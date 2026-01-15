@@ -4,7 +4,7 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Annotated, Any, Dict, Optional, Tuple
 
-from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Path, Query, Request, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -29,6 +29,28 @@ router = APIRouter()
 
 # ✅ Rate limiter para endpoints
 limiter = get_rate_limiter()
+
+
+def _obtener_error_detail(error: Exception, default_message: str = "Error interno del servidor") -> str:
+    """
+    Helper para obtener mensaje de error apropiado según el entorno.
+    En producción, no expone detalles internos.
+    """
+    from app.core.config import settings
+    
+    if settings.ENVIRONMENT == "production":
+        return default_message
+    else:
+        return f"{default_message}: {str(error)}"
+
+
+def _es_campo_sensible(clave: str) -> bool:
+    """
+    Verifica si un campo de configuración contiene información sensible.
+    """
+    campos_sensibles = ["password", "api_key", "token", "secret", "credential"]
+    clave_lower = clave.lower()
+    return any(campo in clave_lower for campo in campos_sensibles)
 
 
 class ConfiguracionUpdate(BaseModel):
@@ -144,6 +166,14 @@ def obtener_configuracion_completa(
         )
 
     try:
+        # ✅ Validar que skip + limit no exceda límites razonables (prevenir DoS)
+        MAX_TOTAL_RECORDS = 10000
+        if skip + limit > MAX_TOTAL_RECORDS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"La suma de skip ({skip}) y limit ({limit}) no puede exceder {MAX_TOTAL_RECORDS} registros",
+            )
+
         # ✅ Paginación implementada
         total = db.query(ConfiguracionSistema).count()
         configuraciones = db.query(ConfiguracionSistema).offset(skip).limit(limit).all()
@@ -165,14 +195,19 @@ def obtener_configuracion_completa(
             "has_more": skip + limit < total,
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error obteniendo configuración: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        # ✅ No exponer detalles internos en producción
+        from app.core.config import settings
+        error_detail = "Error interno del servidor" if settings.ENVIRONMENT == "production" else str(e)
+        raise HTTPException(status_code=500, detail=error_detail)
 
 
 @router.get("/sistema/{clave}")
 def obtener_configuracion_por_clave(
-    clave: str,
+    clave: str = Path(..., regex="^[A-Za-z0-9_]+$", max_length=100, description="Clave de configuración"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -192,12 +227,15 @@ def obtener_configuracion_por_clave(
         raise
     except Exception as e:
         logger.error(f"Error obteniendo configuración: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        # ✅ No exponer detalles internos en producción
+        from app.core.config import settings
+        error_detail = "Error interno del servidor" if settings.ENVIRONMENT == "production" else str(e)
+        raise HTTPException(status_code=500, detail=error_detail)
 
 
 @router.get("/sistema/categoria/{categoria}")
 def obtener_configuracion_por_categoria(
-    categoria: str,
+    categoria: str = Path(..., regex="^[A-Z_]+$", max_length=50, description="Categoría de configuración"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -209,10 +247,11 @@ def obtener_configuracion_por_categoria(
         )
 
     try:
-        configs = db.query(ConfiguracionSistema).filter(ConfiguracionSistema.categoria == categoria.upper()).all()
+        categoria_upper = categoria.upper()
+        configs = db.query(ConfiguracionSistema).filter(ConfiguracionSistema.categoria == categoria_upper).all()
 
         return {
-            "categoria": categoria.upper(),
+            "categoria": categoria_upper,
             "configuraciones": [
                 {
                     "clave": config.clave,
@@ -225,9 +264,14 @@ def obtener_configuracion_por_categoria(
             "total": len(configs),
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error obteniendo configuración por categoría: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        # ✅ No exponer detalles internos en producción
+        from app.core.config import settings
+        error_detail = "Error interno del servidor" if settings.ENVIRONMENT == "production" else str(e)
+        raise HTTPException(status_code=500, detail=error_detail)
 
 
 @router.put("/sistema/{clave}")
@@ -663,16 +707,33 @@ def _verificar_logo_existe(filename: str, db: Optional[Session] = None) -> tuple
     """
     from app.core.config import settings
 
-    # Validar que el archivo sea del tipo correcto
+    # ✅ Validación mejorada: verificar formato de filename
     if not filename.startswith("logo-custom") or not any(filename.endswith(ext) for ext in [".svg", ".png", ".jpg", ".jpeg"]):
         raise HTTPException(status_code=400, detail="Nombre de archivo no válido")
+
+    # ✅ Prevenir path traversal: validar que no contenga caracteres peligrosos
+    if ".." in filename or "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=400, detail="Nombre de archivo contiene caracteres no permitidos")
 
     # Usar path absoluto si UPLOAD_DIR está configurado
     if hasattr(settings, "UPLOAD_DIR") and settings.UPLOAD_DIR:
         uploads_dir = Path(settings.UPLOAD_DIR).resolve()
     else:
         uploads_dir = Path("uploads").resolve()
-    logo_path = uploads_dir / "logos" / filename
+    
+    logos_dir = uploads_dir / "logos"
+    logo_path = logos_dir / filename
+
+    # ✅ Validar path traversal: asegurar que el path resuelto esté dentro del directorio permitido
+    try:
+        logo_path_resolved = logo_path.resolve()
+        logos_dir_resolved = logos_dir.resolve()
+        # Verificar que el path resuelto esté dentro del directorio de logos
+        if not str(logo_path_resolved).startswith(str(logos_dir_resolved)):
+            raise HTTPException(status_code=400, detail="Intento de acceso a ruta no permitida")
+    except (OSError, ValueError) as e:
+        logger.error(f"Error validando path del logo: {e}")
+        raise HTTPException(status_code=400, detail="Ruta de archivo inválida")
 
     # Determinar content type
     content_type_map = {
@@ -885,7 +946,11 @@ def _procesar_configuraciones_email(configs: list) -> Dict[str, Any]:
                             valor = "true"
 
                 config_dict[config.clave] = valor
-                logger.debug(f"📝 Configuración: {config.clave} = {valor[:20] if len(str(valor)) > 20 else valor}")
+                # ✅ No loguear valores de campos sensibles
+                if not _es_campo_sensible(config.clave):
+                    logger.debug(f"📝 Configuración: {config.clave} = {valor[:20] if len(str(valor)) > 20 else valor}")
+                else:
+                    logger.debug(f"📝 Configuración: {config.clave} = *** (oculto)")
             else:
                 logger.warning(f"⚠️ Configuración sin clave válida: {config}")
         except Exception as config_error:
@@ -1119,17 +1184,26 @@ def actualizar_configuracion_email(
         )
 
     try:
-        configuraciones = []
-        for clave, valor in config_data.items():
-            config = (
-                db.query(ConfiguracionSistema)
-                .filter(
-                    ConfiguracionSistema.categoria == "EMAIL",
-                    ConfiguracionSistema.clave == clave,
-                )
-                .first()
+        # ✅ Optimización: Obtener todas las configuraciones existentes en una sola query (evitar N+1)
+        claves_existentes = list(config_data.keys())
+        configs_existentes = (
+            db.query(ConfiguracionSistema)
+            .filter(
+                ConfiguracionSistema.categoria == "EMAIL",
+                ConfiguracionSistema.clave.in_(claves_existentes),
             )
-
+            .all()
+        )
+        
+        # Crear diccionario para acceso rápido
+        configs_dict = {config.clave: config for config in configs_existentes}
+        
+        configuraciones = []
+        nuevas_configs = []
+        
+        for clave, valor in config_data.items():
+            config = configs_dict.get(clave)
+            
             if config:
                 config.valor = str(valor)  # type: ignore[assignment]
                 # actualizado_en se actualiza automáticamente por onupdate=func.now()
@@ -1143,8 +1217,12 @@ def actualizar_configuracion_email(
                     visible_frontend=True,
                     # creado_por y actualizado_por no existen en la tabla BD
                 )
-                db.add(nueva_config)
+                nuevas_configs.append(nueva_config)
                 configuraciones.append(nueva_config)
+        
+        # ✅ Bulk insert para nuevas configuraciones
+        if nuevas_configs:
+            db.bulk_save_objects(nuevas_configs)
 
         # ✅ Flush para aplicar cambios antes del commit
         db.flush()
@@ -1791,7 +1869,11 @@ def _procesar_configuraciones_whatsapp(configs: list) -> Dict[str, Any]:
             if hasattr(config, "clave") and config.clave:
                 valor = config.valor if hasattr(config, "valor") and config.valor is not None else ""
                 config_dict[config.clave] = valor
-                logger.debug(f"📝 Configuración WhatsApp: {config.clave} = {valor[:20] if len(str(valor)) > 20 else valor}")
+                # ✅ No loguear valores de campos sensibles
+                if not _es_campo_sensible(config.clave):
+                    logger.debug(f"📝 Configuración WhatsApp: {config.clave} = {valor[:20] if len(str(valor)) > 20 else valor}")
+                else:
+                    logger.debug(f"📝 Configuración WhatsApp: {config.clave} = *** (oculto)")
             else:
                 logger.warning(f"⚠️ Configuración WhatsApp sin clave válida: {config}")
         except Exception as config_error:
@@ -1857,17 +1939,26 @@ def actualizar_configuracion_whatsapp(
         )
 
     try:
-        configuraciones = []
-        for clave, valor in config_data.items():
-            config = (
-                db.query(ConfiguracionSistema)
-                .filter(
-                    ConfiguracionSistema.categoria == "WHATSAPP",
-                    ConfiguracionSistema.clave == clave,
-                )
-                .first()
+        # ✅ Optimización: Obtener todas las configuraciones existentes en una sola query (evitar N+1)
+        claves_existentes = list(config_data.keys())
+        configs_existentes = (
+            db.query(ConfiguracionSistema)
+            .filter(
+                ConfiguracionSistema.categoria == "WHATSAPP",
+                ConfiguracionSistema.clave.in_(claves_existentes),
             )
-
+            .all()
+        )
+        
+        # Crear diccionario para acceso rápido
+        configs_dict = {config.clave: config for config in configs_existentes}
+        
+        configuraciones = []
+        nuevas_configs = []
+        
+        for clave, valor in config_data.items():
+            config = configs_dict.get(clave)
+            
             if config:
                 config.valor = str(valor)  # type: ignore[assignment]
                 configuraciones.append(config)  # type: ignore[arg-type]
@@ -1879,8 +1970,12 @@ def actualizar_configuracion_whatsapp(
                     tipo_dato="STRING",
                     visible_frontend=True,
                 )
-                db.add(nueva_config)
+                nuevas_configs.append(nueva_config)
                 configuraciones.append(nueva_config)
+        
+        # ✅ Bulk insert para nuevas configuraciones
+        if nuevas_configs:
+            db.bulk_save_objects(nuevas_configs)
 
         db.commit()
 
@@ -1896,7 +1991,10 @@ def actualizar_configuracion_whatsapp(
     except Exception as e:
         db.rollback()
         logger.error(f"Error actualizando configuración de WhatsApp: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+        # ✅ No exponer detalles internos en producción
+        from app.core.config import settings
+        error_detail = "Error interno del servidor" if settings.ENVIRONMENT == "production" else str(e)
+        raise HTTPException(status_code=500, detail=error_detail)
 
 
 class ProbarWhatsAppRequest(BaseModel):
@@ -2510,7 +2608,11 @@ def _procesar_configuraciones_ai(configs: list) -> Dict[str, Any]:
             if hasattr(config, "clave") and config.clave:
                 valor = config.valor if hasattr(config, "valor") and config.valor is not None else ""
                 config_dict[config.clave] = valor
-                logger.debug(f"📝 Configuración AI: {config.clave} = {valor[:20] if len(str(valor)) > 20 else valor}")
+                # ✅ No loguear valores de campos sensibles
+                if not _es_campo_sensible(config.clave):
+                    logger.debug(f"📝 Configuración AI: {config.clave} = {valor[:20] if len(str(valor)) > 20 else valor}")
+                else:
+                    logger.debug(f"📝 Configuración AI: {config.clave} = *** (oculto)")
             else:
                 logger.warning(f"⚠️ Configuración AI sin clave válida: {config}")
         except Exception as config_error:
@@ -2573,26 +2675,33 @@ def actualizar_configuracion_ai(
         )
 
     try:
-        from app.core.encryption import encrypt_api_key
+        from app.core.encryption import encrypt_api_key, is_encrypted
 
-        configuraciones = []
-        for clave, valor in config_data.items():
-            config = (
-                db.query(ConfiguracionSistema)
-                .filter(
-                    ConfiguracionSistema.categoria == "AI",
-                    ConfiguracionSistema.clave == clave,
-                )
-                .first()
+        # ✅ Optimización: Obtener todas las configuraciones existentes en una sola query (evitar N+1)
+        claves_existentes = list(config_data.keys())
+        configs_existentes = (
+            db.query(ConfiguracionSistema)
+            .filter(
+                ConfiguracionSistema.categoria == "AI",
+                ConfiguracionSistema.clave.in_(claves_existentes),
             )
+            .all()
+        )
+        
+        # Crear diccionario para acceso rápido
+        configs_dict = {config.clave: config for config in configs_existentes}
+        
+        configuraciones = []
+        nuevas_configs = []
+        
+        for clave, valor in config_data.items():
+            config = configs_dict.get(clave)
 
             # Encriptar API Key si es openai_api_key
             valor_guardar = str(valor)
             if clave == "openai_api_key" and valor and str(valor).strip():
                 valor_plano = str(valor).strip()
                 # Verificar si ya está encriptada (para evitar re-encriptar)
-                from app.core.encryption import is_encrypted
-
                 if not is_encrypted(valor_plano):
                     try:
                         valor_guardar = encrypt_api_key(valor_plano)
@@ -2625,8 +2734,12 @@ def actualizar_configuracion_ai(
                     tipo_dato="STRING" if clave != "activo" else "BOOLEAN",
                     visible_frontend=True,
                 )
-                db.add(nueva_config)
+                nuevas_configs.append(nueva_config)
                 configuraciones.append(nueva_config)
+        
+        # ✅ Bulk insert para nuevas configuraciones
+        if nuevas_configs:
+            db.bulk_save_objects(nuevas_configs)
 
         db.commit()
 
@@ -2642,7 +2755,10 @@ def actualizar_configuracion_ai(
     except Exception as e:
         db.rollback()
         logger.error(f"Error actualizando configuración de AI: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+        # ✅ No exponer detalles internos en producción
+        from app.core.config import settings
+        error_detail = "Error interno del servidor" if settings.ENVIRONMENT == "production" else str(e)
+        raise HTTPException(status_code=500, detail=error_detail)
 
 
 # ============================================

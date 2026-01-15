@@ -831,8 +831,17 @@ def _construir_query_plantillas(db: Session, solo_activas: bool, tipo: Optional[
 
 
 def _serializar_plantilla(p) -> Optional[dict]:
-    """Serializa una plantilla a diccionario"""
+    """Serializa una plantilla a diccionario usando método to_dict() del modelo"""
     try:
+        # ✅ MEJORA: Usar método to_dict() del modelo si está disponible
+        if hasattr(p, 'to_dict'):
+            result = p.to_dict()
+            # Asegurar que zona_horaria tenga valor por defecto
+            if not result.get('zona_horaria'):
+                result['zona_horaria'] = "America/Caracas"
+            return result
+        
+        # Fallback a serialización manual si no tiene método to_dict()
         return {
             "id": p.id,
             "nombre": p.nombre,
@@ -862,8 +871,10 @@ def _verificar_tabla_plantillas(db: Session):
             raise HTTPException(status_code=500, detail="Tabla 'notificacion_plantillas' no existe. Ejecute las migraciones.")
     except HTTPException:
         raise
-    except Exception:
-        pass
+    except Exception as e:
+        # ✅ MEJORA: Loggear excepciones en lugar de silenciarlas
+        logger.warning(f"Error verificando tabla de plantillas: {e}", exc_info=True)
+        # No lanzar excepción para no interrumpir el flujo, pero loggear el error
 
 
 @router.get("/plantillas", response_model=list[NotificacionPlantillaResponse])
@@ -970,7 +981,8 @@ def crear_plantilla(
             sanitizar_html_enabled=True,
         )
 
-        # Verificar si ya existe una plantilla con el mismo nombre
+        # ✅ MEJORA: Verificar si ya existe una plantilla con el mismo nombre
+        # Manejar tanto la verificación previa como IntegrityError de BD
         existe = db.query(NotificacionPlantilla).filter(NotificacionPlantilla.nombre == plantilla.nombre).first()
         if existe:
             raise HTTPException(status_code=400, detail="Ya existe una plantilla con este nombre")
@@ -984,8 +996,16 @@ def crear_plantilla(
 
         nueva_plantilla = NotificacionPlantilla(**plantilla_data)
         db.add(nueva_plantilla)
-        db.commit()
-        db.refresh(nueva_plantilla)
+        try:
+            db.commit()
+            db.refresh(nueva_plantilla)
+        except Exception as db_error:
+            db.rollback()
+            # ✅ MEJORA: Manejar IntegrityError para nombres duplicados (race condition)
+            error_str = str(db_error).lower()
+            if 'unique' in error_str or 'duplicate' in error_str or 'already exists' in error_str:
+                raise HTTPException(status_code=400, detail="Ya existe una plantilla con este nombre")
+            raise HTTPException(status_code=500, detail=f"Error creando plantilla: {str(db_error)}")
 
         # Auditoría
         try:
@@ -1002,20 +1022,12 @@ def crear_plantilla(
         except Exception as e:
             logger.warning(f"No se pudo registrar auditoría creación plantilla: {e}")
 
-        # Serializar manualmente para evitar errores
-        return {
-            "id": nueva_plantilla.id,
-            "nombre": nueva_plantilla.nombre,
-            "descripcion": nueva_plantilla.descripcion,
-            "tipo": nueva_plantilla.tipo,
-            "asunto": nueva_plantilla.asunto,
-            "cuerpo": nueva_plantilla.cuerpo,
-            "variables_disponibles": nueva_plantilla.variables_disponibles,
-            "activa": bool(nueva_plantilla.activa),
-            "zona_horaria": nueva_plantilla.zona_horaria or "America/Caracas",
-            "fecha_creacion": nueva_plantilla.fecha_creacion,
-            "fecha_actualizacion": nueva_plantilla.fecha_actualizacion,
-        }
+        # ✅ MEJORA: Usar método de serialización centralizado
+        serializado = _serializar_plantilla(nueva_plantilla)
+        if serializado:
+            return serializado
+        # Fallback si _serializar_plantilla retorna None
+        raise HTTPException(status_code=500, detail="Error serializando plantilla creada")
 
     except HTTPException:
         raise
@@ -1097,20 +1109,12 @@ def actualizar_plantilla(
         except Exception as e:
             logger.warning(f"No se pudo registrar auditoría actualización plantilla: {e}")
 
-        # Serializar manualmente para evitar errores
-        return {
-            "id": plantilla_existente.id,
-            "nombre": plantilla_existente.nombre,
-            "descripcion": plantilla_existente.descripcion,
-            "tipo": plantilla_existente.tipo,
-            "asunto": plantilla_existente.asunto,
-            "cuerpo": plantilla_existente.cuerpo,
-            "variables_disponibles": plantilla_existente.variables_disponibles,
-            "activa": bool(plantilla_existente.activa),
-            "zona_horaria": plantilla_existente.zona_horaria or "America/Caracas",
-            "fecha_creacion": plantilla_existente.fecha_creacion,
-            "fecha_actualizacion": plantilla_existente.fecha_actualizacion,
-        }
+        # ✅ MEJORA: Usar método de serialización centralizado
+        serializado = _serializar_plantilla(plantilla_existente)
+        if serializado:
+            return serializado
+        # Fallback si _serializar_plantilla retorna None
+        raise HTTPException(status_code=500, detail="Error serializando plantilla actualizada")
 
     except HTTPException:
         raise
@@ -1176,20 +1180,12 @@ def obtener_plantilla(
         if not plantilla:
             raise HTTPException(status_code=404, detail="Plantilla no encontrada")
 
-        # Serializar manualmente para evitar errores
-        return {
-            "id": plantilla.id,
-            "nombre": plantilla.nombre,
-            "descripcion": plantilla.descripcion,
-            "tipo": plantilla.tipo,
-            "asunto": plantilla.asunto,
-            "cuerpo": plantilla.cuerpo,
-            "variables_disponibles": plantilla.variables_disponibles,
-            "activa": bool(plantilla.activa),
-            "zona_horaria": plantilla.zona_horaria or "America/Caracas",
-            "fecha_creacion": plantilla.fecha_creacion,
-            "fecha_actualizacion": plantilla.fecha_actualizacion,
-        }
+        # ✅ MEJORA: Usar método de serialización centralizado
+        serializado = _serializar_plantilla(plantilla)
+        if serializado:
+            return serializado
+        # Fallback si _serializar_plantilla retorna None
+        raise HTTPException(status_code=500, detail="Error serializando plantilla")
 
     except HTTPException:
         raise

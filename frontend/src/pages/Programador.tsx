@@ -55,99 +55,7 @@ interface TareaProgramada {
   configuracion: Record<string, any>
 }
 
-// Mock data para programador (fallback)
-const mockTareas: TareaProgramada[] = [
-  {
-    id: 'TASK001',
-    nombre: 'Recordatorio de Vencimientos',
-    descripcion: 'Enviar notificaciones a clientes con cuotas próximas a vencer',
-    tipo: 'NOTIFICACION',
-    frecuencia: 'DIARIO',
-    hora: '08:00',
-    estado: 'ACTIVO',
-    ultimaEjecucion: '2024-07-20T08:00:00Z',
-    proximaEjecucion: '2024-07-21T08:00:00Z',
-    exitos: 45,
-    fallos: 2,
-    canales: ['EMAIL', 'SMS'],
-    configuracion: {
-      dias_anticipacion: 3,
-      template: 'vencimiento_proximo'
-    }
-  },
-  {
-    id: 'TASK002',
-    nombre: 'Reporte Semanal de Cartera',
-    descripcion: 'Generar y enviar reporte de cartera a gerencia',
-    tipo: 'REPORTE',
-    frecuencia: 'SEMANAL',
-    hora: '09:00',
-    estado: 'ACTIVO',
-    ultimaEjecucion: '2024-07-19T09:00:00Z',
-    proximaEjecucion: '2024-07-26T09:00:00Z',
-    exitos: 12,
-    fallos: 0,
-    canales: ['EMAIL'],
-    configuracion: {
-      destinatarios: ['gerencia@financiamiento.com'],
-      formato: 'PDF'
-    }
-  },
-  {
-    id: 'TASK003',
-    nombre: 'Actualización de Mora',
-    descripcion: 'Actualizar estado de mora de clientes diariamente',
-    tipo: 'PROCESO',
-    frecuencia: 'DIARIO',
-    hora: '06:00',
-    estado: 'PAUSADO',
-    ultimaEjecucion: '2024-07-18T06:00:00Z',
-    proximaEjecucion: '2024-07-21T06:00:00Z',
-    exitos: 28,
-    fallos: 1,
-    canales: ['SISTEMA'],
-    configuracion: {
-      actualizar_estados: true,
-      calcular_dias_mora: true
-    }
-  },
-  {
-    id: 'TASK004',
-    nombre: 'Backup de Base de Datos',
-    descripcion: 'Realizar respaldo automático de la base de datos',
-    tipo: 'BACKUP',
-    frecuencia: 'DIARIO',
-    hora: '02:00',
-    estado: 'ACTIVO',
-    ultimaEjecucion: '2024-07-20T02:00:00Z',
-    proximaEjecucion: '2024-07-21T02:00:00Z',
-    exitos: 89,
-    fallos: 3,
-    canales: ['SISTEMA'],
-    configuracion: {
-      retencion_dias: 30,
-      comprimir: true
-    }
-  },
-  {
-    id: 'TASK005',
-    nombre: 'Notificación de Pagos Recibidos',
-    descripcion: 'Notificar a analistaes sobre pagos recibidos de sus clientes',
-    tipo: 'NOTIFICACION',
-    frecuencia: 'CONTINUO',
-    hora: '00:00',
-    estado: 'ACTIVO',
-    ultimaEjecucion: '2024-07-20T15:30:00Z',
-    proximaEjecucion: 'CONTINUO',
-    exitos: 156,
-    fallos: 5,
-    canales: ['EMAIL', 'PUSH'],
-    configuracion: {
-      delay_minutos: 5,
-      incluir_detalles: true
-    }
-  },
-]
+// ✅ MEJORA: Eliminado código mock no utilizado
 
 const tiposTarea = [
   { value: 'NOTIFICACION', label: 'Notificación', icon: Bell },
@@ -298,7 +206,10 @@ export function Programador() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {((exitosTotales / (exitosTotales + fallosTotales)) * 100).toFixed(1)}%
+              {/* ✅ MEJORA: Validar división por cero */}
+              {exitosTotales + fallosTotales > 0
+                ? ((exitosTotales / (exitosTotales + fallosTotales)) * 100).toFixed(1)
+                : '0.0'}%
             </div>
             <p className="text-xs text-muted-foreground">Ejecuciones exitosas</p>
           </CardContent>
@@ -524,7 +435,10 @@ export function Programador() {
                       <div><strong>Ejecuciones Exitosas:</strong> {tarea.exitos}</div>
                       <div><strong>Ejecuciones Fallidas:</strong> {tarea.fallos}</div>
                       <div><strong>Tasa de Éxito:</strong>
-                        {((tarea.exitos / (tarea.exitos + tarea.fallos)) * 100).toFixed(1)}%
+                        {/* ✅ MEJORA: Validar división por cero */}
+                        {tarea.exitos + tarea.fallos > 0
+                          ? ((tarea.exitos / (tarea.exitos + tarea.fallos)) * 100).toFixed(1)
+                          : '0.0'}%
                       </div>
                       <div><strong>Última Ejecución:</strong> {formatDate(tarea.ultimaEjecucion)}</div>
                       <div><strong>Próxima Ejecución:</strong>

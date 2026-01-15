@@ -2598,7 +2598,7 @@ def _generar_datos_mensuales(
     """
     Genera datos mensuales con cálculo de morosidad y acumulados.
     Retorna lista de diccionarios con datos mensuales.
-    ✅ CORREGIDO: Usa morosidad_por_mes calculada directamente de cuotas no pagadas.
+    ✅ CORREGIDO: Morosidad = cartera - cobrado (monto_cuotas_programadas - monto_pagado_mes)
     """
     from decimal import Decimal
 
@@ -2623,8 +2623,18 @@ def _generar_datos_mensuales(
 
         monto_cuotas_programadas = cuotas_por_mes.get(mes_key_financiamiento, 0.0)
         monto_pagado_mes = pagos_por_mes.get(mes_key_financiamiento, 0.0)
-        # ✅ CORRECCIÓN: Usar morosidad calculada directamente de cuotas no pagadas del mes
-        morosidad_mensual = morosidad_por_mes.get(mes_key_financiamiento, 0.0)
+        # ✅ CORREGIDO según definición del usuario: Morosidad = cartera - cobrado
+        # cartera = monto_cuotas_programadas (Total Pagos Programados)
+        # cobrado = monto_pagado_mes (Total Pagos Reales)
+        morosidad_mensual = max(0.0, float(monto_cuotas_programadas) - float(monto_pagado_mes))
+
+        # ✅ DIAGNÓSTICO: Log de valores calculados para cada mes
+        logger.info(
+            f"📊 [financiamiento-tendencia] Mes {nombres_meses[num_mes - 1]} {año_mes}: "
+            f"Programado=${monto_cuotas_programadas:,.2f}, "
+            f"Cobrado=${monto_pagado_mes:,.2f}, "
+            f"Morosidad=${morosidad_mensual:,.2f} (calculada como Programado - Cobrado)"
+        )
 
         total_acumulado += Decimal(str(monto_nuevos))
 
@@ -4960,66 +4970,11 @@ def obtener_evolucion_general_mensual(
         start_evolucion = time.time()
         evolucion = []
 
-        # ✅ OPTIMIZACIÓN: Calcular morosidad por mes de forma más eficiente
-        # La morosidad es acumulativa: cuotas vencidas hasta el final de cada mes
-        # Usar CTE o subquery para calcular morosidad por mes
-        morosidad_por_mes = {}
-        try:
-            # Obtener todos los últimos días de mes de una vez
-            ultimos_dias_lista = list(ultimos_dias.values())
-            if ultimos_dias_lista:
-                fecha_ultima_morosidad = max(ultimos_dias_lista)
-
-                # ✅ CORRECCIÓN: Query optimizada: calcular morosidad REAL restando pagos aplicados
-                # Morosidad = Cuotas vencidas - Pagos aplicados a cuotas vencidas
-                query_morosidad_optimizada = db.execute(
-                    text(
-                        """
-                        WITH cuotas_vencidas AS (
-                            SELECT
-                                EXTRACT(YEAR FROM c.fecha_vencimiento)::integer as año,
-                                EXTRACT(MONTH FROM c.fecha_vencimiento)::integer as mes,
-                                COALESCE(SUM(c.monto_cuota), 0) as total_cuotas_vencidas
-                            FROM cuotas c
-                            INNER JOIN prestamos p ON c.prestamo_id = p.id
-                            WHERE p.estado = 'APROBADO'
-                              AND c.fecha_vencimiento <= :fecha_limite
-                              AND c.estado != 'PAGADO'
-                GROUP BY
-                                EXTRACT(YEAR FROM c.fecha_vencimiento),
-                                EXTRACT(MONTH FROM c.fecha_vencimiento)
-                        ),
-                        pagos_aplicados AS (
-                            SELECT
-                                EXTRACT(YEAR FROM c.fecha_vencimiento)::integer as año,
-                                EXTRACT(MONTH FROM c.fecha_vencimiento)::integer as mes,
-                                COALESCE(SUM(c.total_pagado), 0) as total_pagado
-                            FROM cuotas c
-                            INNER JOIN prestamos p ON c.prestamo_id = p.id
-                            WHERE c.fecha_vencimiento <= :fecha_limite
-                              AND c.estado != 'PAGADO'
-                              AND p.estado = 'APROBADO'
-                              AND c.total_pagado > 0
-                GROUP BY
-                                EXTRACT(YEAR FROM c.fecha_vencimiento),
-                                EXTRACT(MONTH FROM c.fecha_vencimiento)
-                        )
-                        SELECT
-                            cv.año,
-                            cv.mes,
-                            GREATEST(0, cv.total_cuotas_vencidas - COALESCE(pa.total_pagado, 0)) as morosidad
-                        FROM cuotas_vencidas cv
-                        LEFT JOIN pagos_aplicados pa ON cv.año = pa.año AND cv.mes = pa.mes
-                        ORDER BY cv.año, cv.mes
-                        """
-                    ).bindparams(fecha_limite=fecha_ultima_morosidad)
-                )
-
-                resultados_morosidad = query_morosidad_optimizada.fetchall()
-                morosidad_por_mes = {(int(row[0]), int(row[1])): float(row[2] or Decimal("0")) for row in resultados_morosidad}
-        except Exception as e:
-            logger.warning(f"⚠️ [evolucion-general] Error calculando morosidad optimizada: {e}, usando método fallback")
-            morosidad_por_mes = {}
+        # ✅ CORREGIDO: Ya no necesitamos calcular morosidad_por_mes acumulativa
+        # La morosidad ahora se calcula mensualmente como: cuotas programadas del mes - pagos del mes
+        # Se calcula directamente en el loop usando cuotas_a_cobrar_por_mes y pagos_por_mes
+        morosidad_por_mes = {}  # Ya no se usa, se calcula dinámicamente
+        logger.info("📊 [evolucion-general] Morosidad se calculará mensualmente como: Cuotas Programadas - Pagos Realizados")
 
         # ✅ OPTIMIZACIÓN: Query única para activos acumulados por mes
         activos_por_mes = {}
@@ -5064,26 +5019,20 @@ def obtener_evolucion_general_mensual(
             nombre_mes = str(mes_info["nombre"])
             mes_key: tuple[int, int] = (año, mes)
 
-            # Usar datos pre-calculados o calcular en el momento si no están disponibles
-            morosidad = morosidad_por_mes.get(mes_key, 0.0)
+            # Usar datos pre-calculados para activos
             total_activos = activos_por_mes.get(mes_key, 0.0)
 
-            # Si no hay datos pre-calculados, calcular en el momento (fallback)
-            if morosidad == 0.0 and mes_key not in morosidad_por_mes:
+            # Si no hay datos pre-calculados de activos, calcular en el momento (fallback)
+            if total_activos == 0.0 and mes_key not in activos_por_mes:
                 ultimo_dia_mes = ultimos_dias[mes_key]
-                query_morosidad = (
-                    db.query(func.sum(Cuota.monto_cuota))
-                    .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                    .filter(
-                        Prestamo.estado == "APROBADO",
-                        Cuota.fecha_vencimiento <= ultimo_dia_mes,
-                        Cuota.estado != "PAGADO",
-                    )
+                query_activos = db.query(func.sum(Prestamo.total_financiamiento)).filter(
+                    Prestamo.estado == "APROBADO",
+                    Prestamo.fecha_registro <= ultimo_dia_mes,
                 )
-                query_morosidad = FiltrosDashboard.aplicar_filtros_cuota(
-                    query_morosidad, analista, concesionario, modelo, None, None
+                query_activos = FiltrosDashboard.aplicar_filtros_prestamo(
+                    query_activos, analista, concesionario, modelo, None, None
                 )
-                morosidad = float(query_morosidad.scalar() or Decimal("0"))
+                total_activos = float(query_activos.scalar() or Decimal("0"))
 
             if total_activos == 0.0 and mes_key not in activos_por_mes:
                 ultimo_dia_mes = ultimos_dias[mes_key]
@@ -5099,14 +5048,28 @@ def obtener_evolucion_general_mensual(
             # Obtener datos pre-calculados
             cuotas_a_cobrar = cuotas_a_cobrar_por_mes.get(mes_key, 0.0)
             total_pagos = pagos_por_mes.get(mes_key, 0.0)
+            
+            # ✅ CORREGIDO según definición del usuario: Morosidad mensual = cartera - cobrado
+            # cartera = cuotas_a_cobrar (cuotas programadas que vencen en ese mes)
+            # cobrado = total_pagos (pagos realizados en ese mes)
+            # Reemplazar morosidad acumulativa con morosidad mensual
+            morosidad_mensual = max(0.0, float(cuotas_a_cobrar) - float(total_pagos))
+            
+            # ✅ DIAGNÓSTICO: Log de valores calculados para cada mes
+            logger.info(
+                f"📊 [evolucion-general] Mes {nombre_mes}: "
+                f"Cuotas Programadas=${cuotas_a_cobrar:,.2f}, "
+                f"Pagos Realizados=${total_pagos:,.2f}, "
+                f"Morosidad=${morosidad_mensual:,.2f} (calculada como Programadas - Realizados)"
+            )
 
             evolucion.append(
                 {
                     "mes": nombre_mes,
-                    "morosidad": round(morosidad, 2),
+                    "morosidad": round(morosidad_mensual, 2),  # ✅ CORREGIDO: Usar morosidad mensual calculada
                     "total_activos": round(total_activos, 2),
-                    "total_financiamiento": round(cuotas_a_cobrar, 2),  # Cambiado: ahora muestra cuotas a cobrar
-                    "total_pagos": round(total_pagos, 2),
+                    "total_financiamiento": round(cuotas_a_cobrar, 2),  # Cuotas programadas del mes
+                    "total_pagos": round(total_pagos, 2),  # Pagos realizados del mes
                 }
             )
 
@@ -5389,15 +5352,14 @@ def obtener_financiamiento_tendencia_mensual(
             db, fecha_inicio_query, fecha_fin_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
         )
 
-        # ✅ CORRECCIÓN: Calcular morosidad mensual real (cuotas que vencen en ese mes y NO fueron pagadas)
-        # ✅ CORRECCIÓN: Pasar fecha_inicio_query y fecha_fin_query para filtrar correctamente
-        morosidad_por_mes = _obtener_morosidad_por_mes(
-            db, analista, concesionario, modelo, fecha_inicio_query, fecha_fin_query
-        )
+        # ✅ CORREGIDO: Ya no necesitamos calcular morosidad_por_mes porque ahora se calcula como cartera - cobrado
+        # La morosidad se calculará en _generar_datos_mensuales como: monto_cuotas_programadas - monto_pagado_mes
+        # Mantenemos el parámetro para compatibilidad pero no se usará
+        morosidad_por_mes = {}  # Ya no se usa, se calcula dinámicamente
 
-        # ✅ CÁLCULO CORREGIDO: Morosidad mensual (NO acumulativa)
+        # ✅ CÁLCULO CORREGIDO: Morosidad mensual = cartera - cobrado (NO acumulativa)
         # Generar datos mensuales (incluyendo meses sin datos) y calcular acumulados
-        logger.info("📊 [financiamiento-tendencia] Calculando morosidad mensual (NO acumulativa)")
+        logger.info("📊 [financiamiento-tendencia] Calculando morosidad mensual como cartera - cobrado")
 
         # ✅ CORRECCIÓN: Usar fecha_fin_query en lugar de hoy para generar meses hasta el final del mes actual
         meses_data = _generar_datos_mensuales(

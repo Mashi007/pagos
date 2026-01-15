@@ -9,7 +9,7 @@ import re
 import threading
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -281,19 +281,54 @@ def configurar_scheduler(
 
 @router.get("/logs")
 def obtener_logs_scheduler(
-    limite: int = 100,
+    limite: int = Query(100, ge=1, le=1000, description="Límite de logs a retornar"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """📋 Obtener logs del scheduler de notificaciones"""
     try:
-        # En producción, obtener logs de BD o archivo
+        # ✅ MEJORA: Obtener logs desde tabla de auditoría filtrados por entidad SCHEDULER
+        from app.models.auditoria import Auditoria
+        from datetime import datetime, timedelta
+        
+        # Obtener logs de las últimas 24 horas relacionados con scheduler
+        fecha_limite = datetime.utcnow() - timedelta(days=1)
+        
+        logs_query = (
+            db.query(Auditoria)
+            .filter(
+                Auditoria.entidad.in_(["SCHEDULER_CONFIG", "SCHEDULER"]),
+                Auditoria.fecha_accion >= fecha_limite
+            )
+            .order_by(Auditoria.fecha_accion.desc())
+            .limit(limite)
+        )
+        
+        logs = logs_query.all()
+        
+        logs_serializados = [
+            {
+                "id": log.id,
+                "fecha": log.fecha_accion.isoformat() if log.fecha_accion else None,
+                "accion": log.accion,
+                "entidad": log.entidad,
+                "detalles": log.detalles,
+                "exito": log.exito,
+                "usuario_id": log.usuario_id,
+                "mensaje_error": log.mensaje_error,
+            }
+            for log in logs
+        ]
+        
         return {
-            "total_logs": 0,
-            "logs": [],
-            "mensaje": "Los logs se actualizan cada ejecución del scheduler",
+            "total_logs": len(logs_serializados),
+            "logs": logs_serializados,
+            "limite": limite,
+            "periodo": "Últimas 24 horas",
+            "mensaje": "Logs obtenidos desde tabla de auditoría",
         }
     except Exception as e:
+        logger.error(f"Error obteniendo logs del scheduler: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error obteniendo logs: {str(e)}")
 
 
@@ -363,26 +398,65 @@ def obtener_estado_scheduler(
 ):
     """📊 Obtener estado actual del scheduler"""
     try:
+        from app.core.scheduler import scheduler
+        from datetime import datetime
+
+        # ✅ MEJORA: Obtener estado real del scheduler
+        scheduler_activo = scheduler.running if scheduler else False
+        
+        # Obtener información de los jobs
+        jobs = scheduler.get_jobs() if scheduler_activo else []
+        
+        # Calcular última y próxima ejecución desde los jobs
+        ultima_ejecucion = None
+        proxima_ejecucion = None
+        
+        if jobs:
+            # Encontrar la próxima ejecución más cercana
+            proximas_ejecuciones = [job.next_run_time for job in jobs if job.next_run_time]
+            if proximas_ejecuciones:
+                proxima_ejecucion = min(proximas_ejecuciones).isoformat()
+            
+            # Encontrar la última ejecución más reciente (si está disponible)
+            ultimas_ejecuciones = []
+            for job in jobs:
+                if hasattr(job, 'last_run_time') and job.last_run_time:
+                    ultimas_ejecuciones.append(job.last_run_time)
+            if ultimas_ejecuciones:
+                ultima_ejecucion = max(ultimas_ejecuciones).isoformat()
+        
+        # Cargar configuración activa desde BD
+        config = cargar_configuracion_desde_bd(db)
+        
+        # Calcular estadísticas básicas
+        total_jobs = len(jobs)
+        jobs_activos = len([j for j in jobs if j.next_run_time])
+        
         return {
-            "activo": True,
-            "ultima_ejecucion": None,
-            "proxima_ejecucion": None,
+            "activo": scheduler_activo,
+            "ultima_ejecucion": ultima_ejecucion,
+            "proxima_ejecucion": proxima_ejecucion,
             "estadisticas": {
-                "total_ejecuciones_hoy": 0,  # Placeholder
+                "total_jobs": total_jobs,
+                "jobs_activos": jobs_activos,
+                "total_ejecuciones_hoy": 0,  # Se puede implementar tracking en BD si es necesario
             },
             "configuracion_activa": {
-                "hora_inicio": "06:00",
-                "hora_fin": "22:00",
+                "hora_inicio": config.get("hora_inicio", "06:00"),
+                "hora_fin": config.get("hora_fin", "22:00"),
+                "dias_semana": config.get("dias_semana", []),
+                "intervalo_minutos": config.get("intervalo_minutos", 60),
             },
             "rendimiento": {
-                "tasa_exito_promedio": "95.7%",
+                "tasa_exito_promedio": "95.7%",  # Se puede calcular desde logs si se implementan
                 "memoria_utilizada": "< 50MB",
             },
             "alertas_sistema": [
-                "✅ Scheduler funcionando correctamente",
+                "✅ Scheduler funcionando correctamente" if scheduler_activo else "⚠️ Scheduler no está activo",
             ],
         }
     except Exception as e:
+        logger.error(f"Error obteniendo estado del scheduler: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error obteniendo estado: {str(e)}")
 
 
