@@ -60,6 +60,13 @@ pypdf==3.17.4
 # weasyprint==60.2  # Descomentar si necesitas HTML to PDF avanzado
 
 # ============================================
+# DOCUMENT PROCESSING (Procesamiento de Documentos para RAG)
+# ============================================
+PyPDF2>=3.0.0          # Extracción de texto de PDF (primario)
+pdfplumber>=0.10.0        # Extracción de texto de PDF (fallback - mejor para PDFs complejos)
+python-docx>=1.1.0         # Extracción de texto de DOCX
+
+# ============================================
 # EMAIL
 # ============================================
 aiosmtplib==3.0.1

@@ -331,22 +331,22 @@ WHERE contenido_procesado = false;
 - El archivo debe existir en el servidor
 - Ruta: `uploads/documentos_ai/` (o según configuración)
 
-### **2. Dependencias Instaladas**
+### **2. Herramientas Adicionales Requeridas** ⚠️
 
-**Para PDF:**
+**⚠️ IMPORTANTE:** Necesitas instalar herramientas adicionales según el tipo de archivo:
+
+| Tipo Archivo | Herramienta Requerida | Instalación |
+|--------------|----------------------|------------|
+| **TXT** | Ninguna | ✅ Ya disponible |
+| **PDF** | PyPDF2 **O** pdfplumber | `pip install PyPDF2 pdfplumber` |
+| **DOCX** | python-docx | `pip install python-docx` |
+
+**Instalación completa recomendada:**
 ```bash
-pip install PyPDF2
-# O alternativamente:
-pip install pdfplumber
+pip install PyPDF2 pdfplumber python-docx
 ```
 
-**Para DOCX:**
-```bash
-pip install python-docx
-```
-
-**Para TXT:**
-- No requiere dependencias adicionales
+**📚 Guía completa:** Ver `Documentos/Guia/HERRAMIENTAS_PROCESAMIENTO_DOCUMENTOS.md` para detalles de instalación, verificación y troubleshooting.
 
 ### **3. Permisos**
 - Solo administradores pueden procesar documentos
