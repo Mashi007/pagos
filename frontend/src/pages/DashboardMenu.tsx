@@ -367,8 +367,8 @@ export function DashboardMenu() {
         `/api/v1/dashboard/cobranzas-semanales?${queryParams.toString()}`,
         { timeout: 60000 }
       )
-      // ✅ Logging para diagnóstico
-      if (response && response.semanas) {
+      // ✅ Logging para diagnóstico (solo en desarrollo)
+      if (process.env.NODE_ENV === 'development' && response && response.semanas) {
         const semanasConDatos = response.semanas.filter(
           s => s.cobranzas_planificadas > 0 || s.pagos_reales > 0
         )

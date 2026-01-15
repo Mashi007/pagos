@@ -79,15 +79,17 @@ export function TablaAmortizacionCompleta() {
   // Obtener préstamos por cédula usando hook
   const { data: prestamosData, isLoading: loadingPrestamos, error: errorPrestamos } = usePrestamosByCedula(cedulaSeleccionada || '')
   
-  // Debug: Log para ver qué está pasando con los préstamos
-  console.log('🔍 [TablaAmortizacion] Estado préstamos:', {
-    cedulaSeleccionada,
-    loadingPrestamos,
-    errorPrestamos,
-    prestamosData,
-    prestamosLength: prestamosData?.length || 0,
-    prestamoIds: prestamosData?.map(p => p.id) || []
-  })
+  // Debug: Log para ver qué está pasando con los préstamos (solo en desarrollo)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔍 [TablaAmortizacion] Estado préstamos:', {
+      cedulaSeleccionada,
+      loadingPrestamos,
+      errorPrestamos,
+      prestamosData,
+      prestamosLength: prestamosData?.length || 0,
+      prestamoIds: prestamosData?.map(p => p.id) || []
+    })
+  }
   
   // Asegurar que prestamos siempre sea un array
   const prestamos = prestamosData || []
@@ -98,30 +100,38 @@ export function TablaAmortizacionCompleta() {
   const prestamoIdsKey = JSON.stringify(prestamoIds)
   const shouldFetchCuotas = !!cedulaSeleccionada && !!prestamosData && Array.isArray(prestamosData) && prestamosData.length > 0 && !loadingPrestamos
   
-  console.log('🔍 [TablaAmortizacion] Condición para cargar cuotas:', {
-    cedulaSeleccionada: !!cedulaSeleccionada,
-    prestamosData: !!prestamosData,
-    isArray: Array.isArray(prestamosData),
-    prestamosLength: prestamosData?.length || 0,
-    loadingPrestamos,
-    shouldFetchCuotas,
-    prestamoIds,
-    prestamoIdsKey
-  })
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔍 [TablaAmortizacion] Condición para cargar cuotas:', {
+      cedulaSeleccionada: !!cedulaSeleccionada,
+      prestamosData: !!prestamosData,
+      isArray: Array.isArray(prestamosData),
+      prestamosLength: prestamosData?.length || 0,
+      loadingPrestamos,
+      shouldFetchCuotas,
+      prestamoIds,
+      prestamoIdsKey
+    })
+  }
   
   const { data: todasLasCuotas, isLoading: loadingCuotas, error: errorCuotas } = useQuery({
     queryKey: ['cuotas-prestamos', prestamoIdsKey],
     queryFn: async () => {
       const ids = prestamosData?.map(p => p.id) || []
       if (!prestamosData || prestamosData.length === 0 || ids.length === 0) {
-        console.log('⚠️ [TablaAmortizacion] No hay préstamos para cargar cuotas')
+        if (process.env.NODE_ENV === 'development') {
+          console.log('⚠️ [TablaAmortizacion] No hay préstamos para cargar cuotas')
+        }
         return []
       }
       try {
         // Usar endpoint optimizado para múltiples préstamos
-        console.log('📡 [TablaAmortizacion] Cargando cuotas para préstamos:', ids)
+        if (process.env.NODE_ENV === 'development') {
+          console.log('📡 [TablaAmortizacion] Cargando cuotas para préstamos:', ids)
+        }
         const cuotas = await cuotaService.getCuotasMultiplesPrestamos(ids)
-        console.log('✅ [TablaAmortizacion] Cuotas cargadas:', cuotas.length)
+        if (process.env.NODE_ENV === 'development') {
+          console.log('✅ [TablaAmortizacion] Cuotas cargadas:', cuotas.length)
+        }
         return cuotas
       } catch (error) {
         console.error('❌ [TablaAmortizacion] Error obteniendo cuotas:', error)
@@ -133,12 +143,13 @@ export function TablaAmortizacionCompleta() {
     retry: 1, // Solo reintentar una vez
   })
 
-  // Debug: Verificar cuando cambian los préstamos
+  // Debug: Verificar cuando cambian los préstamos (solo en desarrollo)
   useEffect(() => {
-    console.log('🔄 [TablaAmortizacion] useEffect - Prestamos cambiaron:', {
-      cedulaSeleccionada,
-      loadingPrestamos,
-      prestamosData,
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔄 [TablaAmortizacion] useEffect - Prestamos cambiaron:', {
+        cedulaSeleccionada,
+        loadingPrestamos,
+        prestamosData,
       prestamosLength: prestamosData?.length || 0,
       prestamoIds,
       shouldFetchCuotas,
