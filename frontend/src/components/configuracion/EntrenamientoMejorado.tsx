@@ -12,12 +12,11 @@ import {
   Download,
   Upload,
   FileText,
-  Sparkles,
+  Star,
   Target,
-  Lightbulb,
-  Settings,
-  ArrowRight,
   Info,
+  Settings,
+  ChevronRight,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -27,6 +26,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from 'sonner'
 import { apiClient } from '@/services/api'
 import { aiTrainingService, ConversacionAI, MetricasEntrenamiento } from '@/services/aiTrainingService'
+import { PromptEditor } from './PromptEditor'
+
+interface Recomendacion {
+  tipo: 'recoleccion' | 'calidad' | 'entrenar' | 'mas_datos'
+  titulo: string
+  descripcion: string
+  accion: string
+  icono: JSX.Element
+  color: 'blue' | 'amber' | 'green'
+}
 
 export function EntrenamientoMejorado() {
   const [activeTab, setActiveTab] = useState('asistente')
@@ -57,8 +66,8 @@ export function EntrenamientoMejorado() {
   const handleRecoleccionAutomatica = async () => {
     setRecolectandoAutomatico(true)
     try {
-      const resultado = await apiClient.post('/api/v1/ai/training/recolectar-automatico')
-      toast.success(`✅ Recolección completada: ${resultado.total_recolectadas} conversaciones nuevas`)
+      const resultado = await apiClient.post<{ total_recolectadas: number }>('/api/v1/ai/training/recolectar-automatico')
+      toast.success(`✅ Recolección completada: ${resultado.data.total_recolectadas} conversaciones nuevas`)
       cargarMetricas()
     } catch (error: any) {
       const mensaje = error?.response?.data?.detail || error?.message || 'Error en recolección automática'
@@ -89,8 +98,8 @@ export function EntrenamientoMejorado() {
     return Math.min((totalDisponible / totalNecesario) * 100, 100)
   }
 
-  const obtenerRecomendaciones = () => {
-    const recomendaciones = []
+  const obtenerRecomendaciones = (): Recomendacion[] => {
+    const recomendaciones: Recomendacion[] = []
     
     if (!metricas) return recomendaciones
 
@@ -228,7 +237,7 @@ export function EntrenamientoMejorado() {
             value="asistente"
             className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm"
           >
-            <Sparkles className="h-4 w-4" />
+            <Star className="h-4 w-4" />
             Asistente Inteligente
           </TabsTrigger>
           <TabsTrigger
@@ -261,7 +270,7 @@ export function EntrenamientoMejorado() {
               <div className="space-y-6">
                 <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl p-6">
                   <div className="flex items-center gap-3 mb-4">
-                    <Sparkles className="h-8 w-8" />
+                    <Star className="h-8 w-8" />
                     <h2 className="text-2xl font-bold">Asistente de Entrenamiento Inteligente</h2>
                   </div>
                   <p className="text-blue-100">
@@ -273,7 +282,7 @@ export function EntrenamientoMejorado() {
                 {/* Recomendaciones */}
                 <div>
                   <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                    <Lightbulb className="h-5 w-5 text-yellow-500" />
+                    <Info className="h-5 w-5 text-yellow-500" />
                     Recomendaciones Personalizadas
                   </h3>
                   <div className="grid gap-4 md:grid-cols-2">
@@ -325,7 +334,7 @@ export function EntrenamientoMejorado() {
                                 }}
                               >
                                 {rec.accion}
-                                <ArrowRight className="ml-2 h-4 w-4" />
+                                <ChevronRight className="ml-2 h-4 w-4" />
                               </Button>
                             </div>
                           </div>
@@ -573,7 +582,7 @@ export function EntrenamientoMejorado() {
                           <ul className="space-y-2">
                             {analisisCalidad.sugerencias.map((sug: string, idx: number) => (
                               <li key={idx} className="flex items-start gap-2 text-sm">
-                                <ArrowRight className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                                <ChevronRight className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
                                 <span>{sug}</span>
                               </li>
                             ))}

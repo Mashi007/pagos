@@ -122,6 +122,7 @@ const mockConfiguracion = {
 
 export function Configuracion() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
   const [configuracion, setConfiguracion] = useState(mockConfiguracion)
   const [configuracionGeneral, setConfiguracionGeneral] = useState<ConfiguracionGeneral | null>(null)
   const [loading, setLoading] = useState(false)
