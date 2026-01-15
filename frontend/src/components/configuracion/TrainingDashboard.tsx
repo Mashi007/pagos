@@ -15,8 +15,8 @@ export function TrainingDashboard() {
     try {
       const data = await aiTrainingService.getMetricasEntrenamiento()
       // Validar que la respuesta tenga la estructura esperada
-      if (data && data.conversaciones && data.fine_tuning && data.rag) {
-        setMetricas(data)
+      if (data && data.conversaciones && data.fine_tuning && data.rag && data.ml_riesgo) {
+        setMetricas(data as MetricasEntrenamiento)
       } else {
         // Si el endpoint no existe o devuelve estructura incorrecta, usar valores por defecto
         setMetricas({
@@ -35,7 +35,10 @@ export function TrainingDashboard() {
             documentos_con_embeddings: 0,
             total_embeddings: 0,
           },
-        })
+          ml_riesgo: {
+            modelos_disponibles: 0,
+          },
+        } as MetricasEntrenamiento)
       }
     } catch (error: any) {
       console.error('Error cargando métricas:', error)
@@ -57,7 +60,10 @@ export function TrainingDashboard() {
             documentos_con_embeddings: 0,
             total_embeddings: 0,
           },
-        })
+          ml_riesgo: {
+            modelos_disponibles: 0,
+          },
+        } as MetricasEntrenamiento)
         // No mostrar toast de error para 404, es esperado si el endpoint no está implementado
       } else {
         toast.error('Error al cargar métricas de entrenamiento')

@@ -508,10 +508,16 @@ class ApiClient {
     // ✅ Timeout especial para clientes-atrasados que puede procesar muchos registros (2868+)
     const isClientesAtrasados = url.includes('/cobranzas/clientes-atrasados')
     const verySlowTimeout = 120000 // 120 segundos para endpoints muy pesados
+    
+    // ✅ Timeout extendido para tablas-campos que consulta toda la estructura de BD
+    const isTablasCampos = url.includes('/tablas-campos')
+    const tablasCamposTimeout = 90000 // 90 segundos para consulta de estructura completa de BD
 
     let defaultTimeout = DEFAULT_TIMEOUT_MS
     if (isClientesAtrasados) {
       defaultTimeout = verySlowTimeout
+    } else if (isTablasCampos) {
+      defaultTimeout = tablasCamposTimeout
     } else if (isSlowEndpoint) {
       defaultTimeout = SLOW_ENDPOINT_TIMEOUT_MS
     }

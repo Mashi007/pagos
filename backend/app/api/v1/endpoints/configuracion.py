@@ -5656,6 +5656,7 @@ def obtener_metricas_chat_ai(
 
 
 @router.get("/ai/tablas-campos")
+@cache_result(ttl=3600, key_prefix="ai")  # Cachear por 1 hora ya que la estructura de BD cambia raramente
 def obtener_tablas_campos(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -7518,11 +7519,13 @@ def _obtener_resumen_bd(db: Session) -> str:
 
     try:
         from sqlalchemy import func
+        from datetime import date
 
         resumen = []
 
         # Información de fecha y hora actual
         fecha_actual = datetime.now()
+        hoy = date.today()
 
         # Mapeo de días y meses en español
         dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
@@ -7575,14 +7578,29 @@ def _obtener_resumen_bd(db: Session) -> str:
         prestamos_pendientes = _ejecutar_consulta_segura(
             lambda: db.query(Prestamo).filter(Prestamo.estado == "PENDIENTE").count(), "consulta de préstamos pendientes"
         )
+        # ✅ Agregar información sobre préstamos aprobados HOY
+        prestamos_aprobados_hoy = _ejecutar_consulta_segura(
+            lambda: db.query(Prestamo)
+            .filter(
+                Prestamo.estado == "APROBADO",
+                Prestamo.fecha_aprobacion.isnot(None),
+                func.date(Prestamo.fecha_aprobacion) == hoy
+            )
+            .count(),
+            "consulta de préstamos aprobados hoy"
+        )
         if (
             total_prestamos is not None
             and prestamos_aprobados is not None
             and prestamos_activos is not None
             and prestamos_pendientes is not None
+            and prestamos_aprobados_hoy is not None
         ):
             resumen.append(
                 f"Préstamos: {total_prestamos} totales, {prestamos_aprobados} aprobados, {prestamos_activos} activos/aprobados, {prestamos_pendientes} pendientes"
+            )
+            resumen.append(
+                f"Préstamos aprobados HOY ({hoy.strftime('%d/%m/%Y')}): {prestamos_aprobados_hoy}"
             )
         else:
             resumen.append("Préstamos: No disponible")
@@ -7606,9 +7624,7 @@ def _obtener_resumen_bd(db: Session) -> str:
             lambda: db.query(Cuota).filter(Cuota.estado == "PENDIENTE").count(), "consulta de cuotas pendientes"
         )
         # ✅ CORREGIDO: No existe estado "MORA", se calcula como cuotas vencidas y no pagadas
-        from datetime import date
         from sqlalchemy import and_
-        hoy = date.today()
         cuotas_mora = _ejecutar_consulta_segura(
             lambda: db.query(Cuota)
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
@@ -9111,22 +9127,40 @@ def _ejecutar_consulta_dinamica(pregunta: str, pregunta_lower: str, db: Session)
             and any(palabra in pregunta_lower for palabra in ["prestamo", "credito", "financiamiento"])
         ):
             if "aprobado" in pregunta_lower or "aprobados" in pregunta_lower:
+                # Usar func.date() para comparar solo la fecha sin hora (más preciso que datetime.combine)
                 prestamos = (
                     db.query(Prestamo)
                     .filter(
                         Prestamo.estado == "APROBADO",
-                        Prestamo.fecha_aprobacion >= datetime.combine(fecha_inicio, datetime.min.time()),
-                        Prestamo.fecha_aprobacion <= datetime.combine(fecha_fin, datetime.max.time()),
+                        Prestamo.fecha_aprobacion.isnot(None),  # Asegurar que fecha_aprobacion no sea NULL
+                        func.date(Prestamo.fecha_aprobacion) >= fecha_inicio,
+                        func.date(Prestamo.fecha_aprobacion) <= fecha_fin,
                     )
                     .all()
                 )
 
+                # ✅ SIEMPRE agregar resultado, incluso si no hay préstamos (para que el AI sepa que se consultó)
+                fecha_formato = fecha_inicio.strftime('%d/%m/%Y')
+                if fecha_inicio == fecha_fin:
+                    fecha_formato = f"el {fecha_inicio.strftime('%d/%m/%Y')}"
+                else:
+                    fecha_formato = f"{fecha_inicio.strftime('%d/%m/%Y')} - {fecha_fin.strftime('%d/%m/%Y')}"
+                
+                resultado += f"\n=== PRÉSTAMOS APROBADOS ({fecha_formato}) ===\n"
+                
                 if prestamos:
                     total = len(prestamos)
                     monto_total = sum(float(p.total_financiamiento or 0) for p in prestamos)
-                    resultado += f"\n=== PRÉSTAMOS APROBADOS ({fecha_inicio.strftime('%d/%m/%Y')} - {fecha_fin.strftime('%d/%m/%Y')}) ===\n"
                     resultado += f"Total: {total}\n"
                     resultado += f"Monto total: {monto_total:,.2f}\n"
+                    # Agregar detalles de los primeros 10 préstamos
+                    for i, p in enumerate(prestamos[:10], 1):
+                        resultado += f"{i}. Cliente: {p.nombres} (Cédula: {p.cedula}), Monto: {float(p.total_financiamiento or 0):,.2f}\n"
+                    if len(prestamos) > 10:
+                        resultado += f"... y {len(prestamos) - 10} préstamo(s) más\n"
+                else:
+                    resultado += f"Total: 0\n"
+                    resultado += f"No se encontraron préstamos aprobados en esta fecha.\n"
 
         # ============================================
         # CONSULTAS DE PAGOS POR PERÍODO
