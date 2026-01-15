@@ -10,6 +10,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
+from app.core.cache import cache_result
 from app.core.config import settings
 from app.core.rate_limiter import get_rate_limiter
 from app.models.ai_prompt_variable import AIPromptVariable
