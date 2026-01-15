@@ -133,7 +133,7 @@ export function PrestamosKPIs({
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Cartera Vigente</CardTitle>
+            <CardTitle className="text-sm font-medium">Cartera por Cobrar</CardTitle>
             <Users className="h-5 w-5 text-orange-600" />
           </CardHeader>
           <CardContent>
@@ -143,7 +143,7 @@ export function PrestamosKPIs({
                 maximumFractionDigits: 2,
               })}
             </div>
-            <p className="text-xs text-gray-600 mt-1">Préstamos aprobados</p>
+            <p className="text-xs text-gray-600 mt-1">Saldo pendiente de cobro</p>
           </CardContent>
         </Card>
       </div>

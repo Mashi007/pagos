@@ -26,8 +26,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { formatCurrency, formatDate } from '@/utils'
 import { reporteService } from '@/services/reporteService'
 import { TablaAmortizacionCompleta } from '@/components/reportes/TablaAmortizacionCompleta'
-import { ReporteDiferenciasAbonos } from '@/components/reportes/ReporteDiferenciasAbonos'
-import { DiferenciasAbonosInformativo } from '@/components/reportes/DiferenciasAbonosInformativo'
 import { toast } from 'sonner'
 
 // Mock data para reportes
@@ -272,9 +270,6 @@ export function Reportes() {
         </div>
       )}
 
-      {/* Reporte de Diferencias de Abonos */}
-      <ReporteDiferenciasAbonos />
-
       {/* KPI Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -356,9 +351,6 @@ export function Reportes() {
           </CardContent>
         </Card>
       </div>
-
-      {/* Informativo: Diferencias de Abonos - Después de KPIs */}
-      <DiferenciasAbonosInformativo />
 
       {/* Tabla de Amortización Completa */}
       <TablaAmortizacionCompleta />

@@ -505,8 +505,18 @@ class ApiClient {
                           url.includes('/ai/training/') ||
                           url.includes('/cobranzas/') // ✅ Agregar endpoints de cobranzas como lentos
 
-    const defaultTimeout = isSlowEndpoint ? SLOW_ENDPOINT_TIMEOUT_MS : DEFAULT_TIMEOUT_MS
-    // Priorizar timeout explícito si se proporciona, sino usar el calculado
+    // ✅ Timeout especial para clientes-atrasados que puede procesar muchos registros (2868+)
+    const isClientesAtrasados = url.includes('/cobranzas/clientes-atrasados')
+    const verySlowTimeout = 120000 // 120 segundos para endpoints muy pesados
+
+    let defaultTimeout = DEFAULT_TIMEOUT_MS
+    if (isClientesAtrasados) {
+      defaultTimeout = verySlowTimeout
+    } else if (isSlowEndpoint) {
+      defaultTimeout = SLOW_ENDPOINT_TIMEOUT_MS
+    }
+
+    // ✅ Priorizar timeout explícito si se proporciona, sino usar el calculado
     const timeout = config?.timeout ?? defaultTimeout
     // ✅ Asegurar que el timeout se aplique correctamente
     // Axios respeta el timeout en la configuración del request sobre el del cliente

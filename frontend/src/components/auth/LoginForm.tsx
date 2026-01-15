@@ -142,25 +142,25 @@ export function LoginForm() {
           className="mx-auto"
         >
           {/* Logo de Rapicredit */}
-          <div className={`w-${LOGO_SIZE_LARGE} h-${LOGO_SIZE_LARGE} mx-auto mb-${SPACING_SMALL} bg-white rounded-2xl flex items-center justify-center shadow-2xl p-3 border-4 border-white/90 ring-4 ring-gray-100/60`}>
+          <div className="w-24 h-24 mx-auto mb-4 bg-white rounded-2xl flex items-center justify-center shadow-2xl p-3 border-4 border-white/90 ring-4 ring-gray-100/60">
             <Logo size="xl" className="drop-shadow-xl brightness-110 contrast-125" />
           </div>
         </motion.div>
 
             <div>
-              <CardTitle className={`text-${TEXT_SIZE_LARGE}xl font-bold text-gradient text-center`}>
+              <CardTitle className="text-3xl font-bold text-gradient text-center">
                 RAPICREDIT
               </CardTitle>
-              <CardDescription className={`text-lg mt-${SPACING_SMALL} text-center font-medium`}>
+              <CardDescription className="text-lg mt-4 text-center font-medium">
                 Sistema de Préstamos y Cobranza
               </CardDescription>
-              <CardDescription className={`text-sm mt-${TEXT_SIZE_MEDIUM} text-center text-gray-500`}>
+              <CardDescription className="text-sm mt-1 text-center text-gray-500">
                 Ingrese sus credenciales para acceder
               </CardDescription>
             </div>
           </CardHeader>
 
-          <CardContent className={`space-y-${SPACING_MEDIUM}`}>
+          <CardContent className="space-y-6">
             {error && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
@@ -175,14 +175,14 @@ export function LoginForm() {
               </motion.div>
             )}
 
-            <form onSubmit={handleSubmit(onSubmit)} className={`space-y-${SPACING_SMALL}`}>
-              <div className={`space-y-${SPACING_SMALL}`}>
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              <div className="space-y-4">
                 <Input
                   {...register('email')}
                   type="email"
                   label="Correo electrónico"
                   placeholder="usuario@empresa.com"
-                  leftIcon={<Mail className={`w-${ICON_SIZE} h-${ICON_SIZE}`} />}
+                  leftIcon={<Mail className="w-4 h-4" />}
                   error={errors.email?.message}
                   autoComplete="email"
                   autoFocus
@@ -193,7 +193,7 @@ export function LoginForm() {
                   type={showPassword ? 'text' : 'password'}
                   label="Contraseña"
                   placeholder="••••••••"
-                  leftIcon={<Lock className={`w-${ICON_SIZE} h-${ICON_SIZE}`} />}
+                  leftIcon={<Lock className="w-4 h-4" />}
                   rightIcon={
                     <button
                       type="button"
@@ -201,9 +201,9 @@ export function LoginForm() {
                       className="hover:text-primary transition-colors"
                     >
                       {showPassword ? (
-                        <EyeOff className={`w-${ICON_SIZE} h-${ICON_SIZE}`} />
+                        <EyeOff className="w-4 h-4" />
                       ) : (
-                        <Eye className={`w-${ICON_SIZE} h-${ICON_SIZE}`} />
+                        <Eye className="w-4 h-4" />
                       )}
                     </button>
                   }
@@ -239,7 +239,7 @@ export function LoginForm() {
 
               <Button
                 type="submit"
-                className={`w-full h-${BUTTON_HEIGHT} text-base font-semibold`}
+                className="w-full h-12 text-base font-semibold"
                 loading={isLoading}
                 disabled={isLoading}
               >

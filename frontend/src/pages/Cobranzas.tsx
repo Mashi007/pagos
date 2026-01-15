@@ -89,6 +89,8 @@ export function Cobranzas() {
   })
 
   // Query para clientes atrasados
+  // ✅ OPTIMIZACIÓN: Desactivar ML por defecto para carga inicial más rápida
+  // El ML se puede cargar después si es necesario (lazy loading)
   const {
     data: clientesAtrasados,
     isLoading: cargandoClientes,
@@ -102,10 +104,12 @@ export function Cobranzas() {
       rangoDiasMin,
       rangoDiasMax,
       false, // incluirAdmin
-      true   // incluirML - mantener true para mostrar predicciones ML
+      false  // ✅ incluirML: false por defecto para carga rápida (2868 clientes es demasiado para ML)
     ),
     retry: 2,
-    retryDelay: 2000, // ✅ Aumentar delay entre retries para dar más tiempo al servidor
+    retryDelay: 3000, // ✅ Aumentar delay entre retries para dar más tiempo al servidor
+    gcTime: 5 * 60 * 1000, // ✅ Mantener en cache 5 minutos para evitar recargas innecesarias
+    staleTime: 2 * 60 * 1000, // ✅ Considerar datos frescos por 2 minutos
     // ✅ No mostrar error si es un timeout que se resolvió en retry
     onError: (error: any) => {
       // Solo mostrar error si NO es un timeout que se resolvió (ECONNABORTED)
@@ -1041,6 +1045,26 @@ export function Cobranzas() {
                                       const estaEditandoML = editandoMLImpago === cliente.prestamo_id
                                       const estaGuardandoML = guardandoMLImpago === cliente.prestamo_id
                                       
+                                      // ✅ Mostrar mensaje si ML no está disponible (carga rápida sin ML)
+                                      if (!cliente.ml_impago && !estaEditandoML) {
+                                        return (
+                                          <div className="flex flex-col items-center gap-1">
+                                            <Badge variant="outline" className="bg-gray-50 text-gray-600 text-xs">
+                                              Sin ML
+                                            </Badge>
+                                            <Button
+                                              size="sm"
+                                              variant="ghost"
+                                              onClick={() => iniciarEdicionMLImpago(cliente.prestamo_id, null)}
+                                              className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:opacity-100"
+                                              title="Agregar Riesgo ML Impago"
+                                            >
+                                              <Edit className="h-3 w-3" />
+                                            </Button>
+                                          </div>
+                                        )
+                                      }
+                                      
                                       if (estaEditandoML) {
                                         return (
                                           <div className="flex flex-col items-center gap-2 min-w-[200px]">
@@ -1600,6 +1624,26 @@ export function Cobranzas() {
                                                 {(() => {
                                                   const estaEditandoML = editandoMLImpago === cliente.prestamo_id
                                                   const estaGuardandoML = guardandoMLImpago === cliente.prestamo_id
+                                                  
+                                                  // ✅ Mostrar mensaje si ML no está disponible (carga rápida sin ML)
+                                                  if (!cliente.ml_impago && !estaEditandoML) {
+                                                    return (
+                                                      <div className="flex flex-col items-center gap-1">
+                                                        <Badge variant="outline" className="bg-gray-50 text-gray-600 text-xs">
+                                                          Sin ML
+                                                        </Badge>
+                                                        <Button
+                                                          size="sm"
+                                                          variant="ghost"
+                                                          onClick={() => iniciarEdicionMLImpago(cliente.prestamo_id, null)}
+                                                          className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:opacity-100"
+                                                          title="Agregar Riesgo ML Impago"
+                                                        >
+                                                          <Edit className="h-3 w-3" />
+                                                        </Button>
+                                                      </div>
+                                                    )
+                                                  }
                                                   
                                                   if (estaEditandoML) {
                                                     return (

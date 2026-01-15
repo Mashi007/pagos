@@ -63,9 +63,10 @@ class CobranzasService {
     const url = `${this.baseUrl}/clientes-atrasados${params.toString() ? `?${params.toString()}` : ''}`
 
     try {
-      // ✅ OPTIMIZACIÓN: Reducir timeout de 90s a 60s (más razonable)
-      // Si hay muchos registros, el backend debería usar paginación o optimizar la query
-      const result = await apiClient.get<ClienteAtrasado[] | { clientes_atrasados: ClienteAtrasado[] }>(url, { timeout: 60000 })
+      // ✅ OPTIMIZACIÓN: Timeout aumentado a 120s para datasets grandes (2868+ clientes)
+      // El endpoint puede tardar más cuando procesa muchos registros sin ML
+      // El apiClient ya detecta este endpoint y aplica timeout de 120s automáticamente
+      const result = await apiClient.get<ClienteAtrasado[] | { clientes_atrasados: ClienteAtrasado[] }>(url, { timeout: 120000 })
       // ✅ Manejar ambos formatos de respuesta (array directo o objeto con clientes_atrasados)
       const clientes = Array.isArray(result) ? result : (result.clientes_atrasados || [])
       console.log(`✅ [Cobranzas] Clientes atrasados cargados: ${clientes.length}`)
