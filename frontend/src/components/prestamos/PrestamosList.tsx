@@ -741,16 +741,6 @@ export function PrestamosList() {
                                             <CalendarCheck className="h-4 w-4 text-purple-600" />
                                           </Button>
                                         )}
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => handleAsignarFechaAprobacion(prestamo)}
-                                            title="Asignar fecha de aprobación y recalcular tabla de amortización"
-                                            className="hover:bg-purple-50"
-                                          >
-                                            <CalendarCheck className="h-4 w-4 text-purple-600" />
-                                          </Button>
-                                        )}
 
                             {/* Botón Eliminar - Solo Admin */}
                             {canDeletePrestamo() ? (
