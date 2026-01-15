@@ -218,6 +218,21 @@ class PrestamoService {
     )
     return response
   }
+
+  // Asignar fecha de aprobación y recalcular tabla de amortización
+  async asignarFechaAprobacion(prestamoId: number, fechaAprobacion: string): Promise<any> {
+    const response = await apiClient.post<any>(
+      `${this.baseUrl}/${prestamoId}/asignar-fecha-aprobacion`,
+      { fecha_aprobacion: fechaAprobacion }
+    )
+    return response
+  }
+
+  // Obtener evaluación de riesgo de un préstamo
+  async getEvaluacionRiesgo(prestamoId: number): Promise<any> {
+    const response = await apiClient.get<any>(`${this.baseUrl}/${prestamoId}/evaluacion-riesgo`)
+    return response
+  }
 }
 
 export const prestamoService = new PrestamoService()

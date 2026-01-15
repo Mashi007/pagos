@@ -21,6 +21,7 @@ from app.models.modelo_riesgo import ModeloRiesgo
 from app.models.modelo_vehiculo import ModeloVehiculo
 from app.models.prestamo import Prestamo
 from app.models.prestamo_auditoria import PrestamoAuditoria
+from app.models.prestamo_evaluacion import PrestamoEvaluacion
 from app.models.user import User
 from app.schemas.prestamo import (
     PrestamoCreate,
@@ -388,13 +389,9 @@ def _aplicar_filtros_prestamos(
 ):
     """Aplica filtros a la query de préstamos"""
     if search:
-        search_pattern = f"%{search}%"
-        query = query.filter(
-            or_(
-                Prestamo.nombres.ilike(search_pattern),
-                Prestamo.cedula.ilike(search_pattern),
-            )
-        )
+        # ✅ Búsqueda solo por cédula (normalizada a mayúsculas)
+        search_pattern = f"%{search.strip().upper()}%"
+        query = query.filter(Prestamo.cedula.ilike(search_pattern))
 
     if estado:
         query = query.filter(Prestamo.estado == estado)
@@ -1531,6 +1528,33 @@ def evaluar_riesgo_prestamo(
         raise HTTPException(status_code=500, detail=f"Error evaluando riesgo: {str(e)}")
 
 
+@router.get("/{prestamo_id}/evaluacion-riesgo", response_model=dict)
+def obtener_evaluacion_riesgo(
+    prestamo_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Obtiene la evaluación de riesgo de un préstamo (solo lectura).
+    Retorna todos los detalles de la evaluación almacenada en BD.
+    """
+    prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
+    if not prestamo:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+    
+    evaluacion = db.query(PrestamoEvaluacion).filter(
+        PrestamoEvaluacion.prestamo_id == prestamo_id
+    ).order_by(PrestamoEvaluacion.id.desc()).first()
+    
+    if not evaluacion:
+        raise HTTPException(
+            status_code=404,
+            detail="El préstamo no tiene una evaluación de riesgo registrada"
+        )
+    
+    return _construir_respuesta_evaluacion(evaluacion, prestamo_id)
+
+
 @router.post("/{prestamo_id}/aplicar-condiciones-aprobacion")
 def aplicar_condiciones_aprobacion(
     prestamo_id: int,
@@ -1674,3 +1698,146 @@ def marcar_revision_prestamo(
         logger.error(f"Error marcando revisión del préstamo {prestamo_id}: {str(e)}")
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error actualizando estado de revisión: {str(e)}")
+
+
+@router.post("/{prestamo_id}/asignar-fecha-aprobacion", response_model=dict)
+def asignar_fecha_aprobacion(
+    prestamo_id: int = Path(..., description="ID del préstamo"),
+    datos: dict = None,  # {fecha_aprobacion: "YYYY-MM-DD"}
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Asigna la fecha de aprobación a un préstamo aprobado y recalcula la tabla de amortización.
+    
+    Este endpoint se usa después de aprobar un préstamo para establecer la fecha definitiva
+    de aprobación y recalcular las cuotas con esa fecha como base.
+    
+    Requisitos:
+    - El préstamo debe estar en estado APROBADO
+    - Solo usuarios admin pueden asignar fecha de aprobación
+    
+    Ejemplo:
+    POST /api/v1/prestamos/123/asignar-fecha-aprobacion
+    {
+        "fecha_aprobacion": "2025-01-15"
+    }
+    """
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden asignar fecha de aprobación"
+        )
+    
+    prestamo = db.query(Prestamo).filter(Prestamo.id == prestamo_id).first()
+    if not prestamo:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+    
+    if prestamo.estado != "APROBADO":
+        raise HTTPException(
+            status_code=400,
+            detail="Solo se puede asignar fecha de aprobación a préstamos en estado APROBADO"
+        )
+    
+    if not datos or "fecha_aprobacion" not in datos:
+        raise HTTPException(
+            status_code=400,
+            detail="Debe proporcionar fecha_aprobacion en el cuerpo de la petición"
+        )
+    
+    # Validar calificación mínima 70
+    evaluacion = db.query(PrestamoEvaluacion).filter(
+        PrestamoEvaluacion.prestamo_id == prestamo_id
+    ).order_by(PrestamoEvaluacion.id.desc()).first()
+    
+    if not evaluacion:
+        raise HTTPException(
+            status_code=400,
+            detail="El préstamo no tiene una evaluación de riesgo. Debe evaluar el riesgo antes de asignar fecha de aprobación."
+        )
+    
+    puntuacion_total = float(evaluacion.puntuacion_total) if evaluacion.puntuacion_total else 0
+    if puntuacion_total < 70:
+        raise HTTPException(
+            status_code=400,
+            detail=f"La calificación mínima requerida es 70 puntos. El préstamo tiene {puntuacion_total:.2f} puntos. No se puede desembolsar."
+        )
+    
+    try:
+        # Parsear fecha de aprobación
+        fecha_aprobacion_str = datos["fecha_aprobacion"]
+        fecha_aprobacion_date = date_parse(fecha_aprobacion_str).date()
+        
+        # Convertir a datetime para fecha_aprobacion (timestamp)
+        fecha_aprobacion_datetime = datetime.combine(fecha_aprobacion_date, datetime.min.time())
+        
+        # Asignar fecha_aprobacion
+        prestamo.fecha_aprobacion = fecha_aprobacion_datetime  # type: ignore[assignment]
+        
+        # Actualizar fecha_base_calculo con la fecha de aprobación para recalcular cuotas
+        prestamo.fecha_base_calculo = fecha_aprobacion_date  # type: ignore[assignment]
+        
+        # Cambiar estado a DESEMBOLSADO (dinero entregado)
+        estado_anterior = prestamo.estado
+        prestamo.estado = "DESEMBOLSADO"  # type: ignore[assignment]
+        
+        # Recalcular tabla de amortización con la nueva fecha
+        try:
+            cuotas_generadas = generar_amortizacion(prestamo, fecha_aprobacion_date, db)
+            logger.info(
+                f"Tabla de amortización recalculada para préstamo {prestamo_id} "
+                f"con fecha de aprobación: {fecha_aprobacion_date}. "
+                f"Cuotas generadas: {len(cuotas_generadas)}"
+            )
+        except Exception as e:
+            logger.error(f"Error generando amortización al asignar fecha: {str(e)}")
+            # No fallar el proceso si falla la generación de cuotas, pero registrar el error
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error recalculando tabla de amortización: {str(e)}"
+            )
+        
+        db.commit()
+        db.refresh(prestamo)
+        
+        # Registrar en auditoría
+        try:
+            crear_registro_auditoria(
+                prestamo_id=prestamo.id,
+                cedula=prestamo.cedula,
+                usuario=current_user.email,
+                campo_modificado="FECHA_APROBACION_Y_ESTADO",
+                valor_anterior=f"Estado: {estado_anterior}, Fecha: {prestamo.fecha_aprobacion if prestamo.fecha_aprobacion else 'None'}",
+                valor_nuevo=f"Estado: DESEMBOLSADO, Fecha: {fecha_aprobacion_datetime}",
+                accion="ASIGNAR_FECHA_APROBACION_Y_DESEMBOLSAR",
+                estado_anterior=estado_anterior,
+                estado_nuevo="DESEMBOLSADO",
+                db=db,
+            )
+        except Exception as e:
+            logger.warning(f"Error registrando auditoría: {str(e)}")
+        
+        logger.info(
+            f"✅ [asignar_fecha_aprobacion] Préstamo {prestamo_id} desembolsado con fecha {fecha_aprobacion_date} "
+            f"por {current_user.email}. Cuotas generadas: {len(cuotas_generadas) if 'cuotas_generadas' in locals() else 0}"
+        )
+        
+        return {
+            "message": "Préstamo desembolsado exitosamente. Tabla de amortización generada y cuotas creadas.",
+            "prestamo_id": prestamo_id,
+            "estado": "DESEMBOLSADO",
+            "fecha_aprobacion": fecha_aprobacion_date.isoformat(),
+            "fecha_base_calculo": fecha_aprobacion_date.isoformat(),
+            "cuotas_recalculadas": len(cuotas_generadas) if 'cuotas_generadas' in locals() else 0,
+            "puntuacion_evaluacion": puntuacion_total,
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error asignando fecha de aprobación al préstamo {prestamo_id}: {str(e)}")
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error asignando fecha de aprobación: {str(e)}"
+        )

@@ -65,7 +65,6 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
     concesionario: prestamo?.concesionario || '',
     analista: prestamo?.analista || '',
     modelo_vehiculo: prestamo?.modelo_vehiculo || '',
-    tasa_interes: prestamo?.tasa_interes || 0,
     observaciones: prestamo?.observaciones || '',
   })
 
@@ -101,11 +100,19 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
   // Errores de UI para marcar campos obligatorios visualmente
   const [uiErrors, setUiErrors] = useState<{ concesionario?: boolean; analista?: boolean }>({})
 
-  // Calcular anticipo como 30% del valor activo automáticamente
+  // Calcular anticipo como 30% del valor activo automáticamente al inicio o cuando cambia el valor activo
+  // Solo si no hay un anticipo ya establecido (para nuevos préstamos) o si el anticipo es igual al 30% calculado
   useEffect(() => {
     if (valorActivo > 0) {
       const anticipoCalculado = valorActivo * 0.30
-      setAnticipo(anticipoCalculado)
+      // Solo actualizar automáticamente si el anticipo actual es 0 o igual al 30% calculado
+      // Esto permite que el usuario modifique el anticipo sin que se sobrescriba cuando cambia el valor activo
+      setAnticipo((prevAnticipo) => {
+        if (prevAnticipo === 0 || Math.abs(prevAnticipo - anticipoCalculado) < 0.01) {
+          return anticipoCalculado
+        }
+        return prevAnticipo
+      })
     } else {
       setAnticipo(0)
     }
@@ -189,7 +196,11 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
       errors.push('El Valor Activo debe ser mayor a 0')
     }
 
-    // Validar Anticipo
+    // Validar Anticipo - debe ser al menos el 30% del valor activo
+    const anticipoMinimo = valorActivo > 0 ? valorActivo * 0.30 : 0
+    if (anticipo < anticipoMinimo) {
+      errors.push(`El Anticipo debe ser al menos el 30% del Valor Activo (mínimo: ${anticipoMinimo.toFixed(2)} USD)`)
+    }
     if (anticipo < 0) {
       errors.push('El Anticipo no puede ser negativo')
     }
@@ -319,7 +330,8 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
   }
 
   // Verificar permisos de edición - Política: no se permite edición de préstamos ya creados
-  const isReadOnly = prestamo ? true : false
+  // Permitir edición si el usuario tiene permisos y está editando un préstamo
+  const isReadOnly = prestamo ? !canEditPrestamo() : false
   const canApprove = prestamo ? canApprovePrestamo() : false
 
   return (
@@ -544,13 +556,34 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                     <Input
                       type="number"
                       step="0.01"
-                      min="0"
+                      min={valorActivo > 0 ? (valorActivo * 0.30).toFixed(2) : "0"}
                       value={anticipo === 0 ? '' : anticipo.toFixed(2)}
-                      readOnly
-                      className="bg-gray-100"
-                      placeholder="Calculado automáticamente"
+                      onChange={(e) => {
+                        const value = e.target.value
+                        const numericValue = value === '' ? 0 : parseFloat(value)
+                        if (!isNaN(numericValue) && numericValue >= 0) {
+                          setAnticipo(numericValue)
+                        }
+                      }}
+                      onBlur={(e) => {
+                        const value = parseFloat(e.target.value)
+                        const anticipoMinimo = valorActivo > 0 ? valorActivo * 0.30 : 0
+                        // Si el valor es menor al mínimo, establecer el mínimo
+                        if (!isNaN(value) && value < anticipoMinimo) {
+                          setAnticipo(anticipoMinimo)
+                          toast.warning(`El anticipo mínimo es ${anticipoMinimo.toFixed(2)} USD (30% del valor activo)`)
+                        } else if (!isNaN(value) && value >= anticipoMinimo) {
+                          setAnticipo(value)
+                        }
+                      }}
+                      disabled={isReadOnly}
+                      placeholder="Mínimo 30% del Valor Activo"
                     />
-                    <p className="text-xs text-gray-500 mt-1">30% del Valor Activo</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {valorActivo > 0 
+                        ? `Mínimo: ${(valorActivo * 0.30).toFixed(2)} USD (30% del Valor Activo)`
+                        : '30% del Valor Activo'}
+                    </p>
                   </div>
                 </div>
 
@@ -635,33 +668,6 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                         ...formData,
                         fecha_requerimiento: e.target.value
                       })}
-                      disabled={isReadOnly}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-1">
-                      Tasa de Interés (%)
-                    </label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={formData.tasa_interes === 0 ? '' : formData.tasa_interes}
-                      onChange={(e) => {
-                        const value = e.target.value
-                        const numericValue = value === '' ? 0 : parseFloat(value.replace(/^0+/, '').replace(/^\./, '0.'))
-                        setFormData({
-                          ...formData,
-                          tasa_interes: isNaN(numericValue) ? 0 : numericValue
-                        })
-                      }}
-                      onBlur={(e) => {
-                        const value = parseFloat(e.target.value)
-                        if (value >= 0) {
-                          setFormData({ ...formData, tasa_interes: value })
-                        }
-                      }}
                       disabled={isReadOnly}
                     />
                   </div>

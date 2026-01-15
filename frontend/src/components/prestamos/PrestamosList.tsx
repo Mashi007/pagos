@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Plus, Search, Filter, Edit, Eye, Trash2, DollarSign, Calendar, Lock, Calculator, CheckCircle2, X, RefreshCw } from 'lucide-react'
+import { Plus, Search, Filter, Edit, Eye, Trash2, DollarSign, Calendar, Lock, Calculator, CheckCircle2, X, RefreshCw, CalendarCheck } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,6 +18,7 @@ import { PrestamosKPIs } from './PrestamosKPIs'
 import { EvaluacionRiesgoForm } from './EvaluacionRiesgoForm'
 import { PrestamoDetalleModal } from './PrestamoDetalleModal'
 import { FormularioAprobacionCondiciones } from './FormularioAprobacionCondiciones'
+import { AsignarFechaAprobacionModal } from './AsignarFechaAprobacionModal'
 import { formatDate } from '@/utils'
 import { prestamoService } from '@/services/prestamoService'
 import { toast } from 'sonner'
@@ -56,9 +57,11 @@ export function PrestamosList() {
   const [showEvaluacion, setShowEvaluacion] = useState(false)
   const [showDetalle, setShowDetalle] = useState(false)
   const [showAprobacionCondiciones, setShowAprobacionCondiciones] = useState(false)
+  const [showAsignarFechaAprobacion, setShowAsignarFechaAprobacion] = useState(false)
   const [editingPrestamo, setEditingPrestamo] = useState<any>(null)
   const [evaluacionPrestamo, setEvaluacionPrestamo] = useState<any>(null)
   const [aprobacionPrestamo, setAprobacionPrestamo] = useState<any>(null)
+  const [fechaAprobacionPrestamo, setFechaAprobacionPrestamo] = useState<any>(null)
   const [viewingPrestamo, setViewingPrestamo] = useState<any>(null)
   const [deletePrestamoId, setDeletePrestamoId] = useState<number | null>(null)
 
@@ -139,6 +142,7 @@ export function PrestamosList() {
       EN_REVISION: 'bg-yellow-100 text-yellow-800 border-yellow-300',
       EVALUADO: 'bg-blue-100 text-blue-800 border-blue-300',
       APROBADO: 'bg-green-100 text-green-800 border-green-300',
+      DESEMBOLSADO: 'bg-blue-100 text-blue-800 border-blue-300',
       RECHAZADO: 'bg-red-100 text-red-800 border-red-300',
     }
     return badges[estado as keyof typeof badges] || badges.DRAFT
@@ -170,6 +174,11 @@ export function PrestamosList() {
     setShowAprobacionCondiciones(true)
   }
 
+  const handleAsignarFechaAprobacion = (prestamo: any) => {
+    setFechaAprobacionPrestamo(prestamo)
+    setShowAsignarFechaAprobacion(true)
+  }
+
   const handleView = (prestamo: any) => {
     setViewingPrestamo(prestamo)
     setShowDetalle(true)
@@ -181,19 +190,6 @@ export function PrestamosList() {
     }
   }
 
-  const handleMarcarRevision = async (prestamoId: number, requiereRevision: boolean) => {
-    try {
-      await prestamoService.marcarRevision(prestamoId, requiereRevision)
-      queryClient.invalidateQueries({ queryKey: prestamoKeys.list(filters) })
-      toast.success(
-        requiereRevision
-          ? 'Préstamo marcado para revisión. Aparecerá en el reporte de diferencias.'
-          : 'Préstamo desmarcado de revisión.'
-      )
-    } catch (error: any) {
-      toast.error(error?.response?.data?.detail || 'Error al actualizar estado de revisión')
-    }
-  }
 
   // Función para actualizar los datos manualmente
   const handleRefresh = async () => {
@@ -249,6 +245,30 @@ export function PrestamosList() {
           queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
           queryClient.invalidateQueries({ queryKey: prestamoKeys.lists() })
           // Forzar refetch inmediato ignorando staleTime
+          await queryClient.refetchQueries({
+            queryKey: prestamoKeys.all,
+            exact: false,
+            type: 'active'
+          })
+        }}
+      />
+    )
+  }
+
+  if (showAsignarFechaAprobacion) {
+    return (
+      <AsignarFechaAprobacionModal
+        prestamo={fechaAprobacionPrestamo}
+        onClose={() => {
+          setShowAsignarFechaAprobacion(false)
+          setFechaAprobacionPrestamo(null)
+        }}
+        onSuccess={async () => {
+          setShowAsignarFechaAprobacion(false)
+          setFechaAprobacionPrestamo(null)
+          // Invalidar queries para refrescar datos
+          queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
+          queryClient.invalidateQueries({ queryKey: prestamoKeys.lists() })
           await queryClient.refetchQueries({
             queryKey: prestamoKeys.all,
             exact: false,
@@ -370,7 +390,7 @@ export function PrestamosList() {
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
                   <Input
-                    placeholder="Buscar por nombre..."
+                    placeholder="Buscar por cédula..."
                     value={filters.search || ''}
                     onChange={(e) => setFilters({ ...filters, search: e.target.value })}
                     className="pl-10"
@@ -419,6 +439,7 @@ export function PrestamosList() {
                       <SelectItem value="EN_REVISION">🟡 En Revisión</SelectItem>
                       <SelectItem value="EVALUADO">🔷 Evaluado</SelectItem>
                       <SelectItem value="APROBADO">🟢 Aprobado</SelectItem>
+                      <SelectItem value="DESEMBOLSADO">🔵 Desembolsado</SelectItem>
                       <SelectItem value="RECHAZADO">🔴 Rechazado</SelectItem>
                     </SelectContent>
                   </Select>
@@ -617,7 +638,6 @@ export function PrestamosList() {
                         <TableHead>Cuotas</TableHead>
                         <TableHead>Estado</TableHead>
                         <TableHead>Fecha</TableHead>
-                        <TableHead className="text-center">REVISAR</TableHead>
                         <TableHead className="text-right">Acciones</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -656,26 +676,32 @@ export function PrestamosList() {
                             {formatDate(prestamo.fecha_registro)}
                           </div>
                         </TableCell>
-                        <TableCell className="text-center">
-                          <input
-                            type="checkbox"
-                            checked={prestamo.requiere_revision || false}
-                            onChange={(e) => handleMarcarRevision(prestamo.id, e.target.checked)}
-                            className="h-4 w-4 cursor-pointer"
-                            title="Marcar para revisar diferencias de abonos"
-                          />
-                        </TableCell>
-                                    <TableCell className="text-right">
+                        <TableCell className="text-right">
                                       <div className="flex justify-end gap-2">
-                                        {/* Botón Ver Detalles */}
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() => handleView(prestamo)}
-                                          title="Ver detalles"
-                                        >
-                                          <Eye className="h-4 w-4" />
-                                        </Button>
+                                        {/* Botón Ver Detalles - Visible cuando está DESEMBOLSADO o tiene fecha_aprobacion */}
+                                        {(prestamo.estado === 'DESEMBOLSADO' || prestamo.fecha_aprobacion) && (
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => handleView(prestamo)}
+                                            title="Ver detalles"
+                                          >
+                                            <Eye className="h-4 w-4" />
+                                          </Button>
+                                        )}
+
+                                        {/* Botón Editar - Solo si tiene permisos Y está DESEMBOLSADO o tiene fecha_aprobacion */}
+                                        {canEditPrestamo() && (prestamo.estado === 'DESEMBOLSADO' || prestamo.fecha_aprobacion) && (
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => handleEdit(prestamo)}
+                                            title="Editar préstamo"
+                                            className="hover:bg-blue-50"
+                                          >
+                                            <Edit className="h-4 w-4 text-blue-600" />
+                                          </Button>
+                                        )}
 
                                         {/* Botón Evaluar Riesgo - Solo Admin (DRAFT o EN_REVISION) */}
                                         {canViewEvaluacionRiesgo() && (prestamo.estado === 'DRAFT' || prestamo.estado === 'EN_REVISION') && (
@@ -703,7 +729,28 @@ export function PrestamosList() {
                                           </Button>
                                         )}
 
-                            {/* Editar removido por política: no editable */}
+                                        {/* Botón Asignar Fecha de Aprobación - Solo Admin (APROBADO sin fecha_aprobacion) */}
+                                        {canViewEvaluacionRiesgo() && prestamo.estado === 'APROBADO' && !prestamo.fecha_aprobacion && (
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => handleAsignarFechaAprobacion(prestamo)}
+                                            title="Asignar fecha de aprobación y desembolsar (requiere calificación mínima 70)"
+                                            className="hover:bg-purple-50"
+                                          >
+                                            <CalendarCheck className="h-4 w-4 text-purple-600" />
+                                          </Button>
+                                        )}
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => handleAsignarFechaAprobacion(prestamo)}
+                                            title="Asignar fecha de aprobación y recalcular tabla de amortización"
+                                            className="hover:bg-purple-50"
+                                          >
+                                            <CalendarCheck className="h-4 w-4 text-purple-600" />
+                                          </Button>
+                                        )}
 
                             {/* Botón Eliminar - Solo Admin */}
                             {canDeletePrestamo() ? (

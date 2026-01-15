@@ -207,7 +207,7 @@ def obtener_configuracion_completa(
 
 @router.get("/sistema/{clave}")
 def obtener_configuracion_por_clave(
-    clave: str = Path(..., regex="^[A-Za-z0-9_]+$", max_length=100, description="Clave de configuración"),
+    clave: Annotated[str, Path(..., regex="^[A-Za-z0-9_]+$", max_length=100, description="Clave de configuración")],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -235,7 +235,7 @@ def obtener_configuracion_por_clave(
 
 @router.get("/sistema/categoria/{categoria}")
 def obtener_configuracion_por_categoria(
-    categoria: str = Path(..., regex="^[A-Z_]+$", max_length=50, description="Categoría de configuración"),
+    categoria: Annotated[str, Path(..., regex="^[A-Z_]+$", max_length=50, description="Categoría de configuración")],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -324,7 +324,7 @@ def actualizar_configuracion(
 
 @router.delete("/sistema/{clave}")
 def eliminar_configuracion(
-    clave: str = Path(..., regex="^[A-Za-z0-9_]+$", max_length=100, description="Clave de configuración"),
+    clave: Annotated[str, Path(..., regex="^[A-Za-z0-9_]+$", max_length=100, description="Clave de configuración")],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -770,7 +770,7 @@ def _verificar_logo_existe(filename: str, db: Optional[Session] = None) -> tuple
 
 @router.head("/logo/{filename}")
 async def verificar_logo_existe(
-    filename: str,
+    filename: Annotated[str, Path(..., description="Nombre del archivo del logo")],
     db: Session = Depends(get_db),
 ):
     """Verificar si el logo existe (HEAD request)"""
@@ -895,7 +895,7 @@ async def eliminar_logo(
 
 @router.get("/logo/{filename}")
 async def obtener_logo(
-    filename: str,
+    filename: Annotated[str, Path(..., description="Nombre del archivo del logo")],
     db: Session = Depends(get_db),
 ):
     """Obtener logo de la empresa"""

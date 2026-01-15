@@ -10,7 +10,9 @@ import { TablaAmortizacionPrestamo } from './TablaAmortizacionPrestamo'
 import { AuditoriaPrestamo } from './AuditoriaPrestamo'
 import { usePrestamo } from '@/hooks/usePrestamos'
 import { aiTrainingService } from '@/services/aiTrainingService'
+import { prestamoService } from '@/services/prestamoService'
 import { toast } from 'sonner'
+import { useQuery } from '@tanstack/react-query'
 
 interface PrestamoDetalleModalProps {
   prestamo: Prestamo
@@ -25,10 +27,21 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
   // Recargar datos completos del préstamo
   const { data: prestamo, isLoading } = usePrestamo(prestamoInitial.id)
 
-  // Cargar predicción de impago si el préstamo está aprobado
+  // Obtener evaluación de riesgo
+  const { data: evaluacionRiesgo, isLoading: loadingEvaluacion } = useQuery({
+    queryKey: ['evaluacion-riesgo', prestamoInitial.id],
+    queryFn: () => prestamoService.getEvaluacionRiesgo(prestamoInitial.id),
+    enabled: !!prestamoInitial.id,
+    retry: false, // No reintentar si no hay evaluación
+    onError: () => {
+      // Silenciar error si no hay evaluación
+    }
+  })
+
+  // Cargar predicción de impago si el préstamo está aprobado o desembolsado
   useEffect(() => {
     const prestamoData = prestamo || prestamoInitial
-    if (prestamoData?.estado === 'APROBADO') {
+    if (prestamoData?.estado === 'APROBADO' || prestamoData?.estado === 'DESEMBOLSADO') {
       cargarPrediccionImpago(prestamoData.id)
     }
   }, [prestamo, prestamoInitial])
@@ -83,6 +96,7 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
       DRAFT: 'bg-gray-100 text-gray-800 border-gray-300',
       EN_REVISION: 'bg-yellow-100 text-yellow-800 border-yellow-300',
       APROBADO: 'bg-green-100 text-green-800 border-green-300',
+      DESEMBOLSADO: 'bg-blue-100 text-blue-800 border-blue-300',
       RECHAZADO: 'bg-red-100 text-red-800 border-red-300',
     }
     return badges[estado as keyof typeof badges] || badges.DRAFT
@@ -93,6 +107,7 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
       DRAFT: 'Borrador',
       EN_REVISION: 'En Revisión',
       APROBADO: 'Aprobado',
+      DESEMBOLSADO: 'Desembolsado',
       RECHAZADO: 'Rechazado',
     }
     return labels[estado] || estado
@@ -255,8 +270,66 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                   </CardContent>
                 </Card>
 
+                {/* Evaluación de Riesgo - Solo lectura */}
+                {evaluacionRiesgo && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <TrendingUp className="h-5 w-5" />
+                        Evaluación de Riesgo (Solo Lectura)
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-sm text-gray-600">Puntuación Total</label>
+                          <p className="text-2xl font-bold text-blue-600">
+                            {evaluacionRiesgo.puntuacion_total?.toFixed(2) || '0.00'} / 100
+                          </p>
+                        </div>
+                        <div>
+                          <label className="text-sm text-gray-600">Clasificación de Riesgo</label>
+                          <Badge className={
+                            evaluacionRiesgo.clasificacion_riesgo === 'A' ? 'bg-green-100 text-green-800 border-green-300' :
+                            evaluacionRiesgo.clasificacion_riesgo === 'B' ? 'bg-blue-100 text-blue-800 border-blue-300' :
+                            evaluacionRiesgo.clasificacion_riesgo === 'C' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' :
+                            evaluacionRiesgo.clasificacion_riesgo === 'D' ? 'bg-orange-100 text-orange-800 border-orange-300' :
+                            'bg-red-100 text-red-800 border-red-300'
+                          }>
+                            {evaluacionRiesgo.clasificacion_riesgo || 'N/A'}
+                          </Badge>
+                        </div>
+                        <div>
+                          <label className="text-sm text-gray-600">Decisión Final</label>
+                          <p className="font-medium">{evaluacionRiesgo.decision_final || 'N/A'}</p>
+                        </div>
+                        {evaluacionRiesgo.sugerencias?.plazo_maximo_sugerido && (
+                          <div>
+                            <label className="text-sm text-gray-600">Plazo Máximo Sugerido</label>
+                            <p className="font-medium">{evaluacionRiesgo.sugerencias.plazo_maximo_sugerido} meses</p>
+                          </div>
+                        )}
+                      </div>
+                      {evaluacionRiesgo.detalle_criterios && (
+                        <div className="mt-4 pt-4 border-t">
+                          <h4 className="font-semibold mb-2">Detalle por Criterios:</h4>
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            <div>Criterio 1 - Capacidad de Pago: {evaluacionRiesgo.detalle_criterios.ratio_endeudamiento?.puntos || 0} pts</div>
+                            <div>Criterio 2 - Estabilidad Laboral: {evaluacionRiesgo.detalle_criterios.antiguedad_trabajo?.puntos || 0} pts</div>
+                            <div>Criterio 3 - Referencias: {evaluacionRiesgo.detalle_criterios.referencias?.puntos || 0} pts</div>
+                            <div>Criterio 4 - Arraigo Geográfico: {(evaluacionRiesgo.detalle_criterios.arraigo_familiar || 0) + (evaluacionRiesgo.detalle_criterios.arraigo_laboral || 0)} pts</div>
+                            <div>Criterio 5 - Perfil Sociodemográfico: {evaluacionRiesgo.detalle_criterios.vivienda?.puntos || 0} pts</div>
+                            <div>Criterio 6 - Edad: {evaluacionRiesgo.detalle_criterios.edad?.puntos || 0} pts</div>
+                            <div>Criterio 7 - Capacidad de Maniobra: {evaluacionRiesgo.detalle_criterios.enganche_garantias?.puntos || 0} pts</div>
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+
                 {/* Predicción de Impago de Cuotas */}
-                {prestamoData.estado === 'APROBADO' && (
+                {(prestamoData.estado === 'APROBADO' || prestamoData.estado === 'DESEMBOLSADO') && (
                   <Card className={prediccionImpago ? getRiesgoColor(prediccionImpago.nivel_riesgo) : ''}>
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">

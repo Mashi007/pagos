@@ -248,19 +248,80 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
   })
 
   // Reglas mínimas para considerar cada sección completa
+  // Criterio 1: Capacidad de Pago (29 puntos)
   const seccion1Completa =
     (formData.ingresos_mensuales ?? 0) > 0 &&
     (formData.gastos_fijos_mensuales ?? 0) >= 0 &&
     (formData.otras_deudas ?? 0) >= 0
 
+  // Criterio 2: Estabilidad Laboral (23 puntos)
   const seccion2Completa =
-    (formData.meses_trabajo ?? 0) >= 0 && !!formData.tipo_empleo && !!formData.sector_economico
+    (formData.meses_trabajo ?? 0) >= 0 && 
+    !!formData.tipo_empleo && 
+    !!formData.sector_economico
 
-  // TODO: Añadir secciones 3–5 como obligatorias (cuando definamos mínimos)
-  const todasSeccionesCompletas = seccion1Completa && seccion2Completa
+  // Criterio 3: Referencias Personales (9 puntos)
+  const seccion3Completa =
+    !!formData.referencia1_observaciones && formData.referencia1_observaciones.trim() !== '' &&
+    (formData.referencia1_calificacion ?? 0) > 0 &&
+    !!formData.referencia2_observaciones && formData.referencia2_observaciones.trim() !== '' &&
+    (formData.referencia2_calificacion ?? 0) > 0 &&
+    !!formData.referencia3_observaciones && formData.referencia3_observaciones.trim() !== '' &&
+    (formData.referencia3_calificacion ?? 0) > 0
+
+  // Criterio 4: Arraigo Geográfico (7 puntos)
+  const seccion4Completa =
+    typeof formData.familia_cercana === 'boolean' &&
+    typeof formData.familia_pais === 'boolean' &&
+    (formData.minutos_trabajo ?? 0) >= 0
+
+  // Criterio 5: Perfil Sociodemográfico (17 puntos)
+  const seccion5Completa =
+    !!formData.tipo_vivienda_detallado &&
+    !!formData.estado_civil &&
+    !!formData.situacion_hijos &&
+    (formData.personas_casa ?? 0) > 0
+
+  // Criterio 6: Edad del Cliente (10 puntos)
+  // La edad se calcula automáticamente desde la fecha de nacimiento del cliente
+  const seccion6Completa = (clienteEdad ?? 0) > 0
+
+  // Criterio 7: Capacidad de Maniobra (5 puntos)
+  // Se calcula automáticamente con los datos del Criterio 1
+  // Si el Criterio 1 está completo, el Criterio 7 también lo está
+  const seccion7Completa = seccion1Completa
+
+  // ✅ Validación completa: todos los 7 criterios deben estar completos
+  const todasSeccionesCompletas = 
+    seccion1Completa && 
+    seccion2Completa && 
+    seccion3Completa && 
+    seccion4Completa && 
+    seccion5Completa && 
+    seccion6Completa && 
+    seccion7Completa
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // Validar que todos los criterios estén completos
+    if (!todasSeccionesCompletas) {
+      const criteriosFaltantes: string[] = []
+      if (!seccion1Completa) criteriosFaltantes.push('Criterio 1: Capacidad de Pago')
+      if (!seccion2Completa) criteriosFaltantes.push('Criterio 2: Estabilidad Laboral')
+      if (!seccion3Completa) criteriosFaltantes.push('Criterio 3: Referencias Personales')
+      if (!seccion4Completa) criteriosFaltantes.push('Criterio 4: Arraigo Geográfico')
+      if (!seccion5Completa) criteriosFaltantes.push('Criterio 5: Perfil Sociodemográfico')
+      if (!seccion6Completa) criteriosFaltantes.push('Criterio 6: Edad del Cliente')
+      if (!seccion7Completa) criteriosFaltantes.push('Criterio 7: Capacidad de Maniobra')
+      
+      toast.error(
+        `Debe completar todos los 7 criterios antes de evaluar. Faltan: ${criteriosFaltantes.join(', ')}`,
+        { duration: 5000 }
+      )
+      return
+    }
+    
     if (bloqueadoPorMora) {
       toast.error('No puede continuar: el cliente tiene cuotas en mora.')
       setShowSection('situacion')
@@ -398,24 +459,53 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
         {/* Navegación por Secciones */}
         <div className="bg-gray-50 px-4 py-2 border-b overflow-x-auto">
           <div className="flex gap-2">
-            {secciones.map((seccion) => (
-              <button
-                key={seccion.id}
-                onClick={() => setShowSection(seccion.id)}
-                className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                  showSection === seccion.id
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white text-gray-600 hover:bg-gray-100'
-                }`}
-              >
-                {seccion.label.split(':')[0]} {seccion.puntos ? `(${seccion.puntos} pts)` : ''}
-              </button>
-            ))}
+            {secciones.map((seccion) => {
+              // Determinar si la sección está completa
+              let seccionCompleta = false
+              if (seccion.id === 'criterio1') seccionCompleta = seccion1Completa
+              else if (seccion.id === 'criterio2') seccionCompleta = seccion2Completa
+              else if (seccion.id === 'criterio3') seccionCompleta = seccion3Completa
+              else if (seccion.id === 'criterio4') seccionCompleta = seccion4Completa
+              else if (seccion.id === 'criterio5') seccionCompleta = seccion5Completa
+              else if (seccion.id === 'criterio6') seccionCompleta = seccion6Completa
+              else if (seccion.id === 'criterio7') seccionCompleta = seccion7Completa
+              else if (seccion.id === 'situacion' || seccion.id === 'resultado') seccionCompleta = true
+              
+              return (
+                <button
+                  key={seccion.id}
+                  onClick={() => setShowSection(seccion.id)}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-2 ${
+                    showSection === seccion.id
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  {seccionCompleta && seccion.id.startsWith('criterio') && (
+                    <CheckCircle className="h-4 w-4 text-green-600" />
+                  )}
+                  {!seccionCompleta && seccion.id.startsWith('criterio') && (
+                    <AlertCircle className="h-4 w-4 text-amber-600" />
+                  )}
+                  {seccion.label.split(':')[0]} {seccion.puntos ? `(${seccion.puntos} pts)` : ''}
+                </button>
+              )
+            })}
           </div>
           {/* Aviso de pendientes */}
           {!todasSeccionesCompletas && (
             <div className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2 rounded">
-              Debe completar los campos obligatorios en: { !seccion1Completa ? 'Criterio 1' : '' }{ !seccion1Completa && !seccion2Completa ? ', ' : ''}{ !seccion2Completa ? 'Criterio 2' : '' }.
+              <strong>⚠️ Debe completar todos los 7 criterios antes de evaluar.</strong> Faltan: {
+                [
+                  !seccion1Completa && 'Criterio 1',
+                  !seccion2Completa && 'Criterio 2',
+                  !seccion3Completa && 'Criterio 3',
+                  !seccion4Completa && 'Criterio 4',
+                  !seccion5Completa && 'Criterio 5',
+                  !seccion6Completa && 'Criterio 6',
+                  !seccion7Completa && 'Criterio 7'
+                ].filter(Boolean).join(', ')
+              }.
             </div>
           )}
         </div>
@@ -1580,7 +1670,27 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
               <Button type="button" variant="outline" onClick={onClose}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={isLoading || !todasSeccionesCompletas || bloqueadoPorMora} title={!todasSeccionesCompletas ? 'Complete las secciones requeridas' : undefined}>
+              <Button 
+                type="submit" 
+                disabled={isLoading || !todasSeccionesCompletas || bloqueadoPorMora} 
+                title={
+                  !todasSeccionesCompletas 
+                    ? `Complete todos los 7 criterios. Faltan: ${
+                        [
+                          !seccion1Completa && 'Criterio 1',
+                          !seccion2Completa && 'Criterio 2',
+                          !seccion3Completa && 'Criterio 3',
+                          !seccion4Completa && 'Criterio 4',
+                          !seccion5Completa && 'Criterio 5',
+                          !seccion6Completa && 'Criterio 6',
+                          !seccion7Completa && 'Criterio 7'
+                        ].filter(Boolean).join(', ')
+                      }`
+                    : bloqueadoPorMora
+                    ? 'El cliente tiene cuotas en mora'
+                    : undefined
+                }
+              >
                 <Calculator className="h-4 w-4 mr-2" />
                 {isLoading ? 'Evaluando...' : 'Evaluar Riesgo'}
               </Button>
