@@ -689,36 +689,50 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
   // ✅ CORRECCIÓN: Solo mostrar logo personalizado si realmente existe y está disponible Y no se fuerza el default
   else if (customLogoUrl && !logoCache.logoNotFound && hasChecked && !forceDefault) {
     return (
-      <img
-        key={`logo-${logoVersion}-${customLogoUrl}`}
-        src={customLogoUrl}
-        alt="Logo de la empresa"
-        className={cn(sizeMap[size], className, 'object-contain')}
-        role="img"
-        loading="eager"
-        onLoad={() => {
-          // ✅ Cuando la imagen se carga completamente, marcarla como cargada
-          if (isMounted()) {
-            setImageLoaded(true)
-          }
-        }}
-        onError={(e) => {
-          // ✅ Si falla la carga (404 o imagen corrupta), marcar como no encontrado y limpiar caché
-          console.warn('⚠️ Error cargando logo (GET falló o imagen inválida), limpiando caché:', customLogoUrl)
-          logoCache.logoNotFound = true
-          logoCache.logoUrl = null
-          logoCache.logoFilename = null
-          logoCache.version += 1
-          // ✅ Limpiar metadatos del localStorage
-          saveLogoMetadata(null)
-          setCustomLogoUrl(null)
-          setHasChecked(true)
-          setImageLoaded(false)
-          setLogoVersion(logoCache.version)
-          notifyLogoListeners(null, logoCache.version) // ✅ Notificar a todas las instancias
-          // No intentar recargar - el logo no existe o está corrupto
-        }}
-      />
+      <div className={cn('relative', sizeMap[size])}>
+        {/* Indicador de carga mientras la imagen se carga */}
+        {!imageLoaded && (
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded animate-pulse">
+            <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
+        <img
+          key={`logo-${logoVersion}-${customLogoUrl}`}
+          src={customLogoUrl}
+          alt="Logo de la empresa"
+          className={cn(
+            sizeMap[size],
+            className,
+            'object-contain',
+            imageLoaded ? 'opacity-100' : 'opacity-0',
+            'transition-opacity duration-300'
+          )}
+          role="img"
+          loading="eager"
+          onLoad={() => {
+            // ✅ Cuando la imagen se carga completamente, marcarla como cargada
+            if (isMounted()) {
+              setImageLoaded(true)
+            }
+          }}
+          onError={(e) => {
+            // ✅ Si falla la carga (404 o imagen corrupta), marcar como no encontrado y limpiar caché
+            console.warn('⚠️ Error cargando logo (GET falló o imagen inválida), limpiando caché:', customLogoUrl)
+            logoCache.logoNotFound = true
+            logoCache.logoUrl = null
+            logoCache.logoFilename = null
+            logoCache.version += 1
+            // ✅ Limpiar metadatos del localStorage
+            saveLogoMetadata(null)
+            setCustomLogoUrl(null)
+            setHasChecked(true)
+            setImageLoaded(false)
+            setLogoVersion(logoCache.version)
+            notifyLogoListeners(null, logoCache.version) // ✅ Notificar a todas las instancias
+            // No intentar recargar - el logo no existe o está corrupto
+          }}
+        />
+      </div>
     )
   }
 

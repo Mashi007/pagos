@@ -29,6 +29,7 @@ import {
   ChevronRight,
   Upload,
   Download,
+  Trash2,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -159,6 +160,19 @@ export function Configuracion() {
       console.log('✅ Configuración general cargada:', config)
 
       setConfiguracionGeneral(config)
+      
+      // ✅ Verificar si hay logo personalizado
+      if (config.logo_filename) {
+        setHasCustomLogo(true)
+        // Cargar preview del logo actual
+        const logoUrl = `/api/v1/configuracion/logo/${config.logo_filename}?t=${Date.now()}`
+        setLogoPreview(logoUrl)
+        setLogoInfo({ filename: config.logo_filename, url: logoUrl })
+      } else {
+        setHasCustomLogo(false)
+        setLogoPreview(null)
+        setLogoInfo(null)
+      }
 
       // Actualizar también el mock para compatibilidad
       setConfiguracion(prev => ({
@@ -394,8 +408,10 @@ export function Configuracion() {
   }
 
   const [uploadingLogo, setUploadingLogo] = useState(false)
+  const [deletingLogo, setDeletingLogo] = useState(false)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const [logoInfo, setLogoInfo] = useState<{ filename: string; url: string } | null>(null)
+  const [hasCustomLogo, setHasCustomLogo] = useState(false)
 
   const handleCargarLogo = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -568,12 +584,49 @@ export function Configuracion() {
 
             {/* Preview del logo actual o nuevo */}
             {logoPreview && (
-              <div className="flex items-center justify-center p-4 bg-white rounded-lg border border-blue-200">
+              <div className="flex flex-col items-center space-y-3 p-4 bg-white rounded-lg border border-blue-200">
                 <img
                   src={logoPreview}
                   alt="Vista previa del logo"
                   className="max-h-24 max-w-48 object-contain"
                 />
+                {hasCustomLogo && (
+                  <p className="text-xs text-gray-500">
+                    Logo personalizado actual: {logoInfo?.filename || 'logo-custom'}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Botón para eliminar logo personalizado */}
+            {hasCustomLogo && (
+              <div className="flex items-center justify-between p-3 bg-red-50 border border-red-200 rounded-lg">
+                <div className="flex items-center space-x-2">
+                  <AlertTriangle className="h-5 w-5 text-red-600" />
+                  <div>
+                    <p className="text-sm font-medium text-red-900">Logo personalizado activo</p>
+                    <p className="text-xs text-red-700">Puede eliminar el logo para restaurar el logo por defecto</p>
+                  </div>
+                </div>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleEliminarLogo}
+                  disabled={deletingLogo || uploadingLogo}
+                  className="flex items-center space-x-2"
+                >
+                  {deletingLogo ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Eliminando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4" />
+                      <span>Eliminar Logo</span>
+                    </>
+                  )}
+                </Button>
               </div>
             )}
 
