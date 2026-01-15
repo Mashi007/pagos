@@ -791,6 +791,12 @@ async def verificar_logo_existe(
         raise HTTPException(status_code=500, detail=f"Error verificando logo: {str(e)}")
 
 
+@router.options("/logo")
+async def eliminar_logo_options(request: Request):
+    """Manejar preflight OPTIONS para DELETE /logo (CORS)"""
+    return {"message": "OK"}
+
+
 @router.delete("/logo")
 @limiter.limit("5/minute")  # ✅ Rate limiting: máximo 5 eliminaciones por minuto
 async def eliminar_logo(

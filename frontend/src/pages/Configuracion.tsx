@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { getErrorMessage, isAxiosError, getErrorDetail } from '@/types/errors'
+import { env } from '@/config/env'
 import {
   Settings,
   Save,
@@ -439,7 +440,7 @@ export function Configuracion() {
 
       // Subir logo usando fetch directamente para FormData (axios puede tener problemas con FormData)
       const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token')
-      const response = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/v1/configuracion/upload-logo`, {
+      const response = await fetch(`${env.API_URL}/api/v1/configuracion/upload-logo`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -503,7 +504,7 @@ export function Configuracion() {
 
       // Llamar al endpoint DELETE para eliminar el logo
       const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token')
-      const response = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/v1/configuracion/logo`, {
+      const response = await fetch(`${env.API_URL}/api/v1/configuracion/logo`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
