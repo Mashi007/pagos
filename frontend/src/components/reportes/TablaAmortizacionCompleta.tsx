@@ -79,18 +79,6 @@ export function TablaAmortizacionCompleta() {
   // Obtener préstamos por cédula usando hook
   const { data: prestamosData, isLoading: loadingPrestamos, error: errorPrestamos } = usePrestamosByCedula(cedulaSeleccionada || '')
   
-  // Debug: Log para ver qué está pasando con los préstamos (solo en desarrollo)
-  if (process.env.NODE_ENV === 'development') {
-    console.log('🔍 [TablaAmortizacion] Estado préstamos:', {
-      cedulaSeleccionada,
-      loadingPrestamos,
-      errorPrestamos,
-      prestamosData,
-      prestamosLength: prestamosData?.length || 0,
-      prestamoIds: prestamosData?.map(p => p.id) || []
-    })
-  }
-  
   // Asegurar que prestamos siempre sea un array
   const prestamos = prestamosData || []
 
@@ -100,18 +88,29 @@ export function TablaAmortizacionCompleta() {
   const prestamoIdsKey = JSON.stringify(prestamoIds)
   const shouldFetchCuotas = !!cedulaSeleccionada && !!prestamosData && Array.isArray(prestamosData) && prestamosData.length > 0 && !loadingPrestamos
   
-  if (process.env.NODE_ENV === 'development') {
-    console.log('🔍 [TablaAmortizacion] Condición para cargar cuotas:', {
-      cedulaSeleccionada: !!cedulaSeleccionada,
-      prestamosData: !!prestamosData,
-      isArray: Array.isArray(prestamosData),
-      prestamosLength: prestamosData?.length || 0,
-      loadingPrestamos,
-      shouldFetchCuotas,
-      prestamoIds,
-      prestamoIdsKey
-    })
-  }
+  // Debug: Log para ver qué está pasando con los préstamos (solo en desarrollo)
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 [TablaAmortizacion] Estado préstamos:', {
+        cedulaSeleccionada,
+        loadingPrestamos,
+        errorPrestamos,
+        prestamosData,
+        prestamosLength: prestamosData?.length || 0,
+        prestamoIds: prestamosData?.map(p => p.id) || []
+      })
+      console.log('🔍 [TablaAmortizacion] Condición para cargar cuotas:', {
+        cedulaSeleccionada: !!cedulaSeleccionada,
+        prestamosData: !!prestamosData,
+        isArray: Array.isArray(prestamosData),
+        prestamosLength: prestamosData?.length || 0,
+        loadingPrestamos,
+        shouldFetchCuotas,
+        prestamoIds,
+        prestamoIdsKey
+      })
+    }
+  }, [cedulaSeleccionada, loadingPrestamos, errorPrestamos, prestamosData, prestamoIds, prestamoIdsKey, shouldFetchCuotas])
   
   const { data: todasLasCuotas, isLoading: loadingCuotas, error: errorCuotas } = useQuery({
     queryKey: ['cuotas-prestamos', prestamoIdsKey],
