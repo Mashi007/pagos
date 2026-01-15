@@ -464,7 +464,7 @@ export function EntrenamientoMejorado() {
                       onClick={() => window.location.href = '/configuracion?tab=ai&subtab=fine-tuning'}
                     >
                       Ver Conversaciones
-                      <ArrowRight className="ml-2 h-4 w-4" />
+                      <ChevronRight className="ml-2 h-4 w-4" />
                     </Button>
                   </div>
                 </div>
