@@ -6944,9 +6944,6 @@ def _validar_pregunta_es_sobre_bd(pregunta: str) -> None:
     # Verificar si contiene frase excluida
     tiene_frase_excluida = any(excluida in pregunta_lower for excluida in frases_excluidas)
     
-    # Si contiene palabras excluidas sin contexto de BD, rechazar
-    tiene_palabra_excluida = any(excluida in pregunta_lower for excluida in palabras_excluidas)
-    
     # Palabras clave que DEBEN estar presentes para ser válida
     palabras_clave_obligatorias = [
         "cliente", "clientes",
