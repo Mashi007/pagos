@@ -497,6 +497,57 @@ export function Configuracion() {
     }
   }
 
+  const handleEliminarLogo = async () => {
+    try {
+      setDeletingLogo(true)
+
+      // Llamar al endpoint DELETE para eliminar el logo
+      const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token')
+      const response = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/v1/configuracion/logo`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Error desconocido' }))
+        throw new Error(errorData.detail || `Error ${response.status}`)
+      }
+
+      const result = await response.json()
+
+      // Limpiar estados del logo
+      setLogoPreview(null)
+      setLogoInfo(null)
+      setHasCustomLogo(false)
+
+      // Disparar evento para actualizar componentes Logo
+      window.dispatchEvent(new CustomEvent('logoUpdated', {
+        detail: { filename: null, url: null }
+      }))
+
+      // También disparar evento para limpiar caché del logo
+      window.dispatchEvent(new CustomEvent('logoDeleted'))
+
+      toast.success(result.message || 'Logo eliminado exitosamente. Se usará el logo por defecto.')
+
+      // Recargar configuración general para actualizar el estado
+      await cargarConfiguracionGeneral()
+    } catch (error: unknown) {
+      console.error('Error eliminando logo:', error)
+      let errorMessage = getErrorMessage(error)
+      const detail = getErrorDetail(error)
+      if (detail) {
+        errorMessage = detail
+      }
+      toast.error(`Error al eliminar logo: ${errorMessage}`)
+    } finally {
+      setDeletingLogo(false)
+    }
+  }
+
   const renderSeccionGeneral = () => (
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2">
