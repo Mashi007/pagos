@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Brain, ChevronRight, Loader2, AlertCircle, MessageSquare } from 'lucide-react'
+import { Brain, ChevronRight, Loader2, AlertCircle, MessageSquare, ThumbsUp, ThumbsDown } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -13,6 +13,8 @@ interface Mensaje {
   contenido: string
   timestamp: Date
   error?: boolean
+  pregunta?: string  // Para guardar la pregunta cuando es respuesta AI
+  calificacion?: 'arriba' | 'abajo' | null  // Calificación del usuario
 }
 
 export function ChatAI() {
@@ -109,7 +111,9 @@ export function ChatAI() {
           id: (Date.now() + 1).toString(),
           tipo: 'ai',
           contenido: respuesta.respuesta,
-          timestamp: new Date()
+          timestamp: new Date(),
+          pregunta: preguntaTexto,  // Guardar pregunta para calificación
+          calificacion: null
         }
         setMensajes(prev => [...prev, mensajeAI])
       } else {
@@ -263,22 +267,62 @@ export function ChatAI() {
                     <Brain className="h-4 w-4 text-blue-600" />
                   </div>
                 )}
-                <div
-                  className={`max-w-[80%] rounded-lg p-3 ${
-                    mensaje.tipo === 'usuario'
-                      ? 'bg-blue-600 text-white'
-                      : mensaje.error
-                      ? 'bg-red-50 text-red-900 border border-red-200'
-                      : 'bg-gray-100 text-gray-900'
-                  }`}
-                >
-                  <p className="whitespace-pre-wrap">{mensaje.contenido}</p>
-                  <span className="text-xs opacity-70 mt-1 block">
-                    {mensaje.timestamp.toLocaleTimeString('es-ES', {
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
-                  </span>
+                <div className="flex flex-col gap-2 max-w-[80%]">
+                  <div
+                    className={`rounded-lg p-3 ${
+                      mensaje.tipo === 'usuario'
+                        ? 'bg-blue-600 text-white'
+                        : mensaje.error
+                        ? 'bg-red-50 text-red-900 border border-red-200'
+                        : 'bg-gray-100 text-gray-900'
+                    }`}
+                  >
+                    <p className="whitespace-pre-wrap">{mensaje.contenido}</p>
+                    <span className="text-xs opacity-70 mt-1 block">
+                      {mensaje.timestamp.toLocaleTimeString('es-ES', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </span>
+                  </div>
+                  {/* Botones de calificación solo para respuestas AI sin error */}
+                  {mensaje.tipo === 'ai' && !mensaje.error && mensaje.pregunta && (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleCalificar(mensaje.id, 'arriba')}
+                        disabled={mensaje.calificacion !== null}
+                        className={`h-7 px-2 ${
+                          mensaje.calificacion === 'arriba'
+                            ? 'bg-green-100 text-green-700 hover:bg-green-100'
+                            : 'text-gray-600 hover:text-green-600'
+                        }`}
+                        title="Calificar como buena respuesta"
+                      >
+                        <ThumbsUp className={`h-3 w-3 ${mensaje.calificacion === 'arriba' ? 'fill-current' : ''}`} />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleCalificar(mensaje.id, 'abajo')}
+                        disabled={mensaje.calificacion !== null}
+                        className={`h-7 px-2 ${
+                          mensaje.calificacion === 'abajo'
+                            ? 'bg-red-100 text-red-700 hover:bg-red-100'
+                            : 'text-gray-600 hover:text-red-600'
+                        }`}
+                        title="Calificar como respuesta a mejorar"
+                      >
+                        <ThumbsDown className={`h-3 w-3 ${mensaje.calificacion === 'abajo' ? 'fill-current' : ''}`} />
+                      </Button>
+                      {mensaje.calificacion && (
+                        <span className="text-xs text-gray-500">
+                          {mensaje.calificacion === 'arriba' ? '✓ Calificada positivamente' : '✓ Marcada para revisión'}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
                 {mensaje.tipo === 'usuario' && (
                   <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">

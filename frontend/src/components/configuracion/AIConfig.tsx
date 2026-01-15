@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Brain, Save, Eye, EyeOff, Upload, FileText, Trash2, BarChart3, CheckCircle, AlertCircle, Loader2, TestTube, ChevronRight, MessageSquare, User, Edit, Zap, RotateCcw, Copy, Settings, DollarSign } from 'lucide-react'
+import { Brain, Save, Eye, EyeOff, Upload, FileText, Trash2, BarChart3, CheckCircle, AlertCircle, Loader2, TestTube, ChevronRight, MessageSquare, User, Edit, Zap, RotateCcw, Copy, Settings, DollarSign, BookOpen, Database, ThumbsDown } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,6 +15,9 @@ import { RAGTab } from './RAGTab'
 import { MLRiesgoTab } from './MLRiesgoTab'
 import { MLImpagoCuotasTab } from './MLImpagoCuotasTab'
 import { EntrenamientoMejorado } from './EntrenamientoMejorado'
+import { DiccionarioSemanticoTab } from './DiccionarioSemanticoTab'
+import { DefinicionesCamposTab } from './DefinicionesCamposTab'
+import { CalificacionesChatTab } from './CalificacionesChatTab'
 
 interface AIConfig {
   openai_api_key: string
@@ -1656,7 +1659,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
         <TabsContent value="sistema-hibrido" className="space-y-4 mt-6">
           <Tabs value={activeHybridTab} onValueChange={setActiveHybridTab} className="w-full">
             {/* Dashboard eliminado - redundante con EntrenamientoMejorado */}
-            <TabsList className="grid w-full grid-cols-4 bg-gray-100/50 p-1 rounded-lg">
+            <TabsList className="grid w-full grid-cols-6 bg-gray-100/50 p-1 rounded-lg">
               <TabsTrigger
                 value="fine-tuning"
                 className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-200"
@@ -1670,6 +1673,27 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
               >
                 <Zap className="h-4 w-4" />
                 RAG
+              </TabsTrigger>
+              <TabsTrigger
+                value="diccionario-semantico"
+                className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-200"
+              >
+                <BookOpen className="h-4 w-4" />
+                Diccionario
+              </TabsTrigger>
+              <TabsTrigger
+                value="definiciones-campos"
+                className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-200"
+              >
+                <Database className="h-4 w-4" />
+                Campos
+              </TabsTrigger>
+              <TabsTrigger
+                value="calificaciones-chat"
+                className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-200"
+              >
+                <ThumbsDown className="h-4 w-4" />
+                Calificaciones
               </TabsTrigger>
               <TabsTrigger
                 value="ml-riesgo"
@@ -1693,6 +1717,18 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
 
             <TabsContent value="rag" className="mt-6">
               <RAGTab />
+            </TabsContent>
+
+            <TabsContent value="diccionario-semantico" className="mt-6">
+              <DiccionarioSemanticoTab />
+            </TabsContent>
+
+            <TabsContent value="definiciones-campos" className="mt-6">
+              <DefinicionesCamposTab />
+            </TabsContent>
+
+            <TabsContent value="calificaciones-chat" className="mt-6">
+              <CalificacionesChatTab />
             </TabsContent>
 
             <TabsContent value="ml-riesgo" className="mt-6">

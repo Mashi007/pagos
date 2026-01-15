@@ -13,6 +13,9 @@ from app.api.deps import get_current_user, get_db
 from app.core.config import settings
 from app.core.rate_limiter import get_rate_limiter
 from app.models.ai_prompt_variable import AIPromptVariable
+from app.models.ai_diccionario_semantico import AIDiccionarioSemantico
+from app.models.ai_definicion_campo import AIDefinicionCampo
+from app.models.ai_calificacion_chat import AICalificacionChat
 from app.models.amortizacion import Cuota
 from app.models.cliente import Cliente
 from app.models.configuracion_sistema import ConfiguracionSistema
@@ -278,7 +281,7 @@ def obtener_configuracion_por_categoria(
 @limiter.limit("20/minute")  # ✅ Rate limiting: máximo 20 actualizaciones por minuto
 def actualizar_configuracion(
     request: Request,
-    clave: Annotated[str, Path(..., regex="^[A-Za-z0-9_]+$", max_length=100, description="Clave de configuración")],
+    clave: str = Path(..., regex="^[A-Za-z0-9_]+$", max_length=100, description="Clave de configuración"),
     config_data: Annotated[ConfiguracionUpdate, Body()],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -757,111 +760,8 @@ def _guardar_logo_en_bd(db: Session, logo_filename: str, logo_base64: str, conte
     logger.info(f"✅ Logo filename y datos guardados en BD exitosamente: {logo_filename}")
 
 
-@router.post("/upload-logo")
-@limiter.limit("10/minute")  # ✅ Rate limiting: máximo 10 uploads por minuto
-async def upload_logo(
-    request: Request,
-    logo: UploadFile = File(...),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Subir logo de la empresa (solo administradores)"""
-    if not current_user.is_admin:
-        raise HTTPException(
-            status_code=403,
-            detail="Solo los administradores pueden subir el logo",
-        )
-
-    try:
-        contents = await logo.read()
-        _validar_logo(logo, contents)
-
-        extension = _obtener_extension_logo(logo.content_type)
-
-        from app.core.config import settings
-
-        # Usar path absoluto si UPLOAD_DIR está configurado, sino usar relativo
-        if hasattr(settings, "UPLOAD_DIR") and settings.UPLOAD_DIR:
-            uploads_dir = Path(settings.UPLOAD_DIR).resolve()
-        else:
-            uploads_dir = Path("uploads").resolve()
-
-        logos_dir = uploads_dir / "logos"
-        logos_dir.mkdir(parents=True, exist_ok=True)
-
-        logo_filename = f"logo-custom{extension}"
-        logo_path = logos_dir / logo_filename
-
-        # ✅ CREAR BACKUP del logo anterior ANTES de hacer cualquier cambio
-        # Esto permite restaurarlo si falla el guardado del nuevo logo
-        backup_logo_anterior = _obtener_backup_logo_anterior(db)
-        
-        # ✅ Eliminar el nuevo archivo si ya existe (por si acaso)
-        if logo_path.exists():
-            try:
-                logo_path.unlink()
-                logger.info(f"🗑️ Archivo existente eliminado antes de guardar nuevo: {logo_filename}")
-            except Exception as cleanup_error:
-                logger.warning(f"⚠️ No se pudo eliminar archivo existente: {str(cleanup_error)}")
-
-        # Guardar nuevo logo en filesystem (si es posible)
-        try:
-            with open(logo_path, "wb") as f:
-                f.write(contents)
-            logger.info(f"✅ Logo guardado en filesystem: {logo_path}")
-        except Exception as fs_error:
-            logger.warning(f"⚠️ No se pudo guardar logo en filesystem (puede ser efímero): {str(fs_error)}")
-            # Continuar - guardaremos en BD como base64
-
-        # Convertir logo a base64 para almacenamiento persistente en BD
-        import base64
-
-        logo_base64 = base64.b64encode(contents).decode("utf-8")
-        content_type = logo.content_type or "image/jpeg"
-
-        # Intentar guardar en BD (filename + base64)
-        try:
-            _guardar_logo_en_bd(db, logo_filename, logo_base64, content_type)
-            # ✅ SOLO DESPUÉS de confirmar que se guardó exitosamente, eliminar el logo anterior
-            _eliminar_logo_anterior(db, logos_dir, logo_filename)
-        except Exception as db_error:
-            db.rollback()
-            
-            # ✅ RESTAURAR logo anterior si falla el guardado del nuevo
-            if backup_logo_anterior:
-                logger.warning(f"⚠️ Error guardando nuevo logo, restaurando logo anterior...")
-                if _restaurar_logo_anterior(db, backup_logo_anterior, logos_dir):
-                    logger.info(f"✅ Logo anterior restaurado exitosamente después del error")
-                else:
-                    logger.error(f"❌ No se pudo restaurar el logo anterior")
-            
-            # Eliminar archivo nuevo si existe y falló el guardado
-            try:
-                if logo_path.exists():
-                    logo_path.unlink()
-                    logger.info(f"🗑️ Archivo de logo nuevo eliminado debido a error en BD: {logo_filename}")
-            except Exception as cleanup_error:
-                logger.error(f"❌ Error eliminando archivo después de fallo en BD: {str(cleanup_error)}")
-
-            logger.error(f"❌ Error guardando configuración de logo en BD: {str(db_error)}", exc_info=True)
-            raise HTTPException(
-                status_code=500, detail=f"Error guardando configuración de logo en base de datos: {str(db_error)}"
-            )
-
-        logger.info(f"Logo subido por usuario {current_user.email}: {logo_filename}")
-
-        return {
-            "message": "Logo cargado exitosamente",
-            "status": "success",
-            "filename": logo_filename,
-            "path": f"/api/v1/configuracion/logo/{logo_filename}",
-            "url": f"/api/v1/configuracion/logo/{logo_filename}",
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error al subir logo: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error al subir logo: {str(e)}")
+# ✅ RUTA MOVIDA A router separado (backend/app/api/v1/endpoints/logo.py)
+# Toda la funcionalidad de upload_logo está ahora en logo.logo_router.post("/upload-logo")
 
 
 def _obtener_logo_desde_bd(filename: str, db: Session) -> Optional[tuple[bytes, str]]:
@@ -966,189 +866,24 @@ def _verificar_logo_existe(filename: str, db: Optional[Session] = None) -> tuple
     raise HTTPException(status_code=404, detail="Logo no encontrado")
 
 
-# ✅ IMPORTANTE: Las rutas sin parámetros deben ir ANTES de las rutas con parámetros
-# Esto evita que FastAPI intente hacer match de /logo con /logo/{filename}
+# ✅ RUTAS DE LOGO MOVIDAS A router separado (backend/app/api/v1/endpoints/logo.py)
+# Las rutas ahora están en: logo.logo_router con prefix="/api/v1/configuracion"
 
-@router.options("/logo")
-async def eliminar_logo_options(request: Request):
-    """Manejar preflight OPTIONS para DELETE /logo (CORS)"""
-    return {"message": "OK"}
-
-
-@router.delete("/logo")
-@limiter.limit("5/minute")  # ✅ Rate limiting: máximo 5 eliminaciones por minuto
-async def eliminar_logo(
-    request: Request,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Eliminar logo personalizado y restaurar logo por defecto (solo administradores)"""
-    if not current_user.is_admin:
-        raise HTTPException(
-            status_code=403,
-            detail="Solo los administradores pueden eliminar el logo",
-        )
-
-    try:
-        from app.core.config import settings
-
-        # Obtener logo anterior desde BD
-        logo_filename = _obtener_logo_anterior(db)
-        
-        if not logo_filename:
-            logger.info("⚠️ No hay logo personalizado para eliminar")
-            return {
-                "message": "No hay logo personalizado para eliminar",
-                "status": "success",
-            }
-
-        # Eliminar logo del filesystem si existe
-        try:
-            if hasattr(settings, "UPLOAD_DIR") and settings.UPLOAD_DIR:
-                uploads_dir = Path(settings.UPLOAD_DIR).resolve()
-            else:
-                uploads_dir = Path("uploads").resolve()
-            
-            logos_dir = uploads_dir / "logos"
-            logo_path = logos_dir / logo_filename
-            
-            if logo_path.exists():
-                logo_path.unlink()
-                logger.info(f"🗑️ Logo eliminado del filesystem: {logo_filename}")
-        except Exception as fs_error:
-            logger.warning(f"⚠️ No se pudo eliminar logo del filesystem: {str(fs_error)}")
-            # Continuar - eliminaremos de BD de todas formas
-
-        # Eliminar logo de la BD
-        try:
-            # Eliminar logo_filename
-            logo_config = (
-                db.query(ConfiguracionSistema)
-                .filter(
-                    ConfiguracionSistema.categoria == "GENERAL",
-                    ConfiguracionSistema.clave == "logo_filename",
-                )
-                .first()
-            )
-            
-            if logo_config:
-                db.delete(logo_config)
-                logger.info(f"🗑️ Logo filename eliminado de BD: {logo_filename}")
-
-            # Eliminar logo_data
-            logo_data_config = (
-                db.query(ConfiguracionSistema)
-                .filter(
-                    ConfiguracionSistema.categoria == "GENERAL",
-                    ConfiguracionSistema.clave == "logo_data",
-                )
-                .first()
-            )
-            
-            if logo_data_config:
-                db.delete(logo_data_config)
-                logger.info(f"🗑️ Logo data eliminado de BD")
-
-            db.commit()
-            logger.info(f"✅ Logo personalizado eliminado exitosamente. Se usará el logo por defecto.")
-            
-            return {
-                "message": "Logo personalizado eliminado exitosamente. Se usará el logo por defecto.",
-                "status": "success",
-                "filename": logo_filename,
-            }
-        except Exception as db_error:
-            db.rollback()
-            logger.error(f"❌ Error eliminando logo de BD: {str(db_error)}", exc_info=True)
-            raise HTTPException(
-                status_code=500,
-                detail=f"Error eliminando configuración de logo en base de datos: {str(db_error)}"
-            )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error al eliminar logo: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error al eliminar logo: {str(e)}")
+# @router.options("/logo")
+# async def eliminar_logo_options(request: Request):
+#     """Manejar preflight OPTIONS para DELETE /logo (CORS)"""
+#     return {"message": "OK"}
 
 
-@router.head("/logo/{filename}")
-async def verificar_logo_existe(
-    filename: Annotated[str, Path(..., description="Nombre del archivo del logo")],
-    db: Session = Depends(get_db),
-):
-    """Verificar si el logo existe (HEAD request)"""
-    try:
-        from fastapi.responses import Response
-
-        logo_path, media_type, logo_bytes = _verificar_logo_existe(filename, db)
-
-        # Devolver respuesta HEAD sin cuerpo
-        return Response(
-            status_code=200,
-            headers={"Content-Type": media_type},
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error verificando logo: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error verificando logo: {str(e)}")
+# @router.delete("/logo")
+# @limiter.limit("5/minute")  # ✅ Rate limiting: máximo 5 eliminaciones por minuto
+# async def eliminar_logo(...):
+#     ... (código movido a logo.py)
 
 
-@router.get("/logo/{filename}")
-async def obtener_logo(
-    filename: Annotated[str, Path(..., description="Nombre del archivo del logo")],
-    db: Session = Depends(get_db),
-):
-    """Obtener logo de la empresa"""
-    try:
-        from fastapi.responses import Response
-
-        # Usar la misma función de verificación que HEAD para garantizar consistencia
-        try:
-            logo_path, media_type, logo_bytes = _verificar_logo_existe(filename, db)
-        except HTTPException as e:
-            # Si el logo no existe, devolver 404 inmediatamente sin más procesamiento
-            logger.debug(f"Logo no encontrado: {filename}")
-            raise e
-
-        # Si existe en filesystem, leer desde ahí
-        if logo_path and logo_path.exists():
-            try:
-                with open(logo_path, "rb") as f:
-                    file_content = f.read()
-                if len(file_content) == 0:
-                    logger.warning(f"Logo existe pero está vacío: {filename}")
-                    raise HTTPException(status_code=404, detail="Logo no encontrado")
-            except (OSError, IOError) as e:
-                logger.error(f"Error leyendo logo desde filesystem: {str(e)}")
-                raise HTTPException(status_code=404, detail="Logo no encontrado")
-        # Si no existe en filesystem pero existe en BD, usar base64
-        elif logo_bytes:
-            file_content = logo_bytes
-            if len(file_content) == 0:
-                logger.warning(f"Logo existe en BD pero está vacío: {filename}")
-                raise HTTPException(status_code=404, detail="Logo no encontrado")
-            logger.info(f"✅ Sirviendo logo desde BD (base64) para: {filename}")
-        else:
-            raise HTTPException(status_code=404, detail="Logo no encontrado")
-
-        # Crear respuesta con headers de no-caché para forzar recarga
-        return Response(
-            content=file_content,
-            media_type=media_type,
-            headers={
-                "Cache-Control": "no-cache, no-store, must-revalidate",
-                "Pragma": "no-cache",
-                "Expires": "0",
-                "Content-Disposition": f'inline; filename="{filename}"',
-                "Content-Length": str(len(file_content)),  # ✅ Agregar Content-Length para evitar abortos
-            },
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error obteniendo logo: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error obteniendo logo: {str(e)}")
+# ✅ RUTAS MOVIDAS A router separado (backend/app/api/v1/endpoints/logo.py)
+# - HEAD /logo/{filename} -> logo.logo_router.head("/logo/{filename}")
+# - GET /logo/{filename} -> logo.logo_router.get("/logo/{filename}")
 
 
 # ============================================
@@ -4593,6 +4328,903 @@ def eliminar_variable_prompt_ai(
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 
+# ============================================
+# GESTIÓN DE DICCIONARIO SEMÁNTICO PARA AI
+# ============================================
+
+
+class AIDiccionarioSemanticoCreate(BaseModel):
+    """Schema para crear entrada en diccionario semántico"""
+
+    palabra: str = Field(..., description="Palabra o término a definir")
+    definicion: str = Field(..., description="Definición de la palabra")
+    categoria: Optional[str] = Field(None, description="Categoría (ej: identificacion, pagos, prestamos)")
+    campo_relacionado: Optional[str] = Field(None, description="Campo técnico relacionado (ej: cedula)")
+    tabla_relacionada: Optional[str] = Field(None, description="Tabla relacionada (ej: clientes)")
+    sinonimos: Optional[list[str]] = Field(None, description="Lista de sinónimos")
+    ejemplos_uso: Optional[list[str]] = Field(None, description="Lista de ejemplos de uso")
+    activo: Optional[bool] = Field(True, description="Estado activo/inactivo")
+    orden: Optional[int] = Field(0, description="Orden de visualización")
+
+
+class AIDiccionarioSemanticoUpdate(BaseModel):
+    """Schema para actualizar entrada en diccionario semántico"""
+
+    palabra: Optional[str] = Field(None, description="Palabra o término")
+    definicion: Optional[str] = Field(None, description="Definición")
+    categoria: Optional[str] = Field(None, description="Categoría")
+    campo_relacionado: Optional[str] = Field(None, description="Campo técnico relacionado")
+    tabla_relacionada: Optional[str] = Field(None, description="Tabla relacionada")
+    sinonimos: Optional[list[str]] = Field(None, description="Lista de sinónimos")
+    ejemplos_uso: Optional[list[str]] = Field(None, description="Lista de ejemplos de uso")
+    activo: Optional[bool] = Field(None, description="Estado activo/inactivo")
+    orden: Optional[int] = Field(None, description="Orden de visualización")
+
+
+@router.get("/ai/diccionario-semantico")
+def listar_diccionario_semantico(
+    categoria: Optional[str] = Query(None, description="Filtrar por categoría"),
+    activo: Optional[bool] = Query(None, description="Filtrar por estado activo"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Listar todas las entradas del diccionario semántico"""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden ver el diccionario semántico",
+        )
+
+    try:
+        query = db.query(AIDiccionarioSemantico)
+        
+        if categoria:
+            query = query.filter(AIDiccionarioSemantico.categoria == categoria)
+        if activo is not None:
+            query = query.filter(AIDiccionarioSemantico.activo == activo)
+        
+        entradas = query.order_by(
+            AIDiccionarioSemantico.orden.asc(),
+            AIDiccionarioSemantico.palabra.asc()
+        ).all()
+        
+        return {
+            "entradas": [entrada.to_dict() for entrada in entradas],
+            "total": len(entradas),
+        }
+    except Exception as e:
+        error_str = str(e).lower()
+        if "does not exist" in error_str or "no such table" in error_str or "relation" in error_str:
+            logger.warning(f"Tabla ai_diccionario_semantico no existe aún. Devolviendo lista vacía. Error: {e}")
+            return {"entradas": [], "total": 0}
+        logger.error(f"Error listando diccionario semántico: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.post("/ai/diccionario-semantico")
+def crear_diccionario_semantico(
+    entrada_data: AIDiccionarioSemanticoCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Crear una nueva entrada en el diccionario semántico"""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden crear entradas en el diccionario semántico",
+        )
+
+    try:
+        import json
+        
+        # Verificar que no exista
+        existe = db.query(AIDiccionarioSemantico).filter(
+            AIDiccionarioSemantico.palabra == entrada_data.palabra.strip()
+        ).first()
+        if existe:
+            raise HTTPException(
+                status_code=400,
+                detail=f"La palabra '{entrada_data.palabra}' ya existe en el diccionario",
+            )
+
+        nueva_entrada = AIDiccionarioSemantico(
+            palabra=entrada_data.palabra.strip(),
+            definicion=entrada_data.definicion.strip(),
+            categoria=entrada_data.categoria.strip() if entrada_data.categoria else None,
+            campo_relacionado=entrada_data.campo_relacionado.strip() if entrada_data.campo_relacionado else None,
+            tabla_relacionada=entrada_data.tabla_relacionada.strip() if entrada_data.tabla_relacionada else None,
+            sinonimos=json.dumps(entrada_data.sinonimos) if entrada_data.sinonimos else None,
+            ejemplos_uso=json.dumps(entrada_data.ejemplos_uso) if entrada_data.ejemplos_uso else None,
+            activo=entrada_data.activo if entrada_data.activo is not None else True,
+            orden=entrada_data.orden if entrada_data.orden is not None else 0,
+        )
+
+        db.add(nueva_entrada)
+        db.commit()
+        db.refresh(nueva_entrada)
+
+        logger.info(f"✅ Entrada de diccionario semántico creada: {nueva_entrada.palabra}")
+        return {
+            "mensaje": "Entrada creada exitosamente",
+            "entrada": nueva_entrada.to_dict(),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creando entrada en diccionario semántico: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.put("/ai/diccionario-semantico/{entrada_id}")
+def actualizar_diccionario_semantico(
+    entrada_id: int,
+    entrada_data: AIDiccionarioSemanticoUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Actualizar una entrada del diccionario semántico"""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden actualizar el diccionario semántico",
+        )
+
+    try:
+        import json
+        
+        entrada = db.query(AIDiccionarioSemantico).filter(
+            AIDiccionarioSemantico.id == entrada_id
+        ).first()
+
+        if not entrada:
+            raise HTTPException(status_code=404, detail="Entrada no encontrada")
+
+        # Actualizar campos si se proporcionan
+        if entrada_data.palabra is not None:
+            # Verificar que no exista otra entrada con esa palabra
+            existe = db.query(AIDiccionarioSemantico).filter(
+                AIDiccionarioSemantico.palabra == entrada_data.palabra.strip(),
+                AIDiccionarioSemantico.id != entrada_id
+            ).first()
+            if existe:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"La palabra '{entrada_data.palabra}' ya existe en otra entrada",
+                )
+            entrada.palabra = entrada_data.palabra.strip()
+        
+        if entrada_data.definicion is not None:
+            entrada.definicion = entrada_data.definicion.strip()
+        if entrada_data.categoria is not None:
+            entrada.categoria = entrada_data.categoria.strip() if entrada_data.categoria else None
+        if entrada_data.campo_relacionado is not None:
+            entrada.campo_relacionado = entrada_data.campo_relacionado.strip() if entrada_data.campo_relacionado else None
+        if entrada_data.tabla_relacionada is not None:
+            entrada.tabla_relacionada = entrada_data.tabla_relacionada.strip() if entrada_data.tabla_relacionada else None
+        if entrada_data.sinonimos is not None:
+            entrada.sinonimos = json.dumps(entrada_data.sinonimos) if entrada_data.sinonimos else None
+        if entrada_data.ejemplos_uso is not None:
+            entrada.ejemplos_uso = json.dumps(entrada_data.ejemplos_uso) if entrada_data.ejemplos_uso else None
+        if entrada_data.activo is not None:
+            entrada.activo = entrada_data.activo
+        if entrada_data.orden is not None:
+            entrada.orden = entrada_data.orden
+
+        db.commit()
+        db.refresh(entrada)
+
+        logger.info(f"✅ Entrada de diccionario semántico actualizada: {entrada.palabra}")
+        return {
+            "mensaje": "Entrada actualizada exitosamente",
+            "entrada": entrada.to_dict(),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error actualizando entrada en diccionario semántico: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.delete("/ai/diccionario-semantico/{entrada_id}")
+def eliminar_diccionario_semantico(
+    entrada_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Eliminar una entrada del diccionario semántico"""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden eliminar entradas del diccionario semántico",
+        )
+
+    try:
+        entrada = db.query(AIDiccionarioSemantico).filter(
+            AIDiccionarioSemantico.id == entrada_id
+        ).first()
+
+        if not entrada:
+            raise HTTPException(status_code=404, detail="Entrada no encontrada")
+
+        palabra = entrada.palabra
+        db.delete(entrada)
+        db.commit()
+
+        logger.info(f"✅ Entrada de diccionario semántico eliminada: {palabra}")
+        return {"mensaje": "Entrada eliminada exitosamente"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error eliminando entrada del diccionario semántico: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.get("/ai/diccionario-semantico/categorias")
+def listar_categorias_diccionario(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Listar todas las categorías del diccionario semántico"""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden ver las categorías",
+        )
+
+    try:
+        categorias = db.query(AIDiccionarioSemantico.categoria).filter(
+            AIDiccionarioSemantico.categoria.isnot(None),
+            AIDiccionarioSemantico.activo.is_(True)
+        ).distinct().all()
+        
+        return {
+            "categorias": [cat[0] for cat in categorias if cat[0]],
+            "total": len([cat[0] for cat in categorias if cat[0]]),
+        }
+    except Exception as e:
+        error_str = str(e).lower()
+        if "does not exist" in error_str or "no such table" in error_str or "relation" in error_str:
+            return {"categorias": [], "total": 0}
+        logger.error(f"Error listando categorías: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+class ProcesarPalabraRequest(BaseModel):
+    """Schema para procesar palabra con ChatGPT"""
+    palabra: str = Field(..., description="Palabra a procesar")
+    definicion_actual: Optional[str] = Field(None, description="Definición actual (si existe)")
+    respuesta_usuario: Optional[str] = Field(None, description="Respuesta del usuario a pregunta previa de ChatGPT")
+
+
+@router.post("/ai/diccionario-semantico/procesar")
+async def procesar_palabra_con_chatgpt(
+    request: ProcesarPalabraRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Procesa una palabra con ChatGPT para mejorar su definición.
+    Si ChatGPT necesita aclaración, pregunta al usuario.
+    Si ChatGPT está claro, mejora la definición automáticamente.
+    """
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden procesar palabras",
+        )
+
+    try:
+        # Obtener configuración de OpenAI
+        configs = db.query(ConfiguracionSistema).filter(ConfiguracionSistema.categoria == "AI").all()
+        if not configs:
+            raise HTTPException(status_code=400, detail="No hay configuración de AI")
+
+        config_dict = {config.clave: config.valor for config in configs}
+        from app.core.encryption import decrypt_api_key
+
+        openai_api_key = decrypt_api_key(config_dict.get("openai_api_key", ""))
+        if not openai_api_key:
+            raise HTTPException(status_code=400, detail="OpenAI API Key no configurado")
+
+        modelo = config_dict.get("modelo", "gpt-3.5-turbo")
+        temperatura = float(config_dict.get("temperatura", "0.7"))
+
+        # Construir prompt según si hay respuesta del usuario o no
+        if request.respuesta_usuario:
+            # Segunda iteración: ChatGPT ya preguntó, ahora procesa la respuesta
+            system_prompt = """Eres un asistente experto en crear definiciones claras y precisas para un diccionario semántico de un sistema de gestión de préstamos.
+
+Tu tarea es:
+1. Analizar la respuesta del usuario sobre la palabra/concepto
+2. Crear una definición clara, completa y profesional
+3. La definición debe explicar QUÉ ES el concepto en el contexto del sistema de préstamos
+4. Debe ser útil para que un AI entienda cómo usar este término en consultas a base de datos
+
+Responde SOLO con la definición mejorada, sin explicaciones adicionales."""
+            
+            user_prompt = f"""Palabra: {request.palabra}
+Definición actual: {request.definicion_actual or '(sin definir)'}
+Respuesta del usuario: {request.respuesta_usuario}
+
+Crea una definición clara y profesional basándote en la respuesta del usuario."""
+        else:
+            # Primera iteración: ChatGPT debe analizar y decidir si necesita más info
+            system_prompt = """Eres un asistente experto en crear definiciones claras y precisas para un diccionario semántico de un sistema de gestión de préstamos.
+
+Tu tarea es analizar una palabra/concepto y:
+1. Si la definición actual es clara y completa → Mejórala y retórnala directamente
+2. Si la definición es vaga, incompleta o no existe → Haz UNA pregunta específica al usuario para aclarar el concepto
+
+FORMATO DE RESPUESTA:
+- Si puedes mejorar la definición directamente:
+  {"tipo": "definicion_mejorada", "definicion": "Definición clara y completa aquí"}
+
+- Si necesitas más información:
+  {"tipo": "pregunta", "pregunta": "Tu pregunta específica aquí"}
+
+IMPORTANTE:
+- La pregunta debe ser específica y ayudar a entender QUÉ ES el concepto en el contexto del sistema
+- La definición debe explicar claramente el concepto para que un AI pueda usarlo en consultas a BD
+- Responde SOLO en formato JSON válido"""
+
+            user_prompt = f"""Palabra: {request.palabra}
+Definición actual: {request.definicion_actual or '(sin definir - nueva palabra)'}
+Categoría esperada: Sistema de gestión de préstamos (clientes, préstamos, cuotas, pagos)
+
+Analiza esta palabra/concepto y decide:
+1. ¿Puedes crear una definición clara con la información disponible?
+2. ¿O necesitas más información del usuario?
+
+Responde en formato JSON según las instrucciones."""
+
+        # Llamar a OpenAI API
+        import httpx
+        import json
+
+        start_time = time.time()
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {openai_api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": modelo,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt},
+                        ],
+                        "temperature": temperatura,
+                        "max_tokens": 500,
+                    },
+                )
+
+                elapsed_time = time.time() - start_time
+
+                if response.status_code == 200:
+                    result = response.json()
+                    respuesta_ai = result.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+                    tokens_usados = result.get("usage", {}).get("total_tokens", 0)
+
+                    logger.info(f"✅ Procesamiento de palabra '{request.palabra}' exitoso: {tokens_usados} tokens en {elapsed_time:.2f}s")
+
+                    # Intentar parsear JSON si es primera iteración
+                    if not request.respuesta_usuario:
+                        try:
+                            # Limpiar respuesta si tiene markdown code blocks
+                            respuesta_limpia = respuesta_ai
+                            if "```json" in respuesta_limpia:
+                                respuesta_limpia = respuesta_limpia.split("```json")[1].split("```")[0].strip()
+                            elif "```" in respuesta_limpia:
+                                respuesta_limpia = respuesta_limpia.split("```")[1].split("```")[0].strip()
+                            
+                            resultado_json = json.loads(respuesta_limpia)
+                            
+                            if resultado_json.get("tipo") == "definicion_mejorada":
+                                return {
+                                    "success": True,
+                                    "tipo": "definicion_mejorada",
+                                    "definicion": resultado_json.get("definicion", ""),
+                                    "tokens_usados": tokens_usados,
+                                }
+                            elif resultado_json.get("tipo") == "pregunta":
+                                return {
+                                    "success": True,
+                                    "tipo": "pregunta",
+                                    "pregunta": resultado_json.get("pregunta", ""),
+                                    "tokens_usados": tokens_usados,
+                                }
+                        except json.JSONDecodeError:
+                            # Si no es JSON válido, asumir que es definición directa
+                            logger.warning(f"Respuesta no es JSON válido, tratando como definición directa")
+                            return {
+                                "success": True,
+                                "tipo": "definicion_mejorada",
+                                "definicion": respuesta_ai,
+                                "tokens_usados": tokens_usados,
+                            }
+                    
+                    # Segunda iteración: respuesta directa con definición mejorada
+                    return {
+                        "success": True,
+                        "tipo": "definicion_mejorada",
+                        "definicion": respuesta_ai,
+                        "tokens_usados": tokens_usados,
+                    }
+                else:
+                    error_detail = response.text
+                    logger.error(f"Error en OpenAI API: {response.status_code} - {error_detail}")
+                    raise HTTPException(
+                        status_code=response.status_code,
+                        detail=f"Error en OpenAI API: {error_detail}",
+                    )
+        except httpx.TimeoutException:
+            logger.error("Timeout al llamar a OpenAI API")
+            raise HTTPException(status_code=504, detail="Timeout al procesar con ChatGPT")
+        except Exception as e:
+            logger.error(f"Error procesando palabra con ChatGPT: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error procesando palabra: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+# ============================================
+# GESTIÓN DE DEFINICIONES DE CAMPOS PARA AI
+# ============================================
+
+
+class AIDefinicionCampoCreate(BaseModel):
+    """Schema para crear definición de campo"""
+
+    tabla: str = Field(..., description="Nombre de la tabla (ej: clientes)")
+    campo: str = Field(..., description="Nombre del campo (ej: cedula)")
+    definicion: str = Field(..., description="Definición del campo")
+    tipo_dato: Optional[str] = Field(None, description="Tipo de dato (ej: VARCHAR, INTEGER)")
+    es_obligatorio: Optional[bool] = Field(False, description="Si es NOT NULL")
+    tiene_indice: Optional[bool] = Field(False, description="Si tiene índice")
+    es_clave_foranea: Optional[bool] = Field(False, description="Si es FK")
+    tabla_referenciada: Optional[str] = Field(None, description="Tabla referenciada si es FK")
+    campo_referenciado: Optional[str] = Field(None, description="Campo referenciado si es FK")
+    valores_posibles: Optional[list[str]] = Field(None, description="Valores posibles (ej: estados)")
+    ejemplos_valores: Optional[list[str]] = Field(None, description="Ejemplos de valores")
+    notas: Optional[str] = Field(None, description="Notas adicionales")
+    activo: Optional[bool] = Field(True, description="Estado activo/inactivo")
+    orden: Optional[int] = Field(0, description="Orden de visualización")
+
+
+class AIDefinicionCampoUpdate(BaseModel):
+    """Schema para actualizar definición de campo"""
+
+    tabla: Optional[str] = Field(None, description="Nombre de la tabla")
+    campo: Optional[str] = Field(None, description="Nombre del campo")
+    definicion: Optional[str] = Field(None, description="Definición")
+    tipo_dato: Optional[str] = Field(None, description="Tipo de dato")
+    es_obligatorio: Optional[bool] = Field(None, description="Si es NOT NULL")
+    tiene_indice: Optional[bool] = Field(None, description="Si tiene índice")
+    es_clave_foranea: Optional[bool] = Field(None, description="Si es FK")
+    tabla_referenciada: Optional[str] = Field(None, description="Tabla referenciada")
+    campo_referenciado: Optional[str] = Field(None, description="Campo referenciado")
+    valores_posibles: Optional[list[str]] = Field(None, description="Valores posibles")
+    ejemplos_valores: Optional[list[str]] = Field(None, description="Ejemplos de valores")
+    notas: Optional[str] = Field(None, description="Notas adicionales")
+    activo: Optional[bool] = Field(None, description="Estado activo/inactivo")
+    orden: Optional[int] = Field(None, description="Orden de visualización")
+
+
+@router.get("/ai/definiciones-campos")
+def listar_definiciones_campos(
+    tabla: Optional[str] = Query(None, description="Filtrar por tabla"),
+    activo: Optional[bool] = Query(None, description="Filtrar por estado activo"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Listar todas las definiciones de campos"""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden ver las definiciones de campos",
+        )
+
+    try:
+        query = db.query(AIDefinicionCampo)
+        
+        if tabla:
+            query = query.filter(AIDefinicionCampo.tabla == tabla)
+        if activo is not None:
+            query = query.filter(AIDefinicionCampo.activo == activo)
+        
+        definiciones = query.order_by(
+            AIDefinicionCampo.tabla.asc(),
+            AIDefinicionCampo.orden.asc(),
+            AIDefinicionCampo.campo.asc()
+        ).all()
+        
+        return {
+            "definiciones": [definicion.to_dict() for definicion in definiciones],
+            "total": len(definiciones),
+        }
+    except Exception as e:
+        error_str = str(e).lower()
+        if "does not exist" in error_str or "no such table" in error_str or "relation" in error_str:
+            logger.warning(f"Tabla ai_definiciones_campos no existe aún. Devolviendo lista vacía. Error: {e}")
+            return {"definiciones": [], "total": 0}
+        logger.error(f"Error listando definiciones de campos: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.post("/ai/definiciones-campos")
+def crear_definicion_campo(
+    definicion_data: AIDefinicionCampoCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Crear una nueva definición de campo"""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden crear definiciones de campos",
+        )
+
+    try:
+        import json
+        
+        # Verificar que no exista
+        existe = db.query(AIDefinicionCampo).filter(
+            AIDefinicionCampo.tabla == definicion_data.tabla.strip(),
+            AIDefinicionCampo.campo == definicion_data.campo.strip()
+        ).first()
+        if existe:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Ya existe una definición para {definicion_data.tabla}.{definicion_data.campo}",
+            )
+
+        nueva_definicion = AIDefinicionCampo(
+            tabla=definicion_data.tabla.strip(),
+            campo=definicion_data.campo.strip(),
+            definicion=definicion_data.definicion.strip(),
+            tipo_dato=definicion_data.tipo_dato.strip() if definicion_data.tipo_dato else None,
+            es_obligatorio=definicion_data.es_obligatorio if definicion_data.es_obligatorio is not None else False,
+            tiene_indice=definicion_data.tiene_indice if definicion_data.tiene_indice is not None else False,
+            es_clave_foranea=definicion_data.es_clave_foranea if definicion_data.es_clave_foranea is not None else False,
+            tabla_referenciada=definicion_data.tabla_referenciada.strip() if definicion_data.tabla_referenciada else None,
+            campo_referenciado=definicion_data.campo_referenciado.strip() if definicion_data.campo_referenciado else None,
+            valores_posibles=json.dumps(definicion_data.valores_posibles) if definicion_data.valores_posibles else None,
+            ejemplos_valores=json.dumps(definicion_data.ejemplos_valores) if definicion_data.ejemplos_valores else None,
+            notas=definicion_data.notas.strip() if definicion_data.notas else None,
+            activo=definicion_data.activo if definicion_data.activo is not None else True,
+            orden=definicion_data.orden if definicion_data.orden is not None else 0,
+        )
+
+        db.add(nueva_definicion)
+        db.commit()
+        db.refresh(nueva_definicion)
+
+        logger.info(f"✅ Definición de campo creada: {nueva_definicion.tabla}.{nueva_definicion.campo}")
+        return {
+            "mensaje": "Definición creada exitosamente",
+            "definicion": nueva_definicion.to_dict(),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creando definición de campo: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.put("/ai/definiciones-campos/{definicion_id}")
+def actualizar_definicion_campo(
+    definicion_id: int,
+    definicion_data: AIDefinicionCampoUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Actualizar una definición de campo"""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden actualizar definiciones de campos",
+        )
+
+    try:
+        import json
+        
+        definicion = db.query(AIDefinicionCampo).filter(
+            AIDefinicionCampo.id == definicion_id
+        ).first()
+
+        if not definicion:
+            raise HTTPException(status_code=404, detail="Definición no encontrada")
+
+        # Actualizar campos si se proporcionan
+        if definicion_data.tabla is not None:
+            nueva_tabla = definicion_data.tabla.strip()
+            nuevo_campo = definicion_data.campo.strip() if definicion_data.campo else definicion.campo
+            
+            # Verificar que no exista otra definición con esa tabla.campo
+            existe = db.query(AIDefinicionCampo).filter(
+                AIDefinicionCampo.tabla == nueva_tabla,
+                AIDefinicionCampo.campo == nuevo_campo,
+                AIDefinicionCampo.id != definicion_id
+            ).first()
+            if existe:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Ya existe una definición para {nueva_tabla}.{nuevo_campo}",
+                )
+            definicion.tabla = nueva_tabla
+        
+        if definicion_data.campo is not None:
+            nuevo_campo = definicion_data.campo.strip()
+            # Verificar duplicado
+            existe = db.query(AIDefinicionCampo).filter(
+                AIDefinicionCampo.tabla == definicion.tabla,
+                AIDefinicionCampo.campo == nuevo_campo,
+                AIDefinicionCampo.id != definicion_id
+            ).first()
+            if existe:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Ya existe una definición para {definicion.tabla}.{nuevo_campo}",
+                )
+            definicion.campo = nuevo_campo
+        
+        if definicion_data.definicion is not None:
+            definicion.definicion = definicion_data.definicion.strip()
+        if definicion_data.tipo_dato is not None:
+            definicion.tipo_dato = definicion_data.tipo_dato.strip() if definicion_data.tipo_dato else None
+        if definicion_data.es_obligatorio is not None:
+            definicion.es_obligatorio = definicion_data.es_obligatorio
+        if definicion_data.tiene_indice is not None:
+            definicion.tiene_indice = definicion_data.tiene_indice
+        if definicion_data.es_clave_foranea is not None:
+            definicion.es_clave_foranea = definicion_data.es_clave_foranea
+        if definicion_data.tabla_referenciada is not None:
+            definicion.tabla_referenciada = definicion_data.tabla_referenciada.strip() if definicion_data.tabla_referenciada else None
+        if definicion_data.campo_referenciado is not None:
+            definicion.campo_referenciado = definicion_data.campo_referenciado.strip() if definicion_data.campo_referenciado else None
+        if definicion_data.valores_posibles is not None:
+            definicion.valores_posibles = json.dumps(definicion_data.valores_posibles) if definicion_data.valores_posibles else None
+        if definicion_data.ejemplos_valores is not None:
+            definicion.ejemplos_valores = json.dumps(definicion_data.ejemplos_valores) if definicion_data.ejemplos_valores else None
+        if definicion_data.notas is not None:
+            definicion.notas = definicion_data.notas.strip() if definicion_data.notas else None
+        if definicion_data.activo is not None:
+            definicion.activo = definicion_data.activo
+        if definicion_data.orden is not None:
+            definicion.orden = definicion_data.orden
+
+        db.commit()
+        db.refresh(definicion)
+
+        logger.info(f"✅ Definición de campo actualizada: {definicion.tabla}.{definicion.campo}")
+        return {
+            "mensaje": "Definición actualizada exitosamente",
+            "definicion": definicion.to_dict(),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error actualizando definición de campo: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.delete("/ai/definiciones-campos/{definicion_id}")
+def eliminar_definicion_campo(
+    definicion_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Eliminar una definición de campo"""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden eliminar definiciones de campos",
+        )
+
+    try:
+        definicion = db.query(AIDefinicionCampo).filter(
+            AIDefinicionCampo.id == definicion_id
+        ).first()
+
+        if not definicion:
+            raise HTTPException(status_code=404, detail="Definición no encontrada")
+
+        tabla_campo = f"{definicion.tabla}.{definicion.campo}"
+        db.delete(definicion)
+        db.commit()
+
+        logger.info(f"✅ Definición de campo eliminada: {tabla_campo}")
+        return {"mensaje": "Definición eliminada exitosamente"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error eliminando definición de campo: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.get("/ai/definiciones-campos/tablas")
+def listar_tablas_definiciones(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Listar todas las tablas que tienen definiciones"""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden ver las tablas",
+        )
+
+    try:
+        tablas = db.query(AIDefinicionCampo.tabla).filter(
+            AIDefinicionCampo.activo.is_(True)
+        ).distinct().all()
+        
+        return {
+            "tablas": [tabla[0] for tabla in tablas if tabla[0]],
+            "total": len([tabla[0] for tabla in tablas if tabla[0]]),
+        }
+    except Exception as e:
+        error_str = str(e).lower()
+        if "does not exist" in error_str or "no such table" in error_str or "relation" in error_str:
+            return {"tablas": [], "total": 0}
+        logger.error(f"Error listando tablas: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+# ============================================
+# GESTIÓN DE CALIFICACIONES DEL CHAT AI
+# ============================================
+
+
+class CalificacionChatRequest(BaseModel):
+    """Schema para calificar respuesta del chat AI"""
+
+    pregunta: str = Field(..., description="Pregunta del usuario")
+    respuesta_ai: str = Field(..., description="Respuesta del AI")
+    calificacion: str = Field(..., description="Calificación: 'arriba' o 'abajo'")
+
+
+@router.post("/ai/chat/calificar")
+def calificar_respuesta_chat(
+    calificacion_data: CalificacionChatRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Guardar calificación de una respuesta del chat AI"""
+    try:
+        if calificacion_data.calificacion not in ["arriba", "abajo"]:
+            raise HTTPException(
+                status_code=400,
+                detail="Calificación debe ser 'arriba' o 'abajo'",
+            )
+
+        nueva_calificacion = AICalificacionChat(
+            pregunta=calificacion_data.pregunta.strip(),
+            respuesta_ai=calificacion_data.respuesta_ai.strip(),
+            calificacion=calificacion_data.calificacion,
+            usuario_email=current_user.email,
+            procesado=False,
+            mejorado=False,
+        )
+
+        db.add(nueva_calificacion)
+        db.commit()
+        db.refresh(nueva_calificacion)
+
+        logger.info(f"✅ Calificación guardada: {calificacion_data.calificacion} por {current_user.email}")
+        return {
+            "mensaje": "Calificación guardada exitosamente",
+            "calificacion": nueva_calificacion.to_dict(),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        error_str = str(e).lower()
+        if "does not exist" in error_str or "no such table" in error_str or "relation" in error_str:
+            logger.warning(f"Tabla ai_calificaciones_chat no existe aún. Error: {e}")
+            raise HTTPException(
+                status_code=503,
+                detail="Sistema de calificaciones no disponible. Ejecuta la migración SQL primero.",
+            )
+        logger.error(f"Error guardando calificación: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.get("/ai/chat/calificaciones")
+def listar_calificaciones_chat(
+    calificacion: Optional[str] = Query(None, description="Filtrar por calificación: 'arriba' o 'abajo'"),
+    procesado: Optional[bool] = Query(None, description="Filtrar por estado de procesamiento"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Listar calificaciones del chat AI (solo administradores)"""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden ver las calificaciones",
+        )
+
+    try:
+        query = db.query(AICalificacionChat)
+        
+        if calificacion:
+            query = query.filter(AICalificacionChat.calificacion == calificacion)
+        if procesado is not None:
+            query = query.filter(AICalificacionChat.procesado == procesado)
+        
+        calificaciones = query.order_by(
+            AICalificacionChat.creado_en.desc()
+        ).all()
+        
+        return {
+            "calificaciones": [cal.to_dict() for cal in calificaciones],
+            "total": len(calificaciones),
+        }
+    except Exception as e:
+        error_str = str(e).lower()
+        if "does not exist" in error_str or "no such table" in error_str or "relation" in error_str:
+            logger.warning(f"Tabla ai_calificaciones_chat no existe aún. Devolviendo lista vacía. Error: {e}")
+            return {"calificaciones": [], "total": 0}
+        logger.error(f"Error listando calificaciones: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
+@router.put("/ai/chat/calificaciones/{calificacion_id}/procesar")
+def marcar_calificacion_procesada(
+    calificacion_id: int,
+    notas: Optional[str] = Body(None, embed=True),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Marcar una calificación como procesada"""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden procesar calificaciones",
+        )
+
+    try:
+        calificacion = db.query(AICalificacionChat).filter(
+            AICalificacionChat.id == calificacion_id
+        ).first()
+
+        if not calificacion:
+            raise HTTPException(status_code=404, detail="Calificación no encontrada")
+
+        calificacion.procesado = True
+        if notas:
+            calificacion.notas_procesamiento = notas.strip()
+
+        db.commit()
+        db.refresh(calificacion)
+
+        logger.info(f"✅ Calificación marcada como procesada: {calificacion_id}")
+        return {
+            "mensaje": "Calificación marcada como procesada",
+            "calificacion": calificacion.to_dict(),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error procesando calificación: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
+
 @router.get("/ai/prompt")
 def obtener_prompt_ai(
     db: Session = Depends(get_db),
@@ -5349,8 +5981,11 @@ def _calcular_metricas_periodo(db: Session, fecha_inicio: date, fecha_fin: date)
         return None
 
 
-def _obtener_mapeo_semantico_campos() -> str:
-    """Genera un mapeo semántico de campos con sinónimos y términos relacionados"""
+def _obtener_mapeo_semantico_campos(db: Session = None) -> str:
+    """
+    Genera un mapeo semántico de campos con sinónimos y términos relacionados.
+    Combina mapeo hardcodeado + diccionario semántico de BD.
+    """
     mapeo = []
     mapeo.append("=== MAPEO SEMÁNTICO DE CAMPOS (Sinónimos y Términos Relacionados) ===\n")
     mapeo.append("Usa este mapeo para entender términos similares y hacer inferencias semánticas\n")
@@ -5378,9 +6013,9 @@ def _obtener_mapeo_semantico_campos() -> str:
     mapeo.append("  • saldo_capital, saldo, capital pendiente, deuda pendiente")
 
     mapeo.append("\n👤 IDENTIFICACIÓN DE CLIENTES:")
-    mapeo.append("  • cedula, cédula, documento, documento identidad, DNI, CI, identificación")
-    mapeo.append("  • nombres, nombre, nombre completo, cliente, persona, titular")
-    mapeo.append("  • telefono, teléfono, tel, número teléfono, contacto, celular")
+    mapeo.append("  • cedula, cédula, documento, documento identidad, DNI, CI, identificación, ced, doc, identidad, carnet")
+    mapeo.append("  • nombres, nombre, nombre completo, cliente, persona, titular, apellido, apellidos, nombre y apellido")
+    mapeo.append("  • telefono, teléfono, tel, número teléfono, contacto, celular, móvil, phone")
     mapeo.append("  • email, correo, correo electrónico, e-mail, mail")
     mapeo.append("  • cliente_id, id cliente, identificador cliente, código cliente")
 
@@ -5405,8 +6040,8 @@ def _obtener_mapeo_semantico_campos() -> str:
     mapeo.append("  • dias_morosidad, días morosidad, días pendiente, días adeudado")
 
     mapeo.append("\n💳 PAGOS Y TRANSACCIONES:")
-    mapeo.append("  • pago, pagos, transacción, abono, depósito, transferencia")
-    mapeo.append("  • numero_documento, número documento, comprobante, referencia, número referencia")
+    mapeo.append("  • pago, pagos, transacción, abono, depósito, transferencia, abonar, cancelar, liquidar, saldar, pagar")
+    mapeo.append("  • numero_documento, número documento, comprobante, referencia, número referencia, recibo, voucher")
     mapeo.append("  • institucion_bancaria, banco, institución bancaria, entidad bancaria")
     mapeo.append("  • conciliado, conciliación, verificado, confirmado, validado")
     mapeo.append("  • activo, activo pago, pago activo, pago válido, pago vigente")
@@ -5425,17 +6060,146 @@ def _obtener_mapeo_semantico_campos() -> str:
     mapeo.append("  • por año, en el año, durante el año, del año")
     mapeo.append("  • por estado, según estado, con estado, que tengan estado")
 
-    mapeo.append("\n⚠️ INSTRUCCIONES PARA EL AI:")
-    mapeo.append("  1. Si el usuario usa un término que no aparece exactamente en los campos,")
-    mapeo.append("     busca en este mapeo para encontrar el campo equivalente")
-    mapeo.append("  2. Si estás confundido entre dos campos similares, puedes hacer una pregunta")
-    mapeo.append("     aclaratoria como: '¿Te refieres a fecha_vencimiento o fecha_pago?'")
-    mapeo.append("  3. Usa inferencia semántica: si preguntan 'cuándo vence', usa fecha_vencimiento")
-    mapeo.append("  4. Si preguntan sobre 'pagos', considera tanto la tabla 'pagos' como 'cuotas'")
-    mapeo.append("  5. Para términos como 'morosidad', considera campos: dias_morosidad, monto_morosidad, estado='MORA'")
-    mapeo.append("  6. Si no estás seguro, pregunta al usuario para aclarar antes de responder")
+    mapeo.append("\n⚠️⚠️⚠️ INSTRUCCIONES CRÍTICAS PARA MAPEO SEMÁNTICO ⚠️⚠️⚠️")
+    mapeo.append("")
+    mapeo.append("1. **SIEMPRE consulta este mapeo primero**: Antes de buscar en la BD, verifica si el usuario usó una palabra común.")
+    mapeo.append("   Ejemplo: Usuario dice 'cédula' → Busca en mapeo → Encuentra que corresponde a campo 'cedula' → Usa 'cedula' en consulta")
+    mapeo.append("")
+    mapeo.append("2. **Inferencia semántica obligatoria**:")
+    mapeo.append("   - 'nombre' → Campo: nombres")
+    mapeo.append("   - 'pago' → Tablas: pagos Y cuotas (ambas)")
+    mapeo.append("   - 'cuota' → Tabla: cuotas, Campo: monto_cuota")
+    mapeo.append("   - 'cliente' → Tabla: clientes, Campo: nombres")
+    mapeo.append("   - 'cédula' → Campo: cedula (en cualquier tabla)")
+    mapeo.append("")
+    mapeo.append("3. **Múltiples interpretaciones**: Si un término puede referirse a varios campos, considera TODOS:")
+    mapeo.append("   - 'pago' puede ser: tabla pagos, tabla cuotas, campo monto_pagado, campo fecha_pago")
+    mapeo.append("   - Busca en TODAS las opciones antes de responder")
+    mapeo.append("")
+    mapeo.append("4. **Ejemplos comunes que DEBES reconocer**:")
+    mapeo.append("   - '¿Cuál es el nombre del cliente con cédula V123456789?' → Busca en tabla clientes, campo cedula='V123456789', retorna campo nombres")
+    mapeo.append("   - '¿Cuántos pagos hay?' → Cuenta en tabla pagos (activos)")
+    mapeo.append("   - '¿Cuánto debe el cliente?' → Busca cuotas pendientes o en mora")
+    mapeo.append("   - '¿Tiene préstamos?' → Busca en tabla prestamos por cliente_id o cedula")
+    mapeo.append("")
+    mapeo.append("5. **Preguntas aclaratorias solo si es necesario**:")
+    mapeo.append("   - Primero intenta inferir del contexto")
+    mapeo.append("   - Solo pregunta si hay ambigüedad real entre campos muy diferentes")
+    mapeo.append("   - Ejemplo de pregunta válida: '¿Te refieres a fecha_vencimiento o fecha_pago?'")
+
+    # Agregar diccionario semántico personalizado desde BD
+    if db:
+        try:
+            entradas_diccionario = db.query(AIDiccionarioSemantico).filter(
+                AIDiccionarioSemantico.activo.is_(True)
+            ).order_by(
+                AIDiccionarioSemantico.categoria.asc(),
+                AIDiccionarioSemantico.orden.asc(),
+                AIDiccionarioSemantico.palabra.asc()
+            ).all()
+            
+            if entradas_diccionario:
+                mapeo.append("\n=== DICCIONARIO SEMÁNTICO PERSONALIZADO ===")
+                mapeo.append("Palabras y definiciones entrenadas para mejorar la comprensión:\n")
+                
+                categoria_actual = None
+                for entrada in entradas_diccionario:
+                    if entrada.categoria and entrada.categoria != categoria_actual:
+                        categoria_actual = entrada.categoria
+                        mapeo.append(f"\n📁 {categoria_actual.upper()}:")
+                    
+                    mapeo.append(f"  • {entrada.palabra}: {entrada.definicion}")
+                    
+                    if entrada.campo_relacionado:
+                        mapeo.append(f"    → Campo técnico: {entrada.campo_relacionado}")
+                    if entrada.tabla_relacionada:
+                        mapeo.append(f"    → Tabla: {entrada.tabla_relacionada}")
+                    
+                    if entrada.sinonimos:
+                        import json
+                        sinonimos_list = json.loads(entrada.sinonimos) if isinstance(entrada.sinonimos, str) else entrada.sinonimos
+                        if sinonimos_list:
+                            mapeo.append(f"    → Sinónimos: {', '.join(sinonimos_list)}")
+                    
+                    if entrada.ejemplos_uso:
+                        import json
+                        ejemplos_list = json.loads(entrada.ejemplos_uso) if isinstance(entrada.ejemplos_uso, str) else entrada.ejemplos_uso
+                        if ejemplos_list:
+                            mapeo.append(f"    → Ejemplos: {'; '.join(ejemplos_list[:2])}")  # Máximo 2 ejemplos
+        except Exception as e:
+            error_str = str(e).lower()
+            if "does not exist" not in error_str and "no such table" not in error_str and "relation" not in error_str:
+                logger.warning(f"Error obteniendo diccionario semántico de BD: {e}")
 
     return "\n".join(mapeo)
+
+
+def _obtener_definiciones_campos_bd(db: Session) -> str:
+    """
+    Obtiene las definiciones de campos desde BD para entrenar acceso rápido.
+    Retorna un catálogo completo de campos con sus definiciones.
+    """
+    try:
+        definiciones = db.query(AIDefinicionCampo).filter(
+            AIDefinicionCampo.activo.is_(True)
+        ).order_by(
+            AIDefinicionCampo.tabla.asc(),
+            AIDefinicionCampo.orden.asc(),
+            AIDefinicionCampo.campo.asc()
+        ).all()
+        
+        if not definiciones:
+            return ""
+        
+        catalogo = []
+        catalogo.append("=== CATÁLOGO DE CAMPOS CON DEFINICIONES (Acceso Rápido a BD) ===\n")
+        catalogo.append("Usa este catálogo para entender rápidamente qué campo usar y qué significa cada campo.\n")
+        
+        tabla_actual = None
+        for def_campo in definiciones:
+            if def_campo.tabla != tabla_actual:
+                tabla_actual = def_campo.tabla
+                catalogo.append(f"\n{'=' * 80}")
+                catalogo.append(f"TABLA: {tabla_actual.upper()}")
+                catalogo.append(f"{'=' * 80}\n")
+            
+            catalogo.append(f"📋 Campo: {def_campo.campo}")
+            catalogo.append(f"   Definición: {def_campo.definicion}")
+            
+            if def_campo.tipo_dato:
+                catalogo.append(f"   Tipo: {def_campo.tipo_dato}")
+            if def_campo.es_obligatorio:
+                catalogo.append(f"   ⚠️ Obligatorio (NOT NULL)")
+            if def_campo.tiene_indice:
+                catalogo.append(f"   ⚡ Indexado (búsquedas rápidas)")
+            if def_campo.es_clave_foranea:
+                catalogo.append(f"   🔗 Clave Foránea → {def_campo.tabla_referenciada}.{def_campo.campo_referenciado}")
+            
+            if def_campo.valores_posibles:
+                import json
+                valores_list = json.loads(def_campo.valores_posibles) if isinstance(def_campo.valores_posibles, str) else def_campo.valores_posibles
+                if valores_list:
+                    catalogo.append(f"   Valores posibles: {', '.join(valores_list)}")
+            
+            if def_campo.ejemplos_valores:
+                import json
+                ejemplos_list = json.loads(def_campo.ejemplos_valores) if isinstance(def_campo.ejemplos_valores, str) else def_campo.ejemplos_valores
+                if ejemplos_list:
+                    catalogo.append(f"   Ejemplos: {', '.join(ejemplos_list[:3])}")  # Máximo 3 ejemplos
+            
+            if def_campo.notas:
+                catalogo.append(f"   💡 Notas: {def_campo.notas}")
+            
+            catalogo.append("")  # Línea en blanco entre campos
+        
+        return "\n".join(catalogo)
+    except Exception as e:
+        error_str = str(e).lower()
+        if "does not exist" in error_str or "no such table" in error_str or "relation" in error_str:
+            logger.debug(f"Tabla ai_definiciones_campos no existe aún. Continuando sin definiciones. Error: {e}")
+            return ""
+        logger.warning(f"Error obteniendo definiciones de campos de BD: {e}")
+        return ""
 
 
 def _obtener_inventario_campos_bd(db: Session) -> str:
@@ -7292,6 +8056,20 @@ def _construir_system_prompt_default(
     """
     return f"""⚠️⚠️⚠️ REGLAS CRÍTICAS - LEE PRIMERO ⚠️⚠️⚠️
 
+🔍🔍🔍 MAPEO SEMÁNTICO - IMPORTANTE 🔍🔍🔍
+
+El usuario puede usar palabras comunes en lugar de nombres técnicos de campos.
+SIEMPRE consulta el "MAPEO SEMÁNTICO DE CAMPOS" más abajo para entender qué campo corresponde.
+
+Ejemplos de mapeo común:
+- Usuario dice "cédula" → Campo: cedula
+- Usuario dice "nombre" → Campo: nombres  
+- Usuario dice "pago" → Considera tablas: pagos Y cuotas
+- Usuario dice "cuota" → Campo: monto_cuota o tabla: cuotas
+- Usuario dice "cliente" → Tabla: clientes
+
+SIEMPRE usa inferencia semántica para mapear palabras comunes a campos técnicos ANTES de buscar en la BD.
+
 🚫 PROHIBICIÓN ABSOLUTA DE INVENTAR INFORMACIÓN:
 - ESTÁ ESTRICTAMENTE PROHIBIDO inventar, crear, generar, asumir o fabricar CUALQUIER dato, número, nombre, fecha, monto, estadística o información.
 - SOLO puedes usar EXACTAMENTE la información proporcionada en las secciones de datos más abajo.
@@ -7665,7 +8443,8 @@ def _obtener_info_esquema(pregunta_lower: str, db: Session) -> str:
 
     info_esquema = ""
     try:
-        info_esquema = "\n\n" + _obtener_mapeo_semantico_campos()
+        info_esquema = "\n\n" + _obtener_mapeo_semantico_campos(db)
+        info_esquema += "\n\n" + _obtener_definiciones_campos_bd(db)
         info_esquema += "\n\n" + _obtener_inventario_campos_bd(db)
         info_esquema += "\n" + _obtener_estadisticas_tablas(db)
 
