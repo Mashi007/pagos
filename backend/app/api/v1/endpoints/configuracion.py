@@ -514,17 +514,142 @@ def _obtener_logo_anterior(db: Session) -> Optional[str]:
     return None
 
 
+def _obtener_backup_logo_anterior(db: Session) -> Optional[dict]:
+    """
+    Obtiene un backup completo del logo anterior (filename y logo_data) antes de eliminarlo.
+    Retorna un diccionario con 'filename' y 'logo_data' o None si no hay logo anterior.
+    """
+    try:
+        from app.models.configuracion_sistema import ConfiguracionSistema
+        
+        logo_filename = _obtener_logo_anterior(db)
+        if not logo_filename:
+            return None
+        
+        # Obtener logo_data también
+        logo_data_config = (
+            db.query(ConfiguracionSistema)
+            .filter(
+                ConfiguracionSistema.categoria == "GENERAL",
+                ConfiguracionSistema.clave == "logo_data",
+            )
+            .first()
+        )
+        
+        backup = {
+            "filename": logo_filename,
+            "logo_data": logo_data_config.valor_json if logo_data_config and logo_data_config.valor_json else None,
+            "logo_filename_config": logo_data_config if logo_data_config else None,
+        }
+        
+        logger.info(f"✅ Backup del logo anterior creado: {logo_filename}")
+        return backup
+    except Exception as e:
+        logger.warning(f"⚠️ Error creando backup del logo anterior: {str(e)}")
+        return None
+
+
+def _restaurar_logo_anterior(db: Session, backup: dict, logos_dir: Path) -> bool:
+    """
+    Restaura el logo anterior desde el backup si el guardado del nuevo logo falló.
+    Retorna True si se restauró exitosamente, False en caso contrario.
+    """
+    try:
+        from app.models.configuracion_sistema import ConfiguracionSistema
+        
+        if not backup or not backup.get("filename"):
+            logger.warning("⚠️ No hay backup válido para restaurar")
+            return False
+        
+        logo_filename = backup["filename"]
+        logo_data = backup.get("logo_data")
+        
+        # Restaurar logo_filename en BD
+        logo_config = (
+            db.query(ConfiguracionSistema)
+            .filter(
+                ConfiguracionSistema.categoria == "GENERAL",
+                ConfiguracionSistema.clave == "logo_filename",
+            )
+            .first()
+        )
+        
+        if logo_config:
+            logo_config.valor = logo_filename  # type: ignore[assignment]
+        else:
+            logo_config = ConfiguracionSistema(
+                categoria="GENERAL",
+                clave="logo_filename",
+                valor=logo_filename,
+                tipo_dato="STRING",
+                descripcion="Nombre del archivo del logo de la empresa",
+                visible_frontend=True,
+            )
+            db.add(logo_config)
+        
+        # Restaurar logo_data en BD si existe
+        if logo_data:
+            logo_data_config = (
+                db.query(ConfiguracionSistema)
+                .filter(
+                    ConfiguracionSistema.categoria == "GENERAL",
+                    ConfiguracionSistema.clave == "logo_data",
+                )
+                .first()
+            )
+            
+            if logo_data_config:
+                logo_data_config.valor_json = logo_data  # type: ignore[assignment]
+            else:
+                logo_data_config = ConfiguracionSistema(
+                    categoria="GENERAL",
+                    clave="logo_data",
+                    valor=None,
+                    valor_json=logo_data,
+                    tipo_dato="JSON",
+                    descripcion="Datos del logo (base64 y metadata) para persistencia en Render",
+                    visible_frontend=False,
+                )
+                db.add(logo_data_config)
+        
+        # Intentar restaurar archivo en filesystem desde BD si existe
+        if logo_data and isinstance(logo_data, dict) and logo_data.get("base64"):
+            try:
+                import base64
+                logo_bytes = base64.b64decode(logo_data["base64"])
+                logo_path = logos_dir / logo_filename
+                
+                with open(logo_path, "wb") as f:
+                    f.write(logo_bytes)
+                logger.info(f"✅ Logo restaurado en filesystem desde BD: {logo_filename}")
+            except Exception as fs_error:
+                logger.warning(f"⚠️ No se pudo restaurar logo en filesystem: {str(fs_error)}")
+                # Continuar - al menos la BD está restaurada
+        
+        db.commit()
+        logger.info(f"✅ Logo anterior restaurado exitosamente: {logo_filename}")
+        return True
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ Error restaurando logo anterior: {str(e)}", exc_info=True)
+        return False
+
+
 def _eliminar_logo_anterior(db: Session, logos_dir: Path, nuevo_logo_filename: str) -> None:
     """
     Elimina el logo anterior del filesystem y limpia datos antiguos de la BD.
-    Siempre elimina del filesystem para asegurar que no queden archivos antiguos.
+    SOLO se debe llamar DESPUÉS de confirmar que el nuevo logo se guardó exitosamente.
     """
     try:
         logo_anterior_filename = _obtener_logo_anterior(db)
 
         # ✅ Eliminar todos los logos antiguos del filesystem (cualquier logo-custom.*)
+        # excepto el nuevo si tiene el mismo nombre
         try:
             for archivo in logos_dir.glob("logo-custom.*"):
+                # No eliminar si es el nuevo logo
+                if archivo.name == nuevo_logo_filename:
+                    continue
                 try:
                     archivo.unlink()
                     logger.info(f"🗑️ Logo anterior eliminado del filesystem: {archivo.name}")
@@ -667,11 +792,11 @@ async def upload_logo(
         logo_filename = f"logo-custom{extension}"
         logo_path = logos_dir / logo_filename
 
-        # ✅ Eliminar logo anterior ANTES de guardar el nuevo
-        # Esto asegura que siempre se reemplace correctamente
-        _eliminar_logo_anterior(db, logos_dir, logo_filename)
+        # ✅ CREAR BACKUP del logo anterior ANTES de hacer cualquier cambio
+        # Esto permite restaurarlo si falla el guardado del nuevo logo
+        backup_logo_anterior = _obtener_backup_logo_anterior(db)
         
-        # ✅ También eliminar el nuevo archivo si ya existe (por si acaso)
+        # ✅ Eliminar el nuevo archivo si ya existe (por si acaso)
         if logo_path.exists():
             try:
                 logo_path.unlink()
@@ -694,16 +819,27 @@ async def upload_logo(
         logo_base64 = base64.b64encode(contents).decode("utf-8")
         content_type = logo.content_type or "image/jpeg"
 
-        # Intentar guardar en BD (filename + base64), si falla, eliminar archivo
+        # Intentar guardar en BD (filename + base64)
         try:
             _guardar_logo_en_bd(db, logo_filename, logo_base64, content_type)
+            # ✅ SOLO DESPUÉS de confirmar que se guardó exitosamente, eliminar el logo anterior
+            _eliminar_logo_anterior(db, logos_dir, logo_filename)
         except Exception as db_error:
             db.rollback()
-            # Rollback: eliminar archivo si falla guardado en BD
+            
+            # ✅ RESTAURAR logo anterior si falla el guardado del nuevo
+            if backup_logo_anterior:
+                logger.warning(f"⚠️ Error guardando nuevo logo, restaurando logo anterior...")
+                if _restaurar_logo_anterior(db, backup_logo_anterior, logos_dir):
+                    logger.info(f"✅ Logo anterior restaurado exitosamente después del error")
+                else:
+                    logger.error(f"❌ No se pudo restaurar el logo anterior")
+            
+            # Eliminar archivo nuevo si existe y falló el guardado
             try:
                 if logo_path.exists():
                     logo_path.unlink()
-                    logger.info(f"🗑️ Archivo de logo eliminado debido a error en BD: {logo_filename}")
+                    logger.info(f"🗑️ Archivo de logo nuevo eliminado debido a error en BD: {logo_filename}")
             except Exception as cleanup_error:
                 logger.error(f"❌ Error eliminando archivo después de fallo en BD: {str(cleanup_error)}")
 

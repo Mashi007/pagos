@@ -5,11 +5,13 @@
 export interface Cuota {
   numero_cuota: number
   fecha_vencimiento: string
-  monto_capital: number
-  monto_interes: number
+  monto_capital?: number  // Opcional - puede no existir
+  monto_interes?: number  // Opcional - puede no existir
   monto_cuota: number
+  saldo_capital_inicial?: number
   saldo_capital_final: number
   estado: string
+  total_pagado?: number
 }
 
 export interface PrestamoInfo {
@@ -31,20 +33,35 @@ export const exportarAExcel = async (cuotas: Cuota[], prestamo: PrestamoInfo) =>
     const { createAndDownloadExcel } = await import('@/types/exceljs')
 
     // Crear datos para Excel
-    const datos = cuotas.map(cuota => ({
-      'Cuota': cuota.numero_cuota,
-      'Fecha Vencimiento': cuota.fecha_vencimiento,
-      'Capital': cuota.monto_capital,
-      'Interés': cuota.monto_interes,
-      'Total': cuota.monto_cuota,
-      'Saldo Pendiente': cuota.saldo_capital_final,
-      'Estado': cuota.estado,
-    }))
+    const datos = cuotas.map(cuota => {
+      // Calcular monto_capital y monto_interes si no existen
+      const saldoInicial = typeof cuota.saldo_capital_inicial === 'number' ? cuota.saldo_capital_inicial : 0
+      const saldoFinal = typeof cuota.saldo_capital_final === 'number' ? cuota.saldo_capital_final : 0
+      const montoCuota = typeof cuota.monto_cuota === 'number' ? cuota.monto_cuota : 0
+      
+      const montoCapital = typeof cuota.monto_capital === 'number' && !isNaN(cuota.monto_capital)
+        ? cuota.monto_capital
+        : Math.max(0, saldoInicial - saldoFinal)
+      
+      const montoInteres = typeof cuota.monto_interes === 'number' && !isNaN(cuota.monto_interes)
+        ? cuota.monto_interes
+        : Math.max(0, montoCuota - montoCapital)
+
+      return {
+        'Cuota': cuota.numero_cuota,
+        'Fecha Vencimiento': cuota.fecha_vencimiento,
+        'Capital': montoCapital,
+        'Interés': montoInteres,
+        'Total': montoCuota,
+        'Saldo Pendiente': saldoFinal,
+        'Estado': cuota.estado,
+      }
+    })
 
     // Agregar resumen
-    const totalCapital = cuotas.reduce((sum, c) => sum + c.monto_capital, 0)
-    const totalInteres = cuotas.reduce((sum, c) => sum + c.monto_interes, 0)
-    const totalGeneral = cuotas.reduce((sum, c) => sum + c.monto_cuota, 0)
+    const totalCapital = datos.reduce((sum, d) => sum + (d.Capital as number), 0)
+    const totalInteres = datos.reduce((sum, d) => sum + (d.Interés as number), 0)
+    const totalGeneral = datos.reduce((sum, d) => sum + (d.Total as number), 0)
 
     const resumen = [
       { 'Cuota': 'RESUMEN', 'Fecha Vencimiento': '', 'Capital': '', 'Interés': '', 'Total': '', 'Saldo Pendiente': '', 'Estado': '' },
@@ -134,16 +151,40 @@ export const exportarAPDF = async (cuotas: Cuota[], prestamo: PrestamoInfo) => {
     doc.setFont('helvetica', 'bold')
     doc.text('TABLA DE AMORTIZACIÓN', 15, 92)
 
-    // Preparar datos para la tabla
-    const datosTabla = cuotas.map(cuota => [
-      cuota.numero_cuota.toString(),
-      cuota.fecha_vencimiento,
-      `$${cuota.monto_capital.toFixed(2)}`,
-      `$${cuota.monto_interes.toFixed(2)}`,
-      `$${cuota.monto_cuota.toFixed(2)}`,
-      `$${cuota.saldo_capital_final.toFixed(2)}`,
-      cuota.estado
-    ])
+    // Preparar datos para la tabla y calcular totales
+    let totalCapital = 0
+    let totalInteres = 0
+    let totalGeneral = 0
+    
+    const datosTabla = cuotas.map(cuota => {
+      // Calcular monto_capital y monto_interes si no existen
+      const saldoInicial = typeof cuota.saldo_capital_inicial === 'number' ? cuota.saldo_capital_inicial : 0
+      const saldoFinal = typeof cuota.saldo_capital_final === 'number' ? cuota.saldo_capital_final : 0
+      const montoCuota = typeof cuota.monto_cuota === 'number' ? cuota.monto_cuota : 0
+      
+      const montoCapital = typeof cuota.monto_capital === 'number' && !isNaN(cuota.monto_capital)
+        ? cuota.monto_capital
+        : Math.max(0, saldoInicial - saldoFinal)
+      
+      const montoInteres = typeof cuota.monto_interes === 'number' && !isNaN(cuota.monto_interes)
+        ? cuota.monto_interes
+        : Math.max(0, montoCuota - montoCapital)
+
+      // Acumular totales
+      totalCapital += montoCapital
+      totalInteres += montoInteres
+      totalGeneral += montoCuota
+
+      return [
+        cuota.numero_cuota.toString(),
+        cuota.fecha_vencimiento,
+        `$${montoCapital.toFixed(2)}`,
+        `$${montoInteres.toFixed(2)}`,
+        `$${montoCuota.toFixed(2)}`,
+        `$${saldoFinal.toFixed(2)}`,
+        cuota.estado
+      ]
+    })
 
     // Crear tabla con autoTable
     autoTable(doc, {
@@ -186,9 +227,7 @@ export const exportarAPDF = async (cuotas: Cuota[], prestamo: PrestamoInfo) => {
     doc.setTextColor(255, 255, 255)
     doc.text('RESUMEN DE PRÉSTAMO', 15, resumenY + 7)
 
-    const totalCapital = cuotas.reduce((sum, c) => sum + c.monto_capital, 0)
-    const totalInteres = cuotas.reduce((sum, c) => sum + c.monto_interes, 0)
-    const totalGeneral = cuotas.reduce((sum, c) => sum + c.monto_cuota, 0)
+    // Los totales ya fueron calculados durante el mapeo de datosTabla
 
     doc.setFontSize(10)
     doc.setFont('helvetica', 'normal')

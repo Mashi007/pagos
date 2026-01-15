@@ -648,12 +648,29 @@ def actualizar_cliente(
         # Nota: Ya no hay campo 'activo', solo se maneja 'estado'
 
         # Aplicar actualizaciones
+        nombres_actualizados = False
         for field, value in update_data.items():
             if hasattr(cliente, field):
                 setattr(cliente, field, value)
+                # Detectar si se actualizó el nombre
+                if field == 'nombres':
+                    nombres_actualizados = True
 
         # Actualizar fecha_actualizacion manualmente
         cliente.fecha_actualizacion = datetime.utcnow()
+
+        # Si se actualizó el nombre, sincronizar con préstamos relacionados
+        if nombres_actualizados and cliente.nombres:
+            prestamos_relacionados = db.query(Prestamo).filter(
+                Prestamo.cliente_id == cliente_id
+            ).all()
+            
+            if prestamos_relacionados:
+                for prestamo in prestamos_relacionados:
+                    prestamo.nombres = cliente.nombres  # type: ignore[assignment]
+                logger.info(
+                    f"✅ Actualizados {len(prestamos_relacionados)} préstamos con nuevo nombre del cliente: {cliente.nombres}"
+                )
 
         db.commit()
         db.refresh(cliente)
