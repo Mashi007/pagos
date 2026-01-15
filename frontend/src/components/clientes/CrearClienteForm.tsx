@@ -147,6 +147,9 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     notas: 'No hay observacion'  // ✅ Default 'No hay observacion'
   })
 
+  // ✅ Estado para almacenar los datos originales del cliente (para comparación en edición)
+  const [datosOriginales, setDatosOriginales] = useState<Partial<FormData> | null>(null)
+
   const [validations, setValidations] = useState<ValidationResult[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showExcelUploader, setShowExcelUploader] = useState(false)
@@ -259,6 +262,9 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
 
       console.log('📝 MODO EDITAR - Datos formateados para cargar:', newFormData)
 
+      // ✅ Guardar datos originales para comparación posterior
+      setDatosOriginales({ ...newFormData })
+
       // ✅ Asegurar que los datos se carguen correctamente
       setFormData(newFormData)
 
@@ -285,6 +291,8 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         estado: 'ACTIVO',  // ✅ Estado por defecto SOLO para clientes nuevos
         notas: 'No hay observacion'  // ✅ Default 'No hay observacion'
       })
+      // ✅ Limpiar datos originales cuando no hay cliente (modo creación)
+      setDatosOriginales(null)
     }
   }, [cliente])
 
@@ -879,7 +887,8 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         estado: toTitleCase(blankIfNN(formData.estadoDireccion))
       })
 
-      const clienteData = {
+      // ✅ Preparar todos los datos formateados
+      const todosLosDatos = {
         cedula: formatCedula(blankIfNN(formData.cedula)),  // ✅ Cédula con letra inicial en mayúscula
         nombres: nombresFormateado,  // ✅ nombres formateados con Title Case
         telefono: telefonoCompleto,  // ✅ Formato: +581234567890
@@ -891,18 +900,111 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         notas: blankIfNN(formData.notas) || 'No hay observacion'
       }
 
-      logger.debug('Datos a enviar al backend', { clienteData })
-
       if (cliente && typeof cliente.id === 'number') {
-        // Editar cliente existente
+        // ✅ MODO EDICIÓN: Solo enviar campos que cambiaron
         logger.info('Editando cliente existente', { clienteId: cliente.id })
+        
+        // ✅ Función para comparar valores normalizados (ignora espacios, mayúsculas/minúsculas)
+        const valoresIguales = (valor1: any, valor2: any): boolean => {
+          // Manejar null/undefined
+          if ((valor1 == null || valor1 === '') && (valor2 == null || valor2 === '')) {
+            return true
+          }
+          if (valor1 == null || valor2 == null) {
+            return false
+          }
+          // Normalizar ambos valores para comparación (trim, lowercase, sin espacios múltiples)
+          const v1 = String(valor1).trim().toLowerCase().replace(/\s+/g, ' ')
+          const v2 = String(valor2).trim().toLowerCase().replace(/\s+/g, ' ')
+          return v1 === v2
+        }
+
+        // ✅ Comparar con datos originales y construir objeto solo con cambios
+        const clienteData: Partial<typeof todosLosDatos> = {}
+        
+        if (datosOriginales) {
+          // ✅ Función para reconstruir dirección original desde datos originales
+          const reconstruirDireccionOriginal = () => {
+            try {
+              return JSON.stringify({
+                callePrincipal: toTitleCase(blankIfNN(datosOriginales.callePrincipal || '')),
+                calleTransversal: blankIfNN(datosOriginales.calleTransversal || '') ? toTitleCase(blankIfNN(datosOriginales.calleTransversal || '')) : null,
+                descripcion: blankIfNN(datosOriginales.descripcion || '') || null,
+                parroquia: toTitleCase(blankIfNN(datosOriginales.parroquia || '')),
+                municipio: toTitleCase(blankIfNN(datosOriginales.municipio || '')),
+                ciudad: toTitleCase(blankIfNN(datosOriginales.ciudad || '')),
+                estado: toTitleCase(blankIfNN(datosOriginales.estadoDireccion || ''))
+              })
+            } catch {
+              return ''
+            }
+          }
+
+          const direccionOriginal = reconstruirDireccionOriginal()
+          const telefonoOriginal = datosOriginales.telefono ? `+58${extraerNumeroTelefono(datosOriginales.telefono)}` : ''
+
+          // Comparar cada campo y solo incluir si cambió
+          if (!valoresIguales(todosLosDatos.cedula, datosOriginales.cedula)) {
+            clienteData.cedula = todosLosDatos.cedula
+          }
+          if (!valoresIguales(todosLosDatos.nombres, datosOriginales.nombres)) {
+            clienteData.nombres = todosLosDatos.nombres
+          }
+          if (!valoresIguales(todosLosDatos.telefono, telefonoOriginal)) {
+            clienteData.telefono = todosLosDatos.telefono
+          }
+          if (!valoresIguales(todosLosDatos.email, datosOriginales.email)) {
+            clienteData.email = todosLosDatos.email
+          }
+          if (!valoresIguales(todosLosDatos.direccion, direccionOriginal)) {
+            clienteData.direccion = todosLosDatos.direccion
+          }
+          if (!valoresIguales(todosLosDatos.fecha_nacimiento, convertirFechaAISO(datosOriginales.fechaNacimiento || ''))) {
+            clienteData.fecha_nacimiento = todosLosDatos.fecha_nacimiento
+          }
+          if (!valoresIguales(todosLosDatos.ocupacion, datosOriginales.ocupacion)) {
+            clienteData.ocupacion = todosLosDatos.ocupacion
+          }
+          if (!valoresIguales(todosLosDatos.estado, datosOriginales.estado)) {
+            clienteData.estado = todosLosDatos.estado
+          }
+          if (!valoresIguales(todosLosDatos.notas, datosOriginales.notas)) {
+            clienteData.notas = todosLosDatos.notas
+          }
+
+          logger.debug('Campos modificados detectados', { 
+            camposModificados: Object.keys(clienteData),
+            clienteData,
+            datosOriginales: {
+              cedula: datosOriginales.cedula,
+              nombres: datosOriginales.nombres,
+              telefono: telefonoOriginal,
+              email: datosOriginales.email,
+              direccion: direccionOriginal.substring(0, 100) + '...'
+            }
+          })
+        } else {
+          // Si no hay datos originales (no debería pasar en modo edición), enviar todos los datos
+          logger.warning('No hay datos originales para comparar, enviando todos los campos')
+          Object.assign(clienteData, todosLosDatos)
+        }
+
+        // ✅ Solo actualizar si hay cambios
+        if (Object.keys(clienteData).length === 0) {
+          logger.info('No hay cambios detectados, no se actualizará el cliente')
+          alert('No se detectaron cambios en el cliente')
+          setIsSubmitting(false)
+          return
+        }
+
+        logger.debug('Datos a enviar al backend (solo campos modificados)', { clienteData })
         await clienteService.updateCliente(String(cliente.id), clienteData)
-        logger.info('Cliente actualizado exitosamente', { clienteId: cliente.id })
+        logger.info('Cliente actualizado exitosamente', { clienteId: cliente.id, camposActualizados: Object.keys(clienteData) })
       } else {
-        // Crear nuevo cliente
-        logger.info('Creando nuevo cliente', { cedula: clienteData.cedula })
-        await clienteService.createCliente(clienteData)
-        logger.info('Cliente creado exitosamente', { cedula: clienteData.cedula })
+        // Crear nuevo cliente - enviar todos los datos
+        logger.info('Creando nuevo cliente', { cedula: todosLosDatos.cedula })
+        await clienteService.createCliente(todosLosDatos)
+        logger.info('Cliente creado exitosamente', { cedula: todosLosDatos.cedula })
       }
       onSuccess()
       onClienteCreated?.()
