@@ -96,6 +96,7 @@ const logoCache: LogoCache = {
   version: 0,
   logoNotFound: initialMetadata.logoNotFound || false,
   logoFilename: initialMetadata.logoFilename || null,
+  lastCheckTime: null, // ✅ Inicializar timestamp de última verificación
 }
 
 // Listeners para notificar a todos los componentes cuando cambia el logo

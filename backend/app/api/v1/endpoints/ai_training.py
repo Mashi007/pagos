@@ -83,6 +83,48 @@ class BuscarDocumentosRequest(BaseModel):
     top_k: int = 3
 
 
+# ============================================
+# ML IMPAGO SCHEMAS
+# ============================================
+
+class EntrenarModeloImpagoRequest(BaseModel):
+    algoritmo: str = Field(default="random_forest", description="Algoritmo a usar: random_forest, xgboost, logistic_regression")
+    test_size: float = Field(default=0.2, ge=0.1, le=0.5, description="Proporción de datos para test")
+    random_state: int = Field(default=42, description="Semilla aleatoria para reproducibilidad")
+
+
+class PredecirImpagoRequest(BaseModel):
+    prestamo_id: int = Field(..., description="ID del préstamo para predecir impago")
+
+
+class ActivarModeloImpagoRequest(BaseModel):
+    modelo_id: int = Field(..., description="ID del modelo a activar")
+
+
+# ============================================
+# ML IMPAGO IMPORTS (condicionales)
+# ============================================
+
+try:
+    from app.models.modelo_impago_cuotas import ModeloImpagoCuotas
+    from app.services.ml_impago_cuotas_service import MLImpagoCuotasService
+    
+    ML_IMPAGO_SERVICE_AVAILABLE = True
+except ImportError:
+    ModeloImpagoCuotas = None
+    MLImpagoCuotasService = None
+    ML_IMPAGO_SERVICE_AVAILABLE = False
+
+
+def _validar_ml_impago_service_disponible():
+    """Valida que el servicio ML Impago esté disponible"""
+    if not ML_IMPAGO_SERVICE_AVAILABLE or MLImpagoCuotasService is None:
+        raise HTTPException(
+            status_code=503,
+            detail="scikit-learn no está instalado. Instala con: pip install scikit-learn",
+        )
+
+
 
 
 # ============================================
@@ -1380,6 +1422,9 @@ def _obtener_prestamos_aprobados_impago(db: Session) -> list:
                 prestamos.append(prestamo)
             return prestamos
         raise
+
+
+def _obtener_cuotas_prestamo(prestamo_id: int, db: Session) -> list:
     """Obtiene cuotas de un préstamo con manejo de errores"""
     from app.models.amortizacion import Cuota
 
