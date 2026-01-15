@@ -738,7 +738,7 @@ export function PrestamosList() {
                                 title="Asignar fecha de aprobación y desembolsar (requiere calificación mínima 70)"
                                 className="hover:bg-purple-50"
                               >
-                                <CalendarCheck className="h-4 w-4 text-purple-600" />
+                                <CalendarIcon className="h-4 w-4 text-purple-600" />
                               </Button>
                             )}
 

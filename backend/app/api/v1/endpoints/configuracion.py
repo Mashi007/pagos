@@ -497,15 +497,50 @@ def _obtener_logo_anterior(db: Session) -> Optional[str]:
 
 
 def _eliminar_logo_anterior(db: Session, logos_dir: Path, nuevo_logo_filename: str) -> None:
-    """Elimina el logo anterior si existe y es diferente al nuevo"""
+    """
+    Elimina el logo anterior del filesystem y limpia datos antiguos de la BD.
+    Siempre elimina del filesystem para asegurar que no queden archivos antiguos.
+    """
     try:
         logo_anterior_filename = _obtener_logo_anterior(db)
 
+        # ✅ Eliminar todos los logos antiguos del filesystem (cualquier logo-custom.*)
+        try:
+            for archivo in logos_dir.glob("logo-custom.*"):
+                try:
+                    archivo.unlink()
+                    logger.info(f"🗑️ Logo anterior eliminado del filesystem: {archivo.name}")
+                except Exception as fs_error:
+                    logger.warning(f"⚠️ No se pudo eliminar {archivo.name}: {str(fs_error)}")
+        except Exception as glob_error:
+            logger.warning(f"⚠️ Error buscando logos antiguos: {str(glob_error)}")
+
+        # ✅ Limpiar datos antiguos de la BD si el nombre es diferente
+        # (Si es el mismo nombre, _guardar_logo_en_bd lo actualizará)
         if logo_anterior_filename and logo_anterior_filename != nuevo_logo_filename:
-            logo_anterior_path = logos_dir / logo_anterior_filename
-            if logo_anterior_path.exists():
-                logo_anterior_path.unlink()
-                logger.info(f"🗑️ Logo anterior eliminado: {logo_anterior_filename}")
+            try:
+                from app.models.configuracion_sistema import ConfiguracionSistema
+                
+                # Eliminar logo_data anterior si existe y es diferente
+                logo_data_config = (
+                    db.query(ConfiguracionSistema)
+                    .filter(
+                        ConfiguracionSistema.categoria == "GENERAL",
+                        ConfiguracionSistema.clave == "logo_data",
+                    )
+                    .first()
+                )
+                
+                if logo_data_config and logo_data_config.valor_json:
+                    logo_data = logo_data_config.valor_json
+                    if isinstance(logo_data, dict) and logo_data.get("filename") == logo_anterior_filename:
+                        # Solo eliminar si el filename coincide con el anterior
+                        db.delete(logo_data_config)
+                        db.flush()  # Flush para asegurar que se elimine antes del commit
+                        logger.info(f"🗑️ Logo data anterior eliminado de BD: {logo_anterior_filename}")
+            except Exception as db_error:
+                logger.warning(f"⚠️ No se pudo eliminar logo anterior de BD: {str(db_error)}")
+                # No hacer rollback aquí, solo loguear el warning
     except Exception as e:
         # No fallar si no se puede eliminar el logo anterior
         logger.warning(f"⚠️ No se pudo eliminar logo anterior: {str(e)}")
@@ -614,8 +649,17 @@ async def upload_logo(
         logo_filename = f"logo-custom{extension}"
         logo_path = logos_dir / logo_filename
 
-        # Eliminar logo anterior si existe y es diferente
+        # ✅ Eliminar logo anterior ANTES de guardar el nuevo
+        # Esto asegura que siempre se reemplace correctamente
         _eliminar_logo_anterior(db, logos_dir, logo_filename)
+        
+        # ✅ También eliminar el nuevo archivo si ya existe (por si acaso)
+        if logo_path.exists():
+            try:
+                logo_path.unlink()
+                logger.info(f"🗑️ Archivo existente eliminado antes de guardar nuevo: {logo_filename}")
+            except Exception as cleanup_error:
+                logger.warning(f"⚠️ No se pudo eliminar archivo existente: {str(cleanup_error)}")
 
         # Guardar nuevo logo en filesystem (si es posible)
         try:
@@ -768,28 +812,8 @@ def _verificar_logo_existe(filename: str, db: Optional[Session] = None) -> tuple
     raise HTTPException(status_code=404, detail="Logo no encontrado")
 
 
-@router.head("/logo/{filename}")
-async def verificar_logo_existe(
-    filename: Annotated[str, Path(..., description="Nombre del archivo del logo")],
-    db: Session = Depends(get_db),
-):
-    """Verificar si el logo existe (HEAD request)"""
-    try:
-        from fastapi.responses import Response
-
-        logo_path, media_type, logo_bytes = _verificar_logo_existe(filename, db)
-
-        # Devolver respuesta HEAD sin cuerpo
-        return Response(
-            status_code=200,
-            headers={"Content-Type": media_type},
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error verificando logo: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error verificando logo: {str(e)}")
-
+# ✅ IMPORTANTE: Las rutas sin parámetros deben ir ANTES de las rutas con parámetros
+# Esto evita que FastAPI intente hacer match de /logo con /logo/{filename}
 
 @router.options("/logo")
 async def eliminar_logo_options(request: Request):
@@ -891,6 +915,29 @@ async def eliminar_logo(
     except Exception as e:
         logger.error(f"Error al eliminar logo: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error al eliminar logo: {str(e)}")
+
+
+@router.head("/logo/{filename}")
+async def verificar_logo_existe(
+    filename: Annotated[str, Path(..., description="Nombre del archivo del logo")],
+    db: Session = Depends(get_db),
+):
+    """Verificar si el logo existe (HEAD request)"""
+    try:
+        from fastapi.responses import Response
+
+        logo_path, media_type, logo_bytes = _verificar_logo_existe(filename, db)
+
+        # Devolver respuesta HEAD sin cuerpo
+        return Response(
+            status_code=200,
+            headers={"Content-Type": media_type},
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error verificando logo: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error verificando logo: {str(e)}")
 
 
 @router.get("/logo/{filename}")
