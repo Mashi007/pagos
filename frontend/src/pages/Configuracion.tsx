@@ -682,6 +682,18 @@ export function Configuracion() {
               </div>
             )}
 
+            {/* Mensaje cuando no hay logo personalizado */}
+            {!hasCustomLogo && !logoPreview && (
+              <div className="flex items-center justify-center p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center space-x-2">
+                  <CheckCircle className="h-5 w-5 text-blue-600" />
+                  <p className="text-sm text-blue-900">
+                    Usando logo por defecto. Puede subir un logo personalizado arriba.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Input de archivo */}
             <div className="flex flex-col space-y-2">
               <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-blue-300 rounded-lg cursor-pointer bg-white/50 hover:bg-blue-50/50 transition-colors">
