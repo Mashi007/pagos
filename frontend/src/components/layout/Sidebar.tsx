@@ -176,6 +176,9 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         { title: 'Configuración Email', href: '/configuracion?tab=email', icon: Mail },
         { title: 'Configuración WhatsApp', href: '/configuracion?tab=whatsapp', icon: MessageSquare },
         { title: 'Configuración AI', href: '/configuracion?tab=ai', icon: Brain },
+        // Herramientas dentro de Configuración
+        ...(user?.is_admin ? [{ title: 'Plantillas', href: '/herramientas/plantillas', icon: FileText }] : []),
+        { title: 'Programador', href: '/scheduler', icon: Calendar },
         { title: 'Analistas', href: '/analistas', icon: Users },
         { title: 'Concesionarios', href: '/concesionarios', icon: Building },
         { title: 'Modelos de Vehículos', href: '/modelos-vehiculos', icon: Car },

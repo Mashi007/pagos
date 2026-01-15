@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { getErrorMessage, isAxiosError, getErrorDetail } from '@/types/errors'
 import { env } from '@/config/env'
@@ -150,6 +150,15 @@ export function Configuracion() {
     cargarConfiguracionGeneral()
   }, [])
 
+  // Navegar a rutas externas cuando se seleccionan secciones con href
+  useEffect(() => {
+    if (seccionActiva === 'plantillas') {
+      navigate('/herramientas/plantillas')
+    } else if (seccionActiva === 'scheduler') {
+      navigate('/scheduler')
+    }
+  }, [seccionActiva, navigate])
+
   const cargarConfiguracionGeneral = async () => {
     try {
       setLoading(true)
@@ -254,6 +263,8 @@ export function Configuracion() {
     }
   }
 
+  const navigate = useNavigate()
+  
   const secciones = [
     { id: 'general', nombre: 'General', icono: Globe },
     {
@@ -265,7 +276,9 @@ export function Configuracion() {
         { id: 'notificaciones', nombre: 'Notificaciones', icono: Bell },
         { id: 'emailConfig', nombre: 'Configuración Email', icono: Mail },
         { id: 'whatsappConfig', nombre: 'Configuración WhatsApp', icono: MessageSquare },
-        { id: 'programador', nombre: 'Programador', icono: Calendar },
+        { id: 'plantillas', nombre: 'Plantillas', icono: FileText, href: '/herramientas/plantillas' },
+        { id: 'scheduler', nombre: 'Programador', icono: Calendar, href: '/scheduler' },
+        { id: 'programador', nombre: 'Programador (Config)', icono: Calendar },
         { id: 'auditoria', nombre: 'Auditoría', icono: FileText },
       ]
     },
@@ -1509,6 +1522,11 @@ export function Configuracion() {
   )
 
   const renderContenidoSeccion = () => {
+    // Si la sección tiene href, no renderizar contenido (la navegación se maneja en useEffect)
+    if (seccionActiva === 'plantillas' || seccionActiva === 'scheduler') {
+      return null
+    }
+    
     switch (seccionActiva) {
       case 'general': return renderSeccionGeneral()
       case 'notificaciones': return renderSeccionNotificaciones()
