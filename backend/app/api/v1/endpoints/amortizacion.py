@@ -191,33 +191,10 @@ def actualizar_cuota(
                         print(f"⚠️ Error estableciendo campo {field}: {e}")
                         raise HTTPException(status_code=400, detail=f"Error al actualizar campo {field}: {str(e)}")
 
-        # Recalcular total_pagado si se actualizaron campos de pago
-        if any(field in update_data for field in ["capital_pagado", "interes_pagado"]):
-            cuota.total_pagado = (cuota.capital_pagado or Decimal("0")) + (cuota.interes_pagado or Decimal("0"))
-        # Si se actualiza total_pagado directamente pero no capital_pagado/interes_pagado,
-        # mantener el total_pagado como está (el usuario lo estableció manualmente)
-
-        # Recalcular campos pendientes si se actualizaron montos base o pagados
-        if any(field in update_data for field in ["monto_capital", "capital_pagado"]):
-            cuota.capital_pendiente = cuota.monto_capital - (cuota.capital_pagado or Decimal("0"))
-
-        if any(field in update_data for field in ["monto_interes", "interes_pagado"]):
-            cuota.interes_pendiente = cuota.monto_interes - (cuota.interes_pagado or Decimal("0"))
-
-        # Si se actualizan directamente los pendientes, recalcular campos pagados
-        if "capital_pendiente" in update_data:
-            # Si se actualiza directamente, recalcular capital_pagado
-            if "capital_pagado" not in update_data:
-                cuota.capital_pagado = cuota.monto_capital - (cuota.capital_pendiente or Decimal("0"))
-                # Recalcular total_pagado si cambió capital_pagado
-                cuota.total_pagado = (cuota.capital_pagado or Decimal("0")) + (cuota.interes_pagado or Decimal("0"))
-
-        if "interes_pendiente" in update_data:
-            # Si se actualiza directamente, recalcular interes_pagado
-            if "interes_pagado" not in update_data:
-                cuota.interes_pagado = cuota.monto_interes - (cuota.interes_pendiente or Decimal("0"))
-                # Recalcular total_pagado si cambió interes_pagado
-                cuota.total_pagado = (cuota.capital_pagado or Decimal("0")) + (cuota.interes_pagado or Decimal("0"))
+        # ✅ CORREGIDO: Eliminar lógica de campos eliminados (capital_pagado, interes_pagado, etc.)
+        # Si se actualiza total_pagado directamente, mantenerlo como está (el usuario lo estableció manualmente)
+        # Los campos eliminados (capital_pagado, interes_pagado, capital_pendiente, interes_pendiente, etc.)
+        # ya no existen en el modelo ni en la BD, por lo que no se pueden recalcular
 
         # Actualizar estado si es necesario (solo si no se actualizó manualmente)
         if "estado" not in update_data:
@@ -325,15 +302,18 @@ def recalcular_mora(
     try:
         resultado = AmortizacionService.recalcular_mora(db, prestamo_id, tasa_mora, fecha_calculo)
 
-        # Obtener cuotas con mora
-        cuotas_con_mora = db.query(Cuota).filter(Cuota.prestamo_id == prestamo_id, Cuota.monto_mora > 0).all()
+        # ✅ CORREGIDO: Obtener cuotas con mora usando dias_morosidad y calcular monto_mora dinámicamente
+        cuotas_con_mora = db.query(Cuota).filter(
+            Cuota.prestamo_id == prestamo_id, 
+            Cuota.dias_morosidad > 0
+        ).all()
 
         cuotas_detalle = [
             {
                 "cuota_id": c.id,
                 "numero_cuota": c.numero_cuota,
-                "monto_mora": float(c.monto_mora),
-                "capital_pendiente": float(c.capital_pendiente),
+                "monto_mora": float(max(Decimal("0.00"), (c.monto_cuota or Decimal("0.00")) - (c.total_pagado or Decimal("0.00")))),
+                "saldo_pendiente": float(max(Decimal("0.00"), (c.monto_cuota or Decimal("0.00")) - (c.total_pagado or Decimal("0.00")))),
             }
             for c in cuotas_con_mora
         ]
@@ -398,8 +378,11 @@ def obtener_estado_cuenta(
         .all()
     )
 
-    # Calcular resumen
-    total_mora = sum(c.monto_mora for c in cuotas_vencidas)
+    # ✅ CORREGIDO: Calcular resumen usando monto_cuota - total_pagado
+    total_mora = sum(
+        max(Decimal("0.00"), (c.monto_cuota or Decimal("0.00")) - (c.total_pagado or Decimal("0.00")))
+        for c in cuotas_vencidas
+    )
 
     resumen = {
         "cuotas_pagadas": len(cuotas_pagadas),
@@ -472,22 +455,16 @@ def proyectar_pago(
         if monto_disponible <= 0:
             break
 
-        # Simular aplicación (sin guardar)
-        aplicado_mora = min(monto_disponible, cuota.monto_mora)
-        monto_disponible -= aplicado_mora
-        monto_a_mora += aplicado_mora
+        # ✅ CORREGIDO: Simular aplicación usando solo monto_cuota y total_pagado
+        # Calcular saldo pendiente de la cuota
+        saldo_pendiente_cuota = max(Decimal("0.00"), (cuota.monto_cuota or Decimal("0.00")) - (cuota.total_pagado or Decimal("0.00")))
+        
+        # Aplicar el monto disponible al saldo pendiente
+        aplicado_total = min(monto_disponible, saldo_pendiente_cuota)
+        monto_disponible -= aplicado_total
+        monto_a_capital += aplicado_total  # Simplificado: todo va a capital (no hay desglose)
 
-        if monto_disponible > 0:
-            aplicado_interes = min(monto_disponible, cuota.interes_pendiente)
-            monto_disponible -= aplicado_interes
-            monto_a_interes += aplicado_interes
-
-        if monto_disponible > 0:
-            aplicado_capital = min(monto_disponible, cuota.capital_pendiente)
-            monto_disponible -= aplicado_capital
-            monto_a_capital += aplicado_capital
-
-        if aplicado_mora > 0 or aplicado_interes > 0 or aplicado_capital > 0:
+        if aplicado_total > 0:
             cuotas_afectadas.append(cuota)
 
     nuevo_saldo = prestamo.saldo_pendiente - monto_a_capital
@@ -560,7 +537,11 @@ def obtener_informacion_adicional(
 
     # Total pagado hasta la fecha
     total_pagado = sum(c.monto_pagado for c in todas_cuotas if c.monto_pagado > 0)
-    total_mora_acumulada = sum(c.monto_mora for c in cuotas_vencidas)
+    # ✅ CORREGIDO: Calcular mora acumulada usando monto_cuota - total_pagado
+    total_mora_acumulada = sum(
+        max(Decimal("0.00"), (c.monto_cuota or Decimal("0.00")) - (c.total_pagado or Decimal("0.00")))
+        for c in cuotas_vencidas
+    )
 
     return {
         "prestamo_id": prestamo_id,
@@ -650,7 +631,7 @@ def obtener_tabla_visual(
                 "estado_visual": f"{emoji} {cuota.estado}",
                 "color": color,
                 "dias_mora": cuota.dias_mora if cuota.dias_mora > 0 else None,
-                "monto_mora": (float(cuota.monto_mora) if cuota.monto_mora > 0 else None),
+                "monto_mora": (float(max(Decimal("0.00"), (cuota.monto_cuota or Decimal("0.00")) - (cuota.total_pagado or Decimal("0.00")))) if cuota.dias_morosidad > 0 else None),  # ✅ CORREGIDO
                 "porcentaje_pagado": float(cuota.porcentaje_pagado),
                 "fecha_pago_real": cuota.fecha_pago,
             }

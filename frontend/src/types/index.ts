@@ -19,8 +19,7 @@ export interface User {
 export interface Cliente {
   id: number
   cedula: string
-  nombres: string
-  apellidos: string
+  nombres: string  // ✅ Unificado: contiene nombres + apellidos (2-7 palabras)
   telefono?: string
   email?: string
   direccion?: string

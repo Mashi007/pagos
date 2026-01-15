@@ -1047,7 +1047,7 @@ export function EmbudoConcesionarios() {
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex-1">
                         <h4 className="font-medium text-sm text-gray-900">
-                          {[cliente.nombres, cliente.apellidos].filter(Boolean).join(' ') || 'Sin nombre'}
+                          {cliente.nombres || 'Sin nombre'}
                         </h4>
                         <p className="text-xs text-gray-500 mt-1">Cédula: {cliente.cedula}</p>
                         {cliente.telefono && (

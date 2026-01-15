@@ -514,10 +514,10 @@ def kpis_prestamos(
     KPIs específicos para el componente PrestamosKPIs
 
     Devuelve:
-    - totalFinanciamiento: Suma de todos los total_financiamiento
+    - totalFinanciamiento: Suma de todos los total_financiamiento (todos los estados)
     - totalPrestamos: Conteo total de préstamos
     - promedioMonto: Promedio del monto financiado
-    - totalCarteraVigente: Suma de total_financiamiento solo de préstamos APROBADOS
+    - totalCarteraVigente: Saldo pendiente por cobrar (suma de monto_cuota - total_pagado para cuotas no pagadas de préstamos APROBADOS)
 
     ✅ SOPORTA FILTROS AUTOMÁTICOS mediante FiltrosDashboard
     """
@@ -539,25 +539,53 @@ def kpis_prestamos(
         # Promedio monto
         promedio_monto = float(total_financiamiento / total_prestamos) if total_prestamos > 0 else 0.0
 
-        # Cartera vigente (solo préstamos APROBADOS)
-        cartera_vigente_query = base_query.filter(Prestamo.estado == "APROBADO")
-        cartera_vigente_query = FiltrosDashboard.aplicar_filtros_prestamo(
-            cartera_vigente_query,
-            analista,
-            concesionario,
-            modelo,
-            fecha_inicio,
-            fecha_fin,
+        # ✅ CORREGIDO: Cartera por Cobrar = Saldo pendiente real
+        # Calcula el saldo pendiente sumando (monto_cuota - total_pagado) de todas las cuotas
+        # de préstamos APROBADOS que tienen saldo pendiente (monto_cuota > total_pagado)
+        cartera_por_cobrar_query = (
+            db.query(
+                func.sum(
+                    func.greatest(
+                        Decimal("0.00"),
+                        func.coalesce(Cuota.monto_cuota, Decimal("0.00"))
+                        - func.coalesce(Cuota.total_pagado, Decimal("0.00"))
+                    )
+                )
+            )
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                Prestamo.estado == "APROBADO",
+                # Solo cuotas con saldo pendiente (monto_cuota > total_pagado)
+                func.coalesce(Cuota.total_pagado, Decimal("0.00")) < func.coalesce(Cuota.monto_cuota, Decimal("0.00"))
+            )
         )
-        total_cartera_vigente = cartera_vigente_query.with_entities(
-            func.sum(Prestamo.total_financiamiento)
-        ).scalar() or Decimal("0")
+        
+        # Aplicar filtros de préstamo a través de la relación
+        if analista or concesionario or modelo or fecha_inicio or fecha_fin:
+            # Construir condiciones de filtro
+            if analista:
+                cartera_por_cobrar_query = cartera_por_cobrar_query.filter(Prestamo.analista == analista)
+            if concesionario:
+                cartera_por_cobrar_query = cartera_por_cobrar_query.filter(Prestamo.concesionario == concesionario)
+            if modelo:
+                cartera_por_cobrar_query = cartera_por_cobrar_query.filter(
+                    or_(Prestamo.modelo_vehiculo == modelo, Prestamo.producto == modelo)
+                )
+            if fecha_inicio:
+                cartera_por_cobrar_query = cartera_por_cobrar_query.filter(Prestamo.fecha_registro >= fecha_inicio)
+            if fecha_fin:
+                fecha_fin_completa = datetime.combine(fecha_fin, datetime.max.time())
+                cartera_por_cobrar_query = cartera_por_cobrar_query.filter(Prestamo.fecha_registro <= fecha_fin_completa)
+        
+        total_cartera_por_cobrar = cartera_por_cobrar_query.scalar() or Decimal("0")
+        # Asegurar que no sea negativo
+        total_cartera_por_cobrar = max(Decimal("0"), total_cartera_por_cobrar)
 
         return {
             "totalFinanciamiento": float(total_financiamiento),
             "totalPrestamos": total_prestamos,
             "promedioMonto": promedio_monto,
-            "totalCarteraVigente": float(total_cartera_vigente),
+            "totalCarteraVigente": float(total_cartera_por_cobrar),  # Ahora es saldo pendiente real
         }
     except Exception as e:
         logger.error(f"Error obteniendo KPIs de préstamos: {str(e)}")

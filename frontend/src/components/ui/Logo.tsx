@@ -7,6 +7,26 @@ import { useIsMounted } from '@/hooks/useIsMounted'
 interface LogoProps {
   className?: string
   size?: 'sm' | 'md' | 'lg' | 'xl'
+  forceDefault?: boolean // ✅ Opción para forzar el uso del logo por defecto
+}
+
+// ✅ Función para limpiar el caché del logo (útil para debugging o reset)
+export function clearLogoCache() {
+  logoCache.logoUrl = null
+  logoCache.logoFilename = null
+  logoCache.logoNotFound = true
+  logoCache.hasChecked = false
+  logoCache.isChecking = false
+  logoCache.version += 1
+  saveLogoMetadata(null)
+  notifyLogoListeners(null, logoCache.version)
+  console.log('✅ Caché del logo limpiado, se usará el logo por defecto')
+}
+
+// ✅ Exponer función globalmente para debugging (solo en desarrollo)
+if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+  ;(window as any).clearLogoCache = clearLogoCache
+  console.log('💡 Función de debugging disponible: window.clearLogoCache() para limpiar el caché del logo')
 }
 
 const sizeMap = {
@@ -90,14 +110,21 @@ function notifyLogoListeners(url: string | null, version: number) {
   })
 }
 
-export function Logo({ className, size = 'md' }: LogoProps) {
-  const [customLogoUrl, setCustomLogoUrl] = useState<string | null>(logoCache.logoUrl)
-  const [hasChecked, setHasChecked] = useState(logoCache.hasChecked)
+export function Logo({ className, size = 'md', forceDefault = false }: LogoProps) {
+  const [customLogoUrl, setCustomLogoUrl] = useState<string | null>(forceDefault ? null : logoCache.logoUrl)
+  const [hasChecked, setHasChecked] = useState(forceDefault ? true : logoCache.hasChecked)
   const [logoVersion, setLogoVersion] = useState(logoCache.version)
   const [imageLoaded, setImageLoaded] = useState(false) // ✅ Estado para controlar cuando la imagen está completamente cargada
   const isMounted = useIsMounted()
 
   useEffect(() => {
+    // ✅ PRIORIDAD 0: Si forceDefault está activado, usar siempre el logo por defecto
+    if (forceDefault) {
+      setCustomLogoUrl(null)
+      setHasChecked(true)
+      return
+    }
+
     // ✅ PRIORIDAD 1: Si ya verificamos y el logo NO existe, no hacer nada más
     if (logoCache.logoNotFound) {
       setHasChecked(true)
@@ -651,11 +678,16 @@ export function Logo({ className, size = 'md' }: LogoProps) {
       window.removeEventListener('logoUpdated', handleLogoUpdate as EventListener)
       logoListeners.delete(handleCacheUpdate)
     }
-  }, [])
+  }, [forceDefault, isMounted])
 
-  // ✅ PRIORIDAD: Si el logo está marcado como no encontrado, NO renderizar <img> (evitar GET requests)
+  // ✅ PRIORIDAD: Si forceDefault está activado, siempre mostrar logo por defecto
+  if (forceDefault) {
+    // Continuar al renderizado del SVG por defecto
+  }
+  // ✅ Si el logo está marcado como no encontrado, NO renderizar <img> (evitar GET requests)
   // Si hay logo personalizado Y NO está marcado como no encontrado, mostrar imagen directamente
-  if (customLogoUrl && !logoCache.logoNotFound) {
+  // ✅ CORRECCIÓN: Solo mostrar logo personalizado si realmente existe y está disponible Y no se fuerza el default
+  else if (customLogoUrl && !logoCache.logoNotFound && hasChecked && !forceDefault) {
     return (
       <img
         key={`logo-${logoVersion}-${customLogoUrl}`}
@@ -671,17 +703,20 @@ export function Logo({ className, size = 'md' }: LogoProps) {
           }
         }}
         onError={(e) => {
-          // ✅ Si falla la carga (404), marcar como no encontrado y evitar más intentos
-          console.warn('⚠️ Error cargando logo (GET falló), marcando como no encontrado:', customLogoUrl)
+          // ✅ Si falla la carga (404 o imagen corrupta), marcar como no encontrado y limpiar caché
+          console.warn('⚠️ Error cargando logo (GET falló o imagen inválida), limpiando caché:', customLogoUrl)
           logoCache.logoNotFound = true
           logoCache.logoUrl = null
+          logoCache.logoFilename = null
           logoCache.version += 1
+          // ✅ Limpiar metadatos del localStorage
+          saveLogoMetadata(null)
           setCustomLogoUrl(null)
           setHasChecked(true)
           setImageLoaded(false)
           setLogoVersion(logoCache.version)
           notifyLogoListeners(null, logoCache.version) // ✅ Notificar a todas las instancias
-          // No intentar recargar - el logo no existe
+          // No intentar recargar - el logo no existe o está corrupto
         }}
       />
     )

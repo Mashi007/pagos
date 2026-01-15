@@ -93,7 +93,7 @@ export function useCreateCliente() {
         exact: false  // Invalida todas las búsquedas: ['clientes', 'search', ...]
       })
 
-      const nombreCompleto = [newCliente.nombres, newCliente.apellidos].filter(Boolean).join(' ').trim() || 'Sin nombre'
+      const nombreCompleto = newCliente.nombres?.trim() || 'Sin nombre'
       toast.success(`Cliente ${nombreCompleto} creado exitosamente`)
     },
     onError: (error: any) => {
@@ -124,7 +124,7 @@ export function useUpdateCliente() {
         exact: false  // Invalida todas las búsquedas: ['clientes', 'search', ...]
       })
 
-      const nombreCompleto = [updatedCliente.nombres, updatedCliente.apellidos].filter(Boolean).join(' ').trim() || 'Sin nombre'
+      const nombreCompleto = updatedCliente.nombres?.trim() || 'Sin nombre'
       toast.success(`Cliente ${nombreCompleto} actualizado`)
     },
     onError: (error: any) => {

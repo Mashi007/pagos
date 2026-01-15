@@ -74,8 +74,7 @@ class ReporteCartera(BaseModel):
 
     fecha_corte: date
     cartera_total: Decimal
-    capital_pendiente: Decimal
-    intereses_pendientes: Decimal
+    saldo_pendiente: Decimal  # ✅ CORREGIDO: Cambiado de capital_pendiente + intereses_pendientes
     mora_total: Decimal
     cantidad_prestamos_activos: int
     cantidad_prestamos_mora: int
@@ -161,9 +160,14 @@ def reporte_cartera(
 
         logger.info(f"[reportes.cartera] Cartera total: {cartera_total}")
 
-        # Capital pendiente: suma de capital_pendiente de todas las cuotas no pagadas
-        capital_pendiente = (
-            db.query(func.sum(func.coalesce(Cuota.capital_pendiente, Decimal("0.00"))))
+        # ✅ CORREGIDO: Saldo pendiente = suma de (monto_cuota - total_pagado) de todas las cuotas no pagadas
+        saldo_pendiente = (
+            db.query(
+                func.sum(
+                    func.coalesce(Cuota.monto_cuota, Decimal("0.00")) - 
+                    func.coalesce(Cuota.total_pagado, Decimal("0.00"))
+                )
+            )
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .filter(
                 Prestamo.estado == "APROBADO",
@@ -172,28 +176,20 @@ def reporte_cartera(
             .scalar()
         ) or Decimal("0")
 
-        logger.info(f"[reportes.cartera] Capital pendiente: {capital_pendiente}")
+        logger.info(f"[reportes.cartera] Saldo pendiente: {saldo_pendiente}")
 
-        # Intereses pendientes: suma de interes_pendiente de todas las cuotas no pagadas
-        intereses_pendientes = (
-            db.query(func.sum(func.coalesce(Cuota.interes_pendiente, Decimal("0.00"))))
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .filter(
-                Prestamo.estado == "APROBADO",
-                Cuota.estado != "PAGADO",
-            )
-            .scalar()
-        ) or Decimal("0")
-
-        logger.info(f"[reportes.cartera] Intereses pendientes: {intereses_pendientes}")
-
-        # Mora total: suma de monto_mora de todas las cuotas con mora
+        # ✅ CORREGIDO: Mora total = suma de (monto_cuota - total_pagado) de cuotas con días de morosidad > 0
         mora_total = (
-            db.query(func.sum(func.coalesce(Cuota.monto_mora, Decimal("0.00"))))
+            db.query(
+                func.sum(
+                    func.coalesce(Cuota.monto_cuota, Decimal("0.00")) - 
+                    func.coalesce(Cuota.total_pagado, Decimal("0.00"))
+                )
+            )
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .filter(
                 Prestamo.estado == "APROBADO",
-                Cuota.monto_mora > Decimal("0.00"),
+                Cuota.dias_morosidad > 0,
             )
             .scalar()
         ) or Decimal("0")
@@ -205,13 +201,13 @@ def reporte_cartera(
 
         logger.info(f"[reportes.cartera] Préstamos activos: {cantidad_prestamos_activos}")
 
-        # Préstamos con cuotas en mora
+        # ✅ CORREGIDO: Préstamos con cuotas en mora (dias_morosidad > 0)
         cantidad_prestamos_mora = (
             db.query(func.count(func.distinct(Prestamo.id)))
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
             .filter(
                 Prestamo.estado == "APROBADO",
-                Cuota.monto_mora > Decimal("0.00"),
+                Cuota.dias_morosidad > 0,
             )
             .scalar()
         ) or 0
@@ -270,8 +266,14 @@ def reporte_cartera(
                 .scalar()
             ) or 0
 
+            # ✅ CORREGIDO: Calcular monto_mora como (monto_cuota - total_pagado) para cuotas con mora
             monto_mora = (
-                db.query(func.sum(Cuota.monto_mora))
+                db.query(
+                    func.sum(
+                        func.coalesce(Cuota.monto_cuota, Decimal("0.00")) - 
+                        func.coalesce(Cuota.total_pagado, Decimal("0.00"))
+                    )
+                )
                 .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
                 .filter(
                     Prestamo.estado == EstadoPrestamo.APROBADO,  # Solo préstamos aprobados
@@ -294,8 +296,7 @@ def reporte_cartera(
         resultado = ReporteCartera(
             fecha_corte=fecha_corte,
             cartera_total=cartera_total,
-            capital_pendiente=capital_pendiente,
-            intereses_pendientes=intereses_pendientes,
+            saldo_pendiente=saldo_pendiente,  # ✅ CORREGIDO: Usar saldo_pendiente en lugar de capital_pendiente + intereses_pendientes
             mora_total=mora_total,
             cantidad_prestamos_activos=cantidad_prestamos_activos,
             cantidad_prestamos_mora=cantidad_prestamos_mora,
@@ -456,7 +457,7 @@ def reporte_morosidad(
                 SELECT
                     COUNT(DISTINCT p.id) as total_prestamos_mora,
                     COUNT(DISTINCT p.cedula) as total_clientes_mora,
-                    COALESCE(SUM(c.monto_morosidad), 0) as monto_total_mora,
+                    COALESCE(SUM(GREATEST(0, c.monto_cuota - COALESCE(c.total_pagado, 0))), 0) as monto_total_mora,  # ✅ CORREGIDO
                     COALESCE(SUM(c.dias_morosidad), 0) as dias_totales_mora,
                     AVG(c.dias_morosidad) as promedio_dias_mora
                 FROM prestamos p
@@ -464,7 +465,7 @@ def reporte_morosidad(
                 INNER JOIN clientes cl ON cl.id = p.cliente_id
                 WHERE p.estado = 'APROBADO'
                   AND c.dias_morosidad > 0
-                  AND c.monto_morosidad > 0
+                  AND (c.monto_cuota - COALESCE(c.total_pagado, 0)) > 0  # ✅ CORREGIDO
                   AND cl.estado != 'INACTIVO'
             """
             )
@@ -496,13 +497,13 @@ def reporte_morosidad(
                     COUNT(DISTINCT p.id) as cantidad_prestamos,
                     COUNT(DISTINCT p.cedula) as cantidad_clientes,
                     COUNT(c.id) as cantidad_cuotas,
-                    COALESCE(SUM(c.monto_morosidad), 0) as monto_total
+                    COALESCE(SUM(GREATEST(0, c.monto_cuota - COALESCE(c.total_pagado, 0))), 0) as monto_total  # ✅ CORREGIDO
                 FROM prestamos p
                 INNER JOIN cuotas c ON c.prestamo_id = p.id
                 INNER JOIN clientes cl ON cl.id = p.cliente_id
                 WHERE p.estado = 'APROBADO'
                   AND c.dias_morosidad > 0
-                  AND c.monto_morosidad > 0
+                  AND (c.monto_cuota - COALESCE(c.total_pagado, 0)) > 0  # ✅ CORREGIDO
                   AND cl.estado != 'INACTIVO'
                 GROUP BY rango_dias
                 ORDER BY
@@ -535,14 +536,14 @@ def reporte_morosidad(
                     COALESCE(p.analista, 'Sin Analista') as analista,
                     COUNT(DISTINCT p.id) as cantidad_prestamos,
                     COUNT(DISTINCT p.cedula) as cantidad_clientes,
-                    COALESCE(SUM(c.monto_morosidad), 0) as monto_total_mora,
+                    COALESCE(SUM(GREATEST(0, c.monto_cuota - COALESCE(c.total_pagado, 0))), 0) as monto_total_mora,  # ✅ CORREGIDO
                     AVG(c.dias_morosidad) as promedio_dias_mora
                 FROM prestamos p
                 INNER JOIN cuotas c ON c.prestamo_id = p.id
                 INNER JOIN clientes cl ON cl.id = p.cliente_id
                 WHERE p.estado = 'APROBADO'
                   AND c.dias_morosidad > 0
-                  AND c.monto_morosidad > 0
+                  AND (c.monto_cuota - COALESCE(c.total_pagado, 0)) > 0  # ✅ CORREGIDO
                   AND cl.estado != 'INACTIVO'
                 GROUP BY COALESCE(p.analista, 'Sin Analista')
                 ORDER BY monto_total_mora DESC
@@ -572,7 +573,7 @@ def reporte_morosidad(
                     COALESCE(p.analista, 'Sin Analista') as analista,
                     p.concesionario,
                     COUNT(c.id) as cuotas_en_mora,
-                    COALESCE(SUM(c.monto_morosidad), 0) as monto_total_mora,
+                    COALESCE(SUM(GREATEST(0, c.monto_cuota - COALESCE(c.total_pagado, 0))), 0) as monto_total_mora,  # ✅ CORREGIDO
                     MAX(c.dias_morosidad) as max_dias_mora,
                     MIN(c.fecha_vencimiento) as primera_cuota_vencida
                 FROM prestamos p
@@ -580,7 +581,7 @@ def reporte_morosidad(
                 INNER JOIN clientes cl ON cl.id = p.cliente_id
                 WHERE p.estado = 'APROBADO'
                   AND c.dias_morosidad > 0
-                  AND c.monto_morosidad > 0
+                  AND (c.monto_cuota - COALESCE(c.total_pagado, 0)) > 0  # ✅ CORREGIDO
                   AND cl.estado != 'INACTIVO'
                 GROUP BY p.id, p.cedula, p.nombres, p.total_financiamiento, p.analista, p.concesionario
                 ORDER BY monto_total_mora DESC
@@ -644,8 +645,8 @@ def reporte_financiero(
                     COALESCE(SUM(pa.monto_pagado), 0) as total_ingresos,
                     COUNT(pa.id) as cantidad_pagos,
                     COALESCE(SUM(p.total_financiamiento), 0) as cartera_total,
-                    COALESCE(SUM(c.capital_pendiente + c.interes_pendiente + COALESCE(c.monto_mora, 0)), 0) as cartera_pendiente,
-                    COALESCE(SUM(CASE WHEN c.dias_morosidad > 0 THEN c.monto_morosidad ELSE 0 END), 0) as morosidad_total
+                    COALESCE(SUM(GREATEST(0, c.monto_cuota - COALESCE(c.total_pagado, 0))), 0) as cartera_pendiente,
+                    COALESCE(SUM(CASE WHEN c.dias_morosidad > 0 THEN GREATEST(0, c.monto_cuota - COALESCE(c.total_pagado, 0)) ELSE 0 END), 0) as morosidad_total  # ✅ CORREGIDO
                 FROM prestamos p
                 LEFT JOIN cuotas c ON c.prestamo_id = p.id AND c.estado != 'PAGADO'
                 LEFT JOIN pagos pa ON pa.prestamo_id = p.id AND pa.activo = true
@@ -792,7 +793,7 @@ def reporte_asesores(
                     COUNT(DISTINCT p.id) as total_prestamos,
                     COUNT(DISTINCT p.cedula) as total_clientes,
                     COALESCE(SUM(p.total_financiamiento), 0) as cartera_total,
-                    COALESCE(SUM(CASE WHEN c.dias_morosidad > 0 THEN c.monto_morosidad ELSE 0 END), 0) as morosidad_total,
+                    COALESCE(SUM(CASE WHEN c.dias_morosidad > 0 THEN GREATEST(0, c.monto_cuota - COALESCE(c.total_pagado, 0)) ELSE 0 END), 0) as morosidad_total  # ✅ CORREGIDO,
                     COALESCE(SUM(pa.monto_pagado), 0) as total_cobrado
                 FROM prestamos p
                 LEFT JOIN cuotas c ON c.prestamo_id = p.id
@@ -871,7 +872,7 @@ def reporte_asesores(
                     COUNT(DISTINCT p.id) as cantidad_prestamos,
                     COALESCE(SUM(p.total_financiamiento), 0) as monto_total_prestamos,
                     COALESCE(SUM(pa.monto_pagado), 0) as monto_total_pagado,
-                    COALESCE(SUM(CASE WHEN c.dias_morosidad > 0 THEN c.monto_morosidad ELSE 0 END), 0) as monto_mora
+                    COALESCE(SUM(CASE WHEN c.dias_morosidad > 0 THEN GREATEST(0, c.monto_cuota - COALESCE(c.total_pagado, 0)) ELSE 0 END), 0) as monto_mora
                 FROM prestamos p
                 LEFT JOIN cuotas c ON c.prestamo_id = p.id
                 LEFT JOIN pagos pa ON pa.prestamo_id = p.id AND pa.activo = true
@@ -935,7 +936,7 @@ def reporte_productos(
                     COALESCE(SUM(p.total_financiamiento), 0) as cartera_total,
                     COALESCE(AVG(p.total_financiamiento), 0) as promedio_prestamo,
                     COALESCE(SUM(pa.monto_pagado), 0) as total_cobrado,
-                    COALESCE(SUM(CASE WHEN c.dias_morosidad > 0 THEN c.monto_morosidad ELSE 0 END), 0) as morosidad_total
+                    COALESCE(SUM(CASE WHEN c.dias_morosidad > 0 THEN GREATEST(0, c.monto_cuota - COALESCE(c.total_pagado, 0)) ELSE 0 END), 0) as morosidad_total  # ✅ CORREGIDO
                 FROM prestamos p
                 LEFT JOIN cuotas c ON c.prestamo_id = p.id
                 LEFT JOIN pagos pa ON pa.prestamo_id = p.id AND pa.activo = true
@@ -1078,24 +1079,31 @@ def _obtener_distribucion_por_mora(db: Session) -> list:
 
     distribucion_por_mora = []
     for rango in rangos_mora:
+        # ✅ CORREGIDO: Usar dias_morosidad en lugar de monto_mora
         cantidad = (
             db.query(func.count(func.distinct(Prestamo.id)))
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
             .filter(
                 Prestamo.estado == "APROBADO",
-                Cuota.monto_mora > Decimal("0.00"),
+                Cuota.dias_morosidad > 0,
                 Cuota.dias_mora >= rango["min"],
                 Cuota.dias_mora <= rango["max"],
             )
             .scalar()
         ) or 0
 
+        # ✅ CORREGIDO: Calcular monto_mora como (monto_cuota - total_pagado)
         monto_mora = (
-            db.query(func.sum(Cuota.monto_mora))
+            db.query(
+                func.sum(
+                    func.coalesce(Cuota.monto_cuota, Decimal("0.00")) - 
+                    func.coalesce(Cuota.total_pagado, Decimal("0.00"))
+                )
+            )
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .filter(
                 Prestamo.estado == "APROBADO",
-                Cuota.monto_mora > Decimal("0.00"),
+                Cuota.dias_morosidad > 0,
                 Cuota.dias_mora >= rango["min"],
                 Cuota.dias_mora <= rango["max"],
             )
@@ -1147,8 +1155,7 @@ def _crear_hoja_resumen_excel(ws, reporte, cantidad_prestamos_activos, cantidad_
     row = 5
     datos_resumen = [
         ("Cartera Total:", reporte.cartera_total),
-        ("Capital Pendiente:", reporte.capital_pendiente),
-        ("Intereses Pendientes:", reporte.intereses_pendientes),
+        ("Saldo Pendiente:", reporte.saldo_pendiente),  # ✅ CORREGIDO
         ("Mora Total:", reporte.mora_total),
         ("Préstamos Activos:", cantidad_prestamos_activos),
         ("Préstamos en Mora:", cantidad_prestamos_mora),
@@ -1248,9 +1255,8 @@ def _crear_hoja_prestamos_detallados_excel(ws, db: Session, estilos):
             Prestamo.numero_cuotas,
             Prestamo.usuario_proponente.label("analista"),
             func.sum(
-                func.coalesce(Cuota.capital_pendiente, Decimal("0.00"))
-                + func.coalesce(Cuota.interes_pendiente, Decimal("0.00"))
-                + func.coalesce(Cuota.monto_mora, Decimal("0.00"))
+                func.coalesce(Cuota.monto_cuota, Decimal("0.00")) - 
+                func.coalesce(Cuota.total_pagado, Decimal("0.00"))
             ).label("saldo_pendiente"),
             func.count(Cuota.id).label("cuotas_pendientes"),
         )
@@ -1333,7 +1339,7 @@ def _generar_pdf_completo(reporte):
         y = 680
         c.drawString(100, y, f"Cartera Total: ${float(reporte.cartera_total):,.2f}")
         y -= 20
-        c.drawString(100, y, f"Capital Pendiente: ${float(reporte.capital_pendiente):,.2f}")
+        c.drawString(100, y, f"Saldo Pendiente: ${float(reporte.saldo_pendiente):,.2f}")  # ✅ CORREGIDO
         y -= 20
         c.drawString(100, y, f"Intereses Pendientes: ${float(reporte.intereses_pendientes):,.2f}")
         y -= 20
@@ -1383,10 +1389,11 @@ def exportar_reporte_cartera(
         reporte = reporte_cartera(fecha_corte, db, current_user)
 
         cantidad_prestamos_activos = db.query(Prestamo).filter(Prestamo.estado == "APROBADO").count()
+        # ✅ CORREGIDO: Usar dias_morosidad en lugar de monto_mora
         cantidad_prestamos_mora = (
             db.query(func.count(func.distinct(Prestamo.id)))
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
-            .filter(Prestamo.estado == "APROBADO", Cuota.monto_mora > Decimal("0.00"))
+            .filter(Prestamo.estado == "APROBADO", Cuota.dias_morosidad > 0)
             .scalar()
         ) or 0
 
@@ -1491,16 +1498,14 @@ def resumen_dashboard(
             total_pagos = 0
 
         # Cartera activa: calcular desde cuotas pendientes
-        # Suma de capital_pendiente + interes_pendiente + monto_mora
+        # ✅ CORREGIDO: Suma de (monto_cuota - total_pagado) para cuotas no pagadas
         # Solo para préstamos aprobados y cuotas no pagadas
         try:
             cartera_activa_query = db.execute(
                 text(
                     """
                     SELECT COALESCE(SUM(
-                        COALESCE(c.capital_pendiente, 0) +
-                        COALESCE(c.interes_pendiente, 0) +
-                        COALESCE(c.monto_mora, 0)
+                        GREATEST(0, COALESCE(c.monto_cuota, 0) - COALESCE(c.total_pagado, 0))
                     ), 0) as cartera_activa
                     FROM cuotas c
                     INNER JOIN prestamos p ON c.prestamo_id = p.id
@@ -1637,9 +1642,7 @@ def _obtener_cuotas_pendientes(prestamo_id: int, hoy: date, db: Session) -> List
             "fecha_vencimiento": (c.fecha_vencimiento.strftime("%d/%m/%Y") if c.fecha_vencimiento else "N/A"),
             "monto_cuota": float(c.monto_cuota),
             "total_pagado": float(c.total_pagado or Decimal("0.00")),
-            "capital_pendiente": float(c.capital_pendiente or Decimal("0.00")),
-            "interes_pendiente": float(c.interes_pendiente or Decimal("0.00")),
-            "monto_mora": float(c.monto_mora or Decimal("0.00")),
+            "saldo_pendiente": float(max(Decimal("0.00"), (c.monto_cuota or Decimal("0.00")) - (c.total_pagado or Decimal("0.00")))),  # ✅ CORREGIDO
             "estado": c.estado,
             "vencida": (c.fecha_vencimiento < hoy if c.fecha_vencimiento else False),
         }
@@ -1683,15 +1686,14 @@ def _preparar_datos_prestamos(prestamos: List[Prestamo], hoy: date, db: Session)
 
 def _crear_tabla_cuotas_pendientes(cuotas_pendientes: List[dict], styles) -> Table:
     """Crea tabla de cuotas pendientes para el PDF"""
+    # ✅ CORREGIDO: Eliminar columnas de campos eliminados
     table_data = [
         [
             "Cuota",
             "Fecha Venc.",
             "Monto Cuota",
             "Pagado",
-            "Capital Pend.",
-            "Interés Pend.",
-            "Mora",
+            "Saldo Pend.",  # ✅ CORREGIDO: Cambiado de Capital Pend. + Interés Pend.
             "Estado",
         ]
     ]
@@ -1707,16 +1709,15 @@ def _crear_tabla_cuotas_pendientes(cuotas_pendientes: List[dict], styles) -> Tab
                 fecha_venc,
                 f"${cuota['monto_cuota']:,.2f}",
                 f"${cuota['total_pagado']:,.2f}",
-                f"${cuota['capital_pendiente']:,.2f}",
-                f"${cuota['interes_pendiente']:,.2f}",
-                f"${cuota['monto_mora']:,.2f}",
+                f"${cuota['saldo_pendiente']:,.2f}",  # ✅ CORREGIDO: Usar saldo_pendiente
                 cuota["estado"],
             ]
         )
 
+    # ✅ CORREGIDO: Ajustar ancho de columnas (eliminadas 2 columnas)
     table = Table(
         table_data,
-        colWidths=[0.5 * inch, 1 * inch, 1 * inch, 1 * inch, 1 * inch, 1 * inch, 0.8 * inch, 1 * inch],
+        colWidths=[0.5 * inch, 1 * inch, 1 * inch, 1 * inch, 1 * inch, 1 * inch],
     )
     table.setStyle(
         TableStyle(
@@ -2002,17 +2003,12 @@ def ajustar_total_abonos_bd(
             logger.info(f"🗑️ [ajustar_total_abonos_bd] Pago {pago.id} marcado como inactivo")
 
         # 2. Resetear total_pagado de todas las cuotas
+        # ✅ CORREGIDO: Eliminar asignaciones a campos eliminados
         for cuota in cuotas:
-            cuota.capital_pagado = Decimal("0.00")  # type: ignore[assignment]
-            cuota.interes_pagado = Decimal("0.00")  # type: ignore[assignment]
-            cuota.mora_pagada = Decimal("0.00")  # type: ignore[assignment]
             cuota.total_pagado = Decimal("0.00")  # type: ignore[assignment]
-            cuota.capital_pendiente = cuota.monto_capital  # type: ignore[assignment]
-            cuota.interes_pendiente = cuota.monto_interes  # type: ignore[assignment]
             cuota.estado = "PENDIENTE"  # type: ignore[assignment]
             cuota.fecha_pago = None  # type: ignore[assignment]
             cuota.dias_mora = 0  # type: ignore[assignment]
-            cuota.monto_mora = Decimal("0.00")  # type: ignore[assignment]
 
         db.commit()
 
@@ -2052,19 +2048,10 @@ def ajustar_total_abonos_bd(
             db.add(nuevo_pago)
             db.flush()  # Para obtener el ID del pago
 
-            # Aplicar pago a la cuota manualmente (sin llamar a la función externa para evitar dependencias circulares)
+            # ✅ CORREGIDO: Aplicar pago a la cuota usando solo campos existentes
             # Actualizar campos de la cuota directamente
             monto_aplicar = monto_pago
-            capital_aplicar = (
-                (monto_aplicar * cuota.monto_capital) / cuota.monto_cuota if cuota.monto_cuota > 0 else Decimal("0.00")
-            )
-            interes_aplicar = monto_aplicar - capital_aplicar
-
-            cuota.capital_pagado += capital_aplicar  # type: ignore[assignment]
-            cuota.interes_pagado += interes_aplicar  # type: ignore[assignment]
             cuota.total_pagado += monto_aplicar  # type: ignore[assignment]
-            cuota.capital_pendiente = max(Decimal("0.00"), cuota.capital_pendiente - capital_aplicar)  # type: ignore[assignment]
-            cuota.interes_pendiente = max(Decimal("0.00"), cuota.interes_pendiente - interes_aplicar)  # type: ignore[assignment]
             cuota.fecha_pago = fecha_pago  # type: ignore[assignment]
 
             # Actualizar estado de la cuota

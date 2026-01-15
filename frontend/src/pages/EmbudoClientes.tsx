@@ -191,7 +191,7 @@ export function EmbudoClientes() {
 
       return {
         id: cliente.id,
-        nombre: [cliente.nombres, cliente.apellidos].filter(Boolean).join(' ').trim() || 'Sin nombre',
+        nombre: cliente.nombres?.trim() || 'Sin nombre',
         cedula: cliente.cedula,
         telefono: cliente.telefono || 'N/A',
         estado: estadoFinal,
@@ -448,7 +448,7 @@ export function EmbudoClientes() {
                       <CardContent className="p-4">
                         <div className="flex items-center justify-between">
                           <div>
-                            <h3 className="font-semibold">{[cliente.nombres, cliente.apellidos].filter(Boolean).join(' ') || 'Sin nombre'}</h3>
+                            <h3 className="font-semibold">{cliente.nombres || 'Sin nombre'}</h3>
                             <p className="text-sm text-gray-500">Cédula: {cliente.cedula}</p>
                             {cliente.telefono && (
                               <p className="text-sm text-gray-500">Tel: {cliente.telefono}</p>

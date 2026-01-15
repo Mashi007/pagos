@@ -835,10 +835,13 @@ def obtener_resumen_prestamos_cliente(
     query_start = time.time()
 
     # Query agregada con GROUP BY - elimina N+1 queries
+    # ✅ CORREGIDO: Usar monto_cuota - total_pagado en lugar de campos eliminados
     cuotas_agregadas = (
         db.query(
             Cuota.prestamo_id,
-            func.sum(Cuota.capital_pendiente + Cuota.interes_pendiente + Cuota.monto_mora).label("saldo_pendiente"),
+            func.sum(
+                func.coalesce(Cuota.monto_cuota, 0) - func.coalesce(Cuota.total_pagado, 0)
+            ).label("saldo_pendiente"),
             func.sum(case((and_(Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADO"), 1), else_=0)).label(
                 "cuotas_en_mora"
             ),
@@ -1129,26 +1132,25 @@ def obtener_cuotas_prestamo(
                 )
                 estado_real = "ATRASADO"
 
+        # ✅ CORREGIDO: Eliminar campos que fueron eliminados de la BD
+        # Calcular monto_morosidad dinámicamente: monto_cuota - total_pagado
+        monto_cuota_val = float(c.monto_cuota) if c.monto_cuota else 0.0
+        total_pagado_val = float(c.total_pagado) if c.total_pagado else 0.0
+        monto_morosidad_calculado = max(0.0, monto_cuota_val - total_pagado_val)
+        
         cuota_dict = {
             "id": c.id,
             "numero_cuota": c.numero_cuota,
             "fecha_vencimiento": c.fecha_vencimiento,
-            "monto_cuota": float(c.monto_cuota),
-            "monto_capital": float(c.monto_capital),
-            "monto_interes": float(c.monto_interes),
-            "saldo_capital_inicial": float(c.saldo_capital_inicial),
-            "saldo_capital_final": float(c.saldo_capital_final),
-            "capital_pagado": float(c.capital_pagado),
-            "interes_pagado": float(c.interes_pagado),
-            "total_pagado": float(c.total_pagado),
-            "capital_pendiente": float(c.capital_pendiente),
-            "interes_pendiente": float(c.interes_pendiente),
+            "monto_cuota": monto_cuota_val,
+            "saldo_capital_inicial": float(c.saldo_capital_inicial) if c.saldo_capital_inicial else 0.0,
+            "saldo_capital_final": float(c.saldo_capital_final) if c.saldo_capital_final else 0.0,
+            "total_pagado": total_pagado_val,
             "estado": estado_real,  # Usar estado corregido si hay inconsistencia
-            "dias_mora": c.dias_mora,
-            "monto_mora": float(c.monto_mora),
-            # ✅ NUEVAS COLUMNAS: Morosidad calculada automáticamente
-            "dias_morosidad": c.dias_morosidad if hasattr(c, "dias_morosidad") else 0,
-            "monto_morosidad": float(c.monto_morosidad) if hasattr(c, "monto_morosidad") and c.monto_morosidad else 0.0,
+            "dias_mora": c.dias_mora if c.dias_mora else 0,
+            # ✅ COLUMNAS: Morosidad calculada automáticamente
+            "dias_morosidad": c.dias_morosidad if hasattr(c, "dias_morosidad") and c.dias_morosidad else 0,
+            "monto_morosidad": monto_morosidad_calculado,
         }
         resultado.append(cuota_dict)
         estados_encontrados.append(f"{c.numero_cuota}:{estado_real}(BD:{c.estado})")

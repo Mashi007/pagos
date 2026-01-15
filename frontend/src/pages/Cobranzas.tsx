@@ -946,9 +946,7 @@ export function Cobranzas() {
                               <th className="text-left p-2 font-semibold">Nombres</th>
                               <th className="text-left p-2 font-semibold">Analista</th>
                               <th className="text-center p-2 font-semibold">Cuotas Impagas</th>
-                              <th className="text-center p-2 font-semibold">Riesgo ML Impago</th>
                               <th className="text-right p-2 font-semibold">Total Adeudado</th>
-                              <th className="text-left p-2 font-semibold">Fecha Primera Vencida</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -1040,146 +1038,8 @@ export function Cobranzas() {
                                       {cuotasImpagas} {cuotasImpagas === 1 ? 'cuota' : 'cuotas'}
                                     </Badge>
                                   </td>
-                                  <td className="p-2 text-center">
-                                    {(() => {
-                                      const estaEditandoML = editandoMLImpago === cliente.prestamo_id
-                                      const estaGuardandoML = guardandoMLImpago === cliente.prestamo_id
-                                      
-                                      // ✅ Mostrar mensaje si ML no está disponible (carga rápida sin ML)
-                                      if (!cliente.ml_impago && !estaEditandoML) {
-                                        return (
-                                          <div className="flex flex-col items-center gap-1">
-                                            <Badge variant="outline" className="bg-gray-50 text-gray-600 text-xs">
-                                              Sin ML
-                                            </Badge>
-                                            <Button
-                                              size="sm"
-                                              variant="ghost"
-                                              onClick={() => iniciarEdicionMLImpago(cliente.prestamo_id, null)}
-                                              className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:opacity-100"
-                                              title="Agregar Riesgo ML Impago"
-                                            >
-                                              <Edit className="h-3 w-3" />
-                                            </Button>
-                                          </div>
-                                        )
-                                      }
-                                      
-                                      if (estaEditandoML) {
-                                        return (
-                                          <div className="flex flex-col items-center gap-2 min-w-[200px]">
-                                            <Select
-                                              value={mlImpagoTemporal?.nivelRiesgo || 'Medio'}
-                                              onValueChange={(value) => setMLImpagoTemporal(prev => prev ? { ...prev, nivelRiesgo: value } : { nivelRiesgo: value, probabilidad: 0.5 })}
-                                              disabled={estaGuardandoML}
-                                            >
-                                              <SelectTrigger className="w-full h-8 text-xs">
-                                                <SelectValue placeholder="Nivel de riesgo" />
-                                              </SelectTrigger>
-                                              <SelectContent>
-                                                <SelectItem value="Alto">Alto</SelectItem>
-                                                <SelectItem value="Medio">Medio</SelectItem>
-                                                <SelectItem value="Bajo">Bajo</SelectItem>
-                                              </SelectContent>
-                                            </Select>
-                                            <Input
-                                              type="number"
-                                              min="0"
-                                              max="1"
-                                              step="0.01"
-                                              value={mlImpagoTemporal?.probabilidad || 0}
-                                              onChange={(e) => setMLImpagoTemporal(prev => prev ? { ...prev, probabilidad: parseFloat(e.target.value) || 0 } : { nivelRiesgo: 'Medio', probabilidad: parseFloat(e.target.value) || 0 })}
-                                              disabled={estaGuardandoML}
-                                              className="w-full h-8 text-xs"
-                                              placeholder="0.0 - 1.0"
-                                            />
-                                            <div className="flex items-center gap-1">
-                                              <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                onClick={() => guardarMLImpago(cliente.prestamo_id)}
-                                                disabled={estaGuardandoML}
-                                                className="h-7 w-7 p-0"
-                                              >
-                                                {estaGuardandoML ? (
-                                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                                ) : (
-                                                  <Save className="h-3 w-3 text-green-600" />
-                                                )}
-                                              </Button>
-                                              <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                onClick={cancelarEdicionMLImpago}
-                                                disabled={estaGuardandoML}
-                                                className="h-7 w-7 p-0"
-                                              >
-                                                <X className="h-3 w-3 text-red-600" />
-                                              </Button>
-                                            </div>
-                                          </div>
-                                        )
-                                      }
-                                      
-                                      if (cliente.ml_impago) {
-                                        return (
-                                          <div className="flex flex-col items-center gap-1 group/ml">
-                                            <div className="flex items-center gap-1">
-                                              <Badge
-                                                variant="outline"
-                                                className={
-                                                  cliente.ml_impago.nivel_riesgo === 'Alto'
-                                                    ? "bg-red-100 text-red-800 border-red-300 font-semibold"
-                                                    : cliente.ml_impago.nivel_riesgo === 'Medio'
-                                                    ? "bg-orange-100 text-orange-800 border-orange-300"
-                                                    : "bg-green-100 text-green-800 border-green-300"
-                                                }
-                                              >
-                                                {cliente.ml_impago.nivel_riesgo}
-                                              </Badge>
-                                              <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                onClick={() => iniciarEdicionMLImpago(cliente.prestamo_id, cliente.ml_impago ?? null)}
-                                                className="h-5 w-5 p-0 opacity-0 group-hover/ml:opacity-100 transition-opacity hover:opacity-100"
-                                                title="Editar Riesgo ML Impago"
-                                              >
-                                                <Edit className="h-3 w-3" />
-                                              </Button>
-                                            </div>
-                                            <span className="text-xs text-gray-600">
-                                              {(cliente.ml_impago.probabilidad_impago * 100).toFixed(1)}%
-                                            </span>
-                                            {cliente.ml_impago.es_manual && (
-                                              <span className="text-xs text-blue-600 italic">Manual</span>
-                                            )}
-                                          </div>
-                                        )
-                                      }
-                                      
-                                      return (
-                                        <div className="flex items-center gap-1 group/ml">
-                                          <span className="text-xs text-gray-400">N/A</span>
-                                          <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            onClick={() => iniciarEdicionMLImpago(cliente.prestamo_id, null)}
-                                            className="h-5 w-5 p-0 opacity-0 group-hover/ml:opacity-100 transition-opacity hover:opacity-100"
-                                            title="Agregar Riesgo ML Impago"
-                                          >
-                                            <Edit className="h-3 w-3" />
-                                          </Button>
-                                        </div>
-                                      )
-                                    })()}
-                                  </td>
                                   <td className="p-2 text-right font-semibold text-red-600">
                                     ${(cliente.total_adeudado || 0).toLocaleString('es-VE')}
-                                  </td>
-                                  <td className="p-2">
-                                    {cliente.fecha_primera_vencida
-                                      ? new Date(cliente.fecha_primera_vencida).toLocaleDateString('es-VE')
-                                      : 'N/A'}
                                   </td>
                                 </tr>
                               )
@@ -1542,9 +1402,7 @@ export function Cobranzas() {
                                           <th className="text-left p-2 font-semibold">Analista</th>
                                           <th className="text-left p-2 font-semibold">Teléfono</th>
                                           <th className="text-right p-2 font-semibold">Cuotas Vencidas</th>
-                                          <th className="text-center p-2 font-semibold">Riesgo ML Impago</th>
                                           <th className="text-right p-2 font-semibold">Total Adeudado</th>
-                                          <th className="text-left p-2 font-semibold">Primera Vencida</th>
                                         </tr>
                                       </thead>
                                       <tbody>
@@ -1620,146 +1478,8 @@ export function Cobranzas() {
                                                   {cliente.cuotas_vencidas}
                                                 </Badge>
                                               </td>
-                                              <td className="p-2 text-center">
-                                                {(() => {
-                                                  const estaEditandoML = editandoMLImpago === cliente.prestamo_id
-                                                  const estaGuardandoML = guardandoMLImpago === cliente.prestamo_id
-                                                  
-                                                  // ✅ Mostrar mensaje si ML no está disponible (carga rápida sin ML)
-                                                  if (!cliente.ml_impago && !estaEditandoML) {
-                                                    return (
-                                                      <div className="flex flex-col items-center gap-1">
-                                                        <Badge variant="outline" className="bg-gray-50 text-gray-600 text-xs">
-                                                          Sin ML
-                                                        </Badge>
-                                                        <Button
-                                                          size="sm"
-                                                          variant="ghost"
-                                                          onClick={() => iniciarEdicionMLImpago(cliente.prestamo_id, null)}
-                                                          className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:opacity-100"
-                                                          title="Agregar Riesgo ML Impago"
-                                                        >
-                                                          <Edit className="h-3 w-3" />
-                                                        </Button>
-                                                      </div>
-                                                    )
-                                                  }
-                                                  
-                                                  if (estaEditandoML) {
-                                                    return (
-                                                      <div className="flex flex-col items-center gap-2 min-w-[200px]">
-                                                        <Select
-                                                          value={mlImpagoTemporal?.nivelRiesgo || 'Medio'}
-                                                          onValueChange={(value) => setMLImpagoTemporal(prev => prev ? { ...prev, nivelRiesgo: value } : { nivelRiesgo: value, probabilidad: 0.5 })}
-                                                          disabled={estaGuardandoML}
-                                                        >
-                                                          <SelectTrigger className="w-full h-8 text-xs">
-                                                            <SelectValue placeholder="Nivel de riesgo" />
-                                                          </SelectTrigger>
-                                                          <SelectContent>
-                                                            <SelectItem value="Alto">Alto</SelectItem>
-                                                            <SelectItem value="Medio">Medio</SelectItem>
-                                                            <SelectItem value="Bajo">Bajo</SelectItem>
-                                                          </SelectContent>
-                                                        </Select>
-                                                        <Input
-                                                          type="number"
-                                                          min="0"
-                                                          max="1"
-                                                          step="0.01"
-                                                          value={mlImpagoTemporal?.probabilidad || 0}
-                                                          onChange={(e) => setMLImpagoTemporal(prev => prev ? { ...prev, probabilidad: parseFloat(e.target.value) || 0 } : { nivelRiesgo: 'Medio', probabilidad: parseFloat(e.target.value) || 0 })}
-                                                          disabled={estaGuardandoML}
-                                                          className="w-full h-8 text-xs"
-                                                          placeholder="0.0 - 1.0"
-                                                        />
-                                                        <div className="flex items-center gap-1">
-                                                          <Button
-                                                            size="sm"
-                                                            variant="ghost"
-                                                            onClick={() => guardarMLImpago(cliente.prestamo_id)}
-                                                            disabled={estaGuardandoML}
-                                                            className="h-7 w-7 p-0"
-                                                          >
-                                                            {estaGuardandoML ? (
-                                                              <Loader2 className="h-3 w-3 animate-spin" />
-                                                            ) : (
-                                                              <Save className="h-3 w-3 text-green-600" />
-                                                            )}
-                                                          </Button>
-                                                          <Button
-                                                            size="sm"
-                                                            variant="ghost"
-                                                            onClick={cancelarEdicionMLImpago}
-                                                            disabled={estaGuardandoML}
-                                                            className="h-7 w-7 p-0"
-                                                          >
-                                                            <X className="h-3 w-3 text-red-600" />
-                                                          </Button>
-                                                        </div>
-                                                      </div>
-                                                    )
-                                                  }
-                                                  
-                                                  if (cliente.ml_impago) {
-                                                    return (
-                                                      <div className="flex flex-col items-center gap-1 group/ml">
-                                                        <div className="flex items-center gap-1">
-                                                          <Badge
-                                                            variant="outline"
-                                                            className={
-                                                              cliente.ml_impago.nivel_riesgo === 'Alto'
-                                                                ? "bg-red-100 text-red-800 border-red-300 font-semibold"
-                                                                : cliente.ml_impago.nivel_riesgo === 'Medio'
-                                                                ? "bg-orange-100 text-orange-800 border-orange-300"
-                                                                : "bg-green-100 text-green-800 border-green-300"
-                                                            }
-                                                          >
-                                                            {cliente.ml_impago.nivel_riesgo}
-                                                          </Badge>
-                                                          <Button
-                                                            size="sm"
-                                                            variant="ghost"
-                                                            onClick={() => iniciarEdicionMLImpago(cliente.prestamo_id, cliente.ml_impago ?? null)}
-                                                            className="h-5 w-5 p-0 opacity-0 group-hover/ml:opacity-100 transition-opacity hover:opacity-100"
-                                                            title="Editar Riesgo ML Impago"
-                                                          >
-                                                            <Edit className="h-3 w-3" />
-                                                          </Button>
-                                                        </div>
-                                                        <span className="text-xs text-gray-600">
-                                                          {(cliente.ml_impago.probabilidad_impago * 100).toFixed(1)}%
-                                                        </span>
-                                                        {cliente.ml_impago.es_manual && (
-                                                          <span className="text-xs text-blue-600 italic">Manual</span>
-                                                        )}
-                                                      </div>
-                                                    )
-                                                  }
-                                                  
-                                                  return (
-                                                    <div className="flex items-center gap-1 group/ml">
-                                                      <span className="text-xs text-gray-400">N/A</span>
-                                                      <Button
-                                                        size="sm"
-                                                        variant="ghost"
-                                                        onClick={() => iniciarEdicionMLImpago(cliente.prestamo_id, null)}
-                                                        className="h-5 w-5 p-0 opacity-0 group-hover/ml:opacity-100 transition-opacity hover:opacity-100"
-                                                        title="Agregar Riesgo ML Impago"
-                                                      >
-                                                        <Edit className="h-3 w-3" />
-                                                      </Button>
-                                                    </div>
-                                                  )
-                                                })()}
-                                              </td>
                                               <td className="p-2 text-right font-semibold text-red-600">
                                                 ${(cliente.total_adeudado || 0).toLocaleString('es-VE')}
-                                              </td>
-                                              <td className="p-2">
-                                                {cliente.fecha_primera_vencida
-                                                  ? new Date(cliente.fecha_primera_vencida).toLocaleDateString('es-VE')
-                                                  : 'N/A'}
                                               </td>
                                             </tr>
                                           )

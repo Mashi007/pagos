@@ -278,7 +278,7 @@ def obtener_configuracion_por_categoria(
 @limiter.limit("20/minute")  # ✅ Rate limiting: máximo 20 actualizaciones por minuto
 def actualizar_configuracion(
     request: Request,
-    clave: str,
+    clave: str = Path(..., regex="^[A-Za-z0-9_]+$", max_length=100, description="Clave de configuración"),
     config_data: Annotated[ConfiguracionUpdate, Body()],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -324,7 +324,7 @@ def actualizar_configuracion(
 
 @router.delete("/sistema/{clave}")
 def eliminar_configuracion(
-    clave: str,
+    clave: str = Path(..., regex="^[A-Za-z0-9_]+$", max_length=100, description="Clave de configuración"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -348,7 +348,10 @@ def eliminar_configuracion(
     except Exception as e:
         db.rollback()
         logger.error(f"Error eliminando configuración: {e}")
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        # ✅ No exponer detalles internos en producción
+        from app.core.config import settings
+        error_detail = "Error interno del servidor" if settings.ENVIRONMENT == "production" else str(e)
+        raise HTTPException(status_code=500, detail=error_detail)
 
 
 # ============================================
@@ -786,6 +789,102 @@ async def verificar_logo_existe(
     except Exception as e:
         logger.error(f"Error verificando logo: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error verificando logo: {str(e)}")
+
+
+@router.delete("/logo")
+@limiter.limit("5/minute")  # ✅ Rate limiting: máximo 5 eliminaciones por minuto
+async def eliminar_logo(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Eliminar logo personalizado y restaurar logo por defecto (solo administradores)"""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo los administradores pueden eliminar el logo",
+        )
+
+    try:
+        from app.core.config import settings
+
+        # Obtener logo anterior desde BD
+        logo_filename = _obtener_logo_anterior(db)
+        
+        if not logo_filename:
+            logger.info("⚠️ No hay logo personalizado para eliminar")
+            return {
+                "message": "No hay logo personalizado para eliminar",
+                "status": "success",
+            }
+
+        # Eliminar logo del filesystem si existe
+        try:
+            if hasattr(settings, "UPLOAD_DIR") and settings.UPLOAD_DIR:
+                uploads_dir = Path(settings.UPLOAD_DIR).resolve()
+            else:
+                uploads_dir = Path("uploads").resolve()
+            
+            logos_dir = uploads_dir / "logos"
+            logo_path = logos_dir / logo_filename
+            
+            if logo_path.exists():
+                logo_path.unlink()
+                logger.info(f"🗑️ Logo eliminado del filesystem: {logo_filename}")
+        except Exception as fs_error:
+            logger.warning(f"⚠️ No se pudo eliminar logo del filesystem: {str(fs_error)}")
+            # Continuar - eliminaremos de BD de todas formas
+
+        # Eliminar logo de la BD
+        try:
+            # Eliminar logo_filename
+            logo_config = (
+                db.query(ConfiguracionSistema)
+                .filter(
+                    ConfiguracionSistema.categoria == "GENERAL",
+                    ConfiguracionSistema.clave == "logo_filename",
+                )
+                .first()
+            )
+            
+            if logo_config:
+                db.delete(logo_config)
+                logger.info(f"🗑️ Logo filename eliminado de BD: {logo_filename}")
+
+            # Eliminar logo_data
+            logo_data_config = (
+                db.query(ConfiguracionSistema)
+                .filter(
+                    ConfiguracionSistema.categoria == "GENERAL",
+                    ConfiguracionSistema.clave == "logo_data",
+                )
+                .first()
+            )
+            
+            if logo_data_config:
+                db.delete(logo_data_config)
+                logger.info(f"🗑️ Logo data eliminado de BD")
+
+            db.commit()
+            logger.info(f"✅ Logo personalizado eliminado exitosamente. Se usará el logo por defecto.")
+            
+            return {
+                "message": "Logo personalizado eliminado exitosamente. Se usará el logo por defecto.",
+                "status": "success",
+                "filename": logo_filename,
+            }
+        except Exception as db_error:
+            db.rollback()
+            logger.error(f"❌ Error eliminando logo de BD: {str(db_error)}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error eliminando configuración de logo en base de datos: {str(db_error)}"
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error al eliminar logo: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error al eliminar logo: {str(e)}")
 
 
 @router.get("/logo/{filename}")

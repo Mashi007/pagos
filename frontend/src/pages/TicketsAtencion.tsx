@@ -218,7 +218,7 @@ export function TicketsAtencion() {
 
   const handleSeleccionarCliente = (cliente: Cliente) => {
     // Capturar rápidamente todos los datos del cliente
-    const nombreCompleto = [cliente.nombres, cliente.apellidos].filter(Boolean).join(' ').trim() || 'Sin nombre'
+    const nombreCompleto = cliente.nombres?.trim() || 'Sin nombre'
     setClienteSeleccionado(cliente)
     setNuevoTicket(prev => ({
       ...prev,
@@ -340,7 +340,7 @@ export function TicketsAtencion() {
                         <div className="flex items-center gap-2 mb-3">
                           <CheckCircle className="h-5 w-5 text-green-600" />
                           <p className="font-semibold text-base text-green-900">
-                            {[clienteSeleccionado.nombres, clienteSeleccionado.apellidos].filter(Boolean).join(' ') || 'Sin nombre'}
+                            {clienteSeleccionado.nombres || 'Sin nombre'}
                           </p>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm ml-7">
@@ -428,7 +428,7 @@ export function TicketsAtencion() {
                                   <div className="flex items-center gap-2 mb-1">
                                     <User className="h-4 w-4 text-blue-600 flex-shrink-0" />
                                     <p className="font-semibold text-sm text-gray-900 truncate">
-                                      {[cliente.nombres, cliente.apellidos].filter(Boolean).join(' ') || 'Sin nombre'}
+                                      {cliente.nombres || 'Sin nombre'}
                                     </p>
                                   </div>
                                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 ml-6 text-xs">
