@@ -16,18 +16,19 @@ interface Cuota {
   numero_cuota: number
   fecha_vencimiento: string
   monto_cuota: number
-  monto_capital: number
-  monto_interes: number
+  monto_capital?: number  // Opcional - puede no existir
+  monto_interes?: number  // Opcional - puede no existir
   saldo_capital_inicial: number
   saldo_capital_final: number
-  capital_pagado: number
-  interes_pagado: number
+  capital_pagado?: number
+  interes_pagado?: number
   total_pagado: number
-  capital_pendiente: number
-  interes_pendiente: number
+  capital_pendiente?: number
+  interes_pendiente?: number
   estado: string
   dias_mora: number
-  monto_mora: number
+  dias_morosidad?: number
+  monto_morosidad?: number
 }
 
 interface TablaAmortizacionPrestamoProps {
@@ -47,7 +48,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
       console.log('📊 Estados encontrados:', data?.map((c: Cuota) => c.estado))
       return data
     },
-    enabled: prestamo.estado === 'APROBADO',
+    enabled: prestamo.estado === 'APROBADO' || prestamo.estado === 'DESEMBOLSADO',
     staleTime: 0, // Siempre refetch para obtener datos actualizados
     refetchOnMount: true, // Refetch al montar el componente
     refetchOnWindowFocus: true, // Refetch al enfocar la ventana
@@ -55,16 +56,19 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
 
   // Función para determinar el estado correcto basado en los datos
   const determinarEstadoReal = (cuota: Cuota): string => {
+    const totalPagado = cuota.total_pagado || 0
+    const montoCuota = cuota.monto_cuota || 0
+    
     // Si total_pagado >= monto_cuota, debería ser PAGADO
-    if (cuota.total_pagado >= cuota.monto_cuota) {
+    if (totalPagado >= montoCuota) {
       return 'PAGADO'
     }
     // Si tiene algún pago pero no completo
-    if (cuota.total_pagado > 0) {
+    if (totalPagado > 0) {
       // Verificar si está vencida
       const hoy = new Date()
-      const fechaVencimiento = new Date(cuota.fecha_vencimiento)
-      if (fechaVencimiento < hoy) {
+      const fechaVencimiento = cuota.fecha_vencimiento ? new Date(cuota.fecha_vencimiento) : null
+      if (fechaVencimiento && fechaVencimiento < hoy) {
         return 'ATRASADO'
       }
       return 'PARCIAL'
@@ -152,14 +156,14 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
     }
   }
 
-  if (prestamo.estado !== 'APROBADO') {
+  if (prestamo.estado !== 'APROBADO' && prestamo.estado !== 'DESEMBOLSADO') {
     return (
       <Card className="border-yellow-200 bg-yellow-50">
         <CardContent className="pt-6">
           <div className="flex items-center gap-3">
             <AlertCircle className="h-5 w-5 text-yellow-600" />
             <p className="text-sm text-yellow-800">
-              La tabla de amortización solo se puede ver para préstamos APROBADOS.
+              La tabla de amortización solo se puede ver para préstamos APROBADOS o DESEMBOLSADOS.
               Estado actual: <strong>{prestamo.estado}</strong>
             </p>
           </div>
@@ -270,22 +274,36 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
               {cuotasVisibles.map((cuota: Cuota) => {
                 // Determinar el estado real basado en los datos
                 const estadoReal = determinarEstadoReal(cuota)
+                
+                // Calcular monto_capital y monto_interes si no existen
+                // Capital = diferencia entre saldo inicial y final
+                const saldoInicial = typeof cuota.saldo_capital_inicial === 'number' ? cuota.saldo_capital_inicial : 0
+                const saldoFinal = typeof cuota.saldo_capital_final === 'number' ? cuota.saldo_capital_final : 0
+                const montoCuota = typeof cuota.monto_cuota === 'number' ? cuota.monto_cuota : 0
+                
+                const montoCapital = typeof cuota.monto_capital === 'number' && !isNaN(cuota.monto_capital)
+                  ? cuota.monto_capital
+                  : Math.max(0, saldoInicial - saldoFinal)
+                
+                const montoInteres = typeof cuota.monto_interes === 'number' && !isNaN(cuota.monto_interes)
+                  ? cuota.monto_interes
+                  : Math.max(0, montoCuota - montoCapital)
 
                 return (
                   <TableRow key={cuota.id}>
                     <TableCell className="font-medium">{cuota.numero_cuota}</TableCell>
                     <TableCell>{formatDate(cuota.fecha_vencimiento)}</TableCell>
                     <TableCell className="text-right">
-                      ${cuota.monto_capital.toFixed(2)}
+                      ${montoCapital.toFixed(2)}
                     </TableCell>
                     <TableCell className="text-right">
-                      ${cuota.monto_interes.toFixed(2)}
+                      ${montoInteres.toFixed(2)}
                     </TableCell>
                     <TableCell className="text-right font-semibold">
-                      ${cuota.monto_cuota.toFixed(2)}
+                      ${montoCuota.toFixed(2)}
                     </TableCell>
                     <TableCell className="text-right text-gray-600">
-                      ${cuota.saldo_capital_final.toFixed(2)}
+                      ${saldoFinal.toFixed(2)}
                     </TableCell>
                     <TableCell>
                       <Badge className={getEstadoBadge(estadoReal)}>
@@ -296,7 +314,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
                         <div className="text-xs text-gray-400 mt-1">
                           <div>Estado BD: {cuota.estado || 'NULL'}</div>
                           <div>Estado Real: {estadoReal}</div>
-                          <div>Pagado: ${cuota.total_pagado.toFixed(2)} / ${cuota.monto_cuota.toFixed(2)}</div>
+                          <div>Pagado: ${(typeof cuota.total_pagado === 'number' ? cuota.total_pagado : 0).toFixed(2)} / ${montoCuota.toFixed(2)}</div>
                         </div>
                       )}
                     </TableCell>
@@ -323,7 +341,14 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
               <CardContent className="pt-4">
                 <p className="text-sm text-green-600">Total Capital</p>
                 <p className="text-2xl font-bold text-green-700">
-                  ${cuotas.reduce((acc, c) => acc + (typeof c.monto_capital === 'number' ? c.monto_capital : 0), 0).toFixed(2)}
+                  ${cuotas.reduce((acc, c: Cuota) => {
+                    const saldoInicial = typeof c.saldo_capital_inicial === 'number' ? c.saldo_capital_inicial : 0
+                    const saldoFinal = typeof c.saldo_capital_final === 'number' ? c.saldo_capital_final : 0
+                    const montoCapital = typeof c.monto_capital === 'number' && !isNaN(c.monto_capital)
+                      ? c.monto_capital
+                      : Math.max(0, saldoInicial - saldoFinal)
+                    return acc + montoCapital
+                  }, 0).toFixed(2)}
                 </p>
               </CardContent>
             </Card>
@@ -331,7 +356,18 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
               <CardContent className="pt-4">
                 <p className="text-sm text-blue-600">Total Intereses</p>
                 <p className="text-2xl font-bold text-blue-700">
-                  ${cuotas.reduce((acc, c) => acc + (typeof c.monto_interes === 'number' ? c.monto_interes : 0), 0).toFixed(2)}
+                  ${cuotas.reduce((acc, c: Cuota) => {
+                    const saldoInicial = typeof c.saldo_capital_inicial === 'number' ? c.saldo_capital_inicial : 0
+                    const saldoFinal = typeof c.saldo_capital_final === 'number' ? c.saldo_capital_final : 0
+                    const montoCuota = typeof c.monto_cuota === 'number' ? c.monto_cuota : 0
+                    const montoCapital = typeof c.monto_capital === 'number' && !isNaN(c.monto_capital)
+                      ? c.monto_capital
+                      : Math.max(0, saldoInicial - saldoFinal)
+                    const montoInteres = typeof c.monto_interes === 'number' && !isNaN(c.monto_interes)
+                      ? c.monto_interes
+                      : Math.max(0, montoCuota - montoCapital)
+                    return acc + montoInteres
+                  }, 0).toFixed(2)}
                 </p>
               </CardContent>
             </Card>
@@ -339,7 +375,10 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
               <CardContent className="pt-4">
                 <p className="text-sm text-purple-600">Monto Total</p>
                 <p className="text-2xl font-bold text-purple-700">
-                  ${cuotas.reduce((acc, c) => acc + (typeof c.monto_cuota === 'number' ? c.monto_cuota : 0), 0).toFixed(2)}
+                  ${cuotas.reduce((acc, c: Cuota) => {
+                    const montoCuota = typeof c.monto_cuota === 'number' ? c.monto_cuota : 0
+                    return acc + montoCuota
+                  }, 0).toFixed(2)}
                 </p>
               </CardContent>
             </Card>

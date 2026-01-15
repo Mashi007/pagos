@@ -17,7 +17,7 @@ interface FormularioAprobacionCondicionesProps {
 
 export function FormularioAprobacionCondiciones({ prestamo, onClose, onSuccess }: FormularioAprobacionCondicionesProps) {
   const [condicionesAprobacion, setCondicionesAprobacion] = useState({
-    tasa_interes: prestamo.tasa_interes ? parseFloat(prestamo.tasa_interes.toString()) : 8.0,
+    tasa_interes: prestamo.tasa_interes ? parseFloat(prestamo.tasa_interes.toString()) : 0.0,
     plazo_maximo: prestamo.numero_cuotas || 36,
     fecha_base_calculo: prestamo.fecha_base_calculo || new Date().toISOString().split('T')[0],
     observaciones: prestamo.observaciones || ''
@@ -178,7 +178,7 @@ export function FormularioAprobacionCondiciones({ prestamo, onClose, onSuccess }
                             })
                           }}
                           className="pl-10"
-                          placeholder="8.0"
+                          placeholder="0.0"
                         />
                       </div>
                     </div>

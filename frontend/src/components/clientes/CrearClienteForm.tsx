@@ -193,6 +193,14 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         return fechaISO
       }
 
+      // ✅ Función para decodificar HTML entities
+      const decodeHtmlEntities = (text: string): string => {
+        if (!text) return ''
+        const textarea = document.createElement('textarea')
+        textarea.innerHTML = text
+        return textarea.value
+      }
+
       // ✅ Función para parsear dirección estructurada desde la BD
       const parsearDireccion = (direccionCompleta: string) => {
         if (!direccionCompleta) {
@@ -207,35 +215,74 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
           }
         }
 
-        // Intentar parsear si está en formato JSON
-        try {
-          const parsed = JSON.parse(direccionCompleta)
-          return {
-            callePrincipal: parsed.callePrincipal || '',
-            calleTransversal: parsed.calleTransversal || '',
-            descripcion: parsed.descripcion || '',
-            parroquia: parsed.parroquia || '',
-            municipio: parsed.municipio || '',
-            ciudad: parsed.ciudad || '',
-            estadoDireccion: parsed.estado || parsed.estadoDireccion || ''
-          }
-        } catch {
-          // Si no es JSON, dividir por separadores comunes o dejarlo en callePrincipal
-          const partes = direccionCompleta.split('|')
-          if (partes.length >= 7) {
+        // ✅ Paso 1: Decodificar HTML entities si existen
+        let direccionLimpia = decodeHtmlEntities(direccionCompleta.trim())
+        
+        // ✅ Paso 2: Si aún tiene entities después de decodificar, intentar reemplazarlos manualmente
+        direccionLimpia = direccionLimpia
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'")
+          .replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+
+        // ✅ Paso 3: Intentar parsear si parece ser JSON
+        if (direccionLimpia.trim().startsWith('{') && direccionLimpia.trim().endsWith('}')) {
+          try {
+            const parsed = JSON.parse(direccionLimpia)
             return {
-              callePrincipal: partes[0] || '',
-              calleTransversal: partes[1] || '',
-              descripcion: partes[2] || '',
-              parroquia: partes[3] || '',
-              municipio: partes[4] || '',
-              ciudad: partes[5] || '',
-              estadoDireccion: partes[6] || ''
+              callePrincipal: String(parsed.callePrincipal || '').trim(),
+              calleTransversal: String(parsed.calleTransversal || '').trim(),
+              descripcion: String(parsed.descripcion || '').trim(),
+              parroquia: String(parsed.parroquia || '').trim(),
+              municipio: String(parsed.municipio || '').trim(),
+              ciudad: String(parsed.ciudad || '').trim(),
+              estadoDireccion: String(parsed.estado || parsed.estadoDireccion || '').trim()
+            }
+          } catch (error) {
+            console.warn('Error parseando JSON de dirección:', error, 'Dirección:', direccionLimpia.substring(0, 100))
+            // Si falla el parseo, intentar extraer valores manualmente
+            try {
+              const calleMatch = direccionLimpia.match(/"callePrincipal"\s*:\s*"([^"]*)"/i)
+              const parroquiaMatch = direccionLimpia.match(/"parroquia"\s*:\s*"([^"]*)"/i)
+              const municipioMatch = direccionLimpia.match(/"municipio"\s*:\s*"([^"]*)"/i)
+              const ciudadMatch = direccionLimpia.match(/"ciudad"\s*:\s*"([^"]*)"/i)
+              const estadoMatch = direccionLimpia.match(/"estado"\s*:\s*"([^"]*)"/i)
+              
+              return {
+                callePrincipal: calleMatch ? calleMatch[1].trim() : '',
+                calleTransversal: '',
+                descripcion: '',
+                parroquia: parroquiaMatch ? parroquiaMatch[1].trim() : '',
+                municipio: municipioMatch ? municipioMatch[1].trim() : '',
+                ciudad: ciudadMatch ? ciudadMatch[1].trim() : '',
+                estadoDireccion: estadoMatch ? estadoMatch[1].trim() : ''
+              }
+            } catch {
+              // Si todo falla, dejar vacío
             }
           }
-          // Si es un texto simple, dejar todo en callePrincipal
+        }
+
+        // ✅ Paso 4: Si no es JSON, dividir por separadores comunes
+        const partes = direccionLimpia.split('|')
+        if (partes.length >= 7) {
           return {
-            callePrincipal: direccionCompleta,
+            callePrincipal: partes[0]?.trim() || '',
+            calleTransversal: partes[1]?.trim() || '',
+            descripcion: partes[2]?.trim() || '',
+            parroquia: partes[3]?.trim() || '',
+            municipio: partes[4]?.trim() || '',
+            ciudad: partes[5]?.trim() || '',
+            estadoDireccion: partes[6]?.trim() || ''
+          }
+        }
+
+        // ✅ Paso 5: Si es un texto simple y no parece JSON corrupto, dejarlo en callePrincipal
+        // Solo si no contiene caracteres JSON típicos
+        if (!direccionLimpia.includes('{') && !direccionLimpia.includes('}') && !direccionLimpia.includes('&quot;')) {
+          return {
+            callePrincipal: direccionLimpia,
             calleTransversal: '',
             descripcion: '',
             parroquia: '',
@@ -244,9 +291,24 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
             estadoDireccion: ''
           }
         }
+
+        // ✅ Paso 6: Si parece JSON corrupto pero no se pudo parsear, devolver vacío
+        return {
+          callePrincipal: '',
+          calleTransversal: '',
+          descripcion: '',
+          parroquia: '',
+          municipio: '',
+          ciudad: '',
+          estadoDireccion: ''
+        }
       }
 
-      const direccionData = parsearDireccion(typeof cliente.direccion === 'string' ? cliente.direccion : '')
+      const direccionRaw = typeof cliente.direccion === 'string' ? cliente.direccion : ''
+      console.log('📝 Dirección raw desde BD:', direccionRaw?.substring(0, 200))
+      
+      const direccionData = parsearDireccion(direccionRaw)
+      console.log('📝 Dirección parseada:', direccionData)
 
       const newFormData: FormData = {
         cedula: typeof cliente.cedula === 'string' ? cliente.cedula : '',
