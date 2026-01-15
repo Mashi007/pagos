@@ -57,7 +57,7 @@ export function EntrenamientoMejorado() {
       const response = await apiClient.get<{ recoleccion_automatica_activa?: string }>('/api/v1/configuracion/ai/configuracion')
       // Manejar tanto string como boolean
       const valor = response?.recoleccion_automatica_activa
-      const activa = valor === 'true' || valor === true || valor === 'True'
+      const activa = valor === 'true' || valor === 'True'
       setRecoleccionAutomaticaActiva(activa)
       console.debug(`Estado de recolección automática cargado: ${activa}`)
     } catch (error: any) {

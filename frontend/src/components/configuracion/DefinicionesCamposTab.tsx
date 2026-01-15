@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Database, Plus, Edit, Trash2, Search, Filter, CheckCircle, XCircle, Loader2, Key, RefreshCw, List } from 'lucide-react'
+import { Database, Plus, Edit, Trash2, Search, Filter, CheckCircle, XCircle, Loader2, Key, RefreshCw, FileText } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -333,7 +333,7 @@ export function DefinicionesCamposTab() {
             variant="outline" 
             onClick={() => setMostrarCamposDisponibles(!mostrarCamposDisponibles)}
           >
-            <List className="h-4 w-4 mr-2" />
+            <FileText className="h-4 w-4 mr-2" />
             {mostrarCamposDisponibles ? 'Ocultar' : 'Ver'} Campos Disponibles
           </Button>
           <Button onClick={() => { resetearFormulario(); setMostrarFormulario(true); setEditandoId(null) }}>
