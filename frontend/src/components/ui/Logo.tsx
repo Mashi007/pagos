@@ -51,6 +51,7 @@ interface LogoCache {
   version: number // Contador de versión para forzar actualizaciones
   logoNotFound: boolean // ✅ Flag para recordar que el logo no existe (evitar requests repetidos)
   logoFilename: string | null // ✅ Nombre del archivo del logo para persistencia
+  lastCheckTime: number | null // ✅ Timestamp de la última verificación para evitar requests frecuentes
 }
 
 // Función para cargar metadatos del logo desde localStorage
@@ -141,7 +142,13 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
       if (logoCache.logoFilename && !logoCache.logoNotFound) {
         setImageLoaded(true) // ✅ Mostrar logo directamente
       }
-      // ✅ NO retornar aquí - continuar para verificar si hay una versión más reciente en el servidor
+      // ✅ Si el logo está cacheado y ya fue verificado recientemente (< 5 minutos),
+      // no hacer nueva solicitud para evitar abortos innecesarios
+      const cacheAge = Date.now() - (logoCache.lastCheckTime || 0)
+      if (cacheAge < 300000) { // 5 minutos
+        return // Usar logo cacheado sin verificar nuevamente
+      }
+      // ✅ Continuar para verificar si hay una versión más reciente en el servidor
       // Esto asegura que si el logo cambió, se actualice inmediatamente sin mostrar la versión antigua
     }
 
@@ -230,6 +237,7 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
                   logoCache.logoFilename = config.logo_filename // ✅ Guardar nombre del archivo
                   logoCache.logoNotFound = false // ✅ Resetear flag
                   logoCache.hasChecked = true
+                  logoCache.lastCheckTime = Date.now() // ✅ Guardar timestamp de verificación
 
                   // ✅ Solo incrementar versión si el logo realmente cambió
                   if (logoChanged) {
@@ -299,6 +307,7 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
                   logoCache.logoUrl = null
                   logoCache.logoFilename = null // ✅ Limpiar nombre del archivo
                   logoCache.hasChecked = true
+                  logoCache.lastCheckTime = Date.now() // ✅ Guardar timestamp de verificación
                   logoCache.isChecking = false
                   // ✅ Limpiar metadatos guardados
                   saveLogoMetadata(null)
@@ -332,6 +341,7 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
               // Si no hay logo_filename en la configuración, no hay logo personalizado
               // No hacer solicitudes HEAD innecesarias
               logoCache.hasChecked = true
+              logoCache.lastCheckTime = Date.now() // ✅ Guardar timestamp de verificación
               logoCache.isChecking = false
               if (isMounted()) {
                 setHasChecked(true)
@@ -347,6 +357,7 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
             console.warn('⚠️ No se pudo obtener logo_filename desde configuración:', getErrorMessage(configError))
           }
           logoCache.hasChecked = true
+          logoCache.lastCheckTime = Date.now() // ✅ Guardar timestamp de verificación (incluso si falló)
           logoCache.isChecking = false
           if (isMounted()) {
             setHasChecked(true)
