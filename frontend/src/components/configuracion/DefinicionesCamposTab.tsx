@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Database, Plus, Edit, Trash2, Search, Filter, CheckCircle, XCircle, Loader2, Key, Hash } from 'lucide-react'
+import { Database, Plus, Edit, Trash2, Search, Filter, CheckCircle, XCircle, Loader2, Key } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -471,7 +471,7 @@ export function DefinicionesCamposTab() {
                             )}
                             {def.tiene_indice && (
                               <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                                <Hash className="h-3 w-3 mr-1" />
+                                <Key className="h-3 w-3 mr-1" />
                                 Indexado
                               </Badge>
                             )}

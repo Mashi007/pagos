@@ -746,25 +746,25 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
       role="img"
       aria-label="RAPICREDIT Logo"
     >
-      {/* Letra R estilizada en azul oscuro */}
+      {/* Letra R estilizada en azul oscuro (#2A3B8F) */}
       <g>
-        {/* Tallo vertical principal con extensión superior izquierda */}
+        {/* Tallo vertical principal */}
         <path d="M 8 4 L 8 32 L 16 32 L 16 28 L 12 28 L 12 4 Z" fill="#2A3B8F"/>
         
-        {/* Extensión superior izquierda (serif) */}
-        <path d="M 8 4 L 6 4 L 6 6 L 8 6 Z" fill="#2A3B8F"/>
-
-        {/* Bowl superior de la R (curva suave) */}
-        <path d="M 12 4 L 12 14 Q 12 10 18 10 Q 24 10 26 12 L 26 18 Q 26 16 24 16 L 20 16 Q 18 16 16 17 L 12 20 Z" fill="#2A3B8F"/>
-
-        {/* Pierna diagonal de la R (extiende hacia abajo y derecha con punta) */}
-        <path d="M 12 20 L 12 24 L 20 24 L 28 32 L 32 32 L 24 24 L 24 20 Z" fill="#2A3B8F"/>
+        {/* Curva superior de la R (bowl) */}
+        <path 
+          d="M 12 4 Q 12 8 18 8 Q 24 8 26 12 Q 26 16 20 16 L 16 16 Q 14 16 12 14 Z" 
+          fill="#2A3B8F"
+        />
         
-        {/* Punta afilada de la pierna */}
-        <path d="M 28 32 L 32 32 L 30 30 Z" fill="#2A3B8F"/>
+        {/* Pierna diagonal de la R (extiende hacia abajo y derecha) */}
+        <path 
+          d="M 12 20 L 12 24 L 20 24 L 28 32 L 32 32 L 24 24 L 24 20 Z" 
+          fill="#2A3B8F"
+        />
       </g>
 
-      {/* Círculo naranja sólido debajo y ligeramente a la izquierda */}
+      {/* Círculo naranja sólido (#F57F20) debajo y ligeramente a la izquierda */}
       <circle cx="10" cy="40" r="5.5" fill="#F57F20"/>
     </svg>
   )

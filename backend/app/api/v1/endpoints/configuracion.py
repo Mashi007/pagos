@@ -281,7 +281,7 @@ def obtener_configuracion_por_categoria(
 @limiter.limit("20/minute")  # ✅ Rate limiting: máximo 20 actualizaciones por minuto
 def actualizar_configuracion(
     request: Request,
-    clave: str = Path(..., regex="^[A-Za-z0-9_]+$", max_length=100, description="Clave de configuración"),
+    clave: Annotated[str, Path(..., regex="^[A-Za-z0-9_]+$", max_length=100, description="Clave de configuración")],
     config_data: Annotated[ConfiguracionUpdate, Body()],
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
