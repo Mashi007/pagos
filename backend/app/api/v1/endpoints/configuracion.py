@@ -5276,7 +5276,7 @@ def calificar_respuesta_chat(
             logger.warning(f"Tabla ai_calificaciones_chat no existe aún. Error: {e}")
             raise HTTPException(
                 status_code=503,
-                detail="Sistema de calificaciones no disponible. Ejecuta el script SQL: scripts/sql/crear_tabla_calificaciones_chat.sql",
+                detail="La tabla de calificaciones no existe. Ejecuta: psql -U usuario -d base_datos -f scripts/sql/crear_tabla_calificaciones_chat.sql",
             )
         logger.error(f"Error guardando calificación: {e}")
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
@@ -5661,8 +5661,8 @@ def obtener_tablas_campos(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Obtener todas las tablas y campos de la base de datos para uso en Fine-tuning.
-    Devuelve un diccionario con tablas como claves y listas de campos como valores.
+    Obtener todas las tablas y campos de la base de datos con información detallada.
+    Devuelve información completa de cada campo: tipo, nullable, índices, FKs, etc.
     """
     try:
         from sqlalchemy.engine import reflection
@@ -5672,29 +5672,202 @@ def obtener_tablas_campos(
         # Obtener todas las tablas
         todas_tablas = inspector.get_table_names()
 
-        # Construir diccionario de tablas y campos
-        tablas_campos: Dict[str, list[str]] = {}
+        # Construir diccionario con información detallada
+        tablas_campos_detallado: Dict[str, list[Dict[str, Any]]] = {}
 
         for tabla in sorted(todas_tablas):
             try:
                 # Obtener columnas de la tabla
                 columnas = inspector.get_columns(tabla)
-                # Extraer solo los nombres de las columnas
-                nombres_campos = [col["name"] for col in columnas]
-                tablas_campos[tabla] = nombres_campos
+                
+                # Obtener índices
+                indices = inspector.get_indexes(tabla)
+                campos_con_indice = set()
+                for idx in indices:
+                    campos_con_indice.update(idx["column_names"])
+                
+                # Obtener claves foráneas
+                fks = inspector.get_foreign_keys(tabla)
+                campos_fk = {}
+                for fk in fks:
+                    for col in fk["constrained_columns"]:
+                        campos_fk[col] = {
+                            "tabla_referenciada": fk["referred_table"],
+                            "campo_referenciado": fk["referred_columns"][0] if fk["referred_columns"] else None
+                        }
+                
+                # Construir información detallada de cada campo
+                campos_info = []
+                for col in columnas:
+                    nombre = col["name"]
+                    tipo = str(col["type"])
+                    nullable = col["nullable"]
+                    es_pk = col.get("primary_key", False)
+                    tiene_indice = nombre in campos_con_indice
+                    es_fk = nombre in campos_fk
+                    
+                    campo_info = {
+                        "nombre": nombre,
+                        "tipo": tipo,
+                        "nullable": nullable,
+                        "es_obligatorio": not nullable,
+                        "es_primary_key": es_pk,
+                        "tiene_indice": tiene_indice,
+                        "es_clave_foranea": es_fk,
+                    }
+                    
+                    if es_fk:
+                        campo_info["tabla_referenciada"] = campos_fk[nombre]["tabla_referenciada"]
+                        campo_info["campo_referenciado"] = campos_fk[nombre]["campo_referenciado"]
+                    
+                    campos_info.append(campo_info)
+                
+                tablas_campos_detallado[tabla] = campos_info
             except Exception as e:
                 logger.warning(f"Error obteniendo campos de tabla {tabla}: {e}")
-                # Si hay error, agregar tabla vacía
-                tablas_campos[tabla] = []
+                tablas_campos_detallado[tabla] = []
 
         return {
-            "tablas_campos": tablas_campos,
+            "tablas_campos": tablas_campos_detallado,
             "total_tablas": len(todas_tablas),
             "fecha_consulta": datetime.now().isoformat(),
         }
     except Exception as e:
         logger.error(f"Error obteniendo tablas y campos: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error obteniendo tablas y campos: {str(e)}")
+
+
+@router.post("/ai/definiciones-campos/sincronizar")
+def sincronizar_campos_bd(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Sincroniza automáticamente todos los campos de la base de datos con la tabla ai_definiciones_campos.
+    Crea entradas para campos que no existen y actualiza información técnica de campos existentes.
+    NO sobrescribe definiciones personalizadas ni notas.
+    """
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden sincronizar campos",
+        )
+
+    try:
+        from sqlalchemy.engine import reflection
+        import json
+
+        inspector = reflection.Inspector.from_engine(db.bind)
+        todas_tablas = inspector.get_table_names()
+
+        campos_creados = 0
+        campos_actualizados = 0
+        campos_existentes = 0
+
+        for tabla in sorted(todas_tablas):
+            try:
+                # Obtener columnas de la tabla
+                columnas = inspector.get_columns(tabla)
+                
+                # Obtener índices
+                indices = inspector.get_indexes(tabla)
+                campos_con_indice = set()
+                for idx in indices:
+                    campos_con_indice.update(idx["column_names"])
+                
+                # Obtener claves foráneas
+                fks = inspector.get_foreign_keys(tabla)
+                campos_fk = {}
+                for fk in fks:
+                    for col in fk["constrained_columns"]:
+                        campos_fk[col] = {
+                            "tabla_referenciada": fk["referred_table"],
+                            "campo_referenciado": fk["referred_columns"][0] if fk["referred_columns"] else None
+                        }
+                
+                # Procesar cada campo
+                for col in columnas:
+                    nombre_campo = col["name"]
+                    tipo = str(col["type"])
+                    nullable = col["nullable"]
+                    es_pk = col.get("primary_key", False)
+                    tiene_indice = nombre_campo in campos_con_indice
+                    es_fk = nombre_campo in campos_fk
+                    
+                    # Buscar si ya existe definición
+                    definicion_existente = db.query(AIDefinicionCampo).filter(
+                        AIDefinicionCampo.tabla == tabla,
+                        AIDefinicionCampo.campo == nombre_campo
+                    ).first()
+                    
+                    if definicion_existente:
+                        # Actualizar información técnica sin sobrescribir definición personalizada
+                        campos_existentes += 1
+                        actualizado = False
+                        
+                        # Solo actualizar si cambió la información técnica
+                        if definicion_existente.tipo_dato != tipo:
+                            definicion_existente.tipo_dato = tipo
+                            actualizado = True
+                        if definicion_existente.es_obligatorio != (not nullable):
+                            definicion_existente.es_obligatorio = not nullable
+                            actualizado = True
+                        if definicion_existente.tiene_indice != tiene_indice:
+                            definicion_existente.tiene_indice = tiene_indice
+                            actualizado = True
+                        if definicion_existente.es_clave_foranea != es_fk:
+                            definicion_existente.es_clave_foranea = es_fk
+                            actualizado = True
+                        
+                        if es_fk:
+                            tabla_ref = campos_fk[nombre_campo]["tabla_referenciada"]
+                            campo_ref = campos_fk[nombre_campo]["campo_referenciado"]
+                            if definicion_existente.tabla_referenciada != tabla_ref:
+                                definicion_existente.tabla_referenciada = tabla_ref
+                                actualizado = True
+                            if definicion_existente.campo_referenciado != campo_ref:
+                                definicion_existente.campo_referenciado = campo_ref
+                                actualizado = True
+                        
+                        if actualizado:
+                            campos_actualizados += 1
+                    else:
+                        # Crear nueva definición con información básica
+                        nueva_definicion = AIDefinicionCampo(
+                            tabla=tabla,
+                            campo=nombre_campo,
+                            definicion=f"Campo {nombre_campo} de la tabla {tabla}. Tipo: {tipo}. {'Obligatorio' if not nullable else 'Opcional'}.",
+                            tipo_dato=tipo,
+                            es_obligatorio=not nullable,
+                            tiene_indice=tiene_indice,
+                            es_clave_foranea=es_fk,
+                            tabla_referenciada=campos_fk[nombre_campo]["tabla_referenciada"] if es_fk else None,
+                            campo_referenciado=campos_fk[nombre_campo]["campo_referenciado"] if es_fk else None,
+                            activo=True,
+                            orden=0,
+                        )
+                        db.add(nueva_definicion)
+                        campos_creados += 1
+                
+            except Exception as e:
+                logger.warning(f"Error procesando tabla {tabla}: {e}")
+                continue
+
+        db.commit()
+
+        logger.info(f"✅ Sincronización completada: {campos_creados} creados, {campos_actualizados} actualizados, {campos_existentes} existentes")
+        
+        return {
+            "mensaje": "Sincronización completada exitosamente",
+            "campos_creados": campos_creados,
+            "campos_actualizados": campos_actualizados,
+            "campos_existentes": campos_existentes,
+            "total_procesados": campos_creados + campos_actualizados + campos_existentes,
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error sincronizando campos: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error sincronizando campos: {str(e)}")
 
 
 class ProbarAIRequest(BaseModel):
@@ -7212,24 +7385,39 @@ def _calcular_analisis_cobranzas(db: Session) -> dict:
     try:
         from datetime import date, timedelta
 
-        from sqlalchemy import and_
+        from sqlalchemy import and_, func
 
         hoy = date.today()
 
-        # Clientes en mora
+        # Clientes en mora (cuotas vencidas y no pagadas completamente)
+        # Una cuota está en mora si: fecha_vencimiento < hoy AND estado != "PAGADO" AND total_pagado < monto_cuota
         clientes_mora = (
             db.query(func.count(func.distinct(Prestamo.cedula)))
             .join(Cuota, Cuota.prestamo_id == Prestamo.id)
-            .filter(and_(Prestamo.estado == "APROBADO", Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADA"))
+            .filter(
+                and_(
+                    Prestamo.estado == "APROBADO",
+                    Cuota.fecha_vencimiento < hoy,
+                    Cuota.estado != "PAGADO",  # ✅ CORREGIDO: "PAGADO" no "PAGADA"
+                    Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Agregado: verificar que no esté completamente pagada
+                )
+            )
             .scalar()
             or 0
         )
 
-        # Monto total en mora
+        # Monto total en mora (solo el monto pendiente de cuotas vencidas)
         monto_total_mora = (
-            db.query(func.sum(Cuota.monto_cuota))
+            db.query(func.sum(Cuota.monto_cuota - func.coalesce(Cuota.total_pagado, 0)))
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .filter(and_(Prestamo.estado == "APROBADO", Cuota.fecha_vencimiento < hoy, Cuota.estado != "PAGADA"))
+            .filter(
+                and_(
+                    Prestamo.estado == "APROBADO",
+                    Cuota.fecha_vencimiento < hoy,
+                    Cuota.estado != "PAGADO",  # ✅ CORREGIDO: "PAGADO" no "PAGADA"
+                    Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Agregado: verificar que no esté completamente pagada
+                )
+            )
             .scalar()
             or 0
         )
@@ -7243,7 +7431,8 @@ def _calcular_analisis_cobranzas(db: Session) -> dict:
                     Prestamo.estado == "APROBADO",
                     Cuota.fecha_vencimiento >= hoy - timedelta(days=30),
                     Cuota.fecha_vencimiento < hoy,
-                    Cuota.estado != "PAGADA",
+                    Cuota.estado != "PAGADO",  # ✅ CORREGIDO: "PAGADO" no "PAGADA"
+                    Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Agregado: verificar que no esté completamente pagada
                 )
             )
             .scalar()
@@ -7258,7 +7447,8 @@ def _calcular_analisis_cobranzas(db: Session) -> dict:
                     Prestamo.estado == "APROBADO",
                     Cuota.fecha_vencimiento >= hoy - timedelta(days=60),
                     Cuota.fecha_vencimiento < hoy - timedelta(days=30),
-                    Cuota.estado != "PAGADA",
+                    Cuota.estado != "PAGADO",  # ✅ CORREGIDO: "PAGADO" no "PAGADA"
+                    Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Agregado: verificar que no esté completamente pagada
                 )
             )
             .scalar()
@@ -7270,7 +7460,10 @@ def _calcular_analisis_cobranzas(db: Session) -> dict:
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .filter(
                 and_(
-                    Prestamo.estado == "APROBADO", Cuota.fecha_vencimiento < hoy - timedelta(days=60), Cuota.estado != "PAGADA"
+                    Prestamo.estado == "APROBADO",
+                    Cuota.fecha_vencimiento < hoy - timedelta(days=60),
+                    Cuota.estado != "PAGADO",  # ✅ CORREGIDO: "PAGADO" no "PAGADA"
+                    Cuota.total_pagado < Cuota.monto_cuota,  # ✅ Agregado: verificar que no esté completamente pagada
                 )
             )
             .scalar()
@@ -7407,13 +7600,28 @@ def _obtener_resumen_bd(db: Session) -> str:
         # Cuotas
         total_cuotas = _ejecutar_consulta_segura(lambda: db.query(Cuota).count(), "consulta de total cuotas")
         cuotas_pagadas = _ejecutar_consulta_segura(
-            lambda: db.query(Cuota).filter(Cuota.estado == "PAGADA").count(), "consulta de cuotas pagadas"
+            lambda: db.query(Cuota).filter(Cuota.estado == "PAGADO").count(), "consulta de cuotas pagadas"  # ✅ CORREGIDO: "PAGADO" no "PAGADA"
         )
         cuotas_pendientes = _ejecutar_consulta_segura(
             lambda: db.query(Cuota).filter(Cuota.estado == "PENDIENTE").count(), "consulta de cuotas pendientes"
         )
+        # ✅ CORREGIDO: No existe estado "MORA", se calcula como cuotas vencidas y no pagadas
+        from datetime import date
+        from sqlalchemy import and_
+        hoy = date.today()
         cuotas_mora = _ejecutar_consulta_segura(
-            lambda: db.query(Cuota).filter(Cuota.estado == "MORA").count(), "consulta de cuotas en mora"
+            lambda: db.query(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .filter(
+                and_(
+                    Prestamo.estado == "APROBADO",
+                    Cuota.fecha_vencimiento < hoy,
+                    Cuota.estado != "PAGADO",
+                    Cuota.total_pagado < Cuota.monto_cuota,
+                )
+            )
+            .count(),
+            "consulta de cuotas en mora",
         )
         if (
             total_cuotas is not None
@@ -7451,8 +7659,15 @@ def _obtener_resumen_bd(db: Session) -> str:
                     extract("year", Cuota.fecha_vencimiento).label("año"),
                     extract("month", Cuota.fecha_vencimiento).label("mes"),
                     func.count(Cuota.id).label("total"),
-                    func.count(Cuota.id).filter(Cuota.estado == "PAGADA").label("pagadas"),
-                    func.count(Cuota.id).filter(Cuota.estado == "MORA").label("en_mora"),
+                    func.count(Cuota.id).filter(Cuota.estado == "PAGADO").label("pagadas"),  # ✅ CORREGIDO: "PAGADO" no "PAGADA"
+                    # ✅ CORREGIDO: No existe estado "MORA", se calcula como cuotas vencidas y no pagadas
+                    func.count(Cuota.id).filter(
+                        and_(
+                            Cuota.fecha_vencimiento < fecha_limite,
+                            Cuota.estado != "PAGADO",
+                            Cuota.total_pagado < Cuota.monto_cuota,
+                        )
+                    ).label("en_mora"),
                     func.count(Cuota.id).filter(Cuota.estado == "PENDIENTE").label("pendientes"),
                     func.sum(Cuota.monto_cuota).label("monto_total"),
                 )
@@ -7869,6 +8084,8 @@ def _validar_pregunta_es_sobre_bd(pregunta: str) -> None:
         "cantidad",
         "cobranza", "cobranzas",
         "tienes", "tiene",  # Agregado para preguntas como "tienes prestamo"
+        "nombre", "nombres",  # Agregado para preguntas sobre nombres
+        "persona", "personas",  # Agregado para preguntas sobre personas
     ]
     
     tiene_palabra_obligatoria = any(obligatoria in pregunta_lower for obligatoria in palabras_clave_obligatorias)
@@ -8803,6 +9020,8 @@ def _ejecutar_consulta_dinamica(pregunta: str, pregunta_lower: str, db: Session)
     import re
     from datetime import datetime, timedelta
 
+    from sqlalchemy import and_, func
+
     resultado = ""
     fecha_actual = datetime.now()
 
@@ -8938,9 +9157,18 @@ def _ejecutar_consulta_dinamica(pregunta: str, pregunta_lower: str, db: Session)
 
             if cuotas:
                 total = len(cuotas)
-                pagadas = len([c for c in cuotas if c.estado == "PAGADA"])
+                pagadas = len([c for c in cuotas if c.estado == "PAGADO"])  # ✅ CORREGIDO: "PAGADO" no "PAGADA"
                 pendientes = len([c for c in cuotas if c.estado == "PENDIENTE"])
-                mora = len([c for c in cuotas if c.estado == "MORA"])
+                # ✅ CORREGIDO: No existe estado "MORA", se calcula como cuotas vencidas y no pagadas
+                from datetime import date
+                hoy = date.today()
+                mora = len(
+                    [
+                        c
+                        for c in cuotas
+                        if c.fecha_vencimiento < hoy and c.estado != "PAGADO" and (c.total_pagado or 0) < (c.monto_cuota or 0)
+                    ]
+                )
                 monto_total = sum(float(c.monto_cuota or 0) for c in cuotas)
 
                 resultado += f"\n=== CUOTAS CON VENCIMIENTO ({fecha_inicio.strftime('%d/%m/%Y')} - {fecha_fin.strftime('%d/%m/%Y')}) ===\n"
@@ -8981,6 +9209,50 @@ def _ejecutar_consulta_dinamica(pregunta: str, pregunta_lower: str, db: Session)
                 resultado += "\n=== PRÉSTAMOS PENDIENTES ===\n"
                 resultado += f"Total: {total}\n"
                 resultado += f"Monto total: {monto_total:,.2f}\n"
+
+        # ============================================
+        # CONSULTAS DE CLIENTES EN MORA
+        # ============================================
+        if any(palabra in pregunta_lower for palabra in ["clientes en mora", "clientes mora", "en mora", "mora"]):
+            from datetime import date
+            hoy = date.today()
+            
+            # Obtener clientes con cuotas vencidas y no pagadas
+            clientes_mora_query = (
+                db.query(
+                    Cliente.cedula,
+                    Cliente.nombres,
+                    Cliente.telefono,
+                    func.count(Cuota.id).label("cuotas_vencidas"),
+                    func.sum(Cuota.monto_cuota - func.coalesce(Cuota.total_pagado, 0)).label("monto_adeudado"),
+                )
+                .join(Prestamo, Prestamo.cedula == Cliente.cedula)
+                .join(Cuota, Cuota.prestamo_id == Prestamo.id)
+                .filter(
+                    and_(
+                        Prestamo.estado == "APROBADO",
+                        Cuota.fecha_vencimiento < hoy,
+                        Cuota.estado != "PAGADO",
+                        Cuota.total_pagado < Cuota.monto_cuota,
+                    )
+                )
+                .group_by(Cliente.cedula, Cliente.nombres, Cliente.telefono)
+                .order_by(func.sum(Cuota.monto_cuota - func.coalesce(Cuota.total_pagado, 0)).desc())
+                .limit(50)  # Limitar a 50 clientes para no sobrecargar
+                .all()
+            )
+            
+            if clientes_mora_query:
+                resultado += "\n=== CLIENTES EN MORA ===\n"
+                resultado += f"Total encontrados: {len(clientes_mora_query)}\n\n"
+                for cliente in clientes_mora_query[:20]:  # Mostrar máximo 20
+                    resultado += (
+                        f"- {cliente.nombres} (Cédula: {cliente.cedula}, Tel: {cliente.telefono or 'N/A'})\n"
+                    )
+                    resultado += f"  Cuotas vencidas: {cliente.cuotas_vencidas}, Monto adeudado: {float(cliente.monto_adeudado or 0):,.2f}\n"
+            else:
+                resultado += "\n=== CLIENTES EN MORA ===\n"
+                resultado += "No hay clientes en mora actualmente.\n"
 
         # ============================================
         # CONSULTAS POR CLIENTE (si no se detectó cédula antes)

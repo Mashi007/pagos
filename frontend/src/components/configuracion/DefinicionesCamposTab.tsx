@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Database, Plus, Edit, Trash2, Search, Filter, CheckCircle, XCircle, Loader2, Key } from 'lucide-react'
+import { Database, Plus, Edit, Trash2, Search, Filter, CheckCircle, XCircle, Loader2, Key, RefreshCw, List } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,13 +29,32 @@ interface DefinicionCampo {
   actualizado_en: string
 }
 
+interface CampoDisponible {
+  nombre: string
+  tipo: string
+  nullable: boolean
+  es_obligatorio: boolean
+  es_primary_key: boolean
+  tiene_indice: boolean
+  es_clave_foranea: boolean
+  tabla_referenciada?: string
+  campo_referenciado?: string
+}
+
+interface TablaCampos {
+  [tabla: string]: CampoDisponible[]
+}
+
 export function DefinicionesCamposTab() {
   const [definiciones, setDefiniciones] = useState<DefinicionCampo[]>([])
   const [tablas, setTablas] = useState<string[]>([])
+  const [camposDisponibles, setCamposDisponibles] = useState<TablaCampos>({})
   const [cargando, setCargando] = useState(false)
+  const [sincronizando, setSincronizando] = useState(false)
   const [filtroTabla, setFiltroTabla] = useState<string>('todas')
   const [busqueda, setBusqueda] = useState('')
   const [mostrarFormulario, setMostrarFormulario] = useState(false)
+  const [mostrarCamposDisponibles, setMostrarCamposDisponibles] = useState(false)
   const [editandoId, setEditandoId] = useState<number | null>(null)
   const [guardando, setGuardando] = useState(false)
 
@@ -59,6 +78,7 @@ export function DefinicionesCamposTab() {
   useEffect(() => {
     cargarDefiniciones()
     cargarTablas()
+    cargarCamposDisponibles()
   }, [])
 
   const cargarDefiniciones = async () => {
@@ -85,6 +105,77 @@ export function DefinicionesCamposTab() {
     } catch (error: any) {
       console.error('Error cargando tablas:', error)
     }
+  }
+
+  const cargarCamposDisponibles = async () => {
+    try {
+      const response = await apiClient.get<{ tablas_campos: TablaCampos, total_tablas: number }>(
+        '/api/v1/configuracion/ai/tablas-campos'
+      )
+      setCamposDisponibles(response.tablas_campos || {})
+    } catch (error: any) {
+      console.error('Error cargando campos disponibles:', error)
+    }
+  }
+
+  const handleSincronizar = async () => {
+    if (!confirm('¿Deseas sincronizar todos los campos de la base de datos? Esto creará definiciones para campos que no existen y actualizará información técnica de campos existentes sin sobrescribir definiciones personalizadas.')) {
+      return
+    }
+
+    setSincronizando(true)
+    try {
+      const response = await apiClient.post<{
+        mensaje: string
+        campos_creados: number
+        campos_actualizados: number
+        campos_existentes: number
+        total_procesados: number
+      }>('/api/v1/configuracion/ai/definiciones-campos/sincronizar')
+      
+      toast.success(
+        `Sincronización completada: ${response.campos_creados} creados, ${response.campos_actualizados} actualizados`
+      )
+      cargarDefiniciones()
+      cargarTablas()
+      cargarCamposDisponibles()
+    } catch (error: any) {
+      console.error('Error sincronizando:', error)
+      toast.error(error?.response?.data?.detail || 'Error al sincronizar campos')
+    } finally {
+      setSincronizando(false)
+    }
+  }
+
+  const handleSeleccionarCampo = (tabla: string, campo: CampoDisponible) => {
+    // Verificar si ya existe definición
+    const existe = definiciones.find(d => d.tabla === tabla && d.campo === campo.nombre)
+    if (existe) {
+      toast.info('Este campo ya tiene una definición. Puedes editarla.')
+      handleEditar(existe)
+      return
+    }
+
+    // Prellenar formulario con información del campo
+    setFormulario({
+      tabla: tabla,
+      campo: campo.nombre,
+      definicion: `Campo ${campo.nombre} de la tabla ${tabla}. Tipo: ${campo.tipo}. ${campo.es_obligatorio ? 'Obligatorio' : 'Opcional'}.`,
+      tipo_dato: campo.tipo,
+      es_obligatorio: campo.es_obligatorio,
+      tiene_indice: campo.tiene_indice,
+      es_clave_foranea: campo.es_clave_foranea,
+      tabla_referenciada: campo.tabla_referenciada || '',
+      campo_referenciado: campo.campo_referenciado || '',
+      valores_posibles: '',
+      ejemplos_valores: '',
+      notas: '',
+      activo: true,
+      orden: 0,
+    })
+    setEditandoId(null)
+    setMostrarFormulario(true)
+    setMostrarCamposDisponibles(false)
   }
 
   const handleGuardar = async () => {
@@ -220,11 +311,93 @@ export function DefinicionesCamposTab() {
             Define todos los campos de la base de datos con sus descripciones para entrenar acceso rápido
           </p>
         </div>
-        <Button onClick={() => { resetearFormulario(); setMostrarFormulario(true); setEditandoId(null) }}>
-          <Plus className="h-4 w-4 mr-2" />
-          Agregar Campo
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={handleSincronizar}
+            disabled={sincronizando}
+          >
+            {sincronizando ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Sincronizando...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Sincronizar BD
+              </>
+            )}
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={() => setMostrarCamposDisponibles(!mostrarCamposDisponibles)}
+          >
+            <List className="h-4 w-4 mr-2" />
+            {mostrarCamposDisponibles ? 'Ocultar' : 'Ver'} Campos Disponibles
+          </Button>
+          <Button onClick={() => { resetearFormulario(); setMostrarFormulario(true); setEditandoId(null) }}>
+            <Plus className="h-4 w-4 mr-2" />
+            Agregar Campo
+          </Button>
+        </div>
       </div>
+
+      {/* Campos Disponibles */}
+      {mostrarCamposDisponibles && (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-lg font-semibold flex items-center gap-2">
+                <Database className="h-5 w-5 text-blue-600" />
+                Campos Disponibles en la Base de Datos
+              </h4>
+              <Badge variant="secondary">
+                {Object.values(camposDisponibles).flat().length} campos totales
+              </Badge>
+            </div>
+            <div className="space-y-4 max-h-96 overflow-y-auto">
+              {Object.entries(camposDisponibles).map(([tabla, campos]) => (
+                <div key={tabla} className="border rounded-lg p-3 bg-white">
+                  <h5 className="font-semibold mb-2 text-sm text-gray-700">
+                    Tabla: <span className="text-blue-600">{tabla}</span>
+                    <Badge variant="outline" className="ml-2">{campos.length}</Badge>
+                  </h5>
+                  <div className="grid grid-cols-2 gap-2">
+                    {campos.map(campo => {
+                      const tieneDefinicion = definiciones.some(d => d.tabla === tabla && d.campo === campo.nombre)
+                      return (
+                        <button
+                          key={campo.nombre}
+                          onClick={() => handleSeleccionarCampo(tabla, campo)}
+                          className={`text-left p-2 rounded border text-sm hover:bg-gray-50 transition-colors ${
+                            tieneDefinicion 
+                              ? 'border-green-300 bg-green-50' 
+                              : 'border-gray-200'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">{campo.nombre}</span>
+                            {tieneDefinicion && (
+                              <CheckCircle className="h-3 w-3 text-green-600" />
+                            )}
+                          </div>
+                          <div className="text-xs text-gray-500 mt-1">
+                            {campo.tipo}
+                            {campo.es_obligatorio && ' • NOT NULL'}
+                            {campo.tiene_indice && ' • Indexado'}
+                            {campo.es_clave_foranea && ` • FK → ${campo.tabla_referenciada}`}
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Filtros */}
       <Card>
@@ -270,22 +443,67 @@ export function DefinicionesCamposTab() {
                   <label className="text-sm font-medium block mb-1">
                     Tabla <span className="text-red-500">*</span>
                   </label>
-                  <Input
-                    value={formulario.tabla}
-                    onChange={(e) => setFormulario({ ...formulario, tabla: e.target.value })}
-                    placeholder="Ej: clientes, prestamos, pagos"
-                  />
+                  <Select 
+                    value={formulario.tabla} 
+                    onValueChange={(value) => setFormulario({ ...formulario, tabla: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar tabla" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.keys(camposDisponibles).map(tabla => (
+                        <SelectItem key={tabla} value={tabla}>{tabla}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {formulario.tabla && camposDisponibles[formulario.tabla] && (
+                    <div className="mt-2">
+                      <label className="text-sm font-medium block mb-1">
+                        Campo <span className="text-red-500">*</span>
+                      </label>
+                      <Select 
+                        value={formulario.campo} 
+                        onValueChange={(value) => {
+                          const campo = camposDisponibles[formulario.tabla].find(c => c.nombre === value)
+                          if (campo) {
+                            handleSeleccionarCampo(formulario.tabla, campo)
+                          }
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccionar campo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {camposDisponibles[formulario.tabla].map(campo => (
+                            <SelectItem key={campo.nombre} value={campo.nombre}>
+                              {campo.nombre} ({campo.tipo})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  {!formulario.tabla && (
+                    <Input
+                      value={formulario.tabla}
+                      onChange={(e) => setFormulario({ ...formulario, tabla: e.target.value })}
+                      placeholder="Ej: clientes, prestamos, pagos"
+                      className="mt-2"
+                    />
+                  )}
                 </div>
-                <div>
-                  <label className="text-sm font-medium block mb-1">
-                    Campo <span className="text-red-500">*</span>
-                  </label>
-                  <Input
-                    value={formulario.campo}
-                    onChange={(e) => setFormulario({ ...formulario, campo: e.target.value })}
-                    placeholder="Ej: cedula, nombres, monto_pagado"
-                  />
-                </div>
+                {!formulario.tabla && (
+                  <div>
+                    <label className="text-sm font-medium block mb-1">
+                      Campo <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      value={formulario.campo}
+                      onChange={(e) => setFormulario({ ...formulario, campo: e.target.value })}
+                      placeholder="Ej: cedula, nombres, monto_pagado"
+                    />
+                  </div>
+                )}
               </div>
 
               <div>

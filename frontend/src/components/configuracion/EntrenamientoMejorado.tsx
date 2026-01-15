@@ -55,8 +55,11 @@ export function EntrenamientoMejorado() {
   const cargarEstadoRecoleccionAutomatica = async () => {
     try {
       const response = await apiClient.get<{ recoleccion_automatica_activa?: string }>('/api/v1/configuracion/ai/configuracion')
-      const activa = response?.recoleccion_automatica_activa === 'true' || false
+      // Manejar tanto string como boolean
+      const valor = response?.recoleccion_automatica_activa
+      const activa = valor === 'true' || valor === true || valor === 'True'
       setRecoleccionAutomaticaActiva(activa)
+      console.debug(`Estado de recolección automática cargado: ${activa}`)
     } catch (error: any) {
       console.error('Error cargando estado de recolección automática:', error)
       // Si no existe la configuración, asumir que está desactivada
@@ -70,20 +73,32 @@ export function EntrenamientoMejorado() {
       const nuevoEstado = !recoleccionAutomaticaActiva
       
       // Guardar configuración
-      await apiClient.put('/api/v1/configuracion/ai/configuracion', {
+      const response = await apiClient.put('/api/v1/configuracion/ai/configuracion', {
         recoleccion_automatica_activa: nuevoEstado.toString()
       })
       
       setRecoleccionAutomaticaActiva(nuevoEstado)
       
+      // Recargar estado para confirmar
+      await cargarEstadoRecoleccionAutomatica()
+      
       if (nuevoEstado) {
-        toast.success('✅ Recolección automática activada. Las conversaciones se guardarán automáticamente.')
+        toast.success('✅ Recolección automática activada. Las conversaciones se guardarán automáticamente.', {
+          duration: 5000,
+        })
       } else {
-        toast.info('Recolección automática desactivada')
+        toast.info('Recolección automática desactivada', {
+          duration: 3000,
+        })
       }
     } catch (error: any) {
       console.error('Error activando recolección automática:', error)
-      toast.error(error?.response?.data?.detail || 'Error al cambiar el estado de recolección automática')
+      const errorMsg = error?.response?.data?.detail || 'Error al cambiar el estado de recolección automática'
+      toast.error(errorMsg, {
+        duration: 5000,
+      })
+      // Recargar estado en caso de error para mantener sincronización
+      await cargarEstadoRecoleccionAutomatica()
     } finally {
       setCargandoEstadoRecoleccion(false)
     }
