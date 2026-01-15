@@ -5449,38 +5449,34 @@ def _obtener_inventario_campos_bd(db: Session) -> str:
         inventario.append("=== INVENTARIO COMPLETO DE CAMPOS DE BASE DE DATOS ===\n")
         inventario.append("Organizado por tablas con información de índices, tipos de datos y relaciones\n")
 
-        # Tablas principales en orden de importancia
-        tablas_prioritarias = [
+        # ⚠️ RESTRICCIÓN: Solo las 4 tablas principales permitidas para consultas
+        tablas_permitidas = [
             "clientes",
             "prestamos",
             "cuotas",
             "pagos",
-            "notificaciones",
-            "users",
-            "concesionarios",
-            "analistas",
-            "configuracion_sistema",
-            "documentos_ai",
-            "auditorias",
-            "prestamos_evaluacion",
-            "prestamos_auditoria",
-            "pagos_auditoria",
         ]
 
-        # Obtener todas las tablas
+        inventario.append("⚠️ IMPORTANTE: El Chat AI solo puede consultar estas 4 tablas:")
+        inventario.append("  1. clientes - Información de clientes")
+        inventario.append("  2. prestamos - Información de préstamos")
+        inventario.append("  3. cuotas - Información de cuotas de préstamos")
+        inventario.append("  4. pagos - Información de pagos realizados")
+        inventario.append("\n✅ CONSULTAS CRUZADAS PERMITIDAS:")
+        inventario.append("  - Puedes hacer JOINs entre estas 4 tablas")
+        inventario.append("  - Puedes relacionar clientes con préstamos, préstamos con cuotas, cuotas con pagos")
+        inventario.append("  - Puedes usar campos de múltiples tablas en una misma consulta")
+        inventario.append("\n")
+
+        # Obtener todas las tablas disponibles
         todas_tablas = inspector.get_table_names()
 
-        # Procesar tablas prioritarias primero
-        tablas_procesadas = set()
-        for tabla in tablas_prioritarias:
+        # Procesar SOLO las 4 tablas permitidas
+        for tabla in tablas_permitidas:
             if tabla in todas_tablas:
-                tablas_procesadas.add(tabla)
                 _agregar_info_tabla(inventario, inspector, tabla)
-
-        # Procesar tablas restantes
-        for tabla in sorted(todas_tablas):
-            if tabla not in tablas_procesadas:
-                _agregar_info_tabla(inventario, inspector, tabla)
+            else:
+                inventario.append(f"\n⚠️ ADVERTENCIA: Tabla '{tabla}' no encontrada en la base de datos")
 
         return "\n".join(inventario)
     except Exception as e:
@@ -7346,31 +7342,85 @@ NOTA: Las consultas dinámicas arriba contienen información específica obtenid
 El sistema tiene acceso completo a TODOS los campos de TODAS las tablas.
 El inventario detallado esta disponible mas abajo en "INVENTARIO COMPLETO DE CAMPOS DE BASE DE DATOS".
 
-RESUMEN RAPIDO DE TABLAS PRINCIPALES:
-- **clientes**: Informacion de clientes (cedula, nombres, telefono, email, estado, activo)
-- **prestamos**: Prestamos aprobados (cliente_id, cedula, total_financiamiento, estado, analista, concesionario)
-- **cuotas**: Cuotas de prestamos (prestamo_id, fecha_vencimiento, monto_cuota, estado, total_pagado, fecha_pago)
-- **pagos**: Pagos realizados (prestamo_id, cedula, fecha_pago, monto_pagado, numero_documento, activo)
-- **notificaciones**: Notificaciones enviadas (cliente_id, tipo, estado, fecha_envio)
-- **users**: Usuarios del sistema (email, nombre, apellido, rol, is_admin)
-- **concesionarios**: Concesionarios (nombre, activo)
-- **analistas**: Analistas/asesores (nombre, email, activo)
-- **configuracion_sistema**: Configuracion (categoria, clave, valor, tipo_dato)
-- **documentos_ai**: Documentos para AI (titulo, contenido_texto, activo, contenido_procesado)
+⚠️⚠️⚠️ TABLAS PERMITIDAS - SOLO ESTAS 4 ⚠️⚠️⚠️
+
+El Chat AI SOLO puede consultar estas 4 tablas y hacer consultas cruzadas entre ellas:
+
+1. **clientes**: Informacion de clientes
+   - Campos principales: id, cedula, nombres, telefono, email, estado, fecha_registro
+   - Relaciones: Se relaciona con prestamos mediante cliente_id o cedula
+
+2. **prestamos**: Prestamos aprobados
+   - Campos principales: id, cliente_id, cedula, total_financiamiento, estado, analista, concesionario, fecha_aprobacion
+   - Relaciones: Se relaciona con clientes (cliente_id/cedula), con cuotas (id), con pagos (id/cedula)
+
+3. **cuotas**: Cuotas de prestamos
+   - Campos principales: id, prestamo_id, fecha_vencimiento, monto_cuota, estado, total_pagado, fecha_pago
+   - Relaciones: Se relaciona con prestamos (prestamo_id), con pagos (indirectamente)
+
+4. **pagos**: Pagos realizados
+   - Campos principales: id, prestamo_id, cedula, fecha_pago, monto_pagado, numero_documento, activo
+   - Relaciones: Se relaciona con prestamos (prestamo_id/cedula), con clientes (cedula)
+
+✅ CONSULTAS CRUZADAS PERMITIDAS:
+- Puedes hacer JOINs entre estas 4 tablas usando las relaciones mencionadas
+- Ejemplos de consultas cruzadas válidas:
+  * Clientes con sus préstamos: JOIN clientes + prestamos
+  * Préstamos con sus cuotas: JOIN prestamos + cuotas
+  * Cuotas con pagos asociados: JOIN cuotas + pagos (a través de prestamos)
+  * Clientes con historial completo: JOIN clientes + prestamos + cuotas + pagos
+- Puedes usar campos de múltiples tablas en GROUP BY, WHERE, SELECT, etc.
+
+❌ TABLAS NO PERMITIDAS:
+- NO puedes consultar otras tablas como: notificaciones, users, concesionarios, analistas, configuracion_sistema, documentos_ai, auditorias, etc.
+- Si necesitas información de otras tablas, solo usa los campos que ya están disponibles en las 4 tablas permitidas (ej: analista está en prestamos, no necesitas la tabla analistas)
+
+⚠️⚠️⚠️ RESTRICCIÓN CRÍTICA DE TABLAS ⚠️⚠️⚠️
+
+SOLO puedes consultar estas 4 tablas:
+1. clientes
+2. prestamos  
+3. cuotas
+4. pagos
+
+NO puedes consultar otras tablas del sistema. Si necesitas información que no está en estas 4 tablas, di que no está disponible.
 
 IMPORTANTE: Consulta el "INVENTARIO COMPLETO DE CAMPOS DE BASE DE DATOS" mas abajo para:
-- Ver TODOS los campos de cada tabla con sus tipos de datos
+- Ver TODOS los campos de las 4 tablas permitidas con sus tipos de datos
 - Identificar que campos estan INDEXADOS (para consultas rapidas)
-- Conocer las relaciones entre tablas (claves foraneas)
+- Conocer las relaciones entre las 4 tablas (claves foraneas)
 - Entender que campos usar para filtros y busquedas eficientes
+- Aprender cómo hacer consultas cruzadas (JOINs) entre las 4 tablas
 
-CAPACIDADES PRINCIPALES:
-1. **Consulta de datos individuales**: Informacion de prestamos, clientes y pagos especificos
-2. **Analisis de KPIs**: Morosidad, recuperacion, cartera en riesgo, efectividad de cobranza
-3. **Analisis de tendencias**: Comparaciones temporales (aumentos/disminuciones)
-4. **Proyecciones operativas**: Cuanto se debe cobrar hoy, esta semana, este mes
-5. **Segmentacion**: Analisis por rangos de mora, montos, productos, zonas
-6. **Analisis de Machine Learning**: Prediccion de morosidad, segmentacion de clientes, deteccion de anomalias, clustering de prestamos
+⚠️⚠️⚠️ RESTRICCIÓN DE TABLAS ⚠️⚠️⚠️
+
+SOLO puedes consultar estas 4 tablas:
+1. **clientes** - Información de clientes
+2. **prestamos** - Información de préstamos
+3. **cuotas** - Información de cuotas de préstamos
+4. **pagos** - Información de pagos realizados
+
+✅ CONSULTAS CRUZADAS PERMITIDAS:
+- Puedes hacer JOINs entre estas 4 tablas usando las relaciones disponibles
+- Puedes combinar campos de múltiples tablas en una misma consulta
+- Ejemplos válidos:
+  * "Clientes con sus préstamos y cuotas"
+  * "Préstamos con total de pagos recibidos"
+  * "Cuotas pendientes con información del cliente"
+  * "Historial completo de un cliente (préstamos + cuotas + pagos)"
+
+❌ RESTRICCIONES:
+- NO puedes consultar otras tablas (notificaciones, users, concesionarios, analistas, etc.)
+- Si necesitas información que no está en estas 4 tablas, di claramente que no está disponible
+- Los campos como "analista" y "concesionario" están disponibles en la tabla "prestamos", no necesitas otras tablas
+
+CAPACIDADES PRINCIPALES (basadas solo en las 4 tablas permitidas):
+1. **Consulta de datos individuales**: Informacion de prestamos, clientes y pagos especificos usando las 4 tablas
+2. **Analisis de KPIs**: Morosidad, recuperacion, cartera en riesgo, efectividad de cobranza usando datos de las 4 tablas
+3. **Analisis de tendencias**: Comparaciones temporales (aumentos/disminuciones) usando fechas de las 4 tablas
+4. **Proyecciones operativas**: Cuanto se debe cobrar hoy, esta semana, este mes usando cuotas y pagos
+5. **Segmentacion**: Analisis por rangos de mora, montos usando datos de prestamos, cuotas y pagos
+6. **Consultas cruzadas**: Combinar información de múltiples tablas para análisis complejos
 
 REGLAS FUNDAMENTALES:
 1. **PRIORIDAD: INFORMACIÓN DEL CLIENTE BUSCADO**: Si hay una sección "=== INFORMACION DEL CLIENTE BUSCADO ===" arriba, esa información tiene MÁXIMA PRIORIDAD. Cuando el usuario pregunta sobre un cliente específico por cédula, SIEMPRE usa esta información primero y responde directamente con los datos encontrados.
