@@ -164,11 +164,31 @@ export function Configuracion() {
       
       // ✅ Verificar si hay logo personalizado
       if (config.logo_filename) {
-        setHasCustomLogo(true)
-        // Cargar preview del logo actual
-        const logoUrl = `/api/v1/configuracion/logo/${config.logo_filename}?t=${Date.now()}`
-        setLogoPreview(logoUrl)
-        setLogoInfo({ filename: config.logo_filename, url: logoUrl })
+        // Verificar que el logo realmente existe haciendo una petición HEAD
+        try {
+          const logoUrl = `${env.API_URL}/api/v1/configuracion/logo/${config.logo_filename}?t=${Date.now()}`
+          const headResponse = await fetch(logoUrl, { method: 'HEAD' })
+          
+          if (headResponse.ok) {
+            // El logo existe, mostrar opción de eliminar
+            setHasCustomLogo(true)
+            setLogoPreview(logoUrl)
+            setLogoInfo({ filename: config.logo_filename, url: logoUrl })
+            console.log(`✅ Logo personalizado encontrado: ${config.logo_filename}`)
+          } else {
+            // El logo no existe aunque esté en la BD, limpiar estado
+            setHasCustomLogo(false)
+            setLogoPreview(null)
+            setLogoInfo(null)
+            console.warn(`⚠️ Logo ${config.logo_filename} no encontrado en el servidor`)
+          }
+        } catch (logoError) {
+          // Si hay error verificando, asumir que no existe
+          setHasCustomLogo(false)
+          setLogoPreview(null)
+          setLogoInfo(null)
+          console.warn(`⚠️ Error verificando logo:`, logoError)
+        }
       } else {
         setHasCustomLogo(false)
         setLogoPreview(null)
@@ -472,17 +492,22 @@ export function Configuracion() {
         reader.readAsDataURL(file)
       }
 
+      // ✅ Marcar que hay logo personalizado para mostrar botón eliminar
+      setHasCustomLogo(true)
+
       // Marcar como cambio pendiente para activar botón Guardar
       // Esto permite al usuario validar/confirmar antes de aplicar el cambio
       setCambiosPendientes(true)
 
-      toast.success('Logo cargado. Haga clic en "Guardar" para confirmar el cambio.')
+      toast.success('Logo cargado exitosamente.')
 
       // Disparar evento para actualizar componentes Logo inmediatamente
-      // (aunque luego se confirmará al hacer clic en Guardar)
       window.dispatchEvent(new CustomEvent('logoUpdated', {
         detail: { filename: result.filename, url: result.url }
       }))
+      
+      // Recargar configuración general para actualizar logo_filename en la BD
+      await cargarConfiguracionGeneral()
     } catch (error: unknown) {
       console.error('Error cargando logo:', error)
       let errorMessage = getErrorMessage(error)

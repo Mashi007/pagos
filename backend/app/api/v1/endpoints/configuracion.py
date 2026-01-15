@@ -380,7 +380,25 @@ def obtener_configuracion_general(db: Session = Depends(get_db)):
             logo_filename = logo_config.valor
             logger.info(f"✅ Logo filename encontrado en BD: {logo_filename}")
         else:
-            logger.debug("⚠️ No se encontró logo_filename en BD (puede ser normal si no se ha subido un logo)")
+            logger.debug("⚠️ No se encontró logo_filename en BD, verificando filesystem...")
+            # ✅ Si no está en BD, verificar si hay logos en el filesystem
+            try:
+                from app.core.config import settings
+                if hasattr(settings, "UPLOAD_DIR") and settings.UPLOAD_DIR:
+                    uploads_dir = Path(settings.UPLOAD_DIR).resolve()
+                else:
+                    uploads_dir = Path("uploads").resolve()
+                
+                logos_dir = uploads_dir / "logos"
+                if logos_dir.exists():
+                    # Buscar cualquier logo-custom.* en el directorio
+                    logos_encontrados = list(logos_dir.glob("logo-custom.*"))
+                    if logos_encontrados:
+                        # Usar el primer logo encontrado
+                        logo_filename = logos_encontrados[0].name
+                        logger.info(f"✅ Logo encontrado en filesystem (no en BD): {logo_filename}")
+            except Exception as fs_error:
+                logger.warning(f"⚠️ Error verificando logos en filesystem: {str(fs_error)}")
     except Exception as e:
         logger.error(f"❌ Error obteniendo logo_filename de BD: {str(e)}", exc_info=True)
 
