@@ -91,6 +91,7 @@ export function TicketsAtencion() {
     prioridad: 'media',
     tipo: 'consulta',
     asignado_a: user ? `${user.nombre} ${user.apellido}` : '',
+    fecha_limite: '',
   })
 
   // Búsqueda de clientes para agregar al ticket (incluir todos los estados)
@@ -246,6 +247,7 @@ export function TicketsAtencion() {
       cliente_id: clienteSeleccionado?.id,
       asignado_a: nuevoTicket.asignado_a || (user ? `${user.nombre} ${user.apellido}` : undefined),
       asignado_a_id: user?.id,
+      fecha_limite: nuevoTicket.fecha_limite || undefined,
     }
 
     createTicketMutation.mutate(ticketData)
@@ -260,6 +262,7 @@ export function TicketsAtencion() {
       prioridad: ticket.prioridad,
       tipo: ticket.tipo,
       asignado_a: ticket.asignado_a,
+      fecha_limite: ticket.fecha_limite || '',
     })
     if (ticket.clienteData) {
       // Convertir clienteData parcial a Cliente completo con valores por defecto
@@ -277,20 +280,18 @@ export function TicketsAtencion() {
   }
 
   const handleActualizarTicket = () => {
-    if (!ticketSeleccionado || !nuevoTicket.titulo || !nuevoTicket.descripcion) {
-      toast.error('Por favor completa el título y descripción del ticket')
+    if (!ticketSeleccionado) {
+      toast.error('No hay ticket seleccionado')
       return
     }
 
     updateTicketMutation.mutate({
       id: ticketSeleccionado.id,
       data: {
-        titulo: nuevoTicket.titulo,
-        descripcion: nuevoTicket.descripcion,
         estado: nuevoTicket.estado,
         prioridad: nuevoTicket.prioridad,
-        tipo: nuevoTicket.tipo,
         asignado_a: nuevoTicket.asignado_a,
+        fecha_limite: nuevoTicket.fecha_limite || undefined,
       },
     })
   }
@@ -568,6 +569,35 @@ export function TicketsAtencion() {
                   </Select>
                 </div>
               </div>
+
+              {/* Fecha Límite */}
+              <div className="space-y-2">
+                <Label htmlFor="fecha_limite">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4" />
+                    Fecha y Hora Límite
+                  </div>
+                </Label>
+                <Input
+                  id="fecha_limite"
+                  type="datetime-local"
+                  value={nuevoTicket.fecha_limite ? new Date(nuevoTicket.fecha_limite).toISOString().slice(0, 16) : ''}
+                  onChange={(e) => {
+                    const fechaHora = e.target.value
+                    if (fechaHora) {
+                      // Convertir a ISO format con timezone
+                      const fechaISO = new Date(fechaHora).toISOString()
+                      setNuevoTicket(prev => ({ ...prev, fecha_limite: fechaISO }))
+                    } else {
+                      setNuevoTicket(prev => ({ ...prev, fecha_limite: '' }))
+                    }
+                  }}
+                  placeholder="Selecciona fecha y hora límite"
+                />
+                <p className="text-xs text-gray-500">
+                  El sistema alertará cuando se alcance esta fecha y hora
+                </p>
+              </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowAddDialog(false)} disabled={createTicketMutation.isPending}>
@@ -590,6 +620,54 @@ export function TicketsAtencion() {
           </DialogContent>
         </Dialog>
       </motion.div>
+
+      {/* ✅ Alertas de Tickets Vencidos */}
+      {(ticketsVencidos.length > 0 || ticketsProximosAVencer.length > 0) && (
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-2"
+        >
+          {ticketsVencidos.length > 0 && (
+            <Card className="border-red-500 bg-red-50">
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-3">
+                  <AlertTriangle className="h-6 w-6 text-red-600" />
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-red-900">
+                      {ticketsVencidos.length} Ticket{ticketsVencidos.length > 1 ? 's' : ''} Vencido{ticketsVencidos.length > 1 ? 's' : ''}
+                    </h3>
+                    <p className="text-sm text-red-700">
+                      {ticketsVencidos.map(t => `#${t.id}: ${t.titulo}`).join(', ')}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          {ticketsProximosAVencer.length > 0 && (
+            <Card className="border-yellow-500 bg-yellow-50">
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-3">
+                  <Clock className="h-6 w-6 text-yellow-600" />
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-yellow-900">
+                      {ticketsProximosAVencer.length} Ticket{ticketsProximosAVencer.length > 1 ? 's' : ''} Próximo{ticketsProximosAVencer.length > 1 ? 's' : ''} a Vencer
+                    </h3>
+                    <p className="text-sm text-yellow-700">
+                      {ticketsProximosAVencer.map(t => {
+                        const fechaLimite = new Date(t.fecha_limite!)
+                        const minutosRestantes = Math.round((fechaLimite.getTime() - new Date().getTime()) / (60 * 1000))
+                        return `#${t.id}: ${t.titulo} (${minutosRestantes} min)`
+                      }).join(', ')}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </motion.div>
+      )}
 
       {/* Estadísticas */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
@@ -731,6 +809,22 @@ export function TicketsAtencion() {
                     const EstadoIcon = estadoInfo.icon
                     const isLast = index === ticketsFiltrados.length - 1
 
+                    // ✅ Verificar si el ticket está vencido o próximo a vencer
+                    const ahora = new Date()
+                    const enUnaHora = new Date(ahora.getTime() + 60 * 60 * 1000)
+                    let estadoFecha: 'vencido' | 'proximo' | 'normal' = 'normal'
+                    let minutosRestantes = 0
+                    
+                    if (ticket.fecha_limite && (ticket.estado === 'abierto' || ticket.estado === 'en_proceso')) {
+                      const fechaLimite = new Date(ticket.fecha_limite)
+                      if (fechaLimite <= ahora) {
+                        estadoFecha = 'vencido'
+                      } else if (fechaLimite <= enUnaHora) {
+                        estadoFecha = 'proximo'
+                        minutosRestantes = Math.round((fechaLimite.getTime() - ahora.getTime()) / (60 * 1000))
+                      }
+                    }
+
                     return (
                       <motion.div
                         key={ticket.id}
@@ -742,6 +836,8 @@ export function TicketsAtencion() {
                         {/* Punto en la línea de tiempo */}
                         <div className="relative z-10 flex-shrink-0">
                           <div className={`w-16 h-16 rounded-full flex items-center justify-center border-4 border-white shadow-lg ${
+                            estadoFecha === 'vencido' ? 'bg-red-500 animate-pulse' :
+                            estadoFecha === 'proximo' ? 'bg-orange-500' :
                             ticket.estado === 'resuelto' ? 'bg-green-500' :
                             ticket.estado === 'cerrado' ? 'bg-gray-500' :
                             ticket.estado === 'en_proceso' ? 'bg-yellow-500' :
@@ -758,14 +854,32 @@ export function TicketsAtencion() {
                         <div className="flex-1 min-w-0">
                           <motion.div
                             whileHover={{ scale: 1.01 }}
-                            className="bg-white rounded-lg border-2 border-gray-200 shadow-md hover:shadow-lg transition-all duration-200 p-6"
+                            className={`bg-white rounded-lg border-2 shadow-md hover:shadow-lg transition-all duration-200 p-6 ${
+                              estadoFecha === 'vencido' ? 'border-red-500 bg-red-50' :
+                              estadoFecha === 'proximo' ? 'border-orange-500 bg-orange-50' :
+                              'border-gray-200'
+                            }`}
                           >
                             {/* Header del ticket */}
                             <div className="flex items-start justify-between mb-4">
                               <div className="flex-1 min-w-0">
-                                <h3 className="text-lg font-bold text-gray-900 mb-2">
-                                  {ticket.titulo}
-                                </h3>
+                                <div className="flex items-center gap-2 mb-2">
+                                  <h3 className="text-lg font-bold text-gray-900">
+                                    {ticket.titulo}
+                                  </h3>
+                                  {estadoFecha === 'vencido' && (
+                                    <Badge className="bg-red-600 text-white animate-pulse">
+                                      <AlertTriangle className="h-3 w-3 mr-1" />
+                                      Vencido
+                                    </Badge>
+                                  )}
+                                  {estadoFecha === 'proximo' && (
+                                    <Badge className="bg-orange-600 text-white">
+                                      <Clock className="h-3 w-3 mr-1" />
+                                      Vence en {minutosRestantes} min
+                                    </Badge>
+                                  )}
+                                </div>
                                 <p className="text-sm text-gray-600 line-clamp-2">
                                   {ticket.descripcion}
                                 </p>
@@ -857,6 +971,19 @@ export function TicketsAtencion() {
                                 <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
                                   <MessageSquare className="h-3 w-3 mr-1" />
                                   Vinculado a WhatsApp
+                                </Badge>
+                              )}
+                              {ticket.fecha_limite && (
+                                <Badge 
+                                  variant="outline" 
+                                  className={`text-xs ${
+                                    estadoFecha === 'vencido' ? 'bg-red-50 text-red-700 border-red-200' :
+                                    estadoFecha === 'proximo' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                    'bg-blue-50 text-blue-700 border-blue-200'
+                                  }`}
+                                >
+                                  <Clock className="h-3 w-3 mr-1" />
+                                  Límite: {formatDate(ticket.fecha_limite)}
                                 </Badge>
                               )}
                               <div className="flex items-center gap-1 text-xs text-gray-500 ml-auto">
@@ -984,18 +1111,46 @@ export function TicketsAtencion() {
                       </SelectItem>
                     ))}
                   </SelectContent>
-                </Select>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Fecha Límite */}
+              <div className="space-y-2">
+                <Label htmlFor="fecha_limite-edit">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4" />
+                    Fecha y Hora Límite
+                  </div>
+                </Label>
+                <Input
+                  id="fecha_limite-edit"
+                  type="datetime-local"
+                  value={nuevoTicket.fecha_limite ? new Date(nuevoTicket.fecha_limite).toISOString().slice(0, 16) : ''}
+                  onChange={(e) => {
+                    const fechaHora = e.target.value
+                    if (fechaHora) {
+                      const fechaISO = new Date(fechaHora).toISOString()
+                      setNuevoTicket(prev => ({ ...prev, fecha_limite: fechaISO }))
+                    } else {
+                      setNuevoTicket(prev => ({ ...prev, fecha_limite: '' }))
+                    }
+                  }}
+                  placeholder="Selecciona fecha y hora límite"
+                />
+                <p className="text-xs text-gray-500">
+                  El sistema alertará cuando se alcance esta fecha y hora
+                </p>
               </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEditDialog(false)} disabled={updateTicketMutation.isPending}>
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleActualizarTicket}
-              disabled={!nuevoTicket.titulo || !nuevoTicket.descripcion || updateTicketMutation.isPending}
-            >
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowEditDialog(false)} disabled={updateTicketMutation.isPending}>
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleActualizarTicket}
+                disabled={!nuevoTicket.titulo || !nuevoTicket.descripcion || updateTicketMutation.isPending}
+              >
               {updateTicketMutation.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />

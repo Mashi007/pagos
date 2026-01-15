@@ -134,6 +134,60 @@ def _restaurar_logo_anterior(db: Session, backup: dict, logos_dir: Path) -> bool
 
 ---
 
+## ✅ Verificación de Base de Datos
+
+### Estado Actual de Logos en BD
+
+**Fecha de Verificación:** 2025-01-15  
+**Script Utilizado:** `scripts/sql/verificar_logos_bd.sql`
+
+**Resultado:**
+```
+estado_logos
+--------------------------------------+
+✅ OK: No hay logos en la base de datos
+```
+
+**Confirmación:**
+- ✅ No existe registro `logo_filename` en la tabla `configuracion_sistema`
+- ✅ No existe registro `logo_data` en la tabla `configuracion_sistema`
+- ✅ Estado consistente: ambos registros ausentes
+
+**Conclusión:**
+El problema al subir logos NO está relacionado con datos previos en la base de datos. El error "Path parameters cannot have a default value" es un problema del código del endpoint, no de datos existentes.
+
+### Logo por Defecto en Frontend
+
+**Estado:** ✅ FUNCIONANDO CORRECTAMENTE
+
+**Ubicación:** `frontend/src/components/ui/Logo.tsx`
+
+**Descripción:**
+El componente `Logo` tiene un **logo por defecto hardcodeado** (SVG) que se muestra cuando:
+- No hay logo personalizado en la base de datos
+- El logo personalizado no se puede cargar
+- Se fuerza el uso del logo por defecto con `forceDefault={true}`
+
+**Logo por Defecto:**
+- Diseño: Letra "R" estilizada en color slate-900 con un círculo naranja debajo
+- Formato: SVG inline en el componente
+- Ubicaciones donde se muestra:
+  - Sidebar (`frontend/src/components/layout/Sidebar.tsx`)
+  - Login (`frontend/src/components/auth/LoginForm.tsx`)
+  - Welcome (`frontend/src/pages/Welcome.tsx`)
+  - Otros componentes que usan `<Logo />`
+
+**Comportamiento:**
+1. El componente `Logo` primero intenta cargar un logo personalizado desde `/api/v1/configuracion/logo/{filename}`
+2. Si no existe logo personalizado en BD, muestra el SVG por defecto
+3. El logo por defecto NO se puede eliminar (es parte del código del frontend)
+4. Solo los logos personalizados subidos a través de `/api/v1/configuracion/upload-logo` pueden ser eliminados
+
+**Nota Importante:**
+El logo que se ve en el sidebar y login (letra "R" con punto naranja) es el **logo por defecto del sistema**, no un logo personalizado almacenado en la base de datos. Este logo siempre estará visible cuando no haya un logo personalizado configurado.
+
+---
+
 ## ⚠️ Problemas Pendientes
 
 ### 1. Error Persistente en Producción
@@ -147,6 +201,7 @@ El error "Path parameters cannot have a default value" sigue apareciendo en prod
 3. **Posible causa:** El problema está en cómo FastAPI procesa todas las rutas al inicio de la aplicación.
 
 **Acciones Recomendadas:**
+- ✅ Verificado: No hay logos previos en BD que puedan causar conflictos
 - Verificar que el código desplegado en producción incluya los cambios recientes
 - Revisar logs del servidor para identificar qué ruta específica está causando el error
 - Considerar separar las rutas de logo en un router diferente si el problema persiste
@@ -190,9 +245,10 @@ app.include_router(logo_router, prefix="/api/v1/configuracion", tags=["logos"])
 - [x] Sistema de backup implementado
 - [x] Sistema de restauración implementado
 - [x] Orden de rutas verificado
+- [x] Verificación de BD: Confirmado que no hay logos previos
 - [ ] Error resuelto en producción (pendiente verificación)
 - [ ] Testing completo realizado
-- [ ] Documentación actualizada
+- [x] Documentación actualizada
 
 ---
 
