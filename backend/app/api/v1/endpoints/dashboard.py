@@ -1776,9 +1776,9 @@ def _calcular_evolucion_mensual(db: Session, hoy: date) -> list:
             )
         
         # ✅ DIAGNÓSTICO: Log de meses calculados
+        meses_str = ', '.join([f"{m['año']}-{m['mes']:02d}" for m in meses_rango])
         logger.info(
-            f"📊 [evolucion_mensual] Meses calculados: "
-            f"{', '.join([f'{m[\"año\"]}-{m[\"mes\"]:02d}' for m in meses_rango])}"
+            f"📊 [evolucion_mensual] Meses calculados: {meses_str}"
         )
 
         # Obtener pagos por mes
