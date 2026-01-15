@@ -3354,9 +3354,8 @@ def obtener_kpis_principales(
             "total_financiamiento",
             "estado",
             "fecha_vencimiento",
-            "capital_pendiente",
-            "interes_pendiente",
-            "monto_mora",
+            "monto_cuota",
+            "total_pagado",
         ]
 
         query_monitor.record_query(
