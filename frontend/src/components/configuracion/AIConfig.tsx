@@ -12,8 +12,6 @@ import { apiClient } from '@/services/api'
 // TrainingDashboard eliminado - redundante con EntrenamientoMejorado
 import { FineTuningTab } from './FineTuningTab'
 import { RAGTab } from './RAGTab'
-import { MLRiesgoTab } from './MLRiesgoTab'
-import { MLImpagoCuotasTab } from './MLImpagoCuotasTab'
 import { EntrenamientoMejorado } from './EntrenamientoMejorado'
 import { DiccionarioSemanticoTab } from './DiccionarioSemanticoTab'
 import { DefinicionesCamposTab } from './DefinicionesCamposTab'
@@ -1695,20 +1693,6 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                 <X className="h-4 w-4" />
                 Calificaciones
               </TabsTrigger>
-              <TabsTrigger
-                value="ml-riesgo"
-                className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-200"
-              >
-                <Brain className="h-4 w-4" />
-                ML Riesgo
-              </TabsTrigger>
-              <TabsTrigger
-                value="ml-impago"
-                className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-200"
-              >
-                <DollarSign className="h-4 w-4" />
-                ML Impago
-              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="fine-tuning" className="mt-6">
@@ -1729,14 +1713,6 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
 
             <TabsContent value="calificaciones-chat" className="mt-6">
               <CalificacionesChatTab />
-            </TabsContent>
-
-            <TabsContent value="ml-riesgo" className="mt-6">
-              <MLRiesgoTab />
-            </TabsContent>
-
-            <TabsContent value="ml-impago" className="mt-6">
-              <MLImpagoCuotasTab />
             </TabsContent>
           </Tabs>
         </TabsContent>

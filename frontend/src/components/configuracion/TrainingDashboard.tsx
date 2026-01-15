@@ -15,7 +15,7 @@ export function TrainingDashboard() {
     try {
       const data = await aiTrainingService.getMetricasEntrenamiento()
       // Validar que la respuesta tenga la estructura esperada
-      if (data && data.conversaciones && data.fine_tuning && data.rag && data.ml_riesgo) {
+      if (data && data.conversaciones && data.fine_tuning && data.rag) {
         setMetricas(data)
       } else {
         // Si el endpoint no existe o devuelve estructura incorrecta, usar valores por defecto
@@ -34,9 +34,6 @@ export function TrainingDashboard() {
           rag: {
             documentos_con_embeddings: 0,
             total_embeddings: 0,
-          },
-          ml_riesgo: {
-            modelos_disponibles: 0,
           },
         })
       }
@@ -59,9 +56,6 @@ export function TrainingDashboard() {
           rag: {
             documentos_con_embeddings: 0,
             total_embeddings: 0,
-          },
-          ml_riesgo: {
-            modelos_disponibles: 0,
           },
         })
         // No mostrar toast de error para 404, es esperado si el endpoint no está implementado
@@ -245,53 +239,6 @@ export function TrainingDashboard() {
         </CardContent>
       </Card>
 
-      {/* Métricas de ML Riesgo */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Brain className="h-5 w-5 text-orange-600" />
-            <h4 className="font-semibold">ML - Modelo de Riesgo</h4>
-          </div>
-          <div className="grid gap-4 md:grid-cols-4">
-            <div className="border rounded-lg p-4">
-              <div className="text-sm text-gray-500 mb-1">Modelos Disponibles</div>
-              <div className="text-2xl font-bold">{metricas.ml_riesgo?.modelos_disponibles ?? 0}</div>
-            </div>
-            <div className="border rounded-lg p-4">
-              <div className="text-sm text-gray-500 mb-1">Modelo Activo</div>
-              <div className="text-lg font-semibold">
-                {metricas.ml_riesgo?.modelo_activo ? (
-                  <Badge variant="default" className="text-xs">
-                    <CheckCircle className="h-3 w-3 mr-1" />
-                    {metricas.ml_riesgo.modelo_activo}
-                  </Badge>
-                ) : (
-                  <span className="text-gray-400">Ninguno</span>
-                )}
-              </div>
-            </div>
-            <div className="border rounded-lg p-4">
-              <div className="text-sm text-gray-500 mb-1">Accuracy Promedio</div>
-              <div className="text-2xl font-bold text-blue-600">
-                {metricas.ml_riesgo?.accuracy_promedio
-                  ? `${(metricas.ml_riesgo.accuracy_promedio * 100).toFixed(1)}%`
-                  : 'N/A'}
-              </div>
-            </div>
-            <div className="border rounded-lg p-4">
-              <div className="text-sm text-gray-500 mb-1">Último Entrenamiento</div>
-              <div className="text-sm font-semibold">
-                {metricas.ml_riesgo?.ultimo_entrenamiento ? (
-                  new Date(metricas.ml_riesgo.ultimo_entrenamiento).toLocaleDateString()
-                ) : (
-                  <span className="text-gray-400">Nunca</span>
-                )}
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Estado General */}
       <Card>
         <CardContent className="pt-6">
@@ -318,18 +265,6 @@ export function TrainingDashboard() {
                   }
                 >
                   {(metricas.rag?.documentos_con_embeddings ?? 0) > 0 ? 'Configurado' : 'Sin configurar'}
-                </Badge>
-              </div>
-            </div>
-            <div className="border rounded-lg p-4 bg-orange-50">
-              <div className="flex items-center justify-between">
-                <span className="font-medium">ML Riesgo</span>
-                <Badge
-                  variant={
-                    metricas.ml_riesgo?.modelo_activo ? 'default' : 'secondary'
-                  }
-                >
-                  {metricas.ml_riesgo?.modelo_activo ? 'Activo' : 'Inactivo'}
                 </Badge>
               </div>
             </div>

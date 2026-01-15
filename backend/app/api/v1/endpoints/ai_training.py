@@ -19,29 +19,10 @@ from app.models.conversacion_ai import ConversacionAI
 from app.models.documento_ai import DocumentoAI
 from app.models.documento_embedding import DocumentoEmbedding
 from app.models.fine_tuning_job import FineTuningJob
-from app.models.modelo_impago_cuotas import ModeloImpagoCuotas
-from app.models.modelo_riesgo import ModeloRiesgo
 from app.models.user import User
 from app.services.ai_training_service import AITrainingService
 from app.services.rag_service import RAGService
 
-# Import condicional de MLService
-try:
-    from app.services.ml_service import MLService
-
-    ML_SERVICE_AVAILABLE = True
-except ImportError:
-    ML_SERVICE_AVAILABLE = False
-    MLService = None
-
-# Import condicional de MLImpagoCuotasService
-try:
-    from app.services.ml_impago_cuotas_service import MLImpagoCuotasService
-
-    ML_IMPAGO_SERVICE_AVAILABLE = True
-except ImportError:
-    ML_IMPAGO_SERVICE_AVAILABLE = False
-    MLImpagoCuotasService = None
 
 logger = logging.getLogger(__name__)
 
@@ -102,38 +83,6 @@ class BuscarDocumentosRequest(BaseModel):
     top_k: int = 3
 
 
-class EntrenarModeloRiesgoRequest(BaseModel):
-    algoritmo: str = "random_forest"
-    test_size: float = 0.2
-    random_state: int = 42
-
-
-class ActivarModeloRiesgoRequest(BaseModel):
-    modelo_id: int
-
-
-class PredecirRiesgoRequest(BaseModel):
-    edad: Optional[int] = None
-    ingreso: Optional[float] = None
-    deuda_total: Optional[float] = None
-    ratio_deuda_ingreso: Optional[float] = None
-    historial_pagos: Optional[float] = None
-    dias_ultimo_prestamo: Optional[int] = None
-    numero_prestamos_previos: Optional[int] = None
-
-
-class EntrenarModeloImpagoRequest(BaseModel):
-    algoritmo: str = "random_forest"
-    test_size: float = 0.2
-    random_state: int = 42
-
-
-class ActivarModeloImpagoRequest(BaseModel):
-    modelo_id: int
-
-
-class PredecirImpagoRequest(BaseModel):
-    prestamo_id: int
 
 
 # ============================================
@@ -1086,89 +1035,8 @@ async def actualizar_embeddings_documento(
 
 
 # ============================================
-# ML RIESGO ENDPOINTS
+# MÉTRICAS CONSOLIDADAS
 # ============================================
-
-
-@router.get("/ml-riesgo/modelos")
-async def listar_modelos_riesgo(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Listar modelos de riesgo disponibles"""
-    try:
-        # Intentar verificar si la tabla existe primero
-        try:
-            modelos = db.query(ModeloRiesgo).order_by(ModeloRiesgo.entrenado_en.desc()).all()
-            return {"modelos": [m.to_dict() for m in modelos]}
-        except (ProgrammingError, OperationalError) as db_error:
-            error_msg = str(db_error).lower()
-            logger.error(f"Error de base de datos listando modelos de riesgo: {db_error}", exc_info=True)
-
-            # Verificar si es un error de tabla no encontrada
-            if any(term in error_msg for term in ["does not exist", "no such table", "relation", "table"]):
-                # Retornar respuesta vacía en lugar de error para que el frontend pueda manejar
-                return {
-                    "modelos": [],
-                    "error": "La tabla 'modelos_riesgo' no está creada. Ejecuta las migraciones: alembic upgrade head",
-                }
-            raise
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise _handle_database_error(e, "listando modelos")
-
-
-@router.get("/ml-riesgo/modelo-activo")
-async def obtener_modelo_riesgo_activo(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Obtener modelo de riesgo activo"""
-    try:
-        modelo = db.query(ModeloRiesgo).filter(ModeloRiesgo.activo.is_(True)).first()
-
-        if not modelo:
-            return {"modelo": None}
-
-        return {"modelo": modelo.to_dict()}
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise _handle_database_error(e, "obteniendo modelo activo")
-
-
-# ============================================================================
-# FUNCIONES HELPER PARA entrenar_modelo_riesgo - Refactorización
-# ============================================================================
-
-
-def _validar_ml_service_disponible() -> None:
-    """Valida que MLService esté disponible"""
-    if not ML_SERVICE_AVAILABLE or MLService is None:
-        raise HTTPException(
-            status_code=503,
-            detail="scikit-learn no está instalado. Instala con: pip install scikit-learn",
-        )
-
-
-def _validar_tabla_modelos_riesgo(db: Session) -> None:
-    """Valida que la tabla modelos_riesgo exista"""
-    try:
-        db.query(ModeloRiesgo).limit(1).all()
-    except (ProgrammingError, OperationalError) as db_error:
-        error_msg = str(db_error).lower()
-        if any(term in error_msg for term in ["does not exist", "no such table", "relation", "table"]):
-            raise HTTPException(
-                status_code=503,
-                detail="La tabla 'modelos_riesgo' no está creada. Ejecuta las migraciones: alembic upgrade head",
-            )
-        raise
-
-
-def _obtener_prestamos_aprobados(db: Session) -> list:
     """
     Obtiene préstamos aprobados con manejo de errores de columnas.
     Retorna lista de préstamos.
@@ -1649,19 +1517,12 @@ async def verificar_conexion_bd_modelos_ml(
         inspector = inspect(db.bind)
         tablas_existentes = inspector.get_table_names()
 
-        tablas_requeridas = {
-            "modelos_riesgo": "Modelos de Riesgo ML",
-            "modelos_impago_cuotas": "Modelos de Impago de Cuotas ML",
-        }
+        tablas_requeridas = {}
 
         resultado = {
             "conexion_bd": True,
             "tablas": {},
             "todas_existen": True,
-            "servicios_ml": {
-                "scikit_learn_disponible": ML_SERVICE_AVAILABLE,
-                "ml_impago_disponible": ML_IMPAGO_SERVICE_AVAILABLE,
-            },
         }
 
         for tabla, nombre in tablas_requeridas.items():
@@ -1763,28 +1624,6 @@ async def obtener_metricas_entrenamiento(
         total_embeddings = db.query(DocumentoEmbedding).count()
         ultima_actualizacion_rag = db.query(func.max(DocumentoEmbedding.creado_en)).scalar()
 
-        # Métricas de ML Riesgo
-        try:
-            modelos_riesgo_disponibles = db.query(ModeloRiesgo).count()
-            modelo_activo_riesgo = db.query(ModeloRiesgo).filter(ModeloRiesgo.activo.is_(True)).first()
-            ultimo_modelo_riesgo = db.query(ModeloRiesgo).order_by(ModeloRiesgo.entrenado_en.desc()).first()
-        except Exception as e:
-            logger.warning(f"Error obteniendo métricas ML Riesgo: {e}")
-            modelos_riesgo_disponibles = 0
-            modelo_activo_riesgo = None
-            ultimo_modelo_riesgo = None
-
-        # Métricas de ML Impago
-        try:
-            modelos_impago_disponibles = db.query(ModeloImpagoCuotas).count()
-            modelo_activo_impago = db.query(ModeloImpagoCuotas).filter(ModeloImpagoCuotas.activo.is_(True)).first()
-            ultimo_modelo_impago = db.query(ModeloImpagoCuotas).order_by(ModeloImpagoCuotas.entrenado_en.desc()).first()
-        except Exception as e:
-            logger.warning(f"Error obteniendo métricas ML Impago: {e}")
-            modelos_impago_disponibles = 0
-            modelo_activo_impago = None
-            ultimo_modelo_impago = None
-
         return {
             "conversaciones": {
                 "total": total_conversaciones,
@@ -1803,22 +1642,6 @@ async def obtener_metricas_entrenamiento(
                 "documentos_con_embeddings": documentos_con_embeddings,
                 "total_embeddings": total_embeddings,
                 "ultima_actualizacion": (ultima_actualizacion_rag.isoformat() if ultima_actualizacion_rag else None),
-            },
-            "ml_riesgo": {
-                "modelos_disponibles": modelos_riesgo_disponibles,
-                "modelo_activo": modelo_activo_riesgo.nombre if modelo_activo_riesgo else None,
-                "ultimo_entrenamiento": (ultimo_modelo_riesgo.entrenado_en.isoformat() if ultimo_modelo_riesgo else None),
-                "accuracy_promedio": (
-                    float(modelo_activo_riesgo.accuracy) if modelo_activo_riesgo and modelo_activo_riesgo.accuracy else None
-                ),
-            },
-            "ml_impago": {
-                "modelos_disponibles": modelos_impago_disponibles,
-                "modelo_activo": modelo_activo_impago.nombre if modelo_activo_impago else None,
-                "ultimo_entrenamiento": (ultimo_modelo_impago.entrenado_en.isoformat() if ultimo_modelo_impago else None),
-                "accuracy_promedio": (
-                    float(modelo_activo_impago.accuracy) if modelo_activo_impago and modelo_activo_impago.accuracy else None
-                ),
             },
         }
 

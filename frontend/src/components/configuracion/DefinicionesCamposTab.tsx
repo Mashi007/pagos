@@ -75,24 +75,53 @@ export function DefinicionesCamposTab() {
     orden: 0,
   })
 
+  const [yaSincronizado, setYaSincronizado] = useState(false)
+
   useEffect(() => {
-    cargarDefiniciones()
-    cargarTablas()
-    cargarCamposDisponibles()
+    cargarTodo()
   }, [])
 
-  const cargarDefiniciones = async () => {
+  const cargarTodo = async () => {
     setCargando(true)
+    try {
+      // Primero cargar campos disponibles
+      const camposCargados = await cargarCamposDisponibles()
+      // Luego cargar definiciones
+      const definicionesCargadas = await cargarDefiniciones()
+      // Y tablas
+      await cargarTablas()
+      
+      // Contar total de campos (sumar campos de todas las tablas)
+      const totalCampos = Object.values(camposCargados).reduce((total, campos) => total + campos.length, 0)
+      
+      console.log(`📊 Campos disponibles: ${totalCampos}, Definiciones existentes: ${definicionesCargadas.length}`)
+      
+      // Si no hay definiciones pero hay campos disponibles, sincronizar automáticamente
+      if (definicionesCargadas.length === 0 && totalCampos > 0 && !yaSincronizado) {
+        console.log('🔄 No hay definiciones precargadas. Sincronizando automáticamente...')
+        setYaSincronizado(true)
+        await handleSincronizarAutomatico()
+      }
+    } catch (error: any) {
+      console.error('Error en cargarTodo:', error)
+      toast.error('Error al cargar los datos')
+    } finally {
+      setCargando(false)
+    }
+  }
+
+  const cargarDefiniciones = async () => {
     try {
       const response = await apiClient.get<{ definiciones: DefinicionCampo[], total: number }>(
         '/api/v1/configuracion/ai/definiciones-campos'
       )
-      setDefiniciones(response.definiciones || [])
+      const definicionesCargadas = response.definiciones || []
+      setDefiniciones(definicionesCargadas)
+      return definicionesCargadas
     } catch (error: any) {
       console.error('Error cargando definiciones:', error)
       toast.error('Error al cargar las definiciones de campos')
-    } finally {
-      setCargando(false)
+      return []
     }
   }
 
@@ -112,9 +141,45 @@ export function DefinicionesCamposTab() {
       const response = await apiClient.get<{ tablas_campos: TablaCampos, total_tablas: number }>(
         '/api/v1/configuracion/ai/tablas-campos'
       )
-      setCamposDisponibles(response.tablas_campos || {})
+      const camposCargados = response.tablas_campos || {}
+      setCamposDisponibles(camposCargados)
+      
+      // Log para debugging
+      const totalCampos = Object.values(camposCargados).reduce((total, campos) => total + campos.length, 0)
+      console.log(`📋 Campos disponibles cargados: ${totalCampos} campos en ${Object.keys(camposCargados).length} tablas`)
+      
+      return camposCargados
     } catch (error: any) {
-      console.error('Error cargando campos disponibles:', error)
+      console.error('❌ Error cargando campos disponibles:', error)
+      toast.error('Error al cargar campos disponibles de la base de datos')
+      return {}
+    }
+  }
+
+  const handleSincronizarAutomatico = async () => {
+    // Sincronización automática sin confirmación
+    setSincronizando(true)
+    try {
+      const response = await apiClient.post<{
+        mensaje: string
+        campos_creados: number
+        campos_actualizados: number
+        campos_existentes: number
+        total_procesados: number
+      }>('/api/v1/configuracion/ai/definiciones-campos/sincronizar')
+      
+      toast.success(
+        `✅ Sincronización automática completada: ${response.campos_creados} campos precargados`
+      )
+      // Recargar todo después de sincronizar
+      await cargarCamposDisponibles()
+      await cargarDefiniciones()
+      await cargarTablas()
+    } catch (error: any) {
+      console.error('Error sincronizando automáticamente:', error)
+      toast.error(error?.response?.data?.detail || 'Error al sincronizar campos automáticamente')
+    } finally {
+      setSincronizando(false)
     }
   }
 
@@ -639,19 +704,52 @@ export function DefinicionesCamposTab() {
       )}
 
       {/* Lista de Definiciones */}
-      {cargando ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
-        </div>
+      {cargando || sincronizando ? (
+        <Card>
+          <CardContent className="pt-6 text-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-purple-600 mx-auto mb-4" />
+            <p className="text-gray-600">
+              {sincronizando 
+                ? 'Sincronizando campos de la base de datos... Esto puede tomar unos momentos.'
+                : 'Cargando definiciones de campos...'}
+            </p>
+          </CardContent>
+        </Card>
       ) : definicionesFiltradas.length === 0 ? (
         <Card>
           <CardContent className="pt-6 text-center py-12">
             <Database className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-            <p className="text-gray-600">
+            <p className="text-gray-600 mb-2 font-medium">
               {busqueda || filtroTabla !== 'todas' 
                 ? 'No se encontraron definiciones con los filtros aplicados'
-                : 'No hay definiciones de campos. Agrega la primera definición.'}
+                : 'No hay definiciones de campos precargadas'}
             </p>
+            {!busqueda && filtroTabla === 'todas' && (
+              <>
+                <p className="text-sm text-gray-500 mb-4">
+                  {Object.keys(camposDisponibles).length > 0 
+                    ? `Se detectaron ${Object.values(camposDisponibles).reduce((total, campos) => total + campos.length, 0)} campos disponibles en ${Object.keys(camposDisponibles).length} tablas.`
+                    : 'No se detectaron campos disponibles en la base de datos.'}
+                </p>
+                <Button 
+                  onClick={handleSincronizar} 
+                  disabled={sincronizando}
+                  className="mt-2"
+                >
+                  {sincronizando ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Sincronizando...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Sincronizar BD Ahora
+                    </>
+                  )}
+                </Button>
+              </>
+            )}
           </CardContent>
         </Card>
       ) : (
