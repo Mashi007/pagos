@@ -203,7 +203,25 @@ export function ChatAI() {
       toast.success(`Calificación ${calificacion === 'arriba' ? 'positiva' : 'negativa'} registrada`)
     } catch (error: any) {
       console.error('Error calificando:', error)
-      toast.error('Error al registrar la calificación')
+      const status = error?.response?.status
+      const detail = error?.response?.data?.detail || ''
+      
+      if (status === 503) {
+        toast.error(
+          'Sistema de calificaciones no disponible. Ejecuta la migración SQL para crear la tabla.',
+          {
+            duration: 5000,
+            action: {
+              label: 'Ver instrucciones',
+              onClick: () => {
+                window.open('/configuracion?tab=ai&subtab=calificaciones-chat', '_blank')
+              }
+            }
+          }
+        )
+      } else {
+        toast.error(detail || 'Error al registrar la calificación')
+      }
     }
   }
 

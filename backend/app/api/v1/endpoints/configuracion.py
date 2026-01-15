@@ -2699,6 +2699,7 @@ def _obtener_valores_ai_por_defecto() -> Dict[str, str]:
         "temperatura": "0.7",
         "max_tokens": "1000",
         "activo": "false",
+        "recoleccion_automatica_activa": "false",
     }
 
 
@@ -5275,7 +5276,7 @@ def calificar_respuesta_chat(
             logger.warning(f"Tabla ai_calificaciones_chat no existe aún. Error: {e}")
             raise HTTPException(
                 status_code=503,
-                detail="Sistema de calificaciones no disponible. Ejecuta la migración SQL primero.",
+                detail="Sistema de calificaciones no disponible. Ejecuta el script SQL: scripts/sql/crear_tabla_calificaciones_chat.sql",
             )
         logger.error(f"Error guardando calificación: {e}")
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
