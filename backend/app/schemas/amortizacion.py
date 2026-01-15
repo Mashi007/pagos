@@ -69,7 +69,7 @@ class CuotaUpdate(BaseModel):
 
 
 class CuotaResponse(CuotaBase):
-    # Schema para respuesta de cuota - FASE 2: Sincronizado con modelo ORM
+    # Schema para respuesta de cuota - FASE 3: Completamente sincronizado con modelo ORM
     id: int
     prestamo_id: int
     fecha_pago: Optional[date] = None
@@ -83,17 +83,27 @@ class CuotaResponse(CuotaBase):
     monto_mora: Decimal
     tasa_mora: Decimal
     estado: str
-    observaciones: Optional[str] = None
+    observaciones: Optional[str] = Field(None, description="Observaciones adicionales de la cuota")
     esta_vencida: bool = False
     monto_pendiente_total: Decimal = Decimal("0.00")
     porcentaje_pagado: Decimal = Decimal("0.00")
 
-    # FASE 2: Campos adicionales sincronizados con ORM
+    # FASE 3: Campos adicionales sincronizados con ORM - COMPLETO
+    # Nota: dias_mora y dias_morosidad son campos diferentes:
+    # - dias_mora: Campo histórico/legacy
+    # - dias_morosidad: Campo actualizado automáticamente (preferido)
     dias_morosidad: Optional[int] = Field(None, description="Días de atraso (actualización automática)")
     monto_morosidad: Optional[Decimal] = Field(None, description="Monto pendiente (actualización automática)")
     es_cuota_especial: Optional[bool] = Field(None, description="Indica si es una cuota especial")
+    
+    # Campos de auditoría - AGREGADOS para sincronización completa
     creado_en: Optional[datetime] = Field(None, description="Fecha de creación del registro")
     actualizado_en: Optional[datetime] = Field(None, description="Fecha de última actualización")
+    
+    # Campos de saldo - EXPLÍCITOS (ya están en CuotaBase pero se hacen explícitos para claridad)
+    # Nota: Estos campos ya están en CuotaBase, pero se documentan aquí para referencia
+    # saldo_capital_inicial: Decimal - Heredado de CuotaBase
+    # saldo_capital_final: Decimal - Heredado de CuotaBase
 
     model_config = {"from_attributes": True}
 
