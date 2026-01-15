@@ -1731,15 +1731,38 @@ def _calcular_evolucion_mensual(db: Session, hoy: date) -> list:
     ]
 
     try:
-        # Calcular rango de meses (últimos 7 meses)
+        # ✅ CORREGIDO: Calcular rango de meses calendario completos (últimos 7 meses)
+        # Usar meses calendario reales en lugar de aproximación de 30 días
+        from calendar import monthrange
+        
         meses_rango = []
+        año_actual = hoy.year
+        mes_actual = hoy.month
+        
+        # Calcular los últimos 7 meses calendario completos
         for i in range(6, -1, -1):
-            mes_fecha = hoy - timedelta(days=30 * i)
-            mes_inicio = date(mes_fecha.year, mes_fecha.month, 1)
-            if mes_fecha.month == 12:
-                mes_fin = date(mes_fecha.year + 1, 1, 1) - timedelta(days=1)
-            else:
-                mes_fin = date(mes_fecha.year, mes_fecha.month + 1, 1) - timedelta(days=1)
+            # Calcular mes retrocediendo desde el mes actual
+            año_mes = año_actual
+            num_mes = mes_actual - i
+            
+            # Ajustar año si el mes es negativo o cero
+            while num_mes <= 0:
+                año_mes -= 1
+                num_mes += 12
+            while num_mes > 12:
+                año_mes += 1
+                num_mes -= 12
+            
+            # Primer día del mes
+            mes_inicio = date(año_mes, num_mes, 1)
+            
+            # Último día del mes (usando monthrange para obtener días del mes)
+            ultimo_dia_mes = monthrange(año_mes, num_mes)[1]
+            mes_fin = date(año_mes, num_mes, ultimo_dia_mes)
+            
+            # Fecha representativa del mes (primer día)
+            mes_fecha = mes_inicio
+            
             meses_rango.append(
                 {
                     "fecha": mes_fecha,
@@ -1747,8 +1770,16 @@ def _calcular_evolucion_mensual(db: Session, hoy: date) -> list:
                     "fin": mes_fin,
                     "inicio_dt": datetime.combine(mes_inicio, datetime.min.time()),
                     "fin_dt": datetime.combine(mes_fin, datetime.max.time()),
+                    "año": año_mes,
+                    "mes": num_mes,
                 }
             )
+        
+        # ✅ DIAGNÓSTICO: Log de meses calculados
+        logger.info(
+            f"📊 [evolucion_mensual] Meses calculados: "
+            f"{', '.join([f'{m[\"año\"]}-{m[\"mes\"]:02d}' for m in meses_rango])}"
+        )
 
         # Obtener pagos por mes
         fecha_primera = meses_rango[0]["inicio_dt"]
@@ -1759,25 +1790,62 @@ def _calcular_evolucion_mensual(db: Session, hoy: date) -> list:
             if isinstance(fecha_ultima, date) and not isinstance(fecha_ultima, datetime):
                 fecha_ultima = datetime.combine(fecha_ultima, datetime.max.time())
 
+            # ✅ DIAGNÓSTICO: Log de fechas para debugging
+            logger.info(
+                f"📊 [evolucion_mensual] Consultando pagos desde {fecha_primera} hasta {fecha_ultima}"
+            )
+
+            # ✅ CORRECCIÓN: Incluir solo pagos de préstamos aprobados o pagos sin préstamo asociado
+            # Usar LEFT JOIN para incluir pagos que pueden estar asociados por cedula cuando no tienen prestamo_id
             pagos_evolucion_query = db.execute(
                 text(
                     """
                     SELECT
-                        EXTRACT(YEAR FROM fecha_pago)::integer as año,
-                        EXTRACT(MONTH FROM fecha_pago)::integer as mes,
-                        COALESCE(SUM(monto_pagado), 0) as monto_total
-                    FROM pagos
-                    WHERE fecha_pago >= :fecha_inicio
-                      AND fecha_pago <= :fecha_fin
-                      AND monto_pagado IS NOT NULL
-                      AND monto_pagado > 0
-                      AND activo = TRUE
-            GROUP BY EXTRACT(YEAR FROM fecha_pago), EXTRACT(MONTH FROM fecha_pago)
+                        EXTRACT(YEAR FROM p.fecha_pago)::integer as año,
+                        EXTRACT(MONTH FROM p.fecha_pago)::integer as mes,
+                        COALESCE(SUM(p.monto_pagado), 0) as monto_total,
+                        COUNT(*) as cantidad_pagos
+                    FROM pagos p
+                    LEFT JOIN prestamos pr ON (
+                        (p.prestamo_id IS NOT NULL AND pr.id = p.prestamo_id)
+                        OR (p.prestamo_id IS NULL AND pr.cedula = p.cedula AND pr.estado = 'APROBADO')
+                    )
+                    WHERE p.fecha_pago >= :fecha_inicio
+                      AND p.fecha_pago <= :fecha_fin
+                      AND p.monto_pagado IS NOT NULL
+                      AND p.monto_pagado > 0
+                      AND p.activo = TRUE
+                      AND (pr.estado = 'APROBADO' OR p.prestamo_id IS NULL)
+                    GROUP BY EXTRACT(YEAR FROM p.fecha_pago), EXTRACT(MONTH FROM p.fecha_pago)
                     ORDER BY año, mes
                 """
                 ).bindparams(fecha_inicio=fecha_primera, fecha_fin=fecha_ultima)
             )
-            pagos_por_mes = {(int(row[0]), int(row[1])): Decimal(str(row[2] or 0)) for row in pagos_evolucion_query}
+            pagos_por_mes = {}
+            total_pagos_encontrados = 0
+            for row in pagos_evolucion_query:
+                año = int(row[0])
+                mes = int(row[1])
+                monto = Decimal(str(row[2] or 0))
+                cantidad = int(row[3] or 0)
+                pagos_por_mes[(año, mes)] = monto
+                total_pagos_encontrados += cantidad
+                logger.info(
+                    f"📊 [evolucion_mensual] Pagos encontrados: {año}-{mes:02d}: "
+                    f"${float(monto):,.2f} ({cantidad} pagos)"
+                )
+            
+            if total_pagos_encontrados == 0:
+                logger.warning(
+                    f"⚠️ [evolucion_mensual] No se encontraron pagos en el rango "
+                    f"{fecha_primera.date()} a {fecha_ultima.date()}. "
+                    f"Verificar que existan pagos con fecha_pago en ese rango y activo=TRUE"
+                )
+            else:
+                logger.info(
+                    f"✅ [evolucion_mensual] Total pagos encontrados: {total_pagos_encontrados} "
+                    f"en {len(pagos_por_mes)} meses diferentes"
+                )
         except Exception as e:
             logger.error(f"Error consultando pagos en dashboard_administrador: {e}", exc_info=True)
             try:
@@ -1866,7 +1934,29 @@ def _calcular_evolucion_mensual(db: Session, hoy: date) -> list:
                 """
                 ).bindparams(fecha_inicio=fecha_primera_cuotas, fecha_fin=fecha_ultima_cuotas)
             )
-            cuotas_a_cobrar_por_mes = {(int(row[0]), int(row[1])): Decimal(str(row[2] or 0)) for row in cuotas_a_cobrar_query}
+            cuotas_a_cobrar_por_mes = {}
+            total_cuotas_encontradas = 0
+            for row in cuotas_a_cobrar_query:
+                año = int(row[0])
+                mes = int(row[1])
+                monto = Decimal(str(row[2] or 0))
+                cuotas_a_cobrar_por_mes[(año, mes)] = monto
+                total_cuotas_encontradas += 1
+                logger.info(
+                    f"📊 [evolucion_mensual] Cuotas programadas: {año}-{mes:02d}: "
+                    f"${float(monto):,.2f}"
+                )
+            
+            if total_cuotas_encontradas == 0:
+                logger.warning(
+                    f"⚠️ [evolucion_mensual] No se encontraron cuotas programadas en el rango "
+                    f"{fecha_primera_cuotas} a {fecha_ultima_cuotas}"
+                )
+            else:
+                logger.info(
+                    f"✅ [evolucion_mensual] Total cuotas programadas encontradas: {total_cuotas_encontradas} "
+                    f"en {len(cuotas_a_cobrar_por_mes)} meses diferentes"
+                )
         except Exception as e:
             logger.error(f"Error consultando cuotas a cobrar en dashboard_administrador: {e}", exc_info=True)
             try:
@@ -1877,8 +1967,8 @@ def _calcular_evolucion_mensual(db: Session, hoy: date) -> list:
 
         # Construir evolución mensual con datos pre-calculados
         for mes_info in meses_rango:
-            año_mes = int(mes_info["fecha"].year)
-            num_mes = int(mes_info["fecha"].month)
+            año_mes = int(mes_info["año"])
+            num_mes = int(mes_info["mes"])
             mes_key_evol: tuple[int, int] = (año_mes, num_mes)
 
             # ✅ CORREGIDO según definición del usuario:
@@ -1890,6 +1980,12 @@ def _calcular_evolucion_mensual(db: Session, hoy: date) -> list:
             
             # ✅ CORREGIDO: Morosidad = cartera - cobrado (en monto USD, no porcentaje)
             morosidad_mes = max(0.0, cartera_mes - cobrado_mes)  # No puede ser negativa
+
+            # ✅ DIAGNÓSTICO: Log de valores calculados para cada mes
+            logger.info(
+                f"📊 [evolucion_mensual] Mes {nombres_meses[num_mes - 1]} {año_mes}: "
+                f"Cartera=${cartera_mes:,.2f}, Cobrado=${cobrado_mes:,.2f}, Morosidad=${morosidad_mes:,.2f}"
+            )
 
             evolucion_mensual.append(
                 {

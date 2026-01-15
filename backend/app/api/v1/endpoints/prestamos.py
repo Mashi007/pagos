@@ -351,6 +351,7 @@ def _obtener_query_base_prestamos(db: Session):
         Prestamo.cliente_id,
         Prestamo.cedula,
         Prestamo.nombres,
+        Prestamo.valor_activo,
         Prestamo.total_financiamiento,
         Prestamo.fecha_requerimiento,
         Prestamo.modalidad_pago,
@@ -359,9 +360,13 @@ def _obtener_query_base_prestamos(db: Session):
         Prestamo.tasa_interes,
         Prestamo.fecha_base_calculo,
         Prestamo.producto,
+        Prestamo.concesionario,
+        Prestamo.analista,
+        Prestamo.modelo_vehiculo,
         Prestamo.estado,
         Prestamo.usuario_proponente,
         Prestamo.usuario_aprobador,
+        Prestamo.usuario_autoriza,
         Prestamo.observaciones,
         Prestamo.fecha_registro,
         Prestamo.fecha_aprobacion,
@@ -449,35 +454,78 @@ def _obtener_prestamos_con_manejo_error(query, skip: int, per_page: int, db: Ses
 def _serializar_prestamo(row) -> Optional[dict]:
     """Serializa un préstamo de forma segura. Returns None si falla"""
     try:
+        # Obtener valores de forma segura con defaults
+        prestamo_id = getattr(row, "id", None)
+        if prestamo_id is None:
+            logger.error("Préstamo sin ID, no se puede serializar")
+            return None
+
+        # Validar campos obligatorios antes de construir el dict
+        analista = getattr(row, "analista", None)
+        if not analista:
+            analista = getattr(row, "usuario_proponente", "SIN_ANALISTA") or "SIN_ANALISTA"
+        
+        numero_cuotas = getattr(row, "numero_cuotas", None)
+        if numero_cuotas is None:
+            logger.warning(f"Préstamo {prestamo_id} sin numero_cuotas, usando 0")
+            numero_cuotas = 0
+        
+        cuota_periodo = getattr(row, "cuota_periodo", None)
+        if cuota_periodo is None:
+            logger.warning(f"Préstamo {prestamo_id} sin cuota_periodo, usando 0")
+            cuota_periodo = Decimal("0.00")
+        
+        tasa_interes = getattr(row, "tasa_interes", None)
+        if tasa_interes is None:
+            logger.warning(f"Préstamo {prestamo_id} sin tasa_interes, usando 0")
+            tasa_interes = Decimal("0.00")
+        
+        producto = getattr(row, "producto", None)
+        if not producto:
+            producto = "SIN_PRODUCTO"
+        
+        usuario_proponente = getattr(row, "usuario_proponente", None)
+        if not usuario_proponente:
+            usuario_proponente = "SISTEMA"
+
         prestamo_data = {
-            "id": row.id,
-            "cliente_id": row.cliente_id,
-            "cedula": row.cedula,
-            "nombres": row.nombres,
+            "id": prestamo_id,
+            "cliente_id": getattr(row, "cliente_id", None) or 0,
+            "cedula": getattr(row, "cedula", "") or "",
+            "nombres": getattr(row, "nombres", "") or "",
             "valor_activo": getattr(row, "valor_activo", None),
-            "total_financiamiento": row.total_financiamiento,
-            "fecha_requerimiento": row.fecha_requerimiento,
-            "modalidad_pago": row.modalidad_pago,
-            "numero_cuotas": row.numero_cuotas,
-            "cuota_periodo": row.cuota_periodo,
-            "tasa_interes": row.tasa_interes,
-            "fecha_base_calculo": row.fecha_base_calculo,
-            "producto": row.producto,
-            "concesionario": None,
-            "analista": row.analista,
-            "modelo_vehiculo": None,
-            "estado": row.estado,
-            "usuario_proponente": row.usuario_proponente,
-            "usuario_aprobador": row.usuario_aprobador,
-            "usuario_autoriza": None,
-            "observaciones": row.observaciones,
-            "fecha_registro": row.fecha_registro,
-            "fecha_aprobacion": row.fecha_aprobacion,
-            "fecha_actualizacion": row.fecha_actualizacion,
+            "total_financiamiento": getattr(row, "total_financiamiento", Decimal("0.00")),
+            "fecha_requerimiento": getattr(row, "fecha_requerimiento", None),
+            "modalidad_pago": getattr(row, "modalidad_pago", "MENSUAL") or "MENSUAL",
+            "numero_cuotas": numero_cuotas,
+            "cuota_periodo": cuota_periodo,
+            "tasa_interes": tasa_interes,
+            "fecha_base_calculo": getattr(row, "fecha_base_calculo", None),
+            "producto": producto,
+            "concesionario": getattr(row, "concesionario", None),
+            "analista": analista,
+            "modelo_vehiculo": getattr(row, "modelo_vehiculo", None),
+            "estado": getattr(row, "estado", "DRAFT") or "DRAFT",
+            "usuario_proponente": usuario_proponente,
+            "usuario_aprobador": getattr(row, "usuario_aprobador", None),
+            "usuario_autoriza": getattr(row, "usuario_autoriza", None),
+            "observaciones": getattr(row, "observaciones", None),
+            "fecha_registro": getattr(row, "fecha_registro", None),
+            "fecha_aprobacion": getattr(row, "fecha_aprobacion", None),
+            "fecha_actualizacion": getattr(row, "fecha_actualizacion", None) or getattr(row, "fecha_registro", None),
         }
-        return PrestamoResponse.model_validate(prestamo_data).model_dump()
+        
+        # Validar con Pydantic
+        validated = PrestamoResponse.model_validate(prestamo_data)
+        return validated.model_dump()
     except Exception as e:
-        logger.error(f"Error serializando préstamo en listar: {str(e)}", exc_info=True)
+        prestamo_id = getattr(row, "id", "N/A")
+        logger.error(
+            f"Error serializando préstamo ID {prestamo_id} en listar: {str(e)}",
+            exc_info=True
+        )
+        # Log detallado de los datos que causaron el error
+        logger.error(f"  Datos del préstamo: id={prestamo_id}, estado={getattr(row, 'estado', 'N/A')}")
         return None
 
 
@@ -511,15 +559,27 @@ def listar_prestamos(
         prestamos = _obtener_prestamos_con_manejo_error(query, skip, per_page, db)
 
         prestamos_serializados = []
+        errores_serializacion = 0
         for row in prestamos:
             prestamo_dict = _serializar_prestamo(row)
             if prestamo_dict:
                 prestamos_serializados.append(prestamo_dict)
+            else:
+                errores_serializacion += 1
 
         if prestamos and not prestamos_serializados:
             logger.error(
-                f"No se pudo serializar ninguno de los {len(prestamos)} préstamos. "
-                "Posible problema de esquema de base de datos."
+                f"❌ No se pudo serializar ninguno de los {len(prestamos)} préstamos. "
+                "Posible problema de esquema de base de datos o validación de Pydantic."
+            )
+        elif errores_serializacion > 0:
+            logger.warning(
+                f"⚠️ Se serializaron {len(prestamos_serializados)} de {len(prestamos)} préstamos. "
+                f"{errores_serializacion} préstamos fallaron en la serialización."
+            )
+        else:
+            logger.info(
+                f"✅ Se serializaron exitosamente {len(prestamos_serializados)} préstamos de {len(prestamos)} obtenidos."
             )
 
         return {
