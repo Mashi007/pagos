@@ -19,8 +19,10 @@ from app.models.conversacion_ai import ConversacionAI
 from app.models.documento_ai import DocumentoAI
 from app.models.documento_embedding import DocumentoEmbedding
 from app.models.fine_tuning_job import FineTuningJob
+from app.models.modelo_riesgo import ModeloRiesgo
 from app.models.user import User
 from app.services.ai_training_service import AITrainingService
+from app.services.ml_service import MLService
 from app.services.rag_service import RAGService
 
 
@@ -72,6 +74,16 @@ class IniciarFineTuningRequest(BaseModel):
 
 class ActivarModeloRequest(BaseModel):
     modelo_id: str
+
+
+class EntrenarModeloRiesgoRequest(BaseModel):
+    algoritmo: str = Field(..., description="Algoritmo de ML a usar (ej: 'random_forest', 'logistic_regression')")
+    test_size: float = Field(0.2, ge=0.1, le=0.5, description="Proporción de datos para test")
+    random_state: Optional[int] = Field(None, description="Semilla aleatoria para reproducibilidad")
+
+
+class ActivarModeloRiesgoRequest(BaseModel):
+    modelo_id: int = Field(..., description="ID del modelo a activar")
 
 
 class GenerarEmbeddingsRequest(BaseModel):
