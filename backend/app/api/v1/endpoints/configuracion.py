@@ -2,7 +2,7 @@ import logging
 import time
 from datetime import date, datetime
 from pathlib import Path
-from typing import Annotated, Any, Dict, Optional, Tuple
+from typing import Annotated, Any, Dict, Optional, Tuple, Union
 
 from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Path, Query, Request, UploadFile
 from pydantic import BaseModel, Field
@@ -5204,8 +5204,9 @@ class CalificacionChatRequest(BaseModel):
     """Schema para calificar respuesta del chat AI"""
 
     pregunta: str = Field(..., description="Pregunta del usuario")
-    respuesta_ai: str = Field(..., description="Respuesta del AI")
-    calificacion: str = Field(..., description="Calificación: 'arriba' o 'abajo'")
+    respuesta_ai: Optional[str] = Field(None, description="Respuesta del AI (nombre alternativo: respuesta)")
+    respuesta: Optional[str] = Field(None, description="Respuesta del AI (nombre alternativo)")
+    calificacion: Any = Field(..., description="Calificación: 'arriba'/'abajo' o 5/1")
 
 
 @router.post("/ai/chat/calificar")
@@ -5215,17 +5216,42 @@ def calificar_respuesta_chat(
     current_user: User = Depends(get_current_user),
 ):
     """Guardar calificación de una respuesta del chat AI"""
+    logger.info(f"📥 Calificación recibida - Usuario: {current_user.email}, Calificación: {calificacion_data.calificacion}")
     try:
-        if calificacion_data.calificacion not in ["arriba", "abajo"]:
+        # Normalizar respuesta (aceptar ambos nombres)
+        respuesta_ai = calificacion_data.respuesta_ai or calificacion_data.respuesta
+        if not respuesta_ai:
             raise HTTPException(
                 status_code=400,
-                detail="Calificación debe ser 'arriba' o 'abajo'",
+                detail="Debe proporcionar 'respuesta_ai' o 'respuesta'",
+            )
+
+        # Normalizar calificación (aceptar números o strings)
+        calificacion_str = calificacion_data.calificacion
+        if isinstance(calificacion_str, (int, float)):
+            # Convertir números: 5 -> 'arriba', 1 -> 'abajo'
+            if calificacion_str >= 3:
+                calificacion_str = "arriba"
+            else:
+                calificacion_str = "abajo"
+        elif isinstance(calificacion_str, str):
+            calificacion_str = calificacion_str.lower().strip()
+            # Mapear variaciones comunes
+            if calificacion_str in ["5", "positivo", "bueno", "correcto", "si", "yes"]:
+                calificacion_str = "arriba"
+            elif calificacion_str in ["1", "negativo", "malo", "incorrecto", "no"]:
+                calificacion_str = "abajo"
+
+        if calificacion_str not in ["arriba", "abajo"]:
+            raise HTTPException(
+                status_code=400,
+                detail="Calificación debe ser 'arriba'/'abajo' o 5/1",
             )
 
         nueva_calificacion = AICalificacionChat(
             pregunta=calificacion_data.pregunta.strip(),
-            respuesta_ai=calificacion_data.respuesta_ai.strip(),
-            calificacion=calificacion_data.calificacion,
+            respuesta_ai=respuesta_ai.strip(),
+            calificacion=calificacion_str,
             usuario_email=current_user.email,
             procesado=False,
             mejorado=False,
@@ -5281,6 +5307,7 @@ def listar_calificaciones_chat(
             AICalificacionChat.creado_en.desc()
         ).all()
         
+        # Retornar en formato compatible con frontend
         return {
             "calificaciones": [cal.to_dict() for cal in calificaciones],
             "total": len(calificaciones),
