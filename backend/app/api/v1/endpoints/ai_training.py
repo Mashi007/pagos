@@ -84,7 +84,7 @@ class BuscarDocumentosRequest(BaseModel):
 
 
 # ============================================
-# ML IMPAGO SCHEMAS
+# ML IMPAGO SCHEMAS (deben estar antes de cualquier uso)
 # ============================================
 
 class EntrenarModeloImpagoRequest(BaseModel):
@@ -123,8 +123,6 @@ def _validar_ml_impago_service_disponible():
             status_code=503,
             detail="scikit-learn no está instalado. Instala con: pip install scikit-learn",
         )
-
-
 
 
 # ============================================
