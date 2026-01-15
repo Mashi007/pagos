@@ -54,7 +54,7 @@ export function CalificacionesChatTab() {
       const response = await apiClient.get<{ calificaciones: CalificacionChat[], total: number }>(
         `/api/v1/configuracion/ai/chat/calificaciones?${params.toString()}`
       )
-      setCalificaciones(response.data?.calificaciones || response.calificaciones || [])
+      setCalificaciones(response.calificaciones || [])
     } catch (error: any) {
       console.error('Error cargando calificaciones:', error)
       if (error?.response?.status !== 503) {
