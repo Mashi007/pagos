@@ -164,7 +164,8 @@ export function ClientesList() {
   // Estadísticas de clientes
   const {
     data: statsData,
-    isLoading: statsLoading
+    isLoading: statsLoading,
+    refetch: refetchStats
   } = useClientesStats()
 
   // Datos mockeados para desarrollo
@@ -277,17 +278,22 @@ export function ClientesList() {
           <Button
             variant="outline"
             size="lg"
-            onClick={() => {
-              refetchClientes()
+            onClick={async () => {
+              // ✅ Actualizar tanto la lista como las estadísticas
+              await Promise.all([
+                refetchClientes(),
+                refetchStats()
+              ])
+              // Invalidar queries para asegurar actualización completa
               queryClient.invalidateQueries({ queryKey: ['clientes'] })
               queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
             }}
-            disabled={isRefetching || isLoading}
+            disabled={isRefetching || isLoading || statsLoading}
             className="px-6 py-6 text-base font-semibold"
-            title="Actualizar datos"
+            title="Actualizar datos y estadísticas"
           >
-            <RefreshCw className={`w-5 h-5 mr-2 ${isRefetching ? 'animate-spin' : ''}`} />
-            {isRefetching ? 'Actualizando...' : 'Actualizar'}
+            <RefreshCw className={`w-5 h-5 mr-2 ${(isRefetching || statsLoading) ? 'animate-spin' : ''}`} />
+            {(isRefetching || statsLoading) ? 'Actualizando...' : 'Actualizar'}
           </Button>
           <Button
             variant="outline"

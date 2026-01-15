@@ -352,18 +352,39 @@ def obtener_estadisticas_clientes(
     current_user: User = Depends(get_current_user),
 ):
     # Obtener estadísticas de clientes directamente desde la BD
+    import time
+    start_time = time.time()
+    
     try:
-        logger.info(f"Obteniendo estadísticas de clientes - Usuario: {current_user.email}")
+        logger.info(f"📊 [stats] Obteniendo estadísticas de clientes - Usuario: {current_user.email}")
 
         # Contar total de clientes
         total = db.query(Cliente).count()
+        logger.debug(f"📊 [stats] Total clientes: {total}")
 
         # Contar por estado
         activos = db.query(Cliente).filter(Cliente.estado == "ACTIVO").count()
+        logger.debug(f"📊 [stats] Clientes activos: {activos}")
 
         inactivos = db.query(Cliente).filter(Cliente.estado == "INACTIVO").count()
+        logger.debug(f"📊 [stats] Clientes inactivos: {inactivos}")
 
         finalizados = db.query(Cliente).filter(Cliente.estado == "FINALIZADO").count()
+        logger.debug(f"📊 [stats] Clientes finalizados: {finalizados}")
+
+        # Verificar consistencia de datos
+        suma_estados = activos + inactivos + finalizados
+        if suma_estados != total:
+            logger.warning(
+                f"⚠️ [stats] Inconsistencia detectada: Total={total}, Suma estados={suma_estados} "
+                f"(Activos={activos}, Inactivos={inactivos}, Finalizados={finalizados})"
+            )
+
+        tiempo_total = int((time.time() - start_time) * 1000)
+        logger.info(
+            f"✅ [stats] Estadísticas obtenidas en {tiempo_total}ms: "
+            f"Total={total}, Activos={activos}, Inactivos={inactivos}, Finalizados={finalizados}"
+        )
 
         return {
             "total": total,
@@ -373,7 +394,8 @@ def obtener_estadisticas_clientes(
         }
 
     except Exception as e:
-        logger.error(f"Error en obtener_estadisticas_clientes: {e}")
+        tiempo_total = int((time.time() - start_time) * 1000)
+        logger.error(f"❌ [stats] Error en obtener_estadisticas_clientes después de {tiempo_total}ms: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 

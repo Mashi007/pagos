@@ -159,9 +159,9 @@ def _calcular_kpis_amortizaciones(
     )
     cuotas_pagadas = cuotas_pagadas_query.scalar() or 0
 
-    # Saldo pendiente
+    # ✅ CORREGIDO: Saldo pendiente = monto_cuota - total_pagado (campos existentes)
     saldo_pendiente_query = (
-        db.query(func.sum(Cuota.capital_pendiente + Cuota.interes_pendiente + Cuota.monto_mora))
+        db.query(func.sum(Cuota.monto_cuota - func.coalesce(Cuota.total_pagado, 0)))
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .filter(Cuota.estado.in_(["PENDIENTE", "ATRASADO", "PARCIAL"]))
     )
@@ -169,10 +169,12 @@ def _calcular_kpis_amortizaciones(
         saldo_pendiente_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
     )
     saldo_pendiente = saldo_pendiente_query.scalar() or Decimal("0")
+    # Asegurar que no sea negativo
+    saldo_pendiente = max(Decimal("0"), saldo_pendiente)
 
-    # Monto vencido
+    # ✅ CORREGIDO: Monto vencido = monto_cuota - total_pagado para cuotas vencidas
     monto_vencido_query = (
-        db.query(func.sum(Cuota.capital_pendiente + Cuota.interes_pendiente + Cuota.monto_mora))
+        db.query(func.sum(Cuota.monto_cuota - func.coalesce(Cuota.total_pagado, 0)))
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .filter(
             Cuota.fecha_vencimiento < fecha_corte,
@@ -183,9 +185,11 @@ def _calcular_kpis_amortizaciones(
         monto_vencido_query, analista, concesionario, modelo, fecha_inicio, fecha_fin
     )
     monto_vencido = monto_vencido_query.scalar() or Decimal("0")
+    # Asegurar que no sea negativo
+    monto_vencido = max(Decimal("0"), monto_vencido)
 
-    # Total pagado en cuotas
-    total_pagado_cuotas_query = db.query(func.sum(Cuota.capital_pagado + Cuota.interes_pagado + Cuota.mora_pagada)).join(
+    # ✅ CORREGIDO: Total pagado en cuotas = suma de total_pagado (campo existente)
+    total_pagado_cuotas_query = db.query(func.sum(func.coalesce(Cuota.total_pagado, 0))).join(
         Prestamo, Cuota.prestamo_id == Prestamo.id
     )
     total_pagado_cuotas_query = FiltrosDashboard.aplicar_filtros_cuota(
