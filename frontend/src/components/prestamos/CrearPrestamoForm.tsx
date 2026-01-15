@@ -331,7 +331,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
 
   // Verificar permisos de edición - Política: no se permite edición de préstamos ya creados
   // Permitir edición si el usuario tiene permisos y está editando un préstamo
-  const isReadOnly = prestamo ? !canEditPrestamo() : false
+  const isReadOnly = prestamo ? !canEditPrestamo(prestamo.estado || '') : false
   const canApprove = prestamo ? canApprovePrestamo() : false
 
   return (

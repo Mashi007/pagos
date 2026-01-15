@@ -985,7 +985,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
           })
         } else {
           // Si no hay datos originales (no debería pasar en modo edición), enviar todos los datos
-          logger.warning('No hay datos originales para comparar, enviando todos los campos')
+          logger.warn('No hay datos originales para comparar, enviando todos los campos')
           Object.assign(clienteData, todosLosDatos)
         }
 

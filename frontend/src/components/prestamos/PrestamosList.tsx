@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Plus, Search, Filter, Edit, Eye, Trash2, DollarSign, Calendar, Lock, Calculator, CheckCircle2, X, RefreshCw, CalendarCheck } from 'lucide-react'
+import { Plus, Search, Filter, Edit, Eye, Trash2, DollarSign, Calendar, Lock, Calculator, CheckCircle2, X, RefreshCw, Calendar as CalendarIcon } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -677,70 +677,70 @@ export function PrestamosList() {
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
-                                      <div className="flex justify-end gap-2">
-                                        {/* Botón Ver Detalles - Visible cuando está DESEMBOLSADO o tiene fecha_aprobacion */}
-                                        {(prestamo.estado === 'DESEMBOLSADO' || prestamo.fecha_aprobacion) && (
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => handleView(prestamo)}
-                                            title="Ver detalles"
-                                          >
-                                            <Eye className="h-4 w-4" />
-                                          </Button>
-                                        )}
+                          <div className="flex justify-end gap-2">
+                            {/* Botón Ver Detalles - Visible cuando está DESEMBOLSADO o tiene fecha_aprobacion */}
+                            {(prestamo.estado === 'DESEMBOLSADO' || prestamo.fecha_aprobacion) && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleView(prestamo)}
+                                title="Ver detalles"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            )}
 
-                                        {/* Botón Editar - Solo si tiene permisos Y está DESEMBOLSADO o tiene fecha_aprobacion */}
-                                        {canEditPrestamo() && (prestamo.estado === 'DESEMBOLSADO' || prestamo.fecha_aprobacion) && (
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => handleEdit(prestamo)}
-                                            title="Editar préstamo"
-                                            className="hover:bg-blue-50"
-                                          >
-                                            <Edit className="h-4 w-4 text-blue-600" />
-                                          </Button>
-                                        )}
+                            {/* Botón Editar - Solo si tiene permisos Y está DESEMBOLSADO o tiene fecha_aprobacion */}
+                            {canEditPrestamo(prestamo.estado) && (prestamo.estado === 'DESEMBOLSADO' || prestamo.fecha_aprobacion) && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEdit(prestamo)}
+                                title="Editar préstamo"
+                                className="hover:bg-blue-50"
+                              >
+                                <Edit className="h-4 w-4 text-blue-600" />
+                              </Button>
+                            )}
 
-                                        {/* Botón Evaluar Riesgo - Solo Admin (DRAFT o EN_REVISION) */}
-                                        {canViewEvaluacionRiesgo() && (prestamo.estado === 'DRAFT' || prestamo.estado === 'EN_REVISION') && (
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => handleEvaluarRiesgo(prestamo)}
-                                            title="Evaluar riesgo del préstamo"
-                                            className="hover:bg-blue-50"
-                                          >
-                                            <Calculator className="h-4 w-4 text-blue-600" />
-                                          </Button>
-                                        )}
+                            {/* Botón Evaluar Riesgo - Solo Admin (DRAFT o EN_REVISION) */}
+                            {canViewEvaluacionRiesgo() && (prestamo.estado === 'DRAFT' || prestamo.estado === 'EN_REVISION') && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEvaluarRiesgo(prestamo)}
+                                title="Evaluar riesgo del préstamo"
+                                className="hover:bg-blue-50"
+                              >
+                                <Calculator className="h-4 w-4 text-blue-600" />
+                              </Button>
+                            )}
 
-                                        {/* Botón Aprobar Crédito - Solo Admin (EVALUADO) */}
-                                        {canViewEvaluacionRiesgo() && prestamo.estado === 'EVALUADO' && (
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => handleAprobarCredito(prestamo)}
-                                            title="Aprobar crédito con condiciones (genera tabla de amortización)"
-                                            className="hover:bg-green-50"
-                                          >
-                                            <CheckCircle2 className="h-4 w-4 text-green-600" />
-                                          </Button>
-                                        )}
+                            {/* Botón Aprobar Crédito - Solo Admin (EVALUADO) */}
+                            {canViewEvaluacionRiesgo() && prestamo.estado === 'EVALUADO' && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleAprobarCredito(prestamo)}
+                                title="Aprobar crédito con condiciones (genera tabla de amortización)"
+                                className="hover:bg-green-50"
+                              >
+                                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                              </Button>
+                            )}
 
-                                        {/* Botón Asignar Fecha de Aprobación - Solo Admin (APROBADO sin fecha_aprobacion) */}
-                                        {canViewEvaluacionRiesgo() && prestamo.estado === 'APROBADO' && !prestamo.fecha_aprobacion && (
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => handleAsignarFechaAprobacion(prestamo)}
-                                            title="Asignar fecha de aprobación y desembolsar (requiere calificación mínima 70)"
-                                            className="hover:bg-purple-50"
-                                          >
-                                            <CalendarCheck className="h-4 w-4 text-purple-600" />
-                                          </Button>
-                                        )}
+                            {/* Botón Asignar Fecha de Aprobación - Solo Admin (APROBADO sin fecha_aprobacion) */}
+                            {canViewEvaluacionRiesgo() && prestamo.estado === 'APROBADO' && !prestamo.fecha_aprobacion && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleAsignarFechaAprobacion(prestamo)}
+                                title="Asignar fecha de aprobación y desembolsar (requiere calificación mínima 70)"
+                                className="hover:bg-purple-50"
+                              >
+                                <CalendarCheck className="h-4 w-4 text-purple-600" />
+                              </Button>
+                            )}
 
                             {/* Botón Eliminar - Solo Admin */}
                             {canDeletePrestamo() ? (
