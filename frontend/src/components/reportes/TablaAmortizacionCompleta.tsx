@@ -150,12 +150,13 @@ export function TablaAmortizacionCompleta() {
         cedulaSeleccionada,
         loadingPrestamos,
         prestamosData,
-      prestamosLength: prestamosData?.length || 0,
-      prestamoIds,
-      shouldFetchCuotas,
-      loadingCuotas,
-      todasLasCuotasLength: todasLasCuotas?.length || 0
-    })
+        prestamosLength: prestamosData?.length || 0,
+        prestamoIds,
+        shouldFetchCuotas,
+        loadingCuotas,
+        todasLasCuotasLength: todasLasCuotas?.length || 0
+      })
+    }
   }, [cedulaSeleccionada, loadingPrestamos, prestamosData, prestamoIds, shouldFetchCuotas, loadingCuotas, todasLasCuotas])
 
   // Obtener pagos por cédula (manejar errores para que no fallen los reportes)

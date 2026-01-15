@@ -6463,7 +6463,7 @@ def _obtener_resumen_bd(db: Session) -> str:
         # Clientes
         total_clientes = _ejecutar_consulta_segura(lambda: db.query(Cliente).count(), "consulta de total clientes")
         clientes_activos = _ejecutar_consulta_segura(
-            lambda: db.query(Cliente).filter(Cliente.activo.is_(True)).count(), "consulta de clientes activos"
+            lambda: db.query(Cliente).filter(Cliente.estado == "ACTIVO").count(), "consulta de clientes activos"
         )
         if total_clientes is not None and clientes_activos is not None:
             resumen.append(f"Clientes: {total_clientes} totales, {clientes_activos} activos")
@@ -7086,15 +7086,41 @@ def _extraer_cedula_de_pregunta(pregunta: str) -> Optional[str]:
     """
     Extrae cédula/documento de la pregunta usando regex.
     Retorna la cédula encontrada o None.
+    
+    Mejorado para capturar:
+    - Cédulas con prefijo (V, E, J, Z) en mayúsculas o minúsculas
+    - Cédulas después de palabras como "cedula", "tienen", "con", etc.
+    - Formato flexible: "cedula v123456789" o "cedula: v123456789"
     """
     import re
 
-    patron_cedula = r"(?:cedula|cédula|documento|dni|ci)[\s:]*([A-Z0-9]+)"
-    match_cedula = re.search(patron_cedula, pregunta, re.IGNORECASE)
-    if match_cedula:
-        cedula = match_cedula.group(1).strip()
-        logger.info(f"Busqueda por cedula detectada: {cedula}")
-        return cedula
+    # Patrón mejorado: captura cédulas con prefijo V/E/J/Z (mayúsculas o minúsculas) seguido de números
+    # También captura solo números si no hay prefijo
+    patrones = [
+        # Patrón 1: "cedula/cédula/documento" seguido de espacios/":" y luego la cédula (con o sin prefijo)
+        # Captura: "cedula v123456789" -> "v123456789"
+        r"(?:cedula|cédula|documento|dni|ci)[\s:]+([vVeEjJzZ]\d{7,10}|\d{7,10})",
+        # Patrón 2: "tienen/con" seguido de "cedula" y luego la cédula
+        # Captura: "tienen cedula v123456789" -> "v123456789"
+        r"(?:tienen|con|tiene)[\s]+(?:cedula|cédula|documento)[\s]+([vVeEjJzZ]\d{7,10}|\d{7,10})",
+        # Patrón 3: Buscar directamente cédulas venezolanas (V/E/J/Z seguido de números)
+        # Captura: "v123456789" -> "v123456789"
+        r"\b([vVeEjJzZ]\d{7,10})\b",
+        # Patrón 4: Buscar cédulas después de "que tiene" o "que tienen"
+        # Captura: "que tiene cedula v123456789" -> "v123456789"
+        r"(?:que\s+)?(?:tiene|tienen)[\s]+(?:cedula|cédula|documento)[\s]+([vVeEjJzZ]\d{7,10}|\d{7,10})",
+    ]
+    
+    for patron in patrones:
+        match_cedula = re.search(patron, pregunta, re.IGNORECASE)
+        if match_cedula:
+            cedula = match_cedula.group(1).strip()
+            # Normalizar: convertir a mayúsculas el prefijo si existe
+            if cedula and len(cedula) > 0 and cedula[0].lower() in ['v', 'e', 'j', 'z']:
+                cedula = cedula[0].upper() + cedula[1:]
+            logger.info(f"Busqueda por cedula detectada: {cedula}")
+            return cedula
+    
     return None
 
 
@@ -7110,7 +7136,24 @@ def _obtener_info_cliente_por_cedula(busqueda_cedula: str, db: Session) -> str:
         from app.models.cliente import Cliente
         from app.models.prestamo import Prestamo
 
+        # Intentar búsqueda exacta primero
         cliente = db.query(Cliente).filter(Cliente.cedula == busqueda_cedula).first()
+        
+        # Si no se encuentra y la cédula tiene prefijo, intentar sin prefijo
+        if not cliente and busqueda_cedula and busqueda_cedula[0].upper() in ['V', 'E', 'J', 'Z']:
+            cedula_sin_prefijo = busqueda_cedula[1:]
+            cliente = db.query(Cliente).filter(Cliente.cedula == cedula_sin_prefijo).first()
+            if cliente:
+                logger.info(f"Cliente encontrado sin prefijo: {cedula_sin_prefijo} (buscado: {busqueda_cedula})")
+        
+        # Si aún no se encuentra, intentar con prefijo mayúscula si se buscó sin prefijo
+        if not cliente and busqueda_cedula and busqueda_cedula[0].isdigit():
+            for prefijo in ['V', 'E', 'J', 'Z']:
+                cedula_con_prefijo = prefijo + busqueda_cedula
+                cliente = db.query(Cliente).filter(Cliente.cedula == cedula_con_prefijo).first()
+                if cliente:
+                    logger.info(f"Cliente encontrado con prefijo {prefijo}: {cedula_con_prefijo} (buscado: {busqueda_cedula})")
+                    break
 
         if cliente:
             info_cliente = f"\n\n=== INFORMACION DEL CLIENTE BUSCADO (Cedula: {busqueda_cedula}) ===\n"
@@ -7119,10 +7162,17 @@ def _obtener_info_cliente_por_cedula(busqueda_cedula: str, db: Session) -> str:
             info_cliente += f"Telefono: {cliente.telefono}\n"
             info_cliente += f"Email: {cliente.email}\n"
             info_cliente += f"Estado: {cliente.estado}\n"
-            info_cliente += f"Activo: {'Si' if cliente.activo else 'No'}\n"
+            # Nota: Cliente no tiene campo 'activo', solo 'estado' (ACTIVO/INACTIVO)
             info_cliente += f"Fecha de registro: {cliente.fecha_registro}\n"
 
+            # Buscar préstamos con la cédula encontrada (con y sin prefijo)
             prestamos = db.query(Prestamo).filter(Prestamo.cedula == busqueda_cedula).all()
+            
+            # Si no se encuentran y la cédula tiene prefijo, buscar sin prefijo
+            if not prestamos and busqueda_cedula and busqueda_cedula[0].upper() in ['V', 'E', 'J', 'Z']:
+                cedula_sin_prefijo = busqueda_cedula[1:]
+                prestamos = db.query(Prestamo).filter(Prestamo.cedula == cedula_sin_prefijo).all()
+            
             if prestamos:
                 info_cliente += f"\nPrestamos: {len(prestamos)} prestamo(s)\n"
                 for p in prestamos:
@@ -7139,8 +7189,22 @@ def _obtener_info_cliente_por_cedula(busqueda_cedula: str, db: Session) -> str:
             else:
                 info_cliente += "\nPrestamos: 0 prestamos\n"
         else:
-            # Buscar en préstamos por si acaso
+            # Buscar en préstamos por si acaso (con y sin prefijo)
             prestamo = db.query(Prestamo).filter(Prestamo.cedula == busqueda_cedula).first()
+            
+            # Si no se encuentra y la cédula tiene prefijo, buscar sin prefijo
+            if not prestamo and busqueda_cedula and busqueda_cedula[0].upper() in ['V', 'E', 'J', 'Z']:
+                cedula_sin_prefijo = busqueda_cedula[1:]
+                prestamo = db.query(Prestamo).filter(Prestamo.cedula == cedula_sin_prefijo).first()
+            
+            # Si aún no se encuentra, intentar con prefijo mayúscula si se buscó sin prefijo
+            if not prestamo and busqueda_cedula and busqueda_cedula[0].isdigit():
+                for prefijo in ['V', 'E', 'J', 'Z']:
+                    cedula_con_prefijo = prefijo + busqueda_cedula
+                    prestamo = db.query(Prestamo).filter(Prestamo.cedula == cedula_con_prefijo).first()
+                    if prestamo:
+                        break
+            
             if prestamo:
                 info_cliente = f"\n\n=== INFORMACION ENCONTRADA (Cedula: {busqueda_cedula}) ===\n"
                 info_cliente += "Cliente no encontrado en tabla clientes, pero hay prestamos con esta cedula\n"
