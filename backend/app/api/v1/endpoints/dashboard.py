@@ -6,7 +6,7 @@ from decimal import Decimal
 from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query  # type: ignore[import-untyped]
-from sqlalchemy import Integer, and_, case, cast, func, or_, text  # type: ignore[import-untyped]
+from sqlalchemy import Integer, Numeric, and_, case, cast, func, or_, text  # type: ignore[import-untyped]
 from sqlalchemy.orm import Session  # type: ignore[import-untyped]
 
 from app.api.deps import get_current_user, get_db
@@ -4513,18 +4513,22 @@ def obtener_composicion_morosidad(
     Retorna puntos agrupados por categorías de días de atraso con el monto total por categoría
     """
     try:
-        # ✅ ACTUALIZADO: Query base usando columnas calculadas automáticamente
+        # ✅ CORREGIDO: Query base usando columnas existentes y calculando monto_morosidad dinámicamente
+        # monto_morosidad se calcula como: monto_cuota - total_pagado (solo si es positivo)
         query_base = (
             db.query(
                 Cuota.id,
                 Cuota.dias_morosidad,  # ✅ Usar columna calculada automáticamente
-                Cuota.monto_morosidad,  # ✅ Usar columna calculada automáticamente
+                Cuota.monto_cuota,  # ✅ Necesario para calcular monto_morosidad
+                Cuota.total_pagado,  # ✅ Necesario para calcular monto_morosidad
             )
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .filter(
                 Prestamo.estado == "APROBADO",
                 Cuota.dias_morosidad > 0,  # ✅ Solo cuotas con morosidad (optimizado con índice)
-                Cuota.monto_morosidad > 0,  # ✅ Solo cuotas con monto pendiente (optimizado con índice)
+                # ✅ CORREGIDO: Filtrar por monto pendiente calculado dinámicamente
+                # Comparar directamente ya que ambos son Numeric en la BD
+                Cuota.monto_cuota > func.coalesce(Cuota.total_pagado, 0),
             )
         )
 
@@ -4559,7 +4563,7 @@ def obtener_composicion_morosidad(
                     "total_cuotas": 0,
                 }
 
-            # Query SQL optimizada con GROUP BY y categorización
+            # ✅ CORREGIDO: Query SQL optimizada calculando monto_morosidad dinámicamente
             query_sql = text(
                 """
                 WITH cuotas_categorizadas AS (
@@ -4573,17 +4577,18 @@ def obtener_composicion_morosidad(
                             WHEN dias_morosidad <= 365 THEN '6 meses - 1 año'
                             ELSE 'Más de 1 año'
                         END as categoria,
-                        monto_morosidad
+                        GREATEST(0, COALESCE(monto_cuota, 0) - COALESCE(total_pagado, 0)) as monto_morosidad
                     FROM cuotas
                     WHERE id = ANY(:ids)
                       AND dias_morosidad > 0
-                      AND monto_morosidad > 0
+                      AND COALESCE(monto_cuota, 0) > COALESCE(total_pagado, 0)
                 )
                 SELECT
                     categoria,
                     COUNT(*) as cantidad_cuotas,
                     SUM(monto_morosidad) as monto_total
                 FROM cuotas_categorizadas
+                WHERE monto_morosidad > 0
                 GROUP BY categoria
                 ORDER BY
                     CASE categoria
@@ -4618,7 +4623,7 @@ def obtener_composicion_morosidad(
 
         except Exception as e:
             logger.warning(f"⚠️ Error en query optimizada de morosidad, usando método fallback: {e}")
-            # Fallback: procesar en Python
+            # ✅ CORREGIDO: Fallback calculando monto_morosidad dinámicamente
             cuotas = query_base.all()
             puntos_por_categoria = {}
             total_morosidad = Decimal("0")
@@ -4626,15 +4631,21 @@ def obtener_composicion_morosidad(
 
             for cuota in cuotas:
                 dias_atraso = cuota.dias_morosidad or 0
-                monto = Decimal(str(cuota.monto_morosidad)) if cuota.monto_morosidad else Decimal("0")
-                categoria = _get_morosidad_categoria(dias_atraso)
+                # ✅ CORREGIDO: Calcular monto_morosidad como monto_cuota - total_pagado
+                monto_cuota_val = Decimal(str(cuota.monto_cuota)) if cuota.monto_cuota else Decimal("0")
+                total_pagado_val = Decimal(str(cuota.total_pagado)) if cuota.total_pagado else Decimal("0")
+                monto = max(Decimal("0"), monto_cuota_val - total_pagado_val)
+                
+                # Solo procesar si hay monto pendiente
+                if monto > 0:
+                    categoria = _get_morosidad_categoria(dias_atraso)
 
-                if categoria not in puntos_por_categoria:
-                    puntos_por_categoria[categoria] = {"monto": Decimal("0"), "cantidad": 0}
-                puntos_por_categoria[categoria]["monto"] += monto
-                puntos_por_categoria[categoria]["cantidad"] += 1
-                total_morosidad += monto
-                total_cuotas += 1
+                    if categoria not in puntos_por_categoria:
+                        puntos_por_categoria[categoria] = {"monto": Decimal("0"), "cantidad": 0}
+                    puntos_por_categoria[categoria]["monto"] += monto
+                    puntos_por_categoria[categoria]["cantidad"] += 1
+                    total_morosidad += monto
+                    total_cuotas += 1
 
         # Definir el orden deseado de las categorías
         orden_categorias = ["0-5 días", "5-15 días", "1-2 meses", "2-3 meses", "4-6 meses", "6 meses - 1 año", "Más de 1 año"]
