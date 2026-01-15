@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Database, Plus, Edit, Trash2, Search, Filter, CheckCircle, XCircle, Loader2, Key, Index } from 'lucide-react'
+import { Database, Plus, Edit, Trash2, Search, Filter, CheckCircle, XCircle, Loader2, Key, Hash } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -67,7 +67,7 @@ export function DefinicionesCamposTab() {
       const response = await apiClient.get<{ definiciones: DefinicionCampo[], total: number }>(
         '/api/v1/configuracion/ai/definiciones-campos'
       )
-      setDefiniciones(response.data.definiciones || [])
+      setDefiniciones(response.definiciones || [])
     } catch (error: any) {
       console.error('Error cargando definiciones:', error)
       toast.error('Error al cargar las definiciones de campos')
@@ -81,7 +81,7 @@ export function DefinicionesCamposTab() {
       const response = await apiClient.get<{ tablas: string[], total: number }>(
         '/api/v1/configuracion/ai/definiciones-campos/tablas'
       )
-      setTablas(response.data.tablas || [])
+      setTablas(response.tablas || [])
     } catch (error: any) {
       console.error('Error cargando tablas:', error)
     }
@@ -471,7 +471,7 @@ export function DefinicionesCamposTab() {
                             )}
                             {def.tiene_indice && (
                               <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                                <Index className="h-3 w-3 mr-1" />
+                                <Hash className="h-3 w-3 mr-1" />
                                 Indexado
                               </Badge>
                             )}

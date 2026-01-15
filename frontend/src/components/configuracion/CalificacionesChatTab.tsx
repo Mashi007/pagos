@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ThumbsDown, ThumbsUp, CheckCircle, XCircle, Loader2, Search, Filter, Sparkles, AlertCircle } from 'lucide-react'
+import { X, CheckCircle, XCircle, Loader2, Search, Filter, Zap, AlertCircle } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -54,7 +54,7 @@ export function CalificacionesChatTab() {
       const response = await apiClient.get<{ calificaciones: CalificacionChat[], total: number }>(
         `/api/v1/configuracion/ai/chat/calificaciones?${params.toString()}`
       )
-      setCalificaciones(response.data.calificaciones || [])
+      setCalificaciones(response.calificaciones || [])
     } catch (error: any) {
       console.error('Error cargando calificaciones:', error)
       if (error?.response?.status !== 503) {
@@ -106,7 +106,7 @@ export function CalificacionesChatTab() {
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-2xl font-bold flex items-center gap-2">
-            <ThumbsDown className="h-6 w-6 text-red-600" />
+            <X className="h-6 w-6 text-red-600" />
             Calificaciones del Chat AI
           </h3>
           <p className="text-sm text-gray-600 mt-1">
@@ -163,7 +163,7 @@ export function CalificacionesChatTab() {
       ) : calificacionesFiltradas.length === 0 ? (
         <Card>
           <CardContent className="pt-6 text-center py-12">
-            <ThumbsDown className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+            <X className="h-12 w-12 mx-auto text-gray-400 mb-4" />
             <p className="text-gray-600">
               {busqueda || filtroCalificacion !== 'todas' || filtroProcesado !== 'todas'
                 ? 'No se encontraron calificaciones con los filtros aplicados'
@@ -182,12 +182,12 @@ export function CalificacionesChatTab() {
                     <div className="flex items-center gap-2">
                       {cal.calificacion === 'arriba' ? (
                         <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                          <ThumbsUp className="h-3 w-3 mr-1" />
+                          <CheckCircle className="h-3 w-3 mr-1" />
                           Pulgar Arriba
                         </Badge>
                       ) : (
                         <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
-                          <ThumbsDown className="h-3 w-3 mr-1" />
+                          <X className="h-3 w-3 mr-1" />
                           Pulgar Abajo
                         </Badge>
                       )}
@@ -237,7 +237,7 @@ export function CalificacionesChatTab() {
                         onClick={() => handleProcesar(cal)}
                         className="text-blue-600 hover:text-blue-700"
                       >
-                        <Sparkles className="h-4 w-4 mr-2" />
+                        <Zap className="h-4 w-4 mr-2" />
                         Procesar y Mejorar
                       </Button>
                     </div>
@@ -254,7 +254,7 @@ export function CalificacionesChatTab() {
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-blue-600" />
+              <Zap className="h-5 w-5 text-blue-600" />
               Procesar Calificación Negativa
             </DialogTitle>
             <DialogDescription>

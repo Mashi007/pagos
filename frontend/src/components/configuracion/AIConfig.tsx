@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Brain, Save, Eye, EyeOff, Upload, FileText, Trash2, BarChart3, CheckCircle, AlertCircle, Loader2, TestTube, ChevronRight, MessageSquare, User, Edit, Zap, RotateCcw, Copy, Settings, DollarSign, BookOpen, Database, ThumbsDown } from 'lucide-react'
+import { Brain, Save, Eye, EyeOff, Upload, FileText, Trash2, BarChart3, CheckCircle, AlertCircle, Loader2, TestTube, ChevronRight, MessageSquare, User, Edit, Zap, RotateCcw, Copy, Settings, DollarSign, Database, X } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -1678,7 +1678,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                 value="diccionario-semantico"
                 className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-200"
               >
-                <BookOpen className="h-4 w-4" />
+                <FileText className="h-4 w-4" />
                 Diccionario
               </TabsTrigger>
               <TabsTrigger
@@ -1692,7 +1692,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                 value="calificaciones-chat"
                 className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-200"
               >
-                <ThumbsDown className="h-4 w-4" />
+                <X className="h-4 w-4" />
                 Calificaciones
               </TabsTrigger>
               <TabsTrigger

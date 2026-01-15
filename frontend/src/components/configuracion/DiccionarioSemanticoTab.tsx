@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { BookOpen, Plus, Edit, Trash2, Search, Filter, CheckCircle, XCircle, Loader2, Info, Sparkles, Send, X } from 'lucide-react'
+import { FileText, Plus, Edit, Trash2, Search, Filter, CheckCircle, XCircle, Loader2, Info, Zap, ChevronRight, X } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -67,7 +67,7 @@ export function DiccionarioSemanticoTab() {
       const response = await apiClient.get<{ entradas: DiccionarioSemantico[], total: number }>(
         '/api/v1/configuracion/ai/diccionario-semantico'
       )
-      setEntradas(response.data.entradas || [])
+      setEntradas(response.entradas || [])
     } catch (error: any) {
       console.error('Error cargando diccionario:', error)
       toast.error('Error al cargar el diccionario semántico')
@@ -81,7 +81,7 @@ export function DiccionarioSemanticoTab() {
       const response = await apiClient.get<{ categorias: string[], total: number }>(
         '/api/v1/configuracion/ai/diccionario-semantico/categorias'
       )
-      setCategorias(response.data.categorias || [])
+      setCategorias(response.categorias || [])
     } catch (error: any) {
       console.error('Error cargando categorías:', error)
     }
@@ -187,11 +187,11 @@ export function DiccionarioSemanticoTab() {
         definicion_actual: entrada.definicion,
       })
 
-      if (response.data.tipo === 'pregunta' && response.data.pregunta) {
-        setPreguntaChatGPT(response.data.pregunta)
+      if (response.tipo === 'pregunta' && response.pregunta) {
+        setPreguntaChatGPT(response.pregunta)
         toast.info('ChatGPT necesita más información')
-      } else if (response.data.tipo === 'definicion_mejorada' && response.data.definicion) {
-        setDefinicionMejorada(response.data.definicion)
+      } else if (response.tipo === 'definicion_mejorada' && response.definicion) {
+        setDefinicionMejorada(response.definicion)
         toast.success('Definición mejorada generada')
       }
     } catch (error: any) {
@@ -218,8 +218,8 @@ export function DiccionarioSemanticoTab() {
         respuesta_usuario: respuestaUsuario,
       })
 
-      if (response.data.definicion) {
-        setDefinicionMejorada(response.data.definicion)
+      if (response.definicion) {
+        setDefinicionMejorada(response.definicion)
         setPreguntaChatGPT('')
         setRespuestaUsuario('')
         toast.success('Definición mejorada generada')
@@ -290,7 +290,7 @@ export function DiccionarioSemanticoTab() {
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-2xl font-bold flex items-center gap-2">
-            <BookOpen className="h-6 w-6 text-blue-600" />
+            <FileText className="h-6 w-6 text-blue-600" />
             Diccionario Semántico
           </h3>
           <p className="text-sm text-gray-600 mt-1">
@@ -390,7 +390,7 @@ export function DiccionarioSemanticoTab() {
                             definicion_actual: formulario.definicion,
                           })
 
-                          if (response.data.tipo === 'pregunta' && response.data.pregunta) {
+                          if (response.tipo === 'pregunta' && response.pregunta) {
                             // Abrir modal para pregunta
                             setPalabraProcesando({
                               id: 0,
@@ -406,11 +406,11 @@ export function DiccionarioSemanticoTab() {
                               creado_en: '',
                               actualizado_en: '',
                             })
-                            setPreguntaChatGPT(response.data.pregunta)
+                            setPreguntaChatGPT(response.pregunta)
                             setMostrarModalProcesar(true)
                             toast.info('ChatGPT necesita más información')
-                          } else if (response.data.tipo === 'definicion_mejorada' && response.data.definicion) {
-                            setFormulario({ ...formulario, definicion: response.data.definicion })
+                          } else if (response.tipo === 'definicion_mejorada' && response.definicion) {
+                            setFormulario({ ...formulario, definicion: response.definicion })
                             toast.success('Definición mejorada aplicada')
                           }
                         } catch (error: any) {
@@ -430,7 +430,7 @@ export function DiccionarioSemanticoTab() {
                         </>
                       ) : (
                         <>
-                          <Sparkles className="h-3 w-3 mr-1" />
+                          <Zap className="h-3 w-3 mr-1" />
                           Procesar con ChatGPT
                         </>
                       )}
@@ -525,7 +525,7 @@ export function DiccionarioSemanticoTab() {
       ) : entradasFiltradas.length === 0 ? (
         <Card>
           <CardContent className="pt-6 text-center py-12">
-            <BookOpen className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+            <FileText className="h-12 w-12 mx-auto text-gray-400 mb-4" />
             <p className="text-gray-600">
               {busqueda || filtroCategoria !== 'todas' 
                 ? 'No se encontraron entradas con los filtros aplicados'
@@ -590,7 +590,7 @@ export function DiccionarioSemanticoTab() {
                             title="Procesar con ChatGPT"
                             className="text-blue-600 hover:text-blue-700"
                           >
-                            <Sparkles className="h-4 w-4" />
+                            <Zap className="h-4 w-4" />
                           </Button>
                           <Button
                             variant="ghost"
@@ -633,7 +633,7 @@ export function DiccionarioSemanticoTab() {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-blue-600" />
+              <Zap className="h-5 w-5 text-blue-600" />
               Procesar Palabra con ChatGPT
             </DialogTitle>
             <DialogDescription>
@@ -656,7 +656,7 @@ export function DiccionarioSemanticoTab() {
             {preguntaChatGPT && (
               <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
                 <div className="flex items-start gap-2 mb-2">
-                  <Sparkles className="h-5 w-5 text-blue-600 mt-0.5" />
+                  <Zap className="h-5 w-5 text-blue-600 mt-0.5" />
                   <div className="flex-1">
                     <h4 className="font-medium text-sm text-blue-900 mb-2">ChatGPT pregunta:</h4>
                     <p className="text-blue-800">{preguntaChatGPT}</p>
@@ -682,7 +682,7 @@ export function DiccionarioSemanticoTab() {
                       </>
                     ) : (
                       <>
-                        <Send className="h-4 w-4 mr-2" />
+                        <ChevronRight className="h-4 w-4 mr-2" />
                         Enviar Respuesta
                       </>
                     )}

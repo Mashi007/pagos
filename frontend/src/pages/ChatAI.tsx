@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Brain, ChevronRight, Loader2, AlertCircle, MessageSquare, ThumbsUp, ThumbsDown } from 'lucide-react'
+import { Brain, ChevronRight, Loader2, AlertCircle, MessageSquare, CheckCircle, X } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -185,6 +185,28 @@ export function ChatAI() {
     }
   }
 
+  const handleCalificar = async (mensajeId: string, calificacion: 'arriba' | 'abajo') => {
+    try {
+      const mensaje = mensajes.find(m => m.id === mensajeId)
+      if (!mensaje || !mensaje.pregunta) return
+
+      await apiClient.post('/api/v1/configuracion/ai/chat/calificar', {
+        pregunta: mensaje.pregunta,
+        respuesta: mensaje.contenido,
+        calificacion: calificacion === 'arriba' ? 5 : 1
+      })
+
+      setMensajes(prev => prev.map(m => 
+        m.id === mensajeId ? { ...m, calificacion } : m
+      ))
+
+      toast.success(`Calificación ${calificacion === 'arriba' ? 'positiva' : 'negativa'} registrada`)
+    } catch (error: any) {
+      console.error('Error calificando:', error)
+      toast.error('Error al registrar la calificación')
+    }
+  }
+
   const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
@@ -300,7 +322,7 @@ export function ChatAI() {
                         }`}
                         title="Calificar como buena respuesta"
                       >
-                        <ThumbsUp className={`h-3 w-3 ${mensaje.calificacion === 'arriba' ? 'fill-current' : ''}`} />
+                        <CheckCircle className={`h-3 w-3 ${mensaje.calificacion === 'arriba' ? 'fill-current' : ''}`} />
                       </Button>
                       <Button
                         variant="ghost"
@@ -314,7 +336,7 @@ export function ChatAI() {
                         }`}
                         title="Calificar como respuesta a mejorar"
                       >
-                        <ThumbsDown className={`h-3 w-3 ${mensaje.calificacion === 'abajo' ? 'fill-current' : ''}`} />
+                        <X className={`h-3 w-3 ${mensaje.calificacion === 'abajo' ? 'fill-current' : ''}`} />
                       </Button>
                       {mensaje.calificacion && (
                         <span className="text-xs text-gray-500">

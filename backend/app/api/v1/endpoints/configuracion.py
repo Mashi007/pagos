@@ -362,6 +362,117 @@ def eliminar_configuracion(
 # ============================================
 
 
+@router.get("/logo/estado")
+def verificar_estado_logo(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Verificar el estado del logo en el sistema
+    Revisa tanto la base de datos como el filesystem
+    """
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administradores pueden verificar el estado del logo",
+        )
+
+    resultado = {
+        "logo_filename_en_bd": None,
+        "logo_data_en_bd": None,
+        "logo_en_filesystem": None,
+        "tiene_base64": False,
+        "estado": "no_cargado",
+        "mensaje": "",
+    }
+
+    try:
+        from app.core.config import settings
+
+        # 1. Verificar logo_filename en BD
+        logo_config = (
+            db.query(ConfiguracionSistema)
+            .filter(
+                ConfiguracionSistema.categoria == "GENERAL",
+                ConfiguracionSistema.clave == "logo_filename",
+            )
+            .first()
+        )
+
+        if logo_config and logo_config.valor:
+            resultado["logo_filename_en_bd"] = logo_config.valor
+            logger.info(f"✅ Logo filename encontrado en BD: {logo_config.valor}")
+
+        # 2. Verificar logo_data en BD (base64)
+        logo_data_config = (
+            db.query(ConfiguracionSistema)
+            .filter(
+                ConfiguracionSistema.categoria == "GENERAL",
+                ConfiguracionSistema.clave == "logo_data",
+            )
+            .first()
+        )
+
+        if logo_data_config and logo_data_config.valor_json:
+            logo_data = logo_data_config.valor_json
+            if isinstance(logo_data, dict) and logo_data.get("base64"):
+                resultado["logo_data_en_bd"] = {
+                    "filename": logo_data.get("filename"),
+                    "content_type": logo_data.get("content_type"),
+                    "tiene_base64": True,
+                    "tamanio_base64": len(logo_data.get("base64", "")),
+                }
+                resultado["tiene_base64"] = True
+                logger.info(f"✅ Logo data (base64) encontrado en BD")
+
+        # 3. Verificar filesystem
+        try:
+            if hasattr(settings, "UPLOAD_DIR") and settings.UPLOAD_DIR:
+                uploads_dir = Path(settings.UPLOAD_DIR).resolve()
+            else:
+                uploads_dir = Path("uploads").resolve()
+
+            logos_dir = uploads_dir / "logos"
+            if logos_dir.exists():
+                logos_encontrados = list(logos_dir.glob("logo-custom.*"))
+                if logos_encontrados:
+                    logo_file = logos_encontrados[0]
+                    resultado["logo_en_filesystem"] = {
+                        "filename": logo_file.name,
+                        "path": str(logo_file),
+                        "tamanio_bytes": logo_file.stat().st_size if logo_file.exists() else 0,
+                        "existe": logo_file.exists(),
+                    }
+                    logger.info(f"✅ Logo encontrado en filesystem: {logo_file.name}")
+        except Exception as fs_error:
+            logger.warning(f"⚠️ Error verificando filesystem: {str(fs_error)}")
+            resultado["error_filesystem"] = str(fs_error)
+
+        # 4. Determinar estado general
+        if resultado["logo_filename_en_bd"]:
+            if resultado["logo_en_filesystem"]:
+                resultado["estado"] = "cargado_completo"
+                resultado["mensaje"] = f"✅ Logo cargado correctamente: {resultado['logo_filename_en_bd']}"
+            elif resultado["tiene_base64"]:
+                resultado["estado"] = "cargado_bd_solo"
+                resultado["mensaje"] = f"✅ Logo cargado en BD (base64): {resultado['logo_filename_en_bd']}. No encontrado en filesystem."
+            else:
+                resultado["estado"] = "parcial"
+                resultado["mensaje"] = f"⚠️ Logo filename existe pero sin datos base64: {resultado['logo_filename_en_bd']}"
+        elif resultado["logo_en_filesystem"]:
+            resultado["estado"] = "solo_filesystem"
+            resultado["mensaje"] = f"⚠️ Logo encontrado en filesystem pero no en BD: {resultado['logo_en_filesystem']['filename']}"
+        else:
+            resultado["estado"] = "no_cargado"
+            resultado["mensaje"] = "❌ No hay logo personalizado cargado. Se usará el logo por defecto."
+
+        return resultado
+
+    except Exception as e:
+        logger.error(f"❌ Error verificando estado del logo: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error verificando estado del logo: {str(e)}")
+
+
 @router.get("/general")
 def obtener_configuracion_general(db: Session = Depends(get_db)):
     """Obtener configuración general del sistema"""
