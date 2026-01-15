@@ -6,10 +6,16 @@ export interface Cuota {
   numero_cuota: number
   fecha_vencimiento: string | Date
   monto_cuota: number
+  monto_capital?: number  // Opcional - puede calcularse desde saldo_capital_inicial y saldo_capital_final
+  monto_interes?: number  // Opcional - puede calcularse desde monto_cuota y monto_capital
   saldo_capital_inicial: number
   saldo_capital_final: number
   fecha_pago?: string | Date | null
   total_pagado: number
+  capital_pagado?: number
+  interes_pagado?: number
+  capital_pendiente?: number
+  interes_pendiente?: number
   dias_mora: number
   dias_morosidad?: number
   estado: string

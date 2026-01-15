@@ -437,16 +437,57 @@ export function TablaAmortizacionCompleta() {
     setMostrarDialogPago(true)
   }
 
-  const getEstadoBadge = (estado: string) => {
-    const estados: Record<string, { color: string; label: string }> = {
-      PAGADO: { color: 'bg-green-500', label: 'Pagado' },
-      PENDIENTE: { color: 'bg-yellow-500', label: 'Pendiente' },
-      ATRASADO: { color: 'bg-red-500', label: 'Atrasado' },
-      PARCIAL: { color: 'bg-blue-500', label: 'Parcial' },
-      VENCIDA: { color: 'bg-red-500', label: 'Vencida' },
+  // Función para determinar el estado correcto basado en los datos (igual que en Préstamos)
+  const determinarEstadoReal = (cuota: Cuota): string => {
+    const totalPagado = cuota.total_pagado || 0
+    const montoCuota = cuota.monto_cuota || 0
+    
+    // Si total_pagado >= monto_cuota, debería ser PAGADO
+    if (totalPagado >= montoCuota) {
+      return 'PAGADO'
     }
-    const config = estados[estado?.toUpperCase()] || { color: 'bg-gray-500', label: estado || 'N/A' }
-    return <Badge className={`${config.color} text-white`}>{config.label}</Badge>
+    // Si tiene algún pago pero no completo
+    if (totalPagado > 0) {
+      // Verificar si está vencida
+      const hoy = new Date()
+      const fechaVencimiento = cuota.fecha_vencimiento ? new Date(cuota.fecha_vencimiento) : null
+      if (fechaVencimiento && fechaVencimiento < hoy) {
+        return 'ATRASADO'
+      }
+      return 'PARCIAL'
+    }
+    // Si no hay pago, devolver el estado original o PENDIENTE
+    return cuota.estado || 'PENDIENTE'
+  }
+
+  const getEstadoBadge = (estado: string) => {
+    // Normalizar estado a mayúsculas para comparación (igual que en Préstamos)
+    const estadoNormalizado = estado?.toUpperCase() || 'PENDIENTE'
+
+    const badges = {
+      PENDIENTE: 'bg-yellow-100 text-yellow-800',
+      PAGADO: 'bg-green-100 text-green-800',
+      PAGADA: 'bg-green-100 text-green-800',
+      ATRASADO: 'bg-red-100 text-red-800',
+      VENCIDA: 'bg-red-100 text-red-800',
+      PARCIAL: 'bg-blue-100 text-blue-800',
+    }
+    return badges[estadoNormalizado as keyof typeof badges] || badges.PENDIENTE
+  }
+
+  const getEstadoLabel = (estado: string) => {
+    // Normalizar estado a mayúsculas para comparación (igual que en Préstamos)
+    const estadoNormalizado = estado?.toUpperCase() || 'PENDIENTE'
+
+    const labels: Record<string, string> = {
+      PENDIENTE: 'Pendiente',
+      PAGADO: 'Pagado',
+      PAGADA: 'Pagada',
+      ATRASADO: 'Atrasado',
+      VENCIDA: 'Vencida',
+      PARCIAL: 'Parcial',
+    }
+    return labels[estadoNormalizado] || estado
   }
 
   const totalFinanciamiento = prestamos?.reduce((sum, p) => sum + (p.total_financiamiento || 0), 0) || 0
@@ -552,54 +593,148 @@ export function TablaAmortizacionCompleta() {
                             </CardTitle>
                           </CardHeader>
                           <CardContent className="pt-6">
-                            <div className="overflow-x-auto">
+                            <div className="rounded-lg border overflow-hidden">
                               <Table>
                                 <TableHeader>
                                   <TableRow>
-                                    <TableHead>Cuota #</TableHead>
+                                    <TableHead>Cuota</TableHead>
                                     <TableHead>Fecha Vencimiento</TableHead>
-                                    <TableHead>Monto Cuota</TableHead>
-                                    <TableHead>Total Pagado</TableHead>
-                                    <TableHead>Pendiente</TableHead>
+                                    <TableHead className="text-right">Capital</TableHead>
+                                    <TableHead className="text-right">Interés</TableHead>
+                                    <TableHead className="text-right">Total</TableHead>
+                                    <TableHead className="text-right">Saldo Pendiente</TableHead>
                                     <TableHead>Estado</TableHead>
                                     <TableHead className="text-right">Acciones</TableHead>
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                  {cuotasDelPrestamo.map((cuota) => (
-                                    <TableRow key={cuota.id}>
-                                      <TableCell className="font-semibold">{cuota.numero_cuota}</TableCell>
-                                      <TableCell>{formatDate(cuota.fecha_vencimiento)}</TableCell>
-                                      <TableCell>{formatCurrency(cuota.monto_cuota)}</TableCell>
-                                      <TableCell className="font-semibold">{formatCurrency(cuota.total_pagado || 0)}</TableCell>
-                                      <TableCell>{formatCurrency((cuota.monto_cuota || 0) - (cuota.total_pagado || 0))}</TableCell>
-                                      <TableCell>{getEstadoBadge(cuota.estado)}</TableCell>
-                                      <TableCell className="text-right">
-                                        <div className="flex gap-2 justify-end">
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => handleEditarCuota(cuota)}
-                                            title="Editar Cuota"
-                                          >
-                                            <Edit className="w-4 h-4" />
-                                          </Button>
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                            onClick={() => handleEliminarCuota(cuota.id)}
-                                            title="Eliminar Cuota"
-                                          >
-                                            <Trash2 className="w-4 h-4" />
-                                          </Button>
-                                        </div>
-                                      </TableCell>
-                                    </TableRow>
-                                  ))}
+                                  {cuotasDelPrestamo.map((cuota: Cuota) => {
+                                    // Determinar el estado real basado en los datos (igual que en Préstamos)
+                                    const estadoReal = determinarEstadoReal(cuota)
+                                    
+                                    // Calcular monto_capital y monto_interes si no existen (igual que en Préstamos)
+                                    const saldoInicial = typeof cuota.saldo_capital_inicial === 'number' ? cuota.saldo_capital_inicial : 0
+                                    const saldoFinal = typeof cuota.saldo_capital_final === 'number' ? cuota.saldo_capital_final : 0
+                                    const montoCuota = typeof cuota.monto_cuota === 'number' ? cuota.monto_cuota : 0
+                                    
+                                    const montoCapital = typeof cuota.monto_capital === 'number' && !isNaN(cuota.monto_capital)
+                                      ? cuota.monto_capital
+                                      : Math.max(0, saldoInicial - saldoFinal)
+                                    
+                                    const montoInteres = typeof cuota.monto_interes === 'number' && !isNaN(cuota.monto_interes)
+                                      ? cuota.monto_interes
+                                      : Math.max(0, montoCuota - montoCapital)
+
+                                    return (
+                                      <TableRow key={cuota.id}>
+                                        <TableCell className="font-medium">{cuota.numero_cuota}</TableCell>
+                                        <TableCell>{formatDate(cuota.fecha_vencimiento)}</TableCell>
+                                        <TableCell className="text-right">
+                                          ${montoCapital.toFixed(2)}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                          ${montoInteres.toFixed(2)}
+                                        </TableCell>
+                                        <TableCell className="text-right font-semibold">
+                                          ${montoCuota.toFixed(2)}
+                                        </TableCell>
+                                        <TableCell className="text-right text-gray-600">
+                                          ${saldoFinal.toFixed(2)}
+                                        </TableCell>
+                                        <TableCell>
+                                          <Badge className={getEstadoBadge(estadoReal)}>
+                                            {getEstadoLabel(estadoReal)}
+                                          </Badge>
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                          <div className="flex gap-2 justify-end">
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              onClick={() => handleEditarCuota(cuota)}
+                                              title="Editar Cuota"
+                                            >
+                                              <Edit className="w-4 h-4" />
+                                            </Button>
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                              onClick={() => handleEliminarCuota(cuota.id)}
+                                              title="Eliminar Cuota"
+                                            >
+                                              <Trash2 className="w-4 h-4" />
+                                            </Button>
+                                          </div>
+                                        </TableCell>
+                                      </TableRow>
+                                    )
+                                  })}
                                 </TableBody>
                               </Table>
                             </div>
+
+                            {/* Resumen (igual que en Préstamos) */}
+                            {cuotasDelPrestamo.length > 0 && (
+                              <div className="mt-4 grid grid-cols-4 gap-4">
+                                <Card className="border-green-200 bg-green-50">
+                                  <CardContent className="pt-4">
+                                    <p className="text-sm text-green-600">Total Capital</p>
+                                    <p className="text-2xl font-bold text-green-700">
+                                      ${cuotasDelPrestamo.reduce((acc, c: Cuota) => {
+                                        const saldoInicial = typeof c.saldo_capital_inicial === 'number' ? c.saldo_capital_inicial : 0
+                                        const saldoFinal = typeof c.saldo_capital_final === 'number' ? c.saldo_capital_final : 0
+                                        const montoCapital = typeof c.monto_capital === 'number' && !isNaN(c.monto_capital)
+                                          ? c.monto_capital
+                                          : Math.max(0, saldoInicial - saldoFinal)
+                                        return acc + montoCapital
+                                      }, 0).toFixed(2)}
+                                    </p>
+                                  </CardContent>
+                                </Card>
+                                <Card className="border-blue-200 bg-blue-50">
+                                  <CardContent className="pt-4">
+                                    <p className="text-sm text-blue-600">Total Intereses</p>
+                                    <p className="text-2xl font-bold text-blue-700">
+                                      ${cuotasDelPrestamo.reduce((acc, c: Cuota) => {
+                                        const saldoInicial = typeof c.saldo_capital_inicial === 'number' ? c.saldo_capital_inicial : 0
+                                        const saldoFinal = typeof c.saldo_capital_final === 'number' ? c.saldo_capital_final : 0
+                                        const montoCuota = typeof c.monto_cuota === 'number' ? c.monto_cuota : 0
+                                        const montoCapital = typeof c.monto_capital === 'number' && !isNaN(c.monto_capital)
+                                          ? c.monto_capital
+                                          : Math.max(0, saldoInicial - saldoFinal)
+                                        const montoInteres = typeof c.monto_interes === 'number' && !isNaN(c.monto_interes)
+                                          ? c.monto_interes
+                                          : Math.max(0, montoCuota - montoCapital)
+                                        return acc + montoInteres
+                                      }, 0).toFixed(2)}
+                                    </p>
+                                  </CardContent>
+                                </Card>
+                                <Card className="border-purple-200 bg-purple-50">
+                                  <CardContent className="pt-4">
+                                    <p className="text-sm text-purple-600">Monto Total</p>
+                                    <p className="text-2xl font-bold text-purple-700">
+                                      ${cuotasDelPrestamo.reduce((acc, c: Cuota) => {
+                                        const montoCuota = typeof c.monto_cuota === 'number' ? c.monto_cuota : 0
+                                        return acc + montoCuota
+                                      }, 0).toFixed(2)}
+                                    </p>
+                                  </CardContent>
+                                </Card>
+                                <Card className="border-gray-200 bg-gray-50">
+                                  <CardContent className="pt-4">
+                                    <p className="text-sm text-gray-600">Pagadas</p>
+                                    <p className="text-2xl font-bold text-gray-700">
+                                      {cuotasDelPrestamo.filter((c: Cuota) => {
+                                        const estadoReal = determinarEstadoReal(c)
+                                        return estadoReal === 'PAGADO' || estadoReal === 'PAGADA'
+                                      }).length} / {cuotasDelPrestamo.length}
+                                    </p>
+                                  </CardContent>
+                                </Card>
+                              </div>
+                            )}
                           </CardContent>
                         </Card>
                       )
