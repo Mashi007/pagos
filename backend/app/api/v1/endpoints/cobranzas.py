@@ -631,6 +631,7 @@ def obtener_clientes_atrasados(
             db.query(
                 Cliente.cedula,
                 Cliente.nombres,
+                Cliente.telefono,
                 func.coalesce(Prestamo.analista, Prestamo.usuario_proponente).label("analista"),
                 Prestamo.id.label("prestamo_id"),
                 cuotas_vencidas_subq.c.cuotas_vencidas,
@@ -743,6 +744,7 @@ def obtener_clientes_atrasados(
                 cliente_data = {
                     "cedula": row.cedula,
                     "nombres": row.nombres,
+                    "telefono": row.telefono,
                     "analista": row.analista,
                     "prestamo_id": row.prestamo_id,
                     "cuotas_vencidas": row.cuotas_vencidas,
@@ -856,6 +858,7 @@ def obtener_clientes_atrasados(
             cliente_data = {
                 "cedula": row.cedula,
                 "nombres": row.nombres,
+                "telefono": row.telefono,
                 "analista": row.analista,
                 "prestamo_id": row.prestamo_id,
                 "cuotas_vencidas": row.cuotas_vencidas,
