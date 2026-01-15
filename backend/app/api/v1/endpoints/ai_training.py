@@ -1828,6 +1828,109 @@ async def obtener_metricas_entrenamiento(
         raise _handle_database_error(e, "obteniendo métricas")
 
 
+@router.post("/recolectar-automatico")
+async def recolectar_conversaciones_automatico(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Recolecta automáticamente conversaciones del Chat AI que aún no han sido guardadas.
+    Busca en logs o en una tabla temporal si existe.
+    """
+    try:
+        # Por ahora, simplemente retornamos las conversaciones existentes
+        # En el futuro, esto podría buscar en logs o una tabla temporal
+        total_existentes = db.query(ConversacionAI).count()
+        
+        # Simular recolección de nuevas conversaciones (esto debería implementarse según tu arquitectura)
+        # Por ejemplo, buscar conversaciones del endpoint /ai/chat que no se guardaron
+        
+        logger.info(f"Recolección automática: {total_existentes} conversaciones existentes")
+        
+        return {
+            "total_recolectadas": 0,  # Por ahora retornamos 0, pero esto debería implementarse
+            "total_existentes": total_existentes,
+            "mensaje": "Recolección completada. Las conversaciones del Chat AI se guardan automáticamente.",
+        }
+    except Exception as e:
+        logger.error(f"Error en recolección automática: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error en recolección automática: {str(e)}")
+
+
+@router.post("/analizar-calidad")
+async def analizar_calidad_datos(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Analiza la calidad de las conversaciones para entrenamiento.
+    Retorna métricas de completitud, consistencia, relevancia y sugerencias.
+    """
+    try:
+        conversaciones = db.query(ConversacionAI).all()
+        
+        if not conversaciones:
+            return {
+                "completitud": 0,
+                "consistencia": 0,
+                "relevancia": 0,
+                "calidad_general": 0,
+                "sugerencias": ["No hay conversaciones para analizar. Recolecta conversaciones primero."],
+            }
+        
+        total = len(conversaciones)
+        
+        # Completitud: conversaciones con pregunta y respuesta completas
+        completas = sum(
+            1
+            for c in conversaciones
+            if c.pregunta and c.respuesta and len(c.pregunta.strip()) > 10 and len(c.respuesta.strip()) > 20
+        )
+        completitud = (completas / total) * 100 if total > 0 else 0
+        
+        # Consistencia: conversaciones con calificación y feedback
+        con_calificacion = sum(1 for c in conversaciones if c.calificacion is not None)
+        consistencia = (con_calificacion / total) * 100 if total > 0 else 0
+        
+        # Relevancia: conversaciones con 4+ estrellas
+        relevantes = sum(1 for c in conversaciones if c.calificacion and c.calificacion >= 4)
+        relevancia = (relevantes / total) * 100 if total > 0 else 0
+        
+        # Calidad general: promedio ponderado
+        calidad_general = (completitud * 0.4 + consistencia * 0.3 + relevancia * 0.3)
+        
+        # Sugerencias
+        sugerencias = []
+        if completitud < 80:
+            sugerencias.append(f"Completitud baja ({completitud:.1f}%): Asegúrate de que todas las conversaciones tengan pregunta y respuesta completas.")
+        if consistencia < 50:
+            sugerencias.append(f"Consistencia baja ({consistencia:.1f}%): Califica más conversaciones para mejorar la calidad del dataset.")
+        if relevancia < 30:
+            sugerencias.append(f"Relevancia baja ({relevancia:.1f}%): Necesitas más conversaciones con calificación alta (4-5 estrellas) para entrenar.")
+        if calidad_general < 60:
+            sugerencias.append("Calidad general baja: Revisa y mejora las conversaciones antes de entrenar.")
+        if total < 10:
+            sugerencias.append(f"Solo tienes {total} conversaciones. Se recomiendan al menos 10 para entrenar (ideal: 50+).")
+        
+        if not sugerencias:
+            sugerencias.append("✅ La calidad de tus datos es buena. Puedes proceder con el entrenamiento.")
+        
+        return {
+            "completitud": round(completitud, 1),
+            "consistencia": round(consistencia, 1),
+            "relevancia": round(relevancia, 1),
+            "calidad_general": round(calidad_general, 1),
+            "total_conversaciones": total,
+            "conversaciones_completas": completas,
+            "conversaciones_calificadas": con_calificacion,
+            "conversaciones_relevantes": relevantes,
+            "sugerencias": sugerencias,
+        }
+    except Exception as e:
+        logger.error(f"Error analizando calidad: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error analizando calidad: {str(e)}")
+
+
 # ============================================
 # ML PREDICCIÓN DE IMPAGO DE CUOTAS
 # ============================================

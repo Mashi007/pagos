@@ -9,11 +9,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { apiClient } from '@/services/api'
-import { TrainingDashboard } from './TrainingDashboard'
+// TrainingDashboard eliminado - redundante con EntrenamientoMejorado
 import { FineTuningTab } from './FineTuningTab'
 import { RAGTab } from './RAGTab'
 import { MLRiesgoTab } from './MLRiesgoTab'
 import { MLImpagoCuotasTab } from './MLImpagoCuotasTab'
+import { EntrenamientoMejorado } from './EntrenamientoMejorado'
 
 interface AIConfig {
   openai_api_key: string
@@ -87,7 +88,7 @@ export function AIConfig() {
   const chatEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [activeTab, setActiveTab] = useState('configuracion')
-  const [activeHybridTab, setActiveHybridTab] = useState('dashboard')
+  const [activeHybridTab, setActiveHybridTab] = useState('fine-tuning') // Cambiado de 'dashboard' a 'fine-tuning'
 
   // Estado para verificar configuración correcta
   const [configuracionCorrecta, setConfiguracionCorrecta] = useState(false)
@@ -1646,39 +1647,16 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
           </div>
         </TabsContent>
 
-        {/* Pestaña 2: Entrenamiento de Prompt */}
+        {/* Pestaña 2: Entrenamiento Mejorado */}
         <TabsContent value="entrenamiento" className="space-y-4 mt-6">
-          <Card className="shadow-sm border-gray-200">
-            <CardContent className="pt-6 space-y-4">
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 shadow-sm">
-                <div className="flex items-start gap-2">
-                  <Brain className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                  <div className="flex-1">
-                    <p className="font-semibold text-blue-900 mb-1">Entrenamiento y Ajuste de Prompt</p>
-                    <p className="text-sm text-blue-800">
-                      Personaliza el prompt del AI para ajustar su comportamiento, tono y capacidades.
-                      El prompt personalizado reemplazará al prompt por defecto.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <PromptEditor />
-            </CardContent>
-          </Card>
+          <EntrenamientoMejorado />
         </TabsContent>
 
         {/* Pestaña 3: Sistema Híbrido */}
         <TabsContent value="sistema-hibrido" className="space-y-4 mt-6">
           <Tabs value={activeHybridTab} onValueChange={setActiveHybridTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-5 bg-gray-100/50 p-1 rounded-lg">
-              <TabsTrigger
-                value="dashboard"
-                className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-200"
-              >
-                <BarChart3 className="h-4 w-4" />
-                Dashboard
-              </TabsTrigger>
+            {/* Dashboard eliminado - redundante con EntrenamientoMejorado */}
+            <TabsList className="grid w-full grid-cols-4 bg-gray-100/50 p-1 rounded-lg">
               <TabsTrigger
                 value="fine-tuning"
                 className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-200"
@@ -1708,10 +1686,6 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                 ML Impago
               </TabsTrigger>
             </TabsList>
-
-            <TabsContent value="dashboard" className="mt-6">
-              <TrainingDashboard />
-            </TabsContent>
 
             <TabsContent value="fine-tuning" className="mt-6">
               <FineTuningTab />

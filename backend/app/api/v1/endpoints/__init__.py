@@ -19,6 +19,7 @@ from . import (  # aprobaciones,  # MODULO DESHABILITADO - Ver main.py
     dashboard,
     health,
     kpis,
+    logo,
     modelos_vehiculos,
     monitoring,
     notificaciones,

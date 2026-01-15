@@ -123,6 +123,7 @@ from app.api.v1.endpoints import (  # noqa: E402; aprobaciones deshabilitado - v
     configuracion,
     conversaciones_whatsapp,
     dashboard,
+    logo,
     health,
     kpis,
     modelos_vehiculos,
@@ -497,6 +498,9 @@ app.include_router(cobranzas.router, prefix="/api/v1/cobranzas", tags=["cobranza
 app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["dashboard"])
 app.include_router(kpis.router, prefix="/api/v1/kpis", tags=["kpis"])
 app.include_router(auditoria.router, prefix="/api/v1", tags=["auditoria"])
+# ✅ Router separado para logos (ANTES de configuracion para evitar conflictos con Path params)
+# Las rutas de logo se registran con prefix="/api/v1/configuracion" para mantener URLs originales
+app.include_router(logo.logo_router, prefix="/api/v1/configuracion", tags=["logos"])
 app.include_router(configuracion.router, prefix="/api/v1/configuracion", tags=["configuracion"])
 app.include_router(ai_training.router, prefix="/api/v1/ai/training", tags=["ai-training"])
 app.include_router(whatsapp_webhook.router, prefix="/api/v1", tags=["whatsapp-webhook"])

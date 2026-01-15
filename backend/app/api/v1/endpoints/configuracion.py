@@ -6757,6 +6757,8 @@ def _obtener_palabras_clave_bd() -> list:
         "quién tiene",
         "quien tiene el",
         "quién tiene el",
+        "tienes",  # Agregado para preguntas como "tienes prestamo V123456789"
+        "tiene",   # Agregado para preguntas como "tiene prestamo"
         "como se llama",
         "cómo se llama",
         "cual es el nombre",
@@ -6944,6 +6946,10 @@ def _validar_pregunta_es_sobre_bd(pregunta: str) -> None:
     # Verificar si contiene frase excluida
     tiene_frase_excluida = any(excluida in pregunta_lower for excluida in frases_excluidas)
     
+    # Verificar si contiene una cédula (V/E/J/Z seguido de números)
+    import re
+    tiene_cedula = bool(re.search(r'\b[vVeEjJzZ]\d{7,10}\b', pregunta))
+    
     # Palabras clave que DEBEN estar presentes para ser válida
     palabras_clave_obligatorias = [
         "cliente", "clientes",
@@ -6959,21 +6965,22 @@ def _validar_pregunta_es_sobre_bd(pregunta: str) -> None:
         "total",
         "cantidad",
         "cobranza", "cobranzas",
+        "tienes", "tiene",  # Agregado para preguntas como "tienes prestamo"
     ]
     
     tiene_palabra_obligatoria = any(obligatoria in pregunta_lower for obligatoria in palabras_clave_obligatorias)
     
-    # Si tiene frase excluida Y no tiene palabra obligatoria, rechazar
-    if tiene_frase_excluida and not tiene_palabra_obligatoria:
+    # Si tiene frase excluida Y no tiene palabra obligatoria NI cédula, rechazar
+    if tiene_frase_excluida and not tiene_palabra_obligatoria and not tiene_cedula:
         logger.warning(f"Pregunta rechazada por ser pregunta general: '{pregunta[:100]}...'")
         raise HTTPException(
             status_code=400,
             detail="El Chat AI solo responde preguntas sobre la base de datos del sistema. Tu pregunta debe incluir terminos relacionados con: clientes, prestamos, pagos, cuotas, morosidad, estadisticas, datos, analisis, fechas, montos, o cualquier consulta sobre la informacion almacenada en el sistema. Para preguntas generales, usa el Chat de Prueba en la configuracion de AI.",
         )
     
-    # Validación original: debe tener al menos una palabra clave de BD
+    # Validación original: debe tener al menos una palabra clave de BD O una cédula
     palabras_clave_bd = _obtener_palabras_clave_bd()
-    es_pregunta_bd = any(palabra in pregunta_lower for palabra in palabras_clave_bd)
+    es_pregunta_bd = any(palabra in pregunta_lower for palabra in palabras_clave_bd) or tiene_cedula
 
     if not es_pregunta_bd:
         logger.warning(f"Pregunta rechazada por no contener palabras clave de BD: '{pregunta[:100]}...'")
