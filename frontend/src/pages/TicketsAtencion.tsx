@@ -209,6 +209,26 @@ export function TicketsAtencion() {
     cerrados: tickets.filter(t => t.estado === 'cerrado').length,
   }
 
+  // ✅ Calcular tickets vencidos y próximos a vencer
+  const ahora = new Date()
+  const enUnaHora = new Date(ahora.getTime() + 60 * 60 * 1000)
+  
+  const ticketsVencidos = tickets.filter(ticket => {
+    if (!ticket.fecha_limite || (ticket.estado !== 'abierto' && ticket.estado !== 'en_proceso')) {
+      return false
+    }
+    const fechaLimite = new Date(ticket.fecha_limite)
+    return fechaLimite <= ahora
+  })
+
+  const ticketsProximosAVencer = tickets.filter(ticket => {
+    if (!ticket.fecha_limite || (ticket.estado !== 'abierto' && ticket.estado !== 'en_proceso')) {
+      return false
+    }
+    const fechaLimite = new Date(ticket.fecha_limite)
+    return fechaLimite > ahora && fechaLimite <= enUnaHora
+  })
+
   const getEstadoInfo = (estado: string) => {
     return ESTADOS_TICKET.find(e => e.id === estado) || ESTADOS_TICKET[0]
   }
