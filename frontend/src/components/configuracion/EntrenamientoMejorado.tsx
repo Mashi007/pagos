@@ -12,7 +12,6 @@ import {
   Download,
   Upload,
   FileText,
-  Star,
   Target,
   Info,
   Settings,
@@ -67,7 +66,7 @@ export function EntrenamientoMejorado() {
     setRecolectandoAutomatico(true)
     try {
       const resultado = await apiClient.post<{ total_recolectadas: number }>('/api/v1/ai/training/recolectar-automatico')
-      toast.success(`✅ Recolección completada: ${resultado.data.total_recolectadas} conversaciones nuevas`)
+      toast.success(`✅ Recolección completada: ${resultado.total_recolectadas} conversaciones nuevas`)
       cargarMetricas()
     } catch (error: any) {
       const mensaje = error?.response?.data?.detail || error?.message || 'Error en recolección automática'
@@ -237,7 +236,7 @@ export function EntrenamientoMejorado() {
             value="asistente"
             className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm"
           >
-            <Star className="h-4 w-4" />
+            <Zap className="h-4 w-4" />
             Asistente Inteligente
           </TabsTrigger>
           <TabsTrigger
@@ -270,7 +269,7 @@ export function EntrenamientoMejorado() {
               <div className="space-y-6">
                 <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl p-6">
                   <div className="flex items-center gap-3 mb-4">
-                    <Star className="h-8 w-8" />
+                    <Zap className="h-8 w-8" />
                     <h2 className="text-2xl font-bold">Asistente de Entrenamiento Inteligente</h2>
                   </div>
                   <p className="text-blue-100">
@@ -576,7 +575,7 @@ export function EntrenamientoMejorado() {
                       <Card>
                         <CardContent className="pt-4">
                           <h4 className="font-semibold mb-3 flex items-center gap-2">
-                            <Lightbulb className="h-5 w-5 text-yellow-500" />
+                            <Info className="h-5 w-5 text-yellow-500" />
                             Sugerencias de Mejora
                           </h4>
                           <ul className="space-y-2">

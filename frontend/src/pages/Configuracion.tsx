@@ -264,8 +264,6 @@ export function Configuracion() {
     }
   }
 
-  const navigate = useNavigate()
-  
   const secciones = [
     { id: 'general', nombre: 'General', icono: Globe },
     {
