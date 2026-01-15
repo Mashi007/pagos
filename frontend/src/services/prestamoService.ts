@@ -53,14 +53,38 @@ class PrestamoService {
 
     const response = await apiClient.get<any>(url)
 
+    // ✅ DEBUG: Log para diagnosticar problemas
+    console.log('🔍 [PrestamoService] Respuesta de getPrestamos:', {
+      url,
+      responseType: typeof response,
+      responseKeys: response && typeof response === 'object' ? Object.keys(response) : [],
+      hasData: !!response?.data,
+      dataIsArray: Array.isArray(response?.data),
+      dataLength: Array.isArray(response?.data) ? response.data.length : 'N/A',
+      total: response?.total,
+      page: response?.page,
+      per_page: response?.per_page,
+      total_pages: response?.total_pages,
+      fullResponse: response
+    })
+
     // Adaptar respuesta del backend al formato esperado
-    return {
+    const result = {
       data: response.data || [],
       total: response.total || 0,
       page: response.page || page,
       per_page: response.per_page || perPage,
       total_pages: response.total_pages || Math.ceil((response.total || 0) / perPage)
     }
+
+    console.log('🔍 [PrestamoService] Resultado adaptado:', {
+      dataLength: Array.isArray(result.data) ? result.data.length : 'N/A',
+      total: result.total,
+      page: result.page,
+      total_pages: result.total_pages
+    })
+
+    return result
   }
 
   // Obtener préstamo por ID

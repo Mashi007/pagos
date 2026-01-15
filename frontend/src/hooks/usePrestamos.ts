@@ -42,7 +42,17 @@ export function usePrestamos(
 ) {
   return useQuery({
     queryKey: prestamoKeys.list(filters),
-    queryFn: () => prestamoService.getPrestamos(filters, page, perPage),
+    queryFn: async () => {
+      console.log('🔍 [usePrestamos] Obteniendo préstamos:', { filters, page, perPage })
+      const result = await prestamoService.getPrestamos(filters, page, perPage)
+      console.log('🔍 [usePrestamos] Resultado recibido:', {
+        hasData: !!result,
+        dataLength: Array.isArray(result?.data) ? result.data.length : 'N/A',
+        total: result?.total,
+        page: result?.page
+      })
+      return result
+    },
     staleTime: 0, // Siempre refetch cuando se invalida (mejor para actualización inmediata de estado)
     refetchOnMount: true, // Refetch cuando el componente se monta
     refetchOnWindowFocus: true, // Refetch cuando se enfoca la ventana (mantiene datos actualizados)

@@ -1881,20 +1881,22 @@ def _calcular_evolucion_mensual(db: Session, hoy: date) -> list:
             num_mes = int(mes_info["fecha"].month)
             mes_key_evol: tuple[int, int] = (año_mes, num_mes)
 
-            # Cuotas a cobrar del mes (monto total de cuotas que vencen en ese mes)
+            # ✅ CORREGIDO según definición del usuario:
+            # Cartera = suma de cuotas programadas (monto total de cuotas que vencen en ese mes)
+            # Cobrado = suma de abonos (monto total de pagos en ese mes)
+            # Morosidad = total_financiamiento - total cobrado = cartera - cobrado
             cartera_mes = float(cuotas_a_cobrar_por_mes.get(mes_key_evol, Decimal("0")))
-            cobrado_mes = pagos_por_mes.get(mes_key_evol, Decimal("0"))
-            cuotas_vencidas_mes = cuotas_vencidas_por_mes.get(mes_key_evol, 0)
-            cuotas_pagadas_mes = cuotas_pagadas_por_mes.get(mes_key_evol, 0)
-            total_cuotas_mes = cuotas_vencidas_mes + cuotas_pagadas_mes
-            morosidad_mes = (cuotas_vencidas_mes / total_cuotas_mes * 100) if total_cuotas_mes > 0 else 0
+            cobrado_mes = float(pagos_por_mes.get(mes_key_evol, Decimal("0")))
+            
+            # ✅ CORREGIDO: Morosidad = cartera - cobrado (en monto USD, no porcentaje)
+            morosidad_mes = max(0.0, cartera_mes - cobrado_mes)  # No puede ser negativa
 
             evolucion_mensual.append(
                 {
                     "mes": f"{nombres_meses[num_mes - 1]} {año_mes}",
-                    "cartera": float(cartera_mes),
-                    "cobrado": float(cobrado_mes),
-                    "morosidad": round(morosidad_mes, 1),
+                    "cartera": round(cartera_mes, 2),
+                    "cobrado": round(cobrado_mes, 2),
+                    "morosidad": round(morosidad_mes, 2),  # ✅ Ahora en monto USD, no porcentaje
                 }
             )
 

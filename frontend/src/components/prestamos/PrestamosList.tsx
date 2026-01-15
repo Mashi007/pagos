@@ -67,6 +67,23 @@ export function PrestamosList() {
   const deletePrestamo = useDeletePrestamo()
   const { canEditPrestamo, canDeletePrestamo, canApprovePrestamo, canViewEvaluacionRiesgo } = usePermissions()
 
+  // Debug: Log del estado de los datos
+  useEffect(() => {
+    if (data) {
+      console.log('🔍 [PrestamosList] Estado de datos:', {
+        hasData: !!data,
+        hasDataData: !!data?.data,
+        dataIsArray: Array.isArray(data?.data),
+        dataLength: Array.isArray(data?.data) ? data.data.length : 'N/A',
+        total: data?.total,
+        page: data?.page,
+        total_pages: data?.total_pages,
+        isLoading,
+        error: error ? error.message : null
+      })
+    }
+  }, [data, isLoading, error])
+
   // Obtener opciones para los selects
   const { data: concesionarios = [] } = useConcesionariosActivos()
   const { data: analistas = [] } = useAnalistasActivos()
@@ -538,29 +555,74 @@ export function PrestamosList() {
 
           {error && (
             <div className="text-center py-8 text-red-600">
-              Error al cargar préstamos
+              Error al cargar préstamos: {error instanceof Error ? error.message : 'Error desconocido'}
             </div>
           )}
 
           {!isLoading && !error && data && (
             <>
-              <div className="border rounded-lg overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Cliente</TableHead>
-                      <TableHead>Cédula</TableHead>
-                      <TableHead>Monto</TableHead>
-                      <TableHead>Modalidad</TableHead>
-                      <TableHead>Cuotas</TableHead>
-                      <TableHead>Estado</TableHead>
-                      <TableHead>Fecha</TableHead>
-                      <TableHead className="text-center">REVISAR</TableHead>
-                      <TableHead className="text-right">Acciones</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data.data.map((prestamo: any) => (
+              {/* Debug info - remover en producción */}
+              {process.env.NODE_ENV === 'development' && (
+                <div className="mb-4 p-2 bg-gray-100 text-xs rounded">
+                  <strong>Debug:</strong> data existe: {data ? 'Sí' : 'No'}, 
+                  data.data existe: {data?.data ? 'Sí' : 'No'}, 
+                  es array: {Array.isArray(data?.data) ? 'Sí' : 'No'}, 
+                  longitud: {Array.isArray(data?.data) ? data.data.length : 'N/A'},
+                  total: {data?.total || 0}
+                </div>
+              )}
+              
+              {(!data.data || !Array.isArray(data.data) || data.data.length === 0) ? (
+                <div className="text-center py-8 text-gray-500">
+                  <div className="mb-4">
+                    {data.total > 0 ? (
+                      <>
+                        <p className="text-lg font-semibold text-red-600 mb-2">
+                          ⚠️ Problema detectado: El sistema reporta {data.total} préstamos, pero no se pudieron mostrar.
+                        </p>
+                        <p className="text-sm mb-4">
+                          Esto puede deberse a un problema en la respuesta del servidor o en el formato de los datos.
+                        </p>
+                        <Button
+                          variant="outline"
+                          onClick={handleRefresh}
+                          className="mt-2"
+                        >
+                          <RefreshCw className="w-4 h-4 mr-2" />
+                          Intentar actualizar nuevamente
+                        </Button>
+                      </>
+                    ) : (
+                      <p>No se encontraron préstamos con los filtros seleccionados.</p>
+                    )}
+                  </div>
+                  {process.env.NODE_ENV === 'development' && (
+                    <details className="mt-4 text-left max-w-2xl mx-auto">
+                      <summary className="cursor-pointer text-sm font-semibold">Detalles técnicos (solo desarrollo)</summary>
+                      <pre className="mt-2 p-2 bg-gray-100 rounded text-xs overflow-auto">
+                        {JSON.stringify({ data, isLoading, error: error ? error.message : null }, null, 2)}
+                      </pre>
+                    </details>
+                  )}
+                </div>
+              ) : (
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Cliente</TableHead>
+                        <TableHead>Cédula</TableHead>
+                        <TableHead>Monto</TableHead>
+                        <TableHead>Modalidad</TableHead>
+                        <TableHead>Cuotas</TableHead>
+                        <TableHead>Estado</TableHead>
+                        <TableHead>Fecha</TableHead>
+                        <TableHead className="text-center">REVISAR</TableHead>
+                        <TableHead className="text-right">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {data.data.map((prestamo: any) => (
                       <TableRow key={prestamo.id}>
                         <TableCell>
                           <div className="font-medium">{prestamo.nombres}</div>
@@ -657,13 +719,14 @@ export function PrestamosList() {
                           </div>
                         </TableCell>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
 
               {/* Paginación */}
-              {data.total_pages > 1 && (
+              {data && data.total_pages > 1 && (
                 <div className="flex items-center justify-between mt-4">
                   <div className="text-sm text-gray-600">
                     Página {data.page} de {data.total_pages} ({data.total} total)
