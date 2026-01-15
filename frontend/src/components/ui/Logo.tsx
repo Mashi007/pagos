@@ -748,24 +748,24 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
     >
       {/* Letra R estilizada en azul oscuro */}
       <g>
-        {/* Tallo vertical principal */}
-        <rect x="7" y="5" width="9" height="28" rx="1.5" fill="#2A3B8F"/>
+        {/* Tallo vertical principal con extensión superior izquierda */}
+        <path d="M 8 4 L 8 32 L 16 32 L 16 28 L 12 28 L 12 4 Z" fill="#2A3B8F"/>
+        
+        {/* Extensión superior izquierda (serif) */}
+        <path d="M 8 4 L 6 4 L 6 6 L 8 6 Z" fill="#2A3B8F"/>
 
-        {/* Parte superior curva de la R */}
-        <path d="M 16 5 L 16 14 Q 16 9 21 9 Q 26 9 27.5 11.5 L 27.5 17 Q 27.5 14.5 25 14.5 L 22 14.5 Q 20 14.5 18.5 15.5 L 16 18 Z"
-              fill="#2A3B8F"/>
+        {/* Bowl superior de la R (curva suave) */}
+        <path d="M 12 4 L 12 14 Q 12 10 18 10 Q 24 10 26 12 L 26 18 Q 26 16 24 16 L 20 16 Q 18 16 16 17 L 12 20 Z" fill="#2A3B8F"/>
 
-        {/* Pierna diagonal de la R */}
-        <path d="M 16 19 L 24 11 L 30 11 L 21 19 L 21 21 L 28 27 L 34 27 L 25 21 L 23 21 Z"
-              fill="#2A3B8F"/>
-
-        {/* Punta inferior derecha */}
-        <path d="M 28 27 L 34 27 L 32 24 L 30 24 Z"
-              fill="#2A3B8F"/>
+        {/* Pierna diagonal de la R (extiende hacia abajo y derecha con punta) */}
+        <path d="M 12 20 L 12 24 L 20 24 L 28 32 L 32 32 L 24 24 L 24 20 Z" fill="#2A3B8F"/>
+        
+        {/* Punta afilada de la pierna */}
+        <path d="M 28 32 L 32 32 L 30 30 Z" fill="#2A3B8F"/>
       </g>
 
       {/* Círculo naranja sólido debajo y ligeramente a la izquierda */}
-      <circle cx="11" cy="41" r="6" fill="#F57F20"/>
+      <circle cx="10" cy="40" r="5.5" fill="#F57F20"/>
     </svg>
   )
 }
