@@ -1,5 +1,0 @@
-# This file includes all production dependencies
--r requirements/prod.txt
-
-# Nota: Redis está incluido en requirements/prod.txt
-# No es necesario duplicarlo aquí ya que prod.txt ya lo incluye
