@@ -71,3 +71,4 @@ scripts/data/*.xlsm
 
 .cursor/rules/kluster-code-verify.mdc
 .kluster
+node_modules
