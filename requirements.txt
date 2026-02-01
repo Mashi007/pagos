@@ -40,11 +40,10 @@ annotated-types==0.7.0
 # El código usa PyJWT directamente con algoritmo HS256 (HMAC-SHA256), que NO requiere ECDSA
 # Esto elimina completamente la dependencia de ecdsa y su vulnerabilidad CVE-2024-23342
 PyJWT==2.8.0  # Usado directamente en app/core/security.py con algoritmo HS256 (no requiere ECDSA)
-# ✅ COMPATIBILIDAD: passlib 1.7.4 requiere bcrypt < 5.0.0
-# bcrypt 5.0.0 removió __about__ que passlib necesita
-# Usar bcrypt 4.1.1 para compatibilidad con passlib 1.7.4
+# ✅ COMPATIBILIDAD: passlib 1.7.4 lee bcrypt.__about__.__version__
+# bcrypt 4.1.0+ removió __about__ → AttributeError en Render. Usar 4.0.x.
 passlib[bcrypt]==1.7.4
-bcrypt==4.1.1  # Versión compatible con passlib 1.7.4 (NO usar 5.0.0)
+bcrypt>=3.2.0,<4.1  # 4.0.x tiene __about__; 4.1+ rompe passlib
 cryptography>=41.0.0  # Para encriptación de API Keys con Fernet (no requiere ecdsa para operaciones básicas)
 
 # ============================================
