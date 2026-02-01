@@ -2,7 +2,7 @@
 API v1
 """
 from fastapi import APIRouter
-from app.api.v1.endpoints import whatsapp, auth, configuracion, pagos, notificaciones, dashboard, kpis, auditoria, cobranzas, clientes
+from app.api.v1.endpoints import whatsapp, auth, configuracion, pagos, notificaciones, notificaciones_tabs, dashboard, kpis, auditoria, cobranzas, clientes, tickets
 
 api_router = APIRouter()
 
@@ -34,11 +34,33 @@ api_router.include_router(
     tags=["pagos"],
 )
 
-# Notificaciones (stub: estadisticas/resumen)
+# Notificaciones (estadisticas/resumen, clientes-retrasados, actualizar)
 api_router.include_router(
     notificaciones.router,
     prefix="/notificaciones",
     tags=["notificaciones"],
+)
+
+# Pestañas de Notificaciones (previas, día pago, retrasadas, prejudicial) - datos reales BD + envío correo por cliente
+api_router.include_router(
+    notificaciones_tabs.router_previas,
+    prefix="/notificaciones-previas",
+    tags=["notificaciones-previas"],
+)
+api_router.include_router(
+    notificaciones_tabs.router_dia_pago,
+    prefix="/notificaciones-dia-pago",
+    tags=["notificaciones-dia-pago"],
+)
+api_router.include_router(
+    notificaciones_tabs.router_retrasadas,
+    prefix="/notificaciones-retrasadas",
+    tags=["notificaciones-retrasadas"],
+)
+api_router.include_router(
+    notificaciones_tabs.router_prejudicial,
+    prefix="/notificaciones-prejudicial",
+    tags=["notificaciones-prejudicial"],
 )
 
 # Dashboard (stub: opciones-filtros, kpis-principales, admin, etc.)
@@ -74,4 +96,11 @@ api_router.include_router(
     clientes.router,
     prefix="/clientes",
     tags=["clientes"],
+)
+
+# Tickets CRM (conectado a BD clientes + tabla tickets; notificación por correo)
+api_router.include_router(
+    tickets.router,
+    prefix="/tickets",
+    tags=["tickets"],
 )

@@ -36,6 +36,29 @@ export interface NotificacionStats {
   tasa_exito: number
 }
 
+/** Un registro de cliente/cuota para notificaciones (nombre, cedula, etc.). */
+export interface ClienteRetrasadoItem {
+  cliente_id: number
+  nombre: string
+  cedula: string
+  numero_cuota?: number
+  fecha_vencimiento?: string
+  monto?: number
+  dias_atraso?: number
+}
+
+export interface ClientesRetrasadosResponse {
+  actualizado_en: string
+  dias_5: ClienteRetrasadoItem[]
+  dias_3: ClienteRetrasadoItem[]
+  dias_1: ClienteRetrasadoItem[]
+  hoy: ClienteRetrasadoItem[]
+  mora_61: {
+    cuotas: ClienteRetrasadoItem[]
+    total_cuotas: number
+  }
+}
+
 export interface EmailConfig {
   smtp_host: string
   smtp_port: string
@@ -46,7 +69,14 @@ export interface EmailConfig {
   smtp_use_tls: string
   modo_pruebas?: string
   email_pruebas?: string
-  email_activo?: string | boolean // ✅ Estado activo/inactivo
+  email_activo?: string | boolean
+  imap_host?: string
+  imap_port?: string
+  imap_user?: string
+  imap_password?: string
+  imap_use_ssl?: string
+  /** Contactos prestablecidos: emails separados por coma para notificación automática de tickets CRM */
+  tickets_notify_emails?: string
 }
 
 export interface NotificacionVariable {
@@ -110,6 +140,18 @@ class NotificacionService {
 
   async obtenerEstadisticas(): Promise<NotificacionStats> {
     return await apiClient.get<NotificacionStats>(`${this.baseUrl}/estadisticas/resumen`)
+  }
+
+  /** Clientes retrasados por reglas: 5 días, 3 días, 1 día, hoy, mora 61+. Datos reales desde BD. */
+  async getClientesRetrasados(): Promise<ClientesRetrasadosResponse> {
+    return await apiClient.get<ClientesRetrasadosResponse>(`${this.baseUrl}/clientes-retrasados`, {
+      timeout: 60000,
+    })
+  }
+
+  /** Ejecutar actualización de notificaciones (dias_mora en clientes). Llamar desde cron a las 2am. */
+  async actualizarNotificaciones(): Promise<{ mensaje: string; clientes_actualizados: number }> {
+    return await apiClient.post<{ mensaje: string; clientes_actualizados: number }>(`${this.baseUrl}/actualizar`)
   }
 
   // Notificaciones automáticas
@@ -245,6 +287,10 @@ class EmailConfigService {
     email_pruebas?: string | null
   }> {
     return await apiClient.get(`${this.baseUrl}/email/estado`)
+  }
+
+  async probarConfiguracionImap(): Promise<{ success: boolean; mensaje?: string }> {
+    return await apiClient.post<{ success: boolean; mensaje?: string }>(`${this.baseUrl}/email/probar-imap`, {})
   }
 }
 

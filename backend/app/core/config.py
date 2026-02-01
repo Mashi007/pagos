@@ -83,6 +83,11 @@ class Settings(BaseSettings):
     SMTP_USER: Optional[str] = None
     SMTP_PASSWORD: Optional[str] = None
     SMTP_FROM_EMAIL: Optional[str] = None
+    # Correo(s) para notificaciones de tickets CRM (varios separados por coma)
+    TICKETS_NOTIFY_EMAIL: Optional[str] = Field(
+        None,
+        description="Email(s) para notificar cuando se crea o actualiza un ticket (separados por coma)"
+    )
     
     # ============================================
     # AI / OpenRouter (clave solo en backend, nunca en frontend)

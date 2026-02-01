@@ -37,7 +37,6 @@ import { LoadingSpinner } from '../components/ui/loading-spinner'
 import { useSimpleAuth } from '../store/simpleAuthStore'
 import { ticketsService, Ticket, TicketCreate } from '../services/ticketsService'
 import { toast } from 'sonner'
-import { getMockTicketsResponse } from '../data/mockTickets'
 
 // Estados de tickets
 const ESTADOS_TICKET = [
@@ -97,7 +96,7 @@ export function TicketsAtencion() {
   // Búsqueda de clientes para agregar al ticket (incluir todos los estados)
   const { data: clientesBuscados = [], isLoading: isLoadingSearch } = useSearchClientes(searchCliente, true)
 
-  // Query para obtener tickets del backend
+  // Query para obtener tickets desde la BD (API real; sin mock)
   const {
     data: ticketsData,
     isLoading: isLoadingTickets,
@@ -106,37 +105,13 @@ export function TicketsAtencion() {
   } = useQuery({
     queryKey: ['tickets', page, filtroEstado, filtroPrioridad],
     queryFn: async () => {
-      try {
-        const response = await ticketsService.getTickets({
-          page,
-          per_page: 20,
-          estado: filtroEstado !== 'todos' ? filtroEstado : undefined,
-          prioridad: filtroPrioridad !== 'todos' ? filtroPrioridad : undefined,
-        })
-        // âœ… Usar mockdata si no hay datos reales o en desarrollo
-        const usarMockData = (!response?.tickets || response.tickets.length === 0) || process.env.NODE_ENV === 'development'
-        if (usarMockData && (!response?.tickets || response.tickets.length === 0)) {
-          return getMockTicketsResponse(
-            page,
-            20,
-            filtroEstado !== 'todos' ? filtroEstado : undefined,
-            filtroPrioridad !== 'todos' ? filtroPrioridad : undefined
-          )
-        }
-        return response
-      } catch (error) {
-        // âœ… En caso de error, usar mockdata en desarrollo
-        if (process.env.NODE_ENV === 'development') {
-          console.warn('Error cargando tickets, usando mockdata:', error)
-          return getMockTicketsResponse(
-            page,
-            20,
-            filtroEstado !== 'todos' ? filtroEstado : undefined,
-            filtroPrioridad !== 'todos' ? filtroPrioridad : undefined
-          )
-        }
-        throw error
-      }
+      const response = await ticketsService.getTickets({
+        page,
+        per_page: 20,
+        estado: filtroEstado !== 'todos' ? filtroEstado : undefined,
+        prioridad: filtroPrioridad !== 'todos' ? filtroPrioridad : undefined,
+      })
+      return response ?? { tickets: [], paginacion: { page: 1, per_page: 20, total: 0, pages: 0 } }
     },
   })
 
@@ -340,10 +315,10 @@ export function TicketsAtencion() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
             <FileText className="h-8 w-8 text-blue-600" />
-            Tickets de Atención
+            CRM — Centro de tickets
           </h1>
           <p className="text-gray-600 mt-1">
-            Gestión de incidencias y actividades que generan seguimiento
+            Tickets conectados a la base de clientes. Se notifica por correo al crear o actualizar.
           </p>
         </div>
         <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>

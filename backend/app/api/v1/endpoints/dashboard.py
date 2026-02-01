@@ -198,9 +198,34 @@ def get_financiamiento_tendencia_mensual(
     analista: Optional[str] = Query(None),
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
 ):
-    """Tendencia mensual de financiamiento (datos demo)."""
-    return {"meses": _ultimos_12_meses()}
+    """Tendencia mensual de financiamiento. Datos reales: cartera por mes desde Cliente."""
+    try:
+        meses_list = _ultimos_12_meses()
+        hoy = datetime.now(timezone.utc)
+        resultado = []
+        for i, m in enumerate(meses_list):
+            fin_mes = hoy - timedelta(days=30 * (11 - i))
+            ultimo_dia = _ultimo_dia_del_mes(fin_mes.replace(tzinfo=timezone.utc) if fin_mes.tzinfo is None else fin_mes)
+            cartera = db.scalar(
+                select(func.coalesce(func.sum(Cliente.total_financiamiento), 0)).select_from(Cliente).where(
+                    Cliente.fecha_registro <= ultimo_dia,
+                    Cliente.total_financiamiento.isnot(None),
+                    Cliente.total_financiamiento > 0,
+                )
+            ) or 0
+            resultado.append({
+                "mes": m["mes"],
+                "monto_nuevos": _safe_float(cartera),
+                "monto_cuotas_programadas": 0.0,
+                "monto_pagado": 0.0,
+                "morosidad_mensual": 0.0,
+            })
+        return {"meses": resultado}
+    except Exception as e:
+        logger.exception("Error en financiamiento-tendencia-mensual: %s", e)
+        return {"meses": _ultimos_12_meses()}
 
 
 @router.get("/prestamos-por-concesionario")
@@ -210,8 +235,9 @@ def get_prestamos_por_concesionario(
     analista: Optional[str] = Query(None),
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
 ):
-    """Préstamos por concesionario (datos demo)."""
+    """Préstamos por concesionario. Stub: Cliente no tiene campo concesionario; requiere tabla/columna."""
     datos = [
         ("Concesionario A", 420, 33.7),
         ("Concesionario B", 318, 25.5),
@@ -231,8 +257,9 @@ def get_prestamos_por_modelo(
     analista: Optional[str] = Query(None),
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
 ):
-    """Préstamos por modelo (datos demo)."""
+    """Préstamos por modelo. Stub: Cliente no tiene campo modelo; requiere tabla/columna."""
     datos = [
         ("Modelo X", 380, 30.5),
         ("Modelo Y", 295, 23.6),
@@ -245,6 +272,18 @@ def get_prestamos_por_modelo(
     }
 
 
+def _rangos_financiamiento():
+    """Definición de rangos de monto para agrupar total_financiamiento."""
+    return [
+        (0, 200, "$0 - $200"),
+        (200, 400, "$200 - $400"),
+        (400, 600, "$400 - $600"),
+        (600, 800, "$600 - $800"),
+        (800, 1000, "$800 - $1,000"),
+        (1000, 999999999, "$1,000+"),
+    ]
+
+
 @router.get("/financiamiento-por-rangos")
 def get_financiamiento_por_rangos(
     fecha_inicio: Optional[str] = Query(None),
@@ -252,26 +291,75 @@ def get_financiamiento_por_rangos(
     analista: Optional[str] = Query(None),
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
 ):
-    """Financiamiento por rangos (datos demo)."""
-    rangos = [
-        ("$0 - $200", 85, 12000),
-        ("$200 - $400", 120, 36000),
-        ("$400 - $600", 95, 47500),
-        ("$600 - $800", 70, 49000),
-        ("$800 - $1,000", 45, 40500),
-        ("$1,000+", 32, 55000),
-    ]
-    total_p = sum(r[1] for r in rangos)
-    total_m = sum(r[2] for r in rangos)
-    return {
-        "rangos": [
-            {"categoria": c, "cantidad_prestamos": n, "monto_total": m, "porcentaje_cantidad": round(100 * n / total_p, 1), "porcentaje_monto": round(100 * m / total_m, 1)}
-            for c, n, m in rangos
-        ],
-        "total_prestamos": total_p,
-        "total_monto": float(total_m),
-    }
+    """Financiamiento por rangos. Datos reales: agrupa Cliente por total_financiamiento."""
+    try:
+        rangos_def = _rangos_financiamiento()
+        resultado = []
+        total_p = 0
+        total_m = 0.0
+        for min_val, max_val, cat in rangos_def:
+            if max_val >= 999999999:
+                q = select(
+                    func.count().label("n"),
+                    func.coalesce(func.sum(Cliente.total_financiamiento), 0).label("m"),
+                ).select_from(Cliente).where(
+                    Cliente.total_financiamiento.isnot(None),
+                    Cliente.total_financiamiento >= min_val,
+                )
+            else:
+                q = select(
+                    func.count().label("n"),
+                    func.coalesce(func.sum(Cliente.total_financiamiento), 0).label("m"),
+                ).select_from(Cliente).where(
+                    Cliente.total_financiamiento.isnot(None),
+                    Cliente.total_financiamiento >= min_val,
+                    Cliente.total_financiamiento < max_val,
+                )
+            row = db.execute(q).one()
+            n, m = int(row.n or 0), _safe_float(row.m)
+            total_p += n
+            total_m += m
+            resultado.append({"categoria": cat, "cantidad_prestamos": n, "monto_total": m})
+        if total_p == 0:
+            total_p = 1
+        if total_m == 0:
+            total_m = 1.0
+        return {
+            "rangos": [
+                {
+                    "categoria": r["categoria"],
+                    "cantidad_prestamos": r["cantidad_prestamos"],
+                    "monto_total": r["monto_total"],
+                    "porcentaje_cantidad": round(100 * r["cantidad_prestamos"] / total_p, 1),
+                    "porcentaje_monto": round(100 * r["monto_total"] / total_m, 1),
+                }
+                for r in resultado
+            ],
+            "total_prestamos": total_p,
+            "total_monto": total_m,
+        }
+    except Exception as e:
+        logger.exception("Error en financiamiento-por-rangos: %s", e)
+        rangos = [
+            ("$0 - $200", 85, 12000),
+            ("$200 - $400", 120, 36000),
+            ("$400 - $600", 95, 47500),
+            ("$600 - $800", 70, 49000),
+            ("$800 - $1,000", 45, 40500),
+            ("$1,000+", 32, 55000),
+        ]
+        total_p = sum(r[1] for r in rangos)
+        total_m = sum(r[2] for r in rangos)
+        return {
+            "rangos": [
+                {"categoria": c, "cantidad_prestamos": n, "monto_total": m, "porcentaje_cantidad": round(100 * n / total_p, 1), "porcentaje_monto": round(100 * m / total_m, 1)}
+                for c, n, m in rangos
+            ],
+            "total_prestamos": total_p,
+            "total_monto": float(total_m),
+        }
 
 
 @router.get("/composicion-morosidad")
@@ -281,19 +369,53 @@ def get_composicion_morosidad(
     analista: Optional[str] = Query(None),
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
 ):
-    """Composición de morosidad (datos demo)."""
-    puntos = [
-        ("1-30 días", 12000, 45),
-        ("31-60 días", 8500, 28),
-        ("61-90 días", 6200, 18),
-        ("90+ días", 15800, 32),
-    ]
-    return {
-        "puntos": [{"categoria": c, "monto": m, "cantidad_cuotas": n} for c, m, n in puntos],
-        "total_morosidad": sum(p[1] for p in puntos),
-        "total_cuotas": sum(p[2] for p in puntos),
-    }
+    """Composición de morosidad. Datos reales: agrupa Cliente por dias_mora (1-30, 31-60, 61-90, 90+)."""
+    try:
+        bandas = [(1, 30, "1-30 días"), (31, 60, "31-60 días"), (61, 90, "61-90 días"), (91, 999999, "90+ días")]
+        puntos = []
+        total_monto = 0.0
+        total_cuotas = 0
+        for min_d, max_d, cat in bandas:
+            if max_d >= 999999:
+                q = select(
+                    func.count().label("n"),
+                    func.coalesce(func.sum(Cliente.total_financiamiento), 0).label("m"),
+                ).select_from(Cliente).where(
+                    Cliente.dias_mora.isnot(None),
+                    Cliente.dias_mora >= min_d,
+                    Cliente.total_financiamiento.isnot(None),
+                )
+            else:
+                q = select(
+                    func.count().label("n"),
+                    func.coalesce(func.sum(Cliente.total_financiamiento), 0).label("m"),
+                ).select_from(Cliente).where(
+                    Cliente.dias_mora.isnot(None),
+                    Cliente.dias_mora >= min_d,
+                    Cliente.dias_mora <= max_d,
+                    Cliente.total_financiamiento.isnot(None),
+                )
+            row = db.execute(q).one()
+            n, m = int(row.n or 0), _safe_float(row.m)
+            total_cuotas += n
+            total_monto += m
+            puntos.append({"categoria": cat, "monto": m, "cantidad_cuotas": n})
+        return {"puntos": puntos, "total_morosidad": total_monto, "total_cuotas": total_cuotas}
+    except Exception as e:
+        logger.exception("Error en composicion-morosidad: %s", e)
+        puntos = [
+            ("1-30 días", 12000, 45),
+            ("31-60 días", 8500, 28),
+            ("61-90 días", 6200, 18),
+            ("90+ días", 15800, 32),
+        ]
+        return {
+            "puntos": [{"categoria": c, "monto": m, "cantidad_cuotas": n} for c, m, n in puntos],
+            "total_morosidad": sum(p[1] for p in puntos),
+            "total_cuotas": sum(p[2] for p in puntos),
+        }
 
 
 @router.get("/cobranza-fechas-especificas")
@@ -303,11 +425,10 @@ def get_cobranza_fechas_especificas(
     analista: Optional[str] = Query(None),
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
 ):
-    """Cobranza por fechas específicas (mañana, hoy, 3 días atrás)."""
-    return {
-        "dias": [],
-    }
+    """Cobranza por fechas específicas. Stub: requiere tabla pagos/cobranzas."""
+    return {"dias": []}
 
 
 @router.get("/cobranzas-semanales")
@@ -318,8 +439,9 @@ def get_cobranzas_semanales(
     analista: Optional[str] = Query(None),
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
 ):
-    """Cobranzas semanales (datos demo)."""
+    """Cobranzas semanales. Stub: requiere tabla pagos/cobranzas para datos reales."""
     sem = []
     for i in range(min(semanas or 12, 12)):
         base = 32000 - i * 1200
@@ -329,11 +451,7 @@ def get_cobranzas_semanales(
             "cobranzas_planificadas": base,
             "pagos_reales": int(base * (0.65 + 0.02 * i)),
         })
-    return {
-        "semanas": sem,
-        "fecha_inicio": fecha_inicio or "",
-        "fecha_fin": fecha_fin or "",
-    }
+    return {"semanas": sem, "fecha_inicio": fecha_inicio or "", "fecha_fin": fecha_fin or ""}
 
 
 @router.get("/morosidad-por-analista")
@@ -343,8 +461,9 @@ def get_morosidad_por_analista(
     analista: Optional[str] = Query(None),
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
 ):
-    """Morosidad por analista (datos demo)."""
+    """Morosidad por analista. Stub: Cliente no tiene campo analista; requiere tabla analistas/asignación."""
     return {
         "analistas": [
             {"analista": "Analista 1", "total_morosidad": 15200, "cantidad_clientes": 45},
@@ -362,10 +481,30 @@ def get_evolucion_morosidad(
     analista: Optional[str] = Query(None),
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
 ):
-    """Evolución de morosidad por mes (datos demo)."""
-    m = _ultimos_12_meses()
-    return {"meses": [{"mes": x["mes"], "morosidad": x["morosidad"]} for x in m]}
+    """Evolución de morosidad por mes. Datos reales: suma dias_mora * monto proxy por mes desde Cliente."""
+    try:
+        meses_list = _ultimos_12_meses()
+        hoy = datetime.now(timezone.utc)
+        resultado = []
+        for i, m in enumerate(meses_list):
+            fin_mes = hoy - timedelta(days=30 * (11 - i))
+            ultimo_dia = _ultimo_dia_del_mes(fin_mes.replace(tzinfo=timezone.utc) if fin_mes.tzinfo is None else fin_mes)
+            moro = db.scalar(
+                select(func.coalesce(func.sum(Cliente.dias_mora * Cliente.total_financiamiento), 0)).select_from(Cliente).where(
+                    Cliente.fecha_registro <= ultimo_dia,
+                    Cliente.dias_mora.isnot(None),
+                    Cliente.dias_mora > 0,
+                    Cliente.total_financiamiento.isnot(None),
+                )
+            ) or 0
+            resultado.append({"mes": m["mes"], "morosidad": _safe_float(moro)})
+        return {"meses": resultado}
+    except Exception as e:
+        logger.exception("Error en evolucion-morosidad: %s", e)
+        m = _ultimos_12_meses()
+        return {"meses": [{"mes": x["mes"], "morosidad": x["morosidad"]} for x in m]}
 
 
 @router.get("/evolucion-pagos")
@@ -375,14 +514,12 @@ def get_evolucion_pagos(
     analista: Optional[str] = Query(None),
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
 ):
-    """Evolución de pagos por mes (datos demo). Frontend espera mes, pagos (cantidad), monto."""
+    """Evolución de pagos por mes. Stub: requiere tabla pagos para datos reales."""
     m = _ultimos_12_meses()
     return {
-        "meses": [
-            {"mes": x["mes"], "pagos": 12 + i, "monto": x["monto_pagado"]}
-            for i, x in enumerate(m)
-        ]
+        "meses": [{"mes": x["mes"], "pagos": 12 + i, "monto": x["monto_pagado"]} for i, x in enumerate(m)
     }
 
 

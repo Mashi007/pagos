@@ -6,7 +6,7 @@ import { Input } from '../../components/ui/input'
 import { Textarea } from '../../components/ui/textarea'
 import { Badge } from '../../components/ui/badge'
 import { toast } from 'sonner'
-import { validarEmail, validarConfiguracionGmail } from '../../utils/validators'
+import { validarEmail, validarConfiguracionGmail, validarConfiguracionImapGmail } from '../../utils/validators'
 import { emailConfigService, notificacionService, type Notificacion } from '../../services/notificacionService'
 
 interface EmailConfigData {
@@ -19,7 +19,13 @@ interface EmailConfigData {
   smtp_use_tls: string
   modo_pruebas?: string
   email_pruebas?: string
-  email_activo?: string // âœ… Estado activo/inactivo
+  email_activo?: string
+  imap_host?: string
+  imap_port?: string
+  imap_user?: string
+  imap_password?: string
+  imap_use_ssl?: string
+  tickets_notify_emails?: string
 }
 
 export function EmailConfig() {
@@ -62,7 +68,10 @@ export function EmailConfig() {
   const [enviosRecientes, setEnviosRecientes] = useState<Notificacion[]>([])
   const [cargandoEnvios, setCargandoEnvios] = useState(false)
   const [resultadoPrueba, setResultadoPrueba] = useState<any>(null)
-  const [emailEnviadoExitoso, setEmailEnviadoExitoso] = useState(false) // âœ… Estado para cambio de color del botón
+  const [emailEnviadoExitoso, setEmailEnviadoExitoso] = useState(false)
+  const [mostrarPasswordImap, setMostrarPasswordImap] = useState(false)
+  const [probandoImap, setProbandoImap] = useState(false)
+  const [resultadoImap, setResultadoImap] = useState<{ success?: boolean; mensaje?: string } | null>(null)
 
   // Cargar configuración al montar
   useEffect(() => {
@@ -153,6 +162,12 @@ export function EmailConfig() {
       if (!data.smtp_host) data.smtp_host = 'smtp.gmail.com'
       if (!data.smtp_port) data.smtp_port = '587'
       if (!data.from_name) data.from_name = 'RapiCredit'
+      if (data.imap_host === undefined) data.imap_host = ''
+      if (data.imap_port === undefined) data.imap_port = '993'
+      if (data.imap_user === undefined) data.imap_user = ''
+      if (data.imap_password === undefined || data.imap_password === '***') data.imap_password = ''
+      if (data.imap_use_ssl === undefined) data.imap_use_ssl = 'true'
+      if (data.tickets_notify_emails === undefined) data.tickets_notify_emails = ''
 
       // Normalizar email_activo a string
       if (data.email_activo !== undefined && data.email_activo !== null) {
@@ -299,9 +314,7 @@ export function EmailConfig() {
     return faltantes
   }
 
-  // Validar configuración antes de guardar usando validadores centralizados
   const validarConfiguracion = (): string | null => {
-    // âœ… Usar validación centralizada
     const validacion = validarConfiguracionGmail({
       smtp_host: config.smtp_host,
       smtp_port: config.smtp_port,
@@ -310,11 +323,18 @@ export function EmailConfig() {
       smtp_use_tls: config.smtp_use_tls,
       from_email: config.from_email
     })
-
-    if (!validacion.valido) {
-      return validacion.errores.join('. ')
+    if (!validacion.valido) return validacion.errores.join('. ')
+    const tieneImap = !!(config.imap_host?.trim() || config.imap_user?.trim() || config.imap_password?.trim())
+    if (tieneImap) {
+      const validacionImap = validarConfiguracionImapGmail({
+        imap_host: config.imap_host || 'imap.gmail.com',
+        imap_port: config.imap_port || '993',
+        imap_user: config.imap_user,
+        imap_password: config.imap_password,
+        imap_use_ssl: config.imap_use_ssl ?? 'true',
+      })
+      if (!validacionImap.valido) return `IMAP: ${validacionImap.errores.join('. ')}`
     }
-
     return null
   }
 
@@ -340,7 +360,13 @@ export function EmailConfig() {
             smtp_password: passwordLimpia,
             modo_pruebas: modoPruebas,
             email_pruebas: modoPruebas === 'true' ? emailPruebas : '',
-            email_activo: emailActivo ? 'true' : 'false' // âœ… Incluir estado activo/inactivo
+            email_activo: emailActivo ? 'true' : 'false',
+            imap_host: config.imap_host || '',
+            imap_port: config.imap_port || '993',
+            imap_user: config.imap_user || '',
+            imap_password: (config.imap_password?.replace(/\s/g, '') || '') || undefined,
+            imap_use_ssl: config.imap_use_ssl ?? 'true',
+            tickets_notify_emails: config.tickets_notify_emails ?? '',
           }
 
       const resultado = await emailConfigService.actualizarConfiguracionEmail(configCompleta)
@@ -681,6 +707,142 @@ export function EmailConfig() {
               className="rounded"
             />
             <label className="text-sm font-medium">Usar TLS (Recomendado para Gmail / Google Workspace)</label>
+          </div>
+
+          {/* Políticas Gmail IMAP (recibir correo) */}
+          <div className="border-t pt-6 mt-6">
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-4">
+              <h3 className="font-semibold text-slate-900 mb-2 flex items-center gap-2">
+                <Mail className="h-5 w-5 text-slate-600" />
+                Políticas Gmail IMAP (recibir correo)
+              </h3>
+              <p className="text-sm text-slate-700 mb-2">
+                Configura IMAP para recibir correo (lectura de bandeja). Gmail: <strong>imap.gmail.com</strong>, puerto <strong>993</strong> (SSL) o <strong>143</strong> (STARTTLS). Requiere la misma <strong>Contraseña de Aplicación</strong> que SMTP.
+              </p>
+              <p className="text-xs text-slate-600">
+                Habilita IMAP en Gmail: Ajustes → Reenvío y POP/IMAP → Activar IMAP. Ref:{' '}
+                <a href="https://support.google.com/mail/answer/7126229" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">support.google.com/mail/answer/7126229</a>
+              </p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="text-sm font-medium block mb-2">Servidor IMAP</label>
+                <Input
+                  value={config.imap_host || ''}
+                  onChange={(e) => handleChange('imap_host', e.target.value)}
+                  placeholder="imap.gmail.com"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium block mb-2">Puerto IMAP</label>
+                <Input
+                  value={config.imap_port || '993'}
+                  onChange={(e) => handleChange('imap_port', e.target.value)}
+                  placeholder="993"
+                />
+                <p className="text-xs text-gray-500 mt-1">993 (SSL) o 143 (STARTTLS). Gmail recomienda 993.</p>
+              </div>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2 mt-4">
+              <div>
+                <label className="text-sm font-medium block mb-2">Email IMAP (usuario)</label>
+                <Input
+                  type="email"
+                  value={config.imap_user || ''}
+                  onChange={(e) => handleChange('imap_user', e.target.value)}
+                  placeholder="tu-email@gmail.com"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium block mb-2">Contraseña de Aplicación (IMAP)</label>
+                <div className="relative">
+                  <Input
+                    type={mostrarPasswordImap ? 'text' : 'password'}
+                    value={config.imap_password || ''}
+                    onChange={(e) => handleChange('imap_password', e.target.value)}
+                    placeholder="Misma App Password que SMTP"
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setMostrarPasswordImap(!mostrarPasswordImap)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {mostrarPasswordImap ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center space-x-2 mt-4">
+              <input
+                type="checkbox"
+                checked={(config.imap_use_ssl ?? 'true') === 'true'}
+                onChange={(e) => handleChange('imap_use_ssl', e.target.checked ? 'true' : 'false')}
+                className="rounded"
+              />
+              <label className="text-sm font-medium">Usar SSL (puerto 993). Desmarca para STARTTLS (143).</label>
+            </div>
+            <div className="mt-4 flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  setProbandoImap(true)
+                  setResultadoImap(null)
+                  try {
+                    const r = await emailConfigService.probarConfiguracionImap()
+                    setResultadoImap(r)
+                    if (r.success) toast.success(r.mensaje || 'Conexión IMAP correcta')
+                    else toast.error(r.mensaje || 'Error probando IMAP')
+                  } catch (err: any) {
+                    const msg = err?.response?.data?.detail || err?.message || 'Error probando IMAP'
+                    setResultadoImap({ success: false, mensaje: msg })
+                    toast.error(msg)
+                  } finally {
+                    setProbandoImap(false)
+                  }
+                }}
+                disabled={probandoImap || !config.imap_host?.trim() || !config.imap_user?.trim() || !config.imap_password?.trim()}
+              >
+                {probandoImap ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <TestTube className="h-4 w-4 mr-2" />}
+                Probar conexión IMAP
+              </Button>
+              {resultadoImap && (
+                <span className={`text-sm ${resultadoImap.success ? 'text-green-600' : 'text-red-600'}`}>
+                  {resultadoImap.success ? 'OK' : resultadoImap.mensaje}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Notificación automática de tickets CRM */}
+          <div className="border-t pt-6 mt-6">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+              <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
+                <Mail className="h-5 w-5 text-blue-600" />
+                Notificación automática de tickets (CRM)
+              </h3>
+              <p className="text-sm text-blue-800 mb-2">
+                Cuando se crea o actualiza un ticket en <a href="/crm/tickets" className="underline font-medium">CRM → Tickets</a>, se envía un correo automáticamente <strong>desde el email configurado arriba</strong> hacia los contactos que indiques aquí.
+              </p>
+              <p className="text-xs text-blue-700">
+                Introduce uno o varios emails separados por coma (contactos prestablecidos). Ej: <code className="bg-blue-100 px-1 rounded">soporte@empresa.com, gerencia@empresa.com</code>
+              </p>
+            </div>
+            <div>
+              <label className="text-sm font-medium block mb-2">Contactos para notificación de tickets</label>
+              <Textarea
+                value={config.tickets_notify_emails || ''}
+                onChange={(e) => handleChange('tickets_notify_emails', e.target.value)}
+                placeholder="email1@ejemplo.com, email2@ejemplo.com"
+                rows={3}
+                className="font-mono text-sm"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Estos contactos recibirán un correo cada vez que se cree o actualice un ticket en el CRM.
+              </p>
+            </div>
           </div>
 
           {/* Selector de ambiente */}
