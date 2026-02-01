@@ -150,23 +150,26 @@ export default defineConfig({
         // ✅ Deshabilitar modulePreload para chunks pesados
         experimentalMinChunkSize: 20000,
         manualChunks: (id) => {
-          // ✅ CRÍTICO: React DEBE estar en el chunk principal y cargarse primero
-          // Verificar React ANTES de cualquier otra lógica
           if (id.includes('node_modules')) {
-            // React core - DEBE estar en chunk principal (undefined = chunk principal)
-            // Esto asegura que React esté disponible antes que cualquier otro chunk
+            // React core - chunk separado (se carga primero por dependencia del entry)
+            // Reduce el tamaño del chunk principal index.js
             if ((id.includes('/react/') || id.includes('/react-dom/') ||
                  id.includes('\\react\\') || id.includes('\\react-dom\\')) &&
                 !id.includes('react-router') &&
                 !id.includes('react-hook-form') &&
                 !id.includes('@tanstack/react-query') &&
                 !id.includes('react-hot-toast')) {
-              return undefined // undefined = chunk principal (index.js)
+              return 'react-core'
             }
 
             // React Router
             if (id.includes('react-router')) {
               return 'router'
+            }
+
+            // Axios - usado en todos los servicios, chunk propio para cache
+            if (id.includes('axios')) {
+              return 'axios'
             }
 
             // Librerías pesadas de exportación - LAZY LOADING (cargar solo cuando se necesiten)
@@ -243,7 +246,7 @@ export default defineConfig({
         moduleSideEffects: false, // Tree-shaking más agresivo
       },
     },
-    chunkSizeWarningLimit: 500, // Reducir límite para detectar chunks grandes
+    chunkSizeWarningLimit: 600, // Tras split react-core/axios; avisar si algún chunk >600 kB
     target: 'esnext',
     minify: 'esbuild',
     // Configuración de source maps para producción
