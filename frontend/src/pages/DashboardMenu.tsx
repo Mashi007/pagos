@@ -26,6 +26,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { useSimpleAuth } from '../store/simpleAuthStore'
 import { formatCurrency } from '../utils'
 import { apiClient } from '../services/api'
@@ -526,6 +527,29 @@ export function DashboardMenu() {
   const evolucionMensual = datosDashboard?.evolucion_mensual || []
   const COLORS_CONCESIONARIOS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#6366f1']
 
+  // Etiqueta del período activo para mostrar en todos los gráficos (estándar profesional)
+  const rangoFechasLabel = useMemo(() => {
+    const obj = construirFiltrosObject(periodo)
+    if (obj.fecha_inicio && obj.fecha_fin) {
+      const fIni = new Date(obj.fecha_inicio)
+      const fFin = new Date(obj.fecha_fin)
+      const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' }
+      return `${fIni.toLocaleDateString('es-ES', opts)} – ${fFin.toLocaleDateString('es-ES', opts)}`
+    }
+    const labels: Record<string, string> = { día: 'Hoy', semana: 'Esta semana', mes: 'Este mes', año: 'Este año' }
+    return labels[periodo] || 'Este año'
+  }, [periodo, filtros, construirFiltrosObject])
+
+  // Estilos profesionales compartidos para todos los gráficos (tooltips, ejes, grid)
+  const chartTooltipStyle = {
+    contentStyle: { backgroundColor: 'rgba(255,255,255,0.98)', border: '1px solid #e5e7eb', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', padding: '12px 14px' },
+    labelStyle: { fontWeight: 600, color: '#374151', marginBottom: 6 },
+    itemStyle: { fontSize: '13px', color: '#4b5563' },
+  }
+  const chartCartesianGrid = { stroke: '#e5e7eb', strokeDasharray: '3 3', strokeOpacity: 0.8 }
+  const chartAxisTick = { fontSize: 12, fill: '#6b7280', fontWeight: 500 }
+  const chartLegendStyle = { wrapperStyle: { paddingTop: 12 }, iconType: 'rect' as const, iconSize: 10 }
+
   // Procesar datos de financiamiento por rangos en bandas de $200 USD
   const datosBandas200 = useMemo(() => {
     try {
@@ -675,40 +699,52 @@ export function DashboardMenu() {
           </motion.div>
         )}
 
-        {/* BARRA DE FILTROS Y BOTONES ARRIBA - OCULTA */}
-        {false && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-          >
-            <Card className="shadow-md border-2 border-gray-200 bg-gradient-to-r from-gray-50 to-white">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between flex-wrap gap-4">
-                  <div className="flex items-center space-x-2">
-                    <div className="flex items-center space-x-2 text-sm font-semibold text-gray-700">
-                      <Filter className="h-4 w-4 text-cyan-600" />
-                      <span>Filtros Rápidos</span>
-                    </div>
+        {/* Barra de filtros de fechas y período — aplica a todos los gráficos */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+        >
+          <Card className="shadow-md border border-gray-200/80 bg-white/95 backdrop-blur-sm rounded-xl">
+            <CardContent className="p-4">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex flex-wrap items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <Filter className="h-4 w-4 text-cyan-600" />
+                    <span className="text-sm font-semibold text-gray-700">Filtros</span>
                   </div>
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <DashboardFiltrosPanel
-                      filtros={filtros}
-                      setFiltros={setFiltros}
-                      periodo={periodo}
-                      setPeriodo={setPeriodo}
-                      onRefresh={handleRefresh}
-                      isRefreshing={isRefreshing}
-                      opcionesFiltros={opcionesFiltros}
-                      loadingOpcionesFiltros={loadingOpcionesFiltros}
-                      errorOpcionesFiltros={errorOpcionesFiltros}
-                    />
-                            </div>
+                  <Select value={periodo} onValueChange={(v) => setPeriodo(v)}>
+                    <SelectTrigger className="w-[140px] h-9 border-gray-200 bg-gray-50/80">
+                      <SelectValue placeholder="Período" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="día">Hoy</SelectItem>
+                      <SelectItem value="semana">Esta semana</SelectItem>
+                      <SelectItem value="mes">Este mes</SelectItem>
+                      <SelectItem value="año">Este año</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-gray-100">
+                    {rangoFechasLabel}
+                  </Badge>
                 </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        )}
+                <div className="flex items-center gap-2">
+                  <DashboardFiltrosPanel
+                    filtros={filtros}
+                    setFiltros={setFiltros}
+                    periodo={periodo}
+                    setPeriodo={setPeriodo}
+                    onRefresh={handleRefresh}
+                    isRefreshing={isRefreshing}
+                    opcionesFiltros={opcionesFiltros}
+                    loadingOpcionesFiltros={loadingOpcionesFiltros}
+                    errorOpcionesFiltros={errorOpcionesFiltros}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
 
         {/* KPIs PRINCIPALES */}
         {(
@@ -800,69 +836,79 @@ export function DashboardMenu() {
         ) : datosDashboard ? (
           <div className="space-y-6">
             {/* Gráfico de Evolución Mensual */}
-            {evolucionMensual.length > 0 && (
-              <motion.div
+            <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
               >
-                <Card className="shadow-lg border-2 border-gray-200">
-                  <CardHeader className="bg-gradient-to-r from-cyan-50 to-blue-50 border-b-2 border-cyan-200">
-                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                      <LineChart className="h-6 w-6 text-cyan-600" />
-                      <span>Evolución Mensual</span>
-                    </CardTitle>
+                <Card className="shadow-lg border border-gray-200/90 rounded-xl overflow-hidden bg-white">
+                  <CardHeader className="bg-gradient-to-r from-cyan-50/90 to-blue-50/90 border-b border-gray-200/80 pb-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
+                        <LineChart className="h-5 w-5 text-cyan-600" />
+                        <span>Evolución Mensual</span>
+                      </CardTitle>
+                      <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
+                        {rangoFechasLabel}
+                      </Badge>
+                    </div>
                   </CardHeader>
-                  <CardContent className="p-6">
-                    <ResponsiveContainer width="100%" height={300}>
-                      <ComposedChart data={evolucionMensual}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="mes" />
-                        <YAxis 
-                          tickFormatter={(value) => {
-                            if (value >= 1000) {
-                              return `$${(value / 1000).toFixed(0)}K`
-                            }
-                            return `$${value}`
-                          }}
-                          label={{ value: 'Monto (USD)', angle: -90, position: 'insideLeft' }}
-                        />
-                        <Tooltip 
-                          formatter={(value: number, name: string) => {
-                            if (name === 'Morosidad') {
-                              return [formatCurrency(value), name]
-                            }
-                            return [formatCurrency(value), name]
-                          }}
-                        />
-                        <Legend />
-                        <Bar dataKey="cartera" fill="#3b82f6" name="Cartera" />
-                        <Bar dataKey="cobrado" fill="#10b981" name="Cobrado" />
-                        <Line type="monotone" dataKey="morosidad" stroke="#ef4444" strokeWidth={2} name="Morosidad" />
-                      </ComposedChart>
-                    </ResponsiveContainer>
+                  <CardContent className="p-6 pt-4">
+                    {evolucionMensual.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={320}>
+                        <ComposedChart data={evolucionMensual} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
+                          <CartesianGrid {...chartCartesianGrid} />
+                          <XAxis dataKey="mes" tick={chartAxisTick} />
+                          <YAxis 
+                            tick={chartAxisTick}
+                            tickFormatter={(value) => {
+                              if (value >= 1000) {
+                                return `$${(value / 1000).toFixed(0)}K`
+                              }
+                              return `$${value}`
+                            }}
+                            label={{ value: 'Monto (USD)', angle: -90, position: 'insideLeft', style: { fill: '#6b7280', fontSize: 12 } }}
+                          />
+                          <Tooltip 
+                            contentStyle={chartTooltipStyle.contentStyle}
+                            labelStyle={chartTooltipStyle.labelStyle}
+                            formatter={(value: number, name: string) => [formatCurrency(value), name]}
+                          />
+                          <Legend {...chartLegendStyle} />
+                          <Bar dataKey="cartera" fill="#3b82f6" name="Cartera" />
+                          <Bar dataKey="cobrado" fill="#10b981" name="Cobrado" />
+                          <Line type="monotone" dataKey="morosidad" stroke="#ef4444" strokeWidth={2} name="Morosidad" />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex items-center justify-center py-16 text-gray-500">No hay datos para el período seleccionado</div>
+                    )}
                   </CardContent>
                 </Card>
               </motion.div>
-            )}
 
             {/* Gráfico de Áreas - Indicadores Financieros - Ancho Completo */}
-            {datosTendencia && datosTendencia.length > 0 && (
-              <motion.div
+            <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.35 }}
               >
-                <Card className="shadow-lg border-2 border-gray-200">
-                  <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b-2 border-green-200">
-                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                      <DollarSign className="h-6 w-6 text-green-600" />
-                      <span>Indicadores Financieros</span>
-                    </CardTitle>
+                <Card className="shadow-lg border border-gray-200/90 rounded-xl overflow-hidden bg-white">
+                  <CardHeader className="bg-gradient-to-r from-green-50/90 to-emerald-50/90 border-b border-gray-200/80 pb-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
+                        <DollarSign className="h-5 w-5 text-green-600" />
+                        <span>Indicadores Financieros</span>
+                      </CardTitle>
+                      <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
+                        {rangoFechasLabel}
+                      </Badge>
+                    </div>
                   </CardHeader>
-                  <CardContent className="p-6">
-                    <ResponsiveContainer width="100%" height={400}>
-                      <AreaChart data={datosTendencia} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                  <CardContent className="p-6 pt-4">
+                    {datosTendencia && datosTendencia.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={400}>
+                      <AreaChart data={datosTendencia} margin={{ top: 12, right: 24, left: 8, bottom: 8 }}>
                         <defs>
                           <linearGradient id="colorFinanciamiento" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
@@ -881,20 +927,20 @@ export function DashboardMenu() {
                             <stop offset="95%" stopColor="#ef4444" stopOpacity={0.1}/>
                           </linearGradient>
                         </defs>
-                        <CartesianGrid strokeDasharray="3 3" />
+                        <CartesianGrid {...chartCartesianGrid} />
                         <XAxis
                           dataKey="mes"
-                          tick={{ fontSize: 12 }}
-                          angle={-45}
-                          textAnchor="end"
+                          tick={{ ...chartAxisTick, angle: -45, textAnchor: 'end' }}
                           height={80}
                         />
                         <YAxis
-                          tick={{ fontSize: 12 }}
+                          tick={chartAxisTick}
                           tickFormatter={(value) => `$${(value / 1000).toFixed(0)}K`}
-                          label={{ value: 'Monto (USD)', angle: -90, position: 'insideLeft' }}
+                          label={{ value: 'Monto (USD)', angle: -90, position: 'insideLeft', style: { fill: '#6b7280', fontSize: 12 } }}
                         />
                         <Tooltip
+                          contentStyle={chartTooltipStyle.contentStyle}
+                          labelStyle={chartTooltipStyle.labelStyle}
                           formatter={(value: number, name: string) => {
                             const labels: Record<string, string> = {
                               'monto_nuevos': 'Total Financiamiento',
@@ -906,7 +952,7 @@ export function DashboardMenu() {
                           }}
                           labelFormatter={(label) => `Mes: ${label}`}
                         />
-                        <Legend />
+                        <Legend {...chartLegendStyle} />
                         <Area
                           type="monotone"
                           dataKey="monto_nuevos"
@@ -941,10 +987,12 @@ export function DashboardMenu() {
                         />
                       </AreaChart>
                     </ResponsiveContainer>
+                    ) : (
+                      <div className="flex items-center justify-center py-16 text-gray-500">No hay datos para el período seleccionado</div>
+                    )}
                   </CardContent>
                 </Card>
               </motion.div>
-            )}
 
           </div>
         ) : null}
@@ -952,31 +1000,36 @@ export function DashboardMenu() {
         {/* GRÁFICOS: BANDAS DE $200 USD Y COBRANZA PLANIFICADA VS REAL */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* GRÁFICO DE BANDAS DE $200 USD */}
-          {datosBandas200 && datosBandas200.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
             >
-              <Card className="shadow-lg border-2 border-gray-200 h-full flex flex-col">
-                <CardHeader className="bg-gradient-to-r from-indigo-50 to-purple-50 border-b-2 border-indigo-200">
-                  <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                    <BarChart3 className="h-6 w-6 text-indigo-600" />
-                    <span>Distribución por Bandas de $200 USD</span>
-                  </CardTitle>
+              <Card className="shadow-lg border border-gray-200/90 rounded-xl overflow-hidden bg-white h-full flex flex-col">
+                <CardHeader className="bg-gradient-to-r from-indigo-50/90 to-purple-50/90 border-b border-gray-200/80 pb-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
+                      <BarChart3 className="h-5 w-5 text-indigo-600" />
+                      <span>Distribución por Bandas de $200 USD</span>
+                    </CardTitle>
+                    <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
+                      {rangoFechasLabel}
+                    </Badge>
+                  </div>
                 </CardHeader>
                 <CardContent className="p-6 flex-1">
+                  {datosBandas200 && datosBandas200.length > 0 ? (
                   <ResponsiveContainer width="100%" height={450}>
                     <BarChart
                       data={datosBandas200}
                       layout="vertical"
-                      margin={{ top: 10, right: 40, left: 120, bottom: 20 }}
+                      margin={{ top: 12, right: 24, left: 120, bottom: 24 }}
                     >
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
+                      <CartesianGrid {...chartCartesianGrid} />
                       <XAxis
                         type="number"
                         domain={[0, 'dataMax']}
-                        tick={{ fontSize: 11, fill: '#6b7280' }}
+                        tick={chartAxisTick}
                         tickFormatter={(value) => value.toLocaleString('es-EC')}
                         label={{
                           value: 'Cantidad de Préstamos',
@@ -995,23 +1048,13 @@ export function DashboardMenu() {
                         tickLine={false}
                       />
                       <Tooltip
-                        formatter={(value: number) => [
-                          `${value.toLocaleString('es-EC')} préstamos`,
-                          'Cantidad'
-                        ]}
+                        contentStyle={chartTooltipStyle.contentStyle}
+                        labelStyle={chartTooltipStyle.labelStyle}
+                        formatter={(value: number) => [`${value.toLocaleString('es-EC')} préstamos`, 'Cantidad']}
                         labelFormatter={(label) => `Banda: ${label}`}
-                        contentStyle={{
-                          backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                          border: '1px solid #e5e7eb',
-                          borderRadius: '8px',
-                          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
-                        }}
-                        cursor={{ fill: 'rgba(99, 102, 241, 0.1)' }}
+                        cursor={{ fill: 'rgba(99, 102, 241, 0.08)' }}
                       />
-                      <Legend
-                        wrapperStyle={{ paddingTop: '10px' }}
-                        iconType="rect"
-                      />
+                      <Legend {...chartLegendStyle} />
                       <Bar
                         dataKey="cantidad"
                         radius={[0, 6, 6, 0]}
@@ -1031,43 +1074,46 @@ export function DashboardMenu() {
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
+                  ) : (
+                    <div className="flex items-center justify-center py-16 text-gray-500">No hay datos para mostrar</div>
+                  )}
                 </CardContent>
               </Card>
             </motion.div>
-          )}
 
           {/* GRÁFICO DE COBRANZA FECHAS ESPECÍFICAS */}
-          {datosCobranzaFechas && datosCobranzaFechas.dias && datosCobranzaFechas.dias.length > 0 && (
-            <motion.div
+          <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.45 }}
               className="h-full"
             >
-              <Card className="shadow-lg border-2 border-gray-200 h-full flex flex-col">
-                <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200">
-                  <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                    <BarChart3 className="h-6 w-6 text-blue-600" />
-                    <span>Cobranza Planificada vs Real</span>
-                  </CardTitle>
+              <Card className="shadow-lg border border-gray-200/90 rounded-xl overflow-hidden bg-white h-full flex flex-col">
+                <CardHeader className="bg-gradient-to-r from-blue-50/90 to-indigo-50/90 border-b border-gray-200/80 pb-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
+                      <BarChart3 className="h-5 w-5 text-blue-600" />
+                      <span>Cobranza Planificada vs Real</span>
+                    </CardTitle>
+                    <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
+                      {rangoFechasLabel}
+                    </Badge>
+                  </div>
                 </CardHeader>
                 <CardContent className="p-6 flex-1">
                   {loadingCobranzaFechas ? (
                     <div className="h-[450px] flex items-center justify-center">
                       <div className="animate-pulse text-gray-400">Cargando...</div>
                     </div>
-                  ) : (
+                  ) : datosCobranzaFechas?.dias?.length ? (
                     <ResponsiveContainer width="100%" height={450}>
-                      <BarChart data={datosCobranzaFechas.dias} margin={{ top: 10, right: 30, left: 0, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis
-                          dataKey="nombre_fecha"
-                          tick={{ fontSize: 12 }}
-                        />
+                      <BarChart data={datosCobranzaFechas.dias} margin={{ top: 12, right: 24, left: 8, bottom: 8 }}>
+                        <CartesianGrid {...chartCartesianGrid} />
+                        <XAxis dataKey="nombre_fecha" tick={chartAxisTick} />
                         <YAxis
                           domain={[0, 'dataMax']}
                           tickCount={6}
-                          tick={{ fontSize: 11 }}
+                          tick={chartAxisTick}
                           tickFormatter={(value) => {
                             if (value >= 1000) {
                               return `$${(value / 1000).toFixed(1)}K`
@@ -1082,63 +1128,55 @@ export function DashboardMenu() {
                           }}
                         />
                         <Tooltip
+                          contentStyle={chartTooltipStyle.contentStyle}
+                          labelStyle={chartTooltipStyle.labelStyle}
                           formatter={(value: number) => [formatCurrency(value), '']}
                           labelFormatter={(label) => `Fecha: ${label}`}
-                          contentStyle={{
-                            backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                            border: '1px solid #e5e7eb',
-                            borderRadius: '8px',
-                            boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
-                          }}
                         />
-                        <Legend />
+                        <Legend {...chartLegendStyle} />
                         <Bar dataKey="cobranza_planificada" fill="#3b82f6" name="Planificado" radius={[4, 4, 0, 0]} />
                         <Bar dataKey="cobranza_real" fill="#10b981" name="Real" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
+                  ) : (
+                    <div className="flex items-center justify-center py-16 text-gray-500">No hay datos para mostrar</div>
                   )}
                 </CardContent>
               </Card>
             </motion.div>
-          )}
         </div>
 
         {/* GRÁFICOS DE DISTRIBUCIÓN */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Préstamos por Concesionario */}
-          {datosConcesionarios && datosConcesionarios.length > 0 && (
-              <motion.div
+          <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.5 }}
               >
-                <Card className="shadow-lg border-2 border-gray-200">
-                <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50 border-b-2 border-purple-200">
-                    <CardTitle className="flex items-center justify-center space-x-2 text-xl font-bold text-gray-800">
-                    <BarChart3 className="h-6 w-6 text-purple-600" />
-                    <span>Préstamos por Concesionario</span>
+                <Card className="shadow-lg border border-gray-200/90 rounded-xl overflow-hidden bg-white">
+                <CardHeader className="bg-gradient-to-r from-purple-50/90 to-pink-50/90 border-b border-gray-200/80 pb-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
+                      <BarChart3 className="h-5 w-5 text-purple-600" />
+                      <span>Préstamos por Concesionario</span>
                     </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6 flex items-center justify-center">
+                    <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
+                      {rangoFechasLabel}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                  <CardContent className="p-6 pt-4 flex items-center justify-center">
+                  {datosConcesionarios && datosConcesionarios.length > 0 ? (
                   <ResponsiveContainer width="100%" height={400}>
-                    <BarChart data={datosConcesionarios} layout="vertical" margin={{ top: 5, right: 30, left: 150, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis
-                        type="number"
-                        allowDecimals={false}
-                        tickFormatter={(value) => value.toLocaleString('es-EC')}
-                      />
-                      <YAxis
-                        type="category"
-                        dataKey="concesionario"
-                        width={140}
-                        tick={{ fontSize: 12 }}
-                      />
+                    <BarChart data={datosConcesionarios} layout="vertical" margin={{ top: 8, right: 24, left: 140, bottom: 8 }}>
+                      <CartesianGrid {...chartCartesianGrid} />
+                      <XAxis type="number" allowDecimals={false} tick={chartAxisTick} tickFormatter={(value) => value.toLocaleString('es-EC')} />
+                      <YAxis type="category" dataKey="concesionario" width={140} tick={chartAxisTick} />
                       <Tooltip
-                        formatter={(value: number, name: string) => [
-                          `${Math.round(value).toLocaleString('es-EC')} préstamos`,
-                          'Cantidad'
-                        ]}
+                        contentStyle={chartTooltipStyle.contentStyle}
+                        labelStyle={chartTooltipStyle.labelStyle}
+                        formatter={(value: number) => [`${Math.round(value).toLocaleString('es-EC')} préstamos`, 'Cantidad']}
                         labelFormatter={(label) => `Concesionario: ${label}`}
                       />
                       <Bar
@@ -1152,45 +1190,42 @@ export function DashboardMenu() {
                       </Bar>
                         </BarChart>
                       </ResponsiveContainer>
+                  ) : (
+                    <div className="flex items-center justify-center py-16 text-gray-500">No hay datos para mostrar</div>
+                  )}
                   </CardContent>
                 </Card>
               </motion.div>
-          )}
 
           {/* Préstamos por Modelo */}
-          {datosModelos && datosModelos.length > 0 && (
-              <motion.div
+          <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.6 }}
               >
-                <Card className="shadow-lg border-2 border-gray-200">
-                <CardHeader className="bg-gradient-to-r from-amber-50 to-orange-50 border-b-2 border-amber-200">
-                    <CardTitle className="flex items-center justify-center space-x-2 text-xl font-bold text-gray-800">
-                    <BarChart3 className="h-6 w-6 text-amber-600" />
-                    <span>Préstamos por Modelo</span>
+                <Card className="shadow-lg border border-gray-200/90 rounded-xl overflow-hidden bg-white">
+                <CardHeader className="bg-gradient-to-r from-amber-50/90 to-orange-50/90 border-b border-gray-200/80 pb-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
+                      <BarChart3 className="h-5 w-5 text-amber-600" />
+                      <span>Préstamos por Modelo</span>
                     </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6 flex items-center justify-center">
+                    <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
+                      {rangoFechasLabel}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                  <CardContent className="p-6 pt-4 flex items-center justify-center">
+                  {datosModelos && datosModelos.length > 0 ? (
                   <ResponsiveContainer width="100%" height={400}>
-                    <BarChart data={datosModelos} layout="vertical" margin={{ top: 5, right: 30, left: 150, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis
-                        type="number"
-                        allowDecimals={false}
-                        tickFormatter={(value) => value.toLocaleString('es-EC')}
-                      />
-                        <YAxis
-                        type="category"
-                        dataKey="modelo"
-                        width={140}
-                        tick={{ fontSize: 12 }}
-                        />
-                            <Tooltip
-                        formatter={(value: number, name: string) => [
-                          `${Math.round(value).toLocaleString('es-EC')} préstamos`,
-                          'Cantidad'
-                        ]}
+                    <BarChart data={datosModelos} layout="vertical" margin={{ top: 8, right: 24, left: 140, bottom: 8 }}>
+                      <CartesianGrid {...chartCartesianGrid} />
+                      <XAxis type="number" allowDecimals={false} tick={chartAxisTick} tickFormatter={(value) => value.toLocaleString('es-EC')} />
+                      <YAxis type="category" dataKey="modelo" width={140} tick={chartAxisTick} />
+                      <Tooltip
+                        contentStyle={chartTooltipStyle.contentStyle}
+                        labelStyle={chartTooltipStyle.labelStyle}
+                        formatter={(value: number) => [`${Math.round(value).toLocaleString('es-EC')} préstamos`, 'Cantidad']}
                         labelFormatter={(label) => `Modelo: ${label}`}
                       />
                       <Bar
@@ -1204,10 +1239,12 @@ export function DashboardMenu() {
                         </Bar>
                       </BarChart>
                         </ResponsiveContainer>
+                  ) : (
+                    <div className="flex items-center justify-center py-16 text-gray-500">No hay datos para mostrar</div>
+                  )}
                   </CardContent>
                 </Card>
               </motion.div>
-          )}
         </div>
 
 
@@ -1215,77 +1252,88 @@ export function DashboardMenu() {
         {/* GRÁFICOS DE MOROSIDAD */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Composición de Morosidad */}
-          {datosComposicionMorosidad && datosComposicionMorosidad.puntos && datosComposicionMorosidad.puntos.length > 0 && (
-            <motion.div
+          <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.8 }}
               className="h-full"
             >
-              <Card className="shadow-lg border-2 border-gray-200 h-full flex flex-col">
-                <CardHeader className="bg-gradient-to-r from-red-50 to-rose-50 border-b-2 border-red-200">
-                  <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                    <BarChart3 className="h-6 w-6 text-red-600" />
-                    <span>Composición de Morosidad</span>
-                  </CardTitle>
+              <Card className="shadow-lg border border-gray-200/90 rounded-xl overflow-hidden bg-white h-full flex flex-col">
+                <CardHeader className="bg-gradient-to-r from-red-50/90 to-rose-50/90 border-b border-gray-200/80 pb-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
+                      <BarChart3 className="h-5 w-5 text-red-600" />
+                      <span>Composición de Morosidad</span>
+                    </CardTitle>
+                    <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
+                      {rangoFechasLabel}
+                    </Badge>
+                  </div>
                 </CardHeader>
                 <CardContent className="p-6 flex-1">
+                  {datosComposicionMorosidad?.puntos?.length ? (
                   <ResponsiveContainer width="100%" height={400}>
-                    <BarChart data={datosComposicionMorosidad.puntos}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="categoria" />
-                      <YAxis />
-                      <Tooltip />
-                        <Legend />
+                    <BarChart data={datosComposicionMorosidad.puntos} margin={{ top: 8, right: 24, left: 8, bottom: 8 }}>
+                      <CartesianGrid {...chartCartesianGrid} />
+                      <XAxis dataKey="categoria" tick={chartAxisTick} />
+                      <YAxis tick={chartAxisTick} />
+                      <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} />
+                      <Legend {...chartLegendStyle} />
                       <Bar dataKey="monto" fill="#ef4444" name="Monto en Morosidad" />
                       </BarChart>
                     </ResponsiveContainer>
+                  ) : (
+                    <div className="flex items-center justify-center py-16 text-gray-500">No hay datos para mostrar</div>
+                  )}
                 </CardContent>
               </Card>
             </motion.div>
-          )}
 
           {/* Morosidad por Analista - Ancho Completo */}
-          {datosMorosidadAnalista && datosMorosidadAnalista.length > 0 && (
-            <motion.div
+          <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.9 }}
               className="h-full lg:col-span-2"
             >
-              <Card className="shadow-lg border-2 border-gray-200 h-full flex flex-col">
-                <CardHeader className="bg-gradient-to-r from-orange-50 to-amber-50 border-b-2 border-orange-200">
-                  <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                    <Users className="h-6 w-6 text-orange-600" />
-                    <span>Morosidad por Analista</span>
-                  </CardTitle>
+              <Card className="shadow-lg border border-gray-200/90 rounded-xl overflow-hidden bg-white h-full flex flex-col">
+                <CardHeader className="bg-gradient-to-r from-orange-50/90 to-amber-50/90 border-b border-gray-200/80 pb-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
+                      <Users className="h-5 w-5 text-orange-600" />
+                      <span>Morosidad por Analista</span>
+                    </CardTitle>
+                    <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
+                      {rangoFechasLabel}
+                    </Badge>
+                  </div>
                 </CardHeader>
                 <CardContent className="p-6 flex-1">
+                  {datosMorosidadAnalista && datosMorosidadAnalista.length > 0 ? (
                   <ResponsiveContainer width="100%" height={400}>
                     <BarChart 
                       data={datosMorosidadAnalista} 
-                      margin={{ top: 5, right: 10, left: 20, bottom: 80 }}
+                      margin={{ top: 8, right: 24, left: 16, bottom: 80 }}
                       barCategoryGap="5%"
                     >
-                      <CartesianGrid strokeDasharray="3 3" />
+                      <CartesianGrid {...chartCartesianGrid} />
                       <XAxis
                         dataKey="analista"
                         angle={-45}
                         textAnchor="end"
                         height={100}
-                        tick={{ fontSize: 11 }}
+                        tick={{ ...chartAxisTick, fontSize: 11 }}
                         interval={0}
                         width={undefined}
                       />
-                      <YAxis
-                        label={{ value: 'Morosidad Total', angle: -90, position: 'insideLeft' }}
-                        width={80}
-                      />
+                      <YAxis tick={chartAxisTick} label={{ value: 'Morosidad Total', angle: -90, position: 'insideLeft', style: { fill: '#6b7280', fontSize: 12 } }} width={80} />
                       <Tooltip
-                        formatter={(value: number) => [`${formatCurrency(value)}`, 'Morosidad Total']}
+                        contentStyle={chartTooltipStyle.contentStyle}
+                        labelStyle={chartTooltipStyle.labelStyle}
+                        formatter={(value: number) => [formatCurrency(value), 'Morosidad Total']}
                         labelFormatter={(label) => `Analista: ${label}`}
                       />
-                      <Legend />
+                      <Legend {...chartLegendStyle} />
                       <Bar
                         dataKey="total_morosidad"
                         fill="#f97316"
@@ -1295,17 +1343,18 @@ export function DashboardMenu() {
                       />
                     </BarChart>
                   </ResponsiveContainer>
+                  ) : (
+                    <div className="flex items-center justify-center py-16 text-gray-500">No hay datos para mostrar</div>
+                  )}
                 </CardContent>
               </Card>
             </motion.div>
-          )}
         </div>
 
         {/* GRÁFICOS DE EVOLUCIÓN */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Evolución de Morosidad */}
-          {datosEvolucionMorosidad && datosEvolucionMorosidad.length > 0 && (
-            <motion.div
+          <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 1.0 }}
@@ -1318,6 +1367,7 @@ export function DashboardMenu() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-6">
+                  {datosEvolucionMorosidad && datosEvolucionMorosidad.length > 0 ? (
                   <ResponsiveContainer width="100%" height={300}>
                     <RechartsLineChart data={datosEvolucionMorosidad}>
                       <CartesianGrid strokeDasharray="3 3" />
@@ -1328,42 +1378,51 @@ export function DashboardMenu() {
                       <Line type="monotone" dataKey="morosidad" stroke="#ef4444" strokeWidth={2} name="Morosidad" />
                     </RechartsLineChart>
                   </ResponsiveContainer>
+                  ) : (
+                    <div className="flex items-center justify-center py-16 text-gray-500">No hay datos para mostrar</div>
+                  )}
                   </CardContent>
                 </Card>
               </motion.div>
-          )}
 
           {/* Evolución de Pagos */}
-          {datosEvolucionPagos && datosEvolucionPagos.length > 0 && (
-              <motion.div
+          <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 1.1 }}
               >
-                <Card className="shadow-lg border-2 border-gray-200">
-                <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b-2 border-green-200">
-                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                    <LineChart className="h-6 w-6 text-green-600" />
-                    <span>Evolución de Pagos</span>
+                <Card className="shadow-lg border border-gray-200/90 rounded-xl overflow-hidden bg-white">
+                <CardHeader className="bg-gradient-to-r from-green-50/90 to-emerald-50/90 border-b border-gray-200/80 pb-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
+                      <LineChart className="h-5 w-5 text-green-600" />
+                      <span>Evolución de Pagos</span>
                     </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6">
-                  <ResponsiveContainer width="100%" height={300}>
-                    <ComposedChart data={datosEvolucionPagos}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="mes" />
-                      <YAxis yAxisId="left" />
-                      <YAxis yAxisId="right" orientation="right" />
-                      <Tooltip />
-                            <Legend />
+                    <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
+                      {rangoFechasLabel}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                  <CardContent className="p-6 pt-4">
+                  {datosEvolucionPagos && datosEvolucionPagos.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={320}>
+                    <ComposedChart data={datosEvolucionPagos} margin={{ top: 8, right: 24, left: 8, bottom: 8 }}>
+                      <CartesianGrid {...chartCartesianGrid} />
+                      <XAxis dataKey="mes" tick={chartAxisTick} />
+                      <YAxis yAxisId="left" tick={chartAxisTick} />
+                      <YAxis yAxisId="right" orientation="right" tick={chartAxisTick} />
+                      <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} />
+                      <Legend {...chartLegendStyle} />
                       <Bar yAxisId="left" dataKey="pagos" fill="#10b981" name="Cantidad Pagos" />
                       <Line yAxisId="right" type="monotone" dataKey="monto" stroke="#3b82f6" strokeWidth={2} name="Monto Total" />
                     </ComposedChart>
                         </ResponsiveContainer>
+                  ) : (
+                    <div className="flex items-center justify-center py-16 text-gray-500">No hay datos para mostrar</div>
+                  )}
                   </CardContent>
                 </Card>
               </motion.div>
-          )}
             </div>
 
       </div>

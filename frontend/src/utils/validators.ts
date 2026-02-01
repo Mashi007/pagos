@@ -116,7 +116,15 @@ export function sanitizarString(texto: string, maxLength: number = 100): string 
   return texto.trim().slice(0, maxLength)
 }
 
-// Validación de configuración de Gmail
+// =============================================================================
+// Normas de Google para email (SMTP e IMAP)
+// =============================================================================
+// SMTP (enviar): smtp.gmail.com | Puertos: 587 (STARTTLS) o 465 (SSL) | App Password
+// IMAP (recibir): imap.gmail.com | Puertos: 993 (SSL) o 143 (STARTTLS) | App Password
+// Ref: https://support.google.com/mail/answer/7126229
+// =============================================================================
+
+// Validación de configuración de Gmail (SMTP - envío de correo)
 export function validarConfiguracionGmail(config: {
   smtp_host?: string
   smtp_port?: string
@@ -126,7 +134,8 @@ export function validarConfiguracionGmail(config: {
   from_email?: string
 }): { valido: boolean; errores: string[] } {
   const errores: string[] = []
-  const esGmail = config.smtp_host?.toLowerCase().includes('gmail.com') || false
+  const host = config.smtp_host?.toLowerCase().trim() ?? ''
+  const esGmail = host === 'smtp.gmail.com' || host.endsWith('.gmail.com')
 
   // Validaciones básicas
   if (!config.smtp_host?.trim()) {
@@ -151,17 +160,67 @@ export function validarConfiguracionGmail(config: {
     errores.push('Email del remitente no es válido')
   }
 
-  // Validaciones específicas para Gmail
+  // Validaciones específicas para Gmail/Google (normas SMTP oficiales)
   if (esGmail) {
     if (!config.smtp_password?.trim()) {
       errores.push('Contraseña de Aplicación es requerida para Gmail/Google Workspace')
     }
     const puerto = parseInt(config.smtp_port || '0')
     if (puerto !== 587 && puerto !== 465) {
-      errores.push('Gmail/Google Workspace requiere puerto 587 (TLS) o 465 (SSL). El puerto 587 es recomendado.')
+      errores.push('Gmail/Google Workspace requiere puerto 587 (STARTTLS) o 465 (SSL). El puerto 587 es recomendado.')
     }
     if (puerto === 587 && config.smtp_use_tls !== 'true') {
       errores.push('Para puerto 587, TLS debe estar habilitado (requerido por Gmail/Google Workspace)')
+    }
+    // Puerto 465 usa SSL implícito; no requiere checkbox TLS adicional
+  }
+
+  return {
+    valido: errores.length === 0,
+    errores
+  }
+}
+
+// Validación de configuración IMAP para Google (recibir correo)
+// Normas: imap.gmail.com, puerto 993 (SSL) o 143 (STARTTLS), App Password
+export function validarConfiguracionImapGmail(config: {
+  imap_host?: string
+  imap_port?: string
+  imap_user?: string
+  imap_password?: string
+  imap_use_ssl?: string
+}): { valido: boolean; errores: string[] } {
+  const errores: string[] = []
+  const host = config.imap_host?.toLowerCase().trim() ?? ''
+  const esGmailImap = host === 'imap.gmail.com' || host.endsWith('.gmail.com')
+
+  if (!config.imap_host?.trim()) {
+    errores.push('Servidor IMAP es requerido')
+  }
+  if (!config.imap_port?.trim()) {
+    errores.push('Puerto IMAP es requerido')
+  } else {
+    const puerto = parseInt(config.imap_port)
+    if (isNaN(puerto) || puerto < 1 || puerto > 65535) {
+      errores.push('Puerto IMAP debe ser un número entre 1 y 65535')
+    }
+  }
+  if (!config.imap_user?.trim()) {
+    errores.push('Email de usuario IMAP es requerido')
+  } else if (!validarEmail(config.imap_user)) {
+    errores.push('Email de usuario IMAP no es válido')
+  }
+
+  if (esGmailImap) {
+    if (!config.imap_password?.trim()) {
+      errores.push('Contraseña de Aplicación es requerida para Gmail/Google Workspace (IMAP)')
+    }
+    const puerto = parseInt(config.imap_port || '0')
+    if (puerto !== 993 && puerto !== 143) {
+      errores.push('Gmail IMAP requiere puerto 993 (SSL) o 143 (STARTTLS). El puerto 993 es recomendado.')
+    }
+    if (puerto === 143 && config.imap_use_ssl !== 'true') {
+      errores.push('Para puerto 143, TLS/STARTTLS debe estar habilitado (requerido por Gmail/Google Workspace)')
     }
   }
 
@@ -171,7 +230,24 @@ export function validarConfiguracionGmail(config: {
   }
 }
 
-// Validación de configuración de WhatsApp
+// =============================================================================
+// Normas de Meta WhatsApp Business API (Cloud API)
+// =============================================================================
+// - Base URL: https://graph.facebook.com/v{version}/ (v18.0, v19.0, v20.0, v21.0, v22.0)
+// - Webhook: GET (hub.mode, hub.verify_token, hub.challenge) | POST (X-Hub-Signature-256, payload object "whatsapp_business_account")
+// - Envío: POST {api_url}/{phone_number_id}/messages | Auth: Bearer {access_token}
+// - Phone Number ID: solo dígitos (ID numérico de Meta)
+// Ref: https://developers.facebook.com/docs/whatsapp/cloud-api
+// =============================================================================
+
+/** Verifica que la URL sea la base de Meta Graph API (WhatsApp Cloud API). Ej: https://graph.facebook.com/v18.0 */
+export function esGraphApiUrl(url: string): boolean {
+  if (!url || typeof url !== 'string') return false
+  const u = url.trim().toLowerCase()
+  return u.startsWith('https://') && u.includes('graph.facebook.com') && /\/v\d+/.test(u)
+}
+
+// Validación de configuración de WhatsApp (Meta Cloud API)
 export function validarConfiguracionWhatsApp(config: {
   api_url?: string
   access_token?: string
@@ -183,15 +259,17 @@ export function validarConfiguracionWhatsApp(config: {
     errores.push('API URL es requerida')
   } else if (!validarURL(config.api_url)) {
     errores.push('API URL no es válida')
+  } else if (!esGraphApiUrl(config.api_url)) {
+    errores.push('API URL debe ser la base de Meta Graph API (ej: https://graph.facebook.com/v18.0)')
   }
 
   if (!config.access_token?.trim()) {
-    errores.push('Access Token es requerido')
+    errores.push('Access Token es requerido (token de Meta Developers)')
   }
 
   const phoneNumberIdValidacion = validarPhoneNumberID(config.phone_number_id || '')
   if (!phoneNumberIdValidacion.valido) {
-    errores.push(phoneNumberIdValidacion.error || 'Phone Number ID es requerido')
+    errores.push(phoneNumberIdValidacion.error || 'Phone Number ID es requerido (solo números, desde Meta Business)')
   }
 
   return {

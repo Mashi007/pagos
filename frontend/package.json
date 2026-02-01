@@ -10,7 +10,7 @@
   "scripts": {
     "setup": "node setup.js",
     "dev": "node node_modules/vite/bin/vite.js",
-    "build": "tsc --noEmit --skipLibCheck && vite build",
+    "build": "tsc --noEmit --skipLibCheck && vite build && node verify-build.js",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "lint:fix": "eslint . --ext ts,tsx --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
