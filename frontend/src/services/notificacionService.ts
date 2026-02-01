@@ -201,6 +201,48 @@ class NotificacionService {
     )
   }
 
+  /** Envía correo a cada cliente en la clasificación indicada (email desde tabla clientes por cédula). */
+  async enviarNotificacionesPrevias(): Promise<{ mensaje: string; enviados: number; sin_email: number; fallidos: number }> {
+    return await apiClient.post<{ mensaje: string; enviados: number; sin_email: number; fallidos: number }>(
+      '/api/v1/notificaciones-previas/enviar',
+      {},
+      { timeout: 120000 }
+    )
+  }
+
+  async enviarNotificacionesDiaPago(): Promise<{ mensaje: string; enviados: number; sin_email: number; fallidos: number }> {
+    return await apiClient.post<{ mensaje: string; enviados: number; sin_email: number; fallidos: number }>(
+      '/api/v1/notificaciones-dia-pago/enviar',
+      {},
+      { timeout: 120000 }
+    )
+  }
+
+  async enviarNotificacionesRetrasadas(): Promise<{ mensaje: string; enviados: number; sin_email: number; fallidos: number }> {
+    return await apiClient.post<{ mensaje: string; enviados: number; sin_email: number; fallidos: number }>(
+      '/api/v1/notificaciones-retrasadas/enviar',
+      {},
+      { timeout: 120000 }
+    )
+  }
+
+  async enviarNotificacionesPrejudiciales(): Promise<{ mensaje: string; enviados: number; sin_email: number; fallidos: number }> {
+    return await apiClient.post<{ mensaje: string; enviados: number; sin_email: number; fallidos: number }>(
+      '/api/v1/notificaciones-prejudicial/enviar',
+      {},
+      { timeout: 120000 }
+    )
+  }
+
+  /** Envía correos a clientes con 61+ días de mora (email desde tabla clientes). */
+  async enviarNotificacionesMora61(): Promise<{ mensaje: string; enviados: number; sin_email: number; fallidos: number }> {
+    return await apiClient.post<{ mensaje: string; enviados: number; sin_email: number; fallidos: number }>(
+      '/api/v1/notificaciones-mora-61/enviar',
+      {},
+      { timeout: 120000 }
+    )
+  }
+
   // Variables de notificaciones
   async listarVariables(activa?: boolean): Promise<NotificacionVariable[]> {
     const params = new URLSearchParams()

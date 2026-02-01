@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   FileText,
   Clock,
+  Mail,
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
@@ -36,9 +37,35 @@ export function Notificaciones() {
     refetchOnWindowFocus: true,
   })
 
+  const [enviando, setEnviando] = useState(false)
+
   const handleRefresh = () => {
     refetch()
     toast.success('Datos actualizados. Se recomienda ejecutar actualización a las 2am (cron).')
+  }
+
+  const handleEnviarCorreos = async () => {
+    setEnviando(true)
+    try {
+      let res: { mensaje: string; enviados: number; sin_email: number; fallidos: number }
+      if (activeTab === 'dias_5' || activeTab === 'dias_3' || activeTab === 'dias_1') {
+        res = await notificacionService.enviarNotificacionesPrevias()
+      } else if (activeTab === 'hoy') {
+        res = await notificacionService.enviarNotificacionesDiaPago()
+      } else if (activeTab === 'mora_61') {
+        res = await notificacionService.enviarNotificacionesMora61()
+      } else {
+        setEnviando(false)
+        return
+      }
+      toast.success(`${res.mensaje} Enviados: ${res.enviados}. Sin email: ${res.sin_email}. Fallidos: ${res.fallidos}.`)
+      refetch()
+    } catch (e) {
+      toast.error('Error al enviar correos')
+      console.error(e)
+    } finally {
+      setEnviando(false)
+    }
   }
 
   const getListForTab = (): ClienteRetrasadoItem[] => {
@@ -95,10 +122,20 @@ export function Notificaciones() {
             <p className="text-xs text-gray-500 mt-1">Última consulta: {new Date(data.actualizado_en).toLocaleString('es-ES')}</p>
           )}
         </div>
-        <Button variant="outline" onClick={handleRefresh} disabled={isFetching}>
-          <RefreshCw className={`w-4 h-4 mr-2 ${isFetching ? 'animate-spin' : ''}`} />
-          Actualizar
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleRefresh} disabled={isFetching}>
+            <RefreshCw className={`w-4 h-4 mr-2 ${isFetching ? 'animate-spin' : ''}`} />
+            Actualizar
+          </Button>
+          <Button
+            variant="default"
+            onClick={handleEnviarCorreos}
+            disabled={enviando || isLoading || getListForTab().length === 0}
+          >
+            <Mail className={`w-4 h-4 mr-2 ${enviando ? 'animate-pulse' : ''}`} />
+            {enviando ? 'Enviando...' : 'Enviar correos'}
+          </Button>
+        </div>
       </motion.div>
 
       <div className="border-b border-gray-200">

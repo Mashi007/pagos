@@ -12,7 +12,7 @@ Cada gráfico queda unívocamente ligado a una tabla y a unos campos. Esta es la
 
 | Gráfico (frontend) | Endpoint | Tabla | Campo(s) usados | Qué se calcula |
 |-------------------|----------|-------|------------------|----------------|
-| **KPIs principales** (Total préstamos, Créditos nuevos, Total clientes, Por estado) | `kpis-principales` | `clientes` | `estado`, `total_financiamiento`, `fecha_registro` | Conteos: total, por estado (ACTIVO/INACTIVO/FINALIZADO), con financiamiento > 0, registrados en el mes |
+| **KPIs principales** (Total préstamos, Créditos nuevos, Total clientes, Por estado) | `kpis-principales` | `prestamos` + `clientes` | **Total préstamos:** count(`prestamos`) donde `estado` = APROBADO. **Créditos nuevos:** suma `prestamos.total_financiamiento` solo del **mes en curso** (estado = APROBADO); indicador % = total mes presente vs mes anterior. **Clientes:** `clientes.estado`, `clientes.fecha_registro` | Total préstamos = count; Créditos nuevos = sum(total_financiamiento) mes actual; % = (mes actual − mes anterior) / mes anterior × 100 |
 | **Evolución mensual** (Cartera, Cobrado, Morosidad) | `admin` | `clientes` | `fecha_registro`, `total_financiamiento` | Por cada mes: suma de `total_financiamiento` de clientes con `fecha_registro` ≤ fin de mes (cobrado/morosidad = 0 hasta tener tabla pagos) |
 | **Indicadores financieros** (áreas por mes) | `financiamiento-tendencia-mensual` | `clientes` | `fecha_registro`, `total_financiamiento` | Igual que Evolución mensual: cartera por mes; resto de series en 0 |
 | **Distribución por bandas de $200** | `financiamiento-por-rangos` | `clientes` | `total_financiamiento` | Conteo y suma por rangos: $0–200, $200–400, …, $1.000+ |
@@ -38,7 +38,7 @@ Cada gráfico queda unívocamente ligado a una tabla y a unos campos. Esta es la
 | Endpoint | Gráfico / Uso | Origen de datos |
 |----------|----------------|------------------|
 | `GET /api/v1/dashboard/opciones-filtros` | Filtros (analistas, concesionarios, modelos) | BD: listas vacías hasta tener columnas en Cliente |
-| `GET /api/v1/dashboard/kpis-principales` | KPIs principales (préstamos, clientes, estados, créditos nuevo mes) | BD: conteos desde `Cliente` (estado, total_financiamiento, fecha_registro) |
+| `GET /api/v1/dashboard/kpis-principales` | KPIs principales (préstamos, clientes, estados, créditos nuevo mes) | BD: **Total préstamos** desde `prestamos` (count donde estado = APROBADO). Resto desde `clientes` (estado, fecha_registro). **Total financiamiento** = sum(prestamos.total_financiamiento) donde estado = APROBADO |
 | `GET /api/v1/dashboard/admin` | Evolución mensual (cartera, cobrado, morosidad) | BD: suma `total_financiamiento` por mes; fallback a demo si no hay datos |
 | `GET /api/v1/dashboard/financiamiento-tendencia-mensual` | Indicadores financieros (áreas por mes) | BD: misma lógica que admin (cartera por mes desde Cliente) |
 | `GET /api/v1/dashboard/financiamiento-por-rangos` | Bandas de $200 USD | BD: agrupa `Cliente.total_financiamiento` por rangos ($0–200, $200–400, …) |
@@ -72,6 +72,16 @@ Todos los endpoints del dashboard reciben sesión de BD (`Depends(get_db)`). Los
 ---
 
 ## Resumen por tabla: qué campos usa cada gráfico
+
+### Tabla `prestamos`
+
+| Campo | Tipo | Gráficos que lo usan |
+|-------|------|----------------------|
+| `estado` | string | KPIs: **Total préstamos** = count donde estado = `APROBADO` |
+| `total_financiamiento` | numeric(14,2) | **Total financiamiento** = sum donde estado = `APROBADO`. **Créditos nuevos** = sum solo del mes en curso (estado = APROBADO) |
+| `fecha_creacion` | datetime | **Créditos nuevos:** filtro por mes en curso y mes anterior para el % vs mes anterior |
+
+Reglas de negocio: **Total financiamiento** = `total_financiamiento` de tabla `prestamos` con `estado` = aprobado. **Créditos nuevos** = suma `total_financiamiento` de `prestamos` solo del mes en curso (estado APROBADO). El indicador % en el pie compara el total del mes presente vs mes anterior.
 
 ### Tabla `clientes`
 

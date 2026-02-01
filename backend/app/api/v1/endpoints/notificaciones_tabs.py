@@ -15,6 +15,7 @@ router_previas = APIRouter()
 router_dia_pago = APIRouter()
 router_retrasadas = APIRouter()
 router_prejudicial = APIRouter()
+router_mora_61 = APIRouter()
 
 
 def _enviar_correos_items(items: List[dict], asunto_base: str, cuerpo_base: str) -> dict:
@@ -172,3 +173,32 @@ def enviar_notificaciones_prejudicial(db: Session = Depends(get_db)):
     )
     res = _enviar_correos_items(items, asunto, cuerpo)
     return {"mensaje": "Envío de notificaciones prejudiciales finalizado.", **res}
+
+
+# --- Mora 61+ días (cuotas con 61 o más días de atraso) ---
+
+@router_mora_61.get("")
+def get_notificaciones_mora_61(estado: str = None, db: Session = Depends(get_db)):
+    """Lista de cuotas con 61 o más días de atraso. Email desde tabla clientes."""
+    data = get_notificaciones_tabs_data(db)
+    items = data["mora_61"]
+    return {"items": items, "total": len(items)}
+
+
+@router_mora_61.post("/enviar")
+def enviar_notificaciones_mora_61(db: Session = Depends(get_db)):
+    """Envía correo a cada cliente con cuota 61+ días en mora (email de tabla clientes)."""
+    data = get_notificaciones_tabs_data(db)
+    items = data["mora_61"]
+    asunto = "Aviso: cuota en mora 61+ días - Rapicredit"
+    cuerpo = (
+        "Estimado/a {nombre} (cédula {cedula}),\n\n"
+        "Le informamos que tiene una cuota con más de 61 días de atraso.\n"
+        "Fecha de vencimiento: {fecha_vencimiento}\n"
+        "Número de cuota: {numero_cuota}\n"
+        "Monto: {monto}\n\n"
+        "Por favor regularice su pago lo antes posible.\n\n"
+        "Saludos,\nRapicredit"
+    )
+    res = _enviar_correos_items(items, asunto, cuerpo)
+    return {"mensaje": "Envío de notificaciones mora 61+ finalizado.", **res}

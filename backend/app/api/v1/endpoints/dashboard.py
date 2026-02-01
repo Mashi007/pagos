@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models.cliente import Cliente
+from app.models.prestamo import Prestamo
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -78,24 +79,66 @@ def get_kpis_principales(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """KPIs principales del dashboard. Datos reales: clientes y conteos desde BD."""
+    """KPIs principales del dashboard. Datos reales: clientes desde Cliente; total préstamos desde prestamos (estado APROBADO)."""
     try:
         total_clientes = db.scalar(select(func.count()).select_from(Cliente)) or 0
         activos = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "ACTIVO")) or 0
         inactivos = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "INACTIVO")) or 0
         finalizados = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "FINALIZADO")) or 0
+        # Total préstamos = cantidad de préstamos aprobados (tabla prestamos, estado = APROBADO)
         total_prestamos = db.scalar(
-            select(func.count()).select_from(Cliente).where(
-                Cliente.total_financiamiento.isnot(None), Cliente.total_financiamiento > 0
+            select(func.count()).select_from(Prestamo).where(Prestamo.estado == "APROBADO")
+        ) or 0
+
+        # Créditos nuevos = suma total_financiamiento de prestamos (estado APROBADO) solo del mes en curso
+        # Indicador % = comparar total mes presente vs mes anterior
+        now_utc = datetime.now(timezone.utc)
+        inicio_mes_actual = now_utc.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        fin_mes_actual = (inicio_mes_actual + timedelta(days=32)).replace(day=1) - timedelta(seconds=1)
+        inicio_mes_anterior = (inicio_mes_actual - timedelta(days=1)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        fin_mes_anterior = inicio_mes_actual - timedelta(seconds=1)
+
+        total_mes_actual = db.scalar(
+            select(func.coalesce(func.sum(Prestamo.total_financiamiento), 0)).select_from(Prestamo).where(
+                Prestamo.estado == "APROBADO",
+                Prestamo.fecha_creacion >= inicio_mes_actual,
+                Prestamo.fecha_creacion <= fin_mes_actual,
             )
         ) or 0
-        inicio_mes = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        creditos_nuevos_mes = db.scalar(
-            select(func.count()).select_from(Cliente).where(Cliente.fecha_registro >= inicio_mes)
+        total_mes_anterior = db.scalar(
+            select(func.coalesce(func.sum(Prestamo.total_financiamiento), 0)).select_from(Prestamo).where(
+                Prestamo.estado == "APROBADO",
+                Prestamo.fecha_creacion >= inicio_mes_anterior,
+                Prestamo.fecha_creacion <= fin_mes_anterior,
+            )
         ) or 0
+
+        creditos_nuevos_valor = _safe_float(total_mes_actual)
+        if total_mes_anterior and _safe_float(total_mes_anterior) != 0:
+            variacion_creditos = ((creditos_nuevos_valor - _safe_float(total_mes_anterior)) / _safe_float(total_mes_anterior)) * 100.0
+        else:
+            variacion_creditos = 0.0
+
+        # Cuotas programadas = suma monto_programado de prestamos en el mes. % cuotas pagadas = suma(monto_pagado) / suma(monto_programado) * 100
+        total_monto_programado = db.scalar(
+            select(func.coalesce(func.sum(Prestamo.monto_programado), 0)).select_from(Prestamo).where(
+                Prestamo.fecha_creacion >= inicio_mes_actual,
+                Prestamo.fecha_creacion <= fin_mes_actual,
+            )
+        ) or 0
+        total_monto_pagado = db.scalar(
+            select(func.coalesce(func.sum(Prestamo.monto_pagado), 0)).select_from(Prestamo).where(
+                Prestamo.fecha_creacion >= inicio_mes_actual,
+                Prestamo.fecha_creacion <= fin_mes_actual,
+            )
+        ) or 0
+        sum_prog = _safe_float(total_monto_programado)
+        sum_pag = _safe_float(total_monto_pagado)
+        porcentaje_cuotas_pagadas = (sum_pag / sum_prog * 100.0) if sum_prog and sum_prog != 0 else 0.0
+
         return {
             "total_prestamos": _kpi(_safe_float(total_prestamos), 0.0),
-            "creditos_nuevos_mes": _kpi(_safe_float(creditos_nuevos_mes), 0.0),
+            "creditos_nuevos_mes": _kpi(creditos_nuevos_valor, round(variacion_creditos, 1)),
             "total_clientes": _kpi(_safe_float(total_clientes), 0.0),
             "clientes_por_estado": {
                 "activos": _kpi(_safe_float(activos), 0.0),
@@ -103,8 +146,8 @@ def get_kpis_principales(
                 "finalizados": _kpi(_safe_float(finalizados), 0.0),
             },
             "total_morosidad_usd": _kpi(0.0, 0.0),
-            "cuotas_programadas": {"valor_actual": 0.0},
-            "porcentaje_cuotas_pagadas": 0.0,
+            "cuotas_programadas": {"valor_actual": sum_prog},
+            "porcentaje_cuotas_pagadas": round(porcentaje_cuotas_pagadas, 1),
         }
     except Exception as e:
         logger.exception("Error en kpis-principales: %s", e)

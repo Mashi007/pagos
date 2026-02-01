@@ -3,8 +3,8 @@ Endpoints de notificaciones a clientes retrasados.
 Datos reales desde BD: cuotas (fecha_vencimiento, pagado) y clientes.
 Reglas: 5 pestañas por días hasta vencimiento y mora 61+.
 """
-from datetime import date, timedelta
-from typing import List, Any
+from datetime import date
+from typing import List
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import select

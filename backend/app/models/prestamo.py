@@ -15,6 +15,8 @@ class Prestamo(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=False, index=True)
     total_financiamiento = Column(Numeric(14, 2), nullable=False)
+    monto_programado = Column(Numeric(14, 2), nullable=True)   # Total cuotas programadas (mes o vida del préstamo)
+    monto_pagado = Column(Numeric(14, 2), nullable=True)       # Total pagado
     estado = Column(String(20), nullable=False, index=True, default="PENDIENTE")  # PENDIENTE, APROBADO, RECHAZADO, etc.
     fecha_creacion = Column(DateTime(timezone=False), nullable=False, server_default=func.now())
     fecha_actualizacion = Column(DateTime(timezone=False), nullable=True, onupdate=func.now())

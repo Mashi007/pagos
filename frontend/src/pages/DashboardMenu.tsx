@@ -847,7 +847,7 @@ export function DashboardMenu() {
                   color="text-green-600"
                   bgColor="bg-green-100"
                   borderColor="border-green-500"
-                  format="number"
+                  format="currency"
                 />
                 <KpiCardLarge
                   title="Cuotas Programadas"
