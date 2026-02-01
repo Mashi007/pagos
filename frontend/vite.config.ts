@@ -106,9 +106,10 @@ export default defineConfig({
     removeHeavyChunksPreload(), // ✅ Eliminar preload de chunks pesados
   ],
   resolve: {
-    alias: {
-      '@': srcDir,
-    },
+    alias: [
+      { find: /^@\//, replacement: `${srcDir}/` },
+      { find: /^@$/, replacement: srcDir },
+    ],
     // Asegurar que React se resuelva correctamente
     dedupe: ['react', 'react-dom'],
   },
