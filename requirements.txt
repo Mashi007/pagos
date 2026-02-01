@@ -1,95 +1,91 @@
-# Backend - Requirements Base
-# Sistema de Préstamos y Cobranza
-# =================================
+# ============================================
+# REQUIREMENTS.TXT PARA RENDER.COM
+# ============================================
+# Este archivo contiene todas las dependencias de producción del backend
+# para compatibilidad con el build de Render.com
+#
+# Generado desde: backend/requirements/base.txt + backend/requirements/prod.txt
+# ============================================
 
 # ============================================
-# WEB FRAMEWORK
+# CORE FRAMEWORK
 # ============================================
-fastapi==0.109.0
-uvicorn[standard]==0.27.0
-python-multipart==0.0.6
+# ✅ ACTUALIZADO 2025-01-27: fastapi 0.128.0 incluye starlette>=0.49.1 (corrige CVE-2025-54121, CVE-2025-62727)
+# FastAPI 0.128.0 requiere starlette<0.51.0,>=0.40.0 - starlette 0.50.0 instalado automáticamente
+fastapi>=0.128.0
+uvicorn[standard]==0.38.0
+python-multipart>=0.0.18
+python-dotenv==1.2.1
 
 # ============================================
 # DATABASE
 # ============================================
-sqlalchemy==2.0.25
+sqlalchemy==2.0.36
 psycopg2-binary==2.9.9
-alembic==1.13.1
+alembic==1.17.1
 
 # ============================================
-# AUTHENTICATION & SECURITY
+# VALIDATION AND SERIALIZATION
 # ============================================
-python-jose[cryptography]==3.3.0
+pydantic==2.12.4
+pydantic-settings==2.12.0
+email-validator==2.2.0
+typing-extensions==4.15.0
+annotated-types==0.7.0
+
+# ============================================
+# SECURITY
+# ============================================
+# ✅ MEJORA 2025-01-27: python-jose removido - NO se usa en el código
+# El código usa PyJWT directamente con algoritmo HS256 (HMAC-SHA256), que NO requiere ECDSA
+# Esto elimina completamente la dependencia de ecdsa y su vulnerabilidad CVE-2024-23342
+PyJWT==2.8.0  # Usado directamente en app/core/security.py con algoritmo HS256 (no requiere ECDSA)
 # ✅ COMPATIBILIDAD: passlib 1.7.4 requiere bcrypt < 5.0.0
 # bcrypt 5.0.0 removió __about__ que passlib necesita
+# Usar bcrypt 4.1.1 para compatibilidad con passlib 1.7.4
 passlib[bcrypt]==1.7.4
 bcrypt==4.1.1  # Versión compatible con passlib 1.7.4 (NO usar 5.0.0)
-python-multipart==0.0.6
+cryptography>=41.0.0  # Para encriptación de API Keys con Fernet (no requiere ecdsa para operaciones básicas)
 
 # ============================================
-# VALIDATION
+# DATE AND TIME
 # ============================================
-pydantic==2.5.3
-pydantic-settings==2.1.0
-email-validator==2.1.0.post1
-bleach==6.1.0  # ✅ Sanitización HTML robusta para plantillas
-
-# ============================================
-# UTILITIES
-# ============================================
-python-dotenv==1.0.1
-
-# ============================================
-# DATE/TIME
-# ============================================
-python-dateutil==2.8.2
+python-dateutil==2.9.0.post0
 pytz==2024.1
-
-# ============================================
-# EXCEL HANDLING
-# ============================================
-openpyxl==3.1.2
-pandas==2.1.4
-xlsxwriter==3.1.9
-
-# ============================================
-# PDF GENERATION
-# ============================================
-reportlab==4.0.9
-pypdf==3.17.4
-# weasyprint==60.2  # Descomentar si necesitas HTML to PDF avanzado
-
-# ============================================
-# DOCUMENT PROCESSING (Procesamiento de Documentos para RAG)
-# ============================================
-PyPDF2>=3.0.0          # Extracción de texto de PDF (primario)
-pdfplumber>=0.10.0        # Extracción de texto de PDF (fallback - mejor para PDFs complejos)
-python-docx>=1.1.0         # Extracción de texto de DOCX
-
-# ============================================
-# EMAIL
-# ============================================
-aiosmtplib==3.0.1
-jinja2==3.1.3
-premailer==3.10.0
 
 # ============================================
 # HTTP CLIENT
 # ============================================
-httpx==0.26.0
+# ✅ ACTUALIZADO 2025-01-27: httpx 0.28.1 compatible con aiohttp>=3.13.3 (corrige 8 CVEs)
+httpx==0.28.1
+requests==2.32.5
+# ✅ ACTUALIZADO 2025-01-27: urllib3>=2.6.3 corrige 5 CVEs (CVE-2025-50182, CVE-2025-50181, CVE-2025-66418, CVE-2025-66471, CVE-2026-21441)
+urllib3>=2.6.3
 
 # ============================================
-# SCHEDULING (Tareas automáticas)
+# FILE PROCESSING
 # ============================================
-apscheduler==3.10.4
+openpyxl==3.1.5
+pandas==2.3.3
+numpy==2.3.4
+scikit-learn==1.6.1
+xgboost==2.1.3
+reportlab==4.2.5
 
 # ============================================
-# SYSTEM MONITORING
+# NOTIFICATIONS
 # ============================================
-psutil==5.9.6
+# twilio==8.2.0  # NO USADO - WhatsApp se integra con Meta Developers API
+aiosmtplib==3.0.2
+jinja2>=3.1.6
 
 # ============================================
-# LOGGING & MONITORING
+# TASK SCHEDULING
+# ============================================
+apscheduler==3.11.1
+
+# ============================================
+# MONITORING AND LOGGING
 # ============================================
 python-json-logger==2.0.7
 
@@ -99,72 +95,20 @@ python-json-logger==2.0.7
 slowapi==0.1.9
 
 # ============================================
-# TESTING
+# CACHE (REDIS)
 # ============================================
-pytest==7.4.4
-pytest-asyncio==0.21.1
-pytest-cov==4.1.0
-faker==22.6.0
-
-# ============================================
-# CODE QUALITY & LINTING
-# ============================================
-flake8==7.0.0
-flake8-docstrings==1.7.0
-flake8-bugbear==24.2.6
-flake8-import-order==0.18.2
-mccabe==0.7.0
-
-# ============================================
-# DEPENDENCIAS ADICIONALES RECOMENDADAS
-# ============================================
-
-# Monitoreo y Error Tracking (Opcional - Recomendado para Producción)
-# sentry-sdk[fastapi]==1.40.0  # Error tracking
-# prometheus-client==0.19.0     # Métricas
-
-# WhatsApp/SMS (Opcional - Si usas Twilio)
-twilio==8.11.1
-
-# Excel Avanzado (Opcional - Si necesitas más features)
-# xlrd==2.0.1  # Para leer archivos .xls viejos
-
-# Compresión de Respuestas
-# brotli==1.1.0  # Compresión HTTP
-
-# Validación de Datos Avanzada
-# phonenumbers==8.13.27  # Para validar teléfonos
-
-# ============================================
-# MACHINE LEARNING (Opcional pero recomendado)
-# ============================================
-scikit-learn>=1.3.0,<2.0.0
-xgboost>=2.0.0,<3.0.0
-
-# ============================================
-# CACHE (Recomendado para producción)
-# ============================================
+# ✅ MEJORA 2025-01-27: Redis para cache distribuido en producción
+# Opcional: se usa MemoryCache como fallback si Redis no está disponible
 redis>=5.0.0,<6.0.0
-# aioredis==2.0.1  # No necesario para cache síncrono
 
 # ============================================
-# NOTAS:
+# MONITORING (SENTRY)
 # ============================================
-# Para instalar:
-# pip install -r requirements/base.txt
-#
-# Para actualizar:
-# pip install -r requirements/base.txt --upgrade
-#
-# Para producción, usar:
-# pip install -r requirements/prod.txt
+# ✅ MEJORA 2025-01-27: Sentry para monitoreo de errores en producción
+# Opcional: solo se inicializa si SENTRY_DSN está configurado
+sentry-sdk[fastapi]>=2.0.0
 
 # ============================================
 # PRODUCTION SERVER
 # ============================================
-gunicorn==21.2.0
-
-# ============================================
-# ASYNC DATABASE DRIVER
-# ============================================
-asyncpg==0.30.0
+gunicorn==23.0.0
