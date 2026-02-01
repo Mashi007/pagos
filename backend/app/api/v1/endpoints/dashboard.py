@@ -136,6 +136,28 @@ def get_kpis_principales(
         sum_pag = _safe_float(total_monto_pagado)
         porcentaje_cuotas_pagadas = (sum_pag / sum_prog * 100.0) if sum_prog and sum_prog != 0 else 0.0
 
+        # Morosidad total mensual = (suma monto_programado - suma monto_pagado) del mes. Comparar con el mismo indicador del mes anterior.
+        total_monto_programado_ant = db.scalar(
+            select(func.coalesce(func.sum(Prestamo.monto_programado), 0)).select_from(Prestamo).where(
+                Prestamo.fecha_creacion >= inicio_mes_anterior,
+                Prestamo.fecha_creacion <= fin_mes_anterior,
+            )
+        ) or 0
+        total_monto_pagado_ant = db.scalar(
+            select(func.coalesce(func.sum(Prestamo.monto_pagado), 0)).select_from(Prestamo).where(
+                Prestamo.fecha_creacion >= inicio_mes_anterior,
+                Prestamo.fecha_creacion <= fin_mes_anterior,
+            )
+        ) or 0
+        sum_prog_ant = _safe_float(total_monto_programado_ant)
+        sum_pag_ant = _safe_float(total_monto_pagado_ant)
+        morosidad_actual = max(0.0, sum_prog - sum_pag)
+        morosidad_anterior = max(0.0, sum_prog_ant - sum_pag_ant)
+        if morosidad_anterior and morosidad_anterior != 0:
+            variacion_morosidad = ((morosidad_actual - morosidad_anterior) / morosidad_anterior) * 100.0
+        else:
+            variacion_morosidad = 0.0
+
         return {
             "total_prestamos": _kpi(_safe_float(total_prestamos), 0.0),
             "creditos_nuevos_mes": _kpi(creditos_nuevos_valor, round(variacion_creditos, 1)),
@@ -145,7 +167,7 @@ def get_kpis_principales(
                 "inactivos": _kpi(_safe_float(inactivos), 0.0),
                 "finalizados": _kpi(_safe_float(finalizados), 0.0),
             },
-            "total_morosidad_usd": _kpi(0.0, 0.0),
+            "total_morosidad_usd": _kpi(round(morosidad_actual, 2), round(variacion_morosidad, 1)),
             "cuotas_programadas": {"valor_actual": sum_prog},
             "porcentaje_cuotas_pagadas": round(porcentaje_cuotas_pagadas, 1),
         }
@@ -160,7 +182,7 @@ def get_kpis_principales(
                 "inactivos": _kpi(0.0, 0.0),
                 "finalizados": _kpi(0.0, 0.0),
             },
-            "total_morosidad_usd": _kpi(0.0, 0.0),
+            "total_morosidad_usd": _kpi(0.0, 0.0),  # fallback en error
             "cuotas_programadas": {"valor_actual": 0.0},
             "porcentaje_cuotas_pagadas": 0.0,
         }
@@ -562,7 +584,7 @@ def get_evolucion_pagos(
     """Evolución de pagos por mes. Stub: requiere tabla pagos para datos reales."""
     m = _ultimos_12_meses()
     return {
-        "meses": [{"mes": x["mes"], "pagos": 12 + i, "monto": x["monto_pagado"]} for i, x in enumerate(m)
+        "meses": [{"mes": x["mes"], "pagos": 12 + i, "monto": x["monto_pagado"]} for i, x in enumerate(m)]
     }
 
 

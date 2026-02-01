@@ -178,7 +178,10 @@ export function Notificaciones() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              {TABS.find((t) => t.id === activeTab)?.icon && <TABS.find((t) => t.id === activeTab)!.icon className="w-5 h-5" />}
+              {(() => {
+                const TabIcon = TABS.find((t) => t.id === activeTab)?.icon
+                return TabIcon ? <TabIcon className="w-5 h-5" /> : null
+              })()}
               {activeTab === 'mora_61'
                 ? 'Informe: cuotas con 61 o más días de mora (una a una)'
                 : `Clientes con cuota no pagada ${activeTab === 'dias_5' ? 'y faltan 5 días' : activeTab === 'dias_3' ? 'y faltan 3 días' : activeTab === 'dias_1' ? 'y falta 1 día' : 'y vence hoy'}`}
