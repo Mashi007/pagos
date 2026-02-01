@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   build: {
     outDir: 'dist',
-    sourcemap: false,
+    sourcemap: process.env.NODE_ENV === 'development',
     assetsDir: 'assets',
     rollupOptions: {
       output: {
@@ -14,5 +14,8 @@ export default defineConfig({
       }
     }
   },
-  base: '/'
+  base: '/',
+  define: {
+    'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development')
+  }
 })

@@ -157,3 +157,11 @@ Thumbs.db
 output_*.txt
 *.output
 *.generated
+
+# ============================================
+# Archivos de backup
+# ============================================
+*.old*.txt
+*.backup
+*.bak
+*~.txt
