@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9
+        http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
+
+  <!-- 🏠 Página Principal -->
+  <url>
+    <loc>https://rapicredit.onrender.com/</loc>
+    <lastmod>2025-10-22</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+
+  <!-- 🔐 Login -->
+  <url>
+    <loc>https://rapicredit.onrender.com/login</loc>
+    <lastmod>2025-10-22</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- 📊 Dashboard -->
+  <url>
+    <loc>https://rapicredit.onrender.com/dashboard</loc>
+    <lastmod>2025-10-22</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <!-- 👥 Clientes -->
+  <url>
+    <loc>https://rapicredit.onrender.com/clientes</loc>
+    <lastmod>2025-10-22</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- 💰 Préstamos -->
+  <url>
+    <loc>https://rapicredit.onrender.com/prestamos</loc>
+    <lastmod>2025-10-22</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- 💳 Pagos -->
+  <url>
+    <loc>https://rapicredit.onrender.com/pagos</loc>
+    <lastmod>2025-10-22</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- 📈 Reportes -->
+  <url>
+    <loc>https://rapicredit.onrender.com/reportes</loc>
+    <lastmod>2025-10-22</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <!-- 🏢 Concesionarios -->
+  <url>
+    <loc>https://rapicredit.onrender.com/concesionarios</loc>
+    <lastmod>2025-10-22</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+  <!-- 🚗 Modelos de Vehículos -->
+  <url>
+    <loc>https://rapicredit.onrender.com/modelos-vehiculos</loc>
+    <lastmod>2025-10-22</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+  <!-- 📋 Validadores -->
+  <url>
+    <loc>https://rapicredit.onrender.com/validadores</loc>
+    <lastmod>2025-10-22</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+
+  <!-- 🔔 Notificaciones -->
+  <url>
+    <loc>https://rapicredit.onrender.com/notificaciones</loc>
+    <lastmod>2025-10-22</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+  <!-- 📊 Auditoría -->
+  <url>
+    <loc>https://rapicredit.onrender.com/auditoria</loc>
+    <lastmod>2025-10-22</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.5</priority>
+  </url>
+
+</urlset>

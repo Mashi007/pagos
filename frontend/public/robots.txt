@@ -1,0 +1,56 @@
+# 🕷️ ROBOTS.TXT - RAPICREDIT
+
+# ========================================
+# 🤖 CONFIGURACIÓN PARA MOTORES DE BÚSQUEDA
+# ========================================
+
+# Permitir acceso a todos los bots
+User-agent: *
+
+# Permitir indexación de páginas públicas
+Allow: /
+Allow: /login
+Allow: /dashboard
+Allow: /clientes
+Allow: /prestamos
+Allow: /pagos
+Allow: /reportes
+
+# Bloquear páginas privadas y administrativas
+Disallow: /admin
+Disallow: /configuracion
+Disallow: /usuarios
+Disallow: /auditoria
+Disallow: /api/
+Disallow: /_internal/
+
+# Bloquear archivos sensibles
+Disallow: /*.json$
+Disallow: /*.env$
+Disallow: /*.log$
+Disallow: /src/
+Disallow: /node_modules/
+
+# ========================================
+# 🗺️ SITEMAP
+# ========================================
+
+# Ubicación del sitemap
+Sitemap: https://rapicredit.onrender.com/sitemap.xml
+
+# ========================================
+# ⏰ CONFIGURACIÓN DE CRAWLING
+# ========================================
+
+# Frecuencia de crawling recomendada
+Crawl-delay: 1
+
+# ========================================
+# 📊 INFORMACIÓN ADICIONAL
+# ========================================
+
+# Contacto para consultas sobre crawling
+# Contact: webmaster@rapicreditca.com
+
+# Última actualización
+# Last-modified: 2025-10-22

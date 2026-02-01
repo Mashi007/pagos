@@ -1,0 +1,39 @@
+<svg width="200" height="60" viewBox="0 0 200 60" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="rGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1E40AF;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1E3A8A;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Letra R estilizada en azul oscuro -->
+  <g transform="translate(10, 8)">
+    <!-- Cuerpo principal de la R -->
+    <path d="M0 0 L0 44 L16 44 L16 28 L22 28 L28 44 L38 44 L28 24 L32 0 Z" 
+          fill="url(#rGradient)" 
+          stroke="none"/>
+    
+    <!-- Pierna diagonal de la R -->
+    <path d="M16 28 L26 18 L32 18 L22 28 Z" 
+          fill="url(#rGradient)"/>
+    
+    <!-- Esquina superior izquierda puntiaguda -->
+    <path d="M0 0 L6 0 L0 6 Z" 
+          fill="url(#rGradient)"/>
+    
+    <!-- Esquina inferior derecha puntiaguda -->
+    <path d="M28 44 L38 44 L38 38 Z" 
+          fill="url(#rGradient)"/>
+  </g>
+  
+  <!-- Círculo naranja pequeño -->
+  <circle cx="18" cy="50" r="4" fill="#F97316"/>
+  
+  <!-- Texto RAPICREDIT -->
+  <text x="60" y="25" font-family="Arial, sans-serif" font-size="18" font-weight="bold" fill="#1F2937">
+    RAPI
+  </text>
+  <text x="60" y="45" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#1E40AF">
+    CREDIT
+  </text>
+</svg>
