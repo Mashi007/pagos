@@ -1,10 +1,11 @@
 services:
-  # Frontend (Static Site)
-  - type: static
+  # Frontend (Web Service - mantiene compatibilidad con configuración anterior)
+  - type: web
     name: pagos-frontend
+    env: node
     rootDir: frontend
     buildCommand: npm install && npm run build
-    staticPublishPath: ./dist
+    startCommand: node server.js
     envVars:
       - key: NODE_VERSION
         value: 20.11.0
