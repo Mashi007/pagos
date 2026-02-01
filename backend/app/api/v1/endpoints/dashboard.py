@@ -1,11 +1,16 @@
 """
-Endpoints del dashboard (stub para que el frontend no reciba 404).
-Con datos de demostración para que los gráficos muestren algo hasta tener BD real.
+Endpoints del dashboard. Usa datos reales de la BD cuando existen (clientes);
+el resto permanece stub hasta tener modelos de préstamos/pagos/cuotas.
 """
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import select, func
+from sqlalchemy.orm import Session
+
+from app.core.database import get_db
+from app.models.cliente import Cliente
 
 router = APIRouter()
 
@@ -42,8 +47,9 @@ def _ultimos_12_meses() -> list[dict]:
 
 
 @router.get("/opciones-filtros")
-def get_opciones_filtros():
-    """Opciones para filtros: analistas, concesionarios, modelos."""
+def get_opciones_filtros(db: Session = Depends(get_db)):
+    """Opciones para filtros: analistas, concesionarios, modelos. Desde BD cuando existan campos."""
+    # Cliente no tiene analista/concesionario/modelo; dejar listas vacías hasta tener esos campos
     return {
         "analistas": [],
         "concesionarios": [],
@@ -58,21 +64,42 @@ def get_kpis_principales(
     analista: Optional[str] = Query(None),
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
 ):
-    """KPIs principales del dashboard (datos demo si no hay BD)."""
+    """KPIs principales del dashboard. Datos reales: clientes y conteos desde BD."""
+    total_clientes = db.scalar(select(func.count()).select_from(Cliente)) or 0
+    activos = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "ACTIVO")) or 0
+    inactivos = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "INACTIVO")) or 0
+    finalizados = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "FINALIZADO")) or 0
+    # Préstamos: clientes con financiamiento registrado
+    total_prestamos = db.scalar(
+        select(func.count()).select_from(Cliente).where(Cliente.total_financiamiento.isnot(None), Cliente.total_financiamiento > 0)
+    ) or 0
+    # Créditos nuevos mes: registros este mes (fecha_registro)
+    inicio_mes = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    creditos_nuevos_mes = db.scalar(
+        select(func.count()).select_from(Cliente).where(Cliente.fecha_registro >= inicio_mes)
+    ) or 0
+    # Morosidad/cuotas: sin tabla pagos/cuotas se deja en 0
     return {
-        "total_prestamos": _kpi(1247, 5.2),
-        "creditos_nuevos_mes": _kpi(89, -2.1),
-        "total_clientes": _kpi(856, 3.0),
+        "total_prestamos": _kpi(float(total_prestamos), 0.0),
+        "creditos_nuevos_mes": _kpi(float(creditos_nuevos_mes), 0.0),
+        "total_clientes": _kpi(float(total_clientes), 0.0),
         "clientes_por_estado": {
-            "activos": _kpi(720, 2.5),
-            "inactivos": _kpi(86, 1.0),
-            "finalizados": _kpi(50, 0.5),
+            "activos": _kpi(float(activos), 0.0),
+            "inactivos": _kpi(float(inactivos), 0.0),
+            "finalizados": _kpi(float(finalizados), 0.0),
         },
-        "total_morosidad_usd": _kpi(42500, -8.0),
-        "cuotas_programadas": {"valor_actual": 185000},
-        "porcentaje_cuotas_pagadas": 72.5,
+        "total_morosidad_usd": _kpi(0.0, 0.0),
+        "cuotas_programadas": {"valor_actual": 0.0},
+        "porcentaje_cuotas_pagadas": 0.0,
     }
+
+
+def _ultimo_dia_del_mes(d: datetime) -> datetime:
+    """Último día del mes a las 23:59 para comparar con fecha_registro."""
+    siguiente = (d.replace(day=28) + timedelta(days=4)).replace(day=1)
+    return siguiente - timedelta(seconds=1)
 
 
 @router.get("/admin")
@@ -80,20 +107,38 @@ def get_dashboard_admin(
     periodo: Optional[str] = Query(None),
     fecha_inicio: Optional[str] = Query(None),
     fecha_fin: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
 ):
-    """Dashboard admin: financieros, meta, evolucion_mensual (datos demo)."""
+    """Dashboard admin: evolucion_mensual con datos reales (cartera desde Cliente); financieros/meta stub."""
     meses = _ultimos_12_meses()
-    evolucion = [{"mes": m["mes"], "cartera": m["cartera"], "cobrado": m["cobrado"], "morosidad": m["morosidad"]} for m in meses]
+    evolucion = []
+    hoy = datetime.now()
+    for i, m in enumerate(meses):
+        fin_mes = hoy - timedelta(days=30 * (11 - i))
+        ultimo_dia = _ultimo_dia_del_mes(fin_mes)
+        cartera = db.scalar(
+            select(func.coalesce(func.sum(Cliente.total_financiamiento), 0)).select_from(Cliente).where(
+                Cliente.fecha_registro <= ultimo_dia,
+                Cliente.total_financiamiento.isnot(None),
+                Cliente.total_financiamiento > 0,
+            )
+        ) or 0
+        evolucion.append({
+            "mes": m["mes"],
+            "cartera": float(cartera),
+            "cobrado": 0.0,
+            "morosidad": 0.0,
+        })
     return {
         "financieros": {
-            "ingresosCapital": 125000,
-            "ingresosInteres": 18500,
-            "ingresosMora": 4200,
-            "totalCobrado": 142000,
-            "totalCobradoAnterior": 138500,
+            "ingresosCapital": 0.0,
+            "ingresosInteres": 0.0,
+            "ingresosMora": 0.0,
+            "totalCobrado": 0.0,
+            "totalCobradoAnterior": 0.0,
         },
-        "meta_mensual": 150000,
-        "avance_meta": 94.7,
+        "meta_mensual": 0.0,
+        "avance_meta": 0.0,
         "evolucion_mensual": evolucion,
     }
 

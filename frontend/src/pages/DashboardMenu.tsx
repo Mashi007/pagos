@@ -34,6 +34,7 @@ import { toast } from 'sonner'
 import { useDashboardFiltros, type DashboardFiltros } from '../hooks/useDashboardFiltros'
 import { DashboardFiltrosPanel } from '../components/dashboard/DashboardFiltrosPanel'
 import { KpiCardLarge } from '../components/dashboard/KpiCardLarge'
+import { ChartWithDateRangeSlider } from '../components/dashboard/ChartWithDateRangeSlider'
 import {
   BarChart,
   Bar,
@@ -590,15 +591,15 @@ export function DashboardMenu() {
     </Select>
   )
 
-  // Estilos profesionales compartidos para todos los gráficos (tooltips, ejes, grid)
+  // Estilos de mayor calidad para todos los gráficos (tooltips, ejes, grid)
   const chartTooltipStyle = {
-    contentStyle: { backgroundColor: 'rgba(255,255,255,0.98)', border: '1px solid #e5e7eb', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', padding: '12px 14px' },
-    labelStyle: { fontWeight: 600, color: '#374151', marginBottom: 6 },
+    contentStyle: { backgroundColor: 'rgba(255,255,255,0.98)', border: '1px solid #e5e7eb', borderRadius: '10px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', padding: '14px 16px' },
+    labelStyle: { fontWeight: 600, color: '#111827', marginBottom: 8, fontSize: 13 },
     itemStyle: { fontSize: '13px', color: '#4b5563' },
   }
-  const chartCartesianGrid = { stroke: '#e5e7eb', strokeDasharray: '3 3', strokeOpacity: 0.8 }
-  const chartAxisTick = { fontSize: 12, fill: '#6b7280', fontWeight: 500 }
-  const chartLegendStyle = { wrapperStyle: { paddingTop: 12 }, iconType: 'rect' as const, iconSize: 10 }
+  const chartCartesianGrid = { stroke: '#d1d5db', strokeDasharray: '4 4', strokeOpacity: 0.9 }
+  const chartAxisTick = { fontSize: 13, fill: '#374151', fontWeight: 500 }
+  const chartLegendStyle = { wrapperStyle: { paddingTop: 14 }, iconType: 'rect' as const, iconSize: 12 }
 
   // Procesar datos de financiamiento por rangos en bandas de $200 USD
   const datosBandas200 = useMemo(() => {
@@ -908,31 +909,35 @@ export function DashboardMenu() {
                   </CardHeader>
                   <CardContent className="p-6 pt-4">
                     {evolucionMensual.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={320}>
-                        <ComposedChart data={evolucionMensual} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
-                          <CartesianGrid {...chartCartesianGrid} />
-                          <XAxis dataKey="mes" tick={chartAxisTick} />
-                          <YAxis 
-                            tick={chartAxisTick}
-                            tickFormatter={(value) => {
-                              if (value >= 1000) {
-                                return `$${(value / 1000).toFixed(0)}K`
-                              }
-                              return `$${value}`
-                            }}
-                            label={{ value: 'Monto (USD)', angle: -90, position: 'insideLeft', style: { fill: '#6b7280', fontSize: 12 } }}
-                          />
-                          <Tooltip 
-                            contentStyle={chartTooltipStyle.contentStyle}
-                            labelStyle={chartTooltipStyle.labelStyle}
-                            formatter={(value: number, name: string) => [formatCurrency(value), name]}
-                          />
-                          <Legend {...chartLegendStyle} />
-                          <Bar dataKey="cartera" fill="#3b82f6" name="Cartera" />
-                          <Bar dataKey="cobrado" fill="#10b981" name="Cobrado" />
-                          <Line type="monotone" dataKey="morosidad" stroke="#ef4444" strokeWidth={2} name="Morosidad" />
-                        </ComposedChart>
-                      </ResponsiveContainer>
+                      <ChartWithDateRangeSlider data={evolucionMensual} dataKey="mes" chartHeight={320}>
+                        {(filteredData) => (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <ComposedChart data={filteredData} margin={{ top: 12, right: 20, left: 12, bottom: 12 }}>
+                              <CartesianGrid {...chartCartesianGrid} />
+                              <XAxis dataKey="mes" tick={chartAxisTick} />
+                              <YAxis 
+                                tick={chartAxisTick}
+                                tickFormatter={(value) => {
+                                  if (value >= 1000) {
+                                    return `$${(value / 1000).toFixed(0)}K`
+                                  }
+                                  return `$${value}`
+                                }}
+                                label={{ value: 'Monto (USD)', angle: -90, position: 'insideLeft', style: { fill: '#374151', fontSize: 13 } }}
+                              />
+                              <Tooltip 
+                                contentStyle={chartTooltipStyle.contentStyle}
+                                labelStyle={chartTooltipStyle.labelStyle}
+                                formatter={(value: number, name: string) => [formatCurrency(value), name]}
+                              />
+                              <Legend {...chartLegendStyle} />
+                              <Bar dataKey="cartera" fill="#3b82f6" name="Cartera" radius={[4, 4, 0, 0]} />
+                              <Bar dataKey="cobrado" fill="#10b981" name="Cobrado" radius={[4, 4, 0, 0]} />
+                              <Line type="monotone" dataKey="morosidad" stroke="#ef4444" strokeWidth={2} name="Morosidad" dot={{ r: 4 }} />
+                            </ComposedChart>
+                          </ResponsiveContainer>
+                        )}
+                      </ChartWithDateRangeSlider>
                     ) : (
                       <div className="flex items-center justify-center py-16 text-gray-500">No hay datos para el período seleccionado</div>
                     )}
@@ -963,88 +968,41 @@ export function DashboardMenu() {
                   </CardHeader>
                   <CardContent className="p-6 pt-4">
                     {datosTendencia && datosTendencia.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={400}>
-                      <AreaChart data={datosTendencia} margin={{ top: 12, right: 24, left: 8, bottom: 8 }}>
-                        <defs>
-                          <linearGradient id="colorFinanciamiento" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
-                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1}/>
-                          </linearGradient>
-                          <linearGradient id="colorPagosProgramados" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
-                            <stop offset="95%" stopColor="#10b981" stopOpacity={0.1}/>
-                          </linearGradient>
-                          <linearGradient id="colorPagosReales" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.8}/>
-                            <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.1}/>
-                          </linearGradient>
-                          <linearGradient id="colorMorosidad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8}/>
-                            <stop offset="95%" stopColor="#ef4444" stopOpacity={0.1}/>
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid {...chartCartesianGrid} />
-                        <XAxis
-                          dataKey="mes"
-                          angle={-45}
-                          textAnchor="end"
-                          tick={chartAxisTick}
-                          height={80}
-                        />
-                        <YAxis
-                          tick={chartAxisTick}
-                          tickFormatter={(value) => `$${(value / 1000).toFixed(0)}K`}
-                          label={{ value: 'Monto (USD)', angle: -90, position: 'insideLeft', style: { fill: '#6b7280', fontSize: 12 } }}
-                        />
-                        <Tooltip
-                          contentStyle={chartTooltipStyle.contentStyle}
-                          labelStyle={chartTooltipStyle.labelStyle}
-                          formatter={(value: number, name: string) => {
-                            const labels: Record<string, string> = {
-                              'monto_nuevos': 'Total Financiamiento',
-                              'monto_cuotas_programadas': 'Total Pagos Programados',
-                              'monto_pagado': 'Total Pagos Reales',
-                              'morosidad_mensual': 'Morosidad'
-                            }
-                            return [formatCurrency(value), labels[name] || name]
-                          }}
-                          labelFormatter={(label) => `Mes: ${label}`}
-                        />
-                        <Legend {...chartLegendStyle} />
-                        <Area
-                          type="monotone"
-                          dataKey="monto_nuevos"
-                          stroke="#3b82f6"
-                          fillOpacity={0.6}
-                          fill="url(#colorFinanciamiento)"
-                          name="Total Financiamiento"
-                        />
-                        <Area
-                          type="monotone"
-                          dataKey="monto_cuotas_programadas"
-                          stroke="#10b981"
-                          fillOpacity={0.6}
-                          fill="url(#colorPagosProgramados)"
-                          name="Total Pagos Programados"
-                        />
-                        <Area
-                          type="monotone"
-                          dataKey="monto_pagado"
-                          stroke="#f59e0b"
-                          fillOpacity={0.6}
-                          fill="url(#colorPagosReales)"
-                          name="Total Pagos Reales"
-                        />
-                        <Area
-                          type="monotone"
-                          dataKey="morosidad_mensual"
-                          stroke="#ef4444"
-                          fillOpacity={0.6}
-                          fill="url(#colorMorosidad)"
-                          name="Morosidad"
-                        />
-                      </AreaChart>
-                    </ResponsiveContainer>
+                      <ChartWithDateRangeSlider data={datosTendencia} dataKey="mes" chartHeight={400}>
+                        {(filteredData) => (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={filteredData} margin={{ top: 14, right: 24, left: 12, bottom: 14 }}>
+                              <defs>
+                                <linearGradient id="colorFinanciamiento" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
+                                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                                </linearGradient>
+                                <linearGradient id="colorPagosProgramados" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
+                                  <stop offset="95%" stopColor="#10b981" stopOpacity={0.1}/>
+                                </linearGradient>
+                                <linearGradient id="colorPagosReales" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.8}/>
+                                  <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.1}/>
+                                </linearGradient>
+                                <linearGradient id="colorMorosidad" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8}/>
+                                  <stop offset="95%" stopColor="#ef4444" stopOpacity={0.1}/>
+                                </linearGradient>
+                              </defs>
+                              <CartesianGrid {...chartCartesianGrid} />
+                              <XAxis dataKey="mes" angle={-45} textAnchor="end" tick={chartAxisTick} height={80} />
+                              <YAxis tick={chartAxisTick} tickFormatter={(value) => `$${(value / 1000).toFixed(0)}K`} label={{ value: 'Monto (USD)', angle: -90, position: 'insideLeft', style: { fill: '#374151', fontSize: 13 } }} />
+                              <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number, name: string) => { const labels: Record<string, string> = { 'monto_nuevos': 'Total Financiamiento', 'monto_cuotas_programadas': 'Total Pagos Programados', 'monto_pagado': 'Total Pagos Reales', 'morosidad_mensual': 'Morosidad' }; return [formatCurrency(value), labels[name] || name]; }} labelFormatter={(label) => `Mes: ${label}`} />
+                              <Legend {...chartLegendStyle} />
+                              <Area type="monotone" dataKey="monto_nuevos" stroke="#3b82f6" fillOpacity={0.6} fill="url(#colorFinanciamiento)" name="Total Financiamiento" />
+                              <Area type="monotone" dataKey="monto_cuotas_programadas" stroke="#10b981" fillOpacity={0.6} fill="url(#colorPagosProgramados)" name="Total Pagos Programados" />
+                              <Area type="monotone" dataKey="monto_pagado" stroke="#f59e0b" fillOpacity={0.6} fill="url(#colorPagosReales)" name="Total Pagos Reales" />
+                              <Area type="monotone" dataKey="morosidad_mensual" stroke="#ef4444" fillOpacity={0.6} fill="url(#colorMorosidad)" name="Morosidad" />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        )}
+                      </ChartWithDateRangeSlider>
                     ) : (
                       <div className="flex items-center justify-center py-16 text-gray-500">No hay datos para el período seleccionado</div>
                     )}
@@ -1080,61 +1038,27 @@ export function DashboardMenu() {
                 </CardHeader>
                 <CardContent className="p-6 flex-1">
                   {datosBandas200 && datosBandas200.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={450}>
-                    <BarChart
-                      data={datosBandas200}
-                      layout="vertical"
-                      margin={{ top: 12, right: 24, left: 120, bottom: 24 }}
-                    >
-                      <CartesianGrid {...chartCartesianGrid} />
-                      <XAxis
-                        type="number"
-                        domain={[0, 'dataMax']}
-                        tick={chartAxisTick}
-                        tickFormatter={(value) => value.toLocaleString('es-EC')}
-                        label={{
-                          value: 'Cantidad de Préstamos',
-                          position: 'insideBottom',
-                          offset: -10,
-                          style: { textAnchor: 'middle', fill: '#374151', fontSize: 12, fontWeight: 600 }
-                        }}
-                        allowDecimals={false}
-                      />
-                      <YAxis
-                        type="category"
-                        dataKey="categoriaFormateada"
-                        width={115}
-                        tick={{ fontSize: 10, fill: '#4b5563', fontWeight: 500 }}
-                        interval={0}
-                        tickLine={false}
-                      />
-                      <Tooltip
-                        contentStyle={chartTooltipStyle.contentStyle}
-                        labelStyle={chartTooltipStyle.labelStyle}
-                        formatter={(value: number) => [`${value.toLocaleString('es-EC')} préstamos`, 'Cantidad']}
-                        labelFormatter={(label) => `Banda: ${label}`}
-                        cursor={{ fill: 'rgba(99, 102, 241, 0.08)' }}
-                      />
-                      <Legend {...chartLegendStyle} />
-                      <Bar
-                        dataKey="cantidad"
-                        radius={[0, 6, 6, 0]}
-                        name="Cantidad de Préstamos"
-                      >
-                        {datosBandas200.map((entry, index) => {
-                          // Gradiente de color según la posición (más oscuro para valores más altos)
-                          const intensity = entry.cantidad / Math.max(...datosBandas200.map(d => d.cantidad))
-                          const opacity = 0.6 + (intensity * 0.4)
-                          return (
-                            <Cell
-                              key={`cell-${index}`}
-                              fill={`rgba(99, 102, 241, ${opacity})`}
-                            />
-                          )
-                        })}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <ChartWithDateRangeSlider data={datosBandas200} dataKey="categoriaFormateada" chartHeight={450}>
+                    {(filteredData) => (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={filteredData} layout="vertical" margin={{ top: 14, right: 24, left: 120, bottom: 24 }}>
+                          <CartesianGrid {...chartCartesianGrid} />
+                          <XAxis type="number" domain={[0, 'dataMax']} tick={chartAxisTick} tickFormatter={(value) => value.toLocaleString('es-EC')} label={{ value: 'Cantidad de Préstamos', position: 'insideBottom', offset: -10, style: { textAnchor: 'middle', fill: '#374151', fontSize: 13, fontWeight: 600 } }} allowDecimals={false} />
+                          <YAxis type="category" dataKey="categoriaFormateada" width={115} tick={{ fontSize: 11, fill: '#4b5563', fontWeight: 500 }} interval={0} tickLine={false} />
+                          <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [`${value.toLocaleString('es-EC')} préstamos`, 'Cantidad']} labelFormatter={(label) => `Banda: ${label}`} cursor={{ fill: 'rgba(99, 102, 241, 0.08)' }} />
+                          <Legend {...chartLegendStyle} />
+                          <Bar dataKey="cantidad" radius={[0, 6, 6, 0]} name="Cantidad de Préstamos">
+                            {filteredData.map((entry, index) => {
+                              const maxCant = Math.max(...filteredData.map(d => d.cantidad))
+                              const intensity = maxCant > 0 ? entry.cantidad / maxCant : 0
+                              const opacity = 0.6 + (intensity * 0.4)
+                              return <Cell key={`cell-${index}`} fill={`rgba(99, 102, 241, ${opacity})`} />
+                            })}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                  </ChartWithDateRangeSlider>
                   ) : (
                     <div className="flex items-center justify-center py-16 text-gray-500">No hay datos para mostrar</div>
                   )}
@@ -1170,38 +1094,21 @@ export function DashboardMenu() {
                       <div className="animate-pulse text-gray-400">Cargando...</div>
                     </div>
                   ) : datosCobranzaFechas?.dias?.length ? (
-                    <ResponsiveContainer width="100%" height={450}>
-                      <BarChart data={datosCobranzaFechas.dias} margin={{ top: 12, right: 24, left: 8, bottom: 8 }}>
-                        <CartesianGrid {...chartCartesianGrid} />
-                        <XAxis dataKey="nombre_fecha" tick={chartAxisTick} />
-                        <YAxis
-                          domain={[0, 'dataMax']}
-                          tickCount={6}
-                          tick={chartAxisTick}
-                          tickFormatter={(value) => {
-                            if (value >= 1000) {
-                              return `$${(value / 1000).toFixed(1)}K`
-                            }
-                            return `$${value}`
-                          }}
-                          label={{
-                            value: 'Monto (USD)',
-                            angle: -90,
-                            position: 'insideLeft',
-                            style: { textAnchor: 'middle', fontSize: 12, fontWeight: 600 }
-                          }}
-                        />
-                        <Tooltip
-                          contentStyle={chartTooltipStyle.contentStyle}
-                          labelStyle={chartTooltipStyle.labelStyle}
-                          formatter={(value: number) => [formatCurrency(value), '']}
-                          labelFormatter={(label) => `Fecha: ${label}`}
-                        />
-                        <Legend {...chartLegendStyle} />
-                        <Bar dataKey="cobranza_planificada" fill="#3b82f6" name="Planificado" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="cobranza_real" fill="#10b981" name="Real" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <ChartWithDateRangeSlider data={datosCobranzaFechas.dias} dataKey="nombre_fecha" chartHeight={450}>
+                      {(filteredData) => (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={filteredData} margin={{ top: 14, right: 24, left: 12, bottom: 14 }}>
+                            <CartesianGrid {...chartCartesianGrid} />
+                            <XAxis dataKey="nombre_fecha" tick={chartAxisTick} />
+                            <YAxis domain={[0, 'dataMax']} tickCount={6} tick={chartAxisTick} tickFormatter={(value) => value >= 1000 ? `$${(value / 1000).toFixed(1)}K` : `$${value}`} label={{ value: 'Monto (USD)', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fontSize: 13, fontWeight: 600 } }} />
+                            <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [formatCurrency(value), '']} labelFormatter={(label) => `Fecha: ${label}`} />
+                            <Legend {...chartLegendStyle} />
+                            <Bar dataKey="cobranza_planificada" fill="#3b82f6" name="Planificado" radius={[4, 4, 0, 0]} />
+                            <Bar dataKey="cobranza_real" fill="#10b981" name="Real" radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      )}
+                    </ChartWithDateRangeSlider>
                   ) : (
                     <div className="flex items-center justify-center py-16 text-gray-500">No hay datos para mostrar</div>
                   )}
@@ -1235,28 +1142,23 @@ export function DashboardMenu() {
                 </CardHeader>
                   <CardContent className="p-6 pt-4 flex items-center justify-center">
                   {datosConcesionarios && datosConcesionarios.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={400}>
-                    <BarChart data={datosConcesionarios} layout="vertical" margin={{ top: 8, right: 24, left: 140, bottom: 8 }}>
-                      <CartesianGrid {...chartCartesianGrid} />
-                      <XAxis type="number" allowDecimals={false} tick={chartAxisTick} tickFormatter={(value) => value.toLocaleString('es-EC')} />
-                      <YAxis type="category" dataKey="concesionario" width={140} tick={chartAxisTick} />
-                      <Tooltip
-                        contentStyle={chartTooltipStyle.contentStyle}
-                        labelStyle={chartTooltipStyle.labelStyle}
-                        formatter={(value: number) => [`${Math.round(value).toLocaleString('es-EC')} préstamos`, 'Cantidad']}
-                        labelFormatter={(label) => `Concesionario: ${label}`}
-                      />
-                      <Bar
-                        dataKey="cantidad_prestamos"
-                        fill="#8b5cf6"
-                        radius={[0, 4, 4, 0]}
-                      >
-                        {datosConcesionarios.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS_CONCESIONARIOS[index % COLORS_CONCESIONARIOS.length]} />
-                        ))}
-                      </Bar>
+                  <ChartWithDateRangeSlider data={datosConcesionarios} dataKey="concesionario" chartHeight={400}>
+                    {(filteredData) => (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={filteredData} layout="vertical" margin={{ top: 12, right: 24, left: 140, bottom: 12 }}>
+                          <CartesianGrid {...chartCartesianGrid} />
+                          <XAxis type="number" allowDecimals={false} tick={chartAxisTick} tickFormatter={(value) => value.toLocaleString('es-EC')} />
+                          <YAxis type="category" dataKey="concesionario" width={140} tick={chartAxisTick} />
+                          <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [`${Math.round(value).toLocaleString('es-EC')} préstamos`, 'Cantidad']} labelFormatter={(label) => `Concesionario: ${label}`} />
+                          <Bar dataKey="cantidad_prestamos" fill="#8b5cf6" radius={[0, 4, 4, 0]}>
+                            {filteredData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={COLORS_CONCESIONARIOS[index % COLORS_CONCESIONARIOS.length]} />
+                            ))}
+                          </Bar>
                         </BarChart>
                       </ResponsiveContainer>
+                    )}
+                  </ChartWithDateRangeSlider>
                   ) : (
                     <div className="flex items-center justify-center py-16 text-gray-500">No hay datos para mostrar</div>
                   )}
@@ -1287,28 +1189,23 @@ export function DashboardMenu() {
                 </CardHeader>
                   <CardContent className="p-6 pt-4 flex items-center justify-center">
                   {datosModelos && datosModelos.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={400}>
-                    <BarChart data={datosModelos} layout="vertical" margin={{ top: 8, right: 24, left: 140, bottom: 8 }}>
-                      <CartesianGrid {...chartCartesianGrid} />
-                      <XAxis type="number" allowDecimals={false} tick={chartAxisTick} tickFormatter={(value) => value.toLocaleString('es-EC')} />
-                      <YAxis type="category" dataKey="modelo" width={140} tick={chartAxisTick} />
-                      <Tooltip
-                        contentStyle={chartTooltipStyle.contentStyle}
-                        labelStyle={chartTooltipStyle.labelStyle}
-                        formatter={(value: number) => [`${Math.round(value).toLocaleString('es-EC')} préstamos`, 'Cantidad']}
-                        labelFormatter={(label) => `Modelo: ${label}`}
-                      />
-                      <Bar
-                        dataKey="cantidad_prestamos"
-                        fill="#f59e0b"
-                        radius={[0, 4, 4, 0]}
-                      >
-                        {datosModelos.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS_CONCESIONARIOS[index % COLORS_CONCESIONARIOS.length]} />
+                  <ChartWithDateRangeSlider data={datosModelos} dataKey="modelo" chartHeight={400}>
+                    {(filteredData) => (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={filteredData} layout="vertical" margin={{ top: 12, right: 24, left: 140, bottom: 12 }}>
+                          <CartesianGrid {...chartCartesianGrid} />
+                          <XAxis type="number" allowDecimals={false} tick={chartAxisTick} tickFormatter={(value) => value.toLocaleString('es-EC')} />
+                          <YAxis type="category" dataKey="modelo" width={140} tick={chartAxisTick} />
+                          <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [`${Math.round(value).toLocaleString('es-EC')} préstamos`, 'Cantidad']} labelFormatter={(label) => `Modelo: ${label}`} />
+                          <Bar dataKey="cantidad_prestamos" fill="#f59e0b" radius={[0, 4, 4, 0]}>
+                            {filteredData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={COLORS_CONCESIONARIOS[index % COLORS_CONCESIONARIOS.length]} />
                             ))}
-                        </Bar>
-                      </BarChart>
-                        </ResponsiveContainer>
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                  </ChartWithDateRangeSlider>
                   ) : (
                     <div className="flex items-center justify-center py-16 text-gray-500">No hay datos para mostrar</div>
                   )}
@@ -1345,16 +1242,20 @@ export function DashboardMenu() {
                 </CardHeader>
                 <CardContent className="p-6 flex-1">
                   {datosComposicionMorosidad?.puntos?.length ? (
-                  <ResponsiveContainer width="100%" height={400}>
-                    <BarChart data={datosComposicionMorosidad.puntos} margin={{ top: 8, right: 24, left: 8, bottom: 8 }}>
-                      <CartesianGrid {...chartCartesianGrid} />
-                      <XAxis dataKey="categoria" tick={chartAxisTick} />
-                      <YAxis tick={chartAxisTick} />
-                      <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} />
-                      <Legend {...chartLegendStyle} />
-                      <Bar dataKey="monto" fill="#ef4444" name="Monto en Morosidad" />
-                      </BarChart>
-                    </ResponsiveContainer>
+                  <ChartWithDateRangeSlider data={datosComposicionMorosidad.puntos} dataKey="categoria" chartHeight={400}>
+                    {(filteredData) => (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={filteredData} margin={{ top: 12, right: 24, left: 12, bottom: 12 }}>
+                          <CartesianGrid {...chartCartesianGrid} />
+                          <XAxis dataKey="categoria" tick={chartAxisTick} />
+                          <YAxis tick={chartAxisTick} />
+                          <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} />
+                          <Legend {...chartLegendStyle} />
+                          <Bar dataKey="monto" fill="#ef4444" name="Monto en Morosidad" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                  </ChartWithDateRangeSlider>
                   ) : (
                     <div className="flex items-center justify-center py-16 text-gray-500">No hay datos para mostrar</div>
                   )}
@@ -1386,39 +1287,20 @@ export function DashboardMenu() {
                 </CardHeader>
                 <CardContent className="p-6 flex-1">
                   {datosMorosidadAnalista && datosMorosidadAnalista.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={400}>
-                    <BarChart 
-                      data={datosMorosidadAnalista} 
-                      margin={{ top: 8, right: 24, left: 16, bottom: 80 }}
-                      barCategoryGap="5%"
-                    >
-                      <CartesianGrid {...chartCartesianGrid} />
-                      <XAxis
-                        dataKey="analista"
-                        angle={-45}
-                        textAnchor="end"
-                        height={100}
-                        tick={{ ...chartAxisTick, fontSize: 11 }}
-                        interval={0}
-                        width={undefined}
-                      />
-                      <YAxis tick={chartAxisTick} label={{ value: 'Morosidad Total', angle: -90, position: 'insideLeft', style: { fill: '#6b7280', fontSize: 12 } }} width={80} />
-                      <Tooltip
-                        contentStyle={chartTooltipStyle.contentStyle}
-                        labelStyle={chartTooltipStyle.labelStyle}
-                        formatter={(value: number) => [formatCurrency(value), 'Morosidad Total']}
-                        labelFormatter={(label) => `Analista: ${label}`}
-                      />
-                      <Legend {...chartLegendStyle} />
-                      <Bar
-                        dataKey="total_morosidad"
-                        fill="#f97316"
-                        name="Morosidad Total"
-                        radius={[4, 4, 0, 0]}
-                        maxBarSize={120}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <ChartWithDateRangeSlider data={datosMorosidadAnalista} dataKey="analista" chartHeight={400}>
+                    {(filteredData) => (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={filteredData} margin={{ top: 12, right: 24, left: 16, bottom: 80 }} barCategoryGap="5%">
+                          <CartesianGrid {...chartCartesianGrid} />
+                          <XAxis dataKey="analista" angle={-45} textAnchor="end" height={100} tick={{ ...chartAxisTick, fontSize: 11 }} interval={0} width={undefined} />
+                          <YAxis tick={chartAxisTick} label={{ value: 'Morosidad Total', angle: -90, position: 'insideLeft', style: { fill: '#374151', fontSize: 13 } }} width={80} />
+                          <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [formatCurrency(value), 'Morosidad Total']} labelFormatter={(label) => `Analista: ${label}`} />
+                          <Legend {...chartLegendStyle} />
+                          <Bar dataKey="total_morosidad" fill="#f97316" name="Morosidad Total" radius={[4, 4, 0, 0]} maxBarSize={120} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                  </ChartWithDateRangeSlider>
                   ) : (
                     <div className="flex items-center justify-center py-16 text-gray-500">No hay datos para mostrar</div>
                   )}
@@ -1452,16 +1334,20 @@ export function DashboardMenu() {
                 </CardHeader>
                 <CardContent className="p-6">
                   {datosEvolucionMorosidad && datosEvolucionMorosidad.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <RechartsLineChart data={datosEvolucionMorosidad}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="mes" />
-                      <YAxis />
-                      <Tooltip />
-                      <Legend />
-                      <Line type="monotone" dataKey="morosidad" stroke="#ef4444" strokeWidth={2} name="Morosidad" />
-                    </RechartsLineChart>
-                  </ResponsiveContainer>
+                  <ChartWithDateRangeSlider data={datosEvolucionMorosidad} dataKey="mes" chartHeight={300}>
+                    {(filteredData) => (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <RechartsLineChart data={filteredData} margin={{ top: 12, right: 20, left: 12, bottom: 12 }}>
+                          <CartesianGrid {...chartCartesianGrid} />
+                          <XAxis dataKey="mes" tick={chartAxisTick} />
+                          <YAxis tick={chartAxisTick} />
+                          <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [formatCurrency(value), 'Morosidad']} />
+                          <Legend {...chartLegendStyle} />
+                          <Line type="monotone" dataKey="morosidad" stroke="#ef4444" strokeWidth={2} name="Morosidad" dot={{ r: 4 }} />
+                        </RechartsLineChart>
+                      </ResponsiveContainer>
+                    )}
+                  </ChartWithDateRangeSlider>
                   ) : (
                     <div className="flex items-center justify-center py-16 text-gray-500">No hay datos para mostrar</div>
                   )}
@@ -1492,18 +1378,22 @@ export function DashboardMenu() {
                 </CardHeader>
                   <CardContent className="p-6 pt-4">
                   {datosEvolucionPagos && datosEvolucionPagos.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={320}>
-                    <ComposedChart data={datosEvolucionPagos} margin={{ top: 8, right: 24, left: 8, bottom: 8 }}>
-                      <CartesianGrid {...chartCartesianGrid} />
-                      <XAxis dataKey="mes" tick={chartAxisTick} />
-                      <YAxis yAxisId="left" tick={chartAxisTick} />
-                      <YAxis yAxisId="right" orientation="right" tick={chartAxisTick} />
-                      <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} />
-                      <Legend {...chartLegendStyle} />
-                      <Bar yAxisId="left" dataKey="pagos" fill="#10b981" name="Cantidad Pagos" />
-                      <Line yAxisId="right" type="monotone" dataKey="monto" stroke="#3b82f6" strokeWidth={2} name="Monto Total" />
-                    </ComposedChart>
-                        </ResponsiveContainer>
+                  <ChartWithDateRangeSlider data={datosEvolucionPagos} dataKey="mes" chartHeight={320}>
+                    {(filteredData) => (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={filteredData} margin={{ top: 12, right: 24, left: 12, bottom: 12 }}>
+                          <CartesianGrid {...chartCartesianGrid} />
+                          <XAxis dataKey="mes" tick={chartAxisTick} />
+                          <YAxis yAxisId="left" tick={chartAxisTick} />
+                          <YAxis yAxisId="right" orientation="right" tick={chartAxisTick} />
+                          <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number, name: string) => [name === 'Monto Total' ? formatCurrency(value) : value, name]} />
+                          <Legend {...chartLegendStyle} />
+                          <Bar yAxisId="left" dataKey="pagos" fill="#10b981" name="Cantidad Pagos" radius={[4, 4, 0, 0]} />
+                          <Line yAxisId="right" type="monotone" dataKey="monto" stroke="#3b82f6" strokeWidth={2} name="Monto Total" dot={{ r: 4 }} />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    )}
+                  </ChartWithDateRangeSlider>
                   ) : (
                     <div className="flex items-center justify-center py-16 text-gray-500">No hay datos para mostrar</div>
                   )}

@@ -31,6 +31,7 @@ import {
   Upload,
   Download,
   Trash2,
+  Car,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
@@ -288,7 +289,8 @@ export function Configuracion() {
     { id: 'inteligenciaArtificial', nombre: 'Inteligencia Artificial', icono: Brain },
     { id: 'validadores', nombre: 'Validadores', icono: CheckSquare },
     { id: 'concesionarios', nombre: 'Concesionarios', icono: Building },
-    { id: 'analistaes', nombre: 'Asesores', icono: Users },
+    { id: 'analistas', nombre: 'Asesores', icono: Users },
+    { id: 'modelosVehiculos', nombre: 'Modelos de Vehículos', icono: Car },
     { id: 'usuarios', nombre: 'Usuarios', icono: Users },
   ]
 
@@ -1541,7 +1543,7 @@ export function Configuracion() {
       case 'inteligenciaArtificial': return renderSeccionInteligenciaArtificial()
       case 'validadores': return <ValidadoresConfig />
       case 'concesionarios': return <ConcesionariosConfig />
-      case 'analistaes': return <AnalistasConfig />
+      case 'analistas': return <AnalistasConfig />
       case 'modelosVehiculos': return <ModelosVehiculosConfig />
       case 'usuarios': return <UsuariosConfig />
       default: return renderSeccionGeneral()

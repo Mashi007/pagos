@@ -129,6 +129,7 @@ class Settings(BaseSettings):
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = True
+        extra = "ignore"  # Ignorar variables extra del .env no definidas en Settings
 
 
 # Instancia global de settings
