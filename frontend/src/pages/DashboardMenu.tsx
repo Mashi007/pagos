@@ -930,7 +930,9 @@ export function DashboardMenu() {
                         <CartesianGrid {...chartCartesianGrid} />
                         <XAxis
                           dataKey="mes"
-                          tick={{ ...chartAxisTick, angle: -45, textAnchor: 'end' }}
+                          angle={-45}
+                          textAnchor="end"
+                          tick={chartAxisTick}
                           height={80}
                         />
                         <YAxis
