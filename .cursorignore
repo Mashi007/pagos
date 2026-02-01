@@ -94,6 +94,5 @@ selenium-manager
 # ============================================
 # Estas carpetas pueden estar causando que Cursor indexe archivos
 # de otros proyectos, generando errores de serializaciÃ³n
-industrialroom/
-scripts/
-sql/
+
+
