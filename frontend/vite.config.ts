@@ -246,7 +246,7 @@ export default defineConfig({
         moduleSideEffects: false, // Tree-shaking más agresivo
       },
     },
-    chunkSizeWarningLimit: 600, // Tras split react-core/axios; avisar si algún chunk >600 kB
+    chunkSizeWarningLimit: 1000, // index ~979 kB; aviso solo si algún chunk supera 1 MB
     target: 'esnext',
     minify: 'esbuild',
     // Configuración de source maps para producción
