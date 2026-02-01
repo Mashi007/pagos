@@ -238,16 +238,24 @@ export function ClientesList() {
   }
 
   if (error || isError) {
-    const errorMessage = error instanceof Error 
-      ? error.message 
-      : (error as any)?.response?.data?.detail 
-        || (error as any)?.message 
-        || 'Error desconocido'
-    
-    console.error('âŒ [ClientesList] Error cargando clientes:', {
-      error,
-      errorMessage,
+    const rawDetail = (error as any)?.response?.data?.detail
+    const rawMessage = (error as any)?.message
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : typeof rawDetail === 'string'
+          ? rawDetail
+          : Array.isArray(rawDetail)
+            ? rawDetail.map((d: any) => d?.msg ?? d?.message ?? JSON.stringify(d)).join('. ')
+            : rawDetail && typeof rawDetail === 'object'
+              ? JSON.stringify(rawDetail)
+              : typeof rawMessage === 'string'
+                ? rawMessage
+                : 'Error desconocido'
+
+    console.error('[ClientesList] Error cargando clientes:', {
       isError,
+      errorMessage,
       errorDetails: error
     })
 
@@ -255,7 +263,7 @@ export function ClientesList() {
       <AlertWithIcon
         variant="destructive"
         title="Error al cargar clientes"
-        description={`No se pudieron cargar los clientes: ${errorMessage}. Por favor, intenta nuevamente.`}
+        description={`No se pudieron cargar los clientes: ${String(errorMessage)}. Por favor, intenta nuevamente.`}
       />
     )
   }
@@ -526,15 +534,15 @@ export function ClientesList() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  clientes.map((cliente) => (
-                  <TableRow key={cliente.id}>
+                  clientes.map((cliente, index) => (
+                  <TableRow key={cliente?.id != null ? String(cliente.id) : `row-${index}`}>
                     <TableCell>
                       <div>
                         <div className="font-medium text-gray-900">
-                          {cliente.nombres}  {/* âœ… nombres unificados */}
+                          {typeof cliente.nombres === 'string' || typeof cliente.nombres === 'number' ? cliente.nombres : (cliente as any).nombre ?? ''}
                         </div>
                         <div className="text-sm text-gray-500">
-                          Cédula: {cliente.cedula} | ID: {cliente.id}
+                          Cédula: {String(cliente.cedula ?? '')} | ID: {String(cliente.id ?? '')}
                         </div>
                       </div>
                     </TableCell>
@@ -542,7 +550,7 @@ export function ClientesList() {
                       <div className="space-y-1">
                         <div className="flex items-center text-sm text-gray-600">
                           <Mail className="w-3 h-3 mr-2" />
-                          {cliente.email}
+                          {String(cliente.email ?? '')}
                           {cliente.email && (
                             <a
                               href={`/comunicaciones?cliente_id=${cliente.id}&tipo=email`}
@@ -555,7 +563,7 @@ export function ClientesList() {
                         </div>
                         <div className="flex items-center text-sm text-gray-600">
                           <Phone className="w-3 h-3 mr-2" />
-                          {cliente.telefono}
+                          {String(cliente.telefono ?? '')}
                           {cliente.telefono && (
                             <a
                               href={`/comunicaciones?cliente_id=${cliente.id}&tipo=whatsapp`}
@@ -572,7 +580,7 @@ export function ClientesList() {
                       <Badge
                         variant={cliente.estado === 'ACTIVO' ? 'default' : 'destructive'}
                       >
-                        {cliente.estado}
+                        {String(cliente.estado ?? '')}
                       </Badge>
                     </TableCell>
                     <TableCell>

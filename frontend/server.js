@@ -277,6 +277,21 @@ const staticOptions = {
   etag: true,
   lastModified: true,
   setHeaders: (res, filePath) => {
+    // CRÍTICO: No cachear index.html para evitar 404 en chunks tras un nuevo deploy.
+    if (filePath.endsWith('index.html') || path.basename(filePath) === 'index.html') {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      return;
+    }
+    // No cachear el entry JS/CSS (index-*.js, index-*.css) para que tras un deploy se cargue el bundle nuevo
+    const basename = path.basename(filePath);
+    if (basename.startsWith('index-') && (filePath.endsWith('.js') || filePath.endsWith('.css'))) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      return;
+    }
     // Asegurar MIME types correctos para archivos JavaScript
     if (filePath.endsWith('.js')) {
       res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
@@ -388,7 +403,10 @@ app.get('*', (req, res) => {
   // Si llegamos aquí, NO es un archivo estático
   // Es una ruta de la SPA (como /clientes, /dashboard) → servir index.html
   // React Router manejará la ruta en el cliente
-  // Solo loggear en desarrollo
+  // CRÍTICO: No cachear index.html para evitar 404 en chunks tras un nuevo deploy
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   if (isDevelopment) {
     console.log(`📄 Frontend (SPA): Sirviendo index.html para ruta: ${req.method} ${req.path}`);
   }

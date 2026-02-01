@@ -225,11 +225,11 @@
       let reloadAttempted = false;
 
       function reloadPage() {
-        if (reloadAttempted) return; // Evitar loops infinitos
+        if (reloadAttempted) return;
         reloadAttempted = true;
-        console.warn('⚠️ Módulo JavaScript no encontrado (probable cache desactualizado). Recargando página...');
-        // Forzar recarga desde el servidor (bypass cache)
-        window.location.href = window.location.href.split('?')[0] + '?t=' + Date.now();
+        console.warn('Módulo no encontrado (cache desactualizado). Recargando...');
+        var base = window.location.href.split('?')[0].split('#')[0];
+        window.location.replace(base + '?nocache=' + Date.now());
       }
 
       window.addEventListener('error', function(event) {
@@ -253,20 +253,23 @@
         }
       }, true); // Usar capture phase para capturar errores antes de que se propaguen
 
-      // También manejar errores no capturados de promesas rechazadas
+      // También manejar errores no capturados de promesas rechazadas (ej. lazy import fallido por chunk 404)
       window.addEventListener('unhandledrejection', function(event) {
-        const reason = (event.reason?.message || event.reason?.toString() || '').toLowerCase();
-        if (
-          reason.includes('failed to fetch dynamically imported module') ||
-          reason.includes('error loading dynamically imported module') ||
-          reason.includes('failed to load module') ||
-          reason.includes('ha fallado la carga del módulo') ||
-          (reason.includes('/assets/') && reason.includes('.js'))
-        ) {
-          event.preventDefault(); // Prevenir que el error se muestre en la consola
+        var r = event.reason;
+        var msg = (r && (typeof r.message === 'string' ? r.message : (r.errMsg || r.msg || String(r)))) || '';
+        msg = msg.toLowerCase();
+        var isChunk = msg.indexOf('dynamically imported module') !== -1 ||
+          (msg.indexOf('failed to fetch') !== -1 && msg.indexOf('module') !== -1) ||
+          (msg.indexOf('error loading') !== -1 && msg.indexOf('module') !== -1) ||
+          msg.indexOf('failed to load module') !== -1 ||
+          (msg.indexOf('/assets/') !== -1 && msg.indexOf('.js') !== -1) ||
+          (msg.indexOf('comunicaciones-') !== -1 || msg.indexOf('notificaciones-') !== -1 || msg.indexOf('clientes-') !== -1) && msg.indexOf('.js') !== -1;
+        if (isChunk) {
+          event.preventDefault();
+          event.stopPropagation();
           reloadPage();
         }
-      });
+      }, true);
     </script>
     <!-- Script para prevenir FOUC: mostrar contenido cuando los estilos estén listos -->
     <script>

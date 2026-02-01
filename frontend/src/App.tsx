@@ -9,6 +9,35 @@ import { Layout } from './components/layout/Layout'
 import { SimpleProtectedRoute } from './components/auth/SimpleProtectedRoute'
 import { useSimpleAuth } from './store/simpleAuthStore'
 
+// Helper: ante fallo de carga de chunk (404 tras deploy), recargar página para obtener assets actualizados
+function lazyWithRetry<T>(
+  factory: () => Promise<{ default: React.ComponentType<T> }>
+): React.LazyExoticComponent<React.ComponentType<T>> {
+  return lazy(() =>
+    factory().catch((err: unknown) => {
+      const msg = (err && typeof (err as Error).message === 'string'
+        ? (err as Error).message
+        : err != null ? String(err) : ''
+      ).toLowerCase()
+      const isChunkLoadError =
+        msg.indexOf('dynamically imported module') !== -1 ||
+        msg.indexOf('error loading dynamically imported') !== -1 ||
+        msg.indexOf('failed to fetch') !== -1 ||
+        msg.indexOf('error loading') !== -1 ||
+        msg.indexOf('loading dynamically imported') !== -1 ||
+        msg.indexOf('imported module') !== -1 ||
+        msg.indexOf('/assets/') !== -1 ||
+        (msg.indexOf('chunk') !== -1 && msg.indexOf('load') !== -1)
+      if (isChunkLoadError && typeof window !== 'undefined') {
+        const base = window.location.pathname + window.location.search
+        const sep = base.indexOf('?') !== -1 ? '&' : '?'
+        window.location.replace(base + sep + '_=' + Date.now())
+        return new Promise(() => {}) // no resolver para no renderizar estado roto
+      }
+      throw err
+    })
+  )
+}
 
 // Constantes de configuración
 const ANIMATION_DURATION = 0.3
@@ -21,39 +50,39 @@ const SPACING_XL = 6
 const SPINNER_SIZE = 12
 const BORDER_WIDTH = 2
 
-// Pages - Lazy loading para optimización
-const Welcome = lazy(() => import('./pages/Welcome').then(module => ({ default: module.Welcome })))
-const Login = lazy(() => import('./pages/Login').then(module => ({ default: module.Login })))
+// Pages - Lazy loading con retry ante 404 de chunks (cache desactualizado tras deploy)
+const Welcome = lazyWithRetry(() => import('./pages/Welcome').then(module => ({ default: module.Welcome })))
+const Login = lazyWithRetry(() => import('./pages/Login').then(module => ({ default: module.Login })))
 // ✅ DashboardMenu importado normalmente (no lazy) para asegurar que React esté disponible
 // Los componentes UI que usa (Radix UI) requieren React como namespace y fallan con lazy loading
 import { DashboardMenu } from './pages/DashboardMenu'
-const Clientes = lazy(() => import('./pages/Clientes').then(module => ({ default: module.Clientes })))
-const Prestamos = lazy(() => import('./pages/Prestamos').then(module => ({ default: module.Prestamos })))
-const Amortizacion = lazy(() => import('./pages/Amortizacion').then(module => ({ default: module.Amortizacion })))
-const Reportes = lazy(() => import('./pages/Reportes').then(module => ({ default: module.Reportes })))
-const Cobranzas = lazy(() => import('./pages/Cobranzas').then(module => ({ default: module.Cobranzas })))
-const Auditoria = lazy(() => import('./pages/Auditoria').then(module => ({ default: module.Auditoria })))
-const ChatAI = lazy(() => import('./pages/ChatAI').then(module => ({ default: module.ChatAI })))
-const Notificaciones = lazy(() => import('./pages/Notificaciones').then(module => ({ default: module.Notificaciones })))
-const Programador = lazy(() => import('./pages/Programador').then(module => ({ default: module.Programador })))
-const Plantillas = lazy(() => import('./pages/Plantillas').then(module => ({ default: module.Plantillas })))
-const Configuracion = lazy(() => import('./pages/Configuracion').then(module => ({ default: module.Configuracion })))
-const Analistas = lazy(() => import('./pages/Analistas').then(module => ({ default: module.Analistas })))
-const PagosPage = lazy(() => import('./pages/PagosPage'))
-const AmortizacionPage = lazy(() => import('./pages/AmortizacionPage').then(module => ({ default: module.AmortizacionPage })))
-const ReportesPage = lazy(() => import('./pages/ReportesPage').then(module => ({ default: module.ReportesPage })))
-const VisualizacionBD = lazy(() => import('./pages/VisualizacionBD').then(module => ({ default: module.VisualizacionBD })))
-const Validadores = lazy(() => import('./pages/Validadores').then(module => ({ default: module.Validadores })))
-const Concesionarios = lazy(() => import('./pages/Concesionarios').then(module => ({ default: module.Concesionarios })))
-const ModelosVehiculos = lazy(() => import('./pages/ModelosVehiculos').then(module => ({ default: module.ModelosVehiculos })))
-const Usuarios = lazy(() => import('./pages/Usuarios').then(module => ({ default: module.Usuarios })))
-const Solicitudes = lazy(() => import('./pages/Solicitudes').then(module => ({ default: module.Solicitudes })))
-const EmbudoClientes = lazy(() => import('./pages/EmbudoClientes').then(module => ({ default: module.EmbudoClientes })))
-const TicketsAtencion = lazy(() => import('./pages/TicketsAtencion').then(module => ({ default: module.TicketsAtencion })))
-const EmbudoConcesionarios = lazy(() => import('./pages/EmbudoConcesionarios').then(module => ({ default: module.EmbudoConcesionarios })))
-const Ventas = lazy(() => import('./pages/Ventas').then(module => ({ default: module.Ventas })))
-const ConversacionesWhatsAppPage = lazy(() => import('./pages/ConversacionesWhatsApp').then(module => ({ default: module.ConversacionesWhatsAppPage })))
-const ComunicacionesPage = lazy(() => import('./pages/Comunicaciones').then(module => ({ default: module.ComunicacionesPage })))
+const Clientes = lazyWithRetry(() => import('./pages/Clientes').then(module => ({ default: module.Clientes })))
+const Prestamos = lazyWithRetry(() => import('./pages/Prestamos').then(module => ({ default: module.Prestamos })))
+const Amortizacion = lazyWithRetry(() => import('./pages/Amortizacion').then(module => ({ default: module.Amortizacion })))
+const Reportes = lazyWithRetry(() => import('./pages/Reportes').then(module => ({ default: module.Reportes })))
+const Cobranzas = lazyWithRetry(() => import('./pages/Cobranzas').then(module => ({ default: module.Cobranzas })))
+const Auditoria = lazyWithRetry(() => import('./pages/Auditoria').then(module => ({ default: module.Auditoria })))
+const ChatAI = lazyWithRetry(() => import('./pages/ChatAI').then(module => ({ default: module.ChatAI })))
+const Notificaciones = lazyWithRetry(() => import('./pages/Notificaciones').then(module => ({ default: module.Notificaciones })))
+const Programador = lazyWithRetry(() => import('./pages/Programador').then(module => ({ default: module.Programador })))
+const Plantillas = lazyWithRetry(() => import('./pages/Plantillas').then(module => ({ default: module.Plantillas })))
+const Configuracion = lazyWithRetry(() => import('./pages/Configuracion').then(module => ({ default: module.Configuracion })))
+const Analistas = lazyWithRetry(() => import('./pages/Analistas').then(module => ({ default: module.Analistas })))
+const PagosPage = lazyWithRetry(() => import('./pages/PagosPage').then(module => ({ default: module.default })))
+const AmortizacionPage = lazyWithRetry(() => import('./pages/AmortizacionPage').then(module => ({ default: module.AmortizacionPage })))
+const ReportesPage = lazyWithRetry(() => import('./pages/ReportesPage').then(module => ({ default: module.ReportesPage })))
+const VisualizacionBD = lazyWithRetry(() => import('./pages/VisualizacionBD').then(module => ({ default: module.VisualizacionBD })))
+const Validadores = lazyWithRetry(() => import('./pages/Validadores').then(module => ({ default: module.Validadores })))
+const Concesionarios = lazyWithRetry(() => import('./pages/Concesionarios').then(module => ({ default: module.Concesionarios })))
+const ModelosVehiculos = lazyWithRetry(() => import('./pages/ModelosVehiculos').then(module => ({ default: module.ModelosVehiculos })))
+const Usuarios = lazyWithRetry(() => import('./pages/Usuarios').then(module => ({ default: module.Usuarios })))
+const Solicitudes = lazyWithRetry(() => import('./pages/Solicitudes').then(module => ({ default: module.Solicitudes })))
+const EmbudoClientes = lazyWithRetry(() => import('./pages/EmbudoClientes').then(module => ({ default: module.EmbudoClientes })))
+const TicketsAtencion = lazyWithRetry(() => import('./pages/TicketsAtencion').then(module => ({ default: module.TicketsAtencion })))
+const EmbudoConcesionarios = lazyWithRetry(() => import('./pages/EmbudoConcesionarios').then(module => ({ default: module.EmbudoConcesionarios })))
+const Ventas = lazyWithRetry(() => import('./pages/Ventas').then(module => ({ default: module.Ventas })))
+const ConversacionesWhatsAppPage = lazyWithRetry(() => import('./pages/ConversacionesWhatsApp').then(module => ({ default: module.ConversacionesWhatsAppPage })))
+const ComunicacionesPage = lazyWithRetry(() => import('./pages/Comunicaciones').then(module => ({ default: module.ComunicacionesPage })))
 
 // Todas las páginas ahora están importadas desde archivos reales
 

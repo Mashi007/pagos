@@ -168,7 +168,9 @@ export function TicketsAtencion() {
       toast.success('Ticket creado exitosamente')
     },
     onError: (error: any) => {
-      toast.error(error?.response?.data?.detail || 'Error creando ticket')
+      const d = error?.response?.data?.detail
+      const msg = typeof d === 'string' ? d : Array.isArray(d) ? d.map((x: any) => x?.msg ?? x?.message ?? JSON.stringify(x)).join('. ') : (d && typeof d === 'object' ? JSON.stringify(d) : 'Error creando ticket')
+      toast.error(msg)
     },
   })
 
@@ -183,19 +185,24 @@ export function TicketsAtencion() {
       toast.success('Ticket actualizado exitosamente')
     },
     onError: (error: any) => {
-      toast.error(error?.response?.data?.detail || 'Error actualizando ticket')
+      const d = error?.response?.data?.detail
+      const msg = typeof d === 'string' ? d : Array.isArray(d) ? d.map((x: any) => x?.msg ?? x?.message ?? JSON.stringify(x)).join('. ') : (d && typeof d === 'object' ? JSON.stringify(d) : 'Error actualizando ticket')
+      toast.error(msg)
     },
   })
 
   const ticketsFiltrados = tickets.filter(ticket => {
+    const titulo = typeof ticket.titulo === 'string' ? ticket.titulo : ''
+    const descripcion = typeof ticket.descripcion === 'string' ? ticket.descripcion : ''
+    const clienteStr = typeof ticket.cliente === 'string' ? ticket.cliente : ''
     const matchSearch =
-      ticket.titulo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (ticket.cliente && ticket.cliente.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      titulo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (clienteStr && clienteStr.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (ticket.clienteData && (
-        ticket.clienteData.cedula.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (ticket.clienteData.telefono && ticket.clienteData.telefono.includes(searchTerm))
+        (String(ticket.clienteData.cedula ?? '').toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (ticket.clienteData.telefono && String(ticket.clienteData.telefono).includes(searchTerm))
       )) ||
-      ticket.descripcion.toLowerCase().includes(searchTerm.toLowerCase())
+      descripcion.toLowerCase().includes(searchTerm.toLowerCase())
     const matchEstado = filtroEstado === 'todos' || ticket.estado === filtroEstado
     const matchPrioridad = filtroPrioridad === 'todos' || ticket.prioridad === filtroPrioridad
     return matchSearch && matchEstado && matchPrioridad
@@ -361,36 +368,36 @@ export function TicketsAtencion() {
                         <div className="flex items-center gap-2 mb-3">
                           <CheckCircle className="h-5 w-5 text-green-600" />
                           <p className="font-semibold text-base text-green-900">
-                            {clienteSeleccionado.nombres || 'Sin nombre'}
+                            {typeof clienteSeleccionado.nombres === 'string' ? clienteSeleccionado.nombres : (clienteSeleccionado as any).nombre ?? 'Sin nombre'}
                           </p>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm ml-7">
                           <div className="flex items-center gap-2">
                             <span className="text-gray-600 font-medium">Cédula:</span>
-                            <span className="text-gray-900 font-semibold">{clienteSeleccionado.cedula}</span>
+                            <span className="text-gray-900 font-semibold">{String(clienteSeleccionado.cedula ?? '')}</span>
                           </div>
                           {clienteSeleccionado.telefono && (
                             <div className="flex items-center gap-2">
                               <span className="text-gray-600 font-medium">Teléfono:</span>
-                              <span className="text-gray-900 font-semibold">{clienteSeleccionado.telefono}</span>
+                              <span className="text-gray-900 font-semibold">{String(clienteSeleccionado.telefono)}</span>
                             </div>
                           )}
                           {clienteSeleccionado.email && (
                             <div className="flex items-center gap-2 sm:col-span-2">
                               <span className="text-gray-600 font-medium">Email:</span>
-                              <span className="text-gray-900 font-semibold break-all">{clienteSeleccionado.email}</span>
+                              <span className="text-gray-900 font-semibold break-all">{String(clienteSeleccionado.email)}</span>
                             </div>
                           )}
                           {clienteSeleccionado.direccion && (
                             <div className="flex items-center gap-2 sm:col-span-2">
                               <span className="text-gray-600 font-medium">Dirección:</span>
-                              <span className="text-gray-900">{clienteSeleccionado.direccion}</span>
+                              <span className="text-gray-900">{String(clienteSeleccionado.direccion)}</span>
                             </div>
                           )}
                           {clienteSeleccionado.ocupacion && (
                             <div className="flex items-center gap-2">
                               <span className="text-gray-600 font-medium">Ocupación:</span>
-                              <span className="text-gray-900">{clienteSeleccionado.ocupacion}</span>
+                              <span className="text-gray-900">{String(clienteSeleccionado.ocupacion)}</span>
                             </div>
                           )}
                         </div>
@@ -449,36 +456,36 @@ export function TicketsAtencion() {
                                   <div className="flex items-center gap-2 mb-1">
                                     <User className="h-4 w-4 text-blue-600 flex-shrink-0" />
                                     <p className="font-semibold text-sm text-gray-900 truncate">
-                                      {cliente.nombres || 'Sin nombre'}
+                                      {typeof cliente.nombres === 'string' ? cliente.nombres : (cliente as any).nombre ?? 'Sin nombre'}
                                     </p>
                                   </div>
                                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 ml-6 text-xs">
                                     <div className="flex items-center gap-1.5">
                                       <span className="text-gray-500">Cédula:</span>
-                                      <span className="font-medium text-gray-700">{cliente.cedula}</span>
+                                      <span className="font-medium text-gray-700">{String(cliente.cedula ?? '')}</span>
                                     </div>
                                     {cliente.telefono && (
                                       <div className="flex items-center gap-1.5">
                                         <span className="text-gray-500">Tel:</span>
-                                        <span className="font-medium text-gray-700">{cliente.telefono}</span>
+                                        <span className="font-medium text-gray-700">{String(cliente.telefono)}</span>
                                       </div>
                                     )}
                                     {cliente.email && (
                                       <div className="flex items-center gap-1.5 sm:col-span-2">
                                         <span className="text-gray-500">Email:</span>
-                                        <span className="font-medium text-gray-700 truncate">{cliente.email}</span>
+                                        <span className="font-medium text-gray-700 truncate">{String(cliente.email)}</span>
                                       </div>
                                     )}
                                     {cliente.direccion && (
                                       <div className="flex items-center gap-1.5 sm:col-span-2">
                                         <span className="text-gray-500">Dirección:</span>
-                                        <span className="font-medium text-gray-700 truncate">{cliente.direccion}</span>
+                                        <span className="font-medium text-gray-700 truncate">{String(cliente.direccion)}</span>
                                       </div>
                                     )}
                                     {cliente.ocupacion && (
                                       <div className="flex items-center gap-1.5">
                                         <span className="text-gray-500">Ocupación:</span>
-                                        <span className="font-medium text-gray-700">{cliente.ocupacion}</span>
+                                        <span className="font-medium text-gray-700">{String(cliente.ocupacion)}</span>
                                       </div>
                                     )}
                                   </div>
@@ -658,7 +665,7 @@ export function TicketsAtencion() {
                       {ticketsVencidos.length} Ticket{ticketsVencidos.length > 1 ? 's' : ''} Vencido{ticketsVencidos.length > 1 ? 's' : ''}
                     </h3>
                     <p className="text-sm text-red-700">
-                      {ticketsVencidos.map(t => `#${t.id}: ${t.titulo}`).join(', ')}
+                      {ticketsVencidos.map(t => `#${t.id}: ${typeof t.titulo === 'string' ? t.titulo : ''}`).join(', ')}
                     </p>
                   </div>
                 </div>
@@ -678,7 +685,8 @@ export function TicketsAtencion() {
                       {ticketsProximosAVencer.map(t => {
                         const fechaLimite = new Date(t.fecha_limite!)
                         const minutosRestantes = Math.round((fechaLimite.getTime() - new Date().getTime()) / (60 * 1000))
-                        return `#${t.id}: ${t.titulo} (${minutosRestantes} min)`
+                        const titulo = typeof t.titulo === 'string' ? t.titulo : ''
+                        return `#${t.id}: ${titulo} (${minutosRestantes} min)`
                       }).join(', ')}
                     </p>
                   </div>
@@ -824,18 +832,20 @@ export function TicketsAtencion() {
                     return fechaB - fechaA
                   })
                   .map((ticket, index) => {
-                    const estadoInfo = getEstadoInfo(ticket.estado)
-                    const prioridadInfo = getPrioridadInfo(ticket.prioridad)
+                    const estadoStr = typeof ticket.estado === 'string' ? ticket.estado : 'abierto'
+                    const prioridadStr = typeof ticket.prioridad === 'string' ? ticket.prioridad : 'media'
+                    const estadoInfo = getEstadoInfo(estadoStr)
+                    const prioridadInfo = getPrioridadInfo(prioridadStr)
                     const EstadoIcon = estadoInfo.icon
                     const isLast = index === ticketsFiltrados.length - 1
 
-                    // âœ… Verificar si el ticket está vencido o próximo a vencer
+                    // Verificar si el ticket está vencido o próximo a vencer
                     const ahora = new Date()
                     const enUnaHora = new Date(ahora.getTime() + 60 * 60 * 1000)
                     let estadoFecha: 'vencido' | 'proximo' | 'normal' = 'normal'
                     let minutosRestantes = 0
                     
-                    if (ticket.fecha_limite && (ticket.estado === 'abierto' || ticket.estado === 'en_proceso')) {
+                    if (ticket.fecha_limite && (estadoStr === 'abierto' || estadoStr === 'en_proceso')) {
                       const fechaLimite = new Date(ticket.fecha_limite)
                       if (fechaLimite <= ahora) {
                         estadoFecha = 'vencido'
@@ -845,9 +855,14 @@ export function TicketsAtencion() {
                       }
                     }
 
+                    const ticketTitulo = typeof ticket.titulo === 'string' ? ticket.titulo : ''
+                    const ticketDescripcion = typeof ticket.descripcion === 'string' ? ticket.descripcion : ''
+                    const ticketCliente = typeof ticket.cliente === 'string' ? ticket.cliente : 'N/A'
+                    const ticketAsignadoA = typeof ticket.asignadoA === 'string' ? ticket.asignadoA : 'Sin asignar'
+
                     return (
                       <motion.div
-                        key={ticket.id}
+                        key={ticket.id != null ? String(ticket.id) : `ticket-${index}`}
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: index * 0.1 }}
@@ -858,9 +873,9 @@ export function TicketsAtencion() {
                           <div className={`w-16 h-16 rounded-full flex items-center justify-center border-4 border-white shadow-lg ${
                             estadoFecha === 'vencido' ? 'bg-red-500 animate-pulse' :
                             estadoFecha === 'proximo' ? 'bg-orange-500' :
-                            ticket.estado === 'resuelto' ? 'bg-green-500' :
-                            ticket.estado === 'cerrado' ? 'bg-gray-500' :
-                            ticket.estado === 'en_proceso' ? 'bg-yellow-500' :
+                            estadoStr === 'resuelto' ? 'bg-green-500' :
+                            estadoStr === 'cerrado' ? 'bg-gray-500' :
+                            estadoStr === 'en_proceso' ? 'bg-yellow-500' :
                             'bg-blue-500'
                           }`}>
                             <span className="text-white font-bold text-sm">#{ticket.id}</span>
@@ -885,7 +900,7 @@ export function TicketsAtencion() {
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 mb-2">
                                   <h3 className="text-lg font-bold text-gray-900">
-                                    {ticket.titulo}
+                                    {ticketTitulo}
                                   </h3>
                                   {estadoFecha === 'vencido' && (
                                     <Badge className="bg-red-600 text-white animate-pulse">
@@ -901,7 +916,7 @@ export function TicketsAtencion() {
                                   )}
                                 </div>
                                 <p className="text-sm text-gray-600 line-clamp-2">
-                                  {ticket.descripcion}
+                                  {ticketDescripcion}
                                 </p>
                               </div>
                               <div className="flex gap-2 ml-4">
@@ -938,29 +953,29 @@ export function TicketsAtencion() {
                                   <p className="text-xs text-gray-500 mb-1">Cliente</p>
                                   {ticket.clienteData ? (
                                     <div>
-                                      <p className="font-semibold text-sm text-gray-900">{ticket.cliente}</p>
+                                      <p className="font-semibold text-sm text-gray-900">{ticketCliente}</p>
                                       <div className="mt-1 space-y-0.5">
-                                        <p className="text-xs text-gray-600">Cédula: <span className="font-medium">{ticket.clienteData.cedula}</span></p>
+                                        <p className="text-xs text-gray-600">Cédula: <span className="font-medium">{String(ticket.clienteData.cedula ?? '')}</span></p>
                                         {ticket.clienteData.telefono && (
-                                          <p className="text-xs text-gray-600">Tel: <span className="font-medium">{ticket.clienteData.telefono}</span></p>
+                                          <p className="text-xs text-gray-600">Tel: <span className="font-medium">{String(ticket.clienteData.telefono)}</span></p>
                                         )}
                                         {ticket.clienteData.email && (
-                                          <p className="text-xs text-gray-600">Email: <span className="font-medium">{ticket.clienteData.email}</span></p>
+                                          <p className="text-xs text-gray-600">Email: <span className="font-medium">{String(ticket.clienteData.email)}</span></p>
                                         )}
                                       </div>
-                                      {ticket.clienteId && (
+                                      {ticket.clienteId != null && (
                                         <Button
                                           variant="link"
                                           size="sm"
                                           className="h-auto p-0 text-xs mt-1 text-blue-600 hover:text-blue-700"
                                           onClick={() => window.open(`/clientes/${ticket.clienteId}`, '_blank')}
                                         >
-                                          Ver cliente completo â†’
+                                          Ver cliente completo → â†’
                                         </Button>
                                       )}
                                     </div>
                                   ) : (
-                                    <p className="font-semibold text-sm text-gray-900">{ticket.cliente || 'N/A'}</p>
+                                    <p className="font-semibold text-sm text-gray-900">{ticketCliente}</p>
                                   )}
                                 </div>
                               </div>
@@ -970,7 +985,7 @@ export function TicketsAtencion() {
                                 <User className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
                                 <div className="min-w-0">
                                   <p className="text-xs text-gray-500 mb-1">Asignado a</p>
-                                  <p className="font-semibold text-sm text-gray-900">{ticket.asignadoA}</p>
+                                  <p className="font-semibold text-sm text-gray-900">{ticketAsignadoA}</p>
                                 </div>
                               </div>
                             </div>
@@ -985,7 +1000,7 @@ export function TicketsAtencion() {
                                 {prioridadInfo.label}
                               </Badge>
                               <Badge variant="outline" className="text-xs">
-                                {ticket.tipo}
+                                {typeof ticket.tipo === 'string' ? ticket.tipo : 'consulta'}
                               </Badge>
                               {ticket.conversacion_whatsapp_id && (
                                 <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
