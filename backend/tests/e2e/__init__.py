@@ -1,3 +1,0 @@
-"""
-Pruebas End-to-End
-"""
