@@ -1,41 +1,28 @@
 """
 Schemas Pydantic para Cliente (request/response).
-Alineados con el frontend (Cliente, ClienteForm).
+Alineados con la tabla public.clientes en la BD.
 """
 from datetime import date, datetime
-from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict
 
 
 class ClienteBase(BaseModel):
     cedula: str
     nombres: str
-    telefono: Optional[str] = None
-    email: Optional[str] = None
-    direccion: Optional[str] = None
-    fecha_nacimiento: Optional[date] = None
-    ocupacion: Optional[str] = None
-    total_financiamiento: Optional[Decimal] = None
-    cuota_inicial: Optional[Decimal] = None
-    monto_financiado: Optional[Decimal] = None
-    fecha_entrega: Optional[date] = None
-    numero_amortizaciones: Optional[int] = None
-    modalidad_pago: Optional[str] = None
+    telefono: str
+    email: str
+    direccion: str
+    fecha_nacimiento: date
+    ocupacion: str
     estado: str = "ACTIVO"
-    activo: bool = True
-    estado_financiero: Optional[str] = None
-    dias_mora: int = 0
-    usuario_registro: Optional[str] = None
-    notas: Optional[str] = None
+    usuario_registro: str
+    notas: str
 
 
 class ClienteCreate(ClienteBase):
-    """Campos para crear cliente (ClienteForm del frontend)."""
-    estado: str = "ACTIVO"
-    activo: bool = True
-    dias_mora: int = 0
+    """Campos para crear cliente."""
 
 
 class ClienteUpdate(BaseModel):
@@ -47,55 +34,25 @@ class ClienteUpdate(BaseModel):
     direccion: Optional[str] = None
     fecha_nacimiento: Optional[date] = None
     ocupacion: Optional[str] = None
-    total_financiamiento: Optional[Decimal] = None
-    cuota_inicial: Optional[Decimal] = None
-    monto_financiado: Optional[Decimal] = None
-    fecha_entrega: Optional[date] = None
-    numero_amortizaciones: Optional[int] = None
-    modalidad_pago: Optional[str] = None
     estado: Optional[str] = None
-    activo: Optional[bool] = None
-    estado_financiero: Optional[str] = None
-    dias_mora: Optional[int] = None
+    usuario_registro: Optional[str] = None
     notas: Optional[str] = None
 
 
-def _decimal_to_float(v):  # ORM devuelve Decimal (Numeric); el front espera float
-    if v is None:
-        return None
-    if hasattr(v, "__float__"):
-        return float(v)
-    return v
-
-
 class ClienteResponse(BaseModel):
-    """Respuesta de cliente (formato esperado por el frontend)."""
+    """Respuesta de cliente (columnas de la tabla clientes)."""
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     cedula: str
     nombres: str
-    telefono: Optional[str] = None
-    email: Optional[str] = None
-    direccion: Optional[str] = None
-    fecha_nacimiento: Optional[date] = None
-    ocupacion: Optional[str] = None
-    total_financiamiento: Optional[float] = None
-    cuota_inicial: Optional[float] = None
-    monto_financiado: Optional[float] = None
-    fecha_entrega: Optional[date] = None
-    numero_amortizaciones: Optional[int] = None
-    modalidad_pago: Optional[str] = None
+    telefono: str
+    email: str
+    direccion: str
+    fecha_nacimiento: date
+    ocupacion: str
     estado: str
-    activo: bool
-    estado_financiero: Optional[str] = None
-    dias_mora: int
     fecha_registro: datetime
-    fecha_actualizacion: Optional[datetime] = None
-    usuario_registro: Optional[str] = None
-    notas: Optional[str] = None
-
-    @field_validator("total_financiamiento", "cuota_inicial", "monto_financiado", mode="before")
-    @classmethod
-    def coerce_decimal_to_float(cls, v):  # ORM devuelve Decimal (Numeric)
-        return _decimal_to_float(v)
+    fecha_actualizacion: datetime
+    usuario_registro: str
+    notas: str

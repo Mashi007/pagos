@@ -1,6 +1,9 @@
 """
-Endpoints de clientes conectados a la BD.
-Listado paginado, stats y CRUD usando el modelo Cliente.
+Endpoints de clientes: CONECTADOS A LA TABLA REAL `clientes` (public.clientes).
+- Conexión: engine/sesión desde app.core.database (DATABASE_URL en .env).
+- Modelo: app.models.cliente.Cliente con __tablename__ = "clientes".
+- Todos los datos son REALES: listado, stats, get, create, update, delete y cambio de estado
+  usan Depends(get_db) y consultas contra la tabla clientes. No hay stubs ni datos demo.
 """
 import logging
 from typing import Optional
@@ -105,7 +108,6 @@ def cambiar_estado_cliente(
     if estado not in ("ACTIVO", "INACTIVO", "MORA", "FINALIZADO"):
         raise HTTPException(status_code=400, detail="estado debe ser ACTIVO, INACTIVO, MORA o FINALIZADO")
     row.estado = estado
-    row.activo = estado == "ACTIVO"
     db.commit()
     db.refresh(row)
     return ClienteResponse.model_validate(row)
@@ -132,16 +134,7 @@ def create_cliente(payload: ClienteCreate, db: Session = Depends(get_db)):
         direccion=payload.direccion,
         fecha_nacimiento=payload.fecha_nacimiento,
         ocupacion=payload.ocupacion,
-        total_financiamiento=payload.total_financiamiento,
-        cuota_inicial=payload.cuota_inicial,
-        monto_financiado=payload.monto_financiado,
-        fecha_entrega=payload.fecha_entrega,
-        numero_amortizaciones=payload.numero_amortizaciones,
-        modalidad_pago=payload.modalidad_pago,
         estado=payload.estado,
-        activo=payload.activo,
-        estado_financiero=payload.estado_financiero,
-        dias_mora=payload.dias_mora,
         usuario_registro=payload.usuario_registro,
         notas=payload.notas,
     )

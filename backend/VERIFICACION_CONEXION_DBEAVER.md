@@ -4,9 +4,25 @@ Cuando DBeaver muestra **EOFException** ("El intento de conexión falló"), la c
 
 ---
 
-## 1. Parámetros que debe usar DBeaver (kohde_bd)
+## 1. Parámetros que debe usar DBeaver
 
-El proyecto usa **PostgreSQL** y la URL se define en `backend/.env` como `DATABASE_URL`. En DBeaver la conexión debe coincidir con esos valores:
+El proyecto usa **PostgreSQL** y la URL se define en `backend/.env` como `DATABASE_URL`. En DBeaver la conexión debe coincidir **exactamente** con esos valores.
+
+### Base de datos en Render (producción) — **pagos_db_zjer**
+
+Esta es la base del proyecto: **pagos_db_zjer** en Render (PostgreSQL 17). Para conectar desde tu equipo (DBeaver o backend en local) usa la **External Database URL** de Render.
+
+| Parámetro   | Valor |
+|------------|--------|
+| **Host**   | `dpg-d3l8tkur433s7380oph0-a.oregon-postgres.render.com` (External) |
+| **Port**   | `5432` |
+| **Database** | `pagos_db_zjer` |
+| **Username** | `pagos_admin` |
+| **Password** | La que aparece en Render → Info de la BD → "Password" (o en External Database URL). |
+
+En `backend/.env` debes usar la **External Database URL** que muestra Render (formato `postgresql://pagos_admin:...@dpg-d3l8tkur...oregon-postgres.render.com:5432/pagos_db_zjer`). El backend ya acepta tanto `postgres://` como `postgresql://`.
+
+### Conexión local (ejemplo)
 
 | Parámetro   | Valor típico (local) | Comentario |
 |------------|----------------------|------------|
@@ -16,11 +32,11 @@ El proyecto usa **PostgreSQL** y la URL se define en `backend/.env` como `DATABA
 | **Username** | Usuario de PostgreSQL | El que está en `DATABASE_URL` antes de `:` en la parte de credenciales |
 | **Password** | Contraseña del usuario | La que configuraste en PostgreSQL |
 
-**Ejemplo de DATABASE_URL (en .env):**
+**Ejemplo de DATABASE_URL local (en .env):**
 ```text
 DATABASE_URL=postgresql://usuario:password@localhost:5432/pagos_db
 ```
-En este caso en DBeaver: Host `localhost`, Port `5432`, Database `pagos_db`, Username `usuario`, Password `password`.
+En DBeaver: Host `localhost`, Port `5432`, Database `pagos_db`, Username `usuario`, Password `password`.
 
 ---
 
@@ -60,18 +76,15 @@ El backend expone un health check de base de datos. Si este responde bien, el fa
 
 ### 4.1 SSL
 
-En muchas instalaciones locales de PostgreSQL **no** se usa SSL. En DBeaver:
-
-- Clic derecho en la conexión **kohde_bd** → **Edit Connection**.
-- Pestaña **SSL**.
-- Probar con **SSL = disable** (o "allow" según tu versión de DBeaver).
+- **BD en Render (cloud):** Render suele requerir SSL. En DBeaver: Edit Connection → pestaña **SSL** → usar **require** o **verify-full** según lo que indique Render.
+- **BD local:** En muchas instalaciones locales **no** se usa SSL. En DBeaver: Edit Connection → pestaña **SSL** → **SSL = disable** (o "allow").
 
 Guarda y prueba de nuevo.
 
 ### 4.2 Host y puerto
 
-- **Host:** Exactamente el mismo que en `DATABASE_URL` (`localhost` o `127.0.0.1`). No uses un nombre que no resuelva o otra máquina si la BD está en local.
-- **Port:** `5432` salvo que hayas cambiado el puerto de PostgreSQL.
+- **Host:** Exactamente el mismo que en `DATABASE_URL`. Para Render (conexión externa): `dpg-d3l8tkur433s7380oph0-a.oregon-postgres.render.com`. Para local: `localhost` o `127.0.0.1`.
+- **Port:** `5432` (Render y PostgreSQL por defecto).
 
 ### 4.3 Firewall / antivirus
 

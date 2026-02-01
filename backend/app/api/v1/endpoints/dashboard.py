@@ -166,6 +166,16 @@ def get_dashboard_admin(
             {"mes": m["mes"], "cartera": 0.0, "cobrado": 0.0, "morosidad": 0.0}
             for m in meses
         ]
+    # Si no hay datos reales (toda la cartera en 0), mostrar datos de ejemplo para que el gráfico no quede vacío
+    tiene_datos_reales = any(_safe_float(e.get("cartera", 0)) > 0 for e in evolucion)
+    if not tiene_datos_reales and evolucion:
+        evolucion = [
+            {"mes": m["mes"], "cartera": m["cartera"], "cobrado": m["cobrado"], "morosidad": m["morosidad"]}
+            for m in meses
+        ]
+        origen = "demo"
+    else:
+        origen = "bd"
     return {
         "financieros": {
             "ingresosCapital": 0.0,
@@ -177,6 +187,7 @@ def get_dashboard_admin(
         "meta_mensual": 0.0,
         "avance_meta": 0.0,
         "evolucion_mensual": evolucion,
+        "evolucion_origen": origen,
     }
 
 
