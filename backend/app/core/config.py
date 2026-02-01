@@ -85,6 +85,18 @@ class Settings(BaseSettings):
     SMTP_FROM_EMAIL: Optional[str] = None
     
     # ============================================
+    # AI / OpenRouter (clave solo en backend, nunca en frontend)
+    # ============================================
+    OPENROUTER_API_KEY: Optional[str] = Field(
+        None,
+        description="API Key de OpenRouter. Configurar en variables de entorno del dashboard (Render, etc.). Nunca se expone al frontend."
+    )
+    OPENROUTER_MODEL: Optional[str] = Field(
+        default="openai/gpt-4o-mini",
+        description="Modelo por defecto para chat/completions. Ej: openai/gpt-4o-mini, google/gemini-2.0-flash-001, anthropic/claude-3-5-haiku"
+    )
+
+    # ============================================
     # Redis (Cache)
     # ============================================
     REDIS_URL: Optional[str] = Field(

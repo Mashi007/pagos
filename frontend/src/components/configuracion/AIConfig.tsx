@@ -18,7 +18,9 @@ import { DefinicionesCamposTab } from './DefinicionesCamposTab'
 import { CalificacionesChatTab } from './CalificacionesChatTab'
 
 interface AIConfig {
-  openai_api_key: string
+  configured?: boolean
+  provider?: string
+  openai_api_key?: string
   modelo: string
   temperatura: string
   max_tokens: string
@@ -38,16 +40,25 @@ interface DocumentoAI {
   actualizado_en: string
 }
 
+/** Modelos OpenRouter recomendados (buen balance costo/calidad). Ref: https://openrouter.ai/docs/guides/overview/models */
+const OPENROUTER_MODELS = [
+  { id: 'openai/gpt-4o-mini', label: 'GPT-4o Mini (OpenAI) — Recomendado, económico' },
+  { id: 'openai/gpt-4o', label: 'GPT-4o (OpenAI) — Más capaz' },
+  { id: 'google/gemini-2.0-flash-001', label: 'Gemini 2.0 Flash (Google) — Rápido y barato' },
+  { id: 'anthropic/claude-3-5-haiku', label: 'Claude 3.5 Haiku (Anthropic) — Buen balance' },
+  { id: 'anthropic/claude-3-5-sonnet', label: 'Claude 3.5 Sonnet (Anthropic) — Más preciso' },
+  { id: 'meta-llama/llama-3.1-70b-instruct', label: 'Llama 3.1 70B (Meta) — Open source' },
+]
+
 export function AIConfig() {
   const [config, setConfig] = useState<AIConfig>({
-    openai_api_key: '',
-    modelo: 'gpt-3.5-turbo',
+    modelo: 'openai/gpt-4o-mini',
     temperatura: '0.7',
     max_tokens: '1000',
     activo: 'false',
   })
 
-  const [mostrarToken, setMostrarToken] = useState(false)
+  const [mostrarToken] = useState(false)
   const [guardando, setGuardando] = useState(false)
   const [documentos, setDocumentos] = useState<DocumentoAI[]>([])
   const [cargandoDocumentos, setCargandoDocumentos] = useState(false)
@@ -94,88 +105,38 @@ export function AIConfig() {
   // Estado para verificar configuración correcta
   const [configuracionCorrecta, setConfiguracionCorrecta] = useState(false)
   const [verificandoConfig, setVerificandoConfig] = useState(false)
-  const [tokenAnterior, setTokenAnterior] = useState<string>('')
-
   useEffect(() => {
     cargarConfiguracion()
     cargarDocumentos()
   }, [])
 
-  // Verificar configuración solo cuando el usuario cambia el token manualmente
-  // NO verificar en cada carga de página - el token se guarda permanentemente en BD
-  useEffect(() => {
-    // En la carga inicial, si hay token guardado, asumir que está correcto (se guardó permanentemente en BD)
-    if (!tokenAnterior && config.openai_api_key && config.openai_api_key.trim() && config.openai_api_key.startsWith('sk-')) {
-      // Token guardado permanentemente en BD - establecer estado
-      if (config.activo === 'true') {
-        setConfiguracionCorrecta(true)
-      }
-      setTokenAnterior(config.openai_api_key)
-      console.log('âœ… Token detectado desde BD - guardado permanentemente, no requiere confirmación')
-      return
-    }
-
-    // Solo verificar si el token cambió manualmente (no en la carga inicial)
-    if (tokenAnterior && tokenAnterior !== config.openai_api_key && config.openai_api_key && config.openai_api_key.trim() && config.openai_api_key.startsWith('sk-')) {
-      // El usuario cambió el token manualmente, verificar después de un delay
-      const timer = setTimeout(() => {
-        verificarConfiguracion(false)
-      }, 1000)
-      return () => clearTimeout(timer)
-    }
-
-    // Actualizar estado basado en configuración actual
-    if (config.openai_api_key && config.openai_api_key.trim() && config.openai_api_key.startsWith('sk-')) {
-      if (config.activo === 'true') {
-        setConfiguracionCorrecta(true)
-      } else {
-        setConfiguracionCorrecta(false)
-      }
-    } else if (config.openai_api_key === '') {
-      setConfiguracionCorrecta(false)
-    }
-  }, [config.openai_api_key, config.activo, tokenAnterior])
-
   const verificarConfiguracion = async (guardarAutomaticamente: boolean = false) => {
-    if (!config.openai_api_key?.trim() || !config.openai_api_key.startsWith('sk-')) {
-      setConfiguracionCorrecta(false)
-      return false
-    }
-
     setVerificandoConfig(true)
     try {
-      // Hacer una prueba simple para verificar que la API key funciona
-      const resultado = await apiClient.post<{
-        success: boolean
-        mensaje?: string
-      }>('/api/v1/configuracion/ai/probar', {
-        pregunta: 'Verificar conexión con OpenAI',
-        usar_documentos: false,
-      })
-
-      // Si la respuesta es exitosa o el error no es de autenticación, la config está correcta
-      const esValida = resultado.success || !resultado.mensaje?.includes('API key')
+      const resultado = await apiClient.post<{ success: boolean; message?: string }>(
+        '/api/v1/configuracion/ai/probar',
+        { pregunta: 'Verificar conexión con OpenRouter' }
+      )
+      const esValida = !!resultado.success
       setConfiguracionCorrecta(esValida)
-
-      // Si el token es válido y se debe guardar automáticamente, guardar la configuración
       if (esValida && guardarAutomaticamente) {
         try {
-          await apiClient.put('/api/v1/configuracion/ai/configuracion', config)
-          toast.success('âœ… Token válido confirmado y guardado automáticamente')
+          await apiClient.put('/api/v1/configuracion/ai/configuracion', {
+            modelo: config.modelo,
+            temperatura: config.temperatura,
+            max_tokens: config.max_tokens,
+            activo: config.activo,
+          })
+          toast.success('Configuración verificada y guardada')
           await cargarConfiguracion()
         } catch (saveError: any) {
-          console.error('Error guardando configuración automáticamente:', saveError)
-          toast.error('Token válido pero error al guardar. Guarda manualmente.')
+          toast.error('Error al guardar. Guarda manualmente.')
         }
       }
-
       return esValida
     } catch (error: any) {
-      // Si el error es de autenticación, la config no está correcta
-      const errorMsg = error?.response?.data?.detail || error?.message || ''
-      const esValida = !errorMsg.toLowerCase().includes('api key') && !errorMsg.toLowerCase().includes('authentication')
-      setConfiguracionCorrecta(esValida)
-      return esValida
+      setConfiguracionCorrecta(false)
+      return false
     } finally {
       setVerificandoConfig(false)
     }
@@ -185,21 +146,21 @@ export function AIConfig() {
     try {
       const data = await apiClient.get<AIConfig>('/api/v1/configuracion/ai/configuracion')
       // Asegurar que todos los campos tengan valores por defecto si vienen como null/undefined
-      const configCargada = {
-        openai_api_key: data.openai_api_key || '',
-        modelo: data.modelo || 'gpt-3.5-turbo',
+      const configCargada: AIConfig = {
+        configured: !!data.configured,
+        provider: data.provider || 'openrouter',
+        modelo: data.modelo || 'openai/gpt-4o-mini',
         temperatura: data.temperatura || '0.7',
         max_tokens: data.max_tokens || '1000',
         activo: data.activo || 'false',
       }
       setConfig(configCargada)
+      setConfiguracionCorrecta(!!data.configured && (data.activo || 'true').toLowerCase() === 'true')
 
       // Log para depuración
       console.log('ðŸ“‹ Configuración cargada desde BD:', {
-        tieneToken: !!(configCargada.openai_api_key && configCargada.openai_api_key.trim()),
-        tokenValido: configCargada.openai_api_key?.startsWith('sk-'),
-        activo: configCargada.activo === 'true',
-        tokenLength: configCargada.openai_api_key?.length || 0
+        configured: configCargada.configured,
+        modelo: configCargada.modelo
       })
     } catch (error) {
       console.error('Error cargando configuración de AI:', error)
@@ -228,27 +189,16 @@ export function AIConfig() {
   const handleGuardar = async () => {
     setGuardando(true)
     try {
-      // Guardar directamente - el token se guarda permanentemente en BD
-      console.log('ðŸ’¾ Guardando configuración:', {
-        tieneToken: !!(config.openai_api_key && config.openai_api_key.trim()),
-        activo: config.activo
+      await apiClient.put('/api/v1/configuracion/ai/configuracion', {
+        modelo: config.modelo,
+        temperatura: config.temperatura,
+        max_tokens: config.max_tokens,
+        activo: config.activo,
       })
+      toast.success('Configuración de AI guardada')
 
-      await apiClient.put('/api/v1/configuracion/ai/configuracion', config)
-      toast.success('âœ… Configuración de AI guardada exitosamente y de forma permanente')
-
-      // Recargar configuración desde BD para confirmar que se guardó
       await cargarConfiguracion()
-
-      // Si hay token guardado, actualizar estado
-      if (config.openai_api_key?.trim() && config.openai_api_key.startsWith('sk-')) {
-        if (config.activo === 'true') {
-          setConfiguracionCorrecta(true)
-        }
-        // Actualizar token anterior para evitar verificaciones innecesarias
-        setTokenAnterior(config.openai_api_key)
-        console.log('âœ… Token guardado permanentemente. No se requiere confirmación adicional.')
-      }
+      if (config.activo === 'true') setConfiguracionCorrecta(true)
     } catch (error: any) {
       console.error('Error guardando configuración:', error)
       const mensajeError = error?.response?.data?.detail || error?.message || 'Error guardando configuración'
@@ -259,12 +209,7 @@ export function AIConfig() {
   }
 
   const handleVerificarYGuardar = async () => {
-    // Verificar y guardar automáticamente si el token es válido
-    const tokenValido = await verificarConfiguracion(true)
-    if (tokenValido) {
-      // Si el token es válido y se guardó, actualizar token anterior
-      setTokenAnterior(config.openai_api_key)
-    }
+    await verificarConfiguracion(true)
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -489,15 +434,8 @@ export function AIConfig() {
       return
     }
 
-    const apiKey = config.openai_api_key?.trim()
-    if (!apiKey) {
-      toast.error('Debes configurar el OpenAI API Key primero')
-      return
-    }
-
-    // Validar formato básico de API key (debe empezar con sk-)
-    if (!apiKey.startsWith('sk-')) {
-      toast.error('El API Key debe empezar con "sk-". Verifica que sea un token válido de OpenAI.')
+    if (!config.configured) {
+      toast.error('Configura OPENROUTER_API_KEY en las variables de entorno del backend (dashboard de Render) y reinicia el servicio.')
       return
     }
 
@@ -1277,14 +1215,17 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                         handleChange('activo', nuevoEstado)
 
                         // Si hay token válido y se está activando, guardar automáticamente
-                        if (e.target.checked && config.openai_api_key?.trim() && config.openai_api_key.startsWith('sk-')) {
+                        if (e.target.checked && config.configured) {
                           try {
-                            const configParaGuardar = { ...config, activo: nuevoEstado }
-                            await apiClient.put('/api/v1/configuracion/ai/configuracion', configParaGuardar)
+                            await apiClient.put('/api/v1/configuracion/ai/configuracion', {
+                              modelo: config.modelo,
+                              temperatura: config.temperatura,
+                              max_tokens: config.max_tokens,
+                              activo: nuevoEstado,
+                            })
                             toast.success('âœ… AI activado y guardado automáticamente')
                             await cargarConfiguracion()
                             setConfiguracionCorrecta(true)
-                            setTokenAnterior(config.openai_api_key)
                           } catch (error) {
                             console.error('Error guardando automáticamente:', error)
                             toast.warning('AI activado localmente. Recuerda guardar la configuración.')
@@ -1304,7 +1245,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
           </div>
 
           {/* âœ… Estado: Configuración correcta */}
-          {config.openai_api_key?.trim() && config.openai_api_key.startsWith('sk-') && configuracionCorrecta && (
+          {config.configured && configuracionCorrecta && (
             <div className="bg-white border-2 border-green-500 rounded-xl p-5 shadow-sm">
               <div className="flex items-center gap-3">
                 {/* Semáforo Verde */}
@@ -1326,7 +1267,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
           )}
 
           {/* âš ï¸ Estado: API Key no válida o no configurada */}
-          {config.openai_api_key?.trim() && !configuracionCorrecta && !verificandoConfig && (
+          {config.configured && !configuracionCorrecta && !verificandoConfig && (
             <div className="bg-white border-2 border-amber-400 rounded-xl p-5 shadow-sm">
               <div className="flex items-center gap-3">
                 {/* Semáforo Amarillo */}
@@ -1350,7 +1291,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
           )}
 
           {/* âŒ Estado: No configurado */}
-          {(!config.openai_api_key?.trim() || !config.openai_api_key.startsWith('sk-')) && (
+          {!config.configured && (
             <div className="bg-white border-2 border-red-500 rounded-xl p-5 shadow-sm">
               <div className="flex items-center gap-3">
                 {/* Semáforo Rojo */}
@@ -1364,7 +1305,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                     Configuración incompleta
                   </p>
                   <p className="text-sm text-gray-600">
-                    Ingresa una API Key válida de OpenAI para habilitar el servicio de AI.
+                    Configura la variable <strong>OPENROUTER_API_KEY</strong> en el dashboard del backend (Render, etc.). La clave nunca se envía ni se muestra en el frontend por seguridad.
                   </p>
                 </div>
               </div>
@@ -1373,40 +1314,24 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
 
           <Card className="shadow-sm border-gray-200">
             <CardContent className="pt-6 space-y-4">
-              <div>
-                <label className="text-sm font-medium block mb-2">OpenAI API Key <span className="text-red-500">*</span></label>
-                <div className="relative">
-                  <Input
-                    type={mostrarToken ? 'text' : 'password'}
-                    value={config.openai_api_key || ''}
-                    onChange={(e) => handleChange('openai_api_key', e.target.value)}
-                    placeholder="sk-..."
-                    className="pr-10"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setMostrarToken(!mostrarToken)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  >
-                    {mostrarToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  Obtén tu API Key en: <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">platform.openai.com/api-keys</a>
+              <div className="rounded-lg bg-blue-50 border border-blue-200 p-4">
+                <p className="text-sm font-medium text-blue-900 mb-1">API key solo en el servidor</p>
+                <p className="text-xs text-blue-800">
+                  Añade <strong>OPENROUTER_API_KEY</strong> en las variables de entorno del backend (dashboard de Render u otro host). Obtén la clave en <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="underline">openrouter.ai/keys</a>. La clave nunca se expone en el frontend.
                 </p>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <label className="text-sm font-medium block mb-2">Modelo</label>
+                  <label className="text-sm font-medium block mb-2">Modelo (OpenRouter)</label>
                   <Select value={config.modelo} onValueChange={(value) => handleChange('modelo', value)}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo (Recomendado)</SelectItem>
-                      <SelectItem value="gpt-4">GPT-4 (Más potente)</SelectItem>
-                      <SelectItem value="gpt-4-turbo">GPT-4 Turbo</SelectItem>
+                      {OPENROUTER_MODELS.map((m) => (
+                        <SelectItem key={m.id} value={m.id}>{m.label}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1441,7 +1366,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                 <Button
                   onClick={handleGuardar}
                   disabled={guardando}
-                  className={configuracionCorrecta && config.openai_api_key?.trim() && config.openai_api_key.startsWith('sk-')
+                  className={configuracionCorrecta && config.configured
                     ? 'bg-green-600 hover:bg-green-700 text-white'
                     : ''}
                 >
@@ -1453,13 +1378,13 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                   ) : (
                     <>
                       <Save className="mr-2 h-4 w-4" />
-                      {configuracionCorrecta && config.openai_api_key?.trim() && config.openai_api_key.startsWith('sk-')
+                      {configuracionCorrecta && config.configured
                         ? 'âœ… Guardar Configuración (Token Válido)'
                         : 'Guardar Configuración'}
                     </>
                   )}
                 </Button>
-                {config.openai_api_key?.trim() && config.openai_api_key.startsWith('sk-') && !configuracionCorrecta && (
+                {config.configured && !configuracionCorrecta && (
                   <Button
                     onClick={handleVerificarYGuardar}
                     disabled={verificandoConfig}
@@ -1606,7 +1531,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                           placeholder="Escribe tu pregunta aquí... (Presiona Enter para enviar, Shift+Enter para nueva línea)"
                           rows={3}
                           className="resize-none pr-12"
-                          disabled={probando || !config.openai_api_key?.trim()}
+                          disabled={probando || !config.configured}
                         />
                         <div className="absolute bottom-2 right-2 text-xs text-gray-400">
                           {preguntaPrueba.length > 0 && `${preguntaPrueba.length} caracteres`}
@@ -1614,7 +1539,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                       </div>
                       <Button
                         onClick={handleProbar}
-                        disabled={probando || !preguntaPrueba.trim() || !config.openai_api_key?.trim()}
+                        disabled={probando || !preguntaPrueba.trim() || !config.configured}
                         className="h-[72px] px-4"
                       >
                         {probando ? (

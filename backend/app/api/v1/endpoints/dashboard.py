@@ -2,7 +2,8 @@
 Endpoints del dashboard. Usa datos reales de la BD cuando existen (clientes);
 el resto permanece stub hasta tener modelos de préstamos/pagos/cuotas.
 """
-from datetime import datetime, timedelta
+import logging
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
@@ -12,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.cliente import Cliente
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -57,6 +59,16 @@ def get_opciones_filtros(db: Session = Depends(get_db)):
     }
 
 
+def _safe_float(val) -> float:
+    """Convierte a float de forma segura (Decimal, int, None)."""
+    if val is None:
+        return 0.0
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 @router.get("/kpis-principales")
 def get_kpis_principales(
     fecha_inicio: Optional[str] = Query(None),
@@ -67,39 +79,57 @@ def get_kpis_principales(
     db: Session = Depends(get_db),
 ):
     """KPIs principales del dashboard. Datos reales: clientes y conteos desde BD."""
-    total_clientes = db.scalar(select(func.count()).select_from(Cliente)) or 0
-    activos = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "ACTIVO")) or 0
-    inactivos = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "INACTIVO")) or 0
-    finalizados = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "FINALIZADO")) or 0
-    # Préstamos: clientes con financiamiento registrado
-    total_prestamos = db.scalar(
-        select(func.count()).select_from(Cliente).where(Cliente.total_financiamiento.isnot(None), Cliente.total_financiamiento > 0)
-    ) or 0
-    # Créditos nuevos mes: registros este mes (fecha_registro)
-    inicio_mes = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    creditos_nuevos_mes = db.scalar(
-        select(func.count()).select_from(Cliente).where(Cliente.fecha_registro >= inicio_mes)
-    ) or 0
-    # Morosidad/cuotas: sin tabla pagos/cuotas se deja en 0
-    return {
-        "total_prestamos": _kpi(float(total_prestamos), 0.0),
-        "creditos_nuevos_mes": _kpi(float(creditos_nuevos_mes), 0.0),
-        "total_clientes": _kpi(float(total_clientes), 0.0),
-        "clientes_por_estado": {
-            "activos": _kpi(float(activos), 0.0),
-            "inactivos": _kpi(float(inactivos), 0.0),
-            "finalizados": _kpi(float(finalizados), 0.0),
-        },
-        "total_morosidad_usd": _kpi(0.0, 0.0),
-        "cuotas_programadas": {"valor_actual": 0.0},
-        "porcentaje_cuotas_pagadas": 0.0,
-    }
+    try:
+        total_clientes = db.scalar(select(func.count()).select_from(Cliente)) or 0
+        activos = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "ACTIVO")) or 0
+        inactivos = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "INACTIVO")) or 0
+        finalizados = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "FINALIZADO")) or 0
+        total_prestamos = db.scalar(
+            select(func.count()).select_from(Cliente).where(
+                Cliente.total_financiamiento.isnot(None), Cliente.total_financiamiento > 0
+            )
+        ) or 0
+        inicio_mes = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        creditos_nuevos_mes = db.scalar(
+            select(func.count()).select_from(Cliente).where(Cliente.fecha_registro >= inicio_mes)
+        ) or 0
+        return {
+            "total_prestamos": _kpi(_safe_float(total_prestamos), 0.0),
+            "creditos_nuevos_mes": _kpi(_safe_float(creditos_nuevos_mes), 0.0),
+            "total_clientes": _kpi(_safe_float(total_clientes), 0.0),
+            "clientes_por_estado": {
+                "activos": _kpi(_safe_float(activos), 0.0),
+                "inactivos": _kpi(_safe_float(inactivos), 0.0),
+                "finalizados": _kpi(_safe_float(finalizados), 0.0),
+            },
+            "total_morosidad_usd": _kpi(0.0, 0.0),
+            "cuotas_programadas": {"valor_actual": 0.0},
+            "porcentaje_cuotas_pagadas": 0.0,
+        }
+    except Exception as e:
+        logger.exception("Error en kpis-principales: %s", e)
+        return {
+            "total_prestamos": _kpi(0.0, 0.0),
+            "creditos_nuevos_mes": _kpi(0.0, 0.0),
+            "total_clientes": _kpi(0.0, 0.0),
+            "clientes_por_estado": {
+                "activos": _kpi(0.0, 0.0),
+                "inactivos": _kpi(0.0, 0.0),
+                "finalizados": _kpi(0.0, 0.0),
+            },
+            "total_morosidad_usd": _kpi(0.0, 0.0),
+            "cuotas_programadas": {"valor_actual": 0.0},
+            "porcentaje_cuotas_pagadas": 0.0,
+        }
 
 
 def _ultimo_dia_del_mes(d: datetime) -> datetime:
-    """Último día del mes a las 23:59 para comparar con fecha_registro."""
+    """Último día del mes a las 23:59 UTC para comparar con fecha_registro (timezone-aware)."""
     siguiente = (d.replace(day=28) + timedelta(days=4)).replace(day=1)
-    return siguiente - timedelta(seconds=1)
+    ultimo = siguiente - timedelta(seconds=1)
+    if ultimo.tzinfo is None:
+        ultimo = ultimo.replace(tzinfo=timezone.utc)
+    return ultimo
 
 
 @router.get("/admin")
@@ -112,23 +142,30 @@ def get_dashboard_admin(
     """Dashboard admin: evolucion_mensual con datos reales (cartera desde Cliente); financieros/meta stub."""
     meses = _ultimos_12_meses()
     evolucion = []
-    hoy = datetime.now()
-    for i, m in enumerate(meses):
-        fin_mes = hoy - timedelta(days=30 * (11 - i))
-        ultimo_dia = _ultimo_dia_del_mes(fin_mes)
-        cartera = db.scalar(
-            select(func.coalesce(func.sum(Cliente.total_financiamiento), 0)).select_from(Cliente).where(
-                Cliente.fecha_registro <= ultimo_dia,
-                Cliente.total_financiamiento.isnot(None),
-                Cliente.total_financiamiento > 0,
-            )
-        ) or 0
-        evolucion.append({
-            "mes": m["mes"],
-            "cartera": float(cartera),
-            "cobrado": 0.0,
-            "morosidad": 0.0,
-        })
+    try:
+        hoy = datetime.now(timezone.utc)
+        for i, m in enumerate(meses):
+            fin_mes = hoy - timedelta(days=30 * (11 - i))
+            ultimo_dia = _ultimo_dia_del_mes(fin_mes.replace(tzinfo=timezone.utc) if fin_mes.tzinfo is None else fin_mes)
+            cartera = db.scalar(
+                select(func.coalesce(func.sum(Cliente.total_financiamiento), 0)).select_from(Cliente).where(
+                    Cliente.fecha_registro <= ultimo_dia,
+                    Cliente.total_financiamiento.isnot(None),
+                    Cliente.total_financiamiento > 0,
+                )
+            ) or 0
+            evolucion.append({
+                "mes": m["mes"],
+                "cartera": _safe_float(cartera),
+                "cobrado": 0.0,
+                "morosidad": 0.0,
+            })
+    except Exception as e:
+        logger.exception("Error en dashboard admin: %s", e)
+        evolucion = [
+            {"mes": m["mes"], "cartera": 0.0, "cobrado": 0.0, "morosidad": 0.0}
+            for m in meses
+        ]
     return {
         "financieros": {
             "ingresosCapital": 0.0,

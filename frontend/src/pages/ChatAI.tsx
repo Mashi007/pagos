@@ -44,21 +44,20 @@ export function ChatAI() {
     setVerificando(true)
     try {
       const config = await apiClient.get<{
-        openai_api_key?: string
+        configured?: boolean
         activo?: string
       }>('/api/v1/configuracion/ai/configuracion')
-      const tieneToken = !!(config?.openai_api_key && config.openai_api_key.trim() && config.openai_api_key.startsWith('sk-'))
+      const tieneConfig = !!config?.configured
       const estaActivo = config?.activo?.toLowerCase() === 'true'
-      const configuradoCorrectamente = tieneToken && estaActivo
+      const configuradoCorrectamente = tieneConfig && estaActivo
 
       setAiConfigurado(configuradoCorrectamente)
 
       // Solo mostrar toasts si NO está configurado correctamente Y es la primera vez
       // No mostrar toasts si el usuario ya sabe que no está configurado
       if (!configuradoCorrectamente) {
-        if (!tieneToken) {
-          // Solo mostrar error si realmente no hay token (no cada vez que se carga)
-          console.log('Token no configurado')
+        if (!tieneConfig) {
+          console.log('AI no configurado (OPENROUTER_API_KEY en backend)')
         } else if (!estaActivo) {
           // Solo mostrar warning si hay token pero está inactivo (no cada vez)
           console.log('AI inactivo')

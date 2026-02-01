@@ -6,7 +6,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class ClienteBase(BaseModel):
@@ -60,6 +60,14 @@ class ClienteUpdate(BaseModel):
     notas: Optional[str] = None
 
 
+def _decimal_to_float(v):  # ORM devuelve Decimal (Numeric); el front espera float
+    if v is None:
+        return None
+    if hasattr(v, "__float__"):
+        return float(v)
+    return v
+
+
 class ClienteResponse(BaseModel):
     """Respuesta de cliente (formato esperado por el frontend)."""
     model_config = ConfigDict(from_attributes=True)
@@ -86,3 +94,8 @@ class ClienteResponse(BaseModel):
     fecha_actualizacion: Optional[datetime] = None
     usuario_registro: Optional[str] = None
     notas: Optional[str] = None
+
+    @field_validator("total_financiamiento", "cuota_inicial", "monto_financiado", mode="before")
+    @classmethod
+    def coerce_decimal_to_float(cls, v):  # ORM devuelve Decimal (Numeric)
+        return _decimal_to_float(v)

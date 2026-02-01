@@ -39,11 +39,22 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 
 @app.on_event("startup")
 def on_startup():
-    """Crear tablas en la BD si no existen (modelos registrados en Base.metadata)."""
+    """Crear tablas en la BD si no existen. Asegura que la tabla clientes esté conectada."""
+    from sqlalchemy import text
     from app.core.database import engine
-    from app.models import Base, Cliente  # noqa: F401 - Cliente registra la tabla en Base.metadata
+    from app.models import Base, Cliente  # noqa: F401 - Cliente registra la tabla clientes en Base.metadata
+
+    # Crear todas las tablas (incluye clientes) si no existen
     Base.metadata.create_all(bind=engine)
     logger.info("Base de datos: tablas creadas o ya existentes.")
+
+    # Verificar que la tabla clientes existe y está accesible
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1 FROM clientes LIMIT 1"))
+        logger.info("Tabla clientes: conectada y accesible.")
+    except Exception as e:
+        logger.warning("Tabla clientes: verificación fallida (puede ser tabla vacía o recién creada): %s", e)
 
 
 @app.get("/")

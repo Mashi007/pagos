@@ -2,9 +2,10 @@
 Endpoints de clientes conectados a la BD.
 Listado paginado, stats y CRUD usando el modelo Cliente.
 """
+import logging
 from typing import Optional
 
-from fastapi import APIRouter, Query, Depends
+from fastapi import APIRouter, Query, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select, func, or_
 from sqlalchemy.orm import Session
@@ -13,6 +14,7 @@ from app.core.database import get_db
 from app.models.cliente import Cliente
 from app.schemas.cliente import ClienteResponse, ClienteCreate, ClienteUpdate
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -29,37 +31,42 @@ def get_clientes(
     Listado paginado de clientes desde la BD.
     Filtros: search (cedula, nombres, email, telefono), estado (ACTIVO, INACTIVO, MORA, FINALIZADO).
     """
-    q = select(Cliente)
-    count_q = select(func.count()).select_from(Cliente)
+    try:
+        q = select(Cliente)
+        count_q = select(func.count()).select_from(Cliente)
 
-    if search and search.strip():
-        t = f"%{search.strip()}%"
-        filtro = or_(
-            Cliente.cedula.ilike(t),
-            Cliente.nombres.ilike(t),
-            Cliente.email.ilike(t),
-            Cliente.telefono.ilike(t),
-        )
-        q = q.where(filtro)
-        count_q = count_q.where(filtro)
-    if estado and estado.strip():
-        est = estado.strip().upper()
-        q = q.where(Cliente.estado == est)
-        count_q = count_q.where(Cliente.estado == est)
+        if search and search.strip():
+            t = f"%{search.strip()}%"
+            filtro = or_(
+                Cliente.cedula.ilike(t),
+                Cliente.nombres.ilike(t),
+                Cliente.email.ilike(t),
+                Cliente.telefono.ilike(t),
+            )
+            q = q.where(filtro)
+            count_q = count_q.where(filtro)
+        if estado and estado.strip():
+            est = estado.strip().upper()
+            q = q.where(Cliente.estado == est)
+            count_q = count_q.where(Cliente.estado == est)
 
-    total = db.scalar(count_q) or 0
-    q = q.order_by(Cliente.id.desc()).offset((page - 1) * per_page).limit(per_page)
-    rows = list(db.execute(q).scalars().all())
+        total = db.scalar(count_q) or 0
+        q = q.order_by(Cliente.id.desc()).offset((page - 1) * per_page).limit(per_page)
+        result = db.execute(q)
+        rows = result.scalars().all()
 
-    total_pages = (total + per_page - 1) // per_page if total else 0
+        total_pages = (total + per_page - 1) // per_page if total else 0
 
-    return {
-        "clientes": [ClienteResponse.model_validate(r) for r in rows],
-        "total": total,
-        "page": page,
-        "per_page": per_page,
-        "total_pages": total_pages,
-    }
+        return {
+            "clientes": [ClienteResponse.model_validate(r) for r in rows],
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+            "total_pages": total_pages,
+        }
+    except Exception as e:
+        logger.exception("Error en listado de clientes: %s", e)
+        raise HTTPException(status_code=500, detail="Error al cargar el listado de clientes") from e
 
 
 @router.get("/stats")

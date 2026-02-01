@@ -2,8 +2,7 @@
 Endpoints de configuración general.
 GET/PUT /configuracion/general, GET /configuracion/logo/{filename},
 POST /configuracion/upload-logo, DELETE /configuracion/logo.
-Articulado con el frontend (Configuracion.tsx, configuracionGeneralService).
-Sin BD: datos en memoria/archivo; cuando exista BD usar get_db y modelos.
+Sub-router /configuracion/ai para OpenRouter (clave solo en backend).
 """
 import os
 import re
@@ -14,7 +13,10 @@ from fastapi import APIRouter, Body, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+from app.api.v1.endpoints import configuracion_ai
+
 router = APIRouter()
+router.include_router(configuracion_ai.router, prefix="/ai", tags=["configuracion-ai"])
 
 # Stub en memoria hasta tener BD (nombre_empresa alineado con frontend ConfiguracionGeneral)
 _config_stub: dict[str, Any] = {
