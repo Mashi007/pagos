@@ -33,13 +33,28 @@ $replacements = @(
   @{ Old = [char]0x00E2 + [char]0x009C + [char]0x201C; New = [char]0x2705 },
   @{ Old = [char]0x00E2 + [char]0x009C + [char]0x0022; New = [char]0x2705 },
   @{ Old = [char]0x2705 + [char]0x0022; New = [char]0x2705 },
+  # Warning sign (U+26A0 U+FE0F) - UTF-8 E2 9A A0 EF B8 8F leido como Latin-1
+  @{ Old = [char]0x00E2 + [char]0x009A + [char]0x00A0 + [char]0x00EF + [char]0x00B8 + [char]0x008F; New = [char]0x26A0 + [char]0xFE0F },
+  @{ Old = [char]0x00E2 + [char]0x009C + [char]0x00AD + [char]0x00EF + [char]0x00B8 + [char]0x008F; New = [char]0x26A0 + [char]0xFE0F },
   # Emojis 4 bytes (F0 9F xx xx leido como Latin-1)
+  @{ Old = [char]0x00F0 + [char]0x009F + [char]0x0094 + [char]0x008D; New = [char]0xD83D + [char]0xDD0D },  # magnifying glass
+  @{ Old = [char]0x00F0 + [char]0x009F + [char]0x0094 + [char]0x0094; New = [char]0xD83D + [char]0xDD14 },  # bell
   @{ Old = [char]0x00F0 + [char]0x009F + [char]0x0093 + [char]0x0084; New = [char]0xD83D + [char]0xDCC4 },
   @{ Old = [char]0x00F0 + [char]0x009F + [char]0x0093 + [char]0x0085; New = [char]0xD83D + [char]0xDCC5 },
   @{ Old = [char]0x00F0 + [char]0x009F + [char]0x0093 + [char]0x008A; New = [char]0xD83D + [char]0xDCCA },
   @{ Old = [char]0x00F0 + [char]0x009F + [char]0x0093 + [char]0x008B; New = [char]0xD83D + [char]0xDCCB },
   @{ Old = [char]0x00F0 + [char]0x009F + [char]0x0092 + [char]0xB0; New = [char]0xD83D + [char]0xDCB0 },
-  @{ Old = [char]0x00F0 + [char]0x009F + [char]0x0092 + [char]0xB5; New = [char]0xD83D + [char]0xDCB5 }
+  @{ Old = [char]0x00F0 + [char]0x009F + [char]0x0092 + [char]0xB5; New = [char]0xD83D + [char]0xDCB5 },
+  @{ Old = [char]0x00F0 + [char]0x009F + [char]0x0092 + [char]0x008A; New = [char]0xD83D + [char]0xDCCA },  # chart
+  @{ Old = [char]0x00F0 + [char]0x009F + [char]0x0092 + [char]0x00A1; New = [char]0xD83D + [char]0xDCA1 },   # light bulb
+  @{ Old = [char]0x00C2 + [char]0x00A1; New = [char]0x00A1 },   # Â¡ -> ¡
+  @{ Old = [char]0x00E2 + [char]0x008F + [char]0x00B1 + [char]0x00EF + [char]0x00B8 + [char]0x008F; New = [char]0x23F1 + [char]0xFE0F },   # â±ï¸ -> ⏱️
+  @{ Old = [char]0x00E2 + [char]0x009A + [char]0x00A0 + [char]0x00EF + [char]0x00B8 + [char]0x008F; New = [char]0x26A0 + [char]0xFE0F },   # âš ï¸ -> ⚠️
+  @{ Old = [char]0x00E2 + [char]0x009D + [char]0x008C; New = [char]0x274C },   # âŒ -> ❌
+  @{ Old = [char]0x00E2 + [char]0x009C + [char]0x0094; New = [char]0x2714 },   # âœ" -> ✔
+  @{ Old = [char]0x00E2 + [char]0x009C + [char]0x201C; New = [char]0x2714 },   # âœ" (comilla tipografica) -> ✔
+  @{ Old = [char]0x00E2 + [char]0x0152; New = [char]0x274C },   # âŒ (2 chars) -> ❌
+  @{ Old = [char]0x00F0 + [char]0x009F + [char]0x2019 + [char]0x00A1; New = [char]0xD83D + [char]0xDCA1 }   # ðŸ'¡ (apostrophe tipografica) -> 💡
 )
 foreach ($f in $files) {
   $content = [System.IO.File]::ReadAllText($f.FullName, [System.Text.Encoding]::UTF8)

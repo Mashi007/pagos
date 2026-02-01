@@ -31,7 +31,7 @@ export function ChatAI() {
     setMensajes([{
       id: 'bienvenida',
       tipo: 'ai',
-      contenido: 'Â¡Hola! Soy tu asistente especializado en consultas sobre la base de datos del sistema. Puedo ayudarte con preguntas sobre clientes, préstamos, pagos, cuotas, estadísticas y la fecha/hora actual. ¿En qué puedo ayudarte?',
+      contenido: '¡Hola! Soy tu asistente especializado en consultas sobre la base de datos del sistema. Puedo ayudarte con preguntas sobre clientes, préstamos, pagos, cuotas, estadísticas y la fecha/hora actual. ¿En qué puedo ayudarte?',
       timestamp: new Date()
     }])
   }, [])
@@ -125,12 +125,12 @@ export function ChatAI() {
       const statusCode = error?.response?.status
       const isTimeout = error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')
 
-      // âœ… Manejo especial para timeouts
+      // Manejo especial para timeouts
       if (isTimeout) {
         const mensajeError: Mensaje = {
           id: (Date.now() + 1).toString(),
           tipo: 'ai',
-          contenido: `â±ï¸ La consulta está tardando más de lo esperado. Esto puede deberse a:\n• Consultas complejas a la base de datos\n• Procesamiento de información extensa\n• Carga alta en el servidor\n\nðŸ’¡ Intenta reformular tu pregunta de forma más específica o intenta nuevamente en unos momentos.`,
+          contenido: `⏱️ La consulta está tardando más de lo esperado. Esto puede deberse a:\n• Consultas complejas a la base de datos\n• Procesamiento de información extensa\n• Carga alta en el servidor\n\nðŸ’¡ Intenta reformular tu pregunta de forma más específica o intenta nuevamente en unos momentos.`,
           timestamp: new Date(),
           error: true
         }

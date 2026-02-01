@@ -168,11 +168,11 @@ export function Configuracion() {
       console.log('ðŸ”„ Cargando configuración general...')
 
       const config = await configuracionGeneralService.obtenerConfiguracionGeneral()
-      console.log('âœ… Configuración general cargada:', config)
+      console.log('✅ Configuración general cargada:', config)
 
       setConfiguracionGeneral(config)
       
-      // âœ… Verificar si hay logo personalizado
+      // ✅ Verificar si hay logo personalizado
       if (config.logo_filename) {
         // Verificar que el logo realmente existe haciendo una petición HEAD
         try {
@@ -184,7 +184,7 @@ export function Configuracion() {
             setHasCustomLogo(true)
             setLogoPreview(logoUrl)
             setLogoInfo({ filename: config.logo_filename, url: logoUrl })
-            console.log(`âœ… Logo personalizado encontrado: ${config.logo_filename}`)
+            console.log(`✅ Logo personalizado encontrado: ${config.logo_filename}`)
           } else {
             // El logo no existe aunque esté en la BD, limpiar estado
             setHasCustomLogo(false)
@@ -240,7 +240,7 @@ export function Configuracion() {
       const updateData = { [campo]: valor }
       const response = await configuracionGeneralService.actualizarConfiguracionGeneral(updateData)
 
-      console.log('âœ… Configuración actualizada:', response)
+      console.log('✅ Configuración actualizada:', response)
 
       // Actualizar estado local
       setConfiguracionGeneral(prev => prev ? { ...prev, [campo]: valor } : null)
@@ -319,7 +319,7 @@ export function Configuracion() {
         // Si hay un logo preview, significa que se subió un logo
         // Verificar explícitamente que el logo esté guardado en la BD
         if (logoPreview && logoInfo) {
-          console.log('âœ… Verificando que logo esté guardado en BD:', logoInfo)
+          console.log('✅ Verificando que logo esté guardado en BD:', logoInfo)
 
           // Verificar que el logo_filename esté persistido en la BD
           const configResponse = await fetch('/api/v1/configuracion/general')
@@ -328,12 +328,12 @@ export function Configuracion() {
           }
 
           const updatedConfig = await configResponse.json()
-          console.log('âœ… Configuración general recargada:', updatedConfig)
+          console.log('✅ Configuración general recargada:', updatedConfig)
 
           // Verificar que logo_filename esté en la BD y coincida con el logo subido
           if (updatedConfig.logo_filename) {
             if (updatedConfig.logo_filename === logoInfo.filename) {
-              console.log('âœ… Logo confirmado y guardado correctamente en BD:', updatedConfig.logo_filename)
+              console.log('✅ Logo confirmado y guardado correctamente en BD:', updatedConfig.logo_filename)
 
               // Actualizar estado local con configuración recargada
               setConfiguracionGeneral(updatedConfig)
@@ -390,7 +390,7 @@ export function Configuracion() {
   const handleCambio = (seccion: string, campo: string, valor: string | number | boolean | null) => {
     console.log(`ðŸ”„ Cambio en ${seccion}.${campo}:`, valor)
 
-    // âœ… Validación en tiempo real
+    // ✅ Validación en tiempo real
     const claveError = `${seccion}.${campo}`
     let error: string | null = null
 
@@ -504,7 +504,7 @@ export function Configuracion() {
         reader.readAsDataURL(file)
       }
 
-      // âœ… Marcar que hay logo personalizado para mostrar botón eliminar
+      // ✅ Marcar que hay logo personalizado para mostrar botón eliminar
       setHasCustomLogo(true)
 
       // Marcar como cambio pendiente para activar botón Guardar
@@ -1007,7 +1007,7 @@ export function Configuracion() {
       </div>
 
       <div>
-        <label className="text-sm font-medium">Ãšltimo Backup</label>
+        <label className="text-sm font-medium">Último Backup</label>
         <Input
           value={formatDate(configuracion.baseDatos.ultimoBackup)}
           disabled
@@ -1496,7 +1496,7 @@ export function Configuracion() {
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">API Key configurada:</span>
                 <Badge variant={configuracion.inteligenciaArtificial.openaiApiKey ? "default" : "destructive"}>
-                  {configuracion.inteligenciaArtificial.openaiApiKey ? "âœ… Configurada" : "âŒ No configurada"}
+                  {configuracion.inteligenciaArtificial.openaiApiKey ? "✅ Configurada" : "❌ No configurada"}
                 </Badge>
               </div>
               <div className="flex items-center justify-between">
@@ -1575,7 +1575,7 @@ export function Configuracion() {
                 </CardTitle>
               </div>
               <div className="flex space-x-2">
-                {/* âœ… Ocultar botón "Guardar" en secciones que tienen su propio botón de guardar */}
+                {/* ✅ Ocultar botón "Guardar" en secciones que tienen su propio botón de guardar */}
                 {/* emailConfig y whatsappConfig tienen sus propios botones de guardar */}
                 {seccionActiva !== 'emailConfig' && seccionActiva !== 'whatsappConfig' && seccionActiva !== 'aiConfig' && (
                   <>

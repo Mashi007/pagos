@@ -382,7 +382,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
         // âœ… Solo cerrar automáticamente si YA NO HAY filas pendientes
         if (remaining.length === 0) {
-          addToast('success', 'ðŸŽ‰ Â¡Todos los clientes han sido guardados exitosamente!')
+          addToast('success', 'ðŸŽ‰ ¡Todos los clientes han sido guardados exitosamente!')
           notifyDashboardUpdate(getSavedClientsCount())
 
           // Mostrar mensaje informativo sobre navegación automática
@@ -496,7 +496,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           // âœ… Solo cerrar automáticamente si YA NO HAY filas pendientes
           if (remaining.length === 0) {
             // Mostrar mensaje informativo sobre navegación automática
-            addToast('success', 'ðŸŽ‰ Â¡Todos los clientes guardados! Cerrando en 2 segundos...')
+            addToast('success', 'ðŸŽ‰ ¡Todos los clientes guardados! Cerrando en 2 segundos...')
 
             // Navegar automáticamente al Dashboard de Clientes después de 2 segundos
             setTimeout(() => {

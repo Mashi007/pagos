@@ -37,10 +37,16 @@ def get_pagos_stats(
 ):
     """
     Estadísticas de pagos por estado. El frontend espera:
-    total_pagos, total_pagado, pagos_por_estado: [{ estado, count }].
+    total_pagos, total_pagado, pagos_por_estado: [{ estado, count }],
+    cuotas_pagadas, cuotas_pendientes, cuotas_atrasadas, pagos_hoy.
+    Stub hasta tener BD/negocio real.
     """
     return {
         "total_pagos": 0,
         "total_pagado": 0,
         "pagos_por_estado": [],
+        "cuotas_pagadas": 0,
+        "cuotas_pendientes": 0,
+        "cuotas_atrasadas": 0,
+        "pagos_hoy": 0,
     }

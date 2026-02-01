@@ -12,6 +12,7 @@ import {
   BarChart3,
   ChevronRight,
   Filter,
+  Search,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
@@ -62,12 +63,12 @@ export function DashboardPagos() {
       const params = construirFiltrosObject()
       return await pagoService.getStats(params)
     },
-    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
-    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
+    staleTime: 2 * 60 * 1000, // ✓ ACTUALIZADO: 2 minutos para datos más frescos
+    refetchOnWindowFocus: true, // ✓ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
   // Cargar KPIs de pagos
-  // âœ… OPTIMIZACIÓN: Usar queryKey sin filtros para compartir datos con useSidebarCounts
+  // ✓ OPTIMIZACIÓN: Usar queryKey sin filtros para compartir datos con useSidebarCounts
   // Si hay filtros activos, usar queryKey con filtros para datos específicos
   const { data: kpisPagos, isLoading: loadingKPIs } = useQuery({
     queryKey: tieneFiltrosActivos ? ['kpis-pagos', filtros] : ['kpis-pagos'],
@@ -105,8 +106,8 @@ export function DashboardPagos() {
       }
       return response
     },
-    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
-    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
+    staleTime: 2 * 60 * 1000, // ✓ ACTUALIZADO: 2 minutos para datos más frescos
+    refetchOnWindowFocus: true, // ✓ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
   // Datos para gráfico de pagos por estado
@@ -171,7 +172,7 @@ export function DashboardPagos() {
               onClick={() => navigate('/dashboard/menu')}
               className="hover:bg-violet-50"
             >
-              â† Menú
+              ← Menú
             </Button>
             <div>
               <h1 className="text-4xl font-black text-gray-900 uppercase tracking-tight">Pagos</h1>

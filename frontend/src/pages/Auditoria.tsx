@@ -66,10 +66,10 @@ export function Auditoria() {
         orden: filtros.orden
       }
 
-      console.log('ðŸ“¡ Llamando a API: /api/v1/auditoria con params:', params)
+      console.log('[Auditoria] Llamando a API: /api/v1/auditoria con params:', params)
       const response = await auditoriaService.listarAuditoria(params)
-      console.log('âœ… Respuesta API:', response)
-      console.log('ðŸ“Š Items recibidos:', response.items?.length || 0, 'Total:', response.total)
+      console.log('Respuesta API:', response)
+      console.log('[Auditoria] Items recibidos:', response.items?.length || 0, 'Total:', response.total)
 
       if (response.items && response.items.length > 0) {
         setAuditorias(response.items)
@@ -78,11 +78,11 @@ export function Auditoria() {
         setAuditorias([])
         setTotal(response.total || 0)
         if (response.total === 0) {
-          console.warn('âš ï¸ No hay registros de auditoría en la base de datos')
+          console.warn('[Auditoria] No hay registros de auditoría en la base de datos')
         }
       }
     } catch (err: any) {
-      console.error('âŒ Error API:', err)
+      console.error('[Auditoria] Error API:', err)
       const errorMessage = err?.response?.data?.detail || err?.message || 'Error al cargar auditoría'
       setError(errorMessage)
       toast.error(`Error al cargar auditoría: ${errorMessage}`)
@@ -95,17 +95,17 @@ export function Auditoria() {
 
   const cargarEstadisticas = async (mostrarToast = false) => {
     try {
-      console.log('ðŸ“Š Cargando estadísticas de auditoría...')
+      console.log('[Auditoria] Cargando estadísticas de auditoría...')
       const response = await auditoriaService.obtenerEstadisticas()
-      console.log('âœ… Estadísticas recibidas:', response)
+      console.log('Estadísticas recibidas:', response)
       setStats(response)
       if (mostrarToast) {
-        toast.success('âœ… KPIs actualizados correctamente')
+        toast.success('KPIs actualizados correctamente')
       }
     } catch (err: any) {
-      console.error('âŒ Error cargando estadísticas:', err)
+      console.error('[Auditoria] Error cargando estadísticas:', err)
       const errorMessage = err?.response?.data?.detail || err?.message || 'Error al cargar estadísticas'
-      console.error('âŒ Detalles del error:', errorMessage)
+      console.error('[Auditoria] Detalles del error:', errorMessage)
       // Establecer valores por defecto en caso de error
       setStats({
         total_acciones: 0,
@@ -149,9 +149,9 @@ export function Auditoria() {
         fecha_hasta: filtros.fecha_hasta || undefined,
       }
       await auditoriaService.descargarExcel(paramsExport)
-      toast.success('âœ… Auditoría exportada exitosamente')
+      toast.success('Auditoría exportada exitosamente')
     } catch (err) {
-      toast.error('âŒ Error al exportar auditoría')
+      toast.error('Error al exportar auditoría')
       console.error('Error:', err)
     }
   }
@@ -257,7 +257,7 @@ export function Auditoria() {
                   {stats ? stats.acciones_esta_semana.toLocaleString() : '0'}
                 </p>
                 <p className="text-xs text-gray-400 mt-1">
-                  Ãšltimos 7 días
+                  Últimos 7 días
                 </p>
               </div>
               <BarChart3 className="w-8 h-8 text-blue-600" />
@@ -274,7 +274,7 @@ export function Auditoria() {
                   {stats ? stats.acciones_este_mes.toLocaleString() : '0'}
                 </p>
                 <p className="text-xs text-gray-400 mt-1">
-                  Ãšltimos 30 días
+                  Últimos 30 días
                 </p>
               </div>
               <Shield className="w-8 h-8 text-purple-600" />

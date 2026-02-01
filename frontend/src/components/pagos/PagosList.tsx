@@ -110,7 +110,7 @@ export function PagosList() {
               try {
                 // Invalidar todas las queries relacionadas con pagos
                 await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
-                await queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false }) // âœ… Invalidar KPIs específicamente
+                await queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false }) // ✓ Invalidar KPIs específicamente
                 await queryClient.invalidateQueries({ queryKey: ['kpis'], exact: false })
                 await queryClient.invalidateQueries({ queryKey: ['dashboard'], exact: false })
                 await queryClient.invalidateQueries({ queryKey: ['pagos-ultimos'], exact: false })

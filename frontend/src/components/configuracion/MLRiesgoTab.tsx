@@ -392,7 +392,7 @@ export function MLRiesgoTab() {
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-600">
                   {estadoJob.status === 'succeeded'
-                    ? 'Â¡Modelo entrenado exitosamente!'
+                    ? '¡Modelo entrenado exitosamente!'
                     : estadoJob.status === 'failed'
                     ? 'Error durante el entrenamiento'
                     : 'Procesando y entrenando modelo...'}

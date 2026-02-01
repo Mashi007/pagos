@@ -37,7 +37,7 @@ export function Cobranzas() {
   const [rangoDiasMax, setRangoDiasMax] = useState<number | undefined>(undefined)
   const [errorRangoDias, setErrorRangoDias] = useState<string | null>(null)
   
-  // âœ… Función de validación de rango de días
+  // ✅ Función de validación de rango de días
   const validarRangoDias = (min: number | undefined, max: number | undefined): boolean => {
     if (min !== undefined && max !== undefined && min > max) {
       setErrorRangoDias('Los días mínimos no pueden ser mayores que los días máximos')
@@ -71,7 +71,7 @@ export function Cobranzas() {
   const [mlImpagoTemporal, setMLImpagoTemporal] = useState<{ nivelRiesgo: string; probabilidad: number } | null>(null)
   const [guardandoMLImpago, setGuardandoMLImpago] = useState<number | null>(null)
   
-  // âœ… QueryClient para invalidación inteligente de caché
+  // ✅ QueryClient para invalidación inteligente de caché
   const queryClient = useQueryClient()
 
   // Query para resumen
@@ -89,7 +89,7 @@ export function Cobranzas() {
   })
 
   // Query para clientes atrasados
-  // âœ… OPTIMIZACIÓN: Desactivar ML por defecto para carga inicial más rápida
+  // ✅ OPTIMIZACIÓN: Desactivar ML por defecto para carga inicial más rápida
   // El ML se puede cargar después si es necesario (lazy loading)
   const {
     data: clientesAtrasados,
@@ -104,13 +104,13 @@ export function Cobranzas() {
       rangoDiasMin,
       rangoDiasMax,
       false, // incluirAdmin
-      false  // âœ… incluirML: false por defecto para carga rápida (2868 clientes es demasiado para ML)
+      false  // ✅ incluirML: false por defecto para carga rápida (2868 clientes es demasiado para ML)
     ),
     retry: 2,
-    retryDelay: 3000, // âœ… Aumentar delay entre retries para dar más tiempo al servidor
-    gcTime: 5 * 60 * 1000, // âœ… Mantener en cache 5 minutos para evitar recargas innecesarias
-    staleTime: 2 * 60 * 1000, // âœ… Considerar datos frescos por 2 minutos
-    // âœ… No mostrar error si es un timeout que se resolvió en retry
+    retryDelay: 3000, // ✅ Aumentar delay entre retries para dar más tiempo al servidor
+    gcTime: 5 * 60 * 1000, // ✅ Mantener en cache 5 minutos para evitar recargas innecesarias
+    staleTime: 2 * 60 * 1000, // ✅ Considerar datos frescos por 2 minutos
+    // ✅ No mostrar error si es un timeout que se resolvió en retry
     onError: (error: any) => {
       // Solo mostrar error si NO es un timeout que se resolvió (ECONNABORTED)
       // React Query manejará el retry automáticamente
@@ -325,7 +325,7 @@ export function Cobranzas() {
       toast.success('Riesgo ML Impago actualizado correctamente')
       setEditandoMLImpago(null)
       setMLImpagoTemporal(null)
-      // âœ… Invalidar caché de cobranzas para refrescar datos actualizados
+      // ✅ Invalidar caché de cobranzas para refrescar datos actualizados
       queryClient.invalidateQueries({ queryKey: ['cobranzas-resumen'] })
       queryClient.invalidateQueries({ queryKey: ['cobranzas-clientes'] })
       // Refrescar los datos
@@ -347,7 +347,7 @@ export function Cobranzas() {
     try {
       await cobranzasService.eliminarMLImpagoManual(prestamoId)
       toast.success('Valores manuales eliminados. Se usarán valores calculados por ML.')
-      // âœ… Invalidar caché de cobranzas para refrescar datos actualizados
+      // ✅ Invalidar caché de cobranzas para refrescar datos actualizados
       queryClient.invalidateQueries({ queryKey: ['cobranzas-resumen'] })
       queryClient.invalidateQueries({ queryKey: ['cobranzas-clientes'] })
       // Refrescar los datos
@@ -415,7 +415,7 @@ export function Cobranzas() {
       const fallidas = stats.fallidas || 0
       const errores = stats.errores || 0
 
-      // âœ… Invalidar caché de cobranzas después de procesar notificaciones
+      // ✅ Invalidar caché de cobranzas después de procesar notificaciones
       // Los datos pueden haber cambiado después de enviar notificaciones
       queryClient.invalidateQueries({ queryKey: ['cobranzas-resumen'] })
       queryClient.invalidateQueries({ queryKey: ['cobranzas-clientes'] })
@@ -496,7 +496,7 @@ export function Cobranzas() {
             ) : (
               <>
                 <AlertTriangle className="h-4 w-4" />
-                ðŸ” Diagnóstico
+                🔍 Diagnóstico
               </>
             )}
           </Button>
@@ -533,7 +533,7 @@ export function Cobranzas() {
         <Card className="border-blue-200 bg-blue-50">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle className="text-lg">ðŸ” Diagnóstico de Cobranzas</CardTitle>
+              <CardTitle className="text-lg">🔍 Diagnóstico de Cobranzas</CardTitle>
               <Button
                 variant="ghost"
                 size="sm"
@@ -590,7 +590,7 @@ export function Cobranzas() {
 
               <div className="mt-4">
                 <p className="text-xs text-gray-500">
-                  ðŸ’¡ Revisa la consola del navegador (F12) para ver el diagnóstico completo con todos los detalles.
+                  💡 Revisa la consola del navegador (F12) para ver el diagnóstico completo con todos los detalles.
                 </p>
               </div>
             </div>
@@ -681,7 +681,7 @@ export function Cobranzas() {
           <TabsTrigger value="cuotas">Cuotas</TabsTrigger>
           <TabsTrigger value="por-dias">Por Días</TabsTrigger>
           <TabsTrigger value="por-analista">Por Analista</TabsTrigger>
-          <TabsTrigger value="informes">ðŸ“Š Informes</TabsTrigger>
+          <TabsTrigger value="informes">📊 Informes</TabsTrigger>
         </TabsList>
 
         {/* Tab Cuotas - Clientes con cuotas impagas */}

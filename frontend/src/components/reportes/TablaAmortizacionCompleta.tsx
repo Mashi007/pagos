@@ -91,7 +91,7 @@ export function TablaAmortizacionCompleta() {
   // Debug: Log para ver qué está pasando con los préstamos (solo en desarrollo)
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
-      console.log('ðŸ” [TablaAmortizacion] Estado préstamos:', {
+      console.log('[TablaAmortizacion] Estado préstamos:', {
         cedulaSeleccionada,
         loadingPrestamos,
         errorPrestamos,
@@ -99,7 +99,7 @@ export function TablaAmortizacionCompleta() {
         prestamosLength: prestamosData?.length || 0,
         prestamoIds: prestamosData?.map(p => p.id) || []
       })
-      console.log('ðŸ” [TablaAmortizacion] Condición para cargar cuotas:', {
+      console.log('[TablaAmortizacion] Condición para cargar cuotas:', {
         cedulaSeleccionada: !!cedulaSeleccionada,
         prestamosData: !!prestamosData,
         isArray: Array.isArray(prestamosData),
@@ -118,22 +118,22 @@ export function TablaAmortizacionCompleta() {
       const ids = prestamosData?.map(p => p.id) || []
       if (!prestamosData || prestamosData.length === 0 || ids.length === 0) {
         if (process.env.NODE_ENV === 'development') {
-          console.log('âš ï¸ [TablaAmortizacion] No hay préstamos para cargar cuotas')
+          console.log('[TablaAmortizacion] No hay préstamos para cargar cuotas')
         }
         return []
       }
       try {
         // Usar endpoint optimizado para múltiples préstamos
         if (process.env.NODE_ENV === 'development') {
-          console.log('ðŸ“¡ [TablaAmortizacion] Cargando cuotas para préstamos:', ids)
+          console.log('[TablaAmortizacion] Cargando cuotas para préstamos:', ids)
         }
         const cuotas = await cuotaService.getCuotasMultiplesPrestamos(ids)
         if (process.env.NODE_ENV === 'development') {
-          console.log('âœ… [TablaAmortizacion] Cuotas cargadas:', cuotas.length)
+          console.log('[TablaAmortizacion] Cuotas cargadas:', cuotas.length)
         }
         return cuotas
       } catch (error) {
-        console.error('âŒ [TablaAmortizacion] Error obteniendo cuotas:', error)
+        console.error('[TablaAmortizacion] Error obteniendo cuotas:', error)
         toast.error('Error al cargar cuotas. Algunos datos pueden estar incompletos.')
         return []
       }
@@ -145,7 +145,7 @@ export function TablaAmortizacionCompleta() {
   // Debug: Verificar cuando cambian los préstamos (solo en desarrollo)
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
-      console.log('ðŸ”„ [TablaAmortizacion] useEffect - Prestamos cambiaron:', {
+      console.log('[TablaAmortizacion] useEffect - Prestamos cambiaron:', {
         cedulaSeleccionada,
         loadingPrestamos,
         prestamosData,
@@ -871,7 +871,7 @@ export function TablaAmortizacionCompleta() {
 
                 // Log para debugging (solo en desarrollo)
                 if (process.env.NODE_ENV === 'development') {
-                  console.log('ðŸ“ [EditarCuota] Datos a enviar:', {
+                  console.log('[EditarCuota] Datos a enviar:', {
                     cuotaId: cuotaEditando.id,
                     data,
                     dataKeys: Object.keys(data)

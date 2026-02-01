@@ -271,7 +271,7 @@ export function FineTuningTab() {
         if (conversacionesCalificadas >= MINIMO_REQUERIDO) {
           toast.success(
             `âœ… Conversación calificada (${calificacion} estrellas) - Lista para entrenamiento. ` +
-            `Total listas: ${conversacionesCalificadas} - Â¡Ya puedes preparar datos! (Mínimo ${MINIMO_REQUERIDO} requerido)`
+            `Total listas: ${conversacionesCalificadas} - ¡Ya puedes preparar datos! (Mínimo ${MINIMO_REQUERIDO} requerido)`
           )
         } else {
           toast.success(
@@ -1880,7 +1880,7 @@ export function FineTuningTab() {
               <div className="flex items-start gap-2">
                 <Info className="h-4 w-4 text-blue-600 mt-0.5" />
                 <div className="text-xs text-blue-800">
-                  <strong>â±ï¸ Tiempos típicos de entrenamiento:</strong>
+                  <strong>⏱️ Tiempos típicos de entrenamiento:</strong>
                   <ul className="mt-1 ml-4 list-disc space-y-0.5">
                     <li><strong>gpt-4o:</strong> 2-4 horas (depende del tamaño del archivo)</li>
                   </ul>

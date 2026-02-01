@@ -172,8 +172,10 @@ class ReporteService {
    * @param fechaCorte Opcional. Si no se proporciona, usa la fecha actual
    */
   async getReporteCartera(fechaCorte?: string): Promise<ReporteCartera> {
-    const params = fechaCorte ? `?fecha_corte=${fechaCorte}` : ''
-    return await apiClient.get(`${this.baseUrl}/cartera${params}`)
+    const params = new URLSearchParams()
+    if (fechaCorte) params.set('fecha_corte', fechaCorte)
+    const query = params.toString()
+    return await apiClient.get(`${this.baseUrl}/cartera${query ? `?${query}` : ''}`)
   }
 
   /**
@@ -185,9 +187,8 @@ class ReporteService {
     fechaInicio: string,
     fechaFin: string
   ): Promise<ReportePagos> {
-    return await apiClient.get(
-      `${this.baseUrl}/pagos?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`
-    )
+    const params = new URLSearchParams({ fecha_inicio: fechaInicio, fecha_fin: fechaFin })
+    return await apiClient.get(`${this.baseUrl}/pagos?${params.toString()}`)
   }
 
   /**
@@ -226,8 +227,10 @@ class ReporteService {
    * @param fechaCorte Opcional. Si no se proporciona, usa la fecha actual
    */
   async getReporteMorosidad(fechaCorte?: string): Promise<ReporteMorosidad> {
-    const params = fechaCorte ? `?fecha_corte=${fechaCorte}` : ''
-    return await apiClient.get(`${this.baseUrl}/morosidad${params}`)
+    const params = new URLSearchParams()
+    if (fechaCorte) params.set('fecha_corte', fechaCorte)
+    const query = params.toString()
+    return await apiClient.get(`${this.baseUrl}/morosidad${query ? `?${query}` : ''}`)
   }
 
   /**
@@ -235,8 +238,10 @@ class ReporteService {
    * @param fechaCorte Opcional. Si no se proporciona, usa la fecha actual
    */
   async getReporteFinanciero(fechaCorte?: string): Promise<ReporteFinanciero> {
-    const params = fechaCorte ? `?fecha_corte=${fechaCorte}` : ''
-    return await apiClient.get(`${this.baseUrl}/financiero${params}`)
+    const params = new URLSearchParams()
+    if (fechaCorte) params.set('fecha_corte', fechaCorte)
+    const query = params.toString()
+    return await apiClient.get(`${this.baseUrl}/financiero${query ? `?${query}` : ''}`)
   }
 
   /**
@@ -244,8 +249,10 @@ class ReporteService {
    * @param fechaCorte Opcional. Si no se proporciona, usa la fecha actual
    */
   async getReporteAsesores(fechaCorte?: string): Promise<ReporteAsesores> {
-    const params = fechaCorte ? `?fecha_corte=${fechaCorte}` : ''
-    return await apiClient.get(`${this.baseUrl}/asesores${params}`)
+    const params = new URLSearchParams()
+    if (fechaCorte) params.set('fecha_corte', fechaCorte)
+    const query = params.toString()
+    return await apiClient.get(`${this.baseUrl}/asesores${query ? `?${query}` : ''}`)
   }
 
   /**
@@ -253,8 +260,10 @@ class ReporteService {
    * @param fechaCorte Opcional. Si no se proporciona, usa la fecha actual
    */
   async getReporteProductos(fechaCorte?: string): Promise<ReporteProductos> {
-    const params = fechaCorte ? `?fecha_corte=${fechaCorte}` : ''
-    return await apiClient.get(`${this.baseUrl}/productos${params}`)
+    const params = new URLSearchParams()
+    if (fechaCorte) params.set('fecha_corte', fechaCorte)
+    const query = params.toString()
+    return await apiClient.get(`${this.baseUrl}/productos${query ? `?${query}` : ''}`)
   }
 
   /**

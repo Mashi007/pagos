@@ -151,7 +151,7 @@ export function MLImpagoCuotasTab() {
       setEstadoEntrenamiento({
         estado: 'completado',
         progreso: 100,
-        mensaje: 'Â¡Modelo entrenado exitosamente!',
+        mensaje: '¡Modelo entrenado exitosamente!',
         modelo: resultado.modelo,
       })
 

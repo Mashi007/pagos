@@ -189,7 +189,7 @@ export function EntrenamientoMejorado() {
     if (metricas.conversaciones.listas_entrenamiento >= 10) {
       recomendaciones.push({
         tipo: 'entrenar',
-        titulo: 'Â¡Listo para Entrenar!',
+        titulo: '¡Listo para Entrenar!',
         descripcion: `Tienes ${metricas.conversaciones.listas_entrenamiento} conversaciones listas. Puedes iniciar el fine-tuning ahora.`,
         accion: 'Entrenar',
         icono: <Play className="h-5 w-5" />,
