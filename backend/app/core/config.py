@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     )
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+
+    # Usuario admin único (auth sin tabla users). Opcional.
+    ADMIN_EMAIL: Optional[str] = Field(None, description="Email del usuario admin para login")
+    ADMIN_PASSWORD: Optional[str] = Field(None, description="Contraseña del usuario admin para login")
     
     @validator('SECRET_KEY')
     def validate_secret_key(cls, v):
@@ -100,7 +104,7 @@ class Settings(BaseSettings):
     # CORS
     # ============================================
     CORS_ORIGINS: Optional[str] = Field(
-        default='["http://localhost:3000", "http://localhost:5173", "https://pagos-f2qf.onrender.com"]',
+        default='["http://localhost:3000", "http://localhost:5173", "https://pagos-f2qf.onrender.com", "https://rapicredit.onrender.com"]',
         description="Lista de orígenes permitidos para CORS (formato JSON o separado por comas). Incluye desarrollo y producción."
     )
     
@@ -108,7 +112,7 @@ class Settings(BaseSettings):
     def cors_origins_list(self) -> List[str]:
         """Retorna CORS_ORIGINS como lista"""
         if not self.CORS_ORIGINS or self.CORS_ORIGINS.strip() == '':
-            return ["http://localhost:3000", "http://localhost:5173", "https://pagos-f2qf.onrender.com"]
+            return ["http://localhost:3000", "http://localhost:5173", "https://pagos-f2qf.onrender.com", "https://rapicredit.onrender.com"]
         
         # Intentar parsear como JSON
         try:
