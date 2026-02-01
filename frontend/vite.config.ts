@@ -5,6 +5,8 @@ import { fileURLToPath } from 'url'
 import type { Plugin } from 'vite'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+// Ruta a src con barras normales (necesario para que Vite resuelva @/ en Windows)
+const srcDir = path.resolve(__dirname, 'src').replace(/\\/g, '/')
 
 // Plugin para eliminar modulepreload de chunks pesados (lazy loading)
 function removeHeavyChunksPreload(): Plugin {
@@ -104,9 +106,9 @@ export default defineConfig({
     removeHeavyChunksPreload(), // ✅ Eliminar preload de chunks pesados
   ],
   resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-    },
+    alias: [
+      { find: /^@\//, replacement: srcDir + '/' },
+    ],
     // Asegurar que React se resuelva correctamente
     dedupe: ['react', 'react-dom'],
   },
