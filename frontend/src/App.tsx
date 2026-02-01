@@ -1,5 +1,5 @@
 import { useEffect, useState, lazy, Suspense } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 
 // Layout
@@ -8,6 +8,19 @@ import { Layout } from './components/layout/Layout'
 // Auth
 import { SimpleProtectedRoute } from './components/auth/SimpleProtectedRoute'
 import { useSimpleAuth } from './store/simpleAuthStore'
+
+/** En rutas públicas (/, /login) solo muestra el Outlet. En el resto muestra Layout con Outlet para que el dashboard y demás carguen. */
+function RootLayoutWrapper() {
+  const location = useLocation()
+  const { isAuthenticated } = useSimpleAuth()
+  const isPublic = location.pathname === '/' || location.pathname === '/login'
+  if (isPublic) return <Outlet />
+  return (
+    <SimpleProtectedRoute>
+      <Layout />
+    </SimpleProtectedRoute>
+  )
+}
 
 // Helper: ante fallo de carga de chunk (404 tras deploy), recargar página para obtener assets actualizados.
 // Tipado explícito para evitar TS2322: ComponentType<never> no asignable a ComponentType<unknown>.
@@ -63,7 +76,7 @@ import { DashboardMenu } from './pages/DashboardMenu'
 import { Configuracion } from './pages/Configuracion'
 import { Plantillas } from './pages/Plantillas'
 import { Programador } from './pages/Programador'
-import { Clientes } from './pages/Clientes'
+import Clientes from './pages/Clientes'
 import { Prestamos } from './pages/Prestamos'
 import { Amortizacion } from './pages/Amortizacion'
 import { Reportes } from './pages/Reportes'
@@ -138,59 +151,51 @@ function App() {
     <AnimatePresence mode="wait">
       <Suspense fallback={<PageLoader />}>
         <Routes>
-        {/* Ruta de bienvenida - página por defecto */}
-        <Route
-          path="/"
-          element={
-            isAuthenticated ? (
-              <Navigate to="/dashboard/menu" replace />
-            ) : (
-              <motion.div
-                key="welcome"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: ANIMATION_DURATION }}
-              >
-                <Welcome />
-              </motion.div>
-            )
-          }
-        />
+        {/* Una sola raíz path="/" para que Layout reciba correctamente las rutas hijas (dashboard, clientes, etc.) */}
+        <Route path="/" element={<RootLayoutWrapper />}>
+          {/* Página de bienvenida (index) */}
+          <Route
+            index
+            element={
+              isAuthenticated ? (
+                <Navigate to="/dashboard/menu" replace />
+              ) : (
+                <motion.div
+                  key="welcome"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: ANIMATION_DURATION }}
+                >
+                  <Welcome />
+                </motion.div>
+              )
+            }
+          />
 
-        {/* Ruta de login */}
-        <Route
-          path="/login"
-          element={
-            isAuthenticated ? (
-              <Navigate to="/dashboard/menu" replace />
-            ) : (
-              <motion.div
-                key="login"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: ANIMATION_DURATION }}
-              >
-                <Login />
-              </motion.div>
-            )
-          }
-        />
+          {/* Login */}
+          <Route
+            path="login"
+            element={
+              isAuthenticated ? (
+                <Navigate to="/dashboard/menu" replace />
+              ) : (
+                <motion.div
+                  key="login"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: ANIMATION_DURATION }}
+                >
+                  <Login />
+                </motion.div>
+              )
+            }
+          />
 
-        {/* Rutas protegidas */}
-        <Route
-          path="/*"
-          element={
-            <SimpleProtectedRoute>
-              <Layout />
-            </SimpleProtectedRoute>
-          }
-        >
-          {/* Dashboard - DashboardMenu es el componente principal */}
-          {/* Redirigir /dashboard a /dashboard/menu */}
-          <Route path="dashboard" element={<Navigate to="/dashboard/menu" replace />} />
+          {/* Dashboard - ruta más específica primero */}
           <Route path="dashboard/menu" element={<DashboardMenu />} />
+          <Route path="dashboard" element={<Navigate to="/dashboard/menu" replace />} />
 
           {/* Clientes */}
           <Route path="clientes" element={<Clientes />} />
@@ -359,7 +364,6 @@ function App() {
           {/* 404 para rutas no encontradas */}
           <Route path="*" element={<NotFound />} />
         </Route>
-
       </Routes>
       </Suspense>
     </AnimatePresence>
