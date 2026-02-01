@@ -4,7 +4,7 @@ Configuración del sistema usando Pydantic Settings
 import json
 from typing import Optional, List
 from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import Field, validator
 
 
 class Settings(BaseSettings):
@@ -35,6 +35,17 @@ class Settings(BaseSettings):
     )
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    
+    @validator('SECRET_KEY')
+    def validate_secret_key(cls, v):
+        """Validar que SECRET_KEY tenga longitud y complejidad adecuadas"""
+        if len(v) < 32:
+            raise ValueError('SECRET_KEY debe tener al menos 32 caracteres para seguridad adecuada')
+        # Validar que no sea un valor común o débil
+        weak_keys = ['secret', 'password', '123456', 'admin', 'test', 'dev', 'development']
+        if v.lower() in weak_keys or len(set(v)) < 8:
+            raise ValueError('SECRET_KEY debe ser una cadena aleatoria y segura, no un valor común')
+        return v
     
     # ============================================
     # WhatsApp / Meta API
@@ -89,15 +100,15 @@ class Settings(BaseSettings):
     # CORS
     # ============================================
     CORS_ORIGINS: Optional[str] = Field(
-        default='["http://localhost:3000", "http://localhost:5173"]',
-        description="Lista de orígenes permitidos para CORS (formato JSON o separado por comas)"
+        default='["http://localhost:3000", "http://localhost:5173", "https://pagos-f2qf.onrender.com"]',
+        description="Lista de orígenes permitidos para CORS (formato JSON o separado por comas). Incluye desarrollo y producción."
     )
     
     @property
     def cors_origins_list(self) -> List[str]:
         """Retorna CORS_ORIGINS como lista"""
         if not self.CORS_ORIGINS or self.CORS_ORIGINS.strip() == '':
-            return ["http://localhost:3000", "http://localhost:5173"]
+            return ["http://localhost:3000", "http://localhost:5173", "https://pagos-f2qf.onrender.com"]
         
         # Intentar parsear como JSON
         try:

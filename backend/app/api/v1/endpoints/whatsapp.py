@@ -2,6 +2,7 @@
 Endpoints para recibir webhooks de WhatsApp (Meta API)
 """
 import logging
+import secrets
 from fastapi import APIRouter, Request, HTTPException, Query, Depends, Header
 from typing import Optional
 from app.schemas.whatsapp import (
@@ -46,15 +47,14 @@ async def verify_webhook(
                 detail="Webhook verification token no configurado"
             )
         
-        # Verificar el token
-        if hub_mode == "subscribe" and hub_verify_token == verify_token:
+        # Verificar el token usando comparación timing-safe
+        if hub_mode == "subscribe" and secrets.compare_digest(hub_verify_token, verify_token):
             logger.info("Webhook de WhatsApp verificado exitosamente")
             # Meta espera recibir el challenge como texto plano
             return int(hub_challenge)
         else:
-            logger.warning(
-                f"Intento de verificación fallido - Mode: {hub_mode}, "
-                f"Token recibido: {hub_verify_token[:5]}..."
+            logger.debug(
+                f"Intento de verificación fallido - Mode: {hub_mode}"
             )
             raise HTTPException(status_code=403, detail="Token de verificación inválido")
             
@@ -62,7 +62,9 @@ async def verify_webhook(
         raise
     except Exception as e:
         logger.error(f"Error en verificación del webhook: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Error verificando webhook")
+        # No exponer detalles del error en producción
+        error_detail = "Error verificando webhook" if not settings.DEBUG else str(e)
+        raise HTTPException(status_code=500, detail=error_detail)
 
 
 @router.post("/webhook")
@@ -177,7 +179,9 @@ async def receive_webhook(
         
     except Exception as e:
         logger.error(f"Error procesando webhook de WhatsApp: {str(e)}", exc_info=True)
+        # No exponer detalles del error en producción
+        error_message = "Error procesando webhook" if not settings.DEBUG else str(e)
         return WhatsAppResponse(
             success=False,
-            message=f"Error procesando webhook: {str(e)}"
+            message=error_message
         )
