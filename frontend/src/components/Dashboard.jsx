@@ -39,14 +39,25 @@ function Dashboard() {
       }
 
       // Intentar obtener usuario actual (si está autenticado)
+      // NOTA: Deshabilitado temporalmente porque el backend no tiene endpoints de autenticación implementados
+      // Cuando el backend tenga /api/v1/auth/me, descomentar esto:
+      /*
       if (authService.isAuthenticated()) {
         try {
           const userData = await authService.getCurrentUser();
           setUser(userData);
         } catch (err) {
-          console.warn('No se pudo obtener usuario:', err);
+          // Si el endpoint no existe (404) o hay error del servidor (500), limpiar tokens silenciosamente
+          if (err.response?.status === 404 || err.response?.status === 500) {
+            console.warn('Endpoint de autenticación no disponible, limpiando tokens');
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+          } else {
+            console.warn('No se pudo obtener usuario:', err);
+          }
         }
       }
+      */
     } catch (err) {
       setError('Error al cargar datos del dashboard');
       console.error('Error:', err);

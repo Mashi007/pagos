@@ -2,10 +2,12 @@
  * Componente de Login básico
  */
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/auth';
 import './Login.css';
 
-function Login({ onLoginSuccess }) {
+function Login() {
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -19,9 +21,8 @@ function Login({ onLoginSuccess }) {
     try {
       const result = await authService.login(email, password);
       console.log('✅ Login exitoso:', result);
-      if (onLoginSuccess) {
-        onLoginSuccess(result.user);
-      }
+      // Redirigir al dashboard después del login
+      navigate('/');
     } catch (err) {
       setError(err.message || 'Error al iniciar sesión');
       console.error('❌ Error en login:', err);

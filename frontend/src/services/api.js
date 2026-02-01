@@ -31,10 +31,27 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
     
+    // Manejar 404 o 500 - Endpoint no existe o error del servidor
+    if (error.response?.status === 404 || error.response?.status === 500) {
+      // Si es un endpoint de autenticación que no existe, silenciar el error
+      // para evitar mostrar "Internal Error" al usuario
+      if (originalRequest.url?.includes('/api/v1/auth/me') || 
+          originalRequest.url?.includes('/api/v1/auth/refresh') ||
+          originalRequest.url?.includes('/api/v1/auth/logout')) {
+        // Crear un error silencioso que no se mostrará al usuario
+        const silentError = new Error('Endpoint no disponible');
+        silentError.response = error.response;
+        silentError.config = error.config;
+        silentError.isSilent = true; // Marcar como error silencioso
+        return Promise.reject(silentError);
+      }
+    }
+    
     // Manejar 401 (Unauthorized) - Token expirado
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       
+      // Si el endpoint de refresh no existe, limpiar tokens silenciosamente
       const refreshToken = localStorage.getItem('refresh_token');
       if (refreshToken) {
         try {
@@ -47,15 +64,16 @@ apiClient.interceptors.response.use(
           originalRequest.headers.Authorization = `Bearer ${access_token}`;
           return apiClient(originalRequest);
         } catch (refreshError) {
-          // Refresh falló, limpiar tokens y redirigir a login
+          // Refresh falló (endpoint no existe o token inválido), limpiar tokens silenciosamente
           localStorage.removeItem('access_token');
           localStorage.removeItem('refresh_token');
-          window.location.href = '/login';
+          // No redirigir si estamos en Dashboard básico
           return Promise.reject(refreshError);
         }
       } else {
-        // No hay refresh token, redirigir a login
-        window.location.href = '/login';
+        // No hay refresh token, limpiar tokens
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
       }
     }
     

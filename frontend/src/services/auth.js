@@ -43,12 +43,18 @@ export const authService = {
   
   /**
    * Obtener usuario actual
+   * NOTA: Este endpoint requiere que el backend tenga /api/v1/auth/me implementado
    */
   async getCurrentUser() {
     try {
       const response = await apiClient.get('/api/v1/auth/me');
       return response.data;
     } catch (error) {
+      // Si el endpoint no existe (404) o hay error del servidor (500), no lanzar error visible
+      if (error.response?.status === 404 || error.response?.status === 500) {
+        console.warn('Endpoint /api/v1/auth/me no disponible en el backend');
+        return null; // Retornar null en lugar de lanzar error
+      }
       throw new Error(handleApiError(error));
     }
   },
