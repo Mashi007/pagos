@@ -34,24 +34,24 @@ const mockReportes = [
     id: 'REP001',
     nombre: 'Reporte de Cartera por Asesor',
     tipo: 'CARTERA',
-    descripcion: 'AnÃ¡lisis detallado de la cartera asignada a cada analista',
+    descripcion: 'Análisis detallado de la cartera asignada a cada analista',
     fechaGeneracion: '2024-07-20',
     periodo: 'Julio 2024',
     formato: 'PDF',
-    tamaÃ±o: '2.4 MB',
+    tamaño: '2.4 MB',
     descargas: 15,
     estado: 'DISPONIBLE',
     generadoPor: 'itmaster@rapicreditca.com',
   },
   {
     id: 'REP002',
-    nombre: 'AnÃ¡lisis de Morosidad',
+    nombre: 'Análisis de Morosidad',
     tipo: 'MOROSIDAD',
-    descripcion: 'Reporte de clientes en mora por perÃ­odo y analista',
+    descripcion: 'Reporte de clientes en mora por período y analista',
     fechaGeneracion: '2024-07-19',
     periodo: 'Julio 2024',
     formato: 'Excel',
-    tamaÃ±o: '1.8 MB',
+    tamaño: '1.8 MB',
     descargas: 8,
     estado: 'DISPONIBLE',
     generadoPor: 'itmaster@rapicreditca.com',
@@ -60,11 +60,11 @@ const mockReportes = [
     id: 'REP003',
     nombre: 'Flujo de Caja Mensual',
     tipo: 'FINANCIERO',
-    descripcion: 'ProyecciÃ³n de ingresos y egresos para el prÃ³ximo mes',
+    descripcion: 'Proyección de ingresos y egresos para el próximo mes',
     fechaGeneracion: '2024-07-18',
     periodo: 'Agosto 2024',
     formato: 'PDF',
-    tamaÃ±o: '3.1 MB',
+    tamaño: '3.1 MB',
     descargas: 12,
     estado: 'PROCESANDO',
     generadoPor: 'itmaster@rapicreditca.com',
@@ -77,7 +77,7 @@ const mockReportes = [
     fechaGeneracion: '2024-07-17',
     periodo: 'Julio 2024',
     formato: 'CSV',
-    tamaÃ±o: '850 KB',
+    tamaño: '850 KB',
     descargas: 25,
     estado: 'DISPONIBLE',
     generadoPor: 'itmaster@rapicreditca.com',
@@ -498,7 +498,7 @@ export function Reportes() {
                     <TableCell>
                       <Badge variant="secondary">{reporte.formato}</Badge>
                     </TableCell>
-                    <TableCell>{reporte.tamaÃ±o}</TableCell>
+                    <TableCell>{reporte.tamaño}</TableCell>
                     <TableCell>{reporte.descargas}</TableCell>
                     <TableCell>{formatDate(reporte.fechaGeneracion)}</TableCell>
                     <TableCell>

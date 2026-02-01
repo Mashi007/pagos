@@ -68,7 +68,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
     observaciones: prestamo?.observaciones || '',
   })
 
-  // Obtener datos de configuraciÃ³n con manejo de errores
+  // Obtener datos de configuración con manejo de errores
   const { data: concesionarios = [], error: errorConcesionarios } = useConcesionariosActivos()
   const { data: analistas = [], error: errorAnalistas } = useAnalistasActivos()
   const { data: modelosVehiculos = [], error: errorModelos } = useModelosVehiculosActivos()
@@ -118,7 +118,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
     }
   }, [valorActivo])
 
-  // Si se selecciona modelo o llegan modelos desde configuraciÃ³n, cargar su precio
+  // Si se selecciona modelo o llegan modelos desde configuración, cargar su precio
   useEffect(() => {
     if (formData.modelo_vehiculo && modelosVehiculos && modelosVehiculos.length > 0) {
       const modeloSel: any = modelosVehiculos.find((m: any) => m.modelo === formData.modelo_vehiculo)
@@ -689,8 +689,8 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                           onChange={(e) => {
                             const dia = parseInt(e.target.value) || 1
                             const fechaActual = formData.fecha_base_calculo || getCurrentDate()
-                            const [aÃ±o, mes] = fechaActual.split('-')
-                            const nuevaFecha = `${aÃ±o}-${mes}-${String(dia).padStart(2, '0')}`
+                            const [año, mes] = fechaActual.split('-')
+                            const nuevaFecha = `${año}-${mes}-${String(dia).padStart(2, '0')}`
                             setFormData({ ...formData, fecha_base_calculo: nuevaFecha })
                           }}
                           disabled={isReadOnly}
@@ -709,8 +709,8 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                           onChange={(e) => {
                             const mes = parseInt(e.target.value) || 1
                             const fechaActual = formData.fecha_base_calculo || getCurrentDate()
-                            const [aÃ±o, , dia] = fechaActual.split('-')
-                            const nuevaFecha = `${aÃ±o}-${String(mes).padStart(2, '0')}-${dia}`
+                            const [año, , dia] = fechaActual.split('-')
+                            const nuevaFecha = `${año}-${String(mes).padStart(2, '0')}-${dia}`
                             setFormData({ ...formData, fecha_base_calculo: nuevaFecha })
                           }}
                           disabled={isReadOnly}
@@ -727,10 +727,10 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                           max="2030"
                           value={formData.fecha_base_calculo ? formData.fecha_base_calculo.split('-')[0] : ''}
                           onChange={(e) => {
-                            const aÃ±o = parseInt(e.target.value) || new Date().getFullYear()
+                            const año = parseInt(e.target.value) || new Date().getFullYear()
                             const fechaActual = formData.fecha_base_calculo || getCurrentDate()
                             const [, mes, dia] = fechaActual.split('-')
-                            const nuevaFecha = `${aÃ±o}-${mes}-${dia}`
+                            const nuevaFecha = `${año}-${mes}-${dia}`
                             setFormData({ ...formData, fecha_base_calculo: nuevaFecha })
                           }}
                           disabled={isReadOnly}
@@ -739,14 +739,14 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                       </div>
                     </div>
                     <p className="text-xs text-blue-700 mt-2">
-                      Esta es la fecha desde la cual se calcularÃ¡n las cuotas de la tabla de amortizaciÃ³n
+                      Esta es la fecha desde la cual se calcularán las cuotas de la tabla de amortizaciÃ³n
                     </p>
                   </div>
                 )}
 
                 {/* Eliminados campos duplicados de Producto y Analista Asignado */}
 
-                {/* Nuevos campos de configuraciÃ³n (sin Modelo aquÃ­) */}
+                {/* Nuevos campos de configuración (sin Modelo aquí) */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium mb-1">

@@ -53,11 +53,11 @@ export function Notificaciones() {
     }))
   }
 
-  // Cargar notificaciones previas si estamos en la pestaÃ±a "previa"
+  // Cargar notificaciones previas si estamos en la pestaña "previa"
   const { data: notificacionesPreviasData, isLoading: isLoadingPrevias, error: errorPrevias, refetch: refetchPrevias } = useQuery({
     queryKey: ['notificaciones-previas', filterEstado],
     queryFn: () => notificacionService.listarNotificacionesPrevias(filterEstado || undefined),
-    enabled: activeTab === 'previa', // Solo cargar cuando estÃ© en la pestaÃ±a previa
+    enabled: activeTab === 'previa', // Solo cargar cuando estÃ© en la pestaña previa
     staleTime: 2 * 60 * 1000, // Cache de 2 minutos
     refetchInterval: 5 * 60 * 1000, // Refrescar cada 5 minutos (optimizado para reducir carga)
     refetchOnWindowFocus: true, // Refrescar al enfocar ventana
@@ -65,11 +65,11 @@ export function Notificaciones() {
     retryDelay: 1000, // Esperar 1 segundo entre reintentos
   })
 
-  // Cargar notificaciones del dÃ­a de pago si estamos en la pestaÃ±a "dia-pago"
+  // Cargar notificaciones del dÃ­a de pago si estamos en la pestaña "dia-pago"
   const { data: notificacionesDiaPagoData, isLoading: isLoadingDiaPago, error: errorDiaPago, refetch: refetchDiaPago } = useQuery({
     queryKey: ['notificaciones-dia-pago', filterEstado],
     queryFn: () => notificacionService.listarNotificacionesDiaPago(filterEstado || undefined),
-    enabled: activeTab === 'dia-pago', // Solo cargar cuando estÃ© en la pestaÃ±a dia-pago
+    enabled: activeTab === 'dia-pago', // Solo cargar cuando estÃ© en la pestaña dia-pago
     staleTime: 2 * 60 * 1000, // Cache de 2 minutos
     refetchInterval: 5 * 60 * 1000, // Refrescar cada 5 minutos (optimizado para reducir carga)
     refetchOnWindowFocus: true, // Refrescar al enfocar ventana
@@ -77,11 +77,11 @@ export function Notificaciones() {
     retryDelay: 1000, // Esperar 1 segundo entre reintentos
   })
 
-  // Cargar notificaciones retrasadas si estamos en la pestaÃ±a "retrasado"
+  // Cargar notificaciones retrasadas si estamos en la pestaña "retrasado"
   const { data: notificacionesRetrasadasData, isLoading: isLoadingRetrasadas, error: errorRetrasadas, refetch: refetchRetrasadas } = useQuery({
     queryKey: ['notificaciones-retrasadas', filterEstado],
     queryFn: () => notificacionService.listarNotificacionesRetrasadas(filterEstado || undefined),
-    enabled: activeTab === 'retrasado', // Solo cargar cuando estÃ© en la pestaÃ±a retrasado
+    enabled: activeTab === 'retrasado', // Solo cargar cuando estÃ© en la pestaña retrasado
     staleTime: 2 * 60 * 1000, // Cache de 2 minutos
     refetchInterval: 5 * 60 * 1000, // Refrescar cada 5 minutos (optimizado para reducir carga)
     refetchOnWindowFocus: true, // Refrescar al enfocar ventana
@@ -89,7 +89,7 @@ export function Notificaciones() {
     retryDelay: 1000, // Esperar 1 segundo entre reintentos
   })
 
-  // Cargar notificaciones prejudiciales si estamos en la pestaÃ±a "prejudicial"
+  // Cargar notificaciones prejudiciales si estamos en la pestaña "prejudicial"
   const { data: notificacionesPrejudicialesData, isLoading: isLoadingPrejudiciales, error: errorPrejudiciales, refetch: refetchPrejudiciales } = useQuery({
     queryKey: ['notificaciones-prejudicial', filterEstado],
     queryFn: async () => {
@@ -102,7 +102,7 @@ export function Notificaciones() {
         throw error
       }
     },
-    enabled: activeTab === 'prejudicial', // Solo cargar cuando estÃ© en la pestaÃ±a prejudicial
+    enabled: activeTab === 'prejudicial', // Solo cargar cuando estÃ© en la pestaña prejudicial
     staleTime: 2 * 60 * 1000, // Cache de 2 minutos
     refetchInterval: 5 * 60 * 1000, // Refrescar cada 5 minutos (optimizado para reducir carga)
     refetchOnWindowFocus: true, // Refrescar al enfocar ventana
@@ -110,7 +110,7 @@ export function Notificaciones() {
     retryDelay: 1000, // Esperar 1 segundo entre reintentos
   })
 
-  // Cargar notificaciones normales para otras pestaÃ±as
+  // Cargar notificaciones normales para otras pestañas
   const { data: notificacionesData, isLoading, error, refetch } = useQuery({
     queryKey: ['notificaciones', filterEstado, page, perPage],
     queryFn: () => notificacionService.listarNotificaciones(page, perPage, filterEstado || undefined),
@@ -140,7 +140,7 @@ export function Notificaciones() {
   const notificacionesPrejudiciales = notificacionesPrejudicialesData?.items || []
   const totalPrejudiciales = notificacionesPrejudicialesData?.total || 0
 
-  // Cargar estadÃ­sticas generales (para referencia, pero no se usan directamente en KPIs)
+  // Cargar estadísticas generales (para referencia, pero no se usan directamente en KPIs)
   const { data: estadisticas } = useQuery({
     queryKey: ['notificaciones-estadisticas'],
     queryFn: () => notificacionService.obtenerEstadisticas(),
@@ -149,25 +149,25 @@ export function Notificaciones() {
     refetchOnWindowFocus: true, // Refrescar al enfocar ventana
   })
 
-  // Tipos de notificaciÃ³n por pestaÃ±a
-  const tiposPorPestaÃ±a: Record<TabType, string[]> = {
+  // Tipos de notificaciÃ³n por pestaña
+  const tiposPorPestaña: Record<TabType, string[]> = {
     previa: ['PAGO_5_DIAS_ANTES', 'PAGO_3_DIAS_ANTES', 'PAGO_1_DIA_ANTES'],
     'dia-pago': ['PAGO_DIA_0'],
     retrasado: ['PAGO_1_DIA_ATRASADO', 'PAGO_3_DIAS_ATRASADO', 'PAGO_5_DIAS_ATRASADO'],
     prejudicial: ['PREJUDICIAL', 'PREJUDICIAL_1', 'PREJUDICIAL_2'], // Tipos para notificaciones prejudiciales
-    configuracion: [] // No se muestran notificaciones en esta pestaÃ±a
+    configuracion: [] // No se muestran notificaciones en esta pestaña
   }
 
-  // Filtrar notificaciones localmente por pestaÃ±a, bÃºsqueda y canal
+  // Filtrar notificaciones localmente por pestaña, búsqueda y canal
   const filteredNotificaciones = notificaciones.filter(notif => {
-    // Filtrar por pestaÃ±a activa (excepto configuraciÃ³n)
+    // Filtrar por pestaña activa (excepto configuración)
     if (activeTab !== 'configuracion') {
-      const tiposPermitidos = tiposPorPestaÃ±a[activeTab]
+      const tiposPermitidos = tiposPorPestaña[activeTab]
       if (!tiposPermitidos.includes(notif.tipo)) {
         return false
       }
     } else {
-      // En configuraciÃ³n no mostramos notificaciones
+      // En configuración no mostramos notificaciones
       return false
     }
 
@@ -182,8 +182,8 @@ export function Notificaciones() {
     return matchesSearch && matchesCanal
   })
 
-  // Calcular estadÃ­sticas por pestaÃ±a desde datos reales de BD (optimizado con useMemo)
-  const estadisticasPorPestaÃ±a = useMemo(() => {
+  // Calcular estadísticas por pestaña desde datos reales de BD (optimizado con useMemo)
+  const estadisticasPorPestaña = useMemo(() => {
     let total = 0
     let enviadas = 0
     let pendientes = 0
@@ -425,7 +425,7 @@ export function Notificaciones() {
         </div>
       </motion.div>
 
-      {/* Filters - Movido antes de las pestaÃ±as */}
+      {/* Filters - Movido antes de las pestañas */}
       {activeTab !== 'configuracion' && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -524,7 +524,7 @@ export function Notificaciones() {
         </div>
       </motion.div>
 
-      {/* Contenido segÃºn pestaÃ±a activa */}
+      {/* Contenido segÃºn pestaña activa */}
       {activeTab === 'configuracion' ? (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -549,9 +549,9 @@ export function Notificaciones() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-gray-600">
-                  {estadisticasPorPestaÃ±a.total}
+                  {estadisticasPorPestaña.total}
                 </div>
-                <p className="text-xs text-gray-600">Notificaciones en esta pestaÃ±a</p>
+                <p className="text-xs text-gray-600">Notificaciones en esta pestaña</p>
               </CardContent>
             </Card>
 
@@ -562,9 +562,9 @@ export function Notificaciones() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-green-600">
-                  {estadisticasPorPestaÃ±a.enviadas}
+                  {estadisticasPorPestaña.enviadas}
                 </div>
-                <p className="text-xs text-gray-600">EnvÃ­os exitosos</p>
+                <p className="text-xs text-gray-600">Envíos exitosos</p>
               </CardContent>
             </Card>
 
@@ -575,9 +575,9 @@ export function Notificaciones() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-yellow-600">
-                  {estadisticasPorPestaÃ±a.pendientes}
+                  {estadisticasPorPestaña.pendientes}
                 </div>
-                <p className="text-xs text-gray-600 mb-2">En espera de envÃ­o</p>
+                <p className="text-xs text-gray-600 mb-2">En espera de envío</p>
                 <Button
                   variant="outline"
                   size="sm"
@@ -597,9 +597,9 @@ export function Notificaciones() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-red-600">
-                  {estadisticasPorPestaÃ±a.fallidas}
+                  {estadisticasPorPestaña.fallidas}
                 </div>
-                <p className="text-xs text-gray-600 mb-2">Requieren revisiÃ³n</p>
+                <p className="text-xs text-gray-600 mb-2">Requieren revisión</p>
                 <Button
                   variant="outline"
                   size="sm"

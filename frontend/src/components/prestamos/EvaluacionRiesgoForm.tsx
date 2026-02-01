@@ -115,7 +115,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
 
   // (moved below formData) - reglas de completitud por secciÃ³n
 
-  // Calcular edad automÃ¡ticamente desde la cÃ©dula del prÃ©stamo
+  // Calcular edad automáticamente desde la cÃ©dula del prÃ©stamo
   useEffect(() => {
     const calcularEdad = async () => {
       try {
@@ -128,11 +128,11 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
             // Calcular edad desde fecha de nacimiento
             const hoy = new Date()
             const nacimiento = new Date(cliente.fecha_nacimiento)
-            let aÃ±os = hoy.getFullYear() - nacimiento.getFullYear()
+            let años = hoy.getFullYear() - nacimiento.getFullYear()
             const diferenciaMeses = hoy.getMonth() - nacimiento.getMonth()
 
             if (diferenciaMeses < 0 || (diferenciaMeses === 0 && hoy.getDate() < nacimiento.getDate())) {
-              aÃ±os -= 1
+              años -= 1
             }
 
             // Calcular meses adicionales
@@ -149,8 +149,8 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
               }
             }
 
-            // Edad en aÃ±os decimales
-            const edadDecimal = aÃ±os + (meses / 12)
+            // Edad en años decimales
+            const edadDecimal = años + (meses / 12)
             setClienteEdad(edadDecimal)
           }
         }
@@ -189,7 +189,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
         fecha_base_calculo: new Date().toISOString().split('T')[0],
         observaciones: `Aprobado despuÃ©s de evaluaciÃ³n de riesgo. PuntuaciÃ³n: ${resultado.puntuacion_total?.toFixed(2)}/100, Riesgo: ${resultado.clasificacion_riesgo}`
       })
-      // Mostrar automÃ¡ticamente el formulario de aprobaciÃ³n cuando hay resultado
+      // Mostrar automáticamente el formulario de aprobaciÃ³n cuando hay resultado
       setShowFormularioAprobacion(true)
     }
   }, [resultado])
@@ -244,7 +244,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
     edad: 0,
 
     // Criterio 7: Capacidad de Maniobra (5 puntos - NO requiere campos adicionales)
-    // Se calcula automÃ¡ticamente: Saldo Residual = Ingresos - Gastos - Deudas - Cuota
+    // Se calcula automáticamente: Saldo Residual = Ingresos - Gastos - Deudas - Cuota
   })
 
   // Reglas mÃ­nimas para considerar cada secciÃ³n completa
@@ -283,11 +283,11 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
     (formData.personas_casa ?? 0) > 0
 
   // Criterio 6: Edad del Cliente (10 puntos)
-  // La edad se calcula automÃ¡ticamente desde la fecha de nacimiento del cliente
+  // La edad se calcula automáticamente desde la fecha de nacimiento del cliente
   const seccion6Completa = (clienteEdad ?? 0) > 0
 
   // Criterio 7: Capacidad de Maniobra (5 puntos)
-  // Se calcula automÃ¡ticamente con los datos del Criterio 1
+  // Se calcula automáticamente con los datos del Criterio 1
   // Si el Criterio 1 estÃ¡ completo, el Criterio 7 tambiÃ©n lo estÃ¡
   const seccion7Completa = seccion1Completa
 
@@ -389,16 +389,16 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
         viven_con_ex: formData.viven_con_ex,
         embarazo_actual: formData.embarazo_actual,
 
-        // Criterio 6: Edad calculada automÃ¡ticamente
+        // Criterio 6: Edad calculada automáticamente
         edad: clienteEdad || 0,
 
         // Criterio 7: Capacidad de Maniobra
-        // Se calcula automÃ¡ticamente con los datos del Criterio 1
+        // Se calcula automáticamente con los datos del Criterio 1
       }
 
       const response = await prestamoService.evaluarRiesgo(prestamo.id, datosEvaluacion)
       setResultado(response)
-      // Cambiar automÃ¡ticamente a la pestaÃ±a de resultado
+      // Cambiar automáticamente a la pestaÃ±a de resultado
       setTimeout(() => setShowSection('resultado'), 100)
       toast.success('âœ… Fase 1 Completada: EvaluaciÃ³n de Riesgo guardada. El prÃ©stamo ahora estÃ¡ en estado EVALUADO.')
 
@@ -650,7 +650,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
               </div>
                 <div className="bg-blue-50 p-3 rounded border border-blue-200">
                   <p className="text-xs text-blue-700">
-                    <strong>Nota:</strong> La cuota del prÃ©stamo se toma automÃ¡ticamente de la base de datos: ${prestamo.cuota_periodo || 0} USD
+                    <strong>Nota:</strong> La cuota del prÃ©stamo se toma automáticamente de la base de datos: ${prestamo.cuota_periodo || 0} USD
                   </p>
               </div>
             </CardContent>
@@ -855,7 +855,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                   <p className="text-xs text-purple-700">
                     <strong>Escala:</strong> CalificaciÃ³n 3 â†’ Recomendable (3 pts) | CalificaciÃ³n 2 â†’ Dudosa (2 pts) | CalificaciÃ³n 1 â†’ No recomendable (1 pt) | No contestÃ³ (0 pts)
                     <br />
-                    <strong>Total mÃ¡ximo:</strong> 9 puntos (3 referencias Ã— 3 pts c/u)
+                    <strong>Total máximo:</strong> 9 puntos (3 referencias Ã— 3 pts c/u)
                   </p>
                 </div>
             </CardContent>
@@ -941,8 +941,8 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                       <SelectItem value="casa_propia_pagada">Casa Propia Pagada (6 pts)</SelectItem>
                       <SelectItem value="casa_propia_hipoteca">Casa Propia con Hipoteca (5 pts)</SelectItem>
                       <SelectItem value="casa_familiar">Casa Familiar/Heredada (5 pts)</SelectItem>
-                      <SelectItem value="alquiler_mas_3">Alquiler &gt;3 aÃ±os (4 pts)</SelectItem>
-                      <SelectItem value="alquiler_1_3">Alquiler 1-3 aÃ±os (3 pts)</SelectItem>
+                      <SelectItem value="alquiler_mas_3">Alquiler &gt;3 años (4 pts)</SelectItem>
+                      <SelectItem value="alquiler_1_3">Alquiler 1-3 años (3 pts)</SelectItem>
                       <SelectItem value="alquiler_menos_1">Alquiler &lt;1 aÃ±o (1 pt)</SelectItem>
                       <SelectItem value="prestado">De Prestado (0.5 pts)</SelectItem>
                       <SelectItem value="sin_vivienda">Sin Vivienda (0 pts)</SelectItem>
@@ -1014,8 +1014,8 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="casado_mas_3">Casado/a &gt;3 aÃ±os (3.5 pts)</SelectItem>
-                      <SelectItem value="casado_menos_3">Casado/a &lt;3 aÃ±os (3.0 pts)</SelectItem>
+                      <SelectItem value="casado_mas_3">Casado/a &gt;3 años (3.5 pts)</SelectItem>
+                      <SelectItem value="casado_menos_3">Casado/a &lt;3 años (3.0 pts)</SelectItem>
                       <SelectItem value="divorciado_con_hijos">Divorciado/a con hijos (2.5 pts)</SelectItem>
                       <SelectItem value="soltero_con_pareja">Soltero/a con pareja (2.0 pts)</SelectItem>
                       <SelectItem value="soltero_sin_pareja">Soltero/a sin pareja (1.5 pts)</SelectItem>
@@ -1178,18 +1178,18 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
               <CardContent className="pt-4 space-y-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">
-                    Edad del Cliente (aÃ±os y meses) *
+                    Edad del Cliente (años y meses) *
                   </label>
                   <Input
                     type="text"
                     value={(() => {
                       const edad = clienteEdad || 0;
-                      // Calcula aÃ±os y meses desde la edad en aÃ±os (decimal)
-                      const aÃ±os = Math.floor(edad);
-                      const meses = Math.round((edad - aÃ±os) * 12);
-                      // Si los meses son negativos (error de cÃ¡lculo), ajustar
+                      // Calcula años y meses desde la edad en años (decimal)
+                      const años = Math.floor(edad);
+                      const meses = Math.round((edad - años) * 12);
+                      // Si los meses son negativos (error de cálculo), ajustar
                       const meses_final = meses < 0 ? 0 : meses;
-                      return meses_final > 0 ? `${aÃ±os} aÃ±os y ${meses_final} meses` : `${aÃ±os} aÃ±os`;
+                      return meses_final > 0 ? `${años} años y ${meses_final} meses` : `${años} años`;
                     })()}
                     disabled={true}
                     required
@@ -1197,17 +1197,17 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                     readOnly
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    â„¹ï¸ La edad se calcula automÃ¡ticamente desde la fecha de nacimiento del cliente en la base de datos (no editable)
+                    â„¹ï¸ La edad se calcula automáticamente desde la fecha de nacimiento del cliente en la base de datos (no editable)
                   </p>
                   <div className="bg-pink-50 p-3 rounded border border-pink-200 mt-3">
                     <p className="text-xs text-pink-700">
-                      <strong>Escala (10 puntos mÃ¡x):</strong><br />
-                      25-50 aÃ±os â†’ 10.0 pts (Ã“ptimo) |<br />
-                      22-24 / 51-55 aÃ±os â†’ 8.0 pts (Muy bueno/Bueno) |<br />
-                      18-21 / 56-60 aÃ±os â†’ 6.0 pts (Regular) |<br />
-                      61-65 aÃ±os â†’ 3.0 pts (Bajo) |<br />
-                      &lt; 18 aÃ±os â†’ RECHAZO AUTOMÃTICO |<br />
-                      &gt; 65 aÃ±os â†’ 2.0 pts (Muy bajo)
+                      <strong>Escala (10 puntos máx):</strong><br />
+                      25-50 años â†’ 10.0 pts (Óptimo) |<br />
+                      22-24 / 51-55 años â†’ 8.0 pts (Muy bueno/Bueno) |<br />
+                      18-21 / 56-60 años â†’ 6.0 pts (Regular) |<br />
+                      61-65 años â†’ 3.0 pts (Bajo) |<br />
+                      &lt; 18 años â†’ RECHAZO AUTOMÁTICO |<br />
+                      &gt; 65 años â†’ 2.0 pts (Muy bajo)
                     </p>
                 </div>
               </div>
@@ -1269,7 +1269,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                   <div className="bg-green-50 p-4 rounded-lg border border-green-200">
                     <h4 className="font-semibold text-green-900 mb-3">ðŸ“Š PREVISUALIZACIÃ“N - CÃLCULO EN TIEMPO REAL</h4>
 
-                    {/* Desglose del cÃ¡lculo */}
+                    {/* Desglose del cálculo */}
                     <div className="bg-white p-3 rounded border border-green-100 mb-3">
                       <div className="grid grid-cols-2 gap-2 text-sm mb-2">
                         <div className="text-gray-600">ðŸ’° Ingresos Mensuales:</div>
@@ -1652,7 +1652,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                     </li>
                     <li>
                       <strong>6. Edad del Cliente:</strong>{' '}
-                      {resultado.detalle_criterios?.edad?.puntos?.toFixed(1)}/10 pts ({resultado.detalle_criterios?.edad?.cliente} aÃ±os)
+                      {resultado.detalle_criterios?.edad?.puntos?.toFixed(1)}/10 pts ({resultado.detalle_criterios?.edad?.cliente} años)
                     </li>
                     <li>
                       <strong>7. Capacidad de Maniobra:</strong>{' '}
@@ -1726,7 +1726,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                         <ul className="list-disc list-inside mt-2 space-y-1 text-xs text-blue-700">
                           <li>Tasa de interÃ©s</li>
                           <li>Fecha de desembolso</li>
-                          <li>Plazo mÃ¡ximo</li>
+                          <li>Plazo máximo</li>
                           <li>Observaciones</li>
                         </ul>
                       </div>

@@ -51,7 +51,7 @@ export const exportarAExcel = async (cuotas: Cuota[], prestamo: PrestamoInfo) =>
         'Cuota': cuota.numero_cuota,
         'Fecha Vencimiento': cuota.fecha_vencimiento,
         'Capital': montoCapital,
-        'InterÃ©s': montoInteres,
+        'Interés': montoInteres,
         'Total': montoCuota,
         'Saldo Pendiente': saldoFinal,
         'Estado': cuota.estado,
@@ -60,12 +60,12 @@ export const exportarAExcel = async (cuotas: Cuota[], prestamo: PrestamoInfo) =>
 
     // Agregar resumen
     const totalCapital = datos.reduce((sum, d) => sum + (d.Capital as number), 0)
-    const totalInteres = datos.reduce((sum, d) => sum + (d.InterÃ©s as number), 0)
+    const totalInteres = datos.reduce((sum, d) => sum + (d.Interés as number), 0)
     const totalGeneral = datos.reduce((sum, d) => sum + (d.Total as number), 0)
 
     const resumen = [
-      { 'Cuota': 'RESUMEN', 'Fecha Vencimiento': '', 'Capital': '', 'InterÃ©s': '', 'Total': '', 'Saldo Pendiente': '', 'Estado': '' },
-      { 'Cuota': '', 'Fecha Vencimiento': '', 'Capital': totalCapital, 'InterÃ©s': totalInteres, 'Total': totalGeneral, 'Saldo Pendiente': '', 'Estado': '' },
+      { 'Cuota': 'RESUMEN', 'Fecha Vencimiento': '', 'Capital': '', 'Interés': '', 'Total': '', 'Saldo Pendiente': '', 'Estado': '' },
+      { 'Cuota': '', 'Fecha Vencimiento': '', 'Capital': totalCapital, 'Interés': totalInteres, 'Total': totalGeneral, 'Saldo Pendiente': '', 'Estado': '' },
     ]
 
     const todosLosDatos = [...datos, ...resumen]
@@ -189,7 +189,7 @@ export const exportarAPDF = async (cuotas: Cuota[], prestamo: PrestamoInfo) => {
     // Crear tabla con autoTable
     autoTable(doc, {
       startY: 95,
-      head: [['Cuota', 'Fecha Vencimiento', 'Capital', 'InterÃ©s', 'Total', 'Saldo Pendiente', 'Estado']],
+      head: [['Cuota', 'Fecha Vencimiento', 'Capital', 'Interés', 'Total', 'Saldo Pendiente', 'Estado']],
       body: datosTabla,
       theme: 'striped',
       headStyles: {

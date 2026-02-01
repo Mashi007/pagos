@@ -77,7 +77,7 @@ const mockConfiguracion = {
     intentosLogin: 3,
     bloqueoTemporal: 15,
     requiere2FA: false,
-    politicaContraseÃ±as: 'ALTA',
+    politicaContraseñas: 'ALTA',
     auditoriaActiva: true,
     ipWhitelist: false,
     sslActivo: true,
@@ -278,7 +278,7 @@ export function Configuracion() {
         { id: 'plantillas', nombre: 'Plantillas', icono: FileText, href: '/herramientas/plantillas' },
         { id: 'scheduler', nombre: 'Programador', icono: Calendar, href: '/scheduler' },
         { id: 'programador', nombre: 'Programador (Config)', icono: Calendar },
-        { id: 'auditoria', nombre: 'AuditorÃ­a', icono: FileText },
+        { id: 'auditoria', nombre: 'Auditoría', icono: FileText },
       ]
     },
     // { id: 'seguridad', nombre: 'Seguridad', icono: Shield }, // OCULTO - No necesario por ahora
@@ -852,7 +852,7 @@ export function Configuracion() {
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2">
         <div>
-          <label className="text-sm font-medium">Timeout de SesiÃ³n (minutos)</label>
+          <label className="text-sm font-medium">Timeout de Sesión (minutos)</label>
           <Input
             type="number"
             value={configuracion.seguridad.sessionTimeout}
@@ -879,8 +879,8 @@ export function Configuracion() {
           />
         </div>
         <div>
-          <label className="text-sm font-medium">PolÃ­tica de ContraseÃ±as</label>
-          <Select value={configuracion.seguridad.politicaContraseÃ±as} onValueChange={(value: string) => handleCambio('seguridad', 'politicaContraseÃ±as', value)}>
+          <label className="text-sm font-medium">Política de Contraseñas</label>
+          <Select value={configuracion.seguridad.politicaContraseñas} onValueChange={(value: string) => handleCambio('seguridad', 'politicaContraseñas', value)}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
@@ -901,7 +901,7 @@ export function Configuracion() {
             onChange={(e) => handleCambio('seguridad', 'requiere2FA', e.target.checked)}
             className="rounded"
           />
-          <label className="text-sm font-medium">Requerir AutenticaciÃ³n de Dos Factores</label>
+          <label className="text-sm font-medium">Requerir Autenticación de Dos Factores</label>
         </div>
         <div className="flex items-center space-x-2">
           <input
@@ -910,7 +910,7 @@ export function Configuracion() {
             onChange={(e) => handleCambio('seguridad', 'auditoriaActiva', e.target.checked)}
             className="rounded"
           />
-          <label className="text-sm font-medium">AuditorÃ­a Activa</label>
+          <label className="text-sm font-medium">Auditoría Activa</label>
         </div>
         <div className="flex items-center space-x-2">
           <input
@@ -1255,7 +1255,7 @@ export function Configuracion() {
       <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
         <div className="flex items-center gap-2 mb-2">
           <FileText className="h-5 w-5 text-purple-600" />
-          <h3 className="font-semibold text-purple-900">AuditorÃ­a del Sistema</h3>
+          <h3 className="font-semibold text-purple-900">Auditoría del Sistema</h3>
         </div>
         <p className="text-sm text-purple-700">
           Registro y seguimiento de todas las actividades del sistema para cumplimiento y seguridad.
@@ -1267,7 +1267,7 @@ export function Configuracion() {
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <FileText className="h-5 w-5 text-blue-600" />
-              ConfiguraciÃ³n de AuditorÃ­a
+              ConfiguraciÃ³n de Auditoría
             </CardTitle>
             <CardDescription>
               Configura quÃ© eventos se registran en el sistema de auditorÃ­a
@@ -1276,7 +1276,7 @@ export function Configuracion() {
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between p-3 border rounded-lg">
               <div>
-                <h4 className="font-medium">AuditorÃ­a de Usuarios</h4>
+                <h4 className="font-medium">Auditoría de Usuarios</h4>
                 <p className="text-sm text-gray-600">
                   Registra login, logout y cambios de perfil
                 </p>
@@ -1293,7 +1293,7 @@ export function Configuracion() {
 
             <div className="flex items-center justify-between p-3 border rounded-lg">
               <div>
-                <h4 className="font-medium">AuditorÃ­a de Transacciones</h4>
+                <h4 className="font-medium">Auditoría de Transacciones</h4>
                 <p className="text-sm text-gray-600">
                   Registra todos los movimientos financieros
                 </p>
@@ -1310,7 +1310,7 @@ export function Configuracion() {
 
             <div className="flex items-center justify-between p-3 border rounded-lg">
               <div>
-                <h4 className="font-medium">AuditorÃ­a de ConfiguraciÃ³n</h4>
+                <h4 className="font-medium">Auditoría de ConfiguraciÃ³n</h4>
                 <p className="text-sm text-gray-600">
                   Registra cambios en configuraciones del sistema
                 </p>
