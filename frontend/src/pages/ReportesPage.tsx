@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { BarChart2 } from 'lucide-react'
+import { BarChart3 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 
@@ -36,7 +36,7 @@ export function ReportesPage() {
           <CardContent>
             <div className="text-center py-8">
               <div className="flex justify-center mb-4">
-                <BarChart2 className="w-16 h-16 text-muted-foreground" />
+                <BarChart3 className="w-16 h-16 text-muted-foreground" />
               </div>
               <h3 className="text-xl font-semibold mb-2">Página en Desarrollo</h3>
               <p className="text-muted-foreground mb-4">
