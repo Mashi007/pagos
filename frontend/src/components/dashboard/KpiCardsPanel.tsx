@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { DollarSign, TrendingUp, Users, AlertTriangle } from 'lucide-react'
 import { KpiCard } from './KpiCard'
-import { apiClient } from '@/services/api'
-import { useDashboardFiltros, type DashboardFiltros } from '@/hooks/useDashboardFiltros'
-import { formatCurrency } from '@/utils'
+import { apiClient } from '../../services/api'
+import { useDashboardFiltros, type DashboardFiltros } from '../../hooks/useDashboardFiltros'
+import { formatCurrency } from '../../utils'
 
 interface KpiCardsPanelProps {
   filtros: DashboardFiltros
@@ -80,7 +80,7 @@ export function KpiCardsPanel({ filtros }: KpiCardsPanelProps) {
   return (
     <div className="space-y-4">
       <KpiCard
-        title="Total Préstamos"
+        title="Total PrÃ©stamos"
         value={kpisData.total_prestamos?.valor_actual ?? 0}
         variationPercent={kpisData.total_prestamos?.variacion_porcentual ?? 0}
         variationAbs={kpisData.total_prestamos?.variacion_absoluta ?? 0}
@@ -88,7 +88,7 @@ export function KpiCardsPanel({ filtros }: KpiCardsPanelProps) {
         icon={DollarSign}
       />
       <KpiCard
-        title="Créditos Nuevos en el Mes"
+        title="CrÃ©ditos Nuevos en el Mes"
         value={kpisData.creditos_nuevos_mes?.valor_actual ?? 0}
         variationPercent={kpisData.creditos_nuevos_mes?.variacion_porcentual ?? 0}
         variationAbs={kpisData.creditos_nuevos_mes?.variacion_absoluta ?? 0}
@@ -104,7 +104,7 @@ export function KpiCardsPanel({ filtros }: KpiCardsPanelProps) {
         icon={Users}
       />
       <KpiCard
-        title="Total Morosidad en Dólares"
+        title="Total Morosidad en DÃ³lares"
         value={kpisData.total_morosidad_usd?.valor_actual ?? 0}
         variationPercent={kpisData.total_morosidad_usd?.variacion_porcentual ?? 0}
         variationAbs={kpisData.total_morosidad_usd?.variacion_absoluta ?? 0}

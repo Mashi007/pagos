@@ -17,14 +17,14 @@ import {
   Settings,
   ChevronRight,
 } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Card, CardContent } from '../../components/ui/card'
+import { Button } from '../../components/ui/button'
+import { Badge } from '../../components/ui/badge'
+import { Progress } from '../../components/ui/progress'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs'
 import { toast } from 'sonner'
-import { apiClient } from '@/services/api'
-import { aiTrainingService, ConversacionAI, MetricasEntrenamiento } from '@/services/aiTrainingService'
+import { apiClient } from '../../services/api'
+import { aiTrainingService, ConversacionAI, MetricasEntrenamiento } from '../../services/aiTrainingService'
 import { PromptEditor } from './PromptEditor'
 
 interface Recomendacion {
@@ -46,7 +46,7 @@ export function EntrenamientoMejorado() {
   const [recoleccionAutomaticaActiva, setRecoleccionAutomaticaActiva] = useState(false)
   const [cargandoEstadoRecoleccion, setCargandoEstadoRecoleccion] = useState(false)
 
-  // Cargar métricas al montar
+  // Cargar mÃ©tricas al montar
   useEffect(() => {
     cargarMetricas()
     cargarEstadoRecoleccionAutomatica()
@@ -59,10 +59,10 @@ export function EntrenamientoMejorado() {
       const valor = response?.recoleccion_automatica_activa
       const activa = valor === 'true' || valor === 'True'
       setRecoleccionAutomaticaActiva(activa)
-      console.debug(`Estado de recolección automática cargado: ${activa}`)
+      console.debug(`Estado de recolecciÃ³n automÃ¡tica cargado: ${activa}`)
     } catch (error: any) {
-      console.error('Error cargando estado de recolección automática:', error)
-      // Si no existe la configuración, asumir que está desactivada
+      console.error('Error cargando estado de recolecciÃ³n automÃ¡tica:', error)
+      // Si no existe la configuraciÃ³n, asumir que estÃ¡ desactivada
       setRecoleccionAutomaticaActiva(false)
     }
   }
@@ -72,7 +72,7 @@ export function EntrenamientoMejorado() {
     try {
       const nuevoEstado = !recoleccionAutomaticaActiva
       
-      // Guardar configuración
+      // Guardar configuraciÃ³n
       const response = await apiClient.put('/api/v1/configuracion/ai/configuracion', {
         recoleccion_automatica_activa: nuevoEstado.toString()
       })
@@ -83,21 +83,21 @@ export function EntrenamientoMejorado() {
       await cargarEstadoRecoleccionAutomatica()
       
       if (nuevoEstado) {
-        toast.success('✅ Recolección automática activada. Las conversaciones se guardarán automáticamente.', {
+        toast.success('âœ… RecolecciÃ³n automÃ¡tica activada. Las conversaciones se guardarÃ¡n automÃ¡ticamente.', {
           duration: 5000,
         })
       } else {
-        toast.info('Recolección automática desactivada', {
+        toast.info('RecolecciÃ³n automÃ¡tica desactivada', {
           duration: 3000,
         })
       }
     } catch (error: any) {
-      console.error('Error activando recolección automática:', error)
-      const errorMsg = error?.response?.data?.detail || 'Error al cambiar el estado de recolección automática'
+      console.error('Error activando recolecciÃ³n automÃ¡tica:', error)
+      const errorMsg = error?.response?.data?.detail || 'Error al cambiar el estado de recolecciÃ³n automÃ¡tica'
       toast.error(errorMsg, {
         duration: 5000,
       })
-      // Recargar estado en caso de error para mantener sincronización
+      // Recargar estado en caso de error para mantener sincronizaciÃ³n
       await cargarEstadoRecoleccionAutomatica()
     } finally {
       setCargandoEstadoRecoleccion(false)
@@ -110,8 +110,8 @@ export function EntrenamientoMejorado() {
       const data = await aiTrainingService.getMetricasEntrenamiento()
       setMetricas(data)
     } catch (error: any) {
-      console.error('Error cargando métricas:', error)
-      toast.error('Error al cargar métricas de entrenamiento')
+      console.error('Error cargando mÃ©tricas:', error)
+      toast.error('Error al cargar mÃ©tricas de entrenamiento')
     } finally {
       setCargandoMetricas(false)
     }
@@ -121,10 +121,10 @@ export function EntrenamientoMejorado() {
     setRecolectandoAutomatico(true)
     try {
       const resultado = await apiClient.post<{ total_recolectadas: number }>('/api/v1/ai/training/recolectar-automatico')
-      toast.success(`✅ Recolección completada: ${resultado.total_recolectadas} conversaciones nuevas`)
+      toast.success(`âœ… RecolecciÃ³n completada: ${resultado.total_recolectadas} conversaciones nuevas`)
       cargarMetricas()
     } catch (error: any) {
-      const mensaje = error?.response?.data?.detail || error?.message || 'Error en recolección automática'
+      const mensaje = error?.response?.data?.detail || error?.message || 'Error en recolecciÃ³n automÃ¡tica'
       toast.error(mensaje)
     } finally {
       setRecolectandoAutomatico(false)
@@ -136,7 +136,7 @@ export function EntrenamientoMejorado() {
     try {
       const resultado = await apiClient.post('/api/v1/ai/training/analizar-calidad')
       setAnalisisCalidad(resultado)
-      toast.success('Análisis de calidad completado')
+      toast.success('AnÃ¡lisis de calidad completado')
     } catch (error: any) {
       const mensaje = error?.response?.data?.detail || error?.message || 'Error analizando calidad'
       toast.error(mensaje)
@@ -157,39 +157,39 @@ export function EntrenamientoMejorado() {
     
     if (!metricas) return recomendaciones
 
-    // Recomendación 1: Recolección automática
+    // RecomendaciÃ³n 1: RecolecciÃ³n automÃ¡tica
     if (metricas.conversaciones.total < 20) {
       recomendaciones.push({
         tipo: 'recoleccion',
         titulo: recoleccionAutomaticaActiva 
-          ? 'Recolección Automática Activada' 
-          : 'Activar Recolección Automática',
+          ? 'RecolecciÃ³n AutomÃ¡tica Activada' 
+          : 'Activar RecolecciÃ³n AutomÃ¡tica',
         descripcion: recoleccionAutomaticaActiva
-          ? 'La recolección automática está activa. Las conversaciones del Chat AI se guardan automáticamente para construir tu dataset de entrenamiento.'
-          : 'Habilita la recolección automática de conversaciones del Chat AI para construir tu dataset de entrenamiento.',
+          ? 'La recolecciÃ³n automÃ¡tica estÃ¡ activa. Las conversaciones del Chat AI se guardan automÃ¡ticamente para construir tu dataset de entrenamiento.'
+          : 'Habilita la recolecciÃ³n automÃ¡tica de conversaciones del Chat AI para construir tu dataset de entrenamiento.',
         accion: recoleccionAutomaticaActiva ? 'Desactivar' : 'Activar',
         icono: <RefreshCw className="h-5 w-5" />,
         color: recoleccionAutomaticaActiva ? 'green' : 'blue',
       })
     }
 
-    // Recomendación 2: Calidad de datos
+    // RecomendaciÃ³n 2: Calidad de datos
     if (metricas.conversaciones.con_calificacion > 0 && metricas.conversaciones.promedio_calificacion < 3.5) {
       recomendaciones.push({
         tipo: 'calidad',
         titulo: 'Mejorar Calidad de Conversaciones',
-        descripcion: `El promedio de calificaciones es ${metricas.conversaciones.promedio_calificacion.toFixed(1)}/5. Revisa y mejora las conversaciones con baja calificación.`,
+        descripcion: `El promedio de calificaciones es ${metricas.conversaciones.promedio_calificacion.toFixed(1)}/5. Revisa y mejora las conversaciones con baja calificaciÃ³n.`,
         accion: 'Revisar',
         icono: <Target className="h-5 w-5" />,
         color: 'amber',
       })
     }
 
-    // Recomendación 3: Entrenamiento listo
+    // RecomendaciÃ³n 3: Entrenamiento listo
     if (metricas.conversaciones.listas_entrenamiento >= 10) {
       recomendaciones.push({
         tipo: 'entrenar',
-        titulo: '¡Listo para Entrenar!',
+        titulo: 'Â¡Listo para Entrenar!',
         descripcion: `Tienes ${metricas.conversaciones.listas_entrenamiento} conversaciones listas. Puedes iniciar el fine-tuning ahora.`,
         accion: 'Entrenar',
         icono: <Play className="h-5 w-5" />,
@@ -197,13 +197,13 @@ export function EntrenamientoMejorado() {
       })
     }
 
-    // Recomendación 4: Más datos
+    // RecomendaciÃ³n 4: MÃ¡s datos
     if (metricas.conversaciones.listas_entrenamiento < 10) {
       recomendaciones.push({
         tipo: 'mas_datos',
-        titulo: 'Necesitas Más Conversaciones',
+        titulo: 'Necesitas MÃ¡s Conversaciones',
         descripcion: `Tienes ${metricas.conversaciones.listas_entrenamiento} conversaciones listas. Se recomiendan al menos 10 para entrenar (ideal: 50+).`,
-        accion: 'Ver Cómo',
+        accion: 'Ver CÃ³mo',
         icono: <Info className="h-5 w-5" />,
         color: 'blue',
       })
@@ -214,18 +214,18 @@ export function EntrenamientoMejorado() {
 
   return (
     <div className="space-y-6">
-      {/* Header con título y descripción */}
+      {/* Header con tÃ­tulo y descripciÃ³n */}
       <div className="mb-6">
         <h2 className="text-3xl font-bold text-gray-900 mb-2 flex items-center gap-3">
           <Brain className="h-8 w-8 text-blue-600" />
           Herramientas de Entrenamiento AI
         </h2>
         <p className="text-gray-600">
-          Gestiona la recolección de datos, calidad y entrenamiento de tu modelo de Chat AI
+          Gestiona la recolecciÃ³n de datos, calidad y entrenamiento de tu modelo de Chat AI
         </p>
       </div>
 
-      {/* Métricas rápidas - Mejorado */}
+      {/* MÃ©tricas rÃ¡pidas - Mejorado */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100 hover:shadow-md transition-shadow">
           <CardContent className="pt-5 pb-5">
@@ -254,7 +254,7 @@ export function EntrenamientoMejorado() {
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">
                   <TrendingUp className="h-5 w-5 text-green-600" />
-                  <p className="text-sm font-semibold text-green-700 uppercase tracking-wide">Calificación</p>
+                  <p className="text-sm font-semibold text-green-700 uppercase tracking-wide">CalificaciÃ³n</p>
                 </div>
                 <p className="text-3xl font-bold text-green-900 mb-1">
                   {metricas?.conversaciones.promedio_calificacion
@@ -292,7 +292,7 @@ export function EntrenamientoMejorado() {
                         : 'border-gray-300 text-gray-600'
                     }`}
                   >
-                    {metricas?.fine_tuning.modelo_activo ? '✓ Activo' : 'Sin activar'}
+                    {metricas?.fine_tuning.modelo_activo ? 'âœ“ Activo' : 'Sin activar'}
                   </Badge>
                 </div>
               </div>
@@ -339,7 +339,7 @@ export function EntrenamientoMejorado() {
             className="flex items-center gap-2 px-4 py-2.5 data-[state=active]:bg-green-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all rounded-lg"
           >
             <RefreshCw className="h-4 w-4" />
-            <span className="font-medium">Recolección</span>
+            <span className="font-medium">RecolecciÃ³n</span>
           </TabsTrigger>
           <TabsTrigger
             value="calidad"
@@ -370,7 +370,7 @@ export function EntrenamientoMejorado() {
                   <div className="flex-1">
                     <h2 className="text-2xl font-bold text-gray-900 mb-2">Asistente de Entrenamiento Inteligente</h2>
                     <p className="text-gray-700">
-                      Te guiaré paso a paso para mejorar el entrenamiento de tu Chat AI. 
+                      Te guiarÃ© paso a paso para mejorar el entrenamiento de tu Chat AI. 
                       Analizo tus datos y te sugiero las mejores acciones.
                     </p>
                   </div>
@@ -448,7 +448,7 @@ export function EntrenamientoMejorado() {
                                     } else if (rec.tipo === 'entrenar') {
                                       window.location.href = '/configuracion?tab=ai&subtab=fine-tuning'
                                     } else {
-                                      toast.info('Consulta la pestaña de Recolección para más información')
+                                      toast.info('Consulta la pestaÃ±a de RecolecciÃ³n para mÃ¡s informaciÃ³n')
                                     }
                                   }}
                                 >
@@ -473,13 +473,13 @@ export function EntrenamientoMejorado() {
                   </div>
                 </div>
 
-                {/* Guía rápida - Mejorado */}
+                {/* GuÃ­a rÃ¡pida - Mejorado */}
                 <Card className="border-gray-200 shadow-sm">
                   <CardContent className="pt-6">
                     <div className="flex items-center justify-between mb-6">
                       <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
                         <Info className="h-5 w-5 text-blue-600" />
-                        Guía Rápida de Entrenamiento
+                        GuÃ­a RÃ¡pida de Entrenamiento
                       </h3>
                       <Badge variant="outline" className="bg-gray-50">
                         5 pasos
@@ -493,8 +493,8 @@ export function EntrenamientoMejorado() {
                         <div className="mt-4">
                           <p className="font-bold text-gray-900 mb-2">Recolecta Conversaciones</p>
                           <p className="text-sm text-gray-700 leading-relaxed">
-                            Activa la recolección automática o crea conversaciones manualmente. 
-                            Mínimo 10 conversaciones, ideal 50+.
+                            Activa la recolecciÃ³n automÃ¡tica o crea conversaciones manualmente. 
+                            MÃ­nimo 10 conversaciones, ideal 50+.
                           </p>
                         </div>
                       </div>
@@ -548,7 +548,7 @@ export function EntrenamientoMejorado() {
               </div>
         </TabsContent>
 
-        {/* Tab 2: Recolección - Mejorado */}
+        {/* Tab 2: RecolecciÃ³n - Mejorado */}
         <TabsContent value="recoleccion" className="mt-6">
           <div className="space-y-6">
             {/* Header */}
@@ -559,16 +559,16 @@ export function EntrenamientoMejorado() {
                     <RefreshCw className="h-6 w-6 text-white" />
                   </div>
                   <div className="flex-1">
-                    <h2 className="text-2xl font-bold text-gray-900 mb-2">Recolección de Conversaciones</h2>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">RecolecciÃ³n de Conversaciones</h2>
                     <p className="text-gray-700">
-                      Gestiona la recolección automática y manual de conversaciones del Chat AI para entrenamiento
+                      Gestiona la recolecciÃ³n automÃ¡tica y manual de conversaciones del Chat AI para entrenamiento
                     </p>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Estado de activación - Mejorado */}
+            {/* Estado de activaciÃ³n - Mejorado */}
             <Card className={`border-2 shadow-lg ${recoleccionAutomaticaActiva ? 'border-green-400 bg-gradient-to-br from-green-50 to-emerald-50' : 'border-gray-300 bg-gradient-to-br from-gray-50 to-gray-100'}`}>
               <CardContent className="pt-6 pb-6">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -582,12 +582,12 @@ export function EntrenamientoMejorado() {
                     </div>
                     <div>
                       <h3 className="text-xl font-bold text-gray-900 mb-1">
-                        {recoleccionAutomaticaActiva ? 'Recolección Automática Activada' : 'Recolección Automática Desactivada'}
+                        {recoleccionAutomaticaActiva ? 'RecolecciÃ³n AutomÃ¡tica Activada' : 'RecolecciÃ³n AutomÃ¡tica Desactivada'}
                       </h3>
                       <p className="text-gray-700">
                         {recoleccionAutomaticaActiva 
-                          ? 'Las conversaciones del Chat AI se guardan automáticamente en tiempo real'
-                          : 'Activa la recolección para guardar conversaciones automáticamente'}
+                          ? 'Las conversaciones del Chat AI se guardan automÃ¡ticamente en tiempo real'
+                          : 'Activa la recolecciÃ³n para guardar conversaciones automÃ¡ticamente'}
                       </p>
                     </div>
                   </div>
@@ -618,27 +618,27 @@ export function EntrenamientoMejorado() {
               </CardContent>
             </Card>
 
-            {/* Información y acciones */}
+            {/* InformaciÃ³n y acciones */}
             <div className="grid md:grid-cols-2 gap-6">
-              {/* Información */}
+              {/* InformaciÃ³n */}
               <Card className="border-blue-200 bg-blue-50">
                 <CardContent className="pt-6">
                   <div className="flex items-start gap-3 mb-4">
                     <Info className="h-6 w-6 text-blue-600 mt-0.5 flex-shrink-0" />
                     <div>
-                      <h4 className="font-bold text-blue-900 mb-2 text-lg">¿Cómo funciona?</h4>
+                      <h4 className="font-bold text-blue-900 mb-2 text-lg">Â¿CÃ³mo funciona?</h4>
                       <ul className="text-sm text-blue-800 space-y-2">
                         <li className="flex items-start gap-2">
                           <CheckCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                          <span>Se guardan automáticamente todas las conversaciones del Chat AI</span>
+                          <span>Se guardan automÃ¡ticamente todas las conversaciones del Chat AI</span>
                         </li>
                         <li className="flex items-start gap-2">
                           <CheckCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                          <span>Incluye pregunta, respuesta, contexto usado y métricas</span>
+                          <span>Incluye pregunta, respuesta, contexto usado y mÃ©tricas</span>
                         </li>
                         <li className="flex items-start gap-2">
                           <CheckCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                          <span>Puedes calificarlas después para filtrar las mejores</span>
+                          <span>Puedes calificarlas despuÃ©s para filtrar las mejores</span>
                         </li>
                         <li className="flex items-start gap-2">
                           <CheckCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
@@ -650,10 +650,10 @@ export function EntrenamientoMejorado() {
                 </CardContent>
               </Card>
 
-              {/* Acciones rápidas */}
+              {/* Acciones rÃ¡pidas */}
               <Card className="border-gray-200">
                 <CardContent className="pt-6">
-                  <h4 className="font-bold text-gray-900 mb-4 text-lg">Acciones Rápidas</h4>
+                  <h4 className="font-bold text-gray-900 mb-4 text-lg">Acciones RÃ¡pidas</h4>
                   <div className="space-y-3">
                     <Button
                       onClick={handleRecoleccionAutomatica}
@@ -689,12 +689,12 @@ export function EntrenamientoMejorado() {
               </Card>
             </div>
 
-            {/* Estadísticas de recolección - Mejorado */}
+            {/* EstadÃ­sticas de recolecciÃ³n - Mejorado */}
             {metricas && (
               <Card className="border-gray-200 shadow-sm">
                 <CardContent className="pt-6">
                   <div className="flex items-center justify-between mb-6">
-                    <h4 className="text-xl font-bold text-gray-900">Estadísticas de Recolección</h4>
+                    <h4 className="text-xl font-bold text-gray-900">EstadÃ­sticas de RecolecciÃ³n</h4>
                     <Badge variant="outline" className="bg-gray-50">
                       Actualizado
                     </Badge>
@@ -708,7 +708,7 @@ export function EntrenamientoMejorado() {
                     <div className="p-4 bg-purple-50 rounded-xl border border-purple-200">
                       <p className="text-xs font-semibold text-purple-700 uppercase tracking-wide mb-2">Calificadas</p>
                       <p className="text-3xl font-bold text-purple-900">{metricas.conversaciones.con_calificacion}</p>
-                      <p className="text-xs text-purple-600 mt-1">con calificación</p>
+                      <p className="text-xs text-purple-600 mt-1">con calificaciÃ³n</p>
                     </div>
                     <div className="p-4 bg-green-50 rounded-xl border border-green-200">
                       <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-2">Listas</p>
@@ -742,23 +742,23 @@ export function EntrenamientoMejorado() {
                     <Target className="h-6 w-6 text-white" />
                   </div>
                   <div className="flex-1">
-                    <h2 className="text-2xl font-bold text-gray-900 mb-2">Análisis de Calidad de Datos</h2>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">AnÃ¡lisis de Calidad de Datos</h2>
                     <p className="text-gray-700">
-                      Analiza la calidad de tus conversaciones para identificar áreas de mejora y optimizar el entrenamiento.
+                      Analiza la calidad de tus conversaciones para identificar Ã¡reas de mejora y optimizar el entrenamiento.
                     </p>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Botón de análisis */}
+            {/* BotÃ³n de anÃ¡lisis */}
             <Card className="border-purple-200">
               <CardContent className="pt-6">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                   <div>
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">Iniciar Análisis</h3>
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">Iniciar AnÃ¡lisis</h3>
                     <p className="text-gray-600">
-                      Ejecuta un análisis completo de la calidad de tus conversaciones recolectadas
+                      Ejecuta un anÃ¡lisis completo de la calidad de tus conversaciones recolectadas
                     </p>
                   </div>
                   <Button
@@ -783,14 +783,14 @@ export function EntrenamientoMejorado() {
               </CardContent>
             </Card>
 
-            {/* Resultados del análisis */}
+            {/* Resultados del anÃ¡lisis */}
             {analisisCalidad && (
               <div className="space-y-6">
                 <Card className="border-green-200 bg-gradient-to-br from-green-50 to-emerald-50 shadow-md">
                   <CardContent className="pt-6">
                     <div className="flex items-center gap-3 mb-6">
                       <CheckCircle className="h-6 w-6 text-green-600" />
-                      <h4 className="text-xl font-bold text-gray-900">Métricas de Calidad</h4>
+                      <h4 className="text-xl font-bold text-gray-900">MÃ©tricas de Calidad</h4>
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <div className="p-4 bg-white rounded-xl border border-green-200">
@@ -865,7 +865,7 @@ export function EntrenamientoMejorado() {
                     <h2 className="text-2xl font-bold text-gray-900 mb-2">Editor de Prompt Personalizado</h2>
                     <p className="text-gray-700">
                       Personaliza el prompt del AI para ajustar su comportamiento, tono y capacidades.
-                      El prompt personalizado reemplazará al prompt por defecto.
+                      El prompt personalizado reemplazarÃ¡ al prompt por defecto.
                     </p>
                   </div>
                 </div>

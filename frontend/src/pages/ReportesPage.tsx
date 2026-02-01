@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
+import { Badge } from '../components/ui/badge'
 
 export function ReportesPage() {
   const [loading, setLoading] = useState(false)
@@ -18,7 +18,7 @@ export function ReportesPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Reportes</h1>
           <p className="text-muted-foreground">
-            Generación de reportes y análisis
+            GeneraciÃ³n de reportes y anÃ¡lisis
           </p>
         </div>
         <Badge variant="outline" className="text-sm">
@@ -34,15 +34,15 @@ export function ReportesPage() {
           </CardHeader>
           <CardContent>
             <div className="text-center py-8">
-              <div className="text-6xl mb-4">📈</div>
-              <h3 className="text-xl font-semibold mb-2">Página en Desarrollo</h3>
+              <div className="text-6xl mb-4">ðŸ“ˆ</div>
+              <h3 className="text-xl font-semibold mb-2">PÃ¡gina en Desarrollo</h3>
               <p className="text-muted-foreground mb-4">
-                Esta funcionalidad está siendo implementada y estará disponible próximamente.
+                Esta funcionalidad estÃ¡ siendo implementada y estarÃ¡ disponible prÃ³ximamente.
               </p>
               <div className="space-y-2 text-sm text-muted-foreground">
-                <p>• Reportes PDF</p>
-                <p>• Análisis de datos</p>
-                <p>• Exportación Excel</p>
+                <p>â€¢ Reportes PDF</p>
+                <p>â€¢ AnÃ¡lisis de datos</p>
+                <p>â€¢ ExportaciÃ³n Excel</p>
               </div>
             </div>
           </CardContent>

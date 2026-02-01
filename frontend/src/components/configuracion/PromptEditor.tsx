@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
 import { FileText, Save, RotateCcw, Loader2, AlertCircle, Copy, Edit, Trash2 } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Badge } from '@/components/ui/badge'
+import { Card, CardContent } from '../../components/ui/card'
+import { Button } from '../../components/ui/button'
+import { Input } from '../../components/ui/input'
+import { Textarea } from '../../components/ui/textarea'
+import { Badge } from '../../components/ui/badge'
 import { toast } from 'sonner'
-import { apiClient } from '@/services/api'
+import { apiClient } from '../../services/api'
 
 export function PromptEditor() {
   const [promptPersonalizado, setPromptPersonalizado] = useState('')
@@ -70,7 +70,7 @@ export function PromptEditor() {
       await apiClient.put('/api/v1/configuracion/ai/prompt', {
         prompt: promptPersonalizado
       })
-      toast.success('✅ Prompt personalizado guardado exitosamente')
+      toast.success('âœ… Prompt personalizado guardado exitosamente')
       await cargarPrompt()
     } catch (error: any) {
       console.error('Error guardando prompt:', error)
@@ -82,7 +82,7 @@ export function PromptEditor() {
   }
 
   const handleRestaurarDefault = async () => {
-    if (!confirm('¿Estás seguro de restaurar el prompt por defecto? Se perderá el prompt personalizado.')) {
+    if (!confirm('Â¿EstÃ¡s seguro de restaurar el prompt por defecto? Se perderÃ¡ el prompt personalizado.')) {
       return
     }
 
@@ -91,7 +91,7 @@ export function PromptEditor() {
       await apiClient.put('/api/v1/configuracion/ai/prompt', {
         prompt: ''
       })
-      toast.success('✅ Prompt restaurado al valor por defecto')
+      toast.success('âœ… Prompt restaurado al valor por defecto')
       await cargarPrompt()
     } catch (error: any) {
       console.error('Error restaurando prompt:', error)
@@ -117,7 +117,7 @@ export function PromptEditor() {
       setVariablesPersonalizadas(data.variables || [])
     } catch (error) {
       console.error('Error cargando variables:', error)
-      // No mostrar error si la tabla no existe aún
+      // No mostrar error si la tabla no existe aÃºn
     } finally {
       setCargandoVariables(false)
     }
@@ -125,7 +125,7 @@ export function PromptEditor() {
 
   const handleCrearVariable = async () => {
     if (!nuevaVariable.variable.trim() || !nuevaVariable.descripcion.trim()) {
-      toast.error('Variable y descripción son requeridos')
+      toast.error('Variable y descripciÃ³n son requeridos')
       return
     }
 
@@ -167,7 +167,7 @@ export function PromptEditor() {
 
   const handleActualizarVariable = async (id: number) => {
     if (!variableEditada.variable.trim() || !variableEditada.descripcion.trim()) {
-      toast.error('Variable y descripción son requeridos')
+      toast.error('Variable y descripciÃ³n son requeridos')
       return
     }
 
@@ -193,7 +193,7 @@ export function PromptEditor() {
   }
 
   const handleEliminarVariable = async (id: number) => {
-    if (!confirm('¿Estás seguro de eliminar esta variable?')) return
+    if (!confirm('Â¿EstÃ¡s seguro de eliminar esta variable?')) return
 
     try {
       await apiClient.delete(`/api/v1/configuracion/ai/prompt/variables/${id}`)
@@ -223,22 +223,22 @@ export function PromptEditor() {
     toast.success('Placeholders copiados al portapapeles')
   }
 
-  const promptTemplate = `Eres un ANALISTA ESPECIALIZADO en préstamos y cobranzas con capacidad de análisis de KPIs operativos. Tu función es proporcionar información precisa, análisis de tendencias y métricas clave basándote EXCLUSIVAMENTE en los datos almacenados en las bases de datos del sistema.
+  const promptTemplate = `Eres un ANALISTA ESPECIALIZADO en prÃ©stamos y cobranzas con capacidad de anÃ¡lisis de KPIs operativos. Tu funciÃ³n es proporcionar informaciÃ³n precisa, anÃ¡lisis de tendencias y mÃ©tricas clave basÃ¡ndote EXCLUSIVAMENTE en los datos almacenados en las bases de datos del sistema.
 
 ROL Y CONTEXTO:
-- Eres un analista especializado en préstamos y cobranzas con capacidad de análisis de KPIs operativos
-- Tu función es proporcionar información precisa, análisis de tendencias y métricas clave
+- Eres un analista especializado en prÃ©stamos y cobranzas con capacidad de anÃ¡lisis de KPIs operativos
+- Tu funciÃ³n es proporcionar informaciÃ³n precisa, anÃ¡lisis de tendencias y mÃ©tricas clave
 - Basas tus respuestas EXCLUSIVAMENTE en los datos almacenados en las bases de datos del sistema
-- Tienes acceso a información en tiempo real de la base de datos del sistema
-- Proporcionas análisis, estadísticas y recomendaciones basadas en datos reales
+- Tienes acceso a informaciÃ³n en tiempo real de la base de datos del sistema
+- Proporcionas anÃ¡lisis, estadÃ­sticas y recomendaciones basadas en datos reales
 - Eres profesional, claro y preciso en tus respuestas
-- Proporcionas respuestas accionables con contexto e interpretación
+- Proporcionas respuestas accionables con contexto e interpretaciÃ³n
 
-RESTRICCIÓN IMPORTANTE: Solo puedes responder preguntas relacionadas con la base de datos del sistema. Si recibes una pregunta que NO esté relacionada con clientes, préstamos, pagos, cuotas, cobranzas, moras, estadísticas del sistema, o la fecha/hora actual, debes responder:
+RESTRICCIÃ“N IMPORTANTE: Solo puedes responder preguntas relacionadas con la base de datos del sistema. Si recibes una pregunta que NO estÃ© relacionada con clientes, prÃ©stamos, pagos, cuotas, cobranzas, moras, estadÃ­sticas del sistema, o la fecha/hora actual, debes responder:
 
-"Lo siento, el Chat AI solo responde preguntas sobre la base de datos del sistema (clientes, préstamos, pagos, cuotas, cobranzas, moras, estadísticas, etc.). Para preguntas generales, por favor usa el Chat de Prueba en la configuración de AI."
+"Lo siento, el Chat AI solo responde preguntas sobre la base de datos del sistema (clientes, prÃ©stamos, pagos, cuotas, cobranzas, moras, estadÃ­sticas, etc.). Para preguntas generales, por favor usa el Chat de Prueba en la configuraciÃ³n de AI."
 
-Tienes acceso a información de la base de datos del sistema y a la fecha/hora actual. Aquí tienes un resumen actualizado:
+Tienes acceso a informaciÃ³n de la base de datos del sistema y a la fecha/hora actual. AquÃ­ tienes un resumen actualizado:
 
 === RESUMEN DE BASE DE DATOS ===
 {resumen_bd}
@@ -246,40 +246,40 @@ Tienes acceso a información de la base de datos del sistema y a la fecha/hora a
 {datos_adicionales}
 {info_esquema}
 
-[El sistema incluirá automáticamente el inventario completo de campos, mapeo semántico, y documentos de contexto]
+[El sistema incluirÃ¡ automÃ¡ticamente el inventario completo de campos, mapeo semÃ¡ntico, y documentos de contexto]
 
 === DOCUMENTOS DE CONTEXTO ADICIONAL ===
 {contexto_documentos}
-NOTA: Si hay documentos de contexto arriba, úsalos como información adicional para responder preguntas. Los documentos pueden contener políticas, procedimientos, o información relevante sobre el sistema.
+NOTA: Si hay documentos de contexto arriba, Ãºsalos como informaciÃ³n adicional para responder preguntas. Los documentos pueden contener polÃ­ticas, procedimientos, o informaciÃ³n relevante sobre el sistema.
 
 CAPACIDADES PRINCIPALES:
-1. **Consulta de datos individuales**: Información de préstamos, clientes y pagos específicos
-2. **Análisis de KPIs**: Morosidad, recuperación, cartera en riesgo, efectividad de cobranza
-3. **Análisis de tendencias**: Comparaciones temporales (aumentos/disminuciones)
-4. **Proyecciones operativas**: Cuánto se debe cobrar hoy, esta semana, este mes
-5. **Segmentación**: Análisis por rangos de mora, montos, productos, zonas
-6. **Análisis de Machine Learning**: Predicción de morosidad, segmentación de clientes, detección de anomalías, clustering de préstamos
+1. **Consulta de datos individuales**: InformaciÃ³n de prÃ©stamos, clientes y pagos especÃ­ficos
+2. **AnÃ¡lisis de KPIs**: Morosidad, recuperaciÃ³n, cartera en riesgo, efectividad de cobranza
+3. **AnÃ¡lisis de tendencias**: Comparaciones temporales (aumentos/disminuciones)
+4. **Proyecciones operativas**: CuÃ¡nto se debe cobrar hoy, esta semana, este mes
+5. **SegmentaciÃ³n**: AnÃ¡lisis por rangos de mora, montos, productos, zonas
+6. **AnÃ¡lisis de Machine Learning**: PredicciÃ³n de morosidad, segmentaciÃ³n de clientes, detecciÃ³n de anomalÃ­as, clustering de prÃ©stamos
 
 REGLAS FUNDAMENTALES:
-1. **SOLO usa datos reales**: Accede a los índices de las bases de datos y consulta los campos específicos necesarios
-2. **NUNCA inventes información**: Si un dato no existe en la base de datos, indica claramente que no está disponible
-3. **Muestra tus cálculos**: Cuando calcules KPIs, indica la fórmula y los valores utilizados
-4. **Compara con contexto**: Para tendencias, muestra período actual vs período anterior
-5. **Respuestas accionables**: Incluye el "¿qué significa esto?" cuando sea relevante
-6. **SOLO responde preguntas sobre la base de datos del sistema relacionadas con cobranzas y préstamos**
-7. Si la pregunta NO es sobre la BD, responde con el mensaje de restricción mencionado arriba
+1. **SOLO usa datos reales**: Accede a los Ã­ndices de las bases de datos y consulta los campos especÃ­ficos necesarios
+2. **NUNCA inventes informaciÃ³n**: Si un dato no existe en la base de datos, indica claramente que no estÃ¡ disponible
+3. **Muestra tus cÃ¡lculos**: Cuando calcules KPIs, indica la fÃ³rmula y los valores utilizados
+4. **Compara con contexto**: Para tendencias, muestra perÃ­odo actual vs perÃ­odo anterior
+5. **Respuestas accionables**: Incluye el "Â¿quÃ© significa esto?" cuando sea relevante
+6. **SOLO responde preguntas sobre la base de datos del sistema relacionadas con cobranzas y prÃ©stamos**
+7. Si la pregunta NO es sobre la BD, responde con el mensaje de restricciÃ³n mencionado arriba
 
-PROCESO DE ANÁLISIS:
-1. Identifica qué métrica o análisis solicita el usuario
-2. Determina qué tabla(s), campo(s) y período de tiempo necesitas
-3. Accede a los datos y realiza los cálculos necesarios
-4. Compara con períodos anteriores si es relevante
+PROCESO DE ANÃLISIS:
+1. Identifica quÃ© mÃ©trica o anÃ¡lisis solicita el usuario
+2. Determina quÃ© tabla(s), campo(s) y perÃ­odo de tiempo necesitas
+3. Accede a los datos y realiza los cÃ¡lculos necesarios
+4. Compara con perÃ­odos anteriores si es relevante
 5. Presenta resultados con contexto y conclusiones claras
 
 OBJETIVO:
-Tu objetivo es ser el asistente analítico que permita tomar decisiones informadas sobre la gestión de préstamos y cobranzas, proporcionando análisis precisos, tendencias claras y métricas accionables basadas exclusivamente en los datos reales del sistema.
+Tu objetivo es ser el asistente analÃ­tico que permita tomar decisiones informadas sobre la gestiÃ³n de prÃ©stamos y cobranzas, proporcionando anÃ¡lisis precisos, tendencias claras y mÃ©tricas accionables basadas exclusivamente en los datos reales del sistema.
 
-RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el mensaje de restricción.`
+RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el mensaje de restricciÃ³n.`
 
   if (cargandoPrompt) {
     return (
@@ -299,8 +299,8 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
           </h3>
           <p className="text-sm text-gray-600 mt-1">
             {tienePromptPersonalizado
-              ? '✅ Usando prompt personalizado'
-              : 'ℹ️ Usando prompt por defecto'}
+              ? 'âœ… Usando prompt personalizado'
+              : 'â„¹ï¸ Usando prompt por defecto'}
           </p>
         </div>
         <div className="flex gap-2">
@@ -350,15 +350,15 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
               </Button>
             </div>
             <p className="text-sm text-amber-800 mb-2">
-              El sistema reemplazará automáticamente estos placeholders con datos reales:
+              El sistema reemplazarÃ¡ automÃ¡ticamente estos placeholders con datos reales:
             </p>
 
             {/* Placeholders predeterminados */}
             <div className="bg-white rounded p-3 font-mono text-xs space-y-1 mb-3">
               <div className="font-semibold text-amber-900 mb-1">Predeterminados:</div>
               <div><code className="text-blue-600">{'{resumen_bd}'}</code> - Resumen de la base de datos</div>
-              <div><code className="text-blue-600">{'{info_cliente_buscado}'}</code> - Información del cliente si se busca por cédula</div>
-              <div><code className="text-blue-600">{'{datos_adicionales}'}</code> - Cálculos y análisis adicionales</div>
+              <div><code className="text-blue-600">{'{info_cliente_buscado}'}</code> - InformaciÃ³n del cliente si se busca por cÃ©dula</div>
+              <div><code className="text-blue-600">{'{datos_adicionales}'}</code> - CÃ¡lculos y anÃ¡lisis adicionales</div>
               <div><code className="text-blue-600">{'{info_esquema}'}</code> - Esquema completo de la base de datos</div>
               <div><code className="text-blue-600">{'{contexto_documentos}'}</code> - Documentos de contexto adicionales</div>
             </div>
@@ -375,12 +375,12 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
               </div>
             )}
 
-            {/* Gestión de Variables Personalizadas */}
+            {/* GestiÃ³n de Variables Personalizadas */}
             {mostrarGestionVariables && (
               <div className="bg-white rounded-lg p-4 border border-amber-300 mt-3">
                 <h4 className="font-semibold mb-3 flex items-center gap-2">
                   <FileText className="h-4 w-4" />
-                  Gestión de Variables Personalizadas
+                  GestiÃ³n de Variables Personalizadas
                 </h4>
 
                 {/* Formulario para nueva variable */}
@@ -394,14 +394,14 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                       placeholder="Ej: {mi_variable} o mi_variable"
                       className="font-mono text-xs"
                     />
-                    <p className="text-xs text-gray-500 mt-1">Se agregarán llaves automáticamente si no las incluyes</p>
+                    <p className="text-xs text-gray-500 mt-1">Se agregarÃ¡n llaves automÃ¡ticamente si no las incluyes</p>
                   </div>
                   <div>
-                    <label className="text-xs font-medium block mb-1">Descripción <span className="text-red-500">*</span></label>
+                    <label className="text-xs font-medium block mb-1">DescripciÃ³n <span className="text-red-500">*</span></label>
                     <Input
                       value={nuevaVariable.descripcion}
                       onChange={(e) => setNuevaVariable(prev => ({ ...prev, descripcion: e.target.value }))}
-                      placeholder="Describe qué contiene esta variable"
+                      placeholder="Describe quÃ© contiene esta variable"
                       className="text-xs"
                     />
                   </div>
@@ -451,7 +451,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                               />
                             </div>
                             <div>
-                              <label className="text-xs font-medium block mb-1">Descripción</label>
+                              <label className="text-xs font-medium block mb-1">DescripciÃ³n</label>
                               <Input
                                 value={variableEditada.descripcion}
                                 onChange={(e) => setVariableEditada(prev => ({ ...prev, descripcion: e.target.value }))}
@@ -569,7 +569,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
         <Textarea
           value={promptPersonalizado}
           onChange={(e) => setPromptPersonalizado(e.target.value)}
-          placeholder="Escribe tu prompt personalizado aquí. Asegúrate de incluir los placeholders: {resumen_bd}, {info_cliente_buscado}, {datos_adicionales}, {info_esquema}, {contexto_documentos}"
+          placeholder="Escribe tu prompt personalizado aquÃ­. AsegÃºrate de incluir los placeholders: {resumen_bd}, {info_cliente_buscado}, {datos_adicionales}, {info_esquema}, {contexto_documentos}"
           className="font-mono text-sm min-h-[500px]"
         />
         <p className="text-xs text-gray-500 mt-2">
@@ -579,9 +579,9 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <p className="text-sm text-blue-800">
-          💡 <strong>Tip:</strong> Puedes personalizar el comportamiento del AI ajustando el prompt.
-          Los placeholders se reemplazarán automáticamente con datos reales del sistema.
-          Si dejas el prompt vacío, se usará el prompt por defecto.
+          ðŸ’¡ <strong>Tip:</strong> Puedes personalizar el comportamiento del AI ajustando el prompt.
+          Los placeholders se reemplazarÃ¡n automÃ¡ticamente con datos reales del sistema.
+          Si dejas el prompt vacÃ­o, se usarÃ¡ el prompt por defecto.
         </p>
       </div>
     </div>

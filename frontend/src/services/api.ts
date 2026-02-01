@@ -1,7 +1,7 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, AxiosProgressEvent, AxiosResponse } from 'axios'
 import toast from 'react-hot-toast'
-import { getErrorMessage, isAxiosError } from '@/types/errors'
-import { env } from '@/config/env'
+import { getErrorMessage, isAxiosError } from '../types/errors'
+import { env } from '../config/env'
 import {
   safeGetItem,
   safeGetSessionItem,
@@ -10,7 +10,7 @@ import {
   safeRemoveItem,
   safeRemoveSessionItem,
   clearAuthStorage
-} from '@/utils/storage'
+} from '../utils/storage'
 
 const safeClear = () => {
   try {

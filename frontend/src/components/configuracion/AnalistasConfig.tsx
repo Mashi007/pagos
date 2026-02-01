@@ -12,13 +12,13 @@ import {
   Loader2,
   RefreshCw
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Analista, AnalistaCreate, AnalistaUpdate } from '@/services/analistaService'
-import { useAnalistasActivos, useCreateAnalista, useUpdateAnalista, useDeleteAnalista } from '@/hooks/useAnalistas'
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
+import { Button } from '../../components/ui/button'
+import { Input } from '../../components/ui/input'
+import { Badge } from '../../components/ui/badge'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
+import { Analista, AnalistaCreate, AnalistaUpdate } from '../../services/analistaService'
+import { useAnalistasActivos, useCreateAnalista, useUpdateAnalista, useDeleteAnalista } from '../../hooks/useAnalistas'
 import toast from 'react-hot-toast'
 
 export function AnalistasConfig() {
@@ -33,7 +33,7 @@ export function AnalistasConfig() {
   })
   const [archivoExcel, setArchivoExcel] = useState<File | null>(null)
 
-  // Función para obtener fecha de hoy
+  // FunciÃ³n para obtener fecha de hoy
   const getTodayDate = () => {
     const today = new Date()
     return today.toISOString().split('T')[0]
@@ -59,18 +59,18 @@ export function AnalistasConfig() {
           id: editingAnalista.id,
           data: formData
         })
-        toast.success('✅ Analista actualizado exitosamente')
+        toast.success('âœ… Analista actualizado exitosamente')
       } else {
         await createAnalistaMutation.mutateAsync(formData)
-        toast.success('✅ Analista creado exitosamente')
+        toast.success('âœ… Analista creado exitosamente')
       }
 
       resetForm()
-      // Refrescar la lista automáticamente
+      // Refrescar la lista automÃ¡ticamente
       refetch()
     } catch (err) {
       console.error('Error al guardar analista:', err)
-      toast.error('❌ Error al guardar analista')
+      toast.error('âŒ Error al guardar analista')
     }
   }
 
@@ -87,8 +87,8 @@ export function AnalistasConfig() {
   const handleDelete = async (id: number) => {
     try {
       const confirmar = window.confirm(
-        '⚠️ ¿Estás seguro de que quieres ELIMINAR este analista?\n\n' +
-        'Esta acción NO se puede deshacer.'
+        'âš ï¸ Â¿EstÃ¡s seguro de que quieres ELIMINAR este analista?\n\n' +
+        'Esta acciÃ³n NO se puede deshacer.'
       )
 
       if (!confirmar) {
@@ -96,12 +96,12 @@ export function AnalistasConfig() {
       }
 
       await deleteAnalistaMutation.mutateAsync(id)
-      toast.success('✅ Analista eliminado exitosamente')
-      // Refrescar la lista automáticamente
+      toast.success('âœ… Analista eliminado exitosamente')
+      // Refrescar la lista automÃ¡ticamente
       refetch()
     } catch (err) {
       console.error('Error al eliminar analista:', err)
-      toast.error('❌ Error al eliminar analista')
+      toast.error('âŒ Error al eliminar analista')
     }
   }
 
@@ -118,7 +118,7 @@ export function AnalistasConfig() {
     refetch()
   }
 
-  // Filtrar analistas por término de búsqueda
+  // Filtrar analistas por tÃ©rmino de bÃºsqueda
   const filteredAnalistas = analistas?.filter((analista: Analista) =>
     analista.nombre.toLowerCase().includes(searchTerm.toLowerCase())
   ) || []
@@ -153,7 +153,7 @@ export function AnalistasConfig() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Configuración de Analistas</h2>
+          <h2 className="text-2xl font-bold tracking-tight">ConfiguraciÃ³n de Analistas</h2>
           <p className="text-muted-foreground">
             Gestiona los analistas del sistema
           </p>
@@ -264,7 +264,7 @@ export function AnalistasConfig() {
                   className="bg-gray-100 text-gray-600"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  La fecha se establece automáticamente al día de hoy
+                  La fecha se establece automÃ¡ticamente al dÃ­a de hoy
                 </p>
               </div>
 
@@ -307,7 +307,7 @@ export function AnalistasConfig() {
                 <TableHead>ID</TableHead>
                 <TableHead>Analista</TableHead>
                 <TableHead>Estado</TableHead>
-                <TableHead>Fecha Creación</TableHead>
+                <TableHead>Fecha CreaciÃ³n</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
@@ -371,7 +371,7 @@ export function AnalistasConfig() {
         </CardContent>
       </Card>
 
-      {/* Importación desde Excel */}
+      {/* ImportaciÃ³n desde Excel */}
       <Card>
         <CardHeader>
           <CardTitle>Importar Analistas (Excel)</CardTitle>
@@ -395,7 +395,7 @@ export function AnalistasConfig() {
               Examinar...
             </label>
             <span className="text-sm text-gray-600">
-              {archivoExcel ? archivoExcel.name : 'No se ha seleccionado ningún archivo.'}
+              {archivoExcel ? archivoExcel.name : 'No se ha seleccionado ningÃºn archivo.'}
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -404,7 +404,7 @@ export function AnalistasConfig() {
               onClick={async () => {
                 if (!archivoExcel) return
                 try {
-                  const svc = (await import('@/services/analistaService')).analistaService
+                  const svc = (await import('../../services/analistaService')).analistaService
                   const res = await svc.importarDesdeExcel(archivoExcel)
                   const msg = `Importado: ${res.creados} creados, ${res.actualizados} actualizados`
                   if (res.errores && res.errores.length > 0) {
@@ -419,7 +419,7 @@ export function AnalistasConfig() {
                   if (fileInput) fileInput.value = ''
                   await refetch()
                 } catch (err: unknown) {
-                  const { getErrorMessage, getErrorDetail } = await import('@/types/errors')
+                  const { getErrorMessage, getErrorDetail } = await import('../../types/errors')
                   let errorMessage = getErrorMessage(err)
                   const detail = getErrorDetail(err)
                   if (detail) {

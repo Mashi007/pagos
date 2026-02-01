@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react'
 import { X, CheckCircle, XCircle, Loader2, Search, Filter, Zap, AlertCircle } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Badge } from '@/components/ui/badge'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { Card, CardContent } from '../../components/ui/card'
+import { Button } from '../../components/ui/button'
+import { Input } from '../../components/ui/input'
+import { Textarea } from '../../components/ui/textarea'
+import { Badge } from '../../components/ui/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../../components/ui/dialog'
 import { toast } from 'sonner'
-import { apiClient } from '@/services/api'
+import { apiClient } from '../../services/api'
 
 interface CalificacionChat {
   id: number
@@ -80,14 +80,14 @@ export function CalificacionesChatTab() {
         `/api/v1/configuracion/ai/chat/calificaciones/${calificacionSeleccionada.id}/procesar`,
         { notas: notasProcesamiento }
       )
-      toast.success('Calificación marcada como procesada')
+      toast.success('CalificaciÃ³n marcada como procesada')
       setMostrarModalProcesar(false)
       setCalificacionSeleccionada(null)
       setNotasProcesamiento('')
       cargarCalificaciones()
     } catch (error: any) {
-      console.error('Error procesando calificación:', error)
-      toast.error(error?.response?.data?.detail || 'Error al procesar calificación')
+      console.error('Error procesando calificaciÃ³n:', error)
+      toast.error(error?.response?.data?.detail || 'Error al procesar calificaciÃ³n')
     } finally {
       setProcesando(false)
     }
@@ -110,7 +110,7 @@ export function CalificacionesChatTab() {
             Calificaciones del Chat AI
           </h3>
           <p className="text-sm text-gray-600 mt-1">
-            Revisa las respuestas con pulgar abajo para mejorar la precisión del sistema
+            Revisa las respuestas con pulgar abajo para mejorar la precisiÃ³n del sistema
           </p>
         </div>
       </div>
@@ -133,7 +133,7 @@ export function CalificacionesChatTab() {
             <Select value={filtroCalificacion} onValueChange={setFiltroCalificacion}>
               <SelectTrigger className="w-48">
                 <Filter className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="Calificación" />
+                <SelectValue placeholder="CalificaciÃ³n" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todas">Todas</SelectItem>
@@ -167,7 +167,7 @@ export function CalificacionesChatTab() {
             <p className="text-gray-600">
               {busqueda || filtroCalificacion !== 'todas' || filtroProcesado !== 'todas'
                 ? 'No se encontraron calificaciones con los filtros aplicados'
-                : 'No hay calificaciones registradas aún'}
+                : 'No hay calificaciones registradas aÃºn'}
             </p>
           </CardContent>
         </Card>
@@ -255,10 +255,10 @@ export function CalificacionesChatTab() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Zap className="h-5 w-5 text-blue-600" />
-              Procesar Calificación Negativa
+              Procesar CalificaciÃ³n Negativa
             </DialogTitle>
             <DialogDescription>
-              Analiza esta interacción para mejorar el sistema
+              Analiza esta interacciÃ³n para mejorar el sistema
             </DialogDescription>
           </DialogHeader>
 
@@ -281,7 +281,7 @@ export function CalificacionesChatTab() {
                 <Textarea
                   value={notasProcesamiento}
                   onChange={(e) => setNotasProcesamiento(e.target.value)}
-                  placeholder="Describe qué se mejoró o qué acciones se tomaron para evitar este error en el futuro..."
+                  placeholder="Describe quÃ© se mejorÃ³ o quÃ© acciones se tomaron para evitar este error en el futuro..."
                   rows={4}
                 />
               </div>

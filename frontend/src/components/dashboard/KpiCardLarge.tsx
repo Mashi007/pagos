@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { formatCurrency } from '@/utils'
+import { formatCurrency } from '../../utils'
 import { TrendingUp, TrendingDown } from 'lucide-react'
 
 interface KpiCardLargeProps {
@@ -44,11 +44,11 @@ export function KpiCardLarge({
     }
   }
 
-  // ✅ Tamaños balanceados para evitar desbordes
+  // âœ… TamaÃ±os balanceados para evitar desbordes
   const textSize = size === 'large' ? 'text-3xl md:text-4xl' : 'text-2xl md:text-3xl'
   const cardHeight = size === 'large' ? 'min-h-[200px]' : 'min-h-[170px]'
-  const titleSize = 'text-sm md:text-base' // Título más legible
-  const variationSize = 'text-sm md:text-base' // Variación más visible
+  const titleSize = 'text-sm md:text-base' // TÃ­tulo mÃ¡s legible
+  const variationSize = 'text-sm md:text-base' // VariaciÃ³n mÃ¡s visible
 
   return (
     <motion.div
@@ -70,7 +70,7 @@ export function KpiCardLarge({
         group
       `}
     >
-      {/* Borde superior decorativo más prominente */}
+      {/* Borde superior decorativo mÃ¡s prominente */}
       <div className={`absolute top-0 left-0 right-0 h-1.5 ${bgColor} opacity-90`}></div>
 
       {/* Gradiente sutil de fondo */}
@@ -79,7 +79,7 @@ export function KpiCardLarge({
       ></div>
 
       <div className="relative z-10 p-5 md:p-6 h-full flex flex-col">
-        {/* Header con icono y título mejorado */}
+        {/* Header con icono y tÃ­tulo mejorado */}
         <div className="flex items-start justify-between mb-3 md:mb-4">
           <div className="flex items-center space-x-3 flex-1 min-w-0">
             <div className={`p-2.5 md:p-3 rounded-xl ${bgColor} border-2 border-white/50 shadow-lg flex-shrink-0`}>
@@ -99,7 +99,7 @@ export function KpiCardLarge({
             {formatValue()}
           </div>
 
-          {/* Variación mejorada con icono y mejor diseño */}
+          {/* VariaciÃ³n mejorada con icono y mejor diseÃ±o */}
           {variation && variation.percent !== undefined && typeof variation.percent === 'number' && (
             <div className="flex items-center gap-2 mt-3">
               <div className={`flex items-center gap-1 px-2 py-1 rounded-md ${
@@ -133,7 +133,7 @@ export function KpiCardLarge({
           </div>
         )}
 
-        {/* Decoración sutil en la esquina inferior */}
+        {/* DecoraciÃ³n sutil en la esquina inferior */}
         <div className={`absolute bottom-0 right-0 w-20 h-20 ${bgColor} opacity-5 rounded-tl-full -mr-10 -mb-10`}></div>
       </div>
     </motion.div>

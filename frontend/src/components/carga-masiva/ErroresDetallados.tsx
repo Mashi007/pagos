@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { AlertTriangle, Download, CheckCircle, XCircle, FileSpreadsheet, ChevronDown, ChevronRight } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { AlertWithIcon } from '@/components/ui/alert'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
+import { Button } from '../../components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
+import { AlertWithIcon } from '../../components/ui/alert'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
+import { Badge } from '../../components/ui/badge'
 
-// Constantes de configuración
+// Constantes de configuraciÃ³n
 const ANIMATION_DELAY = 0.3
 const ROW_ANIMATION_DELAY = 0.05
 const GRID_COLS_LG = 2
@@ -89,12 +89,12 @@ export function ErroresDetallados({ errores, tipo, onDescargarErrores }: Errores
 
   const obtenerCorreccionPorTipo = (errorMsg: string): string => {
     const correcciones: Record<string, string> = {
-      cedula: 'Verificar formato de cédula venezolana (V12345678)',
+      cedula: 'Verificar formato de cÃ©dula venezolana (V12345678)',
       telefono: 'Formato: +5804123456789 o 04123456789',
-      email: 'Formato válido: usuario@dominio.com',
-      monto: 'Solo números, usar punto para decimales (ej: 108.50)',
+      email: 'Formato vÃ¡lido: usuario@dominio.com',
+      monto: 'Solo nÃºmeros, usar punto para decimales (ej: 108.50)',
       fecha: 'Formato: DD/MM/YYYY o YYYY-MM-DD',
-      'no encontrado': 'Primero cargar el cliente con esta cédula'
+      'no encontrado': 'Primero cargar el cliente con esta cÃ©dula'
     }
 
     for (const [key, value] of Object.entries(correcciones)) {
@@ -112,9 +112,9 @@ export function ErroresDetallados({ errores, tipo, onDescargarErrores }: Errores
 
   const obtenerTipoError = (errorMsg: string): string => {
     const tiposError: Record<string, string> = {
-      cedula: 'Cédula',
-      telefono: 'Teléfono',
-      móvil: 'Teléfono',
+      cedula: 'CÃ©dula',
+      telefono: 'TelÃ©fono',
+      mÃ³vil: 'TelÃ©fono',
       email: 'Email',
       monto: 'Monto',
       fecha: 'Fecha',
@@ -130,7 +130,7 @@ export function ErroresDetallados({ errores, tipo, onDescargarErrores }: Errores
       }
     }
 
-    return 'Validación'
+    return 'ValidaciÃ³n'
   }
 
   const getErrorType = (error: string): string => {
@@ -155,9 +155,9 @@ export function ErroresDetallados({ errores, tipo, onDescargarErrores }: Errores
                 <AlertTriangle className={`h-${ICON_SIZE} w-${ICON_SIZE} text-white`} />
               </div>
               <div>
-                <span className="text-lg font-bold">Errores Requieren Corrección Manual</span>
+                <span className="text-lg font-bold">Errores Requieren CorrecciÃ³n Manual</span>
                 <p className="text-sm font-normal text-red-600 mt-1">
-                  {errores.length} registros con problemas de validación
+                  {errores.length} registros con problemas de validaciÃ³n
                 </p>
               </div>
             </div>
@@ -186,8 +186,8 @@ export function ErroresDetallados({ errores, tipo, onDescargarErrores }: Errores
         <CardContent className={`space-y-${GRID_GAP}`}>
           <AlertWithIcon
             variant="destructive"
-            title={`${errores.length} registros requieren corrección manual`}
-            description="Estos registros no pudieron procesarse automáticamente. Descarga la lista para corregirlos y volver a cargar."
+            title={`${errores.length} registros requieren correcciÃ³n manual`}
+            description="Estos registros no pudieron procesarse automÃ¡ticamente. Descarga la lista para corregirlos y volver a cargar."
           />
 
           {/* Tabla de errores mejorada */}
@@ -196,10 +196,10 @@ export function ErroresDetallados({ errores, tipo, onDescargarErrores }: Errores
               <TableHeader className="bg-red-50">
                 <TableRow>
                   <TableHead className="text-red-800 font-semibold">Fila</TableHead>
-                  <TableHead className="text-red-800 font-semibold">Cédula</TableHead>
+                  <TableHead className="text-red-800 font-semibold">CÃ©dula</TableHead>
                   <TableHead className="text-red-800 font-semibold">Tipo de Error</TableHead>
-                  <TableHead className="text-red-800 font-semibold">Descripción</TableHead>
-                  <TableHead className="text-red-800 font-semibold">Acción</TableHead>
+                  <TableHead className="text-red-800 font-semibold">DescripciÃ³n</TableHead>
+                  <TableHead className="text-red-800 font-semibold">AcciÃ³n</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -274,7 +274,7 @@ export function ErroresDetallados({ errores, tipo, onDescargarErrores }: Errores
                   <div>
                     <h4 className="font-semibold text-gray-800 mb-3 flex items-center">
                       <CheckCircle className={`h-${ICON_SIZE_SMALL} w-${ICON_SIZE_SMALL} mr-2 text-green-500`} />
-                      Corrección Sugerida
+                      CorrecciÃ³n Sugerida
                     </h4>
                     <div className="bg-green-50 p-3 rounded-lg border border-green-200">
                       <p className="text-sm text-green-800">
@@ -291,14 +291,14 @@ export function ErroresDetallados({ errores, tipo, onDescargarErrores }: Errores
             <div className={`bg-gradient-to-r from-blue-50 to-blue-100 p-${GRID_GAP} rounded-lg border border-blue-200`}>
             <h4 className="font-bold text-blue-900 mb-4 flex items-center">
               <FileSpreadsheet className={`h-${ICON_SIZE} w-${ICON_SIZE} mr-2`} />
-              📋 Instrucciones para Corrección
+              ðŸ“‹ Instrucciones para CorrecciÃ³n
             </h4>
             <div className={`grid grid-cols-1 md:grid-cols-${GRID_COLS_MD} gap-${CARD_PADDING}`}>
               <div>
                 <h5 className="font-semibold text-blue-800 mb-2">Pasos a seguir:</h5>
                 <ol className="text-sm text-blue-700 space-y-2 list-decimal list-inside">
-                  <li>Descarga la lista de errores usando el botón "Lista de Correcciones"</li>
-                  <li>Corrige los datos en Excel según las sugerencias mostradas</li>
+                  <li>Descarga la lista de errores usando el botÃ³n "Lista de Correcciones"</li>
+                  <li>Corrige los datos en Excel segÃºn las sugerencias mostradas</li>
                   <li>Guarda el archivo corregido</li>
                   <li>Vuelve a cargar el archivo corregido</li>
                 </ol>
@@ -306,10 +306,10 @@ export function ErroresDetallados({ errores, tipo, onDescargarErrores }: Errores
               <div>
                 <h5 className="font-semibold text-blue-800 mb-2">Tipos de errores comunes:</h5>
                 <ul className="text-sm text-blue-700 space-y-1">
-                  <li>• <strong>Cédula:</strong> Formato V12345678</li>
-                  <li>• <strong>Teléfono:</strong> +5804123456789</li>
-                  <li>• <strong>Email:</strong> usuario@dominio.com</li>
-                  <li>• <strong>Monto:</strong> Solo números con punto decimal</li>
+                  <li>â€¢ <strong>CÃ©dula:</strong> Formato V12345678</li>
+                  <li>â€¢ <strong>TelÃ©fono:</strong> +5804123456789</li>
+                  <li>â€¢ <strong>Email:</strong> usuario@dominio.com</li>
+                  <li>â€¢ <strong>Monto:</strong> Solo nÃºmeros con punto decimal</li>
                 </ul>
               </div>
             </div>

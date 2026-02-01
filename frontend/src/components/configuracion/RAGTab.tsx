@@ -12,14 +12,14 @@ import {
   Trash2,
   Save,
 } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { aiTrainingService, DocumentoEmbedding } from '@/services/aiTrainingService'
-import { apiClient } from '@/services/api'
+import { Card, CardContent } from '../../components/ui/card'
+import { Button } from '../../components/ui/button'
+import { Input } from '../../components/ui/input'
+import { Textarea } from '../../components/ui/textarea'
+import { Badge } from '../../components/ui/badge'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs'
+import { aiTrainingService, DocumentoEmbedding } from '../../services/aiTrainingService'
+import { apiClient } from '../../services/api'
 import { toast } from 'sonner'
 
 interface DocumentoAI {
@@ -28,7 +28,7 @@ interface DocumentoAI {
   descripcion: string | null
   nombre_archivo: string
   tipo_archivo: string
-  tamaño_bytes: number | null
+  tamaÃ±o_bytes: number | null
   contenido_procesado: boolean
   activo: boolean
   creado_en: string
@@ -36,7 +36,7 @@ interface DocumentoAI {
 }
 
 export function RAGTab() {
-  // ✅ Por defecto mostrar la pestaña de Gestión de Documentos para facilitar la carga
+  // âœ… Por defecto mostrar la pestaÃ±a de GestiÃ³n de Documentos para facilitar la carga
   const [activeSubTab, setActiveSubTab] = useState('documentos')
 
   // Estados para embeddings
@@ -50,12 +50,12 @@ export function RAGTab() {
   const [generando, setGenerando] = useState(false)
   const [buscando, setBuscando] = useState(false)
 
-  // Búsqueda semántica
+  // BÃºsqueda semÃ¡ntica
   const [preguntaBusqueda, setPreguntaBusqueda] = useState('')
   const [resultados, setResultados] = useState<DocumentoEmbedding[]>([])
   const [topK, setTopK] = useState(3)
 
-  // Estados para gestión de documentos
+  // Estados para gestiÃ³n de documentos
   const [documentos, setDocumentos] = useState<DocumentoAI[]>([])
   const [cargandoDocumentos, setCargandoDocumentos] = useState(false)
   const [nuevoDocumento, setNuevoDocumento] = useState({
@@ -143,7 +143,7 @@ export function RAGTab() {
       ? (estado.documentos_con_embeddings / estado.total_documentos) * 100
       : 0
 
-  // Funciones para gestión de documentos
+  // Funciones para gestiÃ³n de documentos
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
@@ -153,7 +153,7 @@ export function RAGTab() {
         return
       }
       if (file.size > 10 * 1024 * 1024) {
-        toast.error('El archivo es demasiado grande. Máximo 10MB')
+        toast.error('El archivo es demasiado grande. MÃ¡ximo 10MB')
         return
       }
       setNuevoDocumento(prev => ({ ...prev, archivo: file }))
@@ -162,7 +162,7 @@ export function RAGTab() {
 
   const handleSubirDocumento = async () => {
     if (!nuevoDocumento.titulo.trim()) {
-      toast.error('El título es requerido')
+      toast.error('El tÃ­tulo es requerido')
       return
     }
     if (!nuevoDocumento.archivo) {
@@ -205,36 +205,36 @@ export function RAGTab() {
         contenido_en_bd?: boolean
       }>(`/api/v1/configuracion/ai/documentos/${id}/procesar`)
       
-      // Mensaje mejorado según el resultado
+      // Mensaje mejorado segÃºn el resultado
       if (respuesta.mensaje?.includes('ya estaba procesado') || respuesta.contenido_en_bd) {
-        toast.success(`✅ ${respuesta.mensaje || 'Documento procesado'} (${respuesta.caracteres_extraidos || 0} caracteres)`, {
+        toast.success(`âœ… ${respuesta.mensaje || 'Documento procesado'} (${respuesta.caracteres_extraidos || 0} caracteres)`, {
           description: 'El contenido ya estaba disponible en la base de datos'
         })
       } else {
-        toast.success(`Documento procesado exitosamente (${respuesta.caracteres_extraidos || 0} caracteres extraídos)`)
+        toast.success(`Documento procesado exitosamente (${respuesta.caracteres_extraidos || 0} caracteres extraÃ­dos)`)
       }
       
       await cargarDocumentos()
       await cargarEstado()
     } catch (error: any) {
       console.error('Error procesando documento:', error)
-      // Intentar obtener el mensaje del backend de múltiples fuentes
+      // Intentar obtener el mensaje del backend de mÃºltiples fuentes
       let mensajeError = error?.response?.data?.detail || 
                         error?.response?.data?.message || 
                         error?.message || 
                         'Error procesando documento'
 
-      // Simplificar mensajes largos de diagnóstico
-      if (mensajeError.includes('El archivo físico no existe')) {
-        mensajeError = 'El archivo físico no existe en el servidor. Por favor, elimina este documento y súbelo nuevamente.'
+      // Simplificar mensajes largos de diagnÃ³stico
+      if (mensajeError.includes('El archivo fÃ­sico no existe')) {
+        mensajeError = 'El archivo fÃ­sico no existe en el servidor. Por favor, elimina este documento y sÃºbelo nuevamente.'
       } else if (mensajeError.length > 200) {
         // Truncar mensajes muy largos pero mantener la parte importante
         const partes = mensajeError.split('\n')
-        mensajeError = partes[0] + (partes.length > 1 ? ' (Ver consola para más detalles)' : '')
+        mensajeError = partes[0] + (partes.length > 1 ? ' (Ver consola para mÃ¡s detalles)' : '')
       }
 
       toast.error(mensajeError, {
-        duration: 8000, // Aumentar duración para mensajes importantes
+        duration: 8000, // Aumentar duraciÃ³n para mensajes importantes
       })
     } finally {
       setProcesandoDocumento(null)
@@ -242,7 +242,7 @@ export function RAGTab() {
   }
 
   const handleEliminarDocumento = async (id: number) => {
-    if (!confirm('¿Está seguro de eliminar este documento?')) return
+    if (!confirm('Â¿EstÃ¡ seguro de eliminar este documento?')) return
 
     try {
       await apiClient.delete(`/api/v1/configuracion/ai/documentos/${id}`)
@@ -266,7 +266,7 @@ export function RAGTab() {
 
   const handleActualizarDocumento = async (id: number) => {
     if (!documentoEditado.titulo.trim()) {
-      toast.error('El título es requerido')
+      toast.error('El tÃ­tulo es requerido')
       return
     }
 
@@ -290,7 +290,7 @@ export function RAGTab() {
   const handleActivarDesactivarDocumento = async (id: number, activo: boolean) => {
     const documento = documentos.find(doc => doc.id === id)
     if (activo && documento && !documento.contenido_procesado) {
-      if (!confirm('Este documento no está procesado. ¿Deseas procesarlo ahora antes de activarlo?')) {
+      if (!confirm('Este documento no estÃ¡ procesado. Â¿Deseas procesarlo ahora antes de activarlo?')) {
         return
       }
       await handleProcesarDocumento(id)
@@ -306,7 +306,7 @@ export function RAGTab() {
     }
   }
 
-  const formatearTamaño = (bytes: number | null) => {
+  const formatearTamaÃ±o = (bytes: number | null) => {
     if (!bytes) return '0 B'
     if (bytes < 1024) return `${bytes} B`
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`
@@ -323,7 +323,7 @@ export function RAGTab() {
             RAG Mejorado - Documentos y Embeddings
           </h3>
           <p className="text-sm text-gray-500 mt-1">
-            Gestiona documentos y búsqueda semántica mejorada con embeddings vectoriales
+            Gestiona documentos y bÃºsqueda semÃ¡ntica mejorada con embeddings vectoriales
           </p>
         </div>
         <Button onClick={() => { cargarEstado(); cargarDocumentos(); }} variant="outline" size="sm" disabled={cargando || cargandoDocumentos}>
@@ -346,15 +346,15 @@ export function RAGTab() {
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="documentos">
             <FileText className="h-4 w-4 mr-2" />
-            Gestión de Documentos
+            GestiÃ³n de Documentos
           </TabsTrigger>
           <TabsTrigger value="embeddings">
             <Zap className="h-4 w-4 mr-2" />
-            Embeddings y Búsqueda
+            Embeddings y BÃºsqueda
           </TabsTrigger>
         </TabsList>
 
-        {/* Tab: Gestión de Documentos */}
+        {/* Tab: GestiÃ³n de Documentos */}
         <TabsContent value="documentos" className="space-y-4 mt-6">
           <Card>
             <CardContent className="pt-6 space-y-4">
@@ -365,8 +365,8 @@ export function RAGTab() {
                     <p className="font-semibold text-amber-900 mb-1">Agregar Documento de Contexto</p>
                     <ul className="text-sm text-amber-800 space-y-1 list-disc list-inside">
                       <li>Formatos permitidos: PDF, TXT, DOCX</li>
-                      <li>Tamaño máximo: 10MB por archivo</li>
-                      <li>Los documentos se procesarán para generar respuestas contextualizadas</li>
+                      <li>TamaÃ±o mÃ¡ximo: 10MB por archivo</li>
+                      <li>Los documentos se procesarÃ¡n para generar respuestas contextualizadas</li>
                     </ul>
                   </div>
                 </div>
@@ -377,20 +377,20 @@ export function RAGTab() {
                 <h4 className="font-semibold">Nuevo Documento</h4>
 
                 <div>
-                  <label className="text-sm font-medium block mb-2">Título <span className="text-red-500">*</span></label>
+                  <label className="text-sm font-medium block mb-2">TÃ­tulo <span className="text-red-500">*</span></label>
                   <Input
                     value={nuevoDocumento.titulo}
                     onChange={(e) => setNuevoDocumento(prev => ({ ...prev, titulo: e.target.value }))}
-                    placeholder="Ej: Políticas de Préstamos"
+                    placeholder="Ej: PolÃ­ticas de PrÃ©stamos"
                   />
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium block mb-2">Descripción</label>
+                  <label className="text-sm font-medium block mb-2">DescripciÃ³n</label>
                   <Textarea
                     value={nuevoDocumento.descripcion}
                     onChange={(e) => setNuevoDocumento(prev => ({ ...prev, descripcion: e.target.value }))}
-                    placeholder="Describe de qué trata este documento..."
+                    placeholder="Describe de quÃ© trata este documento..."
                     rows={3}
                   />
                 </div>
@@ -449,19 +449,19 @@ export function RAGTab() {
                         {editandoDocumento === doc.id ? (
                           <div className="space-y-3">
                             <div>
-                              <label className="text-sm font-medium block mb-1">Título <span className="text-red-500">*</span></label>
+                              <label className="text-sm font-medium block mb-1">TÃ­tulo <span className="text-red-500">*</span></label>
                               <Input
                                 value={documentoEditado.titulo}
                                 onChange={(e) => setDocumentoEditado(prev => ({ ...prev, titulo: e.target.value }))}
-                                placeholder="Título del documento"
+                                placeholder="TÃ­tulo del documento"
                               />
                             </div>
                             <div>
-                              <label className="text-sm font-medium block mb-1">Descripción</label>
+                              <label className="text-sm font-medium block mb-1">DescripciÃ³n</label>
                               <Textarea
                                 value={documentoEditado.descripcion}
                                 onChange={(e) => setDocumentoEditado(prev => ({ ...prev, descripcion: e.target.value }))}
-                                placeholder="Descripción del documento"
+                                placeholder="DescripciÃ³n del documento"
                                 rows={2}
                               />
                             </div>
@@ -515,13 +515,13 @@ export function RAGTab() {
                                 {doc.activo && !doc.contenido_procesado && (
                                   <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
                                     <AlertCircle className="h-3 w-3 mr-1" />
-                                    ⚠️ No disponible para AI
+                                    âš ï¸ No disponible para AI
                                   </Badge>
                                 )}
                                 {doc.activo && doc.contenido_procesado && (
                                   <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
                                     <CheckCircle className="h-3 w-3 mr-1" />
-                                    ✅ Disponible para AI
+                                    âœ… Disponible para AI
                                   </Badge>
                                 )}
                               </div>
@@ -531,7 +531,7 @@ export function RAGTab() {
                               <div className="flex items-center gap-4 text-xs text-gray-500">
                                 <span>{doc.nombre_archivo}</span>
                                 <span>{doc.tipo_archivo.toUpperCase()}</span>
-                                <span>{formatearTamaño(doc.tamaño_bytes)}</span>
+                                <span>{formatearTamaÃ±o(doc.tamaÃ±o_bytes)}</span>
                                 <span>{new Date(doc.creado_en).toLocaleDateString()}</span>
                               </div>
                             </div>
@@ -597,7 +597,7 @@ export function RAGTab() {
           </Card>
         </TabsContent>
 
-        {/* Tab: Embeddings y Búsqueda */}
+        {/* Tab: Embeddings y BÃºsqueda */}
         <TabsContent value="embeddings" className="space-y-4 mt-6">
           {/* Estado de Embeddings */}
       <Card>
@@ -648,7 +648,7 @@ export function RAGTab() {
 
               {estado.ultima_actualizacion && (
                 <div className="text-sm text-gray-500">
-                  Última actualización:{' '}
+                  Ãšltima actualizaciÃ³n:{' '}
                   {new Date(estado.ultima_actualizacion).toLocaleString('es-ES')}
                 </div>
               )}
@@ -684,8 +684,8 @@ export function RAGTab() {
                       </p>
                       <p className="text-xs text-amber-700 mt-1">
                         {estado.total_documentos - estado.documentos_con_embeddings} documentos
-                        aún no tienen embeddings. Genera embeddings para mejorar la búsqueda
-                        semántica.
+                        aÃºn no tienen embeddings. Genera embeddings para mejorar la bÃºsqueda
+                        semÃ¡ntica.
                       </p>
                     </div>
                   </div>
@@ -701,19 +701,19 @@ export function RAGTab() {
         </CardContent>
       </Card>
 
-      {/* Búsqueda Semántica */}
+      {/* BÃºsqueda SemÃ¡ntica */}
       <Card>
         <CardContent className="pt-6">
           <div className="flex items-center gap-2 mb-4">
             <Search className="h-5 w-5 text-green-600" />
-            <h4 className="font-semibold">Búsqueda Semántica de Prueba</h4>
+            <h4 className="font-semibold">BÃºsqueda SemÃ¡ntica de Prueba</h4>
           </div>
 
           <div className="space-y-4">
             <div>
               <label className="text-sm font-medium mb-2 block">Pregunta o consulta</label>
               <Textarea
-                placeholder="Ej: ¿Cuáles son las políticas de préstamos para clientes nuevos?"
+                placeholder="Ej: Â¿CuÃ¡les son las polÃ­ticas de prÃ©stamos para clientes nuevos?"
                 value={preguntaBusqueda}
                 onChange={(e) => setPreguntaBusqueda(e.target.value)}
                 rows={3}
@@ -789,7 +789,7 @@ export function RAGTab() {
                 <AlertCircle className="h-12 w-12 mx-auto mb-2 text-gray-400" />
                 <p>No se encontraron documentos relevantes</p>
                 <p className="text-xs mt-1">
-                  Intenta con otra pregunta o genera embeddings para más documentos
+                  Intenta con otra pregunta o genera embeddings para mÃ¡s documentos
                 </p>
               </div>
             )}
@@ -797,23 +797,23 @@ export function RAGTab() {
         </CardContent>
       </Card>
 
-          {/* Información */}
+          {/* InformaciÃ³n */}
           <Card>
             <CardContent className="pt-6">
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <div className="flex items-start gap-2">
                   <Zap className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
                   <div className="flex-1">
-                    <p className="font-semibold text-blue-900 mb-1">¿Qué es RAG Mejorado?</p>
+                    <p className="font-semibold text-blue-900 mb-1">Â¿QuÃ© es RAG Mejorado?</p>
                     <p className="text-sm text-blue-800">
                       RAG (Retrieval-Augmented Generation) mejorado usa embeddings vectoriales para
-                      encontrar documentos más relevantes a cada pregunta. Esto mejora la precisión de
-                      las respuestas del AI al incluir solo el contexto más pertinente.
+                      encontrar documentos mÃ¡s relevantes a cada pregunta. Esto mejora la precisiÃ³n de
+                      las respuestas del AI al incluir solo el contexto mÃ¡s pertinente.
                     </p>
                     <ul className="text-xs text-blue-700 mt-2 list-disc list-inside space-y-1">
                       <li>Genera embeddings para todos tus documentos</li>
-                      <li>El sistema busca automáticamente documentos relevantes</li>
-                      <li>Mejora la precisión y reduce costos de tokens</li>
+                      <li>El sistema busca automÃ¡ticamente documentos relevantes</li>
+                      <li>Mejora la precisiÃ³n y reduce costos de tokens</li>
                     </ul>
                   </div>
                 </div>

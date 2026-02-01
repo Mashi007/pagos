@@ -1,5 +1,5 @@
 import { apiClient, ApiResponse } from './api'
-import { User, AuthTokens } from '@/types'
+import { User, AuthTokens } from '../types'
 import {
   safeSetItem,
   safeGetItem,
@@ -8,7 +8,7 @@ import {
   safeGetSessionItem,
   safeRemoveSessionItem,
   clearAuthStorage
-} from '@/utils/storage'
+} from '../utils/storage'
 
 export interface LoginForm {
   email: string

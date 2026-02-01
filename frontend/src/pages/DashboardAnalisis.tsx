@@ -12,19 +12,19 @@ import {
   ChevronRight,
   Filter,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { useSimpleAuth } from '@/store/simpleAuthStore'
-import { formatCurrency } from '@/utils'
-import { apiClient } from '@/services/api'
-import { useDashboardFiltros, type DashboardFiltros } from '@/hooks/useDashboardFiltros'
-import { DashboardFiltrosPanel } from '@/components/dashboard/DashboardFiltrosPanel'
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
+import { Button } from '../components/ui/button'
+import { useSimpleAuth } from '../store/simpleAuthStore'
+import { formatCurrency } from '../utils'
+import { apiClient } from '../services/api'
+import { useDashboardFiltros, type DashboardFiltros } from '../hooks/useDashboardFiltros'
+import { DashboardFiltrosPanel } from '../components/dashboard/DashboardFiltrosPanel'
 import { useNavigate } from 'react-router-dom'
-import { KpiCardLarge } from '@/components/dashboard/KpiCardLarge'
-import { TreemapMorosidadModal } from '@/components/dashboard/modals/TreemapMorosidadModal'
-import { DonutConcesionariosModal } from '@/components/dashboard/modals/DonutConcesionariosModal'
-import { BarrasDivergentesModal } from '@/components/dashboard/modals/BarrasDivergentesModal'
-import { TendenciasModal } from '@/components/dashboard/modals/TendenciasModal'
+import { KpiCardLarge } from '../components/dashboard/KpiCardLarge'
+import { TreemapMorosidadModal } from '../components/dashboard/modals/TreemapMorosidadModal'
+import { DonutConcesionariosModal } from '../components/dashboard/modals/DonutConcesionariosModal'
+import { BarrasDivergentesModal } from '../components/dashboard/modals/BarrasDivergentesModal'
+import { TendenciasModal } from '../components/dashboard/modals/TendenciasModal'
 import {
   LineChart as RechartsLineChart,
   Line,
@@ -103,8 +103,8 @@ export function DashboardAnalisis() {
       }
       return response
     },
-    staleTime: 2 * 60 * 1000, // ✅ ACTUALIZADO: 2 minutos para datos más frescos
-    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
+    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos mÃ¡s frescos
+    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
   // Cargar datos del dashboard
@@ -120,8 +120,8 @@ export function DashboardAnalisis() {
         return {} as DashboardData
       }
     },
-    staleTime: 2 * 60 * 1000, // ✅ ACTUALIZADO: 2 minutos para datos más frescos
-    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
+    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos mÃ¡s frescos
+    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
   // Cargar cobros diarios del mes
@@ -144,11 +144,11 @@ export function DashboardAnalisis() {
         return [] as CobroDiario[]
       }
     },
-    staleTime: 2 * 60 * 1000, // ✅ ACTUALIZADO: 2 minutos para datos más frescos
-    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
+    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos mÃ¡s frescos
+    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
-  // Cargar evolución mensual
+  // Cargar evoluciÃ³n mensual
   const datosEvolucionMensual = dashboardData?.evolucion_mensual || []
 
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -162,30 +162,30 @@ export function DashboardAnalisis() {
   const carteraCobrada = dashboardData?.financieros?.ingresosInteres || 0
   const morosidad = dashboardData?.financieros?.ingresosMora || 0
 
-  // Calcular variación mes anterior y crecimiento anual desde datos reales
+  // Calcular variaciÃ³n mes anterior y crecimiento anual desde datos reales
   const variacionMesAnterior = kpisPrincipales?.variacion_mes_anterior || 0
 
-  // Calcular crecimiento anual comparando mes actual con mismo mes del año anterior
-  // Usar evolucion_mensual si está disponible, o estimar desde variación mensual
+  // Calcular crecimiento anual comparando mes actual con mismo mes del aÃ±o anterior
+  // Usar evolucion_mensual si estÃ¡ disponible, o estimar desde variaciÃ³n mensual
   let crecimientoAnual = 0
 
   if (datosEvolucionMensual.length >= 12) {
-    // Si tenemos 12 meses de datos, comparar mes actual (último) con mes del año anterior (hace 12 meses)
+    // Si tenemos 12 meses de datos, comparar mes actual (Ãºltimo) con mes del aÃ±o anterior (hace 12 meses)
     const mesActual = datosEvolucionMensual[datosEvolucionMensual.length - 1]
     const mesAnoAnterior = datosEvolucionMensual[datosEvolucionMensual.length - 13] // Hace 13 meses (incluye mes actual)
     if (mesAnoAnterior && mesActual && mesAnoAnterior.cartera > 0) {
       crecimientoAnual = ((mesActual.cartera - mesAnoAnterior.cartera) / mesAnoAnterior.cartera) * 100
     }
   } else if (variacionMesAnterior !== 0) {
-    // Si no hay datos suficientes, estimar crecimiento anual como promedio de variación mensual * 12
-    // (estimación conservadora)
+    // Si no hay datos suficientes, estimar crecimiento anual como promedio de variaciÃ³n mensual * 12
+    // (estimaciÃ³n conservadora)
     crecimientoAnual = variacionMesAnterior * 12 * 0.8 // Factor de ajuste para crecimiento compuesto
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="container mx-auto px-4 py-8 space-y-8">
-        {/* Header Estratégico */}
+        {/* Header EstratÃ©gico */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -198,12 +198,12 @@ export function DashboardAnalisis() {
               onClick={() => navigate('/dashboard/menu')}
               className="hover:bg-amber-50"
             >
-              ← Menú
+              â† MenÃº
             </Button>
             <div>
-              <h1 className="text-4xl font-black text-gray-900 uppercase tracking-tight">Análisis</h1>
+              <h1 className="text-4xl font-black text-gray-900 uppercase tracking-tight">AnÃ¡lisis</h1>
               <p className="text-lg text-gray-600 font-medium mt-1">
-                Monitoreo Estratégico • {userName}
+                Monitoreo EstratÃ©gico â€¢ {userName}
               </p>
             </div>
           </div>
@@ -221,7 +221,7 @@ export function DashboardAnalisis() {
                 <div className="flex items-center space-x-2">
                   <div className="flex items-center space-x-2 text-sm font-semibold text-gray-700">
                     <Filter className="h-4 w-4 text-amber-600" />
-                    <span>Filtros Rápidos</span>
+                    <span>Filtros RÃ¡pidos</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 flex-wrap">
@@ -259,7 +259,7 @@ export function DashboardAnalisis() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <KpiCardLarge
-              title="Variación Mes Anterior"
+              title="VariaciÃ³n Mes Anterior"
               value={variacionMesAnterior}
               icon={TrendingUp}
               color="text-amber-600"
@@ -301,9 +301,9 @@ export function DashboardAnalisis() {
           </div>
         )}
 
-        {/* GRÁFICOS PRINCIPALES */}
+        {/* GRÃFICOS PRINCIPALES */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Gráfico 1: Cobros Diarios del Mes */}
+          {/* GrÃ¡fico 1: Cobros Diarios del Mes */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -362,7 +362,7 @@ export function DashboardAnalisis() {
             </Card>
           </motion.div>
 
-          {/* Gráfico 2: Análisis Comparativo */}
+          {/* GrÃ¡fico 2: AnÃ¡lisis Comparativo */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -372,7 +372,7 @@ export function DashboardAnalisis() {
               <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200">
                 <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
                   <BarChart3 className="h-6 w-6 text-blue-600" />
-                  <span>Análisis Comparativo</span>
+                  <span>AnÃ¡lisis Comparativo</span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-6">
@@ -430,8 +430,8 @@ export function DashboardAnalisis() {
         >
           <div className="bg-gradient-to-r from-amber-600 to-orange-600 rounded-xl p-6 shadow-xl">
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center space-x-2">
-              <span>🔍</span>
-              <span>Explorar Análisis Detallados</span>
+              <span>ðŸ”</span>
+              <span>Explorar AnÃ¡lisis Detallados</span>
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <Button
@@ -449,7 +449,7 @@ export function DashboardAnalisis() {
                 onClick={() => setIsDonutConcesionariosOpen(true)}
               >
                 <Building2 className="h-6 w-6" />
-                <span className="font-semibold">Préstamos por Concesionario</span>
+                <span className="font-semibold">PrÃ©stamos por Concesionario</span>
                 <ChevronRight className="h-4 w-4" />
               </Button>
               <Button
@@ -458,7 +458,7 @@ export function DashboardAnalisis() {
                 onClick={() => setIsBarrasDivergentesOpen(true)}
               >
                 <BarChart3 className="h-6 w-6" />
-                <span className="font-semibold">Distribución de Préstamos</span>
+                <span className="font-semibold">DistribuciÃ³n de PrÃ©stamos</span>
                 <ChevronRight className="h-4 w-4" />
               </Button>
               <Button

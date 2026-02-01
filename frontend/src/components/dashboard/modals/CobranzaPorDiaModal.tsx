@@ -13,10 +13,10 @@ import {
 import { BaseModal } from '../BaseModal'
 import { DashboardFiltrosPanel } from '../DashboardFiltrosPanel'
 import { KpiCardsPanel } from '../KpiCardsPanel'
-import { useDashboardFiltros, type DashboardFiltros } from '@/hooks/useDashboardFiltros'
-import { apiClient } from '@/services/api'
-import { formatCurrency } from '@/utils'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useDashboardFiltros, type DashboardFiltros } from '../../../hooks/useDashboardFiltros'
+import { apiClient } from '../../../services/api'
+import { formatCurrency } from '../../../utils'
+import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card'
 import { TrendingUp, DollarSign, Users, AlertTriangle } from 'lucide-react'
 
 interface CobranzaPorDiaModalProps {
@@ -66,7 +66,7 @@ export function CobranzaPorDiaModal({ isOpen, onClose }: CobranzaPorDiaModalProp
     },
   })
 
-  // Cargar datos por día
+  // Cargar datos por dÃ­a
   const { data: cobranzaPorDiaData, isLoading: loadingPorDia, refetch } = useQuery({
     queryKey: ['cobranza-por-dia', filtros],
     queryFn: async (): Promise<CobranzaPorDiaResponse> => {
@@ -84,7 +84,7 @@ export function CobranzaPorDiaModal({ isOpen, onClose }: CobranzaPorDiaModalProp
     staleTime: 5 * 60 * 1000,
   })
 
-  // Cargar métricas acumuladas
+  // Cargar mÃ©tricas acumuladas
   const { data: metricasData, isLoading: loadingMetricas } = useQuery({
     queryKey: ['metricas-acumuladas', filtros],
     queryFn: async (): Promise<MetricasAcumuladasResponse> => {
@@ -116,7 +116,7 @@ export function CobranzaPorDiaModal({ isOpen, onClose }: CobranzaPorDiaModalProp
     setIsRefreshing(false)
   }
 
-  // Formatear fechas para el gráfico
+  // Formatear fechas para el grÃ¡fico
   const datosGrafico = cobranzaPorDiaData?.dias.map((d) => ({
     ...d,
     fechaFormateada: new Date(d.fecha).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }),
@@ -143,7 +143,7 @@ export function CobranzaPorDiaModal({ isOpen, onClose }: CobranzaPorDiaModalProp
     <BaseModal
       isOpen={isOpen}
       onClose={onClose}
-      title="Total a Cobrar, Pagos y Morosidad por Día"
+      title="Total a Cobrar, Pagos y Morosidad por DÃ­a"
       size="xlarge"
     >
       <div className="space-y-6">
@@ -158,27 +158,27 @@ export function CobranzaPorDiaModal({ isOpen, onClose }: CobranzaPorDiaModalProp
           errorOpcionesFiltros={errorOpcionesFiltros}
         />
 
-        {/* Layout: Tarjetas KPI Izquierda + Gráfico Centro + Métricas Derecha */}
+        {/* Layout: Tarjetas KPI Izquierda + GrÃ¡fico Centro + MÃ©tricas Derecha */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Tarjetas KPI - Izquierda */}
           <div className="lg:col-span-2">
             <KpiCardsPanel filtros={filtros} />
           </div>
 
-          {/* Gráfico - Centro */}
+          {/* GrÃ¡fico - Centro */}
           <div className="lg:col-span-7">
             <Card>
               <CardHeader>
-                <CardTitle>Total a Cobrar, Pagos y Morosidad por Día</CardTitle>
+                <CardTitle>Total a Cobrar, Pagos y Morosidad por DÃ­a</CardTitle>
               </CardHeader>
               <CardContent>
                 {loadingPorDia ? (
                   <div className="h-[400px] flex items-center justify-center">
-                    <div className="animate-pulse text-gray-400">Cargando gráfico...</div>
+                    <div className="animate-pulse text-gray-400">Cargando grÃ¡fico...</div>
                   </div>
                 ) : datosGrafico.length === 0 ? (
                   <div className="h-[400px] flex items-center justify-center text-gray-500">
-                    No hay datos disponibles para el período seleccionado
+                    No hay datos disponibles para el perÃ­odo seleccionado
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height={400}>
@@ -206,7 +206,7 @@ export function CobranzaPorDiaModal({ isOpen, onClose }: CobranzaPorDiaModalProp
             </Card>
           </div>
 
-          {/* Métricas Acumuladas - Derecha */}
+          {/* MÃ©tricas Acumuladas - Derecha */}
           <div className="lg:col-span-3 space-y-4">
             <Card>
               <CardHeader>
@@ -237,7 +237,7 @@ export function CobranzaPorDiaModal({ isOpen, onClose }: CobranzaPorDiaModalProp
                   {formatCurrency(metricasData?.acumulado_anual || 0)}
                 </div>
                 <p className="text-sm text-gray-500">
-                  Desde {metricasData?.fecha_inicio_anio ? new Date(metricasData.fecha_inicio_anio).toLocaleDateString('es-ES') : 'inicio del año'}
+                  Desde {metricasData?.fecha_inicio_anio ? new Date(metricasData.fecha_inicio_anio).toLocaleDateString('es-ES') : 'inicio del aÃ±o'}
                 </p>
               </CardContent>
             </Card>
@@ -253,7 +253,7 @@ export function CobranzaPorDiaModal({ isOpen, onClose }: CobranzaPorDiaModalProp
                 <div className="text-3xl font-bold text-orange-600 mb-2">
                   {metricasData?.clientes_1_pago_atrasado || 0}
                 </div>
-                <p className="text-sm text-gray-500">Clientes únicos</p>
+                <p className="text-sm text-gray-500">Clientes Ãºnicos</p>
               </CardContent>
             </Card>
 
@@ -268,7 +268,7 @@ export function CobranzaPorDiaModal({ isOpen, onClose }: CobranzaPorDiaModalProp
                 <div className="text-3xl font-bold text-red-600 mb-2">
                   {metricasData?.clientes_3mas_cuotas_atrasadas || 0}
                 </div>
-                <p className="text-sm text-gray-500">Clientes únicos</p>
+                <p className="text-sm text-gray-500">Clientes Ãºnicos</p>
               </CardContent>
             </Card>
           </div>

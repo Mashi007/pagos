@@ -20,27 +20,27 @@ import {
   Zap,
   Settings,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Badge } from '@/components/ui/badge'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { LoadingSpinner } from '@/components/ui/loading-spinner'
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
+import { Button } from '../../components/ui/button'
+import { Input } from '../../components/ui/input'
+import { Textarea } from '../../components/ui/textarea'
+import { Badge } from '../../components/ui/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
+import { LoadingSpinner } from '../../components/ui/loading-spinner'
 import {
   comunicacionesService,
   ComunicacionUnificada,
   CrearClienteAutomaticoRequest,
-} from '@/services/comunicacionesService'
-import { CrearClienteForm } from '@/components/clientes/CrearClienteForm'
-import { clienteService } from '@/services/clienteService'
-import { ticketsService, TicketCreate, Ticket, TicketUpdate } from '@/services/ticketsService'
-import { userService } from '@/services/userService'
-import { formatDate } from '@/utils'
+} from '../../services/comunicacionesService'
+import { CrearClienteForm } from '../../components/clientes/CrearClienteForm'
+import { clienteService } from '../../services/clienteService'
+import { ticketsService, TicketCreate, Ticket, TicketUpdate } from '../../services/ticketsService'
+import { userService } from '../../services/userService'
+import { formatDate } from '../../utils'
 import { toast } from 'sonner'
-import { useSimpleAuth } from '@/store/simpleAuthStore'
-import { mockComunicaciones, mockNombresClientes } from '@/data/mockComunicaciones'
-import { conversacionesWhatsAppService } from '@/services/conversacionesWhatsAppService'
+import { useSimpleAuth } from '../../store/simpleAuthStore'
+import { mockComunicaciones, mockNombresClientes } from '../../data/mockComunicaciones'
+import { conversacionesWhatsAppService } from '../../services/conversacionesWhatsAppService'
 
 interface ComunicacionesProps {
   clienteId?: number
@@ -50,13 +50,13 @@ interface ComunicacionesProps {
 
 // Interfaz para conversaciones agrupadas (separadas por tipo)
 interface ConversacionAgrupada {
-  id: string // Identificador único: cliente_id_tipo o contacto_tipo
+  id: string // Identificador Ãºnico: cliente_id_tipo o contacto_tipo
   nombre: string
   contacto: string
   tipo: 'whatsapp' | 'email' // NO mixto - separadas
   cliente_id: number | null
-  esNuevo: boolean // No está en base de datos
-  leido: boolean // Si está leído (procesado = true)
+  esNuevo: boolean // No estÃ¡ en base de datos
+  leido: boolean // Si estÃ¡ leÃ­do (procesado = true)
   noLeidos: number
   ultimaComunicacion: ComunicacionUnificada
   comunicaciones: ComunicacionUnificada[] // Solo se cargan cuando se selecciona
@@ -71,23 +71,23 @@ export function Comunicaciones({
   const queryClient = useQueryClient()
   const [busqueda, setBusqueda] = useState('')
   
-  // Estado para selección
+  // Estado para selecciÃ³n
   const [conversacionSeleccionada, setConversacionSeleccionada] = useState<string | null>(null)
   const [comunicacionSeleccionada, setComunicacionSeleccionada] = useState<ComunicacionUnificada | null>(null)
   
   // Estado para carga de mensajes (solo cuando se selecciona)
   const [mensajesCargados, setMensajesCargados] = useState<Map<string, ComunicacionUnificada[]>>(new Map())
   const [cargandoMensajes, setCargandoMensajes] = useState<string | null>(null)
-  // ✅ Ref para rastrear conversaciones cargadas sin causar re-renders
+  // âœ… Ref para rastrear conversaciones cargadas sin causar re-renders
   const conversacionesCargadasRef = useRef<Set<string>>(new Set())
   
-  // Estado para envío de mensajes
+  // Estado para envÃ­o de mensajes
   const [mensajeTexto, setMensajeTexto] = useState('')
   const [asuntoEmail, setAsuntoEmail] = useState('')
   const [enviando, setEnviando] = useState(false)
-  const [modoAutomatico, setModoAutomatico] = useState(true) // Automático por defecto
+  const [modoAutomatico, setModoAutomatico] = useState(true) // AutomÃ¡tico por defecto
   
-  // Estado para creación de cliente y ticket
+  // Estado para creaciÃ³n de cliente y ticket
   const [mostrarCrearCliente, setMostrarCrearCliente] = useState(false)
   const [creandoClienteAuto, setCreandoClienteAuto] = useState(false)
   const [clienteRecienCreado, setClienteRecienCreado] = useState<{ contacto: string; tipo: string } | null>(null)
@@ -105,10 +105,10 @@ export function Comunicaciones({
   const [ticketsCliente, setTicketsCliente] = useState<Ticket[]>([])
   const [ticketEditando, setTicketEditando] = useState<Ticket | null>(null)
   
-  // Estado para usuarios (para asignación y escalación)
+  // Estado para usuarios (para asignaciÃ³n y escalaciÃ³n)
   const [usuarios, setUsuarios] = useState<Array<{ id: number; nombre: string; apellido: string; email: string; is_admin: boolean }>>([])
 
-  // Query para obtener todas las comunicaciones (sin paginación para agrupar)
+  // Query para obtener todas las comunicaciones (sin paginaciÃ³n para agrupar)
   const {
     data: comunicacionesData,
     isLoading,
@@ -119,7 +119,7 @@ export function Comunicaciones({
     queryFn: () => comunicacionesService.listarComunicaciones(1, 100, undefined, clienteId),
   })
 
-  // ✅ Optimizado: Usar useMemo para evitar recálculos innecesarios
+  // âœ… Optimizado: Usar useMemo para evitar recÃ¡lculos innecesarios
   const todasComunicaciones = useMemo(() => {
     const usarMockData = (!comunicacionesData?.comunicaciones || comunicacionesData.comunicaciones.length === 0) || process.env.NODE_ENV === 'development'
     return usarMockData && (!comunicacionesData?.comunicaciones || comunicacionesData.comunicaciones.length === 0) 
@@ -141,7 +141,7 @@ export function Comunicaciones({
   }, [])
 
   // Agrupar comunicaciones por cliente/contacto Y TIPO (separadas)
-  // PRIMERO por leído/no leído, LUEGO por fecha/hora
+  // PRIMERO por leÃ­do/no leÃ­do, LUEGO por fecha/hora
   const conversacionesAgrupadas = useMemo(() => {
     const grupos = new Map<string, ConversacionAgrupada>()
 
@@ -157,11 +157,11 @@ export function Comunicaciones({
         
         // Si tiene cliente_id, intentar obtener nombre del cliente
         if (comm.cliente_id) {
-          // Usar nombre del mockdata si está disponible
+          // Usar nombre del mockdata si estÃ¡ disponible
           nombre = mockNombresClientes[comm.cliente_id] || `Cliente #${comm.cliente_id}`
         }
 
-        // Determinar si está leído (procesado = true)
+        // Determinar si estÃ¡ leÃ­do (procesado = true)
         const leido = comm.procesado
 
         grupos.set(id, {
@@ -174,32 +174,32 @@ export function Comunicaciones({
           leido,
           noLeidos: 0,
           ultimaComunicacion: comm,
-          comunicaciones: [], // Se cargarán cuando se seleccione
+          comunicaciones: [], // Se cargarÃ¡n cuando se seleccione
         })
       }
 
       const grupo = grupos.get(id)!
       
-      // Actualizar última comunicación (más reciente)
+      // Actualizar Ãºltima comunicaciÃ³n (mÃ¡s reciente)
       if (new Date(comm.timestamp) > new Date(grupo.ultimaComunicacion.timestamp)) {
         grupo.ultimaComunicacion = comm
-        grupo.leido = comm.procesado // Actualizar estado de leído
+        grupo.leido = comm.procesado // Actualizar estado de leÃ­do
       }
       
-      // Contar no leídos (requiere_respuesta y no procesado)
+      // Contar no leÃ­dos (requiere_respuesta y no procesado)
       if (comm.requiere_respuesta && !comm.procesado) {
         grupo.noLeidos++
       }
     })
 
-    // Convertir a array y ordenar: PRIMERO por leído/no leído, LUEGO por fecha/hora
+    // Convertir a array y ordenar: PRIMERO por leÃ­do/no leÃ­do, LUEGO por fecha/hora
     const conversacionesArray = Array.from(grupos.values())
     
-    // Separar en dos grupos: no leídos y leídos
+    // Separar en dos grupos: no leÃ­dos y leÃ­dos
     const noLeidos = conversacionesArray.filter(c => !c.leido || c.noLeidos > 0)
     const leidos = conversacionesArray.filter(c => c.leido && c.noLeidos === 0)
     
-    // Ordenar cada grupo por fecha/hora (más reciente primero)
+    // Ordenar cada grupo por fecha/hora (mÃ¡s reciente primero)
     noLeidos.sort((a, b) => {
       const fechaA = new Date(a.ultimaComunicacion.timestamp).getTime()
       const fechaB = new Date(b.ultimaComunicacion.timestamp).getTime()
@@ -212,11 +212,11 @@ export function Comunicaciones({
       return fechaB - fechaA
     })
     
-    // Combinar: primero no leídos, luego leídos
+    // Combinar: primero no leÃ­dos, luego leÃ­dos
     return [...noLeidos, ...leidos]
   }, [todasComunicaciones])
 
-  // Filtrar conversaciones por búsqueda
+  // Filtrar conversaciones por bÃºsqueda
   const conversacionesFiltradas = useMemo(() => {
     if (!busqueda) return conversacionesAgrupadas
     
@@ -230,13 +230,13 @@ export function Comunicaciones({
     )
   }, [conversacionesAgrupadas, busqueda])
 
-  // Obtener conversación seleccionada
+  // Obtener conversaciÃ³n seleccionada
   const conversacionActual = useMemo(() => {
     if (!conversacionSeleccionada) return null
     return conversacionesAgrupadas.find((c) => c.id === conversacionSeleccionada) || null
   }, [conversacionSeleccionada, conversacionesAgrupadas])
 
-  // Efecto para buscar conversación actualizada después de crear cliente
+  // Efecto para buscar conversaciÃ³n actualizada despuÃ©s de crear cliente
   useEffect(() => {
     if (clienteRecienCreado && conversacionesAgrupadas.length > 0) {
       const conversacionActualizada = conversacionesAgrupadas.find(
@@ -249,19 +249,19 @@ export function Comunicaciones({
     }
   }, [clienteRecienCreado, conversacionesAgrupadas])
 
-  // Cargar mensajes cuando se selecciona una conversación
+  // Cargar mensajes cuando se selecciona una conversaciÃ³n
   useEffect(() => {
     if (!conversacionActual) return
     
-    // ✅ Verificar si ya están cargados usando ref (no causa re-renders)
+    // âœ… Verificar si ya estÃ¡n cargados usando ref (no causa re-renders)
     if (conversacionesCargadasRef.current.has(conversacionActual.id)) {
-      return // Ya están cargados, no hacer nada
+      return // Ya estÃ¡n cargados, no hacer nada
     }
     
-    // Cargar mensajes de esta conversación específica
+    // Cargar mensajes de esta conversaciÃ³n especÃ­fica
     setCargandoMensajes(conversacionActual.id)
     
-    // Filtrar comunicaciones de esta conversación específica
+    // Filtrar comunicaciones de esta conversaciÃ³n especÃ­fica
     const mensajes = todasComunicaciones.filter(
       (comm) => {
         const idBase = comm.cliente_id ? `cliente_${comm.cliente_id}` : `contacto_${comm.from_contact}`
@@ -283,15 +283,15 @@ export function Comunicaciones({
       return nuevoMap
     })
     setCargandoMensajes(null)
-  }, [conversacionActual, todasComunicaciones.length]) // ✅ Solo dependencias estables - removido mensajesCargados (usa ref para verificar)
+  }, [conversacionActual, todasComunicaciones.length]) // âœ… Solo dependencias estables - removido mensajesCargados (usa ref para verificar)
 
-  // Obtener mensajes de la conversación actual
+  // Obtener mensajes de la conversaciÃ³n actual
   const mensajesOrdenados = useMemo(() => {
     if (!conversacionActual) return []
     return mensajesCargados.get(conversacionActual.id) || []
   }, [conversacionActual, mensajesCargados])
 
-  // Cargar tickets del cliente cuando se selecciona una conversación
+  // Cargar tickets del cliente cuando se selecciona una conversaciÃ³n
   useEffect(() => {
     if (conversacionActual?.cliente_id) {
       ticketsService
@@ -308,14 +308,14 @@ export function Comunicaciones({
     }
   }, [conversacionActual])
 
-  // Seleccionar conversación
+  // Seleccionar conversaciÃ³n
   const handleSeleccionarConversacion = (conversacion: ConversacionAgrupada) => {
     setConversacionSeleccionada(conversacion.id)
     setComunicacionSeleccionada(conversacion.ultimaComunicacion)
     setTicketEditando(null)
   }
 
-  // Crear cliente automáticamente
+  // Crear cliente automÃ¡ticamente
   const handleCrearCliente = async (conversacion: ConversacionAgrupada) => {
     setCreandoClienteAuto(true)
     try {
@@ -333,7 +333,7 @@ export function Comunicaciones({
       
       if (resultado.success && resultado.cliente) {
         toast.success('Cliente creado exitosamente')
-        // ✅ invalidateQueries ya dispara refetch automáticamente, no necesitamos setTimeout
+        // âœ… invalidateQueries ya dispara refetch automÃ¡ticamente, no necesitamos setTimeout
         queryClient.invalidateQueries({ queryKey: ['comunicaciones'] })
       }
     } catch (error: any) {
@@ -344,19 +344,19 @@ export function Comunicaciones({
     }
   }
 
-  // Crear ticket desde conversación
+  // Crear ticket desde conversaciÃ³n
   const handleCrearTicket = async () => {
     if (!conversacionActual || !comunicacionSeleccionada) return
 
     if (!ticketForm.titulo.trim() || !ticketForm.descripcion.trim()) {
-      toast.error('Por favor completa el título y descripción del ticket')
+      toast.error('Por favor completa el tÃ­tulo y descripciÃ³n del ticket')
       return
     }
 
     // Si es nuevo, primero crear cliente
     if (conversacionActual.esNuevo) {
       await handleCrearCliente(conversacionActual)
-      // ✅ invalidateQueries ya dispara refetch automáticamente, no necesitamos setTimeout
+      // âœ… invalidateQueries ya dispara refetch automÃ¡ticamente, no necesitamos setTimeout
       queryClient.invalidateQueries({ queryKey: ['comunicaciones'] })
       toast.info('Cliente creado. Por favor, crea el ticket nuevamente.')
       return
@@ -451,7 +451,7 @@ export function Comunicaciones({
     }
   }
 
-  // Enviar mensaje (manual o automático)
+  // Enviar mensaje (manual o automÃ¡tico)
   const handleEnviarMensaje = async () => {
     if (!conversacionActual || !mensajeTexto.trim()) return
 
@@ -459,8 +459,8 @@ export function Comunicaciones({
     try {
       if (conversacionActual.tipo === 'whatsapp') {
         // Enviar mensaje de WhatsApp
-        // El contacto es el número que envió el mensaje (from_contact para INBOUND)
-        // Necesitamos obtener el número correcto desde la última comunicación
+        // El contacto es el nÃºmero que enviÃ³ el mensaje (from_contact para INBOUND)
+        // Necesitamos obtener el nÃºmero correcto desde la Ãºltima comunicaciÃ³n
         const ultimaComunicacion = conversacionActual.ultimaComunicacion
         const numeroDestino = ultimaComunicacion.direccion === 'INBOUND' 
           ? ultimaComunicacion.from_contact 
@@ -476,14 +476,14 @@ export function Comunicaciones({
           toast.success('Mensaje enviado exitosamente')
           setMensajeTexto('')
           setAsuntoEmail('')
-          // ✅ invalidateQueries ya dispara refetch automáticamente
+          // âœ… invalidateQueries ya dispara refetch automÃ¡ticamente
           queryClient.invalidateQueries({ queryKey: ['comunicaciones'] })
         } else {
           toast.error('Error enviando mensaje')
         }
       } else if (conversacionActual.tipo === 'email') {
-        // TODO: Implementar envío de email
-        toast.info('Envío de email en desarrollo')
+        // TODO: Implementar envÃ­o de email
+        toast.info('EnvÃ­o de email en desarrollo')
       }
     } catch (error: any) {
       console.error('Error enviando mensaje:', error)
@@ -505,7 +505,7 @@ export function Comunicaciones({
       if (diffMins < 1) return 'Ahora'
       if (diffMins < 60) return `Hace ${diffMins} min`
       if (diffHours < 24) return `Hace ${diffHours} h`
-      if (diffDays < 7) return `Hace ${diffDays} días`
+      if (diffDays < 7) return `Hace ${diffDays} dÃ­as`
       
       return date.toLocaleDateString('es-ES', {
         day: '2-digit',
@@ -523,7 +523,7 @@ export function Comunicaciones({
     <div className="flex h-[calc(100vh-120px)] gap-0 bg-white overflow-hidden">
       {/* COLUMNA IZQUIERDA: Lista de conversaciones */}
       <div className="w-80 flex-shrink-0 border-r border-gray-200 flex flex-col bg-white">
-        {/* Header con búsqueda */}
+        {/* Header con bÃºsqueda */}
         <div className="p-3 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-white">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-lg font-bold text-gray-900">Comunicaciones</h2>
@@ -560,15 +560,15 @@ export function Comunicaciones({
             </div>
           ) : (
             <div className="divide-y divide-gray-100">
-              {/* Separador visual para no leídos */}
+              {/* Separador visual para no leÃ­dos */}
               {conversacionesFiltradas.some(c => !c.leido || c.noLeidos > 0) && (
                 <div className="px-4 py-2.5 bg-gradient-to-r from-blue-50 to-blue-100 border-b-2 border-blue-300">
-                  <p className="text-xs font-bold text-blue-800 uppercase tracking-wide">No Leídos</p>
+                  <p className="text-xs font-bold text-blue-800 uppercase tracking-wide">No LeÃ­dos</p>
                 </div>
               )}
               
               {conversacionesFiltradas.map((conversacion, index) => {
-                // Mostrar separador de leídos cuando cambia de no leído a leído
+                // Mostrar separador de leÃ­dos cuando cambia de no leÃ­do a leÃ­do
                 const mostrarSeparadorLeidos = 
                   index > 0 && 
                   (conversacion.leido && conversacion.noLeidos === 0) &&
@@ -578,7 +578,7 @@ export function Comunicaciones({
                   <div key={conversacion.id}>
                     {mostrarSeparadorLeidos && (
                       <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200">
-                        <p className="text-xs font-bold text-gray-600 uppercase tracking-wide">Leídos</p>
+                        <p className="text-xs font-bold text-gray-600 uppercase tracking-wide">LeÃ­dos</p>
                       </div>
                     )}
                     <div
@@ -638,7 +638,7 @@ export function Comunicaciones({
         </div>
       </div>
 
-      {/* COLUMNA CENTRO: Vista de conversación */}
+      {/* COLUMNA CENTRO: Vista de conversaciÃ³n */}
       <div className="flex-1 flex flex-col min-w-0 bg-white">
         {!conversacionActual ? (
           <div className="flex items-center justify-center h-full bg-gradient-to-br from-gray-50 to-white">
@@ -646,13 +646,13 @@ export function Comunicaciones({
               <div className="p-4 rounded-full bg-blue-100 w-20 h-20 flex items-center justify-center mx-auto mb-4">
                 <MessageSquare className="h-10 w-10 text-blue-600" />
               </div>
-              <p className="text-gray-600 font-medium">Selecciona una conversación para ver los mensajes</p>
-              <p className="text-sm text-gray-400 mt-2">Los mensajes aparecerán aquí</p>
+              <p className="text-gray-600 font-medium">Selecciona una conversaciÃ³n para ver los mensajes</p>
+              <p className="text-sm text-gray-400 mt-2">Los mensajes aparecerÃ¡n aquÃ­</p>
             </div>
           </div>
         ) : (
           <>
-            {/* Header de conversación */}
+            {/* Header de conversaciÃ³n */}
             <div className="p-3 border-b border-gray-200 bg-gradient-to-r from-white to-gray-50">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -707,7 +707,7 @@ export function Comunicaciones({
                 </div>
               ) : mensajesOrdenados.length === 0 ? (
                 <div className="text-center py-12">
-                  <p className="text-gray-500">No hay mensajes en esta conversación</p>
+                  <p className="text-gray-500">No hay mensajes en esta conversaciÃ³n</p>
                 </div>
               ) : (
                 mensajesOrdenados.map((mensaje) => (
@@ -748,7 +748,7 @@ export function Comunicaciones({
 
             {/* Input para enviar mensaje */}
             <div className="p-3 border-t border-gray-200 bg-gradient-to-r from-white to-gray-50">
-              {/* Botón Manual/Automático (solo para WhatsApp) */}
+              {/* BotÃ³n Manual/AutomÃ¡tico (solo para WhatsApp) */}
               {conversacionActual.tipo === 'whatsapp' && (
                 <div className="flex items-center justify-between mb-2 p-2 bg-blue-50 rounded-lg border border-blue-200">
                   <div className="flex items-center gap-2">
@@ -759,7 +759,7 @@ export function Comunicaciones({
                     )}
                     <span className="text-sm font-medium text-gray-700">
                       Modo: <span className={modoAutomatico ? 'text-blue-600 font-bold' : 'text-gray-600 font-bold'}>
-                        {modoAutomatico ? 'Automático (Bot)' : 'Manual'}
+                        {modoAutomatico ? 'AutomÃ¡tico (Bot)' : 'Manual'}
                       </span>
                     </span>
                   </div>
@@ -771,7 +771,7 @@ export function Comunicaciones({
                   >
                     <Settings className="h-4 w-4" />
                     <span className="text-xs">
-                      {modoAutomatico ? 'Cambiar a Manual' : 'Cambiar a Automático'}
+                      {modoAutomatico ? 'Cambiar a Manual' : 'Cambiar a AutomÃ¡tico'}
                     </span>
                   </Button>
                 </div>
@@ -786,15 +786,15 @@ export function Comunicaciones({
                 />
               )}
               
-              {/* En modo automático, mostrar info; en manual, mostrar input */}
+              {/* En modo automÃ¡tico, mostrar info; en manual, mostrar input */}
               {conversacionActual.tipo === 'whatsapp' && modoAutomatico ? (
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                   <div className="flex items-start gap-2">
                     <Zap className="h-5 w-5 text-blue-600 mt-0.5" />
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-blue-900">Bot Automático Activo</p>
+                      <p className="text-sm font-medium text-blue-900">Bot AutomÃ¡tico Activo</p>
                       <p className="text-xs text-blue-700 mt-1">
-                        El bot responderá automáticamente a los mensajes recibidos. Cambia a modo manual para enviar mensajes personalizados.
+                        El bot responderÃ¡ automÃ¡ticamente a los mensajes recibidos. Cambia a modo manual para enviar mensajes personalizados.
                       </p>
                     </div>
                   </div>
@@ -837,8 +837,8 @@ export function Comunicaciones({
               <div className="p-4 rounded-full bg-gray-100 w-16 h-16 flex items-center justify-center mx-auto mb-4">
                 <FileText className="h-8 w-8 text-gray-400" />
               </div>
-              <p className="text-sm text-gray-600 font-medium">Selecciona una conversación para ver los tickets</p>
-              <p className="text-xs text-gray-400 mt-2">Los tickets aparecerán aquí</p>
+              <p className="text-sm text-gray-600 font-medium">Selecciona una conversaciÃ³n para ver los tickets</p>
+              <p className="text-xs text-gray-400 mt-2">Los tickets aparecerÃ¡n aquÃ­</p>
             </div>
           </div>
         ) : (
@@ -852,7 +852,7 @@ export function Comunicaciones({
               </h3>
               {conversacionActual.esNuevo && (
                 <p className="text-xs text-orange-600 mt-2 font-medium bg-orange-50 px-2 py-1 rounded">
-                  ⚠️ Crea un cliente para gestionar tickets
+                  âš ï¸ Crea un cliente para gestionar tickets
                 </p>
               )}
             </div>
@@ -869,13 +869,13 @@ export function Comunicaciones({
                   </CardHeader>
                   <CardContent className="space-y-2 p-3">
                     <Input
-                      placeholder="Título del ticket"
+                      placeholder="TÃ­tulo del ticket"
                       value={ticketForm.titulo}
                       onChange={(e) => setTicketForm({ ...ticketForm, titulo: e.target.value })}
                       className="text-sm"
                     />
                     <Textarea
-                      placeholder="Descripción..."
+                      placeholder="DescripciÃ³n..."
                       value={ticketForm.descripcion}
                       onChange={(e) => setTicketForm({ ...ticketForm, descripcion: e.target.value })}
                       className="text-sm min-h-[80px]"
@@ -911,9 +911,9 @@ export function Comunicaciones({
                       </Select>
                     </div>
                     
-                    {/* Fecha límite (agenda) */}
+                    {/* Fecha lÃ­mite (agenda) */}
                     <div>
-                      <label className="text-xs text-gray-600 mb-1 block">Fecha límite (Agenda)</label>
+                      <label className="text-xs text-gray-600 mb-1 block">Fecha lÃ­mite (Agenda)</label>
                       <Input
                         type="datetime-local"
                         value={ticketForm.fecha_limite}
@@ -1011,16 +1011,16 @@ export function Comunicaciones({
                       </Button>
                     </div>
                     <p className="text-xs text-gray-500 mt-1">
-                      Título y descripción no se pueden editar después de guardar
+                      TÃ­tulo y descripciÃ³n no se pueden editar despuÃ©s de guardar
                     </p>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <div>
-                      <label className="text-xs text-gray-600 mb-1 block">Título (no editable)</label>
+                      <label className="text-xs text-gray-600 mb-1 block">TÃ­tulo (no editable)</label>
                       <Input value={ticketEditando.titulo} disabled className="text-sm bg-gray-50" />
                     </div>
                     <div>
-                      <label className="text-xs text-gray-600 mb-1 block">Descripción (no editable)</label>
+                      <label className="text-xs text-gray-600 mb-1 block">DescripciÃ³n (no editable)</label>
                       <Textarea value={ticketEditando.descripcion} disabled className="text-sm bg-gray-50 min-h-[60px]" />
                     </div>
                     
@@ -1114,7 +1114,7 @@ export function Comunicaciones({
                           <div className="font-bold text-sm text-gray-900 truncate">{ticket.titulo}</div>
                           <div className="text-xs text-gray-500 mt-1 flex items-center gap-2">
                             <span className="font-semibold">#{ticket.id}</span>
-                            <span>•</span>
+                            <span>â€¢</span>
                             <Badge 
                               variant={ticket.estado === 'resuelto' ? 'default' : ticket.estado === 'cerrado' ? 'secondary' : 'outline'} 
                               className="text-xs"
@@ -1156,8 +1156,8 @@ export function Comunicaciones({
       {mostrarCrearCliente && conversacionActual && (
         <CrearClienteForm
           cliente={{
-            // Pre-llenar con datos de la conversación
-            // No incluir 'id' para que se trate como creación, no edición
+            // Pre-llenar con datos de la conversaciÃ³n
+            // No incluir 'id' para que se trate como creaciÃ³n, no ediciÃ³n
             telefono: conversacionActual.tipo === 'whatsapp' ? conversacionActual.contacto : '',
             email: conversacionActual.tipo === 'email' ? conversacionActual.contacto : '',
             nombres: conversacionActual.nombre !== conversacionActual.contacto ? conversacionActual.nombre : '',
@@ -1168,7 +1168,7 @@ export function Comunicaciones({
           onSuccess={() => {
             // Al guardar exitosamente, cerrar el formulario y volver a Comunicaciones
             setMostrarCrearCliente(false)
-            // Guardar información de la conversación actual para buscarla después
+            // Guardar informaciÃ³n de la conversaciÃ³n actual para buscarla despuÃ©s
             if (conversacionActual?.contacto && conversacionActual?.tipo) {
               setClienteRecienCreado({
                 contacto: conversacionActual.contacto,
@@ -1176,14 +1176,14 @@ export function Comunicaciones({
               })
             }
             
-            // ✅ Actualizar comunicaciones para reflejar el nuevo cliente
+            // âœ… Actualizar comunicaciones para reflejar el nuevo cliente
             queryClient.invalidateQueries({ queryKey: ['comunicaciones'] })
             toast.success('Cliente creado exitosamente. Las comunicaciones se han actualizado.')
           }}
           onClienteCreated={() => {
-            // ✅ Cuando se crea el cliente, actualizar comunicaciones
+            // âœ… Cuando se crea el cliente, actualizar comunicaciones
             queryClient.invalidateQueries({ queryKey: ['comunicaciones'] })
-            // Guardar información para buscar la conversación actualizada
+            // Guardar informaciÃ³n para buscar la conversaciÃ³n actualizada
             if (conversacionActual?.contacto && conversacionActual?.tipo) {
               setClienteRecienCreado({
                 contacto: conversacionActual.contacto,

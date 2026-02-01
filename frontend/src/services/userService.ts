@@ -1,9 +1,9 @@
 // frontend/src/services/userService.ts
 import { apiClient as api } from './api'
-import { User } from '@/types'  // IMPORTAR desde types centralizado
+import { User } from '../types'  // IMPORTAR desde types centralizado
 
 // Re-exportar User para compatibilidad
-export type { User } from '@/types'
+export type { User } from '../types'
 
 export interface UserCreate {
   email: string

@@ -16,16 +16,16 @@ import {
   RefreshCw,
   Loader2,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { getErrorMessage, getErrorDetail } from '@/types/errors'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { formatCurrency, formatDate } from '@/utils'
-import { reporteService } from '@/services/reporteService'
-import { TablaAmortizacionCompleta } from '@/components/reportes/TablaAmortizacionCompleta'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card'
+import { Badge } from '../components/ui/badge'
+import { getErrorMessage, getErrorDetail } from '../types/errors'
+import { Button } from '../components/ui/button'
+import { Input } from '../components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
+import { formatCurrency, formatDate } from '../utils'
+import { reporteService } from '../services/reporteService'
+import { TablaAmortizacionCompleta } from '../components/reportes/TablaAmortizacionCompleta'
 import { toast } from 'sonner'
 
 // Mock data para reportes
@@ -34,24 +34,24 @@ const mockReportes = [
     id: 'REP001',
     nombre: 'Reporte de Cartera por Asesor',
     tipo: 'CARTERA',
-    descripcion: 'Análisis detallado de la cartera asignada a cada analista',
+    descripcion: 'AnÃ¡lisis detallado de la cartera asignada a cada analista',
     fechaGeneracion: '2024-07-20',
     periodo: 'Julio 2024',
     formato: 'PDF',
-    tamaño: '2.4 MB',
+    tamaÃ±o: '2.4 MB',
     descargas: 15,
     estado: 'DISPONIBLE',
     generadoPor: 'itmaster@rapicreditca.com',
   },
   {
     id: 'REP002',
-    nombre: 'Análisis de Morosidad',
+    nombre: 'AnÃ¡lisis de Morosidad',
     tipo: 'MOROSIDAD',
-    descripcion: 'Reporte de clientes en mora por período y analista',
+    descripcion: 'Reporte de clientes en mora por perÃ­odo y analista',
     fechaGeneracion: '2024-07-19',
     periodo: 'Julio 2024',
     formato: 'Excel',
-    tamaño: '1.8 MB',
+    tamaÃ±o: '1.8 MB',
     descargas: 8,
     estado: 'DISPONIBLE',
     generadoPor: 'itmaster@rapicreditca.com',
@@ -60,11 +60,11 @@ const mockReportes = [
     id: 'REP003',
     nombre: 'Flujo de Caja Mensual',
     tipo: 'FINANCIERO',
-    descripcion: 'Proyección de ingresos y egresos para el próximo mes',
+    descripcion: 'ProyecciÃ³n de ingresos y egresos para el prÃ³ximo mes',
     fechaGeneracion: '2024-07-18',
     periodo: 'Agosto 2024',
     formato: 'PDF',
-    tamaño: '3.1 MB',
+    tamaÃ±o: '3.1 MB',
     descargas: 12,
     estado: 'PROCESANDO',
     generadoPor: 'itmaster@rapicreditca.com',
@@ -77,7 +77,7 @@ const mockReportes = [
     fechaGeneracion: '2024-07-17',
     periodo: 'Julio 2024',
     formato: 'CSV',
-    tamaño: '850 KB',
+    tamaÃ±o: '850 KB',
     descargas: 25,
     estado: 'DISPONIBLE',
     generadoPor: 'itmaster@rapicreditca.com',
@@ -93,10 +93,10 @@ const tiposReporte = [
   { value: 'PRODUCTOS', label: 'Productos', icon: PieChart },
 ]
 
-// Validación de cédula venezolana
+// ValidaciÃ³n de cÃ©dula venezolana
 const validarCedula = (cedula: string): boolean => {
   if (!cedula || cedula.trim().length === 0) return false
-  // Formato: V/E/J/P/G seguido de 6-12 dígitos
+  // Formato: V/E/J/P/G seguido de 6-12 dÃ­gitos
   return /^[VEJPG]\d{6,12}$/i.test(cedula.trim())
 }
 
@@ -117,10 +117,10 @@ export function Reportes() {
   } = useQuery({
     queryKey: ['reportes-resumen'],
     queryFn: () => reporteService.getResumenDashboard(),
-    staleTime: 2 * 60 * 1000, // 2 minutos - datos más frescos
-    retry: 2, // Dos reintentos para asegurar conexión
+    staleTime: 2 * 60 * 1000, // 2 minutos - datos mÃ¡s frescos
+    retry: 2, // Dos reintentos para asegurar conexiÃ³n
     refetchOnWindowFocus: true, // Recargar cuando la ventana recupera el foco
-    refetchInterval: 5 * 60 * 1000, // Refrescar cada 5 minutos automáticamente
+    refetchInterval: 5 * 60 * 1000, // Refrescar cada 5 minutos automÃ¡ticamente
   })
 
   // Funciones para generar reportes
@@ -186,7 +186,7 @@ export function Reportes() {
         console.log('Reporte de productos:', reporte)
       } else {
         toast.dismiss()
-        toast.info(`Generación de reporte ${tipo} próximamente disponible`)
+        toast.info(`GeneraciÃ³n de reporte ${tipo} prÃ³ximamente disponible`)
       }
     } catch (error: unknown) {
       console.error('Error generando reporte:', error)
@@ -194,14 +194,14 @@ export function Reportes() {
       const errorMessage = getErrorMessage(error)
       const detail = getErrorDetail(error)
       
-      // Mensajes de error más amigables
+      // Mensajes de error mÃ¡s amigables
       let mensajeError = detail || errorMessage
       if (errorMessage?.includes('500') || errorMessage?.includes('Error del servidor')) {
         mensajeError = 'Error del servidor. Por favor, intente nuevamente en unos momentos.'
       } else if (errorMessage?.includes('404') || errorMessage?.includes('No se encontraron')) {
         mensajeError = 'No se encontraron datos para los filtros seleccionados.'
       } else if (errorMessage?.includes('timeout') || errorMessage?.includes('Timeout')) {
-        mensajeError = 'La operación está tomando demasiado tiempo. Por favor, intente con un rango de fechas más corto.'
+        mensajeError = 'La operaciÃ³n estÃ¡ tomando demasiado tiempo. Por favor, intente con un rango de fechas mÃ¡s corto.'
       } else if (!mensajeError) {
         mensajeError = `Error al generar reporte de ${tipo}. Por favor, contacte al soporte si el problema persiste.`
       }
@@ -228,7 +228,7 @@ export function Reportes() {
   const reportesProcesando = mockReportes.filter((r) => r.estado === 'PROCESANDO').length
   const totalDescargas = mockReportes.reduce((sum, r) => sum + r.descargas, 0)
 
-  // KPIs desde el backend - asegurar que sean números (validación robusta)
+  // KPIs desde el backend - asegurar que sean nÃºmeros (validaciÃ³n robusta)
   const kpiCartera = Number(resumenData?.cartera_activa ?? 0) || 0
   const kpiPrestamosMora = Number(resumenData?.prestamos_mora ?? 0) || 0
   const kpiTotalPrestamos = Number(resumenData?.total_prestamos ?? 0) || 0
@@ -293,7 +293,7 @@ export function Reportes() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Préstamos en Mora</CardTitle>
+            <CardTitle className="text-sm font-medium">PrÃ©stamos en Mora</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -307,12 +307,12 @@ export function Reportes() {
             ) : (
               <div className="text-2xl font-bold text-red-600">{kpiPrestamosMora.toLocaleString()}</div>
             )}
-            <p className="text-xs text-muted-foreground">Requieren atención</p>
+            <p className="text-xs text-muted-foreground">Requieren atenciÃ³n</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Préstamos</CardTitle>
+            <CardTitle className="text-sm font-medium">Total PrÃ©stamos</CardTitle>
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -326,7 +326,7 @@ export function Reportes() {
             ) : (
               <div className="text-2xl font-bold">{kpiTotalPrestamos.toLocaleString()}</div>
             )}
-            <p className="text-xs text-muted-foreground">Préstamos activos</p>
+            <p className="text-xs text-muted-foreground">PrÃ©stamos activos</p>
           </CardContent>
         </Card>
         <Card>
@@ -352,7 +352,7 @@ export function Reportes() {
         </Card>
       </div>
 
-      {/* Tabla de Amortización Completa */}
+      {/* Tabla de AmortizaciÃ³n Completa */}
       <TablaAmortizacionCompleta />
 
       {/* Generate Report Section */}
@@ -361,7 +361,7 @@ export function Reportes() {
           <CardTitle className="flex items-center">
             <RefreshCw className="mr-2 h-5 w-5" /> Generar Nuevo Reporte
           </CardTitle>
-          <CardDescription>Selecciona el tipo de reporte y configuración para generar.</CardDescription>
+          <CardDescription>Selecciona el tipo de reporte y configuraciÃ³n para generar.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -380,7 +380,7 @@ export function Reportes() {
                     if (isDisponible && !isGenerando) {
                       generarReporte(tipo.value, 'excel')
                     } else if (!isDisponible) {
-                      toast.info(`El reporte de ${tipo.label} estará disponible próximamente`)
+                      toast.info(`El reporte de ${tipo.label} estarÃ¡ disponible prÃ³ximamente`)
                     }
                   }}
                 >
@@ -422,7 +422,7 @@ export function Reportes() {
                   <SelectItem value="dia">Hoy</SelectItem>
                   <SelectItem value="semana">Esta semana</SelectItem>
                   <SelectItem value="mes">Este mes</SelectItem>
-                  <SelectItem value="año">Este año</SelectItem>
+                  <SelectItem value="aÃ±o">Este aÃ±o</SelectItem>
                 </SelectContent>
               </Select>
               <Button variant="outline" size="sm">
@@ -435,7 +435,7 @@ export function Reportes() {
         <CardContent>
           <div className="flex items-center gap-4 mb-4">
             <Input
-              placeholder="Buscar por nombre, descripción o ID..."
+              placeholder="Buscar por nombre, descripciÃ³n o ID..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="max-w-sm"
@@ -474,10 +474,10 @@ export function Reportes() {
                 <TableHead>ID</TableHead>
                 <TableHead>Nombre</TableHead>
                 <TableHead>Tipo</TableHead>
-                <TableHead>Descripción</TableHead>
-                <TableHead>Período</TableHead>
+                <TableHead>DescripciÃ³n</TableHead>
+                <TableHead>PerÃ­odo</TableHead>
                 <TableHead>Formato</TableHead>
-                <TableHead>Tamaño</TableHead>
+                <TableHead>TamaÃ±o</TableHead>
                 <TableHead>Descargas</TableHead>
                 <TableHead>Fecha</TableHead>
                 <TableHead>Estado</TableHead>
@@ -498,7 +498,7 @@ export function Reportes() {
                     <TableCell>
                       <Badge variant="secondary">{reporte.formato}</Badge>
                     </TableCell>
-                    <TableCell>{reporte.tamaño}</TableCell>
+                    <TableCell>{reporte.tamaÃ±o}</TableCell>
                     <TableCell>{reporte.descargas}</TableCell>
                     <TableCell>{formatDate(reporte.fechaGeneracion)}</TableCell>
                     <TableCell>
@@ -526,7 +526,7 @@ export function Reportes() {
                                 const formato = reporte.formato.toLowerCase() === 'pdf' ? 'pdf' : 'excel'
                                 await generarReporte('CARTERA', formato)
                               } else {
-                                toast.info('La descarga de este reporte estará disponible próximamente')
+                                toast.info('La descarga de este reporte estarÃ¡ disponible prÃ³ximamente')
                               }
                             } catch (error) {
                               console.error('Error descargando reporte:', error)

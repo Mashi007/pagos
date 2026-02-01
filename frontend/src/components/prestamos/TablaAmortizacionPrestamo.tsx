@@ -1,15 +1,15 @@
 import { useState } from 'react'
 import { Download, Eye, FileText, CheckCircle, Clock, AlertCircle } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Prestamo } from '@/types'
-import { prestamoService } from '@/services/prestamoService'
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
+import { Button } from '../../components/ui/button'
+import { Badge } from '../../components/ui/badge'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
+import { Prestamo } from '../../types'
+import { prestamoService } from '../../services/prestamoService'
 import { useQuery } from '@tanstack/react-query'
-import { formatDate } from '@/utils'
+import { formatDate } from '../../utils'
 import toast from 'react-hot-toast'
-import { exportarAExcel, exportarAPDF } from '@/utils/exportUtils'
+import { exportarAExcel, exportarAPDF } from '../../utils/exportUtils'
 
 interface Cuota {
   id: number
@@ -38,14 +38,14 @@ interface TablaAmortizacionPrestamoProps {
 export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestamoProps) {
   const [showFullTable, setShowFullTable] = useState(false)
 
-  // Cargar cuotas del préstamo
+  // Cargar cuotas del prÃ©stamo
   const { data: cuotas, isLoading, error } = useQuery({
     queryKey: ['cuotas-prestamo', prestamo.id],
     queryFn: async () => {
       const data = await prestamoService.getCuotasPrestamo(prestamo.id)
-      // 🔍 DEBUG: Verificar qué estados están llegando
-      console.log('📊 Cuotas recibidas del backend:', data)
-      console.log('📊 Estados encontrados:', data?.map((c: Cuota) => c.estado))
+      // ðŸ” DEBUG: Verificar quÃ© estados estÃ¡n llegando
+      console.log('ðŸ“Š Cuotas recibidas del backend:', data)
+      console.log('ðŸ“Š Estados encontrados:', data?.map((c: Cuota) => c.estado))
       return data
     },
     enabled: prestamo.estado === 'APROBADO' || prestamo.estado === 'DESEMBOLSADO',
@@ -54,18 +54,18 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
     refetchOnWindowFocus: true, // Refetch al enfocar la ventana
   })
 
-  // Función para determinar el estado correcto basado en los datos
+  // FunciÃ³n para determinar el estado correcto basado en los datos
   const determinarEstadoReal = (cuota: Cuota): string => {
     const totalPagado = cuota.total_pagado || 0
     const montoCuota = cuota.monto_cuota || 0
     
-    // Si total_pagado >= monto_cuota, debería ser PAGADO
+    // Si total_pagado >= monto_cuota, deberÃ­a ser PAGADO
     if (totalPagado >= montoCuota) {
       return 'PAGADO'
     }
-    // Si tiene algún pago pero no completo
+    // Si tiene algÃºn pago pero no completo
     if (totalPagado > 0) {
-      // Verificar si está vencida
+      // Verificar si estÃ¡ vencida
       const hoy = new Date()
       const fechaVencimiento = cuota.fecha_vencimiento ? new Date(cuota.fecha_vencimiento) : null
       if (fechaVencimiento && fechaVencimiento < hoy) {
@@ -78,14 +78,14 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
   }
 
   const getEstadoBadge = (estado: string) => {
-    // Normalizar estado a mayúsculas para comparación
+    // Normalizar estado a mayÃºsculas para comparaciÃ³n
     const estadoNormalizado = estado?.toUpperCase() || 'PENDIENTE'
 
     const badges = {
       PENDIENTE: 'bg-yellow-100 text-yellow-800',
-      PAGADO: 'bg-green-100 text-green-800',  // ✅ Corregido: BD usa "PAGADO" no "PAGADA"
+      PAGADO: 'bg-green-100 text-green-800',  // âœ… Corregido: BD usa "PAGADO" no "PAGADA"
       PAGADA: 'bg-green-100 text-green-800',   // Mantener compatibilidad
-      ATRASADO: 'bg-red-100 text-red-800',     // ✅ Agregado: BD también usa "ATRASADO"
+      ATRASADO: 'bg-red-100 text-red-800',     // âœ… Agregado: BD tambiÃ©n usa "ATRASADO"
       VENCIDA: 'bg-red-100 text-red-800',      // Mantener compatibilidad
       PARCIAL: 'bg-blue-100 text-blue-800',
     }
@@ -93,14 +93,14 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
   }
 
   const getEstadoLabel = (estado: string) => {
-    // Normalizar estado a mayúsculas para comparación
+    // Normalizar estado a mayÃºsculas para comparaciÃ³n
     const estadoNormalizado = estado?.toUpperCase() || 'PENDIENTE'
 
     const labels: Record<string, string> = {
       PENDIENTE: 'Pendiente',
-      PAGADO: 'Pagado',      // ✅ Corregido: BD usa "PAGADO"
+      PAGADO: 'Pagado',      // âœ… Corregido: BD usa "PAGADO"
       PAGADA: 'Pagada',      // Mantener compatibilidad
-      ATRASADO: 'Atrasado',  // ✅ Agregado: BD también usa "ATRASADO"
+      ATRASADO: 'Atrasado',  // âœ… Agregado: BD tambiÃ©n usa "ATRASADO"
       VENCIDA: 'Vencida',    // Mantener compatibilidad
       PARCIAL: 'Parcial',
     }
@@ -163,7 +163,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
           <div className="flex items-center gap-3">
             <AlertCircle className="h-5 w-5 text-yellow-600" />
             <p className="text-sm text-yellow-800">
-              La tabla de amortización solo se puede ver para préstamos APROBADOS o DESEMBOLSADOS.
+              La tabla de amortizaciÃ³n solo se puede ver para prÃ©stamos APROBADOS o DESEMBOLSADOS.
               Estado actual: <strong>{prestamo.estado}</strong>
             </p>
           </div>
@@ -178,7 +178,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
         <CardContent className="pt-6">
           <div className="text-center py-8">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="text-sm text-gray-600 mt-2">Cargando tabla de amortización...</p>
+            <p className="text-sm text-gray-600 mt-2">Cargando tabla de amortizaciÃ³n...</p>
           </div>
         </CardContent>
       </Card>
@@ -191,7 +191,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
         <CardContent className="pt-6">
           <div className="flex items-center gap-3">
             <AlertCircle className="h-5 w-5 text-red-600" />
-            <p className="text-sm text-red-800">Error al cargar la tabla de amortización</p>
+            <p className="text-sm text-red-800">Error al cargar la tabla de amortizaciÃ³n</p>
           </div>
         </CardContent>
       </Card>
@@ -206,17 +206,17 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
             <AlertCircle className="h-5 w-5 text-yellow-600" />
             <div>
               <p className="text-sm text-yellow-800 mb-2">
-                No hay tabla de amortización generada para este préstamo.
+                No hay tabla de amortizaciÃ³n generada para este prÃ©stamo.
               </p>
               {prestamo.fecha_base_calculo && (
                 <Button size="sm" onClick={async () => {
                   try {
                     await prestamoService.generarAmortizacion(prestamo.id)
-                    toast.success('Tabla de amortización generada exitosamente')
+                    toast.success('Tabla de amortizaciÃ³n generada exitosamente')
                     // Refrescar datos
                     window.location.reload()
                   } catch (error: any) {
-                    toast.error(error.response?.data?.detail || 'Error al generar amortización')
+                    toast.error(error.response?.data?.detail || 'Error al generar amortizaciÃ³n')
                   }
                 }}>
                   Generar Tabla
@@ -237,7 +237,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
       <CardHeader className="flex flex-row items-center justify-between">
         <div className="flex items-center gap-3">
           <FileText className="h-6 w-6 text-blue-600" />
-          <CardTitle>Tabla de Amortización</CardTitle>
+          <CardTitle>Tabla de AmortizaciÃ³n</CardTitle>
           <Badge variant="secondary">{cuotas.length} cuotas</Badge>
         </div>
         <div className="flex gap-2">
@@ -264,7 +264,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
                 <TableHead>Cuota</TableHead>
                 <TableHead>Fecha Vencimiento</TableHead>
                 <TableHead className="text-right">Capital</TableHead>
-                <TableHead className="text-right">Interés</TableHead>
+                <TableHead className="text-right">InterÃ©s</TableHead>
                 <TableHead className="text-right">Total</TableHead>
                 <TableHead className="text-right">Saldo Pendiente</TableHead>
                 <TableHead>Estado</TableHead>
@@ -309,7 +309,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
                       <Badge className={getEstadoBadge(estadoReal)}>
                         {getEstadoLabel(estadoReal)}
                       </Badge>
-                      {/* 🔍 DEBUG: Mostrar información de depuración */}
+                      {/* ðŸ” DEBUG: Mostrar informaciÃ³n de depuraciÃ³n */}
                       {process.env.NODE_ENV === 'development' && (
                         <div className="text-xs text-gray-400 mt-1">
                           <div>Estado BD: {cuota.estado || 'NULL'}</div>
@@ -325,7 +325,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-4">
                     <Button variant="ghost" onClick={() => setShowFullTable(true)}>
-                      Ver {cuotas.length - 5} cuotas más...
+                      Ver {cuotas.length - 5} cuotas mÃ¡s...
                     </Button>
                   </TableCell>
                 </TableRow>

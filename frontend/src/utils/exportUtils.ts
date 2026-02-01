@@ -1,5 +1,5 @@
 /**
- * Utilidades para exportar tablas de amortización
+ * Utilidades para exportar tablas de amortizaciÃ³n
  */
 
 export interface Cuota {
@@ -25,12 +25,12 @@ export interface PrestamoInfo {
 }
 
 /**
- * Exporta tabla de amortización a Excel
+ * Exporta tabla de amortizaciÃ³n a Excel
  */
 export const exportarAExcel = async (cuotas: Cuota[], prestamo: PrestamoInfo) => {
   try {
-    // Importar dinámicamente exceljs
-    const { createAndDownloadExcel } = await import('@/types/exceljs')
+    // Importar dinÃ¡micamente exceljs
+    const { createAndDownloadExcel } = await import('../types/exceljs')
 
     // Crear datos para Excel
     const datos = cuotas.map(cuota => {
@@ -51,7 +51,7 @@ export const exportarAExcel = async (cuotas: Cuota[], prestamo: PrestamoInfo) =>
         'Cuota': cuota.numero_cuota,
         'Fecha Vencimiento': cuota.fecha_vencimiento,
         'Capital': montoCapital,
-        'Interés': montoInteres,
+        'InterÃ©s': montoInteres,
         'Total': montoCuota,
         'Saldo Pendiente': saldoFinal,
         'Estado': cuota.estado,
@@ -60,12 +60,12 @@ export const exportarAExcel = async (cuotas: Cuota[], prestamo: PrestamoInfo) =>
 
     // Agregar resumen
     const totalCapital = datos.reduce((sum, d) => sum + (d.Capital as number), 0)
-    const totalInteres = datos.reduce((sum, d) => sum + (d.Interés as number), 0)
+    const totalInteres = datos.reduce((sum, d) => sum + (d.InterÃ©s as number), 0)
     const totalGeneral = datos.reduce((sum, d) => sum + (d.Total as number), 0)
 
     const resumen = [
-      { 'Cuota': 'RESUMEN', 'Fecha Vencimiento': '', 'Capital': '', 'Interés': '', 'Total': '', 'Saldo Pendiente': '', 'Estado': '' },
-      { 'Cuota': '', 'Fecha Vencimiento': '', 'Capital': totalCapital, 'Interés': totalInteres, 'Total': totalGeneral, 'Saldo Pendiente': '', 'Estado': '' },
+      { 'Cuota': 'RESUMEN', 'Fecha Vencimiento': '', 'Capital': '', 'InterÃ©s': '', 'Total': '', 'Saldo Pendiente': '', 'Estado': '' },
+      { 'Cuota': '', 'Fecha Vencimiento': '', 'Capital': totalCapital, 'InterÃ©s': totalInteres, 'Total': totalGeneral, 'Saldo Pendiente': '', 'Estado': '' },
     ]
 
     const todosLosDatos = [...datos, ...resumen]
@@ -74,7 +74,7 @@ export const exportarAExcel = async (cuotas: Cuota[], prestamo: PrestamoInfo) =>
     const nombreArchivo = `Tabla_Amortizacion_${prestamo.cedula}_${prestamo.id}.xlsx`
 
     // Descargar usando exceljs
-    await createAndDownloadExcel(todosLosDatos, 'Tabla de Amortización', nombreArchivo)
+    await createAndDownloadExcel(todosLosDatos, 'Tabla de AmortizaciÃ³n', nombreArchivo)
   } catch (error) {
     console.error('Error al exportar a Excel:', error)
     alert('Error al exportar a Excel')
@@ -82,11 +82,11 @@ export const exportarAExcel = async (cuotas: Cuota[], prestamo: PrestamoInfo) =>
 }
 
 /**
- * Exporta tabla de amortización a PDF (formato empresarial)
+ * Exporta tabla de amortizaciÃ³n a PDF (formato empresarial)
  */
 export const exportarAPDF = async (cuotas: Cuota[], prestamo: PrestamoInfo) => {
   try {
-    // Importar dinámicamente jsPDF y jspdf-autotable
+    // Importar dinÃ¡micamente jsPDF y jspdf-autotable
     const [jsPDFModule, autoTableModule] = await Promise.all([
       import('jspdf'),
       import('jspdf-autotable')
@@ -105,18 +105,18 @@ export const exportarAPDF = async (cuotas: Cuota[], prestamo: PrestamoInfo) => {
     const secondaryColor = [107, 114, 128] as [number, number, number] // Gray-500
 
     // ENCABEZADO EMPRESARIAL
-    // Rectángulo de fondo
+    // RectÃ¡ngulo de fondo
     doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2])
     doc.rect(0, 0, 210, 40, 'F')
 
-    // Logo/Título
+    // Logo/TÃ­tulo
     doc.setTextColor(255, 255, 255)
     doc.setFontSize(24)
     doc.setFont('helvetica', 'bold')
     doc.text('RapiCredit', 20, 20)
     doc.setFontSize(12)
     doc.setFont('helvetica', 'normal')
-    doc.text('Sistema de Gestión de Préstamos', 20, 28)
+    doc.text('Sistema de GestiÃ³n de PrÃ©stamos', 20, 28)
 
     // Fecha del reporte
     doc.setFontSize(10)
@@ -129,27 +129,27 @@ export const exportarAPDF = async (cuotas: Cuota[], prestamo: PrestamoInfo) => {
     })
     doc.text(fechaReporte, 160, 20, { align: 'right' })
 
-    // INFORMACIÓN DEL CLIENTE
+    // INFORMACIÃ“N DEL CLIENTE
     doc.setFillColor(245, 245, 250)
     doc.rect(10, 45, 190, 40, 'F')
 
     doc.setFontSize(14)
     doc.setFont('helvetica', 'bold')
     doc.setTextColor(0, 0, 0)
-    doc.text('INFORMACIÓN DEL PRÉSTAMO', 15, 55)
+    doc.text('INFORMACIÃ“N DEL PRÃ‰STAMO', 15, 55)
 
     doc.setFontSize(10)
     doc.setFont('helvetica', 'normal')
     doc.text(`Cliente: ${prestamo.nombres}`, 15, 65)
-    doc.text(`Cédula: ${prestamo.cedula}`, 15, 70)
-    doc.text(`Préstamo #${prestamo.id}`, 110, 65)
+    doc.text(`CÃ©dula: ${prestamo.cedula}`, 15, 70)
+    doc.text(`PrÃ©stamo #${prestamo.id}`, 110, 65)
     doc.text(`Modalidad: ${prestamo.modalidad_pago}`, 110, 70)
     doc.text(`Total: $${prestamo.total_financiamiento.toFixed(2)}`, 110, 75)
 
-    // TABLA DE AMORTIZACIÓN
+    // TABLA DE AMORTIZACIÃ“N
     doc.setFontSize(12)
     doc.setFont('helvetica', 'bold')
-    doc.text('TABLA DE AMORTIZACIÓN', 15, 92)
+    doc.text('TABLA DE AMORTIZACIÃ“N', 15, 92)
 
     // Preparar datos para la tabla y calcular totales
     let totalCapital = 0
@@ -189,7 +189,7 @@ export const exportarAPDF = async (cuotas: Cuota[], prestamo: PrestamoInfo) => {
     // Crear tabla con autoTable
     autoTable(doc, {
       startY: 95,
-      head: [['Cuota', 'Fecha Vencimiento', 'Capital', 'Interés', 'Total', 'Saldo Pendiente', 'Estado']],
+      head: [['Cuota', 'Fecha Vencimiento', 'Capital', 'InterÃ©s', 'Total', 'Saldo Pendiente', 'Estado']],
       body: datosTabla,
       theme: 'striped',
       headStyles: {
@@ -225,7 +225,7 @@ export const exportarAPDF = async (cuotas: Cuota[], prestamo: PrestamoInfo) => {
     doc.setFontSize(11)
     doc.setFont('helvetica', 'bold')
     doc.setTextColor(255, 255, 255)
-    doc.text('RESUMEN DE PRÉSTAMO', 15, resumenY + 7)
+    doc.text('RESUMEN DE PRÃ‰STAMO', 15, resumenY + 7)
 
     // Los totales ya fueron calculados durante el mapeo de datosTabla
 
@@ -243,7 +243,7 @@ export const exportarAPDF = async (cuotas: Cuota[], prestamo: PrestamoInfo) => {
       doc.setFontSize(8)
       doc.setTextColor(secondaryColor[0], secondaryColor[1], secondaryColor[2])
       doc.text(
-        `RapiCredit - Sistema de Préstamos - Página ${i} de ${pageCount}`,
+        `RapiCredit - Sistema de PrÃ©stamos - PÃ¡gina ${i} de ${pageCount}`,
         105,
         290,
         { align: 'center' }
@@ -263,7 +263,7 @@ export const exportarAPDF = async (cuotas: Cuota[], prestamo: PrestamoInfo) => {
     doc.save(nombreArchivo)
   } catch (error) {
     console.error('Error al exportar a PDF:', error)
-    alert('Error al exportar a PDF. Asegúrate de que las librerías estén instaladas.')
+    alert('Error al exportar a PDF. AsegÃºrate de que las librerÃ­as estÃ©n instaladas.')
   }
 }
 

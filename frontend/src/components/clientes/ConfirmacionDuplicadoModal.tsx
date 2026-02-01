@@ -1,11 +1,11 @@
 import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Button } from '@/components/ui/button'
+import { Button } from '../../components/ui/button'
 import { AlertTriangle, User, Calendar, Phone, Mail, DollarSign } from 'lucide-react'
 
 interface ClienteExistente {
   id: number
-  nombres: string  // ✅ nombres unificados (nombres + apellidos)
+  nombres: string  // âœ… nombres unificados (nombres + apellidos)
   cedula: string
   telefono: string
   email: string
@@ -28,7 +28,7 @@ interface ConfirmacionDuplicadoModalProps {
   onConfirm: (comentarios: string) => void
   clienteExistente: ClienteExistente
   clienteNuevo: {
-    nombres: string  // ✅ nombres unificados (nombres + apellidos)
+    nombres: string  // âœ… nombres unificados (nombres + apellidos)
     cedula: string
     telefono: string
     email: string
@@ -47,9 +47,9 @@ export function ConfirmacionDuplicadoModal({
   const [comentarios, setComentarios] = useState('')
   const [isConfirming, setIsConfirming] = useState(false)
 
-  // ✅ VALIDACIÓN ADICIONAL: Verificar que clienteExistente tiene los datos necesarios
+  // âœ… VALIDACIÃ“N ADICIONAL: Verificar que clienteExistente tiene los datos necesarios
   if (!clienteExistente || !clienteExistente.cedula) {
-    console.error('❌ ERROR: ConfirmacionDuplicadoModal recibió clienteExistente inválido:', clienteExistente)
+    console.error('âŒ ERROR: ConfirmacionDuplicadoModal recibiÃ³ clienteExistente invÃ¡lido:', clienteExistente)
     return null
   }
 
@@ -59,7 +59,7 @@ export function ConfirmacionDuplicadoModal({
       await onConfirm(comentarios)
       onClose()
     } catch (error) {
-      console.error('Error en confirmación:', error)
+      console.error('Error en confirmaciÃ³n:', error)
     } finally {
       setIsConfirming(false)
     }
@@ -92,7 +92,7 @@ export function ConfirmacionDuplicadoModal({
           <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white p-6 rounded-t-lg">
             <div className="flex items-center space-x-3">
               <AlertTriangle className="h-6 w-6" />
-              <h2 className="text-xl font-bold">Confirmación de Cliente Duplicado</h2>
+              <h2 className="text-xl font-bold">ConfirmaciÃ³n de Cliente Duplicado</h2>
             </div>
           </div>
 
@@ -107,14 +107,14 @@ export function ConfirmacionDuplicadoModal({
                     Cliente con datos similares encontrado
                   </h3>
                   <p className="text-orange-700">
-                    Se encontró un cliente existente con la misma cédula y datos personales similares.
-                    ¿Desea crear otro perfil de cliente con los mismos datos?
+                    Se encontrÃ³ un cliente existente con la misma cÃ©dula y datos personales similares.
+                    Â¿Desea crear otro perfil de cliente con los mismos datos?
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Comparación de datos */}
+            {/* ComparaciÃ³n de datos */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Cliente existente */}
               <div className="bg-gray-50 rounded-lg p-4">
@@ -127,11 +127,11 @@ export function ConfirmacionDuplicadoModal({
                     <span className="font-medium">Nombre:</span> {clienteExistente.nombres}
                   </div>
                   <div>
-                    <span className="font-medium">Cédula:</span> {clienteExistente.cedula}
+                    <span className="font-medium">CÃ©dula:</span> {clienteExistente.cedula}
                   </div>
                   <div className="flex items-center">
                     <Phone className="h-3 w-3 mr-1" />
-                    <span className="font-medium">Teléfono:</span> {clienteExistente.telefono}
+                    <span className="font-medium">TelÃ©fono:</span> {clienteExistente.telefono}
                   </div>
                   <div className="flex items-center">
                     <Mail className="h-3 w-3 mr-1" />
@@ -155,11 +155,11 @@ export function ConfirmacionDuplicadoModal({
                     <span className="font-medium">Nombre:</span> {clienteNuevo.nombres}
                   </div>
                   <div>
-                    <span className="font-medium">Cédula:</span> {clienteNuevo.cedula}
+                    <span className="font-medium">CÃ©dula:</span> {clienteNuevo.cedula}
                   </div>
                   <div className="flex items-center">
                     <Phone className="h-3 w-3 mr-1" />
-                    <span className="font-medium">Teléfono:</span> {clienteNuevo.telefono}
+                    <span className="font-medium">TelÃ©fono:</span> {clienteNuevo.telefono}
                   </div>
                   <div className="flex items-center">
                     <Mail className="h-3 w-3 mr-1" />
@@ -169,12 +169,12 @@ export function ConfirmacionDuplicadoModal({
               </div>
             </div>
 
-            {/* Tabla de préstamos existentes */}
+            {/* Tabla de prÃ©stamos existentes */}
             {prestamos && prestamos.length > 0 && (
               <div>
                 <h4 className="font-semibold text-gray-800 mb-3 flex items-center">
                   <DollarSign className="h-4 w-4 mr-2" />
-                  Préstamos del Cliente Existente ({prestamos.length})
+                  PrÃ©stamos del Cliente Existente ({prestamos.length})
                 </h4>
                 <div className="overflow-x-auto border border-gray-200 rounded-lg">
                   <table className="w-full text-sm">
@@ -197,7 +197,7 @@ export function ConfirmacionDuplicadoModal({
                           </td>
                           <td className="px-3 py-2">
                             <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                              prestamo.estado === 'AL DÍA' ? 'bg-green-100 text-green-800' :
+                              prestamo.estado === 'AL DÃA' ? 'bg-green-100 text-green-800' :
                               prestamo.estado === 'EN PAGO' ? 'bg-blue-100 text-blue-800' :
                               prestamo.estado === 'PAGADO' ? 'bg-gray-100 text-gray-800' :
                               'bg-yellow-100 text-yellow-800'
@@ -211,7 +211,7 @@ export function ConfirmacionDuplicadoModal({
                   </table>
                 </div>
                 <p className="text-xs text-gray-500 mt-2">
-                  Este cliente ya tiene {prestamos.length} préstamo(s) registrado(s) en el sistema.
+                  Este cliente ya tiene {prestamos.length} prÃ©stamo(s) registrado(s) en el sistema.
                 </p>
               </div>
             )}
@@ -219,18 +219,18 @@ export function ConfirmacionDuplicadoModal({
             {/* Campo de comentarios */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Comentarios sobre la confirmación *
+                Comentarios sobre la confirmaciÃ³n *
               </label>
               <textarea
                 value={comentarios}
                 onChange={(e) => setComentarios(e.target.value)}
-                placeholder="Explique por qué necesita crear otro perfil para este cliente (ej: segundo vehículo, refinanciación, etc.)"
+                placeholder="Explique por quÃ© necesita crear otro perfil para este cliente (ej: segundo vehÃ­culo, refinanciaciÃ³n, etc.)"
                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                 rows={3}
                 required
               />
               <p className="text-xs text-gray-500 mt-1">
-                Este comentario será registrado en la auditoría del sistema
+                Este comentario serÃ¡ registrado en la auditorÃ­a del sistema
               </p>
             </div>
 
@@ -241,8 +241,8 @@ export function ConfirmacionDuplicadoModal({
                 <div>
                   <h4 className="font-semibold text-yellow-800 mb-1">Importante</h4>
                   <p className="text-yellow-700 text-sm">
-                    Al confirmar, se creará un nuevo perfil de cliente independiente.
-                    Cada perfil será tratado como un préstamo diferente en el sistema.
+                    Al confirmar, se crearÃ¡ un nuevo perfil de cliente independiente.
+                    Cada perfil serÃ¡ tratado como un prÃ©stamo diferente en el sistema.
                   </p>
                 </div>
               </div>

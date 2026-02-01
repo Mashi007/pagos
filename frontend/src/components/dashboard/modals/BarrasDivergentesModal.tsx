@@ -13,11 +13,11 @@ import {
 } from 'recharts'
 import { BaseModal } from '../BaseModal'
 import { DashboardFiltrosPanel } from '../DashboardFiltrosPanel'
-import { useDashboardFiltros, type DashboardFiltros } from '@/hooks/useDashboardFiltros'
-import { apiClient } from '@/services/api'
-import { formatCurrency } from '@/utils'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { useDashboardFiltros, type DashboardFiltros } from '../../../hooks/useDashboardFiltros'
+import { apiClient } from '../../../services/api'
+import { formatCurrency } from '../../../utils'
+import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../components/ui/select'
 
 interface BarrasDivergentesModalProps {
   isOpen: boolean
@@ -55,7 +55,7 @@ export function BarrasDivergentesModal({ isOpen, onClose }: BarrasDivergentesMod
     },
   })
 
-  // Cargar datos de distribución
+  // Cargar datos de distribuciÃ³n
   const { data: distribucionData, isLoading: loadingDistribucion, refetch } = useQuery({
     queryKey: ['distribucion-prestamos', filtros, tipoDistribucion],
     queryFn: async (): Promise<BarrasDivergentesResponse> => {
@@ -81,8 +81,8 @@ export function BarrasDivergentesModal({ isOpen, onClose }: BarrasDivergentesMod
     setIsRefreshing(false)
   }
 
-  // Preparar datos para gráfico divergente
-  // Ordenar por monto total (ascendente para visualización)
+  // Preparar datos para grÃ¡fico divergente
+  // Ordenar por monto total (ascendente para visualizaciÃ³n)
   const datosGrafico = [...(distribucionData?.distribucion || [])].sort((a, b) =>
     a.monto_total - b.monto_total
   )
@@ -101,7 +101,7 @@ export function BarrasDivergentesModal({ isOpen, onClose }: BarrasDivergentesMod
         <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
           <p className="font-semibold mb-2">{label}</p>
           <p className="text-sm mb-1">
-            <span className="font-semibold">Cantidad:</span> {cantidad} préstamos
+            <span className="font-semibold">Cantidad:</span> {cantidad} prÃ©stamos
           </p>
           <p className="text-sm mb-1">
             <span className="font-semibold">Monto Total:</span> {formatCurrency(montoTotal)}
@@ -118,15 +118,15 @@ export function BarrasDivergentesModal({ isOpen, onClose }: BarrasDivergentesMod
   const getTitulo = () => {
     switch (tipoDistribucion) {
       case 'rango_monto':
-        return 'Distribución por Rango de Monto'
+        return 'DistribuciÃ³n por Rango de Monto'
       case 'plazo':
-        return 'Distribución por Plazo'
+        return 'DistribuciÃ³n por Plazo'
       case 'rango_monto_plazo':
-        return 'Distribución por Rango de Monto y Plazo'
+        return 'DistribuciÃ³n por Rango de Monto y Plazo'
       case 'estado':
-        return 'Distribución por Estado'
+        return 'DistribuciÃ³n por Estado'
       default:
-        return 'Distribución de Préstamos'
+        return 'DistribuciÃ³n de PrÃ©stamos'
     }
   }
 
@@ -134,7 +134,7 @@ export function BarrasDivergentesModal({ isOpen, onClose }: BarrasDivergentesMod
     <BaseModal
       isOpen={isOpen}
       onClose={onClose}
-      title="Distribución de Préstamos"
+      title="DistribuciÃ³n de PrÃ©stamos"
       size="xlarge"
     >
       <div className="space-y-6">
@@ -150,7 +150,7 @@ export function BarrasDivergentesModal({ isOpen, onClose }: BarrasDivergentesMod
             errorOpcionesFiltros={errorOpcionesFiltros}
           />
           <div className="flex items-center gap-2">
-            <label className="text-sm font-medium">Tipo de Distribución:</label>
+            <label className="text-sm font-medium">Tipo de DistribuciÃ³n:</label>
             <Select value={tipoDistribucion} onValueChange={(v) => setTipoDistribucion(v as TipoDistribucion)}>
               <SelectTrigger className="w-[200px]">
                 <SelectValue />
@@ -165,7 +165,7 @@ export function BarrasDivergentesModal({ isOpen, onClose }: BarrasDivergentesMod
           </div>
         </div>
 
-        {/* Gráfico de Barras Divergentes */}
+        {/* GrÃ¡fico de Barras Divergentes */}
         <Card>
           <CardHeader>
             <CardTitle>{getTitulo()}</CardTitle>
@@ -173,11 +173,11 @@ export function BarrasDivergentesModal({ isOpen, onClose }: BarrasDivergentesMod
           <CardContent>
             {loadingDistribucion ? (
               <div className="h-[500px] flex items-center justify-center">
-                <div className="animate-pulse text-gray-400">Cargando gráfico...</div>
+                <div className="animate-pulse text-gray-400">Cargando grÃ¡fico...</div>
               </div>
             ) : datosGrafico.length === 0 ? (
               <div className="h-[500px] flex items-center justify-center text-gray-500">
-                No hay datos disponibles para el período seleccionado
+                No hay datos disponibles para el perÃ­odo seleccionado
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={500}>
@@ -209,7 +209,7 @@ export function BarrasDivergentesModal({ isOpen, onClose }: BarrasDivergentesMod
                     radius={[0, 8, 8, 0]}
                   >
                     {datosGrafico.map((entry, index) => {
-                      // Colores alternados para mejor visualización
+                      // Colores alternados para mejor visualizaciÃ³n
                       const color = index % 2 === 0 ? '#3b82f6' : '#2563eb'
                       return <Cell key={`cell-${index}`} fill={color} />
                     })}
@@ -222,7 +222,7 @@ export function BarrasDivergentesModal({ isOpen, onClose }: BarrasDivergentesMod
             {distribucionData && (
               <div className="mt-6 grid grid-cols-2 gap-4 pt-6 border-t">
                 <div>
-                  <div className="text-sm text-gray-500">Total de Préstamos</div>
+                  <div className="text-sm text-gray-500">Total de PrÃ©stamos</div>
                   <div className="text-2xl font-bold">{distribucionData.total_prestamos}</div>
                 </div>
                 <div>

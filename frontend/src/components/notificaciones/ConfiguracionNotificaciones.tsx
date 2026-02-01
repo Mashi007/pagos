@@ -1,15 +1,15 @@
 import { useState, useEffect } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
 import { Settings, Zap, Copy, X, Bell, Calendar, AlertTriangle, Shield, ChevronUp, ChevronDown } from 'lucide-react'
-import { emailConfigService } from '@/services/notificacionService'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { emailConfigService } from '../../services/notificacionService'
+import { Button } from '../../components/ui/button'
+import { Input } from '../../components/ui/input'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
 import { toast } from 'sonner'
 
 export function ConfiguracionNotificaciones() {
-  console.log('🔄 [ConfiguracionNotificaciones] Componente renderizado')
+  console.log('ðŸ”„ [ConfiguracionNotificaciones] Componente renderizado')
 
   const [configEnvios, setConfigEnvios] = useState<Record<string, { habilitado: boolean, cco: string[] }>>({})
   const [guardandoEnvios, setGuardandoEnvios] = useState(false)
@@ -22,19 +22,19 @@ export function ConfiguracionNotificaciones() {
     'prejudicial': 'default'
   })
 
-  // Mapeo de tipos a casos con colores por categoría
+  // Mapeo de tipos a casos con colores por categorÃ­a
   const mapeoTipos = {
-    'PAGO_5_DIAS_ANTES': { caso: '5 días antes', categoria: 'Notificación Previa', color: 'blue' },
-    'PAGO_3_DIAS_ANTES': { caso: '3 días antes', categoria: 'Notificación Previa', color: 'blue' },
-    'PAGO_1_DIA_ANTES': { caso: '1 día antes', categoria: 'Notificación Previa', color: 'blue' },
-    'PAGO_DIA_0': { caso: 'Día de pago', categoria: 'Día de Pago', color: 'green' },
-    'PAGO_1_DIA_ATRASADO': { caso: '1 día de retraso', categoria: 'Notificación Retrasada', color: 'orange' },
-    'PAGO_3_DIAS_ATRASADO': { caso: '3 días de retraso', categoria: 'Notificación Retrasada', color: 'orange' },
-    'PAGO_5_DIAS_ATRASADO': { caso: '5 días de retraso', categoria: 'Notificación Retrasada', color: 'orange' },
+    'PAGO_5_DIAS_ANTES': { caso: '5 dÃ­as antes', categoria: 'NotificaciÃ³n Previa', color: 'blue' },
+    'PAGO_3_DIAS_ANTES': { caso: '3 dÃ­as antes', categoria: 'NotificaciÃ³n Previa', color: 'blue' },
+    'PAGO_1_DIA_ANTES': { caso: '1 dÃ­a antes', categoria: 'NotificaciÃ³n Previa', color: 'blue' },
+    'PAGO_DIA_0': { caso: 'DÃ­a de pago', categoria: 'DÃ­a de Pago', color: 'green' },
+    'PAGO_1_DIA_ATRASADO': { caso: '1 dÃ­a de retraso', categoria: 'NotificaciÃ³n Retrasada', color: 'orange' },
+    'PAGO_3_DIAS_ATRASADO': { caso: '3 dÃ­as de retraso', categoria: 'NotificaciÃ³n Retrasada', color: 'orange' },
+    'PAGO_5_DIAS_ATRASADO': { caso: '5 dÃ­as de retraso', categoria: 'NotificaciÃ³n Retrasada', color: 'orange' },
     'PREJUDICIAL': { caso: 'Prejudicial', categoria: 'Prejudicial', color: 'red' },
   }
 
-  // Colores por categoría
+  // Colores por categorÃ­a
   const coloresCategoria = {
     'blue': {
       bg: 'bg-blue-50',
@@ -62,22 +62,22 @@ export function ConfiguracionNotificaciones() {
     }
   }
 
-  // Organización por pestañas (orden de la imagen 1)
-  const tiposPorPestaña: Record<string, string[]> = {
+  // OrganizaciÃ³n por pestaÃ±as (orden de la imagen 1)
+  const tiposPorPestaÃ±a: Record<string, string[]> = {
     'previa': ['PAGO_5_DIAS_ANTES', 'PAGO_3_DIAS_ANTES', 'PAGO_1_DIA_ANTES'],
     'dia-pago': ['PAGO_DIA_0'],
     'retrasada': ['PAGO_1_DIA_ATRASADO', 'PAGO_3_DIAS_ATRASADO', 'PAGO_5_DIAS_ATRASADO'],
     'prejudicial': ['PREJUDICIAL']
   }
 
-  // Función para extraer número de días del caso
+  // FunciÃ³n para extraer nÃºmero de dÃ­as del caso
   const extraerDias = (caso: string): number => {
-    const match = caso.match(/(\d+)\s*d[ií]a/)
+    const match = caso.match(/(\d+)\s*d[iÃ­]a/)
     return match ? parseInt(match[1]) : 0
   }
 
-  // Función para ordenar tipos según el criterio seleccionado
-  const ordenarTipos = (tipos: string[], orden: string, pestaña: string): string[] => {
+  // FunciÃ³n para ordenar tipos segÃºn el criterio seleccionado
+  const ordenarTipos = (tipos: string[], orden: string, pestaÃ±a: string): string[] => {
     const tiposConDatos = tipos.map(tipo => ({
       tipo,
       mapeo: mapeoTipos[tipo as keyof typeof mapeoTipos],
@@ -86,15 +86,15 @@ export function ConfiguracionNotificaciones() {
 
     switch (orden) {
       case 'default':
-        // Orden por defecto según pestañas (5, 3, 1 para previas; 1, 3, 5 para retrasadas)
+        // Orden por defecto segÃºn pestaÃ±as (5, 3, 1 para previas; 1, 3, 5 para retrasadas)
         return tiposConDatos.sort((a, b) => {
           const diasA = extraerDias(a.mapeo?.caso || '')
           const diasB = extraerDias(b.mapeo?.caso || '')
           // Para previas: descendente (5, 3, 1)
           // Para retrasadas: ascendente (1, 3, 5)
-          if (pestaña === 'previa') {
+          if (pestaÃ±a === 'previa') {
             return diasB - diasA
-          } else if (pestaña === 'retrasada') {
+          } else if (pestaÃ±a === 'retrasada') {
             return diasA - diasB
           }
           return 0
@@ -145,14 +145,14 @@ export function ConfiguracionNotificaciones() {
   const cargarConfiguracionEnvios = async () => {
     try {
       setCargando(true)
-      console.log('🔄 [ConfiguracionNotificaciones] Cargando configuración de envíos...')
+      console.log('ðŸ”„ [ConfiguracionNotificaciones] Cargando configuraciÃ³n de envÃ­os...')
       const data = await emailConfigService.obtenerConfiguracionEnvios()
-      console.log('✅ [ConfiguracionNotificaciones] Datos recibidos:', data)
+      console.log('âœ… [ConfiguracionNotificaciones] Datos recibidos:', data)
       setConfigEnvios(data || {})
-      console.log('📊 [ConfiguracionNotificaciones] Estado actualizado:', Object.keys(data || {}).length, 'tipos configurados')
+      console.log('ðŸ“Š [ConfiguracionNotificaciones] Estado actualizado:', Object.keys(data || {}).length, 'tipos configurados')
     } catch (error) {
-      console.error('❌ [ConfiguracionNotificaciones] Error cargando configuración de envíos:', error)
-      toast.error('Error al cargar la configuración de envíos')
+      console.error('âŒ [ConfiguracionNotificaciones] Error cargando configuraciÃ³n de envÃ­os:', error)
+      toast.error('Error al cargar la configuraciÃ³n de envÃ­os')
     } finally {
       setCargando(false)
     }
@@ -180,7 +180,7 @@ export function ConfiguracionNotificaciones() {
       } else {
         nuevosCCO.push(email)
       }
-      // Limitar a 3 correos máximo
+      // Limitar a 3 correos mÃ¡ximo
       return {
         ...prev,
         [tipo]: {
@@ -209,10 +209,10 @@ export function ConfiguracionNotificaciones() {
     try {
       setGuardandoEnvios(true)
       await emailConfigService.actualizarConfiguracionEnvios(configEnvios)
-      toast.success('Configuración de envíos guardada exitosamente')
+      toast.success('ConfiguraciÃ³n de envÃ­os guardada exitosamente')
     } catch (error) {
-      console.error('Error guardando configuración de envíos:', error)
-      toast.error('Error guardando configuración de envíos')
+      console.error('Error guardando configuraciÃ³n de envÃ­os:', error)
+      toast.error('Error guardando configuraciÃ³n de envÃ­os')
     } finally {
       setGuardandoEnvios(false)
     }
@@ -226,30 +226,30 @@ export function ConfiguracionNotificaciones() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Settings className="h-5 w-5 text-blue-600" />
-            Configuración de Notificaciones
+            ConfiguraciÃ³n de Notificaciones
           </CardTitle>
           <CardDescription>
-            Gestiona las plantillas de notificaciones y la configuración de email para enviar correos a los clientes.
+            Gestiona las plantillas de notificaciones y la configuraciÃ³n de email para enviar correos a los clientes.
             Las plantillas permiten personalizar los mensajes usando variables como {'{{nombre}}'}, {'{{monto}}'}, {'{{fecha_vencimiento}}'}, etc.
           </CardDescription>
         </CardHeader>
       </Card>
 
-      {/* Control de Envíos por Pestaña */}
+      {/* Control de EnvÃ­os por PestaÃ±a */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
             <Zap className="h-4 w-4 text-blue-600" />
-            Control de Envíos Automáticos
+            Control de EnvÃ­os AutomÃ¡ticos
           </CardTitle>
           <CardDescription className="text-xs">
-            Habilita o deshabilita el envío automático de correos (se ejecutan a las 4 AM diariamente)
+            Habilita o deshabilita el envÃ­o automÃ¡tico de correos (se ejecutan a las 4 AM diariamente)
           </CardDescription>
         </CardHeader>
         <CardContent>
           {cargando ? (
             <div className="text-center py-8 text-gray-500">
-              <p>Cargando configuración...</p>
+              <p>Cargando configuraciÃ³n...</p>
             </div>
           ) : (
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
@@ -259,14 +259,14 @@ export function ConfiguracionNotificaciones() {
                 className="flex items-center gap-2 data-[state=active]:bg-blue-500 data-[state=active]:text-white transition-all"
               >
                 <Bell className="h-4 w-4" />
-                <span className="font-medium">Notificación Previa</span>
+                <span className="font-medium">NotificaciÃ³n Previa</span>
               </TabsTrigger>
               <TabsTrigger
                 value="dia-pago"
                 className="flex items-center gap-2 data-[state=active]:bg-green-500 data-[state=active]:text-white transition-all"
               >
                 <Calendar className="h-4 w-4" />
-                <span className="font-medium">Día de Pago</span>
+                <span className="font-medium">DÃ­a de Pago</span>
               </TabsTrigger>
               <TabsTrigger
                 value="retrasada"
@@ -284,19 +284,19 @@ export function ConfiguracionNotificaciones() {
               </TabsTrigger>
             </TabsList>
 
-            {/* Renderizar tarjetas por pestaña */}
-            {Object.entries(tiposPorPestaña).map(([pestaña, tipos]) => {
+            {/* Renderizar tarjetas por pestaÃ±a */}
+            {Object.entries(tiposPorPestaÃ±a).map(([pestaÃ±a, tipos]) => {
               const primeraTarjeta = mapeoTipos[tipos[0] as keyof typeof mapeoTipos]
               const colorCategoria = primeraTarjeta?.color || 'blue'
               const colores = coloresCategoria[colorCategoria as keyof typeof coloresCategoria]
 
-              // Ordenar tipos según el criterio seleccionado para esta pestaña
-              const ordenActual = ordenamiento[pestaña] || 'default'
-              const tiposOrdenados = ordenarTipos(tipos, ordenActual, pestaña)
+              // Ordenar tipos segÃºn el criterio seleccionado para esta pestaÃ±a
+              const ordenActual = ordenamiento[pestaÃ±a] || 'default'
+              const tiposOrdenados = ordenarTipos(tipos, ordenActual, pestaÃ±a)
 
               return (
-                <TabsContent key={pestaña} value={pestaña} className="space-y-4 mt-6">
-                  {/* Menú de ordenamiento */}
+                <TabsContent key={pestaÃ±a} value={pestaÃ±a} className="space-y-4 mt-6">
+                  {/* MenÃº de ordenamiento */}
                   {tipos.length > 1 && (
                     <div className="flex justify-end mb-4">
                       <div className="flex items-center gap-2">
@@ -309,7 +309,7 @@ export function ConfiguracionNotificaciones() {
                           onValueChange={(value) => {
                             setOrdenamiento(prev => ({
                               ...prev,
-                              [pestaña]: value
+                              [pestaÃ±a]: value
                             }))
                           }}
                         >
@@ -318,8 +318,8 @@ export function ConfiguracionNotificaciones() {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="default">Orden por defecto</SelectItem>
-                            <SelectItem value="dias-asc">Días (menor a mayor)</SelectItem>
-                            <SelectItem value="dias-desc">Días (mayor a menor)</SelectItem>
+                            <SelectItem value="dias-asc">DÃ­as (menor a mayor)</SelectItem>
+                            <SelectItem value="dias-desc">DÃ­as (mayor a menor)</SelectItem>
                             <SelectItem value="nombre-asc">Nombre (A-Z)</SelectItem>
                             <SelectItem value="estado-activas">Activas primero</SelectItem>
                             <SelectItem value="estado-inactivas">Inactivas primero</SelectItem>
@@ -350,7 +350,7 @@ export function ConfiguracionNotificaciones() {
                                 {mapeo?.caso || tipo}
                               </div>
                               <div className={`text-sm ${coloresTarjeta.text} opacity-75 mt-1`}>
-                                {mapeo?.categoria || 'Sin categoría'}
+                                {mapeo?.categoria || 'Sin categorÃ­a'}
                               </div>
                             </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
@@ -372,7 +372,7 @@ export function ConfiguracionNotificaciones() {
                           </div>
                         </div>
 
-                          {/* CCO mejorado - Campos más grandes y cómodos */}
+                          {/* CCO mejorado - Campos mÃ¡s grandes y cÃ³modos */}
                           <div className={`pt-4 border-t-2 ${colorTipo === 'blue' ? 'border-blue-300' : colorTipo === 'green' ? 'border-green-300' : colorTipo === 'orange' ? 'border-orange-300' : 'border-red-300'} opacity-50`}>
                             <div className="flex items-center gap-2 mb-4">
                               <Copy className={`h-5 w-5 ${coloresTarjeta.text} opacity-75`} />
@@ -416,7 +416,7 @@ export function ConfiguracionNotificaciones() {
               )
             })}
 
-            {/* Botón Guardar - fuera de las pestañas para que siempre sea visible */}
+            {/* BotÃ³n Guardar - fuera de las pestaÃ±as para que siempre sea visible */}
             <div className="flex justify-end pt-6 border-t-2 border-gray-200 mt-8">
               <Button
                 onClick={guardarConfiguracionEnvios}
@@ -425,7 +425,7 @@ export function ConfiguracionNotificaciones() {
                 className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all"
               >
                 <Settings className="h-5 w-5" />
-                {guardandoEnvios ? 'Guardando...' : 'Guardar Configuración de Envíos'}
+                {guardandoEnvios ? 'Guardando...' : 'Guardar ConfiguraciÃ³n de EnvÃ­os'}
               </Button>
             </div>
           </Tabs>

@@ -1,6 +1,6 @@
 import { apiClient, ApiResponse, PaginatedResponse, buildUrl } from './api'
-import { Cliente, ClienteForm, ClienteFilters } from '@/types'
-import { logger } from '@/utils/logger'
+import { Cliente, ClienteForm, ClienteFilters } from '../types'
+import { logger } from '../utils/logger'
 
 // Constantes de configuración
 const DEFAULT_PER_PAGE = 20

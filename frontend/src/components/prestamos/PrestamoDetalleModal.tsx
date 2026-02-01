@@ -1,16 +1,16 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Eye, Calendar, DollarSign, User, Building, TrendingUp, AlertTriangle, Loader2 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Prestamo } from '@/types'
-import { formatDate } from '@/utils'
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
+import { Button } from '../../components/ui/button'
+import { Badge } from '../../components/ui/badge'
+import { Prestamo } from '../../types'
+import { formatDate } from '../../utils'
 import { TablaAmortizacionPrestamo } from './TablaAmortizacionPrestamo'
 import { AuditoriaPrestamo } from './AuditoriaPrestamo'
-import { usePrestamo } from '@/hooks/usePrestamos'
-import { aiTrainingService } from '@/services/aiTrainingService'
-import { prestamoService } from '@/services/prestamoService'
+import { usePrestamo } from '../../hooks/usePrestamos'
+import { aiTrainingService } from '../../services/aiTrainingService'
+import { prestamoService } from '../../services/prestamoService'
 import { toast } from 'sonner'
 import { useQuery } from '@tanstack/react-query'
 
@@ -24,21 +24,21 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
   const [prediccionImpago, setPrediccionImpago] = useState<any>(null)
   const [cargandoPrediccion, setCargandoPrediccion] = useState(false)
 
-  // Recargar datos completos del préstamo
+  // Recargar datos completos del prÃ©stamo
   const { data: prestamo, isLoading } = usePrestamo(prestamoInitial.id)
 
-  // Obtener evaluación de riesgo
+  // Obtener evaluaciÃ³n de riesgo
   const { data: evaluacionRiesgo, isLoading: loadingEvaluacion } = useQuery({
     queryKey: ['evaluacion-riesgo', prestamoInitial.id],
     queryFn: () => prestamoService.getEvaluacionRiesgo(prestamoInitial.id),
     enabled: !!prestamoInitial.id,
-    retry: false, // No reintentar si no hay evaluación
+    retry: false, // No reintentar si no hay evaluaciÃ³n
     onError: () => {
-      // Silenciar error si no hay evaluación
+      // Silenciar error si no hay evaluaciÃ³n
     }
   })
 
-  // Cargar predicción de impago si el préstamo está aprobado o desembolsado
+  // Cargar predicciÃ³n de impago si el prÃ©stamo estÃ¡ aprobado o desembolsado
   useEffect(() => {
     const prestamoData = prestamo || prestamoInitial
     if (prestamoData?.estado === 'APROBADO' || prestamoData?.estado === 'DESEMBOLSADO') {
@@ -52,9 +52,9 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
       const resultado = await aiTrainingService.predecirImpago(prestamoId)
       setPrediccionImpago(resultado)
     } catch (error: any) {
-      // No mostrar error si no hay modelo activo, solo no mostrar la predicción
+      // No mostrar error si no hay modelo activo, solo no mostrar la predicciÃ³n
       if (error?.response?.status !== 400) {
-        console.error('Error cargando predicción de impago:', error)
+        console.error('Error cargando predicciÃ³n de impago:', error)
       }
     } finally {
       setCargandoPrediccion(false)
@@ -82,7 +82,7 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
         >
           <div className="text-center bg-white p-8 rounded-lg">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Cargando detalles del préstamo...</p>
+            <p className="text-gray-600">Cargando detalles del prÃ©stamo...</p>
           </div>
         </motion.div>
       </AnimatePresence>
@@ -105,7 +105,7 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
   const getEstadoLabel = (estado: string) => {
     const labels: Record<string, string> = {
       DRAFT: 'Borrador',
-      EN_REVISION: 'En Revisión',
+      EN_REVISION: 'En RevisiÃ³n',
       APROBADO: 'Aprobado',
       DESEMBOLSADO: 'Desembolsado',
       RECHAZADO: 'Rechazado',
@@ -132,7 +132,7 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
           {/* Header */}
           <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center z-10">
             <div>
-              <h2 className="text-2xl font-bold">Detalles del Préstamo #{prestamoData.id}</h2>
+              <h2 className="text-2xl font-bold">Detalles del PrÃ©stamo #{prestamoData.id}</h2>
               <p className="text-sm text-gray-600">Cliente: {prestamoData.nombres}</p>
             </div>
             <Button variant="ghost" size="icon" onClick={onClose}>
@@ -161,7 +161,7 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                     : 'border-transparent text-gray-600 hover:text-gray-900'
                 }`}
               >
-                Tabla de Amortización
+                Tabla de AmortizaciÃ³n
               </button>
               <button
                 onClick={() => setActiveTab('auditoria')}
@@ -171,7 +171,7 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                     : 'border-transparent text-gray-600 hover:text-gray-900'
                 }`}
               >
-                Auditoría
+                AuditorÃ­a
               </button>
             </div>
           </div>
@@ -191,17 +191,17 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                   </CardHeader>
                 </Card>
 
-                {/* Información del Cliente */}
+                {/* InformaciÃ³n del Cliente */}
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <User className="h-5 w-5" />
-                      Información del Cliente
+                      InformaciÃ³n del Cliente
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-sm text-gray-600">Cédula</label>
+                      <label className="text-sm text-gray-600">CÃ©dula</label>
                       <p className="font-medium">{prestamoData.cedula}</p>
                     </div>
                     <div>
@@ -211,12 +211,12 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                   </CardContent>
                 </Card>
 
-                {/* Información del Préstamo */}
+                {/* InformaciÃ³n del PrÃ©stamo */}
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <DollarSign className="h-5 w-5" />
-                      Información del Préstamo
+                      InformaciÃ³n del PrÃ©stamo
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="grid grid-cols-2 gap-4">
@@ -238,11 +238,11 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                       </p>
                     </div>
                     <div>
-                      <label className="text-sm text-gray-600">Número de Cuotas</label>
+                      <label className="text-sm text-gray-600">NÃºmero de Cuotas</label>
                       <p className="text-xl font-semibold">{prestamoData.numero_cuotas}</p>
                     </div>
                     <div>
-                      <label className="text-sm text-gray-600">Cuota por Período</label>
+                      <label className="text-sm text-gray-600">Cuota por PerÃ­odo</label>
                       <p className="text-xl font-semibold">
                         ${typeof prestamoData.cuota_periodo === 'number'
                           ? prestamoData.cuota_periodo.toFixed(2)
@@ -250,7 +250,7 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                       </p>
                     </div>
                     <div>
-                      <label className="text-sm text-gray-600">Tasa de Interés</label>
+                      <label className="text-sm text-gray-600">Tasa de InterÃ©s</label>
                       <p className="font-medium">
                         {typeof prestamoData.tasa_interes === 'number'
                           ? (prestamoData.tasa_interes * 100).toFixed(2) + '%'
@@ -263,32 +263,32 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                     </div>
                     {prestamoData.fecha_aprobacion && (
                       <div>
-                        <label className="text-sm text-gray-600">Fecha de Aprobación</label>
+                        <label className="text-sm text-gray-600">Fecha de AprobaciÃ³n</label>
                         <p className="font-medium">{formatDate(prestamoData.fecha_aprobacion)}</p>
                       </div>
                     )}
                   </CardContent>
                 </Card>
 
-                {/* Evaluación de Riesgo - Solo lectura */}
+                {/* EvaluaciÃ³n de Riesgo - Solo lectura */}
                 {evaluacionRiesgo && (
                   <Card>
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <TrendingUp className="h-5 w-5" />
-                        Evaluación de Riesgo (Solo Lectura)
+                        EvaluaciÃ³n de Riesgo (Solo Lectura)
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <label className="text-sm text-gray-600">Puntuación Total</label>
+                          <label className="text-sm text-gray-600">PuntuaciÃ³n Total</label>
                           <p className="text-2xl font-bold text-blue-600">
                             {evaluacionRiesgo.puntuacion_total?.toFixed(2) || '0.00'} / 100
                           </p>
                         </div>
                         <div>
-                          <label className="text-sm text-gray-600">Clasificación de Riesgo</label>
+                          <label className="text-sm text-gray-600">ClasificaciÃ³n de Riesgo</label>
                           <Badge className={
                             evaluacionRiesgo.clasificacion_riesgo === 'A' ? 'bg-green-100 text-green-800 border-green-300' :
                             evaluacionRiesgo.clasificacion_riesgo === 'B' ? 'bg-blue-100 text-blue-800 border-blue-300' :
@@ -300,12 +300,12 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                           </Badge>
                         </div>
                         <div>
-                          <label className="text-sm text-gray-600">Decisión Final</label>
+                          <label className="text-sm text-gray-600">DecisiÃ³n Final</label>
                           <p className="font-medium">{evaluacionRiesgo.decision_final || 'N/A'}</p>
                         </div>
                         {evaluacionRiesgo.sugerencias?.plazo_maximo_sugerido && (
                           <div>
-                            <label className="text-sm text-gray-600">Plazo Máximo Sugerido</label>
+                            <label className="text-sm text-gray-600">Plazo MÃ¡ximo Sugerido</label>
                             <p className="font-medium">{evaluacionRiesgo.sugerencias.plazo_maximo_sugerido} meses</p>
                           </div>
                         )}
@@ -317,8 +317,8 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                             <div>Criterio 1 - Capacidad de Pago: {evaluacionRiesgo.detalle_criterios.ratio_endeudamiento?.puntos || 0} pts</div>
                             <div>Criterio 2 - Estabilidad Laboral: {evaluacionRiesgo.detalle_criterios.antiguedad_trabajo?.puntos || 0} pts</div>
                             <div>Criterio 3 - Referencias: {evaluacionRiesgo.detalle_criterios.referencias?.puntos || 0} pts</div>
-                            <div>Criterio 4 - Arraigo Geográfico: {(evaluacionRiesgo.detalle_criterios.arraigo_familiar || 0) + (evaluacionRiesgo.detalle_criterios.arraigo_laboral || 0)} pts</div>
-                            <div>Criterio 5 - Perfil Sociodemográfico: {evaluacionRiesgo.detalle_criterios.vivienda?.puntos || 0} pts</div>
+                            <div>Criterio 4 - Arraigo GeogrÃ¡fico: {(evaluacionRiesgo.detalle_criterios.arraigo_familiar || 0) + (evaluacionRiesgo.detalle_criterios.arraigo_laboral || 0)} pts</div>
+                            <div>Criterio 5 - Perfil SociodemogrÃ¡fico: {evaluacionRiesgo.detalle_criterios.vivienda?.puntos || 0} pts</div>
                             <div>Criterio 6 - Edad: {evaluacionRiesgo.detalle_criterios.edad?.puntos || 0} pts</div>
                             <div>Criterio 7 - Capacidad de Maniobra: {evaluacionRiesgo.detalle_criterios.enganche_garantias?.puntos || 0} pts</div>
                           </div>
@@ -328,13 +328,13 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                   </Card>
                 )}
 
-                {/* Predicción de Impago de Cuotas */}
+                {/* PredicciÃ³n de Impago de Cuotas */}
                 {(prestamoData.estado === 'APROBADO' || prestamoData.estado === 'DESEMBOLSADO') && (
                   <Card className={prediccionImpago ? getRiesgoColor(prediccionImpago.nivel_riesgo) : ''}>
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <TrendingUp className="h-5 w-5" />
-                        Predicción de Impago de Cuotas
+                        PredicciÃ³n de Impago de Cuotas
                         {cargandoPrediccion && (
                           <Loader2 className="h-4 w-4 animate-spin ml-2" />
                         )}
@@ -343,13 +343,13 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                     <CardContent>
                       {cargandoPrediccion ? (
                         <div className="text-center py-4">
-                          <p className="text-sm text-gray-500">Cargando predicción...</p>
+                          <p className="text-sm text-gray-500">Cargando predicciÃ³n...</p>
                         </div>
                       ) : prediccionImpago ? (
                         <div className="space-y-4">
                           <div className="grid grid-cols-2 gap-4">
                             <div>
-                              <div className="text-sm text-gray-600 mb-1">Predicción</div>
+                              <div className="text-sm text-gray-600 mb-1">PredicciÃ³n</div>
                               <div className="font-semibold text-lg">{prediccionImpago.prediccion}</div>
                             </div>
                             <div>
@@ -377,7 +377,7 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                                 <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5" />
                               )}
                               <div>
-                                <div className="text-sm font-medium mb-1">Recomendación</div>
+                                <div className="text-sm font-medium mb-1">RecomendaciÃ³n</div>
                                 <div className="text-sm">{prediccionImpago.recomendacion}</div>
                               </div>
                             </div>
@@ -395,7 +395,7 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                       ) : (
                         <div className="text-center py-4">
                           <p className="text-sm text-gray-500">
-                            No hay modelo activo para predecir impago. Entrena un modelo en Configuración → AI → ML Impago.
+                            No hay modelo activo para predecir impago. Entrena un modelo en ConfiguraciÃ³n â†’ AI â†’ ML Impago.
                           </p>
                         </div>
                       )}
@@ -403,7 +403,7 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                   </Card>
                 )}
 
-                {/* Información de Producto */}
+                {/* InformaciÃ³n de Producto */}
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -413,7 +413,7 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                   </CardHeader>
                   <CardContent className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-sm text-gray-600">Modelo de Vehículo</label>
+                      <label className="text-sm text-gray-600">Modelo de VehÃ­culo</label>
                       <p className="font-medium">{prestamoData.producto}</p>
                     </div>
                     <div>
@@ -423,7 +423,7 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                   </CardContent>
                 </Card>
 
-                {/* Usuarios y Auditoría */}
+                {/* Usuarios y AuditorÃ­a */}
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">

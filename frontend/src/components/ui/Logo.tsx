@@ -1,16 +1,16 @@
 import { useState, useEffect } from 'react'
-import { cn } from '@/utils'
-import { getErrorMessage, isAxiosError } from '@/types/errors'
-import { safeGetItem, safeSetItem } from '@/utils/storage'
-import { useIsMounted } from '@/hooks/useIsMounted'
+import { cn } from '../../utils'
+import { getErrorMessage, isAxiosError } from '../../types/errors'
+import { safeGetItem, safeSetItem } from '../../utils/storage'
+import { useIsMounted } from '../../hooks/useIsMounted'
 
 interface LogoProps {
   className?: string
   size?: 'sm' | 'md' | 'lg' | 'xl'
-  forceDefault?: boolean // ✅ Opción para forzar el uso del logo por defecto
+  forceDefault?: boolean // âœ… OpciÃ³n para forzar el uso del logo por defecto
 }
 
-// ✅ Función para limpiar el caché del logo (útil para debugging o reset)
+// âœ… FunciÃ³n para limpiar el cachÃ© del logo (Ãºtil para debugging o reset)
 export function clearLogoCache() {
   logoCache.logoUrl = null
   logoCache.logoFilename = null
@@ -20,13 +20,13 @@ export function clearLogoCache() {
   logoCache.version += 1
   saveLogoMetadata(null)
   notifyLogoListeners(null, logoCache.version)
-  console.log('✅ Caché del logo limpiado, se usará el logo por defecto')
+  console.log('âœ… CachÃ© del logo limpiado, se usarÃ¡ el logo por defecto')
 }
 
-// ✅ Exponer función globalmente para debugging (solo en desarrollo)
+// âœ… Exponer funciÃ³n globalmente para debugging (solo en desarrollo)
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
   ;(window as any).clearLogoCache = clearLogoCache
-  console.log('💡 Función de debugging disponible: window.clearLogoCache() para limpiar el caché del logo')
+  console.log('ðŸ’¡ FunciÃ³n de debugging disponible: window.clearLogoCache() para limpiar el cachÃ© del logo')
 }
 
 const sizeMap = {
@@ -36,25 +36,25 @@ const sizeMap = {
   xl: 'w-20 h-20',
 }
 
-// Generar IDs únicos para evitar conflictos si hay múltiples logos en la página
+// Generar IDs Ãºnicos para evitar conflictos si hay mÃºltiples logos en la pÃ¡gina
 const uniqueId = `logo-${Math.random().toString(36).substr(2, 9)}`
 
 // Extensiones posibles del logo personalizado (ordenadas por prioridad)
 const LOGO_EXTENSIONS = ['.svg', '.png', '.jpg', '.jpeg']
 
-// Cache compartido en memoria para evitar múltiples peticiones
-// ✅ MEJORADO: Ahora persiste metadatos en localStorage para evitar recargas innecesarias
+// Cache compartido en memoria para evitar mÃºltiples peticiones
+// âœ… MEJORADO: Ahora persiste metadatos en localStorage para evitar recargas innecesarias
 interface LogoCache {
   logoUrl: string | null
   isChecking: boolean
   hasChecked: boolean
-  version: number // Contador de versión para forzar actualizaciones
-  logoNotFound: boolean // ✅ Flag para recordar que el logo no existe (evitar requests repetidos)
-  logoFilename: string | null // ✅ Nombre del archivo del logo para persistencia
-  lastCheckTime: number | null // ✅ Timestamp de la última verificación para evitar requests frecuentes
+  version: number // Contador de versiÃ³n para forzar actualizaciones
+  logoNotFound: boolean // âœ… Flag para recordar que el logo no existe (evitar requests repetidos)
+  logoFilename: string | null // âœ… Nombre del archivo del logo para persistencia
+  lastCheckTime: number | null // âœ… Timestamp de la Ãºltima verificaciÃ³n para evitar requests frecuentes
 }
 
-// Función para cargar metadatos del logo desde localStorage
+// FunciÃ³n para cargar metadatos del logo desde localStorage
 const loadLogoMetadata = (): Partial<LogoCache> => {
   try {
     const cached = safeGetItem('logo_metadata', null)
@@ -74,7 +74,7 @@ const loadLogoMetadata = (): Partial<LogoCache> => {
   return {}
 }
 
-// Función para guardar metadatos del logo en localStorage
+// FunciÃ³n para guardar metadatos del logo en localStorage
 const saveLogoMetadata = (filename: string | null) => {
   try {
     if (filename) {
@@ -87,7 +87,7 @@ const saveLogoMetadata = (filename: string | null) => {
   }
 }
 
-// Inicializar caché con metadatos guardados
+// Inicializar cachÃ© con metadatos guardados
 const initialMetadata = loadLogoMetadata()
 const logoCache: LogoCache = {
   logoUrl: initialMetadata.logoUrl || null,
@@ -96,7 +96,7 @@ const logoCache: LogoCache = {
   version: 0,
   logoNotFound: initialMetadata.logoNotFound || false,
   logoFilename: initialMetadata.logoFilename || null,
-  lastCheckTime: null, // ✅ Inicializar timestamp de última verificación
+  lastCheckTime: null, // âœ… Inicializar timestamp de Ãºltima verificaciÃ³n
 }
 
 // Listeners para notificar a todos los componentes cuando cambia el logo
@@ -116,46 +116,46 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
   const [customLogoUrl, setCustomLogoUrl] = useState<string | null>(forceDefault ? null : logoCache.logoUrl)
   const [hasChecked, setHasChecked] = useState(forceDefault ? true : logoCache.hasChecked)
   const [logoVersion, setLogoVersion] = useState(logoCache.version)
-  const [imageLoaded, setImageLoaded] = useState(false) // ✅ Estado para controlar cuando la imagen está completamente cargada
+  const [imageLoaded, setImageLoaded] = useState(false) // âœ… Estado para controlar cuando la imagen estÃ¡ completamente cargada
   const isMounted = useIsMounted()
 
   useEffect(() => {
-    // ✅ PRIORIDAD 0: Si forceDefault está activado, usar siempre el logo por defecto
+    // âœ… PRIORIDAD 0: Si forceDefault estÃ¡ activado, usar siempre el logo por defecto
     if (forceDefault) {
       setCustomLogoUrl(null)
       setHasChecked(true)
       return
     }
 
-    // ✅ PRIORIDAD 1: Si ya verificamos y el logo NO existe, no hacer nada más
+    // âœ… PRIORIDAD 1: Si ya verificamos y el logo NO existe, no hacer nada mÃ¡s
     if (logoCache.logoNotFound) {
       setHasChecked(true)
       setCustomLogoUrl(null)
       return
     }
 
-    // ✅ PRIORIDAD 2: Si ya tenemos el logo cacheado, usarlo directamente
-    // Si el logo está disponible, mostrarlo inmediatamente
+    // âœ… PRIORIDAD 2: Si ya tenemos el logo cacheado, usarlo directamente
+    // Si el logo estÃ¡ disponible, mostrarlo inmediatamente
     if (logoCache.logoUrl && logoCache.hasChecked) {
       setCustomLogoUrl(logoCache.logoUrl)
       setHasChecked(true)
-      // ✅ Si el logo está cacheado, marcarlo como cargado inmediatamente
+      // âœ… Si el logo estÃ¡ cacheado, marcarlo como cargado inmediatamente
       if (logoCache.logoFilename && !logoCache.logoNotFound) {
-        setImageLoaded(true) // ✅ Mostrar logo directamente
+        setImageLoaded(true) // âœ… Mostrar logo directamente
       }
-      // ✅ Si el logo está cacheado y ya fue verificado recientemente (< 5 minutos),
+      // âœ… Si el logo estÃ¡ cacheado y ya fue verificado recientemente (< 5 minutos),
       // no hacer nueva solicitud para evitar abortos innecesarios
       const cacheAge = Date.now() - (logoCache.lastCheckTime || 0)
       if (cacheAge < 300000) { // 5 minutos
         return // Usar logo cacheado sin verificar nuevamente
       }
-      // ✅ Continuar para verificar si hay una versión más reciente en el servidor
-      // Esto asegura que si el logo cambió, se actualice inmediatamente sin mostrar la versión antigua
+      // âœ… Continuar para verificar si hay una versiÃ³n mÃ¡s reciente en el servidor
+      // Esto asegura que si el logo cambiÃ³, se actualice inmediatamente sin mostrar la versiÃ³n antigua
     }
 
-    // ✅ PRIORIDAD 3: Si otra instancia ya está verificando, esperar a que termine
+    // âœ… PRIORIDAD 3: Si otra instancia ya estÃ¡ verificando, esperar a que termine
     if (logoCache.isChecking) {
-      // Esperar hasta que termine la verificación
+      // Esperar hasta que termine la verificaciÃ³n
       const checkInterval = setInterval(() => {
         if (!logoCache.isChecking) {
           if (logoCache.logoNotFound) {
@@ -173,18 +173,18 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
           }
           clearInterval(checkInterval)
         }
-      }, 50) // ✅ Reducir intervalo para respuesta más rápida
+      }, 50) // âœ… Reducir intervalo para respuesta mÃ¡s rÃ¡pida
 
       return () => clearInterval(checkInterval)
     }
 
-    // ✅ PRIORIDAD 4: Si ya verificamos pero no hay logo (sin logoNotFound), no hacer nada
+    // âœ… PRIORIDAD 4: Si ya verificamos pero no hay logo (sin logoNotFound), no hacer nada
     if (logoCache.hasChecked && !logoCache.logoUrl && !logoCache.logoFilename) {
       setHasChecked(true)
       return
     }
 
-    // ✅ Marcar que estamos verificando ANTES de hacer cualquier request
+    // âœ… Marcar que estamos verificando ANTES de hacer cualquier request
     logoCache.isChecking = true
 
     let controller: AbortController | null = null
@@ -196,13 +196,13 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
       timeoutId = setTimeout(() => controller?.abort(), 5000) // Timeout de 5 segundos
 
       try {
-        // PRIMERO: Intentar obtener el nombre del logo desde la configuración general
+        // PRIMERO: Intentar obtener el nombre del logo desde la configuraciÃ³n general
         try {
           const configResponse = await fetch('/api/v1/configuracion/general', {
             signal: controller.signal,
           })
 
-          // ✅ Verificar si el componente sigue montado antes de continuar
+          // âœ… Verificar si el componente sigue montado antes de continuar
           if (!isMounted()) {
             clearTimeout(timeoutId)
             return
@@ -211,17 +211,17 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
           if (configResponse.ok) {
             const config = await configResponse.json()
             if (config.logo_filename) {
-              // ✅ Si tenemos el nombre del logo, verificar primero si existe antes de intentar cargar
+              // âœ… Si tenemos el nombre del logo, verificar primero si existe antes de intentar cargar
               const logoPath = `/api/v1/configuracion/logo/${config.logo_filename}`
 
-              // Verificar si el logo existe con HEAD request (más ligero que GET)
+              // Verificar si el logo existe con HEAD request (mÃ¡s ligero que GET)
               try {
                 const headResponse = await fetch(logoPath, {
                   method: 'HEAD',
                   signal: controller.signal,
                 })
 
-                // ✅ Verificar si el componente sigue montado antes de continuar
+                // âœ… Verificar si el componente sigue montado antes de continuar
                 if (!isMounted()) {
                   clearTimeout(timeoutId)
                   return
@@ -231,34 +231,34 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
                   // Logo existe, usar URL con timestamp
                   const logoUrl = `${logoPath}?t=${Date.now()}`
 
-                  // ✅ Verificar si el logo cambió comparando el filename
+                  // âœ… Verificar si el logo cambiÃ³ comparando el filename
                   const logoChanged = logoCache.logoFilename !== config.logo_filename
 
                   logoCache.logoUrl = logoUrl
-                  logoCache.logoFilename = config.logo_filename // ✅ Guardar nombre del archivo
-                  logoCache.logoNotFound = false // ✅ Resetear flag
+                  logoCache.logoFilename = config.logo_filename // âœ… Guardar nombre del archivo
+                  logoCache.logoNotFound = false // âœ… Resetear flag
                   logoCache.hasChecked = true
-                  logoCache.lastCheckTime = Date.now() // ✅ Guardar timestamp de verificación
+                  logoCache.lastCheckTime = Date.now() // âœ… Guardar timestamp de verificaciÃ³n
 
-                  // ✅ Solo incrementar versión si el logo realmente cambió
+                  // âœ… Solo incrementar versiÃ³n si el logo realmente cambiÃ³
                   if (logoChanged) {
                     logoCache.version += 1
                   }
 
-                  // ✅ Guardar metadatos en localStorage para persistencia
+                  // âœ… Guardar metadatos en localStorage para persistencia
                   saveLogoMetadata(config.logo_filename)
 
                   if (isMounted()) {
-                    // ✅ Actualizar inmediatamente si el logo cambió (filename diferente)
-                    // Si el logo no cambió, mantener el URL cacheado pero actualizar el timestamp para evitar caché del navegador
+                    // âœ… Actualizar inmediatamente si el logo cambiÃ³ (filename diferente)
+                    // Si el logo no cambiÃ³, mantener el URL cacheado pero actualizar el timestamp para evitar cachÃ© del navegador
                     if (logoChanged) {
                       setCustomLogoUrl(logoUrl)
                       setLogoVersion(logoCache.version)
-                      // ✅ Precargar el nuevo logo y mostrarlo directamente cuando esté listo
+                      // âœ… Precargar el nuevo logo y mostrarlo directamente cuando estÃ© listo
                       const img = new Image()
                       img.onload = () => {
                         if (isMounted()) {
-                          setImageLoaded(true) // ✅ Mostrar logo personalizado directamente
+                          setImageLoaded(true) // âœ… Mostrar logo personalizado directamente
                         }
                       }
                       img.onerror = () => {
@@ -267,17 +267,17 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
                         }
                       }
                       img.src = logoUrl
-                      // ✅ Si hay logo anterior, mantenerlo visible hasta que el nuevo esté listo
+                      // âœ… Si hay logo anterior, mantenerlo visible hasta que el nuevo estÃ© listo
                       if (logoCache.logoUrl) {
                         setImageLoaded(true)
                       }
                     } else if (logoCache.logoUrl) {
-                      // ✅ Mismo logo, pero actualizar URL con nuevo timestamp para evitar caché del navegador
+                      // âœ… Mismo logo, pero actualizar URL con nuevo timestamp para evitar cachÃ© del navegador
                       // Solo actualizar si el URL actual no tiene timestamp (para forzar recarga si es necesario)
                       const currentUrl = logoCache.logoUrl
                       if (!currentUrl.includes('?t=')) {
                         setCustomLogoUrl(logoUrl)
-                        // ✅ Mantener logo visible mientras se actualiza
+                        // âœ… Mantener logo visible mientras se actualiza
                         setImageLoaded(true)
                       }
                       // Si ya tiene timestamp, mantener el URL actual para evitar cambios visuales innecesarios
@@ -287,44 +287,44 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
                   clearTimeout(timeoutId)
                   logoCache.isChecking = false
 
-                  // ✅ Solo notificar si el logo cambió para evitar actualizaciones innecesarias
+                  // âœ… Solo notificar si el logo cambiÃ³ para evitar actualizaciones innecesarias
                   if (logoChanged) {
                     notifyLogoListeners(logoUrl, logoCache.version)
-                    // Solo mostrar en desarrollo para evitar ruido en producción
+                    // Solo mostrar en desarrollo para evitar ruido en producciÃ³n
                     if (process.env.NODE_ENV === 'development') {
-                      console.debug('✅ Logo actualizado desde configuración:', config.logo_filename)
+                      console.debug('âœ… Logo actualizado desde configuraciÃ³n:', config.logo_filename)
                     }
                   } else {
                     // Solo mostrar en desarrollo
                     if (process.env.NODE_ENV === 'development') {
-                      console.debug('✅ Logo verificado (sin cambios):', config.logo_filename)
+                      console.debug('âœ… Logo verificado (sin cambios):', config.logo_filename)
                     }
                   }
                   return
                 } else {
                   // Logo no existe (404), marcar como no encontrado
-                  console.warn('⚠️ Logo no encontrado en servidor (HEAD 404):', config.logo_filename)
+                  console.warn('âš ï¸ Logo no encontrado en servidor (HEAD 404):', config.logo_filename)
                   logoCache.logoNotFound = true
                   logoCache.logoUrl = null
-                  logoCache.logoFilename = null // ✅ Limpiar nombre del archivo
+                  logoCache.logoFilename = null // âœ… Limpiar nombre del archivo
                   logoCache.hasChecked = true
-                  logoCache.lastCheckTime = Date.now() // ✅ Guardar timestamp de verificación
+                  logoCache.lastCheckTime = Date.now() // âœ… Guardar timestamp de verificaciÃ³n
                   logoCache.isChecking = false
-                  // ✅ Limpiar metadatos guardados
+                  // âœ… Limpiar metadatos guardados
                   saveLogoMetadata(null)
                   if (isMounted()) {
                     setCustomLogoUrl(null)
                     setHasChecked(true)
                   }
                   clearTimeout(timeoutId)
-                  notifyLogoListeners(null, logoCache.version) // ✅ Notificar a todas las instancias
+                  notifyLogoListeners(null, logoCache.version) // âœ… Notificar a todas las instancias
                   return
                 }
               } catch (headError: unknown) {
                 // Si HEAD falla, asumir que no existe (evitar requests repetidos)
                 const error = headError as { name?: string }
                 if (error?.name !== 'AbortError') {
-                  console.warn('⚠️ Error verificando logo (HEAD), asumiendo que no existe:', getErrorMessage(headError))
+                  console.warn('âš ï¸ Error verificando logo (HEAD), asumiendo que no existe:', getErrorMessage(headError))
                 }
                 logoCache.logoNotFound = true
                 logoCache.logoUrl = null
@@ -335,14 +335,14 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
                   setHasChecked(true)
                 }
                 clearTimeout(timeoutId)
-                notifyLogoListeners(null, logoCache.version) // ✅ Notificar a todas las instancias
+                notifyLogoListeners(null, logoCache.version) // âœ… Notificar a todas las instancias
                 return
               }
             } else {
-              // Si no hay logo_filename en la configuración, no hay logo personalizado
+              // Si no hay logo_filename en la configuraciÃ³n, no hay logo personalizado
               // No hacer solicitudes HEAD innecesarias
               logoCache.hasChecked = true
-              logoCache.lastCheckTime = Date.now() // ✅ Guardar timestamp de verificación
+              logoCache.lastCheckTime = Date.now() // âœ… Guardar timestamp de verificaciÃ³n
               logoCache.isChecking = false
               if (isMounted()) {
                 setHasChecked(true)
@@ -352,13 +352,13 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
             }
           }
         } catch (configError: unknown) {
-          // Si falla obtener la configuración, marcar como verificado y no hacer más intentos
+          // Si falla obtener la configuraciÃ³n, marcar como verificado y no hacer mÃ¡s intentos
           const error = configError as { name?: string }
           if (error?.name !== 'AbortError') {
-            console.warn('⚠️ No se pudo obtener logo_filename desde configuración:', getErrorMessage(configError))
+            console.warn('âš ï¸ No se pudo obtener logo_filename desde configuraciÃ³n:', getErrorMessage(configError))
           }
           logoCache.hasChecked = true
-          logoCache.lastCheckTime = Date.now() // ✅ Guardar timestamp de verificación (incluso si falló)
+          logoCache.lastCheckTime = Date.now() // âœ… Guardar timestamp de verificaciÃ³n (incluso si fallÃ³)
           logoCache.isChecking = false
           if (isMounted()) {
             setHasChecked(true)
@@ -369,11 +369,11 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
       } catch (error: unknown) {
         const err = error as { name?: string }
         if (err?.name !== 'AbortError') {
-          console.warn('⚠️ Error cargando logo:', getErrorMessage(error))
+          console.warn('âš ï¸ Error cargando logo:', getErrorMessage(error))
         }
       }
 
-      // Si no encontramos ningún logo, marcar como verificado
+      // Si no encontramos ningÃºn logo, marcar como verificado
       clearTimeout(timeoutId)
       logoCache.hasChecked = true
       logoCache.isChecking = false
@@ -384,11 +384,11 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
 
     checkCustomLogo()
 
-    // Listener para cambios en el caché compartido
+    // Listener para cambios en el cachÃ© compartido
     const handleCacheUpdate = (url: string | null, version: number) => {
       if (!isMounted()) return
 
-      // ✅ Extraer filename del URL para comparar si es el mismo logo
+      // âœ… Extraer filename del URL para comparar si es el mismo logo
       const currentFilename = logoCache.logoFilename
       let newFilename: string | null = null
       if (url) {
@@ -396,28 +396,28 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
         newFilename = urlMatch ? urlMatch[1] : null
       }
 
-      // ✅ Solo actualizar si el filename realmente cambió (no solo la versión)
+      // âœ… Solo actualizar si el filename realmente cambiÃ³ (no solo la versiÃ³n)
       const filenameChanged = newFilename !== currentFilename
       const hadNoLogo = !currentFilename && !customLogoUrl
 
       if (filenameChanged || hadNoLogo) {
-        // ✅ Solo mostrar mensaje si el logo realmente cambió
+        // âœ… Solo mostrar mensaje si el logo realmente cambiÃ³
         if (filenameChanged && currentFilename) {
-          console.debug('🔄 Actualizando logo desde caché compartido, versión:', version, 'filename:', newFilename)
+          console.debug('ðŸ”„ Actualizando logo desde cachÃ© compartido, versiÃ³n:', version, 'filename:', newFilename)
         }
         setCustomLogoUrl(url)
         setLogoVersion(version)
         setHasChecked(true)
-        // ✅ Precargar el logo y mostrarlo directamente cuando esté listo
+        // âœ… Precargar el logo y mostrarlo directamente cuando estÃ© listo
         if (url) {
-          // ✅ Si hay logo anterior, mantenerlo visible hasta que el nuevo esté listo
+          // âœ… Si hay logo anterior, mantenerlo visible hasta que el nuevo estÃ© listo
           if (customLogoUrl) {
             setImageLoaded(true)
           }
           const img = new Image()
           img.onload = () => {
             if (isMounted()) {
-              setImageLoaded(true) // ✅ Mostrar logo personalizado directamente
+              setImageLoaded(true) // âœ… Mostrar logo personalizado directamente
             }
           }
           img.onerror = () => {
@@ -430,23 +430,23 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
           setImageLoaded(false)
         }
       } else if (version > logoVersion) {
-        // ✅ Mismo logo, solo actualizar versión sin cambiar el URL (evita parpadeo)
+        // âœ… Mismo logo, solo actualizar versiÃ³n sin cambiar el URL (evita parpadeo)
         setLogoVersion(version)
       }
     }
 
     logoListeners.add(handleCacheUpdate)
 
-    // Si el logo ya estaba cacheado, sincronizar versión
+    // Si el logo ya estaba cacheado, sincronizar versiÃ³n
     if (logoCache.logoUrl && logoCache.version > 0) {
       setLogoVersion(logoCache.version)
     }
 
-    // Escuchar eventos de actualización del logo
+    // Escuchar eventos de actualizaciÃ³n del logo
     const handleLogoUpdate = (event: CustomEvent) => {
       const { filename, url, confirmed } = event.detail || {}
 
-      console.debug('📢 Evento logoUpdated recibido:', { filename, url, confirmed })
+      console.debug('ðŸ“¢ Evento logoUpdated recibido:', { filename, url, confirmed })
 
       // Si solo viene confirmed: true sin filename ni url, ignorar
       if (confirmed && !filename && !url) {
@@ -454,15 +454,15 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
         return
       }
 
-      // Cuando se confirma el logo, invalidar caché y recargar desde configuración
+      // Cuando se confirma el logo, invalidar cachÃ© y recargar desde configuraciÃ³n
       if (confirmed && (filename || url)) {
-        console.debug('🔄 Logo confirmado, invalidando caché y recargando desde configuración')
-        // Invalidar caché para forzar recarga desde BD
+        console.debug('ðŸ”„ Logo confirmado, invalidando cachÃ© y recargando desde configuraciÃ³n')
+        // Invalidar cachÃ© para forzar recarga desde BD
         logoCache.logoUrl = null
         logoCache.hasChecked = false
         logoCache.isChecking = false
 
-        // Recargar desde configuración general para obtener logo_filename persistido en BD
+        // Recargar desde configuraciÃ³n general para obtener logo_filename persistido en BD
         fetch('/api/v1/configuracion/general')
           .then(res => res.json())
           .then(async config => {
@@ -470,25 +470,25 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
 
             if (config.logo_filename) {
               const logoPath = `/api/v1/configuracion/logo/${config.logo_filename}`
-              // ✅ Verificar primero si existe con HEAD request
+              // âœ… Verificar primero si existe con HEAD request
               try {
                 const headResponse = await fetch(logoPath, { method: 'HEAD' })
                 if (headResponse.ok) {
                   newLogoUrl = `${logoPath}?t=${Date.now()}`
-                  console.debug('✅ Logo recargado desde configuración (BD):', config.logo_filename)
+                  console.debug('âœ… Logo recargado desde configuraciÃ³n (BD):', config.logo_filename)
                 } else {
-                  console.warn('⚠️ Logo no encontrado al recargar desde configuración:', config.logo_filename)
+                  console.warn('âš ï¸ Logo no encontrado al recargar desde configuraciÃ³n:', config.logo_filename)
                   logoCache.logoNotFound = true
                   logoCache.logoUrl = null
-                  logoCache.logoFilename = null // ✅ Limpiar nombre del archivo
+                  logoCache.logoFilename = null // âœ… Limpiar nombre del archivo
                   logoCache.hasChecked = true
                   logoCache.version += 1
-                  saveLogoMetadata(null) // ✅ Limpiar metadatos guardados
+                  saveLogoMetadata(null) // âœ… Limpiar metadatos guardados
                   notifyLogoListeners(null, logoCache.version)
                   return
                 }
               } catch (headError) {
-                console.warn('⚠️ Error verificando logo al recargar:', headError)
+                console.warn('âš ï¸ Error verificando logo al recargar:', headError)
                 logoCache.logoNotFound = true
                 logoCache.logoUrl = null
                 logoCache.hasChecked = true
@@ -497,27 +497,27 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
                 return
               }
             } else if (filename) {
-              // Fallback: usar filename del evento si no está en BD aún
+              // Fallback: usar filename del evento si no estÃ¡ en BD aÃºn
               const logoPath = `/api/v1/configuracion/logo/${filename}`
-              // ✅ Verificar primero si existe
+              // âœ… Verificar primero si existe
               try {
                 const headResponse = await fetch(logoPath, { method: 'HEAD' })
                 if (headResponse.ok) {
                   newLogoUrl = `${logoPath}?t=${Date.now()}`
-                  console.debug('✅ Logo actualizado desde evento (fallback):', filename)
+                  console.debug('âœ… Logo actualizado desde evento (fallback):', filename)
                 } else {
-                  console.warn('⚠️ Logo no encontrado en fallback:', filename)
+                  console.warn('âš ï¸ Logo no encontrado en fallback:', filename)
                   logoCache.logoNotFound = true
                   logoCache.logoUrl = null
-                  logoCache.logoFilename = null // ✅ Limpiar nombre del archivo
+                  logoCache.logoFilename = null // âœ… Limpiar nombre del archivo
                   logoCache.hasChecked = true
                   logoCache.version += 1
-                  saveLogoMetadata(null) // ✅ Limpiar metadatos guardados
+                  saveLogoMetadata(null) // âœ… Limpiar metadatos guardados
                   notifyLogoListeners(null, logoCache.version)
                   return
                 }
               } catch (headError) {
-                console.warn('⚠️ Error verificando logo en fallback:', headError)
+                console.warn('âš ï¸ Error verificando logo en fallback:', headError)
                 logoCache.logoNotFound = true
                 logoCache.logoUrl = null
                 logoCache.hasChecked = true
@@ -528,26 +528,26 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
             }
 
             if (newLogoUrl) {
-              // Actualizar caché y notificar a todos los listeners
+              // Actualizar cachÃ© y notificar a todos los listeners
               const logoFilename = config?.logo_filename || filename || null
               logoCache.logoUrl = newLogoUrl
-              logoCache.logoFilename = logoFilename // ✅ Guardar nombre del archivo
-              logoCache.logoNotFound = false // ✅ Resetear flag cuando se actualiza el logo
+              logoCache.logoFilename = logoFilename // âœ… Guardar nombre del archivo
+              logoCache.logoNotFound = false // âœ… Resetear flag cuando se actualiza el logo
               logoCache.hasChecked = true
               logoCache.version += 1
-              // ✅ Guardar metadatos en localStorage
+              // âœ… Guardar metadatos en localStorage
               if (logoFilename) {
                 saveLogoMetadata(logoFilename)
               }
-              // ✅ Actualizar estado local para mostrar logo directamente
+              // âœ… Actualizar estado local para mostrar logo directamente
               if (isMounted()) {
                 setCustomLogoUrl(newLogoUrl)
                 setLogoVersion(logoCache.version)
-                // ✅ Precargar el logo y mostrarlo directamente cuando esté listo
+                // âœ… Precargar el logo y mostrarlo directamente cuando estÃ© listo
                 const img = new Image()
                 img.onload = () => {
                   if (isMounted()) {
-                    setImageLoaded(true) // ✅ Mostrar logo personalizado directamente
+                    setImageLoaded(true) // âœ… Mostrar logo personalizado directamente
                   }
                 }
                 img.onerror = () => {
@@ -556,7 +556,7 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
                   }
                 }
                 img.src = newLogoUrl
-                // ✅ Si hay logo anterior, mantenerlo visible hasta que el nuevo esté listo
+                // âœ… Si hay logo anterior, mantenerlo visible hasta que el nuevo estÃ© listo
                 if (customLogoUrl) {
                   setImageLoaded(true)
                 }
@@ -565,7 +565,7 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
             }
           })
           .catch(err => {
-            console.warn('⚠️ Error recargando logo desde configuración:', err)
+            console.warn('âš ï¸ Error recargando logo desde configuraciÃ³n:', err)
             // Fallback: usar valores del evento directamente, pero verificar primero
             let newLogoUrl: string | null = null
             if (url) {
@@ -630,7 +630,7 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
       let newLogoUrl: string | null = null
 
       if (url) {
-        // Recargar el logo con timestamp para evitar caché
+        // Recargar el logo con timestamp para evitar cachÃ©
         newLogoUrl = `${url}?t=${Date.now()}`
       } else if (filename) {
         // Si solo tenemos el filename, construir el path
@@ -640,26 +640,26 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
 
       if (newLogoUrl) {
         // Actualizar cache y notificar a todos los listeners
-        console.debug('🔄 Actualizando logo (preview):', newLogoUrl)
+        console.debug('ðŸ”„ Actualizando logo (preview):', newLogoUrl)
         const logoFilename = filename || null
         logoCache.logoUrl = newLogoUrl
-        logoCache.logoFilename = logoFilename // ✅ Guardar nombre del archivo
-        logoCache.logoNotFound = false // ✅ Resetear flag cuando se actualiza el logo
+        logoCache.logoFilename = logoFilename // âœ… Guardar nombre del archivo
+        logoCache.logoNotFound = false // âœ… Resetear flag cuando se actualiza el logo
         logoCache.hasChecked = true
         logoCache.version += 1
-        // ✅ Guardar metadatos en localStorage si tenemos filename
+        // âœ… Guardar metadatos en localStorage si tenemos filename
         if (logoFilename) {
           saveLogoMetadata(logoFilename)
         }
-        // ✅ Actualizar estado local para mostrar logo directamente
+        // âœ… Actualizar estado local para mostrar logo directamente
         if (isMounted()) {
           setCustomLogoUrl(newLogoUrl)
           setLogoVersion(logoCache.version)
-          // ✅ Precargar el logo y mostrarlo directamente cuando esté listo
+          // âœ… Precargar el logo y mostrarlo directamente cuando estÃ© listo
           const img = new Image()
           img.onload = () => {
             if (isMounted()) {
-              setImageLoaded(true) // ✅ Mostrar logo personalizado directamente
+              setImageLoaded(true) // âœ… Mostrar logo personalizado directamente
             }
           }
           img.onerror = () => {
@@ -668,7 +668,7 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
             }
           }
           img.src = newLogoUrl
-          // ✅ Si hay logo anterior, mantenerlo visible hasta que el nuevo esté listo
+          // âœ… Si hay logo anterior, mantenerlo visible hasta que el nuevo estÃ© listo
           if (customLogoUrl) {
             setImageLoaded(true)
           }
@@ -680,7 +680,7 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
     window.addEventListener('logoUpdated', handleLogoUpdate as EventListener)
 
     return () => {
-      // ✅ Cancelar peticiones en curso si el componente se desmonta
+      // âœ… Cancelar peticiones en curso si el componente se desmonta
       if (controller) {
         controller.abort()
       }
@@ -692,13 +692,13 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
     }
   }, [forceDefault, isMounted])
 
-  // ✅ PRIORIDAD: Si forceDefault está activado, siempre mostrar logo por defecto
+  // âœ… PRIORIDAD: Si forceDefault estÃ¡ activado, siempre mostrar logo por defecto
   if (forceDefault) {
     // Continuar al renderizado del SVG por defecto
   }
-  // ✅ Si el logo está marcado como no encontrado, NO renderizar <img> (evitar GET requests)
-  // Si hay logo personalizado Y NO está marcado como no encontrado, mostrar imagen directamente
-  // ✅ CORRECCIÓN: Solo mostrar logo personalizado si realmente existe y está disponible Y no se fuerza el default
+  // âœ… Si el logo estÃ¡ marcado como no encontrado, NO renderizar <img> (evitar GET requests)
+  // Si hay logo personalizado Y NO estÃ¡ marcado como no encontrado, mostrar imagen directamente
+  // âœ… CORRECCIÃ“N: Solo mostrar logo personalizado si realmente existe y estÃ¡ disponible Y no se fuerza el default
   else if (customLogoUrl && !logoCache.logoNotFound && hasChecked && !forceDefault) {
     return (
       <div className={cn('relative', sizeMap[size])}>
@@ -722,26 +722,26 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
           role="img"
           loading="eager"
           onLoad={() => {
-            // ✅ Cuando la imagen se carga completamente, marcarla como cargada
+            // âœ… Cuando la imagen se carga completamente, marcarla como cargada
             if (isMounted()) {
               setImageLoaded(true)
             }
           }}
           onError={(e) => {
-            // ✅ Si falla la carga (404 o imagen corrupta), marcar como no encontrado y limpiar caché
-            console.warn('⚠️ Error cargando logo (GET falló o imagen inválida), limpiando caché:', customLogoUrl)
+            // âœ… Si falla la carga (404 o imagen corrupta), marcar como no encontrado y limpiar cachÃ©
+            console.warn('âš ï¸ Error cargando logo (GET fallÃ³ o imagen invÃ¡lida), limpiando cachÃ©:', customLogoUrl)
             logoCache.logoNotFound = true
             logoCache.logoUrl = null
             logoCache.logoFilename = null
             logoCache.version += 1
-            // ✅ Limpiar metadatos del localStorage
+            // âœ… Limpiar metadatos del localStorage
             saveLogoMetadata(null)
             setCustomLogoUrl(null)
             setHasChecked(true)
             setImageLoaded(false)
             setLogoVersion(logoCache.version)
-            notifyLogoListeners(null, logoCache.version) // ✅ Notificar a todas las instancias
-            // No intentar recargar - el logo no existe o está corrupto
+            notifyLogoListeners(null, logoCache.version) // âœ… Notificar a todas las instancias
+            // No intentar recargar - el logo no existe o estÃ¡ corrupto
           }}
         />
       </div>
@@ -749,7 +749,7 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
   }
 
   // Si ya verificamos y no hay logo personalizado, mostrar SVG por defecto
-  // También mostrar SVG mientras verificamos (hasChecked === false)
+  // TambiÃ©n mostrar SVG mientras verificamos (hasChecked === false)
   return (
     <svg
       className={cn(sizeMap[size], className)}
@@ -776,7 +776,7 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
         />
       </g>
 
-      {/* Círculo naranja sólido (#F57F20) debajo y ligeramente a la izquierda */}
+      {/* CÃ­rculo naranja sÃ³lido (#F57F20) debajo y ligeramente a la izquierda */}
       <circle cx="10" cy="40" r="5.5" fill="#F57F20"/>
     </svg>
   )

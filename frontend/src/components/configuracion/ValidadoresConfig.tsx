@@ -15,12 +15,12 @@ import {
   CheckSquare,
   XSquare,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { configuracionService, type ValidadoresConfig, type PruebaValidadores } from '@/services/configuracionService'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card'
+import { Badge } from '../../components/ui/badge'
+import { Button } from '../../components/ui/button'
+import { Input } from '../../components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
+import { configuracionService, type ValidadoresConfig, type PruebaValidadores } from '../../services/configuracionService'
 
 export function ValidadoresConfig() {
   const [configuracion, setConfiguracion] = useState<ValidadoresConfig | null>(null)
@@ -53,9 +53,9 @@ export function ValidadoresConfig() {
       if (err.response?.status === 503) {
         setError('Servicio temporalmente no disponible. Intenta nuevamente.')
       } else if (err.code === 'ERR_NETWORK' || err.message?.includes('Network Error')) {
-        setError('Error de conexión. Verifica que el servidor esté funcionando.')
+        setError('Error de conexiÃ³n. Verifica que el servidor estÃ© funcionando.')
       } else {
-        setError('Error al cargar la configuración de validadores')
+        setError('Error al cargar la configuraciÃ³n de validadores')
       }
     } finally {
       setCargando(false)
@@ -105,7 +105,7 @@ export function ValidadoresConfig() {
     return (
       <div className="flex items-center justify-center p-8">
         <RefreshCw className="h-8 w-8 animate-spin text-blue-600" />
-        <span className="ml-2 text-gray-600">Cargando configuración...</span>
+        <span className="ml-2 text-gray-600">Cargando configuraciÃ³n...</span>
       </div>
     )
   }
@@ -145,17 +145,17 @@ export function ValidadoresConfig() {
             {config.descripcion}
           </CardTitle>
           <CardDescription>
-            {tipo === 'telefono' && 'Validación y formateo de números telefónicos'}
-            {tipo === 'cedula' && 'Validación de cédulas por país'}
-            {tipo === 'fecha' && 'Validación estricta de fechas'}
-            {tipo === 'email' && 'Validación y normalización de emails'}
+            {tipo === 'telefono' && 'ValidaciÃ³n y formateo de nÃºmeros telefÃ³nicos'}
+            {tipo === 'cedula' && 'ValidaciÃ³n de cÃ©dulas por paÃ­s'}
+            {tipo === 'fecha' && 'ValidaciÃ³n estricta de fechas'}
+            {tipo === 'email' && 'ValidaciÃ³n y normalizaciÃ³n de emails'}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Configuración específica por tipo */}
+          {/* ConfiguraciÃ³n especÃ­fica por tipo */}
           {tipo === 'telefono' && config.paises_soportados?.venezuela && (
             <div className="bg-blue-50 p-4 rounded-lg">
-              <h4 className="font-semibold text-blue-900 mb-2">🇻🇪 Venezuela</h4>
+              <h4 className="font-semibold text-blue-900 mb-2">ðŸ‡»ðŸ‡ª Venezuela</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                 <div>
                   <strong>Formato:</strong> {config.paises_soportados.venezuela.formato}
@@ -163,16 +163,16 @@ export function ValidadoresConfig() {
                 <div>
                   <strong>Requisitos:</strong>
                   <ul className="mt-1 space-y-1">
-                    <li>• {config.paises_soportados.venezuela.requisitos.debe_empezar_por}</li>
-                    <li>• {config.paises_soportados.venezuela.requisitos.longitud_total}</li>
-                    <li>• {config.paises_soportados.venezuela.requisitos.primer_digito}</li>
+                    <li>â€¢ {config.paises_soportados.venezuela.requisitos.debe_empezar_por}</li>
+                    <li>â€¢ {config.paises_soportados.venezuela.requisitos.longitud_total}</li>
+                    <li>â€¢ {config.paises_soportados.venezuela.requisitos.primer_digito}</li>
                   </ul>
                 </div>
               </div>
 
               <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <h5 className="font-medium text-green-700 mb-2">✅ Ejemplos Válidos</h5>
+                  <h5 className="font-medium text-green-700 mb-2">âœ… Ejemplos VÃ¡lidos</h5>
                   <ul className="text-sm space-y-1">
                     {config.paises_soportados.venezuela.ejemplos_validos.map((ejemplo: string, idx: number) => (
                       <li key={idx} className="font-mono bg-green-100 px-2 py-1 rounded">{ejemplo}</li>
@@ -180,7 +180,7 @@ export function ValidadoresConfig() {
                   </ul>
                 </div>
                 <div>
-                  <h5 className="font-medium text-red-700 mb-2">❌ Ejemplos Inválidos</h5>
+                  <h5 className="font-medium text-red-700 mb-2">âŒ Ejemplos InvÃ¡lidos</h5>
                   <ul className="text-sm space-y-1">
                     {config.paises_soportados.venezuela.ejemplos_invalidos.map((ejemplo: string, idx: number) => (
                       <li key={idx} className="font-mono bg-red-100 px-2 py-1 rounded">{ejemplo}</li>
@@ -193,10 +193,10 @@ export function ValidadoresConfig() {
 
           {tipo === 'cedula' && config.paises_soportados?.venezuela && (
             <div className="bg-blue-50 p-4 rounded-lg">
-              <h4 className="font-semibold text-blue-900 mb-2">🇻🇪 Venezuela</h4>
+              <h4 className="font-semibold text-blue-900 mb-2">ðŸ‡»ðŸ‡ª Venezuela</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                 <div>
-                  <strong>Prefijos válidos:</strong> {config.paises_soportados.venezuela.prefijos_validos.join(', ')}
+                  <strong>Prefijos vÃ¡lidos:</strong> {config.paises_soportados.venezuela.prefijos_validos.join(', ')}
                 </div>
                 <div>
                   <strong>Longitud:</strong> {config.paises_soportados.venezuela.longitud}
@@ -206,9 +206,9 @@ export function ValidadoresConfig() {
               <div className="mt-4">
                 <strong>Requisitos:</strong>
                 <ul className="mt-1 space-y-1 text-sm">
-                  <li>• {config.paises_soportados.venezuela.requisitos.prefijos}</li>
-                  <li>• {config.paises_soportados.venezuela.requisitos.dígitos}</li>
-                  <li>• {config.paises_soportados.venezuela.requisitos.longitud}</li>
+                  <li>â€¢ {config.paises_soportados.venezuela.requisitos.prefijos}</li>
+                  <li>â€¢ {config.paises_soportados.venezuela.requisitos.dÃ­gitos}</li>
+                  <li>â€¢ {config.paises_soportados.venezuela.requisitos.longitud}</li>
                 </ul>
               </div>
             </div>
@@ -216,23 +216,23 @@ export function ValidadoresConfig() {
 
           {tipo === 'fecha' && (
             <div className="bg-blue-50 p-4 rounded-lg">
-              <h4 className="font-semibold text-blue-900 mb-2">📅 Formato DD/MM/YYYY</h4>
+              <h4 className="font-semibold text-blue-900 mb-2">ðŸ“… Formato DD/MM/YYYY</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                 <div>
                   <strong>Requisitos:</strong>
                   <ul className="mt-1 space-y-1">
-                    <li>• {config.requisitos.dia}</li>
-                    <li>• {config.requisitos.mes}</li>
-                    <li>• {config.requisitos.año}</li>
-                    <li>• {config.requisitos.separador}</li>
+                    <li>â€¢ {config.requisitos.dia}</li>
+                    <li>â€¢ {config.requisitos.mes}</li>
+                    <li>â€¢ {config.requisitos.aÃ±o}</li>
+                    <li>â€¢ {config.requisitos.separador}</li>
                   </ul>
                 </div>
                 <div>
-                  <strong>Características:</strong>
+                  <strong>CaracterÃ­sticas:</strong>
                   <ul className="mt-1 space-y-1">
-                    <li>• Validación estricta</li>
-                    <li>• Verificación de fechas válidas</li>
-                    <li>• Soporte para años bisiestos</li>
+                    <li>â€¢ ValidaciÃ³n estricta</li>
+                    <li>â€¢ VerificaciÃ³n de fechas vÃ¡lidas</li>
+                    <li>â€¢ Soporte para aÃ±os bisiestos</li>
                   </ul>
                 </div>
               </div>
@@ -241,14 +241,14 @@ export function ValidadoresConfig() {
 
           {tipo === 'email' && (
             <div className="bg-blue-50 p-4 rounded-lg">
-              <h4 className="font-semibold text-blue-900 mb-2">📧 Validación RFC 5322</h4>
+              <h4 className="font-semibold text-blue-900 mb-2">ðŸ“§ ValidaciÃ³n RFC 5322</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                 <div>
-                  <strong>Características:</strong>
+                  <strong>CaracterÃ­sticas:</strong>
                   <ul className="mt-1 space-y-1">
-                    <li>• {config.caracteristicas.normalizacion}</li>
-                    <li>• {config.caracteristicas.limpieza}</li>
-                    <li>• {config.caracteristicas.validacion}</li>
+                    <li>â€¢ {config.caracteristicas.normalizacion}</li>
+                    <li>â€¢ {config.caracteristicas.limpieza}</li>
+                    <li>â€¢ {config.caracteristicas.validacion}</li>
                   </ul>
                 </div>
                 <div>
@@ -259,7 +259,7 @@ export function ValidadoresConfig() {
                     ))}
                     {config.caracteristicas.dominios_bloqueados.length > 3 && (
                       <Badge variant="outline" className="text-xs">
-                        +{config.caracteristicas.dominios_bloqueados.length - 3} más
+                        +{config.caracteristicas.dominios_bloqueados.length - 3} mÃ¡s
                       </Badge>
                     )}
                   </div>
@@ -268,13 +268,13 @@ export function ValidadoresConfig() {
             </div>
           )}
 
-          {/* Configuración de comportamiento */}
+          {/* ConfiguraciÃ³n de comportamiento */}
           <div className="flex items-center space-x-4 text-sm">
             <Badge variant={config.auto_formateo ? "default" : "secondary"}>
               {config.auto_formateo ? "Auto-formateo" : "Sin auto-formateo"}
             </Badge>
             <Badge variant={config.validacion_tiempo_real ? "default" : "secondary"}>
-              {config.validacion_tiempo_real ? "Validación en tiempo real" : "Validación manual"}
+              {config.validacion_tiempo_real ? "ValidaciÃ³n en tiempo real" : "ValidaciÃ³n manual"}
             </Badge>
           </div>
         </CardContent>
@@ -292,8 +292,8 @@ export function ValidadoresConfig() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Configuración de Validadores</h2>
-          <p className="text-gray-600">Configuración y pruebas de los validadores del sistema</p>
+          <h2 className="text-2xl font-bold text-gray-900">ConfiguraciÃ³n de Validadores</h2>
+          <p className="text-gray-600">ConfiguraciÃ³n y pruebas de los validadores del sistema</p>
         </div>
         <div className="flex space-x-2">
           <Button onClick={cargarConfiguracion} variant="outline">
@@ -303,12 +303,12 @@ export function ValidadoresConfig() {
         </div>
       </div>
 
-      {/* Información general */}
+      {/* InformaciÃ³n general */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">
             <Info className="mr-2 h-5 w-5" />
-            Información General
+            InformaciÃ³n General
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -350,7 +350,7 @@ export function ValidadoresConfig() {
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="text-sm font-medium">Teléfono</label>
+              <label className="text-sm font-medium">TelÃ©fono</label>
               <Input
                 value={pruebas.telefono}
                 onChange={(e) => setPruebas(prev => ({ ...prev, telefono: e.target.value }))}
@@ -358,7 +358,7 @@ export function ValidadoresConfig() {
               />
             </div>
             <div>
-              <label className="text-sm font-medium">País (Teléfono)</label>
+              <label className="text-sm font-medium">PaÃ­s (TelÃ©fono)</label>
               <Select
                 value={pruebas.pais_telefono}
                 onValueChange={(value) => setPruebas(prev => ({ ...prev, pais_telefono: value }))}
@@ -368,12 +368,12 @@ export function ValidadoresConfig() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="VENEZUELA">Venezuela</SelectItem>
-                  <SelectItem value="DOMINICANA">República Dominicana</SelectItem>
+                  <SelectItem value="DOMINICANA">RepÃºblica Dominicana</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <label className="text-sm font-medium">Cédula</label>
+              <label className="text-sm font-medium">CÃ©dula</label>
               <Input
                 value={pruebas.cedula}
                 onChange={(e) => setPruebas(prev => ({ ...prev, cedula: e.target.value }))}
@@ -381,7 +381,7 @@ export function ValidadoresConfig() {
               />
             </div>
             <div>
-              <label className="text-sm font-medium">País (Cédula)</label>
+              <label className="text-sm font-medium">PaÃ­s (CÃ©dula)</label>
               <Select
                 value={pruebas.pais_cedula}
                 onValueChange={(value) => setPruebas(prev => ({ ...prev, pais_cedula: value }))}
@@ -391,7 +391,7 @@ export function ValidadoresConfig() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="VENEZUELA">Venezuela</SelectItem>
-                  <SelectItem value="DOMINICANA">República Dominicana</SelectItem>
+                  <SelectItem value="DOMINICANA">RepÃºblica Dominicana</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -443,11 +443,11 @@ export function ValidadoresConfig() {
                   </div>
                   <div className="text-center">
                     <div className="text-2xl font-bold text-green-600">{resultadosPrueba.resumen.validos}</div>
-                    <div className="text-sm text-gray-600">Válidos</div>
+                    <div className="text-sm text-gray-600">VÃ¡lidos</div>
                   </div>
                   <div className="text-center">
                     <div className="text-2xl font-bold text-red-600">{resultadosPrueba.resumen.invalidos}</div>
-                    <div className="text-sm text-gray-600">Inválidos</div>
+                    <div className="text-sm text-gray-600">InvÃ¡lidos</div>
                   </div>
                 </div>
 
@@ -459,12 +459,12 @@ export function ValidadoresConfig() {
                         {resultado.valido ? (
                           <Badge className="bg-green-100 text-green-800">
                             <CheckCircle className="h-3 w-3 mr-1" />
-                            Válido
+                            VÃ¡lido
                           </Badge>
                         ) : (
                           <Badge className="bg-red-100 text-red-800">
                             <XCircle className="h-3 w-3 mr-1" />
-                            Inválido
+                            InvÃ¡lido
                           </Badge>
                         )}
                       </div>
@@ -478,7 +478,7 @@ export function ValidadoresConfig() {
                           <div className="text-red-600"><strong>Error:</strong> {resultado.error}</div>
                         )}
                         {resultado.cambio_realizado && (
-                          <div className="text-blue-600"><strong>Cambio aplicado:</strong> Sí</div>
+                          <div className="text-blue-600"><strong>Cambio aplicado:</strong> SÃ­</div>
                         )}
                       </div>
                     </div>

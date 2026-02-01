@@ -14,13 +14,13 @@ import {
   Calendar,
   Trash2,
 } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { aiTrainingService, ModeloImpagoCuotas } from '@/services/aiTrainingService'
+import { Card, CardContent } from '../../components/ui/card'
+import { Button } from '../../components/ui/button'
+import { Input } from '../../components/ui/input'
+import { Badge } from '../../components/ui/badge'
+import { Progress } from '../../components/ui/progress'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
+import { aiTrainingService, ModeloImpagoCuotas } from '../../services/aiTrainingService'
 import { toast } from 'sonner'
 
 interface EstadoEntrenamiento {
@@ -43,7 +43,7 @@ export function MLImpagoCuotasTab() {
   const [algoritmo, setAlgoritmo] = useState('random_forest')
   const [testSize, setTestSize] = useState(0.2)
 
-  // Formulario de predicción
+  // Formulario de predicciÃ³n
   const [mostrarPrediccion, setMostrarPrediccion] = useState(false)
   const [prestamoId, setPrestamoId] = useState('')
   const [prediccion, setPrediccion] = useState<any>(null)
@@ -68,10 +68,10 @@ export function MLImpagoCuotasTab() {
     } catch (error: any) {
       console.error('Error cargando modelos:', error)
       
-      // Manejar timeout específicamente
+      // Manejar timeout especÃ­ficamente
       let mensajeError = 'Error al cargar modelos'
       if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
-        mensajeError = 'La petición está tardando más de lo esperado. El servidor puede estar procesando. Por favor, intenta nuevamente en unos momentos.'
+        mensajeError = 'La peticiÃ³n estÃ¡ tardando mÃ¡s de lo esperado. El servidor puede estar procesando. Por favor, intenta nuevamente en unos momentos.'
       } else if (error?.response?.data?.detail) {
         mensajeError = error.response.data.detail
       } else if (error?.message) {
@@ -79,7 +79,7 @@ export function MLImpagoCuotasTab() {
       }
       
       toast.error(mensajeError, {
-        duration: 8000, // Mostrar por más tiempo para mensajes de timeout
+        duration: 8000, // Mostrar por mÃ¡s tiempo para mensajes de timeout
       })
     } finally {
       setCargando(false)
@@ -114,7 +114,7 @@ export function MLImpagoCuotasTab() {
           nuevoMensaje = 'Preparando datos de entrenamiento...'
         } else if (prev.estado === 'iniciando' && prev.progreso >= 10) {
           nuevoEstado = 'procesando'
-          nuevoMensaje = 'Procesando préstamos y extrayendo features...'
+          nuevoMensaje = 'Procesando prÃ©stamos y extrayendo features...'
         } else if (prev.estado === 'procesando' && prev.progreso < 60) {
           nuevoProgreso = Math.min(prev.progreso + 1.5, 60)
           nuevoMensaje = `Procesando datos... ${Math.round(prev.progreso)}%`
@@ -145,17 +145,17 @@ export function MLImpagoCuotasTab() {
         test_size: testSize,
       })
 
-      // Limpiar intervalo y mostrar éxito
+      // Limpiar intervalo y mostrar Ã©xito
       clearInterval(intervalProgreso)
 
       setEstadoEntrenamiento({
         estado: 'completado',
         progreso: 100,
-        mensaje: '¡Modelo entrenado exitosamente!',
+        mensaje: 'Â¡Modelo entrenado exitosamente!',
         modelo: resultado.modelo,
       })
 
-      // Notificación mejorada con métricas
+      // NotificaciÃ³n mejorada con mÃ©tricas
       const metricas = resultado.metricas
       const accuracy = metricas?.accuracy ? `${(metricas.accuracy * 100).toFixed(1)}%` : 'N/A'
       const f1 = metricas?.f1_score ? `${(metricas.f1_score * 100).toFixed(1)}%` : 'N/A'
@@ -169,13 +169,13 @@ export function MLImpagoCuotasTab() {
         }
       )
 
-      // Recargar modelos después de 2 segundos
+      // Recargar modelos despuÃ©s de 2 segundos
       setTimeout(async () => {
         await cargarModelos()
         setEstadoEntrenamiento(null)
       }, 2000)
 
-      console.log('✅ Modelo entrenado exitosamente:', resultado)
+      console.log('âœ… Modelo entrenado exitosamente:', resultado)
     } catch (error: any) {
       // Limpiar intervalo en caso de error
       clearInterval(intervalProgreso)
@@ -186,7 +186,7 @@ export function MLImpagoCuotasTab() {
         mensaje: 'Error durante el entrenamiento',
         error: error?.response?.data?.detail || error?.message || 'Error desconocido',
       })
-      console.group('❌ Error entrenando modelo ML Impago')
+      console.group('âŒ Error entrenando modelo ML Impago')
       console.error('Error objeto completo:', error)
       console.error('Error response:', error?.response)
       console.error('Error response data:', error?.response?.data)
@@ -195,16 +195,16 @@ export function MLImpagoCuotasTab() {
 
       // Expandir el objeto de error para ver todos los detalles
       if (error?.response?.data) {
-        console.error('📋 Detalles del error del servidor:', JSON.stringify(error.response.data, null, 2))
+        console.error('ðŸ“‹ Detalles del error del servidor:', JSON.stringify(error.response.data, null, 2))
       }
       console.groupEnd()
 
       // Extraer mensaje de error de diferentes posibles ubicaciones
       let mensajeError = 'Error al entrenar modelo'
 
-      // Detectar timeout específicamente
+      // Detectar timeout especÃ­ficamente
       if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
-        mensajeError = 'El entrenamiento está tardando más de lo esperado. El proceso continúa en el servidor. Por favor, espera unos minutos y recarga la página para ver el modelo entrenado.'
+        mensajeError = 'El entrenamiento estÃ¡ tardando mÃ¡s de lo esperado. El proceso continÃºa en el servidor. Por favor, espera unos minutos y recarga la pÃ¡gina para ver el modelo entrenado.'
       } else if (error?.response?.data?.detail) {
         mensajeError = String(error.response.data.detail)
       } else if (error?.response?.data?.message) {
@@ -215,7 +215,7 @@ export function MLImpagoCuotasTab() {
         mensajeError = String(error.error.detail)
       }
 
-      console.error('📝 Mensaje de error extraído para mostrar al usuario:', mensajeError)
+      console.error('ðŸ“ Mensaje de error extraÃ­do para mostrar al usuario:', mensajeError)
 
       // Mostrar toast con el mensaje completo
       toast.error(`Error entrenando modelo: ${mensajeError}`, {
@@ -227,7 +227,7 @@ export function MLImpagoCuotasTab() {
   }
 
   const handleEliminarModelo = async (modeloId: number) => {
-    if (!confirm('¿Estás seguro de que deseas eliminar este modelo? Esta acción no se puede deshacer.')) {
+    if (!confirm('Â¿EstÃ¡s seguro de que deseas eliminar este modelo? Esta acciÃ³n no se puede deshacer.')) {
       return
     }
 
@@ -251,21 +251,21 @@ export function MLImpagoCuotasTab() {
     }
 
     const mensajeConfirmacion = esDesactivacion
-      ? `¿Estás seguro de desactivar el modelo "${modelo.nombre}" v${modelo.version}?`
-      : `¿Estás seguro de ${modeloActivo ? 'cambiar y ' : ''}activar el modelo "${modelo.nombre}" v${modelo.version}?`
+      ? `Â¿EstÃ¡s seguro de desactivar el modelo "${modelo.nombre}" v${modelo.version}?`
+      : `Â¿EstÃ¡s seguro de ${modeloActivo ? 'cambiar y ' : ''}activar el modelo "${modelo.nombre}" v${modelo.version}?`
 
     if (!window.confirm(mensajeConfirmacion)) {
       return
     }
 
     try {
-      console.log('🔄 Activando modelo ML Impago:', modeloId)
+      console.log('ðŸ”„ Activando modelo ML Impago:', modeloId)
       const resultado = await aiTrainingService.activarModeloImpago(modeloId)
-      console.log('✅ Modelo activado exitosamente:', resultado)
+      console.log('âœ… Modelo activado exitosamente:', resultado)
       toast.success(esDesactivacion ? 'Modelo desactivado' : 'Modelo activado exitosamente')
       await cargarModelos()
     } catch (error: any) {
-      console.error('❌ Error activando modelo ML Impago:', error)
+      console.error('âŒ Error activando modelo ML Impago:', error)
       console.error('Error completo:', JSON.stringify(error, null, 2))
       const mensajeError = error?.response?.data?.detail || error?.message || error?.error?.detail || 'Error al activar modelo'
       toast.error(mensajeError)
@@ -274,7 +274,7 @@ export function MLImpagoCuotasTab() {
 
   const handlePredecir = async () => {
     if (!prestamoId) {
-      toast.error('Ingresa un ID de préstamo')
+      toast.error('Ingresa un ID de prÃ©stamo')
       return
     }
 
@@ -308,10 +308,10 @@ export function MLImpagoCuotasTab() {
         <div>
           <h3 className="text-2xl font-bold flex items-center gap-2">
             <DollarSign className="h-6 w-6" />
-            ML - Predicción de Impago de Cuotas
+            ML - PredicciÃ³n de Impago de Cuotas
           </h3>
           <p className="text-sm text-gray-500 mt-1">
-            Entrena y usa modelos de machine learning para predecir si un cliente pagará sus cuotas futuras
+            Entrena y usa modelos de machine learning para predecir si un cliente pagarÃ¡ sus cuotas futuras
           </p>
         </div>
         <Button onClick={cargarModelos} variant="outline" size="sm" disabled={cargando}>
@@ -347,7 +347,7 @@ export function MLImpagoCuotasTab() {
                 <div className="font-semibold">{modeloActivo.nombre}</div>
               </div>
               <div>
-                <div className="text-sm text-gray-500 mb-1">Versión</div>
+                <div className="text-sm text-gray-500 mb-1">VersiÃ³n</div>
                 <div className="font-semibold">{modeloActivo.version}</div>
               </div>
               <div>
@@ -469,7 +469,7 @@ export function MLImpagoCuotasTab() {
               <h4 className="font-semibold">No hay modelo activo</h4>
             </div>
             <p className="text-sm text-gray-600 mb-4">
-              Entrena un modelo y actívalo para comenzar a predecir impago de cuotas.
+              Entrena un modelo y actÃ­valo para comenzar a predecir impago de cuotas.
             </p>
             <Button onClick={() => setMostrarFormEntrenamiento(true)} variant="outline" size="sm">
               <Play className="h-4 w-4 mr-2" />
@@ -486,7 +486,7 @@ export function MLImpagoCuotasTab() {
             <div className="flex items-center justify-between mb-4">
               <h4 className="font-semibold">Entrenar Nuevo Modelo</h4>
               <Button variant="ghost" size="sm" onClick={() => setMostrarFormEntrenamiento(false)}>
-                ✕
+                âœ•
               </Button>
             </div>
             <div className="space-y-4">
@@ -537,19 +537,19 @@ export function MLImpagoCuotasTab() {
         </Card>
       )}
 
-      {/* Formulario de Predicción */}
+      {/* Formulario de PredicciÃ³n */}
       {mostrarPrediccion && (
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between mb-4">
               <h4 className="font-semibold">Predecir Impago de Cuotas</h4>
               <Button variant="ghost" size="sm" onClick={() => setMostrarPrediccion(false)}>
-                ✕
+                âœ•
               </Button>
             </div>
             <div className="space-y-4">
               <div>
-                <label className="text-sm font-medium mb-2 block">ID del Préstamo</label>
+                <label className="text-sm font-medium mb-2 block">ID del PrÃ©stamo</label>
                 <Input
                   type="number"
                   placeholder="Ej: 123"
@@ -557,7 +557,7 @@ export function MLImpagoCuotasTab() {
                   onChange={(e) => setPrestamoId(e.target.value)}
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Ingresa el ID del préstamo para predecir si el cliente pagará sus cuotas futuras
+                  Ingresa el ID del prÃ©stamo para predecir si el cliente pagarÃ¡ sus cuotas futuras
                 </p>
               </div>
               <div className="flex gap-2">
@@ -579,17 +579,17 @@ export function MLImpagoCuotasTab() {
                 </Button>
               </div>
 
-              {/* Resultado de Predicción */}
+              {/* Resultado de PredicciÃ³n */}
               {prediccion && (
                 <Card className="mt-4 border-blue-200 bg-blue-50/50">
                   <CardContent className="pt-6">
                     <h5 className="font-semibold mb-4 flex items-center gap-2">
                       <TrendingUp className="h-5 w-5" />
-                      Resultado de la Predicción
+                      Resultado de la PredicciÃ³n
                     </h5>
                     <div className="grid gap-4 md:grid-cols-2">
                       <div>
-                        <div className="text-sm text-gray-500 mb-1">Predicción</div>
+                        <div className="text-sm text-gray-500 mb-1">PredicciÃ³n</div>
                         <div className="font-semibold text-lg">{prediccion.prediccion}</div>
                       </div>
                       <div>
@@ -616,7 +616,7 @@ export function MLImpagoCuotasTab() {
                       </div>
                     </div>
                     <div className="mt-4 pt-4 border-t">
-                      <div className="text-sm text-gray-500 mb-1">Recomendación</div>
+                      <div className="text-sm text-gray-500 mb-1">RecomendaciÃ³n</div>
                       <div className="text-sm">{prediccion.recomendacion}</div>
                     </div>
                     {prediccion.modelo_usado && (
@@ -656,7 +656,7 @@ export function MLImpagoCuotasTab() {
           ) : modelos.length === 0 ? (
             <div className="text-center py-8">
               <Brain className="h-12 w-12 mx-auto text-gray-400 mb-2" />
-              <p className="text-sm text-gray-500">No hay modelos entrenados aún</p>
+              <p className="text-sm text-gray-500">No hay modelos entrenados aÃºn</p>
               <Button
                 onClick={() => setMostrarFormEntrenamiento(true)}
                 variant="outline"
@@ -688,7 +688,7 @@ export function MLImpagoCuotasTab() {
                         </div>
                         <div className="grid gap-2 md:grid-cols-4 text-sm">
                           <div>
-                            <span className="text-gray-500">Versión:</span> {modelo.version}
+                            <span className="text-gray-500">VersiÃ³n:</span> {modelo.version}
                           </div>
                           <div>
                             <span className="text-gray-500">Algoritmo:</span> {modelo.algoritmo}

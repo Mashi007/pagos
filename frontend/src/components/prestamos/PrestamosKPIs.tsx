@@ -1,6 +1,6 @@
 import { DollarSign, TrendingUp, Users, CreditCard } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { usePrestamosKPIs } from '@/hooks/usePrestamos'
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
+import { usePrestamosKPIs } from '../../hooks/usePrestamos'
 
 interface PrestamosKPIsProps {
   // Props opcionales para filtros
@@ -39,7 +39,7 @@ export function PrestamosKPIs({
     return (
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <h2 className="text-2xl font-bold text-gray-900">KPIs de Préstamos</h2>
+          <h2 className="text-2xl font-bold text-gray-900">KPIs de PrÃ©stamos</h2>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {[1, 2, 3, 4].map((i) => (
@@ -64,7 +64,7 @@ export function PrestamosKPIs({
     return (
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <h2 className="text-2xl font-bold text-gray-900">KPIs de Préstamos</h2>
+          <h2 className="text-2xl font-bold text-gray-900">KPIs de PrÃ©stamos</h2>
         </div>
         <Card>
           <CardContent className="pt-6">
@@ -81,7 +81,7 @@ export function PrestamosKPIs({
     <div className="space-y-6">
       {/* Encabezado */}
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">KPIs de Préstamos</h2>
+        <h2 className="text-2xl font-bold text-gray-900">KPIs de PrÃ©stamos</h2>
       </div>
 
       {/* Vista General con KPIs principales */}
@@ -106,12 +106,12 @@ export function PrestamosKPIs({
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Préstamos</CardTitle>
+            <CardTitle className="text-sm font-medium">Total PrÃ©stamos</CardTitle>
             <CreditCard className="h-5 w-5 text-blue-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-600">{kpiDataFinal.totalPrestamos}</div>
-            <p className="text-xs text-gray-600 mt-1">Préstamos gestionados</p>
+            <p className="text-xs text-gray-600 mt-1">PrÃ©stamos gestionados</p>
           </CardContent>
         </Card>
 

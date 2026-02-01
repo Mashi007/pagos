@@ -1,6 +1,6 @@
 import { apiClient, ApiResponse, PaginatedResponse, buildUrl } from './api'
-import { Prestamo, PrestamoForm } from '@/types'
-import { logger } from '@/utils/logger'
+import { Prestamo, PrestamoForm } from '../types'
+import { logger } from '../utils/logger'
 
 // Constantes de configuración
 const DEFAULT_PER_PAGE = 20

@@ -2,10 +2,10 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
 import { X, Calendar, CheckCircle2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { prestamoService } from '@/services/prestamoService'
+import { Button } from '../../components/ui/button'
+import { Input } from '../../components/ui/input'
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
+import { prestamoService } from '../../services/prestamoService'
 
 interface AsignarFechaAprobacionModalProps {
   prestamo: any
@@ -23,17 +23,17 @@ export function AsignarFechaAprobacionModal({ prestamo, onClose, onSuccess }: As
 
   const handleAsignarFecha = async () => {
     if (!fechaAprobacion) {
-      toast.error('Debe seleccionar una fecha de aprobación')
+      toast.error('Debe seleccionar una fecha de aprobaciÃ³n')
       return
     }
 
     const mensajeConfirmacion =
-      `¿Desea desembolsar el préstamo con fecha ${new Date(fechaAprobacion).toLocaleDateString()}?\n\n` +
-      `Esta acción:\n` +
-      `• Cambiará el estado a DESEMBOLSADO\n` +
-      `• Generará la tabla de amortización\n` +
-      `• Creará todas las cuotas\n` +
-      `• Requiere calificación mínima de 70 puntos`
+      `Â¿Desea desembolsar el prÃ©stamo con fecha ${new Date(fechaAprobacion).toLocaleDateString()}?\n\n` +
+      `Esta acciÃ³n:\n` +
+      `â€¢ CambiarÃ¡ el estado a DESEMBOLSADO\n` +
+      `â€¢ GenerarÃ¡ la tabla de amortizaciÃ³n\n` +
+      `â€¢ CrearÃ¡ todas las cuotas\n` +
+      `â€¢ Requiere calificaciÃ³n mÃ­nima de 70 puntos`
 
     if (!window.confirm(mensajeConfirmacion)) {
       return
@@ -44,14 +44,14 @@ export function AsignarFechaAprobacionModal({ prestamo, onClose, onSuccess }: As
     try {
       const resultado = await prestamoService.asignarFechaAprobacion(prestamo.id, fechaAprobacion)
       toast.success(
-        `✅ Préstamo desembolsado exitosamente. Estado: DESEMBOLSADO. ` +
-        `Tabla de amortización generada con ${resultado.cuotas_recalculadas || 0} cuotas.`
+        `âœ… PrÃ©stamo desembolsado exitosamente. Estado: DESEMBOLSADO. ` +
+        `Tabla de amortizaciÃ³n generada con ${resultado.cuotas_recalculadas || 0} cuotas.`
       )
       onSuccess()
       onClose()
     } catch (error: any) {
-      console.error('Error asignando fecha de aprobación:', error)
-      toast.error(error.response?.data?.detail || error.message || 'Error al asignar fecha de aprobación')
+      console.error('Error asignando fecha de aprobaciÃ³n:', error)
+      toast.error(error.response?.data?.detail || error.message || 'Error al asignar fecha de aprobaciÃ³n')
     } finally {
       setIsLoading(false)
     }
@@ -77,7 +77,7 @@ export function AsignarFechaAprobacionModal({ prestamo, onClose, onSuccess }: As
             <div className="flex justify-between items-center">
               <CardTitle className="flex items-center gap-2">
                 <CheckCircle2 className="h-5 w-5" />
-                Asignar Fecha de Aprobación - Préstamo #{prestamo.id}
+                Asignar Fecha de AprobaciÃ³n - PrÃ©stamo #{prestamo.id}
               </CardTitle>
               <Button
                 variant="ghost"
@@ -93,27 +93,27 @@ export function AsignarFechaAprobacionModal({ prestamo, onClose, onSuccess }: As
           <CardContent className="p-6">
             <div className="space-y-6">
               <div className="bg-green-50 p-4 rounded border border-green-200">
-                <h5 className="font-semibold text-green-900 mb-4">📅 Fecha de Aprobación y Desembolso:</h5>
+                <h5 className="font-semibold text-green-900 mb-4">ðŸ“… Fecha de AprobaciÃ³n y Desembolso:</h5>
                 <div className="bg-blue-50 p-3 rounded border border-blue-200 mb-4">
                   <p className="text-sm font-medium text-blue-900 mb-2">
-                    ⚠️ Requisitos para desembolsar:
+                    âš ï¸ Requisitos para desembolsar:
                   </p>
                   <ul className="text-xs text-blue-800 list-disc list-inside space-y-1">
-                    <li>Calificación mínima de evaluación de riesgo: 70 puntos</li>
-                    <li>El préstamo debe estar en estado APROBADO</li>
-                    <li>Se generará la tabla de amortización automáticamente</li>
-                    <li>Se crearán todas las cuotas en la tabla de cuotas</li>
-                    <li>El estado cambiará a DESEMBOLSADO (dinero entregado)</li>
+                    <li>CalificaciÃ³n mÃ­nima de evaluaciÃ³n de riesgo: 70 puntos</li>
+                    <li>El prÃ©stamo debe estar en estado APROBADO</li>
+                    <li>Se generarÃ¡ la tabla de amortizaciÃ³n automÃ¡ticamente</li>
+                    <li>Se crearÃ¡n todas las cuotas en la tabla de cuotas</li>
+                    <li>El estado cambiarÃ¡ a DESEMBOLSADO (dinero entregado)</li>
                   </ul>
                 </div>
                 <p className="text-sm text-gray-700 mb-4">
-                  Seleccione la fecha de aprobación del crédito. Esta fecha se utilizará como base 
-                  para recalcular la tabla de amortización y determinar las fechas de vencimiento de las cuotas.
+                  Seleccione la fecha de aprobaciÃ³n del crÃ©dito. Esta fecha se utilizarÃ¡ como base 
+                  para recalcular la tabla de amortizaciÃ³n y determinar las fechas de vencimiento de las cuotas.
                 </p>
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-gray-700">
-                    Fecha de Aprobación <span className="text-red-500">*</span>
+                    Fecha de AprobaciÃ³n <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -126,7 +126,7 @@ export function AsignarFechaAprobacionModal({ prestamo, onClose, onSuccess }: As
                     />
                   </div>
                   <p className="text-xs text-gray-500">
-                    Esta fecha será la base para calcular las fechas de vencimiento de todas las cuotas
+                    Esta fecha serÃ¡ la base para calcular las fechas de vencimiento de todas las cuotas
                   </p>
                 </div>
               </div>
@@ -140,7 +140,7 @@ export function AsignarFechaAprobacionModal({ prestamo, onClose, onSuccess }: As
                   className="bg-green-600 hover:bg-green-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={handleAsignarFecha}
                   disabled={isLoading || !fechaAprobacion}
-                  title={!fechaAprobacion ? 'Debe seleccionar una fecha de aprobación' : 'Asignar fecha y recalcular amortización'}
+                  title={!fechaAprobacion ? 'Debe seleccionar una fecha de aprobaciÃ³n' : 'Asignar fecha y recalcular amortizaciÃ³n'}
                 >
                   {isLoading ? 'Asignando...' : 'Asignar Fecha y Recalcular'}
                 </Button>

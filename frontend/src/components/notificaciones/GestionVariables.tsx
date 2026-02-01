@@ -13,104 +13,104 @@ import {
   AlertCircle,
   Loader2,
 } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Badge } from '@/components/ui/badge'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
+import { Button } from '../../components/ui/button'
+import { Input } from '../../components/ui/input'
+import { Textarea } from '../../components/ui/textarea'
+import { Badge } from '../../components/ui/badge'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
+} from '../../components/ui/dialog'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
-import { Label } from '@/components/ui/label'
-import { notificacionService, NotificacionVariable } from '@/services/notificacionService'
+} from '../../components/ui/select'
+import { Label } from '../../components/ui/label'
+import { notificacionService, NotificacionVariable } from '../../services/notificacionService'
 import { toast } from 'sonner'
 
 const TABLAS_DISPONIBLES = [
   { value: 'clientes', label: 'Clientes' },
-  { value: 'prestamos', label: 'Préstamos' },
+  { value: 'prestamos', label: 'PrÃ©stamos' },
   { value: 'cuotas', label: 'Cuotas' },
   { value: 'pagos', label: 'Pagos' },
 ]
 
 const CAMPOS_DISPONIBLES: Record<string, Array<{ campo: string; descripcion: string }>> = {
   clientes: [
-    { campo: 'id', descripcion: 'ID único del cliente' },
-    { campo: 'cedula', descripcion: 'Cédula de identidad' },
+    { campo: 'id', descripcion: 'ID Ãºnico del cliente' },
+    { campo: 'cedula', descripcion: 'CÃ©dula de identidad' },
     { campo: 'nombres', descripcion: 'Nombres completos' },
-    { campo: 'telefono', descripcion: 'Teléfono de contacto' },
-    { campo: 'email', descripcion: 'Correo electrónico' },
-    { campo: 'direccion', descripcion: 'Dirección de residencia' },
+    { campo: 'telefono', descripcion: 'TelÃ©fono de contacto' },
+    { campo: 'email', descripcion: 'Correo electrÃ³nico' },
+    { campo: 'direccion', descripcion: 'DirecciÃ³n de residencia' },
     { campo: 'fecha_nacimiento', descripcion: 'Fecha de nacimiento' },
-    { campo: 'ocupacion', descripcion: 'Ocupación del cliente' },
+    { campo: 'ocupacion', descripcion: 'OcupaciÃ³n del cliente' },
     { campo: 'estado', descripcion: 'Estado (ACTIVO, INACTIVO, FINALIZADO)' },
     { campo: 'activo', descripcion: 'Estado activo (true/false)' },
     { campo: 'fecha_registro', descripcion: 'Fecha de registro' },
-    { campo: 'fecha_actualizacion', descripcion: 'Fecha de última actualización' },
-    { campo: 'usuario_registro', descripcion: 'Usuario que registró' },
+    { campo: 'fecha_actualizacion', descripcion: 'Fecha de Ãºltima actualizaciÃ³n' },
+    { campo: 'usuario_registro', descripcion: 'Usuario que registrÃ³' },
     { campo: 'notas', descripcion: 'Notas adicionales' },
   ],
   prestamos: [
-    { campo: 'id', descripcion: 'ID del préstamo' },
+    { campo: 'id', descripcion: 'ID del prÃ©stamo' },
     { campo: 'cliente_id', descripcion: 'ID del cliente' },
-    { campo: 'cedula', descripcion: 'Cédula del cliente' },
+    { campo: 'cedula', descripcion: 'CÃ©dula del cliente' },
     { campo: 'nombres', descripcion: 'Nombres del cliente' },
-    { campo: 'valor_activo', descripcion: 'Valor del activo (vehículo)' },
+    { campo: 'valor_activo', descripcion: 'Valor del activo (vehÃ­culo)' },
     { campo: 'total_financiamiento', descripcion: 'Monto total financiado' },
-    { campo: 'fecha_requerimiento', descripcion: 'Fecha requerida del préstamo' },
+    { campo: 'fecha_requerimiento', descripcion: 'Fecha requerida del prÃ©stamo' },
     { campo: 'modalidad_pago', descripcion: 'Modalidad (MENSUAL, QUINCENAL, SEMANAL)' },
-    { campo: 'numero_cuotas', descripcion: 'Número total de cuotas' },
-    { campo: 'cuota_periodo', descripcion: 'Monto de cuota por período' },
-    { campo: 'tasa_interes', descripcion: 'Tasa de interés (%)' },
-    { campo: 'fecha_base_calculo', descripcion: 'Fecha base para cálculo' },
+    { campo: 'numero_cuotas', descripcion: 'NÃºmero total de cuotas' },
+    { campo: 'cuota_periodo', descripcion: 'Monto de cuota por perÃ­odo' },
+    { campo: 'tasa_interes', descripcion: 'Tasa de interÃ©s (%)' },
+    { campo: 'fecha_base_calculo', descripcion: 'Fecha base para cÃ¡lculo' },
     { campo: 'producto', descripcion: 'Producto financiero' },
     { campo: 'concesionario', descripcion: 'Concesionario' },
     { campo: 'analista', descripcion: 'Analista asignado' },
-    { campo: 'modelo_vehiculo', descripcion: 'Modelo del vehículo' },
-    { campo: 'estado', descripcion: 'Estado del préstamo' },
+    { campo: 'modelo_vehiculo', descripcion: 'Modelo del vehÃ­culo' },
+    { campo: 'estado', descripcion: 'Estado del prÃ©stamo' },
     { campo: 'usuario_proponente', descripcion: 'Usuario proponente' },
     { campo: 'usuario_aprobador', descripcion: 'Usuario aprobador' },
     { campo: 'fecha_registro', descripcion: 'Fecha de registro' },
-    { campo: 'fecha_aprobacion', descripcion: 'Fecha de aprobación' },
+    { campo: 'fecha_aprobacion', descripcion: 'Fecha de aprobaciÃ³n' },
   ],
   cuotas: [
     { campo: 'id', descripcion: 'ID de la cuota' },
-    { campo: 'prestamo_id', descripcion: 'ID del préstamo' },
-    { campo: 'numero_cuota', descripcion: 'Número de cuota' },
+    { campo: 'prestamo_id', descripcion: 'ID del prÃ©stamo' },
+    { campo: 'numero_cuota', descripcion: 'NÃºmero de cuota' },
     { campo: 'fecha_vencimiento', descripcion: 'Fecha de vencimiento' },
     { campo: 'fecha_pago', descripcion: 'Fecha de pago' },
     { campo: 'monto_cuota', descripcion: 'Monto total de la cuota' },
     { campo: 'saldo_capital_inicial', descripcion: 'Saldo capital inicial' },
     { campo: 'saldo_capital_final', descripcion: 'Saldo capital final' },
     { campo: 'total_pagado', descripcion: 'Total pagado' },
-    { campo: 'dias_mora', descripcion: 'Días de mora' },
-    { campo: 'dias_morosidad', descripcion: 'Días de morosidad' },
+    { campo: 'dias_mora', descripcion: 'DÃ­as de mora' },
+    { campo: 'dias_morosidad', descripcion: 'DÃ­as de morosidad' },
     { campo: 'estado', descripcion: 'Estado de la cuota' },
   ],
   pagos: [
     { campo: 'id', descripcion: 'ID del pago' },
-    { campo: 'cedula', descripcion: 'Cédula del cliente' },
-    { campo: 'prestamo_id', descripcion: 'ID del préstamo' },
-    { campo: 'numero_cuota', descripcion: 'Número de cuota' },
+    { campo: 'cedula', descripcion: 'CÃ©dula del cliente' },
+    { campo: 'prestamo_id', descripcion: 'ID del prÃ©stamo' },
+    { campo: 'numero_cuota', descripcion: 'NÃºmero de cuota' },
     { campo: 'fecha_pago', descripcion: 'Fecha de pago' },
     { campo: 'fecha_registro', descripcion: 'Fecha de registro' },
     { campo: 'monto_pagado', descripcion: 'Monto pagado' },
-    { campo: 'numero_documento', descripcion: 'Número de documento' },
-    { campo: 'institucion_bancaria', descripcion: 'Institución bancaria' },
+    { campo: 'numero_documento', descripcion: 'NÃºmero de documento' },
+    { campo: 'institucion_bancaria', descripcion: 'InstituciÃ³n bancaria' },
     { campo: 'estado', descripcion: 'Estado del pago' },
-    { campo: 'conciliado', descripcion: 'Si está conciliado' },
-    { campo: 'fecha_conciliacion', descripcion: 'Fecha de conciliación' },
+    { campo: 'conciliado', descripcion: 'Si estÃ¡ conciliado' },
+    { campo: 'fecha_conciliacion', descripcion: 'Fecha de conciliaciÃ³n' },
   ],
 }
 
@@ -121,7 +121,7 @@ export function GestionVariables() {
   const [filtroTabla, setFiltroTabla] = useState<string>('')
   const [filtroActiva, setFiltroActiva] = useState<boolean | null>(null)
 
-  // Estado para el diálogo de crear/editar
+  // Estado para el diÃ¡logo de crear/editar
   const [dialogoAbierto, setDialogoAbierto] = useState(false)
   const [editando, setEditando] = useState(false)
   const [variableEditando, setVariableEditando] = useState<NotificacionVariable | null>(null)
@@ -133,7 +133,7 @@ export function GestionVariables() {
   const [descripcion, setDescripcion] = useState('')
   const [activa, setActiva] = useState(true)
 
-  // Diálogo de confirmación para eliminar
+  // DiÃ¡logo de confirmaciÃ³n para eliminar
   const [dialogoEliminarAbierto, setDialogoEliminarAbierto] = useState(false)
   const [variableAEliminar, setVariableAEliminar] = useState<NotificacionVariable | null>(null)
 
@@ -222,9 +222,9 @@ export function GestionVariables() {
       return
     }
 
-    // Validar formato del nombre de variable (solo letras, números y guiones bajos)
+    // Validar formato del nombre de variable (solo letras, nÃºmeros y guiones bajos)
     if (!/^[a-z][a-z0-9_]*$/.test(nombreVariable.trim().toLowerCase())) {
-      toast.error('El nombre de la variable solo puede contener letras minúsculas, números y guiones bajos, y debe empezar con letra')
+      toast.error('El nombre de la variable solo puede contener letras minÃºsculas, nÃºmeros y guiones bajos, y debe empezar con letra')
       return
     }
 
@@ -297,7 +297,7 @@ export function GestionVariables() {
         <div>
           <h2 className="text-2xl font-bold flex items-center gap-2">
             <Database className="h-6 w-6" />
-            Gestión de Variables Personalizadas
+            GestiÃ³n de Variables Personalizadas
           </h2>
           <p className="text-sm text-gray-500 mt-1">
             Crea y gestiona variables personalizadas para usar en plantillas de notificaciones
@@ -395,7 +395,7 @@ export function GestionVariables() {
                     <TableHead>Variable</TableHead>
                     <TableHead>Tabla</TableHead>
                     <TableHead>Campo BD</TableHead>
-                    <TableHead>Descripción</TableHead>
+                    <TableHead>DescripciÃ³n</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
@@ -419,7 +419,7 @@ export function GestionVariables() {
                       <TableCell>
                         <div className="max-w-xs truncate" title={variable.descripcion || ''}>
                           {variable.descripcion || (
-                            <span className="text-gray-400 italic">Sin descripción</span>
+                            <span className="text-gray-400 italic">Sin descripciÃ³n</span>
                           )}
                         </div>
                       </TableCell>
@@ -466,7 +466,7 @@ export function GestionVariables() {
         </CardContent>
       </Card>
 
-      {/* Diálogo de Crear/Editar */}
+      {/* DiÃ¡logo de Crear/Editar */}
       <Dialog open={dialogoAbierto} onOpenChange={setDialogoAbierto}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -499,7 +499,7 @@ export function GestionVariables() {
                   </div>
                 </div>
                 <p className="text-xs text-gray-500">
-                  Solo letras minúsculas, números y guiones bajos. Se usará como {`{{${nombreVariable || 'variable'}}}`}
+                  Solo letras minÃºsculas, nÃºmeros y guiones bajos. Se usarÃ¡ como {`{{${nombreVariable || 'variable'}}}`}
                 </p>
               </div>
 
@@ -572,7 +572,7 @@ export function GestionVariables() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="descripcion">Descripción</Label>
+              <Label htmlFor="descripcion">DescripciÃ³n</Label>
               <Textarea
                 id="descripcion"
                 placeholder="ej: Resumen de la base de datos"
@@ -581,7 +581,7 @@ export function GestionVariables() {
                 rows={3}
               />
               <p className="text-xs text-gray-500">
-                Descripción de qué representa esta variable
+                DescripciÃ³n de quÃ© representa esta variable
               </p>
             </div>
 
@@ -612,16 +612,16 @@ export function GestionVariables() {
         </DialogContent>
       </Dialog>
 
-      {/* Diálogo de Confirmación de Eliminación */}
+      {/* DiÃ¡logo de ConfirmaciÃ³n de EliminaciÃ³n */}
       <Dialog open={dialogoEliminarAbierto} onOpenChange={setDialogoEliminarAbierto}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Confirmar Eliminación</DialogTitle>
+            <DialogTitle>Confirmar EliminaciÃ³n</DialogTitle>
             <p className="text-sm text-gray-500 mt-1">
-              ¿Estás seguro de que deseas eliminar la variable{' '}
+              Â¿EstÃ¡s seguro de que deseas eliminar la variable{' '}
               <strong>{`{{${variableAEliminar?.nombre_variable}}}`}</strong>?
               <br />
-              Esta acción no se puede deshacer.
+              Esta acciÃ³n no se puede deshacer.
             </p>
           </DialogHeader>
           <DialogFooter>

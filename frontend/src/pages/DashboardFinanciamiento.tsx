@@ -13,15 +13,15 @@ import {
   ChevronRight,
   Filter,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { useSimpleAuth } from '@/store/simpleAuthStore'
-import { formatCurrency } from '@/utils'
-import { apiClient } from '@/services/api'
-import { useDashboardFiltros, type DashboardFiltros } from '@/hooks/useDashboardFiltros'
-import { DashboardFiltrosPanel } from '@/components/dashboard/DashboardFiltrosPanel'
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
+import { Button } from '../components/ui/button'
+import { useSimpleAuth } from '../store/simpleAuthStore'
+import { formatCurrency } from '../utils'
+import { apiClient } from '../services/api'
+import { useDashboardFiltros, type DashboardFiltros } from '../hooks/useDashboardFiltros'
+import { DashboardFiltrosPanel } from '../components/dashboard/DashboardFiltrosPanel'
 import { useNavigate } from 'react-router-dom'
-import { KpiCardLarge } from '@/components/dashboard/KpiCardLarge'
+import { KpiCardLarge } from '../components/dashboard/KpiCardLarge'
 import {
   BarChart,
   Bar,
@@ -115,11 +115,11 @@ export function DashboardFinanciamiento() {
         monto_promedio: monto_promedio,
       } as KPIsData
     },
-    staleTime: 2 * 60 * 1000, // ✅ ACTUALIZADO: 2 minutos para datos más frescos
-    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
+    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos mÃ¡s frescos
+    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
-  // Cargar datos de gráfico por estado
+  // Cargar datos de grÃ¡fico por estado
   const { data: datosEstado, isLoading: loadingEstado } = useQuery({
     queryKey: ['financiamiento-por-estado', filtros],
     queryFn: async () => {
@@ -147,7 +147,7 @@ export function DashboardFinanciamiento() {
         {
           estado: 'Activo',
           monto: activo,
-          cantidad: 0, // Se calcularía desde BD si es necesario
+          cantidad: 0, // Se calcularÃ­a desde BD si es necesario
           porcentaje: total > 0 ? (activo / total) * 100 : 0,
         },
         {
@@ -166,8 +166,8 @@ export function DashboardFinanciamiento() {
 
       return datos
     },
-    staleTime: 2 * 60 * 1000, // ✅ ACTUALIZADO: 2 minutos para datos más frescos
-    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
+    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos mÃ¡s frescos
+    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
   // Cargar datos de concesionarios
@@ -212,8 +212,8 @@ export function DashboardFinanciamiento() {
 
       return result
     },
-    staleTime: 2 * 60 * 1000, // ✅ ACTUALIZADO: 2 minutos para datos más frescos
-    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
+    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos mÃ¡s frescos
+    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
   // Cargar tendencia mensual
@@ -233,8 +233,8 @@ export function DashboardFinanciamiento() {
 
       return response.meses
     },
-    staleTime: 2 * 60 * 1000, // ✅ ACTUALIZADO: 2 minutos para datos más frescos
-    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
+    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos mÃ¡s frescos
+    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -244,7 +244,7 @@ export function DashboardFinanciamiento() {
     setIsRefreshing(false)
   }
 
-  // Colores para gráficos
+  // Colores para grÃ¡ficos
   const COLORS_POR_ESTADO = {
     Activo: '#10b981', // green-500
     Inactivo: '#f59e0b', // amber-500
@@ -268,7 +268,7 @@ export function DashboardFinanciamiento() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="container mx-auto px-4 py-8 space-y-8">
-        {/* Header Estratégico */}
+        {/* Header EstratÃ©gico */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -281,14 +281,14 @@ export function DashboardFinanciamiento() {
               onClick={() => navigate('/dashboard/menu')}
               className="hover:bg-cyan-50"
             >
-              ← Menú
+              â† MenÃº
             </Button>
             <div>
               <h1 className="text-6xl font-black text-gray-900 uppercase tracking-tight">
                 Financiamiento
               </h1>
               <p className="text-xl text-gray-600 font-medium mt-1">
-                Monitoreo Estratégico • {userName}
+                Monitoreo EstratÃ©gico â€¢ {userName}
               </p>
             </div>
           </div>
@@ -306,7 +306,7 @@ export function DashboardFinanciamiento() {
                 <div className="flex items-center space-x-2">
                   <div className="flex items-center space-x-2 text-base font-semibold text-gray-700">
                     <Filter className="h-5 w-5 text-cyan-600" />
-                    <span>Filtros Rápidos</span>
+                    <span>Filtros RÃ¡pidos</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 flex-wrap">
@@ -381,7 +381,7 @@ export function DashboardFinanciamiento() {
               format="currency"
             />
             <KpiCardLarge
-              title="Total Préstamos"
+              title="Total PrÃ©stamos"
               value={kpisData.total_financiamientos}
               icon={FileText}
               color="text-blue-600"
@@ -401,7 +401,7 @@ export function DashboardFinanciamiento() {
           </div>
         ) : null}
 
-        {/* LAYOUT: BOTONES IZQUIERDA + GRÁFICOS CENTRO */}
+        {/* LAYOUT: BOTONES IZQUIERDA + GRÃFICOS CENTRO */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* COLUMNA IZQUIERDA: BOTONES EXPLORAR DETALLES */}
           <motion.div
@@ -413,7 +413,7 @@ export function DashboardFinanciamiento() {
             <Card className="shadow-lg border-2 border-cyan-200 bg-gradient-to-br from-cyan-50 to-blue-50 sticky top-4">
                   <CardHeader className="bg-gradient-to-r from-cyan-600 to-blue-600 rounded-t-lg -m-0.5 mb-4">
                 <CardTitle className="text-2xl font-bold text-white flex items-center space-x-2">
-                  <span>🔍</span>
+                  <span>ðŸ”</span>
                   <span>Explorar Detalles</span>
                 </CardTitle>
               </CardHeader>
@@ -434,12 +434,12 @@ export function DashboardFinanciamiento() {
                   variant="outline"
                   className="w-full justify-start bg-white hover:bg-cyan-50 text-gray-800 border-2 border-cyan-200 hover:border-cyan-400 h-auto py-3 px-4"
                   onClick={() => {
-                    // TODO: Navegar a análisis por estado
-                    console.log('Análisis por Estado Completo')
+                    // TODO: Navegar a anÃ¡lisis por estado
+                    console.log('AnÃ¡lisis por Estado Completo')
                   }}
                 >
                   <BarChart3 className="h-6 w-6 mr-3 text-cyan-600" />
-                  <span className="font-semibold text-base flex-1 text-left">Análisis por Estado</span>
+                  <span className="font-semibold text-base flex-1 text-left">AnÃ¡lisis por Estado</span>
                   <ChevronRight className="h-5 w-5 text-gray-400" />
                 </Button>
                 <Button
@@ -448,7 +448,7 @@ export function DashboardFinanciamiento() {
                   onClick={() => navigate('/dashboard/analisis')}
                 >
                   <PieChart className="h-6 w-6 mr-3 text-cyan-600" />
-                  <span className="font-semibold text-base flex-1 text-left">Distribución Concesionarios</span>
+                  <span className="font-semibold text-base flex-1 text-left">DistribuciÃ³n Concesionarios</span>
                   <ChevronRight className="h-5 w-5 text-gray-400" />
                 </Button>
                 <Button
@@ -476,11 +476,11 @@ export function DashboardFinanciamiento() {
             </Card>
           </motion.div>
 
-          {/* COLUMNA CENTRO/DERECHA: GRÁFICOS PRINCIPALES */}
+          {/* COLUMNA CENTRO/DERECHA: GRÃFICOS PRINCIPALES */}
           <div className="lg:col-span-9 space-y-6">
-            {/* Gráficos en Grid 2 Columnas */}
+            {/* GrÃ¡ficos en Grid 2 Columnas */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Gráfico 1: Financiamiento por Estado (Bar Chart) */}
+              {/* GrÃ¡fico 1: Financiamiento por Estado (Bar Chart) */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -532,7 +532,7 @@ export function DashboardFinanciamiento() {
                 </Card>
               </motion.div>
 
-              {/* Gráfico 2: Distribución por Concesionario (Donut) */}
+              {/* GrÃ¡fico 2: DistribuciÃ³n por Concesionario (Donut) */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -542,7 +542,7 @@ export function DashboardFinanciamiento() {
                   <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50 border-b-2 border-purple-200">
                     <CardTitle className="flex items-center space-x-2 text-2xl font-bold text-gray-800">
                       <PieChart className="h-6 w-6 text-purple-600" />
-                      <span>Distribución por Concesionario</span>
+                      <span>DistribuciÃ³n por Concesionario</span>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-6">
@@ -582,7 +582,7 @@ export function DashboardFinanciamiento() {
                                 const cantidad = props.payload?.cantidad ?? 0
                                 const monto = props.payload?.monto ?? 0
                                 return [
-                                  `${(value * 100).toFixed(1)}% (${cantidad} préstamos, ${formatCurrency(monto)})`,
+                                  `${(value * 100).toFixed(1)}% (${cantidad} prÃ©stamos, ${formatCurrency(monto)})`,
                                   'Porcentaje',
                                 ]
                               }}
@@ -595,7 +595,7 @@ export function DashboardFinanciamiento() {
                             <div className="text-2xl font-black text-gray-800">
                               {totalConcesionarios?.cantidad.toLocaleString()}
                             </div>
-                            <div className="text-xs text-gray-500">Préstamos</div>
+                            <div className="text-xs text-gray-500">PrÃ©stamos</div>
                             <div className="text-lg font-bold text-gray-700 mt-1">
                               {formatCurrency(totalConcesionarios?.monto || 0)}
                             </div>
@@ -612,7 +612,7 @@ export function DashboardFinanciamiento() {
               </motion.div>
             </div>
 
-            {/* Gráfico 3: Tendencia Mensual (Full Width) */}
+            {/* GrÃ¡fico 3: Tendencia Mensual (Full Width) */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}

@@ -1,5 +1,5 @@
-import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { Card, CardContent } from '../../components/ui/card'
+import { Badge } from '../../components/ui/badge'
 import {
   CreditCard,
   DollarSign,
@@ -8,7 +8,7 @@ import {
   Clock,
   AlertTriangle
 } from 'lucide-react'
-import { formatCurrency } from '@/utils'
+import { formatCurrency } from '../../utils'
 
 interface PagosKPIsProps {
   totalPagos: number

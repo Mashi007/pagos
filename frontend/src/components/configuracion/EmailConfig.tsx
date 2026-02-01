@@ -1,13 +1,13 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Mail, Save, TestTube, CheckCircle, AlertCircle, Eye, EyeOff, Clock, XCircle, RefreshCw } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Badge } from '@/components/ui/badge'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card'
+import { Button } from '../../components/ui/button'
+import { Input } from '../../components/ui/input'
+import { Textarea } from '../../components/ui/textarea'
+import { Badge } from '../../components/ui/badge'
 import { toast } from 'sonner'
-import { validarEmail, validarConfiguracionGmail } from '@/utils/validators'
-import { emailConfigService, notificacionService, type Notificacion } from '@/services/notificacionService'
+import { validarEmail, validarConfiguracionGmail } from '../../utils/validators'
+import { emailConfigService, notificacionService, type Notificacion } from '../../services/notificacionService'
 
 interface EmailConfigData {
   smtp_host: string
@@ -19,7 +19,7 @@ interface EmailConfigData {
   smtp_use_tls: string
   modo_pruebas?: string
   email_pruebas?: string
-  email_activo?: string // ✅ Estado activo/inactivo
+  email_activo?: string // âœ… Estado activo/inactivo
 }
 
 export function EmailConfig() {
@@ -40,13 +40,13 @@ export function EmailConfig() {
   const [probando, setProbando] = useState(false)
   const [modoPruebas, setModoPruebas] = useState<string>('true')
   const [emailPruebas, setEmailPruebas] = useState('')
-  const [emailActivo, setEmailActivo] = useState<boolean>(true) // ✅ Estado activo/inactivo
+  const [emailActivo, setEmailActivo] = useState<boolean>(true) // âœ… Estado activo/inactivo
   const [emailPruebaDestino, setEmailPruebaDestino] = useState('')
   const [subjectPrueba, setSubjectPrueba] = useState('')
   const [mensajePrueba, setMensajePrueba] = useState('')
   const [errorValidacion, setErrorValidacion] = useState<string | null>(null)
 
-  // Estado de vinculación y monitoreo
+  // Estado de vinculaciÃ³n y monitoreo
   const [vinculacionConfirmada, setVinculacionConfirmada] = useState<boolean>(false)
   const [mensajeVinculacion, setMensajeVinculacion] = useState<string | null>(null)
   const [requiereAppPassword, setRequiereAppPassword] = useState<boolean>(false)
@@ -58,53 +58,53 @@ export function EmailConfig() {
   } | null>(null)
   const [verificandoEstado, setVerificandoEstado] = useState<boolean>(false)
 
-  // Estado de envíos
+  // Estado de envÃ­os
   const [enviosRecientes, setEnviosRecientes] = useState<Notificacion[]>([])
   const [cargandoEnvios, setCargandoEnvios] = useState(false)
   const [resultadoPrueba, setResultadoPrueba] = useState<any>(null)
-  const [emailEnviadoExitoso, setEmailEnviadoExitoso] = useState(false) // ✅ Estado para cambio de color del botón
+  const [emailEnviadoExitoso, setEmailEnviadoExitoso] = useState(false) // âœ… Estado para cambio de color del botÃ³n
 
-  // Cargar configuración al montar
+  // Cargar configuraciÃ³n al montar
   useEffect(() => {
     cargarConfiguracion()
     cargarEnviosRecientes()
-    verificarEstadoGoogle() // ✅ Verificar estado de Google/Gmail al cargar
+    verificarEstadoGoogle() // âœ… Verificar estado de Google/Gmail al cargar
   }, [])
 
-  // ✅ Verificar estado de configuración con Google/Gmail
+  // âœ… Verificar estado de configuraciÃ³n con Google/Gmail
   const verificarEstadoGoogle = async () => {
     try {
       setVerificandoEstado(true)
       const estado = await emailConfigService.verificarEstadoConfiguracionEmail()
       setEstadoConfiguracion(estado)
 
-      // ✅ Actualizar estado de vinculación basado en la verificación REAL de Gmail
-      // La conexión SMTP exitosa significa que Gmail ACEPTÓ las credenciales
+      // âœ… Actualizar estado de vinculaciÃ³n basado en la verificaciÃ³n REAL de Gmail
+      // La conexiÃ³n SMTP exitosa significa que Gmail ACEPTÃ“ las credenciales
       if (estado.configurada && estado.conexion_smtp?.success === true) {
         setVinculacionConfirmada(true)
-        setMensajeVinculacion('✅ Sistema vinculado correctamente con Google/Google Workspace')
+        setMensajeVinculacion('âœ… Sistema vinculado correctamente con Google/Google Workspace')
         setRequiereAppPassword(false)
         if (process.env.NODE_ENV === 'development') {
-          console.log('✅ Gmail confirmó: Configuración correcta y conexión aceptada')
+          console.log('âœ… Gmail confirmÃ³: ConfiguraciÃ³n correcta y conexiÃ³n aceptada')
         }
       } else {
-        // Si hay problemas o la conexión SMTP falló, Gmail RECHAZÓ la conexión
+        // Si hay problemas o la conexiÃ³n SMTP fallÃ³, Gmail RECHAZÃ“ la conexiÃ³n
         setVinculacionConfirmada(false)
 
-        // Verificar si el problema es específico de App Password
+        // Verificar si el problema es especÃ­fico de App Password
         const requiereAppPass = estado.problemas.some(p =>
           p.toLowerCase().includes('app password') ||
-          p.toLowerCase().includes('contraseña de aplicación') ||
+          p.toLowerCase().includes('contraseÃ±a de aplicaciÃ³n') ||
           p.toLowerCase().includes('application-specific password') ||
-          p.toLowerCase().includes('requiere una contraseña de aplicación')
+          p.toLowerCase().includes('requiere una contraseÃ±a de aplicaciÃ³n')
         ) || (estado.conexion_smtp?.message?.toLowerCase().includes('app password') ?? false) ||
-           (estado.conexion_smtp?.message?.toLowerCase().includes('contraseña de aplicación') ?? false)
+           (estado.conexion_smtp?.message?.toLowerCase().includes('contraseÃ±a de aplicaciÃ³n') ?? false)
 
         setRequiereAppPassword(Boolean(requiereAppPass))
-        setMensajeVinculacion(estado.mensaje || '⚠️ Gmail rechazó la conexión. Verifica tus credenciales.')
+        setMensajeVinculacion(estado.mensaje || 'âš ï¸ Gmail rechazÃ³ la conexiÃ³n. Verifica tus credenciales.')
 
         if (process.env.NODE_ENV === 'development') {
-          console.log('❌ Gmail rechazó:', {
+          console.log('âŒ Gmail rechazÃ³:', {
             problemas: estado.problemas,
             conexion_smtp: estado.conexion_smtp,
             requiereAppPassword: requiereAppPass
@@ -115,7 +115,7 @@ export function EmailConfig() {
       console.error('Error verificando estado de Google:', error)
       setEstadoConfiguracion({
         configurada: false,
-        mensaje: 'Error al verificar estado de configuración',
+        mensaje: 'Error al verificar estado de configuraciÃ³n',
         problemas: ['No se pudo verificar el estado con Google'],
         conexion_smtp: { success: false, message: 'Error al conectar con Gmail' }
       })
@@ -124,18 +124,18 @@ export function EmailConfig() {
     }
   }
 
-  // Cargar configuración desde backend
+  // Cargar configuraciÃ³n desde backend
   const cargarConfiguracion = async () => {
     try {
       const data = await emailConfigService.obtenerConfiguracionEmail()
 
-      // ✅ CRÍTICO: Sincronizar from_email con smtp_user si está vacío
-      // Esto asegura que el botón se habilite correctamente
+      // âœ… CRÃTICO: Sincronizar from_email con smtp_user si estÃ¡ vacÃ­o
+      // Esto asegura que el botÃ³n se habilite correctamente
       if ((!data.from_email || data.from_email.trim() === '') && data.smtp_user?.trim()) {
         data.from_email = data.smtp_user
       }
 
-      // ✅ Asegurar que from_email tenga un valor por defecto si smtp_user existe
+      // âœ… Asegurar que from_email tenga un valor por defecto si smtp_user existe
       if (!data.from_email && data.smtp_user) {
         data.from_email = data.smtp_user
       }
@@ -149,7 +149,7 @@ export function EmailConfig() {
         data.smtp_use_tls = (data.smtp_use_tls.toLowerCase() === 'true' || data.smtp_use_tls === '1') ? 'true' : 'false'
       }
 
-      // ✅ Asegurar valores por defecto para campos requeridos
+      // âœ… Asegurar valores por defecto para campos requeridos
       if (!data.smtp_host) data.smtp_host = 'smtp.gmail.com'
       if (!data.smtp_port) data.smtp_port = '587'
       if (!data.from_name) data.from_name = 'RapiCredit'
@@ -168,25 +168,25 @@ export function EmailConfig() {
       setConfig(data as EmailConfigData)
       setModoPruebas(data.modo_pruebas || 'true')
       setEmailPruebas(data.email_pruebas || '')
-      // ✅ Cargar estado activo/inactivo
+      // âœ… Cargar estado activo/inactivo
       const emailActivoValue = data.email_activo === undefined || data.email_activo === null
         ? true
         : (data.email_activo === 'true' || data.email_activo === '1')
       setEmailActivo(emailActivoValue)
     } catch (error) {
-      console.error('Error cargando configuración:', error)
-      toast.error('Error cargando configuración')
+      console.error('Error cargando configuraciÃ³n:', error)
+      toast.error('Error cargando configuraciÃ³n')
     }
   }
 
-  // Cargar envíos recientes
+  // Cargar envÃ­os recientes
   const cargarEnviosRecientes = async () => {
     setCargandoEnvios(true)
     try {
       const resultado = await notificacionService.listarNotificaciones(1, 10)
       setEnviosRecientes(resultado.items || [])
     } catch (error) {
-      console.error('Error cargando envíos:', error)
+      console.error('Error cargando envÃ­os:', error)
     } finally {
       setCargandoEnvios(false)
     }
@@ -197,10 +197,10 @@ export function EmailConfig() {
     setConfig(prev => {
       const nuevo = { ...prev, [campo]: valor }
 
-      // ✅ Sincronizar from_email con smtp_user automáticamente
-      // Esto asegura que siempre tengan el mismo valor si from_email está vacío o igual al anterior
+      // âœ… Sincronizar from_email con smtp_user automÃ¡ticamente
+      // Esto asegura que siempre tengan el mismo valor si from_email estÃ¡ vacÃ­o o igual al anterior
       if (campo === 'smtp_user') {
-        // Si from_email está vacío o es igual al smtp_user anterior, sincronizar
+        // Si from_email estÃ¡ vacÃ­o o es igual al smtp_user anterior, sincronizar
         if (!prev.from_email?.trim() || prev.from_email === prev.smtp_user) {
           nuevo.from_email = valor
         }
@@ -209,7 +209,7 @@ export function EmailConfig() {
       return nuevo
     })
 
-    // Limpiar error de validación cuando el usuario edita
+    // Limpiar error de validaciÃ³n cuando el usuario edita
     if (errorValidacion) {
       setErrorValidacion(null)
     }
@@ -217,7 +217,7 @@ export function EmailConfig() {
 
   // Validar si se puede guardar
   const puedeGuardar = useMemo((): boolean => {
-    // ✅ CONDICIÓN 1: Campos obligatorios básicos (siempre requeridos)
+    // âœ… CONDICIÃ“N 1: Campos obligatorios bÃ¡sicos (siempre requeridos)
     const tieneHost = config.smtp_host?.trim() || ''
     const tienePort = config.smtp_port?.trim() || ''
     const tieneUser = config.smtp_user?.trim() || ''
@@ -227,27 +227,27 @@ export function EmailConfig() {
       return false
     }
 
-    // ✅ CONDICIÓN 2: Puerto válido (número entre 1 y 65535)
+    // âœ… CONDICIÃ“N 2: Puerto vÃ¡lido (nÃºmero entre 1 y 65535)
     const puerto = parseInt(config.smtp_port || '0')
     if (isNaN(puerto) || puerto < 1 || puerto > 65535) {
       return false
     }
 
-    // ✅ CONDICIÓN 3: Validaciones específicas para Gmail/Google Workspace
+    // âœ… CONDICIÃ“N 3: Validaciones especÃ­ficas para Gmail/Google Workspace
     const esGmail = config.smtp_host?.toLowerCase().includes('gmail.com') || false
     if (esGmail) {
-      // ✅ 3.1: Gmail requiere contraseña siempre
+      // âœ… 3.1: Gmail requiere contraseÃ±a siempre
       const tienePassword = config.smtp_password?.trim() || ''
       if (!tienePassword) {
         return false
       }
 
-      // ✅ 3.2: Gmail solo acepta puertos 587 (TLS) o 465 (SSL)
+      // âœ… 3.2: Gmail solo acepta puertos 587 (TLS) o 465 (SSL)
       if (puerto !== 587 && puerto !== 465) {
         return false
       }
 
-      // ✅ 3.3: Puerto 587 requiere TLS habilitado
+      // âœ… 3.3: Puerto 587 requiere TLS habilitado
       if (puerto === 587 && config.smtp_use_tls !== 'true') {
         return false
       }
@@ -267,22 +267,22 @@ export function EmailConfig() {
   const obtenerCamposFaltantes = (): string[] => {
     const faltantes: string[] = []
 
-    // Campos obligatorios básicos
+    // Campos obligatorios bÃ¡sicos
     if (!config.smtp_host?.trim()) faltantes.push('Servidor SMTP')
     if (!config.smtp_port?.trim()) faltantes.push('Puerto SMTP')
     if (!config.smtp_user?.trim()) faltantes.push('Email de Usuario')
     if (!config.from_email?.trim()) faltantes.push('Email del Remitente')
 
-    // Validar puerto numérico
+    // Validar puerto numÃ©rico
     const puerto = parseInt(config.smtp_port || '0')
     if (isNaN(puerto) || puerto < 1 || puerto > 65535) {
-      faltantes.push('Puerto SMTP válido (1-65535)')
+      faltantes.push('Puerto SMTP vÃ¡lido (1-65535)')
     }
 
-    // Validaciones específicas para Gmail
+    // Validaciones especÃ­ficas para Gmail
     if (config.smtp_host?.toLowerCase().includes('gmail.com')) {
       if (!config.smtp_password?.trim()) {
-        faltantes.push('Contraseña de Aplicación')
+        faltantes.push('ContraseÃ±a de AplicaciÃ³n')
       }
 
       // Gmail solo acepta puertos 587 o 465
@@ -299,9 +299,9 @@ export function EmailConfig() {
     return faltantes
   }
 
-  // Validar configuración antes de guardar usando validadores centralizados
+  // Validar configuraciÃ³n antes de guardar usando validadores centralizados
   const validarConfiguracion = (): string | null => {
-    // ✅ Usar validación centralizada
+    // âœ… Usar validaciÃ³n centralizada
     const validacion = validarConfiguracionGmail({
       smtp_host: config.smtp_host,
       smtp_port: config.smtp_port,
@@ -318,7 +318,7 @@ export function EmailConfig() {
     return null
   }
 
-  // Guardar configuración
+  // Guardar configuraciÃ³n
   const handleGuardar = async () => {
     const error = validarConfiguracion()
     if (error) {
@@ -332,7 +332,7 @@ export function EmailConfig() {
     try {
       setGuardando(true)
 
-      // Limpiar espacios de la contraseña
+      // Limpiar espacios de la contraseÃ±a
       const passwordLimpia = config.smtp_password?.replace(/\s/g, '') || ''
 
           const configCompleta = {
@@ -340,12 +340,12 @@ export function EmailConfig() {
             smtp_password: passwordLimpia,
             modo_pruebas: modoPruebas,
             email_pruebas: modoPruebas === 'true' ? emailPruebas : '',
-            email_activo: emailActivo ? 'true' : 'false' // ✅ Incluir estado activo/inactivo
+            email_activo: emailActivo ? 'true' : 'false' // âœ… Incluir estado activo/inactivo
           }
 
       const resultado = await emailConfigService.actualizarConfiguracionEmail(configCompleta)
 
-      // ✅ Actualizar estado de vinculación INMEDIATAMENTE con la respuesta del guardado
+      // âœ… Actualizar estado de vinculaciÃ³n INMEDIATAMENTE con la respuesta del guardado
       // Esto asegura que las banderas se actualicen de inmediato
       const nuevaVinculacion = resultado?.vinculacion_confirmada === true
       const nuevoMensaje = resultado?.mensaje_vinculacion || null
@@ -355,44 +355,44 @@ export function EmailConfig() {
       setMensajeVinculacion(nuevoMensaje)
       setRequiereAppPassword(nuevoRequiereAppPassword)
 
-      // Mostrar mensaje de éxito
+      // Mostrar mensaje de Ã©xito
       if (nuevaVinculacion) {
-        toast.success(nuevoMensaje || '✅ Sistema vinculado correctamente con Google', { duration: 10000 })
+        toast.success(nuevoMensaje || 'âœ… Sistema vinculado correctamente con Google', { duration: 10000 })
       } else if (nuevoRequiereAppPassword) {
-        toast.warning(nuevoMensaje || '⚠️ Configuración guardada pero requiere App Password', { duration: 15000 })
+        toast.warning(nuevoMensaje || 'âš ï¸ ConfiguraciÃ³n guardada pero requiere App Password', { duration: 15000 })
       } else {
-        toast.success('Configuración guardada exitosamente')
+        toast.success('ConfiguraciÃ³n guardada exitosamente')
       }
 
       await cargarConfiguracion()
 
-      // ✅ Verificar estado de Google después de guardar (prueba conexión SMTP real con Gmail)
+      // âœ… Verificar estado de Google despuÃ©s de guardar (prueba conexiÃ³n SMTP real con Gmail)
       // IMPORTANTE: Preservar los estados de requiereAppPassword y vinculacionConfirmada
-      // que vienen de la respuesta del guardado, ya que son más precisos
+      // que vienen de la respuesta del guardado, ya que son mÃ¡s precisos
       const requiereAppPasswordAntes = nuevoRequiereAppPassword
       const vinculacionAntes = nuevaVinculacion
 
       await verificarEstadoGoogle()
 
-      // ✅ Si el guardado indicó que requiere App Password, mantener ese estado
-      // incluso si la verificación posterior muestra otro resultado
+      // âœ… Si el guardado indicÃ³ que requiere App Password, mantener ese estado
+      // incluso si la verificaciÃ³n posterior muestra otro resultado
       if (requiereAppPasswordAntes) {
         setRequiereAppPassword(true)
         setMensajeVinculacion(nuevoMensaje)
         setVinculacionConfirmada(false)
       } else if (vinculacionAntes) {
-        // Si el guardado fue exitoso, mantener el estado de éxito
+        // Si el guardado fue exitoso, mantener el estado de Ã©xito
         setVinculacionConfirmada(true)
         setRequiereAppPassword(false)
       }
     } catch (error: any) {
-      console.error('Error guardando configuración:', error)
+      console.error('Error guardando configuraciÃ³n:', error)
 
       setVinculacionConfirmada(false)
       setMensajeVinculacion(null)
       setRequiereAppPassword(false)
 
-      const mensajeError = error?.response?.data?.detail || error?.message || 'Error guardando configuración'
+      const mensajeError = error?.response?.data?.detail || error?.message || 'Error guardando configuraciÃ³n'
       setErrorValidacion(mensajeError)
       toast.error(mensajeError, { duration: 10000 })
     } finally {
@@ -400,7 +400,7 @@ export function EmailConfig() {
     }
   }
 
-  // Probar envío de email
+  // Probar envÃ­o de email
   const handleProbar = async () => {
     if (modoPruebas === 'true' && !emailPruebas?.trim()) {
       toast.error('En modo Pruebas, debes configurar un Email de Pruebas')
@@ -408,14 +408,14 @@ export function EmailConfig() {
     }
 
     if (emailPruebaDestino && !validarEmail(emailPruebaDestino)) {
-      toast.error('Por favor ingresa un email válido')
+      toast.error('Por favor ingresa un email vÃ¡lido')
       return
     }
 
     try {
       setProbando(true)
       setResultadoPrueba(null)
-      setEmailEnviadoExitoso(false) // ✅ Resetear estado de éxito
+      setEmailEnviadoExitoso(false) // âœ… Resetear estado de Ã©xito
 
       const resultado = await emailConfigService.probarConfiguracionEmail(
         emailPruebaDestino.trim() || undefined,
@@ -427,9 +427,9 @@ export function EmailConfig() {
 
       if (resultado.mensaje?.includes('enviado')) {
         toast.success(`Email de prueba enviado exitosamente a ${resultado.email_destino || 'tu correo'}`)
-        setEmailEnviadoExitoso(true) // ✅ Marcar como enviado exitosamente
+        setEmailEnviadoExitoso(true) // âœ… Marcar como enviado exitosamente
 
-        // ✅ Reactivar botón después de 3 segundos
+        // âœ… Reactivar botÃ³n despuÃ©s de 3 segundos
         setTimeout(() => {
           setEmailEnviadoExitoso(false)
         }, 3000)
@@ -438,9 +438,9 @@ export function EmailConfig() {
         setEmailEnviadoExitoso(false)
       }
     } catch (error: any) {
-      console.error('Error probando configuración:', error)
+      console.error('Error probando configuraciÃ³n:', error)
       const mensajeError = error?.response?.data?.detail || error?.message || 'Error desconocido'
-      toast.error(`Error probando configuración: ${mensajeError}`)
+      toast.error(`Error probando configuraciÃ³n: ${mensajeError}`)
       setResultadoPrueba({ error: mensajeError })
       setEmailEnviadoExitoso(false)
     } finally {
@@ -452,19 +452,19 @@ export function EmailConfig() {
 
   return (
     <div className="space-y-6">
-      {/* Configuración SMTP */}
+      {/* ConfiguraciÃ³n SMTP */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Mail className="h-5 w-5 text-blue-600" />
-            Configuración SMTP (Gmail / Google Workspace)
+            ConfiguraciÃ³n SMTP (Gmail / Google Workspace)
           </CardTitle>
           <CardDescription>
             Ingresa tus credenciales de Gmail o Google Workspace para enviar notificaciones
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* ✅ Toggle Activar/Desactivar Email */}
+          {/* âœ… Toggle Activar/Desactivar Email */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <div className="flex items-center justify-between">
               <div className="flex-1">
@@ -473,8 +473,8 @@ export function EmailConfig() {
                 </label>
                 <p className="text-xs text-gray-600">
                   {emailActivo
-                    ? '✅ El sistema está enviando emails automáticamente'
-                    : '⚠️ El sistema NO enviará emails. Activa el servicio para habilitar envíos.'}
+                    ? 'âœ… El sistema estÃ¡ enviando emails automÃ¡ticamente'
+                    : 'âš ï¸ El sistema NO enviarÃ¡ emails. Activa el servicio para habilitar envÃ­os.'}
                 </p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
@@ -483,7 +483,7 @@ export function EmailConfig() {
                   checked={emailActivo}
                   onChange={(e) => {
                     setEmailActivo(e.target.checked)
-                    toast.info(e.target.checked ? 'Email activado - Los envíos se habilitarán al guardar' : 'Email desactivado - Los envíos se deshabilitarán al guardar')
+                    toast.info(e.target.checked ? 'Email activado - Los envÃ­os se habilitarÃ¡n al guardar' : 'Email desactivado - Los envÃ­os se deshabilitarÃ¡n al guardar')
                   }}
                   className="sr-only peer"
                 />
@@ -498,11 +498,11 @@ export function EmailConfig() {
           {/* Banners de estado y monitoreo de Google */}
           {esGmail && (
             <>
-              {/* ✅ Estado: Configurado y vinculado correctamente */}
+              {/* âœ… Estado: Configurado y vinculado correctamente */}
               {vinculacionConfirmada && estadoConfiguracion?.configurada && (
                 <div className="bg-white border-2 border-green-500 rounded-lg p-4">
                   <div className="flex items-center gap-3">
-                    {/* Semáforo Verde */}
+                    {/* SemÃ¡foro Verde */}
                     <div className="flex flex-col items-center gap-1 flex-shrink-0">
                       <div className="w-4 h-4 bg-green-500 rounded-full shadow-lg"></div>
                       <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
@@ -510,21 +510,21 @@ export function EmailConfig() {
                     </div>
                     <div className="flex-1">
                       <p className="font-semibold text-gray-900">
-                        Configuración correcta
+                        ConfiguraciÃ³n correcta
                       </p>
                       <p className="text-sm text-gray-600">
-                        Gmail aceptó la conexión. Puedes enviar emails.
+                        Gmail aceptÃ³ la conexiÃ³n. Puedes enviar emails.
                       </p>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* ⚠️ Estado: Requiere App Password (prioridad sobre otros estados) */}
+              {/* âš ï¸ Estado: Requiere App Password (prioridad sobre otros estados) */}
               {requiereAppPassword && !vinculacionConfirmada && (
                 <div className="bg-white border-2 border-amber-400 rounded-lg p-4">
                   <div className="flex items-center gap-3">
-                    {/* Semáforo Amarillo */}
+                    {/* SemÃ¡foro Amarillo */}
                     <div className="flex flex-col items-center gap-1 flex-shrink-0">
                       <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
                       <div className="w-4 h-4 bg-amber-500 rounded-full shadow-lg"></div>
@@ -537,7 +537,7 @@ export function EmailConfig() {
                       <div className="text-sm text-gray-600 space-y-1">
                         <p>1. Activa 2FA: <a href="https://myaccount.google.com/security" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">myaccount.google.com/security</a></p>
                         <p>2. Genera App Password: <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">myaccount.google.com/apppasswords</a></p>
-                        <p>3. Pega la contraseña de 16 caracteres y guarda</p>
+                        <p>3. Pega la contraseÃ±a de 16 caracteres y guarda</p>
                       </div>
                       {mensajeVinculacion && (
                         <p className="text-xs text-gray-500 mt-2 italic">
@@ -549,11 +549,11 @@ export function EmailConfig() {
                 </div>
               )}
 
-              {/* ❌ Estado: No configurado o con problemas (solo si no requiere App Password) */}
+              {/* âŒ Estado: No configurado o con problemas (solo si no requiere App Password) */}
               {!vinculacionConfirmada && !requiereAppPassword && estadoConfiguracion && !estadoConfiguracion.configurada && (
                 <div className="bg-white border-2 border-red-500 rounded-lg p-4">
                   <div className="flex items-center gap-3">
-                    {/* Semáforo Rojo */}
+                    {/* SemÃ¡foro Rojo */}
                     <div className="flex flex-col items-center gap-1 flex-shrink-0">
                       <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
                       <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
@@ -561,7 +561,7 @@ export function EmailConfig() {
                     </div>
                     <div className="flex-1">
                       <p className="font-semibold text-gray-900">
-                        Error de conexión
+                        Error de conexiÃ³n
                       </p>
                       <p className="text-sm text-gray-600">
                         {estadoConfiguracion.mensaje || mensajeVinculacion || 'No se pudo conectar. Verifica tus credenciales.'}
@@ -578,18 +578,18 @@ export function EmailConfig() {
                 </div>
               )}
 
-              {/* ⏳ Estado: Pendiente de verificación (solo si no hay estado verificado) */}
+              {/* â³ Estado: Pendiente de verificaciÃ³n (solo si no hay estado verificado) */}
               {!estadoConfiguracion && config.smtp_user && config.smtp_password && !vinculacionConfirmada && !requiereAppPassword && (
                 <div className="bg-white border border-gray-300 rounded-lg p-4">
                   <div className="flex items-center gap-3">
-                    {/* Semáforo Amarillo (pendiente) */}
+                    {/* SemÃ¡foro Amarillo (pendiente) */}
                     <div className="flex flex-col items-center gap-1 flex-shrink-0">
                       <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
                       <div className="w-4 h-4 bg-amber-500 rounded-full shadow-lg"></div>
                       <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
                     </div>
                     <div className="flex-1">
-                      <p className="font-semibold text-gray-900">Guarda la configuración para verificar la conexión con Gmail</p>
+                      <p className="font-semibold text-gray-900">Guarda la configuraciÃ³n para verificar la conexiÃ³n con Gmail</p>
                     </div>
                   </div>
                 </div>
@@ -598,7 +598,7 @@ export function EmailConfig() {
           )}
 
 
-          {/* Campos de configuración */}
+          {/* Campos de configuraciÃ³n */}
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <label className="text-sm font-medium block mb-2">Servidor SMTP</label>
@@ -629,7 +629,7 @@ export function EmailConfig() {
               />
             </div>
             <div>
-              <label className="text-sm font-medium block mb-2">Contraseña de Aplicación</label>
+              <label className="text-sm font-medium block mb-2">ContraseÃ±a de AplicaciÃ³n</label>
               <div className="relative">
                 <Input
                   type={mostrarPassword ? 'text' : 'password'}
@@ -648,7 +648,7 @@ export function EmailConfig() {
               </div>
               <p className="text-xs text-gray-500 mt-1">
                 <strong>IMPORTANTE:</strong> Requiere 2FA activado. Genera una App Password (16 caracteres) en tu cuenta de Google.
-                <strong className="text-red-600"> NO uses tu contraseña normal.</strong> Funciona para Gmail y Google Workspace.
+                <strong className="text-red-600"> NO uses tu contraseÃ±a normal.</strong> Funciona para Gmail y Google Workspace.
               </p>
             </div>
           </div>
@@ -686,7 +686,7 @@ export function EmailConfig() {
           {/* Selector de ambiente */}
           <div className="border-t pt-4 mt-4">
             <div className="mb-4">
-              <label className="text-sm font-medium block mb-2">Ambiente de Envío</label>
+              <label className="text-sm font-medium block mb-2">Ambiente de EnvÃ­o</label>
               <div className="flex gap-4">
                 <label className="flex items-center space-x-2 cursor-pointer">
                   <input
@@ -697,7 +697,7 @@ export function EmailConfig() {
                     onChange={(e) => setModoPruebas(e.target.value)}
                     className="rounded"
                   />
-                  <span className="text-sm">Producción (Envíos reales a clientes)</span>
+                  <span className="text-sm">ProducciÃ³n (EnvÃ­os reales a clientes)</span>
                 </label>
                 <label className="flex items-center space-x-2 cursor-pointer">
                   <input
@@ -708,7 +708,7 @@ export function EmailConfig() {
                     onChange={(e) => setModoPruebas(e.target.value)}
                     className="rounded"
                   />
-                  <span className="text-sm">Pruebas (Todos los emails a dirección de prueba)</span>
+                  <span className="text-sm">Pruebas (Todos los emails a direcciÃ³n de prueba)</span>
                 </label>
               </div>
             </div>
@@ -726,19 +726,19 @@ export function EmailConfig() {
                   className="max-w-md"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  En modo pruebas, todos los emails se enviarán a esta dirección en lugar de a los clientes reales.
+                  En modo pruebas, todos los emails se enviarÃ¡n a esta direcciÃ³n en lugar de a los clientes reales.
                 </p>
               </div>
             )}
           </div>
 
-          {/* Error de validación */}
+          {/* Error de validaciÃ³n */}
           {errorValidacion && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
               <div className="flex items-start gap-2">
                 <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
                 <div className="flex-1">
-                  <p className="font-semibold text-red-900 mb-1">Error de validación:</p>
+                  <p className="font-semibold text-red-900 mb-1">Error de validaciÃ³n:</p>
                   <p className="text-sm text-red-800 whitespace-pre-line">{errorValidacion}</p>
                 </div>
               </div>
@@ -754,7 +754,7 @@ export function EmailConfig() {
               className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Save className="h-4 w-4" />
-              {guardando ? 'Guardando...' : 'Guardar Configuración'}
+              {guardando ? 'Guardando...' : 'Guardar ConfiguraciÃ³n'}
             </Button>
             {!puedeGuardar && !guardando && (
               <p className="text-xs text-amber-600 self-center font-medium">
@@ -763,31 +763,31 @@ export function EmailConfig() {
             )}
           </div>
 
-          {/* Prueba de envío */}
+          {/* Prueba de envÃ­o */}
           <div className="border-t pt-4 mt-4">
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
                 <TestTube className="h-5 w-5" />
-                Envío de Email de Prueba
+                EnvÃ­o de Email de Prueba
               </h3>
               <p className="text-sm text-blue-700 mb-4">
-                Envía un correo de prueba personalizado para verificar que la configuración SMTP funciona correctamente.
+                EnvÃ­a un correo de prueba personalizado para verificar que la configuraciÃ³n SMTP funciona correctamente.
               </p>
 
               {modoPruebas === 'false' && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
-                  <p className="text-sm text-green-800 font-semibold mb-1">✅ Modo Producción activo</p>
+                  <p className="text-sm text-green-800 font-semibold mb-1">âœ… Modo ProducciÃ³n activo</p>
                   <p className="text-xs text-green-700">
-                    El email de prueba se enviará <strong>REALMENTE</strong> al destinatario especificado.
+                    El email de prueba se enviarÃ¡ <strong>REALMENTE</strong> al destinatario especificado.
                   </p>
                 </div>
               )}
 
               {modoPruebas === 'true' && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
-                  <p className="text-sm text-yellow-800 font-semibold mb-1">⚠️ Modo Pruebas activo</p>
+                  <p className="text-sm text-yellow-800 font-semibold mb-1">âš ï¸ Modo Pruebas activo</p>
                   <p className="text-xs text-yellow-700">
-                    El email se redirigirá a {emailPruebas || 'la dirección de pruebas configurada'}.
+                    El email se redirigirÃ¡ a {emailPruebas || 'la direcciÃ³n de pruebas configurada'}.
                   </p>
                 </div>
               )}
@@ -814,7 +814,7 @@ export function EmailConfig() {
                     type="text"
                     value={subjectPrueba}
                     onChange={(e) => setSubjectPrueba(e.target.value)}
-                    placeholder="Prueba de configuración - RapiCredit"
+                    placeholder="Prueba de configuraciÃ³n - RapiCredit"
                     className="max-w-md"
                   />
                 </div>
@@ -826,7 +826,7 @@ export function EmailConfig() {
                   <Textarea
                     value={mensajePrueba}
                     onChange={(e) => setMensajePrueba(e.target.value)}
-                    placeholder="Escribe aquí tu mensaje de prueba..."
+                    placeholder="Escribe aquÃ­ tu mensaje de prueba..."
                     rows={6}
                     className="max-w-md resize-y"
                   />
@@ -838,7 +838,7 @@ export function EmailConfig() {
                   disabled={probando || !config.smtp_user}
                   className={`flex items-center gap-2 transition-colors duration-300 ${
                     emailEnviadoExitoso
-                      ? 'bg-green-600 hover:bg-green-700' // ✅ Verde cuando fue enviado exitosamente
+                      ? 'bg-green-600 hover:bg-green-700' // âœ… Verde cuando fue enviado exitosamente
                       : 'bg-blue-600 hover:bg-blue-700' // Azul normal
                   }`}
                 >
@@ -846,7 +846,7 @@ export function EmailConfig() {
                   {probando
                     ? 'Enviando Email de Prueba...'
                     : emailEnviadoExitoso
-                      ? '✅ Email Enviado'
+                      ? 'âœ… Email Enviado'
                       : 'Enviar Email de Prueba'}
                 </Button>
               </div>
@@ -882,20 +882,20 @@ export function EmailConfig() {
         </CardContent>
       </Card>
 
-      {/* Envíos recientes */}
+      {/* EnvÃ­os recientes */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Mail className="h-5 w-5 text-blue-600" />
-            Verificación de Envíos Reales
+            VerificaciÃ³n de EnvÃ­os Reales
           </CardTitle>
           <CardDescription>
-            Historial reciente de correos enviados para verificar que el sistema está funcionando correctamente
+            Historial reciente de correos enviados para verificar que el sistema estÃ¡ funcionando correctamente
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex justify-between items-center mb-4">
-            <div className="text-sm text-gray-600">Últimos 10 envíos de notificaciones</div>
+            <div className="text-sm text-gray-600">Ãšltimos 10 envÃ­os de notificaciones</div>
             <Button
               variant="outline"
               size="sm"
@@ -908,11 +908,11 @@ export function EmailConfig() {
           </div>
 
           {cargandoEnvios ? (
-            <div className="text-center py-8 text-gray-500">Cargando envíos...</div>
+            <div className="text-center py-8 text-gray-500">Cargando envÃ­os...</div>
           ) : enviosRecientes.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               <AlertCircle className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-              <p>No hay envíos recientes</p>
+              <p>No hay envÃ­os recientes</p>
             </div>
           ) : (
             <div className="space-y-3">

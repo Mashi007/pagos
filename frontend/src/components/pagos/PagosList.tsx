@@ -14,18 +14,18 @@ import {
   FileText,
   AlertTriangle,
 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { pagoService, type Pago } from '@/services/pagoService'
+import { Button } from '../../components/ui/button'
+import { Input } from '../../components/ui/input'
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
+import { Badge } from '../../components/ui/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/tabs'
+import { pagoService, type Pago } from '../../services/pagoService'
 import { RegistrarPagoForm } from './RegistrarPagoForm'
 import { CargaMasivaMenu } from './CargaMasivaMenu'
 import { PagosListResumen } from './PagosListResumen'
 import { PagosKPIsNuevo } from './PagosKPIsNuevo'
-import { AdvertenciaFormatoCientifico } from '@/components/common/AdvertenciaFormatoCientifico'
+import { AdvertenciaFormatoCientifico } from '../../components/common/AdvertenciaFormatoCientifico'
 import { toast } from 'sonner'
 
 export function PagosList() {
@@ -47,13 +47,13 @@ export function PagosList() {
   const { data, isLoading, error, isError } = useQuery({
     queryKey: ['pagos', page, perPage, filters],
     queryFn: () => pagoService.getAllPagos(page, perPage, filters),
-    staleTime: 0, // Siempre refetch cuando se invalida (mejor para actualización inmediata)
+    staleTime: 0, // Siempre refetch cuando se invalida (mejor para actualizaciÃ³n inmediata)
     refetchOnMount: true, // Refetch cuando el componente se monta
     refetchOnWindowFocus: false, // No refetch en focus (evita requests innecesarios)
   })
 
   const handleFilterChange = (key: string, value: string) => {
-    // Convertir "all" a cadena vacía para que el servicio no incluya el filtro
+    // Convertir "all" a cadena vacÃ­a para que el servicio no incluya el filtro
     const filterValue = value === 'all' ? '' : value
     setFilters(prev => ({ ...prev, [key]: filterValue }))
     setPage(1)
@@ -101,8 +101,8 @@ export function PagosList() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Módulo de Pagos</h1>
-          <p className="text-gray-500 mt-1">Gestión de pagos de clientes</p>
+          <h1 className="text-3xl font-bold text-gray-900">MÃ³dulo de Pagos</h1>
+          <p className="text-gray-500 mt-1">GestiÃ³n de pagos de clientes</p>
         </div>
         <div className="flex gap-3">
           <CargaMasivaMenu
@@ -110,7 +110,7 @@ export function PagosList() {
               try {
                 // Invalidar todas las queries relacionadas con pagos
                 await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
-                await queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false }) // ✅ Invalidar KPIs específicamente
+                await queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false }) // âœ… Invalidar KPIs especÃ­ficamente
                 await queryClient.invalidateQueries({ queryKey: ['kpis'], exact: false })
                 await queryClient.invalidateQueries({ queryKey: ['dashboard'], exact: false })
                 await queryClient.invalidateQueries({ queryKey: ['pagos-ultimos'], exact: false })
@@ -119,7 +119,7 @@ export function PagosList() {
                 await queryClient.refetchQueries({ queryKey: ['pagos'], exact: false })
                 toast.success('Datos actualizados correctamente')
               } catch (error) {
-                console.error('❌ Error actualizando dashboard:', error)
+                console.error('âŒ Error actualizando dashboard:', error)
               }
             }}
           />
@@ -138,13 +138,13 @@ export function PagosList() {
         </div>
       </div>
 
-      {/* Advertencia sobre formato científico */}
+      {/* Advertencia sobre formato cientÃ­fico */}
       <AdvertenciaFormatoCientifico />
 
       {/* KPIs de Pagos */}
       <PagosKPIsNuevo />
 
-      {/* Pestañas */}
+      {/* PestaÃ±as */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="mb-4">
           <TabsTrigger value="todos">Todos los Pagos</TabsTrigger>
@@ -158,13 +158,13 @@ export function PagosList() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Filter className="w-5 h-5" />
-                Filtros de Búsqueda
+                Filtros de BÃºsqueda
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                 <Input
-                  placeholder="Cédula de identidad"
+                  placeholder="CÃ©dula de identidad"
                   value={filters.cedula}
                   onChange={e => handleFilterChange('cedula', e.target.value)}
                 />
@@ -255,14 +255,14 @@ export function PagosList() {
               ) : (
                 <>
                   <div className="mb-4 text-sm text-gray-600">
-                    Mostrando {data.pagos.length} de {data.total} pagos (Página {data.page} de {data.total_pages})
+                    Mostrando {data.pagos.length} de {data.total} pagos (PÃ¡gina {data.page} de {data.total_pages})
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead>
                         <tr className="border-b">
                           <th className="px-4 py-3 text-left">ID</th>
-                          <th className="px-4 py-3 text-left">Cédula</th>
+                          <th className="px-4 py-3 text-left">CÃ©dula</th>
                           <th className="px-4 py-3 text-left">Estado</th>
                           <th className="px-4 py-3 text-center">Cuotas Atrasadas</th>
                           <th className="px-4 py-3 text-left">Monto</th>
@@ -285,7 +285,7 @@ export function PagosList() {
                             <td className="px-4 py-3">${typeof pago.monto_pagado === 'number' ? pago.monto_pagado.toFixed(2) : parseFloat(String(pago.monto_pagado || 0)).toFixed(2)}</td>
                             <td className="px-4 py-3">{new Date(pago.fecha_pago).toLocaleDateString()}</td>
                             <td className="px-4 py-3">
-                              {/* ✅ Usar verificado_concordancia si existe (columna "SI"/"NO" de BD), sino usar conciliado (boolean) */}
+                              {/* âœ… Usar verificado_concordancia si existe (columna "SI"/"NO" de BD), sino usar conciliado (boolean) */}
                               {(pago.verificado_concordancia === 'SI' || pago.conciliado) ? (
                                 <Badge className="bg-green-500 text-white">SI</Badge>
                               ) : (
@@ -311,7 +311,7 @@ export function PagosList() {
                                   title="Eliminar Pago"
                                   className="text-red-600 hover:text-red-700 hover:bg-red-50"
                                   onClick={async () => {
-                                    if (window.confirm(`¿Estás seguro de eliminar el pago ID ${pago.id}?`)) {
+                                    if (window.confirm(`Â¿EstÃ¡s seguro de eliminar el pago ID ${pago.id}?`)) {
                                       try {
                                         await pagoService.deletePago(pago.id)
                                         toast.success('Pago eliminado exitosamente')
@@ -332,7 +332,7 @@ export function PagosList() {
                       </tbody>
                     </table>
                   </div>
-                  {/* Paginación */}
+                  {/* PaginaciÃ³n */}
                   {data.total_pages > 1 && (
                     <div className="flex justify-between items-center mt-4">
                       <Button
@@ -343,7 +343,7 @@ export function PagosList() {
                         Anterior
                       </Button>
                       <span className="text-sm text-gray-600">
-                        Página {data.page} de {data.total_pages}
+                        PÃ¡gina {data.page} de {data.total_pages}
                       </span>
                       <Button
                         variant="outline"
@@ -386,47 +386,47 @@ export function PagosList() {
             setPagoEditando(null)
           }}
           onSuccess={async () => {
-            console.log('🔄 onSuccess llamado - Iniciando actualización de dashboard...')
+            console.log('ðŸ”„ onSuccess llamado - Iniciando actualizaciÃ³n de dashboard...')
             setShowRegistrarPago(false)
             setPagoEditando(null)
 
             try {
               // Invalidar todas las queries relacionadas con pagos primero
-              console.log('🔀 Invalidando queries de pagos...')
+              console.log('ðŸ”€ Invalidando queries de pagos...')
               await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
 
               // Invalidar queries de KPIs y dashboard que puedan depender de pagos
-              console.log('🔀 Invalidando queries de KPIs y dashboard...')
-              await queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false }) // ✅ Invalidar específicamente pagos-kpis
+              console.log('ðŸ”€ Invalidando queries de KPIs y dashboard...')
+              await queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false }) // âœ… Invalidar especÃ­ficamente pagos-kpis
               await queryClient.invalidateQueries({ queryKey: ['kpis'], exact: false })
               await queryClient.invalidateQueries({ queryKey: ['dashboard'], exact: false })
 
-              // Invalidar también la query de últimos pagos (resumen)
+              // Invalidar tambiÃ©n la query de Ãºltimos pagos (resumen)
               await queryClient.invalidateQueries({ queryKey: ['pagos-ultimos'], exact: false })
 
-              // Refetch inmediato de KPIs para actualización en tiempo real
+              // Refetch inmediato de KPIs para actualizaciÃ³n en tiempo real
               await queryClient.refetchQueries({ queryKey: ['pagos-kpis'], exact: false })
 
               // Refetch de todas las queries relacionadas con pagos (no solo activas)
-              // Esto asegura que las queries se actualicen incluso si no están montadas
-              console.log('🔁 Ejecutando refetch de queries de pagos...')
+              // Esto asegura que las queries se actualicen incluso si no estÃ¡n montadas
+              console.log('ðŸ” Ejecutando refetch de queries de pagos...')
               const refetchResult = await queryClient.refetchQueries({
                 queryKey: ['pagos'],
                 exact: false
               })
 
-              // Refetch también de queries activas para actualización inmediata
+              // Refetch tambiÃ©n de queries activas para actualizaciÃ³n inmediata
               const activeRefetchResult = await queryClient.refetchQueries({
                 queryKey: ['pagos'],
                 exact: false,
                 type: 'active'
               })
 
-              console.log('✅ Refetch completado:', { refetchResult, activeRefetchResult })
+              console.log('âœ… Refetch completado:', { refetchResult, activeRefetchResult })
 
               toast.success('Pago registrado exitosamente. El dashboard se ha actualizado.')
             } catch (error) {
-              console.error('❌ Error actualizando dashboard:', error)
+              console.error('âŒ Error actualizando dashboard:', error)
               toast.error('Pago registrado, pero hubo un error al actualizar el dashboard')
             }
           }}

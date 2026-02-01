@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AlertCircle, Edit, Save, X, Loader2 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card'
+import { Button } from '../../components/ui/button'
+import { Input } from '../../components/ui/input'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
+import { Badge } from '../../components/ui/badge'
 import { toast } from 'sonner'
-import { formatCurrency } from '@/utils'
-import { apiClient } from '@/services/api'
+import { formatCurrency } from '../../utils'
+import { apiClient } from '../../services/api'
 
 interface DiferenciaAbono {
   prestamo_id: number
@@ -37,7 +37,7 @@ export function ReporteDiferenciasAbonos() {
     refetchInterval: 30000, // Refrescar cada 30 segundos
   })
 
-  // Mutación para ajustar total_abonos_bd
+  // MutaciÃ³n para ajustar total_abonos_bd
   const ajustarAbono = useMutation({
     mutationFn: async ({ prestamoId, nuevoTotal }: { prestamoId: number; nuevoTotal: number }) => {
       const response = await apiClient.put(`/api/v1/reportes/diferencias-abonos/${prestamoId}/ajustar`, {
@@ -57,7 +57,7 @@ export function ReporteDiferenciasAbonos() {
     },
   })
 
-  // Mutación para actualizar valor de imagen
+  // MutaciÃ³n para actualizar valor de imagen
   const actualizarValorImagen = useMutation({
     mutationFn: async ({ cedula, valorImagen }: { cedula: string; valorImagen: number }) => {
       const response = await apiClient.put('/api/v1/reportes/diferencias-abonos/actualizar-valor-imagen', {
@@ -90,7 +90,7 @@ export function ReporteDiferenciasAbonos() {
   const handleGuardar = (prestamoId: number) => {
     const total = parseFloat(nuevoTotal)
     if (isNaN(total) || total < 0) {
-      toast.error('El total debe ser un número válido mayor o igual a 0')
+      toast.error('El total debe ser un nÃºmero vÃ¡lido mayor o igual a 0')
       return
     }
     ajustarAbono.mutate({ prestamoId, nuevoTotal: total })
@@ -109,7 +109,7 @@ export function ReporteDiferenciasAbonos() {
   const handleGuardarImagen = (cedula: string) => {
     const valor = parseFloat(nuevoValorImagen)
     if (isNaN(valor) || valor < 0) {
-      toast.error('El valor debe ser un número válido mayor o igual a 0')
+      toast.error('El valor debe ser un nÃºmero vÃ¡lido mayor o igual a 0')
       return
     }
     actualizarValorImagen.mutate({ cedula, valorImagen: valor })
@@ -147,7 +147,7 @@ export function ReporteDiferenciasAbonos() {
         <CardHeader>
           <CardTitle>Diferencias de Abonos</CardTitle>
           <CardDescription>
-            Préstamos marcados para revisión con diferencias entre BD y valores de referencia
+            PrÃ©stamos marcados para revisiÃ³n con diferencias entre BD y valores de referencia
           </CardDescription>
         </CardHeader>
         <CardContent className="py-8">
@@ -155,7 +155,7 @@ export function ReporteDiferenciasAbonos() {
             <AlertCircle className="h-12 w-12 mx-auto mb-4 text-gray-400" />
             <p className="text-lg font-medium">No hay diferencias pendientes</p>
             <p className="text-sm mt-2">
-              Marca préstamos para revisar en la página de Préstamos para que aparezcan aquí.
+              Marca prÃ©stamos para revisar en la pÃ¡gina de PrÃ©stamos para que aparezcan aquÃ­.
             </p>
           </div>
         </CardContent>
@@ -171,8 +171,8 @@ export function ReporteDiferenciasAbonos() {
           Diferencias de Abonos
         </CardTitle>
         <CardDescription>
-          {diferencias.length} préstamo(s) con diferencias pendientes de revisión. Puedes ajustar el total de abonos
-          y el sistema redistribuirá los pagos uniformemente.
+          {diferencias.length} prÃ©stamo(s) con diferencias pendientes de revisiÃ³n. Puedes ajustar el total de abonos
+          y el sistema redistribuirÃ¡ los pagos uniformemente.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -180,7 +180,7 @@ export function ReporteDiferenciasAbonos() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Cédula</TableHead>
+                <TableHead>CÃ©dula</TableHead>
                 <TableHead>Cliente</TableHead>
                 <TableHead className="text-right">Total Abonos BD</TableHead>
                 <TableHead className="text-right">Total Abonos Imagen</TableHead>

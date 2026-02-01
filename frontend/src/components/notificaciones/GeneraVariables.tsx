@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Button } from '../../components/ui/button'
+import { Input } from '../../components/ui/input'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
+import { Badge } from '../../components/ui/badge'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import { Search, Plus, Trash2, Edit2, Save, X, Database, Link } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { notificacionService, NotificacionVariable } from '@/services/notificacionService'
+import { notificacionService, NotificacionVariable } from '../../services/notificacionService'
 
 // Usar el tipo del servicio
 type VariableConfig = NotificacionVariable
@@ -14,81 +14,81 @@ type VariableConfig = NotificacionVariable
 // Todos los campos disponibles en la base de datos relacionados con clientes
 const CAMPOS_DISPONIBLES = {
   clientes: [
-    { campo: 'id', descripcion: 'ID único del cliente' },
-    { campo: 'cedula', descripcion: 'Cédula de identidad' },
+    { campo: 'id', descripcion: 'ID Ãºnico del cliente' },
+    { campo: 'cedula', descripcion: 'CÃ©dula de identidad' },
     { campo: 'nombres', descripcion: 'Nombres completos' },
-    { campo: 'telefono', descripcion: 'Teléfono de contacto' },
-    { campo: 'email', descripcion: 'Correo electrónico' },
-    { campo: 'direccion', descripcion: 'Dirección de residencia' },
+    { campo: 'telefono', descripcion: 'TelÃ©fono de contacto' },
+    { campo: 'email', descripcion: 'Correo electrÃ³nico' },
+    { campo: 'direccion', descripcion: 'DirecciÃ³n de residencia' },
     { campo: 'fecha_nacimiento', descripcion: 'Fecha de nacimiento' },
-    { campo: 'ocupacion', descripcion: 'Ocupación del cliente' },
+    { campo: 'ocupacion', descripcion: 'OcupaciÃ³n del cliente' },
     { campo: 'estado', descripcion: 'Estado (ACTIVO, INACTIVO, FINALIZADO)' },
     { campo: 'activo', descripcion: 'Estado activo (true/false)' },
     { campo: 'fecha_registro', descripcion: 'Fecha de registro' },
-    { campo: 'fecha_actualizacion', descripcion: 'Fecha de última actualización' },
-    { campo: 'usuario_registro', descripcion: 'Usuario que registró' },
+    { campo: 'fecha_actualizacion', descripcion: 'Fecha de Ãºltima actualizaciÃ³n' },
+    { campo: 'usuario_registro', descripcion: 'Usuario que registrÃ³' },
     { campo: 'notas', descripcion: 'Notas adicionales' },
   ],
   prestamos: [
-    { campo: 'id', descripcion: 'ID del préstamo' },
+    { campo: 'id', descripcion: 'ID del prÃ©stamo' },
     { campo: 'cliente_id', descripcion: 'ID del cliente' },
-    { campo: 'cedula', descripcion: 'Cédula del cliente' },
+    { campo: 'cedula', descripcion: 'CÃ©dula del cliente' },
     { campo: 'nombres', descripcion: 'Nombres del cliente' },
-    { campo: 'valor_activo', descripcion: 'Valor del activo (vehículo)' },
+    { campo: 'valor_activo', descripcion: 'Valor del activo (vehÃ­culo)' },
     { campo: 'total_financiamiento', descripcion: 'Monto total financiado' },
-    { campo: 'fecha_requerimiento', descripcion: 'Fecha requerida del préstamo' },
+    { campo: 'fecha_requerimiento', descripcion: 'Fecha requerida del prÃ©stamo' },
     { campo: 'modalidad_pago', descripcion: 'Modalidad (MENSUAL, QUINCENAL, SEMANAL)' },
-    { campo: 'numero_cuotas', descripcion: 'Número total de cuotas' },
-    { campo: 'cuota_periodo', descripcion: 'Monto de cuota por período' },
-    { campo: 'tasa_interes', descripcion: 'Tasa de interés (%)' },
-    { campo: 'fecha_base_calculo', descripcion: 'Fecha base para cálculo' },
+    { campo: 'numero_cuotas', descripcion: 'NÃºmero total de cuotas' },
+    { campo: 'cuota_periodo', descripcion: 'Monto de cuota por perÃ­odo' },
+    { campo: 'tasa_interes', descripcion: 'Tasa de interÃ©s (%)' },
+    { campo: 'fecha_base_calculo', descripcion: 'Fecha base para cÃ¡lculo' },
     { campo: 'producto', descripcion: 'Producto financiero' },
     { campo: 'concesionario', descripcion: 'Concesionario' },
     { campo: 'analista', descripcion: 'Analista asignado' },
-    { campo: 'modelo_vehiculo', descripcion: 'Modelo del vehículo' },
-    { campo: 'estado', descripcion: 'Estado del préstamo' },
+    { campo: 'modelo_vehiculo', descripcion: 'Modelo del vehÃ­culo' },
+    { campo: 'estado', descripcion: 'Estado del prÃ©stamo' },
     { campo: 'usuario_proponente', descripcion: 'Usuario proponente' },
     { campo: 'usuario_aprobador', descripcion: 'Usuario aprobador' },
     { campo: 'fecha_registro', descripcion: 'Fecha de registro' },
-    { campo: 'fecha_aprobacion', descripcion: 'Fecha de aprobación' },
+    { campo: 'fecha_aprobacion', descripcion: 'Fecha de aprobaciÃ³n' },
   ],
   cuotas: [
     { campo: 'id', descripcion: 'ID de la cuota' },
-    { campo: 'prestamo_id', descripcion: 'ID del préstamo' },
-    { campo: 'numero_cuota', descripcion: 'Número de cuota' },
+    { campo: 'prestamo_id', descripcion: 'ID del prÃ©stamo' },
+    { campo: 'numero_cuota', descripcion: 'NÃºmero de cuota' },
     { campo: 'fecha_vencimiento', descripcion: 'Fecha de vencimiento' },
     { campo: 'fecha_pago', descripcion: 'Fecha de pago' },
     { campo: 'monto_cuota', descripcion: 'Monto total de la cuota' },
     { campo: 'monto_capital', descripcion: 'Monto de capital' },
-    { campo: 'monto_interes', descripcion: 'Monto de interés' },
+    { campo: 'monto_interes', descripcion: 'Monto de interÃ©s' },
     { campo: 'saldo_capital_inicial', descripcion: 'Saldo capital inicial' },
     { campo: 'saldo_capital_final', descripcion: 'Saldo capital final' },
     { campo: 'capital_pagado', descripcion: 'Capital pagado' },
-    { campo: 'interes_pagado', descripcion: 'Interés pagado' },
+    { campo: 'interes_pagado', descripcion: 'InterÃ©s pagado' },
     { campo: 'mora_pagada', descripcion: 'Mora pagada' },
     { campo: 'total_pagado', descripcion: 'Total pagado' },
     { campo: 'capital_pendiente', descripcion: 'Capital pendiente' },
-    { campo: 'interes_pendiente', descripcion: 'Interés pendiente' },
-    { campo: 'dias_mora', descripcion: 'Días de mora' },
+    { campo: 'interes_pendiente', descripcion: 'InterÃ©s pendiente' },
+    { campo: 'dias_mora', descripcion: 'DÃ­as de mora' },
     { campo: 'monto_mora', descripcion: 'Monto de mora' },
     { campo: 'tasa_mora', descripcion: 'Tasa de mora (%)' },
-    { campo: 'dias_morosidad', descripcion: 'Días de morosidad' },
+    { campo: 'dias_morosidad', descripcion: 'DÃ­as de morosidad' },
     { campo: 'monto_morosidad', descripcion: 'Monto de morosidad' },
     { campo: 'estado', descripcion: 'Estado de la cuota' },
   ],
   pagos: [
     { campo: 'id', descripcion: 'ID del pago' },
-    { campo: 'cedula', descripcion: 'Cédula del cliente' },
-    { campo: 'prestamo_id', descripcion: 'ID del préstamo' },
-    { campo: 'numero_cuota', descripcion: 'Número de cuota' },
+    { campo: 'cedula', descripcion: 'CÃ©dula del cliente' },
+    { campo: 'prestamo_id', descripcion: 'ID del prÃ©stamo' },
+    { campo: 'numero_cuota', descripcion: 'NÃºmero de cuota' },
     { campo: 'fecha_pago', descripcion: 'Fecha de pago' },
     { campo: 'fecha_registro', descripcion: 'Fecha de registro' },
     { campo: 'monto_pagado', descripcion: 'Monto pagado' },
-    { campo: 'numero_documento', descripcion: 'Número de documento' },
-    { campo: 'institucion_bancaria', descripcion: 'Institución bancaria' },
+    { campo: 'numero_documento', descripcion: 'NÃºmero de documento' },
+    { campo: 'institucion_bancaria', descripcion: 'InstituciÃ³n bancaria' },
     { campo: 'estado', descripcion: 'Estado del pago' },
-    { campo: 'conciliado', descripcion: 'Si está conciliado' },
-    { campo: 'fecha_conciliacion', descripcion: 'Fecha de conciliación' },
+    { campo: 'conciliado', descripcion: 'Si estÃ¡ conciliado' },
+    { campo: 'fecha_conciliacion', descripcion: 'Fecha de conciliaciÃ³n' },
   ],
 }
 
@@ -108,10 +108,10 @@ export function GeneraVariables() {
   const inicializarVariablesPrecargadas = async () => {
     try {
       await notificacionService.inicializarVariablesPrecargadas()
-      // Recargar variables después de inicializar
+      // Recargar variables despuÃ©s de inicializar
       await cargarVariables()
     } catch (error: any) {
-      // Si falla, no es crítico - las variables precargadas del frontend seguirán funcionando
+      // Si falla, no es crÃ­tico - las variables precargadas del frontend seguirÃ¡n funcionando
       if (error?.response?.status !== 404) {
         console.warn('No se pudieron inicializar variables precargadas en BD:', error?.response?.data?.detail || error.message)
       }
@@ -124,7 +124,7 @@ export function GeneraVariables() {
       const response = await notificacionService.listarVariables()
       setVariables(response || [])
     } catch (error: any) {
-      // Si el endpoint no existe aún, usar lista vacía
+      // Si el endpoint no existe aÃºn, usar lista vacÃ­a
       if (error?.response?.status !== 404) {
         toast.error(error?.response?.data?.detail || 'Error al cargar variables')
       }
@@ -135,7 +135,7 @@ export function GeneraVariables() {
   }
 
   useEffect(() => {
-    // Inicializar variables precargadas automáticamente al cargar el componente
+    // Inicializar variables precargadas automÃ¡ticamente al cargar el componente
     inicializarVariablesPrecargadas()
   }, [])
 
@@ -163,7 +163,7 @@ export function GeneraVariables() {
   }
 
   const eliminarVariable = async (id: number) => {
-    if (!window.confirm('¿Está seguro de eliminar esta variable?')) return
+    if (!window.confirm('Â¿EstÃ¡ seguro de eliminar esta variable?')) return
 
     try {
       await notificacionService.eliminarVariable(id)
@@ -224,7 +224,7 @@ export function GeneraVariables() {
                   onChange={e => setNuevaVariable({ ...nuevaVariable, nombre_variable: e.target.value })}
                   placeholder="nombre_cliente"
                 />
-                <p className="text-xs text-gray-500 mt-1">Se usará como {'{{nombre_cliente}}'} en plantillas</p>
+                <p className="text-xs text-gray-500 mt-1">Se usarÃ¡ como {'{{nombre_cliente}}'} en plantillas</p>
               </div>
               <div>
                 <label className="text-sm text-gray-600 mb-1 block">Tabla</label>
@@ -236,7 +236,7 @@ export function GeneraVariables() {
                   className="w-full border rounded px-3 py-2 text-sm"
                 >
                   <option value="clientes">Clientes</option>
-                  <option value="prestamos">Préstamos</option>
+                  <option value="prestamos">PrÃ©stamos</option>
                   <option value="cuotas">Cuotas</option>
                   <option value="pagos">Pagos</option>
                 </select>
@@ -265,11 +265,11 @@ export function GeneraVariables() {
                 </select>
               </div>
               <div>
-                <label className="text-sm text-gray-600 mb-1 block">Descripción</label>
+                <label className="text-sm text-gray-600 mb-1 block">DescripciÃ³n</label>
                 <Input
                   value={nuevaVariable.descripcion || ''}
                   onChange={e => setNuevaVariable({ ...nuevaVariable, descripcion: e.target.value })}
-                  placeholder="Descripción de la variable"
+                  placeholder="DescripciÃ³n de la variable"
                 />
               </div>
               <div className="flex items-center gap-2">
@@ -305,7 +305,7 @@ export function GeneraVariables() {
             </div>
           </div>
 
-          {/* Búsqueda */}
+          {/* BÃºsqueda */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
@@ -324,7 +324,7 @@ export function GeneraVariables() {
                   <TableHead>Variable</TableHead>
                   <TableHead>Tabla</TableHead>
                   <TableHead>Campo BD</TableHead>
-                  <TableHead>Descripción</TableHead>
+                  <TableHead>DescripciÃ³n</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
@@ -396,7 +396,7 @@ export function GeneraVariables() {
             </Table>
           </div>
 
-          {/* Información de campos disponibles */}
+          {/* InformaciÃ³n de campos disponibles */}
           <Card>
             <CardHeader>
               <CardTitle className="text-sm">Campos Disponibles por Tabla</CardTitle>
@@ -409,7 +409,7 @@ export function GeneraVariables() {
                     <ul className="space-y-1 text-xs text-gray-600">
                       {campos.map(campo => (
                         <li key={campo.campo} className="flex items-start gap-1">
-                          <span className="font-mono text-xs">•</span>
+                          <span className="font-mono text-xs">â€¢</span>
                           <span className="text-xs">{campo.campo}</span>
                         </li>
                       ))}

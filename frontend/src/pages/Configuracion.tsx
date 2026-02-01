@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { getErrorMessage, isAxiosError, getErrorDetail } from '@/types/errors'
-import { env } from '@/config/env'
+import { getErrorMessage, isAxiosError, getErrorDetail } from '../types/errors'
+import { env } from '../config/env'
 import {
   Settings,
   Save,
@@ -32,26 +32,26 @@ import {
   Download,
   Trash2,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { formatDate } from '@/utils'
-import { validarNombreEmpresa, validarMoneda, validarZonaHoraria, validarIdioma } from '@/utils/validators'
-import { ValidadoresConfig } from '@/components/configuracion/ValidadoresConfig'
-import { ConcesionariosConfig } from '@/components/configuracion/ConcesionariosConfig'
-import { AnalistasConfig } from '@/components/configuracion/AnalistasConfig'
-import { ModelosVehiculosConfig } from '@/components/configuracion/ModelosVehiculosConfig'
-import { EmailConfig } from '@/components/configuracion/EmailConfig'
-import { WhatsAppConfig } from '@/components/configuracion/WhatsAppConfig'
-import { AIConfig } from '@/components/configuracion/AIConfig'
-import { configuracionGeneralService, ConfiguracionGeneral } from '@/services/configuracionGeneralService'
-import { apiClient } from '@/services/api'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card'
+import { Badge } from '../components/ui/badge'
+import { Button } from '../components/ui/button'
+import { Input } from '../components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
+import { formatDate } from '../utils'
+import { validarNombreEmpresa, validarMoneda, validarZonaHoraria, validarIdioma } from '../utils/validators'
+import { ValidadoresConfig } from '../components/configuracion/ValidadoresConfig'
+import { ConcesionariosConfig } from '../components/configuracion/ConcesionariosConfig'
+import { AnalistasConfig } from '../components/configuracion/AnalistasConfig'
+import { ModelosVehiculosConfig } from '../components/configuracion/ModelosVehiculosConfig'
+import { EmailConfig } from '../components/configuracion/EmailConfig'
+import { WhatsAppConfig } from '../components/configuracion/WhatsAppConfig'
+import { AIConfig } from '../components/configuracion/AIConfig'
+import { configuracionGeneralService, ConfiguracionGeneral } from '../services/configuracionGeneralService'
+import { apiClient } from '../services/api'
 import { toast } from 'sonner'
-import UsuariosConfig from '@/components/configuracion/UsuariosConfig'
+import UsuariosConfig from '../components/configuracion/UsuariosConfig'
 
-// Mock data para configuración
+// Mock data para configuraciÃ³n
 const mockConfiguracion = {
   general: {
     nombreEmpresa: 'RAPICREDIT',
@@ -77,7 +77,7 @@ const mockConfiguracion = {
     intentosLogin: 3,
     bloqueoTemporal: 15,
     requiere2FA: false,
-    politicaContraseñas: 'ALTA',
+    politicaContraseÃ±as: 'ALTA',
     auditoriaActiva: true,
     ipWhitelist: false,
     sslActivo: true,
@@ -130,7 +130,7 @@ export function Configuracion() {
   const [seccionActiva, setSeccionActiva] = useState('general')
   const [estadoCarga, setEstadoCarga] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
 
-  // Leer el parámetro tab de la URL
+  // Leer el parÃ¡metro tab de la URL
   useEffect(() => {
     const tab = searchParams.get('tab')
     if (tab === 'email') {
@@ -146,7 +146,7 @@ export function Configuracion() {
   const [submenuAbierto, setSubmenuAbierto] = useState(false)
   const [erroresValidacion, setErroresValidacion] = useState<Record<string, string>>({})
 
-  // Cargar configuración general al montar el componente
+  // Cargar configuraciÃ³n general al montar el componente
   useEffect(() => {
     cargarConfiguracionGeneral()
   }, [])
@@ -165,39 +165,39 @@ export function Configuracion() {
       setLoading(true)
       setEstadoCarga('loading')
       setError(null)
-      console.log('🔄 Cargando configuración general...')
+      console.log('ðŸ”„ Cargando configuraciÃ³n general...')
 
       const config = await configuracionGeneralService.obtenerConfiguracionGeneral()
-      console.log('✅ Configuración general cargada:', config)
+      console.log('âœ… ConfiguraciÃ³n general cargada:', config)
 
       setConfiguracionGeneral(config)
       
-      // ✅ Verificar si hay logo personalizado
+      // âœ… Verificar si hay logo personalizado
       if (config.logo_filename) {
-        // Verificar que el logo realmente existe haciendo una petición HEAD
+        // Verificar que el logo realmente existe haciendo una peticiÃ³n HEAD
         try {
           const logoUrl = `${env.API_URL}/api/v1/configuracion/logo/${config.logo_filename}?t=${Date.now()}`
           const headResponse = await fetch(logoUrl, { method: 'HEAD' })
           
           if (headResponse.ok) {
-            // El logo existe, mostrar opción de eliminar
+            // El logo existe, mostrar opciÃ³n de eliminar
             setHasCustomLogo(true)
             setLogoPreview(logoUrl)
             setLogoInfo({ filename: config.logo_filename, url: logoUrl })
-            console.log(`✅ Logo personalizado encontrado: ${config.logo_filename}`)
+            console.log(`âœ… Logo personalizado encontrado: ${config.logo_filename}`)
           } else {
-            // El logo no existe aunque esté en la BD, limpiar estado
+            // El logo no existe aunque estÃ© en la BD, limpiar estado
             setHasCustomLogo(false)
             setLogoPreview(null)
             setLogoInfo(null)
-            console.warn(`⚠️ Logo ${config.logo_filename} no encontrado en el servidor`)
+            console.warn(`âš ï¸ Logo ${config.logo_filename} no encontrado en el servidor`)
           }
         } catch (logoError) {
           // Si hay error verificando, asumir que no existe
           setHasCustomLogo(false)
           setLogoPreview(null)
           setLogoInfo(null)
-          console.warn(`⚠️ Error verificando logo:`, logoError)
+          console.warn(`âš ï¸ Error verificando logo:`, logoError)
         }
       } else {
         setHasCustomLogo(false)
@@ -205,7 +205,7 @@ export function Configuracion() {
         setLogoInfo(null)
       }
 
-      // Actualizar también el mock para compatibilidad
+      // Actualizar tambiÃ©n el mock para compatibilidad
       setConfiguracion(prev => ({
         ...prev,
         general: {
@@ -219,13 +219,13 @@ export function Configuracion() {
       }))
       setEstadoCarga('success')
     } catch (err) {
-      console.error('❌ Error cargando configuración general:', err)
-      setError('Error al cargar configuración general')
+      console.error('âŒ Error cargando configuraciÃ³n general:', err)
+      setError('Error al cargar configuraciÃ³n general')
       setEstadoCarga('error')
       // Usar datos mock como fallback
     } finally {
       setLoading(false)
-      // Resetear estado después de 2 segundos
+      // Resetear estado despuÃ©s de 2 segundos
       setTimeout(() => setEstadoCarga('idle'), 2000)
     }
   }
@@ -235,12 +235,12 @@ export function Configuracion() {
       setLoading(true)
       setError(null)
 
-      console.log(`🔄 Actualizando ${campo} a:`, valor)
+      console.log(`ðŸ”„ Actualizando ${campo} a:`, valor)
 
       const updateData = { [campo]: valor }
       const response = await configuracionGeneralService.actualizarConfiguracionGeneral(updateData)
 
-      console.log('✅ Configuración actualizada:', response)
+      console.log('âœ… ConfiguraciÃ³n actualizada:', response)
 
       // Actualizar estado local
       setConfiguracionGeneral(prev => prev ? { ...prev, [campo]: valor } : null)
@@ -252,11 +252,11 @@ export function Configuracion() {
         }
       }))
 
-      // Mostrar mensaje de éxito
+      // Mostrar mensaje de Ã©xito
       toast.success(`${campo} actualizado exitosamente`)
 
     } catch (err) {
-      console.error('❌ Error actualizando configuración:', err)
+      console.error('âŒ Error actualizando configuraciÃ³n:', err)
       setError(`Error al actualizar ${campo}`)
       toast.error(`Error al actualizar ${campo}`)
     } finally {
@@ -273,18 +273,18 @@ export function Configuracion() {
       submenu: true,
       items: [
         { id: 'notificaciones', nombre: 'Notificaciones', icono: Bell },
-        { id: 'emailConfig', nombre: 'Configuración Email', icono: Mail },
-        { id: 'whatsappConfig', nombre: 'Configuración WhatsApp', icono: MessageSquare },
+        { id: 'emailConfig', nombre: 'ConfiguraciÃ³n Email', icono: Mail },
+        { id: 'whatsappConfig', nombre: 'ConfiguraciÃ³n WhatsApp', icono: MessageSquare },
         { id: 'plantillas', nombre: 'Plantillas', icono: FileText, href: '/herramientas/plantillas' },
         { id: 'scheduler', nombre: 'Programador', icono: Calendar, href: '/scheduler' },
         { id: 'programador', nombre: 'Programador (Config)', icono: Calendar },
-        { id: 'auditoria', nombre: 'Auditoría', icono: FileText },
+        { id: 'auditoria', nombre: 'AuditorÃ­a', icono: FileText },
       ]
     },
     // { id: 'seguridad', nombre: 'Seguridad', icono: Shield }, // OCULTO - No necesario por ahora
     { id: 'baseDatos', nombre: 'Base de Datos', icono: Database },
     // { id: 'integraciones', nombre: 'Integraciones', icono: Settings }, // OCULTO
-    { id: 'facturacion', nombre: 'Facturación', icono: DollarSign },
+    { id: 'facturacion', nombre: 'FacturaciÃ³n', icono: DollarSign },
     { id: 'inteligenciaArtificial', nombre: 'Inteligencia Artificial', icono: Brain },
     { id: 'validadores', nombre: 'Validadores', icono: CheckSquare },
     { id: 'concesionarios', nombre: 'Concesionarios', icono: Building },
@@ -296,7 +296,7 @@ export function Configuracion() {
     try {
       setLoading(true)
 
-      // Guardar cambios de configuración general si hay cambios pendientes
+      // Guardar cambios de configuraciÃ³n general si hay cambios pendientes
       if (configuracionGeneral && cambiosPendientes) {
         // Mapeo de campos frontend a backend
         const camposMap: Record<string, string> = {
@@ -316,29 +316,29 @@ export function Configuracion() {
           }
         }
 
-        // Si hay un logo preview, significa que se subió un logo
-        // Verificar explícitamente que el logo esté guardado en la BD
+        // Si hay un logo preview, significa que se subiÃ³ un logo
+        // Verificar explÃ­citamente que el logo estÃ© guardado en la BD
         if (logoPreview && logoInfo) {
-          console.log('✅ Verificando que logo esté guardado en BD:', logoInfo)
+          console.log('âœ… Verificando que logo estÃ© guardado en BD:', logoInfo)
 
-          // Verificar que el logo_filename esté persistido en la BD
+          // Verificar que el logo_filename estÃ© persistido en la BD
           const configResponse = await fetch('/api/v1/configuracion/general')
           if (!configResponse.ok) {
-            throw new Error(`Error ${configResponse.status} obteniendo configuración`)
+            throw new Error(`Error ${configResponse.status} obteniendo configuraciÃ³n`)
           }
 
           const updatedConfig = await configResponse.json()
-          console.log('✅ Configuración general recargada:', updatedConfig)
+          console.log('âœ… ConfiguraciÃ³n general recargada:', updatedConfig)
 
-          // Verificar que logo_filename esté en la BD y coincida con el logo subido
+          // Verificar que logo_filename estÃ© en la BD y coincida con el logo subido
           if (updatedConfig.logo_filename) {
             if (updatedConfig.logo_filename === logoInfo.filename) {
-              console.log('✅ Logo confirmado y guardado correctamente en BD:', updatedConfig.logo_filename)
+              console.log('âœ… Logo confirmado y guardado correctamente en BD:', updatedConfig.logo_filename)
 
-              // Actualizar estado local con configuración recargada
+              // Actualizar estado local con configuraciÃ³n recargada
               setConfiguracionGeneral(updatedConfig)
 
-              // Disparar evento para actualizar todos los componentes Logo con la información completa
+              // Disparar evento para actualizar todos los componentes Logo con la informaciÃ³n completa
               window.dispatchEvent(new CustomEvent('logoUpdated', {
                 detail: {
                   confirmed: true,
@@ -347,50 +347,50 @@ export function Configuracion() {
                 }
               }))
 
-              // Limpiar estado después de confirmar
+              // Limpiar estado despuÃ©s de confirmar
               setLogoPreview(null)
               setLogoInfo(null)
 
               toast.success('Logo guardado exitosamente en la base de datos')
             } else {
-              console.warn('⚠️ Logo filename en BD no coincide:', {
+              console.warn('âš ï¸ Logo filename en BD no coincide:', {
                 esperado: logoInfo.filename,
                 encontrado: updatedConfig.logo_filename
               })
-              toast.warning('El logo se guardó pero hay una discrepancia. Por favor, verifica.')
+              toast.warning('El logo se guardÃ³ pero hay una discrepancia. Por favor, verifica.')
               // Continuar con el guardado aunque haya discrepancia
               setLogoPreview(null)
               setLogoInfo(null)
             }
           } else {
-            console.error('❌ Logo filename NO encontrado en configuración después de guardar')
-            toast.error('Error: El logo no se guardó correctamente en la base de datos. Por favor, intenta subirlo nuevamente.')
+            console.error('âŒ Logo filename NO encontrado en configuraciÃ³n despuÃ©s de guardar')
+            toast.error('Error: El logo no se guardÃ³ correctamente en la base de datos. Por favor, intenta subirlo nuevamente.')
             // No limpiar estado para que el usuario pueda intentar de nuevo
-            throw new Error('Logo no encontrado en BD después de guardar')
+            throw new Error('Logo no encontrado en BD despuÃ©s de guardar')
           }
         }
 
         // Marcar cambios como guardados solo si no hubo errores
         setCambiosPendientes(false)
 
-        // Mostrar mensaje de éxito general solo si no hay logo (el logo ya mostró su mensaje)
+        // Mostrar mensaje de Ã©xito general solo si no hay logo (el logo ya mostrÃ³ su mensaje)
         if (!logoPreview || !logoInfo) {
-          toast.success('Configuración guardada exitosamente')
+          toast.success('ConfiguraciÃ³n guardada exitosamente')
         }
       }
     } catch (error: unknown) {
-      console.error('Error guardando configuración:', error)
+      console.error('Error guardando configuraciÃ³n:', error)
       const errorMessage = getErrorMessage(error)
-      toast.error(`Error al guardar configuración: ${errorMessage}`)
+      toast.error(`Error al guardar configuraciÃ³n: ${errorMessage}`)
     } finally {
       setLoading(false)
     }
   }
 
   const handleCambio = (seccion: string, campo: string, valor: string | number | boolean | null) => {
-    console.log(`🔄 Cambio en ${seccion}.${campo}:`, valor)
+    console.log(`ðŸ”„ Cambio en ${seccion}.${campo}:`, valor)
 
-    // ✅ Validación en tiempo real
+    // âœ… ValidaciÃ³n en tiempo real
     const claveError = `${seccion}.${campo}`
     let error: string | null = null
 
@@ -402,15 +402,15 @@ export function Configuracion() {
         }
       } else if (campo === 'moneda' && typeof valor === 'string') {
         if (!validarMoneda(valor)) {
-          error = 'Moneda no válida'
+          error = 'Moneda no vÃ¡lida'
         }
       } else if (campo === 'zonaHoraria' && typeof valor === 'string') {
         if (!validarZonaHoraria(valor)) {
-          error = 'Zona horaria no válida'
+          error = 'Zona horaria no vÃ¡lida'
         }
       } else if (campo === 'idioma' && typeof valor === 'string') {
         if (!validarIdioma(valor)) {
-          error = 'Idioma no válido'
+          error = 'Idioma no vÃ¡lido'
         }
       }
     }
@@ -436,7 +436,7 @@ export function Configuracion() {
 
     setCambiosPendientes(true)
 
-    // NO actualizar automáticamente en el backend
+    // NO actualizar automÃ¡ticamente en el backend
     // El usuario debe hacer clic en "Guardar" para persistir los cambios
   }
 
@@ -453,13 +453,13 @@ export function Configuracion() {
     // Validar tipo de archivo
     const allowedTypes = ['image/svg+xml', 'image/png', 'image/jpeg', 'image/jpg']
     if (!allowedTypes.includes(file.type)) {
-      toast.error('Formato no válido. Use SVG, PNG o JPG')
+      toast.error('Formato no vÃ¡lido. Use SVG, PNG o JPG')
       return
     }
 
-    // Validar tamaño (máximo 2MB)
+    // Validar tamaÃ±o (mÃ¡ximo 2MB)
     if (file.size > 2 * 1024 * 1024) {
-      toast.error('El archivo es demasiado grande. Máximo 2MB')
+      toast.error('El archivo es demasiado grande. MÃ¡ximo 2MB')
       return
     }
 
@@ -476,7 +476,7 @@ export function Configuracion() {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
-          // NO establecer Content-Type, el navegador lo hace automáticamente para FormData
+          // NO establecer Content-Type, el navegador lo hace automÃ¡ticamente para FormData
         },
         body: formData,
       })
@@ -488,10 +488,10 @@ export function Configuracion() {
 
       const result = await response.json()
 
-      // Guardar información del logo para usar después al confirmar
+      // Guardar informaciÃ³n del logo para usar despuÃ©s al confirmar
       setLogoInfo({ filename: result.filename, url: result.url })
 
-      // Mostrar preview del logo desde el servidor con timestamp para evitar caché
+      // Mostrar preview del logo desde el servidor con timestamp para evitar cachÃ©
       if (result.url) {
         const logoUrl = `${result.url}?t=${Date.now()}`
         setLogoPreview(logoUrl)
@@ -504,10 +504,10 @@ export function Configuracion() {
         reader.readAsDataURL(file)
       }
 
-      // ✅ Marcar que hay logo personalizado para mostrar botón eliminar
+      // âœ… Marcar que hay logo personalizado para mostrar botÃ³n eliminar
       setHasCustomLogo(true)
 
-      // Marcar como cambio pendiente para activar botón Guardar
+      // Marcar como cambio pendiente para activar botÃ³n Guardar
       // Esto permite al usuario validar/confirmar antes de aplicar el cambio
       setCambiosPendientes(true)
 
@@ -518,7 +518,7 @@ export function Configuracion() {
         detail: { filename: result.filename, url: result.url }
       }))
       
-      // Recargar configuración general para actualizar logo_filename en la BD
+      // Recargar configuraciÃ³n general para actualizar logo_filename en la BD
       await cargarConfiguracionGeneral()
     } catch (error: unknown) {
       console.error('Error cargando logo:', error)
@@ -566,12 +566,12 @@ export function Configuracion() {
         detail: { filename: null, url: null }
       }))
 
-      // También disparar evento para limpiar caché del logo
+      // TambiÃ©n disparar evento para limpiar cachÃ© del logo
       window.dispatchEvent(new CustomEvent('logoDeleted'))
 
-      toast.success(result.message || 'Logo eliminado exitosamente. Se usará el logo por defecto.')
+      toast.success(result.message || 'Logo eliminado exitosamente. Se usarÃ¡ el logo por defecto.')
 
-      // Recargar configuración general para actualizar el estado
+      // Recargar configuraciÃ³n general para actualizar el estado
       await cargarConfiguracionGeneral()
     } catch (error: unknown) {
       console.error('Error eliminando logo:', error)
@@ -602,7 +602,7 @@ export function Configuracion() {
           )}
         </div>
         <div>
-          <label className="text-sm font-medium">Versión del Sistema</label>
+          <label className="text-sm font-medium">VersiÃ³n del Sistema</label>
           <Input
             value={configuracion.general.version}
             disabled
@@ -616,7 +616,7 @@ export function Configuracion() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="ES">Español</SelectItem>
+              <SelectItem value="ES">EspaÃ±ol</SelectItem>
               <SelectItem value="EN">English</SelectItem>
             </SelectContent>
           </Select>
@@ -641,15 +641,15 @@ export function Configuracion() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="VES">Bolívar Soberano (VES)</SelectItem>
-              <SelectItem value="USD">Dólar Americano (USD)</SelectItem>
+              <SelectItem value="VES">BolÃ­var Soberano (VES)</SelectItem>
+              <SelectItem value="USD">DÃ³lar Americano (USD)</SelectItem>
               <SelectItem value="EUR">Euro (EUR)</SelectItem>
             </SelectContent>
           </Select>
         </div>
       </div>
 
-      {/* Sección de Carga de Logo */}
+      {/* SecciÃ³n de Carga de Logo */}
       <Card className="border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50/30">
         <CardHeader>
           <div className="flex items-center space-x-2">
@@ -657,17 +657,17 @@ export function Configuracion() {
             <CardTitle className="text-lg">Cargar Logo de la Empresa</CardTitle>
           </div>
           <CardDescription>
-            Suba un nuevo logo para la empresa. El logo se mostrará en el sidebar, login y otras páginas del sistema.
+            Suba un nuevo logo para la empresa. El logo se mostrarÃ¡ en el sidebar, login y otras pÃ¡ginas del sistema.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col space-y-4">
             <div className="bg-white/60 rounded-lg p-4 border border-blue-100">
               <p className="text-sm text-gray-700 mb-3">
-                <strong>📋 Formatos soportados:</strong> SVG, PNG, JPG
+                <strong>ðŸ“‹ Formatos soportados:</strong> SVG, PNG, JPG
               </p>
               <p className="text-xs text-gray-600">
-                <strong>📏 Tamaño máximo:</strong> 2MB. Se recomienda usar SVG para mejor calidad.
+                <strong>ðŸ“ TamaÃ±o mÃ¡ximo:</strong> 2MB. Se recomienda usar SVG para mejor calidad.
               </p>
             </div>
 
@@ -687,7 +687,7 @@ export function Configuracion() {
               </div>
             )}
 
-            {/* Botón para eliminar logo personalizado */}
+            {/* BotÃ³n para eliminar logo personalizado */}
             {hasCustomLogo && (
               <div className="flex items-center justify-between p-3 bg-red-50 border border-red-200 rounded-lg">
                 <div className="flex items-center space-x-2">
@@ -744,7 +744,7 @@ export function Configuracion() {
                     <>
                       <Upload className="w-8 h-8 mb-2 text-blue-600" />
                       <p className="mb-2 text-sm text-gray-600">
-                        <span className="font-semibold">Haga clic para seleccionar</span> o arrastre el archivo aquí
+                        <span className="font-semibold">Haga clic para seleccionar</span> o arrastre el archivo aquÃ­
                       </p>
                       <p className="text-xs text-gray-500">SVG, PNG o JPG (MAX. 2MB)</p>
                     </>
@@ -852,7 +852,7 @@ export function Configuracion() {
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2">
         <div>
-          <label className="text-sm font-medium">Timeout de Sesión (minutos)</label>
+          <label className="text-sm font-medium">Timeout de SesiÃ³n (minutos)</label>
           <Input
             type="number"
             value={configuracion.seguridad.sessionTimeout}
@@ -879,8 +879,8 @@ export function Configuracion() {
           />
         </div>
         <div>
-          <label className="text-sm font-medium">Política de Contraseñas</label>
-          <Select value={configuracion.seguridad.politicaContraseñas} onValueChange={(value: string) => handleCambio('seguridad', 'politicaContraseñas', value)}>
+          <label className="text-sm font-medium">PolÃ­tica de ContraseÃ±as</label>
+          <Select value={configuracion.seguridad.politicaContraseÃ±as} onValueChange={(value: string) => handleCambio('seguridad', 'politicaContraseÃ±as', value)}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
@@ -901,7 +901,7 @@ export function Configuracion() {
             onChange={(e) => handleCambio('seguridad', 'requiere2FA', e.target.checked)}
             className="rounded"
           />
-          <label className="text-sm font-medium">Requerir Autenticación de Dos Factores</label>
+          <label className="text-sm font-medium">Requerir AutenticaciÃ³n de Dos Factores</label>
         </div>
         <div className="flex items-center space-x-2">
           <input
@@ -910,7 +910,7 @@ export function Configuracion() {
             onChange={(e) => handleCambio('seguridad', 'auditoriaActiva', e.target.checked)}
             className="rounded"
           />
-          <label className="text-sm font-medium">Auditoría Activa</label>
+          <label className="text-sm font-medium">AuditorÃ­a Activa</label>
         </div>
         <div className="flex items-center space-x-2">
           <input
@@ -946,7 +946,7 @@ export function Configuracion() {
           />
         </div>
         <div>
-          <label className="text-sm font-medium">Versión</label>
+          <label className="text-sm font-medium">VersiÃ³n</label>
           <Input
             value={configuracion.baseDatos.version}
             disabled
@@ -975,7 +975,7 @@ export function Configuracion() {
           />
         </div>
         <div>
-          <label className="text-sm font-medium">Retención (días)</label>
+          <label className="text-sm font-medium">RetenciÃ³n (dÃ­as)</label>
           <Input
             type="number"
             value={configuracion.baseDatos.retencionBackup}
@@ -993,7 +993,7 @@ export function Configuracion() {
             onChange={(e) => handleCambio('baseDatos', 'backupAutomatico', e.target.checked)}
             className="rounded"
           />
-          <label className="text-sm font-medium">Backup Automático</label>
+          <label className="text-sm font-medium">Backup AutomÃ¡tico</label>
         </div>
         <div className="flex items-center space-x-2">
           <input
@@ -1007,7 +1007,7 @@ export function Configuracion() {
       </div>
 
       <div>
-        <label className="text-sm font-medium">Último Backup</label>
+        <label className="text-sm font-medium">Ãšltimo Backup</label>
         <Input
           value={formatDate(configuracion.baseDatos.ultimoBackup)}
           disabled
@@ -1021,7 +1021,7 @@ export function Configuracion() {
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2">
         <div>
-          <label className="text-sm font-medium">Versión de API</label>
+          <label className="text-sm font-medium">VersiÃ³n de API</label>
           <Input
             value={configuracion.integraciones.versionAPI}
             onChange={(e) => handleCambio('integraciones', 'versionAPI', e.target.value)}
@@ -1074,7 +1074,7 @@ export function Configuracion() {
             onChange={(e) => handleCambio('integraciones', 'metricaActiva', e.target.checked)}
             className="rounded"
           />
-          <label className="text-sm font-medium">Métricas Activas</label>
+          <label className="text-sm font-medium">MÃ©tricas Activas</label>
         </div>
         <div className="flex items-center space-x-2">
           <input
@@ -1093,7 +1093,7 @@ export function Configuracion() {
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2">
         <div>
-          <label className="text-sm font-medium">Tasa de Interés Anual (%)</label>
+          <label className="text-sm font-medium">Tasa de InterÃ©s Anual (%)</label>
           <Input
             type="number"
             step="0.1"
@@ -1113,7 +1113,7 @@ export function Configuracion() {
           />
         </div>
         <div>
-          <label className="text-sm font-medium">Días de Gracia</label>
+          <label className="text-sm font-medium">DÃ­as de Gracia</label>
           <Input
             type="number"
             value={configuracion.facturacion.diasGracia}
@@ -1122,7 +1122,7 @@ export function Configuracion() {
           />
         </div>
         <div>
-          <label className="text-sm font-medium">Monto Mínimo</label>
+          <label className="text-sm font-medium">Monto MÃ­nimo</label>
           <Input
             type="number"
             value={configuracion.facturacion.montoMinimo}
@@ -1131,7 +1131,7 @@ export function Configuracion() {
           />
         </div>
         <div>
-          <label className="text-sm font-medium">Monto Máximo</label>
+          <label className="text-sm font-medium">Monto MÃ¡ximo</label>
           <Input
             type="number"
             value={configuracion.facturacion.montoMaximo}
@@ -1140,7 +1140,7 @@ export function Configuracion() {
           />
         </div>
         <div>
-          <label className="text-sm font-medium">Plazo Mínimo (meses)</label>
+          <label className="text-sm font-medium">Plazo MÃ­nimo (meses)</label>
           <Input
             type="number"
             value={configuracion.facturacion.plazoMinimo}
@@ -1149,7 +1149,7 @@ export function Configuracion() {
           />
         </div>
         <div>
-          <label className="text-sm font-medium">Plazo Máximo (meses)</label>
+          <label className="text-sm font-medium">Plazo MÃ¡ximo (meses)</label>
           <Input
             type="number"
             value={configuracion.facturacion.plazoMaximo}
@@ -1158,7 +1158,7 @@ export function Configuracion() {
           />
         </div>
         <div>
-          <label className="text-sm font-medium">Cuota Inicial Mínima (%)</label>
+          <label className="text-sm font-medium">Cuota Inicial MÃ­nima (%)</label>
           <Input
             type="number"
             value={configuracion.facturacion.cuotaInicialMinima}
@@ -1178,7 +1178,7 @@ export function Configuracion() {
           <h3 className="font-semibold text-green-900">Programador de Tareas</h3>
         </div>
         <p className="text-sm text-green-700">
-          Configura tareas automáticas, recordatorios y procesos programados del sistema.
+          Configura tareas automÃ¡ticas, recordatorios y procesos programados del sistema.
         </p>
       </div>
 
@@ -1190,7 +1190,7 @@ export function Configuracion() {
               Tareas Programadas
             </CardTitle>
             <CardDescription>
-              Configuración de tareas automáticas del sistema
+              ConfiguraciÃ³n de tareas automÃ¡ticas del sistema
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -1198,7 +1198,7 @@ export function Configuracion() {
               <div>
                 <h4 className="font-medium">Recordatorios de Pago</h4>
                 <p className="text-sm text-gray-600">
-                  Envío automático de recordatorios antes del vencimiento
+                  EnvÃ­o automÃ¡tico de recordatorios antes del vencimiento
                 </p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
@@ -1213,9 +1213,9 @@ export function Configuracion() {
 
             <div className="flex items-center justify-between p-3 border rounded-lg">
               <div>
-                <h4 className="font-medium">Backup Automático</h4>
+                <h4 className="font-medium">Backup AutomÃ¡tico</h4>
                 <p className="text-sm text-gray-600">
-                  Respaldo automático de la base de datos
+                  Respaldo automÃ¡tico de la base de datos
                 </p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
@@ -1230,9 +1230,9 @@ export function Configuracion() {
 
             <div className="flex items-center justify-between p-3 border rounded-lg">
               <div>
-                <h4 className="font-medium">Reportes Automáticos</h4>
+                <h4 className="font-medium">Reportes AutomÃ¡ticos</h4>
                 <p className="text-sm text-gray-600">
-                  Generación y envío automático de reportes
+                  GeneraciÃ³n y envÃ­o automÃ¡tico de reportes
                 </p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
@@ -1255,7 +1255,7 @@ export function Configuracion() {
       <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
         <div className="flex items-center gap-2 mb-2">
           <FileText className="h-5 w-5 text-purple-600" />
-          <h3 className="font-semibold text-purple-900">Auditoría del Sistema</h3>
+          <h3 className="font-semibold text-purple-900">AuditorÃ­a del Sistema</h3>
         </div>
         <p className="text-sm text-purple-700">
           Registro y seguimiento de todas las actividades del sistema para cumplimiento y seguridad.
@@ -1267,16 +1267,16 @@ export function Configuracion() {
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <FileText className="h-5 w-5 text-blue-600" />
-              Configuración de Auditoría
+              ConfiguraciÃ³n de AuditorÃ­a
             </CardTitle>
             <CardDescription>
-              Configura qué eventos se registran en el sistema de auditoría
+              Configura quÃ© eventos se registran en el sistema de auditorÃ­a
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between p-3 border rounded-lg">
               <div>
-                <h4 className="font-medium">Auditoría de Usuarios</h4>
+                <h4 className="font-medium">AuditorÃ­a de Usuarios</h4>
                 <p className="text-sm text-gray-600">
                   Registra login, logout y cambios de perfil
                 </p>
@@ -1293,7 +1293,7 @@ export function Configuracion() {
 
             <div className="flex items-center justify-between p-3 border rounded-lg">
               <div>
-                <h4 className="font-medium">Auditoría de Transacciones</h4>
+                <h4 className="font-medium">AuditorÃ­a de Transacciones</h4>
                 <p className="text-sm text-gray-600">
                   Registra todos los movimientos financieros
                 </p>
@@ -1310,7 +1310,7 @@ export function Configuracion() {
 
             <div className="flex items-center justify-between p-3 border rounded-lg">
               <div>
-                <h4 className="font-medium">Auditoría de Configuración</h4>
+                <h4 className="font-medium">AuditorÃ­a de ConfiguraciÃ³n</h4>
                 <p className="text-sm text-gray-600">
                   Registra cambios en configuraciones del sistema
                 </p>
@@ -1327,9 +1327,9 @@ export function Configuracion() {
 
             <div className="flex items-center justify-between p-3 border rounded-lg">
               <div>
-                <h4 className="font-medium">Retención de Logs</h4>
+                <h4 className="font-medium">RetenciÃ³n de Logs</h4>
                 <p className="text-sm text-gray-600">
-                  Días de retención de registros de auditoría
+                  DÃ­as de retenciÃ³n de registros de auditorÃ­a
                 </p>
               </div>
               <Input
@@ -1350,10 +1350,10 @@ export function Configuracion() {
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <div className="flex items-center gap-2 mb-2">
           <Brain className="h-5 w-5 text-blue-600" />
-          <h3 className="font-semibold text-blue-900">Configuración de Inteligencia Artificial</h3>
+          <h3 className="font-semibold text-blue-900">ConfiguraciÃ³n de Inteligencia Artificial</h3>
         </div>
         <p className="text-sm text-blue-700">
-          Configura las funcionalidades de IA para scoring crediticio, predicción de mora y chatbot inteligente.
+          Configura las funcionalidades de IA para scoring crediticio, predicciÃ³n de mora y chatbot inteligente.
         </p>
       </div>
 
@@ -1366,7 +1366,7 @@ export function Configuracion() {
               OpenAI Configuration
             </CardTitle>
             <CardDescription>
-              Configuración de la API de OpenAI para funcionalidades de IA
+              ConfiguraciÃ³n de la API de OpenAI para funcionalidades de IA
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -1389,7 +1389,7 @@ export function Configuracion() {
                 </button>
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                Obtén tu API Key en: https://platform.openai.com/api-keys
+                ObtÃ©n tu API Key en: https://platform.openai.com/api-keys
               </p>
             </div>
 
@@ -1404,12 +1404,12 @@ export function Configuracion() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo (Recomendado)</SelectItem>
-                  <SelectItem value="gpt-4">GPT-4 (Más potente)</SelectItem>
-                  <SelectItem value="gpt-4-turbo">GPT-4 Turbo (Más rápido)</SelectItem>
+                  <SelectItem value="gpt-4">GPT-4 (MÃ¡s potente)</SelectItem>
+                  <SelectItem value="gpt-4-turbo">GPT-4 Turbo (MÃ¡s rÃ¡pido)</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-gray-500 mt-1">
-                GPT-3.5 Turbo es más económico, GPT-4 es más preciso
+                GPT-3.5 Turbo es mÃ¡s econÃ³mico, GPT-4 es mÃ¡s preciso
               </p>
             </div>
           </CardContent>
@@ -1431,7 +1431,7 @@ export function Configuracion() {
               <div>
                 <h4 className="font-medium">Scoring Crediticio con IA</h4>
                 <p className="text-sm text-gray-600">
-                  Analiza automáticamente la capacidad de pago de los clientes
+                  Analiza automÃ¡ticamente la capacidad de pago de los clientes
                 </p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
@@ -1447,7 +1447,7 @@ export function Configuracion() {
 
             <div className="flex items-center justify-between p-3 border rounded-lg">
               <div>
-                <h4 className="font-medium">Predicción de Mora</h4>
+                <h4 className="font-medium">PredicciÃ³n de Mora</h4>
                 <p className="text-sm text-gray-600">
                   Predice la probabilidad de mora usando machine learning
                 </p>
@@ -1467,7 +1467,7 @@ export function Configuracion() {
               <div>
                 <h4 className="font-medium">Chatbot Inteligente</h4>
                 <p className="text-sm text-gray-600">
-                  Asistente virtual para atención al cliente
+                  Asistente virtual para atenciÃ³n al cliente
                 </p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
@@ -1483,12 +1483,12 @@ export function Configuracion() {
           </CardContent>
         </Card>
 
-        {/* Estado de la configuración */}
+        {/* Estado de la configuraciÃ³n */}
         <Card>
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <CheckCircle className="h-5 w-5 text-green-600" />
-              Estado de la Configuración
+              Estado de la ConfiguraciÃ³n
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -1496,7 +1496,7 @@ export function Configuracion() {
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">API Key configurada:</span>
                 <Badge variant={configuracion.inteligenciaArtificial.openaiApiKey ? "default" : "destructive"}>
-                  {configuracion.inteligenciaArtificial.openaiApiKey ? "✅ Configurada" : "❌ No configurada"}
+                  {configuracion.inteligenciaArtificial.openaiApiKey ? "âœ… Configurada" : "âŒ No configurada"}
                 </Badge>
               </div>
               <div className="flex items-center justify-between">
@@ -1508,7 +1508,7 @@ export function Configuracion() {
                 <Badge variant="secondary">
                   {[
                     configuracion.inteligenciaArtificial.aiScoringEnabled && "Scoring",
-                    configuracion.inteligenciaArtificial.aiPredictionEnabled && "Predicción",
+                    configuracion.inteligenciaArtificial.aiPredictionEnabled && "PredicciÃ³n",
                     configuracion.inteligenciaArtificial.aiChatbotEnabled && "Chatbot"
                   ].filter(Boolean).join(", ") || "Ninguna"}
                 </Badge>
@@ -1521,7 +1521,7 @@ export function Configuracion() {
   )
 
   const renderContenidoSeccion = () => {
-    // Si la sección tiene href, no renderizar contenido (la navegación se maneja en useEffect)
+    // Si la secciÃ³n tiene href, no renderizar contenido (la navegaciÃ³n se maneja en useEffect)
     if (seccionActiva === 'plantillas' || seccionActiva === 'scheduler') {
       return null
     }
@@ -1556,7 +1556,7 @@ export function Configuracion() {
       className="space-y-6"
     >
       <div className="grid gap-6">
-        {/* Contenido de la Sección */}
+        {/* Contenido de la SecciÃ³n */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -1575,7 +1575,7 @@ export function Configuracion() {
                 </CardTitle>
               </div>
               <div className="flex space-x-2">
-                {/* ✅ Ocultar botón "Guardar" en secciones que tienen su propio botón de guardar */}
+                {/* âœ… Ocultar botÃ³n "Guardar" en secciones que tienen su propio botÃ³n de guardar */}
                 {/* emailConfig y whatsappConfig tienen sus propios botones de guardar */}
                 {seccionActiva !== 'emailConfig' && seccionActiva !== 'whatsappConfig' && seccionActiva !== 'aiConfig' && (
                   <>
@@ -1601,7 +1601,7 @@ export function Configuracion() {
             {loading && estadoCarga === 'loading' && (
               <div className="flex items-center justify-center py-8">
                 <RefreshCw className="h-6 w-6 animate-spin text-blue-600 mr-2" />
-                <span className="text-gray-600">Cargando configuración...</span>
+                <span className="text-gray-600">Cargando configuraciÃ³n...</span>
               </div>
             )}
             {!loading && renderContenidoSeccion()}

@@ -15,7 +15,7 @@ interface ImportMeta {
   readonly env: ImportMetaEnv
 }
 
-// Declaraciones mínimas necesarias para módulos externos
+// Declaraciones mÃ­nimas necesarias para mÃ³dulos externos
 declare module 'framer-motion' {
   export const motion: any
   export const AnimatePresence: any
@@ -116,7 +116,7 @@ declare module '@tanstack/react-query' {
 }
 
 // Declaraciones para componentes UI personalizados
-declare module '@/components/ui/badge' {
+declare module './components/ui/badge' {
   interface BadgeProps {
     variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'success' | 'warning'
     children?: React.ReactNode
@@ -125,7 +125,7 @@ declare module '@/components/ui/badge' {
   export const Badge: React.FC<BadgeProps>
 }
 
-declare module '@/components/ui/searchable-select' {
+declare module './components/ui/searchable-select' {
   interface SearchableSelectProps {
     options: Array<{ value: string; label: string }>
     value: string

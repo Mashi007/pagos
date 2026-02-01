@@ -13,20 +13,20 @@ import {
   CheckCircle2,
   Loader2,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { SearchableSelect } from '@/components/ui/searchable-select'
-// exceljs se importa dinámicamente para reducir el bundle inicial
-import { clienteService } from '@/services/clienteService'
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
+import { Button } from '../../components/ui/button'
+import { Badge } from '../../components/ui/badge'
+import { SearchableSelect } from '../../components/ui/searchable-select'
+// exceljs se importa dinÃ¡micamente para reducir el bundle inicial
+import { clienteService } from '../../services/clienteService'
 import { useQueryClient } from '@tanstack/react-query'
-// ✅ IMPORT DINÁMICO: readExcelToJSON se carga solo cuando se necesita
-// import { readExcelToJSON } from '@/types/exceljs' // ❌ REMOVIDO: Import estático causaba precarga
-import { useIsMounted } from '@/hooks/useIsMounted'
+// âœ… IMPORT DINÃMICO: readExcelToJSON se carga solo cuando se necesita
+// import { readExcelToJSON } from '../../types/exceljs' // âŒ REMOVIDO: Import estÃ¡tico causaba precarga
+import { useIsMounted } from '../../hooks/useIsMounted'
 
 interface ExcelData {
   cedula: string
-  nombres: string  // ✅ CARGA MASIVA: Entre 2-4 palabras
+  nombres: string  // âœ… CARGA MASIVA: Entre 2-4 palabras
   telefono: string
   email: string
   direccion: string
@@ -89,7 +89,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     lastRowData: string
   }}>({})
 
-  // Estado para sistema de guardado híbrido
+  // Estado para sistema de guardado hÃ­brido
   const [savedClients, setSavedClients] = useState<Set<number>>(new Set())
   const [isSavingIndividual, setIsSavingIndividual] = useState(false)
   const [savingProgress, setSavingProgress] = useState<{[key: number]: boolean}>({})
@@ -97,14 +97,14 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   const [showOnlyPending, setShowOnlyPending] = useState(false)
 
 
-  // Normalizador: si el valor es 'nn' (cualquier caso/espacios), convertir a vacío
+  // Normalizador: si el valor es 'nn' (cualquier caso/espacios), convertir a vacÃ­o
   const blankIfNN = (value: string | null | undefined): string => {
     if (value == null) return ''
     const trimmed = value.toString().trim()
     return trimmed.toLowerCase() === 'nn' ? '' : trimmed
   }
 
-  // Función para manejar notificaciones de validación por fila completa
+  // FunciÃ³n para manejar notificaciones de validaciÃ³n por fila completa
   const handleRowValidationNotification = (rowIndex: number, rowData: ExcelRow) => {
     const trackerKey = `row-${rowIndex}`
     const currentTracker = violationTracker[trackerKey] || {
@@ -115,7 +115,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     // Crear hash de los datos de la fila para detectar cambios
     const rowDataHash = JSON.stringify({
       cedula: rowData.cedula,
-      nombres: rowData.nombres,  // ✅ nombres unificados
+      nombres: rowData.nombres,  // âœ… nombres unificados
       telefono: rowData.telefono,
       email: rowData.email,
       direccion: rowData.direccion,
@@ -142,11 +142,11 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       .map(([field, _]) => field)
 
     if (!hasErrors) {
-      // Fila válida - mostrar notificación de éxito
+      // Fila vÃ¡lida - mostrar notificaciÃ³n de Ã©xito
       const successToast = {
         id: `success-row-${rowIndex}-${Date.now()}`,
         type: 'success' as const,
-        message: `Fila ${rowIndex + 1} es válida`,
+        message: `Fila ${rowIndex + 1} es vÃ¡lida`,
         field: 'fila_completa',
         rowIndex
       }
@@ -162,7 +162,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         }
       }))
 
-      // Auto-remover notificación después de 3 segundos
+      // Auto-remover notificaciÃ³n despuÃ©s de 3 segundos
       setTimeout(() => {
         setToasts(prev => prev.filter(toast => toast.id !== successToast.id))
       }, 3000)
@@ -171,7 +171,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       // Fila con errores - incrementar contador
       const newViolationCount = currentTracker.violationCount + 1
 
-      // Mostrar notificación solo en violaciones específicas: 1ra, 3ra, 6ta, 9na, 12va...
+      // Mostrar notificaciÃ³n solo en violaciones especÃ­ficas: 1ra, 3ra, 6ta, 9na, 12va...
       const shouldShowNotification = newViolationCount === 1 ||
                                    newViolationCount === 3 ||
                                    newViolationCount === 6 ||
@@ -191,7 +191,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
         setToasts(prev => [...prev, errorToast])
 
-        // Auto-remover notificación después de 3 segundos
+        // Auto-remover notificaciÃ³n despuÃ©s de 3 segundos
         setTimeout(() => {
           setToasts(prev => prev.filter(toast => toast.id !== errorToast.id))
         }, 3000)
@@ -208,7 +208,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     }
   }
 
-  // Función para remover notificación manualmente
+  // FunciÃ³n para remover notificaciÃ³n manualmente
   const removeToast = (toastId: string) => {
     setToasts(prev => prev.filter(toast => toast.id !== toastId))
   }
@@ -216,7 +216,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   // Validar dropdowns cuando cambien los datos de Excel
   useEffect(() => {
     if (excelData.length > 0) {
-      console.log('🔄 Validando dropdowns al cambiar datos de Excel...')
+      console.log('ðŸ”„ Validando dropdowns al cambiar datos de Excel...')
       updateDropdownErrors(excelData)
     }
   }, [excelData])
@@ -229,12 +229,12 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     return () => clearInterval(interval)
   }, [])
 
-  // 🔔 FUNCIONES PARA NOTIFICACIONES TOAST
+  // ðŸ”” FUNCIONES PARA NOTIFICACIONES TOAST
   const addToast = (type: 'error' | 'warning' | 'success', message: string, suggestion?: string, field: string = 'general', rowIndex: number = -1) => {
     const id = Date.now().toString()
     setToasts(prev => [...prev, { id, type, message, suggestion, field, rowIndex }])
 
-    // Auto-remover después de 3 segundos
+    // Auto-remover despuÃ©s de 3 segundos
     setTimeout(() => {
       setToasts(prev => prev.filter(toast => toast.id !== id))
     }, 3000)
@@ -256,7 +256,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 5000)
 
-      // Usar endpoint raíz que sabemos que funciona
+      // Usar endpoint raÃ­z que sabemos que funciona
       const response = await fetch('/', {
         method: 'HEAD',
         signal: controller.signal
@@ -269,9 +269,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     }
   }
 
-  // 🔄 FUNCIONES PARA SISTEMA DE GUARDADO HÍBRIDO
+  // ðŸ”„ FUNCIONES PARA SISTEMA DE GUARDADO HÃBRIDO
   const isClientValid = (row: ExcelRow): boolean => {
-    // Usar el mismo sistema de validación que los campos visuales
+    // Usar el mismo sistema de validaciÃ³n que los campos visuales
     return !row._hasErrors
   }
 
@@ -279,7 +279,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     return excelData.filter(row => isClientValid(row) && !savedClients.has(row._rowIndex))
   }
 
-  // 📊 FUNCIONES PARA FILTRAR DATOS MOSTRADOS
+  // ðŸ“Š FUNCIONES PARA FILTRAR DATOS MOSTRADOS
   const getDisplayData = (): ExcelRow[] => {
     if (showOnlyPending) {
       return excelData.filter(row => !savedClients.has(row._rowIndex))
@@ -295,25 +295,25 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     return savedClients.size
   }
 
-  // 🔄 FUNCIONES PARA CONEXIÓN CON DASHBOARD
+  // ðŸ”„ FUNCIONES PARA CONEXIÃ“N CON DASHBOARD
   const refreshDashboardClients = () => {
-    // Invalidar cache de clientes para refrescar Dashboard y formularios de préstamos
+    // Invalidar cache de clientes para refrescar Dashboard y formularios de prÃ©stamos
     queryClient.invalidateQueries({ queryKey: ['clientes'] })
     queryClient.invalidateQueries({ queryKey: ['clientes-list'] })
     queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
-    // ✅ Invalidar también búsquedas de clientes (usadas en formularios de préstamos)
+    // âœ… Invalidar tambiÃ©n bÃºsquedas de clientes (usadas en formularios de prÃ©stamos)
     queryClient.invalidateQueries({
       queryKey: ['clientes', 'search'],
-      exact: false  // Invalida todas las búsquedas: ['clientes', 'search', ...]
+      exact: false  // Invalida todas las bÃºsquedas: ['clientes', 'search', ...]
     })
 
-    console.log('🔄 Cache de Dashboard de Clientes y búsquedas invalidado')
+    console.log('ðŸ”„ Cache de Dashboard de Clientes y bÃºsquedas invalidado')
   }
 
   const notifyDashboardUpdate = (clientCount: number) => {
     addToast('success',
       `${clientCount} cliente${clientCount > 1 ? 's' : ''} agregado${clientCount > 1 ? 's' : ''} al Dashboard de Clientes`,
-      'Los clientes ya están disponibles en la lista principal'
+      'Los clientes ya estÃ¡n disponibles en la lista principal'
     )
   }
 
@@ -321,9 +321,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   const saveIndividualClient = async (row: ExcelRow): Promise<boolean> => {
 
     try {
-      // ✅ VALIDACIÓN PREVIA: Verificar que NO hay errores antes de intentar guardar
+      // âœ… VALIDACIÃ“N PREVIA: Verificar que NO hay errores antes de intentar guardar
       if (row._hasErrors) {
-        alert('⚠️ NO SE PUEDE GUARDAR: Hay campos vacíos o con errores en esta fila.\n\nPor favor, complete todos los campos obligatorios en la tabla antes de guardar.')
+        alert('âš ï¸ NO SE PUEDE GUARDAR: Hay campos vacÃ­os o con errores en esta fila.\n\nPor favor, complete todos los campos obligatorios en la tabla antes de guardar.')
         return false
       }
 
@@ -331,13 +331,13 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
       const clienteData = {
         cedula: blankIfNN(row.cedula),
-        nombres: formatNombres(blankIfNN(row.nombres)),  // ✅ Aplicar formato Title Case y ya unificados (nombres + apellidos)
+        nombres: formatNombres(blankIfNN(row.nombres)),  // âœ… Aplicar formato Title Case y ya unificados (nombres + apellidos)
         telefono: blankIfNN(row.telefono),
         email: blankIfNN(row.email).toLowerCase(),
         direccion: blankIfNN(row.direccion),
-        fecha_nacimiento: convertirFechaParaBackend(blankIfNN(row.fecha_nacimiento)),  // ✅ Convertir DD/MM/YYYY a YYYY-MM-DD
+        fecha_nacimiento: convertirFechaParaBackend(blankIfNN(row.fecha_nacimiento)),  // âœ… Convertir DD/MM/YYYY a YYYY-MM-DD
         ocupacion: blankIfNN(row.ocupacion),
-        estado: blankIfNN(row.estado).toUpperCase(), // ✅ Normalizar estado
+        estado: blankIfNN(row.estado).toUpperCase(), // âœ… Normalizar estado
         activo: row.activo === 'true' || row.activo === 'TRUE' || row.activo === '1',
         notas: blankIfNN(row.notas) || 'NA'
       }
@@ -349,13 +349,13 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
         // Manejar diferentes tipos de errores
         if (error.response?.status === 400 || error.response?.status === 409) {
-          // Error de cliente duplicado (misma cédula y mismo nombre)
-          const errorMessage = error.response?.data?.detail || error.response?.data?.message || 'No se puede crear un cliente con la misma cédula y el mismo nombre.'
+          // Error de cliente duplicado (misma cÃ©dula y mismo nombre)
+          const errorMessage = error.response?.data?.detail || error.response?.data?.message || 'No se puede crear un cliente con la misma cÃ©dula y el mismo nombre.'
           addToast('error', `Error en fila ${row._rowIndex}: ${errorMessage}`)
         } else if (error.response?.status === 503) {
-          addToast('error', '🚨 SERVICIO NO DISPONIBLE: El backend está caído. Contacta al administrador.')
+          addToast('error', 'ðŸš¨ SERVICIO NO DISPONIBLE: El backend estÃ¡ caÃ­do. Contacta al administrador.')
         } else if (error.code === 'ERR_NETWORK' || error.message?.includes('Network Error')) {
-          addToast('error', '🚨 ERROR DE RED: No se puede conectar al servidor. Verifica tu conexión.')
+          addToast('error', 'ðŸš¨ ERROR DE RED: No se puede conectar al servidor. Verifica tu conexiÃ³n.')
         } else if (error.response?.status >= 500) {
           addToast('error', 'Error del servidor. Contacta al administrador.')
         } else {
@@ -376,19 +376,19 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
       addToast('success', `Cliente ${row.nombres} guardado exitosamente`)
 
-      // Eliminar la fila de la lista después de guardar exitosamente
+      // Eliminar la fila de la lista despuÃ©s de guardar exitosamente
       setExcelData(prev => {
         const remaining = prev.filter(r => r._rowIndex !== row._rowIndex)
 
-        // ✅ Solo cerrar automáticamente si YA NO HAY filas pendientes
+        // âœ… Solo cerrar automÃ¡ticamente si YA NO HAY filas pendientes
         if (remaining.length === 0) {
-          addToast('success', '🎉 ¡Todos los clientes han sido guardados exitosamente!')
+          addToast('success', 'ðŸŽ‰ Â¡Todos los clientes han sido guardados exitosamente!')
           notifyDashboardUpdate(getSavedClientsCount())
 
-          // Mostrar mensaje informativo sobre navegación automática
-          addToast('success', '🔄 Redirigiendo al Dashboard de Clientes en 2 segundos...')
+          // Mostrar mensaje informativo sobre navegaciÃ³n automÃ¡tica
+          addToast('success', 'ðŸ”„ Redirigiendo al Dashboard de Clientes en 2 segundos...')
 
-          // Navegar automáticamente al Dashboard de Clientes después de 2 segundos
+          // Navegar automÃ¡ticamente al Dashboard de Clientes despuÃ©s de 2 segundos
           setTimeout(() => {
             // Cerrar el modal de Carga Masiva
             onClose()
@@ -396,7 +396,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
             navigate('/clientes')
           }, 2000)
         } else {
-          // ✅ HAY clientes pendientes, mostrar información
+          // âœ… HAY clientes pendientes, mostrar informaciÃ³n
           addToast('warning', `${remaining.length} clientes pendientes`)
         }
 
@@ -413,11 +413,11 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
       // Manejar diferentes tipos de errores
       if (error.response?.status === 503) {
-        addToast('error', '🚨 SERVICIO NO DISPONIBLE: El backend está caído. Contacta al administrador.')
+        addToast('error', 'ðŸš¨ SERVICIO NO DISPONIBLE: El backend estÃ¡ caÃ­do. Contacta al administrador.')
       } else if (error.code === 'ERR_NETWORK' || error.message?.includes('Network Error')) {
-        addToast('error', '🚨 ERROR DE RED: No se puede conectar al servidor. Verifica tu conexión.')
+        addToast('error', 'ðŸš¨ ERROR DE RED: No se puede conectar al servidor. Verifica tu conexiÃ³n.')
       } else if (error.response?.status === 400) {
-        addToast('error', `Error de validación: ${error.response?.data?.detail || error.message}`)
+        addToast('error', `Error de validaciÃ³n: ${error.response?.data?.detail || error.message}`)
       } else if (error.response?.status >= 500) {
         addToast('error', 'Error del servidor. Contacta al administrador.')
       } else {
@@ -435,54 +435,54 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     const validClients = getValidClients()
 
     if (validClients.length === 0) {
-      addToast('warning', 'No hay clientes válidos para guardar')
+      addToast('warning', 'No hay clientes vÃ¡lidos para guardar')
       return
     }
 
     setIsSavingIndividual(true)
 
     try {
-      // Guardar todos los clientes válidos uno por uno
+      // Guardar todos los clientes vÃ¡lidos uno por uno
       let successful = 0
       let failed = 0
       const successfulRowIndexes: number[] = []
 
-      console.log(`🔄 Iniciando guardado masivo de ${validClients.length} clientes válidos`)
+      console.log(`ðŸ”„ Iniciando guardado masivo de ${validClients.length} clientes vÃ¡lidos`)
 
       for (let i = 0; i < validClients.length; i++) {
         const client = validClients[i]
-        console.log(`📋 Procesando cliente ${i + 1}/${validClients.length}: ${client.cedula} - ${client.nombres}`)
+        console.log(`ðŸ“‹ Procesando cliente ${i + 1}/${validClients.length}: ${client.cedula} - ${client.nombres}`)
 
         try {
-          // ✅ await esperará automáticamente si hay un duplicado y el usuario debe confirmar
+          // âœ… await esperarÃ¡ automÃ¡ticamente si hay un duplicado y el usuario debe confirmar
           const result = await saveIndividualClient(client)
 
           if (result === true) {
             successful++
             successfulRowIndexes.push(client._rowIndex)
-            console.log(`✅ Cliente ${i + 1}/${validClients.length} guardado exitosamente: ${client.cedula}`)
+            console.log(`âœ… Cliente ${i + 1}/${validClients.length} guardado exitosamente: ${client.cedula}`)
           } else {
             failed++
-            console.log(`⚠️ Cliente ${i + 1}/${validClients.length} no se guardó (result: ${result}): ${client.cedula}`)
+            console.log(`âš ï¸ Cliente ${i + 1}/${validClients.length} no se guardÃ³ (result: ${result}): ${client.cedula}`)
           }
         } catch (error: any) {
           failed++
-          console.error(`❌ Error guardando cliente ${i + 1}/${validClients.length} (${client.cedula}):`, error)
-          // Mostrar error específico al usuario
+          console.error(`âŒ Error guardando cliente ${i + 1}/${validClients.length} (${client.cedula}):`, error)
+          // Mostrar error especÃ­fico al usuario
           if (error.response?.status === 409) {
-            addToast('warning', `Cliente ${client.cedula} (${client.nombres}) duplicado - se canceló`)
+            addToast('warning', `Cliente ${client.cedula} (${client.nombres}) duplicado - se cancelÃ³`)
           } else {
             addToast('error', `Error guardando ${client.cedula}: ${error.message || 'Error desconocido'}`)
           }
         }
 
-        console.log(`📊 Progreso: ${successful} exitosos, ${failed} fallidos, ${validClients.length - (i + 1)} pendientes`)
+        console.log(`ðŸ“Š Progreso: ${successful} exitosos, ${failed} fallidos, ${validClients.length - (i + 1)} pendientes`)
       }
 
-      console.log(`✅ Guardado masivo completado: ${successful} exitosos, ${failed} fallidos`)
+      console.log(`âœ… Guardado masivo completado: ${successful} exitosos, ${failed} fallidos`)
 
       if (successful > 0) {
-        // Solo mostrar notificación de éxito si realmente se guardaron
+        // Solo mostrar notificaciÃ³n de Ã©xito si realmente se guardaron
         addToast('success', `${successful} clientes guardados exitosamente`)
 
         // Refrescar Dashboard de Clientes
@@ -493,12 +493,12 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         setExcelData(prev => {
           const remaining = prev.filter(r => !successfulRowIndexes.includes(r._rowIndex))
 
-          // ✅ Solo cerrar automáticamente si YA NO HAY filas pendientes
+          // âœ… Solo cerrar automÃ¡ticamente si YA NO HAY filas pendientes
           if (remaining.length === 0) {
-            // Mostrar mensaje informativo sobre navegación automática
-            addToast('success', '🎉 ¡Todos los clientes guardados! Cerrando en 2 segundos...')
+            // Mostrar mensaje informativo sobre navegaciÃ³n automÃ¡tica
+            addToast('success', 'ðŸŽ‰ Â¡Todos los clientes guardados! Cerrando en 2 segundos...')
 
-            // Navegar automáticamente al Dashboard de Clientes después de 2 segundos
+            // Navegar automÃ¡ticamente al Dashboard de Clientes despuÃ©s de 2 segundos
             setTimeout(() => {
               // Cerrar el modal de Carga Masiva
               onClose()
@@ -506,8 +506,8 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
               navigate('/clientes')
             }, 2000)
           } else {
-            // ✅ HAY clientes pendientes, mostrar advertencia
-            addToast('warning', `⚠️ Quedan ${remaining.length} clientes por verificar`)
+            // âœ… HAY clientes pendientes, mostrar advertencia
+            addToast('warning', `âš ï¸ Quedan ${remaining.length} clientes por verificar`)
           }
 
           return remaining
@@ -526,11 +526,11 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
       // Manejar diferentes tipos de errores
       if (error.response?.status === 503) {
-        addToast('error', '🚨 SERVICIO NO DISPONIBLE: El backend está caído. Contacta al administrador.')
+        addToast('error', 'ðŸš¨ SERVICIO NO DISPONIBLE: El backend estÃ¡ caÃ­do. Contacta al administrador.')
       } else if (error.code === 'ERR_NETWORK' || error.message?.includes('Network Error')) {
-        addToast('error', '🚨 ERROR DE RED: No se puede conectar al servidor. Verifica tu conexión.')
+        addToast('error', 'ðŸš¨ ERROR DE RED: No se puede conectar al servidor. Verifica tu conexiÃ³n.')
       } else if (error.response?.status === 400) {
-        addToast('error', `Error de validación: ${error.response?.data?.detail || error.message}`)
+        addToast('error', `Error de validaciÃ³n: ${error.response?.data?.detail || error.message}`)
       } else if (error.response?.status >= 500) {
         addToast('error', 'Error del servidor. Contacta al administrador.')
       } else {
@@ -538,13 +538,13 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       }
 
       // NO navegar si hay errores
-      console.log('No se navegará al Dashboard debido a errores en el guardado')
+      console.log('No se navegarÃ¡ al Dashboard debido a errores en el guardado')
     } finally {
       setIsSavingIndividual(false)
     }
   }
 
-  // 💡 FUNCIÓN PARA OBTENER SUGERENCIAS ESPECÍFICAS
+  // ðŸ’¡ FUNCIÃ“N PARA OBTENER SUGERENCIAS ESPECÃFICAS
   const getSuggestion = (field: string, value: string): string => {
     switch (field) {
       case 'nombres':
@@ -556,7 +556,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       case 'cedula':
         return `Ejemplo: "V12345678" o "E87654321"`
       case 'telefono':
-        return `Ejemplo: "8741236589" (10 dígitos sin 0 inicial)`
+        return `Ejemplo: "8741236589" (10 dÃ­gitos sin 0 inicial)`
       case 'email':
         return `Ejemplo: "usuario@dominio.com"`
       case 'estado':
@@ -569,32 +569,32 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     return ''
   }
 
-  // 🎨 FUNCIÓN PARA FORMATO DE NOMBRES (Primera letra mayúscula)
+  // ðŸŽ¨ FUNCIÃ“N PARA FORMATO DE NOMBRES (Primera letra mayÃºscula)
   const formatNombres = (nombres: string): string => {
     if (!nombres || !nombres.trim()) return nombres
 
     return nombres
       .split(/\s+/)  // Separar por espacios
-      .filter(word => word.length > 0)  // Filtrar palabras vacías
+      .filter(word => word.length > 0)  // Filtrar palabras vacÃ­as
       .map(word => {
-        // Capitalizar primera letra, resto minúsculas
+        // Capitalizar primera letra, resto minÃºsculas
         return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
       })
       .join(' ')  // Unir con espacios
   }
 
-  // 📅 FUNCIÓN PARA CONVERTIR FECHA DE EXCEL A DD/MM/YYYY
+  // ðŸ“… FUNCIÃ“N PARA CONVERTIR FECHA DE EXCEL A DD/MM/YYYY
   const convertirFechaExcel = (value: any): string => {
     if (!value) return ''
 
     const strValue = value.toString().trim()
 
-    // Si es un número serial de Excel (ej: 45940, 45941)
+    // Si es un nÃºmero serial de Excel (ej: 45940, 45941)
     if (/^\d{4,}$/.test(strValue)) {
       try {
         const numeroSerie = parseInt(strValue, 10)
-        // Excel cuenta desde 1900-01-01, pero tiene un bug del año bisiesto
-        // Fórmula: fecha = new Date(1900, 0, 1) + (numeroSerie - 2) días
+        // Excel cuenta desde 1900-01-01, pero tiene un bug del aÃ±o bisiesto
+        // FÃ³rmula: fecha = new Date(1900, 0, 1) + (numeroSerie - 2) dÃ­as
         const fechaBase = new Date(1900, 0, 1)
         fechaBase.setDate(fechaBase.getDate() + numeroSerie - 2)
 
@@ -610,22 +610,22 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       }
     }
 
-    // Si ya está en formato DD/MM/YYYY, devolverlo tal cual
+    // Si ya estÃ¡ en formato DD/MM/YYYY, devolverlo tal cual
     if (/^\d{2}\/\d{2}\/\d{4}$/.test(strValue)) {
       return strValue
     }
 
-    // Si está en formato ISO (YYYY-MM-DD), convertir
+    // Si estÃ¡ en formato ISO (YYYY-MM-DD), convertir
     if (/^\d{4}-\d{2}-\d{2}$/.test(strValue)) {
       const [ano, mes, dia] = strValue.split('-')
       return `${dia}/${mes}/${ano}`
     }
 
-    // Formato desconocido, devolver tal cual (se validará después)
+    // Formato desconocido, devolver tal cual (se validarÃ¡ despuÃ©s)
     return strValue
   }
 
-  // 🔄 FUNCIÓN PARA CONVERTIR DD/MM/YYYY A YYYY-MM-DD (formato que espera el backend)
+  // ðŸ”„ FUNCIÃ“N PARA CONVERTIR DD/MM/YYYY A YYYY-MM-DD (formato que espera el backend)
   const convertirFechaParaBackend = (fechaDDMMYYYY: string): string => {
     if (!fechaDDMMYYYY || !fechaDDMMYYYY.trim()) return ''
 
@@ -633,56 +633,56 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     const match = fechaDDMMYYYY.trim().match(fechaRegex)
 
     if (!match) {
-      console.warn('Formato de fecha inválido para convertir:', fechaDDMMYYYY)
-      return fechaDDMMYYYY // Devolver tal cual si no es válido
+      console.warn('Formato de fecha invÃ¡lido para convertir:', fechaDDMMYYYY)
+      return fechaDDMMYYYY // Devolver tal cual si no es vÃ¡lido
     }
 
     const [, dia, mes, ano] = match
     return `${ano}-${mes}-${dia}`
   }
 
-  // 🔍 VALIDAR CAMPO INDIVIDUAL
+  // ðŸ” VALIDAR CAMPO INDIVIDUAL
   const validateField = async (field: string, value: string): Promise<ValidationResult> => {
-    // Regla NN: aceptar 'nn' como válido en cualquier campo
+    // Regla NN: aceptar 'nn' como vÃ¡lido en cualquier campo
     if (typeof value === 'string' && value.trim().toLowerCase() === 'nn') {
       return { isValid: true, message: 'Valor omitido por NN' }
     }
     switch (field) {
       case 'cedula':
-        if (!value.trim()) return { isValid: false, message: 'Cédula requerida' }
+        if (!value.trim()) return { isValid: false, message: 'CÃ©dula requerida' }
         // Limpiar caracteres no permitidos (como : al final)
         const cedulaLimpia = value.trim().replace(/:$/, '').replace(/:/g, '')
         const cedulaPattern = /^[VEJZ]\d{7,10}$/
         if (!cedulaPattern.test(cedulaLimpia.toUpperCase())) {
-          return { isValid: false, message: 'Formato: V/E/J/Z + 7-10 dígitos (sin :)' }
+          return { isValid: false, message: 'Formato: V/E/J/Z + 7-10 dÃ­gitos (sin :)' }
         }
         return { isValid: true }
 
       case 'nombres':
         if (!value.trim()) return { isValid: false, message: 'Nombres requeridos' }
         const nombresWords = value.trim().split(/\s+/).filter(word => word.length > 0)
-        // ✅ CARGA MASIVA: ENTRE 2 Y 7 PALABRAS
+        // âœ… CARGA MASIVA: ENTRE 2 Y 7 PALABRAS
         if (nombresWords.length < 2 || nombresWords.length > 7) {
           return { isValid: false, message: 'DEBE tener entre 2 y 7 palabras' }
         }
         return { isValid: true }
 
       case 'telefono':
-        if (!value || !value.trim()) return { isValid: false, message: 'Teléfono requerido' }
+        if (!value || !value.trim()) return { isValid: false, message: 'TelÃ©fono requerido' }
 
-        // El valor ya viene con +58, solo validar los 10 dígitos
+        // El valor ya viene con +58, solo validar los 10 dÃ­gitos
         if (!value.startsWith('+58')) {
-          return { isValid: false, message: 'Formato: +58 + 10 dígitos' }
+          return { isValid: false, message: 'Formato: +58 + 10 dÃ­gitos' }
         }
 
         const phoneDigits = value.replace('+58', '')
 
-        // Validar que sean exactamente 10 dígitos y no empiece por 0
+        // Validar que sean exactamente 10 dÃ­gitos y no empiece por 0
         const phonePattern = /^[1-9]\d{9}$/
         if (!phonePattern.test(phoneDigits)) {
           return {
             isValid: false,
-            message: 'Formato: 10 dígitos (sin 0 inicial)'
+            message: 'Formato: 10 dÃ­gitos (sin 0 inicial)'
           }
         }
 
@@ -707,17 +707,17 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           return { isValid: false, message: 'El email debe contener un @' }
         }
 
-        // Validar que tenga extensión válida (.com, .edu, .gob, etc.)
+        // Validar que tenga extensiÃ³n vÃ¡lida (.com, .edu, .gob, etc.)
         const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
         if (!emailPattern.test(emailTrimmed.toLowerCase())) {
-          return { isValid: false, message: 'El email debe tener una extensión válida (.com, .edu, .gob, etc.)' }
+          return { isValid: false, message: 'El email debe tener una extensiÃ³n vÃ¡lida (.com, .edu, .gob, etc.)' }
         }
 
         return { isValid: true }
 
       case 'direccion':
-        if (!value.trim()) return { isValid: false, message: 'Dirección requerida' }
-        if (value.trim().length < 5) return { isValid: false, message: 'Mínimo 5 caracteres' }
+        if (!value.trim()) return { isValid: false, message: 'DirecciÃ³n requerida' }
+        if (value.trim().length < 5) return { isValid: false, message: 'MÃ­nimo 5 caracteres' }
         return { isValid: true }
 
       case 'estado':
@@ -746,7 +746,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           return { isValid: false, message: 'Formato: DD/MM/YYYY (ej: 01/01/2025)' }
         }
 
-        // Extraer día, mes y año
+        // Extraer dÃ­a, mes y aÃ±o
         const [, dia, mes, ano] = value.trim().match(fechaFormatRegex)!
         const diaNum = parseInt(dia, 10)
         const mesNum = parseInt(mes, 10)
@@ -754,22 +754,22 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
         // Validar rangos
         if (diaNum < 1 || diaNum > 31) {
-          return { isValid: false, message: 'Día inválido (1-31)' }
+          return { isValid: false, message: 'DÃ­a invÃ¡lido (1-31)' }
         }
         if (mesNum < 1 || mesNum > 12) {
-          return { isValid: false, message: 'Mes inválido (1-12)' }
+          return { isValid: false, message: 'Mes invÃ¡lido (1-12)' }
         }
         if (anoNum < 1900 || anoNum > 2100) {
-          return { isValid: false, message: 'Año inválido (1900-2100)' }
+          return { isValid: false, message: 'AÃ±o invÃ¡lido (1900-2100)' }
         }
 
-        // Validar que la fecha sea válida (ej: no 31/02/2025)
+        // Validar que la fecha sea vÃ¡lida (ej: no 31/02/2025)
         const fechaNac = new Date(anoNum, mesNum - 1, diaNum)
         if (fechaNac.getDate() !== diaNum || fechaNac.getMonth() !== mesNum - 1 || fechaNac.getFullYear() !== anoNum) {
-          return { isValid: false, message: 'Fecha inválida (ej: 31/02 no existe)' }
+          return { isValid: false, message: 'Fecha invÃ¡lida (ej: 31/02 no existe)' }
         }
 
-        // ✅ Validar que la fecha sea pasada (no futura)
+        // âœ… Validar que la fecha sea pasada (no futura)
         const hoyNac = new Date()
         hoyNac.setHours(0, 0, 0, 0)
 
@@ -777,23 +777,23 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           return { isValid: false, message: 'La fecha de nacimiento no puede ser futura o de hoy' }
         }
 
-        // ✅ Validar que tenga al menos 18 años exactos
+        // âœ… Validar que tenga al menos 18 aÃ±os exactos
         const edad = hoyNac.getFullYear() - anoNum
         const fecha18 = new Date(anoNum + 18, mesNum - 1, diaNum)
 
         if (fecha18 > hoyNac) {
-          return { isValid: false, message: 'Debe tener al menos 18 años cumplidos' }
+          return { isValid: false, message: 'Debe tener al menos 18 aÃ±os cumplidos' }
         }
 
         return { isValid: true }
 
       case 'ocupacion':
-        if (!value.trim()) return { isValid: false, message: 'Ocupación requerida' }
-        if (value.trim().length < 2) return { isValid: false, message: 'Mínimo 2 caracteres' }
+        if (!value.trim()) return { isValid: false, message: 'OcupaciÃ³n requerida' }
+        if (value.trim().length < 2) return { isValid: false, message: 'MÃ­nimo 2 caracteres' }
         return { isValid: true }
 
       case 'notas':
-        // Notas es opcional, siempre válido
+        // Notas es opcional, siempre vÃ¡lido
         return { isValid: true }
 
       default:
@@ -801,27 +801,27 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     }
   }
 
-  // 📊 PROCESAR ARCHIVO EXCEL
+  // ðŸ“Š PROCESAR ARCHIVO EXCEL
   const processExcelFile = async (file: File) => {
     if (!isMounted()) return
     setIsProcessing(true)
     try {
-      console.log('📊 Procesando archivo Excel:', file.name)
+      console.log('ðŸ“Š Procesando archivo Excel:', file.name)
 
-      // ✅ VALIDACIÓN DE SEGURIDAD: Validar archivo antes de procesar
-      const { validateExcelFile, validateWorkbookStructure, validateExcelData, sanitizeFileName } = await import('@/utils/excelValidation')
+      // âœ… VALIDACIÃ“N DE SEGURIDAD: Validar archivo antes de procesar
+      const { validateExcelFile, validateWorkbookStructure, validateExcelData, sanitizeFileName } = await import('../../utils/excelValidation')
 
       if (!isMounted()) return
 
       const fileValidation = validateExcelFile(file)
       if (!fileValidation.isValid) {
-        alert(`Error de validación: ${fileValidation.error}`)
+        alert(`Error de validaciÃ³n: ${fileValidation.error}`)
         if (isMounted()) setIsProcessing(false)
         return
       }
 
       if (fileValidation.warnings && fileValidation.warnings.length > 0) {
-        console.warn('Advertencias de validación:', fileValidation.warnings)
+        console.warn('Advertencias de validaciÃ³n:', fileValidation.warnings)
       }
 
       // Sanitizar nombre del archivo
@@ -830,25 +830,25 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         console.warn('Nombre de archivo sanitizado:', sanitizedFileName)
       }
 
-      // ✅ Importar exceljs dinámicamente para reducir bundle inicial
+      // âœ… Importar exceljs dinÃ¡micamente para reducir bundle inicial
       const data = await file.arrayBuffer()
 
       if (!isMounted()) return
 
-      // ✅ VALIDACIÓN DE SEGURIDAD: Validar tamaño del archivo antes de procesar
+      // âœ… VALIDACIÃ“N DE SEGURIDAD: Validar tamaÃ±o del archivo antes de procesar
       if (data.byteLength > 10 * 1024 * 1024) {
-        alert('El archivo es demasiado grande. Tamaño máximo: 10 MB')
+        alert('El archivo es demasiado grande. TamaÃ±o mÃ¡ximo: 10 MB')
         if (isMounted()) setIsProcessing(false)
         return
       }
 
-      // ✅ Leer archivo Excel usando exceljs (import dinámico para evitar precarga)
-      const { readExcelToJSON } = await import('@/types/exceljs')
+      // âœ… Leer archivo Excel usando exceljs (import dinÃ¡mico para evitar precarga)
+      const { readExcelToJSON } = await import('../../types/exceljs')
       const jsonData = await readExcelToJSON(data)
 
       if (!isMounted()) return
 
-      // ✅ VALIDACIÓN DE SEGURIDAD: Validar datos extraídos
+      // âœ… VALIDACIÃ“N DE SEGURIDAD: Validar datos extraÃ­dos
       const dataValidation = validateExcelData(jsonData)
       if (!dataValidation.isValid) {
         alert(`Error en datos del archivo: ${dataValidation.error}`)
@@ -862,7 +862,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
       // Obtener encabezados (primera fila)
       const headers = jsonData[0] as string[]
-      console.log('📋 Encabezados encontrados:', headers)
+      console.log('ðŸ“‹ Encabezados encontrados:', headers)
 
       // Procesar filas de datos
       const processedData: ExcelRow[] = []
@@ -871,7 +871,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         if (!isMounted()) return
 
         const row = jsonData[i] as any[]
-        if (!row || row.every(cell => !cell)) continue // Saltar filas vacías
+        if (!row || row.every(cell => !cell)) continue // Saltar filas vacÃ­as
 
         const rowData: ExcelRow = {
           _rowIndex: i + 1,
@@ -882,7 +882,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           telefono: row[2]?.toString() || '',                 // Columna C
           email: row[3]?.toString() || '',                    // Columna D
           direccion: row[4]?.toString() || '',                // Columna E
-          fecha_nacimiento: convertirFechaExcel(row[5]),       // Columna F - ✅ Convertir de Excel a DD/MM/YYYY
+          fecha_nacimiento: convertirFechaExcel(row[5]),       // Columna F - âœ… Convertir de Excel a DD/MM/YYYY
           ocupacion: row[6]?.toString() || '',                // Columna G
           estado: row[7]?.toString() || 'ACTIVO',            // Columna H - Por defecto siempre ACTIVO
           activo: row[8]?.toString() || 'TRUE',              // Columna I - Por defecto siempre TRUE
@@ -901,7 +901,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           if (!validation.isValid) hasErrors = true
         }
 
-        // Validar notas por separado (siempre válido)
+        // Validar notas por separado (siempre vÃ¡lido)
         rowData._validation.notas = { isValid: true }
 
         rowData._hasErrors = hasErrors
@@ -910,15 +910,15 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
       if (!isMounted()) return
 
-      console.log('✅ Datos procesados:', processedData.length, 'filas')
+      console.log('âœ… Datos procesados:', processedData.length, 'filas')
       setExcelData(processedData)
       setShowPreview(true)
 
-      // Validar dropdowns después de procesar
+      // Validar dropdowns despuÃ©s de procesar
       updateDropdownErrors(processedData)
 
     } catch (error) {
-      console.error('❌ Error procesando Excel:', error)
+      console.error('âŒ Error procesando Excel:', error)
       alert(`Error procesando el archivo: ${error instanceof Error ? error.message : 'Error desconocido'}`)
     } finally {
       if (isMounted()) {
@@ -927,7 +927,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     }
   }
 
-  // 🎯 MANEJAR DRAG & DROP
+  // ðŸŽ¯ MANEJAR DRAG & DROP
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
     setIsDragging(true)
@@ -955,7 +955,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     }
   }
 
-  // 📁 MANEJAR SELECCIÓN DE ARCHIVO
+  // ðŸ“ MANEJAR SELECCIÃ“N DE ARCHIVO
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
@@ -964,21 +964,21 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     }
   }
 
-  // 🔄 ACTUALIZAR VALOR EN PREVISUALIZACIÓN
+  // ðŸ”„ ACTUALIZAR VALOR EN PREVISUALIZACIÃ“N
   const updateCellValue = async (rowIndex: number, field: string, value: string | null) => {
     const newData = [...excelData]
     const row = newData[rowIndex]
 
     if (row) {
-      // 🎨 NO APLICAR FORMATO MIENTRAS ESCRIBE (permitir espacios libres)
-      // El formato se aplicará al guardar
+      // ðŸŽ¨ NO APLICAR FORMATO MIENTRAS ESCRIBE (permitir espacios libres)
+      // El formato se aplicarÃ¡ al guardar
       const formattedValue = value || ''
 
       row[field as keyof ExcelData] = formattedValue
 
-      // Para el campo notas, no hacer validación ni notificaciones
+      // Para el campo notas, no hacer validaciÃ³n ni notificaciones
       if (field === 'notas') {
-        // Solo actualizar el valor sin validación ni notificaciones
+        // Solo actualizar el valor sin validaciÃ³n ni notificaciones
         row._validation[field] = { isValid: true }
         setExcelData(newData)
         return
@@ -992,44 +992,44 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       const fieldsToCheck = Object.keys(row._validation).filter(field => field !== 'notas')
       const hasValidationErrors = fieldsToCheck.some(field => !row._validation[field]?.isValid)
 
-      // ✅ Validar dropdowns explícitamente
+      // âœ… Validar dropdowns explÃ­citamente
       const hasDropdownErrors = false
 
       row._hasErrors = hasValidationErrors || hasDropdownErrors
 
       setExcelData(newData)
 
-      // Manejar notificaciones por fila completa según el comportamiento requerido
+      // Manejar notificaciones por fila completa segÃºn el comportamiento requerido
       handleRowValidationNotification(rowIndex, row)
 
-      // Actualizar estado de errores en dropdowns (ya no necesario - usando validación unificada)
+      // Actualizar estado de errores en dropdowns (ya no necesario - usando validaciÃ³n unificada)
       // updateDropdownErrors(newData)
 
       // Sistema de notificaciones anterior (comentado para usar el nuevo)
       // if (!validation.isValid) {
       //   addToast('error', `Campo "${field}": ${validation.message}`, getSuggestion(field, value))
       // } else {
-      //   addToast('success', `Campo "${field}" es válido`)
+      //   addToast('success', `Campo "${field}" es vÃ¡lido`)
       // }
     }
   }
 
-  // 🎯 VALIDAR DROPDOWNS Y ACTUALIZAR ESTADO DE ERRORES
+  // ðŸŽ¯ VALIDAR DROPDOWNS Y ACTUALIZAR ESTADO DE ERRORES
   const updateDropdownErrors = (data: ExcelRow[]) => {
     const errors: {[key: string]: boolean} = {}
 
     data.forEach((row, index) => {
-      // Validar dropdowns específicos - SIEMPRE mostrar error si está vacío
+      // Validar dropdowns especÃ­ficos - SIEMPRE mostrar error si estÃ¡ vacÃ­o
       // Campos eliminados: modelo_vehiculo, concesionario, analista
     })
 
-    console.log('🔍 Actualizando errores de dropdowns:', errors)
+    console.log('ðŸ” Actualizando errores de dropdowns:', errors)
     setDropdownErrors(errors)
   }
 
-  // 💾 GUARDAR DATOS VALIDADOS
+  // ðŸ’¾ GUARDAR DATOS VALIDADOS
   const handleSaveData = async () => {
-    // Filtrar solo registros completamente válidos
+    // Filtrar solo registros completamente vÃ¡lidos
     const validData = excelData.filter(row => {
       const hasNoErrors = !row._hasErrors
 
@@ -1044,8 +1044,8 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     setIsSaving(true)
 
     try {
-      console.log('💾 Guardando datos:', validData.length, 'clientes')
-      console.log('📋 Datos a guardar:', validData.map(row => ({
+      console.log('ðŸ’¾ Guardando datos:', validData.length, 'clientes')
+      console.log('ðŸ“‹ Datos a guardar:', validData.map(row => ({
         fila: row._rowIndex,
         cedula: row.cedula,
         nombres: row.nombres,
@@ -1066,39 +1066,39 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         try {
           const clienteData = {
             cedula: blankIfNN(row.cedula),
-            nombres: formatNombres(blankIfNN(row.nombres)),  // ✅ Aplicar formato Title Case al guardar
+            nombres: formatNombres(blankIfNN(row.nombres)),  // âœ… Aplicar formato Title Case al guardar
             telefono: blankIfNN(row.telefono),
             email: blankIfNN(row.email).toLowerCase(),
             direccion: blankIfNN(row.direccion),
-            fecha_nacimiento: convertirFechaParaBackend(blankIfNN(row.fecha_nacimiento)),  // ✅ Convertir DD/MM/YYYY a YYYY-MM-DD
+            fecha_nacimiento: convertirFechaParaBackend(blankIfNN(row.fecha_nacimiento)),  // âœ… Convertir DD/MM/YYYY a YYYY-MM-DD
             ocupacion: blankIfNN(row.ocupacion),
-            estado: blankIfNN(row.estado).toUpperCase(), // ✅ Normalizar estado
+            estado: blankIfNN(row.estado).toUpperCase(), // âœ… Normalizar estado
             activo: row.activo === 'true' || row.activo === 'TRUE' || row.activo === '1',
             notas: blankIfNN(row.notas) || 'NA'
           }
 
-          console.log(`🔄 Procesando fila ${row._rowIndex}:`, clienteData)
+          console.log(`ðŸ”„ Procesando fila ${row._rowIndex}:`, clienteData)
 
           const clienteCreado = await clienteService.createCliente(clienteData)
           resultados.push({ success: true, cliente: clienteCreado, fila: row._rowIndex })
-          console.log(`✅ Cliente creado exitosamente: ${clienteData.nombres}`)
+          console.log(`âœ… Cliente creado exitosamente: ${clienteData.nombres}`)
 
         } catch (error: any) {
-          console.error(`❌ Error creando cliente en fila ${row._rowIndex}:`, error)
+          console.error(`âŒ Error creando cliente en fila ${row._rowIndex}:`, error)
 
-          // Manejar error de cliente duplicado (cédula Y nombre, o email)
+          // Manejar error de cliente duplicado (cÃ©dula Y nombre, o email)
           let errorMessage = error instanceof Error ? error.message : 'Error desconocido'
 
           if (error.response?.status === 400 || error.response?.status === 409) {
             const detail = error.response?.data?.detail || error.response?.data?.message || ''
             
-            // Detectar qué tipo de duplicado es
-            if (detail.includes('cédula') && detail.includes('nombre')) {
-              errorMessage = `Cliente duplicado: Ya existe un cliente con la misma cédula (${row.cedula}) y el mismo nombre completo (${row.nombres})`
+            // Detectar quÃ© tipo de duplicado es
+            if (detail.includes('cÃ©dula') && detail.includes('nombre')) {
+              errorMessage = `Cliente duplicado: Ya existe un cliente con la misma cÃ©dula (${row.cedula}) y el mismo nombre completo (${row.nombres})`
             } else if (detail.includes('email')) {
               errorMessage = `Cliente duplicado: Ya existe un cliente con el mismo email (${row.email})`
             } else {
-              errorMessage = detail || 'Cliente duplicado: Ya existe un cliente con los mismos datos (cédula y nombre, o email)'
+              errorMessage = detail || 'Cliente duplicado: Ya existe un cliente con los mismos datos (cÃ©dula y nombre, o email)'
             }
           }
 
@@ -1115,27 +1115,27 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       const exitosos = resultados.filter(r => r.success).length
       const fallidos = resultados.filter(r => !r.success).length
 
-      console.log(`📊 Resumen: ${exitosos} exitosos, ${fallidos} fallidos`)
+      console.log(`ðŸ“Š Resumen: ${exitosos} exitosos, ${fallidos} fallidos`)
 
       if (exitosos > 0) {
-        // Notificar éxito y cerrar
+        // Notificar Ã©xito y cerrar
         onDataProcessed?.(validData)
         onSuccess?.()
-        // ✅ Cerrar automáticamente al guardar exitosamente
+        // âœ… Cerrar automÃ¡ticamente al guardar exitosamente
         onClose()
       } else {
-        alert('No se pudo guardar ningún cliente. Revisa los errores.')
+        alert('No se pudo guardar ningÃºn cliente. Revisa los errores.')
       }
 
     } catch (error) {
-      console.error('❌ Error en proceso de guardado:', error)
+      console.error('âŒ Error en proceso de guardado:', error)
       alert('Error al guardar los datos. Intenta nuevamente.')
     } finally {
       setIsSaving(false)
     }
   }
 
-  // 🎯 CONTAR REGISTROS VÁLIDOS (sin errores + dropdowns seleccionados)
+  // ðŸŽ¯ CONTAR REGISTROS VÃLIDOS (sin errores + dropdowns seleccionados)
   const validRows = excelData.filter(row => {
     const hasNoErrors = !row._hasErrors
 
@@ -1208,7 +1208,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                 >
                   <Upload className="h-12 w-12 mx-auto mb-4 text-gray-400" />
                   <h3 className="text-lg font-semibold mb-2">
-                    {isDragging ? 'Suelta el archivo aquí' : 'Sube tu archivo Excel'}
+                    {isDragging ? 'Suelta el archivo aquÃ­' : 'Sube tu archivo Excel'}
                   </h3>
                   <p className="text-gray-600 mb-4">
                     Arrastra y suelta tu archivo Excel o haz clic para seleccionar
@@ -1252,9 +1252,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
               </CardContent>
             </Card>
           ) : (
-            /* PREVISUALIZACIÓN */
+            /* PREVISUALIZACIÃ“N */
             <div className="space-y-4">
-              {/* Estadísticas */}
+              {/* EstadÃ­sticas */}
               <Card className="border-blue-200 bg-blue-50">
                 <CardContent className="pt-4">
                   <div className="flex items-center justify-between">
@@ -1263,7 +1263,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                         Total: {totalRows} filas
                       </Badge>
                       <Badge variant="outline" className="text-green-700">
-                        Válidos: {getValidClients().length}
+                        VÃ¡lidos: {getValidClients().length}
                       </Badge>
                       <Badge variant="outline" className="text-blue-700">
                         Guardados: {getSavedClientsCount()}
@@ -1273,7 +1273,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                       </Badge>
                       {getSavedClientsCount() > 0 && (
                         <Badge variant="outline" className="text-green-700 bg-green-50">
-                          ✅ {getSavedClientsCount()} en Dashboard
+                          âœ… {getSavedClientsCount()} en Dashboard
                         </Badge>
                       )}
                       <div className="flex items-center space-x-2">
@@ -1306,7 +1306,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                           className="bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100 font-semibold"
                         >
                           <Eye className="mr-2 h-4 w-4" />
-                          📊 Ir al Dashboard de Clientes
+                          ðŸ“Š Ir al Dashboard de Clientes
                         </Button>
                       )}
                       <Button
@@ -1331,7 +1331,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                 </CardContent>
               </Card>
 
-              {/* Modal de Advertencias de Validación */}
+              {/* Modal de Advertencias de ValidaciÃ³n */}
               <AnimatePresence>
                 {showValidationModal && (
                   <motion.div
@@ -1350,7 +1350,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                         <div className="flex items-center justify-between mb-4">
                           <h2 className="text-2xl font-bold text-red-600 flex items-center">
                             <AlertTriangle className="mr-2 h-6 w-6" />
-                            Errores de Validación Encontrados
+                            Errores de ValidaciÃ³n Encontrados
                           </h2>
                           <Button variant="ghost" size="sm" onClick={() => setShowValidationModal(false)}>
                             <X className="h-4 w-4" />
@@ -1362,13 +1362,13 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                             <strong>No se puede guardar:</strong> Se encontraron {totalRows - validRows} registros con errores que deben corregirse antes de continuar.
                           </p>
                           <p className="text-sm text-red-600 mt-1">
-                            <strong>Errores incluyen:</strong> Campos de validación inválidos.
+                            <strong>Errores incluyen:</strong> Campos de validaciÃ³n invÃ¡lidos.
                           </p>
                         </div>
 
                         <div className="space-y-4 max-h-[50vh] overflow-y-auto">
                           {excelData.filter(row => {
-                            // Incluir filas con errores de validación
+                            // Incluir filas con errores de validaciÃ³n
                             const hasValidationErrors = row._hasErrors
 
                             return hasValidationErrors
@@ -1407,10 +1407,10 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                             <div className="text-sm text-blue-800">
                               <strong>Instrucciones para corregir:</strong>
                               <ul className="mt-2 ml-4 list-disc space-y-1">
-                                <li>Los campos con fondo rojo en la tabla tienen errores de validación</li>
+                                <li>Los campos con fondo rojo en la tabla tienen errores de validaciÃ³n</li>
                                 <li>Haz clic en cualquier campo para editarlo directamente</li>
-                                <li>Los errores se corrigen automáticamente al escribir valores válidos</li>
-                                <li>Una vez corregidos todos los errores, podrás guardar los datos</li>
+                                <li>Los errores se corrigen automÃ¡ticamente al escribir valores vÃ¡lidos</li>
+                                <li>Una vez corregidos todos los errores, podrÃ¡s guardar los datos</li>
                               </ul>
                             </div>
                           </div>
@@ -1440,12 +1440,12 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                 )}
               </AnimatePresence>
 
-              {/* Tabla de previsualización */}
+              {/* Tabla de previsualizaciÃ³n */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center">
                     <Eye className="mr-2 h-5 w-5" />
-                    Previsualización de Datos
+                    PrevisualizaciÃ³n de Datos
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -1454,13 +1454,13 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                       <thead>
                         <tr className="bg-gray-50">
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-16">Fila</th>
-                          <th className="border p-2 text-left text-xs font-medium text-gray-500 w-24">Cédula</th>
+                          <th className="border p-2 text-left text-xs font-medium text-gray-500 w-24">CÃ©dula</th>
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-48">Nombres y Apellidos</th>
-                          <th className="border p-2 text-left text-xs font-medium text-gray-500 w-28">Teléfono</th>
+                          <th className="border p-2 text-left text-xs font-medium text-gray-500 w-28">TelÃ©fono</th>
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-40">Email</th>
-                          <th className="border p-2 text-left text-xs font-medium text-gray-500 w-48">Dirección</th>
+                          <th className="border p-2 text-left text-xs font-medium text-gray-500 w-48">DirecciÃ³n</th>
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-24">Fecha Nac.</th>
-                          <th className="border p-2 text-left text-xs font-medium text-gray-500 w-32">Ocupación</th>
+                          <th className="border p-2 text-left text-xs font-medium text-gray-500 w-32">OcupaciÃ³n</th>
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-24">Estado</th>
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-20">Activo</th>
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-48">Notas</th>
@@ -1472,7 +1472,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                           <tr key={index} className={row._hasErrors ? 'bg-red-50' : 'bg-green-50'}>
                             <td className="border p-2 text-xs">{row._rowIndex}</td>
 
-                            {/* Cédula */}
+                            {/* CÃ©dula */}
                             <td className="border p-2">
                               <input
                                 type="text"
@@ -1496,7 +1496,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                               />
                             </td>
 
-                            {/* Teléfono */}
+                            {/* TelÃ©fono */}
                             <td className="border p-2">
                               <div className="flex items-center">
                                 <span className="bg-gray-100 border border-gray-300 rounded-l px-3 py-2 text-sm font-medium text-gray-700">
@@ -1507,7 +1507,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                   value={row.telefono.replace('+58', '')}
                                   onChange={(e) => {
                                     const value = e.target.value
-                                    // Solo permitir números y máximo 10 dígitos
+                                    // Solo permitir nÃºmeros y mÃ¡ximo 10 dÃ­gitos
                                     const cleanValue = value.replace(/\D/g, '').slice(0, 10)
                                     updateCellValue(index, 'telefono', '+58' + cleanValue)
                                   }}
@@ -1531,7 +1531,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                               />
                             </td>
 
-                            {/* Dirección */}
+                            {/* DirecciÃ³n */}
                             <td className="border p-2">
                               <input
                                 type="text"
@@ -1550,10 +1550,10 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 value={row.fecha_nacimiento}
                                 onChange={(e) => {
                                   let value = e.target.value
-                                  // Limpiar todos los caracteres no numéricos y barras
+                                  // Limpiar todos los caracteres no numÃ©ricos y barras
                                   const onlyDigits = value.replace(/\D/g, '')
 
-                                  // Solo procesar si hay dígitos
+                                  // Solo procesar si hay dÃ­gitos
                                   if (onlyDigits.length === 0) {
                                     updateCellValue(index, 'fecha_nacimiento', '')
                                     return
@@ -1561,22 +1561,22 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
                                   // Auto-formatear a DD/MM/YYYY
                                   let formatted = ''
-                                  const digits = onlyDigits.substring(0, 8) // Limitar a 8 dígitos
+                                  const digits = onlyDigits.substring(0, 8) // Limitar a 8 dÃ­gitos
 
                                   if (digits.length === 1) {
-                                    // Solo un dígito: no formatear aún
+                                    // Solo un dÃ­gito: no formatear aÃºn
                                     formatted = digits
                                   } else if (digits.length === 2) {
-                                    // Dos dígitos: DD
+                                    // Dos dÃ­gitos: DD
                                     formatted = digits.substring(0, 2)
                                   } else if (digits.length === 3) {
-                                    // Tres dígitos: DD/M
+                                    // Tres dÃ­gitos: DD/M
                                     formatted = digits.substring(0, 2) + '/' + digits.substring(2, 3)
                                   } else if (digits.length === 4) {
-                                    // Cuatro dígitos: DD/MM
+                                    // Cuatro dÃ­gitos: DD/MM
                                     formatted = digits.substring(0, 2) + '/' + digits.substring(2, 4)
                                   } else if (digits.length >= 5) {
-                                    // Cinco o más dígitos: DD/MM/YYYY
+                                    // Cinco o mÃ¡s dÃ­gitos: DD/MM/YYYY
                                     const dia = digits.substring(0, 2)
                                     const mes = digits.substring(2, 4)
                                     const ano = digits.substring(4, 8)
@@ -1597,15 +1597,15 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
                                   const parts = value.split('/')
                                   if (parts.length === 3) {
-                                    // Auto-completar día con 0 si solo tiene un dígito
+                                    // Auto-completar dÃ­a con 0 si solo tiene un dÃ­gito
                                     if (parts[0].length === 1 && parseInt(parts[0]) <= 3) {
                                       parts[0] = '0' + parts[0]
                                     }
-                                    // Auto-completar mes con 0 si solo tiene un dígito
+                                    // Auto-completar mes con 0 si solo tiene un dÃ­gito
                                     if (parts[1].length === 1) {
                                       parts[1] = '0' + parts[1]
                                     }
-                                    // Auto-completar año con 0 si es necesario
+                                    // Auto-completar aÃ±o con 0 si es necesario
                                     if (parts[2].length < 4) {
                                       parts[2] = parts[2].padStart(4, '0')
                                     }
@@ -1621,7 +1621,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                               />
                             </td>
 
-                            {/* Ocupación */}
+                            {/* OcupaciÃ³n */}
                             <td className="border p-2">
                               <input
                                 type="text"
@@ -1722,7 +1722,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         </div>
       </motion.div>
 
-      {/* 🔔 NOTIFICACIONES TOAST */}
+      {/* ðŸ”” NOTIFICACIONES TOAST */}
       <div className="fixed top-4 right-4 z-[60] space-y-2">
         <AnimatePresence>
           {toasts.map((toast) => (

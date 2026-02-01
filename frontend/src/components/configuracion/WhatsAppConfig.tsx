@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react'
 import { MessageSquare, Save, TestTube, CheckCircle, AlertCircle, Eye, EyeOff, Clock, XCircle, RefreshCw } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Badge } from '@/components/ui/badge'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card'
+import { Button } from '../../components/ui/button'
+import { Input } from '../../components/ui/input'
+import { Textarea } from '../../components/ui/textarea'
+import { Badge } from '../../components/ui/badge'
 import { toast } from 'sonner'
-import { validarTelefono, validarConfiguracionWhatsApp } from '@/utils/validators'
-import { whatsappConfigService, notificacionService, type Notificacion, type WhatsAppConfig } from '@/services/notificacionService'
+import { validarTelefono, validarConfiguracionWhatsApp } from '../../utils/validators'
+import { whatsappConfigService, notificacionService, type Notificacion, type WhatsAppConfig } from '../../services/notificacionService'
 
 export function WhatsAppConfig() {
   const [config, setConfig] = useState<WhatsAppConfig>({
@@ -46,8 +46,8 @@ export function WhatsAppConfig() {
       setModoPruebas(data.modo_pruebas || 'true')
       setTelefonoPruebas(data.telefono_pruebas || '')
     } catch (error) {
-      console.error('Error cargando configuración de WhatsApp:', error)
-      toast.error('Error cargando configuración')
+      console.error('Error cargando configuraciÃ³n de WhatsApp:', error)
+      toast.error('Error cargando configuraciÃ³n')
     }
   }
 
@@ -57,7 +57,7 @@ export function WhatsAppConfig() {
       const resultado = await notificacionService.listarNotificaciones(1, 10, undefined, 'WHATSAPP')
       setEnviosRecientes(resultado.items || [])
     } catch (error) {
-      console.error('Error cargando envíos recientes:', error)
+      console.error('Error cargando envÃ­os recientes:', error)
     } finally {
       setCargandoEnvios(false)
     }
@@ -71,7 +71,7 @@ export function WhatsAppConfig() {
   }
 
   const validarConfiguracion = (): string | null => {
-    // ✅ Usar validación centralizada
+    // âœ… Usar validaciÃ³n centralizada
     const validacion = validarConfiguracionWhatsApp({
       api_url: config.api_url,
       access_token: config.access_token,
@@ -110,11 +110,11 @@ export function WhatsAppConfig() {
       }
 
       await whatsappConfigService.actualizarConfiguracionWhatsApp(configCompleta)
-      toast.success('Configuración de WhatsApp guardada exitosamente')
+      toast.success('ConfiguraciÃ³n de WhatsApp guardada exitosamente')
       await cargarConfiguracion()
     } catch (error: any) {
-      console.error('Error guardando configuración:', error)
-      const mensajeError = error?.response?.data?.detail || error?.message || 'Error guardando configuración'
+      console.error('Error guardando configuraciÃ³n:', error)
+      const mensajeError = error?.response?.data?.detail || error?.message || 'Error guardando configuraciÃ³n'
       toast.error(mensajeError)
     } finally {
       setGuardando(false)
@@ -128,39 +128,39 @@ export function WhatsAppConfig() {
 
       if (telefonoPruebaDestino && telefonoPruebaDestino.trim()) {
         if (!validarTelefono(telefonoPruebaDestino)) {
-          toast.error('Por favor ingresa un número de teléfono válido con código de país (ej: +584121234567)')
+          toast.error('Por favor ingresa un nÃºmero de telÃ©fono vÃ¡lido con cÃ³digo de paÃ­s (ej: +584121234567)')
           setProbando(false)
           return
         }
       }
 
-      console.log('📤 [MENSAJE PRUEBA] Enviando mensaje de prueba...')
+      console.log('ðŸ“¤ [MENSAJE PRUEBA] Enviando mensaje de prueba...')
       const resultado = await whatsappConfigService.probarConfiguracionWhatsApp(
         telefonoPruebaDestino.trim() || undefined,
         mensajePrueba.trim() || undefined
       )
       setResultadoPrueba(resultado)
 
-      // ✅ LOG DETALLADO: Mostrar resultado del mensaje de prueba
-      console.log('📊 [MENSAJE PRUEBA] Resultado completo:', resultado)
+      // âœ… LOG DETALLADO: Mostrar resultado del mensaje de prueba
+      console.log('ðŸ“Š [MENSAJE PRUEBA] Resultado completo:', resultado)
 
       if (resultado.success || resultado.mensaje?.includes('enviado')) {
-        console.log('✅ [CONFIRMACIÓN] Mensaje de prueba ENVIADO EXITOSAMENTE')
-        console.log('✅ [CONFIRMACIÓN] WhatsApp ACEPTÓ y procesó tu mensaje')
-        console.log('✅ [CONFIRMACIÓN] Meta Developers API está funcionando correctamente')
-        console.log('✅ [CONFIRMACIÓN] Tu configuración es VÁLIDA y está CONECTADA')
-        toast.success(`Mensaje de prueba enviado exitosamente a ${resultado.telefono_destino || 'tu teléfono'}`)
+        console.log('âœ… [CONFIRMACIÃ“N] Mensaje de prueba ENVIADO EXITOSAMENTE')
+        console.log('âœ… [CONFIRMACIÃ“N] WhatsApp ACEPTÃ“ y procesÃ³ tu mensaje')
+        console.log('âœ… [CONFIRMACIÃ“N] Meta Developers API estÃ¡ funcionando correctamente')
+        console.log('âœ… [CONFIRMACIÃ“N] Tu configuraciÃ³n es VÃLIDA y estÃ¡ CONECTADA')
+        toast.success(`Mensaje de prueba enviado exitosamente a ${resultado.telefono_destino || 'tu telÃ©fono'}`)
       } else {
-        console.error('❌ [CONFIRMACIÓN] Mensaje de prueba FALLÓ')
-        console.error('❌ [CONFIRMACIÓN] Error:', resultado.error || resultado.mensaje)
-        console.error('❌ [CONFIRMACIÓN] WhatsApp/Meta rechazó el envío')
+        console.error('âŒ [CONFIRMACIÃ“N] Mensaje de prueba FALLÃ“')
+        console.error('âŒ [CONFIRMACIÃ“N] Error:', resultado.error || resultado.mensaje)
+        console.error('âŒ [CONFIRMACIÃ“N] WhatsApp/Meta rechazÃ³ el envÃ­o')
         toast.error('Error enviando mensaje de prueba')
       }
     } catch (error: any) {
-      console.error('❌ [ERROR] Error probando configuración:', error)
+      console.error('âŒ [ERROR] Error probando configuraciÃ³n:', error)
       const mensajeError = error?.response?.data?.detail || error?.message || 'Error desconocido'
-      console.error('❌ [ERROR] Detalle del error:', mensajeError)
-      toast.error(`Error probando configuración: ${mensajeError}`)
+      console.error('âŒ [ERROR] Detalle del error:', mensajeError)
+      toast.error(`Error probando configuraciÃ³n: ${mensajeError}`)
       setResultadoPrueba({ error: mensajeError })
     } finally {
       setProbando(false)
@@ -176,13 +176,13 @@ export function WhatsAppConfig() {
       const resultado = await whatsappConfigService.testCompletoWhatsApp()
       setResultadoTestCompleto(resultado)
 
-      // ✅ LOG DETALLADO: Mostrar resultados del test completo
-      console.log('📊 [TEST COMPLETO] Resultado completo:', resultado)
+      // âœ… LOG DETALLADO: Mostrar resultados del test completo
+      console.log('ðŸ“Š [TEST COMPLETO] Resultado completo:', resultado)
 
-      // Verificar específicamente la conexión con Meta API
+      // Verificar especÃ­ficamente la conexiÃ³n con Meta API
       const testConexion = resultado.tests?.conexion
       if (testConexion) {
-        console.log('🔍 [TEST CONEXIÓN META API]:', {
+        console.log('ðŸ” [TEST CONEXIÃ“N META API]:', {
           nombre: testConexion.nombre,
           exito: testConexion.exito,
           mensaje: testConexion.mensaje || testConexion.error,
@@ -191,19 +191,19 @@ export function WhatsAppConfig() {
         })
 
         if (testConexion.exito) {
-          console.log('✅ [CONFIRMACIÓN] WhatsApp ACEPTÓ la conexión - Meta respondió 200 OK')
-          console.log('✅ [CONFIRMACIÓN] Tu Access Token es VÁLIDO')
-          console.log('✅ [CONFIRMACIÓN] Tu Phone Number ID es CORRECTO')
-          console.log('✅ [CONFIRMACIÓN] Estás CONECTADO a Meta Developers API')
+          console.log('âœ… [CONFIRMACIÃ“N] WhatsApp ACEPTÃ“ la conexiÃ³n - Meta respondiÃ³ 200 OK')
+          console.log('âœ… [CONFIRMACIÃ“N] Tu Access Token es VÃLIDO')
+          console.log('âœ… [CONFIRMACIÃ“N] Tu Phone Number ID es CORRECTO')
+          console.log('âœ… [CONFIRMACIÃ“N] EstÃ¡s CONECTADO a Meta Developers API')
         } else {
-          console.error('❌ [CONFIRMACIÓN] WhatsApp RECHAZÓ la conexión')
-          console.error('❌ [CONFIRMACIÓN] Error:', testConexion.error || testConexion.mensaje)
-          console.error('❌ [CONFIRMACIÓN] Meta respondió con error - Revisa tu configuración')
+          console.error('âŒ [CONFIRMACIÃ“N] WhatsApp RECHAZÃ“ la conexiÃ³n')
+          console.error('âŒ [CONFIRMACIÃ“N] Error:', testConexion.error || testConexion.mensaje)
+          console.error('âŒ [CONFIRMACIÃ“N] Meta respondiÃ³ con error - Revisa tu configuraciÃ³n')
         }
       }
 
       const resumen = resultado.resumen || {}
-      console.log('📈 [RESUMEN TEST]:', {
+      console.log('ðŸ“ˆ [RESUMEN TEST]:', {
         total: resumen.total,
         exitosos: resumen.exitosos,
         fallidos: resumen.fallidos,
@@ -211,14 +211,14 @@ export function WhatsAppConfig() {
       })
 
       if (resumen.fallidos === 0) {
-        toast.success(`✅ Test completo: ${resumen.exitosos}/${resumen.total} tests exitosos`)
-        console.log('✅ [RESULTADO FINAL] Todos los tests pasaron - WhatsApp está configurado correctamente')
+        toast.success(`âœ… Test completo: ${resumen.exitosos}/${resumen.total} tests exitosos`)
+        console.log('âœ… [RESULTADO FINAL] Todos los tests pasaron - WhatsApp estÃ¡ configurado correctamente')
       } else {
-        toast.warning(`⚠️ Test completo: ${resumen.exitosos}/${resumen.total} exitosos, ${resumen.fallidos} fallidos`)
-        console.warn('⚠️ [RESULTADO FINAL] Algunos tests fallaron - Revisa la configuración')
+        toast.warning(`âš ï¸ Test completo: ${resumen.exitosos}/${resumen.total} exitosos, ${resumen.fallidos} fallidos`)
+        console.warn('âš ï¸ [RESULTADO FINAL] Algunos tests fallaron - Revisa la configuraciÃ³n')
       }
     } catch (error: any) {
-      console.error('❌ [ERROR] Error ejecutando test completo:', error)
+      console.error('âŒ [ERROR] Error ejecutando test completo:', error)
       const mensajeError = error?.response?.data?.detail || error?.message || 'Error desconocido'
       toast.error(`Error ejecutando test completo: ${mensajeError}`)
       setResultadoTestCompleto({ error: mensajeError })
@@ -229,18 +229,18 @@ export function WhatsAppConfig() {
 
   return (
     <div className="space-y-6">
-      {/* Información */}
+      {/* InformaciÃ³n */}
       <div className="bg-green-50 border border-green-200 rounded-lg p-4">
         <div className="flex items-center gap-2 mb-2">
           <MessageSquare className="h-5 w-5 text-green-600" />
-          <h3 className="font-semibold text-green-900">Configuración de WhatsApp</h3>
+          <h3 className="font-semibold text-green-900">ConfiguraciÃ³n de WhatsApp</h3>
         </div>
         <p className="text-sm text-green-700">
-          Configura la integración con Meta WhatsApp Business API para enviar notificaciones por WhatsApp a los clientes.
+          Configura la integraciÃ³n con Meta WhatsApp Business API para enviar notificaciones por WhatsApp a los clientes.
         </p>
       </div>
 
-      {/* Configuración Meta API */}
+      {/* ConfiguraciÃ³n Meta API */}
       <Card>
         <CardContent className="space-y-4 pt-6">
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
@@ -296,7 +296,7 @@ export function WhatsAppConfig() {
               </button>
             </div>
             <p className="text-xs text-gray-500 mt-1">
-              Token de acceso de Meta Developers. Obtén uno en: <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">developers.facebook.com</a>
+              Token de acceso de Meta Developers. ObtÃ©n uno en: <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">developers.facebook.com</a>
             </p>
           </div>
 
@@ -328,7 +328,7 @@ export function WhatsAppConfig() {
           {/* Selector de Ambiente */}
           <div className="border-t pt-4 mt-4">
             <div className="mb-4">
-              <label className="text-sm font-medium block mb-2">Ambiente de Envío</label>
+              <label className="text-sm font-medium block mb-2">Ambiente de EnvÃ­o</label>
               <div className="flex gap-4">
                 <label className="flex items-center space-x-2 cursor-pointer">
                   <input
@@ -339,7 +339,7 @@ export function WhatsAppConfig() {
                     onChange={(e) => setModoPruebas(e.target.value)}
                     className="rounded"
                   />
-                  <span className="text-sm">Producción (Envíos reales a clientes)</span>
+                  <span className="text-sm">ProducciÃ³n (EnvÃ­os reales a clientes)</span>
                 </label>
                 <label className="flex items-center space-x-2 cursor-pointer">
                   <input
@@ -350,7 +350,7 @@ export function WhatsAppConfig() {
                     onChange={(e) => setModoPruebas(e.target.value)}
                     className="rounded"
                   />
-                  <span className="text-sm">Pruebas (Todos los mensajes a número de prueba)</span>
+                  <span className="text-sm">Pruebas (Todos los mensajes a nÃºmero de prueba)</span>
                 </label>
               </div>
             </div>
@@ -359,7 +359,7 @@ export function WhatsAppConfig() {
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                 <div className="mb-3">
                   <label className="text-sm font-medium block mb-2">
-                    Teléfono de Pruebas <span className="text-red-500">*</span>
+                    TelÃ©fono de Pruebas <span className="text-red-500">*</span>
                   </label>
                   <Input
                     type="tel"
@@ -369,27 +369,27 @@ export function WhatsAppConfig() {
                     className="max-w-md"
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    En modo pruebas, todos los mensajes se enviarán a este número en lugar de a los clientes reales.
+                    En modo pruebas, todos los mensajes se enviarÃ¡n a este nÃºmero en lugar de a los clientes reales.
                   </p>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Mensaje de error de validación */}
+          {/* Mensaje de error de validaciÃ³n */}
           {errorValidacion && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 mt-4">
               <div className="flex items-start gap-2">
                 <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
                 <div className="flex-1">
-                  <p className="font-semibold text-red-900 mb-1">Error de validación:</p>
+                  <p className="font-semibold text-red-900 mb-1">Error de validaciÃ³n:</p>
                   <p className="text-sm text-red-800 whitespace-pre-line">{errorValidacion}</p>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Botones de Acción */}
+          {/* Botones de AcciÃ³n */}
           <div className="flex gap-2 pt-4 border-t mt-4">
             <Button
               onClick={handleGuardar}
@@ -398,7 +398,7 @@ export function WhatsAppConfig() {
               type="button"
             >
               <Save className="h-4 w-4" />
-              {guardando ? 'Guardando...' : 'Guardar Configuración'}
+              {guardando ? 'Guardando...' : 'Guardar ConfiguraciÃ³n'}
             </Button>
             <Button
               onClick={handleTestCompleto}
@@ -432,10 +432,10 @@ export function WhatsAppConfig() {
                     </h3>
                     {resultadoTestCompleto.resumen && (
                       <div className="text-sm space-y-1 mb-3">
-                        <p>✅ Exitosos: {resultadoTestCompleto.resumen.exitosos}</p>
-                        <p>❌ Fallidos: {resultadoTestCompleto.resumen.fallidos}</p>
+                        <p>âœ… Exitosos: {resultadoTestCompleto.resumen.exitosos}</p>
+                        <p>âŒ Fallidos: {resultadoTestCompleto.resumen.fallidos}</p>
                         {resultadoTestCompleto.resumen.advertencias > 0 && (
-                          <p>⚠️ Advertencias: {resultadoTestCompleto.resumen.advertencias}</p>
+                          <p>âš ï¸ Advertencias: {resultadoTestCompleto.resumen.advertencias}</p>
                         )}
                       </div>
                     )}
@@ -485,33 +485,33 @@ export function WhatsAppConfig() {
             </div>
           )}
 
-          {/* Ambiente de Prueba - Envío de Mensaje de Prueba */}
+          {/* Ambiente de Prueba - EnvÃ­o de Mensaje de Prueba */}
           <div className="border-t pt-4 mt-4">
             <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
               <h3 className="font-semibold text-green-900 mb-2 flex items-center gap-2">
                 <TestTube className="h-5 w-5" />
-                Envío de Mensaje de Prueba
+                EnvÃ­o de Mensaje de Prueba
               </h3>
               <p className="text-sm text-green-700 mb-4">
-                Envía un mensaje de prueba personalizado para verificar que la configuración de WhatsApp funciona correctamente.
+                EnvÃ­a un mensaje de prueba personalizado para verificar que la configuraciÃ³n de WhatsApp funciona correctamente.
               </p>
               {modoPruebas === 'false' && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
                   <p className="text-sm text-green-800 font-semibold mb-1">
-                    ✅ Modo Producción activo
+                    âœ… Modo ProducciÃ³n activo
                   </p>
                   <p className="text-xs text-green-700">
-                    El mensaje de prueba se enviará <strong>REALMENTE</strong> al destinatario especificado.
+                    El mensaje de prueba se enviarÃ¡ <strong>REALMENTE</strong> al destinatario especificado.
                   </p>
                 </div>
               )}
               {modoPruebas === 'true' && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
                   <p className="text-sm text-yellow-800 font-semibold mb-1">
-                    ⚠️ Modo Pruebas activo
+                    âš ï¸ Modo Pruebas activo
                   </p>
                   <p className="text-xs text-yellow-700">
-                    El mensaje se redirigirá a la dirección de pruebas configurada ({telefonoPruebas || 'no configurada'}).
+                    El mensaje se redirigirÃ¡ a la direcciÃ³n de pruebas configurada ({telefonoPruebas || 'no configurada'}).
                   </p>
                 </div>
               )}
@@ -519,7 +519,7 @@ export function WhatsAppConfig() {
               <div className="space-y-4">
                 <div>
                   <label className="text-sm font-medium block mb-2">
-                    Teléfono de Destino <span className="text-gray-500">(opcional)</span>
+                    TelÃ©fono de Destino <span className="text-gray-500">(opcional)</span>
                   </label>
                   <Input
                     type="tel"
@@ -529,7 +529,7 @@ export function WhatsAppConfig() {
                     className="max-w-md"
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    Debe incluir código de país (ej: +584121234567). Si no especificas, se usará el teléfono de pruebas.
+                    Debe incluir cÃ³digo de paÃ­s (ej: +584121234567). Si no especificas, se usarÃ¡ el telÃ©fono de pruebas.
                   </p>
                 </div>
 
@@ -540,12 +540,12 @@ export function WhatsAppConfig() {
                   <Textarea
                     value={mensajePrueba}
                     onChange={(e) => setMensajePrueba(e.target.value)}
-                    placeholder="Escribe aquí tu mensaje de prueba..."
+                    placeholder="Escribe aquÃ­ tu mensaje de prueba..."
                     rows={6}
                     className="max-w-md resize-y"
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    Si no especificas un mensaje, se usará el mensaje predeterminado
+                    Si no especificas un mensaje, se usarÃ¡ el mensaje predeterminado
                   </p>
                 </div>
 
@@ -590,21 +590,21 @@ export function WhatsAppConfig() {
         </CardContent>
       </Card>
 
-      {/* Verificación de Envíos Recientes */}
+      {/* VerificaciÃ³n de EnvÃ­os Recientes */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <MessageSquare className="h-5 w-5 text-green-600" />
-            Verificación de Envíos Recientes
+            VerificaciÃ³n de EnvÃ­os Recientes
           </CardTitle>
           <CardDescription>
-            Historial reciente de mensajes WhatsApp enviados para verificar que el sistema está funcionando correctamente
+            Historial reciente de mensajes WhatsApp enviados para verificar que el sistema estÃ¡ funcionando correctamente
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex justify-between items-center mb-4">
             <div className="text-sm text-gray-600">
-              Últimos 10 envíos de notificaciones WhatsApp
+              Ãšltimos 10 envÃ­os de notificaciones WhatsApp
             </div>
             <Button
               variant="outline"
@@ -618,11 +618,11 @@ export function WhatsAppConfig() {
           </div>
 
           {cargandoEnvios ? (
-            <div className="text-center py-8 text-gray-500">Cargando envíos...</div>
+            <div className="text-center py-8 text-gray-500">Cargando envÃ­os...</div>
           ) : enviosRecientes.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               <AlertCircle className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-              <p>No hay envíos recientes</p>
+              <p>No hay envÃ­os recientes</p>
             </div>
           ) : (
             <div className="space-y-3">

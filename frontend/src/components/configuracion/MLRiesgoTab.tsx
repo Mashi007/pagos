@@ -11,13 +11,13 @@ import {
   Zap,
   Shield,
 } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { aiTrainingService, ModeloRiesgo } from '@/services/aiTrainingService'
+import { Card, CardContent } from '../../components/ui/card'
+import { Button } from '../../components/ui/button'
+import { Input } from '../../components/ui/input'
+import { Badge } from '../../components/ui/badge'
+import { Progress } from '../../components/ui/progress'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
+import { aiTrainingService, ModeloRiesgo } from '../../services/aiTrainingService'
 import { toast } from 'sonner'
 
 export function MLRiesgoTab() {
@@ -38,7 +38,7 @@ export function MLRiesgoTab() {
   const [algoritmo, setAlgoritmo] = useState('random_forest')
   const [testSize, setTestSize] = useState(0.2)
 
-  // Formulario de predicción
+  // Formulario de predicciÃ³n
   const [mostrarPrediccion, setMostrarPrediccion] = useState(false)
   const [datosCliente, setDatosCliente] = useState({
     edad: '',
@@ -145,10 +145,10 @@ export function MLRiesgoTab() {
         progreso: 0,
       })
 
-      // El modelo se obtendrá cuando se consulte el estado del job
-      toast.success('Entrenamiento iniciado. El modelo se creará cuando el proceso termine.')
+      // El modelo se obtendrÃ¡ cuando se consulte el estado del job
+      toast.success('Entrenamiento iniciado. El modelo se crearÃ¡ cuando el proceso termine.')
 
-      // Recargar modelos después de 2 segundos
+      // Recargar modelos despuÃ©s de 2 segundos
       setTimeout(async () => {
         await cargarModelos()
       }, 2000)
@@ -174,7 +174,7 @@ export function MLRiesgoTab() {
     // Verificar si es el modelo activo (para desactivar)
     const esDesactivacion = modeloActivo && modeloActivo.id === modeloId
 
-    // Confirmar activación/desactivación
+    // Confirmar activaciÃ³n/desactivaciÃ³n
     const modelo = modelos.find((m) => m.id === modeloId)
     if (!modelo) {
       toast.error('Modelo no encontrado')
@@ -182,11 +182,11 @@ export function MLRiesgoTab() {
     }
 
     const mensajeConfirmacion = esDesactivacion
-      ? `¿Estás seguro de desactivar el modelo "${modelo.nombre}" v${modelo.version}?\n\n` +
-        `No habrá modelo activo después de esto.`
-      : `¿Estás seguro de ${modeloActivo ? 'cambiar y ' : ''}activar el modelo "${modelo.nombre}" v${modelo.version}?\n\n` +
-        `${modeloActivo ? `Esto desactivará el modelo actual "${modeloActivo.nombre}".\n\n` : ''}` +
-        `El modelo estará disponible para predicciones.`
+      ? `Â¿EstÃ¡s seguro de desactivar el modelo "${modelo.nombre}" v${modelo.version}?\n\n` +
+        `No habrÃ¡ modelo activo despuÃ©s de esto.`
+      : `Â¿EstÃ¡s seguro de ${modeloActivo ? 'cambiar y ' : ''}activar el modelo "${modelo.nombre}" v${modelo.version}?\n\n` +
+        `${modeloActivo ? `Esto desactivarÃ¡ el modelo actual "${modeloActivo.nombre}".\n\n` : ''}` +
+        `El modelo estarÃ¡ disponible para predicciones.`
 
     const confirmar = window.confirm(mensajeConfirmacion)
 
@@ -201,7 +201,7 @@ export function MLRiesgoTab() {
       // Recargar modelos para actualizar el estado
       await cargarModelos()
 
-      // Si hay un modelo activo previo y se está cambiando, mostrar mensaje
+      // Si hay un modelo activo previo y se estÃ¡ cambiando, mostrar mensaje
       if (modeloActivo && modeloActivo.id !== modeloId && !esDesactivacion) {
         toast.info(`Modelo anterior "${modeloActivo.nombre}" ha sido desactivado`)
       }
@@ -210,7 +210,7 @@ export function MLRiesgoTab() {
       const mensajeError =
         error?.response?.data?.detail ||
         error?.message ||
-        `Error al ${esDesactivacion ? 'desactivar' : 'activar'} modelo. Verifica que el modelo existe y está disponible.`
+        `Error al ${esDesactivacion ? 'desactivar' : 'activar'} modelo. Verifica que el modelo existe y estÃ¡ disponible.`
       toast.error(mensajeError)
     }
   }
@@ -302,7 +302,7 @@ export function MLRiesgoTab() {
                 <div className="font-semibold">{modeloActivo.nombre}</div>
               </div>
               <div>
-                <div className="text-sm text-gray-500 mb-1">Versión</div>
+                <div className="text-sm text-gray-500 mb-1">VersiÃ³n</div>
                 <div className="font-semibold">{modeloActivo.version}</div>
               </div>
               <div>
@@ -343,7 +343,7 @@ export function MLRiesgoTab() {
             <div className="mt-4 flex gap-2">
               <Button onClick={() => setMostrarPrediccion(true)} variant="outline" size="sm">
                 <BarChart3 className="h-4 w-4 mr-2" />
-                Probar Predicción
+                Probar PredicciÃ³n
               </Button>
               {modeloActivo && (
                 <Button
@@ -392,7 +392,7 @@ export function MLRiesgoTab() {
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-600">
                   {estadoJob.status === 'succeeded'
-                    ? '¡Modelo entrenado exitosamente!'
+                    ? 'Â¡Modelo entrenado exitosamente!'
                     : estadoJob.status === 'failed'
                     ? 'Error durante el entrenamiento'
                     : 'Procesando y entrenando modelo...'}
@@ -461,7 +461,7 @@ export function MLRiesgoTab() {
               </div>
               <div>
                 <label className="text-sm font-medium mb-2 block">
-                  Tamaño de Test Set ({testSize * 100}%)
+                  TamaÃ±o de Test Set ({testSize * 100}%)
                 </label>
                 <Input
                   type="number"
@@ -572,11 +572,11 @@ export function MLRiesgoTab() {
         </CardContent>
       </Card>
 
-      {/* Formulario de Predicción */}
+      {/* Formulario de PredicciÃ³n */}
       {mostrarPrediccion && (
         <Card>
           <CardContent className="pt-6">
-            <h4 className="font-semibold mb-4">Probar Predicción de Riesgo</h4>
+            <h4 className="font-semibold mb-4">Probar PredicciÃ³n de Riesgo</h4>
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <label className="text-sm font-medium mb-2 block">Edad</label>
@@ -638,7 +638,7 @@ export function MLRiesgoTab() {
                 />
               </div>
               <div>
-                <label className="text-sm font-medium mb-2 block">Días desde Último Préstamo</label>
+                <label className="text-sm font-medium mb-2 block">DÃ­as desde Ãšltimo PrÃ©stamo</label>
                 <Input
                   type="number"
                   value={datosCliente.dias_ultimo_prestamo}
@@ -649,7 +649,7 @@ export function MLRiesgoTab() {
                 />
               </div>
               <div>
-                <label className="text-sm font-medium mb-2 block">Número de Préstamos Previos</label>
+                <label className="text-sm font-medium mb-2 block">NÃºmero de PrÃ©stamos Previos</label>
                 <Input
                   type="number"
                   value={datosCliente.numero_prestamos_previos}
@@ -691,7 +691,7 @@ export function MLRiesgoTab() {
 
             {prediccion && (
               <div className="mt-6 border rounded-lg p-4 bg-gray-50">
-                <h5 className="font-semibold mb-3">Resultado de la Predicción</h5>
+                <h5 className="font-semibold mb-3">Resultado de la PredicciÃ³n</h5>
                 <div className="space-y-3">
                   <div>
                     <div className="text-sm text-gray-500 mb-1">Nivel de Riesgo</div>
@@ -706,12 +706,12 @@ export function MLRiesgoTab() {
                     </div>
                   </div>
                   <div>
-                    <div className="text-sm text-gray-500 mb-1">Recomendación</div>
+                    <div className="text-sm text-gray-500 mb-1">RecomendaciÃ³n</div>
                     <div className="text-sm">{prediccion.recommendation}</div>
                   </div>
                   {prediccion.features_used && (
                     <div>
-                      <div className="text-sm text-gray-500 mb-1">Características Usadas</div>
+                      <div className="text-sm text-gray-500 mb-1">CaracterÃ­sticas Usadas</div>
                       <div className="text-xs text-gray-600">
                         {Object.entries(prediccion.features_used)
                           .map(([key, value]) => `${key}: ${value}`)

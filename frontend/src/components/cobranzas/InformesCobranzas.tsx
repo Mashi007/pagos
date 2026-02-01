@@ -1,9 +1,9 @@
 import React, { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
+import { Button } from '../../components/ui/button'
+import { Input } from '../../components/ui/input'
+import { Badge } from '../../components/ui/badge'
 import {
   FileText,
   Download,
@@ -15,10 +15,10 @@ import {
   DollarSign,
   Eye
 } from 'lucide-react'
-import { cobranzasService } from '@/services/cobranzasService'
+import { cobranzasService } from '../../services/cobranzasService'
 import { toast } from 'sonner'
 
-// ✅ Funciones de validación
+// âœ… Funciones de validaciÃ³n
 const validarRangoDias = (min: string, max: string): { valido: boolean; error?: string } => {
   if (!min && !max) return { valido: true }
   
@@ -26,15 +26,15 @@ const validarRangoDias = (min: string, max: string): { valido: boolean; error?: 
   const maxNum = max ? parseInt(max) : undefined
   
   if (minNum !== undefined && (isNaN(minNum) || minNum < 0)) {
-    return { valido: false, error: 'Los días mínimos deben ser un número positivo' }
+    return { valido: false, error: 'Los dÃ­as mÃ­nimos deben ser un nÃºmero positivo' }
   }
   
   if (maxNum !== undefined && (isNaN(maxNum) || maxNum < 0)) {
-    return { valido: false, error: 'Los días máximos deben ser un número positivo' }
+    return { valido: false, error: 'Los dÃ­as mÃ¡ximos deben ser un nÃºmero positivo' }
   }
   
   if (minNum !== undefined && maxNum !== undefined && minNum > maxNum) {
-    return { valido: false, error: 'Los días mínimos no pueden ser mayores que los días máximos' }
+    return { valido: false, error: 'Los dÃ­as mÃ­nimos no pueden ser mayores que los dÃ­as mÃ¡ximos' }
   }
   
   return { valido: true }
@@ -48,11 +48,11 @@ const validarRangoFechas = (inicio: string, fin: string): { valido: boolean; err
     const fechaFin = new Date(fin)
     
     if (isNaN(fechaInicio.getTime())) {
-      return { valido: false, error: 'Fecha de inicio inválida' }
+      return { valido: false, error: 'Fecha de inicio invÃ¡lida' }
     }
     
     if (isNaN(fechaFin.getTime())) {
-      return { valido: false, error: 'Fecha de fin inválida' }
+      return { valido: false, error: 'Fecha de fin invÃ¡lida' }
     }
     
     if (fechaInicio > fechaFin) {
@@ -61,7 +61,7 @@ const validarRangoFechas = (inicio: string, fin: string): { valido: boolean; err
     
     // Validar que las fechas no sean futuras
     const hoy = new Date()
-    hoy.setHours(23, 59, 59, 999) // Fin del día de hoy
+    hoy.setHours(23, 59, 59, 999) // Fin del dÃ­a de hoy
     
     if (fechaInicio > hoy) {
       return { valido: false, error: 'La fecha de inicio no puede ser futura' }
@@ -93,7 +93,7 @@ export function InformesCobranzas() {
     {
       id: 'clientes-atrasados',
       titulo: 'Clientes Atrasados Completo',
-      descripcion: 'Lista detallada de todos los clientes con pagos atrasados, incluyendo días de retraso y montos adeudados',
+      descripcion: 'Lista detallada de todos los clientes con pagos atrasados, incluyendo dÃ­as de retraso y montos adeudados',
       icono: Users,
       color: 'bg-red-500',
       tieneFiltros: true,
@@ -101,23 +101,23 @@ export function InformesCobranzas() {
     {
       id: 'rendimiento-analista',
       titulo: 'Rendimiento por Analista',
-      descripcion: 'Estadísticas de cobranza por analista: clientes asignados, montos adeudados y promedios de retraso',
+      descripcion: 'EstadÃ­sticas de cobranza por analista: clientes asignados, montos adeudados y promedios de retraso',
       icono: TrendingUp,
       color: 'bg-blue-500',
       tieneFiltros: false,
     },
     {
       id: 'montos-periodo',
-      titulo: 'Montos Vencidos por Período',
-      descripcion: 'Análisis temporal de montos vencidos agrupados por mes, con opción de filtrar por rango de fechas',
+      titulo: 'Montos Vencidos por PerÃ­odo',
+      descripcion: 'AnÃ¡lisis temporal de montos vencidos agrupados por mes, con opciÃ³n de filtrar por rango de fechas',
       icono: BarChart3,
       color: 'bg-green-500',
       tieneFiltros: true,
     },
     {
       id: 'antiguedad-saldos',
-      titulo: 'Antigüedad de Saldos',
-      descripcion: 'Distribución de mora por rangos de antigüedad (0-30 días, 31-60 días, etc.)',
+      titulo: 'AntigÃ¼edad de Saldos',
+      descripcion: 'DistribuciÃ³n de mora por rangos de antigÃ¼edad (0-30 dÃ­as, 31-60 dÃ­as, etc.)',
       icono: Clock,
       color: 'bg-orange-500',
       tieneFiltros: false,
@@ -132,14 +132,14 @@ export function InformesCobranzas() {
     },
   ]
 
-  // Función para validar filtros antes de ejecutar
+  // FunciÃ³n para validar filtros antes de ejecutar
   const validarFiltros = (informeId: string): boolean => {
     const errores: Record<string, string> = {}
     
     if (informeId === 'clientes-atrasados') {
       const validacionDias = validarRangoDias(filtros.dias_retraso_min, filtros.dias_retraso_max)
       if (!validacionDias.valido) {
-        errores.dias_retraso = validacionDias.error || 'Error en rango de días'
+        errores.dias_retraso = validacionDias.error || 'Error en rango de dÃ­as'
       }
     }
     
@@ -154,9 +154,9 @@ export function InformesCobranzas() {
     return Object.keys(errores).length === 0
   }
 
-  // Función para descargar informe
+  // FunciÃ³n para descargar informe
   const descargarInforme = async (informeId: string, formato: 'pdf' | 'excel') => {
-    // ✅ Validar filtros antes de proceder
+    // âœ… Validar filtros antes de proceder
     if (!validarFiltros(informeId)) {
       const primerError = Object.values(erroresValidacion)[0]
       toast.error(primerError || 'Por favor, corrige los errores en los filtros')
@@ -205,9 +205,9 @@ export function InformesCobranzas() {
     }
   }
 
-  // Función para ver informe en línea
+  // FunciÃ³n para ver informe en lÃ­nea
   const verInforme = async (informeId: string) => {
-    // ✅ Validar filtros antes de proceder
+    // âœ… Validar filtros antes de proceder
     if (!validarFiltros(informeId)) {
       const primerError = Object.values(erroresValidacion)[0]
       toast.error(primerError || 'Por favor, corrige los errores en los filtros')
@@ -271,7 +271,7 @@ export function InformesCobranzas() {
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Informes de Cobranzas</h1>
         <p className="text-gray-600 mt-2">
-          Genere y descargue informes detallados de cobranzas en formato PDF o Excel, o visualícelos en línea
+          Genere y descargue informes detallados de cobranzas en formato PDF o Excel, o visualÃ­celos en lÃ­nea
         </p>
       </div>
 
@@ -302,13 +302,13 @@ export function InformesCobranzas() {
                       <div>
                         <Input
                           type="number"
-                          placeholder="Días retraso mínimo"
+                          placeholder="DÃ­as retraso mÃ­nimo"
                           min="0"
                           value={filtros.dias_retraso_min}
                           onChange={(e) => {
                             const nuevoValor = e.target.value
                             setFiltros({ ...filtros, dias_retraso_min: nuevoValor })
-                            // ✅ Validar en tiempo real
+                            // âœ… Validar en tiempo real
                             const validacion = validarRangoDias(nuevoValor, filtros.dias_retraso_max)
                             if (!validacion.valido) {
                               setErroresValidacion(prev => ({ ...prev, dias_retraso: validacion.error || '' }))
@@ -329,13 +329,13 @@ export function InformesCobranzas() {
                       <div>
                         <Input
                           type="number"
-                          placeholder="Días retraso máximo"
+                          placeholder="DÃ­as retraso mÃ¡ximo"
                           min="0"
                           value={filtros.dias_retraso_max}
                           onChange={(e) => {
                             const nuevoValor = e.target.value
                             setFiltros({ ...filtros, dias_retraso_max: nuevoValor })
-                            // ✅ Validar en tiempo real
+                            // âœ… Validar en tiempo real
                             const validacion = validarRangoDias(filtros.dias_retraso_min, nuevoValor)
                             if (!validacion.valido) {
                               setErroresValidacion(prev => ({ ...prev, dias_retraso: validacion.error || '' }))
@@ -365,12 +365,12 @@ export function InformesCobranzas() {
                         <Input
                           type="date"
                           placeholder="Fecha inicio"
-                          max={new Date().toISOString().split('T')[0]} // ✅ No permitir fechas futuras
+                          max={new Date().toISOString().split('T')[0]} // âœ… No permitir fechas futuras
                           value={filtros.fecha_inicio}
                           onChange={(e) => {
                             const nuevoValor = e.target.value
                             setFiltros({ ...filtros, fecha_inicio: nuevoValor })
-                            // ✅ Validar en tiempo real
+                            // âœ… Validar en tiempo real
                             const validacion = validarRangoFechas(nuevoValor, filtros.fecha_fin)
                             if (!validacion.valido) {
                               setErroresValidacion(prev => ({ ...prev, fechas: validacion.error || '' }))
@@ -392,12 +392,12 @@ export function InformesCobranzas() {
                         <Input
                           type="date"
                           placeholder="Fecha fin"
-                          max={new Date().toISOString().split('T')[0]} // ✅ No permitir fechas futuras
+                          max={new Date().toISOString().split('T')[0]} // âœ… No permitir fechas futuras
                           value={filtros.fecha_fin}
                           onChange={(e) => {
                             const nuevoValor = e.target.value
                             setFiltros({ ...filtros, fecha_fin: nuevoValor })
-                            // ✅ Validar en tiempo real
+                            // âœ… Validar en tiempo real
                             const validacion = validarRangoFechas(filtros.fecha_inicio, nuevoValor)
                             if (!validacion.valido) {
                               setErroresValidacion(prev => ({ ...prev, fechas: validacion.error || '' }))
@@ -415,7 +415,7 @@ export function InformesCobranzas() {
                     </div>
                   )}
 
-                  {/* Botones de acción */}
+                  {/* Botones de acciÃ³n */}
                   <div className="flex flex-col gap-2 border-t pt-4">
                     <Button
                       variant="outline"
@@ -423,7 +423,7 @@ export function InformesCobranzas() {
                       onClick={() => verInforme(informe.id)}
                     >
                       <Eye className="h-4 w-4 mr-2" />
-                      Ver en Línea
+                      Ver en LÃ­nea
                     </Button>
                     <div className="flex gap-2">
                       <Button
@@ -451,7 +451,7 @@ export function InformesCobranzas() {
         })}
       </div>
 
-      {/* Vista de informe en línea */}
+      {/* Vista de informe en lÃ­nea */}
       {informeSeleccionado && (
         <Card className="mt-6">
           <CardHeader>
@@ -478,7 +478,7 @@ export function InformesCobranzas() {
               </div>
             ) : datosInforme ? (
               <div className="space-y-6">
-                {/* Información general del informe */}
+                {/* InformaciÃ³n general del informe */}
                 {datosInforme.titulo && (
                   <div className="bg-gray-50 p-4 rounded-lg">
                     <h3 className="font-semibold text-lg mb-2">{datosInforme.titulo}</h3>
@@ -490,7 +490,7 @@ export function InformesCobranzas() {
                   </div>
                 )}
 
-                {/* Renderizado según tipo de informe */}
+                {/* Renderizado segÃºn tipo de informe */}
                 {informeSeleccionado === 'clientes-atrasados' && datosInforme.clientes && (
                   <div className="overflow-x-auto">
                     <h4 className="font-semibold mb-4">
@@ -499,9 +499,9 @@ export function InformesCobranzas() {
                     <table className="w-full text-sm border-collapse">
                       <thead>
                         <tr className="bg-gray-100 border-b">
-                          <th className="p-2 text-left">Cédula</th>
+                          <th className="p-2 text-left">CÃ©dula</th>
                           <th className="p-2 text-left">Nombres</th>
-                          <th className="p-2 text-left">Teléfono</th>
+                          <th className="p-2 text-left">TelÃ©fono</th>
                           <th className="p-2 text-right">Cuotas Vencidas</th>
                           <th className="p-2 text-center">Riesgo ML Impago</th>
                           <th className="p-2 text-right">Total Adeudado</th>
@@ -563,10 +563,10 @@ export function InformesCobranzas() {
                         <tr className="bg-gray-100 border-b">
                           <th className="p-2 text-left">Analista</th>
                           <th className="p-2 text-right">Total Clientes</th>
-                          <th className="p-2 text-right">Total Préstamos</th>
+                          <th className="p-2 text-right">Total PrÃ©stamos</th>
                           <th className="p-2 text-right">Monto Adeudado</th>
                           <th className="p-2 text-right">Cuotas Vencidas</th>
-                          <th className="p-2 text-right">Promedio Días Retraso</th>
+                          <th className="p-2 text-right">Promedio DÃ­as Retraso</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -580,7 +580,7 @@ export function InformesCobranzas() {
                             </td>
                             <td className="p-2 text-right">{analista.total_cuotas_vencidas}</td>
                             <td className="p-2 text-right">
-                              {analista.promedio_dias_retraso?.toFixed(1) || '0'} días
+                              {analista.promedio_dias_retraso?.toFixed(1) || '0'} dÃ­as
                             </td>
                           </tr>
                         ))}
@@ -592,7 +592,7 @@ export function InformesCobranzas() {
                 {informeSeleccionado === 'montos-periodo' && datosInforme.meses && (
                   <div className="overflow-x-auto">
                     <h4 className="font-semibold mb-4">
-                      Período analizado: {datosInforme.meses.length} meses
+                      PerÃ­odo analizado: {datosInforme.meses.length} meses
                     </h4>
                     <table className="w-full text-sm border-collapse">
                       <thead>
@@ -600,7 +600,7 @@ export function InformesCobranzas() {
                           <th className="p-2 text-left">Mes</th>
                           <th className="p-2 text-right">Cantidad Cuotas</th>
                           <th className="p-2 text-right">Monto Total</th>
-                          <th className="p-2 text-right">Clientes Únicos</th>
+                          <th className="p-2 text-right">Clientes Ãšnicos</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -623,11 +623,11 @@ export function InformesCobranzas() {
 
                 {informeSeleccionado === 'antiguedad-saldos' && datosInforme.rangos && (
                   <div className="overflow-x-auto">
-                    <h4 className="font-semibold mb-4">Distribución por Antigüedad</h4>
+                    <h4 className="font-semibold mb-4">DistribuciÃ³n por AntigÃ¼edad</h4>
                     <table className="w-full text-sm border-collapse">
                       <thead>
                         <tr className="bg-gray-100 border-b">
-                          <th className="p-2 text-left">Rango de Días</th>
+                          <th className="p-2 text-left">Rango de DÃ­as</th>
                           <th className="p-2 text-right">Cantidad Cuotas</th>
                           <th className="p-2 text-right">Monto Total</th>
                           <th className="p-2 text-right">Porcentaje</th>
@@ -714,7 +714,7 @@ export function InformesCobranzas() {
                         <table className="w-full text-sm border-collapse">
                           <thead>
                             <tr className="bg-gray-100 border-b">
-                              <th className="p-2 text-left">Cédula</th>
+                              <th className="p-2 text-left">CÃ©dula</th>
                               <th className="p-2 text-left">Nombres</th>
                               <th className="p-2 text-right">Total Adeudado</th>
                               <th className="p-2 text-right">Cuotas Vencidas</th>
@@ -738,7 +738,7 @@ export function InformesCobranzas() {
                   </div>
                 )}
 
-                {/* Mensaje si no hay datos específicos */}
+                {/* Mensaje si no hay datos especÃ­ficos */}
                 {!datosInforme.clientes &&
                  !datosInforme.datos &&
                  !datosInforme.meses &&

@@ -1,5 +1,5 @@
 import { useSearchParams } from 'react-router-dom'
-import { Comunicaciones } from '@/components/comunicaciones/Comunicaciones'
+import { Comunicaciones } from '../components/comunicaciones/Comunicaciones'
 
 export function ComunicacionesPage() {
   const [searchParams] = useSearchParams()

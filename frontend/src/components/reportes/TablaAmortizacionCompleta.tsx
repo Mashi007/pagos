@@ -15,21 +15,21 @@ import {
   CheckCircle2,
   Loader2,
 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { prestamoService } from '@/services/prestamoService'
-import { cuotaService, type Cuota, type CuotaUpdate } from '@/services/cuotaService'
-import { pagoService, type Pago } from '@/services/pagoService'
-import { clienteService } from '@/services/clienteService'
-import { usePrestamosByCedula } from '@/hooks/usePrestamos'
+import { Button } from '../../components/ui/button'
+import { Input } from '../../components/ui/input'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card'
+import { Badge } from '../../components/ui/badge'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog'
+import { Label } from '../../components/ui/label'
+import { Textarea } from '../../components/ui/textarea'
+import { prestamoService } from '../../services/prestamoService'
+import { cuotaService, type Cuota, type CuotaUpdate } from '../../services/cuotaService'
+import { pagoService, type Pago } from '../../services/pagoService'
+import { clienteService } from '../../services/clienteService'
+import { usePrestamosByCedula } from '../../hooks/usePrestamos'
 import { toast } from 'sonner'
-import { formatCurrency, formatDate } from '@/utils'
+import { formatCurrency, formatDate } from '../../utils'
 
 interface ClienteInfo {
   id: number
@@ -60,7 +60,7 @@ export function TablaAmortizacionCompleta() {
   const [fechaBaseCalculo, setFechaBaseCalculo] = useState<string>('')
   const queryClient = useQueryClient()
 
-  // Buscar cliente por cédula
+  // Buscar cliente por cÃ©dula
   const { data: clienteInfo, isLoading: loadingCliente } = useQuery({
     queryKey: ['cliente-cedula', cedulaSeleccionada],
     queryFn: async () => {
@@ -76,22 +76,22 @@ export function TablaAmortizacionCompleta() {
     enabled: !!cedulaSeleccionada,
   })
 
-  // Obtener préstamos por cédula usando hook
+  // Obtener prÃ©stamos por cÃ©dula usando hook
   const { data: prestamosData, isLoading: loadingPrestamos, error: errorPrestamos } = usePrestamosByCedula(cedulaSeleccionada || '')
   
   // Asegurar que prestamos siempre sea un array
   const prestamos = prestamosData || []
 
-  // Obtener cuotas de todos los préstamos (optimizado - una sola query)
+  // Obtener cuotas de todos los prÃ©stamos (optimizado - una sola query)
   // Usar JSON.stringify para crear una key estable para React Query
   const prestamoIds = prestamosData?.map(p => p.id).sort((a, b) => a - b) || []
   const prestamoIdsKey = JSON.stringify(prestamoIds)
   const shouldFetchCuotas = !!cedulaSeleccionada && !!prestamosData && Array.isArray(prestamosData) && prestamosData.length > 0 && !loadingPrestamos
   
-  // Debug: Log para ver qué está pasando con los préstamos (solo en desarrollo)
+  // Debug: Log para ver quÃ© estÃ¡ pasando con los prÃ©stamos (solo en desarrollo)
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
-      console.log('🔍 [TablaAmortizacion] Estado préstamos:', {
+      console.log('ðŸ” [TablaAmortizacion] Estado prÃ©stamos:', {
         cedulaSeleccionada,
         loadingPrestamos,
         errorPrestamos,
@@ -99,7 +99,7 @@ export function TablaAmortizacionCompleta() {
         prestamosLength: prestamosData?.length || 0,
         prestamoIds: prestamosData?.map(p => p.id) || []
       })
-      console.log('🔍 [TablaAmortizacion] Condición para cargar cuotas:', {
+      console.log('ðŸ” [TablaAmortizacion] CondiciÃ³n para cargar cuotas:', {
         cedulaSeleccionada: !!cedulaSeleccionada,
         prestamosData: !!prestamosData,
         isArray: Array.isArray(prestamosData),
@@ -118,22 +118,22 @@ export function TablaAmortizacionCompleta() {
       const ids = prestamosData?.map(p => p.id) || []
       if (!prestamosData || prestamosData.length === 0 || ids.length === 0) {
         if (process.env.NODE_ENV === 'development') {
-          console.log('⚠️ [TablaAmortizacion] No hay préstamos para cargar cuotas')
+          console.log('âš ï¸ [TablaAmortizacion] No hay prÃ©stamos para cargar cuotas')
         }
         return []
       }
       try {
-        // Usar endpoint optimizado para múltiples préstamos
+        // Usar endpoint optimizado para mÃºltiples prÃ©stamos
         if (process.env.NODE_ENV === 'development') {
-          console.log('📡 [TablaAmortizacion] Cargando cuotas para préstamos:', ids)
+          console.log('ðŸ“¡ [TablaAmortizacion] Cargando cuotas para prÃ©stamos:', ids)
         }
         const cuotas = await cuotaService.getCuotasMultiplesPrestamos(ids)
         if (process.env.NODE_ENV === 'development') {
-          console.log('✅ [TablaAmortizacion] Cuotas cargadas:', cuotas.length)
+          console.log('âœ… [TablaAmortizacion] Cuotas cargadas:', cuotas.length)
         }
         return cuotas
       } catch (error) {
-        console.error('❌ [TablaAmortizacion] Error obteniendo cuotas:', error)
+        console.error('âŒ [TablaAmortizacion] Error obteniendo cuotas:', error)
         toast.error('Error al cargar cuotas. Algunos datos pueden estar incompletos.')
         return []
       }
@@ -142,10 +142,10 @@ export function TablaAmortizacionCompleta() {
     retry: 1, // Solo reintentar una vez
   })
 
-  // Debug: Verificar cuando cambian los préstamos (solo en desarrollo)
+  // Debug: Verificar cuando cambian los prÃ©stamos (solo en desarrollo)
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
-      console.log('🔄 [TablaAmortizacion] useEffect - Prestamos cambiaron:', {
+      console.log('ðŸ”„ [TablaAmortizacion] useEffect - Prestamos cambiaron:', {
         cedulaSeleccionada,
         loadingPrestamos,
         prestamosData,
@@ -158,7 +158,7 @@ export function TablaAmortizacionCompleta() {
     }
   }, [cedulaSeleccionada, loadingPrestamos, prestamosData, prestamoIds, shouldFetchCuotas, loadingCuotas, todasLasCuotas])
 
-  // Obtener pagos por cédula (manejar errores para que no fallen los reportes)
+  // Obtener pagos por cÃ©dula (manejar errores para que no fallen los reportes)
   const { data: pagosData, isLoading: loadingPagos, error: errorPagos } = useQuery({
     queryKey: ['pagos-cedula', cedulaSeleccionada],
     queryFn: async () => {
@@ -167,7 +167,7 @@ export function TablaAmortizacionCompleta() {
       } catch (error) {
         console.error('Error obteniendo pagos:', error)
         toast.error('Error al cargar pagos. Algunos datos pueden estar incompletos.')
-        // Retornar estructura vacía para que no falle el reporte
+        // Retornar estructura vacÃ­a para que no falle el reporte
         return { pagos: [], total: 0, page: 1, pageSize: 1000 }
       }
     },
@@ -177,7 +177,7 @@ export function TablaAmortizacionCompleta() {
 
   const pagos = pagosData?.pagos || []
   
-  // Filtrar pagos activos y manejar valores nulos/vacíos en numero_documento
+  // Filtrar pagos activos y manejar valores nulos/vacÃ­os en numero_documento
   const pagosFiltrados = pagos.filter(p => p.activo !== false).map(p => ({
     ...p,
     numero_documento: p.numero_documento || '', // Asegurar que nunca sea null/undefined
@@ -189,10 +189,10 @@ export function TablaAmortizacionCompleta() {
       cuotaService.updateCuota(cuotaId, data),
     onSuccess: (data, variables) => {
       toast.success('Cuota actualizada exitosamente')
-      // Invalidar todas las queries relacionadas con cuotas para asegurar actualización
+      // Invalidar todas las queries relacionadas con cuotas para asegurar actualizaciÃ³n
       queryClient.invalidateQueries({ queryKey: ['cuotas-prestamos'] })
       queryClient.invalidateQueries({ queryKey: ['cuotas'] })
-      // También invalidar la query específica de esta cuota si existe
+      // TambiÃ©n invalidar la query especÃ­fica de esta cuota si existe
       queryClient.invalidateQueries({ queryKey: ['cuota', variables.cuotaId] })
       // Forzar refetch de las cuotas actuales para mostrar cambios inmediatos
       queryClient.refetchQueries({ queryKey: ['cuotas-prestamos', prestamoIdsKey] })
@@ -217,9 +217,9 @@ export function TablaAmortizacionCompleta() {
     },
   })
 
-  // Función para confirmar eliminación
+  // FunciÃ³n para confirmar eliminaciÃ³n
   const handleEliminarCuota = (cuotaId: number) => {
-    if (!confirm('¿Está seguro de eliminar esta cuota? Esta acción no se puede deshacer.')) {
+    if (!confirm('Â¿EstÃ¡ seguro de eliminar esta cuota? Esta acciÃ³n no se puede deshacer.')) {
       return
     }
     mutationEliminarCuota.mutate(cuotaId)
@@ -255,21 +255,21 @@ export function TablaAmortizacionCompleta() {
     },
   })
 
-  // Mutación para generar amortización
+  // MutaciÃ³n para generar amortizaciÃ³n
   const mutationGenerarAmortizacion = useMutation({
     mutationFn: (prestamoId: number) => prestamoService.generarAmortizacion(prestamoId),
     onSuccess: (data, prestamoId) => {
-      toast.success(`Tabla de amortización generada exitosamente para el préstamo ${prestamoId}`)
+      toast.success(`Tabla de amortizaciÃ³n generada exitosamente para el prÃ©stamo ${prestamoId}`)
       // Invalidar queries para recargar cuotas
       queryClient.invalidateQueries({ queryKey: ['cuotas-prestamos'] })
       queryClient.invalidateQueries({ queryKey: ['prestamos-cedula', cedulaSeleccionada] })
     },
     onError: (error: any) => {
-      toast.error(`Error al generar amortización: ${error?.response?.data?.detail || error?.message || 'Error desconocido'}`)
+      toast.error(`Error al generar amortizaciÃ³n: ${error?.response?.data?.detail || error?.message || 'Error desconocido'}`)
     },
   })
 
-  // Mutación para actualizar préstamo
+  // MutaciÃ³n para actualizar prÃ©stamo
   const mutationActualizarPrestamo = useMutation({
     mutationFn: ({ prestamoId, data }: { prestamoId: number; data: Partial<any> }) =>
       prestamoService.updatePrestamo(prestamoId, data),
@@ -278,14 +278,14 @@ export function TablaAmortizacionCompleta() {
     },
   })
 
-  // Función para abrir diálogo de fecha y generar cuotas
+  // FunciÃ³n para abrir diÃ¡logo de fecha y generar cuotas
   const handleAbrirDialogoFecha = (prestamo: any) => {
     setPrestamoParaGenerar(prestamo)
     // Si ya tiene fecha_base_calculo, usarla como valor por defecto
     if (prestamo.fecha_base_calculo) {
       setFechaBaseCalculo(prestamo.fecha_base_calculo)
     } else {
-      // Usar fecha de aprobación o fecha actual como sugerencia
+      // Usar fecha de aprobaciÃ³n o fecha actual como sugerencia
       const fechaSugerida = prestamo.fecha_aprobacion 
         ? new Date(prestamo.fecha_aprobacion).toISOString().split('T')[0]
         : new Date().toISOString().split('T')[0]
@@ -294,21 +294,21 @@ export function TablaAmortizacionCompleta() {
     setMostrarDialogFecha(true)
   }
 
-  // Función para generar cuotas con fecha ingresada manualmente
+  // FunciÃ³n para generar cuotas con fecha ingresada manualmente
   const handleGenerarCuotasConFecha = async () => {
     if (!prestamoParaGenerar || !fechaBaseCalculo) {
-      toast.error('Por favor, ingrese una fecha válida')
+      toast.error('Por favor, ingrese una fecha vÃ¡lida')
       return
     }
 
     try {
-      // Paso 1: Actualizar fecha_base_calculo en el préstamo
+      // Paso 1: Actualizar fecha_base_calculo en el prÃ©stamo
       if (!prestamoParaGenerar.fecha_base_calculo) {
         await mutationActualizarPrestamo.mutateAsync({
           prestamoId: prestamoParaGenerar.id,
           data: { fecha_base_calculo: fechaBaseCalculo }
         })
-        toast.success('Fecha base de cálculo guardada')
+        toast.success('Fecha base de cÃ¡lculo guardada')
       }
 
       // Paso 2: Generar las cuotas
@@ -335,7 +335,7 @@ export function TablaAmortizacionCompleta() {
         }
       }
 
-      // Cerrar diálogo y recargar datos
+      // Cerrar diÃ¡logo y recargar datos
       setMostrarDialogFecha(false)
       setPrestamoParaGenerar(null)
       setFechaBaseCalculo('')
@@ -344,20 +344,20 @@ export function TablaAmortizacionCompleta() {
       queryClient.invalidateQueries({ queryKey: ['prestamos-cedula', cedulaSeleccionada] })
       queryClient.invalidateQueries({ queryKey: ['pagos-cedula', cedulaSeleccionada] })
       
-      toast.success('Tabla de amortización generada y pagos aplicados exitosamente')
+      toast.success('Tabla de amortizaciÃ³n generada y pagos aplicados exitosamente')
     } catch (error: any) {
       toast.error(`Error: ${error?.response?.data?.detail || error?.message || 'Error desconocido'}`)
     }
   }
 
-  // Función para generar cuotas para todos los préstamos sin cuotas
+  // FunciÃ³n para generar cuotas para todos los prÃ©stamos sin cuotas
   const handleGenerarCuotasParaTodos = async () => {
     if (!prestamos || prestamos.length === 0) {
-      toast.error('No hay préstamos para procesar')
+      toast.error('No hay prÃ©stamos para procesar')
       return
     }
 
-    // Filtrar préstamos aprobados sin cuotas
+    // Filtrar prÃ©stamos aprobados sin cuotas
     const prestamosSinCuotas = prestamos.filter((p: any) => {
       const tieneCuotas = todasLasCuotas && todasLasCuotas.length > 0 
         ? todasLasCuotas.some((c: Cuota) => c.prestamo_id === p.id)
@@ -366,43 +366,43 @@ export function TablaAmortizacionCompleta() {
     })
 
     if (prestamosSinCuotas.length === 0) {
-      toast.info('Todos los préstamos aprobados ya tienen cuotas generadas')
+      toast.info('Todos los prÃ©stamos aprobados ya tienen cuotas generadas')
       return
     }
 
-    // Si hay múltiples préstamos, procesar el primero y mostrar diálogo
+    // Si hay mÃºltiples prÃ©stamos, procesar el primero y mostrar diÃ¡logo
     if (prestamosSinCuotas.length === 1) {
       handleAbrirDialogoFecha(prestamosSinCuotas[0])
     } else {
-      // Para múltiples préstamos, procesar el primero
+      // Para mÃºltiples prÃ©stamos, procesar el primero
       handleAbrirDialogoFecha(prestamosSinCuotas[0])
-      toast.info(`Se procesará el préstamo ${prestamosSinCuotas[0].id}. Los demás se pueden procesar después.`)
+      toast.info(`Se procesarÃ¡ el prÃ©stamo ${prestamosSinCuotas[0].id}. Los demÃ¡s se pueden procesar despuÃ©s.`)
     }
   }
 
-  // Función para confirmar eliminación de pago
+  // FunciÃ³n para confirmar eliminaciÃ³n de pago
   const handleEliminarPago = (pagoId: number) => {
-    if (!confirm('¿Está seguro de eliminar este pago? Esta acción no se puede deshacer.')) {
+    if (!confirm('Â¿EstÃ¡ seguro de eliminar este pago? Esta acciÃ³n no se puede deshacer.')) {
       return
     }
     mutationEliminarPago.mutate(pagoId)
   }
 
-  // Validación de cédula venezolana
+  // ValidaciÃ³n de cÃ©dula venezolana
   const validarCedula = (cedula: string): boolean => {
     if (!cedula || cedula.trim().length === 0) return false
-    // Formato: V/E/J/P/G seguido de 6-12 dígitos
+    // Formato: V/E/J/P/G seguido de 6-12 dÃ­gitos
     return /^[VEJPG]\d{6,12}$/i.test(cedula.trim())
   }
 
   const handleBuscar = () => {
     const cedulaLimpia = cedulaBuscar.trim().toUpperCase()
     if (!cedulaLimpia) {
-      toast.error('Por favor, ingrese una cédula')
+      toast.error('Por favor, ingrese una cÃ©dula')
       return
     }
     if (!validarCedula(cedulaLimpia)) {
-      toast.error('Cédula inválida. Debe tener el formato V/E/J/P/G seguido de 6-12 dígitos')
+      toast.error('CÃ©dula invÃ¡lida. Debe tener el formato V/E/J/P/G seguido de 6-12 dÃ­gitos')
       return
     }
     setCedulaSeleccionada(cedulaLimpia)
@@ -420,12 +420,12 @@ export function TablaAmortizacionCompleta() {
   const validarMonto = (valor: string): { valido: boolean; mensaje?: string } => {
     if (!valor || valor.trim() === '') return { valido: true } // Campos opcionales
     const numero = parseFloat(valor)
-    if (isNaN(numero)) return { valido: false, mensaje: 'Debe ser un número válido' }
+    if (isNaN(numero)) return { valido: false, mensaje: 'Debe ser un nÃºmero vÃ¡lido' }
     if (numero < 0) return { valido: false, mensaje: 'No puede ser negativo' }
-    // Validar máximo 2 decimales
+    // Validar mÃ¡ximo 2 decimales
     const partes = valor.split('.')
     if (partes.length === 2 && partes[1].length > 2) {
-      return { valido: false, mensaje: 'Máximo 2 decimales permitidos' }
+      return { valido: false, mensaje: 'MÃ¡ximo 2 decimales permitidos' }
     }
     return { valido: true }
   }
@@ -448,18 +448,18 @@ export function TablaAmortizacionCompleta() {
     setMostrarDialogPago(true)
   }
 
-  // Función para determinar el estado correcto basado en los datos (igual que en Préstamos)
+  // FunciÃ³n para determinar el estado correcto basado en los datos (igual que en PrÃ©stamos)
   const determinarEstadoReal = (cuota: Cuota): string => {
     const totalPagado = cuota.total_pagado || 0
     const montoCuota = cuota.monto_cuota || 0
     
-    // Si total_pagado >= monto_cuota, debería ser PAGADO
+    // Si total_pagado >= monto_cuota, deberÃ­a ser PAGADO
     if (totalPagado >= montoCuota) {
       return 'PAGADO'
     }
-    // Si tiene algún pago pero no completo
+    // Si tiene algÃºn pago pero no completo
     if (totalPagado > 0) {
-      // Verificar si está vencida
+      // Verificar si estÃ¡ vencida
       const hoy = new Date()
       const fechaVencimiento = cuota.fecha_vencimiento ? new Date(cuota.fecha_vencimiento) : null
       if (fechaVencimiento && fechaVencimiento < hoy) {
@@ -472,7 +472,7 @@ export function TablaAmortizacionCompleta() {
   }
 
   const getEstadoBadge = (estado: string) => {
-    // Normalizar estado a mayúsculas para comparación (igual que en Préstamos)
+    // Normalizar estado a mayÃºsculas para comparaciÃ³n (igual que en PrÃ©stamos)
     const estadoNormalizado = estado?.toUpperCase() || 'PENDIENTE'
 
     const badges = {
@@ -487,7 +487,7 @@ export function TablaAmortizacionCompleta() {
   }
 
   const getEstadoLabel = (estado: string) => {
-    // Normalizar estado a mayúsculas para comparación (igual que en Préstamos)
+    // Normalizar estado a mayÃºsculas para comparaciÃ³n (igual que en PrÃ©stamos)
     const estadoNormalizado = estado?.toUpperCase() || 'PENDIENTE'
 
     const labels: Record<string, string> = {
@@ -509,16 +509,16 @@ export function TablaAmortizacionCompleta() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <FileText className="w-5 h-5" />
-            Tabla de Amortización por Cédula
+            Tabla de AmortizaciÃ³n por CÃ©dula
           </CardTitle>
           <CardDescription>
-            Busca una cédula para ver su tabla de amortización completa con opciones de edición y eliminación
+            Busca una cÃ©dula para ver su tabla de amortizaciÃ³n completa con opciones de ediciÃ³n y eliminaciÃ³n
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex gap-2 mb-6">
             <Input
-              placeholder="Ingresa la cédula del cliente"
+              placeholder="Ingresa la cÃ©dula del cliente"
               value={cedulaBuscar}
               onChange={(e) => setCedulaBuscar(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleBuscar()}
@@ -532,17 +532,17 @@ export function TablaAmortizacionCompleta() {
 
           {cedulaSeleccionada && (
             <>
-              {/* Información del Cliente */}
+              {/* InformaciÃ³n del Cliente */}
               {(loadingCliente || loadingPrestamos) ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
-                  <span className="ml-2">Cargando información...</span>
+                  <span className="ml-2">Cargando informaciÃ³n...</span>
                 </div>
               ) : errorPrestamos ? (
                 <Card className="mb-6">
                   <CardContent className="py-8 text-center">
                     <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
-                    <p className="text-red-600 mb-2">Error al cargar los préstamos</p>
+                    <p className="text-red-600 mb-2">Error al cargar los prÃ©stamos</p>
                     <p className="text-sm text-gray-600">
                       {errorPrestamos instanceof Error ? errorPrestamos.message : 'Error desconocido'}
                     </p>
@@ -552,17 +552,17 @@ export function TablaAmortizacionCompleta() {
                 <Card className="mb-6">
                   <CardContent className="py-8 text-center">
                     <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600 mb-2">No se encontraron préstamos para esta cédula</p>
+                    <p className="text-gray-600 mb-2">No se encontraron prÃ©stamos para esta cÃ©dula</p>
                   </CardContent>
                 </Card>
               ) : prestamos && prestamos.length > 0 ? (
                 <>
-                  {/* Tablas de Amortización agrupadas por préstamo */}
+                  {/* Tablas de AmortizaciÃ³n agrupadas por prÃ©stamo */}
                   {loadingCuotas ? (
                     <Card className="mb-6">
                       <CardContent className="py-8 text-center">
                         <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-4" />
-                        <p className="text-gray-600">Cargando tabla de amortización...</p>
+                        <p className="text-gray-600">Cargando tabla de amortizaciÃ³n...</p>
                       </CardContent>
                     </Card>
                   ) : errorCuotas ? (
@@ -576,7 +576,7 @@ export function TablaAmortizacionCompleta() {
                       </CardContent>
                     </Card>
                   ) : todasLasCuotas && todasLasCuotas.length > 0 ? (
-                    // Agrupar cuotas por préstamo y mostrar cada préstamo en su propia tabla
+                    // Agrupar cuotas por prÃ©stamo y mostrar cada prÃ©stamo en su propia tabla
                     prestamos.map((prestamo: any) => {
                       const cuotasDelPrestamo = todasLasCuotas.filter((c: Cuota) => c.prestamo_id === prestamo.id)
                       
@@ -591,7 +591,7 @@ export function TablaAmortizacionCompleta() {
                               <div className="flex items-center gap-3">
                                 <CreditCard className="w-5 h-5 text-blue-600" />
                                 <div>
-                                  <span className="text-lg font-bold">Préstamo #{prestamo.id}</span>
+                                  <span className="text-lg font-bold">PrÃ©stamo #{prestamo.id}</span>
                                   {clienteInfo?.nombres && (
                                     <p className="text-sm text-gray-600 font-normal mt-1">{clienteInfo.nombres}</p>
                                   )}
@@ -611,7 +611,7 @@ export function TablaAmortizacionCompleta() {
                                     <TableHead>Cuota</TableHead>
                                     <TableHead>Fecha Vencimiento</TableHead>
                                     <TableHead className="text-right">Capital</TableHead>
-                                    <TableHead className="text-right">Interés</TableHead>
+                                    <TableHead className="text-right">InterÃ©s</TableHead>
                                     <TableHead className="text-right">Total</TableHead>
                                     <TableHead className="text-right">Saldo Pendiente</TableHead>
                                     <TableHead>Estado</TableHead>
@@ -620,10 +620,10 @@ export function TablaAmortizacionCompleta() {
                                 </TableHeader>
                                 <TableBody>
                                   {cuotasDelPrestamo.map((cuota: Cuota) => {
-                                    // Determinar el estado real basado en los datos (igual que en Préstamos)
+                                    // Determinar el estado real basado en los datos (igual que en PrÃ©stamos)
                                     const estadoReal = determinarEstadoReal(cuota)
                                     
-                                    // Calcular monto_capital y monto_interes si no existen (igual que en Préstamos)
+                                    // Calcular monto_capital y monto_interes si no existen (igual que en PrÃ©stamos)
                                     const saldoInicial = typeof cuota.saldo_capital_inicial === 'number' ? cuota.saldo_capital_inicial : 0
                                     const saldoFinal = typeof cuota.saldo_capital_final === 'number' ? cuota.saldo_capital_final : 0
                                     const montoCuota = typeof cuota.monto_cuota === 'number' ? cuota.monto_cuota : 0
@@ -685,7 +685,7 @@ export function TablaAmortizacionCompleta() {
                               </Table>
                             </div>
 
-                            {/* Resumen (igual que en Préstamos) */}
+                            {/* Resumen (igual que en PrÃ©stamos) */}
                             {cuotasDelPrestamo.length > 0 && (
                               <div className="mt-4 grid grid-cols-4 gap-4">
                                 <Card className="border-green-200 bg-green-50">
@@ -754,9 +754,9 @@ export function TablaAmortizacionCompleta() {
                     <Card className="mb-6">
                       <CardContent className="py-8 text-center">
                         <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                        <p className="text-gray-600 mb-2">No se encontraron cuotas para los préstamos de este cliente</p>
+                        <p className="text-gray-600 mb-2">No se encontraron cuotas para los prÃ©stamos de este cliente</p>
                         <p className="text-sm text-gray-500 mb-4">
-                          Los préstamos pueden no tener tabla de amortización generada.
+                          Los prÃ©stamos pueden no tener tabla de amortizaciÃ³n generada.
                         </p>
                         {prestamos && prestamos.length > 0 && prestamos.some((p: any) => 
                           p.estado === 'APROBADO'
@@ -774,7 +774,7 @@ export function TablaAmortizacionCompleta() {
                             ) : (
                               <>
                                 <FileText className="w-4 h-4 mr-2" />
-                                Generar Tabla de Amortización
+                                Generar Tabla de AmortizaciÃ³n
                               </>
                             )}
                           </Button>
@@ -783,7 +783,7 @@ export function TablaAmortizacionCompleta() {
                           p.estado === 'APROBADO'
                         ) && (
                           <p className="text-sm text-yellow-600 mt-2">
-                            Los préstamos necesitan estar aprobados para generar cuotas.
+                            Los prÃ©stamos necesitan estar aprobados para generar cuotas.
                           </p>
                         )}
                       </CardContent>
@@ -801,7 +801,7 @@ export function TablaAmortizacionCompleta() {
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Editar Cuota #{cuotaEditando?.numero_cuota}</DialogTitle>
-            <p className="text-sm text-gray-600 mb-4">Modifica los datos de la cuota. Los cambios se guardarán inmediatamente.</p>
+            <p className="text-sm text-gray-600 mb-4">Modifica los datos de la cuota. Los cambios se guardarÃ¡n inmediatamente.</p>
           </DialogHeader>
           {cuotaEditando && (
             <form
@@ -814,11 +814,11 @@ export function TablaAmortizacionCompleta() {
                 const fechaPago = formData.get('fecha_pago') as string
                 
                 if (fechaVencimiento && !validarFecha(fechaVencimiento)) {
-                  toast.error('Fecha de vencimiento inválida')
+                  toast.error('Fecha de vencimiento invÃ¡lida')
                   return
                 }
                 if (fechaPago && !validarFecha(fechaPago)) {
-                  toast.error('Fecha de pago inválida')
+                  toast.error('Fecha de pago invÃ¡lida')
                   return
                 }
 
@@ -833,15 +833,15 @@ export function TablaAmortizacionCompleta() {
                 if (fechaVencimiento) {
                   data.fecha_vencimiento = fechaVencimiento
                 }
-                // Manejar fecha_pago: si está vacío, enviar null explícitamente
+                // Manejar fecha_pago: si estÃ¡ vacÃ­o, enviar null explÃ­citamente
                 if (fechaPago && fechaPago.trim() !== '') {
                   data.fecha_pago = fechaPago
                 } else {
-                  // Enviar null explícitamente para limpiar fecha_pago
+                  // Enviar null explÃ­citamente para limpiar fecha_pago
                   data.fecha_pago = null
                 }
 
-                // Procesar montos con validación
+                // Procesar montos con validaciÃ³n
                 for (const campo of camposMonetarios) {
                   const valor = formData.get(campo) as string
                   if (valor && valor.trim() !== '') {
@@ -871,7 +871,7 @@ export function TablaAmortizacionCompleta() {
 
                 // Log para debugging (solo en desarrollo)
                 if (process.env.NODE_ENV === 'development') {
-                  console.log('📝 [EditarCuota] Datos a enviar:', {
+                  console.log('ðŸ“ [EditarCuota] Datos a enviar:', {
                     cuotaId: cuotaEditando.id,
                     data,
                     dataKeys: Object.keys(data)
@@ -940,7 +940,7 @@ export function TablaAmortizacionCompleta() {
                       if (valor) {
                         const validacion = validarMonto(valor)
                         if (!validacion.valido) {
-                          toast.error(validacion.mensaje || 'Valor inválido')
+                          toast.error(validacion.mensaje || 'Valor invÃ¡lido')
                           e.target.focus()
                         } else {
                           e.target.value = formatearMonto(valor)
@@ -948,7 +948,7 @@ export function TablaAmortizacionCompleta() {
                       }
                     }}
                   />
-                  <p className="text-xs text-gray-500 mt-1">Máximo 2 decimales</p>
+                  <p className="text-xs text-gray-500 mt-1">MÃ¡ximo 2 decimales</p>
                 </div>
               </div>
 
@@ -968,7 +968,7 @@ export function TablaAmortizacionCompleta() {
                       if (valor) {
                         const validacion = validarMonto(valor)
                         if (!validacion.valido) {
-                          toast.error(validacion.mensaje || 'Valor inválido')
+                          toast.error(validacion.mensaje || 'Valor invÃ¡lido')
                           e.target.focus()
                         } else {
                           e.target.value = formatearMonto(valor)
@@ -976,7 +976,7 @@ export function TablaAmortizacionCompleta() {
                       }
                     }}
                   />
-                  <p className="text-xs text-gray-500 mt-1">Máximo 2 decimales</p>
+                  <p className="text-xs text-gray-500 mt-1">MÃ¡ximo 2 decimales</p>
                 </div>
               </div>
 
@@ -1035,7 +1035,7 @@ export function TablaAmortizacionCompleta() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Editar Pago ID {pagoEditando?.id}</DialogTitle>
-            <p className="text-sm text-gray-600 mb-4">Modifica los datos del pago. Los números científicos se normalizarán automáticamente.</p>
+            <p className="text-sm text-gray-600 mb-4">Modifica los datos del pago. Los nÃºmeros cientÃ­ficos se normalizarÃ¡n automÃ¡ticamente.</p>
           </DialogHeader>
           {pagoEditando && (
             <form
@@ -1043,31 +1043,31 @@ export function TablaAmortizacionCompleta() {
                 e.preventDefault()
                 const formData = new FormData(e.currentTarget)
                 
-                // Normalizar número de documento si es científico o está vacío
+                // Normalizar nÃºmero de documento si es cientÃ­fico o estÃ¡ vacÃ­o
                 let numeroDocumento = (formData.get('numero_documento') as string)?.trim() || ''
                 
-                // Si está vacío, usar el valor actual o cadena vacía
+                // Si estÃ¡ vacÃ­o, usar el valor actual o cadena vacÃ­a
                 if (!numeroDocumento) {
                   numeroDocumento = pagoEditando.numero_documento || ''
                 }
                 
-                // Normalizar formato científico si existe
+                // Normalizar formato cientÃ­fico si existe
                 if (numeroDocumento && (/[eE]/.test(numeroDocumento))) {
                   try {
                     const numeroFloat = parseFloat(numeroDocumento)
                     if (!isNaN(numeroFloat)) {
                       numeroDocumento = Math.floor(numeroFloat).toString()
-                      toast.info(`Número de documento normalizado: ${numeroDocumento}`)
+                      toast.info(`NÃºmero de documento normalizado: ${numeroDocumento}`)
                     }
                   } catch (e) {
-                    console.error('Error normalizando número:', e)
-                    toast.warning('Error al normalizar número científico. Se guardará tal como está.')
+                    console.error('Error normalizando nÃºmero:', e)
+                    toast.warning('Error al normalizar nÃºmero cientÃ­fico. Se guardarÃ¡ tal como estÃ¡.')
                   }
                 }
                 
-                // Permitir guardar incluso si está vacío (no requerido)
+                // Permitir guardar incluso si estÃ¡ vacÃ­o (no requerido)
                 if (!numeroDocumento) {
-                  numeroDocumento = '' // Permitir vacío
+                  numeroDocumento = '' // Permitir vacÃ­o
                 }
                 
                 // Convertir fecha_pago a string si es Date
@@ -1130,28 +1130,28 @@ export function TablaAmortizacionCompleta() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="numero_documento">Número de Documento</Label>
+                  <Label htmlFor="numero_documento">NÃºmero de Documento</Label>
                   <Input
                     id="numero_documento"
                     name="numero_documento"
                     defaultValue={pagoEditando.numero_documento || ''}
-                    placeholder="Ingrese número de documento"
+                    placeholder="Ingrese nÃºmero de documento"
                   />
                   <p className="text-xs text-gray-500 mt-1">
                     {pagoEditando.numero_documento && /[eE]/.test(pagoEditando.numero_documento) ? (
                       <span className="text-yellow-600">
-                        ⚠️ Formato científico detectado. Se normalizará automáticamente al guardar.
+                        âš ï¸ Formato cientÃ­fico detectado. Se normalizarÃ¡ automÃ¡ticamente al guardar.
                       </span>
                     ) : (
-                      'Los números científicos se normalizarán automáticamente'
+                      'Los nÃºmeros cientÃ­ficos se normalizarÃ¡n automÃ¡ticamente'
                     )}
                     {!pagoEditando.numero_documento && (
-                      <span className="text-gray-500"> Campo opcional. Puede dejarse vacío.</span>
+                      <span className="text-gray-500"> Campo opcional. Puede dejarse vacÃ­o.</span>
                     )}
                   </p>
                 </div>
                 <div>
-                  <Label htmlFor="institucion_bancaria">Institución Bancaria</Label>
+                  <Label htmlFor="institucion_bancaria">InstituciÃ³n Bancaria</Label>
                   <Input
                     id="institucion_bancaria"
                     name="institucion_bancaria"
@@ -1182,17 +1182,17 @@ export function TablaAmortizacionCompleta() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog Ingresar Fecha Base de Cálculo */}
+      {/* Dialog Ingresar Fecha Base de CÃ¡lculo */}
       <Dialog open={mostrarDialogFecha} onOpenChange={setMostrarDialogFecha}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Ingresar Fecha Base de Cálculo</DialogTitle>
+            <DialogTitle>Ingresar Fecha Base de CÃ¡lculo</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             {prestamoParaGenerar && (
               <div className="bg-blue-50 p-3 rounded-md">
                 <p className="text-sm text-gray-600">
-                  <strong>Préstamo ID:</strong> {prestamoParaGenerar.id}
+                  <strong>PrÃ©stamo ID:</strong> {prestamoParaGenerar.id}
                 </p>
                 <p className="text-sm text-gray-600">
                   <strong>Monto:</strong> {formatCurrency(prestamoParaGenerar.total_financiamiento)}
@@ -1203,7 +1203,7 @@ export function TablaAmortizacionCompleta() {
               </div>
             )}
             <div>
-              <Label htmlFor="fecha_base_calculo">Fecha Base de Cálculo *</Label>
+              <Label htmlFor="fecha_base_calculo">Fecha Base de CÃ¡lculo *</Label>
               <Input
                 id="fecha_base_calculo"
                 type="date"
@@ -1213,7 +1213,7 @@ export function TablaAmortizacionCompleta() {
                 className="mt-1"
               />
               <p className="text-xs text-gray-500 mt-1">
-                Esta fecha será guardada y usada para generar las cuotas del préstamo.
+                Esta fecha serÃ¡ guardada y usada para generar las cuotas del prÃ©stamo.
               </p>
             </div>
             {pagos && pagos.length > 0 && prestamoParaGenerar && (
@@ -1222,7 +1222,7 @@ export function TablaAmortizacionCompleta() {
                   <strong>Nota:</strong> Se encontraron {pagos.filter((p: Pago) => 
                     p.prestamo_id === prestamoParaGenerar.id && 
                     (p.conciliado || p.verificado_concordancia === 'SI')
-                  ).length} pago(s) conciliado(s) que se aplicarán automáticamente a las cuotas generadas.
+                  ).length} pago(s) conciliado(s) que se aplicarÃ¡n automÃ¡ticamente a las cuotas generadas.
                 </p>
               </div>
             )}

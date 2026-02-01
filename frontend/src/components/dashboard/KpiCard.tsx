@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
-import { formatCurrency } from '@/utils'
+import { formatCurrency } from '../../utils'
 import type React from 'react'
 
 interface KpiCardProps {
@@ -79,19 +79,19 @@ export function KpiCard({
         </div>
       )}
 
-      {/* Título */}
+      {/* TÃ­tulo */}
       <h3 className={`text-sm font-semibold ${colors.text} mb-2`}>{title}</h3>
 
       {/* Valor Principal */}
       <div className={`text-3xl font-black ${colors.text} mb-2`}>
         {typeof value === 'number' && title.includes('Morosidad')
           ? formatCurrency(value)
-          : typeof value === 'number' && title.includes('Préstamos')
+          : typeof value === 'number' && title.includes('PrÃ©stamos')
           ? value.toLocaleString()
           : formatValue(value)}
       </div>
 
-      {/* Variación */}
+      {/* VariaciÃ³n */}
       {variationPercent !== undefined && (
         <div className="absolute bottom-4 right-4 flex items-center gap-1">
           <VariationIcon className={`h-4 w-4 ${variationColor}`} />

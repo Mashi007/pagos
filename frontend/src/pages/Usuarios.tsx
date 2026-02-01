@@ -1,19 +1,19 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Users, Plus, Search, Edit, Trash2, Shield, Mail, UserCheck, UserX, Loader2, RefreshCw, X, Save } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { PasswordField } from '@/components/ui/PasswordField'
-import { usePassword } from '@/hooks/usePassword'
-import { userService, User, UserCreate } from '@/services/userService'
-import { useSimpleAuth } from '@/store/simpleAuthStore'
-import { clearAuthStorage } from '@/utils/storage'
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
+import { Button } from '../components/ui/button'
+import { Input } from '../components/ui/input'
+import { Badge } from '../components/ui/badge'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
+import { PasswordField } from '../components/ui/PasswordField'
+import { usePassword } from '../hooks/usePassword'
+import { userService, User, UserCreate } from '../services/userService'
+import { useSimpleAuth } from '../store/simpleAuthStore'
+import { clearAuthStorage } from '../utils/storage'
 import { toast } from 'sonner'
-import { getErrorMessage, getErrorDetail } from '@/types/errors'
-import { logger } from '@/utils/logger'
+import { getErrorMessage, getErrorDetail } from '../types/errors'
+import { logger } from '../utils/logger'
 
 export function Usuarios() {
   const { user: currentUser } = useSimpleAuth()
@@ -29,13 +29,13 @@ export function Usuarios() {
     email: '',
     nombre: '',
     apellido: '',
-    is_admin: false,  // Cambio clave: rol → is_admin
+    is_admin: false,  // Cambio clave: rol â†’ is_admin
     password: '',
     cargo: 'Usuario', // Valor por defecto para evitar error de NOT NULL
     is_active: true
   })
 
-  // Hook para validar contraseña
+  // Hook para validar contraseÃ±a
   const { validatePassword } = usePassword()
 
   // Cargar usuarios al montar el componente
@@ -54,7 +54,7 @@ export function Usuarios() {
     }
 
     document.addEventListener('keydown', handleEscape)
-    // Prevenir scroll del body cuando el modal está abierto
+    // Prevenir scroll del body cuando el modal estÃ¡ abierto
     document.body.style.overflow = 'hidden'
 
     return () => {
@@ -80,7 +80,7 @@ export function Usuarios() {
         setUsuarios(response.items)
         logger.debug('Usuarios cargados exitosamente', { count: response.items.length })
       } else {
-        logger.warn('Respuesta sin items válidos', { response })
+        logger.warn('Respuesta sin items vÃ¡lidos', { response })
         setUsuarios([])
       }
     } catch (err) {
@@ -95,10 +95,10 @@ export function Usuarios() {
 
   const handleEliminar = async (id: number) => {
     try {
-      // Confirmar eliminación permanente
+      // Confirmar eliminaciÃ³n permanente
       const confirmar = window.confirm(
-        '⚠️ ¿Estás seguro de que quieres ELIMINAR PERMANENTEMENTE este usuario?\n\n' +
-        'Esta acción NO se puede deshacer y el usuario será borrado completamente de la base de datos.'
+        'âš ï¸ Â¿EstÃ¡s seguro de que quieres ELIMINAR PERMANENTEMENTE este usuario?\n\n' +
+        'Esta acciÃ³n NO se puede deshacer y el usuario serÃ¡ borrado completamente de la base de datos.'
       )
 
       if (!confirmar) {
@@ -107,11 +107,11 @@ export function Usuarios() {
 
       await userService.eliminarUsuario(id)
       logger.userAction('eliminar_usuario', { userId: id })
-      toast.success('✅ Usuario eliminado PERMANENTEMENTE de la base de datos')
+      toast.success('âœ… Usuario eliminado PERMANENTEMENTE de la base de datos')
       cargarUsuarios() // Recargar lista
     } catch (err) {
       logger.apiError(`/api/v1/usuarios/${id}`, err, { action: 'eliminarUsuario', userId: id })
-      toast.error('❌ Error al eliminar usuario permanentemente')
+      toast.error('âŒ Error al eliminar usuario permanentemente')
     }
   }
 
@@ -140,26 +140,26 @@ export function Usuarios() {
       email: usuario.email,
       nombre: usuario.nombre,
       apellido: usuario.apellido,
-      is_admin: usuario.is_admin,  // Cambio clave: rol → is_admin
+      is_admin: usuario.is_admin,  // Cambio clave: rol â†’ is_admin
       password: '',
-      cargo: usuario.cargo || '', // Si es null, usar string vacío (no 'Usuario')
+      cargo: usuario.cargo || '', // Si es null, usar string vacÃ­o (no 'Usuario')
       is_active: usuario.is_active
     })
     setShowCreateForm(true)
   }
 
-  // Validación del formulario
+  // ValidaciÃ³n del formulario
   const isFormValid = () => {
     if (!formData.email || !formData.nombre || !formData.apellido) {
       return false
     }
 
-    // Si estamos creando un nuevo usuario, la contraseña es obligatoria
+    // Si estamos creando un nuevo usuario, la contraseÃ±a es obligatoria
     if (!editingUsuario && !formData.password) {
       return false
     }
 
-    // Si hay una contraseña (ya sea en creación o actualización), debe cumplir todos los requisitos
+    // Si hay una contraseÃ±a (ya sea en creaciÃ³n o actualizaciÃ³n), debe cumplir todos los requisitos
     if (formData.password && formData.password.trim() !== '') {
       const passwordValidation = validatePassword(formData.password)
       if (!passwordValidation.isValid) {
@@ -175,7 +175,7 @@ export function Usuarios() {
 
     // Validar formulario antes de enviar
     if (!isFormValid()) {
-      toast.error('Por favor completa todos los campos requeridos y asegúrate de que la contraseña cumpla con todos los requisitos')
+      toast.error('Por favor completa todos los campos requeridos y asegÃºrate de que la contraseÃ±a cumpla con todos los requisitos')
       return
     }
 
@@ -185,25 +185,25 @@ export function Usuarios() {
       if (editingUsuario) {
         // Actualizar usuario existente - construir UserUpdate correctamente
         // IMPORTANTE: Incluir todos los campos que queremos actualizar, incluso si no cambiaron
-        // El backend usa exclude_unset=True, así que necesitamos enviar valores explícitos
-        // ✅ CRÍTICO: Siempre incluir is_admin explícitamente, incluso si es False
+        // El backend usa exclude_unset=True, asÃ­ que necesitamos enviar valores explÃ­citos
+        // âœ… CRÃTICO: Siempre incluir is_admin explÃ­citamente, incluso si es False
         const updateData: any = {
           email: formData.email,
           nombre: formData.nombre,
           apellido: formData.apellido,
-          is_admin: Boolean(formData.is_admin), // ✅ Forzar conversión a booleano explícito
+          is_admin: Boolean(formData.is_admin), // âœ… Forzar conversiÃ³n a booleano explÃ­cito
           is_active: formData.is_active,
         }
 
-        // ✅ CRÍTICO: Validar que editingUsuario.id existe y es válido
+        // âœ… CRÃTICO: Validar que editingUsuario.id existe y es vÃ¡lido
         if (!editingUsuario || !editingUsuario.id) {
-          console.error('❌ [Usuarios] ERROR: editingUsuario o editingUsuario.id es inválido:', editingUsuario)
-          toast.error('Error: Usuario a editar no válido')
+          console.error('âŒ [Usuarios] ERROR: editingUsuario o editingUsuario.id es invÃ¡lido:', editingUsuario)
+          toast.error('Error: Usuario a editar no vÃ¡lido')
           return
         }
 
-        // ✅ CRÍTICO: Logging detallado del usuario que se está actualizando
-        console.log('📤 [Usuarios] Enviando actualización:', {
+        // âœ… CRÃTICO: Logging detallado del usuario que se estÃ¡ actualizando
+        console.log('ðŸ“¤ [Usuarios] Enviando actualizaciÃ³n:', {
           userId: editingUsuario.id,
           email: editingUsuario.email,
           nombre: editingUsuario.nombre,
@@ -215,17 +215,17 @@ export function Usuarios() {
           endpoint: `/api/v1/usuarios/${editingUsuario.id}`
         })
 
-        // Incluir cargo del formulario (valor que el usuario está editando)
-        // Si el cargo está vacío o solo tiene espacios, enviar null para limpiar el campo
+        // Incluir cargo del formulario (valor que el usuario estÃ¡ editando)
+        // Si el cargo estÃ¡ vacÃ­o o solo tiene espacios, enviar null para limpiar el campo
         if (formData.cargo && formData.cargo.trim() !== '') {
           updateData.cargo = formData.cargo.trim()
         } else {
-          // Si está vacío, enviar null para que se limpie en la BD
+          // Si estÃ¡ vacÃ­o, enviar null para que se limpie en la BD
           updateData.cargo = null
         }
 
-        // Incluir password solo si se proporcionó uno nuevo (no vacío)
-        // Si está vacío, NO lo incluimos para que el backend no intente actualizarlo
+        // Incluir password solo si se proporcionÃ³ uno nuevo (no vacÃ­o)
+        // Si estÃ¡ vacÃ­o, NO lo incluimos para que el backend no intente actualizarlo
         const passwordChanged = formData.password && formData.password.trim() !== ''
         if (passwordChanged) {
           updateData.password = formData.password.trim()
@@ -233,10 +233,10 @@ export function Usuarios() {
 
         await userService.actualizarUsuario(editingUsuario.id, updateData)
 
-        // ✅ Si se cambió la contraseña del usuario actual, forzar logout y redirigir al login
+        // âœ… Si se cambiÃ³ la contraseÃ±a del usuario actual, forzar logout y redirigir al login
         if (passwordChanged && currentUser && editingUsuario.id === currentUser.id) {
-          toast.success('Contraseña cambiada exitosamente. Debes volver a iniciar sesión.')
-          // Limpiar sesión y redirigir al login
+          toast.success('ContraseÃ±a cambiada exitosamente. Debes volver a iniciar sesiÃ³n.')
+          // Limpiar sesiÃ³n y redirigir al login
           clearAuthStorage()
           setTimeout(() => {
             window.location.href = '/login'
@@ -255,11 +255,11 @@ export function Usuarios() {
           password: formData.password,
         }
 
-        // Incluir cargo solo si tiene valor (no vacío)
+        // Incluir cargo solo si tiene valor (no vacÃ­o)
         if (formData.cargo && formData.cargo.trim() !== '') {
           createData.cargo = formData.cargo.trim()
         }
-        // Si está vacío, no incluirlo (será null en la BD)
+        // Si estÃ¡ vacÃ­o, no incluirlo (serÃ¡ null en la BD)
 
         await userService.crearUsuario(createData)
         toast.success('Usuario creado exitosamente')
@@ -291,7 +291,7 @@ export function Usuarios() {
       email: '',
       nombre: '',
       apellido: '',
-      is_admin: false,  // Cambio clave: rol → is_admin
+      is_admin: false,  // Cambio clave: rol â†’ is_admin
       password: '',
       cargo: 'Usuario', // Valor por defecto
       is_active: true
@@ -304,15 +304,15 @@ export function Usuarios() {
     resetForm()
   }
 
-  // Filtrar usuarios por término de búsqueda
+  // Filtrar usuarios por tÃ©rmino de bÃºsqueda
   const usuariosFiltrados = usuarios.filter(usuario =>
     (usuario.nombre && usuario.nombre.toLowerCase().includes(searchTerm.toLowerCase())) ||
     (usuario.apellido && usuario.apellido.toLowerCase().includes(searchTerm.toLowerCase())) ||
     (usuario.email && usuario.email.toLowerCase().includes(searchTerm.toLowerCase()))
   )
 
-  const getRoleBadgeColor = (is_admin: boolean) => {  // Cambio clave: rol → is_admin
-    return is_admin ? 'bg-red-600' : 'bg-blue-600'  // Cambio clave: rol → is_admin
+  const getRoleBadgeColor = (is_admin: boolean) => {  // Cambio clave: rol â†’ is_admin
+    return is_admin ? 'bg-red-600' : 'bg-blue-600'  // Cambio clave: rol â†’ is_admin
   }
 
   return (
@@ -322,7 +322,7 @@ export function Usuarios() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Usuarios del Sistema</h1>
           <p className="text-gray-500 mt-1">
-            Gestión de usuarios y control de acceso
+            GestiÃ³n de usuarios y control de acceso
           </p>
         </div>
         <div className="flex gap-2">
@@ -382,7 +382,7 @@ export function Usuarios() {
               <div>
                 <p className="text-sm text-gray-500">Administradores</p>
                 <p className="text-2xl font-bold text-red-600">
-                  {usuarios.filter(u => u.is_admin).length}  {/* Cambio clave: rol → is_admin */}
+                  {usuarios.filter(u => u.is_admin).length}  {/* Cambio clave: rol â†’ is_admin */}
                 </p>
                 <p className="text-xs text-gray-400 mt-1">
                   {loading ? 'Cargando...' : 'Pueden crear usuarios'}
@@ -397,7 +397,7 @@ export function Usuarios() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">Último Mes</p>
+                <p className="text-sm text-gray-500">Ãšltimo Mes</p>
                 <p className="text-2xl font-bold text-blue-600">
                   {usuarios.filter(u => {
                     const fechaCreacion = new Date(u.created_at)
@@ -416,7 +416,7 @@ export function Usuarios() {
         </Card>
       </div>
 
-      {/* Búsqueda */}
+      {/* BÃºsqueda */}
       <Card>
         <CardContent className="pt-6">
           <div className="relative">
@@ -441,7 +441,7 @@ export function Usuarios() {
                 <TableHead>Email</TableHead>
                 <TableHead>Rol</TableHead>
                 <TableHead>Cargo</TableHead>
-                <TableHead>Último Acceso</TableHead>
+                <TableHead>Ãšltimo Acceso</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
@@ -490,8 +490,8 @@ export function Usuarios() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge className={getRoleBadgeColor(usuario.is_admin)}>  {/* Cambio clave: rol → is_admin */}
-                        {usuario.is_admin ? 'Administrador' : 'Usuario'}  {/* Cambio clave: rol → is_admin */}
+                      <Badge className={getRoleBadgeColor(usuario.is_admin)}>  {/* Cambio clave: rol â†’ is_admin */}
+                        {usuario.is_admin ? 'Administrador' : 'Usuario'}  {/* Cambio clave: rol â†’ is_admin */}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-gray-600">
@@ -645,20 +645,20 @@ export function Usuarios() {
                   placeholder="Ej: Gerente, Analista, Supervisor..."
                   className="mt-1"
                 />
-                <p className="text-xs text-gray-500 mt-1">Dejar vacío para "Sin especificar"</p>
+                <p className="text-xs text-gray-500 mt-1">Dejar vacÃ­o para "Sin especificar"</p>
               </div>
 
               <div>
                 <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                  Contraseña {editingUsuario && '(dejar vacío para mantener la actual)'}
+                  ContraseÃ±a {editingUsuario && '(dejar vacÃ­o para mantener la actual)'}
                 </label>
                 <PasswordField
                   value={formData.password}
                   onChange={(password) => setFormData({ ...formData, password })}
-                  placeholder={editingUsuario ? 'Nueva contraseña (opcional)' : 'Mínimo 8 caracteres'}
+                  placeholder={editingUsuario ? 'Nueva contraseÃ±a (opcional)' : 'MÃ­nimo 8 caracteres'}
                   required={!editingUsuario}
-                  showGenerateButton={true}  // ✅ SIEMPRE mostrar botón de generar
-                  showCopyButton={true}      // ✅ SIEMPRE mostrar botón de copiar
+                  showGenerateButton={true}  // âœ… SIEMPRE mostrar botÃ³n de generar
+                  showCopyButton={true}      // âœ… SIEMPRE mostrar botÃ³n de copiar
                   className="mt-1"
                 />
               </div>

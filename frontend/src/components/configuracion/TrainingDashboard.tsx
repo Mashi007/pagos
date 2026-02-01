@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { BarChart3, Brain, FileText, TrendingUp, RefreshCw, AlertCircle, CheckCircle, Loader2 } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { aiTrainingService, MetricasEntrenamiento } from '@/services/aiTrainingService'
+import { Card, CardContent } from '../../components/ui/card'
+import { Button } from '../../components/ui/button'
+import { Badge } from '../../components/ui/badge'
+import { aiTrainingService, MetricasEntrenamiento } from '../../services/aiTrainingService'
 import { toast } from 'sonner'
 
 export function TrainingDashboard() {
@@ -41,8 +41,8 @@ export function TrainingDashboard() {
         } as MetricasEntrenamiento)
       }
     } catch (error: any) {
-      console.error('Error cargando métricas:', error)
-      // Si es un 404, el endpoint no existe aún - mostrar mensaje informativo
+      console.error('Error cargando mÃ©tricas:', error)
+      // Si es un 404, el endpoint no existe aÃºn - mostrar mensaje informativo
       if (error?.response?.status === 404) {
         setMetricas({
           conversaciones: {
@@ -64,9 +64,9 @@ export function TrainingDashboard() {
             modelos_disponibles: 0,
           },
         } as MetricasEntrenamiento)
-        // No mostrar toast de error para 404, es esperado si el endpoint no está implementado
+        // No mostrar toast de error para 404, es esperado si el endpoint no estÃ¡ implementado
       } else {
-        toast.error('Error al cargar métricas de entrenamiento')
+        toast.error('Error al cargar mÃ©tricas de entrenamiento')
         setMetricas(null)
       }
     } finally {
@@ -90,9 +90,9 @@ export function TrainingDashboard() {
     return (
       <div className="text-center py-12">
         <AlertCircle className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-        <p className="text-gray-500 mb-2">No se pudieron cargar las métricas</p>
+        <p className="text-gray-500 mb-2">No se pudieron cargar las mÃ©tricas</p>
         <p className="text-sm text-gray-400 mb-4">
-          El endpoint de métricas aún no está implementado en el backend
+          El endpoint de mÃ©tricas aÃºn no estÃ¡ implementado en el backend
         </p>
         <Button onClick={cargarMetricas} variant="outline" className="mt-4">
           Reintentar
@@ -111,7 +111,7 @@ export function TrainingDashboard() {
             Dashboard de Entrenamiento
           </h3>
           <p className="text-sm text-gray-500 mt-1">
-            Métricas consolidadas del sistema híbrido de AI
+            MÃ©tricas consolidadas del sistema hÃ­brido de AI
           </p>
         </div>
         <Button onClick={cargarMetricas} variant="outline" size="sm" disabled={cargando}>
@@ -129,7 +129,7 @@ export function TrainingDashboard() {
         </Button>
       </div>
 
-      {/* Métricas de Conversaciones */}
+      {/* MÃ©tricas de Conversaciones */}
       <Card>
         <CardContent className="pt-6">
           <div className="flex items-center gap-2 mb-4">
@@ -142,13 +142,13 @@ export function TrainingDashboard() {
               <div className="text-2xl font-bold">{metricas.conversaciones?.total ?? 0}</div>
             </div>
             <div className="border rounded-lg p-4">
-              <div className="text-sm text-gray-500 mb-1">Con Calificación</div>
+              <div className="text-sm text-gray-500 mb-1">Con CalificaciÃ³n</div>
               <div className="text-2xl font-bold text-green-600">
                 {metricas.conversaciones?.con_calificacion ?? 0}
               </div>
             </div>
             <div className="border rounded-lg p-4">
-              <div className="text-sm text-gray-500 mb-1">Promedio Calificación</div>
+              <div className="text-sm text-gray-500 mb-1">Promedio CalificaciÃ³n</div>
               <div className="text-2xl font-bold text-blue-600">
                 {(metricas.conversaciones?.promedio_calificacion ?? 0) > 0
                   ? (metricas.conversaciones?.promedio_calificacion ?? 0).toFixed(1)
@@ -165,7 +165,7 @@ export function TrainingDashboard() {
         </CardContent>
       </Card>
 
-      {/* Métricas de Fine-tuning */}
+      {/* MÃ©tricas de Fine-tuning */}
       <Card>
         <CardContent className="pt-6">
           <div className="flex items-center gap-2 mb-4">
@@ -211,7 +211,7 @@ export function TrainingDashboard() {
         </CardContent>
       </Card>
 
-      {/* Métricas de RAG */}
+      {/* MÃ©tricas de RAG */}
       <Card>
         <CardContent className="pt-6">
           <div className="flex items-center gap-2 mb-4">
@@ -232,7 +232,7 @@ export function TrainingDashboard() {
               </div>
             </div>
             <div className="border rounded-lg p-4 col-span-2">
-              <div className="text-sm text-gray-500 mb-1">Última Actualización</div>
+              <div className="text-sm text-gray-500 mb-1">Ãšltima ActualizaciÃ³n</div>
               <div className="text-lg font-semibold">
                 {metricas.rag?.ultima_actualizacion ? (
                   new Date(metricas.rag.ultima_actualizacion).toLocaleString('es-ES')

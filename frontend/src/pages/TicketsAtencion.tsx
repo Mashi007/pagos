@@ -22,22 +22,22 @@ import {
   XCircle as XCircleIcon,
   Loader2,
 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog'
-import { Label } from '@/components/ui/label'
-import { formatDate } from '@/utils'
-import { useSearchClientes } from '@/hooks/useClientes'
-import { Cliente } from '@/types'
-import { LoadingSpinner } from '@/components/ui/loading-spinner'
-import { useSimpleAuth } from '@/store/simpleAuthStore'
-import { ticketsService, Ticket, TicketCreate } from '@/services/ticketsService'
+import { Button } from '../components/ui/button'
+import { Input } from '../components/ui/input'
+import { Textarea } from '../components/ui/textarea'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card'
+import { Badge } from '../components/ui/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '../components/ui/dialog'
+import { Label } from '../components/ui/label'
+import { formatDate } from '../utils'
+import { useSearchClientes } from '../hooks/useClientes'
+import { Cliente } from '../types'
+import { LoadingSpinner } from '../components/ui/loading-spinner'
+import { useSimpleAuth } from '../store/simpleAuthStore'
+import { ticketsService, Ticket, TicketCreate } from '../services/ticketsService'
 import { toast } from 'sonner'
-import { getMockTicketsResponse } from '@/data/mockTickets'
+import { getMockTicketsResponse } from '../data/mockTickets'
 
 // Estados de tickets
 const ESTADOS_TICKET = [
@@ -94,7 +94,7 @@ export function TicketsAtencion() {
     fecha_limite: '',
   })
 
-  // Búsqueda de clientes para agregar al ticket (incluir todos los estados)
+  // BÃºsqueda de clientes para agregar al ticket (incluir todos los estados)
   const { data: clientesBuscados = [], isLoading: isLoadingSearch } = useSearchClientes(searchCliente, true)
 
   // Query para obtener tickets del backend
@@ -113,7 +113,7 @@ export function TicketsAtencion() {
           estado: filtroEstado !== 'todos' ? filtroEstado : undefined,
           prioridad: filtroPrioridad !== 'todos' ? filtroPrioridad : undefined,
         })
-        // ✅ Usar mockdata si no hay datos reales o en desarrollo
+        // âœ… Usar mockdata si no hay datos reales o en desarrollo
         const usarMockData = (!response?.tickets || response.tickets.length === 0) || process.env.NODE_ENV === 'development'
         if (usarMockData && (!response?.tickets || response.tickets.length === 0)) {
           return getMockTicketsResponse(
@@ -125,7 +125,7 @@ export function TicketsAtencion() {
         }
         return response
       } catch (error) {
-        // ✅ En caso de error, usar mockdata en desarrollo
+        // âœ… En caso de error, usar mockdata en desarrollo
         if (process.env.NODE_ENV === 'development') {
           console.warn('Error cargando tickets, usando mockdata:', error)
           return getMockTicketsResponse(
@@ -209,7 +209,7 @@ export function TicketsAtencion() {
     cerrados: tickets.filter(t => t.estado === 'cerrado').length,
   }
 
-  // ✅ Calcular tickets vencidos y próximos a vencer
+  // âœ… Calcular tickets vencidos y prÃ³ximos a vencer
   const ahora = new Date()
   const enUnaHora = new Date(ahora.getTime() + 60 * 60 * 1000)
   
@@ -238,7 +238,7 @@ export function TicketsAtencion() {
   }
 
   const handleSeleccionarCliente = (cliente: Cliente) => {
-    // Capturar rápidamente todos los datos del cliente
+    // Capturar rÃ¡pidamente todos los datos del cliente
     const nombreCompleto = cliente.nombres?.trim() || 'Sin nombre'
     setClienteSeleccionado(cliente)
     setNuevoTicket(prev => ({
@@ -246,15 +246,15 @@ export function TicketsAtencion() {
       clienteId: cliente.id,
       cliente: nombreCompleto,
       clienteData: cliente,
-      // Pre-llenar descripción con datos del cliente si está vacía para agilizar
-      descripcion: prev.descripcion || `Cliente: ${nombreCompleto}\nCédula: ${cliente.cedula}${cliente.telefono ? `\nTeléfono: ${cliente.telefono}` : ''}${cliente.email ? `\nEmail: ${cliente.email}` : ''}${cliente.direccion ? `\nDirección: ${cliente.direccion}` : ''}${cliente.ocupacion ? `\nOcupación: ${cliente.ocupacion}` : ''}\n\n`,
+      // Pre-llenar descripciÃ³n con datos del cliente si estÃ¡ vacÃ­a para agilizar
+      descripcion: prev.descripcion || `Cliente: ${nombreCompleto}\nCÃ©dula: ${cliente.cedula}${cliente.telefono ? `\nTelÃ©fono: ${cliente.telefono}` : ''}${cliente.email ? `\nEmail: ${cliente.email}` : ''}${cliente.direccion ? `\nDirecciÃ³n: ${cliente.direccion}` : ''}${cliente.ocupacion ? `\nOcupaciÃ³n: ${cliente.ocupacion}` : ''}\n\n`,
     }))
     setSearchCliente('')
   }
 
   const handleCrearTicket = () => {
     if (!nuevoTicket.titulo || !nuevoTicket.descripcion) {
-      toast.error('Por favor completa el título y descripción del ticket')
+      toast.error('Por favor completa el tÃ­tulo y descripciÃ³n del ticket')
       return
     }
 
@@ -333,10 +333,10 @@ export function TicketsAtencion() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
             <FileText className="h-8 w-8 text-blue-600" />
-            Tickets de Atención
+            Tickets de AtenciÃ³n
           </h1>
           <p className="text-gray-600 mt-1">
-            Gestión de incidencias y actividades que generan seguimiento
+            GestiÃ³n de incidencias y actividades que generan seguimiento
           </p>
         </div>
         <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
@@ -366,12 +366,12 @@ export function TicketsAtencion() {
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm ml-7">
                           <div className="flex items-center gap-2">
-                            <span className="text-gray-600 font-medium">Cédula:</span>
+                            <span className="text-gray-600 font-medium">CÃ©dula:</span>
                             <span className="text-gray-900 font-semibold">{clienteSeleccionado.cedula}</span>
                           </div>
                           {clienteSeleccionado.telefono && (
                             <div className="flex items-center gap-2">
-                              <span className="text-gray-600 font-medium">Teléfono:</span>
+                              <span className="text-gray-600 font-medium">TelÃ©fono:</span>
                               <span className="text-gray-900 font-semibold">{clienteSeleccionado.telefono}</span>
                             </div>
                           )}
@@ -383,13 +383,13 @@ export function TicketsAtencion() {
                           )}
                           {clienteSeleccionado.direccion && (
                             <div className="flex items-center gap-2 sm:col-span-2">
-                              <span className="text-gray-600 font-medium">Dirección:</span>
+                              <span className="text-gray-600 font-medium">DirecciÃ³n:</span>
                               <span className="text-gray-900">{clienteSeleccionado.direccion}</span>
                             </div>
                           )}
                           {clienteSeleccionado.ocupacion && (
                             <div className="flex items-center gap-2">
-                              <span className="text-gray-600 font-medium">Ocupación:</span>
+                              <span className="text-gray-600 font-medium">OcupaciÃ³n:</span>
                               <span className="text-gray-900">{clienteSeleccionado.ocupacion}</span>
                             </div>
                           )}
@@ -414,7 +414,7 @@ export function TicketsAtencion() {
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                       <Input
-                        placeholder="Buscar cliente por nombre, cédula o teléfono (mín. 2 caracteres)..."
+                        placeholder="Buscar cliente por nombre, cÃ©dula o telÃ©fono (mÃ­n. 2 caracteres)..."
                         value={searchCliente}
                         onChange={(e) => setSearchCliente(e.target.value)}
                         className="pl-10"
@@ -454,7 +454,7 @@ export function TicketsAtencion() {
                                   </div>
                                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 ml-6 text-xs">
                                     <div className="flex items-center gap-1.5">
-                                      <span className="text-gray-500">Cédula:</span>
+                                      <span className="text-gray-500">CÃ©dula:</span>
                                       <span className="font-medium text-gray-700">{cliente.cedula}</span>
                                     </div>
                                     {cliente.telefono && (
@@ -471,13 +471,13 @@ export function TicketsAtencion() {
                                     )}
                                     {cliente.direccion && (
                                       <div className="flex items-center gap-1.5 sm:col-span-2">
-                                        <span className="text-gray-500">Dirección:</span>
+                                        <span className="text-gray-500">DirecciÃ³n:</span>
                                         <span className="font-medium text-gray-700 truncate">{cliente.direccion}</span>
                                       </div>
                                     )}
                                     {cliente.ocupacion && (
                                       <div className="flex items-center gap-1.5">
-                                        <span className="text-gray-500">Ocupación:</span>
+                                        <span className="text-gray-500">OcupaciÃ³n:</span>
                                         <span className="font-medium text-gray-700">{cliente.ocupacion}</span>
                                       </div>
                                     )}
@@ -509,20 +509,20 @@ export function TicketsAtencion() {
                 )}
               </div>
 
-              {/* Título */}
+              {/* TÃ­tulo */}
               <div className="space-y-2">
-                <Label htmlFor="titulo">Título *</Label>
+                <Label htmlFor="titulo">TÃ­tulo *</Label>
                 <Input
                   id="titulo"
-                  placeholder="Ej: Consulta sobre estado de préstamo"
+                  placeholder="Ej: Consulta sobre estado de prÃ©stamo"
                   value={nuevoTicket.titulo}
                   onChange={(e) => setNuevoTicket(prev => ({ ...prev, titulo: e.target.value }))}
                 />
               </div>
 
-              {/* Descripción */}
+              {/* DescripciÃ³n */}
               <div className="space-y-2">
-                <Label htmlFor="descripcion">Descripción *</Label>
+                <Label htmlFor="descripcion">DescripciÃ³n *</Label>
                 <Textarea
                   id="descripcion"
                   placeholder="Describe el problema o consulta..."
@@ -590,12 +590,12 @@ export function TicketsAtencion() {
                 </div>
               </div>
 
-              {/* Fecha Límite */}
+              {/* Fecha LÃ­mite */}
               <div className="space-y-2">
                 <Label htmlFor="fecha_limite">
                   <div className="flex items-center gap-2">
                     <Calendar className="h-4 w-4" />
-                    Fecha y Hora Límite
+                    Fecha y Hora LÃ­mite
                   </div>
                 </Label>
                 <Input
@@ -612,10 +612,10 @@ export function TicketsAtencion() {
                       setNuevoTicket(prev => ({ ...prev, fecha_limite: '' }))
                     }
                   }}
-                  placeholder="Selecciona fecha y hora límite"
+                  placeholder="Selecciona fecha y hora lÃ­mite"
                 />
                 <p className="text-xs text-gray-500">
-                  El sistema alertará cuando se alcance esta fecha y hora
+                  El sistema alertarÃ¡ cuando se alcance esta fecha y hora
                 </p>
               </div>
             </div>
@@ -641,7 +641,7 @@ export function TicketsAtencion() {
         </Dialog>
       </motion.div>
 
-      {/* ✅ Alertas de Tickets Vencidos */}
+      {/* âœ… Alertas de Tickets Vencidos */}
       {(ticketsVencidos.length > 0 || ticketsProximosAVencer.length > 0) && (
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -672,7 +672,7 @@ export function TicketsAtencion() {
                   <Clock className="h-6 w-6 text-yellow-600" />
                   <div className="flex-1">
                     <h3 className="font-semibold text-yellow-900">
-                      {ticketsProximosAVencer.length} Ticket{ticketsProximosAVencer.length > 1 ? 's' : ''} Próximo{ticketsProximosAVencer.length > 1 ? 's' : ''} a Vencer
+                      {ticketsProximosAVencer.length} Ticket{ticketsProximosAVencer.length > 1 ? 's' : ''} PrÃ³ximo{ticketsProximosAVencer.length > 1 ? 's' : ''} a Vencer
                     </h3>
                     <p className="text-sm text-yellow-700">
                       {ticketsProximosAVencer.map(t => {
@@ -689,7 +689,7 @@ export function TicketsAtencion() {
         </motion.div>
       )}
 
-      {/* Estadísticas */}
+      {/* EstadÃ­sticas */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card>
           <CardContent className="pt-6">
@@ -731,7 +731,7 @@ export function TicketsAtencion() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <Input
-                  placeholder="Buscar por título, cliente o descripción..."
+                  placeholder="Buscar por tÃ­tulo, cliente o descripciÃ³n..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
@@ -773,9 +773,9 @@ export function TicketsAtencion() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Tickets de Atención</CardTitle>
+              <CardTitle>Tickets de AtenciÃ³n</CardTitle>
               <CardDescription>
-                Gestión de incidencias y actividades que generan seguimiento
+                GestiÃ³n de incidencias y actividades que generan seguimiento
               </CardDescription>
             </div>
             {isLoadingTickets && (
@@ -803,7 +803,7 @@ export function TicketsAtencion() {
               {tickets.length === 0 ? (
                 <>
                   <p className="text-lg font-medium mb-2">No hay tickets creados</p>
-                  <p className="text-sm text-gray-400 mb-4">Crea tu primer ticket usando el botón "Nuevo Ticket"</p>
+                  <p className="text-sm text-gray-400 mb-4">Crea tu primer ticket usando el botÃ³n "Nuevo Ticket"</p>
                 </>
               ) : (
                 <p>No se encontraron tickets con los filtros aplicados</p>
@@ -811,14 +811,14 @@ export function TicketsAtencion() {
             </div>
           ) : (
             <div className="relative">
-              {/* Línea vertical de la timeline */}
+              {/* LÃ­nea vertical de la timeline */}
               <div className="absolute left-8 top-0 bottom-0 w-0.5 bg-gradient-to-b from-blue-200 via-blue-300 to-blue-200" />
 
               {/* Lista de tickets en timeline */}
               <div className="space-y-6">
                 {ticketsFiltrados
                   .sort((a, b) => {
-                    // Ordenar por fecha más reciente primero
+                    // Ordenar por fecha mÃ¡s reciente primero
                     const fechaA = a.fechaCreacion ? new Date(a.fechaCreacion).getTime() : 0
                     const fechaB = b.fechaCreacion ? new Date(b.fechaCreacion).getTime() : 0
                     return fechaB - fechaA
@@ -829,7 +829,7 @@ export function TicketsAtencion() {
                     const EstadoIcon = estadoInfo.icon
                     const isLast = index === ticketsFiltrados.length - 1
 
-                    // ✅ Verificar si el ticket está vencido o próximo a vencer
+                    // âœ… Verificar si el ticket estÃ¡ vencido o prÃ³ximo a vencer
                     const ahora = new Date()
                     const enUnaHora = new Date(ahora.getTime() + 60 * 60 * 1000)
                     let estadoFecha: 'vencido' | 'proximo' | 'normal' = 'normal'
@@ -853,7 +853,7 @@ export function TicketsAtencion() {
                         transition={{ delay: index * 0.1 }}
                         className="relative flex items-start gap-6"
                       >
-                        {/* Punto en la línea de tiempo */}
+                        {/* Punto en la lÃ­nea de tiempo */}
                         <div className="relative z-10 flex-shrink-0">
                           <div className={`w-16 h-16 rounded-full flex items-center justify-center border-4 border-white shadow-lg ${
                             estadoFecha === 'vencido' ? 'bg-red-500 animate-pulse' :
@@ -911,7 +911,7 @@ export function TicketsAtencion() {
                                     size="sm"
                                     onClick={() => handleVerConversacion(ticket.conversacion_whatsapp_id)}
                                     className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                                    title="Ver conversación de WhatsApp"
+                                    title="Ver conversaciÃ³n de WhatsApp"
                                   >
                                     <MessageSquare className="h-4 w-4 mr-1" />
                                     WhatsApp
@@ -929,7 +929,7 @@ export function TicketsAtencion() {
                               </div>
                             </div>
 
-                            {/* Información del ticket */}
+                            {/* InformaciÃ³n del ticket */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                               {/* Cliente */}
                               <div className="flex items-start gap-3">
@@ -940,7 +940,7 @@ export function TicketsAtencion() {
                                     <div>
                                       <p className="font-semibold text-sm text-gray-900">{ticket.cliente}</p>
                                       <div className="mt-1 space-y-0.5">
-                                        <p className="text-xs text-gray-600">Cédula: <span className="font-medium">{ticket.clienteData.cedula}</span></p>
+                                        <p className="text-xs text-gray-600">CÃ©dula: <span className="font-medium">{ticket.clienteData.cedula}</span></p>
                                         {ticket.clienteData.telefono && (
                                           <p className="text-xs text-gray-600">Tel: <span className="font-medium">{ticket.clienteData.telefono}</span></p>
                                         )}
@@ -955,7 +955,7 @@ export function TicketsAtencion() {
                                           className="h-auto p-0 text-xs mt-1 text-blue-600 hover:text-blue-700"
                                           onClick={() => window.open(`/clientes/${ticket.clienteId}`, '_blank')}
                                         >
-                                          Ver cliente completo →
+                                          Ver cliente completo â†’
                                         </Button>
                                       )}
                                     </div>
@@ -1003,7 +1003,7 @@ export function TicketsAtencion() {
                                   }`}
                                 >
                                   <Clock className="h-3 w-3 mr-1" />
-                                  Límite: {formatDate(ticket.fecha_limite)}
+                                  LÃ­mite: {formatDate(ticket.fecha_limite)}
                                 </Badge>
                               )}
                               <div className="flex items-center gap-1 text-xs text-gray-500 ml-auto">
@@ -1020,11 +1020,11 @@ export function TicketsAtencion() {
             </div>
           )}
 
-          {/* Paginación */}
+          {/* PaginaciÃ³n */}
           {ticketsData?.paginacion && ticketsData.paginacion.pages > 1 && (
             <div className="flex items-center justify-between pt-4 border-t mt-6">
               <div className="text-sm text-gray-600">
-                Página {ticketsData.paginacion.page} de {ticketsData.paginacion.pages} ({ticketsData.paginacion.total} total)
+                PÃ¡gina {ticketsData.paginacion.page} de {ticketsData.paginacion.pages} ({ticketsData.paginacion.total} total)
               </div>
               <div className="flex gap-2">
                 <Button
@@ -1058,17 +1058,17 @@ export function TicketsAtencion() {
           <div className="space-y-4 mt-4">
             {/* Mismo formulario que crear, pero con datos precargados */}
             <div className="space-y-2">
-              <Label htmlFor="titulo-edit">Título *</Label>
+              <Label htmlFor="titulo-edit">TÃ­tulo *</Label>
               <Input
                 id="titulo-edit"
-                placeholder="Ej: Consulta sobre estado de préstamo"
+                placeholder="Ej: Consulta sobre estado de prÃ©stamo"
                 value={nuevoTicket.titulo || ''}
                 onChange={(e) => setNuevoTicket(prev => ({ ...prev, titulo: e.target.value }))}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="descripcion-edit">Descripción *</Label>
+              <Label htmlFor="descripcion-edit">DescripciÃ³n *</Label>
               <Textarea
                 id="descripcion-edit"
                 placeholder="Describe el problema o consulta..."
@@ -1135,12 +1135,12 @@ export function TicketsAtencion() {
                 </div>
               </div>
 
-              {/* Fecha Límite */}
+              {/* Fecha LÃ­mite */}
               <div className="space-y-2">
                 <Label htmlFor="fecha_limite-edit">
                   <div className="flex items-center gap-2">
                     <Calendar className="h-4 w-4" />
-                    Fecha y Hora Límite
+                    Fecha y Hora LÃ­mite
                   </div>
                 </Label>
                 <Input
@@ -1156,10 +1156,10 @@ export function TicketsAtencion() {
                       setNuevoTicket(prev => ({ ...prev, fecha_limite: '' }))
                     }
                   }}
-                  placeholder="Selecciona fecha y hora límite"
+                  placeholder="Selecciona fecha y hora lÃ­mite"
                 />
                 <p className="text-xs text-gray-500">
-                  El sistema alertará cuando se alcance esta fecha y hora
+                  El sistema alertarÃ¡ cuando se alcance esta fecha y hora
                 </p>
               </div>
             </div>

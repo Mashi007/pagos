@@ -23,16 +23,16 @@ import {
   Settings,
   DollarSign,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { useSimpleAuth } from '@/store/simpleAuthStore'
-import { formatCurrency } from '@/utils'
-import { apiClient } from '@/services/api'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card'
+import { Button } from '../components/ui/button'
+import { Badge } from '../components/ui/badge'
+import { useSimpleAuth } from '../store/simpleAuthStore'
+import { formatCurrency } from '../utils'
+import { apiClient } from '../services/api'
 import { toast } from 'sonner'
-import { useDashboardFiltros, type DashboardFiltros } from '@/hooks/useDashboardFiltros'
-import { DashboardFiltrosPanel } from '@/components/dashboard/DashboardFiltrosPanel'
-import { KpiCardLarge } from '@/components/dashboard/KpiCardLarge'
+import { useDashboardFiltros, type DashboardFiltros } from '../hooks/useDashboardFiltros'
+import { DashboardFiltrosPanel } from '../components/dashboard/DashboardFiltrosPanel'
+import { KpiCardLarge } from '../components/dashboard/KpiCardLarge'
 import {
   BarChart,
   Bar,
@@ -54,7 +54,7 @@ import {
   Scatter,
 } from 'recharts'
 
-// Submenús eliminados: financiamiento, cuotas, cobranza, analisis, pagos
+// SubmenÃºs eliminados: financiamiento, cuotas, cobranza, analisis, pagos
 
 export function DashboardMenu() {
   const navigate = useNavigate()
@@ -63,11 +63,11 @@ export function DashboardMenu() {
   const queryClient = useQueryClient()
 
   const [filtros, setFiltros] = useState<DashboardFiltros>({})
-  const [periodo, setPeriodo] = useState('año') // ✅ Por defecto: "Este año"
+  const [periodo, setPeriodo] = useState('aÃ±o') // âœ… Por defecto: "Este aÃ±o"
   const { construirParams, construirFiltrosObject, tieneFiltrosActivos, cantidadFiltrosActivos } = useDashboardFiltros(filtros)
 
-  // ✅ OPTIMIZACIÓN PRIORIDAD 1: Carga por batches con priorización
-  // Batch 1: CRÍTICO - Opciones de filtros y KPIs principales (carga inmediata)
+  // âœ… OPTIMIZACIÃ“N PRIORIDAD 1: Carga por batches con priorizaciÃ³n
+  // Batch 1: CRÃTICO - Opciones de filtros y KPIs principales (carga inmediata)
   const { data: opcionesFiltros, isLoading: loadingOpcionesFiltros, isError: errorOpcionesFiltros } = useQuery({
     queryKey: ['opciones-filtros'],
     queryFn: async () => {
@@ -75,16 +75,16 @@ export function DashboardMenu() {
       return response as { analistas: string[]; concesionarios: string[]; modelos: string[] }
     },
     staleTime: 30 * 60 * 1000, // 30 minutos - cambian muy poco
-    refetchOnWindowFocus: false, // No recargar automáticamente
-    // ✅ Prioridad máxima - carga inmediatamente
+    refetchOnWindowFocus: false, // No recargar automÃ¡ticamente
+    // âœ… Prioridad mÃ¡xima - carga inmediatamente
   })
 
-  // Batch 1: CRÍTICO - KPIs principales (visible primero para el usuario)
-  // ✅ ACTUALIZADO: Incluye período en queryKey y aplica filtro de período
+  // Batch 1: CRÃTICO - KPIs principales (visible primero para el usuario)
+  // âœ… ACTUALIZADO: Incluye perÃ­odo en queryKey y aplica filtro de perÃ­odo
   const { data: kpisPrincipales, isLoading: loadingKPIs, isError: errorKPIs, refetch } = useQuery({
     queryKey: ['kpis-principales-menu', periodo, JSON.stringify(filtros)],
     queryFn: async () => {
-      const params = construirFiltrosObject(periodo) // ✅ Pasar período para calcular fechas
+      const params = construirFiltrosObject(periodo) // âœ… Pasar perÃ­odo para calcular fechas
       const queryParams = new URLSearchParams()
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
@@ -107,13 +107,13 @@ export function DashboardMenu() {
       }
       return response
     },
-    staleTime: 2 * 60 * 1000, // ✅ ACTUALIZADO: 2 minutos para datos más frescos
-    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
-    enabled: true, // ✅ Prioridad máxima - carga inmediatamente
-    retry: false, // No reintentar automáticamente en caso de error 401
+    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos mÃ¡s frescos
+    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
+    enabled: true, // âœ… Prioridad mÃ¡xima - carga inmediatamente
+    retry: false, // No reintentar automÃ¡ticamente en caso de error 401
   })
 
-  // Batch 2: IMPORTANTE - Dashboard admin (gráfico principal, carga después de KPIs)
+  // Batch 2: IMPORTANTE - Dashboard admin (grÃ¡fico principal, carga despuÃ©s de KPIs)
   const { data: datosDashboard, isLoading: loadingDashboard } = useQuery({
     queryKey: ['dashboard-menu', periodo, JSON.stringify(filtros)],
     queryFn: async () => {
@@ -138,30 +138,30 @@ export function DashboardMenu() {
         return {}
       }
     },
-    staleTime: 2 * 60 * 1000, // ✅ ACTUALIZADO: 2 minutos para datos más frescos
-    retry: 1, // Solo un retry para evitar múltiples intentos
-    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
-    enabled: true, // ✅ Carga después de Batch 1
+    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos mÃ¡s frescos
+    retry: 1, // Solo un retry para evitar mÃºltiples intentos
+    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
+    enabled: true, // âœ… Carga despuÃ©s de Batch 1
   })
 
-  // Batch 3: MEDIA - Gráficos secundarios rápidos (cargar después de Batch 2, en paralelo limitado)
-  // ✅ Lazy loading: Solo cargar cuando KPIs estén listos para reducir carga inicial
-  // ✅ ACTUALIZADO: Incluye período en queryKey y aplica filtro de período
-  // ✅ ACTUALIZADO: Muestra datos desde septiembre 2024
+  // Batch 3: MEDIA - GrÃ¡ficos secundarios rÃ¡pidos (cargar despuÃ©s de Batch 2, en paralelo limitado)
+  // âœ… Lazy loading: Solo cargar cuando KPIs estÃ©n listos para reducir carga inicial
+  // âœ… ACTUALIZADO: Incluye perÃ­odo en queryKey y aplica filtro de perÃ­odo
+  // âœ… ACTUALIZADO: Muestra datos desde septiembre 2024
   const { data: datosTendencia, isLoading: loadingTendencia } = useQuery({
     queryKey: ['financiamiento-tendencia', periodo, JSON.stringify(filtros)],
     queryFn: async () => {
-      const params = construirFiltrosObject(periodo) // ✅ Pasar período para calcular fechas
+      const params = construirFiltrosObject(periodo) // âœ… Pasar perÃ­odo para calcular fechas
       const queryParams = new URLSearchParams()
 
-      // ✅ CORRECCIÓN: Para este gráfico específico, NO pasar fecha_inicio del período
-      // En su lugar, usar el parámetro 'meses' para mostrar los últimos 12 meses
-      // Esto asegura que siempre se muestren múltiples meses independientemente del período seleccionado
-      // Solo pasar fecha_inicio si viene de filtros explícitos del usuario (no del período)
+      // âœ… CORRECCIÃ“N: Para este grÃ¡fico especÃ­fico, NO pasar fecha_inicio del perÃ­odo
+      // En su lugar, usar el parÃ¡metro 'meses' para mostrar los Ãºltimos 12 meses
+      // Esto asegura que siempre se muestren mÃºltiples meses independientemente del perÃ­odo seleccionado
+      // Solo pasar fecha_inicio si viene de filtros explÃ­citos del usuario (no del perÃ­odo)
       const fechaInicioFiltro = filtros.fecha_inicio && filtros.fecha_inicio !== '' ? filtros.fecha_inicio : null
       
       if (fechaInicioFiltro) {
-        // Si el usuario especificó fecha_inicio explícitamente en filtros, usarla
+        // Si el usuario especificÃ³ fecha_inicio explÃ­citamente en filtros, usarla
         const fechaInicioDate = new Date(fechaInicioFiltro)
         const fechaMinima = new Date('2024-09-01')
         if (fechaInicioDate < fechaMinima) {
@@ -170,21 +170,21 @@ export function DashboardMenu() {
           queryParams.append('fecha_inicio', fechaInicioFiltro)
         }
       } else {
-        // Si no hay fecha_inicio explícita, usar septiembre 2024 como fecha de inicio mínima
+        // Si no hay fecha_inicio explÃ­cita, usar septiembre 2024 como fecha de inicio mÃ­nima
         queryParams.append('fecha_inicio', '2024-09-01') // Desde septiembre 2024
       }
 
-      // ✅ Pasar solo filtros de analista, concesionario y modelo (NO fecha_inicio ni fecha_fin del período)
+      // âœ… Pasar solo filtros de analista, concesionario y modelo (NO fecha_inicio ni fecha_fin del perÃ­odo)
       Object.entries(params).forEach(([key, value]) => {
-        // No pasar fecha_inicio ni fecha_fin del período (ya se manejan arriba o se ignoran)
+        // No pasar fecha_inicio ni fecha_fin del perÃ­odo (ya se manejan arriba o se ignoran)
         // Solo pasar filtros de analista, concesionario y modelo
         if (key !== 'fecha_inicio' && key !== 'fecha_fin' && value) {
           queryParams.append(key, value.toString())
         }
       })
       
-      // ✅ SIEMPRE agregar parámetro meses=12 para mostrar últimos 12 meses
-      // Esto asegura que se muestren múltiples meses independientemente del período
+      // âœ… SIEMPRE agregar parÃ¡metro meses=12 para mostrar Ãºltimos 12 meses
+      // Esto asegura que se muestren mÃºltiples meses independientemente del perÃ­odo
       queryParams.append('meses', '12')
 
       const response = await apiClient.get(
@@ -193,17 +193,17 @@ export function DashboardMenu() {
       const meses = response.meses
       return meses
     },
-    staleTime: 5 * 60 * 1000, // ✅ ACTUALIZADO: 5 minutos para datos históricos más frescos
-    enabled: !!kpisPrincipales, // ✅ Solo carga después de KPIs (lazy loading)
-    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
+    staleTime: 5 * 60 * 1000, // âœ… ACTUALIZADO: 5 minutos para datos histÃ³ricos mÃ¡s frescos
+    enabled: !!kpisPrincipales, // âœ… Solo carga despuÃ©s de KPIs (lazy loading)
+    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
-  // Batch 3: Gráficos secundarios rápidos
-  // ✅ ACTUALIZADO: Incluye período en queryKey y aplica filtro de período
+  // Batch 3: GrÃ¡ficos secundarios rÃ¡pidos
+  // âœ… ACTUALIZADO: Incluye perÃ­odo en queryKey y aplica filtro de perÃ­odo
   const { data: datosConcesionarios, isLoading: loadingConcesionarios } = useQuery({
     queryKey: ['prestamos-concesionario', periodo, JSON.stringify(filtros)],
     queryFn: async () => {
-      const params = construirFiltrosObject(periodo) // ✅ Pasar período
+      const params = construirFiltrosObject(periodo) // âœ… Pasar perÃ­odo
       const queryParams = new URLSearchParams()
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
@@ -211,21 +211,21 @@ export function DashboardMenu() {
       const response = await apiClient.get(
         `/api/v1/dashboard/prestamos-por-concesionario?${queryParams.toString()}`
       ) as { concesionarios: Array<{ concesionario: string; total_prestamos: number; cantidad_prestamos: number; porcentaje: number }> }
-      // ✅ Ordenar de mayor a menor por cantidad_prestamos (cantidad real, no monto)
+      // âœ… Ordenar de mayor a menor por cantidad_prestamos (cantidad real, no monto)
       const concesionariosOrdenados = response.concesionarios
         .sort((a, b) => b.cantidad_prestamos - a.cantidad_prestamos)
         .slice(0, 10) // Top 10
       return concesionariosOrdenados
     },
-    staleTime: 2 * 60 * 1000, // ✅ ACTUALIZADO: 2 minutos para datos más frescos
-    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
-    enabled: !!kpisPrincipales, // ✅ Lazy loading - carga después de KPIs
+    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos mÃ¡s frescos
+    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
+    enabled: !!kpisPrincipales, // âœ… Lazy loading - carga despuÃ©s de KPIs
   })
 
   const { data: datosModelos, isLoading: loadingModelos } = useQuery({
     queryKey: ['prestamos-modelo', periodo, JSON.stringify(filtros)],
     queryFn: async () => {
-      const params = construirFiltrosObject(periodo) // ✅ Pasar período
+      const params = construirFiltrosObject(periodo) // âœ… Pasar perÃ­odo
       const queryParams = new URLSearchParams()
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
@@ -233,31 +233,31 @@ export function DashboardMenu() {
       const response = await apiClient.get(
         `/api/v1/dashboard/prestamos-por-modelo?${queryParams.toString()}`
       ) as { modelos: Array<{ modelo: string; total_prestamos: number; cantidad_prestamos: number; porcentaje: number }> }
-      // ✅ Ordenar de mayor a menor por cantidad_prestamos (cantidad real, no monto)
+      // âœ… Ordenar de mayor a menor por cantidad_prestamos (cantidad real, no monto)
       const modelosOrdenados = response.modelos
         .sort((a, b) => b.cantidad_prestamos - a.cantidad_prestamos)
         .slice(0, 10) // Top 10
       return modelosOrdenados
     },
-    staleTime: 2 * 60 * 1000, // ✅ ACTUALIZADO: 2 minutos para datos más frescos
-    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
-    enabled: !!kpisPrincipales, // ✅ Lazy loading - carga después de KPIs
+    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos mÃ¡s frescos
+    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
+    enabled: !!kpisPrincipales, // âœ… Lazy loading - carga despuÃ©s de KPIs
   })
 
-  // Batch 4: BAJA - Gráficos menos críticos (cargar después de Batch 3, lazy loading)
-  // ✅ ACTUALIZADO: Incluye período en queryKey y aplica filtro de período
+  // Batch 4: BAJA - GrÃ¡ficos menos crÃ­ticos (cargar despuÃ©s de Batch 3, lazy loading)
+  // âœ… ACTUALIZADO: Incluye perÃ­odo en queryKey y aplica filtro de perÃ­odo
   const { data: datosFinanciamientoRangos, isLoading: loadingFinanciamientoRangos, isError: errorFinanciamientoRangos, error: errorFinanciamientoRangosDetail, refetch: refetchFinanciamientoRangos } = useQuery({
     queryKey: ['financiamiento-rangos', periodo, JSON.stringify(filtros)],
     queryFn: async () => {
       try {
-        const params = construirFiltrosObject(periodo) // ✅ Pasar período
+        const params = construirFiltrosObject(periodo) // âœ… Pasar perÃ­odo
         const queryParams = new URLSearchParams()
         Object.entries(params).forEach(([key, value]) => {
           if (value) queryParams.append(key, value.toString())
         })
         const response = await apiClient.get(
           `/api/v1/dashboard/financiamiento-por-rangos?${queryParams.toString()}`,
-          { timeout: 60000 } // ✅ Timeout extendido para queries pesadas
+          { timeout: 60000 } // âœ… Timeout extendido para queries pesadas
         ) as {
           rangos: Array<{
             categoria: string
@@ -271,13 +271,13 @@ export function DashboardMenu() {
         }
         return response
       } catch (error: any) {
-        console.error('❌ [DashboardMenu] Error cargando financiamiento por rangos:', error)
+        console.error('âŒ [DashboardMenu] Error cargando financiamiento por rangos:', error)
         // Si el error es 500 o de red, lanzar el error para que React Query lo maneje
-        // Si es otro error, retornar respuesta vacía para no romper el dashboard
+        // Si es otro error, retornar respuesta vacÃ­a para no romper el dashboard
         if (error?.response?.status >= 500 || error?.code === 'ERR_NETWORK' || error?.code === 'ECONNABORTED') {
           throw error // Lanzar para que React Query muestre el error
         }
-        // Para otros errores, retornar respuesta vacía
+        // Para otros errores, retornar respuesta vacÃ­a
         return {
           rangos: [],
           total_prestamos: 0,
@@ -285,17 +285,17 @@ export function DashboardMenu() {
         }
       }
     },
-    staleTime: 5 * 60 * 1000, // ✅ ACTUALIZADO: 5 minutos para datos más frescos
-    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
-    enabled: !!datosDashboard, // ✅ Lazy loading - carga después de dashboard admin
-    retry: 1, // ✅ Permitir 1 reintento para errores de red
+    staleTime: 5 * 60 * 1000, // âœ… ACTUALIZADO: 5 minutos para datos mÃ¡s frescos
+    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
+    enabled: !!datosDashboard, // âœ… Lazy loading - carga despuÃ©s de dashboard admin
+    retry: 1, // âœ… Permitir 1 reintento para errores de red
     retryDelay: 2000, // Esperar 2 segundos antes de reintentar
   })
 
   const { data: datosComposicionMorosidad, isLoading: loadingComposicionMorosidad } = useQuery({
     queryKey: ['composicion-morosidad', periodo, JSON.stringify(filtros)],
     queryFn: async () => {
-      const params = construirFiltrosObject(periodo) // ✅ Pasar período
+      const params = construirFiltrosObject(periodo) // âœ… Pasar perÃ­odo
       const queryParams = new URLSearchParams()
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
@@ -313,14 +313,14 @@ export function DashboardMenu() {
       }
       return response
     },
-    staleTime: 2 * 60 * 1000, // ✅ ACTUALIZADO: 2 minutos para datos más frescos
-    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
-    enabled: !!datosDashboard, // ✅ Lazy loading - carga después de dashboard admin
+    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos mÃ¡s frescos
+    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
+    enabled: !!datosDashboard, // âœ… Lazy loading - carga despuÃ©s de dashboard admin
   })
 
 
-  // Datos de cobranza para fechas específicas (mañana, hoy, 3 días atrás)
-  // ✅ OPTIMIZACIÓN: Aumentar staleTime y deshabilitar refetchOnWindowFocus para evitar llamadas redundantes
+  // Datos de cobranza para fechas especÃ­ficas (maÃ±ana, hoy, 3 dÃ­as atrÃ¡s)
+  // âœ… OPTIMIZACIÃ“N: Aumentar staleTime y deshabilitar refetchOnWindowFocus para evitar llamadas redundantes
   const { data: datosCobranzaFechas, isLoading: loadingCobranzaFechas } = useQuery({
     queryKey: ['cobranza-fechas-especificas', JSON.stringify(filtros)],
     queryFn: async () => {
@@ -339,21 +339,21 @@ export function DashboardMenu() {
       }>(`/api/v1/dashboard/cobranza-fechas-especificas?${queryParams.toString()}`)
       return response
     },
-    staleTime: 2 * 60 * 1000, // ✅ ACTUALIZADO: 2 minutos para datos más frescos
-    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
+    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos mÃ¡s frescos
+    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
     enabled: true,
-    retry: 1, // Solo un retry para evitar múltiples intentos
+    retry: 1, // Solo un retry para evitar mÃºltiples intentos
   })
 
   const { data: datosCobranzasSemanales, isLoading: loadingCobranzasSemanales } = useQuery({
     queryKey: ['cobranzas-semanales', periodo, JSON.stringify(filtros)],
     queryFn: async () => {
-      const params = construirFiltrosObject(periodo) // ✅ Pasar período
+      const params = construirFiltrosObject(periodo) // âœ… Pasar perÃ­odo
       const queryParams = new URLSearchParams()
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
       })
-      queryParams.append('semanas', '12') // Últimas 12 semanas
+      queryParams.append('semanas', '12') // Ãšltimas 12 semanas
       const response = await apiClient.get<{
         semanas: Array<{
           semana_inicio: string
@@ -367,28 +367,28 @@ export function DashboardMenu() {
         `/api/v1/dashboard/cobranzas-semanales?${queryParams.toString()}`,
         { timeout: 60000 }
       )
-      // ✅ Logging para diagnóstico (solo en desarrollo)
+      // âœ… Logging para diagnÃ³stico (solo en desarrollo)
       if (process.env.NODE_ENV === 'development' && response && response.semanas) {
         const semanasConDatos = response.semanas.filter(
           s => s.cobranzas_planificadas > 0 || s.pagos_reales > 0
         )
         console.log(
-          `📊 [CobranzasSemanales] Total semanas: ${response.semanas.length}, ` +
+          `ðŸ“Š [CobranzasSemanales] Total semanas: ${response.semanas.length}, ` +
           `Semanas con datos: ${semanasConDatos.length}`,
           semanasConDatos.length > 0 ? semanasConDatos : 'Sin datos'
         )
       }
       return response
     },
-    staleTime: 15 * 60 * 1000, // 15 minutos - optimizado para datos históricos
-    enabled: !!datosDashboard, // ✅ Lazy loading - carga después de dashboard admin
-    refetchOnWindowFocus: false, // Reducir peticiones automáticas
+    staleTime: 15 * 60 * 1000, // 15 minutos - optimizado para datos histÃ³ricos
+    enabled: !!datosDashboard, // âœ… Lazy loading - carga despuÃ©s de dashboard admin
+    refetchOnWindowFocus: false, // Reducir peticiones automÃ¡ticas
   })
 
   const { data: datosMorosidadAnalista, isLoading: loadingMorosidadAnalista } = useQuery({
     queryKey: ['morosidad-analista', periodo, JSON.stringify(filtros)],
     queryFn: async () => {
-      const params = construirFiltrosObject(periodo) // ✅ Pasar período
+      const params = construirFiltrosObject(periodo) // âœ… Pasar perÃ­odo
       const queryParams = new URLSearchParams()
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
@@ -396,39 +396,39 @@ export function DashboardMenu() {
       const response = await apiClient.get(
         `/api/v1/dashboard/morosidad-por-analista?${queryParams.toString()}`
       ) as { analistas: Array<{ analista: string; total_morosidad: number; cantidad_clientes: number }> }
-      // ✅ Ordenar de mayor a menor por total_morosidad
+      // âœ… Ordenar de mayor a menor por total_morosidad
       const analistasOrdenados = response.analistas
         .sort((a, b) => b.total_morosidad - a.total_morosidad)
         .slice(0, 10) // Top 10
       return analistasOrdenados
     },
-    staleTime: 2 * 60 * 1000, // ✅ ACTUALIZADO: 2 minutos para datos más frescos
-    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
-    enabled: !!datosDashboard, // ✅ Lazy loading - carga después de dashboard admin
+    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos mÃ¡s frescos
+    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
+    enabled: !!datosDashboard, // âœ… Lazy loading - carga despuÃ©s de dashboard admin
   })
 
   const { data: datosEvolucionMorosidad, isLoading: loadingEvolucionMorosidad } = useQuery({
     queryKey: ['evolucion-morosidad-menu', periodo, JSON.stringify(filtros)],
     queryFn: async () => {
-      const params = construirFiltrosObject(periodo) // ✅ Pasar período
+      const params = construirFiltrosObject(periodo) // âœ… Pasar perÃ­odo
       const queryParams = new URLSearchParams()
       
-      // ✅ CORRECCIÓN: NO pasar fecha_inicio del período para este gráfico
-      // En su lugar, usar el parámetro 'meses' para mostrar los últimos 12 meses
-      // Solo pasar fecha_inicio si viene de filtros explícitos del usuario
+      // âœ… CORRECCIÃ“N: NO pasar fecha_inicio del perÃ­odo para este grÃ¡fico
+      // En su lugar, usar el parÃ¡metro 'meses' para mostrar los Ãºltimos 12 meses
+      // Solo pasar fecha_inicio si viene de filtros explÃ­citos del usuario
       const fechaInicioFiltro = filtros.fecha_inicio && filtros.fecha_inicio !== '' ? filtros.fecha_inicio : null
       if (fechaInicioFiltro) {
         queryParams.append('fecha_inicio', fechaInicioFiltro)
       }
       
       Object.entries(params).forEach(([key, value]) => {
-        // No pasar fecha_inicio ni fecha_fin del período
+        // No pasar fecha_inicio ni fecha_fin del perÃ­odo
         if (key !== 'fecha_inicio' && key !== 'fecha_fin' && value) {
           queryParams.append(key, value.toString())
         }
       })
       
-      // ✅ SIEMPRE agregar parámetro meses=12 para mostrar últimos 12 meses
+      // âœ… SIEMPRE agregar parÃ¡metro meses=12 para mostrar Ãºltimos 12 meses
       queryParams.append('meses', '12')
       
       const response = await apiClient.get(
@@ -436,33 +436,33 @@ export function DashboardMenu() {
       ) as { meses: Array<{ mes: string; morosidad: number }> }
       return response.meses
     },
-    staleTime: 5 * 60 * 1000, // ✅ ACTUALIZADO: 5 minutos para datos históricos más frescos
-    refetchOnWindowFocus: true, // ✅ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
-    enabled: !!datosDashboard, // ✅ Lazy loading - carga después de dashboard admin
+    staleTime: 5 * 60 * 1000, // âœ… ACTUALIZADO: 5 minutos para datos histÃ³ricos mÃ¡s frescos
+    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
+    enabled: !!datosDashboard, // âœ… Lazy loading - carga despuÃ©s de dashboard admin
   })
 
   const { data: datosEvolucionPagos, isLoading: loadingEvolucionPagos } = useQuery({
     queryKey: ['evolucion-pagos-menu', periodo, JSON.stringify(filtros)],
     queryFn: async () => {
-      const params = construirFiltrosObject(periodo) // ✅ Pasar período
+      const params = construirFiltrosObject(periodo) // âœ… Pasar perÃ­odo
       const queryParams = new URLSearchParams()
       
-      // ✅ CORRECCIÓN: NO pasar fecha_inicio del período para este gráfico
-      // En su lugar, usar el parámetro 'meses' para mostrar los últimos 12 meses
-      // Solo pasar fecha_inicio si viene de filtros explícitos del usuario
+      // âœ… CORRECCIÃ“N: NO pasar fecha_inicio del perÃ­odo para este grÃ¡fico
+      // En su lugar, usar el parÃ¡metro 'meses' para mostrar los Ãºltimos 12 meses
+      // Solo pasar fecha_inicio si viene de filtros explÃ­citos del usuario
       const fechaInicioFiltro = filtros.fecha_inicio && filtros.fecha_inicio !== '' ? filtros.fecha_inicio : null
       if (fechaInicioFiltro) {
         queryParams.append('fecha_inicio', fechaInicioFiltro)
       }
       
       Object.entries(params).forEach(([key, value]) => {
-        // No pasar fecha_inicio ni fecha_fin del período
+        // No pasar fecha_inicio ni fecha_fin del perÃ­odo
         if (key !== 'fecha_inicio' && key !== 'fecha_fin' && value) {
           queryParams.append(key, value.toString())
         }
       })
       
-      // ✅ SIEMPRE agregar parámetro meses=12 para mostrar últimos 12 meses
+      // âœ… SIEMPRE agregar parÃ¡metro meses=12 para mostrar Ãºltimos 12 meses
       queryParams.append('meses', '12')
       
       // Usar timeout extendido para endpoints lentos
@@ -472,18 +472,18 @@ export function DashboardMenu() {
       ) as { meses: Array<{ mes: string; pagos: number; monto: number }> }
       return response.meses
     },
-    staleTime: 15 * 60 * 1000, // 15 minutos - optimizado para datos históricos
+    staleTime: 15 * 60 * 1000, // 15 minutos - optimizado para datos histÃ³ricos
     retry: 1,
-    refetchOnWindowFocus: false, // Reducir peticiones automáticas
-    enabled: !!datosDashboard, // ✅ Lazy loading - carga después de dashboard admin
+    refetchOnWindowFocus: false, // Reducir peticiones automÃ¡ticas
+    enabled: !!datosDashboard, // âœ… Lazy loading - carga despuÃ©s de dashboard admin
   })
 
 
   const [isRefreshing, setIsRefreshing] = useState(false)
 
-  // NOTA: No necesitamos invalidar queries manualmente aquí
-  // React Query detecta automáticamente los cambios en queryKey (que incluye JSON.stringify(filtros))
-  // y refetch automáticamente cuando cambian los filtros o el período
+  // NOTA: No necesitamos invalidar queries manualmente aquÃ­
+  // React Query detecta automÃ¡ticamente los cambios en queryKey (que incluye JSON.stringify(filtros))
+  // y refetch automÃ¡ticamente cuando cambian los filtros o el perÃ­odo
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
@@ -514,10 +514,10 @@ export function DashboardMenu() {
       await queryClient.refetchQueries({ queryKey: ['evolucion-morosidad-menu'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['evolucion-pagos-menu'], exact: false })
 
-      // También refrescar la query de kpisPrincipales usando su refetch
+      // TambiÃ©n refrescar la query de kpisPrincipales usando su refetch
       await refetch()
     } catch (error) {
-      console.error('❌ [DashboardMenu] Error al refrescar queries:', error)
+      console.error('âŒ [DashboardMenu] Error al refrescar queries:', error)
     } finally {
       setIsRefreshing(false)
     }
@@ -536,23 +536,23 @@ export function DashboardMenu() {
       // Crear bandas de $200 USD
       const bandas: Record<string, number> = {}
       const montosExtraidos = datosFinanciamientoRangos.rangos.map(r => {
-        // Extraer el monto máximo del rango
+        // Extraer el monto mÃ¡ximo del rango
         const match = r.categoria.match(/\$(\d+)/g)
         if (match) {
           const montos = match.map(m => parseInt(m.replace('$', '').replace(/,/g, '')))
           return Math.max(...montos)
         }
         return 0
-      }).filter(m => !isNaN(m) && m > 0) // Filtrar valores inválidos
+      }).filter(m => !isNaN(m) && m > 0) // Filtrar valores invÃ¡lidos
       
-      // Si no hay montos válidos, retornar array vacío
+      // Si no hay montos vÃ¡lidos, retornar array vacÃ­o
       if (montosExtraidos.length === 0) {
         return []
       }
       
       const maxMonto = Math.max(...montosExtraidos)
 
-    // Inicializar todas las bandas de $200 desde $0 hasta el máximo
+    // Inicializar todas las bandas de $200 desde $0 hasta el mÃ¡ximo
     for (let i = 0; i <= maxMonto; i += 200) {
       const bandaMax = i + 200
       const etiqueta = bandaMax > maxMonto && i > 0
@@ -561,12 +561,12 @@ export function DashboardMenu() {
       bandas[etiqueta] = 0
     }
 
-    // Distribuir los préstamos de los rangos existentes en las nuevas bandas de $200
+    // Distribuir los prÃ©stamos de los rangos existentes en las nuevas bandas de $200
     datosFinanciamientoRangos.rangos.forEach(rango => {
       const cantidad = rango.cantidad_prestamos
       const montoPromedio = rango.monto_total / (cantidad || 1)
 
-      // Extraer límites del rango
+      // Extraer lÃ­mites del rango
       const match = rango.categoria.match(/\$(\d+)/g)
       if (match) {
         const montos = match.map(m => parseInt(m.replace('$', '').replace(/,/g, '')))
@@ -578,7 +578,7 @@ export function DashboardMenu() {
           const bandaMin = i
           const bandaMax = i + 200
 
-          // Calcular intersección entre el rango y la banda
+          // Calcular intersecciÃ³n entre el rango y la banda
           const interseccionMin = Math.max(bandaMin, minRango)
           const interseccionMax = Math.min(bandaMax, maxRango)
 
@@ -601,7 +601,7 @@ export function DashboardMenu() {
     // Convertir a array y ordenar por monto (descendente)
     const bandasArray = Object.entries(bandas)
       .map(([categoria, cantidad]) => {
-        // Extraer el monto mínimo para ordenar (capturar todos los dígitos y comas después del $)
+        // Extraer el monto mÃ­nimo para ordenar (capturar todos los dÃ­gitos y comas despuÃ©s del $)
         const match = categoria.match(/\$([\d,]+)/)
         const montoMin = match ? parseInt(match[1].replace(/,/g, '')) : 0
         return {
@@ -613,20 +613,20 @@ export function DashboardMenu() {
       .filter(item => item.cantidad > 0) // Solo mostrar bandas con datos
       .sort((a, b) => b.montoMin - a.montoMin) // Ordenar de mayor a menor (valores grandes arriba)
 
-      // Formatear etiquetas de manera más legible
-      // El orden es descendente (mayor a menor), así los valores más grandes aparecen arriba en el gráfico vertical
+      // Formatear etiquetas de manera mÃ¡s legible
+      // El orden es descendente (mayor a menor), asÃ­ los valores mÃ¡s grandes aparecen arriba en el grÃ¡fico vertical
       return bandasArray.map(item => ({
         ...item,
-        categoriaFormateada: item.categoria.replace(/,/g, '') // Remover comas para mejor visualización
+        categoriaFormateada: item.categoria.replace(/,/g, '') // Remover comas para mejor visualizaciÃ³n
       }))
     } catch (error) {
       console.error('Error procesando datos de financiamiento por rangos:', error)
-      return [] // Retornar array vacío en caso de error
+      return [] // Retornar array vacÃ­o en caso de error
     }
   }, [datosFinanciamientoRangos])
 
-  // ✅ Asegurar que el componente siempre renderice, incluso si hay errores
-  // Si hay un error crítico en las queries principales, mostrar mensaje pero no bloquear
+  // âœ… Asegurar que el componente siempre renderice, incluso si hay errores
+  // Si hay un error crÃ­tico en las queries principales, mostrar mensaje pero no bloquear
   const hasCriticalError = errorOpcionesFiltros || errorKPIs
   
   return (
@@ -652,14 +652,14 @@ export function DashboardMenu() {
                   <div className="absolute inset-0 h-2 w-2 rounded-full bg-emerald-400 animate-ping opacity-75"></div>
                 </div>
                 <p className="text-gray-600 font-semibold text-sm tracking-wide">
-                  Bienvenido, <span className="text-cyan-600 font-black">{userName}</span> • Monitoreo Estratégico
+                  Bienvenido, <span className="text-cyan-600 font-black">{userName}</span> â€¢ Monitoreo EstratÃ©gico
                 </p>
               </div>
             </div>
           </div>
         </motion.div>
         
-        {/* Mensaje de error si hay problemas críticos */}
+        {/* Mensaje de error si hay problemas crÃ­ticos */}
         {hasCriticalError && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -669,7 +669,7 @@ export function DashboardMenu() {
             <div className="flex items-center gap-2 text-yellow-800">
               <AlertTriangle className="h-5 w-5" />
               <p className="text-sm font-medium">
-                Algunos datos no se pudieron cargar. Por favor, recarga la página o intenta más tarde.
+                Algunos datos no se pudieron cargar. Por favor, recarga la pÃ¡gina o intenta mÃ¡s tarde.
               </p>
             </div>
           </motion.div>
@@ -688,7 +688,7 @@ export function DashboardMenu() {
                   <div className="flex items-center space-x-2">
                     <div className="flex items-center space-x-2 text-sm font-semibold text-gray-700">
                       <Filter className="h-4 w-4 text-cyan-600" />
-                      <span>Filtros Rápidos</span>
+                      <span>Filtros RÃ¡pidos</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-3 flex-wrap">
@@ -736,7 +736,7 @@ export function DashboardMenu() {
                 className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
               >
                 <KpiCardLarge
-                  title="Total Préstamos"
+                  title="Total PrÃ©stamos"
                   value={kpisPrincipales.total_prestamos.valor_actual}
                   variation={kpisPrincipales.total_prestamos.variacion_porcentual !== undefined ? {
                     percent: kpisPrincipales.total_prestamos.variacion_porcentual,
@@ -749,7 +749,7 @@ export function DashboardMenu() {
                   format="number"
                 />
                 <KpiCardLarge
-                  title="Créditos Nuevos"
+                  title="CrÃ©ditos Nuevos"
                   value={kpisPrincipales.creditos_nuevos_mes.valor_actual}
                   variation={kpisPrincipales.creditos_nuevos_mes.variacion_porcentual !== undefined ? {
                     percent: kpisPrincipales.creditos_nuevos_mes.variacion_porcentual,
@@ -791,7 +791,7 @@ export function DashboardMenu() {
           </>
         )}
 
-        {/* GRÁFICOS PRINCIPALES */}
+        {/* GRÃFICOS PRINCIPALES */}
         {loadingDashboard ? (
           <div className="space-y-6">
             <div className="h-[400px] bg-gray-100 rounded-xl animate-pulse" />
@@ -799,7 +799,7 @@ export function DashboardMenu() {
           </div>
         ) : datosDashboard ? (
           <div className="space-y-6">
-            {/* Gráfico de Evolución Mensual */}
+            {/* GrÃ¡fico de EvoluciÃ³n Mensual */}
             {evolucionMensual.length > 0 && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -810,7 +810,7 @@ export function DashboardMenu() {
                   <CardHeader className="bg-gradient-to-r from-cyan-50 to-blue-50 border-b-2 border-cyan-200">
                     <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
                       <LineChart className="h-6 w-6 text-cyan-600" />
-                      <span>Evolución Mensual</span>
+                      <span>EvoluciÃ³n Mensual</span>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-6">
@@ -846,7 +846,7 @@ export function DashboardMenu() {
               </motion.div>
             )}
 
-            {/* Gráfico de Áreas - Indicadores Financieros - Ancho Completo */}
+            {/* GrÃ¡fico de Ãreas - Indicadores Financieros - Ancho Completo */}
             {datosTendencia && datosTendencia.length > 0 && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -949,9 +949,9 @@ export function DashboardMenu() {
           </div>
         ) : null}
 
-        {/* GRÁFICOS: BANDAS DE $200 USD Y COBRANZA PLANIFICADA VS REAL */}
+        {/* GRÃFICOS: BANDAS DE $200 USD Y COBRANZA PLANIFICADA VS REAL */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* GRÁFICO DE BANDAS DE $200 USD */}
+          {/* GRÃFICO DE BANDAS DE $200 USD */}
           {datosBandas200 && datosBandas200.length > 0 && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -962,7 +962,7 @@ export function DashboardMenu() {
                 <CardHeader className="bg-gradient-to-r from-indigo-50 to-purple-50 border-b-2 border-indigo-200">
                   <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
                     <BarChart3 className="h-6 w-6 text-indigo-600" />
-                    <span>Distribución por Bandas de $200 USD</span>
+                    <span>DistribuciÃ³n por Bandas de $200 USD</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-6 flex-1">
@@ -979,7 +979,7 @@ export function DashboardMenu() {
                         tick={{ fontSize: 11, fill: '#6b7280' }}
                         tickFormatter={(value) => value.toLocaleString('es-EC')}
                         label={{
-                          value: 'Cantidad de Préstamos',
+                          value: 'Cantidad de PrÃ©stamos',
                           position: 'insideBottom',
                           offset: -10,
                           style: { textAnchor: 'middle', fill: '#374151', fontSize: 12, fontWeight: 600 }
@@ -996,7 +996,7 @@ export function DashboardMenu() {
                       />
                       <Tooltip
                         formatter={(value: number) => [
-                          `${value.toLocaleString('es-EC')} préstamos`,
+                          `${value.toLocaleString('es-EC')} prÃ©stamos`,
                           'Cantidad'
                         ]}
                         labelFormatter={(label) => `Banda: ${label}`}
@@ -1015,10 +1015,10 @@ export function DashboardMenu() {
                       <Bar
                         dataKey="cantidad"
                         radius={[0, 6, 6, 0]}
-                        name="Cantidad de Préstamos"
+                        name="Cantidad de PrÃ©stamos"
                       >
                         {datosBandas200.map((entry, index) => {
-                          // Gradiente de color según la posición (más oscuro para valores más altos)
+                          // Gradiente de color segÃºn la posiciÃ³n (mÃ¡s oscuro para valores mÃ¡s altos)
                           const intensity = entry.cantidad / Math.max(...datosBandas200.map(d => d.cantidad))
                           const opacity = 0.6 + (intensity * 0.4)
                           return (
@@ -1036,7 +1036,7 @@ export function DashboardMenu() {
             </motion.div>
           )}
 
-          {/* GRÁFICO DE COBRANZA FECHAS ESPECÍFICAS */}
+          {/* GRÃFICO DE COBRANZA FECHAS ESPECÃFICAS */}
           {datosCobranzaFechas && datosCobranzaFechas.dias && datosCobranzaFechas.dias.length > 0 && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -1103,9 +1103,9 @@ export function DashboardMenu() {
           )}
         </div>
 
-        {/* GRÁFICOS DE DISTRIBUCIÓN */}
+        {/* GRÃFICOS DE DISTRIBUCIÃ“N */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Préstamos por Concesionario */}
+          {/* PrÃ©stamos por Concesionario */}
           {datosConcesionarios && datosConcesionarios.length > 0 && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -1116,7 +1116,7 @@ export function DashboardMenu() {
                 <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50 border-b-2 border-purple-200">
                     <CardTitle className="flex items-center justify-center space-x-2 text-xl font-bold text-gray-800">
                     <BarChart3 className="h-6 w-6 text-purple-600" />
-                    <span>Préstamos por Concesionario</span>
+                    <span>PrÃ©stamos por Concesionario</span>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-6 flex items-center justify-center">
@@ -1136,7 +1136,7 @@ export function DashboardMenu() {
                       />
                       <Tooltip
                         formatter={(value: number, name: string) => [
-                          `${Math.round(value).toLocaleString('es-EC')} préstamos`,
+                          `${Math.round(value).toLocaleString('es-EC')} prÃ©stamos`,
                           'Cantidad'
                         ]}
                         labelFormatter={(label) => `Concesionario: ${label}`}
@@ -1157,7 +1157,7 @@ export function DashboardMenu() {
               </motion.div>
           )}
 
-          {/* Préstamos por Modelo */}
+          {/* PrÃ©stamos por Modelo */}
           {datosModelos && datosModelos.length > 0 && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -1168,7 +1168,7 @@ export function DashboardMenu() {
                 <CardHeader className="bg-gradient-to-r from-amber-50 to-orange-50 border-b-2 border-amber-200">
                     <CardTitle className="flex items-center justify-center space-x-2 text-xl font-bold text-gray-800">
                     <BarChart3 className="h-6 w-6 text-amber-600" />
-                    <span>Préstamos por Modelo</span>
+                    <span>PrÃ©stamos por Modelo</span>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-6 flex items-center justify-center">
@@ -1188,7 +1188,7 @@ export function DashboardMenu() {
                         />
                             <Tooltip
                         formatter={(value: number, name: string) => [
-                          `${Math.round(value).toLocaleString('es-EC')} préstamos`,
+                          `${Math.round(value).toLocaleString('es-EC')} prÃ©stamos`,
                           'Cantidad'
                         ]}
                         labelFormatter={(label) => `Modelo: ${label}`}
@@ -1212,9 +1212,9 @@ export function DashboardMenu() {
 
 
 
-        {/* GRÁFICOS DE MOROSIDAD */}
+        {/* GRÃFICOS DE MOROSIDAD */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Composición de Morosidad */}
+          {/* ComposiciÃ³n de Morosidad */}
           {datosComposicionMorosidad && datosComposicionMorosidad.puntos && datosComposicionMorosidad.puntos.length > 0 && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -1226,7 +1226,7 @@ export function DashboardMenu() {
                 <CardHeader className="bg-gradient-to-r from-red-50 to-rose-50 border-b-2 border-red-200">
                   <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
                     <BarChart3 className="h-6 w-6 text-red-600" />
-                    <span>Composición de Morosidad</span>
+                    <span>ComposiciÃ³n de Morosidad</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-6 flex-1">
@@ -1301,9 +1301,9 @@ export function DashboardMenu() {
           )}
         </div>
 
-        {/* GRÁFICOS DE EVOLUCIÓN */}
+        {/* GRÃFICOS DE EVOLUCIÃ“N */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Evolución de Morosidad */}
+          {/* EvoluciÃ³n de Morosidad */}
           {datosEvolucionMorosidad && datosEvolucionMorosidad.length > 0 && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -1314,7 +1314,7 @@ export function DashboardMenu() {
                 <CardHeader className="bg-gradient-to-r from-red-50 to-pink-50 border-b-2 border-red-200">
                   <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
                     <LineChart className="h-6 w-6 text-red-600" />
-                    <span>Evolución de Morosidad</span>
+                    <span>EvoluciÃ³n de Morosidad</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-6">
@@ -1333,7 +1333,7 @@ export function DashboardMenu() {
               </motion.div>
           )}
 
-          {/* Evolución de Pagos */}
+          {/* EvoluciÃ³n de Pagos */}
           {datosEvolucionPagos && datosEvolucionPagos.length > 0 && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -1344,7 +1344,7 @@ export function DashboardMenu() {
                 <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b-2 border-green-200">
                     <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
                     <LineChart className="h-6 w-6 text-green-600" />
-                    <span>Evolución de Pagos</span>
+                    <span>EvoluciÃ³n de Pagos</span>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-6">

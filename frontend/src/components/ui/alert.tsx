@@ -1,6 +1,6 @@
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
-import { cn } from "@/utils"
+import { cn } from "../../utils"
 import { AlertCircle, CheckCircle, Info, AlertTriangle } from "lucide-react"
 
 const alertVariants = cva(
@@ -62,7 +62,7 @@ const AlertDescription = React.forwardRef<
 ))
 AlertDescription.displayName = "AlertDescription"
 
-// Componente de alerta con icono automático
+// Componente de alerta con icono automÃ¡tico
 interface AlertWithIconProps extends React.HTMLAttributes<HTMLDivElement>, VariantProps<typeof alertVariants> {
   title?: string
   description?: string

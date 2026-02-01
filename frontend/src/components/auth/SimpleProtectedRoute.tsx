@@ -1,18 +1,18 @@
 // frontend/src/components/auth/SimpleProtectedRoute.tsx
 import React from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
-import { useSimpleAuth } from '@/store/simpleAuthStore'
-import { LoadingSpinner } from '@/components/ui/loading-spinner'
+import { useSimpleAuth } from '../../store/simpleAuthStore'
+import { LoadingSpinner } from '../../components/ui/loading-spinner'
 
 interface SimpleProtectedRouteProps {
   children: React.ReactNode
-  requireAdmin?: boolean  // Cambio clave: requiredRoles → requireAdmin
+  requireAdmin?: boolean  // Cambio clave: requiredRoles â†’ requireAdmin
   fallbackPath?: string
 }
 
 export function SimpleProtectedRoute({
   children,
-  requireAdmin = false,  // Cambio clave: requiredRoles → requireAdmin
+  requireAdmin = false,  // Cambio clave: requiredRoles â†’ requireAdmin
   fallbackPath = '/login'
 }: SimpleProtectedRouteProps) {
   const { isAuthenticated, user, isLoading } = useSimpleAuth()
@@ -32,11 +32,11 @@ export function SimpleProtectedRoute({
     }
   }, [isLoading])
 
-  // Mostrar loading mientras se verifica la autenticación
+  // Mostrar loading mientras se verifica la autenticaciÃ³n
   if (isLoading && !loadingTimeout) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <LoadingSpinner size="lg" text="Verificando autenticación..." />
+        <LoadingSpinner size="lg" text="Verificando autenticaciÃ³n..." />
       </div>
     )
   }
@@ -56,7 +56,7 @@ export function SimpleProtectedRoute({
               Tiempo de espera agotado
             </h1>
             <p className="text-gray-600 mb-4">
-              No se pudo verificar la autenticación. Por favor, intente iniciar sesión nuevamente.
+              No se pudo verificar la autenticaciÃ³n. Por favor, intente iniciar sesiÃ³n nuevamente.
             </p>
           </div>
           <button
@@ -70,7 +70,7 @@ export function SimpleProtectedRoute({
     )
   }
 
-  // Si no está autenticado, redirigir al login
+  // Si no estÃ¡ autenticado, redirigir al login
   if (!isAuthenticated || !user) {
     return <Navigate to={fallbackPath} state={{ from: location }} replace />
   }
@@ -90,7 +90,7 @@ export function SimpleProtectedRoute({
               Acceso Denegado
             </h1>
             <p className="text-gray-600 mb-4">
-              No tiene permisos para acceder a esta página.
+              No tiene permisos para acceder a esta pÃ¡gina.
             </p>
             <div className="bg-gray-50 rounded-lg p-4 mb-6">
               <p className="text-sm text-gray-700 mb-1">
@@ -107,7 +107,7 @@ export function SimpleProtectedRoute({
               onClick={() => window.history.back()}
               className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium"
             >
-              ← Volver a la página anterior
+              â† Volver a la pÃ¡gina anterior
             </button>
 
             <button

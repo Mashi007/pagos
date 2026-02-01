@@ -13,10 +13,10 @@ import {
 import { BaseModal } from '../BaseModal'
 import { DashboardFiltrosPanel } from '../DashboardFiltrosPanel'
 import { KpiCardsPanel } from '../KpiCardsPanel'
-import { useDashboardFiltros, type DashboardFiltros } from '@/hooks/useDashboardFiltros'
-import { apiClient } from '@/services/api'
-import { formatCurrency } from '@/utils'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useDashboardFiltros, type DashboardFiltros } from '../../../hooks/useDashboardFiltros'
+import { apiClient } from '../../../services/api'
+import { formatCurrency } from '../../../utils'
+import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card'
 
 interface CobranzasMensualesModalProps {
   isOpen: boolean
@@ -113,14 +113,14 @@ export function CobranzasMensualesModal({ isOpen, onClose }: CobranzasMensualesM
           errorOpcionesFiltros={errorOpcionesFiltros}
         />
 
-        {/* Layout: Tarjetas KPI Izquierda + Gráfico Derecha */}
+        {/* Layout: Tarjetas KPI Izquierda + GrÃ¡fico Derecha */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Tarjetas KPI - Izquierda */}
           <div className="lg:col-span-1">
             <KpiCardsPanel filtros={filtros} />
           </div>
 
-          {/* Gráfico - Derecha */}
+          {/* GrÃ¡fico - Derecha */}
           <div className="lg:col-span-3">
             <Card>
               <CardHeader>
@@ -129,11 +129,11 @@ export function CobranzasMensualesModal({ isOpen, onClose }: CobranzasMensualesM
               <CardContent>
                 {loadingCobranzas ? (
                   <div className="h-[400px] flex items-center justify-center">
-                    <div className="animate-pulse text-gray-400">Cargando gráfico...</div>
+                    <div className="animate-pulse text-gray-400">Cargando grÃ¡fico...</div>
                   </div>
                 ) : datosGrafico.length === 0 ? (
                   <div className="h-[400px] flex items-center justify-center text-gray-500">
-                    No hay datos disponibles para el período seleccionado
+                    No hay datos disponibles para el perÃ­odo seleccionado
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height={400}>

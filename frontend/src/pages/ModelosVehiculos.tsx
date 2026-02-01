@@ -12,14 +12,14 @@ import {
   Loader2,
   RefreshCw
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { ModeloVehiculo, ModeloVehiculoUpdate, ModeloVehiculoCreate } from '@/services/modeloVehiculoService'
-import { configuracionGeneralService } from '@/services/configuracionGeneralService'
-import { useModelosVehiculos, useDeleteModeloVehiculo, useUpdateModeloVehiculo, useCreateModeloVehiculo } from '@/hooks/useModelosVehiculos'
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
+import { Button } from '../components/ui/button'
+import { Input } from '../components/ui/input'
+import { Badge } from '../components/ui/badge'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
+import { ModeloVehiculo, ModeloVehiculoUpdate, ModeloVehiculoCreate } from '../services/modeloVehiculoService'
+import { configuracionGeneralService } from '../services/configuracionGeneralService'
+import { useModelosVehiculos, useDeleteModeloVehiculo, useUpdateModeloVehiculo, useCreateModeloVehiculo } from '../hooks/useModelosVehiculos'
 import toast from 'react-hot-toast'
 
 export function ModelosVehiculos() {
@@ -62,10 +62,10 @@ export function ModelosVehiculos() {
 
   const handleEliminar = async (id: number) => {
     try {
-      // Confirmar eliminación permanente
+      // Confirmar eliminaciÃ³n permanente
       const confirmar = window.confirm(
-        '⚠️ ¿Estás seguro de que quieres ELIMINAR PERMANENTEMENTE este modelo?\n\n' +
-        'Esta acción NO se puede deshacer y el modelo será borrado completamente de la base de datos.'
+        'âš ï¸ Â¿EstÃ¡s seguro de que quieres ELIMINAR PERMANENTEMENTE este modelo?\n\n' +
+        'Esta acciÃ³n NO se puede deshacer y el modelo serÃ¡ borrado completamente de la base de datos.'
       )
 
       if (!confirmar) {
@@ -111,7 +111,7 @@ export function ModelosVehiculos() {
   const handleCreateOrUpdate = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // Validar modelo (solo que no esté vacío)
+    // Validar modelo (solo que no estÃ© vacÃ­o)
     const error = validateModelo(formData.modelo)
     if (error) {
       setValidationError(error)
@@ -130,17 +130,17 @@ export function ModelosVehiculos() {
           id: editingModelo.id,
           data: { ...formData, modelo: modeloFormateado }
         })
-        toast.success('✅ Modelo actualizado exitosamente')
+        toast.success('âœ… Modelo actualizado exitosamente')
       } else {
         // Al crear, ya tiene activo: true por defecto
         await createModeloMutation.mutateAsync({ ...formData, modelo: modeloFormateado })
-        toast.success('✅ Modelo creado exitosamente')
+        toast.success('âœ… Modelo creado exitosamente')
       }
       resetForm()
       refetch()
     } catch (err) {
       console.error('Error:', err)
-      toast.error('❌ Error al guardar modelo')
+      toast.error('âŒ Error al guardar modelo')
     }
   }
 
@@ -159,18 +159,18 @@ export function ModelosVehiculos() {
     refetch()
   }
 
-  // Filtrar modelos por término de búsqueda
+  // Filtrar modelos por tÃ©rmino de bÃºsqueda
   const filteredModelos = (modelos || []).filter(modelo =>
     modelo.modelo.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  // Paginación
+  // PaginaciÃ³n
   const totalPages = Math.ceil(filteredModelos.length / itemsPerPage)
   const startIndex = (currentPage - 1) * itemsPerPage
   const endIndex = startIndex + itemsPerPage
   const paginatedModelos = filteredModelos.slice(startIndex, endIndex)
 
-  // Resetear a página 1 cuando cambia el filtro de búsqueda
+  // Resetear a pÃ¡gina 1 cuando cambia el filtro de bÃºsqueda
   useEffect(() => {
     setCurrentPage(1)
   }, [searchTerm])
@@ -180,7 +180,7 @@ export function ModelosVehiculos() {
       <div className="flex items-center justify-center h-64">
         <div className="flex items-center space-x-2">
           <Loader2 className="h-6 w-6 animate-spin" />
-          <span>Cargando modelos de vehículos...</span>
+          <span>Cargando modelos de vehÃ­culos...</span>
         </div>
       </div>
     )
@@ -190,7 +190,7 @@ export function ModelosVehiculos() {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
-          <p className="text-red-500 mb-4">Error al cargar modelos de vehículos</p>
+          <p className="text-red-500 mb-4">Error al cargar modelos de vehÃ­culos</p>
           <Button onClick={handleRefresh} variant="outline">
             <RefreshCw className="h-4 w-4 mr-2" />
             Reintentar
@@ -205,9 +205,9 @@ export function ModelosVehiculos() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Modelos de Vehículos</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Modelos de VehÃ­culos</h1>
           <p className="text-muted-foreground">
-            Gestiona los modelos de vehículos del sistema
+            Gestiona los modelos de vehÃ­culos del sistema
           </p>
         </div>
         <div className="flex items-center space-x-2">
@@ -285,7 +285,7 @@ export function ModelosVehiculos() {
       {/* Modelos Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Lista de Modelos de Vehículos</CardTitle>
+          <CardTitle>Lista de Modelos de VehÃ­culos</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
@@ -295,7 +295,7 @@ export function ModelosVehiculos() {
                 <TableHead>Modelo</TableHead>
                 <TableHead>Precio ({moneda})</TableHead>
                 <TableHead>Estado</TableHead>
-                <TableHead>Fecha Creación</TableHead>
+                <TableHead>Fecha CreaciÃ³n</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
@@ -356,7 +356,7 @@ export function ModelosVehiculos() {
             </div>
           )}
 
-          {/* Paginación */}
+          {/* PaginaciÃ³n */}
           {filteredModelos.length > itemsPerPage && (
             <div className="flex items-center justify-between px-2 py-4 border-t">
               <div className="text-sm text-gray-500">
@@ -411,7 +411,7 @@ export function ModelosVehiculos() {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  {editingModelo ? 'Editar Modelo de Vehículo' : 'Nuevo Modelo de Vehículo'}
+                  {editingModelo ? 'Editar Modelo de VehÃ­culo' : 'Nuevo Modelo de VehÃ­culo'}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -504,7 +504,7 @@ export function ModelosVehiculos() {
         </div>
       )}
 
-      {/* Importación desde Excel */}
+      {/* ImportaciÃ³n desde Excel */}
       <Card>
         <CardHeader>
           <CardTitle>Importar Modelos y Precios (Excel)</CardTitle>
@@ -526,7 +526,7 @@ export function ModelosVehiculos() {
               Examinar...
             </label>
             <span className="text-sm text-gray-600">
-              {archivoExcel ? archivoExcel.name : 'No se ha seleccionado ningún archivo.'}
+              {archivoExcel ? archivoExcel.name : 'No se ha seleccionado ningÃºn archivo.'}
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -535,7 +535,7 @@ export function ModelosVehiculos() {
               onClick={async () => {
                 if (!archivoExcel) return
                 try {
-                  const svc = (await import('@/services/modeloVehiculoService')).modeloVehiculoService
+                  const svc = (await import('../services/modeloVehiculoService')).modeloVehiculoService
                   const res = await svc.importarDesdeExcel(archivoExcel)
                   toast.success(`Importado: ${res.creados} creados, ${res.actualizados} actualizados`)
                   setArchivoExcel(null)
@@ -544,7 +544,7 @@ export function ModelosVehiculos() {
                   if (fileInput) fileInput.value = ''
                   await refetch()
                 } catch (err: unknown) {
-                  const { getErrorMessage, getErrorDetail } = await import('@/types/errors')
+                  const { getErrorMessage, getErrorDetail } = await import('../types/errors')
                   let errorMessage = getErrorMessage(err)
                   const detail = getErrorDetail(err)
                   if (detail) {

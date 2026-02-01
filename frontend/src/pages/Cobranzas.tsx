@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
+import { Button } from '../components/ui/button'
+import { Badge } from '../components/ui/badge'
+import { Input } from '../components/ui/input'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import {
   AlertTriangle,
   TrendingDown,
@@ -23,12 +23,12 @@ import {
   X,
   Edit
 } from 'lucide-react'
-import { cobranzasService } from '@/services/cobranzasService'
+import { cobranzasService } from '../services/cobranzasService'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import type { ClienteAtrasado, CobranzasPorAnalista } from '@/services/cobranzasService'
-import { InformesCobranzas } from '@/components/cobranzas/InformesCobranzas'
+import type { ClienteAtrasado, CobranzasPorAnalista } from '../services/cobranzasService'
+import { InformesCobranzas } from '../components/cobranzas/InformesCobranzas'
 import { toast } from 'sonner'
-import { userService } from '@/services/userService'
+import { userService } from '../services/userService'
 
 export function Cobranzas() {
   const [tabActiva, setTabActiva] = useState('cuotas')
@@ -37,18 +37,18 @@ export function Cobranzas() {
   const [rangoDiasMax, setRangoDiasMax] = useState<number | undefined>(undefined)
   const [errorRangoDias, setErrorRangoDias] = useState<string | null>(null)
   
-  // ✅ Función de validación de rango de días
+  // âœ… FunciÃ³n de validaciÃ³n de rango de dÃ­as
   const validarRangoDias = (min: number | undefined, max: number | undefined): boolean => {
     if (min !== undefined && max !== undefined && min > max) {
-      setErrorRangoDias('Los días mínimos no pueden ser mayores que los días máximos')
+      setErrorRangoDias('Los dÃ­as mÃ­nimos no pueden ser mayores que los dÃ­as mÃ¡ximos')
       return false
     }
     if (min !== undefined && min < 0) {
-      setErrorRangoDias('Los días mínimos deben ser un número positivo')
+      setErrorRangoDias('Los dÃ­as mÃ­nimos deben ser un nÃºmero positivo')
       return false
     }
     if (max !== undefined && max < 0) {
-      setErrorRangoDias('Los días máximos deben ser un número positivo')
+      setErrorRangoDias('Los dÃ­as mÃ¡ximos deben ser un nÃºmero positivo')
       return false
     }
     setErrorRangoDias(null)
@@ -71,7 +71,7 @@ export function Cobranzas() {
   const [mlImpagoTemporal, setMLImpagoTemporal] = useState<{ nivelRiesgo: string; probabilidad: number } | null>(null)
   const [guardandoMLImpago, setGuardandoMLImpago] = useState<number | null>(null)
   
-  // ✅ QueryClient para invalidación inteligente de caché
+  // âœ… QueryClient para invalidaciÃ³n inteligente de cachÃ©
   const queryClient = useQueryClient()
 
   // Query para resumen
@@ -89,8 +89,8 @@ export function Cobranzas() {
   })
 
   // Query para clientes atrasados
-  // ✅ OPTIMIZACIÓN: Desactivar ML por defecto para carga inicial más rápida
-  // El ML se puede cargar después si es necesario (lazy loading)
+  // âœ… OPTIMIZACIÃ“N: Desactivar ML por defecto para carga inicial mÃ¡s rÃ¡pida
+  // El ML se puede cargar despuÃ©s si es necesario (lazy loading)
   const {
     data: clientesAtrasados,
     isLoading: cargandoClientes,
@@ -104,18 +104,18 @@ export function Cobranzas() {
       rangoDiasMin,
       rangoDiasMax,
       false, // incluirAdmin
-      false  // ✅ incluirML: false por defecto para carga rápida (2868 clientes es demasiado para ML)
+      false  // âœ… incluirML: false por defecto para carga rÃ¡pida (2868 clientes es demasiado para ML)
     ),
     retry: 2,
-    retryDelay: 3000, // ✅ Aumentar delay entre retries para dar más tiempo al servidor
-    gcTime: 5 * 60 * 1000, // ✅ Mantener en cache 5 minutos para evitar recargas innecesarias
-    staleTime: 2 * 60 * 1000, // ✅ Considerar datos frescos por 2 minutos
-    // ✅ No mostrar error si es un timeout que se resolvió en retry
+    retryDelay: 3000, // âœ… Aumentar delay entre retries para dar mÃ¡s tiempo al servidor
+    gcTime: 5 * 60 * 1000, // âœ… Mantener en cache 5 minutos para evitar recargas innecesarias
+    staleTime: 2 * 60 * 1000, // âœ… Considerar datos frescos por 2 minutos
+    // âœ… No mostrar error si es un timeout que se resolviÃ³ en retry
     onError: (error: any) => {
-      // Solo mostrar error si NO es un timeout que se resolvió (ECONNABORTED)
-      // React Query manejará el retry automáticamente
+      // Solo mostrar error si NO es un timeout que se resolviÃ³ (ECONNABORTED)
+      // React Query manejarÃ¡ el retry automÃ¡ticamente
       if (error?.code !== 'ECONNABORTED' && !error?.message?.includes('timeout')) {
-        console.error('❌ [Cobranzas] Error cargando clientes atrasados:', error)
+        console.error('âŒ [Cobranzas] Error cargando clientes atrasados:', error)
       }
     },
   })
@@ -155,14 +155,14 @@ export function Cobranzas() {
   } = useQuery({
     queryKey: ['analistas-activos'],
     queryFn: async () => {
-      const { analistaService } = await import('@/services/analistaService')
+      const { analistaService } = await import('../services/analistaService')
       return await analistaService.listarAnalistasActivos()
     },
     retry: 2,
     retryDelay: 1000,
   })
 
-  // Efecto para mostrar errores automáticamente
+  // Efecto para mostrar errores automÃ¡ticamente
   useEffect(() => {
     if (errorResumen) {
       console.error('Error cargando resumen de cobranzas:', errorResumenDetalle)
@@ -199,7 +199,7 @@ export function Cobranzas() {
     }
   }, [errorAnalistas, errorAnalistasDetalle])
 
-  // Función para exportar clientes de un analista
+  // FunciÃ³n para exportar clientes de un analista
   const exportarClientesAnalista = async (nombreAnalista: string) => {
     try {
       const clientes = await cobranzasService.getClientesPorAnalista(nombreAnalista)
@@ -214,7 +214,7 @@ export function Cobranzas() {
     }
   }
 
-  // Función para expandir/colapsar analista y cargar sus clientes
+  // FunciÃ³n para expandir/colapsar analista y cargar sus clientes
   const toggleAnalista = async (nombreAnalista: string) => {
     const expandidos = new Set(analistasExpandidos)
 
@@ -223,7 +223,7 @@ export function Cobranzas() {
       expandidos.delete(nombreAnalista)
       setAnalistasExpandidos(expandidos)
     } else {
-      // Expandir y cargar clientes si no están cargados
+      // Expandir y cargar clientes si no estÃ¡n cargados
       expandidos.add(nombreAnalista)
       setAnalistasExpandidos(expandidos)
 
@@ -242,19 +242,19 @@ export function Cobranzas() {
     }
   }
 
-  // Función para iniciar edición del analista
+  // FunciÃ³n para iniciar ediciÃ³n del analista
   const iniciarEdicionAnalista = (prestamoId: number, analistaActual: string) => {
     setEditandoAnalista(prestamoId)
     setAnalistaTemporal(analistaActual || '')
   }
 
-  // Función para cancelar edición del analista
+  // FunciÃ³n para cancelar ediciÃ³n del analista
   const cancelarEdicionAnalista = () => {
     setEditandoAnalista(null)
     setAnalistaTemporal('')
   }
 
-  // Función para guardar el analista actualizado
+  // FunciÃ³n para guardar el analista actualizado
   const guardarAnalista = async (prestamoId: number) => {
     if (!analistaTemporal || analistaTemporal.trim() === '') {
       toast.error('Debe seleccionar un analista')
@@ -270,7 +270,7 @@ export function Cobranzas() {
       // Refrescar los datos de ambas secciones
       refetchClientes()
       refetchAnalistas()
-      // Si estamos en la sección "Por Analista", también refrescar los clientes de cada analista
+      // Si estamos en la secciÃ³n "Por Analista", tambiÃ©n refrescar los clientes de cada analista
       // Limpiar los clientes cargados para forzar recarga
       setClientesPorAnalista({})
     } catch (error: any) {
@@ -281,7 +281,7 @@ export function Cobranzas() {
     }
   }
 
-  // Función para iniciar edición de ML Impago
+  // FunciÃ³n para iniciar ediciÃ³n de ML Impago
   const iniciarEdicionMLImpago = (prestamoId: number, mlImpagoActual: { nivel_riesgo: string; probabilidad_impago: number } | null | undefined) => {
     setEditandoMLImpago(prestamoId)
     if (mlImpagoActual) {
@@ -297,13 +297,13 @@ export function Cobranzas() {
     }
   }
 
-  // Función para cancelar edición de ML Impago
+  // FunciÃ³n para cancelar ediciÃ³n de ML Impago
   const cancelarEdicionMLImpago = () => {
     setEditandoMLImpago(null)
     setMLImpagoTemporal(null)
   }
 
-  // Función para guardar ML Impago actualizado
+  // FunciÃ³n para guardar ML Impago actualizado
   const guardarMLImpago = async (prestamoId: number) => {
     if (!mlImpagoTemporal) {
       toast.error('Debe completar los datos de ML Impago')
@@ -325,13 +325,13 @@ export function Cobranzas() {
       toast.success('Riesgo ML Impago actualizado correctamente')
       setEditandoMLImpago(null)
       setMLImpagoTemporal(null)
-      // ✅ Invalidar caché de cobranzas para refrescar datos actualizados
+      // âœ… Invalidar cachÃ© de cobranzas para refrescar datos actualizados
       queryClient.invalidateQueries({ queryKey: ['cobranzas-resumen'] })
       queryClient.invalidateQueries({ queryKey: ['cobranzas-clientes'] })
       // Refrescar los datos
       refetchClientes()
       refetchResumen()
-      // Si estamos en la sección "Por Analista", también refrescar
+      // Si estamos en la secciÃ³n "Por Analista", tambiÃ©n refrescar
       setClientesPorAnalista({})
     } catch (error: any) {
       console.error('Error actualizando ML Impago:', error)
@@ -341,13 +341,13 @@ export function Cobranzas() {
     }
   }
 
-  // Función para eliminar valores manuales de ML Impago
+  // FunciÃ³n para eliminar valores manuales de ML Impago
   const eliminarMLImpagoManual = async (prestamoId: number) => {
     setGuardandoMLImpago(prestamoId)
     try {
       await cobranzasService.eliminarMLImpagoManual(prestamoId)
-      toast.success('Valores manuales eliminados. Se usarán valores calculados por ML.')
-      // ✅ Invalidar caché de cobranzas para refrescar datos actualizados
+      toast.success('Valores manuales eliminados. Se usarÃ¡n valores calculados por ML.')
+      // âœ… Invalidar cachÃ© de cobranzas para refrescar datos actualizados
       queryClient.invalidateQueries({ queryKey: ['cobranzas-resumen'] })
       queryClient.invalidateQueries({ queryKey: ['cobranzas-clientes'] })
       // Refrescar los datos
@@ -362,7 +362,7 @@ export function Cobranzas() {
     }
   }
 
-  // Función para exportar a Excel
+  // FunciÃ³n para exportar a Excel
   const exportarAExcel = async (data: Record<string, unknown>[], nombre: string, columnas?: string[]) => {
     if (!data || data.length === 0) {
       alert('No hay datos para exportar')
@@ -370,8 +370,8 @@ export function Cobranzas() {
     }
 
     try {
-      // Importar dinámicamente exceljs
-      const { createAndDownloadExcel } = await import('@/types/exceljs')
+      // Importar dinÃ¡micamente exceljs
+      const { createAndDownloadExcel } = await import('../types/exceljs')
 
       // Obtener columnas del primer objeto si no se especifican
       const keys = columnas || Object.keys(data[0])
@@ -397,7 +397,7 @@ export function Cobranzas() {
     }
   }
 
-  // Función para determinar color del badge según días de retraso
+  // FunciÃ³n para determinar color del badge segÃºn dÃ­as de retraso
   const getColorBadge = (diasRetraso: number) => {
     if (diasRetraso === 1) return 'bg-green-100 text-green-800'
     if (diasRetraso === 3) return 'bg-yellow-100 text-yellow-800'
@@ -415,8 +415,8 @@ export function Cobranzas() {
       const fallidas = stats.fallidas || 0
       const errores = stats.errores || 0
 
-      // ✅ Invalidar caché de cobranzas después de procesar notificaciones
-      // Los datos pueden haber cambiado después de enviar notificaciones
+      // âœ… Invalidar cachÃ© de cobranzas despuÃ©s de procesar notificaciones
+      // Los datos pueden haber cambiado despuÃ©s de enviar notificaciones
       queryClient.invalidateQueries({ queryKey: ['cobranzas-resumen'] })
       queryClient.invalidateQueries({ queryKey: ['cobranzas-clientes'] })
       queryClient.invalidateQueries({ queryKey: ['cobranzas-por-analista'] })
@@ -440,7 +440,7 @@ export function Cobranzas() {
         toast.info('No hay notificaciones pendientes para procesar')
       }
     } catch (error: unknown) {
-      const { getErrorMessage, getErrorDetail } = await import('@/types/errors')
+      const { getErrorMessage, getErrorDetail } = await import('../types/errors')
       let errorMessage = getErrorMessage(error)
       const detail = getErrorDetail(error)
       if (detail) {
@@ -453,18 +453,18 @@ export function Cobranzas() {
     }
   }
 
-  // Ejecutar diagnóstico
+  // Ejecutar diagnÃ³stico
   const ejecutarDiagnostico = async () => {
     setMostrandoDiagnostico(true)
     try {
       const resultado = await cobranzasService.getDiagnostico()
       setDiagnosticoData(resultado)
-      toast.success('Diagnóstico completado. Revisa la consola para más detalles.')
+      toast.success('DiagnÃ³stico completado. Revisa la consola para mÃ¡s detalles.')
     } catch (error: unknown) {
-      const { getErrorMessage } = await import('@/types/errors')
+      const { getErrorMessage } = await import('../types/errors')
       const errorMessage = getErrorMessage(error)
-      console.error('Error obteniendo diagnóstico:', errorMessage)
-      toast.error(errorMessage || 'Error al obtener diagnóstico')
+      console.error('Error obteniendo diagnÃ³stico:', errorMessage)
+      toast.error(errorMessage || 'Error al obtener diagnÃ³stico')
       setDiagnosticoData(null)
     } finally {
       setMostrandoDiagnostico(false)
@@ -476,7 +476,7 @@ export function Cobranzas() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Gestión de Cobranzas</h1>
+          <h1 className="text-3xl font-bold text-gray-900">GestiÃ³n de Cobranzas</h1>
           <p className="text-gray-600 mt-2">
             Seguimiento de pagos atrasados y cartera vencida
           </p>
@@ -496,7 +496,7 @@ export function Cobranzas() {
             ) : (
               <>
                 <AlertTriangle className="h-4 w-4" />
-                🔍 Diagnóstico
+                ðŸ” DiagnÃ³stico
               </>
             )}
           </Button>
@@ -528,18 +528,18 @@ export function Cobranzas() {
         </div>
       </div>
 
-      {/* Mostrar diagnóstico si está disponible */}
+      {/* Mostrar diagnÃ³stico si estÃ¡ disponible */}
       {diagnosticoData && (
         <Card className="border-blue-200 bg-blue-50">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle className="text-lg">🔍 Diagnóstico de Cobranzas</CardTitle>
+              <CardTitle className="text-lg">ðŸ” DiagnÃ³stico de Cobranzas</CardTitle>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setDiagnosticoData(null)}
               >
-                ✕
+                âœ•
               </Button>
             </div>
           </CardHeader>
@@ -566,7 +566,7 @@ export function Cobranzas() {
 
               {diagnosticoData.diagnosticos?.estados_prestamos_con_cuotas_vencidas && (
                 <div>
-                  <p className="text-sm font-semibold mb-2">Estados de Préstamos con Cuotas Vencidas:</p>
+                  <p className="text-sm font-semibold mb-2">Estados de PrÃ©stamos con Cuotas Vencidas:</p>
                   <div className="flex flex-wrap gap-2">
                     {Object.entries(diagnosticoData.diagnosticos.estados_prestamos_con_cuotas_vencidas).map(([estado, cantidad]: [string, any]) => (
                       <Badge key={estado} variant="outline">
@@ -579,18 +579,18 @@ export function Cobranzas() {
 
               {diagnosticoData.analisis_filtros && (
                 <div>
-                  <p className="text-sm font-semibold mb-2">Análisis de Filtros:</p>
+                  <p className="text-sm font-semibold mb-2">AnÃ¡lisis de Filtros:</p>
                   <div className="space-y-1 text-sm">
-                    <p>• Perdidas por estado: {diagnosticoData.analisis_filtros.cuotas_perdidas_por_estado || 0}</p>
-                    <p>• Perdidas por admin: {diagnosticoData.analisis_filtros.cuotas_perdidas_por_admin || 0}</p>
-                    <p>• Perdidas por user admin: {diagnosticoData.analisis_filtros.cuotas_perdidas_por_user_admin || 0}</p>
+                    <p>â€¢ Perdidas por estado: {diagnosticoData.analisis_filtros.cuotas_perdidas_por_estado || 0}</p>
+                    <p>â€¢ Perdidas por admin: {diagnosticoData.analisis_filtros.cuotas_perdidas_por_admin || 0}</p>
+                    <p>â€¢ Perdidas por user admin: {diagnosticoData.analisis_filtros.cuotas_perdidas_por_user_admin || 0}</p>
                   </div>
                 </div>
               )}
 
               <div className="mt-4">
                 <p className="text-xs text-gray-500">
-                  💡 Revisa la consola del navegador (F12) para ver el diagnóstico completo con todos los detalles.
+                  ðŸ’¡ Revisa la consola del navegador (F12) para ver el diagnÃ³stico completo con todos los detalles.
                 </p>
               </div>
             </div>
@@ -675,13 +675,13 @@ export function Cobranzas() {
         </div>
       ) : null}
 
-      {/* Tabs de análisis */}
+      {/* Tabs de anÃ¡lisis */}
       <Tabs value={tabActiva} onValueChange={setTabActiva}>
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="cuotas">Cuotas</TabsTrigger>
-          <TabsTrigger value="por-dias">Por Días</TabsTrigger>
+          <TabsTrigger value="por-dias">Por DÃ­as</TabsTrigger>
           <TabsTrigger value="por-analista">Por Analista</TabsTrigger>
-          <TabsTrigger value="informes">📊 Informes</TabsTrigger>
+          <TabsTrigger value="informes">ðŸ“Š Informes</TabsTrigger>
         </TabsList>
 
         {/* Tab Cuotas - Clientes con cuotas impagas */}
@@ -692,16 +692,16 @@ export function Cobranzas() {
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-semibold text-blue-900">Filtro de Días de Retraso Activo:</p>
+                    <p className="text-sm font-semibold text-blue-900">Filtro de DÃ­as de Retraso Activo:</p>
                     <p className="text-sm text-blue-700">
                       {filtroDiasRetraso !== undefined
-                        ? `Mostrando clientes con exactamente ${filtroDiasRetraso} días de retraso`
+                        ? `Mostrando clientes con exactamente ${filtroDiasRetraso} dÃ­as de retraso`
                         : rangoDiasMin !== undefined && rangoDiasMax !== undefined
-                        ? `Mostrando clientes con ${rangoDiasMin} a ${rangoDiasMax} días de retraso`
+                        ? `Mostrando clientes con ${rangoDiasMin} a ${rangoDiasMax} dÃ­as de retraso`
                         : rangoDiasMin !== undefined
-                        ? `Mostrando clientes con ${rangoDiasMin} o más días de retraso`
+                        ? `Mostrando clientes con ${rangoDiasMin} o mÃ¡s dÃ­as de retraso`
                         : rangoDiasMax !== undefined
-                        ? `Mostrando clientes con hasta ${rangoDiasMax} días de retraso`
+                        ? `Mostrando clientes con hasta ${rangoDiasMax} dÃ­as de retraso`
                         : ''}
                     </p>
                   </div>
@@ -727,24 +727,24 @@ export function Cobranzas() {
                 <div>
                   <CardTitle>Clientes con Cuotas Impagas</CardTitle>
                   <CardDescription>
-                    Listado de clientes con cuotas no pagadas. Se muestra el número de cuotas impagas por cliente.
+                    Listado de clientes con cuotas no pagadas. Se muestra el nÃºmero de cuotas impagas por cliente.
                   </CardDescription>
                 </div>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={async () => {
-                    // Filtrar clientes según búsqueda y filtros para exportar
+                    // Filtrar clientes segÃºn bÃºsqueda y filtros para exportar
                     let clientesParaExportar = clientesAtrasados || []
 
-                    // Aplicar filtro de cuotas mínimas
+                    // Aplicar filtro de cuotas mÃ­nimas
                     if (filtroCuotasMinimas !== undefined) {
                       clientesParaExportar = clientesParaExportar.filter(
                         cliente => (cliente.cuotas_vencidas || 0) >= filtroCuotasMinimas!
                       )
                     }
 
-                    // Aplicar búsqueda
+                    // Aplicar bÃºsqueda
                     if (busquedaResumen.trim()) {
                       clientesParaExportar = clientesParaExportar.filter(cliente =>
                         cliente.cedula.toLowerCase().includes(busquedaResumen.toLowerCase()) ||
@@ -766,7 +766,7 @@ export function Cobranzas() {
                 </Button>
               </div>
 
-              {/* Mensaje de error de validación */}
+              {/* Mensaje de error de validaciÃ³n */}
               {errorRangoDias && (
                 <Card className="border-red-200 bg-red-50 mb-4">
                   <CardContent className="pt-6">
@@ -780,10 +780,10 @@ export function Cobranzas() {
 
               {/* Filtros */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                {/* Filtro por cantidad mínima de cuotas impagas */}
+                {/* Filtro por cantidad mÃ­nima de cuotas impagas */}
                 <div>
                   <label className="text-sm font-medium text-gray-700 mb-2 block">
-                    Filtrar por cantidad mínima de cuotas impagas
+                    Filtrar por cantidad mÃ­nima de cuotas impagas
                   </label>
                   <div className="flex gap-2">
                     <Input
@@ -809,7 +809,7 @@ export function Cobranzas() {
                   </div>
                 </div>
 
-                {/* Búsqueda */}
+                {/* BÃºsqueda */}
                 <div>
                   <label className="text-sm font-medium text-gray-700 mb-2 block">
                     Buscar cliente
@@ -818,7 +818,7 @@ export function Cobranzas() {
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       type="text"
-                      placeholder="Buscar por nombre o cédula..."
+                      placeholder="Buscar por nombre o cÃ©dula..."
                       value={busquedaResumen}
                       onChange={(e) => setBusquedaResumen(e.target.value)}
                       className="pl-10"
@@ -827,12 +827,12 @@ export function Cobranzas() {
                 </div>
               </div>
 
-              {/* Información del filtro activo */}
+              {/* InformaciÃ³n del filtro activo */}
               {filtroCuotasMinimas !== undefined && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
                   <div className="flex items-center justify-between">
                     <p className="text-sm text-amber-800">
-                      <span className="font-semibold">Filtro activo:</span> Mostrando solo clientes con {filtroCuotasMinimas} o más cuotas impagas
+                      <span className="font-semibold">Filtro activo:</span> Mostrando solo clientes con {filtroCuotasMinimas} o mÃ¡s cuotas impagas
                     </p>
                     <Button
                       variant="ghost"
@@ -869,22 +869,22 @@ export function Cobranzas() {
                   <Users className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground">
                     {filtroDiasRetraso
-                      ? `No hay clientes con cuotas impagas con exactamente ${filtroDiasRetraso} días de retraso`
+                      ? `No hay clientes con cuotas impagas con exactamente ${filtroDiasRetraso} dÃ­as de retraso`
                       : rangoDiasMin !== undefined && rangoDiasMax !== undefined
-                      ? `No hay clientes con cuotas impagas con ${rangoDiasMin} a ${rangoDiasMax} días de retraso`
+                      ? `No hay clientes con cuotas impagas con ${rangoDiasMin} a ${rangoDiasMax} dÃ­as de retraso`
                       : rangoDiasMin !== undefined
-                      ? `No hay clientes con cuotas impagas con ${rangoDiasMin} o más días de retraso`
+                      ? `No hay clientes con cuotas impagas con ${rangoDiasMin} o mÃ¡s dÃ­as de retraso`
                       : rangoDiasMax !== undefined
-                      ? `No hay clientes con cuotas impagas con hasta ${rangoDiasMax} días de retraso`
+                      ? `No hay clientes con cuotas impagas con hasta ${rangoDiasMax} dÃ­as de retraso`
                       : filtroCuotasMinimas !== undefined
-                      ? `No hay clientes con ${filtroCuotasMinimas} o más cuotas impagas`
+                      ? `No hay clientes con ${filtroCuotasMinimas} o mÃ¡s cuotas impagas`
                       : 'No hay clientes con cuotas impagas en este momento'}
                   </p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   {(() => {
-                    // Filtrar clientes según búsqueda
+                    // Filtrar clientes segÃºn bÃºsqueda
                     let clientesFiltrados = busquedaResumen.trim()
                       ? clientesAtrasados.filter(cliente =>
                           cliente.cedula.toLowerCase().includes(busquedaResumen.toLowerCase()) ||
@@ -892,19 +892,19 @@ export function Cobranzas() {
                         )
                       : clientesAtrasados
 
-                    // Aplicar filtro de cuotas mínimas
+                    // Aplicar filtro de cuotas mÃ­nimas
                     if (filtroCuotasMinimas !== undefined) {
                       clientesFiltrados = clientesFiltrados.filter(
                         cliente => (cliente.cuotas_vencidas || 0) >= filtroCuotasMinimas!
                       )
                     }
 
-                    // Ordenar por número de cuotas impagas (mayor a menor), luego por total adeudado
+                    // Ordenar por nÃºmero de cuotas impagas (mayor a menor), luego por total adeudado
                     clientesFiltrados = [...clientesFiltrados].sort((a, b) => {
                       const cuotasA = a.cuotas_vencidas || 0
                       const cuotasB = b.cuotas_vencidas || 0
                       if (cuotasA !== cuotasB) {
-                        return cuotasB - cuotasA // Más cuotas primero
+                        return cuotasB - cuotasA // MÃ¡s cuotas primero
                       }
                       return (b.total_adeudado || 0) - (a.total_adeudado || 0) // Luego por monto
                     })
@@ -915,11 +915,11 @@ export function Cobranzas() {
                           <Search className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
                           <p className="text-sm text-muted-foreground">
                             {busquedaResumen.trim() && filtroCuotasMinimas !== undefined
-                              ? `No se encontraron clientes que coincidan con "${busquedaResumen}" y tengan ${filtroCuotasMinimas} o más cuotas impagas`
+                              ? `No se encontraron clientes que coincidan con "${busquedaResumen}" y tengan ${filtroCuotasMinimas} o mÃ¡s cuotas impagas`
                               : busquedaResumen.trim()
                               ? `No se encontraron clientes que coincidan con "${busquedaResumen}"`
                               : filtroCuotasMinimas !== undefined
-                              ? `No se encontraron clientes con ${filtroCuotasMinimas} o más cuotas impagas`
+                              ? `No se encontraron clientes con ${filtroCuotasMinimas} o mÃ¡s cuotas impagas`
                               : 'No hay clientes con cuotas impagas'}
                           </p>
                         </div>
@@ -942,7 +942,7 @@ export function Cobranzas() {
                         <table className="w-full text-sm">
                           <thead>
                             <tr className="border-b bg-gray-50">
-                              <th className="text-left p-2 font-semibold">Cédula</th>
+                              <th className="text-left p-2 font-semibold">CÃ©dula</th>
                               <th className="text-left p-2 font-semibold">Nombres</th>
                               <th className="text-left p-2 font-semibold">Analista</th>
                               <th className="text-center p-2 font-semibold">Cuotas Impagas</th>
@@ -1055,13 +1055,13 @@ export function Cobranzas() {
           </Card>
         </TabsContent>
 
-        {/* Tab Por Días de Retraso */}
+        {/* Tab Por DÃ­as de Retraso */}
         <TabsContent value="por-dias" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Filtro por Días de Retraso</CardTitle>
+              <CardTitle>Filtro por DÃ­as de Retraso</CardTitle>
               <CardDescription>
-                Filtre clientes con cuotas no pagadas según días de retraso desde la fecha de vencimiento
+                Filtre clientes con cuotas no pagadas segÃºn dÃ­as de retraso desde la fecha de vencimiento
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -1069,7 +1069,7 @@ export function Cobranzas() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg border">
                 <div>
                   <label className="text-sm font-medium text-gray-700 mb-2 block">
-                    Días Mínimo de Retraso
+                    DÃ­as MÃ­nimo de Retraso
                   </label>
                   <Input
                     type="number"
@@ -1097,7 +1097,7 @@ export function Cobranzas() {
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-700 mb-2 block">
-                    Días Máximo de Retraso
+                    DÃ­as MÃ¡ximo de Retraso
                   </label>
                   <Input
                     type="number"
@@ -1150,7 +1150,7 @@ export function Cobranzas() {
                       setTabActiva('cuotas')
                     }}
                   >
-                    <Badge className="bg-green-100 text-green-800 mb-2">1-7 Días</Badge>
+                    <Badge className="bg-green-100 text-green-800 mb-2">1-7 DÃ­as</Badge>
                     <span className="text-xs text-gray-600">Retraso Leve</span>
                   </Button>
 
@@ -1164,7 +1164,7 @@ export function Cobranzas() {
                       setTabActiva('cuotas')
                     }}
                   >
-                    <Badge className="bg-yellow-100 text-yellow-800 mb-2">8-30 Días</Badge>
+                    <Badge className="bg-yellow-100 text-yellow-800 mb-2">8-30 DÃ­as</Badge>
                     <span className="text-xs text-gray-600">Retraso Moderado</span>
                   </Button>
 
@@ -1178,7 +1178,7 @@ export function Cobranzas() {
                       setTabActiva('cuotas')
                     }}
                   >
-                    <Badge className="bg-orange-100 text-orange-800 mb-2">31-60 Días</Badge>
+                    <Badge className="bg-orange-100 text-orange-800 mb-2">31-60 DÃ­as</Badge>
                     <span className="text-xs text-gray-600">Retraso Alto</span>
                   </Button>
 
@@ -1192,29 +1192,29 @@ export function Cobranzas() {
                       setTabActiva('cuotas')
                     }}
                   >
-                    <Badge className="bg-red-100 text-red-800 mb-2">61+ Días</Badge>
-                    <span className="text-xs text-gray-600">Retraso Crítico</span>
+                    <Badge className="bg-red-100 text-red-800 mb-2">61+ DÃ­as</Badge>
+                    <span className="text-xs text-gray-600">Retraso CrÃ­tico</span>
                   </Button>
                 </div>
               </div>
 
-              {/* Botón para aplicar filtro personalizado */}
+              {/* BotÃ³n para aplicar filtro personalizado */}
               {(rangoDiasMin !== undefined || rangoDiasMax !== undefined) && (
                 <div className="flex justify-center">
                   <Button
                     onClick={() => setTabActiva('cuotas')}
                     className="w-full md:w-auto"
                   >
-                    Ver Clientes con {rangoDiasMin !== undefined ? `mínimo ${rangoDiasMin} días` : ''}
+                    Ver Clientes con {rangoDiasMin !== undefined ? `mÃ­nimo ${rangoDiasMin} dÃ­as` : ''}
                     {rangoDiasMin !== undefined && rangoDiasMax !== undefined ? ' y ' : ''}
-                    {rangoDiasMax !== undefined ? `máximo ${rangoDiasMax} días` : ''}
+                    {rangoDiasMax !== undefined ? `mÃ¡ximo ${rangoDiasMax} dÃ­as` : ''}
                     {rangoDiasMin === undefined && rangoDiasMax !== undefined ? ' de retraso' : ''}
-                    {rangoDiasMin !== undefined && rangoDiasMax === undefined ? ' o más de retraso' : ''}
+                    {rangoDiasMin !== undefined && rangoDiasMax === undefined ? ' o mÃ¡s de retraso' : ''}
                   </Button>
                 </div>
               )}
 
-              {/* Información del filtro activo */}
+              {/* InformaciÃ³n del filtro activo */}
               {(rangoDiasMin !== undefined || rangoDiasMax !== undefined || filtroDiasRetraso !== undefined) && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                   <div className="flex items-center justify-between">
@@ -1222,13 +1222,13 @@ export function Cobranzas() {
                       <p className="text-sm font-semibold text-blue-900">Filtro Activo:</p>
                       <p className="text-sm text-blue-700">
                         {filtroDiasRetraso !== undefined
-                          ? `Clientes con exactamente ${filtroDiasRetraso} días de retraso`
+                          ? `Clientes con exactamente ${filtroDiasRetraso} dÃ­as de retraso`
                           : rangoDiasMin !== undefined && rangoDiasMax !== undefined
-                          ? `Clientes con ${rangoDiasMin} a ${rangoDiasMax} días de retraso`
+                          ? `Clientes con ${rangoDiasMin} a ${rangoDiasMax} dÃ­as de retraso`
                           : rangoDiasMin !== undefined
-                          ? `Clientes con ${rangoDiasMin} o más días de retraso`
+                          ? `Clientes con ${rangoDiasMin} o mÃ¡s dÃ­as de retraso`
                           : rangoDiasMax !== undefined
-                          ? `Clientes con hasta ${rangoDiasMax} días de retraso`
+                          ? `Clientes con hasta ${rangoDiasMax} dÃ­as de retraso`
                           : ''}
                       </p>
                     </div>
@@ -1254,7 +1254,7 @@ export function Cobranzas() {
         <TabsContent value="por-analista" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Análisis por Analista</CardTitle>
+              <CardTitle>AnÃ¡lisis por Analista</CardTitle>
               <CardDescription>
                 Montos sin cobrar y cantidad de clientes atrasados por analista
               </CardDescription>
@@ -1291,7 +1291,7 @@ export function Cobranzas() {
                     const cargando = cargandoClientesAnalista[analista.nombre] || false
                     const busqueda = busquedaPorAnalista[analista.nombre] || ''
 
-                    // Filtrar clientes según búsqueda
+                    // Filtrar clientes segÃºn bÃºsqueda
                     const clientesFiltrados = busqueda.trim()
                       ? clientes.filter(cliente =>
                           cliente.cedula.toLowerCase().includes(busqueda.toLowerCase()) ||
@@ -1365,19 +1365,19 @@ export function Cobranzas() {
                               </div>
                             ) : (
                               <div className="space-y-4">
-                                {/* Búsqueda de clientes */}
+                                {/* BÃºsqueda de clientes */}
                                 <div className="relative">
                                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                   <Input
                                     type="text"
-                                    placeholder="Buscar cliente por nombre o cédula..."
+                                    placeholder="Buscar cliente por nombre o cÃ©dula..."
                                     value={busqueda}
                                     onChange={(e) => setBusquedaPorAnalista(prev => ({ ...prev, [analista.nombre]: e.target.value }))}
                                     className="pl-10"
                                   />
                                 </div>
 
-                                {/* Información de resultados */}
+                                {/* InformaciÃ³n de resultados */}
                                 {busqueda.trim() && (
                                   <div className="text-sm text-muted-foreground">
                                     Mostrando {clientesOrdenados.length} de {clientes.length} clientes
@@ -1397,10 +1397,10 @@ export function Cobranzas() {
                                     <table className="w-full text-sm">
                                       <thead>
                                         <tr className="border-b bg-gray-50">
-                                          <th className="text-left p-2 font-semibold">Cédula</th>
+                                          <th className="text-left p-2 font-semibold">CÃ©dula</th>
                                           <th className="text-left p-2 font-semibold">Nombres</th>
                                           <th className="text-left p-2 font-semibold">Analista</th>
-                                          <th className="text-left p-2 font-semibold">Teléfono</th>
+                                          <th className="text-left p-2 font-semibold">TelÃ©fono</th>
                                           <th className="text-right p-2 font-semibold">Cuotas Vencidas</th>
                                           <th className="text-right p-2 font-semibold">Total Adeudado</th>
                                         </tr>

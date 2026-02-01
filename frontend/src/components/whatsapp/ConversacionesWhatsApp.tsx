@@ -17,26 +17,26 @@ import {
   Brain,
   Plus,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Badge } from '@/components/ui/badge'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { LoadingSpinner } from '@/components/ui/loading-spinner'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card'
+import { Button } from '../../components/ui/button'
+import { Input } from '../../components/ui/input'
+import { Textarea } from '../../components/ui/textarea'
+import { Badge } from '../../components/ui/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog'
+import { LoadingSpinner } from '../../components/ui/loading-spinner'
 import {
   conversacionesWhatsAppService,
   ConversacionWhatsApp,
   FiltrosConversaciones,
-} from '@/services/conversacionesWhatsAppService'
-import { CrearClienteForm } from '@/components/clientes/CrearClienteForm'
-import { clienteService } from '@/services/clienteService'
-import { ticketsService, TicketCreate } from '@/services/ticketsService'
-import { formatDate } from '@/utils'
+} from '../../services/conversacionesWhatsAppService'
+import { CrearClienteForm } from '../../components/clientes/CrearClienteForm'
+import { clienteService } from '../../services/clienteService'
+import { ticketsService, TicketCreate } from '../../services/ticketsService'
+import { formatDate } from '../../utils'
 import { toast } from 'sonner'
 import { FileText } from 'lucide-react'
-import { useSimpleAuth } from '@/store/simpleAuthStore'
+import { useSimpleAuth } from '../../store/simpleAuthStore'
 
 interface ConversacionesWhatsAppProps {
   clienteId?: number
@@ -58,7 +58,7 @@ export function ConversacionesWhatsApp({
   const [filtros, setFiltros] = useState<FiltrosConversaciones>({})
   const [busqueda, setBusqueda] = useState('')
 
-  // Estado para envío de mensajes
+  // Estado para envÃ­o de mensajes
   const [numeroDestino, setNumeroDestino] = useState(numeroTelefono || '')
   const [mensajeTexto, setMensajeTexto] = useState('')
   const [enviando, setEnviando] = useState(false)
@@ -96,7 +96,7 @@ export function ConversacionesWhatsApp({
     }
   }, [clienteId])
 
-  // Si hay numeroTelefono, filtrar por número
+  // Si hay numeroTelefono, filtrar por nÃºmero
   useEffect(() => {
     if (numeroTelefono) {
       setFiltros((prev) => ({ ...prev, from_number: numeroTelefono }))
@@ -110,10 +110,10 @@ export function ConversacionesWhatsApp({
     }
   }, [numeroTelefono])
 
-  // Si hay clienteId, obtener información del cliente
+  // Si hay clienteId, obtener informaciÃ³n del cliente
   useEffect(() => {
     if (clienteId) {
-      // Obtener información del cliente para mostrar su número
+      // Obtener informaciÃ³n del cliente para mostrar su nÃºmero
       clienteService.getCliente(String(clienteId))
         .then((cliente) => {
           if (cliente.telefono) {
@@ -156,7 +156,7 @@ export function ConversacionesWhatsApp({
     },
   })
 
-  // Query para estadísticas (solo si se solicita)
+  // Query para estadÃ­sticas (solo si se solicita)
   const { data: estadisticas } = useQuery({
     queryKey: ['conversaciones-whatsapp-estadisticas'],
     queryFn: () => conversacionesWhatsAppService.obtenerEstadisticas(),
@@ -168,7 +168,7 @@ export function ConversacionesWhatsApp({
 
   const handleFiltroChange = (key: keyof FiltrosConversaciones, value: any) => {
     setFiltros((prev) => ({ ...prev, [key]: value || undefined }))
-    setPage(1) // Resetear a primera página
+    setPage(1) // Resetear a primera pÃ¡gina
   }
 
   const limpiarFiltros = () => {
@@ -177,7 +177,7 @@ export function ConversacionesWhatsApp({
     setPage(1)
   }
 
-  // Filtrar conversaciones por búsqueda local
+  // Filtrar conversaciones por bÃºsqueda local
   const conversacionesFiltradas = busqueda
     ? conversaciones.filter(
         (conv) =>
@@ -202,7 +202,7 @@ export function ConversacionesWhatsApp({
     }
   }
 
-  // Buscar cliente cuando cambia el número de destino
+  // Buscar cliente cuando cambia el nÃºmero de destino
   const buscarCliente = async (numero: string): Promise<boolean> => {
     if (!numero || numero.trim().length < 8) {
       setClienteInfo(null)
@@ -226,7 +226,7 @@ export function ConversacionesWhatsApp({
   // Enviar mensaje
   const handleEnviarMensaje = async () => {
     if (!numeroDestino.trim() || !mensajeTexto.trim()) {
-      toast.error('Por favor ingresa un número de teléfono y un mensaje')
+      toast.error('Por favor ingresa un nÃºmero de telÃ©fono y un mensaje')
       return
     }
 
@@ -239,7 +239,7 @@ export function ConversacionesWhatsApp({
     // Verificar si el cliente existe
     const clienteActual = clienteInfo?.cliente || (clienteId ? { id: clienteId } : null)
 
-    // Si no hay cliente y no se está mostrando el modal, mostrarlo
+    // Si no hay cliente y no se estÃ¡ mostrando el modal, mostrarlo
     if (!clienteActual && !clienteId) {
       // Buscar nuevamente para obtener el estado actualizado
       const busquedaActualizada = await conversacionesWhatsAppService.buscarClientePorNumero(numeroDestino)
@@ -248,7 +248,7 @@ export function ConversacionesWhatsApp({
         toast.warning('Cliente no encontrado. Por favor crea el cliente primero.')
         return
       } else {
-        // Si se encontró, actualizar el estado
+        // Si se encontrÃ³, actualizar el estado
         setClienteInfo({
           encontrado: true,
           cliente: busquedaActualizada.cliente,
@@ -256,7 +256,7 @@ export function ConversacionesWhatsApp({
       }
     }
 
-    // Si hay cliente o se está creando, enviar mensaje
+    // Si hay cliente o se estÃ¡ creando, enviar mensaje
     setEnviando(true)
     try {
       const clienteIdParaEnvio = clienteInfo?.cliente?.id || clienteId
@@ -291,7 +291,7 @@ export function ConversacionesWhatsApp({
 
   // Cuando se crea un cliente nuevo, actualizar la info
   const handleClienteCreado = () => {
-    // El callback onClienteCreated no recibe parámetros, así que buscamos el cliente
+    // El callback onClienteCreated no recibe parÃ¡metros, asÃ­ que buscamos el cliente
     buscarCliente(numeroDestino).then(() => {
       // Intentar enviar el mensaje nuevamente si hay uno pendiente
       if (mensajeTexto.trim()) {
@@ -302,12 +302,12 @@ export function ConversacionesWhatsApp({
     })
   }
 
-  // Abrir modal para crear ticket desde conversación
+  // Abrir modal para crear ticket desde conversaciÃ³n
   const handleAbrirCrearTicket = (conversacion: ConversacionWhatsApp) => {
     setConversacionParaTicket(conversacion)
     setTicketForm({
       titulo: `Ticket desde WhatsApp - ${conversacion.from_number}`,
-      descripcion: `Conversación de WhatsApp:\n\n${conversacion.body || '[Sin contenido]'}\n\nFecha: ${formatearFecha(conversacion.timestamp)}`,
+      descripcion: `ConversaciÃ³n de WhatsApp:\n\n${conversacion.body || '[Sin contenido]'}\n\nFecha: ${formatearFecha(conversacion.timestamp)}`,
       tipo: 'consulta',
       prioridad: 'media',
       estado: 'abierto',
@@ -320,7 +320,7 @@ export function ConversacionesWhatsApp({
     if (!conversacionParaTicket) return
 
     if (!ticketForm.titulo.trim() || !ticketForm.descripcion.trim()) {
-      toast.error('Por favor completa el título y descripción del ticket')
+      toast.error('Por favor completa el tÃ­tulo y descripciÃ³n del ticket')
       return
     }
 
@@ -359,7 +359,7 @@ export function ConversacionesWhatsApp({
     }
   }
 
-  // Efecto para buscar cliente cuando cambia el número
+  // Efecto para buscar cliente cuando cambia el nÃºmero
   useEffect(() => {
     if (numeroDestino && numeroDestino.trim().length >= 8) {
       const timeoutId = setTimeout(() => {
@@ -371,7 +371,7 @@ export function ConversacionesWhatsApp({
 
   return (
     <div className="space-y-4">
-      {/* Estadísticas */}
+      {/* EstadÃ­sticas */}
       {mostrarEstadisticas && estadisticas && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card>
@@ -411,7 +411,7 @@ export function ConversacionesWhatsApp({
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Últimas 24h</p>
+                  <p className="text-sm text-gray-600">Ãšltimas 24h</p>
                   <p className="text-2xl font-bold text-purple-600">{estadisticas.ultimas_24h}</p>
                 </div>
                 <Calendar className="h-8 w-8 text-purple-600" />
@@ -433,7 +433,7 @@ export function ConversacionesWhatsApp({
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
-                <label className="text-sm text-gray-600 mb-1 block">Búsqueda</label>
+                <label className="text-sm text-gray-600 mb-1 block">BÃºsqueda</label>
                 <div className="relative">
                   <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
                   <Input
@@ -446,9 +446,9 @@ export function ConversacionesWhatsApp({
               </div>
               {!clienteId && (
                 <div>
-                  <label className="text-sm text-gray-600 mb-1 block">Número de teléfono</label>
+                  <label className="text-sm text-gray-600 mb-1 block">NÃºmero de telÃ©fono</label>
                   <Input
-                    placeholder="Número..."
+                    placeholder="NÃºmero..."
                     value={filtros.from_number || ''}
                     onChange={(e) => handleFiltroChange('from_number', e.target.value)}
                   />
@@ -456,7 +456,7 @@ export function ConversacionesWhatsApp({
               )}
               {!clienteId && (
                 <div>
-                  <label className="text-sm text-gray-600 mb-1 block">Dirección</label>
+                  <label className="text-sm text-gray-600 mb-1 block">DirecciÃ³n</label>
                   <Select
                     value={filtros.direccion || 'all'}
                     onValueChange={(value) => handleFiltroChange('direccion', value === 'all' ? undefined : value)}
@@ -600,7 +600,7 @@ export function ConversacionesWhatsApp({
                       </div>
                     )}
 
-                    {/* Botón para crear ticket */}
+                    {/* BotÃ³n para crear ticket */}
                     {conversacion.direccion === 'INBOUND' && (
                       <div className="mt-3 pt-3 border-t">
                         <Button
@@ -610,7 +610,7 @@ export function ConversacionesWhatsApp({
                           className="w-full"
                         >
                           <FileText className="h-4 w-4 mr-2" />
-                          Crear Ticket desde esta Conversación
+                          Crear Ticket desde esta ConversaciÃ³n
                         </Button>
                       </div>
                     )}
@@ -618,11 +618,11 @@ export function ConversacionesWhatsApp({
                 </div>
               ))}
 
-              {/* Paginación */}
+              {/* PaginaciÃ³n */}
               {paginacion && paginacion.pages > 1 && (
                 <div className="flex items-center justify-between pt-4 border-t">
                   <div className="text-sm text-gray-600">
-                    Página {paginacion.page} de {paginacion.pages} ({paginacion.total} total)
+                    PÃ¡gina {paginacion.page} de {paginacion.pages} ({paginacion.total} total)
                   </div>
                   <div className="flex gap-2">
                     <Button
@@ -649,7 +649,7 @@ export function ConversacionesWhatsApp({
         </CardContent>
       </Card>
 
-      {/* Área de envío de mensajes */}
+      {/* Ãrea de envÃ­o de mensajes */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -668,14 +668,14 @@ export function ConversacionesWhatsApp({
                 Cliente no encontrado. Debes crear el cliente primero.
               </span>
             ) : (
-              'Ingresa un número de teléfono para buscar el cliente'
+              'Ingresa un nÃºmero de telÃ©fono para buscar el cliente'
             )}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium mb-2 block">Número de Teléfono</label>
+              <label className="text-sm font-medium mb-2 block">NÃºmero de TelÃ©fono</label>
               <div className="flex gap-2">
                 <Input
                   placeholder="Ej: +584123456789"
@@ -699,7 +699,7 @@ export function ConversacionesWhatsApp({
             <div>
               <label className="text-sm font-medium mb-2 block">Mensaje</label>
               <Textarea
-                placeholder="Escribe tu mensaje aquí..."
+                placeholder="Escribe tu mensaje aquÃ­..."
                 value={mensajeTexto}
                 onChange={(e) => setMensajeTexto(e.target.value)}
                 rows={4}
@@ -745,7 +745,7 @@ export function ConversacionesWhatsApp({
           <DialogHeader>
             <DialogTitle>Crear Cliente Nuevo</DialogTitle>
             <p className="text-sm text-gray-600 mt-2">
-              El cliente con el número {numeroDestino} no existe. Por favor crea el cliente primero para poder enviar mensajes.
+              El cliente con el nÃºmero {numeroDestino} no existe. Por favor crea el cliente primero para poder enviar mensajes.
             </p>
           </DialogHeader>
           <CrearClienteForm
@@ -754,7 +754,7 @@ export function ConversacionesWhatsApp({
             }}
             onClose={() => setMostrarCrearCliente(false)}
             onSuccess={async () => {
-              // Buscar el cliente recién creado
+              // Buscar el cliente reciÃ©n creado
               await buscarCliente(numeroDestino)
               setMostrarCrearCliente(false)
               toast.success('Cliente creado exitosamente. Ahora puedes enviar el mensaje.')
@@ -768,22 +768,22 @@ export function ConversacionesWhatsApp({
       <Dialog open={mostrarCrearTicket} onOpenChange={setMostrarCrearTicket}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Crear Ticket desde Conversación WhatsApp</DialogTitle>
+            <DialogTitle>Crear Ticket desde ConversaciÃ³n WhatsApp</DialogTitle>
             <p className="text-sm text-gray-600 mt-2">
-              Crear un ticket de atención vinculado a esta conversación de WhatsApp
+              Crear un ticket de atenciÃ³n vinculado a esta conversaciÃ³n de WhatsApp
             </p>
           </DialogHeader>
           <div className="space-y-4 mt-4">
             <div>
-              <label className="text-sm font-medium mb-2 block">Título *</label>
+              <label className="text-sm font-medium mb-2 block">TÃ­tulo *</label>
               <Input
                 value={ticketForm.titulo}
                 onChange={(e) => setTicketForm({ ...ticketForm, titulo: e.target.value })}
-                placeholder="Ej: Consulta sobre estado de préstamo"
+                placeholder="Ej: Consulta sobre estado de prÃ©stamo"
               />
             </div>
             <div>
-              <label className="text-sm font-medium mb-2 block">Descripción *</label>
+              <label className="text-sm font-medium mb-2 block">DescripciÃ³n *</label>
               <Textarea
                 value={ticketForm.descripcion}
                 onChange={(e) => setTicketForm({ ...ticketForm, descripcion: e.target.value })}
@@ -847,7 +847,7 @@ export function ConversacionesWhatsApp({
             {conversacionParaTicket && (
               <div className="p-3 bg-blue-50 rounded border border-blue-200">
                 <p className="text-xs text-blue-700 mb-1">
-                  <strong>Conversación vinculada:</strong> {conversacionParaTicket.from_number}
+                  <strong>ConversaciÃ³n vinculada:</strong> {conversacionParaTicket.from_number}
                 </p>
                 {conversacionParaTicket.cliente_id && (
                   <p className="text-xs text-blue-700">

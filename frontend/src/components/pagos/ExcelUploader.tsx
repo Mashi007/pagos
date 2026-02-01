@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { Upload, X, FileSpreadsheet, Loader2, CheckCircle } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
-import { pagoService } from '@/services/pagoService'
+import { Button } from '../../components/ui/button'
+import { Card, CardContent } from '../../components/ui/card'
+import { pagoService } from '../../services/pagoService'
 import { toast } from 'sonner'
 
 interface ExcelUploaderProps {
@@ -19,12 +19,12 @@ export function ExcelUploader({ onClose, onSuccess }: ExcelUploaderProps) {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
     if (selectedFile) {
-      // ✅ VALIDACIÓN DE SEGURIDAD: Validar archivo antes de aceptarlo
-      const { validateExcelFile } = await import('@/utils/excelValidation')
+      // âœ… VALIDACIÃ“N DE SEGURIDAD: Validar archivo antes de aceptarlo
+      const { validateExcelFile } = await import('../../utils/excelValidation')
       const validation = validateExcelFile(selectedFile)
 
       if (!validation.isValid) {
-        toast.error(validation.error || 'Archivo inválido')
+        toast.error(validation.error || 'Archivo invÃ¡lido')
         return
       }
 
@@ -95,10 +95,10 @@ export function ExcelUploader({ onClose, onSuccess }: ExcelUploaderProps) {
                 <div className="space-y-3">
                   <h3 className="font-semibold text-lg">Formato del archivo Excel:</h3>
                   <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
-                    <li>Cédula de Identidad</li>
+                    <li>CÃ©dula de Identidad</li>
                     <li>Fecha de Pago</li>
                     <li>Monto Pagado</li>
-                    <li>Número de Documento</li>
+                    <li>NÃºmero de Documento</li>
                   </ul>
                   <p className="text-xs text-gray-500 mt-2">
                     El archivo debe contener estas columnas exactamente como se muestra.

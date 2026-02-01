@@ -12,13 +12,13 @@ import {
   Loader2,
   RefreshCw
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Analista, AnalistaUpdate, AnalistaCreate } from '@/services/analistaService'
-import { useAnalistas, useDeleteAnalista, useUpdateAnalista, useCreateAnalista } from '@/hooks/useAnalistas'
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
+import { Button } from '../components/ui/button'
+import { Input } from '../components/ui/input'
+import { Badge } from '../components/ui/badge'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
+import { Analista, AnalistaUpdate, AnalistaCreate } from '../services/analistaService'
+import { useAnalistas, useDeleteAnalista, useUpdateAnalista, useCreateAnalista } from '../hooks/useAnalistas'
 import toast from 'react-hot-toast'
 
 export function Analistas() {
@@ -50,10 +50,10 @@ export function Analistas() {
 
   const handleEliminar = async (id: number) => {
     try {
-      // Confirmar eliminación permanente
+      // Confirmar eliminaciÃ³n permanente
       const confirmar = window.confirm(
-        '⚠️ ¿Estás seguro de que quieres ELIMINAR PERMANENTEMENTE este analista?\n\n' +
-        'Esta acción NO se puede deshacer y el analista será borrado completamente de la base de datos.'
+        'âš ï¸ Â¿EstÃ¡s seguro de que quieres ELIMINAR PERMANENTEMENTE este analista?\n\n' +
+        'Esta acciÃ³n NO se puede deshacer y el analista serÃ¡ borrado completamente de la base de datos.'
       )
 
       if (!confirmar) {
@@ -74,7 +74,7 @@ export function Analistas() {
     // Limpiar espacios extras
     const nombreLimpio = nombre.trim().replace(/\s+/g, ' ')
 
-    // Verificar cantidad de palabras (mínimo 2, máximo 4)
+    // Verificar cantidad de palabras (mÃ­nimo 2, mÃ¡ximo 4)
     const palabras = nombreLimpio.split(' ')
 
     if (palabras.length < 2) {
@@ -82,7 +82,7 @@ export function Analistas() {
     }
 
     if (palabras.length > 4) {
-      return 'Debe ingresar máximo 4 palabras'
+      return 'Debe ingresar mÃ¡ximo 4 palabras'
     }
 
     // Verificar que cada palabra tenga al menos 2 caracteres
@@ -138,17 +138,17 @@ export function Analistas() {
           id: editingAnalista.id,
           data: { ...formData, nombre: nombreFormateado }
         })
-        toast.success('✅ Analista actualizado exitosamente')
+        toast.success('âœ… Analista actualizado exitosamente')
       } else {
         // Al crear, ya tiene activo: true por defecto
         await createAnalistaMutation.mutateAsync({ ...formData, nombre: nombreFormateado })
-        toast.success('✅ Analista creado exitosamente')
+        toast.success('âœ… Analista creado exitosamente')
       }
       resetForm()
       refetch()
     } catch (err) {
       console.error('Error:', err)
-      toast.error('❌ Error al guardar analista')
+      toast.error('âŒ Error al guardar analista')
     }
   }
 
@@ -166,18 +166,18 @@ export function Analistas() {
     refetch()
   }
 
-  // Filtrar analistas por término de búsqueda
+  // Filtrar analistas por tÃ©rmino de bÃºsqueda
   const filteredAnalistas = (analistas || []).filter(analista =>
     analista.nombre.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  // Paginación
+  // PaginaciÃ³n
   const totalPages = Math.ceil(filteredAnalistas.length / itemsPerPage)
   const startIndex = (currentPage - 1) * itemsPerPage
   const endIndex = startIndex + itemsPerPage
   const paginatedAnalistas = filteredAnalistas.slice(startIndex, endIndex)
 
-  // Resetear a página 1 cuando cambia el filtro de búsqueda
+  // Resetear a pÃ¡gina 1 cuando cambia el filtro de bÃºsqueda
   useEffect(() => {
     setCurrentPage(1)
   }, [searchTerm])
@@ -301,7 +301,7 @@ export function Analistas() {
                 <TableHead>ID</TableHead>
                 <TableHead>Nombre</TableHead>
                 <TableHead>Estado</TableHead>
-                <TableHead>Fecha Creación</TableHead>
+                <TableHead>Fecha CreaciÃ³n</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
@@ -361,7 +361,7 @@ export function Analistas() {
             </div>
           )}
 
-          {/* Paginación */}
+          {/* PaginaciÃ³n */}
           {filteredAnalistas.length > itemsPerPage && (
             <div className="flex items-center justify-between px-2 py-4 border-t">
               <div className="text-sm text-gray-500">
@@ -403,7 +403,7 @@ export function Analistas() {
         </CardContent>
       </Card>
 
-      {/* Importación desde Excel */}
+      {/* ImportaciÃ³n desde Excel */}
       <Card>
         <CardHeader>
           <CardTitle>Importar Analistas (Excel)</CardTitle>
@@ -427,7 +427,7 @@ export function Analistas() {
               Examinar...
             </label>
             <span className="text-sm text-gray-600">
-              {archivoExcel ? archivoExcel.name : 'No se ha seleccionado ningún archivo.'}
+              {archivoExcel ? archivoExcel.name : 'No se ha seleccionado ningÃºn archivo.'}
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -436,7 +436,7 @@ export function Analistas() {
               onClick={async () => {
                 if (!archivoExcel) return
                 try {
-                  const svc = (await import('@/services/analistaService')).analistaService
+                  const svc = (await import('../services/analistaService')).analistaService
                   const res = await svc.importarDesdeExcel(archivoExcel)
                   const msg = `Importado: ${res.creados} creados, ${res.actualizados} actualizados`
                   if (res.errores && res.errores.length > 0) {
@@ -451,7 +451,7 @@ export function Analistas() {
                   if (fileInput) fileInput.value = ''
                   await refetch()
                 } catch (err: unknown) {
-                  const { getErrorMessage, getErrorDetail } = await import('@/types/errors')
+                  const { getErrorMessage, getErrorDetail } = await import('../types/errors')
                   let errorMessage = getErrorMessage(err)
                   const detail = getErrorDetail(err)
                   if (detail) {
@@ -507,7 +507,7 @@ export function Analistas() {
                     )}
                     {!editingAnalista && !validationError && (
                       <p className="text-xs text-gray-500 mt-1">
-                        Ejemplo: Juan Pérez (mínimo 2, máximo 4 palabras)
+                        Ejemplo: Juan PÃ©rez (mÃ­nimo 2, mÃ¡ximo 4 palabras)
                       </p>
                     )}
                   </div>

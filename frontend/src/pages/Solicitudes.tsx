@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { FileText, Search, CheckCircle, XCircle, Clock, Eye } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Card, CardContent } from '../components/ui/card'
+import { Button } from '../components/ui/button'
+import { Input } from '../components/ui/input'
+import { Badge } from '../components/ui/badge'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
 
 export function Solicitudes() {
   const [searchTerm, setSearchTerm] = useState('')
@@ -13,7 +13,7 @@ export function Solicitudes() {
   const solicitudes = [
     {
       id: 1,
-      cliente: 'Juan Pérez',
+      cliente: 'Juan PÃ©rez',
       cedula: 'V12345678',
       tipo: 'PRESTAMO',
       monto: 25000,
@@ -22,7 +22,7 @@ export function Solicitudes() {
     },
     {
       id: 2,
-      cliente: 'María García',
+      cliente: 'MarÃ­a GarcÃ­a',
       cedula: 'V23456789',
       tipo: 'AMPLIACION',
       monto: 15000,
@@ -45,7 +45,7 @@ export function Solicitudes() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Solicitudes</h1>
-          <p className="text-gray-500 mt-1">Gestión de solicitudes de préstamos</p>
+          <p className="text-gray-500 mt-1">GestiÃ³n de solicitudes de prÃ©stamos</p>
         </div>
       </div>
 

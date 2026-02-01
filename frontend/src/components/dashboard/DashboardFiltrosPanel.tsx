@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
 import { Filter, X, RefreshCw, Check } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Input } from '@/components/ui/input'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { useDashboardFiltros, type DashboardFiltros } from '@/hooks/useDashboardFiltros'
+import { Button } from '../../components/ui/button'
+import { Badge } from '../../components/ui/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
+import { Input } from '../../components/ui/input'
+import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover'
+import { useDashboardFiltros, type DashboardFiltros } from '../../hooks/useDashboardFiltros'
 
 interface DashboardFiltrosPanelProps {
   filtros: DashboardFiltros
@@ -26,7 +26,7 @@ interface DashboardFiltrosPanelProps {
 export function DashboardFiltrosPanel({
   filtros,
   setFiltros,
-  periodo = 'año', // ✅ Por defecto: "Este año"
+  periodo = 'aÃ±o', // âœ… Por defecto: "Este aÃ±o"
   setPeriodo,
   onRefresh,
   isRefreshing = false,
@@ -35,11 +35,11 @@ export function DashboardFiltrosPanel({
   errorOpcionesFiltros = false,
 }: DashboardFiltrosPanelProps) {
   const [showFiltros, setShowFiltros] = useState(false)
-  // ✅ Estado temporal para filtros antes de aplicar
+  // âœ… Estado temporal para filtros antes de aplicar
   const [filtrosTemporales, setFiltrosTemporales] = useState<DashboardFiltros>(filtros)
   const { tieneFiltrosActivos, cantidadFiltrosActivos } = useDashboardFiltros(filtros)
 
-  // ✅ Sincronizar filtros temporales cuando cambian los filtros reales (desde fuera) y se abre el popover
+  // âœ… Sincronizar filtros temporales cuando cambian los filtros reales (desde fuera) y se abre el popover
   useEffect(() => {
     if (showFiltros) {
       setFiltrosTemporales(filtros)
@@ -47,18 +47,18 @@ export function DashboardFiltrosPanel({
   }, [filtros, showFiltros])
 
   const handleLimpiarFiltros = () => {
-    console.log('🧹 Limpiando filtros...')
+    console.log('ðŸ§¹ Limpiando filtros...')
     const filtrosVacios: DashboardFiltros = {}
     setFiltrosTemporales(filtrosVacios)
     setFiltros(filtrosVacios)
-    setShowFiltros(false) // Cerrar popover después de limpiar
+    setShowFiltros(false) // Cerrar popover despuÃ©s de limpiar
   }
 
-  // ✅ Función para aplicar filtros
+  // âœ… FunciÃ³n para aplicar filtros
   const handleAplicarFiltros = () => {
-    console.log('✅ Aplicando filtros:', filtrosTemporales)
+    console.log('âœ… Aplicando filtros:', filtrosTemporales)
     setFiltros(filtrosTemporales)
-    setShowFiltros(false) // Cerrar popover después de aplicar
+    setShowFiltros(false) // Cerrar popover despuÃ©s de aplicar
   }
 
   return (
@@ -68,7 +68,7 @@ export function DashboardFiltrosPanel({
         open={showFiltros}
         onOpenChange={(open) => {
           setShowFiltros(open)
-          // ✅ Cuando se abre el popover, sincronizar filtros temporales con los actuales
+          // âœ… Cuando se abre el popover, sincronizar filtros temporales con los actuales
           if (open) {
             setFiltrosTemporales(filtros)
           }
@@ -111,7 +111,7 @@ export function DashboardFiltrosPanel({
                     ...filtrosTemporales,
                     analista: value === '__ALL__' ? undefined : value,
                   }
-                  console.log('🔍 [Filtro Analista] Cambiando filtro temporal:', { anterior: filtrosTemporales.analista, nuevo: nuevoFiltro.analista, todosLosFiltros: nuevoFiltro })
+                  console.log('ðŸ” [Filtro Analista] Cambiando filtro temporal:', { anterior: filtrosTemporales.analista, nuevo: nuevoFiltro.analista, todosLosFiltros: nuevoFiltro })
                   setFiltrosTemporales(nuevoFiltro)
                 }}
                 disabled={loadingOpcionesFiltros}
@@ -159,7 +159,7 @@ export function DashboardFiltrosPanel({
                     ...filtrosTemporales,
                     concesionario: value === '__ALL__' ? undefined : value,
                   }
-                  console.log('🔍 [Filtro Concesionario] Cambiando filtro temporal:', { anterior: filtrosTemporales.concesionario, nuevo: nuevoFiltro.concesionario, todosLosFiltros: nuevoFiltro })
+                  console.log('ðŸ” [Filtro Concesionario] Cambiando filtro temporal:', { anterior: filtrosTemporales.concesionario, nuevo: nuevoFiltro.concesionario, todosLosFiltros: nuevoFiltro })
                   setFiltrosTemporales(nuevoFiltro)
                 }}
                 disabled={loadingOpcionesFiltros}
@@ -207,7 +207,7 @@ export function DashboardFiltrosPanel({
                     ...filtrosTemporales,
                     modelo: value === '__ALL__' ? undefined : value,
                   }
-                  console.log('🔍 [Filtro Modelo] Cambiando filtro temporal:', { anterior: filtrosTemporales.modelo, nuevo: nuevoFiltro.modelo, todosLosFiltros: nuevoFiltro })
+                  console.log('ðŸ” [Filtro Modelo] Cambiando filtro temporal:', { anterior: filtrosTemporales.modelo, nuevo: nuevoFiltro.modelo, todosLosFiltros: nuevoFiltro })
                   setFiltrosTemporales(nuevoFiltro)
                 }}
                 disabled={loadingOpcionesFiltros}
@@ -257,7 +257,7 @@ export function DashboardFiltrosPanel({
                       ...filtrosTemporales,
                       fecha_inicio: e.target.value || undefined,
                     }
-                    console.log('🔍 [Filtro Fecha Inicio] Cambiando filtro temporal:', { anterior: filtrosTemporales.fecha_inicio, nuevo: nuevoFiltro.fecha_inicio, todosLosFiltros: nuevoFiltro })
+                    console.log('ðŸ” [Filtro Fecha Inicio] Cambiando filtro temporal:', { anterior: filtrosTemporales.fecha_inicio, nuevo: nuevoFiltro.fecha_inicio, todosLosFiltros: nuevoFiltro })
                     setFiltrosTemporales(nuevoFiltro)
                   }}
                 />
@@ -272,14 +272,14 @@ export function DashboardFiltrosPanel({
                       ...filtrosTemporales,
                       fecha_fin: e.target.value || undefined,
                     }
-                    console.log('🔍 [Filtro Fecha Fin] Cambiando filtro temporal:', { anterior: filtrosTemporales.fecha_fin, nuevo: nuevoFiltro.fecha_fin, todosLosFiltros: nuevoFiltro })
+                    console.log('ðŸ” [Filtro Fecha Fin] Cambiando filtro temporal:', { anterior: filtrosTemporales.fecha_fin, nuevo: nuevoFiltro.fecha_fin, todosLosFiltros: nuevoFiltro })
                     setFiltrosTemporales(nuevoFiltro)
                   }}
                 />
               </div>
             </div>
 
-            {/* ✅ Botón para Aplicar Filtros */}
+            {/* âœ… BotÃ³n para Aplicar Filtros */}
             <div className="flex items-center justify-end gap-2 pt-2 border-t">
               <Button
                 variant="outline"

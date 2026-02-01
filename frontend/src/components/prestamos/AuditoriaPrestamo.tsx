@@ -1,6 +1,6 @@
-import { useAuditoriaPrestamo } from '@/hooks/useAuditoriaPrestamo'
-import { formatDate } from '@/utils'
-import { Card, CardContent } from '@/components/ui/card'
+import { useAuditoriaPrestamo } from '../../hooks/useAuditoriaPrestamo'
+import { formatDate } from '../../utils'
+import { Card, CardContent } from '../../components/ui/card'
 import { Clock, User, Calendar, Edit } from 'lucide-react'
 
 interface AuditoriaPrestamoProps {
@@ -26,7 +26,7 @@ export function AuditoriaPrestamo({ prestamoId }: AuditoriaPrestamoProps) {
     return (
       <div className="flex items-center justify-center py-8">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <p className="ml-3 text-gray-600">Cargando historial de auditoría...</p>
+        <p className="ml-3 text-gray-600">Cargando historial de auditorÃ­a...</p>
       </div>
     )
   }
@@ -35,7 +35,7 @@ export function AuditoriaPrestamo({ prestamoId }: AuditoriaPrestamoProps) {
     return (
       <Card>
         <CardContent className="py-8 text-center">
-          <p className="text-red-600">Error al cargar el historial de auditoría</p>
+          <p className="text-red-600">Error al cargar el historial de auditorÃ­a</p>
         </CardContent>
       </Card>
     )
@@ -46,7 +46,7 @@ export function AuditoriaPrestamo({ prestamoId }: AuditoriaPrestamoProps) {
         <Card>
         <CardContent className="py-8 text-center">
           <Clock className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-          <p className="text-gray-600">No hay historial de auditoría para este préstamo</p>
+          <p className="text-gray-600">No hay historial de auditorÃ­a para este prÃ©stamo</p>
         </CardContent>
       </Card>
     )
@@ -90,7 +90,7 @@ export function AuditoriaPrestamo({ prestamoId }: AuditoriaPrestamoProps) {
                       <span className="px-3 py-1 bg-red-50 text-red-700 rounded-md font-medium border border-red-200">
                         {entry.estado_anterior}
                       </span>
-                      <span className="text-gray-400">→</span>
+                      <span className="text-gray-400">â†’</span>
                       <span className="px-3 py-1 bg-green-50 text-green-700 rounded-md font-medium border border-green-200">
                         {entry.estado_nuevo}
                       </span>

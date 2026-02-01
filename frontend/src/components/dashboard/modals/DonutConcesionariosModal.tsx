@@ -10,10 +10,10 @@ import {
 } from 'recharts'
 import { BaseModal } from '../BaseModal'
 import { DashboardFiltrosPanel } from '../DashboardFiltrosPanel'
-import { useDashboardFiltros, type DashboardFiltros } from '@/hooks/useDashboardFiltros'
-import { apiClient } from '@/services/api'
-import { formatCurrency } from '@/utils'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useDashboardFiltros, type DashboardFiltros } from '../../../hooks/useDashboardFiltros'
+import { apiClient } from '../../../services/api'
+import { formatCurrency } from '../../../utils'
+import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card'
 
 interface DonutConcesionariosModalProps {
   isOpen: boolean
@@ -45,7 +45,7 @@ export function DonutConcesionariosModal({ isOpen, onClose }: DonutConcesionario
     },
   })
 
-  // Cargar datos de préstamos por concesionario
+  // Cargar datos de prÃ©stamos por concesionario
   const { data: prestamosData, isLoading: loadingPrestamos, refetch } = useQuery({
     queryKey: ['prestamos-por-concesionario', filtros],
     queryFn: async (): Promise<DonutConcesionariosResponse> => {
@@ -70,7 +70,7 @@ export function DonutConcesionariosModal({ isOpen, onClose }: DonutConcesionario
     setIsRefreshing(false)
   }
 
-  // Preparar datos para el gráfico (agrupar segmentos pequeños en "Otros")
+  // Preparar datos para el grÃ¡fico (agrupar segmentos pequeÃ±os en "Otros")
   const umbralPorcentaje = 3 // Agrupar si es menos del 3%
   const datosGrafico = prestamosData?.concesionarios || []
   const datosPrincipales = datosGrafico.filter((d) => d.porcentaje >= umbralPorcentaje)
@@ -91,18 +91,18 @@ export function DonutConcesionariosModal({ isOpen, onClose }: DonutConcesionario
     }] : []),
   ]
 
-  // Colores para el gráfico
+  // Colores para el grÃ¡fico
   const COLORS = [
     '#3b82f6', // azul
     '#10b981', // verde
     '#f59e0b', // amarillo
     '#ef4444', // rojo
-    '#8b5cf6', // púrpura
+    '#8b5cf6', // pÃºrpura
     '#ec4899', // rosa
     '#06b6d4', // cian
     '#84cc16', // lima
     '#f97316', // naranja
-    '#6366f1', // índigo
+    '#6366f1', // Ã­ndigo
     '#14b8a6', // teal
     '#a855f7', // violeta
   ]
@@ -121,7 +121,7 @@ export function DonutConcesionariosModal({ isOpen, onClose }: DonutConcesionario
             <span className="font-semibold">Porcentaje:</span> {typeof data.payload?.porcentaje === 'number' ? data.payload.porcentaje.toFixed(2) : '0.00'}%
           </p>
           <p className="text-sm">
-            <span className="font-semibold">Cantidad:</span> {typeof data.payload?.cantidad_prestamos === 'number' ? data.payload.cantidad_prestamos : 0} préstamos
+            <span className="font-semibold">Cantidad:</span> {typeof data.payload?.cantidad_prestamos === 'number' ? data.payload.cantidad_prestamos : 0} prÃ©stamos
           </p>
         </div>
       )
@@ -157,7 +157,7 @@ export function DonutConcesionariosModal({ isOpen, onClose }: DonutConcesionario
     <BaseModal
       isOpen={isOpen}
       onClose={onClose}
-      title="Préstamos por Concesionario"
+      title="PrÃ©stamos por Concesionario"
       size="large"
     >
       <div className="space-y-6">
@@ -172,23 +172,23 @@ export function DonutConcesionariosModal({ isOpen, onClose }: DonutConcesionario
           errorOpcionesFiltros={errorOpcionesFiltros}
         />
 
-        {/* Gráfico Donut */}
+        {/* GrÃ¡fico Donut */}
         <Card>
           <CardHeader>
-            <CardTitle>Distribución de Préstamos por Concesionario (Porcentaje)</CardTitle>
+            <CardTitle>DistribuciÃ³n de PrÃ©stamos por Concesionario (Porcentaje)</CardTitle>
           </CardHeader>
           <CardContent>
             {loadingPrestamos ? (
               <div className="h-[500px] flex items-center justify-center">
-                <div className="animate-pulse text-gray-400">Cargando gráfico...</div>
+                <div className="animate-pulse text-gray-400">Cargando grÃ¡fico...</div>
               </div>
             ) : datosFinales.length === 0 ? (
               <div className="h-[500px] flex items-center justify-center text-gray-500">
-                No hay datos de préstamos disponibles para el período seleccionado
+                No hay datos de prÃ©stamos disponibles para el perÃ­odo seleccionado
               </div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Gráfico */}
+                {/* GrÃ¡fico */}
                 <div className="lg:col-span-2">
                   <ResponsiveContainer width="100%" height={400}>
                     <PieChart>

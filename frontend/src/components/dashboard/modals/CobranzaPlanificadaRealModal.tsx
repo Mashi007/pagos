@@ -16,11 +16,11 @@ import {
 } from 'recharts'
 import { BaseModal } from '../BaseModal'
 import { DashboardFiltrosPanel } from '../DashboardFiltrosPanel'
-import { useDashboardFiltros, type DashboardFiltros } from '@/hooks/useDashboardFiltros'
-import { apiClient } from '@/services/api'
-import { formatCurrency } from '@/utils'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { useDashboardFiltros, type DashboardFiltros } from '../../../hooks/useDashboardFiltros'
+import { apiClient } from '../../../services/api'
+import { formatCurrency } from '../../../utils'
+import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card'
+import { Button } from '../../../components/ui/button'
 import { TrendingUp, TrendingDown, Target, CheckCircle2, XCircle } from 'lucide-react'
 
 interface CobranzaPlanificadaRealModalProps {
@@ -61,13 +61,13 @@ export function CobranzaPlanificadaRealModal({ isOpen, onClose }: CobranzaPlanif
     },
   })
 
-  // Calcular fechas según vista rápida
+  // Calcular fechas segÃºn vista rÃ¡pida
   const calcularFechasVista = (vista: VistaRapida) => {
     const hoy = new Date()
     hoy.setHours(0, 0, 0, 0)
     const manana = new Date(hoy)
     manana.setDate(manana.getDate() + 1)
-    // Últimos 3 días: desde hace 2 días hasta hoy (3 días en total)
+    // Ãšltimos 3 dÃ­as: desde hace 2 dÃ­as hasta hoy (3 dÃ­as en total)
     const ultimos3Inicio = new Date(hoy)
     ultimos3Inicio.setDate(ultimos3Inicio.getDate() - 2)
 
@@ -88,7 +88,7 @@ export function CobranzaPlanificadaRealModal({ isOpen, onClose }: CobranzaPlanif
           fecha_fin: hoy.toISOString().split('T')[0],
         }
       default:
-        // personalizado - usar días mostrar
+        // personalizado - usar dÃ­as mostrar
         const fechaInicio = new Date(hoy)
         fechaInicio.setDate(fechaInicio.getDate() - (diasMostrar - 1))
         return {
@@ -98,7 +98,7 @@ export function CobranzaPlanificadaRealModal({ isOpen, onClose }: CobranzaPlanif
     }
   }
 
-  // Cargar datos por día
+  // Cargar datos por dÃ­a
   const fechasVista = calcularFechasVista(vistaRapida)
   const { data: cobranzaPorDiaData, isLoading: loadingPorDia, refetch } = useQuery({
     queryKey: ['cobranza-por-dia', filtros, vistaRapida, fechasVista],
@@ -106,7 +106,7 @@ export function CobranzaPlanificadaRealModal({ isOpen, onClose }: CobranzaPlanif
       const params = construirFiltrosObject()
       const queryParams = new URLSearchParams()
       Object.entries(params).forEach(([key, value]) => {
-        // ✅ Evitar duplicar fecha_inicio y fecha_fin ya que se agregan manualmente después
+        // âœ… Evitar duplicar fecha_inicio y fecha_fin ya que se agregan manualmente despuÃ©s
         if (key !== 'fecha_inicio' && key !== 'fecha_fin' && value) {
           queryParams.append(key, value.toString())
         }
@@ -129,7 +129,7 @@ export function CobranzaPlanificadaRealModal({ isOpen, onClose }: CobranzaPlanif
     setIsRefreshing(false)
   }
 
-  // Procesar datos para el gráfico
+  // Procesar datos para el grÃ¡fico
   const datosGrafico = useMemo(() => {
     if (!cobranzaPorDiaData?.dias) return []
 
@@ -157,7 +157,7 @@ export function CobranzaPlanificadaRealModal({ isOpen, onClose }: CobranzaPlanif
     })
   }, [cobranzaPorDiaData])
 
-  // Calcular métricas agregadas
+  // Calcular mÃ©tricas agregadas
   const metricas = useMemo(() => {
     if (datosGrafico.length === 0) {
       return {
@@ -246,7 +246,7 @@ export function CobranzaPlanificadaRealModal({ isOpen, onClose }: CobranzaPlanif
     return null
   }
 
-  // Renderizar gráfico según tipo
+  // Renderizar grÃ¡fico segÃºn tipo
   const renderGrafico = () => {
     const commonProps = {
       data: datosGrafico,
@@ -370,7 +370,7 @@ export function CobranzaPlanificadaRealModal({ isOpen, onClose }: CobranzaPlanif
     <BaseModal
       isOpen={isOpen}
       onClose={onClose}
-      title="Cobranza Planificada vs Real por Día"
+      title="Cobranza Planificada vs Real por DÃ­a"
       size="xlarge"
     >
       <div className="space-y-6">
@@ -386,13 +386,13 @@ export function CobranzaPlanificadaRealModal({ isOpen, onClose }: CobranzaPlanif
             errorOpcionesFiltros={errorOpcionesFiltros}
           />
 
-          {/* Controles de visualización */}
+          {/* Controles de visualizaciÃ³n */}
           <Card>
             <CardContent className="pt-6">
               <div className="space-y-4">
-                {/* Vistas rápidas */}
+                {/* Vistas rÃ¡pidas */}
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-gray-700">Vista rápida:</span>
+                  <span className="text-sm font-medium text-gray-700">Vista rÃ¡pida:</span>
                   <div className="flex gap-2">
                     <Button
                       variant={vistaRapida === 'hoy' ? 'default' : 'outline'}
@@ -406,14 +406,14 @@ export function CobranzaPlanificadaRealModal({ isOpen, onClose }: CobranzaPlanif
                       size="sm"
                       onClick={() => setVistaRapida('manana')}
                     >
-                      Mañana
+                      MaÃ±ana
                     </Button>
                     <Button
                       variant={vistaRapida === 'ultimos3' ? 'default' : 'outline'}
                       size="sm"
                       onClick={() => setVistaRapida('ultimos3')}
                     >
-                      Últimos 3 días
+                      Ãšltimos 3 dÃ­as
                     </Button>
                     <Button
                       variant={vistaRapida === 'personalizado' ? 'default' : 'outline'}
@@ -424,17 +424,17 @@ export function CobranzaPlanificadaRealModal({ isOpen, onClose }: CobranzaPlanif
                     </Button>
                   </div>
                 </div>
-                {/* Tipo de gráfico y días (solo visible en personalizado) */}
+                {/* Tipo de grÃ¡fico y dÃ­as (solo visible en personalizado) */}
                 <div className="flex flex-wrap items-center gap-4">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-gray-700">Tipo de gráfico:</span>
+                    <span className="text-sm font-medium text-gray-700">Tipo de grÃ¡fico:</span>
                     <div className="flex gap-2">
                       <Button
                         variant={tipoGrafico === 'line' ? 'default' : 'outline'}
                         size="sm"
                         onClick={() => setTipoGrafico('line')}
                       >
-                        Líneas
+                        LÃ­neas
                       </Button>
                       <Button
                         variant={tipoGrafico === 'bar' ? 'default' : 'outline'}
@@ -448,13 +448,13 @@ export function CobranzaPlanificadaRealModal({ isOpen, onClose }: CobranzaPlanif
                         size="sm"
                         onClick={() => setTipoGrafico('area')}
                       >
-                        Área
+                        Ãrea
                       </Button>
                     </div>
                   </div>
                   {vistaRapida === 'personalizado' && (
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-gray-700">Días a mostrar:</span>
+                      <span className="text-sm font-medium text-gray-700">DÃ­as a mostrar:</span>
                       <select
                         value={diasMostrar}
                         onChange={(e) => {
@@ -463,11 +463,11 @@ export function CobranzaPlanificadaRealModal({ isOpen, onClose }: CobranzaPlanif
                         }}
                         className="px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
-                        <option value={7}>7 días</option>
-                        <option value={15}>15 días</option>
-                        <option value={30}>30 días</option>
-                        <option value={60}>60 días</option>
-                        <option value={90}>90 días</option>
+                        <option value={7}>7 dÃ­as</option>
+                        <option value={15}>15 dÃ­as</option>
+                        <option value={30}>30 dÃ­as</option>
+                        <option value={60}>60 dÃ­as</option>
+                        <option value={90}>90 dÃ­as</option>
                       </select>
                     </div>
                   )}
@@ -477,7 +477,7 @@ export function CobranzaPlanificadaRealModal({ isOpen, onClose }: CobranzaPlanif
           </Card>
         </div>
 
-        {/* Métricas principales */}
+        {/* MÃ©tricas principales */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card>
             <CardHeader className="pb-3">
@@ -550,13 +550,13 @@ export function CobranzaPlanificadaRealModal({ isOpen, onClose }: CobranzaPlanif
                 {metricas.porcentajeCumplimiento.toFixed(1)}%
               </div>
               <div className="text-xs text-gray-500 mt-1">
-                {metricas.diasCumplidos} días cumplidos / {metricas.diasNoCumplidos} no cumplidos
+                {metricas.diasCumplidos} dÃ­as cumplidos / {metricas.diasNoCumplidos} no cumplidos
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Gráfico principal */}
+        {/* GrÃ¡fico principal */}
         <Card>
           <CardHeader>
             <CardTitle>Cobranza Planificada vs Real</CardTitle>
@@ -564,11 +564,11 @@ export function CobranzaPlanificadaRealModal({ isOpen, onClose }: CobranzaPlanif
           <CardContent>
             {loadingPorDia ? (
               <div className="h-[500px] flex items-center justify-center">
-                <div className="animate-pulse text-gray-400">Cargando gráfico...</div>
+                <div className="animate-pulse text-gray-400">Cargando grÃ¡fico...</div>
               </div>
             ) : datosGrafico.length === 0 ? (
               <div className="h-[500px] flex items-center justify-center text-gray-500">
-                No hay datos disponibles para el período seleccionado
+                No hay datos disponibles para el perÃ­odo seleccionado
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={500}>

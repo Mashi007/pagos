@@ -1,5 +1,5 @@
 import { useSearchParams } from 'react-router-dom'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { EmbudoClientes } from './EmbudoClientes'
 import { EmbudoConcesionarios } from './EmbudoConcesionarios'
 import { Target } from 'lucide-react'

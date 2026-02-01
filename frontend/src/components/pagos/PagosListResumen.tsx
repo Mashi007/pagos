@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { FileText, Download, Filter } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { pagoService } from '@/services/pagoService'
+import { Button } from '../../components/ui/button'
+import { Input } from '../../components/ui/input'
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
+import { Badge } from '../../components/ui/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
+import { pagoService } from '../../services/pagoService'
 import { toast } from 'sonner'
 
 interface UltimoPago {
@@ -29,7 +29,7 @@ export function PagosListResumen() {
     estado: '',
   })
 
-  // Query para obtener últimos pagos por cédula
+  // Query para obtener Ãºltimos pagos por cÃ©dula
   const { data, isLoading } = useQuery({
     queryKey: ['pagos-ultimos', page, perPage, filters],
     queryFn: () => pagoService.getUltimosPagos(page, perPage, filters),
@@ -39,7 +39,7 @@ export function PagosListResumen() {
   })
 
   const handleFilterChange = (key: string, value: string) => {
-    // Convertir "all" a cadena vacía para que el servicio no incluya el filtro
+    // Convertir "all" a cadena vacÃ­a para que el servicio no incluya el filtro
     const filterValue = value === 'all' ? '' : value
     setFilters(prev => ({ ...prev, [key]: filterValue }))
     setPage(1)
@@ -77,7 +77,7 @@ export function PagosListResumen() {
       toast.dismiss()
       toast.success('PDF descargado exitosamente')
     } catch (error: unknown) {
-      const { getErrorMessage, isAxiosError, getErrorDetail } = await import('@/types/errors')
+      const { getErrorMessage, isAxiosError, getErrorDetail } = await import('../../types/errors')
       let errorMessage = getErrorMessage(error)
       const detail = getErrorDetail(error)
       if (detail) {
@@ -96,13 +96,13 @@ export function PagosListResumen() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Filter className="w-5 h-5" />
-            Filtros de Búsqueda
+            Filtros de BÃºsqueda
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
-              placeholder="Cédula de identidad"
+              placeholder="CÃ©dula de identidad"
               value={filters.cedula}
               onChange={e => handleFilterChange('cedula', e.target.value)}
             />
@@ -129,7 +129,7 @@ export function PagosListResumen() {
       {/* Tabla de Resumen */}
       <Card>
         <CardHeader>
-          <CardTitle>Resumen por Cliente (Último Pago)</CardTitle>
+          <CardTitle>Resumen por Cliente (Ãšltimo Pago)</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -140,14 +140,14 @@ export function PagosListResumen() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b">
-                      <th className="px-4 py-3 text-left">Cédula</th>
-                      <th className="px-4 py-3 text-left">ID Último Pago</th>
+                      <th className="px-4 py-3 text-left">CÃ©dula</th>
+                      <th className="px-4 py-3 text-left">ID Ãšltimo Pago</th>
                       <th className="px-4 py-3 text-left">Estado</th>
-                      <th className="px-4 py-3 text-right">Monto Último Pago</th>
-                      <th className="px-4 py-3 text-left">Fecha Último Pago</th>
+                      <th className="px-4 py-3 text-right">Monto Ãšltimo Pago</th>
+                      <th className="px-4 py-3 text-left">Fecha Ãšltimo Pago</th>
                       <th className="px-4 py-3 text-right">Cuotas Atrasadas</th>
                       <th className="px-4 py-3 text-right">Saldo Vencido</th>
-                      <th className="px-4 py-3 text-left">Total Préstamos</th>
+                      <th className="px-4 py-3 text-left">Total PrÃ©stamos</th>
                       <th className="px-4 py-3 text-left">Acciones</th>
                     </tr>
                   </thead>
@@ -197,11 +197,11 @@ export function PagosListResumen() {
                   </tbody>
                 </table>
               </div>
-              {/* Paginación */}
+              {/* PaginaciÃ³n */}
               {data && data.total_pages > 1 && (
                 <div className="flex justify-between items-center mt-4">
                   <div className="text-sm text-gray-600">
-                    Página {data.page} de {data.total_pages} ({data.total} registros)
+                    PÃ¡gina {data.page} de {data.total_pages} ({data.total} registros)
                   </div>
                   <div className="flex gap-2">
                     <Button

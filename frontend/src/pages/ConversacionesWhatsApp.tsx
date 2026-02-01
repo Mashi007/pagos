@@ -1,5 +1,5 @@
 import { useSearchParams } from 'react-router-dom'
-import { ConversacionesWhatsApp } from '@/components/whatsapp/ConversacionesWhatsApp'
+import { ConversacionesWhatsApp } from '../components/whatsapp/ConversacionesWhatsApp'
 
 export function ConversacionesWhatsAppPage() {
   const [searchParams] = useSearchParams()

@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Edit, Save, AlertCircle, CheckCircle } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
-import { LoadingSpinner } from '@/components/ui/loading-spinner'
+import { Button } from '../../components/ui/button'
+import { Input } from '../../components/ui/input'
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
+import { Badge } from '../../components/ui/badge'
+import { LoadingSpinner } from '../../components/ui/loading-spinner'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { clienteService } from '@/services/clienteService'
+import { clienteService } from '../../services/clienteService'
 import toast from 'react-hot-toast'
 
 interface ProblemaValidacion {
@@ -115,7 +115,7 @@ export function CorregirClientes({ onClose }: CorregirClientesProps) {
         <Card className="w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle>Corregir Clientes con Problemas de Validación</CardTitle>
+              <CardTitle>Corregir Clientes con Problemas de ValidaciÃ³n</CardTitle>
               <Button variant="ghost" size="sm" onClick={onClose}>
                 <X className="w-4 h-4" />
               </Button>
@@ -137,7 +137,7 @@ export function CorregirClientes({ onClose }: CorregirClientesProps) {
         <Card className="w-full max-w-6xl">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle>Corregir Clientes con Problemas de Validación</CardTitle>
+              <CardTitle>Corregir Clientes con Problemas de ValidaciÃ³n</CardTitle>
               <Button variant="ghost" size="sm" onClick={onClose}>
                 <X className="w-4 h-4" />
               </Button>
@@ -170,7 +170,7 @@ export function CorregirClientes({ onClose }: CorregirClientesProps) {
           <div>
             <h2 className="text-2xl font-bold text-gray-900">Corregir Clientes</h2>
             <p className="text-gray-600 mt-1">
-              {total} cliente{total !== 1 ? 's' : ''} con problemas de validación
+              {total} cliente{total !== 1 ? 's' : ''} con problemas de validaciÃ³n
             </p>
           </div>
           <Button variant="ghost" size="sm" onClick={onClose}>
@@ -183,16 +183,16 @@ export function CorregirClientes({ onClose }: CorregirClientesProps) {
           {clientes.length === 0 ? (
             <div className="text-center py-12">
               <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-              <p className="text-lg text-gray-600">No hay clientes con problemas de validación</p>
+              <p className="text-lg text-gray-600">No hay clientes con problemas de validaciÃ³n</p>
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>ID</TableHead>
-                  <TableHead>Cédula</TableHead>
+                  <TableHead>CÃ©dula</TableHead>
                   <TableHead>Nombres</TableHead>
-                  <TableHead>Teléfono</TableHead>
+                  <TableHead>TelÃ©fono</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Problemas</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
@@ -304,11 +304,11 @@ export function CorregirClientes({ onClose }: CorregirClientesProps) {
           )}
         </div>
 
-        {/* Paginación */}
+        {/* PaginaciÃ³n */}
         {totalPages > 1 && (
           <div className="border-t p-4 flex items-center justify-between">
             <div className="text-sm text-gray-600">
-              Mostrando página {currentPage} de {totalPages}
+              Mostrando pÃ¡gina {currentPage} de {totalPages}
             </div>
             <div className="flex gap-2">
               <Button

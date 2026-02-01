@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Upload, FileSpreadsheet, CheckCircle, ChevronDown } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Button } from '../../components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover'
 import { ExcelUploader } from './ExcelUploader'
 import { ConciliacionExcelUploader } from './ConciliacionExcelUploader'
 
@@ -44,7 +44,7 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
               }}
             >
               <CheckCircle className="w-4 h-4 mr-2" />
-              Conciliación
+              ConciliaciÃ³n
             </button>
           </div>
         </PopoverContent>
@@ -61,7 +61,7 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
         />
       )}
 
-      {/* Modal Conciliación */}
+      {/* Modal ConciliaciÃ³n */}
       {showConciliacion && (
         <ConciliacionExcelUploader
           onClose={() => setShowConciliacion(false)}

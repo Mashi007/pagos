@@ -4,8 +4,8 @@
  */
 // frontend/src/store/simpleAuthStore.ts
 import { create } from 'zustand'
-import { User, LoginForm } from '@/types'
-import { authService } from '@/services/authService'
+import { User, LoginForm } from '../types'
+import { authService } from '../services/authService'
 import toast from 'react-hot-toast'
 import {
   safeGetItem,
@@ -13,7 +13,7 @@ import {
   safeGetSessionItem,
   safeSetSessionItem,
   clearAuthStorage
-} from '@/utils/storage'
+} from '../utils/storage'
 
 interface SimpleAuthState {
   user: User | null
