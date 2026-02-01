@@ -55,6 +55,10 @@ class Settings(BaseSettings):
         None,
         description="Business Account ID de WhatsApp"
     )
+    WHATSAPP_APP_SECRET: Optional[str] = Field(
+        None,
+        description="App Secret de Meta para verificar firma de webhooks (recomendado)"
+    )
     
     # ============================================
     # Email

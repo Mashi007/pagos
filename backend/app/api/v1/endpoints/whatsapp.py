@@ -2,7 +2,7 @@
 Endpoints para recibir webhooks de WhatsApp (Meta API)
 """
 import logging
-from fastapi import APIRouter, Request, HTTPException, Query, Depends
+from fastapi import APIRouter, Request, HTTPException, Query, Depends, Header
 from typing import Optional
 from app.schemas.whatsapp import (
     WhatsAppWebhookPayload,
@@ -13,6 +13,7 @@ from app.schemas.whatsapp import (
 )
 from app.services.whatsapp_service import WhatsAppService
 from app.core.config import settings
+from app.core.security_whatsapp import verify_webhook_signature
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -65,18 +66,42 @@ async def verify_webhook(
 
 
 @router.post("/webhook")
-async def receive_webhook(request: Request):
+async def receive_webhook(
+    request: Request,
+    x_hub_signature_256: Optional[str] = Header(None, alias="X-Hub-Signature-256")
+):
     """
     Endpoint para recibir mensajes de WhatsApp desde Meta
     
     Meta envía los mensajes entrantes a este endpoint como POST requests.
     
+    Args:
+        request: Request object con el payload
+        x_hub_signature_256: Firma del webhook de Meta (opcional pero recomendado)
+    
     Returns:
         Respuesta de confirmación
     """
     try:
-        # Obtener el payload JSON
-        payload = await request.json()
+        # Obtener el cuerpo del request en bytes para verificación de firma
+        body_bytes = await request.body()
+        
+        # Verificar firma del webhook (si está configurado) ANTES de procesar
+        app_secret = getattr(settings, "WHATSAPP_APP_SECRET", None)
+        if app_secret and x_hub_signature_256:
+            if not verify_webhook_signature(body_bytes, x_hub_signature_256, app_secret):
+                logger.warning("Firma del webhook inválida - posible request malicioso")
+                raise HTTPException(
+                    status_code=403,
+                    detail="Firma del webhook inválida"
+                )
+            logger.debug("Firma del webhook verificada correctamente")
+        elif app_secret and not x_hub_signature_256:
+            logger.warning("App Secret configurado pero no se recibió firma del webhook")
+        
+        # Obtener el payload JSON después de verificar la firma
+        import json
+        payload = json.loads(body_bytes.decode('utf-8'))
         logger.info(f"Webhook recibido de WhatsApp: {payload.get('object', 'unknown')}")
         
         # Validar que sea un webhook de WhatsApp Business Account
