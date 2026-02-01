@@ -142,6 +142,7 @@ export function DashboardMenu() {
           meta_mensual?: number
           avance_meta?: number
           evolucion_mensual?: Array<{ mes: string; cartera: number; cobrado: number; morosidad: number }>
+          evolucion_origen?: 'demo' | 'bd'
         }
         return response
       } catch (error) {
@@ -899,11 +900,16 @@ export function DashboardMenu() {
                         <LineChart className="h-5 w-5 text-cyan-600" />
                         <span>Evolución Mensual</span>
                       </CardTitle>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <SelectorPeriodoGrafico chartId="evolucion" />
                         <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
                           {getRangoFechasLabelGrafico('evolucion')}
                         </Badge>
+                        {datosDashboard?.evolucion_origen === 'demo' && (
+                          <Badge variant="outline" className="text-xs font-medium text-amber-700 bg-amber-50 border-amber-300">
+                            Datos de ejemplo
+                          </Badge>
+                        )}
                       </div>
                     </div>
                   </CardHeader>
