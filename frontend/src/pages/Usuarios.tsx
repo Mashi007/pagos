@@ -706,3 +706,5 @@ export function Usuarios() {
   )
 }
 
+export default Usuarios
+

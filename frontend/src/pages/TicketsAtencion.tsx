@@ -1201,3 +1201,5 @@ export function TicketsAtencion() {
     </div>
   )
 }
+
+export default TicketsAtencion

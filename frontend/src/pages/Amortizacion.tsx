@@ -320,3 +320,5 @@ export function Amortizacion() {
     </div>
   )
 }
+
+export default Amortizacion

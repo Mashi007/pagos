@@ -422,3 +422,5 @@ export function ChatAI() {
   )
 }
 
+export default ChatAI
+

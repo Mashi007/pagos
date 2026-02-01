@@ -16,3 +16,5 @@ export function ConversacionesWhatsAppPage() {
   )
 }
 
+export default ConversacionesWhatsAppPage
+

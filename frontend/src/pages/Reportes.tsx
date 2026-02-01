@@ -558,3 +558,5 @@ export function Reportes() {
     </motion.div>
   )
 }
+
+export default Reportes

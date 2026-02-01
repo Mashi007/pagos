@@ -770,3 +770,5 @@ export function EmbudoClientes() {
     </div>
   )
 }
+
+export default EmbudoClientes

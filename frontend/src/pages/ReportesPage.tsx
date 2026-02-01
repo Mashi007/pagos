@@ -54,3 +54,5 @@ export function ReportesPage() {
     </motion.div>
   )
 }
+
+export default ReportesPage

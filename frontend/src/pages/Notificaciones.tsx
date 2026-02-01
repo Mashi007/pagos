@@ -1044,3 +1044,5 @@ export function Notificaciones() {
     </div>
   )
 }
+
+export default Notificaciones

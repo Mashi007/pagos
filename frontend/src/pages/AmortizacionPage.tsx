@@ -51,3 +51,5 @@ export function AmortizacionPage() {
     </motion.div>
   )
 }
+
+export default AmortizacionPage

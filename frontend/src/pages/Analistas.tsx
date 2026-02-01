@@ -560,3 +560,5 @@ export function Analistas() {
     </div>
   )
 }
+
+export default Analistas

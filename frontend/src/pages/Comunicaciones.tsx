@@ -16,3 +16,5 @@ export function ComunicacionesPage() {
   )
 }
 
+export default ComunicacionesPage
+

@@ -502,3 +502,5 @@ export function Programador() {
     </motion.div>
   )
 }
+
+export default Programador

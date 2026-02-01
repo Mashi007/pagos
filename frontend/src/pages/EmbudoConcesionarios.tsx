@@ -1143,3 +1143,5 @@ export function EmbudoConcesionarios() {
     </div>
   )
 }
+
+export default EmbudoConcesionarios

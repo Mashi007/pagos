@@ -382,3 +382,5 @@ export function VisualizacionBD() {
     </div>
   )
 }
+
+export default VisualizacionBD

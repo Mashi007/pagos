@@ -493,3 +493,5 @@ export function Auditoria() {
     </div>
   )
 }
+
+export default Auditoria

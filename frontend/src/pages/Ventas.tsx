@@ -42,3 +42,5 @@ export function Ventas() {
   )
 }
 
+export default Ventas
+

@@ -162,3 +162,5 @@ export function Solicitudes() {
   )
 }
 
+export default Solicitudes
+

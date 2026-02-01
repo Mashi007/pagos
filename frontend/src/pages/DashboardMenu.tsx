@@ -1431,3 +1431,5 @@ export function DashboardMenu() {
     </div>
   )
 }
+
+export default DashboardMenu

@@ -1611,3 +1611,5 @@ export function Configuracion() {
     </motion.div>
   )
 }
+
+export default Configuracion

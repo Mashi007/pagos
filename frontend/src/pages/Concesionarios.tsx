@@ -560,3 +560,5 @@ export function Concesionarios() {
     </div>
   )
 }
+
+export default Concesionarios

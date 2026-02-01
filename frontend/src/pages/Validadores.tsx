@@ -339,3 +339,5 @@ export function Validadores() {
     </div>
   )
 }
+
+export default Validadores

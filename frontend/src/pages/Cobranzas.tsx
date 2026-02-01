@@ -1510,3 +1510,5 @@ export function Cobranzas() {
   )
 }
 
+export default Cobranzas
+

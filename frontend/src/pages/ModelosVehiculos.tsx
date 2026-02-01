@@ -562,3 +562,5 @@ export function ModelosVehiculos() {
     </div>
   )
 }
+
+export default ModelosVehiculos
