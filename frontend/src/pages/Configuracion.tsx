@@ -128,10 +128,17 @@ export function Configuracion() {
   const [configuracionGeneral, setConfiguracionGeneral] = useState<ConfiguracionGeneral | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [seccionActiva, setSeccionActiva] = useState('general')
+  // Inicializar sección desde URL para que Email, WhatsApp y AI se vean al entrar por enlace
+  const [seccionActiva, setSeccionActiva] = useState(() => {
+    const tab = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('tab') : null
+    if (tab === 'email') return 'emailConfig'
+    if (tab === 'whatsapp') return 'whatsappConfig'
+    if (tab === 'ai') return 'aiConfig'
+    return 'general'
+  })
   const [estadoCarga, setEstadoCarga] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
 
-  // Leer el parámetro tab de la URL
+  // Sincronizar sección con el parámetro tab de la URL (al cambiar tab por navegación)
   useEffect(() => {
     const tab = searchParams.get('tab')
     if (tab === 'email') {
@@ -265,7 +272,7 @@ export function Configuracion() {
     }
   }
 
-  const secciones = [
+  const seccionesList = [
     { id: 'general', nombre: 'General', icono: Globe },
     {
       id: 'herramientas',
@@ -293,6 +300,24 @@ export function Configuracion() {
     { id: 'modelosVehiculos', nombre: 'Modelos de Vehículos', icono: Car },
     { id: 'usuarios', nombre: 'Usuarios', icono: Users },
   ]
+  const secciones = seccionesList
+  // Buscar sección por id (top-level o dentro de herramientas.items) para título
+  const findSeccionById = (id: string) => {
+    for (const s of seccionesList) {
+      if ((s as { id?: string }).id === id) return s as { id: string; nombre: string; icono: typeof Settings }
+      const items = (s as { items?: { id: string; nombre: string; icono: typeof Settings }[] }).items
+      if (items) {
+        const found = items.find((i) => i.id === id)
+        if (found) return found
+      }
+    }
+    return null
+  }
+  const nombresSeccionEspecial: Record<string, { nombre: string; icono: typeof Mail }> = {
+    emailConfig: { nombre: 'Configuración Email', icono: Mail },
+    whatsappConfig: { nombre: 'Configuración WhatsApp', icono: MessageSquare },
+    aiConfig: { nombre: 'Configuración AI', icono: Brain },
+  }
 
   const handleGuardar = async () => {
     try {
@@ -1565,12 +1590,14 @@ export function Configuracion() {
               <div>
                 <CardTitle className="flex items-center">
                   {(() => {
-                    const seccion = secciones.find(s => s.id === seccionActiva)
+                    const seccion = findSeccionById(seccionActiva) || (nombresSeccionEspecial[seccionActiva]
+                      ? { nombre: nombresSeccionEspecial[seccionActiva].nombre, icono: nombresSeccionEspecial[seccionActiva].icono }
+                      : secciones.find(s => s.id === seccionActiva))
                     const IconComponent = seccion?.icono || Settings
                     return (
                       <>
                         <IconComponent className="mr-2 h-5 w-5" />
-                        {seccion?.nombre}
+                        {seccion?.nombre ?? 'Configuración'}
                       </>
                     )
                   })()}

@@ -7,6 +7,7 @@ from app.models.prestamo import Prestamo
 from app.models.ticket import Ticket
 from app.models.cuota import Cuota
 from app.models.pagos_whatsapp import PagosWhatsapp
+from app.models.configuracion import Configuracion
 
-__all__ = ["Base", "Cliente", "Prestamo", "Ticket", "Cuota", "PagosWhatsapp"]
+__all__ = ["Base", "Cliente", "Prestamo", "Ticket", "Cuota", "PagosWhatsapp", "Configuracion"]
 

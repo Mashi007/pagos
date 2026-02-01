@@ -72,3 +72,10 @@ CREATE TABLE IF NOT EXISTS pagos_whatsapp (
 );
 CREATE INDEX IF NOT EXISTS ix_pagos_whatsapp_id ON pagos_whatsapp (id);
 CREATE INDEX IF NOT EXISTS ix_pagos_whatsapp_cedula_cliente ON pagos_whatsapp (cedula_cliente);
+
+-- 5) CONFIGURACION – clave-valor para persistir config (email, etc.)
+-- -------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS configuracion (
+    clave VARCHAR(100) PRIMARY KEY,
+    valor TEXT
+);
