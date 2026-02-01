@@ -605,17 +605,17 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                       <PopoverContent className="w-80">
                         <p className="text-sm font-semibold mb-2">Ratio de Endeudamiento:</p>
                         <ul className="text-xs space-y-1">
-                          <li>- &lt; 25% -> 14 puntos (Excelente)</li>
-                          <li>- 25-35% -> 11 puntos (Bueno)</li>
-                          <li>- 35-50% -> 6 puntos (Regular)</li>
-                          <li>- &gt; 50% -> 2 puntos (Malo)</li>
+                          <li>- &lt; 25% -&gt; 14 puntos (Excelente)</li>
+                          <li>- 25-35% -&gt; 11 puntos (Bueno)</li>
+                          <li>- 35-50% -&gt; 6 puntos (Regular)</li>
+                          <li>- &gt; 50% -&gt; 2 puntos (Malo)</li>
                           </ul>
                         <p className="text-sm font-semibold mb-2 mt-4">Ratio de Cobertura:</p>
                         <ul className="text-xs space-y-1">
-                          <li>- &gt; 2.5x -> 15 puntos (Excelente)</li>
-                          <li>- 2.0-2.5x -> 12 puntos (Bueno)</li>
-                          <li>- 1.5-2.0x -> 6 puntos (Regular)</li>
-                          <li>- &lt; 1.5x -> 0 puntos (RECHAZO)</li>
+                          <li>- &gt; 2.5x -&gt; 15 puntos (Excelente)</li>
+                          <li>- 2.0-2.5x -&gt; 12 puntos (Bueno)</li>
+                          <li>- 1.5-2.0x -&gt; 6 puntos (Regular)</li>
+                          <li>- &lt; 1.5x -&gt; 0 puntos (RECHAZO)</li>
                         </ul>
                     </PopoverContent>
                   </Popover>
@@ -679,7 +679,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                     required
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    Escala: &gt; 24 meses -> 9 pts, 12-24 -> 7 pts, 6-12 -> 4 pts, &lt; 6 -> 0 pts
+                    Escala: &gt; 24 meses -&gt; 9 pts, 12-24 -&gt; 7 pts, 6-12 -&gt; 4 pts, &lt; 6 -&gt; 0 pts
                   </p>
                         </div>
                 <div>
@@ -853,7 +853,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
 
                 <div className="bg-purple-50 p-3 rounded border border-purple-200">
                   <p className="text-xs text-purple-700">
-                    <strong>Escala:</strong> Calificación 3 -> Recomendable (3 pts) | Calificación 2 -> Dudosa (2 pts) | Calificación 1 -> No recomendable (1 pt) | No contestó (0 pts)
+                    <strong>Escala:</strong> Calificación 3 -&gt; Recomendable (3 pts) | Calificación 2 -&gt; Dudosa (2 pts) | Calificación 1 -&gt; No recomendable (1 pt) | No contestó (0 pts)
                     <br />
                     <strong>Total máximo:</strong> 9 puntos (3 referencias x 3 pts c/u)
                   </p>
@@ -883,7 +883,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                     onChange={(e) => setFormData({ ...formData, minutos_trabajo: parseInt(e.target.value) || 0 })}
                 required
               />
-                  <p className="text-xs text-gray-500 mt-1">&lt; 30 min -> 3 pts, 30-60 min -> 2 pts, &gt; 60 min -> 0 pts</p>
+                  <p className="text-xs text-gray-500 mt-1">&lt; 30 min -&gt; 3 pts, 30-60 min -&gt; 2 pts, &gt; 60 min -&gt; 0 pts</p>
                 </div>
                     <div className="space-y-2">
                   <div className="flex items-center space-x-2">
@@ -997,7 +997,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                       value={formData.personas_casa || 1}
                       onChange={(e) => setFormData({ ...formData, personas_casa: parseInt(e.target.value) || 1 })}
                     />
-                    <p className="text-xs text-gray-500 mt-1">&gt; 5 personas -> -0.5 pts</p>
+                    <p className="text-xs text-gray-500 mt-1">&gt; 5 personas -&gt; -0.5 pts</p>
                   </div>
                 </div>
 
@@ -1202,12 +1202,12 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                   <div className="bg-pink-50 p-3 rounded border border-pink-200 mt-3">
                     <p className="text-xs text-pink-700">
                       <strong>Escala (10 puntos máx):</strong><br />
-                      25-50 años -> 10.0 pts (Óptimo) |<br />
-                      22-24 / 51-55 años -> 8.0 pts (Muy bueno/Bueno) |<br />
-                      18-21 / 56-60 años -> 6.0 pts (Regular) |<br />
-                      61-65 años -> 3.0 pts (Bajo) |<br />
-                      &lt; 18 años -> RECHAZO AUTOMÁTICO |<br />
-                      &gt; 65 años -> 2.0 pts (Muy bajo)
+                      25-50 años -&gt; 10.0 pts (Óptimo) |<br />
+                      22-24 / 51-55 años -&gt; 8.0 pts (Muy bueno/Bueno) |<br />
+                      18-21 / 56-60 años -&gt; 6.0 pts (Regular) |<br />
+                      61-65 años -&gt; 3.0 pts (Bajo) |<br />
+                      &lt; 18 años -&gt; RECHAZO AUTOMÁTICO |<br />
+                      &gt; 65 años -&gt; 2.0 pts (Muy bajo)
                     </p>
                 </div>
               </div>
@@ -1338,9 +1338,9 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
               <div className="bg-red-50 p-3 rounded border border-red-200">
                 <p className="text-xs text-red-700">
                   <strong>Escala de Puntuacion (3 bandas):</strong><br />
-                  [OK] >=15% del ingreso -> 5 pts (Holgado) - Margen suficiente para imprevistos<br />
-                  [!] 5%-14.9% del ingreso -> 3 pts (Ajustado) - Margen minimo<br />
-                  [X] &lt;5% o deficit -> 0 pts (Insuficiente) - Sin margen, alto riesgo
+                  [OK] &gt;=15% del ingreso -&gt; 5 pts (Holgado) - Margen suficiente para imprevistos<br />
+                  [!] 5%-14.9% del ingreso -&gt; 3 pts (Ajustado) - Margen minimo<br />
+                  [X] &lt;5% o deficit -&gt; 0 pts (Insuficiente) - Sin margen, alto riesgo
                 </p>
               </div>
             </CardContent>
