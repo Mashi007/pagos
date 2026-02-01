@@ -1,7 +1,8 @@
 """
 Configuración del sistema usando Pydantic Settings
 """
-from typing import Optional
+import json
+from typing import Optional, List
 from pydantic_settings import BaseSettings
 from pydantic import Field
 
@@ -83,7 +84,27 @@ class Settings(BaseSettings):
     # ============================================
     # CORS
     # ============================================
-    CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:5173"]
+    CORS_ORIGINS: Optional[str] = Field(
+        default='["http://localhost:3000", "http://localhost:5173"]',
+        description="Lista de orígenes permitidos para CORS (formato JSON o separado por comas)"
+    )
+    
+    @property
+    def cors_origins_list(self) -> List[str]:
+        """Retorna CORS_ORIGINS como lista"""
+        if not self.CORS_ORIGINS or self.CORS_ORIGINS.strip() == '':
+            return ["http://localhost:3000", "http://localhost:5173"]
+        
+        # Intentar parsear como JSON
+        try:
+            parsed = json.loads(self.CORS_ORIGINS)
+            if isinstance(parsed, list):
+                return parsed
+        except json.JSONDecodeError:
+            pass
+        
+        # Si no es JSON válido, tratar como string separado por comas
+        return [origin.strip() for origin in self.CORS_ORIGINS.split(',') if origin.strip()]
     
     class Config:
         env_file = ".env"
