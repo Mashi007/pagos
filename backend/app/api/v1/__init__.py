@@ -69,7 +69,7 @@ api_router.include_router(
     tags=["cobranzas"],
 )
 
-# Clientes (listado paginado y stats; stub hasta tener BD)
+# Clientes (conectado a BD: listado paginado, stats, CRUD, cambio de estado)
 api_router.include_router(
     clientes.router,
     prefix="/clientes",

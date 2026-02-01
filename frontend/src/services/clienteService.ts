@@ -158,13 +158,13 @@ class ClienteService {
     return response
   }
 
-  // Cambiar estado de cliente
+  // Cambiar estado de cliente (el backend devuelve Cliente directamente, no envuelto en ApiResponse)
   async cambiarEstado(clienteId: string, estado: Cliente['estado']): Promise<Cliente> {
-    const response = await apiClient.patch<ApiResponse<Cliente>>(
+    const response = await apiClient.patch<Cliente>(
       `${this.baseUrl}/${clienteId}/estado`,
       { estado }
     )
-    return response.data
+    return response
   }
 
   // Asignar analista a cliente (FUNCIÓN OBSOLETA - eliminado)

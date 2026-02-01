@@ -37,6 +37,15 @@ app.add_middleware(
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
 
+@app.on_event("startup")
+def on_startup():
+    """Crear tablas en la BD si no existen (modelos registrados en Base.metadata)."""
+    from app.core.database import engine
+    from app.models import Base, Cliente  # noqa: F401 - Cliente registra la tabla en Base.metadata
+    Base.metadata.create_all(bind=engine)
+    logger.info("Base de datos: tablas creadas o ya existentes.")
+
+
 @app.get("/")
 async def root():
     """Endpoint raíz"""
@@ -57,6 +66,24 @@ async def root_head():
 async def health_check():
     """Endpoint de salud"""
     return {"status": "healthy"}
+
+
+@app.get("/health/db")
+async def health_check_db():
+    """Verifica que la conexión a la BD responde (SELECT 1)."""
+    from sqlalchemy import text
+    from fastapi.responses import JSONResponse
+    from app.core.database import engine
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return {"status": "healthy", "database": "connected"}
+    except Exception as e:
+        logger.exception("Health check DB failed")
+        return JSONResponse(
+            status_code=503,
+            content={"status": "unhealthy", "database": "disconnected", "error": str(e)},
+        )
 
 
 @app.head("/health")
