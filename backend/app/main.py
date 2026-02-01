@@ -45,10 +45,22 @@ async def root():
     }
 
 
+@app.head("/")
+async def root_head():
+    """Endpoint raíz para HEAD requests (health checks)"""
+    return
+
+
 @app.get("/health")
 async def health_check():
     """Endpoint de salud"""
     return {"status": "healthy"}
+
+
+@app.head("/health")
+async def health_check_head():
+    """Endpoint de salud para HEAD requests"""
+    return
 
 
 if __name__ == "__main__":
