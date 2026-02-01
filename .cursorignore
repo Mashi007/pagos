@@ -1,0 +1,99 @@
+﻿# ============================================
+# .cursorignore - Excluir archivos del anÃ¡lisis de Cursor
+# ============================================
+# Este archivo le dice a Cursor quÃ© archivos y carpetas NO debe indexar/analizar
+# para evitar problemas de rendimiento y errores de serializaciÃ³n
+
+# ============================================
+# Node.js / Frontend
+# ============================================
+node_modules/
+**/node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.next/
+frontend/out/
+
+# ============================================
+# Python / Backend
+# ============================================
+.venv/
+venv/
+**/venv/
+**/.venv/
+backend/.venv/
+backend/venv/
+backend/env/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# ============================================
+# CachÃ©s y archivos temporales
+# ============================================
+.mypy_cache/
+**/.mypy_cache/
+backend/.mypy_cache/
+.pytest_cache/
+**/.pytest_cache/
+backend/.pytest_cache/
+*.cache
+.cache/
+
+# ============================================
+# Build outputs
+# ============================================
+dist/
+build/
+*.egg-info/
+.eggs/
+eggs/
+
+# ============================================
+# Logs
+# ============================================
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ============================================
+# Archivos binarios grandes
+# ============================================
+*.exe
+*.dll
+*.so
+*.dylib
+*.pyd
+chromedriver*
+selenium-manager
+
+# ============================================
+# Base de datos
+# ============================================
+*.db
+*.sqlite
+*.sqlite3
+
+# ============================================
+# Archivos temporales
+# ============================================
+*.tmp
+*.temp
+*.bak
+*.backup
+*.old
+
+# ============================================
+# Carpetas de otros proyectos (NO pertenecen a "pagos")
+# ============================================
+# Estas carpetas pueden estar causando que Cursor indexe archivos
+# de otros proyectos, generando errores de serializaciÃ³n
+industrialroom/
+scripts/
+sql/
