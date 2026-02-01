@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: pagos-frontend
+    env: node
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./frontend/dist
+    envVars:
+      - key: NODE_VERSION
+        value: 20.11.0
