@@ -15,6 +15,8 @@ from app.schemas.whatsapp import (
 from app.services.whatsapp_service import WhatsAppService
 from app.core.config import settings
 from app.core.security_whatsapp import verify_webhook_signature
+from app.core.database import get_db
+from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -70,7 +72,8 @@ async def verify_webhook(
 @router.post("/webhook")
 async def receive_webhook(
     request: Request,
-    x_hub_signature_256: Optional[str] = Header(None, alias="X-Hub-Signature-256")
+    x_hub_signature_256: Optional[str] = Header(None, alias="X-Hub-Signature-256"),
+    db: Session = Depends(get_db),
 ):
     """
     Endpoint para recibir mensajes de WhatsApp desde Meta
@@ -137,10 +140,11 @@ async def receive_webhook(
                             if message.from_ in contacts:
                                 contact = WhatsAppContact(**contacts[message.from_])
                             
-                            # Procesar el mensaje
+                            # Procesar el mensaje (db para guardar imágenes en pagos_whatsapp)
                             result = await whatsapp_service.process_incoming_message(
                                 message=message,
-                                contact=contact
+                                contact=contact,
+                                db=db,
                             )
                             
                             if result.get("success"):

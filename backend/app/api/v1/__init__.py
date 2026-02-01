@@ -2,7 +2,7 @@
 API v1
 """
 from fastapi import APIRouter
-from app.api.v1.endpoints import whatsapp, auth, configuracion, pagos, notificaciones, notificaciones_tabs, dashboard, kpis, auditoria, cobranzas, clientes, tickets
+from app.api.v1.endpoints import whatsapp, auth, configuracion, pagos, notificaciones, notificaciones_tabs, dashboard, kpis, auditoria, cobranzas, clientes, tickets, comunicaciones
 
 api_router = APIRouter()
 
@@ -108,4 +108,11 @@ api_router.include_router(
     tickets.router,
     prefix="/tickets",
     tags=["tickets"],
+)
+
+# Comunicaciones (WhatsApp/Email). Config en configuracion?tab=whatsapp. Imágenes WhatsApp → pagos_whatsapp.
+api_router.include_router(
+    comunicaciones.router,
+    prefix="/comunicaciones",
+    tags=["comunicaciones"],
 )

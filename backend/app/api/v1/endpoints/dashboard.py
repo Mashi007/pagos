@@ -583,9 +583,8 @@ def get_evolucion_pagos(
 ):
     """Evolución de pagos por mes. Stub: requiere tabla pagos para datos reales."""
     m = _ultimos_12_meses()
-    return {
-        "meses": [{"mes": x["mes"], "pagos": 12 + i, "monto": x["monto_pagado"]} for i, x in enumerate(m)]
-    }
+    meses_list = [{"mes": x["mes"], "pagos": 12 + i, "monto": x["monto_pagado"]} for i, x in enumerate(m)]
+    return {"meses": meses_list}
 
 
 # ========== Endpoints adicionales usados por modales/páginas (stub) ==========

@@ -13,11 +13,12 @@ from fastapi import APIRouter, Body, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from app.api.v1.endpoints import configuracion_ai, configuracion_email
+from app.api.v1.endpoints import configuracion_ai, configuracion_email, configuracion_whatsapp
 
 router = APIRouter()
 router.include_router(configuracion_ai.router, prefix="/ai", tags=["configuracion-ai"])
 router.include_router(configuracion_email.router, prefix="/email", tags=["configuracion-email"])
+router.include_router(configuracion_whatsapp.router, prefix="/whatsapp", tags=["configuracion-whatsapp"])
 
 # Stub en memoria hasta tener BD (nombre_empresa alineado con frontend ConfiguracionGeneral)
 _config_stub: dict[str, Any] = {

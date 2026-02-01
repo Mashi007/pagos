@@ -17,6 +17,14 @@ class WhatsAppText(BaseModel):
     body: str = Field(..., description="Cuerpo del mensaje")
 
 
+class WhatsAppImage(BaseModel):
+    """Contenido de mensaje de imagen (Meta API)"""
+    id: str = Field(..., description="ID del media en Meta")
+    sha256: Optional[str] = None
+    mime_type: Optional[str] = None
+    caption: Optional[str] = None
+
+
 class WhatsAppMessage(BaseModel):
     """Mensaje recibido de WhatsApp"""
     from_: str = Field(..., alias="from", description="Número de teléfono remitente")
@@ -24,7 +32,8 @@ class WhatsAppMessage(BaseModel):
     timestamp: str = Field(..., description="Timestamp del mensaje")
     type: str = Field(..., description="Tipo de mensaje (text, image, etc.)")
     text: Optional[WhatsAppText] = None
-    
+    image: Optional[WhatsAppImage] = None
+
     class Config:
         populate_by_name = True
 

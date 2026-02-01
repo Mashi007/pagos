@@ -1,10 +1,17 @@
 """
-Servicio para manejar mensajes entrantes de WhatsApp (Meta API)
+Servicio para manejar mensajes entrantes de WhatsApp (Meta API).
+Si reciben imagen, se guarda en BD tabla pagos_whatsapp (fecha, cedula_cliente, imagen).
 """
 import logging
 from typing import Optional, Dict, Any
 from datetime import datetime
+from sqlalchemy.orm import Session
+from sqlalchemy import select
+
 from app.schemas.whatsapp import WhatsAppMessage, WhatsAppContact
+from app.core.config import settings
+from app.models.cliente import Cliente
+from app.models.pagos_whatsapp import PagosWhatsapp
 
 logger = logging.getLogger(__name__)
 
@@ -18,17 +25,12 @@ class WhatsAppService:
     async def process_incoming_message(
         self, 
         message: WhatsAppMessage, 
-        contact: Optional[WhatsAppContact] = None
+        contact: Optional[WhatsAppContact] = None,
+        db: Optional[Session] = None
     ) -> Dict[str, Any]:
         """
-        Procesa un mensaje entrante de WhatsApp
-        
-        Args:
-            message: Mensaje recibido
-            contact: Información del contacto (opcional)
-            
-        Returns:
-            Dict con información del procesamiento
+        Procesa un mensaje entrante de WhatsApp.
+        Si es imagen, descarga y guarda en pagos_whatsapp (fecha, cedula_cliente, imagen).
         """
         try:
             self.logger.info(
@@ -36,7 +38,6 @@ class WhatsAppService:
                 f"From: {message.from_}, Type: {message.type}"
             )
             
-            # Extraer información del mensaje
             message_data = {
                 "message_id": message.id,
                 "from_number": message.from_,
@@ -45,16 +46,17 @@ class WhatsAppService:
                 "processed_at": datetime.utcnow().isoformat()
             }
             
-            # Procesar según el tipo de mensaje
             if message.type == "text" and message.text:
                 message_data["text_content"] = message.text.body
                 result = await self._process_text_message(message.text.body, message.from_)
+                message_data.update(result)
+            elif message.type == "image" and message.image and db:
+                result = await self._process_image_message(message, db)
                 message_data.update(result)
             else:
                 message_data["status"] = "unsupported_type"
                 message_data["note"] = f"Tipo de mensaje {message.type} no soportado aún"
             
-            # Información del contacto si está disponible
             if contact:
                 message_data["contact_wa_id"] = contact.wa_id
                 if contact.profile:
@@ -74,6 +76,52 @@ class WhatsAppService:
                 "error": str(e),
                 "message_id": message.id if message else None
             }
+    
+    async def _process_image_message(self, message: WhatsAppMessage, db: Session) -> Dict[str, Any]:
+        """Descarga la imagen de Meta, obtiene cedula por telefono y guarda en pagos_whatsapp."""
+        cedula_cliente = None
+        from_number = "".join(c for c in message.from_ if c.isdigit())
+        if from_number:
+            last_digits = from_number[-10:] if len(from_number) >= 10 else from_number
+            q = select(Cliente.cedula).where(
+                Cliente.telefono.isnot(None),
+                Cliente.telefono.like(f"%{last_digits}")
+            ).limit(1)
+            row = db.execute(q).scalars().first()
+            if row:
+                cedula_cliente = row
+        token = getattr(settings, "WHATSAPP_ACCESS_TOKEN", None)
+        api_url = getattr(settings, "WHATSAPP_GRAPH_URL", "https://graph.facebook.com/v18.0")
+        if not token:
+            logger.warning("WHATSAPP_ACCESS_TOKEN no configurado; no se puede descargar imagen")
+            return {"status": "image_skipped", "note": "Token no configurado"}
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                r = await client.get(f"{api_url}/{message.image.id}", headers={"Authorization": f"Bearer {token}"})
+                r.raise_for_status()
+                data = r.json()
+                media_url = data.get("url")
+                if not media_url:
+                    return {"status": "image_no_url", "note": "Meta no devolvió URL"}
+                r2 = await client.get(media_url, headers={"Authorization": f"Bearer {token}"})
+                r2.raise_for_status()
+                image_bytes = r2.content
+            if not image_bytes:
+                return {"status": "image_empty", "note": "Imagen vacía"}
+            row = PagosWhatsapp(
+                fecha=datetime.utcnow(),
+                cedula_cliente=cedula_cliente,
+                imagen=image_bytes,
+            )
+            db.add(row)
+            db.commit()
+            logger.info(f"Imagen guardada en pagos_whatsapp id={row.id} cedula={cedula_cliente}")
+            return {"status": "image_saved", "pagos_whatsapp_id": row.id, "cedula_cliente": cedula_cliente}
+        except Exception as e:
+            logger.exception("Error guardando imagen en pagos_whatsapp: %s", e)
+            db.rollback()
+            return {"status": "image_error", "note": str(e)}
     
     async def _process_text_message(self, text: str, from_number: str) -> Dict[str, Any]:
         """

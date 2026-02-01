@@ -6,6 +6,7 @@ from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.ticket import Ticket
 from app.models.cuota import Cuota
+from app.models.pagos_whatsapp import PagosWhatsapp
 
-__all__ = ["Base", "Cliente", "Prestamo", "Ticket", "Cuota"]
+__all__ = ["Base", "Cliente", "Prestamo", "Ticket", "Cuota", "PagosWhatsapp"]
 
