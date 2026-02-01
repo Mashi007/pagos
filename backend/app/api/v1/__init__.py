@@ -2,7 +2,7 @@
 API v1
 """
 from fastapi import APIRouter
-from app.api.v1.endpoints import whatsapp, auth, configuracion, pagos, notificaciones, dashboard, kpis, auditoria, cobranzas
+from app.api.v1.endpoints import whatsapp, auth, configuracion, pagos, notificaciones, dashboard, kpis, auditoria, cobranzas, clientes
 
 api_router = APIRouter()
 
@@ -67,4 +67,11 @@ api_router.include_router(
     cobranzas.router,
     prefix="/cobranzas",
     tags=["cobranzas"],
+)
+
+# Clientes (listado paginado y stats; stub hasta tener BD)
+api_router.include_router(
+    clientes.router,
+    prefix="/clientes",
+    tags=["clientes"],
 )

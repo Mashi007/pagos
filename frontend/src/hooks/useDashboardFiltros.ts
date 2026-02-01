@@ -108,9 +108,12 @@ export function useDashboardFiltros(filtros: DashboardFiltros) {
         fecha_fin.setHours(23, 59, 59, 999)
     }
 
+    // Formato YYYY-MM-DD en hora local (evita que 31 dic 23:59 UTC-5 se convierta en 2027-01-01 en UTC)
+    const fmt = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
     return {
-      fecha_inicio: fecha_inicio.toISOString().split('T')[0],
-      fecha_fin: fecha_fin.toISOString().split('T')[0],
+      fecha_inicio: fmt(fecha_inicio),
+      fecha_fin: fmt(fecha_fin),
     }
   }
 
