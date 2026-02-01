@@ -6,30 +6,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Sistema de Gestión de Pagos" />
     <title>Pagos - Sistema de Gestión</title>
-    <!-- Fallback para si JavaScript no carga -->
-    <noscript>
-      <style>
-        body { 
-          font-family: Arial, sans-serif; 
-          padding: 20px; 
-          text-align: center;
-          background: #242424;
-          color: white;
-        }
-        .error {
-          background: #ff4444;
-          color: white;
-          padding: 20px;
-          border-radius: 8px;
-          margin: 20px auto;
-          max-width: 600px;
-        }
-      </style>
-      <div class="error">
-        <h1>JavaScript Requerido</h1>
-        <p>Esta aplicación requiere JavaScript para funcionar. Por favor, habilita JavaScript en tu navegador.</p>
-      </div>
-    </noscript>
     <style>
       /* Estilos de carga inicial para evitar FOUC (Flash of Unstyled Content) */
       #root {
@@ -44,9 +20,34 @@
         text-align: center;
         font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
       }
+      .noscript-error {
+        font-family: Arial, sans-serif; 
+        padding: 20px; 
+        text-align: center;
+        background: #242424;
+        color: white;
+      }
+      .noscript-error .error-box {
+        background: #ff4444;
+        color: white;
+        padding: 20px;
+        border-radius: 8px;
+        margin: 20px auto;
+        max-width: 600px;
+      }
     </style>
   </head>
   <body>
+    <!-- Fallback para si JavaScript no carga - debe estar en body, no en head -->
+    <noscript>
+      <div class="noscript-error">
+        <div class="error-box">
+          <h1>JavaScript Requerido</h1>
+          <p>Esta aplicación requiere JavaScript para funcionar. Por favor, habilita JavaScript en tu navegador.</p>
+        </div>
+      </div>
+    </noscript>
+    
     <div id="root">
       <!-- Mensaje de carga mientras React se inicializa -->
       <div class="loading">
