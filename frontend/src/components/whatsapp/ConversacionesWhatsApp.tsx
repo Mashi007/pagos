@@ -411,7 +411,7 @@ export function ConversacionesWhatsApp({
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">Ãšltimas 24h</p>
+                  <p className="text-sm text-gray-600">Últimas 24h</p>
                   <p className="text-2xl font-bold text-purple-600">{estadisticas.ultimas_24h}</p>
                 </div>
                 <Calendar className="h-8 w-8 text-purple-600" />

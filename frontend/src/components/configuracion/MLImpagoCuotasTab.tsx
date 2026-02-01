@@ -486,7 +486,7 @@ export function MLImpagoCuotasTab() {
             <div className="flex items-center justify-between mb-4">
               <h4 className="font-semibold">Entrenar Nuevo Modelo</h4>
               <Button variant="ghost" size="sm" onClick={() => setMostrarFormEntrenamiento(false)}>
-                âœ•
+                ✓
               </Button>
             </div>
             <div className="space-y-4">
@@ -544,7 +544,7 @@ export function MLImpagoCuotasTab() {
             <div className="flex items-center justify-between mb-4">
               <h4 className="font-semibold">Predecir Impago de Cuotas</h4>
               <Button variant="ghost" size="sm" onClick={() => setMostrarPrediccion(false)}>
-                âœ•
+                ✓
               </Button>
             </div>
             <div className="space-y-4">

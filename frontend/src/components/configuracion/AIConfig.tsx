@@ -873,12 +873,12 @@ INSTRUCCIONES ESPECÍFICAS PARA BÃšSQUEDAS Y CONSULTAS:
 **FORMATO DE RESPUESTA PARA BÃšSQUEDAS**:
 - Si encuentras el cliente:
   ðŸ‘¤ Cliente encontrado:
-  â€¢ Nombre: [nombres]
-  â€¢ Cédula: [cedula]
-  â€¢ Teléfono: [telefono]
-  â€¢ Email: [email]
-  â€¢ Estado: [estado]
-  â€¢ Fecha de registro: [fecha_registro]
+  • Nombre: [nombres]
+  • Cédula: [cedula]
+  • Teléfono: [telefono]
+  • Email: [email]
+  • Estado: [estado]
+  • Fecha de registro: [fecha_registro]
 - Si no encuentras: "âŒ No se encontró ningún cliente con la cédula [cedula] en la base de datos."
 
 RESTRICCIONES IMPORTANTES:
@@ -1638,7 +1638,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                         </label>
                       </div>
                       <p className="text-xs text-gray-500">
-                        Enter para enviar â€¢ Shift+Enter para nueva línea
+                        Enter para enviar • Shift+Enter para nueva línea
                       </p>
                     </div>
                   </div>

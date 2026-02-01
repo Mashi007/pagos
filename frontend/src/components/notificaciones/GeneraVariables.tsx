@@ -409,7 +409,7 @@ export function GeneraVariables() {
                     <ul className="space-y-1 text-xs text-gray-600">
                       {campos.map(campo => (
                         <li key={campo.campo} className="flex items-start gap-1">
-                          <span className="font-mono text-xs">â€¢</span>
+                          <span className="font-mono text-xs">•</span>
                           <span className="text-xs">{campo.campo}</span>
                         </li>
                       ))}

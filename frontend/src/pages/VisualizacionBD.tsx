@@ -376,7 +376,7 @@ export function VisualizacionBD() {
         <AlertWithIcon
           variant="info"
           title="Información de la Base de Datos"
-          description={`â€¢ Total de registros: ${clientes.length} clientes\nâ€¢ Ãšltima actualización: ${new Date().toLocaleString()}\nâ€¢ Formato de exportación: CSV compatible con Excel\nâ€¢ Filtros aplicados: ${searchTerm ? `Búsqueda: "${searchTerm}"` : 'Sin búsqueda'} ${filterEstado ? `| Estado: ${filterEstado}` : ''}`}
+          description={`• Total de registros: ${clientes.length} clientes\n• Última actualización: ${new Date().toLocaleString()}\n• Formato de exportación: CSV compatible con Excel\n• Filtros aplicados: ${searchTerm ? `Búsqueda: "${searchTerm}"` : 'Sin búsqueda'} ${filterEstado ? `| Estado: ${filterEstado}` : ''}`}
         />
       </motion.div>
     </div>

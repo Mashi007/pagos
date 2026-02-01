@@ -1114,7 +1114,7 @@ export function Comunicaciones({
                           <div className="font-bold text-sm text-gray-900 truncate">{ticket.titulo}</div>
                           <div className="text-xs text-gray-500 mt-1 flex items-center gap-2">
                             <span className="font-semibold">#{ticket.id}</span>
-                            <span>â€¢</span>
+                            <span>•</span>
                             <Badge 
                               variant={ticket.estado === 'resuelto' ? 'default' : ticket.estado === 'cerrado' ? 'secondary' : 'outline'} 
                               className="text-xs"

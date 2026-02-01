@@ -282,7 +282,7 @@ export function Programador() {
                 <TableHead>Frecuencia</TableHead>
                 <TableHead>Hora</TableHead>
                 <TableHead>Estado</TableHead>
-                <TableHead>Ãšltima Ejecución</TableHead>
+                <TableHead>Última Ejecución</TableHead>
                 <TableHead>Próxima Ejecución</TableHead>
                 <TableHead>Ã‰xitos/Fallos</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
@@ -440,7 +440,7 @@ export function Programador() {
                           ? ((tarea.exitos / (tarea.exitos + tarea.fallos)) * 100).toFixed(1)
                           : '0.0'}%
                       </div>
-                      <div><strong>Ãšltima Ejecución:</strong> {formatDate(tarea.ultimaEjecucion)}</div>
+                      <div><strong>Última Ejecución:</strong> {formatDate(tarea.ultimaEjecucion)}</div>
                       <div><strong>Próxima Ejecución:</strong>
                         {tarea.proximaEjecucion === 'CONTINUO' ? 'Continuo' : formatDate(tarea.proximaEjecucion)}
                       </div>

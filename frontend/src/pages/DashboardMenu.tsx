@@ -353,7 +353,7 @@ export function DashboardMenu() {
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
       })
-      queryParams.append('semanas', '12') // Ãšltimas 12 semanas
+      queryParams.append('semanas', '12') // Últimas 12 semanas
       const response = await apiClient.get<{
         semanas: Array<{
           semana_inicio: string
@@ -652,7 +652,7 @@ export function DashboardMenu() {
                   <div className="absolute inset-0 h-2 w-2 rounded-full bg-emerald-400 animate-ping opacity-75"></div>
                 </div>
                 <p className="text-gray-600 font-semibold text-sm tracking-wide">
-                  Bienvenido, <span className="text-cyan-600 font-black">{userName}</span> â€¢ Monitoreo Estratégico
+                  Bienvenido, <span className="text-cyan-600 font-black">{userName}</span> • Monitoreo Estratégico
                 </p>
               </div>
             </div>

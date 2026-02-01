@@ -73,9 +73,9 @@ export function FormularioAprobacionCondiciones({ prestamo, onClose, onSuccess }
 
     const mensajeConfirmacion =
       `¿Desea aprobar este préstamo con las siguientes condiciones?\n\n` +
-      `â€¢ Tasa de Interés: ${condicionesAprobacion.tasa_interes}%\n` +
-      `â€¢ Plazo Máximo: ${condicionesAprobacion.plazo_maximo} meses\n` +
-      `â€¢ Fecha de Desembolso: ${new Date(condicionesAprobacion.fecha_base_calculo).toLocaleDateString()}`
+      `• Tasa de Interés: ${condicionesAprobacion.tasa_interes}%\n` +
+      `• Plazo Máximo: ${condicionesAprobacion.plazo_maximo} meses\n` +
+      `• Fecha de Desembolso: ${new Date(condicionesAprobacion.fecha_base_calculo).toLocaleDateString()}`
 
     if (!window.confirm(mensajeConfirmacion)) {
       console.log('âŒ Usuario canceló la confirmación')

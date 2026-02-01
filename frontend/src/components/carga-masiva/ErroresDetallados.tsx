@@ -306,10 +306,10 @@ export function ErroresDetallados({ errores, tipo, onDescargarErrores }: Errores
               <div>
                 <h5 className="font-semibold text-blue-800 mb-2">Tipos de errores comunes:</h5>
                 <ul className="text-sm text-blue-700 space-y-1">
-                  <li>â€¢ <strong>Cédula:</strong> Formato V12345678</li>
-                  <li>â€¢ <strong>Teléfono:</strong> +5804123456789</li>
-                  <li>â€¢ <strong>Email:</strong> usuario@dominio.com</li>
-                  <li>â€¢ <strong>Monto:</strong> Solo números con punto decimal</li>
+                  <li>• <strong>Cédula:</strong> Formato V12345678</li>
+                  <li>• <strong>Teléfono:</strong> +5804123456789</li>
+                  <li>• <strong>Email:</strong> usuario@dominio.com</li>
+                  <li>• <strong>Monto:</strong> Solo números con punto decimal</li>
                 </ul>
               </div>
             </div>

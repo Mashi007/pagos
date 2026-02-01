@@ -192,7 +192,7 @@ export function LoginForm() {
                   {...register('password')}
                   type={showPassword ? 'text' : 'password'}
                   label="Contraseña"
-                  placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+                  placeholder="••••••••"
                   leftIcon={<Lock className="w-4 h-4" />}
                   rightIcon={
                     <button

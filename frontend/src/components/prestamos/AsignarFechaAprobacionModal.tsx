@@ -30,10 +30,10 @@ export function AsignarFechaAprobacionModal({ prestamo, onClose, onSuccess }: As
     const mensajeConfirmacion =
       `¿Desea desembolsar el préstamo con fecha ${new Date(fechaAprobacion).toLocaleDateString()}?\n\n` +
       `Esta acción:\n` +
-      `â€¢ Cambiará el estado a DESEMBOLSADO\n` +
-      `â€¢ Generará la tabla de amortización\n` +
-      `â€¢ Creará todas las cuotas\n` +
-      `â€¢ Requiere calificación mínima de 70 puntos`
+      `• Cambiará el estado a DESEMBOLSADO\n` +
+      `• Generará la tabla de amortización\n` +
+      `• Creará todas las cuotas\n` +
+      `• Requiere calificación mínima de 70 puntos`
 
     if (!window.confirm(mensajeConfirmacion)) {
       return

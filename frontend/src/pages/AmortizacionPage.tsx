@@ -40,9 +40,9 @@ export function AmortizacionPage() {
                 Esta funcionalidad está siendo implementada y estará disponible próximamente.
               </p>
               <div className="space-y-2 text-sm text-muted-foreground">
-                <p>â€¢ Generación de tablas</p>
-                <p>â€¢ Cálculos automáticos</p>
-                <p>â€¢ Visualización de cronogramas</p>
+                <p>• Generación de tablas</p>
+                <p>• Cálculos automáticos</p>
+                <p>• Visualización de cronogramas</p>
               </div>
             </div>
           </CardContent>

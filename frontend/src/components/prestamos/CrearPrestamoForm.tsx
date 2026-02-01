@@ -237,7 +237,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
 
     // Si hay errores, mostrar notificación consolidada y bloquear envío
     if (errors.length > 0) {
-      const listado = errors.map(e => `â€¢ ${e}`).join('\n')
+      const listado = errors.map(e => `• ${e}`).join('\n')
       toast.error(`Faltan datos obligatorios:\n${listado}`)
       // Desplazar al inicio del formulario para que el operador corrija
       try {

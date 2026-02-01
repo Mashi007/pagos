@@ -1098,7 +1098,7 @@ export function FineTuningTab() {
                   </div>
                   {ultimaActualizacion && (
                     <p className="text-xs text-gray-500 mb-3">
-                      Ãšltima actualización: {new Date(ultimaActualizacion).toLocaleString('es-ES')}
+                      Última actualización: {new Date(ultimaActualizacion).toLocaleString('es-ES')}
                       ({Object.keys(tablasYCampos).length} tablas)
                     </p>
                   )}
@@ -1467,7 +1467,7 @@ export function FineTuningTab() {
                           </div>
                           {ultimaActualizacion && (
                             <p className="text-xs text-gray-500 mb-3">
-                              Ãšltima actualización: {new Date(ultimaActualizacion).toLocaleString('es-ES')}
+                              Última actualización: {new Date(ultimaActualizacion).toLocaleString('es-ES')}
                               ({Object.keys(tablasYCampos).length} tablas)
                             </p>
                           )}

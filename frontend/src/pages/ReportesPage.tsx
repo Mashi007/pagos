@@ -40,9 +40,9 @@ export function ReportesPage() {
                 Esta funcionalidad está siendo implementada y estará disponible próximamente.
               </p>
               <div className="space-y-2 text-sm text-muted-foreground">
-                <p>â€¢ Reportes PDF</p>
-                <p>â€¢ Análisis de datos</p>
-                <p>â€¢ Exportación Excel</p>
+                <p>• Reportes PDF</p>
+                <p>• Análisis de datos</p>
+                <p>• Exportación Excel</p>
               </div>
             </div>
           </CardContent>

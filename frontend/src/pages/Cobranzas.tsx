@@ -539,7 +539,7 @@ export function Cobranzas() {
                 size="sm"
                 onClick={() => setDiagnosticoData(null)}
               >
-                âœ•
+                ✓
               </Button>
             </div>
           </CardHeader>
@@ -581,9 +581,9 @@ export function Cobranzas() {
                 <div>
                   <p className="text-sm font-semibold mb-2">Análisis de Filtros:</p>
                   <div className="space-y-1 text-sm">
-                    <p>â€¢ Perdidas por estado: {diagnosticoData.analisis_filtros.cuotas_perdidas_por_estado || 0}</p>
-                    <p>â€¢ Perdidas por admin: {diagnosticoData.analisis_filtros.cuotas_perdidas_por_admin || 0}</p>
-                    <p>â€¢ Perdidas por user admin: {diagnosticoData.analisis_filtros.cuotas_perdidas_por_user_admin || 0}</p>
+                    <p>• Perdidas por estado: {diagnosticoData.analisis_filtros.cuotas_perdidas_por_estado || 0}</p>
+                    <p>• Perdidas por admin: {diagnosticoData.analisis_filtros.cuotas_perdidas_por_admin || 0}</p>
+                    <p>• Perdidas por user admin: {diagnosticoData.analisis_filtros.cuotas_perdidas_por_user_admin || 0}</p>
                   </div>
                 </div>
               )}

@@ -449,9 +449,9 @@ export function DefinicionesCamposTab() {
                           </div>
                           <div className="text-xs text-gray-500 mt-1">
                             {campo.tipo}
-                            {campo.es_obligatorio && ' â€¢ NOT NULL'}
-                            {campo.tiene_indice && ' â€¢ Indexado'}
-                            {campo.es_clave_foranea && ` â€¢ FK â†’ ${campo.tabla_referenciada}`}
+                            {campo.es_obligatorio && ' • NOT NULL'}
+                            {campo.tiene_indice && ' • Indexado'}
+                            {campo.es_clave_foranea && ` • FK â†’ ${campo.tabla_referenciada}`}
                           </div>
                         </button>
                       )

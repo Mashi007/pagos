@@ -212,3 +212,89 @@ def get_evolucion_pagos(
     return {
         "meses": [],
     }
+
+
+# ========== Endpoints adicionales usados por modales/páginas (stub) ==========
+
+@router.get("/cobranza-por-dia")
+def get_cobranza_por_dia(
+    fecha_inicio: Optional[str] = Query(None),
+    fecha_fin: Optional[str] = Query(None),
+    analista: Optional[str] = Query(None),
+    concesionario: Optional[str] = Query(None),
+    modelo: Optional[str] = Query(None),
+):
+    """Cobranza por día (DashboardCobranza, CobranzaPorDiaModal, CobranzaPlanificadaRealModal)."""
+    return {"dias": []}
+
+
+@router.get("/cobranzas-mensuales")
+def get_cobranzas_mensuales(
+    fecha_inicio: Optional[str] = Query(None),
+    fecha_fin: Optional[str] = Query(None),
+    analista: Optional[str] = Query(None),
+    concesionario: Optional[str] = Query(None),
+    modelo: Optional[str] = Query(None),
+):
+    """Cobranzas mensuales (CobranzasMensualesModal)."""
+    return {"meses": []}
+
+
+@router.get("/cobros-por-analista")
+def get_cobros_por_analista(
+    fecha_inicio: Optional[str] = Query(None),
+    fecha_fin: Optional[str] = Query(None),
+    analista: Optional[str] = Query(None),
+    concesionario: Optional[str] = Query(None),
+    modelo: Optional[str] = Query(None),
+):
+    """Cobros por analista (DashboardCobranza)."""
+    return {"analistas": []}
+
+
+@router.get("/cobros-diarios")
+def get_cobros_diarios(
+    fecha_inicio: Optional[str] = Query(None),
+    fecha_fin: Optional[str] = Query(None),
+    analista: Optional[str] = Query(None),
+    concesionario: Optional[str] = Query(None),
+    modelo: Optional[str] = Query(None),
+):
+    """Cobros diarios (DashboardAnalisis)."""
+    return {"dias": []}
+
+
+@router.get("/cuentas-cobrar-tendencias")
+def get_cuentas_cobrar_tendencias(
+    fecha_inicio: Optional[str] = Query(None),
+    fecha_fin: Optional[str] = Query(None),
+    analista: Optional[str] = Query(None),
+    concesionario: Optional[str] = Query(None),
+    modelo: Optional[str] = Query(None),
+):
+    """Tendencias cuentas por cobrar (TendenciasModal)."""
+    return {"tendencias": []}
+
+
+@router.get("/distribucion-prestamos")
+def get_distribucion_prestamos(
+    fecha_inicio: Optional[str] = Query(None),
+    fecha_fin: Optional[str] = Query(None),
+    analista: Optional[str] = Query(None),
+    concesionario: Optional[str] = Query(None),
+    modelo: Optional[str] = Query(None),
+):
+    """Distribución de préstamos (BarrasDivergentesModal)."""
+    return {"distribucion": []}
+
+
+@router.get("/metricas-acumuladas")
+def get_metricas_acumuladas(
+    fecha_inicio: Optional[str] = Query(None),
+    fecha_fin: Optional[str] = Query(None),
+    analista: Optional[str] = Query(None),
+    concesionario: Optional[str] = Query(None),
+    modelo: Optional[str] = Query(None),
+):
+    """Métricas acumuladas (CobranzaPorDiaModal)."""
+    return {"metricas": []}

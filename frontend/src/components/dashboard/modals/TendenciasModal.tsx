@@ -231,7 +231,7 @@ export function TendenciasModal({ isOpen, onClose }: TendenciasModalProps) {
               <div className="flex items-center gap-2 ml-auto">
                 <RefreshCw className="h-4 w-4 text-gray-400 animate-spin" />
                 <span className="text-xs text-gray-500">
-                  Ãšltima actualización: {new Date(tendenciasData.ultima_actualizacion).toLocaleString('es-ES')}
+                  Última actualización: {new Date(tendenciasData.ultima_actualizacion).toLocaleString('es-ES')}
                 </span>
               </div>
             )}

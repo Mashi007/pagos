@@ -648,7 +648,7 @@ export function RAGTab() {
 
               {estado.ultima_actualizacion && (
                 <div className="text-sm text-gray-500">
-                  Ãšltima actualización:{' '}
+                  Última actualización:{' '}
                   {new Date(estado.ultima_actualizacion).toLocaleString('es-ES')}
                 </div>
               )}

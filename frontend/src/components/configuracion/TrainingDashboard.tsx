@@ -232,7 +232,7 @@ export function TrainingDashboard() {
               </div>
             </div>
             <div className="border rounded-lg p-4 col-span-2">
-              <div className="text-sm text-gray-500 mb-1">Ãšltima Actualización</div>
+              <div className="text-sm text-gray-500 mb-1">Última Actualización</div>
               <div className="text-lg font-semibold">
                 {metricas.rag?.ultima_actualizacion ? (
                   new Date(metricas.rag.ultima_actualizacion).toLocaleString('es-ES')

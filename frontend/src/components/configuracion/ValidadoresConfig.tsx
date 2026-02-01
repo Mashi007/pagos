@@ -155,7 +155,7 @@ export function ValidadoresConfig() {
           {/* Configuración específica por tipo */}
           {tipo === 'telefono' && config.paises_soportados?.venezuela && (
             <div className="bg-blue-50 p-4 rounded-lg">
-              <h4 className="font-semibold text-blue-900 mb-2">ðŸ‡»ðŸ‡ª Venezuela</h4>
+              <h4 className="font-semibold text-blue-900 mb-2">Venezuela</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                 <div>
                   <strong>Formato:</strong> {config.paises_soportados.venezuela.formato}
@@ -163,9 +163,9 @@ export function ValidadoresConfig() {
                 <div>
                   <strong>Requisitos:</strong>
                   <ul className="mt-1 space-y-1">
-                    <li>â€¢ {config.paises_soportados.venezuela.requisitos.debe_empezar_por}</li>
-                    <li>â€¢ {config.paises_soportados.venezuela.requisitos.longitud_total}</li>
-                    <li>â€¢ {config.paises_soportados.venezuela.requisitos.primer_digito}</li>
+                    <li>• {config.paises_soportados.venezuela.requisitos.debe_empezar_por}</li>
+                    <li>• {config.paises_soportados.venezuela.requisitos.longitud_total}</li>
+                    <li>• {config.paises_soportados.venezuela.requisitos.primer_digito}</li>
                   </ul>
                 </div>
               </div>
@@ -193,7 +193,7 @@ export function ValidadoresConfig() {
 
           {tipo === 'cedula' && config.paises_soportados?.venezuela && (
             <div className="bg-blue-50 p-4 rounded-lg">
-              <h4 className="font-semibold text-blue-900 mb-2">ðŸ‡»ðŸ‡ª Venezuela</h4>
+              <h4 className="font-semibold text-blue-900 mb-2">Venezuela</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                 <div>
                   <strong>Prefijos válidos:</strong> {config.paises_soportados.venezuela.prefijos_validos.join(', ')}
@@ -206,9 +206,9 @@ export function ValidadoresConfig() {
               <div className="mt-4">
                 <strong>Requisitos:</strong>
                 <ul className="mt-1 space-y-1 text-sm">
-                  <li>â€¢ {config.paises_soportados.venezuela.requisitos.prefijos}</li>
-                  <li>â€¢ {config.paises_soportados.venezuela.requisitos.dígitos}</li>
-                  <li>â€¢ {config.paises_soportados.venezuela.requisitos.longitud}</li>
+                  <li>• {config.paises_soportados.venezuela.requisitos.prefijos}</li>
+                  <li>• {config.paises_soportados.venezuela.requisitos.dígitos}</li>
+                  <li>• {config.paises_soportados.venezuela.requisitos.longitud}</li>
                 </ul>
               </div>
             </div>
@@ -221,18 +221,18 @@ export function ValidadoresConfig() {
                 <div>
                   <strong>Requisitos:</strong>
                   <ul className="mt-1 space-y-1">
-                    <li>â€¢ {config.requisitos.dia}</li>
-                    <li>â€¢ {config.requisitos.mes}</li>
-                    <li>â€¢ {config.requisitos.año}</li>
-                    <li>â€¢ {config.requisitos.separador}</li>
+                    <li>• {config.requisitos.dia}</li>
+                    <li>• {config.requisitos.mes}</li>
+                    <li>• {config.requisitos.año}</li>
+                    <li>• {config.requisitos.separador}</li>
                   </ul>
                 </div>
                 <div>
                   <strong>Características:</strong>
                   <ul className="mt-1 space-y-1">
-                    <li>â€¢ Validación estricta</li>
-                    <li>â€¢ Verificación de fechas válidas</li>
-                    <li>â€¢ Soporte para años bisiestos</li>
+                    <li>• Validación estricta</li>
+                    <li>• Verificación de fechas válidas</li>
+                    <li>• Soporte para años bisiestos</li>
                   </ul>
                 </div>
               </div>
@@ -246,9 +246,9 @@ export function ValidadoresConfig() {
                 <div>
                   <strong>Características:</strong>
                   <ul className="mt-1 space-y-1">
-                    <li>â€¢ {config.caracteristicas.normalizacion}</li>
-                    <li>â€¢ {config.caracteristicas.limpieza}</li>
-                    <li>â€¢ {config.caracteristicas.validacion}</li>
+                    <li>• {config.caracteristicas.normalizacion}</li>
+                    <li>• {config.caracteristicas.limpieza}</li>
+                    <li>• {config.caracteristicas.validacion}</li>
                   </ul>
                 </div>
                 <div>

@@ -163,7 +163,7 @@ export function DashboardCobranza() {
             </Button>
             <div>
               <h1 className="text-4xl font-black text-gray-900 uppercase tracking-tight">Cobranza</h1>
-              <p className="text-lg text-gray-600 font-medium mt-1">Monitoreo Estratégico â€¢ {userName}</p>
+              <p className="text-lg text-gray-600 font-medium mt-1">Monitoreo Estratégico • {userName}</p>
             </div>
           </div>
         </motion.div>

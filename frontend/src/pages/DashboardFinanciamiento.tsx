@@ -288,7 +288,7 @@ export function DashboardFinanciamiento() {
                 Financiamiento
               </h1>
               <p className="text-xl text-gray-600 font-medium mt-1">
-                Monitoreo Estratégico â€¢ {userName}
+                Monitoreo Estratégico • {userName}
               </p>
             </div>
           </div>

@@ -203,7 +203,7 @@ export function DashboardAnalisis() {
             <div>
               <h1 className="text-4xl font-black text-gray-900 uppercase tracking-tight">Análisis</h1>
               <p className="text-lg text-gray-600 font-medium mt-1">
-                Monitoreo Estratégico â€¢ {userName}
+                Monitoreo Estratégico • {userName}
               </p>
             </div>
           </div>
