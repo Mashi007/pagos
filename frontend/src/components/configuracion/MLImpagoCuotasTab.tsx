@@ -43,7 +43,7 @@ export function MLImpagoCuotasTab() {
   const [algoritmo, setAlgoritmo] = useState('random_forest')
   const [testSize, setTestSize] = useState(0.2)
 
-  // Formulario de predicciÃ³n
+  // Formulario de predicción
   const [mostrarPrediccion, setMostrarPrediccion] = useState(false)
   const [prestamoId, setPrestamoId] = useState('')
   const [prediccion, setPrediccion] = useState<any>(null)
@@ -68,10 +68,10 @@ export function MLImpagoCuotasTab() {
     } catch (error: any) {
       console.error('Error cargando modelos:', error)
       
-      // Manejar timeout especÃ­ficamente
+      // Manejar timeout específicamente
       let mensajeError = 'Error al cargar modelos'
       if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
-        mensajeError = 'La peticiÃ³n estÃ¡ tardando mÃ¡s de lo esperado. El servidor puede estar procesando. Por favor, intenta nuevamente en unos momentos.'
+        mensajeError = 'La petición está tardando más de lo esperado. El servidor puede estar procesando. Por favor, intenta nuevamente en unos momentos.'
       } else if (error?.response?.data?.detail) {
         mensajeError = error.response.data.detail
       } else if (error?.message) {
@@ -79,7 +79,7 @@ export function MLImpagoCuotasTab() {
       }
       
       toast.error(mensajeError, {
-        duration: 8000, // Mostrar por mÃ¡s tiempo para mensajes de timeout
+        duration: 8000, // Mostrar por más tiempo para mensajes de timeout
       })
     } finally {
       setCargando(false)
@@ -114,7 +114,7 @@ export function MLImpagoCuotasTab() {
           nuevoMensaje = 'Preparando datos de entrenamiento...'
         } else if (prev.estado === 'iniciando' && prev.progreso >= 10) {
           nuevoEstado = 'procesando'
-          nuevoMensaje = 'Procesando prÃ©stamos y extrayendo features...'
+          nuevoMensaje = 'Procesando préstamos y extrayendo features...'
         } else if (prev.estado === 'procesando' && prev.progreso < 60) {
           nuevoProgreso = Math.min(prev.progreso + 1.5, 60)
           nuevoMensaje = `Procesando datos... ${Math.round(prev.progreso)}%`
@@ -145,7 +145,7 @@ export function MLImpagoCuotasTab() {
         test_size: testSize,
       })
 
-      // Limpiar intervalo y mostrar Ã©xito
+      // Limpiar intervalo y mostrar éxito
       clearInterval(intervalProgreso)
 
       setEstadoEntrenamiento({
@@ -155,7 +155,7 @@ export function MLImpagoCuotasTab() {
         modelo: resultado.modelo,
       })
 
-      // NotificaciÃ³n mejorada con mÃ©tricas
+      // Notificación mejorada con métricas
       const metricas = resultado.metricas
       const accuracy = metricas?.accuracy ? `${(metricas.accuracy * 100).toFixed(1)}%` : 'N/A'
       const f1 = metricas?.f1_score ? `${(metricas.f1_score * 100).toFixed(1)}%` : 'N/A'
@@ -169,7 +169,7 @@ export function MLImpagoCuotasTab() {
         }
       )
 
-      // Recargar modelos despuÃ©s de 2 segundos
+      // Recargar modelos después de 2 segundos
       setTimeout(async () => {
         await cargarModelos()
         setEstadoEntrenamiento(null)
@@ -202,9 +202,9 @@ export function MLImpagoCuotasTab() {
       // Extraer mensaje de error de diferentes posibles ubicaciones
       let mensajeError = 'Error al entrenar modelo'
 
-      // Detectar timeout especÃ­ficamente
+      // Detectar timeout específicamente
       if (error?.code === 'ECONNABORTED' || error?.message?.includes('timeout')) {
-        mensajeError = 'El entrenamiento estÃ¡ tardando mÃ¡s de lo esperado. El proceso continÃºa en el servidor. Por favor, espera unos minutos y recarga la pÃ¡gina para ver el modelo entrenado.'
+        mensajeError = 'El entrenamiento está tardando más de lo esperado. El proceso continúa en el servidor. Por favor, espera unos minutos y recarga la página para ver el modelo entrenado.'
       } else if (error?.response?.data?.detail) {
         mensajeError = String(error.response.data.detail)
       } else if (error?.response?.data?.message) {
@@ -215,7 +215,7 @@ export function MLImpagoCuotasTab() {
         mensajeError = String(error.error.detail)
       }
 
-      console.error('ðŸ“ Mensaje de error extraÃ­do para mostrar al usuario:', mensajeError)
+      console.error('ðŸ“ Mensaje de error extraído para mostrar al usuario:', mensajeError)
 
       // Mostrar toast con el mensaje completo
       toast.error(`Error entrenando modelo: ${mensajeError}`, {
@@ -227,7 +227,7 @@ export function MLImpagoCuotasTab() {
   }
 
   const handleEliminarModelo = async (modeloId: number) => {
-    if (!confirm('Â¿EstÃ¡s seguro de que deseas eliminar este modelo? Esta acciÃ³n no se puede deshacer.')) {
+    if (!confirm('¿Estás seguro de que deseas eliminar este modelo? Esta acción no se puede deshacer.')) {
       return
     }
 
@@ -251,8 +251,8 @@ export function MLImpagoCuotasTab() {
     }
 
     const mensajeConfirmacion = esDesactivacion
-      ? `Â¿EstÃ¡s seguro de desactivar el modelo "${modelo.nombre}" v${modelo.version}?`
-      : `Â¿EstÃ¡s seguro de ${modeloActivo ? 'cambiar y ' : ''}activar el modelo "${modelo.nombre}" v${modelo.version}?`
+      ? `¿Estás seguro de desactivar el modelo "${modelo.nombre}" v${modelo.version}?`
+      : `¿Estás seguro de ${modeloActivo ? 'cambiar y ' : ''}activar el modelo "${modelo.nombre}" v${modelo.version}?`
 
     if (!window.confirm(mensajeConfirmacion)) {
       return
@@ -274,7 +274,7 @@ export function MLImpagoCuotasTab() {
 
   const handlePredecir = async () => {
     if (!prestamoId) {
-      toast.error('Ingresa un ID de prÃ©stamo')
+      toast.error('Ingresa un ID de préstamo')
       return
     }
 
@@ -308,10 +308,10 @@ export function MLImpagoCuotasTab() {
         <div>
           <h3 className="text-2xl font-bold flex items-center gap-2">
             <DollarSign className="h-6 w-6" />
-            ML - PredicciÃ³n de Impago de Cuotas
+            ML - Predicción de Impago de Cuotas
           </h3>
           <p className="text-sm text-gray-500 mt-1">
-            Entrena y usa modelos de machine learning para predecir si un cliente pagarÃ¡ sus cuotas futuras
+            Entrena y usa modelos de machine learning para predecir si un cliente pagará sus cuotas futuras
           </p>
         </div>
         <Button onClick={cargarModelos} variant="outline" size="sm" disabled={cargando}>
@@ -347,7 +347,7 @@ export function MLImpagoCuotasTab() {
                 <div className="font-semibold">{modeloActivo.nombre}</div>
               </div>
               <div>
-                <div className="text-sm text-gray-500 mb-1">VersiÃ³n</div>
+                <div className="text-sm text-gray-500 mb-1">Versión</div>
                 <div className="font-semibold">{modeloActivo.version}</div>
               </div>
               <div>
@@ -469,7 +469,7 @@ export function MLImpagoCuotasTab() {
               <h4 className="font-semibold">No hay modelo activo</h4>
             </div>
             <p className="text-sm text-gray-600 mb-4">
-              Entrena un modelo y actÃ­valo para comenzar a predecir impago de cuotas.
+              Entrena un modelo y actívalo para comenzar a predecir impago de cuotas.
             </p>
             <Button onClick={() => setMostrarFormEntrenamiento(true)} variant="outline" size="sm">
               <Play className="h-4 w-4 mr-2" />
@@ -537,7 +537,7 @@ export function MLImpagoCuotasTab() {
         </Card>
       )}
 
-      {/* Formulario de PredicciÃ³n */}
+      {/* Formulario de Predicción */}
       {mostrarPrediccion && (
         <Card>
           <CardContent className="pt-6">
@@ -549,7 +549,7 @@ export function MLImpagoCuotasTab() {
             </div>
             <div className="space-y-4">
               <div>
-                <label className="text-sm font-medium mb-2 block">ID del PrÃ©stamo</label>
+                <label className="text-sm font-medium mb-2 block">ID del Préstamo</label>
                 <Input
                   type="number"
                   placeholder="Ej: 123"
@@ -557,7 +557,7 @@ export function MLImpagoCuotasTab() {
                   onChange={(e) => setPrestamoId(e.target.value)}
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Ingresa el ID del prÃ©stamo para predecir si el cliente pagarÃ¡ sus cuotas futuras
+                  Ingresa el ID del préstamo para predecir si el cliente pagará sus cuotas futuras
                 </p>
               </div>
               <div className="flex gap-2">
@@ -579,17 +579,17 @@ export function MLImpagoCuotasTab() {
                 </Button>
               </div>
 
-              {/* Resultado de PredicciÃ³n */}
+              {/* Resultado de Predicción */}
               {prediccion && (
                 <Card className="mt-4 border-blue-200 bg-blue-50/50">
                   <CardContent className="pt-6">
                     <h5 className="font-semibold mb-4 flex items-center gap-2">
                       <TrendingUp className="h-5 w-5" />
-                      Resultado de la PredicciÃ³n
+                      Resultado de la Predicción
                     </h5>
                     <div className="grid gap-4 md:grid-cols-2">
                       <div>
-                        <div className="text-sm text-gray-500 mb-1">PredicciÃ³n</div>
+                        <div className="text-sm text-gray-500 mb-1">Predicción</div>
                         <div className="font-semibold text-lg">{prediccion.prediccion}</div>
                       </div>
                       <div>
@@ -616,7 +616,7 @@ export function MLImpagoCuotasTab() {
                       </div>
                     </div>
                     <div className="mt-4 pt-4 border-t">
-                      <div className="text-sm text-gray-500 mb-1">RecomendaciÃ³n</div>
+                      <div className="text-sm text-gray-500 mb-1">Recomendación</div>
                       <div className="text-sm">{prediccion.recomendacion}</div>
                     </div>
                     {prediccion.modelo_usado && (
@@ -656,7 +656,7 @@ export function MLImpagoCuotasTab() {
           ) : modelos.length === 0 ? (
             <div className="text-center py-8">
               <Brain className="h-12 w-12 mx-auto text-gray-400 mb-2" />
-              <p className="text-sm text-gray-500">No hay modelos entrenados aÃºn</p>
+              <p className="text-sm text-gray-500">No hay modelos entrenados aún</p>
               <Button
                 onClick={() => setMostrarFormEntrenamiento(true)}
                 variant="outline"
@@ -688,7 +688,7 @@ export function MLImpagoCuotasTab() {
                         </div>
                         <div className="grid gap-2 md:grid-cols-4 text-sm">
                           <div>
-                            <span className="text-gray-500">VersiÃ³n:</span> {modelo.version}
+                            <span className="text-gray-500">Versión:</span> {modelo.version}
                           </div>
                           <div>
                             <span className="text-gray-500">Algoritmo:</span> {modelo.algoritmo}

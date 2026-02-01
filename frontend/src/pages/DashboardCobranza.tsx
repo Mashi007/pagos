@@ -86,11 +86,11 @@ export function DashboardCobranza() {
         } as DashboardData
       }
     },
-    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos mÃ¡s frescos
+    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
     refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
-  // Cargar recaudaciÃ³n por dÃ­a del mes
+  // Cargar recaudación por día del mes
   const { data: datosRecaudacionDia, isLoading: loadingRecaudacionDia } = useQuery({
     queryKey: ['cobranza-por-dia-mes', filtros],
     queryFn: async () => {
@@ -99,22 +99,22 @@ export function DashboardCobranza() {
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
       })
-      queryParams.append('dias', '31') // Ãšltimos 31 dÃ­as
+      queryParams.append('dias', '31') // Ãšltimos 31 días
       const queryString = queryParams.toString()
       const response = await apiClient.get(
         `/api/v1/dashboard/cobranza-por-dia?${queryString}`
       ) as { dias: Array<{ fecha: string; total_a_cobrar: number; pagos: number; morosidad: number }> }
 
-      // Filtrar solo dÃ­as del mes actual
+      // Filtrar solo días del mes actual
       const hoy = new Date()
       const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1)
       return response.dias.filter(d => new Date(d.fecha) >= primerDiaMes)
     },
-    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos mÃ¡s frescos
+    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
     refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
-  // Cargar distribuciÃ³n por analista
+  // Cargar distribución por analista
   const { data: datosAnalistas, isLoading: loadingAnalistas } = useQuery({
     queryKey: ['cobros-por-analista', filtros],
     queryFn: async () => {
@@ -129,7 +129,7 @@ export function DashboardCobranza() {
       ) as { analistas: Array<{ analista: string; total_cobrado: number; cantidad_pagos: number }> }
       return response.analistas
     },
-    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos mÃ¡s frescos
+    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
     refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
@@ -151,7 +151,7 @@ export function DashboardCobranza() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="container mx-auto px-4 py-8 space-y-8">
-        {/* Header EstratÃ©gico */}
+        {/* Header Estratégico */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -159,11 +159,11 @@ export function DashboardCobranza() {
         >
           <div className="flex items-center space-x-4">
             <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/menu')} className="hover:bg-emerald-50">
-              â† MenÃº
+              â† Menú
             </Button>
             <div>
               <h1 className="text-4xl font-black text-gray-900 uppercase tracking-tight">Cobranza</h1>
-              <p className="text-lg text-gray-600 font-medium mt-1">Monitoreo EstratÃ©gico â€¢ {userName}</p>
+              <p className="text-lg text-gray-600 font-medium mt-1">Monitoreo Estratégico â€¢ {userName}</p>
             </div>
           </div>
         </motion.div>
@@ -180,7 +180,7 @@ export function DashboardCobranza() {
                 <div className="flex items-center space-x-2">
                   <div className="flex items-center space-x-2 text-sm font-semibold text-gray-700">
                     <Filter className="h-4 w-4 text-emerald-600" />
-                    <span>Filtros RÃ¡pidos</span>
+                    <span>Filtros Rápidos</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 flex-wrap">
@@ -246,7 +246,7 @@ export function DashboardCobranza() {
               format="percentage"
             />
             <KpiCardLarge
-              title="Tasa RecuperaciÃ³n"
+              title="Tasa Recuperación"
               value={data.financieros?.tasaRecuperacion || 0}
               icon={TrendingDown}
               color="text-blue-600"
@@ -267,9 +267,9 @@ export function DashboardCobranza() {
               // Debe consultar: COUNT(*) FROM pagos WHERE conciliado = TRUE AND fecha_pago >= primer_dia_mes
             />
             <KpiCardLarge
-              title="DÃ­as Promedio Cobro"
+              title="Días Promedio Cobro"
               value="12"
-              subtitle="dÃ­as"
+              subtitle="días"
               icon={Clock}
               color="text-amber-600"
               bgColor="bg-amber-100"
@@ -281,9 +281,9 @@ export function DashboardCobranza() {
           </div>
         )}
 
-        {/* GRÃFICOS PRINCIPALES */}
+        {/* GRÁFICOS PRINCIPALES */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* GrÃ¡fico 1: Progreso hacia Meta Mensual */}
+          {/* Gráfico 1: Progreso hacia Meta Mensual */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
             <Card className="shadow-lg border-2 border-gray-200">
               <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50 border-b-2 border-purple-200">
@@ -317,13 +317,13 @@ export function DashboardCobranza() {
             </Card>
           </motion.div>
 
-          {/* GrÃ¡fico 2: DistribuciÃ³n por Analista */}
+          {/* Gráfico 2: Distribución por Analista */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
             <Card className="shadow-lg border-2 border-gray-200">
               <CardHeader className="bg-gradient-to-r from-teal-50 to-cyan-50 border-b-2 border-teal-200">
                 <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
                   <Users className="h-6 w-6 text-teal-600" />
-                  <span>DistribuciÃ³n de Cobros por Analista</span>
+                  <span>Distribución de Cobros por Analista</span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-6">
@@ -350,13 +350,13 @@ export function DashboardCobranza() {
           </motion.div>
         </div>
 
-        {/* GrÃ¡fico 3: RecaudaciÃ³n por DÃ­a del Mes (Full Width) */}
+        {/* Gráfico 3: Recaudación por Día del Mes (Full Width) */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
           <Card className="shadow-lg border-2 border-gray-200">
             <CardHeader className="bg-gradient-to-r from-emerald-50 to-green-50 border-b-2 border-emerald-200">
               <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
                 <BarChart3 className="h-6 w-6 text-emerald-600" />
-                <span>RecaudaciÃ³n por DÃ­a del Mes</span>
+                <span>Recaudación por Día del Mes</span>
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6">
@@ -394,7 +394,7 @@ export function DashboardCobranza() {
           <div className="bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl p-6 shadow-xl">
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center space-x-2">
               <span>ðŸ”</span>
-              <span>Explorar AnÃ¡lisis Detallados</span>
+              <span>Explorar Análisis Detallados</span>
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <Button
@@ -412,7 +412,7 @@ export function DashboardCobranza() {
                 onClick={() => setIsCobranzaPorDiaOpen(true)}
               >
                 <TrendingUp className="h-6 w-6" />
-                <span className="font-semibold">Cobranza por DÃ­a</span>
+                <span className="font-semibold">Cobranza por Día</span>
                 <ChevronRight className="h-4 w-4" />
               </Button>
               <Button
@@ -440,12 +440,12 @@ export function DashboardCobranza() {
                 variant="secondary"
                 className="bg-white hover:bg-gray-50 text-gray-800 border-2 border-transparent hover:border-emerald-300 h-auto py-4 flex flex-col items-center space-y-2"
                 onClick={() => {
-                  // TODO: Navegar a anÃ¡lisis de metas
-                  console.log('AnÃ¡lisis de Metas por PerÃ­odo')
+                  // TODO: Navegar a análisis de metas
+                  console.log('Análisis de Metas por Período')
                 }}
               >
                 <Target className="h-6 w-6" />
-                <span className="font-semibold">AnÃ¡lisis de Metas</span>
+                <span className="font-semibold">Análisis de Metas</span>
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>

@@ -79,19 +79,19 @@ export function KpiCard({
         </div>
       )}
 
-      {/* TÃ­tulo */}
+      {/* Título */}
       <h3 className={`text-sm font-semibold ${colors.text} mb-2`}>{title}</h3>
 
       {/* Valor Principal */}
       <div className={`text-3xl font-black ${colors.text} mb-2`}>
         {typeof value === 'number' && title.includes('Morosidad')
           ? formatCurrency(value)
-          : typeof value === 'number' && title.includes('PrÃ©stamos')
+          : typeof value === 'number' && title.includes('Préstamos')
           ? value.toLocaleString()
           : formatValue(value)}
       </div>
 
-      {/* VariaciÃ³n */}
+      {/* Variación */}
       {variationPercent !== undefined && (
         <div className="absolute bottom-4 right-4 flex items-center gap-1">
           <VariationIcon className={`h-4 w-4 ${variationColor}`} />

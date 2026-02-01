@@ -34,7 +34,7 @@ import { Prestamo, PrestamoForm } from '../../types'
 import { ModalValidacionPrestamoExistente } from './ModalValidacionPrestamoExistente'
 
 interface CrearPrestamoFormProps {
-  prestamo?: Prestamo // PrÃ©stamo existente para ediciÃ³n
+  prestamo?: Prestamo // Préstamo existente para edición
   onClose: () => void
   onSuccess: () => void
 }
@@ -47,7 +47,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
   // Cerrar con ESC
   useEscapeClose(onClose, true)
 
-  // FunciÃ³n para obtener la fecha actual en formato YYYY-MM-DD
+  // Función para obtener la fecha actual en formato YYYY-MM-DD
   const getCurrentDate = () => {
     const today = new Date()
     const year = today.getFullYear()
@@ -60,7 +60,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
     cedula: prestamo?.cedula || '',
     total_financiamiento: prestamo?.total_financiamiento || 0,
     modalidad_pago: prestamo?.modalidad_pago || 'MENSUAL',
-    fecha_requerimiento: prestamo?.fecha_requerimiento || getCurrentDate(), // Fecha actual por defecto para nuevos prÃ©stamos
+    fecha_requerimiento: prestamo?.fecha_requerimiento || getCurrentDate(), // Fecha actual por defecto para nuevos préstamos
     producto: prestamo?.producto || '',
     concesionario: prestamo?.concesionario || '',
     analista: prestamo?.analista || '',
@@ -82,12 +82,12 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
     console.warn('Error cargando analistas:', errorAnalistas)
   }
   if (errorModelos) {
-    console.warn('Error cargando modelos de vehÃ­culos:', errorModelos)
+    console.warn('Error cargando modelos de vehículos:', errorModelos)
   }
 
   const [valorActivo, setValorActivo] = useState<number>(prestamo?.valor_activo || 0)
 
-  // Estados para validaciÃ³n de prÃ©stamos existentes
+  // Estados para validación de préstamos existentes
   const [showModalValidacion, setShowModalValidacion] = useState(false)
   const [resumenPrestamos, setResumenPrestamos] = useState<any>(null)
   const [justificacionAutorizacion, setJustificacionAutorizacion] = useState('')
@@ -100,12 +100,12 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
   // Errores de UI para marcar campos obligatorios visualmente
   const [uiErrors, setUiErrors] = useState<{ concesionario?: boolean; analista?: boolean }>({})
 
-  // Calcular anticipo como 30% del valor activo automÃ¡ticamente al inicio o cuando cambia el valor activo
-  // Solo si no hay un anticipo ya establecido (para nuevos prÃ©stamos) o si el anticipo es igual al 30% calculado
+  // Calcular anticipo como 30% del valor activo automáticamente al inicio o cuando cambia el valor activo
+  // Solo si no hay un anticipo ya establecido (para nuevos préstamos) o si el anticipo es igual al 30% calculado
   useEffect(() => {
     if (valorActivo > 0) {
       const anticipoCalculado = valorActivo * 0.30
-      // Solo actualizar automÃ¡ticamente si el anticipo actual es 0 o igual al 30% calculado
+      // Solo actualizar automáticamente si el anticipo actual es 0 o igual al 30% calculado
       // Esto permite que el usuario modifique el anticipo sin que se sobrescriba cuando cambia el valor activo
       setAnticipo((prevAnticipo) => {
         if (prevAnticipo === 0 || Math.abs(prevAnticipo - anticipoCalculado) < 0.01) {
@@ -131,7 +131,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
     }
   }, [formData.modelo_vehiculo, modelosVehiculos])
 
-  // Calcular total_financiamiento automÃ¡ticamente
+  // Calcular total_financiamiento automáticamente
   useEffect(() => {
     const total = valorActivo - anticipo
     setFormData(prev => ({
@@ -140,13 +140,13 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
     }))
   }, [valorActivo, anticipo])
 
-  // Buscar cliente por cÃ©dula con debounce mejorado
+  // Buscar cliente por cédula con debounce mejorado
   const debouncedCedula = useDebounce(formData.cedula || '', 500)
   const { data: clienteInfo, isLoading: isLoadingCliente } = useSearchClientes(
     debouncedCedula && debouncedCedula.length >= 2 ? debouncedCedula : ''
   )
 
-  // Calcular cuota por perÃ­odo basado en el nÃºmero de cuotas manual
+  // Calcular cuota por período basado en el número de cuotas manual
   useEffect(() => {
     if (formData.total_financiamiento && formData.total_financiamiento > 0 && numeroCuotas > 0) {
       const cuota = formData.total_financiamiento / numeroCuotas
@@ -166,10 +166,10 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
       // El modelo Cliente contiene: id, cedula, nombres, telefono, email, direccion,
       // fecha_nacimiento, ocupacion, estado, fecha_registro, fecha_actualizacion, usuario_registro, notas
       setClienteData(cliente)
-      // No autocompletamos campos del prÃ©stamo porque el cliente no tiene esos datos
-      // (modelo_vehiculo, analista, concesionario son campos del prÃ©stamo, no del cliente)
+      // No autocompletamos campos del préstamo porque el cliente no tiene esos datos
+      // (modelo_vehiculo, analista, concesionario son campos del préstamo, no del cliente)
     } else if (formData.cedula && formData.cedula.length >= 2 && clienteInfo && clienteInfo.length === 0) {
-      // Cliente no encontrado o no estÃ¡ ACTIVO (no aparecerÃ¡ en la bÃºsqueda)
+      // Cliente no encontrado o no está ACTIVO (no aparecerá en la búsqueda)
       setClienteData(null)
     }
   }, [clienteInfo, formData.cedula])
@@ -180,15 +180,15 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
     // Validaciones requeridas
     const errors: string[] = []
 
-    // Validar cÃ©dula
+    // Validar cédula
     if (!formData.cedula || formData.cedula.trim() === '') {
-      errors.push('La cÃ©dula es requerida')
+      errors.push('La cédula es requerida')
     }
 
-    // Validar que el cliente exista (solo para nuevos prÃ©stamos)
-    // NOTA: Solo aparecen clientes ACTIVOS en la bÃºsqueda, pero validamos por seguridad
+    // Validar que el cliente exista (solo para nuevos préstamos)
+    // NOTA: Solo aparecen clientes ACTIVOS en la búsqueda, pero validamos por seguridad
     if (!prestamo && !clienteData) {
-      errors.push('Debe buscar y seleccionar un cliente vÃ¡lido con estado ACTIVO')
+      errors.push('Debe buscar y seleccionar un cliente válido con estado ACTIVO')
     }
 
     // Validar Valor Activo
@@ -199,15 +199,15 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
     // Validar Anticipo - debe ser al menos el 30% del valor activo
     const anticipoMinimo = valorActivo > 0 ? valorActivo * 0.30 : 0
     if (anticipo < anticipoMinimo) {
-      errors.push(`El Anticipo debe ser al menos el 30% del Valor Activo (mÃ­nimo: ${anticipoMinimo.toFixed(2)} USD)`)
+      errors.push(`El Anticipo debe ser al menos el 30% del Valor Activo (mínimo: ${anticipoMinimo.toFixed(2)} USD)`)
     }
     if (anticipo < 0) {
       errors.push('El Anticipo no puede ser negativo')
     }
 
-    // Validar NÃºmero de Cuotas
+    // Validar Número de Cuotas
     if (numeroCuotas < 1 || numeroCuotas > 12) {
-      errors.push('El nÃºmero de cuotas debe estar entre 1 y 12')
+      errors.push('El número de cuotas debe estar entre 1 y 12')
     }
 
     // Validar Total de Financiamiento
@@ -232,10 +232,10 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
     if (faltaAnalista) errors.push('Debe seleccionar un Analista')
     setUiErrors({ concesionario: faltaConcesionario, analista: faltaAnalista })
     if (!formData.modelo_vehiculo || String(formData.modelo_vehiculo).trim() === '') {
-      errors.push('Debe seleccionar un Modelo de VehÃ­culo')
+      errors.push('Debe seleccionar un Modelo de Vehículo')
     }
 
-    // Si hay errores, mostrar notificaciÃ³n consolidada y bloquear envÃ­o
+    // Si hay errores, mostrar notificación consolidada y bloquear envío
     if (errors.length > 0) {
       const listado = errors.map(e => `â€¢ ${e}`).join('\n')
       toast.error(`Faltan datos obligatorios:\n${listado}`)
@@ -247,7 +247,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
       return
     }
 
-    // Si es un nuevo prÃ©stamo, verificar si el cliente ya tiene prÃ©stamos
+    // Si es un nuevo préstamo, verificar si el cliente ya tiene préstamos
     if (!prestamo && formData.cedula) {
       try {
         const resumen = await prestamoService.getResumenPrestamos(formData.cedula)
@@ -258,25 +258,25 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
           return
         }
       } catch (error) {
-        console.error('Error verificando prÃ©stamos existentes:', error)
+        console.error('Error verificando préstamos existentes:', error)
         // Continuar con el proceso si hay error (no bloquear)
       }
     }
 
-    // ConfirmaciÃ³n: creaciÃ³n definitiva (no editable posteriormente)
+    // Confirmación: creación definitiva (no editable posteriormente)
     if (!prestamo) {
       const ok = window.confirm(
-        'ConfirmaciÃ³n importante\n\n' +
-        'Al crear el prÃ©stamo no podrÃ¡ editarlo despuÃ©s.\n' +
-        'Â¿Desea continuar?'
+        'Confirmación importante\n\n' +
+        'Al crear el préstamo no podrá editarlo después.\n' +
+        '¿Desea continuar?'
       )
       if (!ok) {
-        toast('CreaciÃ³n cancelada')
+        toast('Creación cancelada')
         return
       }
     }
 
-    // Proceder con la creaciÃ³n/actualizaciÃ³n
+    // Proceder con la creación/actualización
     await crearOActualizarPrestamo()
   }
 
@@ -286,7 +286,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
       const prestamoData = {
         ...formData,
         valor_activo: valorActivo > 0 ? valorActivo : undefined,
-        // Asegurar producto desde selecciones si estÃ¡ vacÃ­o
+        // Asegurar producto desde selecciones si está vacío
         producto: formData.producto && String(formData.producto).trim() !== ''
           ? formData.producto
           : (formData.modelo_vehiculo || ''),
@@ -299,25 +299,25 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
         fecha_base_calculo: formData.fecha_base_calculo,
         usuario_autoriza: !prestamo && justificacionAutorizacion ? user?.email : undefined,
         observaciones: justificacionAutorizacion
-          ? `${formData.observaciones || ''}\n\n--- JUSTIFICACIÃ“N PARA NUEVO PRÃ‰STAMO ---\n${justificacionAutorizacion}`.trim()
+          ? `${formData.observaciones || ''}\n\n--- JUSTIFICACIÓN PARA NUEVO PRÃ‰STAMO ---\n${justificacionAutorizacion}`.trim()
           : formData.observaciones,
       }
 
       if (prestamo) {
-        // Editar prÃ©stamo existente
+        // Editar préstamo existente
         await updatePrestamo.mutateAsync({
           id: prestamo.id,
           data: prestamoData
         })
       } else {
-        // Crear nuevo prÃ©stamo
+        // Crear nuevo préstamo
         await createPrestamo.mutateAsync(prestamoData as PrestamoForm)
       }
 
       onSuccess()
       onClose()
     } catch (error) {
-      toast.error('Error al guardar el prÃ©stamo')
+      toast.error('Error al guardar el préstamo')
       console.error('Error saving loan:', error)
     }
   }
@@ -325,12 +325,12 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
   const handleConfirmarAutorizacion = (justificacion: string) => {
     setJustificacionAutorizacion(justificacion)
     setShowModalValidacion(false)
-    // Continuar con la creaciÃ³n del prÃ©stamo
+    // Continuar con la creación del préstamo
     crearOActualizarPrestamo()
   }
 
-  // Verificar permisos de ediciÃ³n - PolÃ­tica: no se permite ediciÃ³n de prÃ©stamos ya creados
-  // Permitir ediciÃ³n si el usuario tiene permisos y estÃ¡ editando un prÃ©stamo
+  // Verificar permisos de edición - Política: no se permite edición de préstamos ya creados
+  // Permitir edición si el usuario tiene permisos y está editando un préstamo
   const isReadOnly = prestamo ? !canEditPrestamo(prestamo.estado || '') : false
   const canApprove = prestamo ? canApprovePrestamo() : false
 
@@ -352,25 +352,25 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
         >
           <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center z-10">
             <h2 className="text-xl font-bold">
-              {prestamo ? 'Editar PrÃ©stamo' : 'Nuevo PrÃ©stamo'}
+              {prestamo ? 'Editar Préstamo' : 'Nuevo Préstamo'}
             </h2>
-            {/* BotÃ³n X eliminado - solo se puede cerrar con Cancelar o Crear */}
+            {/* Botón X eliminado - solo se puede cerrar con Cancelar o Crear */}
           </div>
 
           <form onSubmit={handleSubmit} className="p-6 space-y-6">
-            {/* BÃºsqueda de Cliente */}
+            {/* Búsqueda de Cliente */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Search className="h-5 w-5" />
-                  BÃºsqueda de Cliente
+                  Búsqueda de Cliente
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* Seleccionar primero el Modelo para cargar el precio */}
                 <div>
                   <label className="block text-sm font-medium mb-1">
-                    Modelo de VehÃ­culo <span className="text-red-500">*</span>
+                    Modelo de Vehículo <span className="text-red-500">*</span>
                   </label>
                   <Select
                     value={formData.modelo_vehiculo ?? ''}
@@ -402,14 +402,14 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-gray-500 mt-1">Seleccione el modelo para cargar automÃ¡ticamente el precio del activo.</p>
+                  <p className="text-xs text-gray-500 mt-1">Seleccione el modelo para cargar automáticamente el precio del activo.</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">
-                    CÃ©dula <span className="text-red-500">*</span>
+                    Cédula <span className="text-red-500">*</span>
                   </label>
                   <Input
-                    placeholder="Buscar por cÃ©dula..."
+                    placeholder="Buscar por cédula..."
                     value={formData.cedula}
                     onChange={(e) => setFormData({ ...formData, cedula: e.target.value.toUpperCase() })}
                     disabled={isReadOnly || isLoadingCliente}
@@ -429,7 +429,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                                   <CheckCircle2 className="h-5 w-5 text-green-600" />
                                   <p className="font-semibold text-green-800">{clienteData.nombres}</p>
                                 </div>
-                                <p className="text-sm text-green-700">Cliente encontrado y datos cargados automÃ¡ticamente</p>
+                                <p className="text-sm text-green-700">Cliente encontrado y datos cargados automáticamente</p>
                               </div>
                             )}
 
@@ -437,14 +437,14 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                               <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
                                 <div className="flex items-center gap-2">
                                   <AlertCircle className="h-5 w-5 text-red-600" />
-                                  <p className="text-sm text-red-800">Cliente no encontrado con esta cÃ©dula</p>
+                                  <p className="text-sm text-red-800">Cliente no encontrado con esta cédula</p>
                                 </div>
                               </div>
                             )}
               </CardContent>
             </Card>
 
-            {/* InformaciÃ³n Adicional del Cliente (Colapsable) */}
+            {/* Información Adicional del Cliente (Colapsable) */}
             {clienteData && (
               <Card>
                 <CardHeader>
@@ -471,7 +471,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                       <CardContent className="space-y-3">
                         <div className="grid grid-cols-2 gap-4">
                           <div>
-                            <label className="text-sm text-gray-600">CÃ©dula</label>
+                            <label className="text-sm text-gray-600">Cédula</label>
                             <p className="font-medium">{clienteData.cedula}</p>
                           </div>
                           <div>
@@ -479,7 +479,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                             <p className="font-medium">{clienteData.nombres}</p>
                           </div>
                           <div>
-                            <label className="text-sm text-gray-600">TelÃ©fono</label>
+                            <label className="text-sm text-gray-600">Teléfono</label>
                             <p className="font-medium">{clienteData.telefono || 'N/A'}</p>
                           </div>
                           <div>
@@ -487,7 +487,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                             <p className="font-medium">{clienteData.email || 'N/A'}</p>
                           </div>
                           <div>
-                            <label className="text-sm text-gray-600">DirecciÃ³n</label>
+                            <label className="text-sm text-gray-600">Dirección</label>
                             <p className="font-medium">{clienteData.direccion || 'N/A'}</p>
                           </div>
                           <div>
@@ -499,7 +499,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                             </p>
                           </div>
                           <div>
-                            <label className="text-sm text-gray-600">OcupaciÃ³n</label>
+                            <label className="text-sm text-gray-600">Ocupación</label>
                             <p className="font-medium">{clienteData.ocupacion || 'N/A'}</p>
                           </div>
                           <div>
@@ -522,12 +522,12 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
               </Card>
             )}
 
-            {/* Datos del PrÃ©stamo */}
+            {/* Datos del Préstamo */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <DollarSign className="h-5 w-5" />
-                  Datos del PrÃ©stamo
+                  Datos del Préstamo
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -544,14 +544,14 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                       value={Number.isFinite(valorActivo) ? valorActivo : ''}
                       readOnly
                       className="bg-gray-100"
-                      placeholder="Se carga segÃºn el modelo seleccionado"
+                      placeholder="Se carga según el modelo seleccionado"
                       disabled={isReadOnly || !formData.modelo_vehiculo}
                     />
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium mb-1">
-                      Anticipo (USD) <span className="text-green-600">(AutomÃ¡tico - 30%)</span>
+                      Anticipo (USD) <span className="text-green-600">(Automático - 30%)</span>
                     </label>
                     <Input
                       type="number"
@@ -568,20 +568,20 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                       onBlur={(e) => {
                         const value = parseFloat(e.target.value)
                         const anticipoMinimo = valorActivo > 0 ? valorActivo * 0.30 : 0
-                        // Si el valor es menor al mÃ­nimo, establecer el mÃ­nimo
+                        // Si el valor es menor al mínimo, establecer el mínimo
                         if (!isNaN(value) && value < anticipoMinimo) {
                           setAnticipo(anticipoMinimo)
-                          toast.warning(`El anticipo mÃ­nimo es ${anticipoMinimo.toFixed(2)} USD (30% del valor activo)`)
+                          toast.warning(`El anticipo mínimo es ${anticipoMinimo.toFixed(2)} USD (30% del valor activo)`)
                         } else if (!isNaN(value) && value >= anticipoMinimo) {
                           setAnticipo(value)
                         }
                       }}
                       disabled={isReadOnly}
-                      placeholder="MÃ­nimo 30% del Valor Activo"
+                      placeholder="Mínimo 30% del Valor Activo"
                     />
                     <p className="text-xs text-gray-500 mt-1">
                       {valorActivo > 0 
-                        ? `MÃ­nimo: ${(valorActivo * 0.30).toFixed(2)} USD (30% del Valor Activo)`
+                        ? `Mínimo: ${(valorActivo * 0.30).toFixed(2)} USD (30% del Valor Activo)`
                         : '30% del Valor Activo'}
                     </p>
                   </div>
@@ -600,7 +600,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                       readOnly
                       className="bg-gray-100"
                     />
-                    <p className="text-xs text-gray-500 mt-1">Calculado automÃ¡ticamente (Valor Activo - Anticipo)</p>
+                    <p className="text-xs text-gray-500 mt-1">Calculado automáticamente (Valor Activo - Anticipo)</p>
                   </div>
 
                   <div>
@@ -629,7 +629,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1">NÃºmero de Cuotas <span className="text-red-500">*</span></label>
+                    <label className="block text-sm font-medium mb-1">Número de Cuotas <span className="text-red-500">*</span></label>
                     <Input
                       type="number"
                       min="1"
@@ -637,17 +637,17 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                       value={numeroCuotas}
                       onChange={(e) => {
                         const value = parseInt(e.target.value) || 12
-                        // Validar que estÃ© entre 1 y 12
+                        // Validar que esté entre 1 y 12
                         const validValue = Math.max(1, Math.min(12, value))
                         setNumeroCuotas(validValue)
                       }}
                       disabled={isReadOnly}
                     />
-                    <p className="text-xs text-gray-500 mt-1">MÃ­nimo: 1, MÃ¡ximo: 12</p>
+                    <p className="text-xs text-gray-500 mt-1">Mínimo: 1, Máximo: 12</p>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-1">Cuota por PerÃ­odo (USD)</label>
+                    <label className="block text-sm font-medium mb-1">Cuota por Período (USD)</label>
                     <Input
                       value={cuotaPeriodo.toFixed(2)}
                       disabled
@@ -675,11 +675,11 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
 
                 {prestamo && prestamo.estado === 'APROBADO' && (
                   <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                    <h4 className="font-semibold text-blue-900 mb-2">ðŸ“… Fecha de Desembolso (DÃ­a/Mes/AÃ±o)</h4>
+                    <h4 className="font-semibold text-blue-900 mb-2">ðŸ“… Fecha de Desembolso (Día/Mes/Año)</h4>
                     <div className="grid grid-cols-3 gap-4">
                       <div>
                         <label className="block text-sm font-medium mb-1">
-                          DÃ­a <span className="text-red-500">*</span>
+                          Día <span className="text-red-500">*</span>
                         </label>
                         <Input
                           type="number"
@@ -719,7 +719,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-1">
-                          AÃ±o <span className="text-red-500">*</span>
+                          Año <span className="text-red-500">*</span>
                         </label>
                         <Input
                           type="number"
@@ -739,7 +739,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                       </div>
                     </div>
                     <p className="text-xs text-blue-700 mt-2">
-                      Esta es la fecha desde la cual se calcularán las cuotas de la tabla de amortizaciÃ³n
+                      Esta es la fecha desde la cual se calcularán las cuotas de la tabla de amortización
                     </p>
                   </div>
                 )}
@@ -822,7 +822,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
               </CardContent>
             </Card>
 
-            {/* Botones de AprobaciÃ³n (Solo ADMIN) */}
+            {/* Botones de Aprobación (Solo ADMIN) */}
             {prestamo && canApprove && prestamo.estado === 'EN_REVISION' && (
               <Card className="border-yellow-200 bg-yellow-50">
                 <CardContent className="pt-4">
@@ -830,8 +830,8 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                     <Button
                       type="button"
                       onClick={() => {
-                        // TODO: Implementar aprobaciÃ³n
-                        console.log('Aprobar prÃ©stamo')
+                        // TODO: Implementar aprobación
+                        console.log('Aprobar préstamo')
                       }}
                       className="flex-1 bg-green-600 hover:bg-green-700"
                     >
@@ -842,7 +842,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                       type="button"
                       onClick={() => {
                         // TODO: Implementar rechazo
-                        console.log('Rechazar prÃ©stamo')
+                        console.log('Rechazar préstamo')
                       }}
                       variant="destructive"
                       className="flex-1"
@@ -863,7 +863,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
               {!isReadOnly && (
                 <Button type="submit">
                   <Save className="h-4 w-4 mr-2" />
-                  {prestamo ? 'Actualizar' : 'Crear'} PrÃ©stamo
+                  {prestamo ? 'Actualizar' : 'Crear'} Préstamo
                 </Button>
               )}
               {isReadOnly && (
@@ -874,7 +874,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
             </div>
           </form>
 
-          {/* Modal de ValidaciÃ³n de PrÃ©stamos Existentes */}
+          {/* Modal de Validación de Préstamos Existentes */}
           {showModalValidacion && resumenPrestamos && resumenPrestamos.tiene_prestamos && (
             <ModalValidacionPrestamoExistente
               prestamos={resumenPrestamos.prestamos || []}

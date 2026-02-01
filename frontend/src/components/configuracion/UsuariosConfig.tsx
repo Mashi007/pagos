@@ -35,7 +35,7 @@ export default function UsuariosConfig() {
   const [viewingUser, setViewingUser] = useState<User | null>(null)
   const [filterActive, setFilterActive] = useState<boolean | undefined>(undefined)
 
-  // FunciÃ³n para validar email con el sistema
+  // Función para validar email con el sistema
   const validateEmailWithSystem = async (email: string) => {
     try {
       const response = await fetch('/api/v1/validadores/validar-campo', {
@@ -59,8 +59,8 @@ export default function UsuariosConfig() {
             formattedValue: result.validacion.valor_formateado
           }
         } else {
-          // Mostrar error y sugerencia si estÃ¡ disponible
-          const errorMsg = result.validacion?.error || 'Formato de email invÃ¡lido'
+          // Mostrar error y sugerencia si está disponible
+          const errorMsg = result.validacion?.error || 'Formato de email inválido'
           const sugerencia = result.validacion?.sugerencia || ''
           const mensajeCompleto = sugerencia ? `${errorMsg}. ${sugerencia}` : errorMsg
 
@@ -71,10 +71,10 @@ export default function UsuariosConfig() {
         }
       }
     } catch (error) {
-      console.warn('Error validando email con backend, usando validaciÃ³n local:', error)
+      console.warn('Error validando email con backend, usando validación local:', error)
     }
 
-    // Fallback: validaciÃ³n local
+    // Fallback: validación local
     const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
     if (!emailPattern.test(email.toLowerCase())) {
       return { isValid: false, message: 'Formato: usuario@dominio.com' }
@@ -93,7 +93,7 @@ export default function UsuariosConfig() {
     is_active: true
   })
 
-  // Hook para validar contraseÃ±a
+  // Hook para validar contraseña
   const { validatePassword } = usePassword()
 
   useEffect(() => {
@@ -111,7 +111,7 @@ export default function UsuariosConfig() {
       if (err.response?.status === 503) {
         setError('Servicio temporalmente no disponible. Intenta nuevamente.')
       } else if (err.code === 'ERR_NETWORK' || err.message?.includes('Network Error')) {
-        setError('Error de conexiÃ³n. Verifica que el servidor estÃ© funcionando.')
+        setError('Error de conexión. Verifica que el servidor esté funcionando.')
       } else {
         setError('No se pudieron cargar los usuarios.')
       }
@@ -120,18 +120,18 @@ export default function UsuariosConfig() {
     }
   }
 
-  // ValidaciÃ³n del formulario
+  // Validación del formulario
   const isFormValid = () => {
     if (!formData.email || !formData.nombre || !formData.apellido) {
       return false
     }
 
-    // Si estamos creando un nuevo usuario, la contraseÃ±a es obligatoria
+    // Si estamos creando un nuevo usuario, la contraseña es obligatoria
     if (!editingUser && !formData.password) {
       return false
     }
 
-    // Si hay una contraseÃ±a (ya sea en creaciÃ³n o actualizaciÃ³n), debe cumplir todos los requisitos
+    // Si hay una contraseña (ya sea en creación o actualización), debe cumplir todos los requisitos
     if (formData.password && formData.password.trim() !== '') {
       const passwordValidation = validatePassword(formData.password)
       if (!passwordValidation.isValid) {
@@ -154,7 +154,7 @@ export default function UsuariosConfig() {
       // Validar email con el validador del sistema
       const emailValidation = await validateEmailWithSystem(formData.email)
       if (!emailValidation.isValid) {
-        toast.error(emailValidation.message || 'Email invÃ¡lido')
+        toast.error(emailValidation.message || 'Email inválido')
         return
       }
 
@@ -169,7 +169,7 @@ export default function UsuariosConfig() {
           is_active: formData.is_active
         }
 
-        // Solo incluir password si se proporcionÃ³
+        // Solo incluir password si se proporcionó
         if (formData.password) {
           updateData.password = formData.password
         }
@@ -203,7 +203,7 @@ export default function UsuariosConfig() {
   const handleEdit = (usuario: User) => {
     setEditingUser(usuario)
     setFormData({
-      email: usuario.email.toLowerCase(), // Normalizar a minÃºsculas
+      email: usuario.email.toLowerCase(), // Normalizar a minúsculas
       nombre: usuario.nombre,
       apellido: usuario.apellido,
       cargo: usuario.cargo || 'Usuario', // Preservar cargo existente
@@ -220,7 +220,7 @@ export default function UsuariosConfig() {
   }
 
   const handleDelete = async (usuario: User) => {
-    if (!confirm(`Â¿EstÃ¡s seguro de eliminar el usuario ${usuario.nombre} ${usuario.apellido} (${usuario.email})?`)) {
+    if (!confirm(`¿Estás seguro de eliminar el usuario ${usuario.nombre} ${usuario.apellido} (${usuario.email})?`)) {
       return
     }
 
@@ -264,7 +264,7 @@ export default function UsuariosConfig() {
         <div>
           <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <Users className="h-6 w-6 text-blue-600" />
-            GestiÃ³n de Usuarios
+            Gestión de Usuarios
           </h2>
           <p className="text-sm text-gray-600 mt-1">
             Administra usuarios del sistema - Todos tienen acceso completo
@@ -591,18 +591,18 @@ export default function UsuariosConfig() {
                   </p>
                 </div>
 
-                {/* ContraseÃ±a */}
+                {/* Contraseña */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    ContraseÃ±a {editingUser ? '(dejar en blanco para no cambiar)' : '*'}
+                    Contraseña {editingUser ? '(dejar en blanco para no cambiar)' : '*'}
                   </label>
                   <PasswordField
                     value={formData.password}
                     onChange={(password) => setFormData({ ...formData, password })}
-                    placeholder={editingUser ? 'Nueva contraseÃ±a (opcional)' : 'MÃ­nimo 8 caracteres'}
+                    placeholder={editingUser ? 'Nueva contraseña (opcional)' : 'Mínimo 8 caracteres'}
                     required={!editingUser}
-                    showGenerateButton={true}  // âœ… SIEMPRE mostrar botÃ³n de generar
-                    showCopyButton={true}      // âœ… SIEMPRE mostrar botÃ³n de copiar
+                    showGenerateButton={true}  // âœ… SIEMPRE mostrar botón de generar
+                    showCopyButton={true}      // âœ… SIEMPRE mostrar botón de copiar
                   />
                 </div>
 
@@ -706,7 +706,7 @@ export default function UsuariosConfig() {
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-500">Fecha de creaciÃ³n</p>
+                    <p className="text-sm font-medium text-gray-500">Fecha de creación</p>
                     <p className="text-sm text-gray-900 mt-1">
                       {new Date(viewingUser.created_at).toLocaleDateString('es-ES', {
                         day: '2-digit',

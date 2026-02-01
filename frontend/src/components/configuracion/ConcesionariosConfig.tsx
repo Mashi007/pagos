@@ -49,10 +49,10 @@ export function ConcesionariosConfig() {
 
   const handleEliminar = async (id: number) => {
     try {
-      // Confirmar eliminaciÃ³n permanente
+      // Confirmar eliminación permanente
       const confirmar = window.confirm(
-        'âš ï¸ Â¿EstÃ¡s seguro de que quieres ELIMINAR PERMANENTEMENTE este concesionario?\n\n' +
-        'Esta acciÃ³n NO se puede deshacer y el concesionario serÃ¡ borrado completamente de la base de datos.'
+        'âš ï¸ ¿Estás seguro de que quieres ELIMINAR PERMANENTEMENTE este concesionario?\n\n' +
+        'Esta acción NO se puede deshacer y el concesionario será borrado completamente de la base de datos.'
       )
 
       if (!confirmar) {
@@ -73,7 +73,7 @@ export function ConcesionariosConfig() {
     // Limpiar espacios extras
     const nombreLimpio = nombre.trim().replace(/\s+/g, ' ')
 
-    // Verificar cantidad de palabras (mÃ­nimo 2, mÃ¡ximo 4)
+    // Verificar cantidad de palabras (mínimo 2, máximo 4)
     const palabras = nombreLimpio.split(' ')
 
     if (palabras.length < 2) {
@@ -81,7 +81,7 @@ export function ConcesionariosConfig() {
     }
 
     if (palabras.length > 4) {
-      return 'Debe ingresar mÃ¡ximo 4 palabras'
+      return 'Debe ingresar máximo 4 palabras'
     }
 
     // Verificar que cada palabra tenga al menos 2 caracteres
@@ -165,18 +165,18 @@ export function ConcesionariosConfig() {
     refetch()
   }
 
-  // Filtrar concesionarios por tÃ©rmino de bÃºsqueda
+  // Filtrar concesionarios por término de búsqueda
   const filteredConcesionarios = (concesionarios || []).filter(concesionario =>
     concesionario.nombre.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  // PaginaciÃ³n
+  // Paginación
   const totalPages = Math.ceil(filteredConcesionarios.length / itemsPerPage)
   const startIndex = (currentPage - 1) * itemsPerPage
   const endIndex = startIndex + itemsPerPage
   const paginatedConcesionarios = filteredConcesionarios.slice(startIndex, endIndex)
 
-  // Resetear a pÃ¡gina 1 cuando cambia el filtro de bÃºsqueda
+  // Resetear a página 1 cuando cambia el filtro de búsqueda
   useEffect(() => {
     setCurrentPage(1)
   }, [searchTerm])
@@ -211,7 +211,7 @@ export function ConcesionariosConfig() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">ConfiguraciÃ³n de Concesionarios</h2>
+          <h2 className="text-2xl font-bold tracking-tight">Configuración de Concesionarios</h2>
           <p className="text-muted-foreground">
             Gestiona los concesionarios del sistema
           </p>
@@ -291,7 +291,7 @@ export function ConcesionariosConfig() {
                 <TableHead>ID</TableHead>
                 <TableHead>Nombre</TableHead>
                 <TableHead>Estado</TableHead>
-                <TableHead>Fecha CreaciÃ³n</TableHead>
+                <TableHead>Fecha Creación</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
@@ -351,7 +351,7 @@ export function ConcesionariosConfig() {
             </div>
           )}
 
-          {/* PaginaciÃ³n */}
+          {/* Paginación */}
           {filteredConcesionarios.length > itemsPerPage && (
             <div className="flex items-center justify-between px-2 py-4 border-t">
               <div className="text-sm text-gray-500">
@@ -393,7 +393,7 @@ export function ConcesionariosConfig() {
         </CardContent>
       </Card>
 
-      {/* ImportaciÃ³n desde Excel */}
+      {/* Importación desde Excel */}
       <Card>
         <CardHeader>
           <CardTitle>Importar Concesionarios (Excel)</CardTitle>
@@ -417,7 +417,7 @@ export function ConcesionariosConfig() {
               Examinar...
             </label>
             <span className="text-sm text-gray-600">
-              {archivoExcel ? archivoExcel.name : 'No se ha seleccionado ningÃºn archivo.'}
+              {archivoExcel ? archivoExcel.name : 'No se ha seleccionado ningún archivo.'}
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -497,7 +497,7 @@ export function ConcesionariosConfig() {
                     )}
                     {!editingConcesionario && !validationError && (
                       <p className="text-xs text-gray-500 mt-1">
-                        Ejemplo: Juan PÃ©rez (mÃ­nimo 2, mÃ¡ximo 4 palabras)
+                        Ejemplo: Juan Pérez (mínimo 2, máximo 4 palabras)
                       </p>
                     )}
                   </div>

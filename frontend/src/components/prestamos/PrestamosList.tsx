@@ -27,7 +27,7 @@ export function PrestamosList() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [page, setPage] = useState(1)
   
-  // Leer requiere_revision de los parÃ¡metros de URL
+  // Leer requiere_revision de los parámetros de URL
   const requiereRevisionParam = searchParams.get('requiere_revision')
   const requiereRevision = requiereRevisionParam === 'true' ? true : undefined
   
@@ -43,7 +43,7 @@ export function PrestamosList() {
     requiere_revision: requiereRevision,
   })
   
-  // Efecto para actualizar filtros cuando cambien los parÃ¡metros de URL
+  // Efecto para actualizar filtros cuando cambien los parámetros de URL
   useEffect(() => {
     const requiereRevisionParam = searchParams.get('requiere_revision')
     const requiereRevision = requiereRevisionParam === 'true' ? true : undefined
@@ -92,7 +92,7 @@ export function PrestamosList() {
   const { data: analistas = [] } = useAnalistasActivos()
   const { data: modelosVehiculos = [] } = useModelosVehiculosActivos()
 
-  // FunciÃ³n para limpiar filtros
+  // Función para limpiar filtros
   const handleClearFilters = () => {
     setFilters({
       search: '',
@@ -105,7 +105,7 @@ export function PrestamosList() {
       fecha_fin: undefined,
       requiere_revision: undefined,
     })
-    // Limpiar tambiÃ©n el parÃ¡metro de URL
+    // Limpiar también el parámetro de URL
     setSearchParams({})
     setPage(1)
   }
@@ -122,7 +122,7 @@ export function PrestamosList() {
     filters.fecha_fin,
   ].filter(Boolean).length
 
-  // Efecto para resetear pÃ¡gina cuando cambien los filtros
+  // Efecto para resetear página cuando cambien los filtros
   useEffect(() => {
     setPage(1)
   }, [
@@ -151,7 +151,7 @@ export function PrestamosList() {
   const getEstadoLabel = (estado: string) => {
     const labels: Record<string, string> = {
       DRAFT: 'Borrador',
-      EN_REVISION: 'En RevisiÃ³n',
+      EN_REVISION: 'En Revisión',
       EVALUADO: 'Evaluado',
       APROBADO: 'Aprobado',
       RECHAZADO: 'Rechazado',
@@ -185,16 +185,16 @@ export function PrestamosList() {
   }
 
   const handleDelete = async (id: number) => {
-    if (window.confirm('Â¿EstÃ¡ seguro de eliminar este prÃ©stamo?')) {
+    if (window.confirm('¿Está seguro de eliminar este préstamo?')) {
       await deletePrestamo.mutateAsync(id)
     }
   }
 
 
-  // FunciÃ³n para actualizar los datos manualmente
+  // Función para actualizar los datos manualmente
   const handleRefresh = async () => {
     try {
-      // Invalidar todas las queries relacionadas con prÃ©stamos
+      // Invalidar todas las queries relacionadas con préstamos
       queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
       queryClient.invalidateQueries({ queryKey: prestamoKeys.lists() })
       
@@ -327,8 +327,8 @@ export function PrestamosList() {
       {/* Encabezado */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">PrÃ©stamos</h1>
-          <p className="text-gray-600 mt-1">GestiÃ³n de prÃ©stamos y financiamiento</p>
+          <h1 className="text-3xl font-bold text-gray-900">Préstamos</h1>
+          <p className="text-gray-600 mt-1">Gestión de préstamos y financiamiento</p>
         </div>
         <div className="flex gap-3">
           <Button
@@ -347,18 +347,18 @@ export function PrestamosList() {
             className="px-8 py-6 text-base font-semibold min-w-[200px]"
           >
             <Plus className="w-5 h-5 mr-2" />
-            Nuevo PrÃ©stamo
+            Nuevo Préstamo
           </Button>
         </div>
       </div>
 
-      {/* Filtros y bÃºsqueda */}
+      {/* Filtros y búsqueda */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Filter className="h-5 w-5 text-gray-600" />
-              <CardTitle>Filtros de BÃºsqueda</CardTitle>
+              <CardTitle>Filtros de Búsqueda</CardTitle>
               {activeFiltersCount > 0 && (
                 <Badge variant="secondary" className="ml-2">
                   {activeFiltersCount} {activeFiltersCount === 1 ? 'filtro activo' : 'filtros activos'}
@@ -384,13 +384,13 @@ export function PrestamosList() {
         </CardHeader>
         <CardContent className="pt-6">
           <div className="space-y-4">
-            {/* Fila 1: BÃºsqueda general */}
+            {/* Fila 1: Búsqueda general */}
             <div className="flex gap-4">
               <div className="flex-1">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
                   <Input
-                    placeholder="Buscar por cÃ©dula..."
+                    placeholder="Buscar por cédula..."
                     value={filters.search || ''}
                     onChange={(e) => setFilters({ ...filters, search: e.target.value })}
                     className="pl-10"
@@ -402,13 +402,13 @@ export function PrestamosList() {
             {/* Filtros expandibles */}
             {showFilters && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 pt-4 border-t">
-                {/* CÃ©dula */}
+                {/* Cédula */}
                 <div>
                   <label className="text-sm font-medium text-gray-700 mb-1 block">
-                    CÃ©dula de identidad
+                    Cédula de identidad
                   </label>
                   <Input
-                    placeholder="CÃ©dula de identidad"
+                    placeholder="Cédula de identidad"
                     value={filters.cedula || ''}
                     onChange={(e) => setFilters({ ...filters, cedula: e.target.value })}
                     onKeyPress={(e) => {
@@ -436,7 +436,7 @@ export function PrestamosList() {
                     <SelectContent>
                       <SelectItem value="ALL">Todos los estados</SelectItem>
                       <SelectItem value="DRAFT">ðŸ”µ Borrador</SelectItem>
-                      <SelectItem value="EN_REVISION">ðŸŸ¡ En RevisiÃ³n</SelectItem>
+                      <SelectItem value="EN_REVISION">ðŸŸ¡ En Revisión</SelectItem>
                       <SelectItem value="EVALUADO">ðŸ”· Evaluado</SelectItem>
                       <SelectItem value="APROBADO">ðŸŸ¢ Aprobado</SelectItem>
                       <SelectItem value="DESEMBOLSADO">ðŸ”µ Desembolsado</SelectItem>
@@ -536,10 +536,10 @@ export function PrestamosList() {
                   </Select>
                 </div>
 
-                {/* Modelo de VehÃ­culo */}
+                {/* Modelo de Vehículo */}
                 <div>
                   <label className="text-sm font-medium text-gray-700 mb-1 block">
-                    Modelo de VehÃ­culo
+                    Modelo de Vehículo
                   </label>
                   <Select
                     value={filters.modelo || 'ALL'}
@@ -566,28 +566,28 @@ export function PrestamosList() {
         </CardContent>
       </Card>
 
-      {/* Tabla de prÃ©stamos */}
+      {/* Tabla de préstamos */}
       <Card>
         <CardHeader>
-          <CardTitle>Lista de PrÃ©stamos</CardTitle>
+          <CardTitle>Lista de Préstamos</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading && <div className="text-center py-8">Cargando...</div>}
 
           {error && (
             <div className="text-center py-8 text-red-600">
-              Error al cargar prÃ©stamos: {error instanceof Error ? error.message : 'Error desconocido'}
+              Error al cargar préstamos: {error instanceof Error ? error.message : 'Error desconocido'}
             </div>
           )}
 
           {!isLoading && !error && data && (
             <>
-              {/* Debug info - remover en producciÃ³n */}
+              {/* Debug info - remover en producción */}
               {process.env.NODE_ENV === 'development' && (
                 <div className="mb-4 p-2 bg-gray-100 text-xs rounded">
-                  <strong>Debug:</strong> data existe: {data ? 'SÃ­' : 'No'}, 
-                  data.data existe: {data?.data ? 'SÃ­' : 'No'}, 
-                  es array: {Array.isArray(data?.data) ? 'SÃ­' : 'No'}, 
+                  <strong>Debug:</strong> data existe: {data ? 'Sí' : 'No'}, 
+                  data.data existe: {data?.data ? 'Sí' : 'No'}, 
+                  es array: {Array.isArray(data?.data) ? 'Sí' : 'No'}, 
                   longitud: {Array.isArray(data?.data) ? data.data.length : 'N/A'},
                   total: {data?.total || 0}
                 </div>
@@ -599,7 +599,7 @@ export function PrestamosList() {
                     {data.total > 0 ? (
                       <>
                         <p className="text-lg font-semibold text-red-600 mb-2">
-                          âš ï¸ Problema detectado: El sistema reporta {data.total} prÃ©stamos, pero no se pudieron mostrar.
+                          âš ï¸ Problema detectado: El sistema reporta {data.total} préstamos, pero no se pudieron mostrar.
                         </p>
                         <p className="text-sm mb-4">
                           Esto puede deberse a un problema en la respuesta del servidor o en el formato de los datos.
@@ -614,12 +614,12 @@ export function PrestamosList() {
                         </Button>
                       </>
                     ) : (
-                      <p>No se encontraron prÃ©stamos con los filtros seleccionados.</p>
+                      <p>No se encontraron préstamos con los filtros seleccionados.</p>
                     )}
                   </div>
                   {process.env.NODE_ENV === 'development' && (
                     <details className="mt-4 text-left max-w-2xl mx-auto">
-                      <summary className="cursor-pointer text-sm font-semibold">Detalles tÃ©cnicos (solo desarrollo)</summary>
+                      <summary className="cursor-pointer text-sm font-semibold">Detalles técnicos (solo desarrollo)</summary>
                       <pre className="mt-2 p-2 bg-gray-100 rounded text-xs overflow-auto">
                         {JSON.stringify({ data, isLoading, error: error ? error.message : null }, null, 2)}
                       </pre>
@@ -632,7 +632,7 @@ export function PrestamosList() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Cliente</TableHead>
-                        <TableHead>CÃ©dula</TableHead>
+                        <TableHead>Cédula</TableHead>
                         <TableHead>Monto</TableHead>
                         <TableHead>Modalidad</TableHead>
                         <TableHead>Cuotas</TableHead>
@@ -678,7 +678,7 @@ export function PrestamosList() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
-                            {/* BotÃ³n Ver Detalles - Visible cuando estÃ¡ DESEMBOLSADO o tiene fecha_aprobacion */}
+                            {/* Botón Ver Detalles - Visible cuando está DESEMBOLSADO o tiene fecha_aprobacion */}
                             {(prestamo.estado === 'DESEMBOLSADO' || prestamo.fecha_aprobacion) && (
                               <Button
                                 variant="ghost"
@@ -690,65 +690,65 @@ export function PrestamosList() {
                               </Button>
                             )}
 
-                            {/* BotÃ³n Editar - Solo si tiene permisos Y estÃ¡ DESEMBOLSADO o tiene fecha_aprobacion */}
+                            {/* Botón Editar - Solo si tiene permisos Y está DESEMBOLSADO o tiene fecha_aprobacion */}
                             {canEditPrestamo(prestamo.estado) && (prestamo.estado === 'DESEMBOLSADO' || prestamo.fecha_aprobacion) && (
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => handleEdit(prestamo)}
-                                title="Editar prÃ©stamo"
+                                title="Editar préstamo"
                                 className="hover:bg-blue-50"
                               >
                                 <Edit className="h-4 w-4 text-blue-600" />
                               </Button>
                             )}
 
-                            {/* BotÃ³n Evaluar Riesgo - Solo Admin (DRAFT o EN_REVISION) */}
+                            {/* Botón Evaluar Riesgo - Solo Admin (DRAFT o EN_REVISION) */}
                             {canViewEvaluacionRiesgo() && (prestamo.estado === 'DRAFT' || prestamo.estado === 'EN_REVISION') && (
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => handleEvaluarRiesgo(prestamo)}
-                                title="Evaluar riesgo del prÃ©stamo"
+                                title="Evaluar riesgo del préstamo"
                                 className="hover:bg-blue-50"
                               >
                                 <Calculator className="h-4 w-4 text-blue-600" />
                               </Button>
                             )}
 
-                            {/* BotÃ³n Aprobar CrÃ©dito - Solo Admin (EVALUADO) */}
+                            {/* Botón Aprobar Crédito - Solo Admin (EVALUADO) */}
                             {canViewEvaluacionRiesgo() && prestamo.estado === 'EVALUADO' && (
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => handleAprobarCredito(prestamo)}
-                                title="Aprobar crÃ©dito con condiciones (genera tabla de amortizaciÃ³n)"
+                                title="Aprobar crédito con condiciones (genera tabla de amortización)"
                                 className="hover:bg-green-50"
                               >
                                 <CheckCircle2 className="h-4 w-4 text-green-600" />
                               </Button>
                             )}
 
-                            {/* BotÃ³n Asignar Fecha de AprobaciÃ³n - Solo Admin (APROBADO sin fecha_aprobacion) */}
+                            {/* Botón Asignar Fecha de Aprobación - Solo Admin (APROBADO sin fecha_aprobacion) */}
                             {canViewEvaluacionRiesgo() && prestamo.estado === 'APROBADO' && !prestamo.fecha_aprobacion && (
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => handleAsignarFechaAprobacion(prestamo)}
-                                title="Asignar fecha de aprobaciÃ³n y desembolsar (requiere calificaciÃ³n mÃ­nima 70)"
+                                title="Asignar fecha de aprobación y desembolsar (requiere calificación mínima 70)"
                                 className="hover:bg-purple-50"
                               >
                                 <CalendarIcon className="h-4 w-4 text-purple-600" />
                               </Button>
                             )}
 
-                            {/* BotÃ³n Eliminar - Solo Admin */}
+                            {/* Botón Eliminar - Solo Admin */}
                             {canDeletePrestamo() ? (
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => handleDelete(prestamo.id)}
-                                title="Eliminar prÃ©stamo"
+                                title="Eliminar préstamo"
                               >
                                 <Trash2 className="h-4 w-4 text-red-600" />
                               </Button>
@@ -762,11 +762,11 @@ export function PrestamosList() {
                 </div>
               )}
 
-              {/* PaginaciÃ³n */}
+              {/* Paginación */}
               {data && data.total_pages > 1 && (
                 <div className="flex items-center justify-between mt-4">
                   <div className="text-sm text-gray-600">
-                    PÃ¡gina {data.page} de {data.total_pages} ({data.total} total)
+                    Página {data.page} de {data.total_pages} ({data.total} total)
                   </div>
                   <div className="flex gap-2">
                     <Button

@@ -43,7 +43,7 @@ const ESTADOS_EMBUDO = [
   },
   {
     id: 'evaluacion',
-    label: 'En EvaluaciÃ³n',
+    label: 'En Evaluación',
     color: 'bg-blue-50 border-blue-200',
     headerColor: 'bg-blue-100 text-blue-800',
     icon: Clock,
@@ -82,7 +82,7 @@ const mapearEstadoEmbudo = (
   prestamosAlDia: boolean,
   prestamosCliente: any[] = []
 ): string => {
-  // 1. RECHAZADO: Solo si en mÃ³dulo prÃ©stamos estÃ¡ con ese estado
+  // 1. RECHAZADO: Solo si en módulo préstamos está con ese estado
   const prestamosRechazados = prestamosCliente.filter(p =>
     p.estado === 'RECHAZADO'
   )
@@ -90,7 +90,7 @@ const mapearEstadoEmbudo = (
     return 'rechazado'
   }
 
-  // 2. APROBADO: Todos los que tienen estado aprobado en prÃ©stamos
+  // 2. APROBADO: Todos los que tienen estado aprobado en préstamos
   const prestamosAprobados = prestamosCliente.filter(p =>
     p.estado === 'APROBADO'
   )
@@ -98,7 +98,7 @@ const mapearEstadoEmbudo = (
     return 'aprobado'
   }
 
-  // 3. EN EVALUACIÃ“N: Solo si estÃ¡n en el mÃ³dulo prÃ©stamos en evaluaciÃ³n (EN_REVISION o DRAFT)
+  // 3. EN EVALUACIÓN: Solo si están en el módulo préstamos en evaluación (EN_REVISION o DRAFT)
   const prestamosEnEvaluacion = prestamosCliente.filter(p =>
     p.estado === 'EN_REVISION' || p.estado === 'DRAFT'
   )
@@ -107,8 +107,8 @@ const mapearEstadoEmbudo = (
   }
 
   // 4. PROSPECTO: Debe habilitarse para encontrar cliente de base de datos
-  // Cualquier cliente de la base de datos puede ser prospecto (no requiere tener prÃ©stamos)
-  // Si no tiene prÃ©stamos o no estÃ¡ en ningÃºn estado especÃ­fico, es prospecto
+  // Cualquier cliente de la base de datos puede ser prospecto (no requiere tener préstamos)
+  // Si no tiene préstamos o no está en ningún estado específico, es prospecto
   return 'prospecto'
 }
 
@@ -132,10 +132,10 @@ export function EmbudoClientes() {
     1000 // Obtener muchos clientes para el embudo
   )
 
-  // Obtener prÃ©stamos para vincular concesionarios
+  // Obtener préstamos para vincular concesionarios
   const { data: prestamosData } = usePrestamos(undefined, 1, 1000)
 
-  // Obtener estadÃ­sticas del embudo desde la API
+  // Obtener estadísticas del embudo desde la API
   const { data: estadisticasEmbudo, isLoading: isLoadingEstadisticas } = useQuery({
     queryKey: ['estadisticas-embudo'],
     queryFn: () => clienteService.getEstadisticasEmbudo(),
@@ -143,7 +143,7 @@ export function EmbudoClientes() {
     refetchInterval: 60 * 1000, // Refrescar cada minuto
   })
 
-  // BÃºsqueda de clientes para agregar (incluir todos los estados para el embudo)
+  // Búsqueda de clientes para agregar (incluir todos los estados para el embudo)
   const { data: clientesBuscados = [], isLoading: isLoadingSearch } = useSearchClientes(searchCliente, true)
 
   // Convertir clientes a formato del embudo
@@ -153,13 +153,13 @@ export function EmbudoClientes() {
     const prestamos = prestamosData?.data || []
 
     // Combinar clientes de la API con clientes agregados manualmente
-    // Si un cliente estÃ¡ en clientesEnEmbudo, usar esa versiÃ³n (tiene estado actualizado)
+    // Si un cliente está en clientesEnEmbudo, usar esa versión (tiene estado actualizado)
     const todosClientes = clientesData.data.map(cliente => {
       const clienteActualizado = clientesEnEmbudo.get(cliente.id)
       return clienteActualizado || cliente
     })
 
-    // Agregar clientes que no estÃ¡n en la API pero sÃ­ en clientesEnEmbudo
+    // Agregar clientes que no están en la API pero sí en clientesEnEmbudo
     clientesEnEmbudo.forEach((cliente) => {
       if (!todosClientes.find(c => c.id === cliente.id)) {
         todosClientes.push(cliente)
@@ -167,14 +167,14 @@ export function EmbudoClientes() {
     })
 
     return todosClientes.map(cliente => {
-      // Buscar prÃ©stamos del cliente
+      // Buscar préstamos del cliente
       const prestamosCliente = prestamos.filter(p => p.cliente_id === cliente.id)
       const tienePrestamos = prestamosCliente.length > 0
 
-      // Verificar si los prÃ©stamos estÃ¡n al dÃ­a:
+      // Verificar si los préstamos están al día:
       // - El cliente debe estar ACTIVO
-      // - No debe tener dÃ­as de mora (dias_mora === 0)
-      // - Los prÃ©stamos deben estar APROBADOS (no en revisiÃ³n o rechazados)
+      // - No debe tener días de mora (dias_mora === 0)
+      // - Los préstamos deben estar APROBADOS (no en revisión o rechazados)
       const prestamosAlDia = tienePrestamos &&
         cliente.estado === 'ACTIVO' &&
         cliente.dias_mora === 0 &&
@@ -221,7 +221,7 @@ export function EmbudoClientes() {
     }))
   }, [clientesFiltrados])
 
-  // EstadÃ­sticas basadas en los embudos (deben coincidir exactamente)
+  // Estadísticas basadas en los embudos (deben coincidir exactamente)
   const estadisticas = useMemo(() => {
     // Usar los mismos datos que clientesPorEstado para garantizar coincidencia
     const prospectos = clientesPorEstado.find(e => e.id === 'prospecto')?.count || 0
@@ -242,7 +242,7 @@ export function EmbudoClientes() {
 
   const handleAgregarCliente = (cliente: Cliente) => {
     setClientesEnEmbudo(prev => new Map(prev).set(cliente.id, cliente))
-    // Asignar automÃ¡ticamente al embudo "agregar_otro"
+    // Asignar automáticamente al embudo "agregar_otro"
     setEstadosManuales(prev => {
       const nuevo = new Map(prev)
       nuevo.set(cliente.id, 'agregar_otro')
@@ -274,7 +274,7 @@ export function EmbudoClientes() {
     setColumnaDestino(null)
   }
 
-  // FunciÃ³n auxiliar para mapear estado del embudo al estado del cliente en BD
+  // Función auxiliar para mapear estado del embudo al estado del cliente en BD
   // Retorna el nuevo estado o null si no debe cambiar
   const mapearEstadoEmbudoACliente = (
     estadoEmbudo: string,
@@ -285,16 +285,16 @@ export function EmbudoClientes() {
       case 'prospecto':
         return 'ACTIVO'
       case 'evaluacion':
-        // Si el cliente tiene prÃ©stamos en aprobaciÃ³n de riesgo, mantener ACTIVO
-        // Solo cambiar a MORA si realmente estÃ¡ en mora
+        // Si el cliente tiene préstamos en aprobación de riesgo, mantener ACTIVO
+        // Solo cambiar a MORA si realmente está en mora
         const tienePrestamosEnRiesgo = prestamosCliente.some(p =>
           p.estado === 'EN_REVISION' || p.estado === 'DRAFT'
         )
         if (tienePrestamosEnRiesgo) {
-          // Mantener ACTIVO si estÃ¡ en aprobaciÃ³n de riesgo
+          // Mantener ACTIVO si está en aprobación de riesgo
           return cliente.estado === 'ACTIVO' ? null : 'ACTIVO'
         }
-        // Si no estÃ¡ en aprobaciÃ³n de riesgo, puede ser MORA
+        // Si no está en aprobación de riesgo, puede ser MORA
         return 'MORA'
       case 'aprobado':
         return 'FINALIZADO'
@@ -314,11 +314,11 @@ export function EmbudoClientes() {
       // Buscar el cliente en la lista de clientes del embudo
       const cliente = clientesEmbudo.find(c => c.id === clienteArrastrando)
       if (cliente && cliente.cliente) {
-        // Obtener prÃ©stamos del cliente para la lÃ³gica de mapeo
+        // Obtener préstamos del cliente para la lógica de mapeo
         const prestamos = prestamosData?.data || []
         const prestamosCliente = prestamos.filter(p => p.cliente_id === cliente.id)
 
-        // Guardar el estado manual del embudo (esto tiene prioridad sobre el cÃ¡lculo automÃ¡tico)
+        // Guardar el estado manual del embudo (esto tiene prioridad sobre el cálculo automático)
         setEstadosManuales(prev => {
           const nuevo = new Map(prev)
           nuevo.set(cliente.id, estadoDestino)
@@ -332,7 +332,7 @@ export function EmbudoClientes() {
           prestamosCliente
         )
 
-        // Si hay un nuevo estado vÃ¡lido y es diferente al actual, actualizar en BD
+        // Si hay un nuevo estado válido y es diferente al actual, actualizar en BD
         if (nuevoEstadoCliente && nuevoEstadoCliente !== cliente.cliente.estado) {
           try {
             // Actualizar estado en la base de datos
@@ -365,7 +365,7 @@ export function EmbudoClientes() {
         } else {
           // Si no hay cambio de estado o es null, solo actualizar el estado manual del embudo
           // (ya se hizo arriba con setEstadosManuales)
-          // Actualizar tambiÃ©n en clientesEnEmbudo para mantener consistencia
+          // Actualizar también en clientesEnEmbudo para mantener consistencia
           setClientesEnEmbudo(prev => {
             const nuevo = new Map(prev)
             nuevo.set(cliente.id, cliente.cliente)
@@ -397,7 +397,7 @@ export function EmbudoClientes() {
             Venta Servicios
           </h2>
           <p className="text-gray-600 mt-1 text-sm">
-            GestiÃ³n de ventas y servicios
+            Gestión de ventas y servicios
           </p>
         </div>
         <div className="flex gap-2">
@@ -420,7 +420,7 @@ export function EmbudoClientes() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <Input
-                  placeholder="Buscar por nombre, cÃ©dula o telÃ©fono..."
+                  placeholder="Buscar por nombre, cédula o teléfono..."
                   value={searchCliente}
                   onChange={(e) => setSearchCliente(e.target.value)}
                   className="pl-10"
@@ -449,7 +449,7 @@ export function EmbudoClientes() {
                         <div className="flex items-center justify-between">
                           <div>
                             <h3 className="font-semibold">{cliente.nombres || 'Sin nombre'}</h3>
-                            <p className="text-sm text-gray-500">CÃ©dula: {cliente.cedula}</p>
+                            <p className="text-sm text-gray-500">Cédula: {cliente.cedula}</p>
                             {cliente.telefono && (
                               <p className="text-sm text-gray-500">Tel: {cliente.telefono}</p>
                             )}
@@ -470,7 +470,7 @@ export function EmbudoClientes() {
         </div>
       </motion.div>
 
-      {/* EstadÃ­sticas - Deben coincidir exactamente con los embudos */}
+      {/* Estadísticas - Deben coincidir exactamente con los embudos */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <Card>
           <CardContent className="pt-6">
@@ -507,7 +507,7 @@ export function EmbudoClientes() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <Input
-                  placeholder="Buscar por nombre, cÃ©dula, telÃ©fono o concesionario..."
+                  placeholder="Buscar por nombre, cédula, teléfono o concesionario..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
@@ -590,7 +590,7 @@ export function EmbudoClientes() {
                                         <Menu className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
                                         <div className="flex-1 min-w-0">
                                           <h3 className="font-semibold text-gray-900 text-sm">{cliente.nombre}</h3>
-                                          <p className="text-xs text-gray-500 mt-1">CÃ©dula: {cliente.cedula}</p>
+                                          <p className="text-xs text-gray-500 mt-1">Cédula: {cliente.cedula}</p>
                                         </div>
                                       </div>
                                       <div className="flex gap-1">
@@ -665,7 +665,7 @@ export function EmbudoClientes() {
                           columnaDestino === columna.id ? 'border-blue-400 bg-blue-50/50' : 'border-gray-300'
                         } transition-all`}>
                           <AlertCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                          <p className="text-xs">Suelta aquÃ­ para mover</p>
+                          <p className="text-xs">Suelta aquí para mover</p>
                         </div>
                       ) : (
                         columna.clientes.map((cliente) => (
@@ -691,7 +691,7 @@ export function EmbudoClientes() {
                                   <Menu className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
                                   <div className="flex-1 min-w-0">
                                     <h3 className="font-semibold text-gray-900 text-sm">{cliente.nombre}</h3>
-                                    <p className="text-xs text-gray-500 mt-1">CÃ©dula: {cliente.cedula}</p>
+                                    <p className="text-xs text-gray-500 mt-1">Cédula: {cliente.cedula}</p>
                                   </div>
                                 </div>
                                 <div className="flex gap-1">

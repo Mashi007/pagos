@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { concesionarioService, Concesionario, ConcesionarioCreate, ConcesionarioUpdate } from '../services/concesionarioService'
 import toast from 'react-hot-toast'
 
-// Constantes de configuraciÃ³n
+// Constantes de configuración
 const STALE_TIME_MEDIUM = 5 * 60 * 1000 // 5 minutos
 const STALE_TIME_LONG = 10 * 60 * 1000 // 10 minutos
 const RETRY_COUNT = 3
@@ -39,7 +39,7 @@ export function useConcesionariosActivos() {
         return await concesionarioService.listarConcesionariosActivos()
       } catch (error) {
         console.error('Error obteniendo concesionarios activos:', error)
-        return [] // Devolver array vacÃ­o en caso de error
+        return [] // Devolver array vacío en caso de error
       }
     },
     staleTime: STALE_TIME_LONG,
@@ -48,7 +48,7 @@ export function useConcesionariosActivos() {
   })
 }
 
-// Hook para obtener un concesionario especÃ­fico
+// Hook para obtener un concesionario específico
 export function useConcesionario(id: number) {
   return useQuery({
     queryKey: concesionarioKeys.detail(id),
@@ -84,7 +84,7 @@ export function useUpdateConcesionario() {
     mutationFn: ({ id, data }: { id: number; data: ConcesionarioUpdate }) =>
       concesionarioService.actualizarConcesionario(id, data),
     onSuccess: (updatedConcesionario) => {
-      // Actualizar cache especÃ­fico
+      // Actualizar cache específico
       queryClient.setQueryData(
         concesionarioKeys.detail(updatedConcesionario.id),
         updatedConcesionario

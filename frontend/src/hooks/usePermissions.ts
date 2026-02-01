@@ -3,7 +3,7 @@ import { User } from '../types'
 
 /**
  * Hook para verificar permisos del usuario actual
- * Basado en el rol (is_admin) y estado del prÃ©stamo
+ * Basado en el rol (is_admin) y estado del préstamo
  */
 export function usePermissions() {
   const { user } = useSimpleAuth()
@@ -16,8 +16,8 @@ export function usePermissions() {
   }
 
   /**
-   * Verifica si el usuario puede editar un prÃ©stamo
-   * - USER: Solo puede editar si el prÃ©stamo estÃ¡ en DRAFT
+   * Verifica si el usuario puede editar un préstamo
+   * - USER: Solo puede editar si el préstamo está en DRAFT
    * - ADMIN: Puede editar siempre
    */
   const canEditPrestamo = (prestamoEstado: string): boolean => {
@@ -31,7 +31,7 @@ export function usePermissions() {
   }
 
   /**
-   * Verifica si el usuario puede aprobar/rechazar prÃ©stamos
+   * Verifica si el usuario puede aprobar/rechazar préstamos
    * - Solo ADMIN puede aprobar/rechazar
    */
   const canApprovePrestamo = (): boolean => {
@@ -39,7 +39,7 @@ export function usePermissions() {
   }
 
   /**
-   * Verifica si el usuario puede eliminar prÃ©stamos
+   * Verifica si el usuario puede eliminar préstamos
    * - Solo ADMIN puede eliminar
    */
   const canDeletePrestamo = (): boolean => {
@@ -47,7 +47,7 @@ export function usePermissions() {
   }
 
   /**
-   * Verifica si el usuario puede ver evaluaciÃ³n de riesgo
+   * Verifica si el usuario puede ver evaluación de riesgo
    * - Solo ADMIN puede ver
    */
   const canViewEvaluacionRiesgo = (): boolean => {
@@ -63,7 +63,7 @@ export function usePermissions() {
   }
 
   /**
-   * Obtiene los estados permitidos para cambiar segÃºn el rol
+   * Obtiene los estados permitidos para cambiar según el rol
    */
   const getAllowedStates = (currentState: string): string[] => {
     if (isAdmin()) {
@@ -80,7 +80,7 @@ export function usePermissions() {
   }
 
   /**
-   * Verifica si el usuario puede cambiar el estado del prÃ©stamo
+   * Verifica si el usuario puede cambiar el estado del préstamo
    */
   const canChangeState = (currentState: string, newState: string): boolean => {
     const allowedStates = getAllowedStates(currentState)

@@ -47,13 +47,13 @@ export function PagosList() {
   const { data, isLoading, error, isError } = useQuery({
     queryKey: ['pagos', page, perPage, filters],
     queryFn: () => pagoService.getAllPagos(page, perPage, filters),
-    staleTime: 0, // Siempre refetch cuando se invalida (mejor para actualizaciÃ³n inmediata)
+    staleTime: 0, // Siempre refetch cuando se invalida (mejor para actualización inmediata)
     refetchOnMount: true, // Refetch cuando el componente se monta
     refetchOnWindowFocus: false, // No refetch en focus (evita requests innecesarios)
   })
 
   const handleFilterChange = (key: string, value: string) => {
-    // Convertir "all" a cadena vacÃ­a para que el servicio no incluya el filtro
+    // Convertir "all" a cadena vacía para que el servicio no incluya el filtro
     const filterValue = value === 'all' ? '' : value
     setFilters(prev => ({ ...prev, [key]: filterValue }))
     setPage(1)
@@ -101,8 +101,8 @@ export function PagosList() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">MÃ³dulo de Pagos</h1>
-          <p className="text-gray-500 mt-1">GestiÃ³n de pagos de clientes</p>
+          <h1 className="text-3xl font-bold text-gray-900">Módulo de Pagos</h1>
+          <p className="text-gray-500 mt-1">Gestión de pagos de clientes</p>
         </div>
         <div className="flex gap-3">
           <CargaMasivaMenu
@@ -110,7 +110,7 @@ export function PagosList() {
               try {
                 // Invalidar todas las queries relacionadas con pagos
                 await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
-                await queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false }) // âœ… Invalidar KPIs especÃ­ficamente
+                await queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false }) // âœ… Invalidar KPIs específicamente
                 await queryClient.invalidateQueries({ queryKey: ['kpis'], exact: false })
                 await queryClient.invalidateQueries({ queryKey: ['dashboard'], exact: false })
                 await queryClient.invalidateQueries({ queryKey: ['pagos-ultimos'], exact: false })
@@ -138,13 +138,13 @@ export function PagosList() {
         </div>
       </div>
 
-      {/* Advertencia sobre formato cientÃ­fico */}
+      {/* Advertencia sobre formato científico */}
       <AdvertenciaFormatoCientifico />
 
       {/* KPIs de Pagos */}
       <PagosKPIsNuevo />
 
-      {/* PestaÃ±as */}
+      {/* Pestañas */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="mb-4">
           <TabsTrigger value="todos">Todos los Pagos</TabsTrigger>
@@ -158,13 +158,13 @@ export function PagosList() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Filter className="w-5 h-5" />
-                Filtros de BÃºsqueda
+                Filtros de Búsqueda
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                 <Input
-                  placeholder="CÃ©dula de identidad"
+                  placeholder="Cédula de identidad"
                   value={filters.cedula}
                   onChange={e => handleFilterChange('cedula', e.target.value)}
                 />
@@ -255,14 +255,14 @@ export function PagosList() {
               ) : (
                 <>
                   <div className="mb-4 text-sm text-gray-600">
-                    Mostrando {data.pagos.length} de {data.total} pagos (PÃ¡gina {data.page} de {data.total_pages})
+                    Mostrando {data.pagos.length} de {data.total} pagos (Página {data.page} de {data.total_pages})
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead>
                         <tr className="border-b">
                           <th className="px-4 py-3 text-left">ID</th>
-                          <th className="px-4 py-3 text-left">CÃ©dula</th>
+                          <th className="px-4 py-3 text-left">Cédula</th>
                           <th className="px-4 py-3 text-left">Estado</th>
                           <th className="px-4 py-3 text-center">Cuotas Atrasadas</th>
                           <th className="px-4 py-3 text-left">Monto</th>
@@ -311,7 +311,7 @@ export function PagosList() {
                                   title="Eliminar Pago"
                                   className="text-red-600 hover:text-red-700 hover:bg-red-50"
                                   onClick={async () => {
-                                    if (window.confirm(`Â¿EstÃ¡s seguro de eliminar el pago ID ${pago.id}?`)) {
+                                    if (window.confirm(`¿Estás seguro de eliminar el pago ID ${pago.id}?`)) {
                                       try {
                                         await pagoService.deletePago(pago.id)
                                         toast.success('Pago eliminado exitosamente')
@@ -332,7 +332,7 @@ export function PagosList() {
                       </tbody>
                     </table>
                   </div>
-                  {/* PaginaciÃ³n */}
+                  {/* Paginación */}
                   {data.total_pages > 1 && (
                     <div className="flex justify-between items-center mt-4">
                       <Button
@@ -343,7 +343,7 @@ export function PagosList() {
                         Anterior
                       </Button>
                       <span className="text-sm text-gray-600">
-                        PÃ¡gina {data.page} de {data.total_pages}
+                        Página {data.page} de {data.total_pages}
                       </span>
                       <Button
                         variant="outline"
@@ -386,7 +386,7 @@ export function PagosList() {
             setPagoEditando(null)
           }}
           onSuccess={async () => {
-            console.log('ðŸ”„ onSuccess llamado - Iniciando actualizaciÃ³n de dashboard...')
+            console.log('ðŸ”„ onSuccess llamado - Iniciando actualización de dashboard...')
             setShowRegistrarPago(false)
             setPagoEditando(null)
 
@@ -397,25 +397,25 @@ export function PagosList() {
 
               // Invalidar queries de KPIs y dashboard que puedan depender de pagos
               console.log('ðŸ”€ Invalidando queries de KPIs y dashboard...')
-              await queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false }) // âœ… Invalidar especÃ­ficamente pagos-kpis
+              await queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false }) // âœ… Invalidar específicamente pagos-kpis
               await queryClient.invalidateQueries({ queryKey: ['kpis'], exact: false })
               await queryClient.invalidateQueries({ queryKey: ['dashboard'], exact: false })
 
-              // Invalidar tambiÃ©n la query de Ãºltimos pagos (resumen)
+              // Invalidar también la query de últimos pagos (resumen)
               await queryClient.invalidateQueries({ queryKey: ['pagos-ultimos'], exact: false })
 
-              // Refetch inmediato de KPIs para actualizaciÃ³n en tiempo real
+              // Refetch inmediato de KPIs para actualización en tiempo real
               await queryClient.refetchQueries({ queryKey: ['pagos-kpis'], exact: false })
 
               // Refetch de todas las queries relacionadas con pagos (no solo activas)
-              // Esto asegura que las queries se actualicen incluso si no estÃ¡n montadas
+              // Esto asegura que las queries se actualicen incluso si no están montadas
               console.log('ðŸ” Ejecutando refetch de queries de pagos...')
               const refetchResult = await queryClient.refetchQueries({
                 queryKey: ['pagos'],
                 exact: false
               })
 
-              // Refetch tambiÃ©n de queries activas para actualizaciÃ³n inmediata
+              // Refetch también de queries activas para actualización inmediata
               const activeRefetchResult = await queryClient.refetchQueries({
                 queryKey: ['pagos'],
                 exact: false,

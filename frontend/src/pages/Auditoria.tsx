@@ -29,15 +29,15 @@ export function Auditoria() {
     orden: 'desc'
   })
 
-  // Cargar auditorÃ­a cuando cambian los filtros o la pÃ¡gina
+  // Cargar auditoría cuando cambian los filtros o la página
   useEffect(() => {
     cargarAuditoria()
-    // Actualizar estadÃ­sticas cuando se recarga la lista
+    // Actualizar estadísticas cuando se recarga la lista
     cargarEstadisticas()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, filtros.usuario_email, filtros.modulo, filtros.accion, filtros.fecha_desde, filtros.fecha_hasta, filtros.ordenar_por, filtros.orden])
 
-  // Cargar estadÃ­sticas al montar y luego con polling mÃ¡s frecuente
+  // Cargar estadísticas al montar y luego con polling más frecuente
   useEffect(() => {
     cargarEstadisticas()
 
@@ -78,14 +78,14 @@ export function Auditoria() {
         setAuditorias([])
         setTotal(response.total || 0)
         if (response.total === 0) {
-          console.warn('âš ï¸ No hay registros de auditorÃ­a en la base de datos')
+          console.warn('âš ï¸ No hay registros de auditoría en la base de datos')
         }
       }
     } catch (err: any) {
       console.error('âŒ Error API:', err)
-      const errorMessage = err?.response?.data?.detail || err?.message || 'Error al cargar auditorÃ­a'
+      const errorMessage = err?.response?.data?.detail || err?.message || 'Error al cargar auditoría'
       setError(errorMessage)
-      toast.error(`Error al cargar auditorÃ­a: ${errorMessage}`)
+      toast.error(`Error al cargar auditoría: ${errorMessage}`)
       setAuditorias([])
       setTotal(0)
     } finally {
@@ -95,16 +95,16 @@ export function Auditoria() {
 
   const cargarEstadisticas = async (mostrarToast = false) => {
     try {
-      console.log('ðŸ“Š Cargando estadÃ­sticas de auditorÃ­a...')
+      console.log('ðŸ“Š Cargando estadísticas de auditoría...')
       const response = await auditoriaService.obtenerEstadisticas()
-      console.log('âœ… EstadÃ­sticas recibidas:', response)
+      console.log('âœ… Estadísticas recibidas:', response)
       setStats(response)
       if (mostrarToast) {
         toast.success('âœ… KPIs actualizados correctamente')
       }
     } catch (err: any) {
-      console.error('âŒ Error cargando estadÃ­sticas:', err)
-      const errorMessage = err?.response?.data?.detail || err?.message || 'Error al cargar estadÃ­sticas'
+      console.error('âŒ Error cargando estadísticas:', err)
+      const errorMessage = err?.response?.data?.detail || err?.message || 'Error al cargar estadísticas'
       console.error('âŒ Detalles del error:', errorMessage)
       // Establecer valores por defecto en caso de error
       setStats({
@@ -149,9 +149,9 @@ export function Auditoria() {
         fecha_hasta: filtros.fecha_hasta || undefined,
       }
       await auditoriaService.descargarExcel(paramsExport)
-      toast.success('âœ… AuditorÃ­a exportada exitosamente')
+      toast.success('âœ… Auditoría exportada exitosamente')
     } catch (err) {
-      toast.error('âŒ Error al exportar auditorÃ­a')
+      toast.error('âŒ Error al exportar auditoría')
       console.error('Error:', err)
     }
   }
@@ -190,7 +190,7 @@ export function Auditoria() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">AuditorÃ­a del Sistema</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Auditoría del Sistema</h1>
           <p className="text-gray-500 mt-1">
             Seguimiento completo de todas las acciones realizadas
           </p>
@@ -200,7 +200,7 @@ export function Auditoria() {
             onClick={() => cargarEstadisticas(true)}
             variant="outline"
             disabled={loading}
-            title="Actualizar estadÃ­sticas"
+            title="Actualizar estadísticas"
           >
             <Activity className="w-4 h-4 mr-2" />
             Actualizar KPIs
@@ -223,7 +223,7 @@ export function Auditoria() {
                   {stats ? stats.total_acciones.toLocaleString() : '0'}
                 </p>
                 <p className="text-xs text-gray-400 mt-1">
-                  Registros histÃ³ricos
+                  Registros históricos
                 </p>
               </div>
               <Activity className="w-8 h-8 text-blue-600" />
@@ -257,7 +257,7 @@ export function Auditoria() {
                   {stats ? stats.acciones_esta_semana.toLocaleString() : '0'}
                 </p>
                 <p className="text-xs text-gray-400 mt-1">
-                  Ãšltimos 7 dÃ­as
+                  Ãšltimos 7 días
                 </p>
               </div>
               <BarChart3 className="w-8 h-8 text-blue-600" />
@@ -274,7 +274,7 @@ export function Auditoria() {
                   {stats ? stats.acciones_este_mes.toLocaleString() : '0'}
                 </p>
                 <p className="text-xs text-gray-400 mt-1">
-                  Ãšltimos 30 dÃ­as
+                  Ãšltimos 30 días
                 </p>
               </div>
               <Shield className="w-8 h-8 text-purple-600" />
@@ -288,7 +288,7 @@ export function Auditoria() {
         <CardHeader>
           <CardTitle className="flex items-center">
             <Filter className="w-5 h-5 mr-2" />
-            Filtros de BÃºsqueda
+            Filtros de Búsqueda
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -303,30 +303,30 @@ export function Auditoria() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">MÃ³dulo</label>
+              <label className="block text-sm font-medium mb-1">Módulo</label>
               <Select value={filtros.modulo} onValueChange={(value) => setFiltros({ ...filtros, modulo: value })}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar mÃ³dulo" />
+                  <SelectValue placeholder="Seleccionar módulo" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ALL">Todos los mÃ³dulos</SelectItem>
+                  <SelectItem value="ALL">Todos los módulos</SelectItem>
                   <SelectItem value="USUARIOS">Usuarios</SelectItem>
                   <SelectItem value="CLIENTES">Clientes</SelectItem>
-                  <SelectItem value="PRESTAMOS">PrÃ©stamos</SelectItem>
+                  <SelectItem value="PRESTAMOS">Préstamos</SelectItem>
                   <SelectItem value="PAGOS">Pagos</SelectItem>
                   <SelectItem value="COBRANZAS">Cobranzas</SelectItem>
                   <SelectItem value="REPORTES">Reportes</SelectItem>
-                  <SelectItem value="AUDITORIA">AuditorÃ­a</SelectItem>
-                  <SelectItem value="CONFIGURACION">ConfiguraciÃ³n</SelectItem>
+                  <SelectItem value="AUDITORIA">Auditoría</SelectItem>
+                  <SelectItem value="CONFIGURACION">Configuración</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">AcciÃ³n</label>
+              <label className="block text-sm font-medium mb-1">Acción</label>
               <Select value={filtros.accion} onValueChange={(value) => setFiltros({ ...filtros, accion: value })}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar acciÃ³n" />
+                  <SelectValue placeholder="Seleccionar acción" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">Todas las acciones</SelectItem>
@@ -383,10 +383,10 @@ export function Auditoria() {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[180px]">Email Usuario</TableHead>
-                <TableHead className="w-[120px]">AcciÃ³n</TableHead>
-                <TableHead className="w-[120px]">MÃ³dulo</TableHead>
+                <TableHead className="w-[120px]">Acción</TableHead>
+                <TableHead className="w-[120px]">Módulo</TableHead>
                 <TableHead className="w-[140px]">Campo</TableHead>
-                <TableHead className="min-w-[200px]">DescripciÃ³n</TableHead>
+                <TableHead className="min-w-[200px]">Descripción</TableHead>
                 <TableHead className="w-[110px]">Resultado</TableHead>
                 <TableHead className="w-[160px]">Fecha</TableHead>
               </TableRow>
@@ -396,7 +396,7 @@ export function Auditoria() {
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-8">
                     <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
-                    <p className="text-gray-500">Cargando auditorÃ­a...</p>
+                    <p className="text-gray-500">Cargando auditoría...</p>
                   </TableCell>
                 </TableRow>
               ) : error ? (
@@ -411,7 +411,7 @@ export function Auditoria() {
               ) : auditorias.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-8">
-                    <p className="text-gray-500">No se encontraron registros de auditorÃ­a</p>
+                    <p className="text-gray-500">No se encontraron registros de auditoría</p>
                   </TableCell>
                 </TableRow>
               ) : (
@@ -459,7 +459,7 @@ export function Auditoria() {
             </TableBody>
           </Table>
 
-          {/* PaginaciÃ³n */}
+          {/* Paginación */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between mt-4">
               <p className="text-sm text-gray-500">
@@ -475,7 +475,7 @@ export function Auditoria() {
                   Anterior
                 </Button>
                 <span className="px-3 py-1 text-sm">
-                  PÃ¡gina {currentPage} de {totalPages}
+                  Página {currentPage} de {totalPages}
                 </span>
                 <Button
                   variant="outline"

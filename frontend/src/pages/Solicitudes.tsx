@@ -13,7 +13,7 @@ export function Solicitudes() {
   const solicitudes = [
     {
       id: 1,
-      cliente: 'Juan PÃ©rez',
+      cliente: 'Juan Pérez',
       cedula: 'V12345678',
       tipo: 'PRESTAMO',
       monto: 25000,
@@ -22,7 +22,7 @@ export function Solicitudes() {
     },
     {
       id: 2,
-      cliente: 'MarÃ­a GarcÃ­a',
+      cliente: 'María García',
       cedula: 'V23456789',
       tipo: 'AMPLIACION',
       monto: 15000,
@@ -45,7 +45,7 @@ export function Solicitudes() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Solicitudes</h1>
-          <p className="text-gray-500 mt-1">GestiÃ³n de solicitudes de prÃ©stamos</p>
+          <p className="text-gray-500 mt-1">Gestión de solicitudes de préstamos</p>
         </div>
       </div>
 

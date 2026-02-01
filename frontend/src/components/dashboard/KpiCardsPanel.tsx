@@ -80,7 +80,7 @@ export function KpiCardsPanel({ filtros }: KpiCardsPanelProps) {
   return (
     <div className="space-y-4">
       <KpiCard
-        title="Total PrÃ©stamos"
+        title="Total Préstamos"
         value={kpisData.total_prestamos?.valor_actual ?? 0}
         variationPercent={kpisData.total_prestamos?.variacion_porcentual ?? 0}
         variationAbs={kpisData.total_prestamos?.variacion_absoluta ?? 0}
@@ -88,7 +88,7 @@ export function KpiCardsPanel({ filtros }: KpiCardsPanelProps) {
         icon={DollarSign}
       />
       <KpiCard
-        title="CrÃ©ditos Nuevos en el Mes"
+        title="Créditos Nuevos en el Mes"
         value={kpisData.creditos_nuevos_mes?.valor_actual ?? 0}
         variationPercent={kpisData.creditos_nuevos_mes?.variacion_porcentual ?? 0}
         variationAbs={kpisData.creditos_nuevos_mes?.variacion_absoluta ?? 0}
@@ -104,7 +104,7 @@ export function KpiCardsPanel({ filtros }: KpiCardsPanelProps) {
         icon={Users}
       />
       <KpiCard
-        title="Total Morosidad en DÃ³lares"
+        title="Total Morosidad en Dólares"
         value={kpisData.total_morosidad_usd?.valor_actual ?? 0}
         variationPercent={kpisData.total_morosidad_usd?.variacion_porcentual ?? 0}
         variationAbs={kpisData.total_morosidad_usd?.variacion_absoluta ?? 0}

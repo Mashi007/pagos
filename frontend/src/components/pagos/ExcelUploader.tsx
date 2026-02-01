@@ -19,12 +19,12 @@ export function ExcelUploader({ onClose, onSuccess }: ExcelUploaderProps) {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
     if (selectedFile) {
-      // âœ… VALIDACIÃ“N DE SEGURIDAD: Validar archivo antes de aceptarlo
+      // âœ… VALIDACIÓN DE SEGURIDAD: Validar archivo antes de aceptarlo
       const { validateExcelFile } = await import('../../utils/excelValidation')
       const validation = validateExcelFile(selectedFile)
 
       if (!validation.isValid) {
-        toast.error(validation.error || 'Archivo invÃ¡lido')
+        toast.error(validation.error || 'Archivo inválido')
         return
       }
 
@@ -95,10 +95,10 @@ export function ExcelUploader({ onClose, onSuccess }: ExcelUploaderProps) {
                 <div className="space-y-3">
                   <h3 className="font-semibold text-lg">Formato del archivo Excel:</h3>
                   <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
-                    <li>CÃ©dula de Identidad</li>
+                    <li>Cédula de Identidad</li>
                     <li>Fecha de Pago</li>
                     <li>Monto Pagado</li>
-                    <li>NÃºmero de Documento</li>
+                    <li>Número de Documento</li>
                   </ul>
                   <p className="text-xs text-gray-500 mt-2">
                     El archivo debe contener estas columnas exactamente como se muestra.

@@ -18,7 +18,7 @@ export function ReportesPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Reportes</h1>
           <p className="text-muted-foreground">
-            GeneraciÃ³n de reportes y anÃ¡lisis
+            Generación de reportes y análisis
           </p>
         </div>
         <Badge variant="outline" className="text-sm">
@@ -35,14 +35,14 @@ export function ReportesPage() {
           <CardContent>
             <div className="text-center py-8">
               <div className="text-6xl mb-4">ðŸ“ˆ</div>
-              <h3 className="text-xl font-semibold mb-2">PÃ¡gina en Desarrollo</h3>
+              <h3 className="text-xl font-semibold mb-2">Página en Desarrollo</h3>
               <p className="text-muted-foreground mb-4">
-                Esta funcionalidad estÃ¡ siendo implementada y estarÃ¡ disponible prÃ³ximamente.
+                Esta funcionalidad está siendo implementada y estará disponible próximamente.
               </p>
               <div className="space-y-2 text-sm text-muted-foreground">
                 <p>â€¢ Reportes PDF</p>
-                <p>â€¢ AnÃ¡lisis de datos</p>
-                <p>â€¢ ExportaciÃ³n Excel</p>
+                <p>â€¢ Análisis de datos</p>
+                <p>â€¢ Exportación Excel</p>
               </div>
             </div>
           </CardContent>

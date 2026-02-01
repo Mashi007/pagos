@@ -68,7 +68,7 @@ const mapearEstadoConcesionario = (concesionario: Concesionario, prestamos: Pres
     return 'inactivo'
   }
 
-  // Si tiene prÃ©stamos aprobados, estÃ¡ activo
+  // Si tiene préstamos aprobados, está activo
   const prestamosAprobados = prestamos.filter(p =>
     p.concesionario === concesionario.nombre && p.estado === 'APROBADO'
   )
@@ -77,7 +77,7 @@ const mapearEstadoConcesionario = (concesionario: Concesionario, prestamos: Pres
     return 'activo'
   }
 
-  // Si tiene prÃ©stamos en revisiÃ³n o draft, estÃ¡ pendiente
+  // Si tiene préstamos en revisión o draft, está pendiente
   const prestamosPendientes = prestamos.filter(p =>
     p.concesionario === concesionario.nombre &&
     (p.estado === 'EN_REVISION' || p.estado === 'DRAFT')
@@ -87,11 +87,11 @@ const mapearEstadoConcesionario = (concesionario: Concesionario, prestamos: Pres
     return 'pendiente'
   }
 
-  // Si estÃ¡ activo pero sin prÃ©stamos, estÃ¡ pendiente
+  // Si está activo pero sin préstamos, está pendiente
   return 'pendiente'
 }
 
-// ConfiguraciÃ³n de campos de tarjetas
+// Configuración de campos de tarjetas
 interface CamposTarjetaConfig {
   mostrarNombre: boolean
   mostrarEstado: boolean
@@ -125,7 +125,7 @@ export function EmbudoConcesionarios() {
     activo: true
   })
 
-  // ConfiguraciÃ³n de campos de tarjetas
+  // Configuración de campos de tarjetas
   const [camposTarjeta, setCamposTarjeta] = useState<CamposTarjetaConfig>(() => {
     const saved = localStorage.getItem('embudo_concesionarios_campos')
     return saved ? JSON.parse(saved) : CAMPOS_DEFAULT
@@ -133,7 +133,7 @@ export function EmbudoConcesionarios() {
 
   const createConcesionarioMutation = useCreateConcesionario()
 
-  // Obtener concesionarios reales desde configuraciÃ³n/concesionarios
+  // Obtener concesionarios reales desde configuración/concesionarios
   const {
     data: concesionariosData,
     isLoading: isLoadingConcesionarios,
@@ -141,7 +141,7 @@ export function EmbudoConcesionarios() {
     refetch: refetchConcesionarios
   } = useConcesionarios({ limit: 1000 })
 
-  // Obtener todos los prÃ©stamos para calcular estadÃ­sticas
+  // Obtener todos los préstamos para calcular estadísticas
   const {
     data: prestamosData,
     isLoading: isLoadingPrestamos,
@@ -149,10 +149,10 @@ export function EmbudoConcesionarios() {
   } = usePrestamos(
     undefined,
     1,
-    1000 // Obtener muchos prÃ©stamos para anÃ¡lisis
+    1000 // Obtener muchos préstamos para análisis
   )
 
-  // Obtener todos los clientes para vincular con prÃ©stamos
+  // Obtener todos los clientes para vincular con préstamos
   const {
     data: clientesData,
     error: errorClientes
@@ -178,7 +178,7 @@ export function EmbudoConcesionarios() {
       return concesionarioActualizado || concesionario
     })
 
-    // Agregar concesionarios que no estÃ¡n en la API pero sÃ­ en concesionariosEnEmbudo
+    // Agregar concesionarios que no están en la API pero sí en concesionariosEnEmbudo
     concesionariosEnEmbudo.forEach((concesionario) => {
       if (!concesionariosAPI.find(c => c.id === concesionario.id)) {
         concesionariosAPI.push(concesionario)
@@ -188,7 +188,7 @@ export function EmbudoConcesionarios() {
     return concesionariosAPI
   }, [concesionarios, concesionariosEnEmbudo])
 
-  // Calcular estadÃ­sticas por concesionario
+  // Calcular estadísticas por concesionario
   const concesionariosConEstadisticas = useMemo(() => {
     return todosConcesionarios.map(concesionario => {
       const prestamosConcesionario = prestamos.filter(p =>
@@ -197,11 +197,11 @@ export function EmbudoConcesionarios() {
 
       const prestamosAprobados = prestamosConcesionario.filter(p => p.estado === 'APROBADO')
 
-      // Obtener clientes Ãºnicos de los prÃ©stamos
+      // Obtener clientes únicos de los préstamos
       const clientesIds = new Set(prestamosConcesionario.map(p => p.cliente_id))
       const clientesAsignados = clientes.filter(c => clientesIds.has(c.id))
 
-      // Calcular monto total de prÃ©stamos aprobados
+      // Calcular monto total de préstamos aprobados
       const montoTotal = prestamosAprobados.reduce((sum, p) =>
         sum + Number(p.total_financiamiento || 0), 0
       )
@@ -239,7 +239,7 @@ export function EmbudoConcesionarios() {
     ? concesionariosConEstadisticas.filter(c => c.id === concesionarioSeleccionado)
     : concesionariosConEstadisticas
 
-  // Filtrar concesionarios (aplicar bÃºsqueda si no hay concesionario seleccionado)
+  // Filtrar concesionarios (aplicar búsqueda si no hay concesionario seleccionado)
   const concesionariosFiltrados = concesionariosParaMostrar.filter(concesionario => {
     if (concesionarioSeleccionado) {
       // Si hay un concesionario seleccionado, mostrar solo ese
@@ -251,7 +251,7 @@ export function EmbudoConcesionarios() {
     return matchSearch
   })
 
-  // BÃºsqueda de concesionarios para agregar
+  // Búsqueda de concesionarios para agregar
   const concesionariosBuscados = useMemo(() => {
     if (!searchConcesionario || searchConcesionario.length < 2) return []
     return concesionarios.filter(c =>
@@ -262,7 +262,7 @@ export function EmbudoConcesionarios() {
 
   const handleAgregarConcesionario = (concesionario: Concesionario) => {
     setConcesionariosEnEmbudo(prev => new Map(prev).set(concesionario.id, concesionario))
-    // Asignar automÃ¡ticamente al embudo "inactivo" (agregar otro)
+    // Asignar automáticamente al embudo "inactivo" (agregar otro)
     setEstadosManuales(prev => {
       const nuevo = new Map(prev)
       nuevo.set(concesionario.id, 'inactivo')
@@ -316,7 +316,7 @@ export function EmbudoConcesionarios() {
     }))
   }, [concesionariosFiltrados])
 
-  // EstadÃ­sticas basadas en los embudos (deben coincidir exactamente)
+  // Estadísticas basadas en los embudos (deben coincidir exactamente)
   const estadisticas = useMemo(() => {
     const concesionariosParaEstadisticas = concesionarioSeleccionado
       ? concesionariosConEstadisticas.filter(c => c.id === concesionarioSeleccionado)
@@ -340,11 +340,11 @@ export function EmbudoConcesionarios() {
     }
   }, [concesionariosConEstadisticas, concesionarioSeleccionado, concesionariosPorEstado])
 
-  // Clientes y prÃ©stamos del concesionario seleccionado
+  // Clientes y préstamos del concesionario seleccionado
   const clientesYprestamosDetalle = useMemo(() => {
     if (!concesionarioDetalle) return []
 
-    // Agrupar por cliente y mostrar sus prÃ©stamos
+    // Agrupar por cliente y mostrar sus préstamos
     const clientesMap = new Map<number, {
       cliente: typeof clientes[0]
       prestamos: Prestamo[]
@@ -410,7 +410,7 @@ export function EmbudoConcesionarios() {
             Seguimiento Concesionarios
           </h2>
           <p className="text-gray-600 mt-1 text-sm">
-            Seguimiento de concesionarios que gestionan ventas en base a crÃ©ditos
+            Seguimiento de concesionarios que gestionan ventas en base a créditos
           </p>
         </div>
         <div className="flex gap-2">
@@ -542,7 +542,7 @@ export function EmbudoConcesionarios() {
             </DialogContent>
           </Dialog>
 
-          {/* DiÃ¡logo de ConfiguraciÃ³n de Tarjetas */}
+          {/* Diálogo de Configuración de Tarjetas */}
           <Dialog open={showConfigDialog} onOpenChange={setShowConfigDialog}>
             <DialogContent className="max-w-md">
               <DialogHeader>
@@ -553,7 +553,7 @@ export function EmbudoConcesionarios() {
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <p className="text-sm text-gray-600">
-                  Selecciona quÃ© campos deseas mostrar en las tarjetas del embudo:
+                  Selecciona qué campos deseas mostrar en las tarjetas del embudo:
                 </p>
                 <div className="space-y-3">
                   <div className="flex items-center space-x-2">
@@ -617,7 +617,7 @@ export function EmbudoConcesionarios() {
                       className="rounded border-gray-300"
                     />
                     <Label htmlFor="mostrarPrestamos" className="cursor-pointer font-normal">
-                      PrÃ©stamos activos
+                      Préstamos activos
                     </Label>
                   </div>
                   <div className="flex items-center space-x-2">
@@ -673,7 +673,7 @@ export function EmbudoConcesionarios() {
         </div>
       </motion.div>
 
-      {/* EstadÃ­sticas - Deben coincidir exactamente con los embudos */}
+      {/* Estadísticas - Deben coincidir exactamente con los embudos */}
       <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-7 gap-4">
         <Card>
           <CardContent className="pt-6">
@@ -708,7 +708,7 @@ export function EmbudoConcesionarios() {
         <Card>
           <CardContent className="pt-6">
             <div className="text-2xl font-bold text-purple-600">{estadisticas.totalPrestamos}</div>
-            <p className="text-xs text-gray-600 mt-1">PrÃ©stamos Activos</p>
+            <p className="text-xs text-gray-600 mt-1">Préstamos Activos</p>
           </CardContent>
         </Card>
         <Card>
@@ -728,7 +728,7 @@ export function EmbudoConcesionarios() {
                 value={concesionarioSeleccionadoId || 'todos'}
                 onValueChange={(value) => {
                   setConcesionarioSeleccionadoId(value === 'todos' ? '' : value)
-                  setSearchTerm('') // Limpiar bÃºsqueda al seleccionar
+                  setSearchTerm('') // Limpiar búsqueda al seleccionar
                 }}
               >
                 <SelectTrigger className="w-full">
@@ -769,7 +769,7 @@ export function EmbudoConcesionarios() {
               <Building className="h-16 w-16 mx-auto mb-4 text-gray-400" />
               <h3 className="text-lg font-semibold text-gray-900 mb-2">No hay concesionarios</h3>
               <p className="text-sm text-gray-600 mb-4">
-                No se encontraron concesionarios en el sistema. Puedes crear uno nuevo desde la configuraciÃ³n.
+                No se encontraron concesionarios en el sistema. Puedes crear uno nuevo desde la configuración.
               </p>
               <Button onClick={() => navigate('/concesionarios')}>
                 <Plus className="h-4 w-4 mr-2" />
@@ -894,7 +894,7 @@ export function EmbudoConcesionarios() {
                                           <div className="text-sm font-bold text-blue-700">{concesionario.clientesAsignados}</div>
                                         </div>
                                         <div className="bg-purple-50 rounded p-2">
-                                          <div className="text-xs text-gray-600">PrÃ©stamos</div>
+                                          <div className="text-xs text-gray-600">Préstamos</div>
                                           <div className="text-sm font-bold text-purple-700">{concesionario.prestamosActivos}</div>
                                         </div>
                                       </div>
@@ -987,7 +987,7 @@ export function EmbudoConcesionarios() {
                                       )}
                                       {camposTarjeta.mostrarPrestamos && (
                                         <div className="bg-purple-50 rounded p-2">
-                                          <div className="text-xs text-gray-600">PrÃ©stamos</div>
+                                          <div className="text-xs text-gray-600">Préstamos</div>
                                           <div className="text-sm font-bold text-purple-700">{concesionario.prestamosActivos}</div>
                                         </div>
                                       )}
@@ -1018,7 +1018,7 @@ export function EmbudoConcesionarios() {
           </div>
         </div>
 
-        {/* Panel de Clientes y PrÃ©stamos del Concesionario Seleccionado */}
+        {/* Panel de Clientes y Préstamos del Concesionario Seleccionado */}
         {concesionarioDetalle && (
           <div className="lg:col-span-1">
             <Card className="h-full">
@@ -1027,7 +1027,7 @@ export function EmbudoConcesionarios() {
                   {concesionarioDetalle.nombre}
                 </CardTitle>
                 <CardDescription>
-                  {concesionarioDetalle.clientesAsignados} clientes, {concesionarioDetalle.prestamosActivos} prÃ©stamos activos
+                  {concesionarioDetalle.clientesAsignados} clientes, {concesionarioDetalle.prestamosActivos} préstamos activos
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3 max-h-[calc(100vh-400px)] overflow-y-auto">
@@ -1049,7 +1049,7 @@ export function EmbudoConcesionarios() {
                         <h4 className="font-medium text-sm text-gray-900">
                           {cliente.nombres || 'Sin nombre'}
                         </h4>
-                        <p className="text-xs text-gray-500 mt-1">CÃ©dula: {cliente.cedula}</p>
+                        <p className="text-xs text-gray-500 mt-1">Cédula: {cliente.cedula}</p>
                         {cliente.telefono && (
                           <p className="text-xs text-gray-500">Tel: {cliente.telefono}</p>
                         )}
@@ -1066,7 +1066,7 @@ export function EmbudoConcesionarios() {
 
                     <div className="space-y-2 mt-2 pt-2 border-t border-gray-200">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="text-gray-600">PrÃ©stamos:</span>
+                        <span className="text-gray-600">Préstamos:</span>
                         <Badge variant="outline" className="text-xs">
                           {prestamosCliente.length}
                         </Badge>
@@ -1076,7 +1076,7 @@ export function EmbudoConcesionarios() {
                         <div key={prestamo.id} className="bg-white rounded p-2 border border-gray-100">
                           <div className="flex items-center justify-between mb-1">
                             <span className="text-xs font-medium text-gray-700">
-                              PrÃ©stamo #{prestamo.id}
+                              Préstamo #{prestamo.id}
                             </span>
                             <Badge
                               variant="outline"

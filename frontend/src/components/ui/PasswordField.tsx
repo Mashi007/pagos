@@ -1,5 +1,5 @@
 /**
- * Componente reutilizable para campo de contraseÃ±a con funcionalidades avanzadas
+ * Componente reutilizable para campo de contraseña con funcionalidades avanzadas
  */
 import { Input } from '../../components/ui/input'
 import { Button } from '../../components/ui/button'
@@ -22,7 +22,7 @@ interface PasswordFieldProps {
 export const PasswordField = ({
   value,
   onChange,
-  placeholder = 'MÃ­nimo 8 caracteres',
+  placeholder = 'Mínimo 8 caracteres',
   required = false,
   minLength = 8,
   showGenerateButton = true,
@@ -43,7 +43,7 @@ export const PasswordField = ({
     onPasswordChange: onChange
   })
 
-  // Usar el valor del prop si estÃ¡ disponible, sino usar el del hook
+  // Usar el valor del prop si está disponible, sino usar el del hook
   const currentPassword = value || hookPassword
   const validation = validatePassword(currentPassword)
 
@@ -90,7 +90,7 @@ export const PasswordField = ({
             }}
             disabled={disabled}
             className="px-3"
-            title="Generar contraseÃ±a automÃ¡tica"
+            title="Generar contraseña automática"
           >
             <Key className="h-4 w-4" />
           </Button>
@@ -103,14 +103,14 @@ export const PasswordField = ({
             onClick={copyPassword}
             disabled={disabled}
             className="px-3"
-            title="Copiar contraseÃ±a"
+            title="Copiar contraseña"
           >
             <Copy className="h-4 w-4" />
           </Button>
         )}
       </div>
 
-      {/* Indicador de fortaleza de contraseÃ±a */}
+      {/* Indicador de fortaleza de contraseña */}
       {currentPassword && (
         <div className="space-y-1">
           <div className="flex items-center gap-2">
@@ -131,27 +131,27 @@ export const PasswordField = ({
               ))}
             </div>
             <span className="text-xs text-gray-500">
-              {validation.strength <= 2 ? 'DÃ©bil' :
+              {validation.strength <= 2 ? 'Débil' :
                validation.strength <= 3 ? 'Media' : 'Fuerte'}
             </span>
           </div>
 
-          {/* Requisitos de contraseÃ±a */}
+          {/* Requisitos de contraseña */}
           <div className="text-xs text-gray-500 space-y-0.5">
             <div className={validation.hasMinLength ? 'text-green-600' : ''}>
-              âœ“ MÃ­nimo 8 caracteres
+              âœ“ Mínimo 8 caracteres
             </div>
             <div className={validation.hasUppercase ? 'text-green-600' : ''}>
-              âœ“ Al menos una mayÃºscula
+              âœ“ Al menos una mayúscula
             </div>
             <div className={validation.hasLowercase ? 'text-green-600' : ''}>
-              âœ“ Al menos una minÃºscula
+              âœ“ Al menos una minúscula
             </div>
             <div className={validation.hasNumbers ? 'text-green-600' : ''}>
-              âœ“ Al menos un nÃºmero
+              âœ“ Al menos un número
             </div>
             <div className={validation.hasSymbols ? 'text-green-600' : ''}>
-              âœ“ Al menos un sÃ­mbolo
+              âœ“ Al menos un símbolo
             </div>
           </div>
         </div>

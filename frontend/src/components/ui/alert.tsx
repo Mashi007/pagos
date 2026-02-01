@@ -62,7 +62,7 @@ const AlertDescription = React.forwardRef<
 ))
 AlertDescription.displayName = "AlertDescription"
 
-// Componente de alerta con icono automÃ¡tico
+// Componente de alerta con icono automático
 interface AlertWithIconProps extends React.HTMLAttributes<HTMLDivElement>, VariantProps<typeof alertVariants> {
   title?: string
   description?: string

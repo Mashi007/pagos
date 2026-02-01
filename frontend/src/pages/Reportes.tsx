@@ -93,10 +93,10 @@ const tiposReporte = [
   { value: 'PRODUCTOS', label: 'Productos', icon: PieChart },
 ]
 
-// ValidaciÃ³n de cÃ©dula venezolana
+// Validación de cédula venezolana
 const validarCedula = (cedula: string): boolean => {
   if (!cedula || cedula.trim().length === 0) return false
-  // Formato: V/E/J/P/G seguido de 6-12 dÃ­gitos
+  // Formato: V/E/J/P/G seguido de 6-12 dígitos
   return /^[VEJPG]\d{6,12}$/i.test(cedula.trim())
 }
 
@@ -117,10 +117,10 @@ export function Reportes() {
   } = useQuery({
     queryKey: ['reportes-resumen'],
     queryFn: () => reporteService.getResumenDashboard(),
-    staleTime: 2 * 60 * 1000, // 2 minutos - datos mÃ¡s frescos
-    retry: 2, // Dos reintentos para asegurar conexiÃ³n
+    staleTime: 2 * 60 * 1000, // 2 minutos - datos más frescos
+    retry: 2, // Dos reintentos para asegurar conexión
     refetchOnWindowFocus: true, // Recargar cuando la ventana recupera el foco
-    refetchInterval: 5 * 60 * 1000, // Refrescar cada 5 minutos automÃ¡ticamente
+    refetchInterval: 5 * 60 * 1000, // Refrescar cada 5 minutos automáticamente
   })
 
   // Funciones para generar reportes
@@ -186,7 +186,7 @@ export function Reportes() {
         console.log('Reporte de productos:', reporte)
       } else {
         toast.dismiss()
-        toast.info(`GeneraciÃ³n de reporte ${tipo} prÃ³ximamente disponible`)
+        toast.info(`Generación de reporte ${tipo} próximamente disponible`)
       }
     } catch (error: unknown) {
       console.error('Error generando reporte:', error)
@@ -194,14 +194,14 @@ export function Reportes() {
       const errorMessage = getErrorMessage(error)
       const detail = getErrorDetail(error)
       
-      // Mensajes de error mÃ¡s amigables
+      // Mensajes de error más amigables
       let mensajeError = detail || errorMessage
       if (errorMessage?.includes('500') || errorMessage?.includes('Error del servidor')) {
         mensajeError = 'Error del servidor. Por favor, intente nuevamente en unos momentos.'
       } else if (errorMessage?.includes('404') || errorMessage?.includes('No se encontraron')) {
         mensajeError = 'No se encontraron datos para los filtros seleccionados.'
       } else if (errorMessage?.includes('timeout') || errorMessage?.includes('Timeout')) {
-        mensajeError = 'La operaciÃ³n estÃ¡ tomando demasiado tiempo. Por favor, intente con un rango de fechas mÃ¡s corto.'
+        mensajeError = 'La operación está tomando demasiado tiempo. Por favor, intente con un rango de fechas más corto.'
       } else if (!mensajeError) {
         mensajeError = `Error al generar reporte de ${tipo}. Por favor, contacte al soporte si el problema persiste.`
       }
@@ -228,7 +228,7 @@ export function Reportes() {
   const reportesProcesando = mockReportes.filter((r) => r.estado === 'PROCESANDO').length
   const totalDescargas = mockReportes.reduce((sum, r) => sum + r.descargas, 0)
 
-  // KPIs desde el backend - asegurar que sean nÃºmeros (validaciÃ³n robusta)
+  // KPIs desde el backend - asegurar que sean números (validación robusta)
   const kpiCartera = Number(resumenData?.cartera_activa ?? 0) || 0
   const kpiPrestamosMora = Number(resumenData?.prestamos_mora ?? 0) || 0
   const kpiTotalPrestamos = Number(resumenData?.total_prestamos ?? 0) || 0
@@ -293,7 +293,7 @@ export function Reportes() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">PrÃ©stamos en Mora</CardTitle>
+            <CardTitle className="text-sm font-medium">Préstamos en Mora</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -307,12 +307,12 @@ export function Reportes() {
             ) : (
               <div className="text-2xl font-bold text-red-600">{kpiPrestamosMora.toLocaleString()}</div>
             )}
-            <p className="text-xs text-muted-foreground">Requieren atenciÃ³n</p>
+            <p className="text-xs text-muted-foreground">Requieren atención</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total PrÃ©stamos</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Préstamos</CardTitle>
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -326,7 +326,7 @@ export function Reportes() {
             ) : (
               <div className="text-2xl font-bold">{kpiTotalPrestamos.toLocaleString()}</div>
             )}
-            <p className="text-xs text-muted-foreground">PrÃ©stamos activos</p>
+            <p className="text-xs text-muted-foreground">Préstamos activos</p>
           </CardContent>
         </Card>
         <Card>
@@ -352,7 +352,7 @@ export function Reportes() {
         </Card>
       </div>
 
-      {/* Tabla de AmortizaciÃ³n Completa */}
+      {/* Tabla de Amortización Completa */}
       <TablaAmortizacionCompleta />
 
       {/* Generate Report Section */}
@@ -361,7 +361,7 @@ export function Reportes() {
           <CardTitle className="flex items-center">
             <RefreshCw className="mr-2 h-5 w-5" /> Generar Nuevo Reporte
           </CardTitle>
-          <CardDescription>Selecciona el tipo de reporte y configuraciÃ³n para generar.</CardDescription>
+          <CardDescription>Selecciona el tipo de reporte y configuración para generar.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -380,7 +380,7 @@ export function Reportes() {
                     if (isDisponible && !isGenerando) {
                       generarReporte(tipo.value, 'excel')
                     } else if (!isDisponible) {
-                      toast.info(`El reporte de ${tipo.label} estarÃ¡ disponible prÃ³ximamente`)
+                      toast.info(`El reporte de ${tipo.label} estará disponible próximamente`)
                     }
                   }}
                 >
@@ -422,7 +422,7 @@ export function Reportes() {
                   <SelectItem value="dia">Hoy</SelectItem>
                   <SelectItem value="semana">Esta semana</SelectItem>
                   <SelectItem value="mes">Este mes</SelectItem>
-                  <SelectItem value="aÃ±o">Este aÃ±o</SelectItem>
+                  <SelectItem value="año">Este año</SelectItem>
                 </SelectContent>
               </Select>
               <Button variant="outline" size="sm">
@@ -435,7 +435,7 @@ export function Reportes() {
         <CardContent>
           <div className="flex items-center gap-4 mb-4">
             <Input
-              placeholder="Buscar por nombre, descripciÃ³n o ID..."
+              placeholder="Buscar por nombre, descripción o ID..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="max-w-sm"
@@ -474,10 +474,10 @@ export function Reportes() {
                 <TableHead>ID</TableHead>
                 <TableHead>Nombre</TableHead>
                 <TableHead>Tipo</TableHead>
-                <TableHead>DescripciÃ³n</TableHead>
-                <TableHead>PerÃ­odo</TableHead>
+                <TableHead>Descripción</TableHead>
+                <TableHead>Período</TableHead>
                 <TableHead>Formato</TableHead>
-                <TableHead>TamaÃ±o</TableHead>
+                <TableHead>Tamaño</TableHead>
                 <TableHead>Descargas</TableHead>
                 <TableHead>Fecha</TableHead>
                 <TableHead>Estado</TableHead>
@@ -526,7 +526,7 @@ export function Reportes() {
                                 const formato = reporte.formato.toLowerCase() === 'pdf' ? 'pdf' : 'excel'
                                 await generarReporte('CARTERA', formato)
                               } else {
-                                toast.info('La descarga de este reporte estarÃ¡ disponible prÃ³ximamente')
+                                toast.info('La descarga de este reporte estará disponible próximamente')
                               }
                             } catch (error) {
                               console.error('Error descargando reporte:', error)

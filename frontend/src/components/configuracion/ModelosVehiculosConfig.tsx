@@ -61,10 +61,10 @@ export function ModelosVehiculosConfig() {
 
   const handleEliminar = async (id: number) => {
     try {
-      // Confirmar eliminaciÃ³n permanente
+      // Confirmar eliminación permanente
       const confirmar = window.confirm(
-        'âš ï¸ Â¿EstÃ¡s seguro de que quieres ELIMINAR PERMANENTEMENTE este modelo?\n\n' +
-        'Esta acciÃ³n NO se puede deshacer y el modelo serÃ¡ borrado completamente de la base de datos.'
+        'âš ï¸ ¿Estás seguro de que quieres ELIMINAR PERMANENTEMENTE este modelo?\n\n' +
+        'Esta acción NO se puede deshacer y el modelo será borrado completamente de la base de datos.'
       )
 
       if (!confirmar) {
@@ -158,18 +158,18 @@ export function ModelosVehiculosConfig() {
     refetch()
   }
 
-  // Filtrar modelos por tÃ©rmino de bÃºsqueda
+  // Filtrar modelos por término de búsqueda
   const filteredModelos = (modelos || []).filter(modelo =>
     modelo.modelo.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  // PaginaciÃ³n
+  // Paginación
   const totalPages = Math.ceil(filteredModelos.length / itemsPerPage)
   const startIndex = (currentPage - 1) * itemsPerPage
   const endIndex = startIndex + itemsPerPage
   const paginatedModelos = filteredModelos.slice(startIndex, endIndex)
 
-  // Resetear a pÃ¡gina 1 cuando cambia el filtro de bÃºsqueda
+  // Resetear a página 1 cuando cambia el filtro de búsqueda
   useEffect(() => {
     setCurrentPage(1)
   }, [searchTerm])
@@ -179,7 +179,7 @@ export function ModelosVehiculosConfig() {
       <div className="flex items-center justify-center h-64">
         <div className="flex items-center space-x-2">
           <Loader2 className="h-6 w-6 animate-spin" />
-          <span>Cargando modelos de vehÃ­culos...</span>
+          <span>Cargando modelos de vehículos...</span>
         </div>
       </div>
     )
@@ -189,7 +189,7 @@ export function ModelosVehiculosConfig() {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
-          <p className="text-red-500 mb-4">Error al cargar modelos de vehÃ­culos</p>
+          <p className="text-red-500 mb-4">Error al cargar modelos de vehículos</p>
           <Button onClick={handleRefresh} variant="outline">
             <RefreshCw className="h-4 w-4 mr-2" />
             Reintentar
@@ -204,9 +204,9 @@ export function ModelosVehiculosConfig() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">ConfiguraciÃ³n de Modelos de VehÃ­culos</h2>
+          <h2 className="text-2xl font-bold tracking-tight">Configuración de Modelos de Vehículos</h2>
           <p className="text-muted-foreground">
-            Gestiona los modelos de vehÃ­culos del sistema
+            Gestiona los modelos de vehículos del sistema
           </p>
         </div>
         <div className="flex items-center space-x-2">
@@ -285,7 +285,7 @@ export function ModelosVehiculosConfig() {
                 <TableHead>Modelo</TableHead>
                 <TableHead>Precio ({moneda})</TableHead>
                 <TableHead>Estado</TableHead>
-                <TableHead>Fecha CreaciÃ³n</TableHead>
+                <TableHead>Fecha Creación</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
@@ -346,7 +346,7 @@ export function ModelosVehiculosConfig() {
             </div>
           )}
 
-          {/* PaginaciÃ³n */}
+          {/* Paginación */}
           {filteredModelos.length > itemsPerPage && (
             <div className="flex items-center justify-between px-2 py-4 border-t">
               <div className="text-sm text-gray-500">
@@ -401,7 +401,7 @@ export function ModelosVehiculosConfig() {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  {editingModelo ? 'Editar Modelo de VehÃ­culo' : 'Nuevo Modelo de VehÃ­culo'}
+                  {editingModelo ? 'Editar Modelo de Vehículo' : 'Nuevo Modelo de Vehículo'}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -493,7 +493,7 @@ export function ModelosVehiculosConfig() {
         </div>
       )}
 
-      {/* ImportaciÃ³n desde Excel */}
+      {/* Importación desde Excel */}
       <Card>
         <CardHeader>
           <CardTitle>Importar Modelos y Precios (Excel)</CardTitle>

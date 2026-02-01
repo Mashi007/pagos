@@ -55,13 +55,13 @@ export function FineTuningTab() {
   const [modeloBase, setModeloBase] = useState('gpt-4o-2024-08-06')
   const [archivoId, setArchivoId] = useState('')
 
-  // Estados para crear conversaciÃ³n manual
+  // Estados para crear conversación manual
   const [mostrarFormNuevaConversacion, setMostrarFormNuevaConversacion] = useState(false)
   const [nuevaPregunta, setNuevaPregunta] = useState('')
   const [nuevaRespuesta, setNuevaRespuesta] = useState('')
   const [guardandoConversacion, setGuardandoConversacion] = useState(false)
 
-  // Estados para editar conversaciÃ³n
+  // Estados para editar conversación
   const [editandoConversacionId, setEditandoConversacionId] = useState<number | null>(null)
   const [preguntaEditada, setPreguntaEditada] = useState('')
   const [respuestaEditada, setRespuestaEditada] = useState('')
@@ -75,7 +75,7 @@ export function FineTuningTab() {
   const [mejorandoRespuesta, setMejorandoRespuesta] = useState(false)
   const [mejorandoConversacion, setMejorandoConversacion] = useState(false)
 
-  // Estados para estadÃ­sticas de feedback
+  // Estados para estadísticas de feedback
   const [estadisticasFeedback, setEstadisticasFeedback] = useState<any>(null)
   const [cargandoEstadisticas, setCargandoEstadisticas] = useState(false)
   const [mostrarEstadisticas, setMostrarEstadisticas] = useState(false)
@@ -88,12 +88,12 @@ export function FineTuningTab() {
   const preguntaTextareaRef = useRef<HTMLTextAreaElement>(null)
   const respuestaTextareaRef = useRef<HTMLTextAreaElement>(null)
 
-  // Estados para tablas y campos dinÃ¡micos
+  // Estados para tablas y campos dinámicos
   const [tablasYCampos, setTablasYCampos] = useState<Record<string, string[]>>({})
   const [cargandoTablasCampos, setCargandoTablasCampos] = useState(false)
   const [ultimaActualizacion, setUltimaActualizacion] = useState<string>('')
 
-  // Obtener campos disponibles segÃºn la tabla seleccionada
+  // Obtener campos disponibles según la tabla seleccionada
   const camposDisponibles = tablaSeleccionada ? (tablasYCampos[tablaSeleccionada] || []) : []
 
   // Cargar tablas y campos desde el backend
@@ -125,7 +125,7 @@ export function FineTuningTab() {
     }
   }, [tablaSeleccionada, campoSeleccionado, camposDisponibles])
 
-  // FunciÃ³n para insertar tabla o campo en el textarea activo
+  // Función para insertar tabla o campo en el textarea activo
   const insertarEnTextarea = (
     texto: string,
     valorActual?: string,
@@ -136,13 +136,13 @@ export function FineTuningTab() {
     let valor: string
     let setValue: (value: string) => void
 
-    // Si estamos en modo ediciÃ³n y se pasaron los parÃ¡metros
+    // Si estamos en modo edición y se pasaron los parámetros
     if (valorActual !== undefined && setter && textareaRef) {
       textarea = textareaRef.current
       valor = valorActual
       setValue = setter
     } else {
-      // Modo creaciÃ³n (comportamiento original)
+      // Modo creación (comportamiento original)
       if (textareaActivo === 'pregunta' || (document.activeElement === preguntaTextareaRef.current)) {
         textarea = preguntaTextareaRef.current
         valor = nuevaPregunta
@@ -166,7 +166,7 @@ export function FineTuningTab() {
 
       setValue(nuevoValor)
 
-      // Restaurar el foco y posiciÃ³n del cursor
+      // Restaurar el foco y posición del cursor
       setTimeout(() => {
         textarea?.focus()
         const nuevaPosicion = start + texto.length
@@ -175,7 +175,7 @@ export function FineTuningTab() {
     }
   }
 
-  // FunciÃ³n para insertar tabla
+  // Función para insertar tabla
   const handleInsertarTabla = () => {
     if (!tablaSeleccionada) {
       toast.warning('Selecciona una tabla primero')
@@ -185,7 +185,7 @@ export function FineTuningTab() {
     setTablaSeleccionada('')
   }
 
-  // FunciÃ³n para insertar campo
+  // Función para insertar campo
   const handleInsertarCampo = () => {
     if (!campoSeleccionado) {
       toast.warning('Selecciona un campo primero')
@@ -253,7 +253,7 @@ export function FineTuningTab() {
 
   const handleCalificar = async (conversacionId: number) => {
     if (calificacion < 1 || calificacion > 5) {
-      toast.error('Selecciona una calificaciÃ³n de 1 a 5 estrellas')
+      toast.error('Selecciona una calificación de 1 a 5 estrellas')
       return
     }
 
@@ -261,7 +261,7 @@ export function FineTuningTab() {
     try {
       await aiTrainingService.calificarConversacion(conversacionId, calificacion, feedback)
 
-      // Si la calificaciÃ³n es 4+ estrellas, la conversaciÃ³n estÃ¡ lista para entrenamiento
+      // Si la calificación es 4+ estrellas, la conversación está lista para entrenamiento
       if (calificacion >= 4) {
         const conversacionesCalificadas = conversaciones.filter(
           (c) => c.calificacion && c.calificacion >= 4
@@ -270,24 +270,24 @@ export function FineTuningTab() {
 
         if (conversacionesCalificadas >= MINIMO_REQUERIDO) {
           toast.success(
-            `âœ… ConversaciÃ³n calificada (${calificacion} estrellas) - Lista para entrenamiento. ` +
-            `Total listas: ${conversacionesCalificadas} - Â¡Ya puedes preparar datos! (MÃ­nimo ${MINIMO_REQUERIDO} requerido)`
+            `âœ… Conversación calificada (${calificacion} estrellas) - Lista para entrenamiento. ` +
+            `Total listas: ${conversacionesCalificadas} - Â¡Ya puedes preparar datos! (Mínimo ${MINIMO_REQUERIDO} requerido)`
           )
         } else {
           toast.success(
-            `âœ… ConversaciÃ³n calificada (${calificacion} estrellas) - Lista para entrenamiento. ` +
-            `Total listas: ${conversacionesCalificadas} (necesitas ${MINIMO_REQUERIDO - conversacionesCalificadas} mÃ¡s para entrenar)`
+            `âœ… Conversación calificada (${calificacion} estrellas) - Lista para entrenamiento. ` +
+            `Total listas: ${conversacionesCalificadas} (necesitas ${MINIMO_REQUERIDO - conversacionesCalificadas} más para entrenar)`
           )
         }
       } else {
-        toast.success(`ConversaciÃ³n calificada (${calificacion} estrellas)`)
+        toast.success(`Conversación calificada (${calificacion} estrellas)`)
       }
 
       setCalificacion(0)
       setFeedback('')
       cargarConversaciones()
     } catch (error: any) {
-      toast.error('Error al calificar conversaciÃ³n')
+      toast.error('Error al calificar conversación')
     } finally {
       setCalificandoId(null)
     }
@@ -299,14 +299,14 @@ export function FineTuningTab() {
       const stats = await aiTrainingService.getEstadisticasFeedback()
       setEstadisticasFeedback(stats)
     } catch (error: any) {
-      console.error('Error cargando estadÃ­sticas:', error)
-      toast.error('Error al cargar estadÃ­sticas de feedback')
+      console.error('Error cargando estadísticas:', error)
+      toast.error('Error al cargar estadísticas de feedback')
     } finally {
       setCargandoEstadisticas(false)
     }
   }
 
-  // FunciÃ³n para detectar feedback negativo (similar a la del backend)
+  // Función para detectar feedback negativo (similar a la del backend)
   const detectarFeedbackNegativo = (feedback: string | null | undefined): boolean => {
     if (!feedback) return false
 
@@ -315,11 +315,11 @@ export function FineTuningTab() {
     // Palabras clave que indican feedback negativo (mismo que backend)
     const palabrasNegativas = [
       "mal", "malo", "incorrecto", "error", "equivocado", "confuso",
-      "no entendÃ­", "no entiendo", "poco claro", "poco clara",
+      "no entendí", "no entiendo", "poco claro", "poco clara",
       "incompleto", "incompleta", "faltante", "falta", "deficiente",
-      "mejorar", "deberÃ­a", "deberia", "podrÃ­a", "podria",
-      "serÃ­a mejor", "no me gusta", "no me sirve", "no ayuda",
-      "no es Ãºtil", "muy tÃ©cnico", "muy tÃ©cnica", "demasiado complejo",
+      "mejorar", "debería", "deberia", "podría", "podria",
+      "sería mejor", "no me gusta", "no me sirve", "no ayuda",
+      "no es útil", "muy técnico", "muy técnica", "demasiado complejo",
       "compleja", "no responde", "no contesta", "no es lo que busco",
       "no es lo que necesito",
     ]
@@ -327,7 +327,7 @@ export function FineTuningTab() {
     // Contar palabras negativas
     const conteoNegativo = palabrasNegativas.filter(palabra => feedbackLower.includes(palabra)).length
 
-    // Si hay 2 o mÃ¡s palabras negativas, considerar feedback negativo
+    // Si hay 2 o más palabras negativas, considerar feedback negativo
     return conteoNegativo >= 2
   }
 
@@ -337,18 +337,18 @@ export function FineTuningTab() {
       const conversacionesCalificadas = conversaciones.filter((c) => c.calificacion && c.calificacion >= 4)
       const conversacionesSeleccionadas = conversacionesCalificadas.map((c) => c.id)
 
-      // MÃ­nimo requerido por OpenAI para fine-tuning: 10 conversaciones
+      // Mínimo requerido por OpenAI para fine-tuning: 10 conversaciones
       const MINIMO_CONVERSACIONES = 10
 
       if (conversacionesSeleccionadas.length < MINIMO_CONVERSACIONES) {
         toast.error(
-          `Se necesita al menos ${MINIMO_CONVERSACIONES} conversaciones calificadas (4+ estrellas) para entrenar un modelo. OpenAI requiere mÃ­nimo 10 ejemplos. Actualmente tienes ${conversacionesSeleccionadas.length}.`
+          `Se necesita al menos ${MINIMO_CONVERSACIONES} conversaciones calificadas (4+ estrellas) para entrenar un modelo. OpenAI requiere mínimo 10 ejemplos. Actualmente tienes ${conversacionesSeleccionadas.length}.`
         )
         setPreparando(false)
         return
       }
 
-      // ValidaciÃ³n temprana: simular filtrado de feedback negativo
+      // Validación temprana: simular filtrado de feedback negativo
       if (filtrarFeedbackNegativo) {
         const conversacionesConFeedbackNegativo = conversacionesCalificadas.filter(c =>
           detectarFeedbackNegativo(c.feedback || null)
@@ -356,7 +356,7 @@ export function FineTuningTab() {
         const conversacionesDespuesFiltrado = conversacionesCalificadas.length - conversacionesConFeedbackNegativo.length
 
         if (conversacionesDespuesFiltrado < MINIMO_CONVERSACIONES) {
-          const mensaje = `âš ï¸ Advertencia: DespuÃ©s de filtrar feedback negativo, solo quedarÃ­an ${conversacionesDespuesFiltrado} conversaciones (se excluirÃ­an ${conversacionesConFeedbackNegativo.length}). Se necesitan al menos ${MINIMO_CONVERSACIONES} conversaciones.\n\nÂ¿Deseas continuar de todas formas? El proceso fallarÃ¡ si quedan menos de ${MINIMO_CONVERSACIONES} conversaciones.`
+          const mensaje = `âš ï¸ Advertencia: Después de filtrar feedback negativo, solo quedarían ${conversacionesDespuesFiltrado} conversaciones (se excluirían ${conversacionesConFeedbackNegativo.length}). Se necesitan al menos ${MINIMO_CONVERSACIONES} conversaciones.\n\n¿Deseas continuar de todas formas? El proceso fallará si quedan menos de ${MINIMO_CONVERSACIONES} conversaciones.`
 
           const continuar = window.confirm(mensaje)
           if (!continuar) {
@@ -364,9 +364,9 @@ export function FineTuningTab() {
             return
           }
         } else if (conversacionesConFeedbackNegativo.length > 0) {
-          // Mostrar informaciÃ³n pero permitir continuar
+          // Mostrar información pero permitir continuar
           toast.info(
-            `Se excluirÃ¡n ${conversacionesConFeedbackNegativo.length} conversaciones con feedback negativo. QuedarÃ¡n ${conversacionesDespuesFiltrado} conversaciones para entrenar.`,
+            `Se excluirán ${conversacionesConFeedbackNegativo.length} conversaciones con feedback negativo. Quedarán ${conversacionesDespuesFiltrado} conversaciones para entrenar.`,
             { duration: 5000 }
           )
         }
@@ -386,7 +386,7 @@ export function FineTuningTab() {
       toast.success(mensaje)
       setMostrarFormEntrenamiento(true)
 
-      // Recargar estadÃ­sticas despuÃ©s de preparar
+      // Recargar estadísticas después de preparar
       if (mostrarEstadisticas) {
         cargarEstadisticasFeedback()
       }
@@ -434,7 +434,7 @@ export function FineTuningTab() {
   }
 
   const handleCancelarJob = async (jobId: string) => {
-    if (!confirm('Â¿EstÃ¡s seguro de que deseas cancelar este job de entrenamiento?')) {
+    if (!confirm('¿Estás seguro de que deseas cancelar este job de entrenamiento?')) {
       return
     }
 
@@ -449,7 +449,7 @@ export function FineTuningTab() {
   }
 
   const handleEliminarJob = async (jobId: string) => {
-    if (!confirm('Â¿EstÃ¡s seguro de que deseas eliminar este job? Esta acciÃ³n no se puede deshacer.')) {
+    if (!confirm('¿Estás seguro de que deseas eliminar este job? Esta acción no se puede deshacer.')) {
       return
     }
 
@@ -465,8 +465,8 @@ export function FineTuningTab() {
 
   const handleEliminarTodosJobs = async (soloFallidos: boolean = false) => {
     const mensaje = soloFallidos
-      ? 'Â¿EstÃ¡s seguro de que deseas eliminar todos los jobs fallidos? Esta acciÃ³n no se puede deshacer.'
-      : 'Â¿EstÃ¡s seguro de que deseas eliminar TODOS los jobs completados? Esta acciÃ³n no se puede deshacer.'
+      ? '¿Estás seguro de que deseas eliminar todos los jobs fallidos? Esta acción no se puede deshacer.'
+      : '¿Estás seguro de que deseas eliminar TODOS los jobs completados? Esta acción no se puede deshacer.'
 
     if (!confirm(mensaje)) {
       return
@@ -495,7 +495,7 @@ export function FineTuningTab() {
         respuesta: nuevaRespuesta.trim(),
         modelo_usado: 'manual',
       })
-      toast.success('ConversaciÃ³n creada exitosamente')
+      toast.success('Conversación creada exitosamente')
       setNuevaPregunta('')
       setNuevaRespuesta('')
       setTablaSeleccionada('')
@@ -504,7 +504,7 @@ export function FineTuningTab() {
       setMostrarFormNuevaConversacion(false)
       cargarConversaciones()
     } catch (error: any) {
-      const mensaje = error?.response?.data?.detail || error?.message || 'Error al crear conversaciÃ³n'
+      const mensaje = error?.response?.data?.detail || error?.message || 'Error al crear conversación'
       toast.error(mensaje)
     } finally {
       setGuardandoConversacion(false)
@@ -536,11 +536,11 @@ export function FineTuningTab() {
         respuesta: respuestaEditada.trim(),
         modelo_usado: 'manual',
       })
-      toast.success('ConversaciÃ³n actualizada exitosamente')
+      toast.success('Conversación actualizada exitosamente')
       handleCancelarEdicion()
       cargarConversaciones()
     } catch (error: any) {
-      const mensaje = error?.response?.data?.detail || error?.message || 'Error al actualizar conversaciÃ³n'
+      const mensaje = error?.response?.data?.detail || error?.message || 'Error al actualizar conversación'
       toast.error(mensaje)
     } finally {
       setActualizandoConversacion(false)
@@ -605,16 +605,16 @@ export function FineTuningTab() {
       })
       setPreguntaEditada(resultado.pregunta_mejorada)
       setRespuestaEditada(resultado.respuesta_mejorada)
-      toast.success(`ConversaciÃ³n mejorada: ${resultado.mejoras_aplicadas.join(', ')}`)
+      toast.success(`Conversación mejorada: ${resultado.mejoras_aplicadas.join(', ')}`)
     } catch (error: any) {
-      const mensaje = error?.response?.data?.detail || error?.message || 'Error al mejorar conversaciÃ³n'
+      const mensaje = error?.response?.data?.detail || error?.message || 'Error al mejorar conversación'
       toast.error(mensaje)
     } finally {
       setMejorandoConversacion(false)
     }
   }
 
-  // Funciones para mejorar en modo creaciÃ³n
+  // Funciones para mejorar en modo creación
   const handleMejorarNuevaPregunta = async () => {
     if (!nuevaPregunta.trim()) {
       toast.warning('Primero escribe una pregunta')
@@ -673,9 +673,9 @@ export function FineTuningTab() {
       })
       setNuevaPregunta(resultado.pregunta_mejorada)
       setNuevaRespuesta(resultado.respuesta_mejorada)
-      toast.success(`ConversaciÃ³n mejorada: ${resultado.mejoras_aplicadas.join(', ')}`)
+      toast.success(`Conversación mejorada: ${resultado.mejoras_aplicadas.join(', ')}`)
     } catch (error: any) {
-      const mensaje = error?.response?.data?.detail || error?.message || 'Error al mejorar conversaciÃ³n'
+      const mensaje = error?.response?.data?.detail || error?.message || 'Error al mejorar conversación'
       toast.error(mensaje)
     } finally {
       setMejorandoConversacion(false)
@@ -759,7 +759,7 @@ export function FineTuningTab() {
         fileInputRef.current.value = ''
       }
     } catch (error: any) {
-      toast.error('Error al leer el archivo. Verifica que sea un JSON vÃ¡lido.')
+      toast.error('Error al leer el archivo. Verifica que sea un JSON válido.')
     }
   }
 
@@ -799,14 +799,14 @@ export function FineTuningTab() {
         </div>
       </div>
 
-      {/* EstadÃ­sticas de Feedback */}
+      {/* Estadísticas de Feedback */}
       {mostrarEstadisticas && estadisticasFeedback && (
         <Card className="bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between mb-4">
               <h4 className="font-semibold text-lg flex items-center gap-2">
                 <BarChart3 className="h-5 w-5 text-purple-600" />
-                EstadÃ­sticas de Feedback
+                Estadísticas de Feedback
               </h4>
               <Button
                 variant="ghost"
@@ -853,7 +853,7 @@ export function FineTuningTab() {
               </div>
             </div>
 
-            {/* AnÃ¡lisis de Feedback */}
+            {/* Análisis de Feedback */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
               <div className="bg-green-50 rounded-lg p-4 border border-green-200">
                 <div className="flex items-center gap-2 mb-2">
@@ -885,7 +885,7 @@ export function FineTuningTab() {
                 </div>
                 {filtrarFeedbackNegativo && (
                   <div className="text-xs text-red-700 mt-2 font-semibold">
-                    âš ï¸ Estas conversaciones se excluirÃ¡n automÃ¡ticamente
+                    âš ï¸ Estas conversaciones se excluirán automáticamente
                   </div>
                 )}
               </div>
@@ -906,9 +906,9 @@ export function FineTuningTab() {
               </div>
             </div>
 
-            {/* DistribuciÃ³n de Calificaciones */}
+            {/* Distribución de Calificaciones */}
             <div className="bg-white rounded-lg p-4 border">
-              <div className="text-sm font-semibold mb-3">DistribuciÃ³n de Calificaciones</div>
+              <div className="text-sm font-semibold mb-3">Distribución de Calificaciones</div>
               <div className="flex items-end gap-2 h-32">
                 {[1, 2, 3, 4, 5].map((star) => {
                   const cantidad = estadisticasFeedback.distribucion_calificaciones[star] || 0
@@ -936,13 +936,13 @@ export function FineTuningTab() {
         </Card>
       )}
 
-      {/* GuÃ­a de uso */}
+      {/* Guía de uso */}
       <Card className="bg-blue-50 border-blue-200">
         <CardContent className="pt-6">
           <div className="flex items-center justify-between mb-3">
             <h4 className="font-semibold flex items-center gap-2">
               <AlertCircle className="h-5 w-5 text-blue-600" />
-              Â¿CÃ³mo usar Fine-tuning?
+              ¿Cómo usar Fine-tuning?
             </h4>
             <Button
               variant="outline"
@@ -957,12 +957,12 @@ export function FineTuningTab() {
               {mostrarEstadisticas ? (
                 <>
                   <XCircle className="h-4 w-4 mr-2" />
-                  Ocultar EstadÃ­sticas
+                  Ocultar Estadísticas
                 </>
               ) : (
                 <>
                   <BarChart3 className="h-4 w-4 mr-2" />
-                  Ver EstadÃ­sticas
+                  Ver Estadísticas
                 </>
               )}
             </Button>
@@ -971,19 +971,19 @@ export function FineTuningTab() {
             <div className="flex items-start gap-2">
               <span className="font-semibold text-blue-600">1.</span>
               <div>
-                <strong>Agregar conversaciones:</strong> Usa "Nueva ConversaciÃ³n" para crear manualmente o "Importar desde JSON" para cargar mÃºltiples conversaciones.
+                <strong>Agregar conversaciones:</strong> Usa "Nueva Conversación" para crear manualmente o "Importar desde JSON" para cargar múltiples conversaciones.
               </div>
             </div>
             <div className="flex items-start gap-2">
               <span className="font-semibold text-blue-600">2.</span>
               <div>
-                <strong>Calificar conversaciones:</strong> Para cada conversaciÃ³n, califica con 1-5 estrellas. Solo las conversaciones con 4+ estrellas se usarÃ¡n para entrenar.
+                <strong>Calificar conversaciones:</strong> Para cada conversación, califica con 1-5 estrellas. Solo las conversaciones con 4+ estrellas se usarán para entrenar.
               </div>
             </div>
             <div className="flex items-start gap-2">
               <span className="font-semibold text-blue-600">3.</span>
               <div>
-                <strong>Preparar datos:</strong> Necesitas al menos 1 conversaciÃ³n calificada (4+ estrellas). Luego haz clic en "Preparar Datos para Entrenamiento".
+                <strong>Preparar datos:</strong> Necesitas al menos 1 conversación calificada (4+ estrellas). Luego haz clic en "Preparar Datos para Entrenamiento".
               </div>
             </div>
             <div className="flex items-start gap-2">
@@ -1012,12 +1012,12 @@ export function FineTuningTab() {
           <div className="grid gap-4 md:grid-cols-4">
             <Select value={filtroCalificacion} onValueChange={setFiltroCalificacion}>
               <SelectTrigger>
-                <SelectValue placeholder="CalificaciÃ³n" />
+                <SelectValue placeholder="Calificación" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todas">Todas</SelectItem>
-                <SelectItem value="con_calificacion">Con calificaciÃ³n</SelectItem>
-                <SelectItem value="sin_calificacion">Sin calificaciÃ³n</SelectItem>
+                <SelectItem value="con_calificacion">Con calificación</SelectItem>
+                <SelectItem value="sin_calificacion">Sin calificación</SelectItem>
               </SelectContent>
             </Select>
             <Input
@@ -1046,12 +1046,12 @@ export function FineTuningTab() {
         </CardContent>
       </Card>
 
-      {/* Formulario para crear conversaciÃ³n manual */}
+      {/* Formulario para crear conversación manual */}
       {mostrarFormNuevaConversacion && (
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between mb-4">
-              <h4 className="font-semibold">Nueva ConversaciÃ³n</h4>
+              <h4 className="font-semibold">Nueva Conversación</h4>
               <Button
                 variant="ghost"
                 size="sm"
@@ -1098,7 +1098,7 @@ export function FineTuningTab() {
                   </div>
                   {ultimaActualizacion && (
                     <p className="text-xs text-gray-500 mb-3">
-                      Ãšltima actualizaciÃ³n: {new Date(ultimaActualizacion).toLocaleString('es-ES')}
+                      Ãšltima actualización: {new Date(ultimaActualizacion).toLocaleString('es-ES')}
                       ({Object.keys(tablasYCampos).length} tablas)
                     </p>
                   )}
@@ -1209,7 +1209,7 @@ export function FineTuningTab() {
                 </div>
                 <Textarea
                   ref={preguntaTextareaRef}
-                  placeholder="Ej: Â¿CuÃ¡l es el proceso para solicitar un prÃ©stamo?"
+                  placeholder="Ej: ¿Cuál es el proceso para solicitar un préstamo?"
                   value={nuevaPregunta}
                   onChange={(e) => setNuevaPregunta(e.target.value)}
                   onFocus={() => setTextareaActivo('pregunta')}
@@ -1264,7 +1264,7 @@ export function FineTuningTab() {
                 </div>
                 <Textarea
                   ref={respuestaTextareaRef}
-                  placeholder="Ej: Para solicitar un prÃ©stamo necesitas..."
+                  placeholder="Ej: Para solicitar un préstamo necesitas..."
                   value={nuevaRespuesta}
                   onChange={(e) => setNuevaRespuesta(e.target.value)}
                   onFocus={() => setTextareaActivo('respuesta')}
@@ -1281,7 +1281,7 @@ export function FineTuningTab() {
                   ) : (
                     <>
                       <Upload className="h-4 w-4 mr-2" />
-                      Guardar ConversaciÃ³n
+                      Guardar Conversación
                     </>
                   )}
                 </Button>
@@ -1318,7 +1318,7 @@ export function FineTuningTab() {
                 onClick={() => setMostrarFormNuevaConversacion(!mostrarFormNuevaConversacion)}
               >
                 <Upload className="h-4 w-4 mr-2" />
-                {mostrarFormNuevaConversacion ? 'Ocultar Formulario' : 'Nueva ConversaciÃ³n'}
+                {mostrarFormNuevaConversacion ? 'Ocultar Formulario' : 'Nueva Conversación'}
               </Button>
               <Button
                 variant="outline"
@@ -1363,7 +1363,7 @@ export function FineTuningTab() {
                     {totalListas > 0 && (
                       <Badge variant={puedePreparar ? "default" : "secondary"} className="mr-2">
                         {totalListas} lista{totalListas !== 1 ? 's' : ''} para entrenamiento
-                        {!puedePreparar && totalListas < MINIMO_REQUERIDO && ` (${MINIMO_REQUERIDO - totalListas} mÃ¡s necesaria${MINIMO_REQUERIDO - totalListas !== 1 ? 's' : ''})`}
+                        {!puedePreparar && totalListas < MINIMO_REQUERIDO && ` (${MINIMO_REQUERIDO - totalListas} más necesaria${MINIMO_REQUERIDO - totalListas !== 1 ? 's' : ''})`}
                       </Badge>
                     )}
                     <div className="flex items-center gap-2">
@@ -1382,7 +1382,7 @@ export function FineTuningTab() {
                           className="text-xs"
                         >
                           {conversacionesConFeedbackNegativo} excluidas â†’ {conversacionesDespuesFiltrado} disponibles
-                          {!puedePrepararDespuesFiltrado && ` (necesitas ${MINIMO_REQUERIDO - conversacionesDespuesFiltrado} mÃ¡s)`}
+                          {!puedePrepararDespuesFiltrado && ` (necesitas ${MINIMO_REQUERIDO - conversacionesDespuesFiltrado} más)`}
                         </Badge>
                       )}
                     </div>
@@ -1423,10 +1423,10 @@ export function FineTuningTab() {
               {conversaciones.map((conv) => (
                 <div key={conv.id} className="border rounded-lg p-4">
                   {editandoConversacionId === conv.id ? (
-                    // Modo ediciÃ³n
+                    // Modo edición
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
-                        <h5 className="font-semibold text-blue-600">Editando conversaciÃ³n</h5>
+                        <h5 className="font-semibold text-blue-600">Editando conversación</h5>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -1437,7 +1437,7 @@ export function FineTuningTab() {
                         </Button>
                       </div>
 
-                      {/* Selector de Tablas y Campos (tambiÃ©n disponible en ediciÃ³n) */}
+                      {/* Selector de Tablas y Campos (también disponible en edición) */}
                       <Card className="bg-gray-50 border-gray-200">
                         <CardContent className="pt-4">
                           <div className="flex items-center justify-between mb-3">
@@ -1467,7 +1467,7 @@ export function FineTuningTab() {
                           </div>
                           {ultimaActualizacion && (
                             <p className="text-xs text-gray-500 mb-3">
-                              Ãšltima actualizaciÃ³n: {new Date(ultimaActualizacion).toLocaleString('es-ES')}
+                              Ãšltima actualización: {new Date(ultimaActualizacion).toLocaleString('es-ES')}
                               ({Object.keys(tablasYCampos).length} tablas)
                             </p>
                           )}
@@ -1590,7 +1590,7 @@ export function FineTuningTab() {
                         </div>
                         <Textarea
                           ref={preguntaEditadaRef}
-                          placeholder="Ej: Â¿QuÃ© es total_financiamiento en la tabla prestamos?"
+                          placeholder="Ej: ¿Qué es total_financiamiento en la tabla prestamos?"
                           value={preguntaEditada}
                           onChange={(e) => setPreguntaEditada(e.target.value)}
                           onFocus={() => setTextareaActivo('pregunta')}
@@ -1686,7 +1686,7 @@ export function FineTuningTab() {
                       </div>
                     </div>
                   ) : (
-                    // Modo visualizaciÃ³n
+                    // Modo visualización
                     <>
                       <div className="flex items-start justify-between mb-2">
                         <div className="flex-1">
@@ -1776,7 +1776,7 @@ export function FineTuningTab() {
                             Guardando...
                           </>
                         ) : (
-                          'Guardar CalificaciÃ³n'
+                          'Guardar Calificación'
                         )}
                       </Button>
                     </div>
@@ -1801,7 +1801,7 @@ export function FineTuningTab() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="gpt-4o-2024-08-06">gpt-4o-2024-08-06 (Recomendado - VersiÃ³n especÃ­fica)</SelectItem>
+                    <SelectItem value="gpt-4o-2024-08-06">gpt-4o-2024-08-06 (Recomendado - Versión específica)</SelectItem>
                     <SelectItem value="gpt-4o">gpt-4o (Puede no estar disponible)</SelectItem>
                   </SelectContent>
                 </Select>
@@ -1880,15 +1880,15 @@ export function FineTuningTab() {
               <div className="flex items-start gap-2">
                 <Info className="h-4 w-4 text-blue-600 mt-0.5" />
                 <div className="text-xs text-blue-800">
-                  <strong>â±ï¸ Tiempos tÃ­picos de entrenamiento:</strong>
+                  <strong>â±ï¸ Tiempos típicos de entrenamiento:</strong>
                   <ul className="mt-1 ml-4 list-disc space-y-0.5">
-                    <li><strong>gpt-4o:</strong> 2-4 horas (depende del tamaÃ±o del archivo)</li>
+                    <li><strong>gpt-4o:</strong> 2-4 horas (depende del tamaño del archivo)</li>
                   </ul>
                   <p className="mt-1 text-blue-600">
-                    <strong>âš ï¸ Nota:</strong> Para fine-tuning, se recomienda usar <code className="bg-blue-100 px-1 rounded">gpt-4o-2024-08-06</code> (versiÃ³n especÃ­fica). gpt-3.5-turbo y gpt-4o-mini no soportan fine-tuning.
+                    <strong>âš ï¸ Nota:</strong> Para fine-tuning, se recomienda usar <code className="bg-blue-100 px-1 rounded">gpt-4o-2024-08-06</code> (versión específica). gpt-3.5-turbo y gpt-4o-mini no soportan fine-tuning.
                   </p>
                   <p className="mt-2 text-blue-700">
-                    El sistema actualiza automÃ¡ticamente el estado cada 10 segundos. Los jobs pueden tardar mÃ¡s tiempo si OpenAI tiene alta demanda.
+                    El sistema actualiza automáticamente el estado cada 10 segundos. Los jobs pueden tardar más tiempo si OpenAI tiene alta demanda.
                   </p>
                 </div>
               </div>
@@ -1906,7 +1906,7 @@ export function FineTuningTab() {
           ) : (
             <div className="space-y-4">
               {jobs.map((job) => {
-                // Calcular tiempo transcurrido (usar tiempoActual para actualizaciÃ³n en tiempo real)
+                // Calcular tiempo transcurrido (usar tiempoActual para actualización en tiempo real)
                 const fechaCreacion = new Date(job.creado_en)
                 const ahora = tiempoActual
                 const tiempoTranscurridoMs = ahora.getTime() - fechaCreacion.getTime()
@@ -1921,8 +1921,8 @@ export function FineTuningTab() {
                   tiempoTranscurridoTexto = `${minutosTranscurridos}m`
                 }
 
-                // Tiempo estimado segÃºn modelo base
-                const tiempoEstimado = '2-4 horas'  // gpt-4o tÃ­picamente toma 2-4 horas
+                // Tiempo estimado según modelo base
+                const tiempoEstimado = '2-4 horas'  // gpt-4o típicamente toma 2-4 horas
 
                 // Verificar si el job usa un modelo obsoleto
                 const modeloObsoleto = job.modelo_base === 'gpt-3.5-turbo' || job.modelo_base === 'gpt-4o-mini'
@@ -1934,8 +1934,8 @@ export function FineTuningTab() {
                       <div className="flex items-start gap-2">
                         <AlertCircle className="h-4 w-4 text-yellow-700 mt-0.5 flex-shrink-0" />
                         <div className="text-yellow-800">
-                          <strong>âš ï¸ Modelo obsoleto:</strong> Este job usa <code className="bg-yellow-200 px-1 rounded">{job.modelo_base}</code>, que ya no estÃ¡ disponible para fine-tuning.
-                          Los nuevos jobs usarÃ¡n <code className="bg-yellow-200 px-1 rounded">gpt-4o</code> automÃ¡ticamente.
+                          <strong>âš ï¸ Modelo obsoleto:</strong> Este job usa <code className="bg-yellow-200 px-1 rounded">{job.modelo_base}</code>, que ya no está disponible para fine-tuning.
+                          Los nuevos jobs usarán <code className="bg-yellow-200 px-1 rounded">gpt-4o</code> automáticamente.
                         </div>
                       </div>
                     </div>
@@ -1961,7 +1961,7 @@ export function FineTuningTab() {
                               Tiempo transcurrido: <strong>{tiempoTranscurridoTexto}</strong>
                               {job.status === 'running' && minutosTranscurridos < 30 && (
                                 <span className="ml-2 text-blue-600">
-                                  (TÃ­pico: {tiempoEstimado})
+                                  (Típico: {tiempoEstimado})
                                 </span>
                               )}
                             </span>

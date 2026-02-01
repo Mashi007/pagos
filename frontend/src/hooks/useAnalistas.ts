@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { analistaService, Analista, AnalistaCreate, AnalistaUpdate } from '../services/analistaService'
 import toast from 'react-hot-toast'
 
-// Constantes de configuraciÃ³n
+// Constantes de configuración
 const STALE_TIME_MEDIUM = 5 * 60 * 1000 // 5 minutos
 const STALE_TIME_LONG = 10 * 60 * 1000 // 10 minutos
 const RETRY_COUNT = 3
@@ -39,7 +39,7 @@ export function useAnalistasActivos() {
         return await analistaService.listarAnalistasActivos()
       } catch (error) {
         console.error('Error obteniendo analistas activos:', error)
-        return [] // Devolver array vacÃ­o en caso de error
+        return [] // Devolver array vacío en caso de error
       }
     },
     staleTime: STALE_TIME_LONG,
@@ -48,7 +48,7 @@ export function useAnalistasActivos() {
   })
 }
 
-// Hook para obtener un analista especÃ­fico
+// Hook para obtener un analista específico
 export function useAnalista(id: number) {
   return useQuery({
     queryKey: analistaKeys.detail(id),
@@ -84,7 +84,7 @@ export function useUpdateAnalista() {
     mutationFn: ({ id, data }: { id: number; data: AnalistaUpdate }) =>
       analistaService.actualizarAnalista(id, data),
     onSuccess: (updatedAnalista) => {
-      // Actualizar cache especÃ­fico
+      // Actualizar cache específico
       queryClient.setQueryData(
         analistaKeys.detail(updatedAnalista.id),
         updatedAnalista

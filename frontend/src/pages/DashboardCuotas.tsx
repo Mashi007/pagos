@@ -85,11 +85,11 @@ export function DashboardCuotas() {
         total_cuotas_impagas_2mas: response.total_cuotas_impagas_2mas || 0,
       } as KPIsData
     },
-    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos mÃ¡s frescos
+    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
     refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
-  // Cargar datos para grÃ¡fico de estado de cuotas
+  // Cargar datos para gráfico de estado de cuotas
   const datosEstadoCuotas = kpisData
     ? [
         {
@@ -117,7 +117,7 @@ export function DashboardCuotas() {
       ]
     : []
 
-  // Cargar datos para grÃ¡fico de conciliaciÃ³n
+  // Cargar datos para gráfico de conciliación
   const datosConciliacion = kpisData
     ? [
         {
@@ -147,7 +147,7 @@ export function DashboardCuotas() {
       ]
     : []
 
-  // Cargar evoluciÃ³n de morosidad (Ãºltimos 6 meses) - DATOS REALES
+  // Cargar evolución de morosidad (últimos 6 meses) - DATOS REALES
   const { data: datosEvolucionMorosidad, isLoading: loadingEvolucion } = useQuery({
     queryKey: ['evolucion-morosidad', filtros],
     queryFn: async () => {
@@ -164,7 +164,7 @@ export function DashboardCuotas() {
       }
       return response.meses
     },
-    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos mÃ¡s frescos
+    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
     refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
@@ -181,7 +181,7 @@ export function DashboardCuotas() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="container mx-auto px-4 py-8 space-y-8">
-        {/* Header EstratÃ©gico */}
+        {/* Header Estratégico */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -194,12 +194,12 @@ export function DashboardCuotas() {
               onClick={() => navigate('/dashboard/menu')}
               className="hover:bg-purple-50"
             >
-              â† MenÃº
+              â† Menú
             </Button>
             <div>
               <h1 className="text-4xl font-black text-gray-900 uppercase tracking-tight">Cuotas</h1>
               <p className="text-lg text-gray-600 font-medium mt-1">
-                Monitoreo EstratÃ©gico â€¢ {userName}
+                Monitoreo Estratégico â€¢ {userName}
               </p>
             </div>
           </div>
@@ -217,7 +217,7 @@ export function DashboardCuotas() {
                 <div className="flex items-center space-x-2">
                   <div className="flex items-center space-x-2 text-sm font-semibold text-gray-700">
                     <Filter className="h-4 w-4 text-purple-600" />
-                    <span>Filtros RÃ¡pidos</span>
+                    <span>Filtros Rápidos</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 flex-wrap">
@@ -302,7 +302,7 @@ export function DashboardCuotas() {
               format="currency"
             />
             <KpiCardLarge
-              title="Tasa de RecuperaciÃ³n"
+              title="Tasa de Recuperación"
               value={kpisData.porcentaje_cuotas_pagadas}
               subtitle="Mes actual"
               icon={CheckCircle}
@@ -314,7 +314,7 @@ export function DashboardCuotas() {
           </div>
         ) : null}
 
-        {/* LAYOUT: BOTONES IZQUIERDA + GRÃFICOS CENTRO */}
+        {/* LAYOUT: BOTONES IZQUIERDA + GRÁFICOS CENTRO */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* COLUMNA IZQUIERDA: BOTONES EXPLORAR DETALLES */}
           <motion.div
@@ -347,12 +347,12 @@ export function DashboardCuotas() {
                   variant="outline"
                   className="w-full justify-start bg-white hover:bg-purple-50 text-gray-800 border-2 border-purple-200 hover:border-purple-400 h-auto py-3 px-4"
                   onClick={() => {
-                    // TODO: Navegar a anÃ¡lisis de morosidad
-                    console.log('AnÃ¡lisis de Morosidad Avanzada')
+                    // TODO: Navegar a análisis de morosidad
+                    console.log('Análisis de Morosidad Avanzada')
                   }}
                 >
                   <AlertTriangle className="h-5 w-5 mr-3 text-purple-600" />
-                  <span className="font-semibold flex-1 text-left">AnÃ¡lisis de Morosidad</span>
+                  <span className="font-semibold flex-1 text-left">Análisis de Morosidad</span>
                   <ChevronRight className="h-4 w-4 text-gray-400" />
                 </Button>
                 <Button
@@ -383,11 +383,11 @@ export function DashboardCuotas() {
             </Card>
           </motion.div>
 
-          {/* COLUMNA CENTRO/DERECHA: GRÃFICOS PRINCIPALES */}
+          {/* COLUMNA CENTRO/DERECHA: GRÁFICOS PRINCIPALES */}
           <div className="lg:col-span-9 space-y-6">
-            {/* GrÃ¡ficos en Grid 2 Columnas */}
+            {/* Gráficos en Grid 2 Columnas */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* GrÃ¡fico 1: Estado de Cuotas del Mes */}
+              {/* Gráfico 1: Estado de Cuotas del Mes */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -429,7 +429,7 @@ export function DashboardCuotas() {
                 </Card>
               </motion.div>
 
-              {/* GrÃ¡fico 2: Cuotas por Estado de ConciliaciÃ³n */}
+              {/* Gráfico 2: Cuotas por Estado de Conciliación */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -439,7 +439,7 @@ export function DashboardCuotas() {
                   <CardHeader className="bg-gradient-to-r from-blue-50 to-cyan-50 border-b-2 border-blue-200">
                     <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
                       <PieChart className="h-6 w-6 text-blue-600" />
-                      <span>Cuotas por Estado de ConciliaciÃ³n</span>
+                      <span>Cuotas por Estado de Conciliación</span>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-6">
@@ -496,7 +496,7 @@ export function DashboardCuotas() {
               </motion.div>
             </div>
 
-            {/* GrÃ¡fico 3: EvoluciÃ³n de Morosidad */}
+            {/* Gráfico 3: Evolución de Morosidad */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -506,7 +506,7 @@ export function DashboardCuotas() {
                 <CardHeader className="bg-gradient-to-r from-red-50 to-orange-50 border-b-2 border-red-200">
                   <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
                     <TrendingUp className="h-6 w-6 text-red-600" />
-                    <span>EvoluciÃ³n de Morosidad (Ãšltimos 6 Meses)</span>
+                    <span>Evolución de Morosidad (Ãšltimos 6 Meses)</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-6">

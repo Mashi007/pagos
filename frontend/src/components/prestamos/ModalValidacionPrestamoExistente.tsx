@@ -36,12 +36,12 @@ export function ModalValidacionPrestamoExistente({
 
   const handleConfirm = () => {
     if (!justificacion.trim()) {
-      setError('Debe ingresar una justificaciÃ³n para continuar')
+      setError('Debe ingresar una justificación para continuar')
       return
     }
 
     if (justificacion.trim().length < 10) {
-      setError('La justificaciÃ³n debe tener al menos 10 caracteres')
+      setError('La justificación debe tener al menos 10 caracteres')
       return
     }
 
@@ -59,7 +59,7 @@ export function ModalValidacionPrestamoExistente({
   const getEstadoBadge = (estado: string) => {
     const estados: Record<string, { label: string; className: string }> = {
       DRAFT: { label: 'Borrador', className: 'bg-gray-500' },
-      EN_REVISION: { label: 'En RevisiÃ³n', className: 'bg-yellow-500' },
+      EN_REVISION: { label: 'En Revisión', className: 'bg-yellow-500' },
       APROBADO: { label: 'Aprobado', className: 'bg-green-500' },
       RECHAZADO: { label: 'Rechazado', className: 'bg-red-500' },
     }
@@ -98,10 +98,10 @@ export function ModalValidacionPrestamoExistente({
               </div>
               <div>
                 <h2 className="text-xl font-bold text-gray-900">
-                  Cliente ya tiene crÃ©dito(s) existente(s)
+                  Cliente ya tiene crédito(s) existente(s)
                 </h2>
                 <p className="text-sm text-gray-600 mt-1">
-                  Se requiere justificaciÃ³n para crear un nuevo prÃ©stamo
+                  Se requiere justificación para crear un nuevo préstamo
                 </p>
               </div>
             </div>
@@ -128,7 +128,7 @@ export function ModalValidacionPrestamoExistente({
               <CardContent>
                 <div className="grid grid-cols-3 gap-4">
                   <div>
-                    <p className="text-sm text-gray-600">Total PrÃ©stamos</p>
+                    <p className="text-sm text-gray-600">Total Préstamos</p>
                     <p className="text-2xl font-bold">{prestamos.length}</p>
                   </div>
                   <div>
@@ -147,9 +147,9 @@ export function ModalValidacionPrestamoExistente({
               </CardContent>
             </Card>
 
-            {/* Detalles de PrÃ©stamos */}
+            {/* Detalles de Préstamos */}
             <div>
-              <h3 className="text-lg font-semibold mb-4">Detalles de PrÃ©stamos Existentes</h3>
+              <h3 className="text-lg font-semibold mb-4">Detalles de Préstamos Existentes</h3>
               <div className="space-y-4">
                 {prestamos.map((prestamo, index) => (
                   <Card key={prestamo.id} className="border-l-4 border-l-blue-500">
@@ -158,7 +158,7 @@ export function ModalValidacionPrestamoExistente({
                         <div>
                           <div className="flex items-center gap-2 mb-1">
                             <Car className="h-4 w-4 text-gray-500" />
-                            <p className="text-xs text-gray-600">VehÃ­culo</p>
+                            <p className="text-xs text-gray-600">Vehículo</p>
                           </div>
                           <p className="font-semibold">{prestamo.modelo_vehiculo || 'N/A'}</p>
                         </div>
@@ -201,18 +201,18 @@ export function ModalValidacionPrestamoExistente({
               </div>
             </div>
 
-            {/* Campo de JustificaciÃ³n */}
+            {/* Campo de Justificación */}
             <Card className="border-blue-200">
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
                   <FileText className="h-5 w-5" />
-                  JustificaciÃ³n para Nuevo PrÃ©stamo
+                  Justificación para Nuevo Préstamo
                   <span className="text-red-500">*</span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <Textarea
-                  placeholder="Ingrese una justificaciÃ³n detallada de por quÃ© se estÃ¡ creando un nuevo prÃ©stamo cuando el cliente ya tiene crÃ©dito(s) existente(s). (MÃ­nimo 10 caracteres)"
+                  placeholder="Ingrese una justificación detallada de por qué se está creando un nuevo préstamo cuando el cliente ya tiene crédito(s) existente(s). (Mínimo 10 caracteres)"
                   value={justificacion}
                   onChange={(e) => {
                     setJustificacion(e.target.value)
@@ -225,7 +225,7 @@ export function ModalValidacionPrestamoExistente({
                   <p className="text-sm text-red-600">{error}</p>
                 )}
                 <p className="text-xs text-gray-500">
-                  Esta justificaciÃ³n serÃ¡ guardada junto con el prÃ©stamo y quedarÃ¡ registrada como parte de la auditorÃ­a.
+                  Esta justificación será guardada junto con el préstamo y quedará registrada como parte de la auditoría.
                 </p>
               </CardContent>
             </Card>

@@ -43,12 +43,12 @@ export function Welcome() {
             </h1>
 
             <p className="text-xl sm:text-2xl text-gray-600 font-medium mb-4">
-              Sistema de GestiÃ³n de PrÃ©stamos y Cobranzas
+              Sistema de Gestión de Préstamos y Cobranzas
             </p>
 
             <p className="text-lg text-gray-500 max-w-2xl mx-auto mb-12">
-              Plataforma integral para la administraciÃ³n eficiente de operaciones crediticias,
-              control de pagos y gestiÃ³n de clientes.
+              Plataforma integral para la administración eficiente de operaciones crediticias,
+              control de pagos y gestión de clientes.
             </p>
           </motion.div>
 

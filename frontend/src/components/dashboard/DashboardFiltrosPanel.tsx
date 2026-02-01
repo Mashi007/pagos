@@ -26,7 +26,7 @@ interface DashboardFiltrosPanelProps {
 export function DashboardFiltrosPanel({
   filtros,
   setFiltros,
-  periodo = 'aÃ±o', // âœ… Por defecto: "Este aÃ±o"
+  periodo = 'año', // âœ… Por defecto: "Este año"
   setPeriodo,
   onRefresh,
   isRefreshing = false,
@@ -51,14 +51,14 @@ export function DashboardFiltrosPanel({
     const filtrosVacios: DashboardFiltros = {}
     setFiltrosTemporales(filtrosVacios)
     setFiltros(filtrosVacios)
-    setShowFiltros(false) // Cerrar popover despuÃ©s de limpiar
+    setShowFiltros(false) // Cerrar popover después de limpiar
   }
 
-  // âœ… FunciÃ³n para aplicar filtros
+  // âœ… Función para aplicar filtros
   const handleAplicarFiltros = () => {
     console.log('âœ… Aplicando filtros:', filtrosTemporales)
     setFiltros(filtrosTemporales)
-    setShowFiltros(false) // Cerrar popover despuÃ©s de aplicar
+    setShowFiltros(false) // Cerrar popover después de aplicar
   }
 
   return (
@@ -279,7 +279,7 @@ export function DashboardFiltrosPanel({
               </div>
             </div>
 
-            {/* âœ… BotÃ³n para Aplicar Filtros */}
+            {/* âœ… Botón para Aplicar Filtros */}
             <div className="flex items-center justify-end gap-2 pt-2 border-t">
               <Button
                 variant="outline"

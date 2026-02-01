@@ -9,12 +9,12 @@ interface SidebarCounts {
 
 /**
  * Hook optimizado que usa React Query para compartir datos con otros componentes
- * Evita llamadas redundantes a las mismas APIs que otros componentes ya estÃ¡n usando
+ * Evita llamadas redundantes a las mismas APIs que otros componentes ya están usando
  */
 export function useSidebarCounts() {
-  // âœ… OPTIMIZACIÃ“N: Usar React Query para compartir datos con otros componentes
-  // Estos queries tienen las mismas queryKeys que otros componentes, asÃ­ que React Query
-  // compartirÃ¡ los datos en cache y evitarÃ¡ llamadas redundantes
+  // âœ… OPTIMIZACIÓN: Usar React Query para compartir datos con otros componentes
+  // Estos queries tienen las mismas queryKeys que otros componentes, así que React Query
+  // compartirá los datos en cache y evitará llamadas redundantes
   
   // Query para KPIs de pagos - compartido con DashboardPagos y otros componentes
   const { data: kpisData, isLoading: loadingKPIs } = useQuery({
@@ -28,14 +28,14 @@ export function useSidebarCounts() {
         clientesAlDia?: number
       }
     },
-    staleTime: 5 * 60 * 1000, // 5 minutos - datos no cambian tan rÃ¡pido
-    refetchOnWindowFocus: false, // âœ… No recargar automÃ¡ticamente al enfocar ventana
-    refetchInterval: 5 * 60 * 1000, // âœ… Actualizar cada 5 minutos automÃ¡ticamente
-    refetchIntervalInBackground: false, // Solo actualizar si la pÃ¡gina estÃ¡ visible
-    retry: 1, // Solo un retry para evitar mÃºltiples intentos
+    staleTime: 5 * 60 * 1000, // 5 minutos - datos no cambian tan rápido
+    refetchOnWindowFocus: false, // âœ… No recargar automáticamente al enfocar ventana
+    refetchInterval: 5 * 60 * 1000, // âœ… Actualizar cada 5 minutos automáticamente
+    refetchIntervalInBackground: false, // Solo actualizar si la página está visible
+    retry: 1, // Solo un retry para evitar múltiples intentos
   })
 
-  // Query para estadÃ­sticas de notificaciones - compartido con otros componentes
+  // Query para estadísticas de notificaciones - compartido con otros componentes
   const { data: notificacionesData, isLoading: loadingNotificaciones } = useQuery({
     queryKey: ['notificaciones-estadisticas-resumen'],
     queryFn: async () => {
@@ -45,9 +45,9 @@ export function useSidebarCounts() {
       }
     },
     staleTime: 5 * 60 * 1000, // 5 minutos
-    refetchOnWindowFocus: false, // âœ… No recargar automÃ¡ticamente al enfocar ventana
-    refetchInterval: 5 * 60 * 1000, // âœ… Actualizar cada 5 minutos automÃ¡ticamente
-    refetchIntervalInBackground: false, // Solo actualizar si la pÃ¡gina estÃ¡ visible
+    refetchOnWindowFocus: false, // âœ… No recargar automáticamente al enfocar ventana
+    refetchInterval: 5 * 60 * 1000, // âœ… Actualizar cada 5 minutos automáticamente
+    refetchIntervalInBackground: false, // Solo actualizar si la página está visible
     retry: 1,
   })
 

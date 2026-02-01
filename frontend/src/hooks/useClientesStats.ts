@@ -12,11 +12,11 @@ export function useClientesStats() {
   return useQuery({
     queryKey: ['clientes-stats'],
     queryFn: async (): Promise<ClientesStats> => {
-      // Obtener estadÃ­sticas directamente desde el endpoint del backend
-      // Esto es mÃ¡s eficiente que traer todos los clientes
+      // Obtener estadísticas directamente desde el endpoint del backend
+      // Esto es más eficiente que traer todos los clientes
       return await clienteService.getStats()
     },
-    staleTime: 1 * 60 * 1000, // âœ… Cache de 1 minuto (reducido para datos mÃ¡s frescos)
+    staleTime: 1 * 60 * 1000, // âœ… Cache de 1 minuto (reducido para datos más frescos)
     refetchOnWindowFocus: true, // Refrescar cuando el usuario vuelve a la ventana
     refetchOnMount: true, // Refrescar cuando el componente se monta
     refetchInterval: 2 * 60 * 1000 // âœ… Refrescar cada 2 minutos (reducido de 5 minutos)

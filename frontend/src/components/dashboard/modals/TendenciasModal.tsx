@@ -55,7 +55,7 @@ export function TendenciasModal({ isOpen, onClose }: TendenciasModalProps) {
   const [diasPersonalizado, setDiasPersonalizado] = useState(30)
   const { construirFiltrosObject } = useDashboardFiltros(filtros)
 
-  // ConfiguraciÃ³n de polling (cada 10 minutos por defecto)
+  // Configuración de polling (cada 10 minutos por defecto)
   const POLLING_INTERVAL = 10 * 60 * 1000 // 10 minutos
 
   // Cargar opciones de filtros
@@ -88,10 +88,10 @@ export function TendenciasModal({ isOpen, onClose }: TendenciasModalProps) {
       return response || { datos: [], fecha_inicio: '', fecha_fin: '', meses_proyeccion: 6, ultima_actualizacion: '' }
     },
     staleTime: 5 * 60 * 1000,
-    refetchInterval: isOpen ? POLLING_INTERVAL : false, // Polling solo si el modal estÃ¡ abierto
+    refetchInterval: isOpen ? POLLING_INTERVAL : false, // Polling solo si el modal está abierto
   })
 
-  // Efecto para actualizaciÃ³n automÃ¡tica cuando cambian los crÃ©ditos/amortizaciones
+  // Efecto para actualización automática cuando cambian los créditos/amortizaciones
   useEffect(() => {
     if (!isOpen) return
 
@@ -109,12 +109,12 @@ export function TendenciasModal({ isOpen, onClose }: TendenciasModalProps) {
     setIsRefreshing(false)
   }
 
-  // Separar datos histÃ³ricos de proyecciones
+  // Separar datos históricos de proyecciones
   const datosHistoricos = tendenciasData?.datos.filter((d) => !d.es_proyeccion) || []
   const datosProyeccion = tendenciasData?.datos.filter((d) => d.es_proyeccion) || []
   const fechaDivision = datosHistoricos.length > 0 ? datosHistoricos[datosHistoricos.length - 1].fecha : null
 
-  // Combinar datos para el grÃ¡fico
+  // Combinar datos para el gráfico
   const datosGrafico = tendenciasData?.datos || []
 
   // Tooltip personalizado
@@ -132,7 +132,7 @@ export function TendenciasModal({ isOpen, onClose }: TendenciasModalProps) {
               <p key={index} className="text-sm" style={{ color: entry.color }}>
                 {entry.name}:{' '}
                 {dataKey.includes('cuotas_en_dias')
-                  ? `${typeof value === 'number' ? value.toFixed(0) : 'N/A'} dÃ­as`
+                  ? `${typeof value === 'number' ? value.toFixed(0) : 'N/A'} días`
                   : typeof value === 'number'
                   ? formatCurrency(value)
                   : 'N/A'}
@@ -153,7 +153,7 @@ export function TendenciasModal({ isOpen, onClose }: TendenciasModalProps) {
     <BaseModal
       isOpen={isOpen}
       onClose={onClose}
-      title="Tendencias de Cuentas por Cobrar y Cuotas en DÃ­as"
+      title="Tendencias de Cuentas por Cobrar y Cuotas en Días"
       size="xlarge"
     >
       <div className="space-y-6">
@@ -172,7 +172,7 @@ export function TendenciasModal({ isOpen, onClose }: TendenciasModalProps) {
           {/* Configuraciones adicionales */}
           <div className="flex items-center gap-4 flex-wrap">
             <div className="flex items-center gap-2">
-              <label className="text-sm font-medium">Meses de ProyecciÃ³n:</label>
+              <label className="text-sm font-medium">Meses de Proyección:</label>
               <Select
                 value={mesesProyeccion.toString()}
                 onValueChange={(v) => setMesesProyeccion(Number(v))}
@@ -199,8 +199,8 @@ export function TendenciasModal({ isOpen, onClose }: TendenciasModalProps) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="mes_actual">Mes Actual</SelectItem>
-                  <SelectItem value="proximos_n_dias">PrÃ³ximos N DÃ­as</SelectItem>
-                  <SelectItem value="hasta_fin_anio">Hasta Fin de AÃ±o</SelectItem>
+                  <SelectItem value="proximos_n_dias">Próximos N Días</SelectItem>
+                  <SelectItem value="hasta_fin_anio">Hasta Fin de Año</SelectItem>
                   <SelectItem value="personalizado">Personalizado</SelectItem>
                 </SelectContent>
               </Select>
@@ -208,7 +208,7 @@ export function TendenciasModal({ isOpen, onClose }: TendenciasModalProps) {
 
             {granularidad === 'proximos_n_dias' && (
               <div className="flex items-center gap-2">
-                <label className="text-sm font-medium">DÃ­as:</label>
+                <label className="text-sm font-medium">Días:</label>
                 <Select
                   value={diasPersonalizado.toString()}
                   onValueChange={(v) => setDiasPersonalizado(Number(v))}
@@ -217,11 +217,11 @@ export function TendenciasModal({ isOpen, onClose }: TendenciasModalProps) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="7">7 dÃ­as</SelectItem>
-                    <SelectItem value="15">15 dÃ­as</SelectItem>
-                    <SelectItem value="30">30 dÃ­as</SelectItem>
-                    <SelectItem value="60">60 dÃ­as</SelectItem>
-                    <SelectItem value="90">90 dÃ­as</SelectItem>
+                    <SelectItem value="7">7 días</SelectItem>
+                    <SelectItem value="15">15 días</SelectItem>
+                    <SelectItem value="30">30 días</SelectItem>
+                    <SelectItem value="60">60 días</SelectItem>
+                    <SelectItem value="90">90 días</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -231,30 +231,30 @@ export function TendenciasModal({ isOpen, onClose }: TendenciasModalProps) {
               <div className="flex items-center gap-2 ml-auto">
                 <RefreshCw className="h-4 w-4 text-gray-400 animate-spin" />
                 <span className="text-xs text-gray-500">
-                  Ãšltima actualizaciÃ³n: {new Date(tendenciasData.ultima_actualizacion).toLocaleString('es-ES')}
+                  Ãšltima actualización: {new Date(tendenciasData.ultima_actualizacion).toLocaleString('es-ES')}
                 </span>
               </div>
             )}
           </div>
         </div>
 
-        {/* GrÃ¡fico de Tendencias */}
+        {/* Gráfico de Tendencias */}
         <Card>
           <CardHeader>
-            <CardTitle>Cuentas por Cobrar y Cuotas en DÃ­as (con ProyecciÃ³n)</CardTitle>
+            <CardTitle>Cuentas por Cobrar y Cuotas en Días (con Proyección)</CardTitle>
           </CardHeader>
           <CardContent>
             {loadingTendencias ? (
               <div className="h-[500px] flex items-center justify-center">
-                <div className="animate-pulse text-gray-400">Cargando grÃ¡fico...</div>
+                <div className="animate-pulse text-gray-400">Cargando gráfico...</div>
               </div>
             ) : datosGrafico.length === 0 ? (
               <div className="h-[500px] flex items-center justify-center text-gray-500">
-                No hay datos disponibles para el perÃ­odo seleccionado
+                No hay datos disponibles para el período seleccionado
               </div>
             ) : (
               <div className="space-y-6">
-                {/* GrÃ¡fico 1: Cuentas por Cobrar */}
+                {/* Gráfico 1: Cuentas por Cobrar */}
                 <div>
                   <h3 className="text-lg font-semibold mb-3">Cuentas por Cobrar</h3>
                   <ResponsiveContainer width="100%" height={300}>
@@ -287,7 +287,7 @@ export function TendenciasModal({ isOpen, onClose }: TendenciasModalProps) {
                           x={datosHistoricos[datosHistoricos.length - 1]?.fecha_formateada}
                           stroke="#ef4444"
                           strokeDasharray="5 5"
-                          label={{ value: 'Inicio ProyecciÃ³n', position: 'top', fill: '#ef4444' }}
+                          label={{ value: 'Inicio Proyección', position: 'top', fill: '#ef4444' }}
                         />
                       )}
                       <Area
@@ -313,9 +313,9 @@ export function TendenciasModal({ isOpen, onClose }: TendenciasModalProps) {
                   </ResponsiveContainer>
                 </div>
 
-                {/* GrÃ¡fico 2: Cuotas en DÃ­as */}
+                {/* Gráfico 2: Cuotas en Días */}
                 <div>
-                  <h3 className="text-lg font-semibold mb-3">Cuotas en DÃ­as</h3>
+                  <h3 className="text-lg font-semibold mb-3">Cuotas en Días</h3>
                   <ResponsiveContainer width="100%" height={300}>
                     <LineChart data={datosGrafico} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
@@ -327,7 +327,7 @@ export function TendenciasModal({ isOpen, onClose }: TendenciasModalProps) {
                       <YAxis
                         stroke="#6b7280"
                         style={{ fontSize: '12px' }}
-                        label={{ value: 'DÃ­as', angle: -90, position: 'insideLeft' }}
+                        label={{ value: 'Días', angle: -90, position: 'insideLeft' }}
                       />
                       <Tooltip content={<CustomTooltip />} />
                       <Legend />
@@ -336,13 +336,13 @@ export function TendenciasModal({ isOpen, onClose }: TendenciasModalProps) {
                           x={datosHistoricos[datosHistoricos.length - 1]?.fecha_formateada}
                           stroke="#ef4444"
                           strokeDasharray="5 5"
-                          label={{ value: 'Inicio ProyecciÃ³n', position: 'top', fill: '#ef4444' }}
+                          label={{ value: 'Inicio Proyección', position: 'top', fill: '#ef4444' }}
                         />
                       )}
                       <Line
                         type="monotone"
                         dataKey="cuotas_en_dias"
-                        name="Cuotas en DÃ­as (Real)"
+                        name="Cuotas en Días (Real)"
                         stroke="#10b981"
                         strokeWidth={3}
                         dot={{ r: 4 }}
@@ -351,7 +351,7 @@ export function TendenciasModal({ isOpen, onClose }: TendenciasModalProps) {
                       <Line
                         type="monotone"
                         dataKey="cuotas_en_dias_proyectado"
-                        name="Cuotas en DÃ­as (Proyectado)"
+                        name="Cuotas en Días (Proyectado)"
                         stroke="#10b981"
                         strokeDasharray="5 5"
                         strokeWidth={2}

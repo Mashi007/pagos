@@ -35,7 +35,7 @@ export function Usuarios() {
     is_active: true
   })
 
-  // Hook para validar contraseÃ±a
+  // Hook para validar contraseña
   const { validatePassword } = usePassword()
 
   // Cargar usuarios al montar el componente
@@ -54,7 +54,7 @@ export function Usuarios() {
     }
 
     document.addEventListener('keydown', handleEscape)
-    // Prevenir scroll del body cuando el modal estÃ¡ abierto
+    // Prevenir scroll del body cuando el modal está abierto
     document.body.style.overflow = 'hidden'
 
     return () => {
@@ -80,7 +80,7 @@ export function Usuarios() {
         setUsuarios(response.items)
         logger.debug('Usuarios cargados exitosamente', { count: response.items.length })
       } else {
-        logger.warn('Respuesta sin items vÃ¡lidos', { response })
+        logger.warn('Respuesta sin items válidos', { response })
         setUsuarios([])
       }
     } catch (err) {
@@ -95,10 +95,10 @@ export function Usuarios() {
 
   const handleEliminar = async (id: number) => {
     try {
-      // Confirmar eliminaciÃ³n permanente
+      // Confirmar eliminación permanente
       const confirmar = window.confirm(
-        'âš ï¸ Â¿EstÃ¡s seguro de que quieres ELIMINAR PERMANENTEMENTE este usuario?\n\n' +
-        'Esta acciÃ³n NO se puede deshacer y el usuario serÃ¡ borrado completamente de la base de datos.'
+        'âš ï¸ ¿Estás seguro de que quieres ELIMINAR PERMANENTEMENTE este usuario?\n\n' +
+        'Esta acción NO se puede deshacer y el usuario será borrado completamente de la base de datos.'
       )
 
       if (!confirmar) {
@@ -142,24 +142,24 @@ export function Usuarios() {
       apellido: usuario.apellido,
       is_admin: usuario.is_admin,  // Cambio clave: rol â†’ is_admin
       password: '',
-      cargo: usuario.cargo || '', // Si es null, usar string vacÃ­o (no 'Usuario')
+      cargo: usuario.cargo || '', // Si es null, usar string vacío (no 'Usuario')
       is_active: usuario.is_active
     })
     setShowCreateForm(true)
   }
 
-  // ValidaciÃ³n del formulario
+  // Validación del formulario
   const isFormValid = () => {
     if (!formData.email || !formData.nombre || !formData.apellido) {
       return false
     }
 
-    // Si estamos creando un nuevo usuario, la contraseÃ±a es obligatoria
+    // Si estamos creando un nuevo usuario, la contraseña es obligatoria
     if (!editingUsuario && !formData.password) {
       return false
     }
 
-    // Si hay una contraseÃ±a (ya sea en creaciÃ³n o actualizaciÃ³n), debe cumplir todos los requisitos
+    // Si hay una contraseña (ya sea en creación o actualización), debe cumplir todos los requisitos
     if (formData.password && formData.password.trim() !== '') {
       const passwordValidation = validatePassword(formData.password)
       if (!passwordValidation.isValid) {
@@ -175,7 +175,7 @@ export function Usuarios() {
 
     // Validar formulario antes de enviar
     if (!isFormValid()) {
-      toast.error('Por favor completa todos los campos requeridos y asegÃºrate de que la contraseÃ±a cumpla con todos los requisitos')
+      toast.error('Por favor completa todos los campos requeridos y asegúrate de que la contraseña cumpla con todos los requisitos')
       return
     }
 
@@ -185,25 +185,25 @@ export function Usuarios() {
       if (editingUsuario) {
         // Actualizar usuario existente - construir UserUpdate correctamente
         // IMPORTANTE: Incluir todos los campos que queremos actualizar, incluso si no cambiaron
-        // El backend usa exclude_unset=True, asÃ­ que necesitamos enviar valores explÃ­citos
-        // âœ… CRÃTICO: Siempre incluir is_admin explÃ­citamente, incluso si es False
+        // El backend usa exclude_unset=True, así que necesitamos enviar valores explícitos
+        // âœ… CRÍTICO: Siempre incluir is_admin explícitamente, incluso si es False
         const updateData: any = {
           email: formData.email,
           nombre: formData.nombre,
           apellido: formData.apellido,
-          is_admin: Boolean(formData.is_admin), // âœ… Forzar conversiÃ³n a booleano explÃ­cito
+          is_admin: Boolean(formData.is_admin), // âœ… Forzar conversión a booleano explícito
           is_active: formData.is_active,
         }
 
-        // âœ… CRÃTICO: Validar que editingUsuario.id existe y es vÃ¡lido
+        // âœ… CRÍTICO: Validar que editingUsuario.id existe y es válido
         if (!editingUsuario || !editingUsuario.id) {
-          console.error('âŒ [Usuarios] ERROR: editingUsuario o editingUsuario.id es invÃ¡lido:', editingUsuario)
-          toast.error('Error: Usuario a editar no vÃ¡lido')
+          console.error('âŒ [Usuarios] ERROR: editingUsuario o editingUsuario.id es inválido:', editingUsuario)
+          toast.error('Error: Usuario a editar no válido')
           return
         }
 
-        // âœ… CRÃTICO: Logging detallado del usuario que se estÃ¡ actualizando
-        console.log('ðŸ“¤ [Usuarios] Enviando actualizaciÃ³n:', {
+        // âœ… CRÍTICO: Logging detallado del usuario que se está actualizando
+        console.log('ðŸ“¤ [Usuarios] Enviando actualización:', {
           userId: editingUsuario.id,
           email: editingUsuario.email,
           nombre: editingUsuario.nombre,
@@ -215,17 +215,17 @@ export function Usuarios() {
           endpoint: `/api/v1/usuarios/${editingUsuario.id}`
         })
 
-        // Incluir cargo del formulario (valor que el usuario estÃ¡ editando)
-        // Si el cargo estÃ¡ vacÃ­o o solo tiene espacios, enviar null para limpiar el campo
+        // Incluir cargo del formulario (valor que el usuario está editando)
+        // Si el cargo está vacío o solo tiene espacios, enviar null para limpiar el campo
         if (formData.cargo && formData.cargo.trim() !== '') {
           updateData.cargo = formData.cargo.trim()
         } else {
-          // Si estÃ¡ vacÃ­o, enviar null para que se limpie en la BD
+          // Si está vacío, enviar null para que se limpie en la BD
           updateData.cargo = null
         }
 
-        // Incluir password solo si se proporcionÃ³ uno nuevo (no vacÃ­o)
-        // Si estÃ¡ vacÃ­o, NO lo incluimos para que el backend no intente actualizarlo
+        // Incluir password solo si se proporcionó uno nuevo (no vacío)
+        // Si está vacío, NO lo incluimos para que el backend no intente actualizarlo
         const passwordChanged = formData.password && formData.password.trim() !== ''
         if (passwordChanged) {
           updateData.password = formData.password.trim()
@@ -233,10 +233,10 @@ export function Usuarios() {
 
         await userService.actualizarUsuario(editingUsuario.id, updateData)
 
-        // âœ… Si se cambiÃ³ la contraseÃ±a del usuario actual, forzar logout y redirigir al login
+        // âœ… Si se cambió la contraseña del usuario actual, forzar logout y redirigir al login
         if (passwordChanged && currentUser && editingUsuario.id === currentUser.id) {
-          toast.success('ContraseÃ±a cambiada exitosamente. Debes volver a iniciar sesiÃ³n.')
-          // Limpiar sesiÃ³n y redirigir al login
+          toast.success('Contraseña cambiada exitosamente. Debes volver a iniciar sesión.')
+          // Limpiar sesión y redirigir al login
           clearAuthStorage()
           setTimeout(() => {
             window.location.href = '/login'
@@ -255,11 +255,11 @@ export function Usuarios() {
           password: formData.password,
         }
 
-        // Incluir cargo solo si tiene valor (no vacÃ­o)
+        // Incluir cargo solo si tiene valor (no vacío)
         if (formData.cargo && formData.cargo.trim() !== '') {
           createData.cargo = formData.cargo.trim()
         }
-        // Si estÃ¡ vacÃ­o, no incluirlo (serÃ¡ null en la BD)
+        // Si está vacío, no incluirlo (será null en la BD)
 
         await userService.crearUsuario(createData)
         toast.success('Usuario creado exitosamente')
@@ -304,7 +304,7 @@ export function Usuarios() {
     resetForm()
   }
 
-  // Filtrar usuarios por tÃ©rmino de bÃºsqueda
+  // Filtrar usuarios por término de búsqueda
   const usuariosFiltrados = usuarios.filter(usuario =>
     (usuario.nombre && usuario.nombre.toLowerCase().includes(searchTerm.toLowerCase())) ||
     (usuario.apellido && usuario.apellido.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -322,7 +322,7 @@ export function Usuarios() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Usuarios del Sistema</h1>
           <p className="text-gray-500 mt-1">
-            GestiÃ³n de usuarios y control de acceso
+            Gestión de usuarios y control de acceso
           </p>
         </div>
         <div className="flex gap-2">
@@ -416,7 +416,7 @@ export function Usuarios() {
         </Card>
       </div>
 
-      {/* BÃºsqueda */}
+      {/* Búsqueda */}
       <Card>
         <CardContent className="pt-6">
           <div className="relative">
@@ -645,20 +645,20 @@ export function Usuarios() {
                   placeholder="Ej: Gerente, Analista, Supervisor..."
                   className="mt-1"
                 />
-                <p className="text-xs text-gray-500 mt-1">Dejar vacÃ­o para "Sin especificar"</p>
+                <p className="text-xs text-gray-500 mt-1">Dejar vacío para "Sin especificar"</p>
               </div>
 
               <div>
                 <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                  ContraseÃ±a {editingUsuario && '(dejar vacÃ­o para mantener la actual)'}
+                  Contraseña {editingUsuario && '(dejar vacío para mantener la actual)'}
                 </label>
                 <PasswordField
                   value={formData.password}
                   onChange={(password) => setFormData({ ...formData, password })}
-                  placeholder={editingUsuario ? 'Nueva contraseÃ±a (opcional)' : 'MÃ­nimo 8 caracteres'}
+                  placeholder={editingUsuario ? 'Nueva contraseña (opcional)' : 'Mínimo 8 caracteres'}
                   required={!editingUsuario}
-                  showGenerateButton={true}  // âœ… SIEMPRE mostrar botÃ³n de generar
-                  showCopyButton={true}      // âœ… SIEMPRE mostrar botÃ³n de copiar
+                  showGenerateButton={true}  // âœ… SIEMPRE mostrar botón de generar
+                  showCopyButton={true}      // âœ… SIEMPRE mostrar botón de copiar
                   className="mt-1"
                 />
               </div>

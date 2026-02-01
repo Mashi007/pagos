@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/ca
 import { usePagosKPIs } from '../../hooks/usePagos'
 
 export function PagosKPIsNuevo() {
-  // Obtener KPIs desde el backend (mes/aÃ±o actual por defecto)
+  // Obtener KPIs desde el backend (mes/año actual por defecto)
   const { data: kpiData, isLoading, error } = usePagosKPIs()
 
   // Valores por defecto mientras carga
@@ -13,7 +13,7 @@ export function PagosKPIsNuevo() {
     clientesEnMora: 0,
     clientesAlDia: 0,
     mes: new Date().getMonth() + 1,
-    aÃ±o: new Date().getFullYear(),
+    año: new Date().getFullYear(),
   }
 
   if (isLoading) {
@@ -70,7 +70,7 @@ export function PagosKPIsNuevo() {
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-gray-900">KPIs de Pagos</h2>
         <span className="text-sm text-gray-500">
-          {nombreMes} {kpiDataFinal.aÃ±o}
+          {nombreMes} {kpiDataFinal.año}
         </span>
       </div>
 
@@ -123,7 +123,7 @@ export function PagosKPIsNuevo() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Clientes al DÃ­a</CardTitle>
+            <CardTitle className="text-sm font-medium">Clientes al Día</CardTitle>
             <CheckCircle className="h-5 w-5 text-orange-600" />
           </CardHeader>
           <CardContent>

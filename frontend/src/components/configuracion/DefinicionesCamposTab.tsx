@@ -96,9 +96,9 @@ export function DefinicionesCamposTab() {
       
       console.log(`ðŸ“Š Campos disponibles: ${totalCampos}, Definiciones existentes: ${definicionesCargadas.length}`)
       
-      // Si no hay definiciones pero hay campos disponibles, sincronizar automÃ¡ticamente
+      // Si no hay definiciones pero hay campos disponibles, sincronizar automáticamente
       if (definicionesCargadas.length === 0 && totalCampos > 0 && !yaSincronizado) {
-        console.log('ðŸ”„ No hay definiciones precargadas. Sincronizando automÃ¡ticamente...')
+        console.log('ðŸ”„ No hay definiciones precargadas. Sincronizando automáticamente...')
         setYaSincronizado(true)
         await handleSincronizarAutomatico()
       }
@@ -157,7 +157,7 @@ export function DefinicionesCamposTab() {
   }
 
   const handleSincronizarAutomatico = async () => {
-    // SincronizaciÃ³n automÃ¡tica sin confirmaciÃ³n
+    // Sincronización automática sin confirmación
     setSincronizando(true)
     try {
       const response = await apiClient.post<{
@@ -169,22 +169,22 @@ export function DefinicionesCamposTab() {
       }>('/api/v1/configuracion/ai/definiciones-campos/sincronizar')
       
       toast.success(
-        `âœ… SincronizaciÃ³n automÃ¡tica completada: ${response.campos_creados} campos precargados`
+        `âœ… Sincronización automática completada: ${response.campos_creados} campos precargados`
       )
-      // Recargar todo despuÃ©s de sincronizar
+      // Recargar todo después de sincronizar
       await cargarCamposDisponibles()
       await cargarDefiniciones()
       await cargarTablas()
     } catch (error: any) {
-      console.error('Error sincronizando automÃ¡ticamente:', error)
-      toast.error(error?.response?.data?.detail || 'Error al sincronizar campos automÃ¡ticamente')
+      console.error('Error sincronizando automáticamente:', error)
+      toast.error(error?.response?.data?.detail || 'Error al sincronizar campos automáticamente')
     } finally {
       setSincronizando(false)
     }
   }
 
   const handleSincronizar = async () => {
-    if (!confirm('Â¿Deseas sincronizar todos los campos de la base de datos? Esto crearÃ¡ definiciones para campos que no existen y actualizarÃ¡ informaciÃ³n tÃ©cnica de campos existentes sin sobrescribir definiciones personalizadas.')) {
+    if (!confirm('¿Deseas sincronizar todos los campos de la base de datos? Esto creará definiciones para campos que no existen y actualizará información técnica de campos existentes sin sobrescribir definiciones personalizadas.')) {
       return
     }
 
@@ -199,7 +199,7 @@ export function DefinicionesCamposTab() {
       }>('/api/v1/configuracion/ai/definiciones-campos/sincronizar')
       
       toast.success(
-        `SincronizaciÃ³n completada: ${response.campos_creados} creados, ${response.campos_actualizados} actualizados`
+        `Sincronización completada: ${response.campos_creados} creados, ${response.campos_actualizados} actualizados`
       )
       cargarDefiniciones()
       cargarTablas()
@@ -213,15 +213,15 @@ export function DefinicionesCamposTab() {
   }
 
   const handleSeleccionarCampo = (tabla: string, campo: CampoDisponible) => {
-    // Verificar si ya existe definiciÃ³n
+    // Verificar si ya existe definición
     const existe = definiciones.find(d => d.tabla === tabla && d.campo === campo.nombre)
     if (existe) {
-      toast.info('Este campo ya tiene una definiciÃ³n. Puedes editarla.')
+      toast.info('Este campo ya tiene una definición. Puedes editarla.')
       handleEditar(existe)
       return
     }
 
-    // Prellenar formulario con informaciÃ³n del campo
+    // Prellenar formulario con información del campo
     setFormulario({
       tabla: tabla,
       campo: campo.nombre,
@@ -245,7 +245,7 @@ export function DefinicionesCamposTab() {
 
   const handleGuardar = async () => {
     if (!formulario.tabla.trim() || !formulario.campo.trim() || !formulario.definicion.trim()) {
-      toast.error('Tabla, campo y definiciÃ³n son obligatorios')
+      toast.error('Tabla, campo y definición son obligatorios')
       return
     }
 
@@ -263,10 +263,10 @@ export function DefinicionesCamposTab() {
 
       if (editandoId) {
         await apiClient.put(`/api/v1/configuracion/ai/definiciones-campos/${editandoId}`, datos)
-        toast.success('DefiniciÃ³n actualizada exitosamente')
+        toast.success('Definición actualizada exitosamente')
       } else {
         await apiClient.post('/api/v1/configuracion/ai/definiciones-campos', datos)
-        toast.success('DefiniciÃ³n creada exitosamente')
+        toast.success('Definición creada exitosamente')
       }
 
       setMostrarFormulario(false)
@@ -276,7 +276,7 @@ export function DefinicionesCamposTab() {
       cargarTablas()
     } catch (error: any) {
       console.error('Error guardando:', error)
-      toast.error(error?.response?.data?.detail || 'Error al guardar la definiciÃ³n')
+      toast.error(error?.response?.data?.detail || 'Error al guardar la definición')
     } finally {
       setGuardando(false)
     }
@@ -304,15 +304,15 @@ export function DefinicionesCamposTab() {
   }
 
   const handleEliminar = async (id: number) => {
-    if (!confirm('Â¿EstÃ¡s seguro de eliminar esta definiciÃ³n?')) return
+    if (!confirm('¿Estás seguro de eliminar esta definición?')) return
 
     try {
       await apiClient.delete(`/api/v1/configuracion/ai/definiciones-campos/${id}`)
-      toast.success('DefiniciÃ³n eliminada exitosamente')
+      toast.success('Definición eliminada exitosamente')
       cargarDefiniciones()
     } catch (error: any) {
       console.error('Error eliminando:', error)
-      toast.error(error?.response?.data?.detail || 'Error al eliminar la definiciÃ³n')
+      toast.error(error?.response?.data?.detail || 'Error al eliminar la definición')
     }
   }
 
@@ -321,7 +321,7 @@ export function DefinicionesCamposTab() {
       await apiClient.put(`/api/v1/configuracion/ai/definiciones-campos/${definicion.id}`, {
         activo: !definicion.activo,
       })
-      toast.success(`DefiniciÃ³n ${!definicion.activo ? 'activada' : 'desactivada'}`)
+      toast.success(`Definición ${!definicion.activo ? 'activada' : 'desactivada'}`)
       cargarDefiniciones()
     } catch (error: any) {
       console.error('Error cambiando estado:', error)
@@ -370,10 +370,10 @@ export function DefinicionesCamposTab() {
         <div>
           <h3 className="text-2xl font-bold flex items-center gap-2">
             <Database className="h-6 w-6 text-purple-600" />
-            CatÃ¡logo de Campos
+            Catálogo de Campos
           </h3>
           <p className="text-sm text-gray-600 mt-1">
-            Define todos los campos de la base de datos con sus descripciones para entrenar acceso rÃ¡pido
+            Define todos los campos de la base de datos con sus descripciones para entrenar acceso rápido
           </p>
         </div>
         <div className="flex gap-2">
@@ -472,7 +472,7 @@ export function DefinicionesCamposTab() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
-                  placeholder="Buscar por tabla, campo o definiciÃ³n..."
+                  placeholder="Buscar por tabla, campo o definición..."
                   value={busqueda}
                   onChange={(e) => setBusqueda(e.target.value)}
                   className="pl-10"
@@ -500,7 +500,7 @@ export function DefinicionesCamposTab() {
         <Card className="border-purple-200">
           <CardContent className="pt-6">
             <h4 className="text-lg font-semibold mb-4">
-              {editandoId ? 'Editar DefiniciÃ³n' : 'Nueva DefiniciÃ³n'}
+              {editandoId ? 'Editar Definición' : 'Nueva Definición'}
             </h4>
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -573,12 +573,12 @@ export function DefinicionesCamposTab() {
 
               <div>
                 <label className="text-sm font-medium block mb-1">
-                  DefiniciÃ³n <span className="text-red-500">*</span>
+                  Definición <span className="text-red-500">*</span>
                 </label>
                 <Textarea
                   value={formulario.definicion}
                   onChange={(e) => setFormulario({ ...formulario, definicion: e.target.value })}
-                  placeholder="Describe quÃ© almacena este campo y cÃ³mo se usa..."
+                  placeholder="Describe qué almacena este campo y cómo se usa..."
                   rows={3}
                 />
               </div>
@@ -629,7 +629,7 @@ export function DefinicionesCamposTab() {
                     onChange={(e) => setFormulario({ ...formulario, tiene_indice: e.target.checked })}
                     className="rounded"
                   />
-                  <span className="text-sm">Tiene Ãndice</span>
+                  <span className="text-sm">Tiene Índice</span>
                 </label>
                 <label className="flex items-center gap-2">
                   <input
@@ -638,12 +638,12 @@ export function DefinicionesCamposTab() {
                     onChange={(e) => setFormulario({ ...formulario, es_clave_foranea: e.target.checked })}
                     className="rounded"
                   />
-                  <span className="text-sm">Clave ForÃ¡nea (FK)</span>
+                  <span className="text-sm">Clave Foránea (FK)</span>
                 </label>
               </div>
 
               <div>
-                <label className="text-sm font-medium block mb-1">Valores Posibles (uno por lÃ­nea)</label>
+                <label className="text-sm font-medium block mb-1">Valores Posibles (uno por línea)</label>
                 <Textarea
                   value={formulario.valores_posibles}
                   onChange={(e) => setFormulario({ ...formulario, valores_posibles: e.target.value })}
@@ -653,7 +653,7 @@ export function DefinicionesCamposTab() {
               </div>
 
               <div>
-                <label className="text-sm font-medium block mb-1">Ejemplos de Valores (uno por lÃ­nea)</label>
+                <label className="text-sm font-medium block mb-1">Ejemplos de Valores (uno por línea)</label>
                 <Textarea
                   value={formulario.ejemplos_valores}
                   onChange={(e) => setFormulario({ ...formulario, ejemplos_valores: e.target.value })}
@@ -667,7 +667,7 @@ export function DefinicionesCamposTab() {
                 <Textarea
                   value={formulario.notas}
                   onChange={(e) => setFormulario({ ...formulario, notas: e.target.value })}
-                  placeholder="InformaciÃ³n adicional sobre el campo..."
+                  placeholder="Información adicional sobre el campo..."
                   rows={2}
                 />
               </div>

@@ -115,7 +115,7 @@ export function CorregirClientes({ onClose }: CorregirClientesProps) {
         <Card className="w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle>Corregir Clientes con Problemas de ValidaciÃ³n</CardTitle>
+              <CardTitle>Corregir Clientes con Problemas de Validación</CardTitle>
               <Button variant="ghost" size="sm" onClick={onClose}>
                 <X className="w-4 h-4" />
               </Button>
@@ -137,7 +137,7 @@ export function CorregirClientes({ onClose }: CorregirClientesProps) {
         <Card className="w-full max-w-6xl">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle>Corregir Clientes con Problemas de ValidaciÃ³n</CardTitle>
+              <CardTitle>Corregir Clientes con Problemas de Validación</CardTitle>
               <Button variant="ghost" size="sm" onClick={onClose}>
                 <X className="w-4 h-4" />
               </Button>
@@ -170,7 +170,7 @@ export function CorregirClientes({ onClose }: CorregirClientesProps) {
           <div>
             <h2 className="text-2xl font-bold text-gray-900">Corregir Clientes</h2>
             <p className="text-gray-600 mt-1">
-              {total} cliente{total !== 1 ? 's' : ''} con problemas de validaciÃ³n
+              {total} cliente{total !== 1 ? 's' : ''} con problemas de validación
             </p>
           </div>
           <Button variant="ghost" size="sm" onClick={onClose}>
@@ -183,16 +183,16 @@ export function CorregirClientes({ onClose }: CorregirClientesProps) {
           {clientes.length === 0 ? (
             <div className="text-center py-12">
               <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-              <p className="text-lg text-gray-600">No hay clientes con problemas de validaciÃ³n</p>
+              <p className="text-lg text-gray-600">No hay clientes con problemas de validación</p>
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>ID</TableHead>
-                  <TableHead>CÃ©dula</TableHead>
+                  <TableHead>Cédula</TableHead>
                   <TableHead>Nombres</TableHead>
-                  <TableHead>TelÃ©fono</TableHead>
+                  <TableHead>Teléfono</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Problemas</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
@@ -304,11 +304,11 @@ export function CorregirClientes({ onClose }: CorregirClientesProps) {
           )}
         </div>
 
-        {/* PaginaciÃ³n */}
+        {/* Paginación */}
         {totalPages > 1 && (
           <div className="border-t p-4 flex items-center justify-between">
             <div className="text-sm text-gray-600">
-              Mostrando pÃ¡gina {currentPage} de {totalPages}
+              Mostrando página {currentPage} de {totalPages}
             </div>
             <div className="flex gap-2">
               <Button

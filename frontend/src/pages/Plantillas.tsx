@@ -12,7 +12,7 @@ export function Plantillas() {
     <div className="p-4 space-y-4">
       <div>
         <h1 className="text-xl font-bold">Plantillas de notificaciones</h1>
-        <p className="text-sm text-gray-500">Herramienta de construcciÃ³n de plantillas y gestiÃ³n de variables (solo Administrador)</p>
+        <p className="text-sm text-gray-500">Herramienta de construcción de plantillas y gestión de variables (solo Administrador)</p>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">

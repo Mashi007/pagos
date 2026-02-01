@@ -69,7 +69,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
 
   const toggleCompact = () => {
     setIsCompact(!isCompact)
-    // Si se estÃ¡ compactando, cerrar submenÃºs
+    // Si se está compactando, cerrar submenús
     if (!isCompact) {
       setOpenSubmenus([])
     }
@@ -105,7 +105,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       isSubmenu: true,
       children: [
         { title: 'Clientes', href: '/clientes', icon: Users },
-        { title: 'Tickets AtenciÃ³n', href: '/crm/tickets', icon: FileText },
+        { title: 'Tickets Atención', href: '/crm/tickets', icon: FileText },
         {
           title: 'Notificaciones',
           href: '/notificaciones',
@@ -125,7 +125,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       ],
     },
     {
-      title: 'PrÃ©stamos',
+      title: 'Préstamos',
       href: '/prestamos',
       icon: CreditCard,
     },
@@ -147,7 +147,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       icon: FileText,
     },
     {
-      title: 'AuditorÃ­a',
+      title: 'Auditoría',
       href: '/auditoria',
       icon: Shield,
     },
@@ -167,27 +167,27 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       ],
     },
     {
-      title: 'ConfiguraciÃ³n',
+      title: 'Configuración',
       icon: Settings,
       isSubmenu: true,
       children: [
         { title: 'General', href: '/configuracion', icon: Settings },
         { title: 'Validadores', href: '/validadores', icon: CheckCircle },
-        { title: 'ConfiguraciÃ³n Email', href: '/configuracion?tab=email', icon: Mail },
-        { title: 'ConfiguraciÃ³n WhatsApp', href: '/configuracion?tab=whatsapp', icon: MessageSquare },
-        { title: 'ConfiguraciÃ³n AI', href: '/configuracion?tab=ai', icon: Brain },
-        // Herramientas dentro de ConfiguraciÃ³n
+        { title: 'Configuración Email', href: '/configuracion?tab=email', icon: Mail },
+        { title: 'Configuración WhatsApp', href: '/configuracion?tab=whatsapp', icon: MessageSquare },
+        { title: 'Configuración AI', href: '/configuracion?tab=ai', icon: Brain },
+        // Herramientas dentro de Configuración
         ...(user?.is_admin ? [{ title: 'Plantillas', href: '/herramientas/plantillas', icon: FileText }] : []),
         { title: 'Programador', href: '/scheduler', icon: Calendar },
         { title: 'Analistas', href: '/analistas', icon: Users },
         { title: 'Concesionarios', href: '/concesionarios', icon: Building },
-        { title: 'Modelos de VehÃ­culos', href: '/modelos-vehiculos', icon: Car },
+        { title: 'Modelos de Vehículos', href: '/modelos-vehiculos', icon: Car },
         { title: 'Usuarios', href: '/usuarios', icon: Shield },
       ],
     },
   ]
 
-  // Abrir automÃ¡ticamente el submenÃº si alguna de sus rutas estÃ¡ activa
+  // Abrir automáticamente el submenú si alguna de sus rutas está activa
   useEffect(() => {
     const pathname = location.pathname
     menuItems.forEach((item) => {
@@ -211,7 +211,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     })
   }, [location.pathname, location.search])
 
-  // TEMPORAL: Mostrar todos los elementos del menÃº sin filtros de permisos
+  // TEMPORAL: Mostrar todos los elementos del menú sin filtros de permisos
   const filteredMenuItems = menuItems.filter((item) => {
     // Mostrar todos los elementos por ahora
     return true
@@ -233,13 +233,13 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     }
 
     // âœ… Para rutas sin query params, verificar que sea exacta Y que no haya query params en la URL actual
-    // Esto evita que /configuracion resalte cuando estÃ¡s en /configuracion?tab=email
+    // Esto evita que /configuracion resalte cuando estás en /configuracion?tab=email
     if (location.search) {
       // Si la URL actual tiene query params pero el href no, NO resaltar
       return false
     }
 
-    // âœ… ComparaciÃ³n exacta de pathname para rutas sin query params
+    // âœ… Comparación exacta de pathname para rutas sin query params
     return location.pathname === href
   }
 
@@ -283,7 +283,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
 
   return (
     <>
-      {/* Overlay para mÃ³vil */}
+      {/* Overlay para móvil */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -390,7 +390,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                 <X className="h-5 w-5" />
               </Button>
             </div>
-            {/* BotÃ³n toggle modo compacto - solo desktop */}
+            {/* Botón toggle modo compacto - solo desktop */}
             <div className="hidden lg:block">
               <Button
                 variant="ghost"
@@ -423,7 +423,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                   transition={{ delay: index * 0.05 }}
                 >
                   {item.isSubmenu && item.children ? (
-                    // Renderizar submenÃº con dropdown
+                    // Renderizar submenú con dropdown
                     <div>
                       <button
                         onClick={() => toggleSubmenu(item.title)}
@@ -450,7 +450,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                         )}
                       </button>
 
-                      {/* SubmenÃº desplegable */}
+                      {/* Submenú desplegable */}
                       <AnimatePresence>
                         {openSubmenus.includes(item.title) && (
                           <motion.div
@@ -511,7 +511,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                       <NavLink
                         to={item.href!}
                         onClick={() => {
-                          // Cerrar sidebar en mÃ³vil al hacer click
+                          // Cerrar sidebar en móvil al hacer click
                           if (window.innerWidth < 1024) {
                             onClose()
                           }
@@ -553,7 +553,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
             </div>
           </nav>
 
-          {/* Footer con informaciÃ³n de usuario */}
+          {/* Footer con información de usuario */}
           <div className={cn(
             "border-t border-blue-200/60 bg-white/50",
             isCompact ? "p-2" : "p-4"
@@ -589,7 +589,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                 )}
               </button>
 
-              {/* MenÃº desplegable del usuario */}
+              {/* Menú desplegable del usuario */}
               <AnimatePresence>
                 {showUserMenu && (
                   <motion.div
@@ -607,7 +607,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                         </button>
                         <button className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition-colors flex items-center space-x-2">
                           <Settings className="h-4 w-4" />
-                          <span>ConfiguraciÃ³n</span>
+                          <span>Configuración</span>
                         </button>
                         {user?.is_admin === false && (
                           <button
@@ -632,7 +632,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                           className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center space-x-2"
                         >
                           <LogOut className="h-4 w-4" />
-                          <span>Cerrar SesiÃ³n</span>
+                          <span>Cerrar Sesión</span>
                         </button>
                       </div>
                     </div>

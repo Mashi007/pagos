@@ -26,7 +26,7 @@ interface RegistrarPagoFormProps {
   onClose: () => void
   onSuccess: () => void
   pagoInicial?: Partial<PagoCreate>
-  pagoId?: number  // âœ… Si estÃ¡ presente, es modo ediciÃ³n
+  pagoId?: number  // âœ… Si está presente, es modo edición
 }
 
 export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId }: RegistrarPagoFormProps) {
@@ -44,23 +44,23 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId }: R
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  // Debounce de la cÃ©dula para buscar prÃ©stamos
+  // Debounce de la cédula para buscar préstamos
   const debouncedCedula = useDebounce(formData.cedula_cliente, 500)
 
-  // Buscar prÃ©stamos cuando cambia la cÃ©dula (con al menos 2 caracteres)
+  // Buscar préstamos cuando cambia la cédula (con al menos 2 caracteres)
   const { data: prestamos, isLoading: isLoadingPrestamos } = usePrestamosByCedula(
     debouncedCedula.length >= 2 ? debouncedCedula : ''
   )
 
-  // Obtener informaciÃ³n del prÃ©stamo seleccionado para validaciones
+  // Obtener información del préstamo seleccionado para validaciones
   const { data: prestamoSeleccionado } = usePrestamo(formData.prestamo_id || 0)
 
-  // Auto-seleccionar prÃ©stamo si hay solo uno disponible
+  // Auto-seleccionar préstamo si hay solo uno disponible
   useEffect(() => {
     if (prestamos && prestamos.length === 1 && !formData.prestamo_id) {
       setFormData(prev => ({ ...prev, prestamo_id: prestamos[0].id }))
     } else if (prestamos && prestamos.length === 0) {
-      // Limpiar ID si no hay prÃ©stamos
+      // Limpiar ID si no hay préstamos
       setFormData(prev => ({ ...prev, prestamo_id: null }))
     }
   }, [prestamos])
@@ -70,57 +70,57 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId }: R
 
     // âœ… VALIDACIONES SEGÃšN CRITERIOS DOCUMENTADOS
 
-    // Validar campos bÃ¡sicos
+    // Validar campos básicos
     const newErrors: Record<string, string> = {}
     if (!formData.cedula_cliente) {
-      newErrors.cedula_cliente = 'CÃ©dula requerida'
+      newErrors.cedula_cliente = 'Cédula requerida'
     }
 
-    // Si hay prÃ©stamos disponibles, el ID de prÃ©stamo es obligatorio
+    // Si hay préstamos disponibles, el ID de préstamo es obligatorio
     if (prestamos && prestamos.length > 0 && !formData.prestamo_id) {
-      newErrors.prestamo_id = 'Debe seleccionar un crÃ©dito'
+      newErrors.prestamo_id = 'Debe seleccionar un crédito'
     }
 
-    // âœ… CRITERIO 1: VerificaciÃ³n de cÃ©dula del pago vs cÃ©dula del prÃ©stamo
+    // âœ… CRITERIO 1: Verificación de cédula del pago vs cédula del préstamo
     if (formData.prestamo_id && prestamoSeleccionado) {
       if (formData.cedula_cliente !== prestamoSeleccionado.cedula) {
-        newErrors.cedula_cliente = `La cÃ©dula del pago (${formData.cedula_cliente}) no coincide con la cÃ©dula del prÃ©stamo (${prestamoSeleccionado.cedula}). El pago solo se aplicarÃ¡ si las cÃ©dulas coinciden.`
-        newErrors.prestamo_id = 'La cÃ©dula del pago debe coincidir con la cÃ©dula del prÃ©stamo seleccionado'
+        newErrors.cedula_cliente = `La cédula del pago (${formData.cedula_cliente}) no coincide con la cédula del préstamo (${prestamoSeleccionado.cedula}). El pago solo se aplicará si las cédulas coinciden.`
+        newErrors.prestamo_id = 'La cédula del pago debe coincidir con la cédula del préstamo seleccionado'
       }
     }
 
-    // âœ… CRITERIO 2: ValidaciÃ³n de monto
+    // âœ… CRITERIO 2: Validación de monto
     if (!formData.monto_pagado || formData.monto_pagado <= 0) {
-      newErrors.monto_pagado = 'Monto invÃ¡lido. Debe ser mayor a cero'
+      newErrors.monto_pagado = 'Monto inválido. Debe ser mayor a cero'
     } else if (formData.monto_pagado > 1000000) {
       newErrors.monto_pagado = 'Monto muy alto. Por favor verifique el valor'
     }
 
-    // âœ… CRITERIO 3: ValidaciÃ³n y normalizaciÃ³n de nÃºmero de documento
-    // Normalizar formato cientÃ­fico si existe (ej: 7.40087E+14 -> 740087000000000)
+    // âœ… CRITERIO 3: Validación y normalización de número de documento
+    // Normalizar formato científico si existe (ej: 7.40087E+14 -> 740087000000000)
     let numeroDocumentoNormalizado = formData.numero_documento.trim()
     if (numeroDocumentoNormalizado && (/[eE]/.test(numeroDocumentoNormalizado))) {
       try {
         const numeroFloat = parseFloat(numeroDocumentoNormalizado)
         numeroDocumentoNormalizado = Math.floor(numeroFloat).toString()
         // Mostrar advertencia al usuario
-        console.warn(`âš ï¸ NÃºmero de documento normalizado de formato cientÃ­fico: ${formData.numero_documento} -> ${numeroDocumentoNormalizado}`)
+        console.warn(`âš ï¸ Número de documento normalizado de formato científico: ${formData.numero_documento} -> ${numeroDocumentoNormalizado}`)
       } catch (e) {
-        console.error('Error normalizando nÃºmero de documento:', e)
+        console.error('Error normalizando número de documento:', e)
       }
     }
     
     if (!numeroDocumentoNormalizado || numeroDocumentoNormalizado === '') {
-      newErrors.numero_documento = 'NÃºmero de documento requerido'
+      newErrors.numero_documento = 'Número de documento requerido'
     }
 
-    // âœ… CRITERIO 4: ValidaciÃ³n de fecha
+    // âœ… CRITERIO 4: Validación de fecha
     if (!formData.fecha_pago) {
       newErrors.fecha_pago = 'Fecha de pago requerida'
     } else {
       const fechaPago = new Date(formData.fecha_pago)
       const hoy = new Date()
-      hoy.setHours(23, 59, 59, 999) // Permitir hasta el final del dÃ­a
+      hoy.setHours(23, 59, 59, 999) // Permitir hasta el final del día
       if (fechaPago > hoy) {
         newErrors.fecha_pago = 'La fecha de pago no puede ser futura'
       }
@@ -133,14 +133,14 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId }: R
 
     setIsSubmitting(true)
     try {
-      // Aplicar normalizaciÃ³n al nÃºmero de documento antes de enviar
+      // Aplicar normalización al número de documento antes de enviar
       const datosEnvio = {
         ...formData,
         numero_documento: numeroDocumentoNormalizado
       }
       
       if (isEditing && pagoId) {
-        console.log('ðŸ”„ Iniciando actualizaciÃ³n de pago...', { pagoId, datosEnvio })
+        console.log('ðŸ”„ Iniciando actualización de pago...', { pagoId, datosEnvio })
         const result = await pagoService.updatePago(pagoId, datosEnvio)
         console.log('âœ… Pago actualizado exitosamente:', result)
       } else {
@@ -195,11 +195,11 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId }: R
               </div>
             )}
 
-            {/* CÃ©dula e ID PrÃ©stamo */}
+            {/* Cédula e ID Préstamo */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">
-                  CÃ©dula Cliente <span className="text-red-500">*</span>
+                  Cédula Cliente <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <CreditCard className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -219,25 +219,25 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId }: R
                 {isLoadingPrestamos && formData.cedula_cliente.length >= 2 && (
                   <p className="text-xs text-blue-600 flex items-center gap-1">
                     <Loader2 className="w-3 h-3 animate-spin" />
-                    Buscando prÃ©stamos...
+                    Buscando préstamos...
                   </p>
                 )}
                 {!isLoadingPrestamos && prestamos && prestamos.length > 0 && formData.cedula_cliente.length >= 2 && (
                   <p className="text-xs text-green-600 flex items-center gap-1">
                     <CheckCircle className="w-3 h-3" />
-                    {prestamos.length} prÃ©stamo{prestamos.length !== 1 ? 's' : ''} encontrado{prestamos.length !== 1 ? 's' : ''}
+                    {prestamos.length} préstamo{prestamos.length !== 1 ? 's' : ''} encontrado{prestamos.length !== 1 ? 's' : ''}
                   </p>
                 )}
                 {!isLoadingPrestamos && prestamos && prestamos.length === 0 && formData.cedula_cliente.length >= 2 && (
                   <p className="text-xs text-yellow-600">
-                    No se encontraron prÃ©stamos para esta cÃ©dula
+                    No se encontraron préstamos para esta cédula
                   </p>
                 )}
               </div>
 
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">
-                  ID CrÃ©dito {formData.cedula_cliente && prestamos && prestamos.length > 0 && <span className="text-red-500">*</span>}
+                  ID Crédito {formData.cedula_cliente && prestamos && prestamos.length > 0 && <span className="text-red-500">*</span>}
                 </label>
                 {prestamos && prestamos.length > 0 ? (
                   <Select
@@ -245,7 +245,7 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId }: R
                     onValueChange={(value) => setFormData({ ...formData, prestamo_id: parseInt(value) })}
                   >
                     <SelectTrigger className={errors.prestamo_id ? 'border-red-500' : ''}>
-                      <SelectValue placeholder="Seleccione un crÃ©dito" />
+                      <SelectValue placeholder="Seleccione un crédito" />
                     </SelectTrigger>
                     <SelectContent>
                       {prestamos.map((prestamo) => (
@@ -260,7 +260,7 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId }: R
                     type="number"
                     value={formData.prestamo_id || ''}
                     onChange={e => setFormData({ ...formData, prestamo_id: e.target.value ? parseInt(e.target.value) : null })}
-                    placeholder="ID del crÃ©dito"
+                    placeholder="ID del crédito"
                     disabled={!formData.cedula_cliente}
                     className={errors.prestamo_id ? 'border-red-500' : ''}
                   />
@@ -268,11 +268,11 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId }: R
                 {(errors.prestamo_id || (formData.cedula_cliente && prestamos && prestamos.length > 0 && !formData.prestamo_id)) && (
                   <p className="text-sm text-red-600 flex items-center gap-1">
                     <AlertCircle className="w-4 h-4" />
-                    {errors.prestamo_id || 'Debe seleccionar un crÃ©dito'}
+                    {errors.prestamo_id || 'Debe seleccionar un crédito'}
                   </p>
                 )}
 
-                {/* âœ… VerificaciÃ³n de cÃ©dula del prÃ©stamo vs cÃ©dula del pago */}
+                {/* âœ… Verificación de cédula del préstamo vs cédula del pago */}
                 {formData.prestamo_id && prestamoSeleccionado && formData.cedula_cliente && (
                   <div className={`text-xs p-2 rounded flex items-start gap-2 ${
                     formData.cedula_cliente === prestamoSeleccionado.cedula
@@ -286,14 +286,14 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId }: R
                     )}
                     <div>
                       {formData.cedula_cliente === prestamoSeleccionado.cedula ? (
-                        <span className="font-medium">âœ… CÃ©dulas coinciden</span>
+                        <span className="font-medium">âœ… Cédulas coinciden</span>
                       ) : (
                         <div>
-                          <span className="font-medium">âš ï¸ CÃ©dulas no coinciden</span>
+                          <span className="font-medium">âš ï¸ Cédulas no coinciden</span>
                           <p className="mt-1">
-                            CÃ©dula del pago: <strong>{formData.cedula_cliente}</strong><br />
-                            CÃ©dula del prÃ©stamo: <strong>{prestamoSeleccionado.cedula}</strong><br />
-                            <span className="text-xs">El pago solo se aplicarÃ¡ si las cÃ©dulas coinciden.</span>
+                            Cédula del pago: <strong>{formData.cedula_cliente}</strong><br />
+                            Cédula del préstamo: <strong>{prestamoSeleccionado.cedula}</strong><br />
+                            <span className="text-xs">El pago solo se aplicará si las cédulas coinciden.</span>
                           </p>
                         </div>
                       )}
@@ -349,18 +349,18 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId }: R
                   </p>
                 )}
 
-                {/* âœ… InformaciÃ³n sobre cÃ³mo se aplicarÃ¡ el pago */}
+                {/* âœ… Información sobre cómo se aplicará el pago */}
                 {formData.monto_pagado > 0 && formData.prestamo_id && prestamoSeleccionado && (
                   <div className="bg-blue-50 border border-blue-200 rounded p-2 text-xs text-blue-700">
                     <div className="flex items-start gap-2">
                       <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
                       <div>
-                        <p className="font-medium mb-1">â„¹ï¸ CÃ³mo se aplicarÃ¡ el pago:</p>
+                        <p className="font-medium mb-1">â„¹ï¸ Cómo se aplicará el pago:</p>
                         <ul className="list-disc list-inside space-y-1 ml-2">
-                          <li>Se aplicarÃ¡ a las cuotas mÃ¡s antiguas primero (por fecha de vencimiento)</li>
-                          <li>Se distribuirÃ¡ proporcionalmente entre capital e interÃ©s</li>
+                          <li>Se aplicará a las cuotas más antiguas primero (por fecha de vencimiento)</li>
+                          <li>Se distribuirá proporcionalmente entre capital e interés</li>
                           {formData.monto_pagado >= 500 && (
-                            <li>Si el monto cubre una cuota completa y sobra, el exceso se aplicarÃ¡ a la siguiente cuota</li>
+                            <li>Si el monto cubre una cuota completa y sobra, el exceso se aplicará a la siguiente cuota</li>
                           )}
                         </ul>
                       </div>
@@ -370,10 +370,10 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId }: R
               </div>
             </div>
 
-            {/* InstituciÃ³n Bancaria */}
+            {/* Institución Bancaria */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700">
-                InstituciÃ³n Bancaria
+                Institución Bancaria
               </label>
               <div className="relative">
                 <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -387,10 +387,10 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId }: R
               </div>
             </div>
 
-            {/* NÃºmero de Documento */}
+            {/* Número de Documento */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700">
-                NÃºmero de Documento <span className="text-red-500">*</span>
+                Número de Documento <span className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <FileText className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -399,7 +399,7 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId }: R
                   value={formData.numero_documento}
                   onChange={e => setFormData({ ...formData, numero_documento: e.target.value })}
                   className={`pl-10 ${errors.numero_documento ? 'border-red-500' : ''}`}
-                  placeholder="NÃºmero de referencia"
+                  placeholder="Número de referencia"
                 />
               </div>
               {errors.numero_documento && (

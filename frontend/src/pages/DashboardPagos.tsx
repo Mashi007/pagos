@@ -55,20 +55,20 @@ export function DashboardPagos() {
     },
   })
 
-  // Cargar estadÃ­sticas de pagos
+  // Cargar estadísticas de pagos
   const { data: pagosStats, isLoading: pagosStatsLoading, refetch } = useQuery({
     queryKey: ['pagos-stats', filtros],
     queryFn: async () => {
       const params = construirFiltrosObject()
       return await pagoService.getStats(params)
     },
-    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos mÃ¡s frescos
+    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
     refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
   // Cargar KPIs de pagos
-  // âœ… OPTIMIZACIÃ“N: Usar queryKey sin filtros para compartir datos con useSidebarCounts
-  // Si hay filtros activos, usar queryKey con filtros para datos especÃ­ficos
+  // âœ… OPTIMIZACIÓN: Usar queryKey sin filtros para compartir datos con useSidebarCounts
+  // Si hay filtros activos, usar queryKey con filtros para datos específicos
   const { data: kpisPagos, isLoading: loadingKPIs } = useQuery({
     queryKey: tieneFiltrosActivos ? ['kpis-pagos', filtros] : ['kpis-pagos'],
     queryFn: async () => {
@@ -81,7 +81,7 @@ export function DashboardPagos() {
       }
       return response
     },
-    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos mÃ¡s frescos
+    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
     refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
     retry: 1, // Solo un retry
   })
@@ -105,18 +105,18 @@ export function DashboardPagos() {
       }
       return response
     },
-    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos mÃ¡s frescos
+    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
     refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
-  // Datos para grÃ¡fico de pagos por estado
+  // Datos para gráfico de pagos por estado
   const datosPagosEstado = pagosPorEstado?.pagos_por_estado.map((item) => ({
     estado: item.estado,
     cantidad: item.count,
     porcentaje: pagosPorEstado.total_pagos > 0 ? (item.count / pagosPorEstado.total_pagos) * 100 : 0,
   })) || []
 
-  // Cargar evoluciÃ³n de pagos (Ãºltimos 6 meses) - DATOS REALES
+  // Cargar evolución de pagos (últimos 6 meses) - DATOS REALES
   const { data: datosEvolucion, isLoading: loadingEvolucion } = useQuery({
     queryKey: ['evolucion-pagos', filtros],
     queryFn: async () => {
@@ -133,7 +133,7 @@ export function DashboardPagos() {
       }
       return response.meses
     },
-    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos mÃ¡s frescos
+    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
     refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
@@ -158,7 +158,7 @@ export function DashboardPagos() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="container mx-auto px-4 py-8 space-y-8">
-        {/* Header EstratÃ©gico */}
+        {/* Header Estratégico */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -171,12 +171,12 @@ export function DashboardPagos() {
               onClick={() => navigate('/dashboard/menu')}
               className="hover:bg-violet-50"
             >
-              â† MenÃº
+              â† Menú
             </Button>
             <div>
               <h1 className="text-4xl font-black text-gray-900 uppercase tracking-tight">Pagos</h1>
               <p className="text-lg text-gray-600 font-medium mt-1">
-                Monitoreo EstratÃ©gico â€¢ {userName}
+                Monitoreo Estratégico â€¢ {userName}
               </p>
             </div>
           </div>
@@ -194,7 +194,7 @@ export function DashboardPagos() {
                 <div className="flex items-center space-x-2">
                   <div className="flex items-center space-x-2 text-sm font-semibold text-gray-700">
                     <Filter className="h-4 w-4 text-violet-600" />
-                    <span>Filtros RÃ¡pidos</span>
+                    <span>Filtros Rápidos</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 flex-wrap">
@@ -272,9 +272,9 @@ export function DashboardPagos() {
           </div>
         )}
 
-        {/* GRÃFICOS PRINCIPALES */}
+        {/* GRÁFICOS PRINCIPALES */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* GrÃ¡fico 1: Pagos por Estado */}
+          {/* Gráfico 1: Pagos por Estado */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -340,7 +340,7 @@ export function DashboardPagos() {
             </Card>
           </motion.div>
 
-          {/* GrÃ¡fico 2: EvoluciÃ³n de Pagos */}
+          {/* Gráfico 2: Evolución de Pagos */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -350,7 +350,7 @@ export function DashboardPagos() {
               <CardHeader className="bg-gradient-to-r from-indigo-50 to-blue-50 border-b-2 border-indigo-200">
                 <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
                   <BarChart3 className="h-6 w-6 text-indigo-600" />
-                  <span>EvoluciÃ³n de Pagos</span>
+                  <span>Evolución de Pagos</span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-6">
@@ -402,7 +402,7 @@ export function DashboardPagos() {
           <div className="bg-gradient-to-r from-violet-600 to-indigo-600 rounded-xl p-6 shadow-xl">
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center space-x-2">
               <span>ðŸ”</span>
-              <span>Explorar AnÃ¡lisis Detallados</span>
+              <span>Explorar Análisis Detallados</span>
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <Button
@@ -421,12 +421,12 @@ export function DashboardPagos() {
                 variant="secondary"
                 className="bg-white hover:bg-gray-50 text-gray-800 border-2 border-transparent hover:border-violet-300 h-auto py-4 flex flex-col items-center space-y-2"
                 onClick={() => {
-                  // TODO: Navegar a anÃ¡lisis de conciliaciones
-                  console.log('AnÃ¡lisis de Conciliaciones')
+                  // TODO: Navegar a análisis de conciliaciones
+                  console.log('Análisis de Conciliaciones')
                 }}
               >
                 <Shield className="h-6 w-6" />
-                <span className="font-semibold">AnÃ¡lisis de Conciliaciones</span>
+                <span className="font-semibold">Análisis de Conciliaciones</span>
                 <ChevronRight className="h-4 w-4" />
               </Button>
               <Button

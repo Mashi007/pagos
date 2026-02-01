@@ -19,12 +19,12 @@ export function ConciliacionExcelUploader({ onClose, onSuccess }: ConciliacionEx
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
     if (selectedFile) {
-      // âœ… VALIDACIÃ“N DE SEGURIDAD: Validar archivo antes de aceptarlo
+      // âœ… VALIDACIÓN DE SEGURIDAD: Validar archivo antes de aceptarlo
       const { validateExcelFile } = await import('../../utils/excelValidation')
       const validation = validateExcelFile(selectedFile)
 
       if (!validation.isValid) {
-        toast.error(validation.error || 'Archivo invÃ¡lido')
+        toast.error(validation.error || 'Archivo inválido')
         return
       }
 
@@ -63,7 +63,7 @@ export function ConciliacionExcelUploader({ onClose, onSuccess }: ConciliacionEx
         onSuccess()
       }
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || error.message || 'Error al procesar conciliaciÃ³n')
+      toast.error(error.response?.data?.detail || error.message || 'Error al procesar conciliación')
     } finally {
       setIsUploading(false)
     }
@@ -85,7 +85,7 @@ export function ConciliacionExcelUploader({ onClose, onSuccess }: ConciliacionEx
         >
           {/* Header */}
           <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center z-10">
-            <h2 className="text-xl font-bold">ConciliaciÃ³n de Pagos</h2>
+            <h2 className="text-xl font-bold">Conciliación de Pagos</h2>
             <Button variant="ghost" size="icon" onClick={onClose}>
               <X className="w-5 h-5" />
             </Button>
@@ -102,12 +102,12 @@ export function ConciliacionExcelUploader({ onClose, onSuccess }: ConciliacionEx
                     El archivo debe contener <strong>exactamente 2 columnas</strong>:
                   </p>
                   <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
-                    <li><strong>Fecha de DepÃ³sito</strong> (formato: YYYY-MM-DD o DD/MM/YYYY)</li>
-                    <li><strong>NÃºmero de Documento</strong> (debe coincidir exactamente con un pago existente)</li>
+                    <li><strong>Fecha de Depósito</strong> (formato: YYYY-MM-DD o DD/MM/YYYY)</li>
+                    <li><strong>Número de Documento</strong> (debe coincidir exactamente con un pago existente)</li>
                   </ul>
                   <p className="text-xs text-gray-500 mt-2">
-                    El sistema buscarÃ¡ cada nÃºmero de documento en los pagos registrados.
-                    Si encuentra una coincidencia exacta, marcarÃ¡ el pago como conciliado.
+                    El sistema buscará cada número de documento en los pagos registrados.
+                    Si encuentra una coincidencia exacta, marcará el pago como conciliado.
                   </p>
                 </div>
               </CardContent>
@@ -187,7 +187,7 @@ export function ConciliacionExcelUploader({ onClose, onSuccess }: ConciliacionEx
                 ) : (
                   <>
                     <Upload className="w-4 h-4 mr-2" />
-                    Procesar ConciliaciÃ³n
+                    Procesar Conciliación
                   </>
                 )}
               </Button>

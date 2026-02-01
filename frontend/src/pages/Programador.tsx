@@ -55,14 +55,14 @@ interface TareaProgramada {
   configuracion: Record<string, any>
 }
 
-// âœ… MEJORA: Eliminado cÃ³digo mock no utilizado
+// âœ… MEJORA: Eliminado código mock no utilizado
 
 const tiposTarea = [
-  { value: 'NOTIFICACION', label: 'NotificaciÃ³n', icon: Bell },
+  { value: 'NOTIFICACION', label: 'Notificación', icon: Bell },
   { value: 'REPORTE', label: 'Reporte', icon: FileText },
   { value: 'PROCESO', label: 'Proceso', icon: RefreshCw },
   { value: 'BACKUP', label: 'Backup', icon: Shield },
-  { value: 'INTEGRACION', label: 'IntegraciÃ³n', icon: Link },
+  { value: 'INTEGRACION', label: 'Integración', icon: Link },
   { value: 'ML', label: 'Machine Learning', icon: Brain },
 ]
 
@@ -114,8 +114,8 @@ export function Programador() {
 
   const handleToggleTarea = (id: string) => {
     console.log(`Toggle tarea ${id}`)
-    // LÃ³gica para pausar/reanudar tarea (futuro)
-    toast('Funcionalidad de pausar/reanudar prÃ³ximamente')
+    // Lógica para pausar/reanudar tarea (futuro)
+    toast('Funcionalidad de pausar/reanudar próximamente')
   }
 
   const handleEjecutarTarea = async (id: string) => {
@@ -163,7 +163,7 @@ export function Programador() {
 
       {!schedulerActivo && (
         <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded">
-          âš ï¸ El scheduler no estÃ¡ activo. Las tareas programadas no se ejecutarÃ¡n automÃ¡ticamente.
+          âš ï¸ El scheduler no está activo. Las tareas programadas no se ejecutarán automáticamente.
         </div>
       )}
 
@@ -186,7 +186,7 @@ export function Programador() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">{activas}</div>
-            <p className="text-xs text-muted-foreground">En ejecuciÃ³n</p>
+            <p className="text-xs text-muted-foreground">En ejecución</p>
           </CardContent>
         </Card>
         <Card>
@@ -206,7 +206,7 @@ export function Programador() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {/* âœ… MEJORA: Validar divisiÃ³n por cero */}
+              {/* âœ… MEJORA: Validar división por cero */}
               {exitosTotales + fallosTotales > 0
                 ? ((exitosTotales / (exitosTotales + fallosTotales)) * 100).toFixed(1)
                 : '0.0'}%
@@ -220,14 +220,14 @@ export function Programador() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">
-            <Settings className="mr-2 h-5 w-5" /> Filtros y BÃºsqueda
+            <Settings className="mr-2 h-5 w-5" /> Filtros y Búsqueda
           </CardTitle>
           <CardDescription>Filtra las tareas programadas por diferentes criterios.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-4">
             <Input
-              placeholder="Buscar por nombre, descripciÃ³n o ID..."
+              placeholder="Buscar por nombre, descripción o ID..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="max-w-sm"
@@ -282,8 +282,8 @@ export function Programador() {
                 <TableHead>Frecuencia</TableHead>
                 <TableHead>Hora</TableHead>
                 <TableHead>Estado</TableHead>
-                <TableHead>Ãšltima EjecuciÃ³n</TableHead>
-                <TableHead>PrÃ³xima EjecuciÃ³n</TableHead>
+                <TableHead>Ãšltima Ejecución</TableHead>
+                <TableHead>Próxima Ejecución</TableHead>
                 <TableHead>Ã‰xitos/Fallos</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
@@ -394,7 +394,7 @@ export function Programador() {
             <CardTitle className="flex items-center">
               <Clock className="mr-2 h-5 w-5" /> Detalle de Tarea - {selectedTarea}
             </CardTitle>
-            <CardDescription>ConfiguraciÃ³n y historial de la tarea seleccionada.</CardDescription>
+            <CardDescription>Configuración y historial de la tarea seleccionada.</CardDescription>
           </CardHeader>
           <CardContent>
             {(() => {
@@ -404,11 +404,11 @@ export function Programador() {
               return (
                 <div className="grid gap-6 md:grid-cols-2">
                   <div className="space-y-4">
-                    <h3 className="font-semibold">InformaciÃ³n General</h3>
+                    <h3 className="font-semibold">Información General</h3>
                     <div className="bg-gray-50 p-4 rounded-lg space-y-2">
                       <div><strong>ID:</strong> {tarea.id}</div>
                       <div><strong>Nombre:</strong> {tarea.nombre}</div>
-                      <div><strong>DescripciÃ³n:</strong> {tarea.descripcion}</div>
+                      <div><strong>Descripción:</strong> {tarea.descripcion}</div>
                       <div><strong>Tipo:</strong> {tarea.tipo}</div>
                       <div><strong>Frecuencia:</strong> {tarea.frecuencia}</div>
                       <div><strong>Hora:</strong> {tarea.hora}</div>
@@ -430,25 +430,25 @@ export function Programador() {
                   </div>
 
                   <div className="space-y-4">
-                    <h3 className="font-semibold">EstadÃ­sticas</h3>
+                    <h3 className="font-semibold">Estadísticas</h3>
                     <div className="bg-gray-50 p-4 rounded-lg space-y-2">
                       <div><strong>Ejecuciones Exitosas:</strong> {tarea.exitos}</div>
                       <div><strong>Ejecuciones Fallidas:</strong> {tarea.fallos}</div>
                       <div><strong>Tasa de Ã‰xito:</strong>
-                        {/* âœ… MEJORA: Validar divisiÃ³n por cero */}
+                        {/* âœ… MEJORA: Validar división por cero */}
                         {tarea.exitos + tarea.fallos > 0
                           ? ((tarea.exitos / (tarea.exitos + tarea.fallos)) * 100).toFixed(1)
                           : '0.0'}%
                       </div>
-                      <div><strong>Ãšltima EjecuciÃ³n:</strong> {formatDate(tarea.ultimaEjecucion)}</div>
-                      <div><strong>PrÃ³xima EjecuciÃ³n:</strong>
+                      <div><strong>Ãšltima Ejecución:</strong> {formatDate(tarea.ultimaEjecucion)}</div>
+                      <div><strong>Próxima Ejecución:</strong>
                         {tarea.proximaEjecucion === 'CONTINUO' ? 'Continuo' : formatDate(tarea.proximaEjecucion)}
                       </div>
                     </div>
                   </div>
 
                   <div className="space-y-4">
-                    <h3 className="font-semibold">Canales de ComunicaciÃ³n</h3>
+                    <h3 className="font-semibold">Canales de Comunicación</h3>
                     <div className="bg-gray-50 p-4 rounded-lg">
                       <div className="flex flex-wrap gap-2">
                         {tarea.canales.map((canal) => (
@@ -461,7 +461,7 @@ export function Programador() {
                   </div>
 
                   <div className="space-y-4">
-                    <h3 className="font-semibold">ConfiguraciÃ³n</h3>
+                    <h3 className="font-semibold">Configuración</h3>
                     <div className="bg-gray-50 p-4 rounded-lg">
                       <pre className="text-sm text-gray-700 whitespace-pre-wrap">
                         {JSON.stringify(tarea.configuracion, null, 2)}

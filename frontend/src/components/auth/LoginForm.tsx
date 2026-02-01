@@ -15,7 +15,7 @@ import { useSimpleAuth } from '../../store/simpleAuthStore'
 import { LoginForm as LoginFormType } from '../../types'
 import { isAxiosError } from '../../types/errors'
 
-// Constantes de configuraciÃ³n
+// Constantes de configuración
 const MIN_PASSWORD_LENGTH = 6
 const ANIMATION_DURATION = 0.5
 const SPRING_DELAY = 0.2
@@ -29,16 +29,16 @@ const SPACING_MEDIUM = 6
 const BUTTON_HEIGHT = 12
 const ICON_SIZE = 4
 
-// Schema de validaciÃ³n
+// Schema de validación
 const loginSchema = z.object({
   email: z
     .string()
     .min(1, 'El email es requerido')
-    .email('Formato de email invÃ¡lido'),
+    .email('Formato de email inválido'),
   password: z
     .string()
-    .min(1, 'La contraseÃ±a es requerida')
-    .min(MIN_PASSWORD_LENGTH, `La contraseÃ±a debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres`),
+    .min(1, 'La contraseña es requerida')
+    .min(MIN_PASSWORD_LENGTH, `La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres`),
   remember: z.boolean().optional(),
 })
 
@@ -74,10 +74,10 @@ export function LoginForm() {
     try {
       clearError()
 
-      // Asegurar que remember sea boolean y email en minÃºsculas
+      // Asegurar que remember sea boolean y email en minúsculas
       const loginData = {
         ...data,
-        email: data.email.toLowerCase().trim(), // Convertir a minÃºsculas
+        email: data.email.toLowerCase().trim(), // Convertir a minúsculas
         remember: Boolean(data.remember)
       }
 
@@ -87,13 +87,13 @@ export function LoginForm() {
       // Manejar diferentes tipos de errores
       if (!isAxiosError(error) || !error.response) {
         setError('root', {
-          message: 'Error de conexiÃ³n. Verifica que el servidor estÃ© funcionando.'
+          message: 'Error de conexión. Verifica que el servidor esté funcionando.'
         })
         return
       }
 
       if (isAxiosError(error) && error.response?.status === 422) {
-        // Errores de validaciÃ³n del servidor
+        // Errores de validación del servidor
         const responseData = error.response.data as { detail?: Array<{ loc?: string[]; msg?: string }> | string } | undefined
         const details = responseData?.detail
         if (Array.isArray(details)) {
@@ -109,7 +109,7 @@ export function LoginForm() {
         // Extraer mensaje del backend (puede estar en detail)
         const responseData = error.response?.data as { detail?: string; message?: string } | undefined
         const errorDetail = responseData?.detail || responseData?.message
-        const errorMessage = errorDetail || 'Credenciales incorrectas. Verifica tu email y contraseÃ±a.'
+        const errorMessage = errorDetail || 'Credenciales incorrectas. Verifica tu email y contraseña.'
         setError('root', {
           message: errorMessage
         })
@@ -152,7 +152,7 @@ export function LoginForm() {
                 RAPICREDIT
               </CardTitle>
               <CardDescription className="text-lg mt-4 text-center font-medium">
-                Sistema de PrÃ©stamos y Cobranza
+                Sistema de Préstamos y Cobranza
               </CardDescription>
               <CardDescription className="text-sm mt-1 text-center text-gray-500">
                 Ingrese sus credenciales para acceder
@@ -169,7 +169,7 @@ export function LoginForm() {
               >
                 <AlertWithIcon
                   variant="destructive"
-                  title="Error de autenticaciÃ³n"
+                  title="Error de autenticación"
                   description={error}
                 />
               </motion.div>
@@ -180,7 +180,7 @@ export function LoginForm() {
                 <Input
                   {...register('email')}
                   type="email"
-                  label="Correo electrÃ³nico"
+                  label="Correo electrónico"
                   placeholder="usuario@empresa.com"
                   leftIcon={<Mail className="w-4 h-4" />}
                   error={errors.email?.message}
@@ -191,7 +191,7 @@ export function LoginForm() {
                 <Input
                   {...register('password')}
                   type={showPassword ? 'text' : 'password'}
-                  label="ContraseÃ±a"
+                  label="Contraseña"
                   placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                   leftIcon={<Lock className="w-4 h-4" />}
                   rightIcon={
@@ -229,11 +229,11 @@ export function LoginForm() {
                   type="button"
                   className="text-sm text-primary hover:underline"
                   onClick={() => {
-                    // TODO: Implementar recuperaciÃ³n de contraseÃ±a
-                    alert('Funcionalidad prÃ³ximamente disponible')
+                    // TODO: Implementar recuperación de contraseña
+                    alert('Funcionalidad próximamente disponible')
                   }}
                 >
-                  Â¿OlvidÃ³ su contraseÃ±a?
+                  ¿Olvidó su contraseña?
                 </button>
               </div>
 
@@ -243,14 +243,14 @@ export function LoginForm() {
                 loading={isLoading}
                 disabled={isLoading}
               >
-                {isLoading ? 'Iniciando sesiÃ³n...' : 'Iniciar SesiÃ³n'}
+                {isLoading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
               </Button>
             </form>
 
         <div className="text-center text-sm text-muted-foreground">
           <p className="font-semibold text-blue-600">RAPICREDIT v1.0</p>
           <p className="mt-1">Â© 2024 - Todos los derechos reservados</p>
-          <p className="text-xs mt-1 text-gray-400">Sistema de prÃ©stamos y cobranza</p>
+          <p className="text-xs mt-1 text-gray-400">Sistema de préstamos y cobranza</p>
         </div>
           </CardContent>
         </Card>

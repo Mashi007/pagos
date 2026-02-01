@@ -15,7 +15,7 @@ interface ImportMeta {
   readonly env: ImportMetaEnv
 }
 
-// Declaraciones mÃ­nimas necesarias para mÃ³dulos externos
+// Declaraciones mínimas necesarias para módulos externos
 declare module 'framer-motion' {
   export const motion: any
   export const AnimatePresence: any

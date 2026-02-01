@@ -28,8 +28,8 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
   const [activeTab, setActiveTab] = useState('armar')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [nombre, setNombre] = useState('')
-  const [tipo, setTipo] = useState('') // Mantener para compatibilidad con ediciÃ³n individual
-  const [tiposSeleccionados, setTiposSeleccionados] = useState<string[]>([]) // Para creaciÃ³n mÃºltiple
+  const [tipo, setTipo] = useState('') // Mantener para compatibilidad con edición individual
+  const [tiposSeleccionados, setTiposSeleccionados] = useState<string[]>([]) // Para creación múltiple
   const [activa, setActiva] = useState(true)
   const [asunto, setAsunto] = useState('')
   const [encabezado, setEncabezado] = useState('')
@@ -55,20 +55,20 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
     'nombre', 'monto', 'fecha_vencimiento', 'numero_cuota', 'credito_id', 'cedula', 'dias_atraso'
   ]
 
-  // Tipos organizados por categorÃ­as
+  // Tipos organizados por categorías
   const tiposPorCategoria = {
     antes: [
-      { valor: 'PAGO_5_DIAS_ANTES', label: '5 dÃ­as antes' },
-      { valor: 'PAGO_3_DIAS_ANTES', label: '3 dÃ­as antes' },
-      { valor: 'PAGO_1_DIA_ANTES', label: '1 dÃ­a antes' },
+      { valor: 'PAGO_5_DIAS_ANTES', label: '5 días antes' },
+      { valor: 'PAGO_3_DIAS_ANTES', label: '3 días antes' },
+      { valor: 'PAGO_1_DIA_ANTES', label: '1 día antes' },
     ],
     diaPago: [
-      { valor: 'PAGO_DIA_0', label: 'DÃ­a de pago' },
+      { valor: 'PAGO_DIA_0', label: 'Día de pago' },
     ],
     retraso: [
-      { valor: 'PAGO_1_DIA_ATRASADO', label: '1 dÃ­a de retraso' },
-      { valor: 'PAGO_3_DIAS_ATRASADO', label: '3 dÃ­as de retraso' },
-      { valor: 'PAGO_5_DIAS_ATRASADO', label: '5 dÃ­as de retraso' },
+      { valor: 'PAGO_1_DIA_ATRASADO', label: '1 día de retraso' },
+      { valor: 'PAGO_3_DIAS_ATRASADO', label: '3 días de retraso' },
+      { valor: 'PAGO_5_DIAS_ATRASADO', label: '5 días de retraso' },
     ],
     prejudicial: [
       { valor: 'PREJUDICIAL', label: 'Prejudicial' },
@@ -104,81 +104,81 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
   const generarVariablesPrecargadas = (): NotificacionVariable[] => {
     const CAMPOS_DISPONIBLES = {
       clientes: [
-        { campo: 'id', descripcion: 'ID Ãºnico del cliente' },
-        { campo: 'cedula', descripcion: 'CÃ©dula de identidad' },
+        { campo: 'id', descripcion: 'ID único del cliente' },
+        { campo: 'cedula', descripcion: 'Cédula de identidad' },
         { campo: 'nombres', descripcion: 'Nombres completos' },
-        { campo: 'telefono', descripcion: 'TelÃ©fono de contacto' },
-        { campo: 'email', descripcion: 'Correo electrÃ³nico' },
-        { campo: 'direccion', descripcion: 'DirecciÃ³n de residencia' },
+        { campo: 'telefono', descripcion: 'Teléfono de contacto' },
+        { campo: 'email', descripcion: 'Correo electrónico' },
+        { campo: 'direccion', descripcion: 'Dirección de residencia' },
         { campo: 'fecha_nacimiento', descripcion: 'Fecha de nacimiento' },
-        { campo: 'ocupacion', descripcion: 'OcupaciÃ³n del cliente' },
+        { campo: 'ocupacion', descripcion: 'Ocupación del cliente' },
         { campo: 'estado', descripcion: 'Estado (ACTIVO, INACTIVO, FINALIZADO)' },
         { campo: 'activo', descripcion: 'Estado activo (true/false)' },
         { campo: 'fecha_registro', descripcion: 'Fecha de registro' },
-        { campo: 'fecha_actualizacion', descripcion: 'Fecha de Ãºltima actualizaciÃ³n' },
-        { campo: 'usuario_registro', descripcion: 'Usuario que registrÃ³' },
+        { campo: 'fecha_actualizacion', descripcion: 'Fecha de última actualización' },
+        { campo: 'usuario_registro', descripcion: 'Usuario que registró' },
         { campo: 'notas', descripcion: 'Notas adicionales' },
       ],
       prestamos: [
-        { campo: 'id', descripcion: 'ID del prÃ©stamo' },
+        { campo: 'id', descripcion: 'ID del préstamo' },
         { campo: 'cliente_id', descripcion: 'ID del cliente' },
-        { campo: 'cedula', descripcion: 'CÃ©dula del cliente' },
+        { campo: 'cedula', descripcion: 'Cédula del cliente' },
         { campo: 'nombres', descripcion: 'Nombres del cliente' },
-        { campo: 'valor_activo', descripcion: 'Valor del activo (vehÃ­culo)' },
+        { campo: 'valor_activo', descripcion: 'Valor del activo (vehículo)' },
         { campo: 'total_financiamiento', descripcion: 'Monto total financiado' },
-        { campo: 'fecha_requerimiento', descripcion: 'Fecha requerida del prÃ©stamo' },
+        { campo: 'fecha_requerimiento', descripcion: 'Fecha requerida del préstamo' },
         { campo: 'modalidad_pago', descripcion: 'Modalidad (MENSUAL, QUINCENAL, SEMANAL)' },
-        { campo: 'numero_cuotas', descripcion: 'NÃºmero total de cuotas' },
-        { campo: 'cuota_periodo', descripcion: 'Monto de cuota por perÃ­odo' },
-        { campo: 'tasa_interes', descripcion: 'Tasa de interÃ©s (%)' },
-        { campo: 'fecha_base_calculo', descripcion: 'Fecha base para cÃ¡lculo' },
+        { campo: 'numero_cuotas', descripcion: 'Número total de cuotas' },
+        { campo: 'cuota_periodo', descripcion: 'Monto de cuota por período' },
+        { campo: 'tasa_interes', descripcion: 'Tasa de interés (%)' },
+        { campo: 'fecha_base_calculo', descripcion: 'Fecha base para cálculo' },
         { campo: 'producto', descripcion: 'Producto financiero' },
         { campo: 'concesionario', descripcion: 'Concesionario' },
         { campo: 'analista', descripcion: 'Analista asignado' },
-        { campo: 'modelo_vehiculo', descripcion: 'Modelo del vehÃ­culo' },
-        { campo: 'estado', descripcion: 'Estado del prÃ©stamo' },
+        { campo: 'modelo_vehiculo', descripcion: 'Modelo del vehículo' },
+        { campo: 'estado', descripcion: 'Estado del préstamo' },
         { campo: 'usuario_proponente', descripcion: 'Usuario proponente' },
         { campo: 'usuario_aprobador', descripcion: 'Usuario aprobador' },
         { campo: 'fecha_registro', descripcion: 'Fecha de registro' },
-        { campo: 'fecha_aprobacion', descripcion: 'Fecha de aprobaciÃ³n' },
+        { campo: 'fecha_aprobacion', descripcion: 'Fecha de aprobación' },
       ],
       cuotas: [
         { campo: 'id', descripcion: 'ID de la cuota' },
-        { campo: 'prestamo_id', descripcion: 'ID del prÃ©stamo' },
-        { campo: 'numero_cuota', descripcion: 'NÃºmero de cuota' },
+        { campo: 'prestamo_id', descripcion: 'ID del préstamo' },
+        { campo: 'numero_cuota', descripcion: 'Número de cuota' },
         { campo: 'fecha_vencimiento', descripcion: 'Fecha de vencimiento' },
         { campo: 'fecha_pago', descripcion: 'Fecha de pago' },
         { campo: 'monto_cuota', descripcion: 'Monto total de la cuota' },
         { campo: 'monto_capital', descripcion: 'Monto de capital' },
-        { campo: 'monto_interes', descripcion: 'Monto de interÃ©s' },
+        { campo: 'monto_interes', descripcion: 'Monto de interés' },
         { campo: 'saldo_capital_inicial', descripcion: 'Saldo capital inicial' },
         { campo: 'saldo_capital_final', descripcion: 'Saldo capital final' },
         { campo: 'capital_pagado', descripcion: 'Capital pagado' },
-        { campo: 'interes_pagado', descripcion: 'InterÃ©s pagado' },
+        { campo: 'interes_pagado', descripcion: 'Interés pagado' },
         { campo: 'mora_pagada', descripcion: 'Mora pagada' },
         { campo: 'total_pagado', descripcion: 'Total pagado' },
         { campo: 'capital_pendiente', descripcion: 'Capital pendiente' },
-        { campo: 'interes_pendiente', descripcion: 'InterÃ©s pendiente' },
-        { campo: 'dias_mora', descripcion: 'DÃ­as de mora' },
+        { campo: 'interes_pendiente', descripcion: 'Interés pendiente' },
+        { campo: 'dias_mora', descripcion: 'Días de mora' },
         { campo: 'monto_mora', descripcion: 'Monto de mora' },
         { campo: 'tasa_mora', descripcion: 'Tasa de mora (%)' },
-        { campo: 'dias_morosidad', descripcion: 'DÃ­as de morosidad' },
+        { campo: 'dias_morosidad', descripcion: 'Días de morosidad' },
         { campo: 'monto_morosidad', descripcion: 'Monto de morosidad' },
         { campo: 'estado', descripcion: 'Estado de la cuota' },
       ],
       pagos: [
         { campo: 'id', descripcion: 'ID del pago' },
-        { campo: 'cedula', descripcion: 'CÃ©dula del cliente' },
-        { campo: 'prestamo_id', descripcion: 'ID del prÃ©stamo' },
-        { campo: 'numero_cuota', descripcion: 'NÃºmero de cuota' },
+        { campo: 'cedula', descripcion: 'Cédula del cliente' },
+        { campo: 'prestamo_id', descripcion: 'ID del préstamo' },
+        { campo: 'numero_cuota', descripcion: 'Número de cuota' },
         { campo: 'fecha_pago', descripcion: 'Fecha de pago' },
         { campo: 'fecha_registro', descripcion: 'Fecha de registro' },
         { campo: 'monto_pagado', descripcion: 'Monto pagado' },
-        { campo: 'numero_documento', descripcion: 'NÃºmero de documento' },
-        { campo: 'institucion_bancaria', descripcion: 'InstituciÃ³n bancaria' },
+        { campo: 'numero_documento', descripcion: 'Número de documento' },
+        { campo: 'institucion_bancaria', descripcion: 'Institución bancaria' },
         { campo: 'estado', descripcion: 'Estado del pago' },
-        { campo: 'conciliado', descripcion: 'Si estÃ¡ conciliado' },
-        { campo: 'fecha_conciliacion', descripcion: 'Fecha de conciliaciÃ³n' },
+        { campo: 'conciliado', descripcion: 'Si está conciliado' },
+        { campo: 'fecha_conciliacion', descripcion: 'Fecha de conciliación' },
       ],
     }
 
@@ -232,10 +232,10 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
     cargarVariables()
   }, [])
 
-  // Cargar plantilla inicial si se proporciona (para ediciÃ³n desde Resumen)
+  // Cargar plantilla inicial si se proporciona (para edición desde Resumen)
   useEffect(() => {
     if (plantillaInicial && plantillas.length > 0) {
-      // Buscar la plantilla en la lista cargada para asegurar que estÃ© actualizada
+      // Buscar la plantilla en la lista cargada para asegurar que esté actualizada
       const plantillaEncontrada = plantillas.find(p => p.id === plantillaInicial.id)
       const plantillaACargar = plantillaEncontrada || plantillaInicial
 
@@ -249,7 +249,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
       setCuerpo(plantillaACargar.cuerpo)
       setFirma('')
 
-      // Cambiar a la pestaÃ±a de armar plantilla
+      // Cambiar a la pestaña de armar plantilla
       setActiveTab('armar')
 
       // Notificar que la plantilla fue cargada
@@ -259,7 +259,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
     }
   }, [plantillaInicial, plantillas, onPlantillaCargada])
 
-  // Recargar plantillas cuando se cambia a la pestaÃ±a de resumen
+  // Recargar plantillas cuando se cambia a la pestaña de resumen
   useEffect(() => {
     if (activeTab === 'resumen') {
       cargar()
@@ -366,7 +366,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
       filtradas = filtradas.filter(v => v.tabla === filtroTablaVariable)
     }
 
-    // Filtrar por bÃºsqueda
+    // Filtrar por búsqueda
     if (busquedaVariable) {
       filtradas = filtradas.filter(v =>
         v.nombre_variable.toLowerCase().includes(busquedaVariable.toLowerCase()) ||
@@ -391,7 +391,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
     return agrupadas
   }, [variablesFiltradas])
 
-  // Obtener tablas Ãºnicas
+  // Obtener tablas únicas
   const tablasUnicas = useMemo(() => {
     return Array.from(new Set(variablesConfiguradas.map(v => v.tabla))).sort()
   }, [variablesConfiguradas])
@@ -433,7 +433,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
     const tipoAValidar = tipoValidar || tipo
     if (!tipoAValidar) return null
 
-    // Reglas bÃ¡sicas por tipo
+    // Reglas básicas por tipo
     const requeridasPorTipo: Record<string, string[]> = {
       'PAGO_5_DIAS_ANTES': ['nombre', 'monto', 'fecha_vencimiento'],
       'PAGO_3_DIAS_ANTES': ['nombre', 'monto', 'fecha_vencimiento'],
@@ -477,7 +477,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
         toast.success('Plantilla actualizada exitosamente')
         await cargar()
         limpiar()
-        // Cambiar a la pestaÃ±a de resumen despuÃ©s de guardar
+        // Cambiar a la pestaña de resumen después de guardar
         setActiveTab('resumen')
       } catch (error: any) {
         toast.error(error?.response?.data?.detail || 'Error al guardar plantilla')
@@ -487,7 +487,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
 
     // Si estamos creando nuevas plantillas, validar tipos seleccionados
     if (tiposSeleccionados.length === 0) {
-      toast.error('Seleccione al menos un tipo de notificaciÃ³n')
+      toast.error('Seleccione al menos un tipo de notificación')
       return
     }
 
@@ -534,7 +534,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
 
       if (plantillasCreadas.length > 0) {
         toast.success(`Se crearon ${plantillasCreadas.length} plantilla(s) exitosamente`)
-        // Cambiar a la pestaÃ±a de resumen despuÃ©s de guardar
+        // Cambiar a la pestaña de resumen después de guardar
         setActiveTab('resumen')
       }
 
@@ -555,7 +555,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
       return
     }
 
-    if (!window.confirm(`Â¿Eliminar plantilla "${selected.nombre}"?`)) return
+    if (!window.confirm(`¿Eliminar plantilla "${selected.nombre}"?`)) return
 
     try {
       await notificacionService.eliminarPlantilla(selected.id)
@@ -601,7 +601,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
       const data = JSON.parse(text)
 
       if (!data.nombre || !data.tipo || !data.asunto || !data.cuerpo) {
-        toast.error('Archivo JSON invÃ¡lido: faltan campos obligatorios')
+        toast.error('Archivo JSON inválido: faltan campos obligatorios')
         return
       }
 
@@ -615,9 +615,9 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
       setSelected(null)
       setActiveTab('armar')
 
-      toast.success('Plantilla importada. Revise y guarde cuando estÃ© lista.')
+      toast.success('Plantilla importada. Revise y guarde cuando esté lista.')
     } catch (error: any) {
-      toast.error('Error al leer el archivo JSON: ' + (error.message || 'Formato invÃ¡lido'))
+      toast.error('Error al leer el archivo JSON: ' + (error.message || 'Formato inválido'))
     }
 
     if (fileInputRef.current) {
@@ -632,7 +632,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
   }
 
   const handleEliminarDesdeResumen = async (plantilla: NotificacionPlantilla) => {
-    if (!window.confirm(`Â¿EstÃ¡ seguro de eliminar la plantilla "${plantilla.nombre}"?`)) {
+    if (!window.confirm(`¿Está seguro de eliminar la plantilla "${plantilla.nombre}"?`)) {
       return
     }
 
@@ -661,26 +661,26 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
     }
   }
 
-  // Mapeo de tipos a categorÃ­as y casos (para el resumen)
+  // Mapeo de tipos a categorías y casos (para el resumen)
   const mapeoTipos = {
-    'PAGO_5_DIAS_ANTES': { categoria: 'NotificaciÃ³n Previa', caso: '5 dÃ­as antes' },
-    'PAGO_3_DIAS_ANTES': { categoria: 'NotificaciÃ³n Previa', caso: '3 dÃ­as antes' },
-    'PAGO_1_DIA_ANTES': { categoria: 'NotificaciÃ³n Previa', caso: '1 dÃ­a antes' },
-    'PAGO_DIA_0': { categoria: 'DÃ­a de Pago', caso: 'DÃ­a de pago' },
-    'PAGO_1_DIA_ATRASADO': { categoria: 'NotificaciÃ³n Retrasada', caso: '1 dÃ­a de retraso' },
-    'PAGO_3_DIAS_ATRASADO': { categoria: 'NotificaciÃ³n Retrasada', caso: '3 dÃ­as de retraso' },
-    'PAGO_5_DIAS_ATRASADO': { categoria: 'NotificaciÃ³n Retrasada', caso: '5 dÃ­as de retraso' },
+    'PAGO_5_DIAS_ANTES': { categoria: 'Notificación Previa', caso: '5 días antes' },
+    'PAGO_3_DIAS_ANTES': { categoria: 'Notificación Previa', caso: '3 días antes' },
+    'PAGO_1_DIA_ANTES': { categoria: 'Notificación Previa', caso: '1 día antes' },
+    'PAGO_DIA_0': { categoria: 'Día de Pago', caso: 'Día de pago' },
+    'PAGO_1_DIA_ATRASADO': { categoria: 'Notificación Retrasada', caso: '1 día de retraso' },
+    'PAGO_3_DIAS_ATRASADO': { categoria: 'Notificación Retrasada', caso: '3 días de retraso' },
+    'PAGO_5_DIAS_ATRASADO': { categoria: 'Notificación Retrasada', caso: '5 días de retraso' },
     'PREJUDICIAL': { categoria: 'Prejudicial', caso: 'Prejudicial' },
   }
 
   const categoriasOrden = [
-    { key: 'NotificaciÃ³n Previa', color: 'blue', borderColor: 'border-blue-500', icon: 'ðŸ“…' },
-    { key: 'DÃ­a de Pago', color: 'green', borderColor: 'border-green-500', icon: 'ðŸ’°' },
-    { key: 'NotificaciÃ³n Retrasada', color: 'orange', borderColor: 'border-orange-500', icon: 'âš ï¸' },
+    { key: 'Notificación Previa', color: 'blue', borderColor: 'border-blue-500', icon: 'ðŸ“…' },
+    { key: 'Día de Pago', color: 'green', borderColor: 'border-green-500', icon: 'ðŸ’°' },
+    { key: 'Notificación Retrasada', color: 'orange', borderColor: 'border-orange-500', icon: 'âš ï¸' },
     { key: 'Prejudicial', color: 'red', borderColor: 'border-red-500', icon: 'ðŸš¨' },
   ]
 
-  // Organizar plantillas por categorÃ­a (para el resumen)
+  // Organizar plantillas por categoría (para el resumen)
   const plantillasPorCategoria = useMemo(() => {
     const organizadas: Record<string, NotificacionPlantilla[]> = {}
 
@@ -695,7 +695,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
       }
     })
 
-    // Ordenar plantillas dentro de cada categorÃ­a por caso
+    // Ordenar plantillas dentro de cada categoría por caso
     Object.keys(organizadas).forEach(categoria => {
       organizadas[categoria].sort((a, b) => {
         const casoA = mapeoTipos[a.tipo as keyof typeof mapeoTipos]?.caso || ''
@@ -747,7 +747,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
             </div>
             <div>
               <label className="text-sm text-gray-600 mb-2 block">
-                Tipos de NotificaciÃ³n {selected ? '(EdiciÃ³n - Solo un tipo)' : '(Seleccione uno o mÃ¡s para crear mÃºltiples plantillas)'}
+                Tipos de Notificación {selected ? '(Edición - Solo un tipo)' : '(Seleccione uno o más para crear múltiples plantillas)'}
               </label>
 
               {selected ? (
@@ -757,7 +757,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
                   {tiposSugeridos.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               ) : (
-                // Al crear, mostrar selector mÃºltiple por categorÃ­as
+                // Al crear, mostrar selector múltiple por categorías
                 <div className="border rounded-lg p-4 bg-gray-50 space-y-4">
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-gray-600">
@@ -803,9 +803,9 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
                     </div>
                   </div>
 
-                  {/* DÃ­a de pago */}
+                  {/* Día de pago */}
                   <div>
-                    <h4 className="text-sm font-semibold mb-2 text-green-700">ðŸ’° DÃ­a de Pago</h4>
+                    <h4 className="text-sm font-semibold mb-2 text-green-700">ðŸ’° Día de Pago</h4>
                     <div className="grid grid-cols-3 gap-2">
                       {tiposPorCategoria.diaPago.map(t => (
                         <label key={t.valor} className="flex items-center gap-2 p-2 border rounded hover:bg-white cursor-pointer">
@@ -823,7 +823,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
 
                   {/* Retraso */}
                   <div>
-                    <h4 className="text-sm font-semibold mb-2 text-orange-700">âš ï¸ DÃ­as de Retraso</h4>
+                    <h4 className="text-sm font-semibold mb-2 text-orange-700">âš ï¸ Días de Retraso</h4>
                     <div className="grid grid-cols-3 gap-2">
                       {tiposPorCategoria.retraso.map(t => (
                         <label key={t.valor} className="flex items-center gap-2 p-2 border rounded hover:bg-white cursor-pointer">
@@ -861,7 +861,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
             </div>
             <div className="flex items-center gap-2">
               <input id="activa" type="checkbox" checked={activa} onChange={e=>setActiva(e.target.checked)} />
-              <label htmlFor="activa" className="text-sm">Habilitar envÃ­o automÃ¡tico a las 3:00 AM</label>
+              <label htmlFor="activa" className="text-sm">Habilitar envío automático a las 3:00 AM</label>
             </div>
           </div>
 
@@ -871,7 +871,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
               <Input ref={asuntoRef as any} value={asunto} onFocus={()=>setFocus('asunto')} onChange={e=>setAsunto(e.target.value)} placeholder="Asunto del correo" />
             </div>
             <div className="col-span-2">
-              <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">Formato rÃ¡pido (encabezado/cuerpo/firma):
+              <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">Formato rápido (encabezado/cuerpo/firma):
                 <Button size="sm" variant="ghost" onClick={()=>aplicarFormato('b')}>B</Button>
                 <Button size="sm" variant="ghost" onClick={()=>aplicarFormato('i')}>I</Button>
                 <Button size="sm" variant="ghost" onClick={()=>aplicarFormato('u')}>U</Button>
@@ -937,7 +937,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
                     </select>
                   </div>
 
-                  {/* BÃºsqueda de variables */}
+                  {/* Búsqueda de variables */}
                   <div className="relative">
                     <label className="text-xs font-semibold text-gray-700 mb-1 block">Buscar variable:</label>
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" style={{ top: '60%' }} />
@@ -1006,7 +1006,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
                                     </div>
                                   </div>
 
-                                  {/* DescripciÃ³n si existe */}
+                                  {/* Descripción si existe */}
                                   {v.descripcion && (
                                     <div className="text-xs text-gray-600 mt-2 italic border-l-2 border-blue-200 pl-2">
                                       {v.descripcion}
@@ -1014,7 +1014,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
                                   )}
                                 </div>
 
-                                {/* BotÃ³n de inserciÃ³n mejorado */}
+                                {/* Botón de inserción mejorado */}
                                 <Button
                                   size="sm"
                                   className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
@@ -1037,7 +1037,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
               </div>
             )}
 
-            {/* MÃ©todo alternativo: campo de texto para variables rÃ¡pidas */}
+            {/* Método alternativo: campo de texto para variables rápidas */}
             <div className="mt-3 pt-3 border-t flex items-center gap-2">
               <Input
                 value={variable}
@@ -1083,11 +1083,11 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
               Resumen de Plantillas por Caso
             </CardTitle>
             <CardDescription>
-              VisualizaciÃ³n organizada de todas las plantillas almacenadas, clasificadas por tipo de notificaciÃ³n y caso.
+              Visualización organizada de todas las plantillas almacenadas, clasificadas por tipo de notificación y caso.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {/* BÃºsqueda y filtros para el resumen */}
+            {/* Búsqueda y filtros para el resumen */}
             <div className="mb-6 space-y-2">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -1125,7 +1125,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
               <div className="text-center py-8 text-gray-500">
                 <AlertCircle className="h-12 w-12 mx-auto mb-4 text-gray-400" />
                 <p>No hay plantillas configuradas.</p>
-                <p className="text-sm mt-2">Vaya a la pestaÃ±a "Armar plantilla" para crear nuevas plantillas.</p>
+                <p className="text-sm mt-2">Vaya a la pestaña "Armar plantilla" para crear nuevas plantillas.</p>
               </div>
             ) : (
               <div className="space-y-6">
@@ -1153,7 +1153,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
                               <TableRow>
                                 <TableHead>Tipo</TableHead>
                                 <TableHead>Caso</TableHead>
-                                <TableHead>Fecha ActualizaciÃ³n</TableHead>
+                                <TableHead>Fecha Actualización</TableHead>
                                 <TableHead>Archivo / Plantilla</TableHead>
                                 <TableHead>Estado</TableHead>
                                 <TableHead className="text-right">Acciones</TableHead>

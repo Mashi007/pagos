@@ -2,7 +2,7 @@ import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "../../utils"
 
-// Constantes de configuraciÃ³n
+// Constantes de configuración
 const DEFAULT_HEIGHT = 10
 const SMALL_HEIGHT = 9
 const LARGE_HEIGHT = 11

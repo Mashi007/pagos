@@ -33,7 +33,7 @@ export function AnalistasConfig() {
   })
   const [archivoExcel, setArchivoExcel] = useState<File | null>(null)
 
-  // FunciÃ³n para obtener fecha de hoy
+  // Función para obtener fecha de hoy
   const getTodayDate = () => {
     const today = new Date()
     return today.toISOString().split('T')[0]
@@ -66,7 +66,7 @@ export function AnalistasConfig() {
       }
 
       resetForm()
-      // Refrescar la lista automÃ¡ticamente
+      // Refrescar la lista automáticamente
       refetch()
     } catch (err) {
       console.error('Error al guardar analista:', err)
@@ -87,8 +87,8 @@ export function AnalistasConfig() {
   const handleDelete = async (id: number) => {
     try {
       const confirmar = window.confirm(
-        'âš ï¸ Â¿EstÃ¡s seguro de que quieres ELIMINAR este analista?\n\n' +
-        'Esta acciÃ³n NO se puede deshacer.'
+        'âš ï¸ ¿Estás seguro de que quieres ELIMINAR este analista?\n\n' +
+        'Esta acción NO se puede deshacer.'
       )
 
       if (!confirmar) {
@@ -97,7 +97,7 @@ export function AnalistasConfig() {
 
       await deleteAnalistaMutation.mutateAsync(id)
       toast.success('âœ… Analista eliminado exitosamente')
-      // Refrescar la lista automÃ¡ticamente
+      // Refrescar la lista automáticamente
       refetch()
     } catch (err) {
       console.error('Error al eliminar analista:', err)
@@ -118,7 +118,7 @@ export function AnalistasConfig() {
     refetch()
   }
 
-  // Filtrar analistas por tÃ©rmino de bÃºsqueda
+  // Filtrar analistas por término de búsqueda
   const filteredAnalistas = analistas?.filter((analista: Analista) =>
     analista.nombre.toLowerCase().includes(searchTerm.toLowerCase())
   ) || []
@@ -153,7 +153,7 @@ export function AnalistasConfig() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">ConfiguraciÃ³n de Analistas</h2>
+          <h2 className="text-2xl font-bold tracking-tight">Configuración de Analistas</h2>
           <p className="text-muted-foreground">
             Gestiona los analistas del sistema
           </p>
@@ -264,7 +264,7 @@ export function AnalistasConfig() {
                   className="bg-gray-100 text-gray-600"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  La fecha se establece automÃ¡ticamente al dÃ­a de hoy
+                  La fecha se establece automáticamente al día de hoy
                 </p>
               </div>
 
@@ -307,7 +307,7 @@ export function AnalistasConfig() {
                 <TableHead>ID</TableHead>
                 <TableHead>Analista</TableHead>
                 <TableHead>Estado</TableHead>
-                <TableHead>Fecha CreaciÃ³n</TableHead>
+                <TableHead>Fecha Creación</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
@@ -371,7 +371,7 @@ export function AnalistasConfig() {
         </CardContent>
       </Card>
 
-      {/* ImportaciÃ³n desde Excel */}
+      {/* Importación desde Excel */}
       <Card>
         <CardHeader>
           <CardTitle>Importar Analistas (Excel)</CardTitle>
@@ -395,7 +395,7 @@ export function AnalistasConfig() {
               Examinar...
             </label>
             <span className="text-sm text-gray-600">
-              {archivoExcel ? archivoExcel.name : 'No se ha seleccionado ningÃºn archivo.'}
+              {archivoExcel ? archivoExcel.name : 'No se ha seleccionado ningún archivo.'}
             </span>
           </div>
           <div className="flex items-center gap-2">

@@ -70,7 +70,7 @@ export function DiccionarioSemanticoTab() {
       setEntradas(response.entradas || [])
     } catch (error: any) {
       console.error('Error cargando diccionario:', error)
-      toast.error('Error al cargar el diccionario semÃ¡ntico')
+      toast.error('Error al cargar el diccionario semántico')
     } finally {
       setCargando(false)
     }
@@ -83,13 +83,13 @@ export function DiccionarioSemanticoTab() {
       )
       setCategorias(response.categorias || [])
     } catch (error: any) {
-      console.error('Error cargando categorÃ­as:', error)
+      console.error('Error cargando categorías:', error)
     }
   }
 
   const handleGuardar = async () => {
     if (!formulario.palabra.trim() || !formulario.definicion.trim()) {
-      toast.error('Palabra y definiciÃ³n son obligatorios')
+      toast.error('Palabra y definición son obligatorios')
       return
     }
 
@@ -142,7 +142,7 @@ export function DiccionarioSemanticoTab() {
   }
 
   const handleEliminar = async (id: number) => {
-    if (!confirm('Â¿EstÃ¡s seguro de eliminar esta entrada del diccionario?')) return
+    if (!confirm('¿Estás seguro de eliminar esta entrada del diccionario?')) return
 
     try {
       await apiClient.delete(`/api/v1/configuracion/ai/diccionario-semantico/${id}`)
@@ -189,10 +189,10 @@ export function DiccionarioSemanticoTab() {
 
       if (response.tipo === 'pregunta' && response.pregunta) {
         setPreguntaChatGPT(response.pregunta)
-        toast.info('ChatGPT necesita mÃ¡s informaciÃ³n')
+        toast.info('ChatGPT necesita más información')
       } else if (response.tipo === 'definicion_mejorada' && response.definicion) {
         setDefinicionMejorada(response.definicion)
-        toast.success('DefiniciÃ³n mejorada generada')
+        toast.success('Definición mejorada generada')
       }
     } catch (error: any) {
       console.error('Error procesando palabra:', error)
@@ -222,7 +222,7 @@ export function DiccionarioSemanticoTab() {
         setDefinicionMejorada(response.definicion)
         setPreguntaChatGPT('')
         setRespuestaUsuario('')
-        toast.success('DefiniciÃ³n mejorada generada')
+        toast.success('Definición mejorada generada')
       }
     } catch (error: any) {
       console.error('Error enviando respuesta:', error)
@@ -252,7 +252,7 @@ export function DiccionarioSemanticoTab() {
     setMostrarModalProcesar(false)
     setDefinicionMejorada('')
     setPalabraProcesando(null)
-    toast.success('DefiniciÃ³n mejorada aplicada al formulario')
+    toast.success('Definición mejorada aplicada al formulario')
   }
 
   const resetearFormulario = () => {
@@ -278,7 +278,7 @@ export function DiccionarioSemanticoTab() {
   })
 
   const entradasPorCategoria = entradasFiltradas.reduce((acc, entrada) => {
-    const cat = entrada.categoria || 'Sin categorÃ­a'
+    const cat = entrada.categoria || 'Sin categoría'
     if (!acc[cat]) acc[cat] = []
     acc[cat].push(entrada)
     return acc
@@ -291,10 +291,10 @@ export function DiccionarioSemanticoTab() {
         <div>
           <h3 className="text-2xl font-bold flex items-center gap-2">
             <FileText className="h-6 w-6 text-blue-600" />
-            Diccionario SemÃ¡ntico
+            Diccionario Semántico
           </h3>
           <p className="text-sm text-gray-600 mt-1">
-            Agrega palabras y definiciones para entrenar al AI a reconocer tÃ©rminos comunes
+            Agrega palabras y definiciones para entrenar al AI a reconocer términos comunes
           </p>
         </div>
         <Button onClick={() => { resetearFormulario(); setMostrarFormulario(true); setEditandoId(null) }}>
@@ -311,7 +311,7 @@ export function DiccionarioSemanticoTab() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
-                  placeholder="Buscar por palabra o definiciÃ³n..."
+                  placeholder="Buscar por palabra o definición..."
                   value={busqueda}
                   onChange={(e) => setBusqueda(e.target.value)}
                   className="pl-10"
@@ -321,10 +321,10 @@ export function DiccionarioSemanticoTab() {
             <Select value={filtroCategoria} onValueChange={setFiltroCategoria}>
               <SelectTrigger className="w-48">
                 <Filter className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="CategorÃ­a" />
+                <SelectValue placeholder="Categoría" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="todas">Todas las categorÃ­as</SelectItem>
+                <SelectItem value="todas">Todas las categorías</SelectItem>
                 {categorias.map(cat => (
                   <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                 ))}
@@ -350,11 +350,11 @@ export function DiccionarioSemanticoTab() {
                   <Input
                     value={formulario.palabra}
                     onChange={(e) => setFormulario({ ...formulario, palabra: e.target.value })}
-                    placeholder="Ej: cÃ©dula, pago, nombre"
+                    placeholder="Ej: cédula, pago, nombre"
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium block mb-1">CategorÃ­a</label>
+                  <label className="text-sm font-medium block mb-1">Categoría</label>
                   <Input
                     value={formulario.categoria}
                     onChange={(e) => setFormulario({ ...formulario, categoria: e.target.value })}
@@ -366,7 +366,7 @@ export function DiccionarioSemanticoTab() {
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-sm font-medium">
-                    DefiniciÃ³n <span className="text-red-500">*</span>
+                    Definición <span className="text-red-500">*</span>
                   </label>
                   {formulario.palabra.trim() && (
                     <Button
@@ -408,10 +408,10 @@ export function DiccionarioSemanticoTab() {
                             })
                             setPreguntaChatGPT(response.pregunta)
                             setMostrarModalProcesar(true)
-                            toast.info('ChatGPT necesita mÃ¡s informaciÃ³n')
+                            toast.info('ChatGPT necesita más información')
                           } else if (response.tipo === 'definicion_mejorada' && response.definicion) {
                             setFormulario({ ...formulario, definicion: response.definicion })
-                            toast.success('DefiniciÃ³n mejorada aplicada')
+                            toast.success('Definición mejorada aplicada')
                           }
                         } catch (error: any) {
                           console.error('Error procesando:', error)
@@ -440,14 +440,14 @@ export function DiccionarioSemanticoTab() {
                 <Textarea
                   value={formulario.definicion}
                   onChange={(e) => setFormulario({ ...formulario, definicion: e.target.value })}
-                  placeholder="Describe quÃ© significa esta palabra en el contexto del sistema..."
+                  placeholder="Describe qué significa esta palabra en el contexto del sistema..."
                   rows={3}
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-medium block mb-1">Campo TÃ©cnico Relacionado</label>
+                  <label className="text-sm font-medium block mb-1">Campo Técnico Relacionado</label>
                   <Input
                     value={formulario.campo_relacionado}
                     onChange={(e) => setFormulario({ ...formulario, campo_relacionado: e.target.value })}
@@ -465,21 +465,21 @@ export function DiccionarioSemanticoTab() {
               </div>
 
               <div>
-                <label className="text-sm font-medium block mb-1">SinÃ³nimos (uno por lÃ­nea)</label>
+                <label className="text-sm font-medium block mb-1">Sinónimos (uno por línea)</label>
                 <Textarea
                   value={formulario.sinonimos}
                   onChange={(e) => setFormulario({ ...formulario, sinonimos: e.target.value })}
-                  placeholder="documento&#10;DNI&#10;CI&#10;identificaciÃ³n"
+                  placeholder="documento&#10;DNI&#10;CI&#10;identificación"
                   rows={3}
                 />
               </div>
 
               <div>
-                <label className="text-sm font-medium block mb-1">Ejemplos de Uso (uno por lÃ­nea)</label>
+                <label className="text-sm font-medium block mb-1">Ejemplos de Uso (uno por línea)</label>
                 <Textarea
                   value={formulario.ejemplos_uso}
                   onChange={(e) => setFormulario({ ...formulario, ejemplos_uso: e.target.value })}
-                  placeholder="Â¿CuÃ¡l es el nombre del cliente con cÃ©dula V123456789?&#10;Buscar por documento V123456789"
+                  placeholder="¿Cuál es el nombre del cliente con cédula V123456789?&#10;Buscar por documento V123456789"
                   rows={2}
                 />
               </div>
@@ -571,7 +571,7 @@ export function DiccionarioSemanticoTab() {
                             )}
                             {entrada.sinonimos.length > 0 && (
                               <Badge variant="outline">
-                                SinÃ³nimos: {entrada.sinonimos.join(', ')}
+                                Sinónimos: {entrada.sinonimos.join(', ')}
                               </Badge>
                             )}
                           </div>
@@ -644,10 +644,10 @@ export function DiccionarioSemanticoTab() {
           </DialogHeader>
 
           <div className="space-y-4 mt-4">
-            {/* DefiniciÃ³n Actual */}
+            {/* Definición Actual */}
             {palabraProcesando && (
               <div className="bg-gray-50 p-4 rounded-lg">
-                <h4 className="font-medium text-sm text-gray-700 mb-2">DefiniciÃ³n Actual:</h4>
+                <h4 className="font-medium text-sm text-gray-700 mb-2">Definición Actual:</h4>
                 <p className="text-gray-600">{palabraProcesando.definicion || '(sin definir)'}</p>
               </div>
             )}
@@ -666,7 +666,7 @@ export function DiccionarioSemanticoTab() {
                   <Textarea
                     value={respuestaUsuario}
                     onChange={(e) => setRespuestaUsuario(e.target.value)}
-                    placeholder="Escribe tu respuesta aquÃ­..."
+                    placeholder="Escribe tu respuesta aquí..."
                     rows={3}
                     className="mb-2"
                   />
@@ -691,13 +691,13 @@ export function DiccionarioSemanticoTab() {
               </div>
             )}
 
-            {/* DefiniciÃ³n Mejorada */}
+            {/* Definición Mejorada */}
             {definicionMejorada && (
               <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
                 <div className="flex items-start gap-2 mb-2">
                   <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
                   <div className="flex-1">
-                    <h4 className="font-medium text-sm text-green-900 mb-2">DefiniciÃ³n Mejorada:</h4>
+                    <h4 className="font-medium text-sm text-green-900 mb-2">Definición Mejorada:</h4>
                     <p className="text-green-800 whitespace-pre-wrap">{definicionMejorada}</p>
                   </div>
                 </div>
@@ -707,7 +707,7 @@ export function DiccionarioSemanticoTab() {
                     className="flex-1 bg-green-600 hover:bg-green-700"
                   >
                     <CheckCircle className="h-4 w-4 mr-2" />
-                    Aplicar DefiniciÃ³n
+                    Aplicar Definición
                   </Button>
                   <Button
                     variant="outline"
@@ -731,7 +731,7 @@ export function DiccionarioSemanticoTab() {
               </div>
             )}
 
-            {/* BotÃ³n Cerrar */}
+            {/* Botón Cerrar */}
             <div className="flex justify-end pt-4 border-t">
               <Button variant="outline" onClick={() => {
                 setMostrarModalProcesar(false)

@@ -49,8 +49,8 @@ export const AdvertenciaFormatoCientifico: React.FC<AdvertenciaFormatoCientifico
         <CheckCircle2 className="h-4 w-4 text-green-600" />
         <AlertTitle className="text-green-800">Advertencia revisada</AlertTitle>
         <AlertDescription className="text-green-700">
-          Has confirmado que entiendes el problema del formato cientÃ­fico. 
-          Los nÃºmeros se normalizarÃ¡n automÃ¡ticamente en futuras importaciones.
+          Has confirmado que entiendes el problema del formato científico. 
+          Los números se normalizarán automáticamente en futuras importaciones.
         </AlertDescription>
       </Alert>
     );
@@ -61,20 +61,20 @@ export const AdvertenciaFormatoCientifico: React.FC<AdvertenciaFormatoCientifico
       <Alert className="mb-4 border-yellow-200 bg-yellow-50">
         <AlertTriangle className="h-4 w-4 text-yellow-600" />
         <AlertTitle className="text-yellow-800">
-          âš ï¸ Advertencia: Problema de Formato CientÃ­fico en NÃºmeros de Documento
+          âš ï¸ Advertencia: Problema de Formato Científico en Números de Documento
         </AlertTitle>
         <AlertDescription className="text-yellow-700 space-y-2">
           <p>
-            <strong>Problema detectado:</strong> Algunos nÃºmeros de documento estÃ¡n almacenados en formato cientÃ­fico 
-            (ej: <code className="bg-yellow-100 px-1 rounded">7.40087E+14</code>), lo que oculta los Ãºltimos dÃ­gitos significativos.
+            <strong>Problema detectado:</strong> Algunos números de documento están almacenados en formato científico 
+            (ej: <code className="bg-yellow-100 px-1 rounded">7.40087E+14</code>), lo que oculta los últimos dígitos significativos.
           </p>
           <p>
-            <strong>Impacto:</strong> Esto puede causar que nÃºmeros diferentes aparezcan como iguales, afectando la 
-            reconciliaciÃ³n de pagos y la integridad de los datos.
+            <strong>Impacto:</strong> Esto puede causar que números diferentes aparezcan como iguales, afectando la 
+            reconciliación de pagos y la integridad de los datos.
           </p>
           <p>
-            <strong>SoluciÃ³n implementada:</strong> El sistema ahora normaliza automÃ¡ticamente estos nÃºmeros en futuras 
-            importaciones. Sin embargo, los datos existentes pueden requerir revisiÃ³n y correcciÃ³n manual.
+            <strong>Solución implementada:</strong> El sistema ahora normaliza automáticamente estos números en futuras 
+            importaciones. Sin embargo, los datos existentes pueden requerir revisión y corrección manual.
           </p>
           <div className="flex gap-2 mt-3">
             <Button
@@ -102,10 +102,10 @@ export const AdvertenciaFormatoCientifico: React.FC<AdvertenciaFormatoCientifico
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-yellow-600" />
-              RevisiÃ³n y CorrecciÃ³n de Datos con Formato CientÃ­fico
+              Revisión y Corrección de Datos con Formato Científico
             </DialogTitle>
             <div className="text-sm text-gray-600 mb-4">
-              Puedes revisar y corregir los datos afectados usando las herramientas de ediciÃ³n disponibles.
+              Puedes revisar y corregir los datos afectados usando las herramientas de edición disponibles.
             </div>
           </DialogHeader>
 
@@ -113,9 +113,9 @@ export const AdvertenciaFormatoCientifico: React.FC<AdvertenciaFormatoCientifico
             <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
               <h4 className="font-semibold text-blue-900 mb-2">Herramientas Disponibles:</h4>
               <ul className="list-disc list-inside space-y-1 text-blue-800 text-sm">
-                <li><strong>Editar Pagos:</strong> Puedes editar nÃºmeros de documento directamente desde la lista de pagos</li>
-                <li><strong>Editar Cuotas:</strong> Revisa y corrige informaciÃ³n de cuotas si es necesario</li>
-                <li><strong>Editar PrÃ©stamos:</strong> Verifica y actualiza datos de prÃ©stamos relacionados</li>
+                <li><strong>Editar Pagos:</strong> Puedes editar números de documento directamente desde la lista de pagos</li>
+                <li><strong>Editar Cuotas:</strong> Revisa y corrige información de cuotas si es necesario</li>
+                <li><strong>Editar Préstamos:</strong> Verifica y actualiza datos de préstamos relacionados</li>
                 <li><strong>Eliminar y Recrear:</strong> Si es necesario, puedes eliminar registros incorrectos y recrearlos con datos correctos</li>
               </ul>
             </div>
@@ -123,20 +123,20 @@ export const AdvertenciaFormatoCientifico: React.FC<AdvertenciaFormatoCientifico
             <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
               <h4 className="font-semibold text-yellow-900 mb-2">âš ï¸ Importante:</h4>
               <ul className="list-disc list-inside space-y-1 text-yellow-800 text-sm">
-                <li>Los nÃºmeros en formato cientÃ­fico se normalizan automÃ¡ticamente al guardar</li>
-                <li>Si el nÃºmero original tenÃ­a mÃ¡s dÃ­gitos que los recuperables, estos se perderÃ¡n</li>
-                <li>Revisa los archivos CSV/Excel originales para obtener los nÃºmeros completos si es posible</li>
-                <li>Todos los cambios quedan registrados en la auditorÃ­a del sistema</li>
+                <li>Los números en formato científico se normalizan automáticamente al guardar</li>
+                <li>Si el número original tenía más dígitos que los recuperables, estos se perderán</li>
+                <li>Revisa los archivos CSV/Excel originales para obtener los números completos si es posible</li>
+                <li>Todos los cambios quedan registrados en la auditoría del sistema</li>
               </ul>
             </div>
 
             <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
               <h4 className="font-semibold text-gray-900 mb-2">Datos Afectados:</h4>
               <ul className="list-disc list-inside space-y-1 text-gray-800 text-sm">
-                <li><strong>Pagos:</strong> NÃºmeros de documento en formato cientÃ­fico</li>
-                <li><strong>Cuotas:</strong> InformaciÃ³n relacionada con pagos afectados</li>
-                <li><strong>PrÃ©stamos:</strong> Datos de prÃ©stamos con pagos afectados</li>
-                <li><strong>Tablas de AmortizaciÃ³n:</strong> Cuotas generadas para prÃ©stamos afectados</li>
+                <li><strong>Pagos:</strong> Números de documento en formato científico</li>
+                <li><strong>Cuotas:</strong> Información relacionada con pagos afectados</li>
+                <li><strong>Préstamos:</strong> Datos de préstamos con pagos afectados</li>
+                <li><strong>Tablas de Amortización:</strong> Cuotas generadas para préstamos afectados</li>
               </ul>
             </div>
           </div>

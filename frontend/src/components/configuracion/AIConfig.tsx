@@ -31,7 +31,7 @@ interface DocumentoAI {
   descripcion: string | null
   nombre_archivo: string
   tipo_archivo: string
-  tamaÃ±o_bytes: number | null
+  tamaño_bytes: number | null
   contenido_procesado: boolean
   activo: boolean
   creado_en: string
@@ -91,7 +91,7 @@ export function AIConfig() {
   const [activeTab, setActiveTab] = useState('configuracion')
   const [activeHybridTab, setActiveHybridTab] = useState('fine-tuning') // Cambiado de 'dashboard' a 'fine-tuning'
 
-  // Estado para verificar configuraciÃ³n correcta
+  // Estado para verificar configuración correcta
   const [configuracionCorrecta, setConfiguracionCorrecta] = useState(false)
   const [verificandoConfig, setVerificandoConfig] = useState(false)
   const [tokenAnterior, setTokenAnterior] = useState<string>('')
@@ -101,30 +101,30 @@ export function AIConfig() {
     cargarDocumentos()
   }, [])
 
-  // Verificar configuraciÃ³n solo cuando el usuario cambia el token manualmente
-  // NO verificar en cada carga de pÃ¡gina - el token se guarda permanentemente en BD
+  // Verificar configuración solo cuando el usuario cambia el token manualmente
+  // NO verificar en cada carga de página - el token se guarda permanentemente en BD
   useEffect(() => {
-    // En la carga inicial, si hay token guardado, asumir que estÃ¡ correcto (se guardÃ³ permanentemente en BD)
+    // En la carga inicial, si hay token guardado, asumir que está correcto (se guardó permanentemente en BD)
     if (!tokenAnterior && config.openai_api_key && config.openai_api_key.trim() && config.openai_api_key.startsWith('sk-')) {
       // Token guardado permanentemente en BD - establecer estado
       if (config.activo === 'true') {
         setConfiguracionCorrecta(true)
       }
       setTokenAnterior(config.openai_api_key)
-      console.log('âœ… Token detectado desde BD - guardado permanentemente, no requiere confirmaciÃ³n')
+      console.log('âœ… Token detectado desde BD - guardado permanentemente, no requiere confirmación')
       return
     }
 
-    // Solo verificar si el token cambiÃ³ manualmente (no en la carga inicial)
+    // Solo verificar si el token cambió manualmente (no en la carga inicial)
     if (tokenAnterior && tokenAnterior !== config.openai_api_key && config.openai_api_key && config.openai_api_key.trim() && config.openai_api_key.startsWith('sk-')) {
-      // El usuario cambiÃ³ el token manualmente, verificar despuÃ©s de un delay
+      // El usuario cambió el token manualmente, verificar después de un delay
       const timer = setTimeout(() => {
         verificarConfiguracion(false)
       }, 1000)
       return () => clearTimeout(timer)
     }
 
-    // Actualizar estado basado en configuraciÃ³n actual
+    // Actualizar estado basado en configuración actual
     if (config.openai_api_key && config.openai_api_key.trim() && config.openai_api_key.startsWith('sk-')) {
       if (config.activo === 'true') {
         setConfiguracionCorrecta(true)
@@ -149,29 +149,29 @@ export function AIConfig() {
         success: boolean
         mensaje?: string
       }>('/api/v1/configuracion/ai/probar', {
-        pregunta: 'Verificar conexiÃ³n con OpenAI',
+        pregunta: 'Verificar conexión con OpenAI',
         usar_documentos: false,
       })
 
-      // Si la respuesta es exitosa o el error no es de autenticaciÃ³n, la config estÃ¡ correcta
+      // Si la respuesta es exitosa o el error no es de autenticación, la config está correcta
       const esValida = resultado.success || !resultado.mensaje?.includes('API key')
       setConfiguracionCorrecta(esValida)
 
-      // Si el token es vÃ¡lido y se debe guardar automÃ¡ticamente, guardar la configuraciÃ³n
+      // Si el token es válido y se debe guardar automáticamente, guardar la configuración
       if (esValida && guardarAutomaticamente) {
         try {
           await apiClient.put('/api/v1/configuracion/ai/configuracion', config)
-          toast.success('âœ… Token vÃ¡lido confirmado y guardado automÃ¡ticamente')
+          toast.success('âœ… Token válido confirmado y guardado automáticamente')
           await cargarConfiguracion()
         } catch (saveError: any) {
-          console.error('Error guardando configuraciÃ³n automÃ¡ticamente:', saveError)
-          toast.error('Token vÃ¡lido pero error al guardar. Guarda manualmente.')
+          console.error('Error guardando configuración automáticamente:', saveError)
+          toast.error('Token válido pero error al guardar. Guarda manualmente.')
         }
       }
 
       return esValida
     } catch (error: any) {
-      // Si el error es de autenticaciÃ³n, la config no estÃ¡ correcta
+      // Si el error es de autenticación, la config no está correcta
       const errorMsg = error?.response?.data?.detail || error?.message || ''
       const esValida = !errorMsg.toLowerCase().includes('api key') && !errorMsg.toLowerCase().includes('authentication')
       setConfiguracionCorrecta(esValida)
@@ -194,16 +194,16 @@ export function AIConfig() {
       }
       setConfig(configCargada)
 
-      // Log para depuraciÃ³n
-      console.log('ðŸ“‹ ConfiguraciÃ³n cargada desde BD:', {
+      // Log para depuración
+      console.log('ðŸ“‹ Configuración cargada desde BD:', {
         tieneToken: !!(configCargada.openai_api_key && configCargada.openai_api_key.trim()),
         tokenValido: configCargada.openai_api_key?.startsWith('sk-'),
         activo: configCargada.activo === 'true',
         tokenLength: configCargada.openai_api_key?.length || 0
       })
     } catch (error) {
-      console.error('Error cargando configuraciÃ³n de AI:', error)
-      toast.error('Error cargando configuraciÃ³n')
+      console.error('Error cargando configuración de AI:', error)
+      toast.error('Error cargando configuración')
     }
   }
 
@@ -229,15 +229,15 @@ export function AIConfig() {
     setGuardando(true)
     try {
       // Guardar directamente - el token se guarda permanentemente en BD
-      console.log('ðŸ’¾ Guardando configuraciÃ³n:', {
+      console.log('ðŸ’¾ Guardando configuración:', {
         tieneToken: !!(config.openai_api_key && config.openai_api_key.trim()),
         activo: config.activo
       })
 
       await apiClient.put('/api/v1/configuracion/ai/configuracion', config)
-      toast.success('âœ… ConfiguraciÃ³n de AI guardada exitosamente y de forma permanente')
+      toast.success('âœ… Configuración de AI guardada exitosamente y de forma permanente')
 
-      // Recargar configuraciÃ³n desde BD para confirmar que se guardÃ³
+      // Recargar configuración desde BD para confirmar que se guardó
       await cargarConfiguracion()
 
       // Si hay token guardado, actualizar estado
@@ -247,11 +247,11 @@ export function AIConfig() {
         }
         // Actualizar token anterior para evitar verificaciones innecesarias
         setTokenAnterior(config.openai_api_key)
-        console.log('âœ… Token guardado permanentemente. No se requiere confirmaciÃ³n adicional.')
+        console.log('âœ… Token guardado permanentemente. No se requiere confirmación adicional.')
       }
     } catch (error: any) {
-      console.error('Error guardando configuraciÃ³n:', error)
-      const mensajeError = error?.response?.data?.detail || error?.message || 'Error guardando configuraciÃ³n'
+      console.error('Error guardando configuración:', error)
+      const mensajeError = error?.response?.data?.detail || error?.message || 'Error guardando configuración'
       toast.error(mensajeError)
     } finally {
       setGuardando(false)
@@ -259,10 +259,10 @@ export function AIConfig() {
   }
 
   const handleVerificarYGuardar = async () => {
-    // Verificar y guardar automÃ¡ticamente si el token es vÃ¡lido
+    // Verificar y guardar automáticamente si el token es válido
     const tokenValido = await verificarConfiguracion(true)
     if (tokenValido) {
-      // Si el token es vÃ¡lido y se guardÃ³, actualizar token anterior
+      // Si el token es válido y se guardó, actualizar token anterior
       setTokenAnterior(config.openai_api_key)
     }
   }
@@ -277,9 +277,9 @@ export function AIConfig() {
         return
       }
 
-      // Validar tamaÃ±o (mÃ¡ximo 10MB)
+      // Validar tamaño (máximo 10MB)
       if (file.size > 10 * 1024 * 1024) {
-        toast.error('El archivo es demasiado grande. MÃ¡ximo 10MB')
+        toast.error('El archivo es demasiado grande. Máximo 10MB')
         return
       }
 
@@ -289,7 +289,7 @@ export function AIConfig() {
 
   const handleSubirDocumento = async () => {
     if (!nuevoDocumento.titulo.trim()) {
-      toast.error('El tÃ­tulo es requerido')
+      toast.error('El título es requerido')
       return
     }
 
@@ -335,35 +335,35 @@ export function AIConfig() {
         contenido_en_bd?: boolean
       }>(`/api/v1/configuracion/ai/documentos/${id}/procesar`)
       
-      // Mensaje mejorado segÃºn el resultado
+      // Mensaje mejorado según el resultado
       if (respuesta.mensaje?.includes('ya estaba procesado') || respuesta.contenido_en_bd) {
         toast.success(`âœ… ${respuesta.mensaje || 'Documento procesado'} (${respuesta.caracteres_extraidos || 0} caracteres)`, {
           description: 'El contenido ya estaba disponible en la base de datos'
         })
       } else {
-        toast.success(`Documento procesado exitosamente (${respuesta.caracteres_extraidos || 0} caracteres extraÃ­dos)`)
+        toast.success(`Documento procesado exitosamente (${respuesta.caracteres_extraidos || 0} caracteres extraídos)`)
       }
       
       await cargarDocumentos()
     } catch (error: any) {
       console.error('Error procesando documento:', error)
-      // Intentar obtener el mensaje del backend de mÃºltiples fuentes
+      // Intentar obtener el mensaje del backend de múltiples fuentes
       let mensajeError = error?.response?.data?.detail || 
                         error?.response?.data?.message || 
                         error?.message || 
                         'Error procesando documento'
 
-      // Simplificar mensajes largos de diagnÃ³stico
-      if (mensajeError.includes('El archivo fÃ­sico no existe')) {
-        mensajeError = 'El archivo fÃ­sico no existe en el servidor. Por favor, elimina este documento y sÃºbelo nuevamente.'
+      // Simplificar mensajes largos de diagnóstico
+      if (mensajeError.includes('El archivo físico no existe')) {
+        mensajeError = 'El archivo físico no existe en el servidor. Por favor, elimina este documento y súbelo nuevamente.'
       } else if (mensajeError.length > 200) {
         // Truncar mensajes muy largos pero mantener la parte importante
         const partes = mensajeError.split('\n')
-        mensajeError = partes[0] + (partes.length > 1 ? ' (Ver consola para mÃ¡s detalles)' : '')
+        mensajeError = partes[0] + (partes.length > 1 ? ' (Ver consola para más detalles)' : '')
       }
 
       toast.error(`Error al procesar documento: ${mensajeError}`, {
-        duration: 8000, // Aumentar duraciÃ³n para mensajes importantes
+        duration: 8000, // Aumentar duración para mensajes importantes
       })
     } finally {
       setProcesandoDocumento(null)
@@ -371,7 +371,7 @@ export function AIConfig() {
   }
 
   const handleEliminarDocumento = async (id: number) => {
-    if (!confirm('Â¿EstÃ¡ seguro de eliminar este documento?')) {
+    if (!confirm('¿Está seguro de eliminar este documento?')) {
       return
     }
 
@@ -401,7 +401,7 @@ export function AIConfig() {
 
   const handleActualizarDocumento = async (id: number) => {
     if (!documentoEditado.titulo.trim()) {
-      toast.error('El tÃ­tulo es requerido')
+      toast.error('El título es requerido')
       return
     }
 
@@ -428,22 +428,22 @@ export function AIConfig() {
     // Encontrar el documento para validar
     const documento = documentos.find(doc => doc.id === id)
 
-    // Si se estÃ¡ intentando activar, verificar que estÃ© procesado
+    // Si se está intentando activar, verificar que esté procesado
     if (activo && documento && !documento.contenido_procesado) {
       const confirmar = confirm(
-        'âš ï¸ Este documento no estÃ¡ procesado.\n\n' +
+        'âš ï¸ Este documento no está procesado.\n\n' +
         'Para que el AI pueda usar este documento como contexto, debe estar:\n' +
         '1. âœ… Procesado (extraer texto del archivo)\n' +
         '2. âœ… Activo\n' +
-        '3. âœ… Con contenido_texto vÃ¡lido\n\n' +
-        'Â¿Deseas procesarlo ahora antes de activarlo?'
+        '3. âœ… Con contenido_texto válido\n\n' +
+        '¿Deseas procesarlo ahora antes de activarlo?'
       )
 
       if (confirmar) {
         // Procesar primero
         try {
           await handleProcesarDocumento(id)
-          // DespuÃ©s de procesar, activar
+          // Después de procesar, activar
           await apiClient.patch(`/api/v1/configuracion/ai/documentos/${id}/activar`, { activo: true })
           toast.success('âœ… Documento procesado y activado exitosamente')
           await cargarDocumentos()
@@ -455,7 +455,7 @@ export function AIConfig() {
         return
       } else {
         // Si no quiere procesar, solo activar (pero mostrar advertencia)
-        toast.warning('âš ï¸ Documento activado pero no procesado. El AI no podrÃ¡ usarlo como contexto hasta que sea procesado.')
+        toast.warning('âš ï¸ Documento activado pero no procesado. El AI no podrá usarlo como contexto hasta que sea procesado.')
       }
     }
 
@@ -470,14 +470,14 @@ export function AIConfig() {
     }
   }
 
-  const formatearTamaÃ±o = (bytes: number | null) => {
+  const formatearTamaño = (bytes: number | null) => {
     if (!bytes) return '0 B'
     if (bytes < 1024) return `${bytes} B`
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`
     return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
   }
 
-  // Scroll automÃ¡tico al final del chat
+  // Scroll automático al final del chat
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [mensajesChat, probando])
@@ -495,9 +495,9 @@ export function AIConfig() {
       return
     }
 
-    // Validar formato bÃ¡sico de API key (debe empezar con sk-)
+    // Validar formato básico de API key (debe empezar con sk-)
     if (!apiKey.startsWith('sk-')) {
-      toast.error('El API Key debe empezar con "sk-". Verifica que sea un token vÃ¡lido de OpenAI.')
+      toast.error('El API Key debe empezar con "sk-". Verifica que sea un token válido de OpenAI.')
       return
     }
 
@@ -576,7 +576,7 @@ export function AIConfig() {
     }
   }
 
-  // Manejar Enter para enviar (Shift+Enter para nueva lÃ­nea)
+  // Manejar Enter para enviar (Shift+Enter para nueva línea)
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
@@ -666,7 +666,7 @@ export function AIConfig() {
     }
 
     const handleRestaurarDefault = async () => {
-      if (!confirm('Â¿EstÃ¡s seguro de restaurar el prompt por defecto? Se perderÃ¡ el prompt personalizado.')) {
+      if (!confirm('¿Estás seguro de restaurar el prompt por defecto? Se perderá el prompt personalizado.')) {
         return
       }
 
@@ -701,7 +701,7 @@ export function AIConfig() {
         setVariablesPersonalizadas(data.variables || [])
       } catch (error) {
         console.error('Error cargando variables:', error)
-        // No mostrar error si la tabla no existe aÃºn
+        // No mostrar error si la tabla no existe aún
       } finally {
         setCargandoVariables(false)
       }
@@ -709,7 +709,7 @@ export function AIConfig() {
 
     const handleCrearVariable = async () => {
       if (!nuevaVariable.variable.trim() || !nuevaVariable.descripcion.trim()) {
-        toast.error('Variable y descripciÃ³n son requeridos')
+        toast.error('Variable y descripción son requeridos')
         return
       }
 
@@ -751,7 +751,7 @@ export function AIConfig() {
 
     const handleActualizarVariable = async (id: number) => {
       if (!variableEditada.variable.trim() || !variableEditada.descripcion.trim()) {
-        toast.error('Variable y descripciÃ³n son requeridos')
+        toast.error('Variable y descripción son requeridos')
         return
       }
 
@@ -777,7 +777,7 @@ export function AIConfig() {
     }
 
     const handleEliminarVariable = async (id: number) => {
-      if (!confirm('Â¿EstÃ¡s seguro de eliminar esta variable?')) return
+      if (!confirm('¿Estás seguro de eliminar esta variable?')) return
 
       try {
         await apiClient.delete(`/api/v1/configuracion/ai/prompt/variables/${id}`)
@@ -807,22 +807,22 @@ export function AIConfig() {
       toast.success('Placeholders copiados al portapapeles')
     }
 
-    const promptTemplate = `Eres un ANALISTA ESPECIALIZADO en prÃ©stamos y cobranzas con capacidad de anÃ¡lisis de KPIs operativos. Tu funciÃ³n es proporcionar informaciÃ³n precisa, anÃ¡lisis de tendencias y mÃ©tricas clave basÃ¡ndote EXCLUSIVAMENTE en los datos almacenados en las bases de datos del sistema.
+    const promptTemplate = `Eres un ANALISTA ESPECIALIZADO en préstamos y cobranzas con capacidad de análisis de KPIs operativos. Tu función es proporcionar información precisa, análisis de tendencias y métricas clave basándote EXCLUSIVAMENTE en los datos almacenados en las bases de datos del sistema.
 
 ROL Y CONTEXTO:
-- Eres un analista especializado en prÃ©stamos y cobranzas con capacidad de anÃ¡lisis de KPIs operativos
-- Tu funciÃ³n es proporcionar informaciÃ³n precisa, anÃ¡lisis de tendencias y mÃ©tricas clave
+- Eres un analista especializado en préstamos y cobranzas con capacidad de análisis de KPIs operativos
+- Tu función es proporcionar información precisa, análisis de tendencias y métricas clave
 - Basas tus respuestas EXCLUSIVAMENTE en los datos almacenados en las bases de datos del sistema
-- Tienes acceso a informaciÃ³n en tiempo real de la base de datos del sistema
-- Proporcionas anÃ¡lisis, estadÃ­sticas y recomendaciones basadas en datos reales
+- Tienes acceso a información en tiempo real de la base de datos del sistema
+- Proporcionas análisis, estadísticas y recomendaciones basadas en datos reales
 - Eres profesional, claro y preciso en tus respuestas
-- Proporcionas respuestas accionables con contexto e interpretaciÃ³n
+- Proporcionas respuestas accionables con contexto e interpretación
 
-RESTRICCIÃ“N IMPORTANTE: Solo puedes responder preguntas relacionadas con la base de datos del sistema. Si recibes una pregunta que NO estÃ© relacionada con clientes, prÃ©stamos, pagos, cuotas, cobranzas, moras, estadÃ­sticas del sistema, o la fecha/hora actual, debes responder:
+RESTRICCIÓN IMPORTANTE: Solo puedes responder preguntas relacionadas con la base de datos del sistema. Si recibes una pregunta que NO esté relacionada con clientes, préstamos, pagos, cuotas, cobranzas, moras, estadísticas del sistema, o la fecha/hora actual, debes responder:
 
-"Lo siento, el Chat AI solo responde preguntas sobre la base de datos del sistema (clientes, prÃ©stamos, pagos, cuotas, cobranzas, moras, estadÃ­sticas, etc.). Para preguntas generales, por favor usa el Chat de Prueba en la configuraciÃ³n de AI."
+"Lo siento, el Chat AI solo responde preguntas sobre la base de datos del sistema (clientes, préstamos, pagos, cuotas, cobranzas, moras, estadísticas, etc.). Para preguntas generales, por favor usa el Chat de Prueba en la configuración de AI."
 
-Tienes acceso a informaciÃ³n de la base de datos del sistema y a la fecha/hora actual. AquÃ­ tienes un resumen actualizado:
+Tienes acceso a información de la base de datos del sistema y a la fecha/hora actual. Aquí tienes un resumen actualizado:
 
 === RESUMEN DE BASE DE DATOS ===
 {resumen_bd}
@@ -830,78 +830,78 @@ Tienes acceso a informaciÃ³n de la base de datos del sistema y a la fecha/hora
 {datos_adicionales}
 {info_esquema}
 
-[El sistema incluirÃ¡ automÃ¡ticamente el inventario completo de campos, mapeo semÃ¡ntico, y documentos de contexto]
+[El sistema incluirá automáticamente el inventario completo de campos, mapeo semántico, y documentos de contexto]
 
 === DOCUMENTOS DE CONTEXTO ADICIONAL ===
 {contexto_documentos}
-NOTA: Si hay documentos de contexto arriba, Ãºsalos como informaciÃ³n adicional para responder preguntas. Los documentos pueden contener polÃ­ticas, procedimientos, o informaciÃ³n relevante sobre el sistema.
+NOTA: Si hay documentos de contexto arriba, úsalos como información adicional para responder preguntas. Los documentos pueden contener políticas, procedimientos, o información relevante sobre el sistema.
 
 CAPACIDADES PRINCIPALES:
-1. **Consulta de datos individuales**: InformaciÃ³n de prÃ©stamos, clientes y pagos especÃ­ficos
-2. **AnÃ¡lisis de KPIs**: Morosidad, recuperaciÃ³n, cartera en riesgo, efectividad de cobranza
-3. **AnÃ¡lisis de tendencias**: Comparaciones temporales (aumentos/disminuciones)
-4. **Proyecciones operativas**: CuÃ¡nto se debe cobrar hoy, esta semana, este mes
-5. **SegmentaciÃ³n**: AnÃ¡lisis por rangos de mora, montos, productos, zonas
-6. **AnÃ¡lisis de Machine Learning**: PredicciÃ³n de morosidad, segmentaciÃ³n de clientes, detecciÃ³n de anomalÃ­as, clustering de prÃ©stamos
+1. **Consulta de datos individuales**: Información de préstamos, clientes y pagos específicos
+2. **Análisis de KPIs**: Morosidad, recuperación, cartera en riesgo, efectividad de cobranza
+3. **Análisis de tendencias**: Comparaciones temporales (aumentos/disminuciones)
+4. **Proyecciones operativas**: Cuánto se debe cobrar hoy, esta semana, este mes
+5. **Segmentación**: Análisis por rangos de mora, montos, productos, zonas
+6. **Análisis de Machine Learning**: Predicción de morosidad, segmentación de clientes, detección de anomalías, clustering de préstamos
 
 REGLAS FUNDAMENTALES:
-1. **SOLO usa datos reales**: Accede a los Ã­ndices de las bases de datos y consulta los campos especÃ­ficos necesarios
-2. **NUNCA inventes informaciÃ³n**: Si un dato no existe en la base de datos, indica claramente que no estÃ¡ disponible
-3. **Muestra tus cÃ¡lculos**: Cuando calcules KPIs, indica la fÃ³rmula y los valores utilizados
-4. **Compara con contexto**: Para tendencias, muestra perÃ­odo actual vs perÃ­odo anterior
-5. **Respuestas accionables**: Incluye el "Â¿quÃ© significa esto?" cuando sea relevante
-6. **SOLO responde preguntas sobre la base de datos del sistema relacionadas con cobranzas y prÃ©stamos**
-7. Si la pregunta NO es sobre la BD, responde con el mensaje de restricciÃ³n mencionado arriba
+1. **SOLO usa datos reales**: Accede a los índices de las bases de datos y consulta los campos específicos necesarios
+2. **NUNCA inventes información**: Si un dato no existe en la base de datos, indica claramente que no está disponible
+3. **Muestra tus cálculos**: Cuando calcules KPIs, indica la fórmula y los valores utilizados
+4. **Compara con contexto**: Para tendencias, muestra período actual vs período anterior
+5. **Respuestas accionables**: Incluye el "¿qué significa esto?" cuando sea relevante
+6. **SOLO responde preguntas sobre la base de datos del sistema relacionadas con cobranzas y préstamos**
+7. Si la pregunta NO es sobre la BD, responde con el mensaje de restricción mencionado arriba
 
-PROCESO DE ANÃLISIS:
-1. Identifica quÃ© mÃ©trica o anÃ¡lisis solicita el usuario
-2. Determina quÃ© tabla(s), campo(s) y perÃ­odo de tiempo necesitas
-3. Accede a los datos y realiza los cÃ¡lculos necesarios
-4. Compara con perÃ­odos anteriores si es relevante
+PROCESO DE ANÁLISIS:
+1. Identifica qué métrica o análisis solicita el usuario
+2. Determina qué tabla(s), campo(s) y período de tiempo necesitas
+3. Accede a los datos y realiza los cálculos necesarios
+4. Compara con períodos anteriores si es relevante
 5. Presenta resultados con contexto y conclusiones claras
 
-INSTRUCCIONES ESPECÃFICAS PARA BÃšSQUEDAS Y CONSULTAS:
+INSTRUCCIONES ESPECÍFICAS PARA BÃšSQUEDAS Y CONSULTAS:
 
-**BÃšSQUEDAS POR IDENTIFICACIÃ“N (CÃ©dula/Documento)**:
-- Cuando el usuario pregunta "Â¿CÃ³mo se llama quien tiene este nÃºmero de cÃ©dula: V19226493?" o similar:
-  1. Busca en la tabla \`clientes\` usando el campo \`cedula\` (indexed para bÃºsquedas rÃ¡pidas)
-  2. Si encuentras el cliente, proporciona: nombres, cÃ©dula, telÃ©fono, email, estado, fecha_registro
-  3. Si no encuentras el cliente, indica claramente: "No se encontrÃ³ ningÃºn cliente con la cÃ©dula V19226493"
-  4. Puedes buscar tambiÃ©n en \`prestamos.cedula\` si el cliente no estÃ¡ en la tabla clientes pero tiene prÃ©stamos
-  5. Usa el mapeo semÃ¡ntico: "cedula", "cÃ©dula", "documento", "dni", "ci" son equivalentes
+**BÃšSQUEDAS POR IDENTIFICACIÓN (Cédula/Documento)**:
+- Cuando el usuario pregunta "¿Cómo se llama quien tiene este número de cédula: V19226493?" o similar:
+  1. Busca en la tabla \`clientes\` usando el campo \`cedula\` (indexed para búsquedas rápidas)
+  2. Si encuentras el cliente, proporciona: nombres, cédula, teléfono, email, estado, fecha_registro
+  3. Si no encuentras el cliente, indica claramente: "No se encontró ningún cliente con la cédula V19226493"
+  4. Puedes buscar también en \`prestamos.cedula\` si el cliente no está en la tabla clientes pero tiene préstamos
+  5. Usa el mapeo semántico: "cedula", "cédula", "documento", "dni", "ci" son equivalentes
 
 **FORMATO DE RESPUESTA PARA BÃšSQUEDAS**:
 - Si encuentras el cliente:
   ðŸ‘¤ Cliente encontrado:
   â€¢ Nombre: [nombres]
-  â€¢ CÃ©dula: [cedula]
-  â€¢ TelÃ©fono: [telefono]
+  â€¢ Cédula: [cedula]
+  â€¢ Teléfono: [telefono]
   â€¢ Email: [email]
   â€¢ Estado: [estado]
   â€¢ Fecha de registro: [fecha_registro]
-- Si no encuentras: "âŒ No se encontrÃ³ ningÃºn cliente con la cÃ©dula [cedula] en la base de datos."
+- Si no encuentras: "âŒ No se encontró ningún cliente con la cédula [cedula] en la base de datos."
 
 RESTRICCIONES IMPORTANTES:
-- âš ï¸ PROHIBIDO INVENTAR DATOS: Solo usa la informaciÃ³n proporcionada en el resumen. NO inventes, NO uses tu conocimiento de entrenamiento, NO asumas datos.
+- âš ï¸ PROHIBIDO INVENTAR DATOS: Solo usa la información proporcionada en el resumen. NO inventes, NO uses tu conocimiento de entrenamiento, NO asumas datos.
 - âš ï¸ NO hagas suposiciones sobre datos faltantes
-- âš ï¸ NO uses promedios histÃ³ricos como datos reales sin aclararlo
-- âš ï¸ FECHA ACTUAL: La fecha y hora actual estÃ¡n incluidas en el resumen. DEBES usar EXACTAMENTE esa informaciÃ³n.
-- âš ï¸ DATOS DE BD: Solo usa los nÃºmeros y estadÃ­sticas del resumen. Si no estÃ¡ en el resumen, di que no tienes esa informaciÃ³n especÃ­fica.
-- âš ï¸ NO INVENTES: Si no tienes la informaciÃ³n exacta, di "No tengo esa informaciÃ³n especÃ­fica en el resumen proporcionado" en lugar de inventar.
-- âš ï¸ ANÃLISIS PROFESIONAL: Como especialista, proporciona anÃ¡lisis y contexto cuando sea relevante, pero siempre basado en los datos del resumen.
-- Si faltan datos para un anÃ¡lisis completo, indÃ­calo claramente
-- Para tendencias, necesitas al menos 2 perÃ­odos de comparaciÃ³n
-- Si hay valores atÃ­picos, seÃ±Ã¡lalos
+- âš ï¸ NO uses promedios históricos como datos reales sin aclararlo
+- âš ï¸ FECHA ACTUAL: La fecha y hora actual están incluidas en el resumen. DEBES usar EXACTAMENTE esa información.
+- âš ï¸ DATOS DE BD: Solo usa los números y estadísticas del resumen. Si no está en el resumen, di que no tienes esa información específica.
+- âš ï¸ NO INVENTES: Si no tienes la información exacta, di "No tengo esa información específica en el resumen proporcionado" en lugar de inventar.
+- âš ï¸ ANÁLISIS PROFESIONAL: Como especialista, proporciona análisis y contexto cuando sea relevante, pero siempre basado en los datos del resumen.
+- Si faltan datos para un análisis completo, indícalo claramente
+- Para tendencias, necesitas al menos 2 períodos de comparación
+- Si hay valores atípicos, señálalos
 
 CUANDO NO PUEDAS RESPONDER:
-- **Datos insuficientes**: "Para este anÃ¡lisis necesito datos de [especificar], que no estÃ¡n disponibles actualmente"
-- **PerÃ­odo no disponible**: "Solo tengo datos desde [fecha]. Â¿Deseas el anÃ¡lisis con la informaciÃ³n disponible?"
-- **CÃ¡lculo complejo**: "Este anÃ¡lisis requiere: [listar requisitos]. Â¿Confirmas que proceda?"
+- **Datos insuficientes**: "Para este análisis necesito datos de [especificar], que no están disponibles actualmente"
+- **Período no disponible**: "Solo tengo datos desde [fecha]. ¿Deseas el análisis con la información disponible?"
+- **Cálculo complejo**: "Este análisis requiere: [listar requisitos]. ¿Confirmas que proceda?"
 
 OBJETIVO:
-Tu objetivo es ser el asistente analÃ­tico que permita tomar decisiones informadas sobre la gestiÃ³n de prÃ©stamos y cobranzas, proporcionando anÃ¡lisis precisos, tendencias claras y mÃ©tricas accionables basadas exclusivamente en los datos reales del sistema.
+Tu objetivo es ser el asistente analítico que permita tomar decisiones informadas sobre la gestión de préstamos y cobranzas, proporcionando análisis precisos, tendencias claras y métricas accionables basadas exclusivamente en los datos reales del sistema.
 
-RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el mensaje de restricciÃ³n.`
+RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el mensaje de restricción.`
 
     if (cargandoPrompt) {
       return (
@@ -972,15 +972,15 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                 </Button>
               </div>
               <p className="text-sm text-amber-800 mb-2">
-                El sistema reemplazarÃ¡ automÃ¡ticamente estos placeholders con datos reales:
+                El sistema reemplazará automáticamente estos placeholders con datos reales:
               </p>
 
               {/* Placeholders predeterminados */}
               <div className="bg-white rounded p-3 font-mono text-xs space-y-1 mb-3">
                 <div className="font-semibold text-amber-900 mb-1">Predeterminados:</div>
                 <div><code className="text-blue-600">{'{resumen_bd}'}</code> - Resumen de la base de datos</div>
-                <div><code className="text-blue-600">{'{info_cliente_buscado}'}</code> - InformaciÃ³n del cliente si se busca por cÃ©dula</div>
-                <div><code className="text-blue-600">{'{datos_adicionales}'}</code> - CÃ¡lculos y anÃ¡lisis adicionales</div>
+                <div><code className="text-blue-600">{'{info_cliente_buscado}'}</code> - Información del cliente si se busca por cédula</div>
+                <div><code className="text-blue-600">{'{datos_adicionales}'}</code> - Cálculos y análisis adicionales</div>
                 <div><code className="text-blue-600">{'{info_esquema}'}</code> - Esquema completo de la base de datos</div>
                 <div><code className="text-blue-600">{'{contexto_documentos}'}</code> - Documentos de contexto adicionales</div>
               </div>
@@ -997,12 +997,12 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                 </div>
               )}
 
-              {/* GestiÃ³n de Variables Personalizadas */}
+              {/* Gestión de Variables Personalizadas */}
               {mostrarGestionVariables && (
                 <div className="bg-white rounded-lg p-4 border border-amber-300 mt-3">
                   <h4 className="font-semibold mb-3 flex items-center gap-2">
                     <FileText className="h-4 w-4" />
-                    GestiÃ³n de Variables Personalizadas
+                    Gestión de Variables Personalizadas
                   </h4>
 
                   {/* Formulario para nueva variable */}
@@ -1016,14 +1016,14 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                         placeholder="Ej: {mi_variable} o mi_variable"
                         className="font-mono text-xs"
                       />
-                      <p className="text-xs text-gray-500 mt-1">Se agregarÃ¡n llaves automÃ¡ticamente si no las incluyes</p>
+                      <p className="text-xs text-gray-500 mt-1">Se agregarán llaves automáticamente si no las incluyes</p>
                     </div>
                     <div>
-                      <label className="text-xs font-medium block mb-1">DescripciÃ³n <span className="text-red-500">*</span></label>
+                      <label className="text-xs font-medium block mb-1">Descripción <span className="text-red-500">*</span></label>
                       <Input
                         value={nuevaVariable.descripcion}
                         onChange={(e) => setNuevaVariable(prev => ({ ...prev, descripcion: e.target.value }))}
-                        placeholder="Describe quÃ© contiene esta variable"
+                        placeholder="Describe qué contiene esta variable"
                         className="text-xs"
                       />
                     </div>
@@ -1073,7 +1073,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                                 />
                               </div>
                               <div>
-                                <label className="text-xs font-medium block mb-1">DescripciÃ³n</label>
+                                <label className="text-xs font-medium block mb-1">Descripción</label>
                                 <Input
                                   value={variableEditada.descripcion}
                                   onChange={(e) => setVariableEditada(prev => ({ ...prev, descripcion: e.target.value }))}
@@ -1191,7 +1191,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
           <Textarea
             value={promptPersonalizado}
             onChange={(e) => setPromptPersonalizado(e.target.value)}
-            placeholder="Escribe tu prompt personalizado aquÃ­. AsegÃºrate de incluir los placeholders: {resumen_bd}, {info_cliente_buscado}, {datos_adicionales}, {info_esquema}, {contexto_documentos}"
+            placeholder="Escribe tu prompt personalizado aquí. Asegúrate de incluir los placeholders: {resumen_bd}, {info_cliente_buscado}, {datos_adicionales}, {info_esquema}, {contexto_documentos}"
             className="font-mono text-sm min-h-[500px]"
           />
           <p className="text-xs text-gray-500 mt-2">
@@ -1202,8 +1202,8 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <p className="text-sm text-blue-800">
             ðŸ’¡ <strong>Tip:</strong> Puedes personalizar el comportamiento del AI ajustando el prompt.
-            Los placeholders se reemplazarÃ¡n automÃ¡ticamente con datos reales del sistema.
-            Si dejas el prompt vacÃ­o, se usarÃ¡ el prompt por defecto.
+            Los placeholders se reemplazarán automáticamente con datos reales del sistema.
+            Si dejas el prompt vacío, se usará el prompt por defecto.
           </p>
         </div>
       </div>
@@ -1212,22 +1212,22 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
 
   return (
     <div className="space-y-6">
-      {/* InformaciÃ³n mejorada */}
+      {/* Información mejorada */}
       <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5 shadow-sm">
         <div className="flex items-center gap-3 mb-2">
           <div className="p-2 bg-blue-100 rounded-lg">
             <Brain className="h-6 w-6 text-blue-600" />
           </div>
           <div>
-            <h3 className="font-bold text-lg text-blue-900">ConfiguraciÃ³n de Inteligencia Artificial</h3>
+            <h3 className="font-bold text-lg text-blue-900">Configuración de Inteligencia Artificial</h3>
             <p className="text-sm text-blue-700 mt-1">
-              Configura ChatGPT para respuestas automÃ¡ticas contextualizadas en WhatsApp usando tus documentos como base de conocimiento.
+              Configura ChatGPT para respuestas automáticas contextualizadas en WhatsApp usando tus documentos como base de conocimiento.
             </p>
           </div>
         </div>
       </div>
 
-      {/* Tabs con 3 pestaÃ±as - diseÃ±o mejorado */}
+      {/* Tabs con 3 pestañas - diseño mejorado */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-3 bg-gray-100/50 p-1 rounded-lg">
           <TabsTrigger
@@ -1235,7 +1235,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
             className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-200"
           >
             <Settings className="h-4 w-4" />
-            ConfiguraciÃ³n
+            Configuración
           </TabsTrigger>
           <TabsTrigger
             value="entrenamiento"
@@ -1249,11 +1249,11 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
             className="flex items-center gap-2 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-200"
           >
             <Zap className="h-4 w-4" />
-            Sistema HÃ­brido
+            Sistema Híbrido
           </TabsTrigger>
         </TabsList>
 
-        {/* PestaÃ±a 1: ConfiguraciÃ³n */}
+        {/* Pestaña 1: Configuración */}
         <TabsContent value="configuracion" className="space-y-4 mt-6">
           {/* âœ… Toggle Activar/Desactivar AI */}
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 shadow-sm">
@@ -1264,8 +1264,8 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                 </label>
                 <p className="text-xs text-gray-600">
                   {config.activo === 'true'
-                    ? 'âœ… El sistema estÃ¡ usando AI para generar respuestas automÃ¡ticas'
-                    : 'âš ï¸ El sistema NO usarÃ¡ AI. Activa el servicio para habilitar respuestas inteligentes.'}
+                    ? 'âœ… El sistema está usando AI para generar respuestas automáticas'
+                    : 'âš ï¸ El sistema NO usará AI. Activa el servicio para habilitar respuestas inteligentes.'}
                 </p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
@@ -1276,21 +1276,21 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                         const nuevoEstado = e.target.checked ? 'true' : 'false'
                         handleChange('activo', nuevoEstado)
 
-                        // Si hay token vÃ¡lido y se estÃ¡ activando, guardar automÃ¡ticamente
+                        // Si hay token válido y se está activando, guardar automáticamente
                         if (e.target.checked && config.openai_api_key?.trim() && config.openai_api_key.startsWith('sk-')) {
                           try {
                             const configParaGuardar = { ...config, activo: nuevoEstado }
                             await apiClient.put('/api/v1/configuracion/ai/configuracion', configParaGuardar)
-                            toast.success('âœ… AI activado y guardado automÃ¡ticamente')
+                            toast.success('âœ… AI activado y guardado automáticamente')
                             await cargarConfiguracion()
                             setConfiguracionCorrecta(true)
                             setTokenAnterior(config.openai_api_key)
                           } catch (error) {
-                            console.error('Error guardando automÃ¡ticamente:', error)
-                            toast.warning('AI activado localmente. Recuerda guardar la configuraciÃ³n.')
+                            console.error('Error guardando automáticamente:', error)
+                            toast.warning('AI activado localmente. Recuerda guardar la configuración.')
                           }
                         } else {
-                          toast.info(e.target.checked ? 'AI activado - Las respuestas inteligentes se habilitarÃ¡n al guardar' : 'AI desactivado - Las respuestas inteligentes se deshabilitarÃ¡n al guardar')
+                          toast.info(e.target.checked ? 'AI activado - Las respuestas inteligentes se habilitarán al guardar' : 'AI desactivado - Las respuestas inteligentes se deshabilitarán al guardar')
                         }
                       }}
                       className="sr-only peer"
@@ -1303,11 +1303,11 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
             </div>
           </div>
 
-          {/* âœ… Estado: ConfiguraciÃ³n correcta */}
+          {/* âœ… Estado: Configuración correcta */}
           {config.openai_api_key?.trim() && config.openai_api_key.startsWith('sk-') && configuracionCorrecta && (
             <div className="bg-white border-2 border-green-500 rounded-xl p-5 shadow-sm">
               <div className="flex items-center gap-3">
-                {/* SemÃ¡foro Verde */}
+                {/* Semáforo Verde */}
                 <div className="flex flex-col items-center gap-1 flex-shrink-0">
                   <div className="w-4 h-4 bg-green-500 rounded-full shadow-lg"></div>
                   <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
@@ -1315,21 +1315,21 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                 </div>
                 <div className="flex-1">
                   <p className="font-semibold text-gray-900">
-                    ConfiguraciÃ³n correcta
+                    Configuración correcta
                   </p>
                   <p className="text-sm text-gray-600">
-                    OpenAI aceptÃ³ la conexiÃ³n. Puedes usar AI para generar respuestas.
+                    OpenAI aceptó la conexión. Puedes usar AI para generar respuestas.
                   </p>
                 </div>
               </div>
             </div>
           )}
 
-          {/* âš ï¸ Estado: API Key no vÃ¡lida o no configurada */}
+          {/* âš ï¸ Estado: API Key no válida o no configurada */}
           {config.openai_api_key?.trim() && !configuracionCorrecta && !verificandoConfig && (
             <div className="bg-white border-2 border-amber-400 rounded-xl p-5 shadow-sm">
               <div className="flex items-center gap-3">
-                {/* SemÃ¡foro Amarillo */}
+                {/* Semáforo Amarillo */}
                 <div className="flex flex-col items-center gap-1 flex-shrink-0">
                   <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
                   <div className="w-4 h-4 bg-amber-500 rounded-full shadow-lg"></div>
@@ -1337,12 +1337,12 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                 </div>
                 <div className="flex-1">
                   <p className="font-semibold text-gray-900 mb-2">
-                    API Key no vÃ¡lida o no configurada
+                    API Key no válida o no configurada
                   </p>
                   <div className="text-sm text-gray-600 space-y-1">
                     <p>1. Verifica que tu API Key comience con "sk-"</p>
-                    <p>2. AsegÃºrate de que la API Key sea vÃ¡lida y tenga crÃ©ditos disponibles</p>
-                    <p>3. ObtÃ©n una nueva API Key en: <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">platform.openai.com/api-keys</a></p>
+                    <p>2. Asegúrate de que la API Key sea válida y tenga créditos disponibles</p>
+                    <p>3. Obtén una nueva API Key en: <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">platform.openai.com/api-keys</a></p>
                   </div>
                 </div>
               </div>
@@ -1353,7 +1353,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
           {(!config.openai_api_key?.trim() || !config.openai_api_key.startsWith('sk-')) && (
             <div className="bg-white border-2 border-red-500 rounded-xl p-5 shadow-sm">
               <div className="flex items-center gap-3">
-                {/* SemÃ¡foro Rojo */}
+                {/* Semáforo Rojo */}
                 <div className="flex flex-col items-center gap-1 flex-shrink-0">
                   <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
                   <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
@@ -1361,10 +1361,10 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                 </div>
                 <div className="flex-1">
                   <p className="font-semibold text-gray-900">
-                    ConfiguraciÃ³n incompleta
+                    Configuración incompleta
                   </p>
                   <p className="text-sm text-gray-600">
-                    Ingresa una API Key vÃ¡lida de OpenAI para habilitar el servicio de AI.
+                    Ingresa una API Key válida de OpenAI para habilitar el servicio de AI.
                   </p>
                 </div>
               </div>
@@ -1392,7 +1392,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                   </button>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  ObtÃ©n tu API Key en: <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">platform.openai.com/api-keys</a>
+                  Obtén tu API Key en: <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">platform.openai.com/api-keys</a>
                 </p>
               </div>
 
@@ -1405,7 +1405,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo (Recomendado)</SelectItem>
-                      <SelectItem value="gpt-4">GPT-4 (MÃ¡s potente)</SelectItem>
+                      <SelectItem value="gpt-4">GPT-4 (Más potente)</SelectItem>
                       <SelectItem value="gpt-4-turbo">GPT-4 Turbo</SelectItem>
                     </SelectContent>
                   </Select>
@@ -1433,7 +1433,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                     onChange={(e) => handleChange('max_tokens', e.target.value)}
                     placeholder="1000"
                   />
-                  <p className="text-xs text-gray-500 mt-1">MÃ¡ximo de tokens en la respuesta.</p>
+                  <p className="text-xs text-gray-500 mt-1">Máximo de tokens en la respuesta.</p>
                 </div>
               </div>
 
@@ -1454,8 +1454,8 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                     <>
                       <Save className="mr-2 h-4 w-4" />
                       {configuracionCorrecta && config.openai_api_key?.trim() && config.openai_api_key.startsWith('sk-')
-                        ? 'âœ… Guardar ConfiguraciÃ³n (Token VÃ¡lido)'
-                        : 'Guardar ConfiguraciÃ³n'}
+                        ? 'âœ… Guardar Configuración (Token Válido)'
+                        : 'Guardar Configuración'}
                     </>
                   )}
                 </Button>
@@ -1511,14 +1511,14 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                   </p>
                 </div>
 
-                {/* Ãrea de Chat */}
+                {/* Área de Chat */}
                 <div className="bg-gray-50 h-[500px] flex flex-col">
                   {/* Mensajes */}
                   <div className="flex-1 overflow-y-auto p-4 space-y-4">
                     {mensajesChat.length === 0 ? (
                       <div className="flex flex-col items-center justify-center h-full text-gray-400">
                         <MessageSquare className="h-12 w-12 mb-3 opacity-50" />
-                        <p className="text-sm">No hay mensajes aÃºn</p>
+                        <p className="text-sm">No hay mensajes aún</p>
                         <p className="text-xs mt-1">Escribe una pregunta para comenzar</p>
                       </div>
                     ) : (
@@ -1603,7 +1603,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                           value={preguntaPrueba}
                           onChange={(e) => setPreguntaPrueba(e.target.value)}
                           onKeyDown={handleKeyDown}
-                          placeholder="Escribe tu pregunta aquÃ­... (Presiona Enter para enviar, Shift+Enter para nueva lÃ­nea)"
+                          placeholder="Escribe tu pregunta aquí... (Presiona Enter para enviar, Shift+Enter para nueva línea)"
                           rows={3}
                           className="resize-none pr-12"
                           disabled={probando || !config.openai_api_key?.trim()}
@@ -1638,7 +1638,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                         </label>
                       </div>
                       <p className="text-xs text-gray-500">
-                        Enter para enviar â€¢ Shift+Enter para nueva lÃ­nea
+                        Enter para enviar â€¢ Shift+Enter para nueva línea
                       </p>
                     </div>
                   </div>
@@ -1648,12 +1648,12 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
           </div>
         </TabsContent>
 
-        {/* PestaÃ±a 2: Entrenamiento Mejorado */}
+        {/* Pestaña 2: Entrenamiento Mejorado */}
         <TabsContent value="entrenamiento" className="space-y-4 mt-6">
           <EntrenamientoMejorado />
         </TabsContent>
 
-        {/* PestaÃ±a 3: Sistema HÃ­brido */}
+        {/* Pestaña 3: Sistema Híbrido */}
         <TabsContent value="sistema-hibrido" className="space-y-4 mt-6">
           <Tabs value={activeHybridTab} onValueChange={setActiveHybridTab} className="w-full">
             {/* Dashboard eliminado - redundante con EntrenamientoMejorado */}

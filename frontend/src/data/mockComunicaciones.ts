@@ -1,35 +1,35 @@
-// Mock data para comunicaciones - Ejemplos de configuraciÃ³n
+// Mock data para comunicaciones - Ejemplos de configuración
 // Este archivo contiene ejemplos de comunicaciones (WhatsApp y Email)
-// para mostrar cÃ³mo estÃ¡ estructurada la informaciÃ³n
+// para mostrar cómo está estructurada la información
 
 import { ComunicacionUnificada } from '../services/comunicacionesService'
 
 export const mockComunicaciones: ComunicacionUnificada[] = [
-  // Ejemplo 1: ComunicaciÃ³n WhatsApp INBOUND (requiere respuesta) - NUEVO
+  // Ejemplo 1: Comunicación WhatsApp INBOUND (requiere respuesta) - NUEVO
   {
     id: 1,
     tipo: 'whatsapp',
     from_contact: '+584121234567',
     to_contact: '+584129876543',
     subject: null,
-    body: 'Buenos dÃ­as, quisiera informaciÃ³n sobre los requisitos para solicitar un prÃ©stamo. Â¿CuÃ¡l es el monto mÃ­nimo?',
+    body: 'Buenos días, quisiera información sobre los requisitos para solicitar un préstamo. ¿Cuál es el monto mínimo?',
     timestamp: new Date('2025-11-18T14:30:00Z').toISOString(),
     direccion: 'INBOUND',
-    cliente_id: null, // Cliente no identificado aÃºn
+    cliente_id: null, // Cliente no identificado aún
     ticket_id: null,
     requiere_respuesta: true,
     procesado: false,
     respuesta_enviada: false,
     creado_en: new Date('2025-11-18T14:30:00Z').toISOString(),
   },
-  // Ejemplo 2: ComunicaciÃ³n Email INBOUND (requiere respuesta) - Cliente identificado
+  // Ejemplo 2: Comunicación Email INBOUND (requiere respuesta) - Cliente identificado
   {
     id: 2,
     tipo: 'email',
     from_contact: 'maria.gonzalez@email.com',
     to_contact: 'atencion@rapicredit.com',
-    subject: 'Consulta sobre estado de mi prÃ©stamo',
-    body: 'Estimados, quisiera saber el estado actual de mi prÃ©stamo #12345. Â¿CuÃ¡ntas cuotas me faltan por pagar? Necesito esta informaciÃ³n para planificar mis pagos.',
+    subject: 'Consulta sobre estado de mi préstamo',
+    body: 'Estimados, quisiera saber el estado actual de mi préstamo #12345. ¿Cuántas cuotas me faltan por pagar? Necesito esta información para planificar mis pagos.',
     timestamp: new Date('2025-11-18T13:15:00Z').toISOString(),
     direccion: 'INBOUND',
     cliente_id: 5, // Cliente identificado
@@ -39,14 +39,14 @@ export const mockComunicaciones: ComunicacionUnificada[] = [
     respuesta_enviada: false,
     creado_en: new Date('2025-11-18T13:15:00Z').toISOString(),
   },
-  // Ejemplo 3: ComunicaciÃ³n WhatsApp OUTBOUND (ya respondida)
+  // Ejemplo 3: Comunicación WhatsApp OUTBOUND (ya respondida)
   {
     id: 3,
     tipo: 'whatsapp',
     from_contact: '+584129876543',
     to_contact: '+584121234567',
     subject: null,
-    body: 'Hola! El monto mÃ­nimo para prÃ©stamos es de 5,000 VES. Puede visitarnos en nuestra oficina o completar el formulario en lÃ­nea. Â¿Necesita mÃ¡s informaciÃ³n?',
+    body: 'Hola! El monto mínimo para préstamos es de 5,000 VES. Puede visitarnos en nuestra oficina o completar el formulario en línea. ¿Necesita más información?',
     timestamp: new Date('2025-11-18T14:45:00Z').toISOString(),
     direccion: 'OUTBOUND',
     cliente_id: null,
@@ -56,14 +56,14 @@ export const mockComunicaciones: ComunicacionUnificada[] = [
     respuesta_enviada: true,
     creado_en: new Date('2025-11-18T14:45:00Z').toISOString(),
   },
-  // Ejemplo 4: ComunicaciÃ³n Email INBOUND - NUEVO
+  // Ejemplo 4: Comunicación Email INBOUND - NUEVO
   {
     id: 4,
     tipo: 'email',
     from_contact: 'carlos.rodriguez@gmail.com',
     to_contact: 'atencion@rapicredit.com',
-    subject: 'Solicitud de informaciÃ³n sobre prÃ©stamos',
-    body: 'Buen dÃ­a, estoy interesado en obtener un prÃ©stamo personal. Â¿PodrÃ­an enviarme informaciÃ³n sobre las tasas de interÃ©s y los requisitos necesarios?',
+    subject: 'Solicitud de información sobre préstamos',
+    body: 'Buen día, estoy interesado en obtener un préstamo personal. ¿Podrían enviarme información sobre las tasas de interés y los requisitos necesarios?',
     timestamp: new Date('2025-11-18T12:00:00Z').toISOString(),
     direccion: 'INBOUND',
     cliente_id: null,
@@ -73,14 +73,14 @@ export const mockComunicaciones: ComunicacionUnificada[] = [
     respuesta_enviada: false,
     creado_en: new Date('2025-11-18T12:00:00Z').toISOString(),
   },
-  // Ejemplo 5: ComunicaciÃ³n WhatsApp INBOUND - Cliente identificado
+  // Ejemplo 5: Comunicación WhatsApp INBOUND - Cliente identificado
   {
     id: 5,
     tipo: 'whatsapp',
     from_contact: '+584147891234',
     to_contact: '+584129876543',
     subject: null,
-    body: 'Hola, tengo una duda sobre mi Ãºltimo pago. Â¿Pueden confirmarme si se registrÃ³ correctamente?',
+    body: 'Hola, tengo una duda sobre mi último pago. ¿Pueden confirmarme si se registró correctamente?',
     timestamp: new Date('2025-11-18T11:20:00Z').toISOString(),
     direccion: 'INBOUND',
     cliente_id: 8,
@@ -90,14 +90,14 @@ export const mockComunicaciones: ComunicacionUnificada[] = [
     respuesta_enviada: false,
     creado_en: new Date('2025-11-18T11:20:00Z').toISOString(),
   },
-  // Ejemplo 6: ComunicaciÃ³n Email OUTBOUND (ya respondida)
+  // Ejemplo 6: Comunicación Email OUTBOUND (ya respondida)
   {
     id: 6,
     tipo: 'email',
     from_contact: 'atencion@rapicredit.com',
     to_contact: 'maria.gonzalez@email.com',
-    subject: 'Re: Consulta sobre estado de mi prÃ©stamo',
-    body: 'Estimada MarÃ­a, su prÃ©stamo #12345 tiene un saldo pendiente de 3 cuotas. La prÃ³xima cuota vence el 25 de noviembre. Puede realizar el pago a travÃ©s de nuestra plataforma en lÃ­nea.',
+    subject: 'Re: Consulta sobre estado de mi préstamo',
+    body: 'Estimada María, su préstamo #12345 tiene un saldo pendiente de 3 cuotas. La próxima cuota vence el 25 de noviembre. Puede realizar el pago a través de nuestra plataforma en línea.',
     timestamp: new Date('2025-11-18T13:30:00Z').toISOString(),
     direccion: 'OUTBOUND',
     cliente_id: 5,
@@ -107,14 +107,14 @@ export const mockComunicaciones: ComunicacionUnificada[] = [
     respuesta_enviada: true,
     creado_en: new Date('2025-11-18T13:30:00Z').toISOString(),
   },
-  // Ejemplo 7: ComunicaciÃ³n WhatsApp INBOUND - NUEVO
+  // Ejemplo 7: Comunicación WhatsApp INBOUND - NUEVO
   {
     id: 7,
     tipo: 'whatsapp',
     from_contact: '+584165432109',
     to_contact: '+584129876543',
     subject: null,
-    body: 'Buenas tardes, necesito informaciÃ³n urgente sobre cÃ³mo puedo refinanciar mi prÃ©stamo actual.',
+    body: 'Buenas tardes, necesito información urgente sobre cómo puedo refinanciar mi préstamo actual.',
     timestamp: new Date('2025-11-18T10:45:00Z').toISOString(),
     direccion: 'INBOUND',
     cliente_id: null,
@@ -124,14 +124,14 @@ export const mockComunicaciones: ComunicacionUnificada[] = [
     respuesta_enviada: false,
     creado_en: new Date('2025-11-18T10:45:00Z').toISOString(),
   },
-  // Ejemplo 8: ComunicaciÃ³n Email INBOUND - Cliente identificado
+  // Ejemplo 8: Comunicación Email INBOUND - Cliente identificado
   {
     id: 8,
     tipo: 'email',
     from_contact: 'juan.perez@hotmail.com',
     to_contact: 'atencion@rapicredit.com',
-    subject: 'Problema con mi cuenta en lÃ­nea',
-    body: 'No puedo acceder a mi cuenta en la plataforma. He intentado recuperar mi contraseÃ±a pero no recibo el correo de recuperaciÃ³n. Â¿Pueden ayudarme?',
+    subject: 'Problema con mi cuenta en línea',
+    body: 'No puedo acceder a mi cuenta en la plataforma. He intentado recuperar mi contraseña pero no recibo el correo de recuperación. ¿Pueden ayudarme?',
     timestamp: new Date('2025-11-18T09:30:00Z').toISOString(),
     direccion: 'INBOUND',
     cliente_id: 12,
@@ -143,19 +143,19 @@ export const mockComunicaciones: ComunicacionUnificada[] = [
   },
 ]
 
-// Mock data para nombres de clientes (para mejorar la visualizaciÃ³n)
+// Mock data para nombres de clientes (para mejorar la visualización)
 export const mockNombresClientes: Record<number, string> = {
-  5: 'MarÃ­a GonzÃ¡lez',
-  8: 'Ana MartÃ­nez',
-  12: 'Juan PÃ©rez',
+  5: 'María González',
+  8: 'Ana Martínez',
+  12: 'Juan Pérez',
 }
 
 // Mock data para tickets
 export const mockTickets = [
   {
     id: 12,
-    titulo: 'Consulta sobre requisitos de prÃ©stamo',
-    descripcion: 'Cliente solicita informaciÃ³n sobre requisitos y monto mÃ­nimo',
+    titulo: 'Consulta sobre requisitos de préstamo',
+    descripcion: 'Cliente solicita información sobre requisitos y monto mínimo',
     cliente_id: null,
     estado: 'abierto',
     prioridad: 'media',
@@ -164,8 +164,8 @@ export const mockTickets = [
   },
   {
     id: 15,
-    titulo: 'Consulta estado de prÃ©stamo #12345',
-    descripcion: 'Cliente solicita informaciÃ³n sobre cuotas pendientes',
+    titulo: 'Consulta estado de préstamo #12345',
+    descripcion: 'Cliente solicita información sobre cuotas pendientes',
     cliente_id: 5,
     estado: 'resuelto',
     prioridad: 'baja',

@@ -9,30 +9,30 @@ import toast from 'react-hot-toast'
 
 interface ResumenPlantillasProps {
   onEditarPlantilla?: (plantilla: NotificacionPlantilla) => void
-  onCambiarPestaÃ±a?: (pestaÃ±a: string) => void
+  onCambiarPestaña?: (pestaña: string) => void
   activeTab?: string
 }
 
-// Mapeo de tipos a categorÃ­as y casos
+// Mapeo de tipos a categorías y casos
 const mapeoTipos = {
-  'PAGO_5_DIAS_ANTES': { categoria: 'NotificaciÃ³n Previa', caso: '5 dÃ­as antes' },
-  'PAGO_3_DIAS_ANTES': { categoria: 'NotificaciÃ³n Previa', caso: '3 dÃ­as antes' },
-  'PAGO_1_DIA_ANTES': { categoria: 'NotificaciÃ³n Previa', caso: '1 dÃ­a antes' },
-  'PAGO_DIA_0': { categoria: 'DÃ­a de Pago', caso: 'DÃ­a de pago' },
-  'PAGO_1_DIA_ATRASADO': { categoria: 'NotificaciÃ³n Retrasada', caso: '1 dÃ­a de retraso' },
-  'PAGO_3_DIAS_ATRASADO': { categoria: 'NotificaciÃ³n Retrasada', caso: '3 dÃ­as de retraso' },
-  'PAGO_5_DIAS_ATRASADO': { categoria: 'NotificaciÃ³n Retrasada', caso: '5 dÃ­as de retraso' },
+  'PAGO_5_DIAS_ANTES': { categoria: 'Notificación Previa', caso: '5 días antes' },
+  'PAGO_3_DIAS_ANTES': { categoria: 'Notificación Previa', caso: '3 días antes' },
+  'PAGO_1_DIA_ANTES': { categoria: 'Notificación Previa', caso: '1 día antes' },
+  'PAGO_DIA_0': { categoria: 'Día de Pago', caso: 'Día de pago' },
+  'PAGO_1_DIA_ATRASADO': { categoria: 'Notificación Retrasada', caso: '1 día de retraso' },
+  'PAGO_3_DIAS_ATRASADO': { categoria: 'Notificación Retrasada', caso: '3 días de retraso' },
+  'PAGO_5_DIAS_ATRASADO': { categoria: 'Notificación Retrasada', caso: '5 días de retraso' },
   'PREJUDICIAL': { categoria: 'Prejudicial', caso: 'Prejudicial' },
 }
 
 const categoriasOrden = [
-  { key: 'NotificaciÃ³n Previa', color: 'blue', icon: 'ðŸ“…' },
-  { key: 'DÃ­a de Pago', color: 'green', icon: 'ðŸ’°' },
-  { key: 'NotificaciÃ³n Retrasada', color: 'orange', icon: 'âš ï¸' },
+  { key: 'Notificación Previa', color: 'blue', icon: 'ðŸ“…' },
+  { key: 'Día de Pago', color: 'green', icon: 'ðŸ’°' },
+  { key: 'Notificación Retrasada', color: 'orange', icon: 'âš ï¸' },
   { key: 'Prejudicial', color: 'red', icon: 'ðŸš¨' },
 ]
 
-export function ResumenPlantillas({ onEditarPlantilla, onCambiarPestaÃ±a, activeTab }: ResumenPlantillasProps) {
+export function ResumenPlantillas({ onEditarPlantilla, onCambiarPestaña, activeTab }: ResumenPlantillasProps) {
   const [plantillas, setPlantillas] = useState<NotificacionPlantilla[]>([])
   const [loading, setLoading] = useState(false)
 
@@ -52,15 +52,15 @@ export function ResumenPlantillas({ onEditarPlantilla, onCambiarPestaÃ±a, acti
     cargarPlantillas()
   }, [])
 
-  // Recargar plantillas cuando se cambia a la pestaÃ±a de resumen
-  // Esto asegura que las plantillas reciÃ©n guardadas aparezcan
+  // Recargar plantillas cuando se cambia a la pestaña de resumen
+  // Esto asegura que las plantillas recién guardadas aparezcan
   useEffect(() => {
     if (activeTab === 'resumen') {
       cargarPlantillas()
     }
   }, [activeTab])
 
-  // Organizar plantillas por categorÃ­a
+  // Organizar plantillas por categoría
   const plantillasPorCategoria = useMemo(() => {
     const organizadas: Record<string, NotificacionPlantilla[]> = {}
 
@@ -75,7 +75,7 @@ export function ResumenPlantillas({ onEditarPlantilla, onCambiarPestaÃ±a, acti
       }
     })
 
-    // Ordenar plantillas dentro de cada categorÃ­a por caso
+    // Ordenar plantillas dentro de cada categoría por caso
     Object.keys(organizadas).forEach(categoria => {
       organizadas[categoria].sort((a, b) => {
         const casoA = mapeoTipos[a.tipo as keyof typeof mapeoTipos]?.caso || ''
@@ -107,13 +107,13 @@ export function ResumenPlantillas({ onEditarPlantilla, onCambiarPestaÃ±a, acti
     if (onEditarPlantilla) {
       onEditarPlantilla(plantilla)
     }
-    if (onCambiarPestaÃ±a) {
-      onCambiarPestaÃ±a('plantillas')
+    if (onCambiarPestaña) {
+      onCambiarPestaña('plantillas')
     }
   }
 
   const handleEliminar = async (plantilla: NotificacionPlantilla) => {
-    if (!window.confirm(`Â¿EstÃ¡ seguro de eliminar la plantilla "${plantilla.nombre}"?`)) {
+    if (!window.confirm(`¿Está seguro de eliminar la plantilla "${plantilla.nombre}"?`)) {
       return
     }
 
@@ -140,7 +140,7 @@ export function ResumenPlantillas({ onEditarPlantilla, onCambiarPestaÃ±a, acti
             Resumen de Plantillas por Caso
           </CardTitle>
           <CardDescription>
-            VisualizaciÃ³n organizada de todas las plantillas almacenadas, clasificadas por tipo de notificaciÃ³n y caso.
+            Visualización organizada de todas las plantillas almacenadas, clasificadas por tipo de notificación y caso.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -150,7 +150,7 @@ export function ResumenPlantillas({ onEditarPlantilla, onCambiarPestaÃ±a, acti
             <div className="text-center py-8 text-gray-500">
               <AlertCircle className="h-12 w-12 mx-auto mb-4 text-gray-400" />
               <p>No hay plantillas configuradas.</p>
-              <p className="text-sm mt-2">Vaya a la pestaÃ±a "Plantillas" para crear nuevas plantillas.</p>
+              <p className="text-sm mt-2">Vaya a la pestaña "Plantillas" para crear nuevas plantillas.</p>
             </div>
           ) : (
             <div className="space-y-6">
@@ -178,7 +178,7 @@ export function ResumenPlantillas({ onEditarPlantilla, onCambiarPestaÃ±a, acti
                             <TableRow>
                               <TableHead>Tipo</TableHead>
                               <TableHead>Caso</TableHead>
-                              <TableHead>Fecha ActualizaciÃ³n</TableHead>
+                              <TableHead>Fecha Actualización</TableHead>
                               <TableHead>Archivo / Plantilla</TableHead>
                               <TableHead>Estado</TableHead>
                               <TableHead className="text-right">Acciones</TableHead>

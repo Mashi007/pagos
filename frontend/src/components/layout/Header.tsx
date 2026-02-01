@@ -6,7 +6,7 @@ import { Button } from '../../components/ui/button'
 import { Badge } from '../../components/ui/badge'
 import { Logo } from '../../components/ui/Logo'
 
-// Constantes de configuraciÃ³n
+// Constantes de configuración
 const NOTIFICATIONS_WIDTH = 80
 const USER_MENU_WIDTH = 64
 const NOTIFICATIONS_MAX_HEIGHT = 96
@@ -28,12 +28,12 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
   const userName = user ? `${user.nombre} ${user.apellido}` : 'Usuario'
   const userRole = user?.is_admin ? 'Administrador' : 'Usuario'  // Cambio clave: rol â†’ is_admin
 
-  // Mock de notificaciones - en producciÃ³n vendrÃ­an del backend
+  // Mock de notificaciones - en producción vendrían del backend
   const notifications = [
     {
       id: 1,
       title: 'Pago recibido',
-      message: 'Cliente Juan PÃ©rez realizÃ³ pago de $500',
+      message: 'Cliente Juan Pérez realizó pago de $500',
       time: '5 min',
       read: false,
     },
@@ -211,7 +211,7 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
                     </button>
                     <button className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2">
                       <Settings className="h-4 w-4" />
-                      <span>ConfiguraciÃ³n</span>
+                      <span>Configuración</span>
                     </button>
                     {user?.is_admin === false && (
                       <button
@@ -236,7 +236,7 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
                       className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2"
                     >
                       <LogOut className="h-4 w-4" />
-                      <span>Cerrar SesiÃ³n</span>
+                      <span>Cerrar Sesión</span>
                     </button>
                   </div>
                 </motion.div>

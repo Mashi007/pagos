@@ -44,7 +44,7 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
               }}
             >
               <CheckCircle className="w-4 h-4 mr-2" />
-              ConciliaciÃ³n
+              Conciliación
             </button>
           </div>
         </PopoverContent>
@@ -61,7 +61,7 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
         />
       )}
 
-      {/* Modal ConciliaciÃ³n */}
+      {/* Modal Conciliación */}
       {showConciliacion && (
         <ConciliacionExcelUploader
           onClose={() => setShowConciliacion(false)}

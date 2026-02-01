@@ -19,7 +19,7 @@ import {
   ChevronDown,
   ChevronUp
 } from 'lucide-react'
-// ExcelJS se importa dinÃ¡micamente cuando se necesita
+// ExcelJS se importa dinámicamente cuando se necesita
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
@@ -39,9 +39,9 @@ export function Notificaciones() {
   const [page, setPage] = useState(1)
   const perPage = 20
 
-  // Estado para controlar quÃ© grupos de dÃ­as estÃ¡n expandidos
+  // Estado para controlar qué grupos de días están expandidos
   const [gruposExpandidos, setGruposExpandidos] = useState<Record<string, boolean>>({
-    '5': false,  // Por defecto, todos contraÃ­dos
+    '5': false,  // Por defecto, todos contraídos
     '3': false,
     '1': false
   })
@@ -57,7 +57,7 @@ export function Notificaciones() {
   const { data: notificacionesPreviasData, isLoading: isLoadingPrevias, error: errorPrevias, refetch: refetchPrevias } = useQuery({
     queryKey: ['notificaciones-previas', filterEstado],
     queryFn: () => notificacionService.listarNotificacionesPrevias(filterEstado || undefined),
-    enabled: activeTab === 'previa', // Solo cargar cuando estÃ© en la pestaña previa
+    enabled: activeTab === 'previa', // Solo cargar cuando esté en la pestaña previa
     staleTime: 2 * 60 * 1000, // Cache de 2 minutos
     refetchInterval: 5 * 60 * 1000, // Refrescar cada 5 minutos (optimizado para reducir carga)
     refetchOnWindowFocus: true, // Refrescar al enfocar ventana
@@ -65,11 +65,11 @@ export function Notificaciones() {
     retryDelay: 1000, // Esperar 1 segundo entre reintentos
   })
 
-  // Cargar notificaciones del dÃ­a de pago si estamos en la pestaña "dia-pago"
+  // Cargar notificaciones del día de pago si estamos en la pestaña "dia-pago"
   const { data: notificacionesDiaPagoData, isLoading: isLoadingDiaPago, error: errorDiaPago, refetch: refetchDiaPago } = useQuery({
     queryKey: ['notificaciones-dia-pago', filterEstado],
     queryFn: () => notificacionService.listarNotificacionesDiaPago(filterEstado || undefined),
-    enabled: activeTab === 'dia-pago', // Solo cargar cuando estÃ© en la pestaña dia-pago
+    enabled: activeTab === 'dia-pago', // Solo cargar cuando esté en la pestaña dia-pago
     staleTime: 2 * 60 * 1000, // Cache de 2 minutos
     refetchInterval: 5 * 60 * 1000, // Refrescar cada 5 minutos (optimizado para reducir carga)
     refetchOnWindowFocus: true, // Refrescar al enfocar ventana
@@ -81,7 +81,7 @@ export function Notificaciones() {
   const { data: notificacionesRetrasadasData, isLoading: isLoadingRetrasadas, error: errorRetrasadas, refetch: refetchRetrasadas } = useQuery({
     queryKey: ['notificaciones-retrasadas', filterEstado],
     queryFn: () => notificacionService.listarNotificacionesRetrasadas(filterEstado || undefined),
-    enabled: activeTab === 'retrasado', // Solo cargar cuando estÃ© en la pestaña retrasado
+    enabled: activeTab === 'retrasado', // Solo cargar cuando esté en la pestaña retrasado
     staleTime: 2 * 60 * 1000, // Cache de 2 minutos
     refetchInterval: 5 * 60 * 1000, // Refrescar cada 5 minutos (optimizado para reducir carga)
     refetchOnWindowFocus: true, // Refrescar al enfocar ventana
@@ -102,7 +102,7 @@ export function Notificaciones() {
         throw error
       }
     },
-    enabled: activeTab === 'prejudicial', // Solo cargar cuando estÃ© en la pestaña prejudicial
+    enabled: activeTab === 'prejudicial', // Solo cargar cuando esté en la pestaña prejudicial
     staleTime: 2 * 60 * 1000, // Cache de 2 minutos
     refetchInterval: 5 * 60 * 1000, // Refrescar cada 5 minutos (optimizado para reducir carga)
     refetchOnWindowFocus: true, // Refrescar al enfocar ventana
@@ -114,7 +114,7 @@ export function Notificaciones() {
   const { data: notificacionesData, isLoading, error, refetch } = useQuery({
     queryKey: ['notificaciones', filterEstado, page, perPage],
     queryFn: () => notificacionService.listarNotificaciones(page, perPage, filterEstado || undefined),
-    enabled: activeTab !== 'previa' && activeTab !== 'dia-pago' && activeTab !== 'retrasado' && activeTab !== 'prejudicial', // Solo cargar cuando NO estÃ© en previa, dia-pago, retrasado o prejudicial
+    enabled: activeTab !== 'previa' && activeTab !== 'dia-pago' && activeTab !== 'retrasado' && activeTab !== 'prejudicial', // Solo cargar cuando NO esté en previa, dia-pago, retrasado o prejudicial
     staleTime: 30 * 1000, // Cache de 30 segundos
     refetchInterval: 2 * 60 * 1000, // Refrescar cada 2 minutos (reducido de 30s)
     refetchOnWindowFocus: true, // Refrescar al enfocar ventana
@@ -128,7 +128,7 @@ export function Notificaciones() {
   const notificacionesPrevias = notificacionesPreviasData?.items || []
   const totalPrevias = notificacionesPreviasData?.total || 0
 
-  // Datos de notificaciones del dÃ­a de pago
+  // Datos de notificaciones del día de pago
   const notificacionesDiaPago = notificacionesDiaPagoData?.items || []
   const totalDiaPago = notificacionesDiaPagoData?.total || 0
 
@@ -149,7 +149,7 @@ export function Notificaciones() {
     refetchOnWindowFocus: true, // Refrescar al enfocar ventana
   })
 
-  // Tipos de notificaciÃ³n por pestaña
+  // Tipos de notificación por pestaña
   const tiposPorPestaña: Record<TabType, string[]> = {
     previa: ['PAGO_5_DIAS_ANTES', 'PAGO_3_DIAS_ANTES', 'PAGO_1_DIA_ANTES'],
     'dia-pago': ['PAGO_DIA_0'],
@@ -272,13 +272,13 @@ export function Notificaciones() {
 
   const getTipoBadge = (tipo: string) => {
     const tipos: Record<string, { label: string; color: string }> = {
-      'PAGO_5_DIAS_ANTES': { label: 'Recordatorio 5 dÃ­as', color: 'bg-blue-100 text-blue-800' },
-      'PAGO_3_DIAS_ANTES': { label: 'Recordatorio 3 dÃ­as', color: 'bg-cyan-100 text-cyan-800' },
-      'PAGO_1_DIA_ANTES': { label: 'Recordatorio 1 dÃ­a', color: 'bg-yellow-100 text-yellow-800' },
+      'PAGO_5_DIAS_ANTES': { label: 'Recordatorio 5 días', color: 'bg-blue-100 text-blue-800' },
+      'PAGO_3_DIAS_ANTES': { label: 'Recordatorio 3 días', color: 'bg-cyan-100 text-cyan-800' },
+      'PAGO_1_DIA_ANTES': { label: 'Recordatorio 1 día', color: 'bg-yellow-100 text-yellow-800' },
       'PAGO_DIA_0': { label: 'Vencimiento hoy', color: 'bg-orange-100 text-orange-800' },
-      'PAGO_1_DIA_ATRASADO': { label: '1 dÃ­a atrasado', color: 'bg-red-100 text-red-800' },
-      'PAGO_3_DIAS_ATRASADO': { label: '3 dÃ­as atrasado', color: 'bg-red-100 text-red-800' },
-      'PAGO_5_DIAS_ATRASADO': { label: '5 dÃ­as atrasado', color: 'bg-red-100 text-red-800' },
+      'PAGO_1_DIA_ATRASADO': { label: '1 día atrasado', color: 'bg-red-100 text-red-800' },
+      'PAGO_3_DIAS_ATRASADO': { label: '3 días atrasado', color: 'bg-red-100 text-red-800' },
+      'PAGO_5_DIAS_ATRASADO': { label: '5 días atrasado', color: 'bg-red-100 text-red-800' },
       'PREJUDICIAL': { label: 'Prejudicial', color: 'bg-purple-100 text-purple-800' },
       'PREJUDICIAL_1': { label: 'Prejudicial - Primera', color: 'bg-purple-100 text-purple-800' },
       'PREJUDICIAL_2': { label: 'Prejudicial - Segunda', color: 'bg-purple-100 text-purple-800' },
@@ -311,7 +311,7 @@ export function Notificaciones() {
 
   const descargarExcel = async (estado: 'PENDIENTE' | 'FALLIDA') => {
     try {
-      // Obtener las notificaciones segÃºn el estado
+      // Obtener las notificaciones según el estado
       const notificacionesFiltradas = activeTab === 'previa'
         ? notificacionesPrevias.filter(n => n.estado === estado)
         : filteredNotificaciones.filter(n => n.estado === estado)
@@ -321,7 +321,7 @@ export function Notificaciones() {
         return
       }
 
-      // Importar exceljs dinÃ¡micamente
+      // Importar exceljs dinámicamente
       const { createAndDownloadExcel } = await import('../types/exceljs')
 
       // Preparar los datos para Excel
@@ -330,17 +330,17 @@ export function Notificaciones() {
           // Para notificaciones previas
           return {
             'Nombre': notif.nombre || '',
-            'CÃ©dula': notif.cedula || '',
-            'Modelo de VehÃ­culo': notif.modelo_vehiculo || '',
+            'Cédula': notif.cedula || '',
+            'Modelo de Vehículo': notif.modelo_vehiculo || '',
             'Correo': notif.correo || '',
-            'TelÃ©fono': notif.telefono || '',
-            'DÃ­as antes de vencimiento': notif.dias_antes_vencimiento || '',
+            'Teléfono': notif.telefono || '',
+            'Días antes de vencimiento': notif.dias_antes_vencimiento || '',
             'Fecha vencimiento': notif.fecha_vencimiento
               ? new Date(notif.fecha_vencimiento).toLocaleDateString('es-ES')
               : '',
             'Cuota #': notif.numero_cuota || '',
             'Monto': notif.monto_cuota ? `$${notif.monto_cuota.toFixed(2)}` : '',
-            'PrÃ©stamo ID': notif.prestamo_id || '',
+            'Préstamo ID': notif.prestamo_id || '',
             'Estado': notif.estado || ''
           }
         } else {
@@ -352,10 +352,10 @@ export function Notificaciones() {
             'Canal': notif.canal || '',
             'Estado': notif.estado || '',
             'Cliente ID': notif.cliente_id || '',
-            'Fecha CreaciÃ³n': notif.fecha_creacion
+            'Fecha Creación': notif.fecha_creacion
               ? new Date(notif.fecha_creacion).toLocaleString('es-ES')
               : '',
-            'Fecha EnvÃ­o': notif.fecha_envio
+            'Fecha Envío': notif.fecha_envio
               ? new Date(notif.fecha_envio).toLocaleString('es-ES')
               : '',
             'Error': notif.error_mensaje || ''
@@ -382,11 +382,11 @@ export function Notificaciones() {
   }
 
   const tabs = [
-    { id: 'previa' as TabType, label: 'NotificaciÃ³n Previa', icon: Bell },
-    { id: 'dia-pago' as TabType, label: 'DÃ­a de Pago', icon: Calendar },
-    { id: 'retrasado' as TabType, label: 'NotificaciÃ³n Pago Retrasado', icon: AlertTriangle },
-    { id: 'prejudicial' as TabType, label: 'NotificaciÃ³n Prejudicial', icon: Shield },
-    { id: 'configuracion' as TabType, label: 'ConfiguraciÃ³n', icon: Settings },
+    { id: 'previa' as TabType, label: 'Notificación Previa', icon: Bell },
+    { id: 'dia-pago' as TabType, label: 'Día de Pago', icon: Calendar },
+    { id: 'retrasado' as TabType, label: 'Notificación Pago Retrasado', icon: AlertTriangle },
+    { id: 'prejudicial' as TabType, label: 'Notificación Prejudicial', icon: Shield },
+    { id: 'configuracion' as TabType, label: 'Configuración', icon: Settings },
   ]
 
   return (
@@ -436,7 +436,7 @@ export function Notificaciones() {
             <CardHeader>
               <CardTitle className="flex items-center">
                 <Filter className="w-5 h-5 mr-2" />
-                Filtros y BÃºsqueda
+                Filtros y Búsqueda
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -486,7 +486,7 @@ export function Notificaciones() {
         </motion.div>
       )}
 
-      {/* Tabs - Movido despuÃ©s de los filtros */}
+      {/* Tabs - Movido después de los filtros */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -524,7 +524,7 @@ export function Notificaciones() {
         </div>
       </motion.div>
 
-      {/* Contenido segÃºn pestaña activa */}
+      {/* Contenido según pestaña activa */}
       {activeTab === 'configuracion' ? (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -659,18 +659,18 @@ export function Notificaciones() {
                     <p className="text-lg font-medium">No se encontraron notificaciones</p>
                     {activeTab === 'prejudicial' && (
                       <p className="text-sm text-gray-400 mt-2">
-                        No hay clientes con 3 o mÃ¡s cuotas atrasadas en este momento.
+                        No hay clientes con 3 o más cuotas atrasadas en este momento.
                       </p>
                     )}
                     {(activeTab !== 'previa' && activeTab !== 'dia-pago' && activeTab !== 'retrasado' && activeTab !== 'prejudicial') && notificaciones.length > 0 && (
                       <p className="text-sm text-gray-400 mt-2">
-                        Intenta ajustar los filtros para ver mÃ¡s resultados
+                        Intenta ajustar los filtros para ver más resultados
                       </p>
                     )}
                   </div>
                 ) : (
                   (activeTab === 'previa' || activeTab === 'retrasado') ? (
-                    // Agrupar notificaciones previas o retrasadas por dÃ­as
+                    // Agrupar notificaciones previas o retrasadas por días
                     (() => {
                       const datos = activeTab === 'previa' ? notificacionesPrevias : notificacionesRetrasadas
                       const campoDias = activeTab === 'previa' ? 'dias_antes_vencimiento' : 'dias_atrasado'
@@ -681,9 +681,9 @@ export function Notificaciones() {
                         '1': datos.filter(n => n[campoDias] === 1)
                       }
 
-                      // Orden de visualizaciÃ³n: 5, 3, 1
+                      // Orden de visualización: 5, 3, 1
                       const ordenGrupos = ['5', '3', '1']
-                      const textoDias = activeTab === 'previa' ? 'dÃ­as antes del vencimiento' : 'dÃ­as atrasado'
+                      const textoDias = activeTab === 'previa' ? 'días antes del vencimiento' : 'días atrasado'
 
                       return (
                         <div className="space-y-4">
@@ -710,7 +710,7 @@ export function Notificaciones() {
                                       {dias} {textoDias}
                                     </Badge>
                                     <span className="text-sm text-gray-500">
-                                      ({notificacionesGrupo.length} {notificacionesGrupo.length === 1 ? 'notificaciÃ³n' : 'notificaciones'})
+                                      ({notificacionesGrupo.length} {notificacionesGrupo.length === 1 ? 'notificación' : 'notificaciones'})
                                     </span>
                                   </div>
                                 </button>
@@ -733,7 +733,7 @@ export function Notificaciones() {
 
                                             {/* Contenido principal */}
                                             <div className="flex-1 space-y-2">
-                                              {/* Nombre y cÃ©dula */}
+                                              {/* Nombre y cédula */}
                                               <div className="font-bold text-gray-900">
                                                 {notificacion.nombre || 'N/A'} - {notificacion.cedula || 'N/A'}
                                               </div>
@@ -747,7 +747,7 @@ export function Notificaciones() {
                                                   <span className="font-medium">Correo:</span> {notificacion.correo || 'N/A'}
                                                 </div>
                                                 <div className="text-gray-700">
-                                                  <span className="font-medium">TelÃ©fono:</span> {notificacion.telefono || 'N/A'}
+                                                  <span className="font-medium">Teléfono:</span> {notificacion.telefono || 'N/A'}
                                                 </div>
                                                 <div className="text-gray-700">
                                                   <span className="font-medium">Fecha vencimiento:</span> {
@@ -761,7 +761,7 @@ export function Notificaciones() {
                                                 </div>
                                                 {notificacion.prestamo_id && (
                                                   <div className="text-gray-700">
-                                                    <span className="font-medium">PrÃ©stamo ID:</span> {notificacion.prestamo_id}
+                                                    <span className="font-medium">Préstamo ID:</span> {notificacion.prestamo_id}
                                                   </div>
                                                 )}
                                               </div>
@@ -772,7 +772,7 @@ export function Notificaciones() {
                                           <div className="flex flex-col items-end gap-2 ml-4">
                                             {getEstadoBadge(notificacion.estado)}
                                             <Badge className="bg-blue-100 text-blue-800 border-blue-300">
-                                              {notificacion[campoDias]} {activeTab === 'previa' ? 'dÃ­as antes' : 'dÃ­as atrasado'}
+                                              {notificacion[campoDias]} {activeTab === 'previa' ? 'días antes' : 'días atrasado'}
                                             </Badge>
                                           </div>
                                         </div>
@@ -788,7 +788,7 @@ export function Notificaciones() {
                       )
                     })()
                   ) : activeTab === 'dia-pago' ? (
-                    // Notificaciones del dÃ­a de pago (sin agrupar, ordenadas alfabÃ©ticamente)
+                    // Notificaciones del día de pago (sin agrupar, ordenadas alfabéticamente)
                     <div className="space-y-4">
                       {notificacionesDiaPago.map((notificacion) => (
                         <Card
@@ -805,7 +805,7 @@ export function Notificaciones() {
 
                                 {/* Contenido principal */}
                                 <div className="flex-1 space-y-2">
-                                  {/* Nombre y cÃ©dula */}
+                                  {/* Nombre y cédula */}
                                   <div className="font-bold text-gray-900">
                                     {notificacion.nombre || 'N/A'} - {notificacion.cedula || 'N/A'}
                                   </div>
@@ -819,7 +819,7 @@ export function Notificaciones() {
                                       <span className="font-medium">Correo:</span> {notificacion.correo || 'N/A'}
                                     </div>
                                     <div className="text-gray-700">
-                                      <span className="font-medium">TelÃ©fono:</span> {notificacion.telefono || 'N/A'}
+                                      <span className="font-medium">Teléfono:</span> {notificacion.telefono || 'N/A'}
                                     </div>
                                     <div className="text-gray-700">
                                       <span className="font-medium">Fecha vencimiento:</span> {
@@ -833,7 +833,7 @@ export function Notificaciones() {
                                     </div>
                                     {notificacion.prestamo_id && (
                                       <div className="text-gray-700">
-                                        <span className="font-medium">PrÃ©stamo ID:</span> {notificacion.prestamo_id}
+                                        <span className="font-medium">Préstamo ID:</span> {notificacion.prestamo_id}
                                       </div>
                                     )}
                                   </div>
@@ -853,7 +853,7 @@ export function Notificaciones() {
                       ))}
                     </div>
                   ) : activeTab === 'prejudicial' ? (
-                    // Notificaciones prejudiciales (sin agrupar, ordenadas por fecha mÃ¡s antigua)
+                    // Notificaciones prejudiciales (sin agrupar, ordenadas por fecha más antigua)
                     <div className="space-y-4">
                       {notificacionesPrejudiciales.map((notificacion) => (
                         <Card
@@ -870,7 +870,7 @@ export function Notificaciones() {
 
                                 {/* Contenido principal */}
                                 <div className="flex-1 space-y-2">
-                                  {/* Nombre y cÃ©dula */}
+                                  {/* Nombre y cédula */}
                                   <div className="font-bold text-gray-900">
                                     {notificacion.nombre || 'N/A'} - {notificacion.cedula || 'N/A'}
                                   </div>
@@ -884,7 +884,7 @@ export function Notificaciones() {
                                       <span className="font-medium">Correo:</span> {notificacion.correo || 'N/A'}
                                     </div>
                                     <div className="text-gray-700">
-                                      <span className="font-medium">TelÃ©fono:</span> {notificacion.telefono || 'N/A'}
+                                      <span className="font-medium">Teléfono:</span> {notificacion.telefono || 'N/A'}
                                     </div>
                                     <div className="text-gray-700">
                                       <span className="font-medium">Fecha vencimiento:</span> {
@@ -898,7 +898,7 @@ export function Notificaciones() {
                                     </div>
                                     {notificacion.prestamo_id && (
                                       <div className="text-gray-700">
-                                        <span className="font-medium">PrÃ©stamo ID:</span> {notificacion.prestamo_id}
+                                        <span className="font-medium">Préstamo ID:</span> {notificacion.prestamo_id}
                                       </div>
                                     )}
                                     {/* Total cuotas atrasadas - siempre visible y destacado */}
@@ -985,7 +985,7 @@ export function Notificaciones() {
                                     size="icon"
                                     className="h-8 w-8"
                                     onClick={() => {
-                                      // AcciÃ³n de ver detalles
+                                      // Acción de ver detalles
                                     }}
                                   >
                                     <Eye className="h-4 w-4 text-gray-600" />
@@ -996,7 +996,7 @@ export function Notificaciones() {
                                       size="icon"
                                       className="h-8 w-8"
                                       onClick={() => {
-                                        // AcciÃ³n de reintentar
+                                        // Acción de reintentar
                                       }}
                                     >
                                       <RefreshCw className="h-4 w-4 text-red-600" />
@@ -1012,7 +1012,7 @@ export function Notificaciones() {
                   )
                 )}
 
-                {/* PaginaciÃ³n */}
+                {/* Paginación */}
                 {(activeTab !== 'previa' && activeTab !== 'dia-pago' && activeTab !== 'retrasado' && activeTab !== 'prejudicial') && totalPages > 1 && (
                   <div className="flex justify-center items-center space-x-2 pt-4">
                     <Button
@@ -1023,7 +1023,7 @@ export function Notificaciones() {
                       Anterior
                     </Button>
                     <span className="text-sm text-gray-600">
-                      PÃ¡gina {page} de {totalPages} ({total} total)
+                      Página {page} de {totalPages} ({total} total)
                     </span>
                     <Button
                       variant="outline"

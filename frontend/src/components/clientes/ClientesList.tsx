@@ -37,12 +37,12 @@ import { clienteService } from '../../services/clienteService'
 import { useNavigate } from 'react-router-dom'
 
 export function ClientesList() {
-  // Forzar nuevo build - versiÃ³n actualizada
+  // Forzar nuevo build - versión actualizada
   const navigate = useNavigate()
   const [searchTerm, setSearchTerm] = useState('')
   const [filters, setFilters] = useState<ClienteFilters>({})
   const [currentPage, setCurrentPage] = useState(1)
-  const [perPage, setPerPage] = useState(20) // TamaÃ±o de pÃ¡gina configurable
+  const [perPage, setPerPage] = useState(20) // Tamaño de página configurable
   const [showFilters, setShowFilters] = useState(false)
   const [showCrearCliente, setShowCrearCliente] = useState(false)
   const [clienteSeleccionado, setClienteSeleccionado] = useState<any>(null)
@@ -60,7 +60,7 @@ export function ClientesList() {
   // Funciones para manejar acciones
   const handleVerCliente = (cliente: { id: number; cedula?: string; nombre?: string; [key: string]: unknown }) => {
     setClienteSeleccionado(cliente)
-    // AquÃ­ podrÃ­as abrir un modal o navegar a una pÃ¡gina de detalles
+    // Aquí podrías abrir un modal o navegar a una página de detalles
     console.log('Ver cliente:', cliente)
   }
 
@@ -99,7 +99,7 @@ export function ClientesList() {
 
       // Refrescar la lista
       queryClient.invalidateQueries({ queryKey: ['clientes'] })
-      queryClient.invalidateQueries({ queryKey: ['clientes-stats'] }) // âœ… Actualizar estadÃ­sticas
+      queryClient.invalidateQueries({ queryKey: ['clientes-stats'] }) // âœ… Actualizar estadísticas
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       queryClient.invalidateQueries({ queryKey: ['kpis'] })
 
@@ -107,7 +107,7 @@ export function ClientesList() {
       setShowEliminarCliente(false)
       setClienteSeleccionado(null)
 
-      // Mostrar mensaje de Ã©xito - UNA SOLA NOTIFICACIÃ“N
+      // Mostrar mensaje de éxito - UNA SOLA NOTIFICACIÓN
       showNotification('success', 'âœ… Cliente eliminado permanentemente de la base de datos')
 
     } catch (error) {
@@ -121,7 +121,7 @@ export function ClientesList() {
     setShowEditarCliente(false)
     setClienteSeleccionado(null)
     queryClient.invalidateQueries({ queryKey: ['clientes'] })
-    queryClient.invalidateQueries({ queryKey: ['clientes-stats'] }) // âœ… Actualizar estadÃ­sticas
+    queryClient.invalidateQueries({ queryKey: ['clientes-stats'] }) // âœ… Actualizar estadísticas
   }
   const { user } = useSimpleAuth()
   const canViewAllClients = true // Todos pueden ver todos los clientes
@@ -158,7 +158,7 @@ export function ClientesList() {
     total_pages: clientesData?.total_pages
   })
 
-  // EstadÃ­sticas de clientes
+  // Estadísticas de clientes
   const {
     data: statsData,
     isLoading: statsLoading,
@@ -169,7 +169,7 @@ export function ClientesList() {
   const mockClientes = [
     {
       id: '1',
-      nombre: 'Juan PÃ©rez',
+      nombre: 'Juan Pérez',
       email: 'juan@example.com',
       telefono: '+1234567890',
       estado: 'ACTIVO',
@@ -178,7 +178,7 @@ export function ClientesList() {
     },
     {
       id: '2',
-      nombre: 'MarÃ­a GarcÃ­a',
+      nombre: 'María García',
       email: 'maria@example.com',
       telefono: '+1234567891',
       estado: 'MORA',
@@ -187,8 +187,8 @@ export function ClientesList() {
     }
   ]
 
-  // âœ… CORRECCIÃ“N: Usar datos reales si existen, sino usar mock solo si no hay respuesta del servidor
-  // Si clientesData existe (incluso si data es un array vacÃ­o), usar los datos reales
+  // âœ… CORRECCIÓN: Usar datos reales si existen, sino usar mock solo si no hay respuesta del servidor
+  // Si clientesData existe (incluso si data es un array vacío), usar los datos reales
   const clientes = clientesData?.data !== undefined 
     ? (Array.isArray(clientesData.data) ? clientesData.data : [])
     : mockClientes // Solo usar mock si no hay respuesta del servidor (clientesData es undefined)
@@ -226,7 +226,7 @@ export function ClientesList() {
 
   const handlePerPageChange = (newPerPage: number) => {
     setPerPage(newPerPage)
-    setCurrentPage(1) // Resetear a pÃ¡gina 1 cuando cambia el tamaÃ±o
+    setCurrentPage(1) // Resetear a página 1 cuando cambia el tamaño
   }
 
   if (isLoading) {
@@ -276,18 +276,18 @@ export function ClientesList() {
             variant="outline"
             size="lg"
             onClick={async () => {
-              // âœ… Actualizar tanto la lista como las estadÃ­sticas
+              // âœ… Actualizar tanto la lista como las estadísticas
               await Promise.all([
                 refetchClientes(),
                 refetchStats()
               ])
-              // Invalidar queries para asegurar actualizaciÃ³n completa
+              // Invalidar queries para asegurar actualización completa
               queryClient.invalidateQueries({ queryKey: ['clientes'] })
               queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
             }}
             disabled={isRefetching || isLoading || statsLoading}
             className="px-6 py-6 text-base font-semibold"
-            title="Actualizar datos y estadÃ­sticas"
+            title="Actualizar datos y estadísticas"
           >
             <RefreshCw className={`w-5 h-5 mr-2 ${(isRefetching || statsLoading) ? 'animate-spin' : ''}`} />
             {(isRefetching || statsLoading) ? 'Actualizando...' : 'Actualizar'}
@@ -312,7 +312,7 @@ export function ClientesList() {
         isLoading={statsLoading}
       />
 
-      {/* Filtros y bÃºsqueda */}
+      {/* Filtros y búsqueda */}
       <Card>
         <CardContent className="p-4">
           <div className="flex flex-col sm:flex-row gap-4">
@@ -320,7 +320,7 @@ export function ClientesList() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <Input
-                  placeholder="Buscar por cÃ©dula o nombres..."
+                  placeholder="Buscar por cédula o nombres..."
                   value={searchTerm}
                   onChange={(e) => handleSearch(e.target.value)}
                   className="pl-10"
@@ -348,18 +348,18 @@ export function ClientesList() {
               <div className="space-y-4">
                 <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
                   <Filter className="w-4 h-4" />
-                  Filtros de BÃºsqueda
+                  Filtros de Búsqueda
                 </h3>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {/* CÃ©dula de identidad */}
+                  {/* Cédula de identidad */}
                   <div>
                     <label className="text-sm font-medium text-gray-700 mb-2 block">
-                      CÃ©dula de identidad
+                      Cédula de identidad
                     </label>
                     <Input
                       type="text"
-                      placeholder="CÃ©dula de identidad"
+                      placeholder="Cédula de identidad"
                       value={filters.cedula || ''}
                       onChange={(e) => handleFilterChange('cedula', e.target.value || undefined)}
                       className="w-full"
@@ -397,42 +397,42 @@ export function ClientesList() {
                     />
                   </div>
 
-                  {/* TelÃ©fono */}
+                  {/* Teléfono */}
                   <div>
                     <label className="text-sm font-medium text-gray-700 mb-2 block">
-                      TelÃ©fono
+                      Teléfono
                     </label>
                     <Input
                       type="text"
-                      placeholder="TelÃ©fono"
+                      placeholder="Teléfono"
                       value={filters.telefono || ''}
                       onChange={(e) => handleFilterChange('telefono', e.target.value || undefined)}
                       className="w-full"
                     />
                   </div>
 
-                  {/* OcupaciÃ³n */}
+                  {/* Ocupación */}
                   <div>
                     <label className="text-sm font-medium text-gray-700 mb-2 block">
-                      OcupaciÃ³n
+                      Ocupación
                     </label>
                     <Input
                       type="text"
-                      placeholder="OcupaciÃ³n"
+                      placeholder="Ocupación"
                       value={filters.ocupacion || ''}
                       onChange={(e) => handleFilterChange('ocupacion', e.target.value || undefined)}
                       className="w-full"
                     />
                   </div>
 
-                  {/* Usuario que registrÃ³ */}
+                  {/* Usuario que registró */}
                   <div>
                     <label className="text-sm font-medium text-gray-700 mb-2 block">
-                      Usuario que registrÃ³
+                      Usuario que registró
                     </label>
                     <Input
                       type="text"
-                      placeholder="Usuario que registrÃ³"
+                      placeholder="Usuario que registró"
                       value={filters.usuario_registro || ''}
                       onChange={(e) => handleFilterChange('usuario_registro', e.target.value || undefined)}
                       className="w-full"
@@ -481,7 +481,7 @@ export function ClientesList() {
                   </div>
                 </div>
 
-                {/* BotÃ³n Limpiar Filtros */}
+                {/* Botón Limpiar Filtros */}
                 <div className="flex justify-end pt-2">
                   <Button variant="outline" onClick={clearFilters}>
                     Limpiar Filtros
@@ -503,7 +503,7 @@ export function ClientesList() {
                   <TableHead>Cliente</TableHead>
                   <TableHead>Contacto</TableHead>
                   <TableHead>Estado</TableHead>
-                  <TableHead>Fecha ActualizaciÃ³n</TableHead>
+                  <TableHead>Fecha Actualización</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -519,9 +519,9 @@ export function ClientesList() {
                       ) : clientesData?.total === 0 ? (
                         'No hay clientes que coincidan con los filtros seleccionados'
                       ) : clientesData?.total && clientesData.total > 0 ? (
-                        `Se encontraron ${clientesData.total} clientes pero no se pudieron cargar. Verifica la consola para mÃ¡s detalles.`
+                        `Se encontraron ${clientesData.total} clientes pero no se pudieron cargar. Verifica la consola para más detalles.`
                       ) : (
-                        'No se pudieron cargar los clientes. Verifica la consola para mÃ¡s detalles.'
+                        'No se pudieron cargar los clientes. Verifica la consola para más detalles.'
                       )}
                     </TableCell>
                   </TableRow>
@@ -534,7 +534,7 @@ export function ClientesList() {
                           {cliente.nombres}  {/* âœ… nombres unificados */}
                         </div>
                         <div className="text-sm text-gray-500">
-                          CÃ©dula: {cliente.cedula} | ID: {cliente.id}
+                          Cédula: {cliente.cedula} | ID: {cliente.id}
                         </div>
                       </div>
                     </TableCell>
@@ -586,7 +586,7 @@ export function ClientesList() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
-                        {/* âœ… BOTÃ“N VER COMUNICACIONES */}
+                        {/* âœ… BOTÓN VER COMUNICACIONES */}
                         <Button
                           variant="outline"
                           size="sm"
@@ -600,14 +600,14 @@ export function ClientesList() {
                           Comunicaciones
                         </Button>
 
-                        {/* âœ… BOTÃ“N EDITAR - ACTIVO Y FUNCIONAL */}
+                        {/* âœ… BOTÓN EDITAR - ACTIVO Y FUNCIONAL */}
                         <Button
                           variant="outline"
                           size="sm"
                           title="Editar cliente"
                           className="text-green-600 border-green-400 bg-green-50 hover:text-white hover:bg-green-600 hover:border-green-600 font-medium cursor-pointer transition-colors"
                           onClick={() => {
-                            console.log('ðŸŸ¢ BotÃ³n Editar clickeado para cliente ID:', cliente.id)
+                            console.log('ðŸŸ¢ Botón Editar clickeado para cliente ID:', cliente.id)
                             handleEditarCliente(cliente)
                           }}
                         >
@@ -615,14 +615,14 @@ export function ClientesList() {
                           Editar
                         </Button>
 
-                        {/* âœ… BOTÃ“N ELIMINAR - ACTIVO Y FUNCIONAL */}
+                        {/* âœ… BOTÓN ELIMINAR - ACTIVO Y FUNCIONAL */}
                         <Button
                           variant="outline"
                           size="sm"
                           title="Eliminar cliente"
                           className="text-red-600 border-red-400 bg-red-50 hover:text-white hover:bg-red-600 hover:border-red-600 font-medium cursor-pointer transition-colors"
                           onClick={() => {
-                            console.log('ðŸ”´ BotÃ³n Eliminar clickeado para cliente ID:', cliente.id)
+                            console.log('ðŸ”´ Botón Eliminar clickeado para cliente ID:', cliente.id)
                             handleEliminarCliente(cliente)
                           }}
                         >
@@ -640,7 +640,7 @@ export function ClientesList() {
         </CardContent>
       </Card>
 
-      {/* PaginaciÃ³n */}
+      {/* Paginación */}
       {(totalPages > 1 || clientesData?.total) && (
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
@@ -649,7 +649,7 @@ export function ClientesList() {
             </div>
             <div className="flex items-center gap-2">
               <label className="text-sm text-gray-700 whitespace-nowrap">
-                Por pÃ¡gina:
+                Por página:
               </label>
               <select
                 value={perPage}
@@ -670,7 +670,7 @@ export function ClientesList() {
           {totalPages > 1 && (
             <div className="flex items-center gap-2">
               <div className="text-sm text-gray-700 mr-2">
-                PÃ¡gina {currentPage} de {totalPages}
+                Página {currentPage} de {totalPages}
               </div>
               <Button
                 variant="outline"
@@ -699,13 +699,13 @@ export function ClientesList() {
           <CrearClienteForm
             onClose={() => setShowCrearCliente(false)}
             onSuccess={() => {
-              // âœ… CORRECCIÃ“N: Invalidar queries para actualizar datos
+              // âœ… CORRECCIÓN: Invalidar queries para actualizar datos
               queryClient.invalidateQueries({ queryKey: ['clientes'] })
               queryClient.invalidateQueries({ queryKey: ['dashboard'] })
               queryClient.invalidateQueries({ queryKey: ['kpis'] })
             }}
             onClienteCreated={() => {
-              // âœ… CORRECCIÃ“N: Invalidar queries para actualizar datos
+              // âœ… CORRECCIÓN: Invalidar queries para actualizar datos
               queryClient.invalidateQueries({ queryKey: ['clientes'] })
               queryClient.invalidateQueries({ queryKey: ['dashboard'] })
               queryClient.invalidateQueries({ queryKey: ['kpis'] })
@@ -739,7 +739,7 @@ export function ClientesList() {
         )}
       </AnimatePresence>
 
-      {/* Modal Confirmar EliminaciÃ³n */}
+      {/* Modal Confirmar Eliminación */}
       <AnimatePresence>
         {showEliminarCliente && clienteSeleccionado && (
           <motion.div
@@ -763,23 +763,23 @@ export function ClientesList() {
                     Eliminar Cliente
                   </h3>
                   <p className="text-sm text-red-600 font-medium">
-                    âš ï¸ ELIMINACIÃ“N PERMANENTE - No se puede deshacer
+                    âš ï¸ ELIMINACIÓN PERMANENTE - No se puede deshacer
                   </p>
                 </div>
               </div>
 
               <div className="mb-6">
                 <p className="text-gray-700">
-                  Â¿EstÃ¡s seguro de que quieres <span className="font-semibold text-red-600">ELIMINAR PERMANENTEMENTE</span> al cliente{' '}
+                  ¿Estás seguro de que quieres <span className="font-semibold text-red-600">ELIMINAR PERMANENTEMENTE</span> al cliente{' '}
                   <span className="font-semibold">
                     {clienteSeleccionado.nombres}
                   </span>?
                 </p>
                 <p className="text-sm text-red-600 mt-2 font-medium">
-                  âš ï¸ El cliente serÃ¡ eliminado completamente de la base de datos.
+                  âš ï¸ El cliente será eliminado completamente de la base de datos.
                 </p>
                 <p className="text-sm text-gray-500 mt-1">
-                  CÃ©dula: {clienteSeleccionado.cedula}
+                  Cédula: {clienteSeleccionado.cedula}
                 </p>
               </div>
 
@@ -805,7 +805,7 @@ export function ClientesList() {
         )}
       </AnimatePresence>
 
-      {/* âœ… NOTIFICACIÃ“N ÃšNICA */}
+      {/* âœ… NOTIFICACIÓN ÃšNICA */}
       {notification && (
         <motion.div
           initial={{ opacity: 0, y: -50 }}

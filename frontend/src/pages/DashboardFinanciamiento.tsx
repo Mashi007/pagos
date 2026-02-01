@@ -115,11 +115,11 @@ export function DashboardFinanciamiento() {
         monto_promedio: monto_promedio,
       } as KPIsData
     },
-    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos mÃ¡s frescos
+    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
     refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
-  // Cargar datos de grÃ¡fico por estado
+  // Cargar datos de gráfico por estado
   const { data: datosEstado, isLoading: loadingEstado } = useQuery({
     queryKey: ['financiamiento-por-estado', filtros],
     queryFn: async () => {
@@ -147,7 +147,7 @@ export function DashboardFinanciamiento() {
         {
           estado: 'Activo',
           monto: activo,
-          cantidad: 0, // Se calcularÃ­a desde BD si es necesario
+          cantidad: 0, // Se calcularía desde BD si es necesario
           porcentaje: total > 0 ? (activo / total) * 100 : 0,
         },
         {
@@ -166,7 +166,7 @@ export function DashboardFinanciamiento() {
 
       return datos
     },
-    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos mÃ¡s frescos
+    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
     refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
@@ -212,7 +212,7 @@ export function DashboardFinanciamiento() {
 
       return result
     },
-    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos mÃ¡s frescos
+    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
     refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
@@ -233,7 +233,7 @@ export function DashboardFinanciamiento() {
 
       return response.meses
     },
-    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos mÃ¡s frescos
+    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
     refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
@@ -244,7 +244,7 @@ export function DashboardFinanciamiento() {
     setIsRefreshing(false)
   }
 
-  // Colores para grÃ¡ficos
+  // Colores para gráficos
   const COLORS_POR_ESTADO = {
     Activo: '#10b981', // green-500
     Inactivo: '#f59e0b', // amber-500
@@ -268,7 +268,7 @@ export function DashboardFinanciamiento() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="container mx-auto px-4 py-8 space-y-8">
-        {/* Header EstratÃ©gico */}
+        {/* Header Estratégico */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -281,14 +281,14 @@ export function DashboardFinanciamiento() {
               onClick={() => navigate('/dashboard/menu')}
               className="hover:bg-cyan-50"
             >
-              â† MenÃº
+              â† Menú
             </Button>
             <div>
               <h1 className="text-6xl font-black text-gray-900 uppercase tracking-tight">
                 Financiamiento
               </h1>
               <p className="text-xl text-gray-600 font-medium mt-1">
-                Monitoreo EstratÃ©gico â€¢ {userName}
+                Monitoreo Estratégico â€¢ {userName}
               </p>
             </div>
           </div>
@@ -306,7 +306,7 @@ export function DashboardFinanciamiento() {
                 <div className="flex items-center space-x-2">
                   <div className="flex items-center space-x-2 text-base font-semibold text-gray-700">
                     <Filter className="h-5 w-5 text-cyan-600" />
-                    <span>Filtros RÃ¡pidos</span>
+                    <span>Filtros Rápidos</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 flex-wrap">
@@ -381,7 +381,7 @@ export function DashboardFinanciamiento() {
               format="currency"
             />
             <KpiCardLarge
-              title="Total PrÃ©stamos"
+              title="Total Préstamos"
               value={kpisData.total_financiamientos}
               icon={FileText}
               color="text-blue-600"
@@ -401,7 +401,7 @@ export function DashboardFinanciamiento() {
           </div>
         ) : null}
 
-        {/* LAYOUT: BOTONES IZQUIERDA + GRÃFICOS CENTRO */}
+        {/* LAYOUT: BOTONES IZQUIERDA + GRÁFICOS CENTRO */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* COLUMNA IZQUIERDA: BOTONES EXPLORAR DETALLES */}
           <motion.div
@@ -434,12 +434,12 @@ export function DashboardFinanciamiento() {
                   variant="outline"
                   className="w-full justify-start bg-white hover:bg-cyan-50 text-gray-800 border-2 border-cyan-200 hover:border-cyan-400 h-auto py-3 px-4"
                   onClick={() => {
-                    // TODO: Navegar a anÃ¡lisis por estado
-                    console.log('AnÃ¡lisis por Estado Completo')
+                    // TODO: Navegar a análisis por estado
+                    console.log('Análisis por Estado Completo')
                   }}
                 >
                   <BarChart3 className="h-6 w-6 mr-3 text-cyan-600" />
-                  <span className="font-semibold text-base flex-1 text-left">AnÃ¡lisis por Estado</span>
+                  <span className="font-semibold text-base flex-1 text-left">Análisis por Estado</span>
                   <ChevronRight className="h-5 w-5 text-gray-400" />
                 </Button>
                 <Button
@@ -448,7 +448,7 @@ export function DashboardFinanciamiento() {
                   onClick={() => navigate('/dashboard/analisis')}
                 >
                   <PieChart className="h-6 w-6 mr-3 text-cyan-600" />
-                  <span className="font-semibold text-base flex-1 text-left">DistribuciÃ³n Concesionarios</span>
+                  <span className="font-semibold text-base flex-1 text-left">Distribución Concesionarios</span>
                   <ChevronRight className="h-5 w-5 text-gray-400" />
                 </Button>
                 <Button
@@ -476,11 +476,11 @@ export function DashboardFinanciamiento() {
             </Card>
           </motion.div>
 
-          {/* COLUMNA CENTRO/DERECHA: GRÃFICOS PRINCIPALES */}
+          {/* COLUMNA CENTRO/DERECHA: GRÁFICOS PRINCIPALES */}
           <div className="lg:col-span-9 space-y-6">
-            {/* GrÃ¡ficos en Grid 2 Columnas */}
+            {/* Gráficos en Grid 2 Columnas */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* GrÃ¡fico 1: Financiamiento por Estado (Bar Chart) */}
+              {/* Gráfico 1: Financiamiento por Estado (Bar Chart) */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -532,7 +532,7 @@ export function DashboardFinanciamiento() {
                 </Card>
               </motion.div>
 
-              {/* GrÃ¡fico 2: DistribuciÃ³n por Concesionario (Donut) */}
+              {/* Gráfico 2: Distribución por Concesionario (Donut) */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -542,7 +542,7 @@ export function DashboardFinanciamiento() {
                   <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50 border-b-2 border-purple-200">
                     <CardTitle className="flex items-center space-x-2 text-2xl font-bold text-gray-800">
                       <PieChart className="h-6 w-6 text-purple-600" />
-                      <span>DistribuciÃ³n por Concesionario</span>
+                      <span>Distribución por Concesionario</span>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-6">
@@ -582,7 +582,7 @@ export function DashboardFinanciamiento() {
                                 const cantidad = props.payload?.cantidad ?? 0
                                 const monto = props.payload?.monto ?? 0
                                 return [
-                                  `${(value * 100).toFixed(1)}% (${cantidad} prÃ©stamos, ${formatCurrency(monto)})`,
+                                  `${(value * 100).toFixed(1)}% (${cantidad} préstamos, ${formatCurrency(monto)})`,
                                   'Porcentaje',
                                 ]
                               }}
@@ -595,7 +595,7 @@ export function DashboardFinanciamiento() {
                             <div className="text-2xl font-black text-gray-800">
                               {totalConcesionarios?.cantidad.toLocaleString()}
                             </div>
-                            <div className="text-xs text-gray-500">PrÃ©stamos</div>
+                            <div className="text-xs text-gray-500">Préstamos</div>
                             <div className="text-lg font-bold text-gray-700 mt-1">
                               {formatCurrency(totalConcesionarios?.monto || 0)}
                             </div>
@@ -612,7 +612,7 @@ export function DashboardFinanciamiento() {
               </motion.div>
             </div>
 
-            {/* GrÃ¡fico 3: Tendencia Mensual (Full Width) */}
+            {/* Gráfico 3: Tendencia Mensual (Full Width) */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}

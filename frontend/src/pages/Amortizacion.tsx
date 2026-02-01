@@ -16,7 +16,7 @@ import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Badge } from '../components/ui/badge'
 
-// Constantes de configuraciÃ³n
+// Constantes de configuración
 const DEFAULT_CUOTA_MENSUAL = 416.67
 const DEFAULT_CUOTA_MENSUAL_ALT = 428.57
 const DEFAULT_MONTO_FINANCIADO_1 = 20000.00
@@ -35,11 +35,11 @@ const DEFAULT_PROXIMA_CUOTA = '2024-02-15'
 const DEFAULT_PROXIMA_CUOTA_ALT = '2024-01-15'
 const DEFAULT_PERCENTAGE_MULTIPLIER = 100
 
-// Mock data para amortizaciÃ³n
+// Mock data para amortización
 const mockAmortizaciones = [
   {
     id: 1,
-    cliente: 'Juan Carlos PÃ©rez GonzÃ¡lez',
+    cliente: 'Juan Carlos Pérez González',
     cedula: '12345678',
     vehiculo: 'Toyota Corolla 2022',
     monto_financiado: DEFAULT_MONTO_FINANCIADO_1,
@@ -52,7 +52,7 @@ const mockAmortizaciones = [
   },
   {
     id: 2,
-    cliente: 'MarÃ­a Elena RodrÃ­guez LÃ³pez',
+    cliente: 'María Elena Rodríguez López',
     cedula: '87654321',
     vehiculo: 'Hyundai Accent 2023',
     monto_financiado: DEFAULT_MONTO_FINANCIADO_2,
@@ -65,7 +65,7 @@ const mockAmortizaciones = [
   },
   {
     id: 3,
-    cliente: 'Carlos Alberto MartÃ­nez Silva',
+    cliente: 'Carlos Alberto Martínez Silva',
     cedula: '11223344',
     vehiculo: 'Nissan Versa 2021',
     monto_financiado: DEFAULT_MONTO_FINANCIADO_3,
@@ -85,7 +85,7 @@ export function Amortizacion() {
   const getEstadoBadge = (estado: string) => {
     switch (estado) {
       case 'al_dia':
-        return <Badge className="bg-green-100 text-green-800">Al DÃ­a</Badge>
+        return <Badge className="bg-green-100 text-green-800">Al Día</Badge>
       case 'en_mora':
         return <Badge className="bg-red-100 text-red-800">En Mora</Badge>
       case 'vencido':
@@ -121,8 +121,8 @@ export function Amortizacion() {
       >
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Tablas de AmortizaciÃ³n</h1>
-            <p className="text-gray-600 mt-1">Monitorea el progreso de los prÃ©stamos y su estado de pago</p>
+            <h1 className="text-3xl font-bold text-gray-900">Tablas de Amortización</h1>
+            <p className="text-gray-600 mt-1">Monitorea el progreso de los préstamos y su estado de pago</p>
           </div>
           <Button className="bg-blue-600 hover:bg-blue-700">
             <Calculator className="w-4 h-4 mr-2" />
@@ -179,7 +179,7 @@ export function Amortizacion() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total PrÃ©stamos</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Préstamos</CardTitle>
             <Car className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
@@ -201,7 +201,7 @@ export function Amortizacion() {
           <CardHeader>
             <CardTitle className="flex items-center">
               <Filter className="w-5 h-5 mr-2" />
-              Filtros y BÃºsqueda
+              Filtros y Búsqueda
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -209,7 +209,7 @@ export function Amortizacion() {
               <div className="relative">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                 <Input
-                  placeholder="Buscar por cliente, cÃ©dula o vehÃ­culo..."
+                  placeholder="Buscar por cliente, cédula o vehículo..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
@@ -221,7 +221,7 @@ export function Amortizacion() {
                 className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">Todos los estados</option>
-                <option value="al_dia">Al DÃ­a</option>
+                <option value="al_dia">Al Día</option>
                 <option value="en_mora">En Mora</option>
                 <option value="vencido">Vencido</option>
               </select>
@@ -244,7 +244,7 @@ export function Amortizacion() {
           <CardHeader>
             <CardTitle>Estado de Amortizaciones</CardTitle>
             <CardDescription>
-              Progreso de pago de todos los prÃ©stamos activos
+              Progreso de pago de todos los préstamos activos
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -260,12 +260,12 @@ export function Amortizacion() {
                           <Calculator className="w-5 h-5 text-blue-600" />
                           <div>
                             <h3 className="font-semibold text-gray-900">{amortizacion.cliente}</h3>
-                            <p className="text-sm text-gray-600">CÃ©dula: {amortizacion.cedula}</p>
+                            <p className="text-sm text-gray-600">Cédula: {amortizacion.cedula}</p>
                           </div>
                         </div>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                           <div>
-                            <span className="text-gray-500">VehÃ­culo:</span>
+                            <span className="text-gray-500">Vehículo:</span>
                             <p className="font-medium">{amortizacion.vehiculo}</p>
                           </div>
                           <div>
@@ -273,7 +273,7 @@ export function Amortizacion() {
                             <p className="font-medium">${amortizacion.cuota_mensual.toLocaleString('es-ES', { minimumFractionDigits: 2 })}</p>
                           </div>
                           <div>
-                            <span className="text-gray-500">PrÃ³xima Cuota:</span>
+                            <span className="text-gray-500">Próxima Cuota:</span>
                             <p className="font-medium">{new Date(amortizacion.proxima_cuota).toLocaleDateString('es-ES')}</p>
                           </div>
                           <div>
@@ -293,7 +293,7 @@ export function Amortizacion() {
                     {/* Progress Bar */}
                     <div className="mt-4">
                       <div className="flex justify-between text-sm text-gray-600 mb-2">
-                        <span>Progreso del prÃ©stamo</span>
+                        <span>Progreso del préstamo</span>
                         <span>{amortizacion.cuotas_pagadas}/{amortizacion.cuotas_totales} cuotas ({progreso.toFixed(1)}%)</span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-2">

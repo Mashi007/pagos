@@ -14,7 +14,7 @@ interface Mensaje {
   timestamp: Date
   error?: boolean
   pregunta?: string  // Para guardar la pregunta cuando es respuesta AI
-  calificacion?: 'arriba' | 'abajo' | null  // CalificaciÃ³n del usuario
+  calificacion?: 'arriba' | 'abajo' | null  // Calificación del usuario
 }
 
 export function ChatAI() {
@@ -31,7 +31,7 @@ export function ChatAI() {
     setMensajes([{
       id: 'bienvenida',
       tipo: 'ai',
-      contenido: 'Â¡Hola! Soy tu asistente especializado en consultas sobre la base de datos del sistema. Puedo ayudarte con preguntas sobre clientes, prÃ©stamos, pagos, cuotas, estadÃ­sticas y la fecha/hora actual. Â¿En quÃ© puedo ayudarte?',
+      contenido: 'Â¡Hola! Soy tu asistente especializado en consultas sobre la base de datos del sistema. Puedo ayudarte con preguntas sobre clientes, préstamos, pagos, cuotas, estadísticas y la fecha/hora actual. ¿En qué puedo ayudarte?',
       timestamp: new Date()
     }])
   }, [])
@@ -53,19 +53,19 @@ export function ChatAI() {
 
       setAiConfigurado(configuradoCorrectamente)
 
-      // Solo mostrar toasts si NO estÃ¡ configurado correctamente Y es la primera vez
-      // No mostrar toasts si el usuario ya sabe que no estÃ¡ configurado
+      // Solo mostrar toasts si NO está configurado correctamente Y es la primera vez
+      // No mostrar toasts si el usuario ya sabe que no está configurado
       if (!configuradoCorrectamente) {
         if (!tieneToken) {
           // Solo mostrar error si realmente no hay token (no cada vez que se carga)
           console.log('Token no configurado')
         } else if (!estaActivo) {
-          // Solo mostrar warning si hay token pero estÃ¡ inactivo (no cada vez)
+          // Solo mostrar warning si hay token pero está inactivo (no cada vez)
           console.log('AI inactivo')
         }
       }
     } catch (error) {
-      console.error('Error verificando configuraciÃ³n AI:', error)
+      console.error('Error verificando configuración AI:', error)
       setAiConfigurado(false)
       // No mostrar toast de error en cada carga, solo loguear
     } finally {
@@ -76,7 +76,7 @@ export function ChatAI() {
   const enviarPregunta = async () => {
     if (!pregunta.trim()) return
     if (!aiConfigurado) {
-      toast.error('AI no estÃ¡ configurado o activo. ConfigÃºralo primero.')
+      toast.error('AI no está configurado o activo. Configúralo primero.')
       return
     }
 
@@ -112,7 +112,7 @@ export function ChatAI() {
           tipo: 'ai',
           contenido: respuesta.respuesta,
           timestamp: new Date(),
-          pregunta: preguntaTexto,  // Guardar pregunta para calificaciÃ³n
+          pregunta: preguntaTexto,  // Guardar pregunta para calificación
           calificacion: null
         }
         setMensajes(prev => [...prev, mensajeAI])
@@ -130,34 +130,34 @@ export function ChatAI() {
         const mensajeError: Mensaje = {
           id: (Date.now() + 1).toString(),
           tipo: 'ai',
-          contenido: `â±ï¸ La consulta estÃ¡ tardando mÃ¡s de lo esperado. Esto puede deberse a:\nâ€¢ Consultas complejas a la base de datos\nâ€¢ Procesamiento de informaciÃ³n extensa\nâ€¢ Carga alta en el servidor\n\nðŸ’¡ Intenta reformular tu pregunta de forma mÃ¡s especÃ­fica o intenta nuevamente en unos momentos.`,
+          contenido: `â±ï¸ La consulta está tardando más de lo esperado. Esto puede deberse a:\nâ€¢ Consultas complejas a la base de datos\nâ€¢ Procesamiento de información extensa\nâ€¢ Carga alta en el servidor\n\nðŸ’¡ Intenta reformular tu pregunta de forma más específica o intenta nuevamente en unos momentos.`,
           timestamp: new Date(),
           error: true
         }
         setMensajes(prev => [...prev, mensajeError])
-        toast.warning('La consulta estÃ¡ tardando mÃ¡s de lo esperado. Intenta nuevamente.')
+        toast.warning('La consulta está tardando más de lo esperado. Intenta nuevamente.')
         return
       }
 
-      // Si es un error 400 (pregunta rechazada o validaciÃ³n), mostrar mensaje apropiado
+      // Si es un error 400 (pregunta rechazada o validación), mostrar mensaje apropiado
       if (statusCode === 400) {
         const esPreguntaRechazada = errorDetail.includes('solo responde preguntas') ||
                                     errorDetail.includes('base de datos') ||
-                                    errorDetail.includes('no puede estar vacÃ­a')
+                                    errorDetail.includes('no puede estar vacía')
 
         if (esPreguntaRechazada) {
-          // Mostrar mensaje en el chat con explicaciÃ³n
+          // Mostrar mensaje en el chat con explicación
           const mensajeError: Mensaje = {
             id: (Date.now() + 1).toString(),
             tipo: 'ai',
-            contenido: `âš ï¸ ${errorDetail}\n\nðŸ’¡ Tip: AsegÃºrate de que tu pregunta incluya tÃ©rminos relacionados con:\nâ€¢ Clientes, prÃ©stamos, pagos, cuotas\nâ€¢ Morosidad, estadÃ­sticas, datos\nâ€¢ Fechas, montos, anÃ¡lisis\nâ€¢ O cualquier tÃ©rmino relacionado con la base de datos del sistema`,
+            contenido: `âš ï¸ ${errorDetail}\n\nðŸ’¡ Tip: Asegúrate de que tu pregunta incluya términos relacionados con:\nâ€¢ Clientes, préstamos, pagos, cuotas\nâ€¢ Morosidad, estadísticas, datos\nâ€¢ Fechas, montos, análisis\nâ€¢ O cualquier término relacionado con la base de datos del sistema`,
             timestamp: new Date(),
             error: true
           }
           setMensajes(prev => [...prev, mensajeError])
           toast.warning(errorDetail)
         } else {
-          // Otros errores 400 (configuraciÃ³n, etc.)
+          // Otros errores 400 (configuración, etc.)
           const mensajeError: Mensaje = {
             id: (Date.now() + 1).toString(),
             tipo: 'ai',
@@ -169,7 +169,7 @@ export function ChatAI() {
           toast.error(errorDetail)
         }
       } else {
-        // Para otros errores (500, etc.), sÃ­ mostrar mensaje en el chat
+        // Para otros errores (500, etc.), sí mostrar mensaje en el chat
         const mensajeError: Mensaje = {
           id: (Date.now() + 1).toString(),
           tipo: 'ai',
@@ -200,7 +200,7 @@ export function ChatAI() {
         m.id === mensajeId ? { ...m, calificacion } : m
       ))
 
-      toast.success(`CalificaciÃ³n ${calificacion === 'arriba' ? 'positiva' : 'negativa'} registrada`)
+      toast.success(`Calificación ${calificacion === 'arriba' ? 'positiva' : 'negativa'} registrada`)
     } catch (error: any) {
       console.error('Error calificando:', error)
       const status = error?.response?.status
@@ -208,7 +208,7 @@ export function ChatAI() {
       
       if (status === 503) {
         toast.error(
-          'Sistema de calificaciones no disponible. Ejecuta la migraciÃ³n SQL para crear la tabla.',
+          'Sistema de calificaciones no disponible. Ejecuta la migración SQL para crear la tabla.',
           {
             duration: 5000,
             action: {
@@ -220,7 +220,7 @@ export function ChatAI() {
           }
         )
       } else {
-        toast.error(detail || 'Error al registrar la calificaciÃ³n')
+        toast.error(detail || 'Error al registrar la calificación')
       }
     }
   }
@@ -242,26 +242,26 @@ export function ChatAI() {
         </div>
         <div className="space-y-2">
           <p className="text-gray-600">
-            Consulta informaciÃ³n de la base de datos usando inteligencia artificial
+            Consulta información de la base de datos usando inteligencia artificial
           </p>
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
               Solo consultas de base de datos
             </Badge>
             <span className="text-xs text-gray-500">
-              Para preguntas generales, usa el Chat de Prueba en ConfiguraciÃ³n &gt; AI
+              Para preguntas generales, usa el Chat de Prueba en Configuración &gt; AI
             </span>
           </div>
         </div>
       </div>
 
-      {/* Estado de configuraciÃ³n */}
+      {/* Estado de configuración */}
       {verificando ? (
         <Card className="mb-4">
           <CardContent className="pt-6">
             <div className="flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Verificando configuraciÃ³n de AI...</span>
+              <span>Verificando configuración de AI...</span>
             </div>
           </CardContent>
         </Card>
@@ -275,7 +275,7 @@ export function ChatAI() {
                 <p className="text-sm text-amber-700">
                   Para usar Chat AI, necesitas configurar y activar la Inteligencia Artificial en{' '}
                   <a href="/configuracion?tab=ai" className="underline font-medium">
-                    ConfiguraciÃ³n &gt; Inteligencia Artificial
+                    Configuración &gt; Inteligencia Artificial
                   </a>
                 </p>
               </div>
@@ -289,11 +289,11 @@ export function ChatAI() {
         <CardHeader className="border-b">
           <CardTitle className="flex items-center gap-2">
             <MessageSquare className="h-5 w-5" />
-            ConversaciÃ³n
+            Conversación
           </CardTitle>
         </CardHeader>
         <CardContent className="flex-1 flex flex-col p-0">
-          {/* Ãrea de mensajes */}
+          {/* Área de mensajes */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {mensajes.map((mensaje) => (
               <div
@@ -325,7 +325,7 @@ export function ChatAI() {
                       })}
                     </span>
                   </div>
-                  {/* Botones de calificaciÃ³n solo para respuestas AI sin error */}
+                  {/* Botones de calificación solo para respuestas AI sin error */}
                   {mensaje.tipo === 'ai' && !mensaje.error && mensaje.pregunta && (
                     <div className="flex items-center gap-2">
                       <Button
@@ -358,7 +358,7 @@ export function ChatAI() {
                       </Button>
                       {mensaje.calificacion && (
                         <span className="text-xs text-gray-500">
-                          {mensaje.calificacion === 'arriba' ? 'âœ“ Calificada positivamente' : 'âœ“ Marcada para revisiÃ³n'}
+                          {mensaje.calificacion === 'arriba' ? 'âœ“ Calificada positivamente' : 'âœ“ Marcada para revisión'}
                         </span>
                       )}
                     </div>
@@ -366,7 +366,7 @@ export function ChatAI() {
                 </div>
                 {mensaje.tipo === 'usuario' && (
                   <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
-                    <span className="text-xs font-semibold">TÃº</span>
+                    <span className="text-xs font-semibold">Tú</span>
                   </div>
                 )}
               </div>
@@ -393,7 +393,7 @@ export function ChatAI() {
                 onKeyPress={handleKeyPress}
                 placeholder={
                   aiConfigurado
-                    ? "Escribe tu pregunta sobre la base de datos... (Presiona Enter para enviar, Shift+Enter para nueva lÃ­nea)"
+                    ? "Escribe tu pregunta sobre la base de datos... (Presiona Enter para enviar, Shift+Enter para nueva línea)"
                     : "Configura AI primero para usar el chat..."
                 }
                 disabled={!aiConfigurado || enviando}
@@ -413,7 +413,7 @@ export function ChatAI() {
               </Button>
             </div>
             <p className="text-xs text-gray-500 mt-2">
-              Ejemplos: "Â¿CuÃ¡ntos prÃ©stamos activos hay?", "Â¿CuÃ¡l es el total de pagos del mes?", "MuÃ©strame los clientes en mora"
+              Ejemplos: "¿Cuántos préstamos activos hay?", "¿Cuál es el total de pagos del mes?", "Muéstrame los clientes en mora"
             </p>
           </div>
         </CardContent>

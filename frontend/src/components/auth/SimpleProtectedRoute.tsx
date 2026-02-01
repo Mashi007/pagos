@@ -32,11 +32,11 @@ export function SimpleProtectedRoute({
     }
   }, [isLoading])
 
-  // Mostrar loading mientras se verifica la autenticaciÃ³n
+  // Mostrar loading mientras se verifica la autenticación
   if (isLoading && !loadingTimeout) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <LoadingSpinner size="lg" text="Verificando autenticaciÃ³n..." />
+        <LoadingSpinner size="lg" text="Verificando autenticación..." />
       </div>
     )
   }
@@ -56,7 +56,7 @@ export function SimpleProtectedRoute({
               Tiempo de espera agotado
             </h1>
             <p className="text-gray-600 mb-4">
-              No se pudo verificar la autenticaciÃ³n. Por favor, intente iniciar sesiÃ³n nuevamente.
+              No se pudo verificar la autenticación. Por favor, intente iniciar sesión nuevamente.
             </p>
           </div>
           <button
@@ -70,7 +70,7 @@ export function SimpleProtectedRoute({
     )
   }
 
-  // Si no estÃ¡ autenticado, redirigir al login
+  // Si no está autenticado, redirigir al login
   if (!isAuthenticated || !user) {
     return <Navigate to={fallbackPath} state={{ from: location }} replace />
   }
@@ -90,7 +90,7 @@ export function SimpleProtectedRoute({
               Acceso Denegado
             </h1>
             <p className="text-gray-600 mb-4">
-              No tiene permisos para acceder a esta pÃ¡gina.
+              No tiene permisos para acceder a esta página.
             </p>
             <div className="bg-gray-50 rounded-lg p-4 mb-6">
               <p className="text-sm text-gray-700 mb-1">
@@ -107,7 +107,7 @@ export function SimpleProtectedRoute({
               onClick={() => window.history.back()}
               className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium"
             >
-              â† Volver a la pÃ¡gina anterior
+              â† Volver a la página anterior
             </button>
 
             <button

@@ -20,14 +20,14 @@ export function Validadores() {
   const [configuracion, setConfiguracion] = useState<ConfiguracionValidadores | null>(null)
   const [loadingConfig, setLoadingConfig] = useState(true)
 
-  // Cargar configuraciÃ³n al montar el componente
+  // Cargar configuración al montar el componente
   useEffect(() => {
     const cargarConfiguracion = async () => {
       try {
         const config = await validadoresService.obtenerConfiguracion()
         setConfiguracion(config)
       } catch (error) {
-        console.error('Error cargando configuraciÃ³n:', error)
+        console.error('Error cargando configuración:', error)
       } finally {
         setLoadingConfig(false)
       }
@@ -68,53 +68,53 @@ export function Validadores() {
 
   const validadoresDisponibles = [
     {
-      nombre: 'CÃ©dula',
+      nombre: 'Cédula',
       campo: 'cedula',
-      formato: 'V/E/J + 7-10 dÃ­gitos',
+      formato: 'V/E/J + 7-10 dígitos',
       ejemplo: 'V12345678',
-      descripcion: 'Valida y formatea cÃ©dulas venezolanas'
+      descripcion: 'Valida y formatea cédulas venezolanas'
     },
     {
-      nombre: 'TelÃ©fono',
+      nombre: 'Teléfono',
       campo: 'telefono_venezuela',
-      formato: '+58 + 10 dÃ­gitos (NO empieza por 0)',
+      formato: '+58 + 10 dígitos (NO empieza por 0)',
       ejemplo: '+58 1234567890 o 1234567890',
-      descripcion: 'Valida y formatea telÃ©fonos venezolanos. Se agrega +58 automÃ¡ticamente. Cualquier orden vÃ¡lido de 10 dÃ­gitos (NO empieza por 0).'
+      descripcion: 'Valida y formatea teléfonos venezolanos. Se agrega +58 automáticamente. Cualquier orden válido de 10 dígitos (NO empieza por 0).'
     },
     {
       nombre: 'Email',
       campo: 'email',
       formato: 'usuario@dominio.com',
       ejemplo: 'usuario@ejemplo.com',
-      descripcion: 'Valida formato RFC 5322, sin espacios/comas, minÃºsculas'
+      descripcion: 'Valida formato RFC 5322, sin espacios/comas, minúsculas'
     },
     {
       nombre: 'Fecha',
       campo: 'fecha',
       formato: 'DD/MM/YYYY',
       ejemplo: '15/03/2024',
-      descripcion: 'Valida fechas DD/MM/YYYY, auto-completado, aÃ±o 4 dÃ­gitos'
+      descripcion: 'Valida fechas DD/MM/YYYY, auto-completado, año 4 dígitos'
     },
     {
       nombre: 'Monto',
       campo: 'monto',
       formato: 'Formato europeo estricto: punto cada 3 desde derecha, coma decimal',
       ejemplo: '1.000,12 o 10.500,25',
-      descripcion: 'Sistema europeo estricto: punto (.) cada 3 dÃ­gitos desde la derecha para miles (obligatorio si > 999), coma (,) para decimales. Rango: 1-20000.'
+      descripcion: 'Sistema europeo estricto: punto (.) cada 3 dígitos desde la derecha para miles (obligatorio si > 999), coma (,) para decimales. Rango: 1-20000.'
     },
     {
       nombre: 'Nombre',
       campo: 'nombre',
-      formato: '1-2 palabras, solo primera letra mayÃºscula',
+      formato: '1-2 palabras, solo primera letra mayúscula',
       ejemplo: 'JUAN PEDRO â†’ Juan pedro',
-      descripcion: 'Auto-convierte a formato correcto. Solo la primera letra del texto en mayÃºscula, resto en minÃºscula.'
+      descripcion: 'Auto-convierte a formato correcto. Solo la primera letra del texto en mayúscula, resto en minúscula.'
     },
     {
       nombre: 'Apellido',
       campo: 'apellido',
-      formato: '1-2 palabras, solo primera letra mayÃºscula',
+      formato: '1-2 palabras, solo primera letra mayúscula',
       ejemplo: 'PEREZ GONZALEZ â†’ Perez gonzalez',
-      descripcion: 'Auto-convierte a formato correcto. Solo la primera letra del texto en mayÃºscula, resto en minÃºscula.'
+      descripcion: 'Auto-convierte a formato correcto. Solo la primera letra del texto en mayúscula, resto en minúscula.'
     }
   ]
 
@@ -125,12 +125,12 @@ export function Validadores() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Validadores</h1>
           <p className="text-gray-500 mt-1">
-            ConfiguraciÃ³n y prueba de validadores del sistema
+            Configuración y prueba de validadores del sistema
           </p>
         </div>
       </div>
 
-      {/* SecciÃ³n: Probar Validadores */}
+      {/* Sección: Probar Validadores */}
       <div className="grid gap-6 md:grid-cols-2">
             {/* Panel de prueba */}
             <Card>
@@ -180,7 +180,7 @@ export function Validadores() {
                   ) : (
                     <>
                       <PlayCircle className="w-4 h-4 mr-2" />
-                      Probar ValidaciÃ³n
+                      Probar Validación
                     </>
                   )}
                 </Button>
@@ -205,7 +205,7 @@ export function Validadores() {
                           )}
                           <div className="flex-1">
                             <p className="font-medium">
-                              {resultadoTest.validacion?.valido ? 'âœ… VÃ¡lido' : 'âŒ InvÃ¡lido'}
+                              {resultadoTest.validacion?.valido ? 'âœ… Válido' : 'âŒ Inválido'}
                             </p>
                             {resultadoTest.validacion?.error && (
                               <p className="text-sm text-red-700 font-medium mt-1">
@@ -276,17 +276,17 @@ export function Validadores() {
             </Card>
       </div>
 
-      {/* SecciÃ³n: ConfiguraciÃ³n */}
+      {/* Sección: Configuración */}
       <div>
           <Card>
             <CardHeader>
-              <CardTitle>ConfiguraciÃ³n de Validadores</CardTitle>
+              <CardTitle>Configuración de Validadores</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-6">
-                {/* PaÃ­s configurado */}
+                {/* País configurado */}
                 <div>
-                  <h3 className="font-medium text-gray-900 mb-3">PaÃ­s Configurado</h3>
+                  <h3 className="font-medium text-gray-900 mb-3">País Configurado</h3>
                   <Badge variant="outline" className="text-lg px-4 py-2">
                     ðŸ‡»ðŸ‡ª Venezuela
                   </Badge>
@@ -297,10 +297,10 @@ export function Validadores() {
                   <h3 className="font-medium text-gray-900 mb-3">Moneda</h3>
                   <div className="flex gap-2">
                     <Badge variant="default" className="text-lg px-4 py-2">
-                      ðŸ’µ USD - DÃ³lar Americano
+                      ðŸ’µ USD - Dólar Americano
                     </Badge>
                     <Badge variant="outline" className="text-lg px-4 py-2">
-                      ðŸ’° Bs. - BolÃ­vares (Venezuela)
+                      ðŸ’° Bs. - Bolívares (Venezuela)
                     </Badge>
                   </div>
                 </div>
@@ -311,15 +311,15 @@ export function Validadores() {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
                       <code className="text-xs">POST /api/v1/validadores/validar-campo</code>
-                      <Badge>ValidaciÃ³n en tiempo real</Badge>
+                      <Badge>Validación en tiempo real</Badge>
                     </div>
                     <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
                       <code className="text-xs">POST /api/v1/validadores/formatear-tiempo-real</code>
-                      <Badge>Formateo automÃ¡tico</Badge>
+                      <Badge>Formateo automático</Badge>
                     </div>
                     <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
                       <code className="text-xs">GET /api/v1/validadores/configuracion</code>
-                      <Badge>ConfiguraciÃ³n</Badge>
+                      <Badge>Configuración</Badge>
                     </div>
                     <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
                       <code className="text-xs">GET /api/v1/validadores/ejemplos-correccion</code>
@@ -327,7 +327,7 @@ export function Validadores() {
                     </div>
                     <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
                       <code className="text-xs">GET /api/v1/validadores/detectar-errores-masivo</code>
-                      <Badge variant="outline">DiagnÃ³stico masivo</Badge>
+                      <Badge variant="outline">Diagnóstico masivo</Badge>
                     </div>
                   </div>
                 </div>

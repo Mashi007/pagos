@@ -43,7 +43,7 @@ export function VisualizacionBD() {
   const cargarDatos = async () => {
     setIsLoading(true)
     try {
-      // Simular carga de estadÃ­sticas
+      // Simular carga de estadísticas
       setStats({
         totalClientes: 150,
         totalPrestamos: 120,
@@ -58,7 +58,7 @@ export function VisualizacionBD() {
           id: '1',
           cedula: '12345678',
           nombre: 'Juan',
-          apellido: 'PÃ©rez',
+          apellido: 'Pérez',
           telefono: '3001234567',
           email: 'juan@email.com',
           monto_prestamo: 500000,
@@ -68,8 +68,8 @@ export function VisualizacionBD() {
         {
           id: '2',
           cedula: '87654321',
-          nombre: 'MarÃ­a',
-          apellido: 'GarcÃ­a',
+          nombre: 'María',
+          apellido: 'García',
           telefono: '3007654321',
           email: 'maria@email.com',
           monto_prestamo: 750000,
@@ -80,7 +80,7 @@ export function VisualizacionBD() {
           id: '3',
           cedula: '11223344',
           nombre: 'Carlos',
-          apellido: 'LÃ³pez',
+          apellido: 'López',
           telefono: '3009988776',
           email: 'carlos@email.com',
           monto_prestamo: 300000,
@@ -111,7 +111,7 @@ export function VisualizacionBD() {
 
   const exportarDatos = () => {
     const csvContent = [
-      ['CÃ©dula', 'Nombre', 'Apellido', 'TelÃ©fono', 'Email', 'Monto PrÃ©stamo', 'Estado', 'Fecha Registro'],
+      ['Cédula', 'Nombre', 'Apellido', 'Teléfono', 'Email', 'Monto Préstamo', 'Estado', 'Fecha Registro'],
       ...clientesFiltrados.map(cliente => [
         cliente.cedula,
         cliente.nombre,
@@ -149,7 +149,7 @@ export function VisualizacionBD() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900 flex items-center space-x-2">
             <Database className="h-8 w-8 text-blue-600" />
-            <span>VisualizaciÃ³n de Base de Datos</span>
+            <span>Visualización de Base de Datos</span>
           </h1>
           <p className="text-gray-600 mt-2">
             Explora y gestiona todos los datos de tu sistema RAPICREDIT
@@ -167,7 +167,7 @@ export function VisualizacionBD() {
         </div>
       </motion.div>
 
-      {/* EstadÃ­sticas */}
+      {/* Estadísticas */}
       {stats && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -196,7 +196,7 @@ export function VisualizacionBD() {
                   <Eye className="h-5 w-5 text-green-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600">PrÃ©stamos</p>
+                  <p className="text-sm text-gray-600">Préstamos</p>
                   <p className="text-2xl font-bold text-green-600">{stats.totalPrestamos}</p>
                 </div>
               </div>
@@ -261,14 +261,14 @@ export function VisualizacionBD() {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <Filter className="h-5 w-5" />
-              <span>Filtros y BÃºsqueda</span>
+              <span>Filtros y Búsqueda</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium text-gray-700 mb-2 block">
-                  Buscar por cÃ©dula, nombre, apellido o email:
+                  Buscar por cédula, nombre, apellido o email:
                 </label>
                 <Input
                   placeholder="Buscar..."
@@ -321,11 +321,11 @@ export function VisualizacionBD() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>CÃ©dula</TableHead>
+                    <TableHead>Cédula</TableHead>
                     <TableHead>Nombre Completo</TableHead>
-                    <TableHead>TelÃ©fono</TableHead>
+                    <TableHead>Teléfono</TableHead>
                     <TableHead>Email</TableHead>
-                    <TableHead>Monto PrÃ©stamo</TableHead>
+                    <TableHead>Monto Préstamo</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead>Fecha Registro</TableHead>
                   </TableRow>
@@ -367,7 +367,7 @@ export function VisualizacionBD() {
         </Card>
       </motion.div>
 
-      {/* InformaciÃ³n adicional */}
+      {/* Información adicional */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -375,8 +375,8 @@ export function VisualizacionBD() {
       >
         <AlertWithIcon
           variant="info"
-          title="InformaciÃ³n de la Base de Datos"
-          description={`â€¢ Total de registros: ${clientes.length} clientes\nâ€¢ Ãšltima actualizaciÃ³n: ${new Date().toLocaleString()}\nâ€¢ Formato de exportaciÃ³n: CSV compatible con Excel\nâ€¢ Filtros aplicados: ${searchTerm ? `BÃºsqueda: "${searchTerm}"` : 'Sin bÃºsqueda'} ${filterEstado ? `| Estado: ${filterEstado}` : ''}`}
+          title="Información de la Base de Datos"
+          description={`â€¢ Total de registros: ${clientes.length} clientes\nâ€¢ Ãšltima actualización: ${new Date().toLocaleString()}\nâ€¢ Formato de exportación: CSV compatible con Excel\nâ€¢ Filtros aplicados: ${searchTerm ? `Búsqueda: "${searchTerm}"` : 'Sin búsqueda'} ${filterEstado ? `| Estado: ${filterEstado}` : ''}`}
         />
       </motion.div>
     </div>

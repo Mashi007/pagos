@@ -16,9 +16,9 @@ export function AmortizacionPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">AmortizaciÃ³n</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Amortización</h1>
           <p className="text-muted-foreground">
-            Tablas de amortizaciÃ³n y cÃ¡lculos
+            Tablas de amortización y cálculos
           </p>
         </div>
         <Badge variant="outline" className="text-sm">
@@ -30,19 +30,19 @@ export function AmortizacionPage() {
       <div className="grid gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>AmortizaciÃ³n</CardTitle>
+            <CardTitle>Amortización</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-center py-8">
               <div className="text-6xl mb-4">ðŸ“Š</div>
-              <h3 className="text-xl font-semibold mb-2">PÃ¡gina en Desarrollo</h3>
+              <h3 className="text-xl font-semibold mb-2">Página en Desarrollo</h3>
               <p className="text-muted-foreground mb-4">
-                Esta funcionalidad estÃ¡ siendo implementada y estarÃ¡ disponible prÃ³ximamente.
+                Esta funcionalidad está siendo implementada y estará disponible próximamente.
               </p>
               <div className="space-y-2 text-sm text-muted-foreground">
-                <p>â€¢ GeneraciÃ³n de tablas</p>
-                <p>â€¢ CÃ¡lculos automÃ¡ticos</p>
-                <p>â€¢ VisualizaciÃ³n de cronogramas</p>
+                <p>â€¢ Generación de tablas</p>
+                <p>â€¢ Cálculos automáticos</p>
+                <p>â€¢ Visualización de cronogramas</p>
               </div>
             </div>
           </CardContent>

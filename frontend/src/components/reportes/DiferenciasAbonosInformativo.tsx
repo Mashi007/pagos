@@ -32,11 +32,11 @@ export function DiferenciasAbonosInformativo() {
   const cantidadPrestamos = diferencias?.length || 0
 
   const handleVerPrestamos = () => {
-    // Navegar a la pÃ¡gina de prÃ©stamos con filtro de requiere_revision
+    // Navegar a la página de préstamos con filtro de requiere_revision
     navigate('/prestamos?requiere_revision=true')
   }
 
-  // Si hay error o estÃ¡ cargando, mostrar estado correspondiente
+  // Si hay error o está cargando, mostrar estado correspondiente
   if (isLoading) {
     return (
       <Card className="border-l-4 border-l-orange-500">
@@ -46,7 +46,7 @@ export function DiferenciasAbonosInformativo() {
               <Loader2 className="h-5 w-5 animate-spin text-orange-600" />
               <div>
                 <p className="font-semibold text-gray-900">Diferencias de Abonos</p>
-                <p className="text-sm text-gray-600">Cargando informaciÃ³n...</p>
+                <p className="text-sm text-gray-600">Cargando información...</p>
               </div>
             </div>
           </div>
@@ -64,7 +64,7 @@ export function DiferenciasAbonosInformativo() {
               <AlertCircle className="h-5 w-5 text-red-600" />
               <div>
                 <p className="font-semibold text-gray-900">Diferencias de Abonos</p>
-                <p className="text-sm text-red-600">Error al cargar informaciÃ³n</p>
+                <p className="text-sm text-red-600">Error al cargar información</p>
               </div>
             </div>
           </div>
@@ -83,7 +83,7 @@ export function DiferenciasAbonosInformativo() {
             Diferencias de Abonos
           </CardTitle>
           <CardDescription>
-            PrÃ©stamos marcados para revisiÃ³n con diferencias entre BD y valores de referencia
+            Préstamos marcados para revisión con diferencias entre BD y valores de referencia
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -91,7 +91,7 @@ export function DiferenciasAbonosInformativo() {
             <div className="text-center flex-1">
               <p className="text-lg font-medium text-gray-500">No hay diferencias pendientes</p>
               <p className="text-sm text-gray-400 mt-1">
-                Marca prÃ©stamos para revisar en la pÃ¡gina de PrÃ©stamos para que aparezcan aquÃ­.
+                Marca préstamos para revisar en la página de Préstamos para que aparezcan aquí.
               </p>
             </div>
           </div>
@@ -100,7 +100,7 @@ export function DiferenciasAbonosInformativo() {
     )
   }
 
-  // Si hay diferencias, mostrar conteo y botÃ³n
+  // Si hay diferencias, mostrar conteo y botón
   return (
     <Card className="border-l-4 border-l-orange-500 bg-orange-50/50">
       <CardHeader className="pb-3">
@@ -111,7 +111,7 @@ export function DiferenciasAbonosInformativo() {
               Diferencias de Abonos
             </CardTitle>
             <CardDescription className="mt-1">
-              PrÃ©stamos marcados para revisiÃ³n con diferencias entre BD y valores de referencia
+              Préstamos marcados para revisión con diferencias entre BD y valores de referencia
             </CardDescription>
           </div>
           <Badge variant="destructive" className="text-lg px-3 py-1">
@@ -123,17 +123,17 @@ export function DiferenciasAbonosInformativo() {
         <div className="flex items-center justify-between">
           <div>
             <p className="text-lg font-semibold text-gray-900">
-              {cantidadPrestamos} {cantidadPrestamos === 1 ? 'prÃ©stamo' : 'prÃ©stamos'} que validar
+              {cantidadPrestamos} {cantidadPrestamos === 1 ? 'préstamo' : 'préstamos'} que validar
             </p>
             <p className="text-sm text-gray-600 mt-1">
-              Hay prÃ©stamos con diferencias pendientes de revisiÃ³n
+              Hay préstamos con diferencias pendientes de revisión
             </p>
           </div>
           <Button
             onClick={handleVerPrestamos}
             className="bg-orange-600 hover:bg-orange-700 text-white"
           >
-            Ver PrÃ©stamos
+            Ver Préstamos
             <ChevronRight className="ml-2 h-4 w-4" />
           </Button>
         </div>

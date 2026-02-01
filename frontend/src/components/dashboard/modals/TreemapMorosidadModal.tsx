@@ -183,19 +183,19 @@ export function TreemapMorosidadModal({ isOpen, onClose }: TreemapMorosidadModal
           errorOpcionesFiltros={errorOpcionesFiltros}
         />
 
-        {/* GrÃ¡fico Treemap */}
+        {/* Gráfico Treemap */}
         <Card>
           <CardHeader>
-            <CardTitle>Morosidad por Analista (Clientes con morosidad desde 1 dÃ­a)</CardTitle>
+            <CardTitle>Morosidad por Analista (Clientes con morosidad desde 1 día)</CardTitle>
           </CardHeader>
           <CardContent>
             {loadingMorosidad ? (
               <div className="h-[500px] flex items-center justify-center">
-                <div className="animate-pulse text-gray-400">Cargando grÃ¡fico...</div>
+                <div className="animate-pulse text-gray-400">Cargando gráfico...</div>
               </div>
             ) : datosTreemap.length === 0 ? (
               <div className="h-[500px] flex items-center justify-center text-gray-500">
-                No hay datos de morosidad disponibles para el perÃ­odo seleccionado
+                No hay datos de morosidad disponibles para el período seleccionado
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={500}>
