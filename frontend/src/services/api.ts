@@ -661,6 +661,7 @@ class ApiClient {
 
 // Instancia singleton del cliente API
 export const apiClient = new ApiClient()
+export default apiClient
 
 // FUNCIÓN GLOBAL DE EMERGENCIA: Limpiar storage desde consola del navegador
 // Uso: window.clearAuthStorage() en la consola del navegador
