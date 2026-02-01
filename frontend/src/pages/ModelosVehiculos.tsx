@@ -17,7 +17,7 @@ import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Badge } from '../components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
-import { ModeloVehiculo, ModeloVehiculoUpdate, ModeloVehiculoCreate } from '../services/modeloVehiculoService'
+import { modeloVehiculoService, ModeloVehiculo, ModeloVehiculoUpdate, ModeloVehiculoCreate } from '../services/modeloVehiculoService'
 import { configuracionGeneralService } from '../services/configuracionGeneralService'
 import { useModelosVehiculos, useDeleteModeloVehiculo, useUpdateModeloVehiculo, useCreateModeloVehiculo } from '../hooks/useModelosVehiculos'
 import toast from 'react-hot-toast'
@@ -535,8 +535,7 @@ export function ModelosVehiculos() {
               onClick={async () => {
                 if (!archivoExcel) return
                 try {
-                  const svc = (await import('../services/modeloVehiculoService')).modeloVehiculoService
-                  const res = await svc.importarDesdeExcel(archivoExcel)
+                  const res = await modeloVehiculoService.importarDesdeExcel(archivoExcel)
                   toast.success(`Importado: ${res.creados} creados, ${res.actualizados} actualizados`)
                   setArchivoExcel(null)
                   // Resetear el input file
