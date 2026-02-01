@@ -4,10 +4,93 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Sistema de Gestión de Pagos" />
     <title>Pagos - Sistema de Gestión</title>
+    <!-- Fallback para si JavaScript no carga -->
+    <noscript>
+      <style>
+        body { 
+          font-family: Arial, sans-serif; 
+          padding: 20px; 
+          text-align: center;
+          background: #242424;
+          color: white;
+        }
+        .error {
+          background: #ff4444;
+          color: white;
+          padding: 20px;
+          border-radius: 8px;
+          margin: 20px auto;
+          max-width: 600px;
+        }
+      </style>
+      <div class="error">
+        <h1>JavaScript Requerido</h1>
+        <p>Esta aplicación requiere JavaScript para funcionar. Por favor, habilita JavaScript en tu navegador.</p>
+      </div>
+    </noscript>
+    <style>
+      /* Estilos de carga inicial para evitar FOUC (Flash of Unstyled Content) */
+      #root {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: #242424;
+        color: rgba(255, 255, 255, 0.87);
+      }
+      .loading {
+        text-align: center;
+        font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Mensaje de carga mientras React se inicializa -->
+      <div class="loading">
+        <h1>Cargando...</h1>
+        <p>Si este mensaje persiste, verifica la consola del navegador para errores.</p>
+      </div>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
+    <script>
+      // Script inline para verificar que JavaScript está funcionando
+      console.log('✅ HTML cargado correctamente');
+      console.log('✅ JavaScript está habilitado');
+      
+      // Verificar que el elemento root existe
+      if (document.getElementById('root')) {
+        console.log('✅ Elemento #root encontrado');
+      } else {
+        console.error('❌ ERROR: Elemento #root NO encontrado');
+      }
+      
+      // Timeout para detectar si React no carga
+      setTimeout(function() {
+        const root = document.getElementById('root');
+        if (root && root.innerHTML.includes('Cargando...')) {
+          console.warn('⚠️ ADVERTENCIA: React parece no haber cargado después de 5 segundos');
+          root.innerHTML = `
+            <div style="padding: 20px; text-align: center; font-family: Arial, sans-serif;">
+              <h1 style="color: #ff6b6b;">Error de Carga</h1>
+              <p>La aplicación no se cargó correctamente.</p>
+              <p>Por favor, verifica:</p>
+              <ul style="text-align: left; max-width: 500px; margin: 20px auto;">
+                <li>Que los archivos JavaScript se hayan cargado (revisa la pestaña Network)</li>
+                <li>Que no haya errores en la consola (F12 → Console)</li>
+                <li>Que el servidor esté funcionando correctamente</li>
+              </ul>
+              <p style="margin-top: 20px;">
+                <button onclick="location.reload()" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">
+                  Recargar Página
+                </button>
+              </p>
+            </div>
+          `;
+        }
+      }, 5000);
+    </script>
   </body>
 </html>
