@@ -1,8 +1,7 @@
 services:
-  # Frontend
-  - type: web
+  # Frontend (Static Site)
+  - type: static
     name: pagos-frontend
-    env: node
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: ./dist
