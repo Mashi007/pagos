@@ -1,7 +1,8 @@
 """
 Endpoints del dashboard (stub para que el frontend no reciba 404).
-Todos los GET devuelven datos mínimos hasta tener BD/negocio real.
+Con datos de demostración para que los gráficos muestren algo hasta tener BD real.
 """
+from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Query
@@ -11,6 +12,33 @@ router = APIRouter()
 
 def _kpi(valor: float = 0, variacion: float = 0) -> dict:
     return {"valor_actual": valor, "variacion_porcentual": variacion}
+
+
+def _ultimos_12_meses() -> list[dict]:
+    """Genera los últimos 12 meses con datos demo para gráficos."""
+    meses = []
+    hoy = datetime.now()
+    nombres = ("Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic")
+    for i in range(11, -1, -1):
+        d = hoy - timedelta(days=30 * i)
+        mes = d.month
+        año = d.year
+        label = f"{nombres[mes - 1]} {año}"
+        # Valores demo crecientes para que se vean las series
+        base = 50_000 + (11 - i) * 8_000
+        meses.append({
+            "mes": label,
+            "cartera": base + (i * 2_000),
+            "cobrado": int(base * 0.6) + (i * 1_500),
+            "morosidad": int(base * 0.08) + (i * 200),
+            "cantidad_nuevos": 15 + i,
+            "monto_nuevos": base,
+            "total_acumulado": base * (12 - i),
+            "monto_cuotas_programadas": int(base * 0.7),
+            "monto_pagado": int(base * 0.55),
+            "morosidad_mensual": int(base * 0.07),
+        })
+    return meses
 
 
 @router.get("/opciones-filtros")
@@ -31,19 +59,19 @@ def get_kpis_principales(
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
 ):
-    """KPIs principales del dashboard."""
+    """KPIs principales del dashboard (datos demo si no hay BD)."""
     return {
-        "total_prestamos": _kpi(0),
-        "creditos_nuevos_mes": _kpi(0),
-        "total_clientes": _kpi(0),
+        "total_prestamos": _kpi(1247, 5.2),
+        "creditos_nuevos_mes": _kpi(89, -2.1),
+        "total_clientes": _kpi(856, 3.0),
         "clientes_por_estado": {
-            "activos": _kpi(0),
-            "inactivos": _kpi(0),
-            "finalizados": _kpi(0),
+            "activos": _kpi(720, 2.5),
+            "inactivos": _kpi(86, 1.0),
+            "finalizados": _kpi(50, 0.5),
         },
-        "total_morosidad_usd": _kpi(0),
-        "cuotas_programadas": {"valor_actual": 0},
-        "porcentaje_cuotas_pagadas": 0,
+        "total_morosidad_usd": _kpi(42500, -8.0),
+        "cuotas_programadas": {"valor_actual": 185000},
+        "porcentaje_cuotas_pagadas": 72.5,
     }
 
 
@@ -53,18 +81,20 @@ def get_dashboard_admin(
     fecha_inicio: Optional[str] = Query(None),
     fecha_fin: Optional[str] = Query(None),
 ):
-    """Dashboard admin: financieros, meta, evolucion_mensual."""
+    """Dashboard admin: financieros, meta, evolucion_mensual (datos demo)."""
+    meses = _ultimos_12_meses()
+    evolucion = [{"mes": m["mes"], "cartera": m["cartera"], "cobrado": m["cobrado"], "morosidad": m["morosidad"]} for m in meses]
     return {
         "financieros": {
-            "ingresosCapital": 0,
-            "ingresosInteres": 0,
-            "ingresosMora": 0,
-            "totalCobrado": 0,
-            "totalCobradoAnterior": 0,
+            "ingresosCapital": 125000,
+            "ingresosInteres": 18500,
+            "ingresosMora": 4200,
+            "totalCobrado": 142000,
+            "totalCobradoAnterior": 138500,
         },
-        "meta_mensual": 0,
-        "avance_meta": 0,
-        "evolucion_mensual": [],
+        "meta_mensual": 150000,
+        "avance_meta": 94.7,
+        "evolucion_mensual": evolucion,
     }
 
 
@@ -76,10 +106,8 @@ def get_financiamiento_tendencia_mensual(
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
 ):
-    """Tendencia mensual de financiamiento."""
-    return {
-        "meses": [],
-    }
+    """Tendencia mensual de financiamiento (datos demo)."""
+    return {"meses": _ultimos_12_meses()}
 
 
 @router.get("/prestamos-por-concesionario")
@@ -90,9 +118,16 @@ def get_prestamos_por_concesionario(
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
 ):
-    """Préstamos por concesionario."""
+    """Préstamos por concesionario (datos demo)."""
+    datos = [
+        ("Concesionario A", 420, 33.7),
+        ("Concesionario B", 318, 25.5),
+        ("Concesionario C", 245, 19.6),
+        ("Concesionario D", 164, 13.2),
+        ("Concesionario E", 100, 8.0),
+    ]
     return {
-        "concesionarios": [],
+        "concesionarios": [{"concesionario": n, "total_prestamos": int(c * 1200), "cantidad_prestamos": c, "porcentaje": p} for n, c, p in datos],
     }
 
 
@@ -104,9 +139,16 @@ def get_prestamos_por_modelo(
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
 ):
-    """Préstamos por modelo."""
+    """Préstamos por modelo (datos demo)."""
+    datos = [
+        ("Modelo X", 380, 30.5),
+        ("Modelo Y", 295, 23.6),
+        ("Modelo Z", 220, 17.6),
+        ("Modelo W", 182, 14.6),
+        ("Otros", 170, 13.6),
+    ]
     return {
-        "modelos": [],
+        "modelos": [{"modelo": n, "total_prestamos": int(c * 1500), "cantidad_prestamos": c, "porcentaje": p} for n, c, p in datos],
     }
 
 
@@ -118,10 +160,24 @@ def get_financiamiento_por_rangos(
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
 ):
-    """Financiamiento por rangos."""
+    """Financiamiento por rangos (datos demo)."""
+    rangos = [
+        ("$0 - $200", 85, 12000),
+        ("$200 - $400", 120, 36000),
+        ("$400 - $600", 95, 47500),
+        ("$600 - $800", 70, 49000),
+        ("$800 - $1,000", 45, 40500),
+        ("$1,000+", 32, 55000),
+    ]
+    total_p = sum(r[1] for r in rangos)
+    total_m = sum(r[2] for r in rangos)
     return {
-        "rangos": [],
-        "total_prestamos": 0,
+        "rangos": [
+            {"categoria": c, "cantidad_prestamos": n, "monto_total": m, "porcentaje_cantidad": round(100 * n / total_p, 1), "porcentaje_monto": round(100 * m / total_m, 1)}
+            for c, n, m in rangos
+        ],
+        "total_prestamos": total_p,
+        "total_monto": float(total_m),
     }
 
 
@@ -133,11 +189,17 @@ def get_composicion_morosidad(
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
 ):
-    """Composición de morosidad."""
+    """Composición de morosidad (datos demo)."""
+    puntos = [
+        ("1-30 días", 12000, 45),
+        ("31-60 días", 8500, 28),
+        ("61-90 días", 6200, 18),
+        ("90+ días", 15800, 32),
+    ]
     return {
-        "puntos": [],
-        "total_morosidad": 0,
-        "total_cuotas": 0,
+        "puntos": [{"categoria": c, "monto": m, "cantidad_cuotas": n} for c, m, n in puntos],
+        "total_morosidad": sum(p[1] for p in puntos),
+        "total_cuotas": sum(p[2] for p in puntos),
     }
 
 
@@ -164,9 +226,18 @@ def get_cobranzas_semanales(
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
 ):
-    """Cobranzas semanales."""
+    """Cobranzas semanales (datos demo)."""
+    sem = []
+    for i in range(min(semanas or 12, 12)):
+        base = 32000 - i * 1200
+        sem.append({
+            "semana_inicio": (datetime.now() - timedelta(weeks=i)).strftime("%Y-%m-%d"),
+            "nombre_semana": f"Sem {12 - i}",
+            "cobranzas_planificadas": base,
+            "pagos_reales": int(base * (0.65 + 0.02 * i)),
+        })
     return {
-        "semanas": [],
+        "semanas": sem,
         "fecha_inicio": fecha_inicio or "",
         "fecha_fin": fecha_fin or "",
     }
@@ -180,9 +251,14 @@ def get_morosidad_por_analista(
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
 ):
-    """Morosidad por analista."""
+    """Morosidad por analista (datos demo)."""
     return {
-        "analistas": [],
+        "analistas": [
+            {"analista": "Analista 1", "total_morosidad": 15200, "cantidad_clientes": 45},
+            {"analista": "Analista 2", "total_morosidad": 11800, "cantidad_clientes": 38},
+            {"analista": "Analista 3", "total_morosidad": 9500, "cantidad_clientes": 32},
+            {"analista": "Analista 4", "total_morosidad": 6000, "cantidad_clientes": 22},
+        ],
     }
 
 
@@ -194,10 +270,9 @@ def get_evolucion_morosidad(
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
 ):
-    """Evolución de morosidad por mes."""
-    return {
-        "meses": [],
-    }
+    """Evolución de morosidad por mes (datos demo)."""
+    m = _ultimos_12_meses()
+    return {"meses": [{"mes": x["mes"], "morosidad": x["morosidad"]} for x in m]}
 
 
 @router.get("/evolucion-pagos")
@@ -208,9 +283,13 @@ def get_evolucion_pagos(
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
 ):
-    """Evolución de pagos por mes."""
+    """Evolución de pagos por mes (datos demo). Frontend espera mes, pagos (cantidad), monto."""
+    m = _ultimos_12_meses()
     return {
-        "meses": [],
+        "meses": [
+            {"mes": x["mes"], "pagos": 12 + i, "monto": x["monto_pagado"]}
+            for i, x in enumerate(m)
+        ]
     }
 
 

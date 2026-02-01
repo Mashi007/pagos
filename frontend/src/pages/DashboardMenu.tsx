@@ -64,8 +64,16 @@ export function DashboardMenu() {
   const queryClient = useQueryClient()
 
   const [filtros, setFiltros] = useState<DashboardFiltros>({})
-  const [periodo, setPeriodo] = useState('año') // âœ… Por defecto: "Este año"
+  const [periodo, setPeriodo] = useState('año') // Período general (por defecto: "Este año")
+  /** Período por gráfico: cada gráfico puede usar el general o uno propio. Key = id del gráfico, value = día|semana|mes|año o '' = usar general */
+  const [periodoPorGrafico, setPeriodoPorGrafico] = useState<Record<string, string>>({})
   const { construirParams, construirFiltrosObject, tieneFiltrosActivos, cantidadFiltrosActivos } = useDashboardFiltros(filtros)
+
+  /** Período efectivo para un gráfico: el del gráfico si está definido, si no el general */
+  const getPeriodoGrafico = (chartId: string) => periodoPorGrafico[chartId] || periodo
+  const setPeriodoGrafico = (chartId: string, value: string) => {
+    setPeriodoPorGrafico((prev) => (value ? { ...prev, [chartId]: value } : { ...prev, [chartId]: '' }))
+  }
 
   // âœ… OPTIMIZACIÓN PRIORIDAD 1: Carga por batches con priorización
   // Batch 1: CRÍTICO - Opciones de filtros y KPIs principales (carga inmediata)
@@ -115,11 +123,12 @@ export function DashboardMenu() {
   })
 
   // Batch 2: IMPORTANTE - Dashboard admin (gráfico principal, carga después de KPIs)
+  const periodoEvolucion = getPeriodoGrafico('evolucion')
   const { data: datosDashboard, isLoading: loadingDashboard } = useQuery({
-    queryKey: ['dashboard-menu', periodo, JSON.stringify(filtros)],
+    queryKey: ['dashboard-menu', periodoEvolucion, JSON.stringify(filtros)],
     queryFn: async () => {
       try {
-        const params = construirParams(periodo)
+        const params = construirParams(periodoEvolucion)
         // Usar timeout extendido para endpoints lentos
         const response = await apiClient.get(`/api/v1/dashboard/admin?${params}`, { timeout: 60000 }) as {
           financieros?: {
@@ -148,11 +157,12 @@ export function DashboardMenu() {
   // Batch 3: MEDIA - Gráficos secundarios rápidos (cargar después de Batch 2, en paralelo limitado)
   // âœ… Lazy loading: Solo cargar cuando KPIs estén listos para reducir carga inicial
   // âœ… ACTUALIZADO: Incluye período en queryKey y aplica filtro de período
-  // âœ… ACTUALIZADO: Muestra datos desde septiembre 2024
+  // âœ… ACTUALIZADO: Muestra datos desde septiembre 2024. Período por gráfico.
+  const periodoTendencia = getPeriodoGrafico('tendencia')
   const { data: datosTendencia, isLoading: loadingTendencia } = useQuery({
-    queryKey: ['financiamiento-tendencia', periodo, JSON.stringify(filtros)],
+    queryKey: ['financiamiento-tendencia', periodoTendencia, JSON.stringify(filtros)],
     queryFn: async () => {
-      const params = construirFiltrosObject(periodo) // âœ… Pasar período para calcular fechas
+      const params = construirFiltrosObject(periodoTendencia) // âœ… Pasar período para calcular fechas
       const queryParams = new URLSearchParams()
 
       // âœ… CORRECCIÓN: Para este gráfico específico, NO pasar fecha_inicio del período
@@ -199,12 +209,12 @@ export function DashboardMenu() {
     refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
   })
 
-  // Batch 3: Gráficos secundarios rápidos
-  // âœ… ACTUALIZADO: Incluye período en queryKey y aplica filtro de período
+  // Batch 3: Gráficos secundarios rápidos. Período por gráfico.
+  const periodoConcesionario = getPeriodoGrafico('concesionario')
   const { data: datosConcesionarios, isLoading: loadingConcesionarios } = useQuery({
-    queryKey: ['prestamos-concesionario', periodo, JSON.stringify(filtros)],
+    queryKey: ['prestamos-concesionario', periodoConcesionario, JSON.stringify(filtros)],
     queryFn: async () => {
-      const params = construirFiltrosObject(periodo) // âœ… Pasar período
+      const params = construirFiltrosObject(periodoConcesionario)
       const queryParams = new URLSearchParams()
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
@@ -223,10 +233,11 @@ export function DashboardMenu() {
     enabled: !!kpisPrincipales, // âœ… Lazy loading - carga después de KPIs
   })
 
+  const periodoModelo = getPeriodoGrafico('modelo')
   const { data: datosModelos, isLoading: loadingModelos } = useQuery({
-    queryKey: ['prestamos-modelo', periodo, JSON.stringify(filtros)],
+    queryKey: ['prestamos-modelo', periodoModelo, JSON.stringify(filtros)],
     queryFn: async () => {
-      const params = construirFiltrosObject(periodo) // âœ… Pasar período
+      const params = construirFiltrosObject(periodoModelo)
       const queryParams = new URLSearchParams()
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
@@ -246,12 +257,13 @@ export function DashboardMenu() {
   })
 
   // Batch 4: BAJA - Gráficos menos críticos (cargar después de Batch 3, lazy loading)
-  // âœ… ACTUALIZADO: Incluye período en queryKey y aplica filtro de período
+  // Período por gráfico
+  const periodoRangos = getPeriodoGrafico('rangos')
   const { data: datosFinanciamientoRangos, isLoading: loadingFinanciamientoRangos, isError: errorFinanciamientoRangos, error: errorFinanciamientoRangosDetail, refetch: refetchFinanciamientoRangos } = useQuery({
-    queryKey: ['financiamiento-rangos', periodo, JSON.stringify(filtros)],
+    queryKey: ['financiamiento-rangos', periodoRangos, JSON.stringify(filtros)],
     queryFn: async () => {
       try {
-        const params = construirFiltrosObject(periodo) // âœ… Pasar período
+        const params = construirFiltrosObject(periodoRangos)
         const queryParams = new URLSearchParams()
         Object.entries(params).forEach(([key, value]) => {
           if (value) queryParams.append(key, value.toString())
@@ -293,10 +305,11 @@ export function DashboardMenu() {
     retryDelay: 2000, // Esperar 2 segundos antes de reintentar
   })
 
+  const periodoComposicionMorosidad = getPeriodoGrafico('composicion-morosidad')
   const { data: datosComposicionMorosidad, isLoading: loadingComposicionMorosidad } = useQuery({
-    queryKey: ['composicion-morosidad', periodo, JSON.stringify(filtros)],
+    queryKey: ['composicion-morosidad', periodoComposicionMorosidad, JSON.stringify(filtros)],
     queryFn: async () => {
-      const params = construirFiltrosObject(periodo) // âœ… Pasar período
+      const params = construirFiltrosObject(periodoComposicionMorosidad)
       const queryParams = new URLSearchParams()
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
@@ -346,10 +359,11 @@ export function DashboardMenu() {
     retry: 1, // Solo un retry para evitar múltiples intentos
   })
 
+  const periodoCobranzasSemanales = getPeriodoGrafico('cobranzas-semanales')
   const { data: datosCobranzasSemanales, isLoading: loadingCobranzasSemanales } = useQuery({
-    queryKey: ['cobranzas-semanales', periodo, JSON.stringify(filtros)],
+    queryKey: ['cobranzas-semanales', periodoCobranzasSemanales, JSON.stringify(filtros)],
     queryFn: async () => {
-      const params = construirFiltrosObject(periodo) // âœ… Pasar período
+      const params = construirFiltrosObject(periodoCobranzasSemanales)
       const queryParams = new URLSearchParams()
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
@@ -386,10 +400,11 @@ export function DashboardMenu() {
     refetchOnWindowFocus: false, // Reducir peticiones automáticas
   })
 
+  const periodoMorosidadAnalista = getPeriodoGrafico('morosidad-analista')
   const { data: datosMorosidadAnalista, isLoading: loadingMorosidadAnalista } = useQuery({
-    queryKey: ['morosidad-analista', periodo, JSON.stringify(filtros)],
+    queryKey: ['morosidad-analista', periodoMorosidadAnalista, JSON.stringify(filtros)],
     queryFn: async () => {
-      const params = construirFiltrosObject(periodo) // âœ… Pasar período
+      const params = construirFiltrosObject(periodoMorosidadAnalista)
       const queryParams = new URLSearchParams()
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
@@ -408,10 +423,11 @@ export function DashboardMenu() {
     enabled: !!datosDashboard, // âœ… Lazy loading - carga después de dashboard admin
   })
 
+  const periodoEvolucionMorosidad = getPeriodoGrafico('evolucion-morosidad')
   const { data: datosEvolucionMorosidad, isLoading: loadingEvolucionMorosidad } = useQuery({
-    queryKey: ['evolucion-morosidad-menu', periodo, JSON.stringify(filtros)],
+    queryKey: ['evolucion-morosidad-menu', periodoEvolucionMorosidad, JSON.stringify(filtros)],
     queryFn: async () => {
-      const params = construirFiltrosObject(periodo) // âœ… Pasar período
+      const params = construirFiltrosObject(periodoEvolucionMorosidad)
       const queryParams = new URLSearchParams()
       
       // âœ… CORRECCIÓN: NO pasar fecha_inicio del período para este gráfico
@@ -442,10 +458,11 @@ export function DashboardMenu() {
     enabled: !!datosDashboard, // âœ… Lazy loading - carga después de dashboard admin
   })
 
+  const periodoEvolucionPagos = getPeriodoGrafico('evolucion-pagos')
   const { data: datosEvolucionPagos, isLoading: loadingEvolucionPagos } = useQuery({
-    queryKey: ['evolucion-pagos-menu', periodo, JSON.stringify(filtros)],
+    queryKey: ['evolucion-pagos-menu', periodoEvolucionPagos, JSON.stringify(filtros)],
     queryFn: async () => {
-      const params = construirFiltrosObject(periodo) // âœ… Pasar período
+      const params = construirFiltrosObject(periodoEvolucionPagos)
       const queryParams = new URLSearchParams()
       
       // âœ… CORRECCIÓN: NO pasar fecha_inicio del período para este gráfico
@@ -527,7 +544,7 @@ export function DashboardMenu() {
   const evolucionMensual = datosDashboard?.evolucion_mensual || []
   const COLORS_CONCESIONARIOS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#6366f1']
 
-  // Etiqueta del período activo para mostrar en todos los gráficos (estándar profesional)
+  // Etiqueta del período activo (general)
   const rangoFechasLabel = useMemo(() => {
     const obj = construirFiltrosObject(periodo)
     if (obj.fecha_inicio && obj.fecha_fin) {
@@ -539,6 +556,39 @@ export function DashboardMenu() {
     const labels: Record<string, string> = { día: 'Hoy', semana: 'Esta semana', mes: 'Este mes', año: 'Este año' }
     return labels[periodo] || 'Este año'
   }, [periodo, filtros, construirFiltrosObject])
+
+  /** Etiqueta de rango de fechas para un gráfico (usa período del gráfico o el general) */
+  const getRangoFechasLabelGrafico = (chartId: string) => {
+    const p = getPeriodoGrafico(chartId)
+    const obj = construirFiltrosObject(p)
+    if (obj.fecha_inicio && obj.fecha_fin) {
+      const fIni = new Date(obj.fecha_inicio)
+      const fFin = new Date(obj.fecha_fin)
+      const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' }
+      return `${fIni.toLocaleDateString('es-ES', opts)} – ${fFin.toLocaleDateString('es-ES', opts)}`
+    }
+    const labels: Record<string, string> = { día: 'Hoy', semana: 'Esta semana', mes: 'Este mes', año: 'Este año' }
+    return labels[p] || 'Este año'
+  }
+
+  /** Selector de período por gráfico (dropdown para cada tarjeta) */
+  const SelectorPeriodoGrafico = ({ chartId }: { chartId: string }) => (
+    <Select
+      value={periodoPorGrafico[chartId] || 'general'}
+      onValueChange={(v) => setPeriodoGrafico(chartId, v === 'general' ? '' : v)}
+    >
+      <SelectTrigger className="w-[160px] h-8 text-xs border-gray-200 bg-white/80">
+        <SelectValue placeholder="Período" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="general">General (barra superior)</SelectItem>
+        <SelectItem value="día">Hoy</SelectItem>
+        <SelectItem value="semana">Esta semana</SelectItem>
+        <SelectItem value="mes">Este mes</SelectItem>
+        <SelectItem value="año">Este año</SelectItem>
+      </SelectContent>
+    </Select>
+  )
 
   // Estilos profesionales compartidos para todos los gráficos (tooltips, ejes, grid)
   const chartTooltipStyle = {
@@ -699,7 +749,7 @@ export function DashboardMenu() {
           </motion.div>
         )}
 
-        {/* Barra de filtros de fechas y período — aplica a todos los gráficos */}
+        {/* Barra de filtros: período general (cada gráfico puede usar este o uno propio) */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -848,9 +898,12 @@ export function DashboardMenu() {
                         <LineChart className="h-5 w-5 text-cyan-600" />
                         <span>Evolución Mensual</span>
                       </CardTitle>
-                      <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
-                        {rangoFechasLabel}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <SelectorPeriodoGrafico chartId="evolucion" />
+                        <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
+                          {getRangoFechasLabelGrafico('evolucion')}
+                        </Badge>
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent className="p-6 pt-4">
@@ -900,9 +953,12 @@ export function DashboardMenu() {
                         <DollarSign className="h-5 w-5 text-green-600" />
                         <span>Indicadores Financieros</span>
                       </CardTitle>
-                      <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
-                        {rangoFechasLabel}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <SelectorPeriodoGrafico chartId="tendencia" />
+                        <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
+                          {getRangoFechasLabelGrafico('tendencia')}
+                        </Badge>
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent className="p-6 pt-4">
@@ -1014,9 +1070,12 @@ export function DashboardMenu() {
                       <BarChart3 className="h-5 w-5 text-indigo-600" />
                       <span>Distribución por Bandas de $200 USD</span>
                     </CardTitle>
-                    <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
-                      {rangoFechasLabel}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <SelectorPeriodoGrafico chartId="rangos" />
+                      <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
+                        {getRangoFechasLabelGrafico('rangos')}
+                      </Badge>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="p-6 flex-1">
@@ -1097,9 +1156,12 @@ export function DashboardMenu() {
                       <BarChart3 className="h-5 w-5 text-blue-600" />
                       <span>Cobranza Planificada vs Real</span>
                     </CardTitle>
-                    <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
-                      {rangoFechasLabel}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <SelectorPeriodoGrafico chartId="cobranzas-semanales" />
+                      <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
+                        {getRangoFechasLabelGrafico('cobranzas-semanales')}
+                      </Badge>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="p-6 flex-1">
@@ -1163,9 +1225,12 @@ export function DashboardMenu() {
                       <BarChart3 className="h-5 w-5 text-purple-600" />
                       <span>Préstamos por Concesionario</span>
                     </CardTitle>
-                    <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
-                      {rangoFechasLabel}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <SelectorPeriodoGrafico chartId="concesionario" />
+                      <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
+                        {getRangoFechasLabelGrafico('concesionario')}
+                      </Badge>
+                    </div>
                   </div>
                 </CardHeader>
                   <CardContent className="p-6 pt-4 flex items-center justify-center">
@@ -1212,9 +1277,12 @@ export function DashboardMenu() {
                       <BarChart3 className="h-5 w-5 text-amber-600" />
                       <span>Préstamos por Modelo</span>
                     </CardTitle>
-                    <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
-                      {rangoFechasLabel}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <SelectorPeriodoGrafico chartId="modelo" />
+                      <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
+                        {getRangoFechasLabelGrafico('modelo')}
+                      </Badge>
+                    </div>
                   </div>
                 </CardHeader>
                   <CardContent className="p-6 pt-4 flex items-center justify-center">
@@ -1267,9 +1335,12 @@ export function DashboardMenu() {
                       <BarChart3 className="h-5 w-5 text-red-600" />
                       <span>Composición de Morosidad</span>
                     </CardTitle>
-                    <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
-                      {rangoFechasLabel}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <SelectorPeriodoGrafico chartId="composicion-morosidad" />
+                      <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
+                        {getRangoFechasLabelGrafico('composicion-morosidad')}
+                      </Badge>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="p-6 flex-1">
@@ -1305,9 +1376,12 @@ export function DashboardMenu() {
                       <Users className="h-5 w-5 text-orange-600" />
                       <span>Morosidad por Analista</span>
                     </CardTitle>
-                    <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
-                      {rangoFechasLabel}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <SelectorPeriodoGrafico chartId="morosidad-analista" />
+                      <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
+                        {getRangoFechasLabelGrafico('morosidad-analista')}
+                      </Badge>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="p-6 flex-1">
@@ -1363,10 +1437,18 @@ export function DashboardMenu() {
             >
               <Card className="shadow-lg border-2 border-gray-200">
                 <CardHeader className="bg-gradient-to-r from-red-50 to-pink-50 border-b-2 border-red-200">
-                  <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                    <LineChart className="h-6 w-6 text-red-600" />
-                    <span>Evolución de Morosidad</span>
-                  </CardTitle>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
+                      <LineChart className="h-6 w-6 text-red-600" />
+                      <span>Evolución de Morosidad</span>
+                    </CardTitle>
+                    <div className="flex items-center gap-2">
+                      <SelectorPeriodoGrafico chartId="evolucion-morosidad" />
+                      <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
+                        {getRangoFechasLabelGrafico('evolucion-morosidad')}
+                      </Badge>
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent className="p-6">
                   {datosEvolucionMorosidad && datosEvolucionMorosidad.length > 0 ? (
@@ -1400,9 +1482,12 @@ export function DashboardMenu() {
                       <LineChart className="h-5 w-5 text-green-600" />
                       <span>Evolución de Pagos</span>
                     </CardTitle>
-                    <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
-                      {rangoFechasLabel}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <SelectorPeriodoGrafico chartId="evolucion-pagos" />
+                      <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
+                        {getRangoFechasLabelGrafico('evolucion-pagos')}
+                      </Badge>
+                    </div>
                   </div>
                 </CardHeader>
                   <CardContent className="p-6 pt-4">
