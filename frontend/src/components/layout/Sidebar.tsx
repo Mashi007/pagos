@@ -115,11 +115,8 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         { title: 'Comunicaciones', href: '/comunicaciones', icon: MessageSquare },
       ],
     },
-    {
-      title: 'Ventas',
-      href: '/ventas',
-      icon: Target,
-    },
+    // Ventas: oculto y en pausa (no afectar otros procesos)
+    // { title: 'Ventas', href: '/ventas', icon: Target },
     {
       title: 'Préstamos',
       href: '/prestamos',

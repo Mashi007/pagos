@@ -20,40 +20,43 @@ router = APIRouter()
 
 
 def _ticket_to_response(t: Ticket, cliente_row: Optional[Cliente] = None) -> dict:
-    """Construye respuesta de ticket con datos de cliente (camelCase para frontend)."""
+    """Construye respuesta de ticket con datos de cliente (camelCase para frontend). Tolerante a NULL."""
     cliente_nombre = None
     cliente_data = None
     if cliente_row:
-        cliente_nombre = cliente_row.nombres or ""
+        cliente_nombre = (cliente_row.nombres or "").strip() or "Sin nombre"
         cliente_data = ClienteDataTicket(
             id=cliente_row.id,
-            nombres=cliente_row.nombres,
-            cedula=cliente_row.cedula,
+            nombres=(cliente_row.nombres or "").strip() or "Sin nombre",
+            cedula=(cliente_row.cedula or "").strip() or "",
             telefono=cliente_row.telefono or None,
             email=cliente_row.email or None,
             direccion=cliente_row.direccion or None,
         )
+    fecha_limite = getattr(t, "fecha_limite", None)
+    fecha_creacion = getattr(t, "fecha_creacion", None)
+    fecha_actualizacion = getattr(t, "fecha_actualizacion", None)
     return {
         "id": t.id,
-        "titulo": t.titulo,
-        "descripcion": t.descripcion,
+        "titulo": t.titulo or "",
+        "descripcion": t.descripcion or "",
         "cliente_id": t.cliente_id,
         "cliente": cliente_nombre,
         "clienteData": cliente_data.model_dump() if cliente_data else None,
         "conversacion_whatsapp_id": t.conversacion_whatsapp_id,
         "comunicacion_email_id": t.comunicacion_email_id,
-        "estado": t.estado,
-        "prioridad": t.prioridad,
-        "tipo": t.tipo,
+        "estado": t.estado or "abierto",
+        "prioridad": t.prioridad or "media",
+        "tipo": t.tipo or "consulta",
         "asignado_a": t.asignado_a,
         "asignado_a_id": t.asignado_a_id,
         "escalado_a_id": t.escalado_a_id,
         "escalado": t.escalado or False,
-        "fecha_limite": t.fecha_limite.isoformat() if t.fecha_limite else None,
+        "fecha_limite": fecha_limite.isoformat() if fecha_limite else None,
         "archivos": t.archivos,
         "creado_por_id": t.creado_por_id,
-        "fechaCreacion": t.fecha_creacion.isoformat() if t.fecha_creacion else None,
-        "fechaActualizacion": t.fecha_actualizacion.isoformat() if t.fecha_actualizacion else None,
+        "fechaCreacion": fecha_creacion.isoformat() if fecha_creacion else None,
+        "fechaActualizacion": fecha_actualizacion.isoformat() if fecha_actualizacion else None,
     }
 
 
@@ -69,37 +72,44 @@ def get_tickets(
     db: Session = Depends(get_db),
 ):
     """Listado paginado de tickets desde la BD. Filtros: cliente_id, estado, prioridad, tipo."""
-    q = select(Ticket)
-    count_q = select(func.count()).select_from(Ticket)
-    if cliente_id is not None:
-        q = q.where(Ticket.cliente_id == cliente_id)
-        count_q = count_q.where(Ticket.cliente_id == cliente_id)
-    if estado and estado.strip():
-        q = q.where(Ticket.estado == estado.strip().lower())
-        count_q = count_q.where(Ticket.estado == estado.strip().lower())
-    if prioridad and prioridad.strip():
-        q = q.where(Ticket.prioridad == prioridad.strip().lower())
-        count_q = count_q.where(Ticket.prioridad == prioridad.strip().lower())
-    if tipo and tipo.strip():
-        q = q.where(Ticket.tipo == tipo.strip().lower())
-        count_q = count_q.where(Ticket.tipo == tipo.strip().lower())
+    try:
+        q = select(Ticket)
+        count_q = select(func.count()).select_from(Ticket)
+        if cliente_id is not None:
+            q = q.where(Ticket.cliente_id == cliente_id)
+            count_q = count_q.where(Ticket.cliente_id == cliente_id)
+        if estado and estado.strip():
+            q = q.where(Ticket.estado == estado.strip().lower())
+            count_q = count_q.where(Ticket.estado == estado.strip().lower())
+        if prioridad and prioridad.strip():
+            q = q.where(Ticket.prioridad == prioridad.strip().lower())
+            count_q = count_q.where(Ticket.prioridad == prioridad.strip().lower())
+        if tipo and tipo.strip():
+            q = q.where(Ticket.tipo == tipo.strip().lower())
+            count_q = count_q.where(Ticket.tipo == tipo.strip().lower())
 
-    total = db.scalar(count_q) or 0
-    q = q.order_by(Ticket.id.desc()).offset((page - 1) * per_page).limit(per_page)
-    rows = db.execute(q).scalars().all()
-    # Cargar clientes para los tickets que tienen cliente_id
-    clientes_map = {}
-    if rows:
-        ids = [r.cliente_id for r in rows if r.cliente_id]
-        if ids:
-            clientes = db.execute(select(Cliente).where(Cliente.id.in_(ids))).scalars().all()
-            clientes_map = {c.id: c for c in clientes}
-    tickets_list = [_ticket_to_response(t, clientes_map.get(t.cliente_id)) for t in rows]
-    total_pages = (total + per_page - 1) // per_page if total else 0
-    return {
-        "tickets": tickets_list,
-        "paginacion": {"page": page, "per_page": per_page, "total": total, "pages": total_pages},
-    }
+        total = db.scalar(count_q) or 0
+        q = q.order_by(Ticket.id.desc()).offset((page - 1) * per_page).limit(per_page)
+        rows = db.execute(q).scalars().all()
+        # Cargar clientes para los tickets que tienen cliente_id
+        clientes_map = {}
+        if rows:
+            ids = [r.cliente_id for r in rows if r.cliente_id]
+            if ids:
+                clientes = db.execute(select(Cliente).where(Cliente.id.in_(ids))).scalars().all()
+                clientes_map = {c.id: c for c in clientes}
+        tickets_list = [_ticket_to_response(t, clientes_map.get(t.cliente_id)) for t in rows]
+        total_pages = (total + per_page - 1) // per_page if total else 0
+        return {
+            "tickets": tickets_list,
+            "paginacion": {"page": page, "per_page": per_page, "total": total, "pages": total_pages},
+        }
+    except Exception as e:
+        logger.exception("Error en listado de tickets: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al cargar tickets: {e!s}",
+        ) from e
 
 
 @router.get("/{ticket_id}", response_model=dict)

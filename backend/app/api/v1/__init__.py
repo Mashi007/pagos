@@ -2,7 +2,7 @@
 API v1
 """
 from fastapi import APIRouter
-from app.api.v1.endpoints import whatsapp, auth, configuracion, pagos, notificaciones, notificaciones_tabs, dashboard, kpis, auditoria, cobranzas, clientes, tickets, comunicaciones, validadores
+from app.api.v1.endpoints import whatsapp, auth, configuracion, pagos, notificaciones, notificaciones_tabs, dashboard, kpis, auditoria, cobranzas, clientes, tickets, comunicaciones, validadores, usuarios
 
 api_router = APIRouter()
 
@@ -122,4 +122,11 @@ api_router.include_router(
     validadores.router,
     prefix="/validadores",
     tags=["validadores"],
+)
+
+# Usuarios (sin tabla users: listado desde ADMIN_EMAIL para Tickets/Comunicaciones).
+api_router.include_router(
+    usuarios.router,
+    prefix="/usuarios",
+    tags=["usuarios"],
 )

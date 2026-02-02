@@ -35,7 +35,8 @@ function Layout() {
     { path: '/comunicaciones', label: 'Comunicaciones', icon: '📧' },
     { path: '/tickets-atencion', label: 'Tickets', icon: '🎫' },
     { path: '/solicitudes', label: 'Solicitudes', icon: '📝' },
-    { path: '/ventas', label: 'Ventas', icon: '🛒' },
+    // Ventas: oculto y en pausa
+    // { path: '/ventas', label: 'Ventas', icon: '🛒' },
     { path: '/visualizacion-bd', label: 'Visualización BD', icon: '🗄️' },
     { path: '/programador', label: 'Programador', icon: '📅' },
     { path: '/plantillas', label: 'Plantillas', icon: '📑' },

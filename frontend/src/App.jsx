@@ -21,7 +21,7 @@ import Comunicaciones from './pages/Comunicaciones';
 import TicketsAtencion from './pages/TicketsAtencion';
 import Solicitudes from './pages/Solicitudes';
 import VisualizacionBD from './pages/VisualizacionBD';
-import Ventas from './pages/Ventas';
+// Ventas: en pausa
 import Programador from './pages/Programador';
 import Plantillas from './pages/Plantillas';
 import { authService } from './services/auth';
@@ -98,7 +98,7 @@ function App() {
           {/* Otros módulos */}
           <Route path="solicitudes" element={<Solicitudes />} />
           <Route path="visualizacion-bd" element={<VisualizacionBD />} />
-          <Route path="ventas" element={<Ventas />} />
+          <Route path="ventas" element={<Navigate to="/" replace />} />
           <Route path="programador" element={<Programador />} />
           <Route path="plantillas" element={<Plantillas />} />
         </Route>

@@ -146,6 +146,25 @@ def put_configuracion_general(payload: ConfiguracionGeneralUpdate = Body(...), d
     return {"message": "Configuración actualizada", "configuracion": _config_stub.copy()}
 
 
+def _logo_exists_and_type(filename: str, db: Session) -> tuple[bool, Optional[str]]:
+    """Comprueba si el logo existe (disco o BD) y devuelve (existe, media_type). Usado por GET y HEAD."""
+    safe = _safe_filename(filename)
+    if not safe:
+        return False, None
+    base_dir = _logo_dir()
+    if base_dir:
+        path = os.path.join(base_dir, safe)
+        if os.path.isfile(path) and os.path.normpath(path).startswith(os.path.normpath(base_dir)):
+            return True, _content_type_for_filename(safe)
+    _load_general_from_db(db)
+    if _config_stub.get("logo_filename") != safe:
+        return False, None
+    row = db.get(Configuracion, CLAVE_LOGO_IMAGEN)
+    if not row or not row.valor:
+        return False, None
+    return True, _content_type_for_filename(safe)
+
+
 @router.get("/logo/{filename}")
 def get_logo(filename: str, db: Session = Depends(get_db)):
     """
@@ -160,7 +179,6 @@ def get_logo(filename: str, db: Session = Depends(get_db)):
         path = os.path.join(base_dir, safe)
         if os.path.isfile(path) and os.path.normpath(path).startswith(os.path.normpath(base_dir)):
             return FileResponse(path)
-    # Servir desde BD (cuando no hay LOGO_UPLOAD_DIR o el archivo no está en disco)
     _load_general_from_db(db)
     if _config_stub.get("logo_filename") != safe:
         raise HTTPException(status_code=404, detail="Logo no encontrado")
@@ -173,6 +191,18 @@ def get_logo(filename: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Logo corrupto")
     media_type = _content_type_for_filename(safe)
     return Response(content=content, media_type=media_type)
+
+
+@router.head("/logo/{filename}")
+def head_logo(filename: str, db: Session = Depends(get_db)):
+    """
+    HEAD para el logo: el frontend usa HEAD para comprobar si existe sin descargar.
+    Sin este endpoint, algunos proxies/dev devuelven 405 Method Not Allowed.
+    """
+    exists, media_type = _logo_exists_and_type(filename, db)
+    if not exists:
+        raise HTTPException(status_code=404, detail="Logo no encontrado")
+    return Response(status_code=200, headers={"Content-Type": media_type or "image/png"})
 
 
 @router.post("/upload-logo")

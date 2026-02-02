@@ -90,7 +90,7 @@ import Solicitudes from './pages/Solicitudes'
 import EmbudoClientes from './pages/EmbudoClientes'
 import TicketsAtencion from './pages/TicketsAtencion'
 import EmbudoConcesionarios from './pages/EmbudoConcesionarios'
-import Ventas from './pages/Ventas'
+// Ventas: en pausa (ruta redirige a /pagos)
 import ConversacionesWhatsAppPage from './pages/ConversacionesWhatsApp'
 import ComunicacionesPage from './pages/Comunicaciones'
 
@@ -336,8 +336,8 @@ function App() {
             }
           />
 
-          {/* Ventas */}
-          <Route path="ventas" element={<Ventas />} />
+          {/* Ventas: en pausa - redirige a inicio para no cargar procesos */}
+          <Route path="ventas" element={<Navigate to="/pagos" replace />} />
 
           {/* CRM */}
           <Route path="crm/embudo-clientes" element={<EmbudoClientes />} />
