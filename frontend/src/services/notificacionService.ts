@@ -331,8 +331,17 @@ class EmailConfigService {
     return await apiClient.get(`${this.baseUrl}/email/estado`)
   }
 
-  async probarConfiguracionImap(): Promise<{ success: boolean; mensaje?: string }> {
-    return await apiClient.post<{ success: boolean; mensaje?: string }>(`${this.baseUrl}/email/probar-imap`, {})
+  async probarConfiguracionImap(imapConfig?: {
+    imap_host?: string
+    imap_port?: string
+    imap_user?: string
+    imap_password?: string
+    imap_use_ssl?: string
+  }): Promise<{ success: boolean; mensaje?: string }> {
+    return await apiClient.post<{ success: boolean; mensaje?: string }>(
+      `${this.baseUrl}/email/probar-imap`,
+      imapConfig ?? {}
+    )
   }
 }
 

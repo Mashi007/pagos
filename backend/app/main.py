@@ -64,7 +64,7 @@ def on_startup():
     """Crear tablas en la BD si no existen. Inicializar config de email desde .env. Iniciar scheduler de reportes cobranzas."""
     from sqlalchemy import text
     from app.core.database import engine
-    from app.models import Base, Cliente, Prestamo, Ticket, Cuota, PagosWhatsapp, Configuracion, Auditoria, User  # noqa: F401 - registran tablas en Base.metadata
+    from app.models import Base, Cliente, Prestamo, Ticket, Cuota, PagosWhatsapp, Configuracion, Auditoria, User, DefinicionCampo  # noqa: F401 - registran tablas en Base.metadata
     from app.core.email_config_holder import init_from_settings as init_email_config
     from app.core.scheduler import start_scheduler
 

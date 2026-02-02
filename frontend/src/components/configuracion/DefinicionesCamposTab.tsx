@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Database, Plus, Edit, Trash2, Search, Filter, CheckCircle, XCircle, Loader2, Key, RefreshCw, FileText } from 'lucide-react'
+import { Database, Plus, Edit, Trash2, Search, Filter, CheckCircle, XCircle, Loader2, Key, RefreshCw, FileText, ChevronDown, ChevronUp } from 'lucide-react'
 import { Card, CardContent } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -55,6 +55,7 @@ export function DefinicionesCamposTab() {
   const [busqueda, setBusqueda] = useState('')
   const [mostrarFormulario, setMostrarFormulario] = useState(false)
   const [mostrarCamposDisponibles, setMostrarCamposDisponibles] = useState(false)
+  const [mostrarMasOpciones, setMostrarMasOpciones] = useState(false)
   const [editandoId, setEditandoId] = useState<number | null>(null)
   const [guardando, setGuardando] = useState(false)
 
@@ -112,6 +113,7 @@ export function DefinicionesCamposTab() {
 
   const cargarDefiniciones = async () => {
     try {
+      // Carga desde la tabla definiciones_campos (BD) vía API
       const response = await apiClient.get<{ definiciones: DefinicionCampo[], total: number }>(
         '/api/v1/configuracion/ai/definiciones-campos'
       )
@@ -495,7 +497,7 @@ export function DefinicionesCamposTab() {
         </CardContent>
       </Card>
 
-      {/* Formulario */}
+      {/* Formulario simplificado */}
       {mostrarFormulario && (
         <Card className="border-purple-200">
           <CardContent className="pt-6">
@@ -503,200 +505,124 @@ export function DefinicionesCamposTab() {
               {editandoId ? 'Editar Definición' : 'Nueva Definición'}
             </h4>
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              {/* Esencial: Tabla + Campo + Definición + Tipo */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-medium block mb-1">
-                    Tabla <span className="text-red-500">*</span>
-                  </label>
-                  <Select 
-                    value={formulario.tabla} 
-                    onValueChange={(value) => setFormulario({ ...formulario, tabla: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar tabla" />
-                    </SelectTrigger>
+                  <label className="text-sm font-medium block mb-1">Tabla <span className="text-red-500">*</span></label>
+                  <Select value={formulario.tabla} onValueChange={(v) => setFormulario({ ...formulario, tabla: v })}>
+                    <SelectTrigger><SelectValue placeholder="Seleccionar tabla" /></SelectTrigger>
                     <SelectContent>
-                      {Object.keys(camposDisponibles).map(tabla => (
-                        <SelectItem key={tabla} value={tabla}>{tabla}</SelectItem>
-                      ))}
+                      {Object.keys(camposDisponibles).map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                     </SelectContent>
                   </Select>
-                  {formulario.tabla && camposDisponibles[formulario.tabla] && (
-                    <div className="mt-2">
-                      <label className="text-sm font-medium block mb-1">
-                        Campo <span className="text-red-500">*</span>
-                      </label>
-                      <Select 
-                        value={formulario.campo} 
-                        onValueChange={(value) => {
-                          const campo = camposDisponibles[formulario.tabla].find(c => c.nombre === value)
-                          if (campo) {
-                            handleSeleccionarCampo(formulario.tabla, campo)
-                          }
-                        }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar campo" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {camposDisponibles[formulario.tabla].map(campo => (
-                            <SelectItem key={campo.nombre} value={campo.nombre}>
-                              {campo.nombre} ({campo.tipo})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                  {!formulario.tabla && (
-                    <Input
-                      value={formulario.tabla}
-                      onChange={(e) => setFormulario({ ...formulario, tabla: e.target.value })}
-                      placeholder="Ej: clientes, prestamos, pagos"
-                      className="mt-2"
-                    />
-                  )}
                 </div>
-                {!formulario.tabla && (
-                  <div>
-                    <label className="text-sm font-medium block mb-1">
-                      Campo <span className="text-red-500">*</span>
-                    </label>
+                <div>
+                  <label className="text-sm font-medium block mb-1">Campo <span className="text-red-500">*</span></label>
+                  {formulario.tabla && camposDisponibles[formulario.tabla] ? (
+                    <Select
+                      value={formulario.campo}
+                      onValueChange={(v) => {
+                        const c = camposDisponibles[formulario.tabla].find(x => x.nombre === v)
+                        if (c) handleSeleccionarCampo(formulario.tabla, c)
+                      }}
+                    >
+                      <SelectTrigger><SelectValue placeholder="Seleccionar campo" /></SelectTrigger>
+                      <SelectContent>
+                        {camposDisponibles[formulario.tabla].map(c => (
+                          <SelectItem key={c.nombre} value={c.nombre}>{c.nombre} ({c.tipo})</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
                     <Input
                       value={formulario.campo}
                       onChange={(e) => setFormulario({ ...formulario, campo: e.target.value })}
-                      placeholder="Ej: cedula, nombres, monto_pagado"
+                      placeholder="Ej: cedula, estado"
                     />
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium block mb-1">Definición <span className="text-red-500">*</span></label>
+                <Textarea
+                  value={formulario.definicion}
+                  onChange={(e) => setFormulario({ ...formulario, definicion: e.target.value })}
+                  placeholder="Qué almacena este campo y cómo se usa..."
+                  rows={2}
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium block mb-1">Tipo de dato</label>
+                <Input
+                  value={formulario.tipo_dato}
+                  onChange={(e) => setFormulario({ ...formulario, tipo_dato: e.target.value })}
+                  placeholder="Ej: VARCHAR, INTEGER, DATE"
+                />
+              </div>
+
+              {/* Más opciones (colapsable) */}
+              <div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-gray-600 -ml-2"
+                  onClick={() => setMostrarMasOpciones(!mostrarMasOpciones)}
+                >
+                  {mostrarMasOpciones ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
+                  Más opciones
+                </Button>
+                {mostrarMasOpciones && (
+                  <div className="mt-3 pl-2 border-l-2 border-gray-200 space-y-3">
+                    <div className="flex flex-wrap gap-4">
+                      <label className="flex items-center gap-2">
+                        <input type="checkbox" checked={formulario.es_obligatorio} onChange={(e) => setFormulario({ ...formulario, es_obligatorio: e.target.checked })} className="rounded" />
+                        <span className="text-sm">Obligatorio</span>
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input type="checkbox" checked={formulario.tiene_indice} onChange={(e) => setFormulario({ ...formulario, tiene_indice: e.target.checked })} className="rounded" />
+                        <span className="text-sm">Tiene índice</span>
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input type="checkbox" checked={formulario.es_clave_foranea} onChange={(e) => setFormulario({ ...formulario, es_clave_foranea: e.target.checked })} className="rounded" />
+                        <span className="text-sm">Clave foránea</span>
+                      </label>
+                    </div>
+                    {formulario.es_clave_foranea && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input value={formulario.tabla_referenciada} onChange={(e) => setFormulario({ ...formulario, tabla_referenciada: e.target.value })} placeholder="Tabla referenciada" />
+                        <Input value={formulario.campo_referenciado} onChange={(e) => setFormulario({ ...formulario, campo_referenciado: e.target.value })} placeholder="Campo referenciado" />
+                      </div>
+                    )}
+                    <div>
+                      <label className="text-sm text-gray-600 block mb-1">Valores posibles (uno por línea)</label>
+                      <Textarea value={formulario.valores_posibles} onChange={(e) => setFormulario({ ...formulario, valores_posibles: e.target.value })} placeholder="PENDIENTE&#10;PAGADO&#10;MORA" rows={2} className="text-sm" />
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-600 block mb-1">Ejemplos (uno por línea)</label>
+                      <Textarea value={formulario.ejemplos_valores} onChange={(e) => setFormulario({ ...formulario, ejemplos_valores: e.target.value })} placeholder="Ej: V123456789" rows={1} className="text-sm" />
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-600 block mb-1">Notas</label>
+                      <Input value={formulario.notas} onChange={(e) => setFormulario({ ...formulario, notas: e.target.value })} placeholder="Notas opcionales" />
+                    </div>
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox" checked={formulario.activo} onChange={(e) => setFormulario({ ...formulario, activo: e.target.checked })} className="rounded" />
+                      <span className="text-sm">Activo</span>
+                    </label>
                   </div>
                 )}
               </div>
 
-              <div>
-                <label className="text-sm font-medium block mb-1">
-                  Definición <span className="text-red-500">*</span>
-                </label>
-                <Textarea
-                  value={formulario.definicion}
-                  onChange={(e) => setFormulario({ ...formulario, definicion: e.target.value })}
-                  placeholder="Describe qué almacena este campo y cómo se usa..."
-                  rows={3}
-                />
-              </div>
-
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="text-sm font-medium block mb-1">Tipo de Dato</label>
-                  <Input
-                    value={formulario.tipo_dato}
-                    onChange={(e) => setFormulario({ ...formulario, tipo_dato: e.target.value })}
-                    placeholder="Ej: VARCHAR, INTEGER, DATE"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium block mb-1">Tabla Referenciada (FK)</label>
-                  <Input
-                    value={formulario.tabla_referenciada}
-                    onChange={(e) => setFormulario({ ...formulario, tabla_referenciada: e.target.value })}
-                    placeholder="Ej: clientes"
-                    disabled={!formulario.es_clave_foranea}
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium block mb-1">Campo Referenciado (FK)</label>
-                  <Input
-                    value={formulario.campo_referenciado}
-                    onChange={(e) => setFormulario({ ...formulario, campo_referenciado: e.target.value })}
-                    placeholder="Ej: id"
-                    disabled={!formulario.es_clave_foranea}
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center gap-6">
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={formulario.es_obligatorio}
-                    onChange={(e) => setFormulario({ ...formulario, es_obligatorio: e.target.checked })}
-                    className="rounded"
-                  />
-                  <span className="text-sm">Obligatorio (NOT NULL)</span>
-                </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={formulario.tiene_indice}
-                    onChange={(e) => setFormulario({ ...formulario, tiene_indice: e.target.checked })}
-                    className="rounded"
-                  />
-                  <span className="text-sm">Tiene Índice</span>
-                </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={formulario.es_clave_foranea}
-                    onChange={(e) => setFormulario({ ...formulario, es_clave_foranea: e.target.checked })}
-                    className="rounded"
-                  />
-                  <span className="text-sm">Clave Foránea (FK)</span>
-                </label>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium block mb-1">Valores Posibles (uno por línea)</label>
-                <Textarea
-                  value={formulario.valores_posibles}
-                  onChange={(e) => setFormulario({ ...formulario, valores_posibles: e.target.value })}
-                  placeholder="PENDIENTE&#10;PAGADO&#10;MORA"
-                  rows={2}
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium block mb-1">Ejemplos de Valores (uno por línea)</label>
-                <Textarea
-                  value={formulario.ejemplos_valores}
-                  onChange={(e) => setFormulario({ ...formulario, ejemplos_valores: e.target.value })}
-                  placeholder="V123456789&#10;V987654321"
-                  rows={2}
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium block mb-1">Notas Adicionales</label>
-                <Textarea
-                  value={formulario.notas}
-                  onChange={(e) => setFormulario({ ...formulario, notas: e.target.value })}
-                  placeholder="Información adicional sobre el campo..."
-                  rows={2}
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={formulario.activo}
-                    onChange={(e) => setFormulario({ ...formulario, activo: e.target.checked })}
-                    className="rounded"
-                  />
-                  <span className="text-sm">Activo</span>
-                </label>
-                <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => { setMostrarFormulario(false); resetearFormulario(); setEditandoId(null) }}>
-                    Cancelar
-                  </Button>
-                  <Button onClick={handleGuardar} disabled={guardando}>
-                    {guardando ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Guardando...
-                      </>
-                    ) : (
-                      'Guardar'
-                    )}
-                  </Button>
-                </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => { setMostrarFormulario(false); resetearFormulario(); setEditandoId(null); setMostrarMasOpciones(false) }}>
+                  Cancelar
+                </Button>
+                <Button onClick={handleGuardar} disabled={guardando}>
+                  {guardando ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Guardando...</> : 'Guardar'}
+                </Button>
               </div>
             </div>
           </CardContent>

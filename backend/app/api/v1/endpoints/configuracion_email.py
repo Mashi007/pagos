@@ -242,17 +242,38 @@ def post_email_probar(payload: ProbarEmailRequest = Body(...), db: Session = Dep
 
 
 class ProbarImapRequest(BaseModel):
-    pass
+    """Opcional: envía la config IMAP del formulario para probar sin guardar antes."""
+    imap_host: Optional[str] = None
+    imap_port: Optional[str] = None
+    imap_user: Optional[str] = None
+    imap_password: Optional[str] = None
+    imap_use_ssl: Optional[str] = None
 
 
 @router.post(
     "/probar-imap",
-    summary="[Stub] Prueba configuración IMAP; no abre conexión real al servidor.",
+    summary="[Stub] Prueba configuración IMAP; acepta config en body o usa la persistida en BD.",
 )
 def post_email_probar_imap(payload: ProbarImapRequest = Body(...), db: Session = Depends(get_db)):
-    """Prueba de conexión IMAP (usa config persistida en BD). Stub: no verifica conexión real."""
-    _load_email_config_from_db(db)
-    cfg = _email_config_stub
+    """Prueba de conexión IMAP. Si el body trae imap_host, imap_user e imap_password, usa esos; si no, usa la config de BD. Stub: no abre conexión real."""
+    cfg: dict[str, Any]
+    if (
+        (payload.imap_host or "").strip()
+        and (payload.imap_user or "").strip()
+        and (payload.imap_password or "").strip()
+        and (payload.imap_password or "").strip() != "***"
+    ):
+        cfg = {
+            "imap_host": (payload.imap_host or "").strip(),
+            "imap_port": (payload.imap_port or "993").strip(),
+            "imap_user": (payload.imap_user or "").strip(),
+            "imap_password": (payload.imap_password or "").strip(),
+            "imap_use_ssl": (payload.imap_use_ssl or "true").strip().lower(),
+        }
+    else:
+        _load_email_config_from_db(db)
+        cfg = _email_config_stub
+
     imap_ok = bool(
         cfg.get("imap_host") and cfg.get("imap_user") and cfg.get("imap_password")
         and (cfg.get("imap_password") != "***")

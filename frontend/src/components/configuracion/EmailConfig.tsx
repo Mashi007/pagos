@@ -796,7 +796,13 @@ export function EmailConfig() {
                   setProbandoImap(true)
                   setResultadoImap(null)
                   try {
-                    const r = await emailConfigService.probarConfiguracionImap()
+                    const r = await emailConfigService.probarConfiguracionImap({
+                      imap_host: config.imap_host || undefined,
+                      imap_port: config.imap_port || undefined,
+                      imap_user: config.imap_user || undefined,
+                      imap_password: config.imap_password || undefined,
+                      imap_use_ssl: config.imap_use_ssl ?? undefined,
+                    })
                     setResultadoImap(r)
                     if (r.success) toast.success(r.mensaje || 'Conexión IMAP correcta')
                     else toast.error(r.mensaje || 'Error probando IMAP')

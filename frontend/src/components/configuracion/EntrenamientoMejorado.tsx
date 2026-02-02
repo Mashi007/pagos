@@ -119,7 +119,12 @@ export function EntrenamientoMejorado() {
       if (data && data.conversaciones && data.fine_tuning && data.rag && data.ml_riesgo) {
         setMetricas(data as MetricasEntrenamiento)
       } else {
-        setMetricas({ ...metricasPorDefecto, ...data } as MetricasEntrenamiento)
+        setMetricas({
+          conversaciones: data?.conversaciones ?? metricasPorDefecto.conversaciones,
+          fine_tuning: data?.fine_tuning ?? metricasPorDefecto.fine_tuning,
+          rag: data?.rag ?? metricasPorDefecto.rag,
+          ml_riesgo: data?.ml_riesgo ?? metricasPorDefecto.ml_riesgo,
+        } as MetricasEntrenamiento)
       }
     } catch (error: any) {
       console.error('Error cargando métricas:', error)

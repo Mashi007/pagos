@@ -10,6 +10,7 @@ from app.models.pagos_whatsapp import PagosWhatsapp
 from app.models.configuracion import Configuracion
 from app.models.auditoria import Auditoria
 from app.models.user import User
+from app.models.definicion_campo import DefinicionCampo
 
-__all__ = ["Base", "Cliente", "Prestamo", "Ticket", "Cuota", "PagosWhatsapp", "Configuracion", "Auditoria", "User"]
+__all__ = ["Base", "Cliente", "Prestamo", "Ticket", "Cuota", "PagosWhatsapp", "Configuracion", "Auditoria", "User", "DefinicionCampo"]
 

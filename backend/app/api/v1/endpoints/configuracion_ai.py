@@ -19,14 +19,19 @@ from fastapi import APIRouter, Depends, HTTPException, Body
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+import logging
+
 from app.core.config import settings
-from app.core.database import get_db
+from app.core.database import get_db, engine
 from app.models.configuracion import Configuracion
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.cuota import Cuota
+from app.models.definicion_campo import DefinicionCampo
 from sqlalchemy import func
+from sqlalchemy import inspect as sa_inspect
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 CLAVE_AI = "configuracion_ai"
@@ -506,3 +511,259 @@ def put_chat_calificacion_procesar(
             _save_calificaciones_list(db, items)
             return {"success": True, "id": calificacion_id}
     raise HTTPException(status_code=404, detail="Calificación no encontrada")
+
+
+# --- Catálogo de campos: tablas/campos desde BD y definiciones (reglas de negocio) ---
+
+def _inspector_tablas_campos() -> dict[str, list[dict]]:
+    """Obtiene tablas y columnas del esquema actual de la BD vía SQLAlchemy inspector."""
+    result: dict[str, list[dict]] = {}
+    try:
+        insp = sa_inspect(engine)
+        table_names = insp.get_table_names()
+        for table in table_names:
+            cols = insp.get_columns(table)
+            pk = insp.get_pk_constraint(table)
+            pk_cols = set((pk or {}).get("constrained_columns") or [])
+            fks = insp.get_foreign_keys(table)
+            fk_by_col: dict[str, Any] = {}
+            for fk in fks:
+                for c in (fk.get("constrained_columns") or []):
+                    fk_by_col[c] = fk
+            campos = []
+            for col in cols:
+                name = col.get("name") or ""
+                tipo = str(col.get("type", ""))
+                nullable = col.get("nullable", True)
+                es_pk = name in pk_cols
+                fk_info = fk_by_col.get(name)
+                campos.append({
+                    "nombre": name,
+                    "tipo": tipo,
+                    "nullable": nullable,
+                    "es_obligatorio": not nullable,
+                    "es_primary_key": es_pk,
+                    "tiene_indice": es_pk or bool(fk_info),
+                    "es_clave_foranea": bool(fk_info),
+                    "tabla_referenciada": (fk_info or {}).get("referred_table") if fk_info else None,
+                    "campo_referenciado": ((fk_info or {}).get("referred_columns") or [None])[0] if fk_info else None,
+                })
+            result[table] = campos
+    except Exception as e:
+        logger.warning("Inspector tablas-campos: %s", e)
+    return result
+
+
+@router.get("/tablas-campos")
+def get_tablas_campos(db: Session = Depends(get_db)):
+    """
+    Lista tablas y campos del esquema de la BD (para Catálogo de Campos).
+    El frontend usa tablas_campos y total_tablas.
+    """
+    tablas_campos = _inspector_tablas_campos()
+    return {"tablas_campos": tablas_campos, "total_tablas": len(tablas_campos)}
+
+
+def _definicion_to_dict(row: DefinicionCampo) -> dict:
+    """Convierte fila DefinicionCampo a dict esperado por el frontend."""
+    def parse_json_array(s: Optional[str]):
+        if not s or not s.strip():
+            return []
+        try:
+            out = json.loads(s)
+            return out if isinstance(out, list) else []
+        except Exception:
+            return []
+    return {
+        "id": row.id,
+        "tabla": row.tabla or "",
+        "campo": row.campo or "",
+        "definicion": row.definicion or "",
+        "tipo_dato": row.tipo_dato,
+        "es_obligatorio": bool(row.es_obligatorio),
+        "tiene_indice": bool(row.tiene_indice),
+        "es_clave_foranea": bool(row.es_clave_foranea),
+        "tabla_referenciada": row.tabla_referenciada,
+        "campo_referenciado": row.campo_referenciado,
+        "valores_posibles": parse_json_array(row.valores_posibles),
+        "ejemplos_valores": parse_json_array(row.ejemplos_valores),
+        "notas": row.notas,
+        "activo": bool(row.activo),
+        "orden": int(row.orden or 0),
+        "creado_en": row.creado_en.isoformat() if row.creado_en else "",
+        "actualizado_en": row.actualizado_en.isoformat() if row.actualizado_en else "",
+    }
+
+
+@router.get("/definiciones-campos")
+def get_definiciones_campos(db: Session = Depends(get_db)):
+    """
+    Lista definiciones de campos desde la tabla definiciones_campos (BD).
+    Sirve al Catálogo de Campos en Configuración > AI > Catálogo de Campos.
+    """
+    rows = db.query(DefinicionCampo).order_by(DefinicionCampo.tabla, DefinicionCampo.orden, DefinicionCampo.campo).all()
+    definiciones = [_definicion_to_dict(r) for r in rows]
+    return {"definiciones": definiciones, "total": len(definiciones)}
+
+
+@router.get("/definiciones-campos/tablas")
+def get_definiciones_campos_tablas(db: Session = Depends(get_db)):
+    """
+    Lista nombres de tablas con al menos una definición (desde definiciones_campos).
+    Usado por el Catálogo de Campos para el filtro por tabla.
+    """
+    from sqlalchemy import distinct
+    tablas = db.query(distinct(DefinicionCampo.tabla)).where(DefinicionCampo.tabla.isnot(None)).all()
+    lista = sorted([t[0] for t in tablas if t[0]])
+    return {"tablas": lista, "total": len(lista)}
+
+
+class DefinicionCampoCreate(BaseModel):
+    tabla: str
+    campo: str
+    definicion: str
+    tipo_dato: Optional[str] = None
+    es_obligatorio: bool = False
+    tiene_indice: bool = False
+    es_clave_foranea: bool = False
+    tabla_referenciada: Optional[str] = None
+    campo_referenciado: Optional[str] = None
+    valores_posibles: Optional[list[str]] = None
+    ejemplos_valores: Optional[list[str]] = None
+    notas: Optional[str] = None
+    activo: bool = True
+    orden: int = 0
+
+
+class DefinicionCampoUpdate(BaseModel):
+    definicion: Optional[str] = None
+    tipo_dato: Optional[str] = None
+    es_obligatorio: Optional[bool] = None
+    tiene_indice: Optional[bool] = None
+    es_clave_foranea: Optional[bool] = None
+    tabla_referenciada: Optional[str] = None
+    campo_referenciado: Optional[str] = None
+    valores_posibles: Optional[list[str]] = None
+    ejemplos_valores: Optional[list[str]] = None
+    notas: Optional[str] = None
+    activo: Optional[bool] = None
+    orden: Optional[int] = None
+
+
+@router.post("/definiciones-campos/sincronizar")
+def post_definiciones_campos_sincronizar(db: Session = Depends(get_db)):
+    """
+    Sincroniza definiciones con el esquema actual de la BD.
+    Crea definiciones para campos nuevos; actualiza tipo_dato/obligatorio/índice/FK
+    en existentes sin sobrescribir definicion/notas si ya están rellenados.
+    """
+    tablas_campos = _inspector_tablas_campos()
+    creados = 0
+    actualizados = 0
+    existentes = 0
+    for tabla, campos in tablas_campos.items():
+        for c in campos:
+            nombre = c.get("nombre") or ""
+            if not nombre:
+                continue
+            existente = db.query(DefinicionCampo).filter(
+                DefinicionCampo.tabla == tabla,
+                DefinicionCampo.campo == nombre,
+            ).first()
+            def_text = (c.get("definicion") or "").strip() or f"Campo {nombre} de la tabla {tabla}. Tipo: {c.get('tipo', '')}. {'Obligatorio' if c.get('es_obligatorio') else 'Opcional'}."
+            if existente:
+                # Actualizar solo datos técnicos; no sobrescribir definicion/notas si ya tienen contenido
+                existente.tipo_dato = c.get("tipo") or existente.tipo_dato
+                existente.es_obligatorio = c.get("es_obligatorio", existente.es_obligatorio)
+                existente.tiene_indice = c.get("tiene_indice", existente.tiene_indice)
+                existente.es_clave_foranea = c.get("es_clave_foranea", existente.es_clave_foranea)
+                existente.tabla_referenciada = c.get("tabla_referenciada") or existente.tabla_referenciada
+                existente.campo_referenciado = c.get("campo_referenciado") or existente.campo_referenciado
+                actualizados += 1
+            else:
+                db.add(DefinicionCampo(
+                    tabla=tabla,
+                    campo=nombre,
+                    definicion=def_text,
+                    tipo_dato=c.get("tipo"),
+                    es_obligatorio=c.get("es_obligatorio", False),
+                    tiene_indice=c.get("tiene_indice", False),
+                    es_clave_foranea=c.get("es_clave_foranea", False),
+                    tabla_referenciada=c.get("tabla_referenciada"),
+                    campo_referenciado=c.get("campo_referenciado"),
+                    valores_posibles=None,
+                    ejemplos_valores=None,
+                    notas=None,
+                    activo=True,
+                    orden=0,
+                ))
+                creados += 1
+    db.commit()
+    total = creados + actualizados
+    return {
+        "mensaje": f"Sincronización completada: {creados} creados, {actualizados} actualizados.",
+        "campos_creados": creados,
+        "campos_actualizados": actualizados,
+        "campos_existentes": existentes,
+        "total_procesados": total,
+    }
+
+
+@router.post("/definiciones-campos")
+def post_definiciones_campos(payload: DefinicionCampoCreate = Body(...), db: Session = Depends(get_db)):
+    """Crea una definición de campo."""
+    if not (payload.tabla or "").strip() or not (payload.campo or "").strip() or not (payload.definicion or "").strip():
+        raise HTTPException(status_code=400, detail="Tabla, campo y definición son obligatorios")
+    existente = db.query(DefinicionCampo).filter(DefinicionCampo.tabla == payload.tabla.strip(), DefinicionCampo.campo == payload.campo.strip()).first()
+    if existente:
+        raise HTTPException(status_code=400, detail="Ya existe una definición para esta tabla y campo")
+    vals_pos = json.dumps(payload.valores_posibles) if payload.valores_posibles else None
+    ejem_pos = json.dumps(payload.ejemplos_valores) if payload.ejemplos_valores else None
+    row = DefinicionCampo(
+        tabla=payload.tabla.strip(),
+        campo=payload.campo.strip(),
+        definicion=payload.definicion.strip(),
+        tipo_dato=payload.tipo_dato or None,
+        es_obligatorio=payload.es_obligatorio,
+        tiene_indice=payload.tiene_indice,
+        es_clave_foranea=payload.es_clave_foranea,
+        tabla_referenciada=payload.tabla_referenciada or None,
+        campo_referenciado=payload.campo_referenciado or None,
+        valores_posibles=vals_pos,
+        ejemplos_valores=ejem_pos,
+        notas=payload.notas or None,
+        activo=payload.activo,
+        orden=payload.orden,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return _definicion_to_dict(row)
+
+
+@router.put("/definiciones-campos/{definicion_id}")
+def put_definiciones_campos(definicion_id: int, payload: DefinicionCampoUpdate = Body(...), db: Session = Depends(get_db)):
+    """Actualiza una definición de campo (parcial)."""
+    row = db.get(DefinicionCampo, definicion_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Definición no encontrada")
+    data = payload.model_dump(exclude_unset=True)
+    for k, v in data.items():
+        if k in ("valores_posibles", "ejemplos_valores") and v is not None:
+            setattr(row, k, json.dumps(v))
+        elif hasattr(row, k):
+            setattr(row, k, v)
+    db.commit()
+    db.refresh(row)
+    return _definicion_to_dict(row)
+
+
+@router.delete("/definiciones-campos/{definicion_id}")
+def delete_definiciones_campos(definicion_id: int, db: Session = Depends(get_db)):
+    """Elimina una definición de campo."""
+    row = db.get(DefinicionCampo, definicion_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Definición no encontrada")
+    db.delete(row)
+    db.commit()
+    return {"message": "Definición eliminada"}
