@@ -486,7 +486,6 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
         // Recargar desde configuración general para obtener logo_filename persistido en BD
         const base = getApiBase()
         apiClient.get<{ logo_filename?: string }>('/api/v1/configuracion/general')
-          .then(res => res.data)
           .then(async config => {
             let newLogoUrl: string | null = null
 

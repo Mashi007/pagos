@@ -2,7 +2,9 @@
 Endpoints de notificaciones a clientes retrasados.
 Datos reales desde BD: cuotas (fecha_vencimiento, pagado) y clientes.
 Reglas: 5 pestañas por días hasta vencimiento y mora 61+.
+Configuración de envíos (habilitado/CCO por tipo) desde tabla configuracion (notificaciones_envios).
 """
+import json
 from datetime import date
 from typing import List
 
@@ -15,8 +17,24 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.cuota import Cuota
 from app.models.cliente import Cliente
+from app.models.configuracion import Configuracion
+
+CLAVE_NOTIFICACIONES_ENVIOS = "notificaciones_envios"
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
+
+
+def get_notificaciones_envios_config(db: Session) -> dict:
+    """Carga la configuración de envíos por tipo (habilitado, cco) desde BD para reglas de negocio."""
+    try:
+        row = db.get(Configuracion, CLAVE_NOTIFICACIONES_ENVIOS)
+        if row and row.valor:
+            data = json.loads(row.valor)
+            if isinstance(data, dict):
+                return data
+    except Exception:
+        pass
+    return {}
 
 
 def _item(cliente: Cliente, cuota: Cuota, dias_atraso: int = None) -> dict:
@@ -62,10 +80,11 @@ def get_notificaciones_lista(
     per_page: int = 20,
     estado: str = None,
     canal: str = None,
+    db: Session = Depends(get_db),
 ):
     """
     Listado paginado de notificaciones (envíos). El frontend Email/WhatsApp Config lo usa para 'envíos recientes'.
-    Sin tabla de notificaciones en BD se devuelve lista vacía para evitar 404.
+    Sin tabla de notificaciones en BD se devuelve lista vacía para evitar 404. get_db inyectado para reglas de negocio.
     """
     total = 0
     total_pages = 0
@@ -80,8 +99,8 @@ def get_notificaciones_lista(
 
 
 @router.get("/estadisticas/resumen")
-def get_notificaciones_resumen():
-    """Resumen para sidebar. El frontend espera: no_leidas, total."""
+def get_notificaciones_resumen(db: Session = Depends(get_db)):
+    """Resumen para sidebar. El frontend espera: no_leidas, total. get_db inyectado para consistencia."""
     return {"no_leidas": 0, "total": 0}
 
 

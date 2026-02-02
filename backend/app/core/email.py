@@ -15,11 +15,13 @@ def send_email(
     subject: str,
     body_text: str,
     body_html: Optional[str] = None,
+    cc_emails: Optional[List[str]] = None,
 ) -> bool:
     """
     Envía un correo vía SMTP (desde el email configurado en Configuración > Email o .env).
     Antes de enviar sincroniza el holder con la BD para que Notificaciones/CRM usen la config guardada.
     to_emails: lista de direcciones destino.
+    cc_emails: opcional, lista de direcciones en CCO (configuración por tipo en Notificaciones).
     Devuelve True si se envió, False si no hay SMTP configurado o falló.
     """
     if not to_emails:
@@ -30,6 +32,8 @@ def send_email(
         logger.warning("SMTP no configurado (SMTP_HOST/USER/PASSWORD). No se envía correo.")
         return False
 
+    cc_list = [e.strip() for e in (cc_emails or []) if e and isinstance(e, str) and "@" in e.strip()]
+
     try:
         import smtplib
         from email.mime.text import MIMEText
@@ -39,16 +43,19 @@ def send_email(
         msg["Subject"] = subject
         msg["From"] = cfg.get("from_email") or cfg.get("smtp_user")
         msg["To"] = ", ".join(to_emails)
+        if cc_list:
+            msg["Cc"] = ", ".join(cc_list)
 
         msg.attach(MIMEText(body_text, "plain", "utf-8"))
         if body_html:
             msg.attach(MIMEText(body_html, "html", "utf-8"))
 
         port = int(cfg.get("smtp_port") or 587)
+        all_recipients = to_emails + cc_list
         with smtplib.SMTP(cfg["smtp_host"], port) as server:
             server.starttls()
             server.login(cfg["smtp_user"], cfg["smtp_password"])
-            server.sendmail(msg["From"], to_emails, msg.as_string())
+            server.sendmail(msg["From"], all_recipients, msg.as_string())
         logger.info("Correo enviado a %s: %s", to_emails, subject)
         return True
     except Exception as e:

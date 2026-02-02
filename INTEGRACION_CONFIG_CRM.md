@@ -35,16 +35,16 @@ Resumen de cómo está integrada la configuración de Gmail y WhatsApp con los c
 ### Backend
 
 - La configuración WhatsApp se persiste en BD (clave `whatsapp_config`) y se sirve enmascarada (tokens como `***`).
-- El **webhook de WhatsApp** y el servicio de envío (`whatsapp_service.py`) leen actualmente el token desde **settings** (`.env`). Para que Comunicaciones use al 100% la config guardada en Configuración > WhatsApp habría que hacer que el servicio de WhatsApp cargue el token desde la BD (similar a `sync_from_db` para email); por ahora la config en BD se usa para mostrar estado en la UI y para guardar/editar desde Configuración.
+- El **webhook de WhatsApp** y el servicio (`whatsapp_service.py`) usan la config guardada en BD: antes de cada uso se llama a `sync_from_db()` en `app.core.whatsapp_config_holder`, que carga desde la tabla `configuracion`. Así Comunicaciones (envío/recepción, verificación del webhook, descarga de imágenes) usan la **configuración guardada en Configuración > WhatsApp**, con fallback a variables de entorno si no hay nada en BD.
 
-**Resumen:** Comunicaciones está **conectada** a la configuración WhatsApp: muestra el estado y enlaza a Configuración > WhatsApp. El envío/recepción de mensajes por WhatsApp en el backend sigue usando preferentemente las variables de entorno; la config en BD es la fuente de verdad para la UI y para futura ampliación.
+**Resumen:** Comunicaciones está **integrada** con la configuración WhatsApp: muestra el estado, enlaza a Configuración > WhatsApp y el envío/recepción usan la config de BD (holder + sync_from_db), alineado con Email.
 
 ---
 
 ## 3. Configuración > Email y Configuración > WhatsApp
 
 - **Email:** usada por Notificaciones (envío de correos), tickets (notificación por correo) y por la pestaña Configuración dentro de Notificaciones (enlace a Configuración > Email). **Integrada con envío real** vía `sync_from_db()` antes de cada `send_email()`.
-- **WhatsApp:** usada por Comunicaciones (estado + enlace a Configuración > WhatsApp). Config guardada en BD; envío/recepción en backend puede seguir usando .env hasta que se añada carga desde BD en el servicio de WhatsApp.
+- **WhatsApp:** usada por Comunicaciones (estado + enlace a Configuración > WhatsApp). Config guardada en BD; envío/recepción y webhook usan esa config vía `whatsapp_config_holder.sync_from_db()` antes de cada uso (fallback a .env si no hay config en BD).
 
 ---
 

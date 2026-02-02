@@ -39,7 +39,7 @@ export default function UsuariosConfig() {
   // Función para validar email con el sistema
   const validateEmailWithSystem = async (email: string) => {
     try {
-      const { data: result } = await apiClient.post<{
+      const result = await apiClient.post<{
         validacion?: { valido: boolean; valor_formateado?: string; error?: string; sugerencia?: string }
       }>('/api/v1/validadores/validar-campo', {
         campo: 'email',

@@ -25,6 +25,19 @@ router = APIRouter()
 
 CLAVE_AI = "configuracion_ai"
 
+# Prompt del sistema para respuestas rápidas usando solo datos de get_db (BD).
+# Instruye al modelo a responder únicamente con los datos disponibles en el contexto inyectado.
+CHAT_SYSTEM_PROMPT_INSTRUCCIONES = (
+    "Eres un asistente que responde SOLO con datos de la base de datos del sistema. "
+    "Debes usar ÚNICAMENTE los datos que se te proporcionan en el bloque 'Datos disponibles (get_db)' más abajo; "
+    "responde con cualquier dato disponible que responda la pregunta. "
+    "Sé conciso y directo para respuestas rápidas. "
+    "Si la pregunta no puede responderse con los datos proporcionados, di que ese dato no está disponible en el contexto. "
+    "No inventes cifras ni información. "
+    "Si la pregunta no es sobre la base de datos del sistema (clientes, préstamos, cuotas, pagos, estadísticas), "
+    "indica que solo respondes consultas sobre estos datos."
+)
+
 # Valores por defecto (se sobrescriben desde BD si existe)
 _DEFAULT_AI_CONFIG: dict[str, Any] = {
     "modelo": None,
@@ -53,21 +66,37 @@ def _load_ai_config_from_db(db: Session) -> None:
 
 
 def _build_chat_context(db: Session) -> str:
-    """Construye un resumen de la BD para inyectar en el system prompt del chat (respuestas con datos reales)."""
+    """
+    Construye un resumen compacto de la BD (get_db) para el system prompt.
+    Una sola ronda de consultas agregadas para respuestas rápidas; el modelo
+    debe responder solo con estos datos disponibles.
+    """
     lines: list[str] = []
     try:
         total_clientes = db.query(func.count(Cliente.id)).scalar() or 0
         total_prestamos = db.query(func.count(Prestamo.id)).scalar() or 0
-        prestamos_activos = db.query(func.count(Prestamo.id)).filter(Prestamo.estado == "ACTIVO").scalar() or 0
+        prestamos_aprobados = db.query(func.count(Prestamo.id)).filter(Prestamo.estado == "APROBADO").scalar() or 0
         total_cuotas = db.query(func.count(Cuota.id)).scalar() or 0
         cuotas_pagadas = db.query(func.count(Cuota.id)).filter(Cuota.fecha_pago.isnot(None)).scalar() or 0
         cuotas_pendientes = total_cuotas - cuotas_pagadas
-        lines.append(f"- Clientes: {total_clientes} total.")
-        lines.append(f"- Préstamos: {total_prestamos} total; {prestamos_activos} activos.")
-        lines.append(f"- Cuotas: {total_cuotas} total; {cuotas_pagadas} pagadas; {cuotas_pendientes} pendientes.")
+        lines.append(f"clientes_total={total_clientes}")
+        lines.append(f"prestamos_total={total_prestamos}; prestamos_aprobados={prestamos_aprobados}")
+        lines.append(f"cuotas_total={total_cuotas}; cuotas_pagadas={cuotas_pagadas}; cuotas_pendientes={cuotas_pendientes}")
     except Exception:
-        lines.append("(No se pudo cargar el resumen de la base de datos.)")
-    return "Contexto actual de la base de datos del sistema:\n" + "\n".join(lines)
+        lines.append("(error al cargar datos)")
+    return "\n".join(lines)
+
+
+def _build_chat_system_prompt(db: Session) -> str:
+    """
+    Arma el system prompt completo: instrucciones + bloque 'Datos disponibles (get_db)'.
+    Estructura pensada para respuestas rápidas y uso explícito solo de datos de get_db.
+    """
+    datos_bd = _build_chat_context(db)
+    return (
+        f"{CHAT_SYSTEM_PROMPT_INSTRUCCIONES}\n\n"
+        f"Datos disponibles (get_db):\n{datos_bd}"
+    )
 
 
 def _get_openrouter_key() -> Optional[str]:
@@ -185,16 +214,23 @@ class ChatRequest(BaseModel):
 
 
 @router.post("/chat")
-def post_ai_chat(payload: ChatRequest = Body(...)):
+def post_ai_chat(payload: ChatRequest = Body(...), db: Session = Depends(get_db)):
     """
-    Chat completions vía OpenRouter. La clave se usa solo en el backend.
+    Chat completions vía OpenRouter. Usa get_db para cargar config y para inyectar
+    'Datos disponibles (get_db)' en el system prompt. El prompt exige respuestas
+    rápidas y solo con datos disponibles en ese bloque.
     """
+    _load_ai_config_from_db(db)
     pregunta = (payload.pregunta or "").strip()
     if not pregunta:
         raise HTTPException(status_code=400, detail="La pregunta no puede estar vacía")
     if _ai_config_stub.get("activo", "true").lower() != "true":
         raise HTTPException(status_code=400, detail="El servicio AI está desactivado en configuración")
-    messages = [{"role": "user", "content": pregunta}]
+    system_prompt = _build_chat_system_prompt(db)
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": pregunta},
+    ]
     try:
         out = _call_openrouter(messages)
     except HTTPException:
@@ -220,8 +256,9 @@ class ProbarRequest(BaseModel):
 
 
 @router.post("/probar")
-def post_ai_probar(payload: ProbarRequest = Body(...)):
-    """Prueba la conexión con OpenRouter y devuelve la respuesta para el chat de prueba."""
+def post_ai_probar(payload: ProbarRequest = Body(...), db: Session = Depends(get_db)):
+    """Prueba la conexión con OpenRouter y devuelve la respuesta para el chat de prueba. Carga config desde BD."""
+    _load_ai_config_from_db(db)
     mensaje = (payload.mensaje or payload.pregunta or "Hola, responde OK si me escuchas.").strip() or "Hola."
     messages = [{"role": "user", "content": mensaje}]
     try:
@@ -242,9 +279,119 @@ def post_ai_probar(payload: ProbarRequest = Body(...)):
 
 
 @router.get("/documentos")
-def get_ai_documentos():
+def get_ai_documentos(db: Session = Depends(get_db)):
     """
     Listado de documentos para RAG/IA. El frontend AIConfig lo usa.
-    Sin persistencia de documentos se devuelve lista vacía para evitar 404.
+    Con get_db para futura persistencia en BD; por ahora devuelve lista vacía.
     """
     return {"total": 0, "documentos": []}
+
+
+# --- Calificaciones del Chat AI (persistidas en BD: tabla configuracion, clave chat_ai_calificaciones) ---
+
+CLAVE_CHAT_CALIFICACIONES = "chat_ai_calificaciones"
+
+
+def _get_calificaciones_list(db: Session) -> list[dict]:
+    """Lee la lista de calificaciones desde configuracion (JSON array)."""
+    try:
+        row = db.get(Configuracion, CLAVE_CHAT_CALIFICACIONES)
+        if row and row.valor:
+            data = json.loads(row.valor)
+            if isinstance(data, list):
+                return data
+    except Exception:
+        pass
+    return []
+
+
+def _save_calificaciones_list(db: Session, items: list[dict]) -> None:
+    """Persiste la lista de calificaciones en configuracion."""
+    try:
+        valor = json.dumps(items)
+        row = db.get(Configuracion, CLAVE_CHAT_CALIFICACIONES)
+        if row:
+            row.valor = valor
+        else:
+            db.add(Configuracion(clave=CLAVE_CHAT_CALIFICACIONES, valor=valor))
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+
+class CalificarRequest(BaseModel):
+    pregunta: str
+    respuesta: str
+    calificacion: int  # 5 = arriba, 1-4 = abajo
+
+
+@router.post("/chat/calificar")
+def post_chat_calificar(payload: CalificarRequest = Body(...), db: Session = Depends(get_db)):
+    """
+    Registra una calificación del usuario sobre una respuesta del Chat AI.
+    Persiste en BD (configuracion.chat_ai_calificaciones). get_db para acceso a BD.
+    """
+    calificacion_tipo = "arriba" if (payload.calificacion or 0) >= 5 else "abajo"
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+    items = _get_calificaciones_list(db)
+    next_id = max((item.get("id", 0) for item in items), default=0) + 1
+    item = {
+        "id": next_id,
+        "pregunta": (payload.pregunta or "").strip(),
+        "respuesta_ai": (payload.respuesta or "").strip(),
+        "calificacion": calificacion_tipo,
+        "usuario_email": None,
+        "procesado": False,
+        "notas_procesamiento": None,
+        "mejorado": False,
+        "creado_en": now,
+        "actualizado_en": now,
+    }
+    items.append(item)
+    _save_calificaciones_list(db, items)
+    return {"success": True, "id": next_id, "calificacion": calificacion_tipo}
+
+
+@router.get("/chat/calificaciones")
+def get_chat_calificaciones(
+    calificacion: Optional[str] = None,
+    procesado: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Lista calificaciones del Chat AI desde BD. Filtros: calificacion (arriba|abajo), procesado (true|false).
+    get_db para acceso a BD.
+    """
+    items = _get_calificaciones_list(db)
+    if calificacion and calificacion.lower() in ("arriba", "abajo"):
+        items = [i for i in items if (i.get("calificacion") or "").lower() == calificacion.lower()]
+    if procesado is not None:
+        want = procesado.lower() == "true"
+        items = [i for i in items if i.get("procesado") is want]
+    return {"calificaciones": items, "total": len(items)}
+
+
+class ProcesarCalificacionRequest(BaseModel):
+    notas: Optional[str] = None
+
+
+@router.put("/chat/calificaciones/{calificacion_id}/procesar")
+def put_chat_calificacion_procesar(
+    calificacion_id: int,
+    payload: ProcesarCalificacionRequest = Body(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Marca una calificación como procesada y opcionalmente guarda notas.
+    get_db para acceso a BD.
+    """
+    from datetime import datetime, timezone
+    items = _get_calificaciones_list(db)
+    for i, item in enumerate(items):
+        if item.get("id") == calificacion_id:
+            items[i] = {**item, "procesado": True, "notas_procesamiento": (payload.notas or "").strip() or None, "actualizado_en": datetime.now(timezone.utc).isoformat()}
+            _save_calificaciones_list(db, items)
+            return {"success": True, "id": calificacion_id}
+    raise HTTPException(status_code=404, detail="Calificación no encontrada")

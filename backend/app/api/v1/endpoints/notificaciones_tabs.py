@@ -1,8 +1,9 @@
 """
-Endpoints para las pestañas de Notificaciones (previas, día pago, retrasadas, prejudicial).
-Datos reales desde BD (cuotas + clientes). Envío de correo al email del cliente (tabla clientes).
+Endpoints para las pestañas de Notificaciones (previas, día pago, retrasadas, prejudicial, mora 61).
+Datos reales desde BD (cuotas + clientes). Envío por Email (Configuración > Email) y respeto de
+configuración de envíos (habilitado/CCO por tipo) desde BD (notificaciones_envios). get_db en todos los procesos.
 """
-from typing import List
+from typing import Callable, List
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -10,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.email import send_email
-from app.api.v1.endpoints.notificaciones import get_notificaciones_tabs_data
+from app.api.v1.endpoints.notificaciones import get_notificaciones_tabs_data, get_notificaciones_envios_config
 
 router_previas = APIRouter(dependencies=[Depends(get_current_user)])
 router_dia_pago = APIRouter(dependencies=[Depends(get_current_user)])
@@ -19,16 +20,37 @@ router_prejudicial = APIRouter(dependencies=[Depends(get_current_user)])
 router_mora_61 = APIRouter(dependencies=[Depends(get_current_user)])
 
 
-def _enviar_correos_items(items: List[dict], asunto_base: str, cuerpo_base: str) -> dict:
-    """Envía un correo por cada item que tenga correo válido. Usa email de tabla clientes (item['correo'])."""
+def _enviar_correos_items(
+    items: List[dict],
+    asunto_base: str,
+    cuerpo_base: str,
+    config_envios: dict,
+    get_tipo_for_item: Callable[[dict], str],
+) -> dict:
+    """
+    Envía correo por cada item con correo válido. Respeta reglas de negocio:
+    - config_envios (desde BD): si tipo tiene habilitado=false no se envía; CCO del tipo se añade al correo.
+    - Email desde Configuración > Email (sync_from_db en send_email).
+    """
     enviados = 0
     sin_email = 0
     fallidos = 0
+    omitidos_config = 0
     for item in items:
+        tipo = get_tipo_for_item(item)
+        tipo_cfg = config_envios.get(tipo) or {}
+        if tipo_cfg.get("habilitado") is False:
+            omitidos_config += 1
+            continue
         correo = (item.get("correo") or "").strip()
         if not correo or "@" not in correo:
             sin_email += 1
             continue
+        cco = tipo_cfg.get("cco") or []
+        if isinstance(cco, list):
+            cc_list = [e.strip() for e in cco if e and isinstance(e, str) and "@" in e.strip()]
+        else:
+            cc_list = []
         nombre = item.get("nombre") or "Cliente"
         cedula = item.get("cedula") or ""
         fecha_v = item.get("fecha_vencimiento") or ""
@@ -41,11 +63,11 @@ def _enviar_correos_items(items: List[dict], asunto_base: str, cuerpo_base: str)
             numero_cuota=numero_cuota or "",
             monto=monto if monto is not None else "",
         )
-        if send_email([correo], asunto_base, cuerpo):
+        if send_email([correo], asunto_base, cuerpo, cc_emails=cc_list or None):
             enviados += 1
         else:
             fallidos += 1
-    return {"enviados": enviados, "sin_email": sin_email, "fallidos": fallidos}
+    return {"enviados": enviados, "sin_email": sin_email, "fallidos": fallidos, "omitidos_config": omitidos_config}
 
 
 # --- Notificaciones previas (5, 3, 1 días antes) ---
