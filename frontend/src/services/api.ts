@@ -569,7 +569,13 @@ class ApiClient {
 
       // Verificar si la respuesta es un error 4xx (validateStatus permite 4xx pero debemos manejarlos)
       if (response.status >= 400 && response.status < 500) {
-        console.error('❌ [ApiClient] POST recibió error 4xx:', { url, status: response.status, data: response.data })
+        // 401 en login/refresh es esperado (credenciales incorrectas); no loguear como error
+        const isAuthFailure = response.status === 401 && (url.includes('/auth/login') || url.includes('/auth/refresh'))
+        if (isAuthFailure) {
+          console.warn('⚠️ [ApiClient] Login/refresh no autorizado (401):', url)
+        } else {
+          console.error('❌ [ApiClient] POST recibió error 4xx:', { url, status: response.status, data: response.data })
+        }
         // Crear un error de Axios para que se maneje correctamente, preservando el mensaje del backend
         const backendMessage = (response.data as any)?.detail || (response.data as any)?.message || `Request failed with status ${response.status}`
         const error = new Error(backendMessage) as any

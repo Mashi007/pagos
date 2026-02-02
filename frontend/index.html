@@ -99,6 +99,8 @@
         function shouldSuppress(message) {
           if (!message || typeof message !== 'string') return false;
           const lowerMessage = message.toLowerCase();
+          // Captura temprana: cualquier mensaje que contenga "reglas ignoradas" y "selector" (aviso CSS del navegador)
+          if (lowerMessage.indexOf('reglas ignoradas') !== -1 && lowerMessage.indexOf('selector') !== -1) return true;
 
           // ✅ Patrones específicos del warning que estamos viendo
           const patterns = [
