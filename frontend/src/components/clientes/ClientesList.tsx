@@ -137,10 +137,14 @@ export function ClientesList() {
   console.log('ðŸ” [ClientesList] Estado de la query:', {
     isLoading,
     isError,
-    error: error ? {
-      message: error instanceof Error ? error.message : String(error),
-      ...((error as { response?: { data?: Record<string, unknown> } })?.response?.data ?? {})
-    } : null,
+    error: error ? (() => {
+      const err = error as { response?: { data?: Record<string, unknown> } }
+      const extra = err?.response && typeof err.response === 'object' ? err.response.data ?? {} : {}
+      return {
+        message: error instanceof Error ? error.message : String(error),
+        ...extra
+      }
+    })() : null,
     clientesData: clientesResponse,
     hasData: !!clientesResponse,
     dataLength: clientesResponse?.data?.length || 0,
