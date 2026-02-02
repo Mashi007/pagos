@@ -62,8 +62,8 @@ MENSAJE_BIENVENIDA = (
 MENSAJE_CONFIRMACION = "Confirma que el siguiente reporte de pago se realizará a cargo de {nombre}. ¿Sí o No?"
 MENSAJE_CONFIRMACION_SIN_NOMBRE = "Confirma que el siguiente reporte de pago se realizará a cargo del titular de la cédula {cedula}. ¿Sí o No?"
 MENSAJE_GRACIAS_PIDE_FOTO = (
-    "Gracias{nombre_gracias}. Ahora toma una foto clara de tu papeleta de depósito a máxima altura de tu celular (cámara) a unos 20 cm de tu papeleta. "
-    "Si no está clara se te pedirá que vuelvas a tomar la foto; máximo 3 intentos. Al tercero se almacena."
+    "Gracias{nombre_gracias}. Ahora adjunta una foto clara de tu papeleta de depósito o recibo de pago válido, a unos 20 cm. "
+    "Si no es un recibo válido o no se ve bien se te pedirá otra; máximo 3 intentos. Al tercero se almacena."
 )
 MENSAJE_CEDULA_INVALIDA = (
     "La cédula debe empezar por una de las 3 letras E, J o V, seguido de entre 6 y 11 números, sin guiones ni signos. "
@@ -71,11 +71,15 @@ MENSAJE_CEDULA_INVALIDA = (
 )
 MENSAJE_VUELVE_CEDULA = "Por favor escribe de nuevo tu número de cédula (E, J o V seguido de 6 a 11 números)."
 MENSAJE_RESPONDE_SI_NO = "Por favor responde Sí o No: ¿El reporte de pago es a cargo de {nombre}?"
-MENSAJE_CONTINUAMOS_SIN_CONFIRMAR = "Continuamos. Envía una foto clara de tu papeleta de depósito a 20 cm."
-MENSAJE_ENVIA_FOTO = "Por favor envía una foto clara de tu papeleta de depósito a 20 cm."
-MENSAJE_FOTO_POCO_CLARA = "La imagen no está lo suficientemente clara. Toma otra foto a 20 cm de tu papeleta. Intento {n}/3."
+MENSAJE_CONTINUAMOS_SIN_CONFIRMAR = "Continuamos. Envía una foto clara de tu papeleta de depósito (recibo de pago válido) a 20 cm."
+MENSAJE_ENVIA_FOTO = "Por favor adjunta una foto clara de tu papeleta de depósito o recibo de pago válido, a 20 cm."
+MENSAJE_FOTO_POCO_CLARA = "Necesitamos un recibo de pago válido (papeleta de depósito). La imagen no es válida o no se ve bien. Toma otra foto a 20 cm de tu papeleta. Intento {n}/3."
 MENSAJE_RECIBIDO = "Gracias. (Cédula {cedula} reportada.)"
 OBSERVACION_NO_CONFIRMA = "No confirma identidad"
+# Cuando piden algo que no es reportar pago (información, hablar con alguien, etc.), se les indica que llamen.
+MENSAJE_OTRA_INFORMACION = (
+    "Para otras consultas te atendemos por teléfono. Llama al 0424-4359435 y un asistente te atenderá."
+)
 
 # Si la conversación lleva más de esta cantidad de horas sin actividad, se trata como nuevo caso (bienvenida de nuevo).
 HORAS_INACTIVIDAD_NUEVO_CASO = 24
@@ -152,6 +156,22 @@ def _es_respuesta_no(text: str) -> bool:
     """True si el texto se interpreta como No."""
     t = (text or "").strip().lower()
     return t in ("no", "n", "negativo", "incorrecto")
+
+
+# Palabras/frases que sugieren que piden otra cosa (no reportar pago): información, hablar con alguien, etc.
+_PALABRAS_OTRA_INFORMACION = (
+    "informacion", "información", "consulta", "consultar", "hablar", "llamar", "atención", "atencion",
+    "ayuda", "horario", "direccion", "dirección", "contacto", "telefono", "teléfono", "otra cosa",
+    "alguien", "asistente", "humano", "persona", "ejecutivo", "asesor", "soporte", "reclamo", "queja",
+)
+
+
+def _pide_otra_informacion(text: str) -> bool:
+    """True si el mensaje parece pedir información o atención que no sea reportar un pago."""
+    t = (text or "").strip().lower()
+    if len(t) < 3:
+        return False
+    return any(p in t for p in _PALABRAS_OTRA_INFORMACION)
 
 
 def _buscar_nombre_cliente_por_cedula(db: Session, cedula: str) -> Optional[str]:
@@ -282,13 +302,19 @@ class WhatsAppService:
             db.add(conv)
             db.commit()
             db.refresh(conv)
+            if _pide_otra_informacion(text):
+                return {"status": "otra_informacion", "response_text": MENSAJE_OTRA_INFORMACION}
             return {"status": "welcome", "response_text": MENSAJE_BIENVENIDA}
         # Si lleva mucho tiempo sin actividad, tratar como nuevo caso (nuevo reporte de pago)
         if _conversacion_obsoleta(conv):
             _reiniciar_como_nuevo_caso(conv, db)
+            if _pide_otra_informacion(text):
+                return {"status": "otra_informacion", "response_text": MENSAJE_OTRA_INFORMACION}
             return {"status": "welcome", "response_text": MENSAJE_BIENVENIDA}
         if conv.estado == "esperando_cedula":
             if not _validar_cedula_evj(text):
+                if _pide_otra_informacion(text):
+                    return {"status": "otra_informacion", "response_text": MENSAJE_OTRA_INFORMACION}
                 return {"status": "cedula_invalida", "response_text": MENSAJE_CEDULA_INVALIDA}
             cedula = _cedula_normalizada(text)
             nombre_cliente = _buscar_nombre_cliente_por_cedula(db, cedula)
@@ -324,6 +350,8 @@ class WhatsAppService:
                 conv.updated_at = datetime.utcnow()
                 db.commit()
                 return {"status": "no_confirmado_vuelve_cedula", "response_text": MENSAJE_VUELVE_CEDULA}
+            if _pide_otra_informacion(text):
+                return {"status": "otra_informacion", "response_text": MENSAJE_OTRA_INFORMACION}
             intento = (conv.intento_confirmacion or 0) + 1
             conv.intento_confirmacion = intento
             conv.updated_at = datetime.utcnow()
@@ -337,6 +365,8 @@ class WhatsAppService:
             nombre = conv.nombre_cliente or conv.cedula or "el titular"
             return {"status": "pide_si_no", "response_text": MENSAJE_RESPONDE_SI_NO.format(nombre=nombre)}
         if conv.estado == "esperando_foto":
+            if _pide_otra_informacion(text):
+                return {"status": "otra_informacion", "response_text": MENSAJE_OTRA_INFORMACION}
             nombre = conv.nombre_cliente or ""
             if nombre:
                 return {"status": "remind_foto", "response_text": f"{nombre}, {MENSAJE_ENVIA_FOTO}"}

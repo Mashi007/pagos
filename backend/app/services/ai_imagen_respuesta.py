@@ -20,14 +20,15 @@ MIN_CARACTERES_FALLBACK = 50
 
 # Mensajes de respaldo si la IA no está configurada o falla
 MENSAJE_FALLBACK_GRACIAS = "Gracias. (Cédula {cedula} reportada.)"
-MENSAJE_FALLBACK_MALA = "La imagen no está lo suficientemente clara. Toma otra foto a 20 cm de tu papeleta."
+MENSAJE_FALLBACK_MALA = "Necesitamos un recibo de pago válido (papeleta de depósito). Envía una foto clara de tu papeleta a 20 cm."
 
 SYSTEM_PROMPT = (
-    "Eres un asistente de cobranza. Te dan el texto extraído por OCR de una foto de una papeleta de depósito. "
-    "Debes decidir si la imagen es ACEPTABLE (legible, parece papeleta de depósito) o NO. "
+    "Eres un asistente de cobranza. Te dan el texto extraído por OCR de una foto que el cliente envió como papeleta de depósito. "
+    "Debes decidir si la imagen es ACEPTABLE como recibo de pago (legible, es una papeleta/comprobante de depósito) o NO. "
+    "Si la imagen no es un recibo de pago válido (ej. selfie, documento distinto, imagen borrosa o irrelevante), es NO aceptable. "
     "Responde ÚNICAMENTE con un JSON válido, sin markdown ni texto extra, con exactamente dos campos: "
     '"aceptable" (true o false) y "mensaje" (una sola frase corta en español). '
-    "Si aceptable: mensaje debe agradecer y puede mencionar la cédula. Si no aceptable: mensaje debe pedir amablemente otra foto más clara."
+    "Si aceptable: mensaje debe agradecer y puede mencionar la cédula. Si no aceptable: mensaje debe pedir que adjunte un recibo de pago válido (papeleta de depósito) y tome la foto a 20 cm."
 )
 
 
