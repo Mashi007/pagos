@@ -52,7 +52,8 @@
         const originalWarn = console.warn;
         const originalError = console.error;
         function toMessage(args) {
-          return args.map(function(arg) {
+          var arr = Array.prototype.slice.call(args);
+          return arr.map(function(arg) {
             if (arg != null && typeof arg === 'object' && typeof arg.message === 'string') return arg.message;
             if (arg != null && typeof arg === 'object' && typeof arg.defaultMessage === 'string') return arg.defaultMessage;
             return String(arg);
@@ -85,8 +86,10 @@
         const originalError = console.error;
 
         // Construir mensaje: si algún arg es objeto con .message, usarlo (navegador a veces envía así el warning CSS)
+        // arguments es array-like, no Array; convertir a array para poder usar .map
         function getMessage(args) {
-          return args.map(function(arg) {
+          var arr = Array.prototype.slice.call(args);
+          return arr.map(function(arg) {
             if (arg != null && typeof arg === 'object' && typeof arg.message === 'string') return arg.message;
             if (arg != null && typeof arg === 'object' && typeof arg.defaultMessage === 'string') return arg.defaultMessage;
             return typeof arg === 'string' ? arg : (arg && typeof arg.toString === 'function' ? arg.toString() : String(arg));
