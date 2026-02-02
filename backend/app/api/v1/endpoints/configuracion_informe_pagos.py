@@ -224,4 +224,8 @@ def put_informe_pagos_configuracion(
     out = get_informe_pagos_config()
     if out.get("google_credentials_json"):
         out["google_credentials_json"] = "***"
+    if out.get("google_oauth_client_secret"):
+        out["google_oauth_client_secret"] = "***"
+    if "google_oauth_refresh_token" in out and out["google_oauth_refresh_token"]:
+        out["google_oauth_refresh_token"] = "***"
     return {"message": "Configuración informe pagos actualizada", "configuracion": out}
