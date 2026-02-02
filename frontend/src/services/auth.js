@@ -1,8 +1,10 @@
 /**
  * Servicio de autenticación
+ * Usa almacenamiento seguro para evitar DOMException "The operation is insecure" en iframes/contextos restrictivos.
  */
 import apiClient from './api';
 import { handleApiError } from '../utils/errorHandler';
+import { safeGetItem, safeSetItem, safeRemoveItem } from '../utils/storage';
 
 export const authService = {
   /**
@@ -15,17 +17,16 @@ export const authService = {
         password,
       });
       const { access_token, refresh_token, user } = response.data;
-      
-      // Guardar tokens
-      localStorage.setItem('access_token', access_token);
-      localStorage.setItem('refresh_token', refresh_token);
-      
+
+      safeSetItem('access_token', access_token);
+      safeSetItem('refresh_token', refresh_token);
+
       return { user, access_token, refresh_token };
     } catch (error) {
       throw new Error(handleApiError(error));
     }
   },
-  
+
   /**
    * Cerrar sesión
    */
@@ -35,9 +36,8 @@ export const authService = {
     } catch (error) {
       console.error('Error en logout:', error);
     } finally {
-      // Limpiar tokens siempre
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
+      safeRemoveItem('access_token');
+      safeRemoveItem('refresh_token');
     }
   },
   
@@ -63,13 +63,13 @@ export const authService = {
    * Verificar si el usuario está autenticado
    */
   isAuthenticated() {
-    return !!localStorage.getItem('access_token');
+    return !!safeGetItem('access_token');
   },
-  
+
   /**
    * Obtener token de acceso
    */
   getToken() {
-    return localStorage.getItem('access_token');
+    return safeGetItem('access_token');
   },
 };
