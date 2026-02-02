@@ -41,7 +41,8 @@ CHAT_SYSTEM_PROMPT_INSTRUCCIONES = (
     "Si la pregunta no puede responderse con los datos proporcionados, di que ese dato no está disponible en el contexto. "
     "No inventes cifras ni información. "
     "Si la pregunta no es sobre la base de datos del sistema (clientes, préstamos, cuotas, pagos, estadísticas), "
-    "indica que solo respondes consultas sobre estos datos."
+    "indica que solo respondes consultas sobre estos datos. "
+    "Responde SIEMPRE en español."
 )
 
 # Modelo recomendado para OpenRouter (balance costo/velocidad/calidad para Chat y GPT).
@@ -216,6 +217,8 @@ def put_ai_configuracion(payload: AIConfigUpdate = Body(...), db: Session = Depe
     """
     Actualiza modelo, temperatura, max_tokens, activo y opcionalmente el token OpenRouter.
     Si openai_api_key u openrouter_api_key viene con *** o vacío, no se sobrescribe el token guardado.
+    El token se persiste en BD (tabla configuracion, clave configuracion_ai); nunca se envía al
+    frontend ni se registra en logs, para evitar fugas y baneos de la API key.
     """
     _load_ai_config_from_db(db)
     data = payload.model_dump(exclude_none=True)
@@ -225,7 +228,8 @@ def put_ai_configuracion(payload: AIConfigUpdate = Body(...), db: Session = Depe
     token_nuevo = data.get("openrouter_api_key") or data.get("openai_api_key")
     if token_nuevo is not None and not _is_api_key_masked(token_nuevo):
         _ai_config_stub["openrouter_api_key"] = str(token_nuevo).strip()
-    # Persistir en BD (incluye openrouter_api_key si está en el stub)
+    # Persistir en BD (incluye openrouter_api_key si está en el stub); el token queda guardado
+    # y no se sobrescribe cuando el frontend envía "***" en siguientes guardados
     try:
         row = db.get(Configuracion, CLAVE_AI)
         payload_bd = {
@@ -298,7 +302,10 @@ def post_ai_probar(payload: ProbarRequest = Body(...), db: Session = Depends(get
     """Prueba la conexión con OpenRouter y devuelve la respuesta para el chat de prueba. Carga config desde BD."""
     _load_ai_config_from_db(db)
     mensaje = (payload.mensaje or payload.pregunta or "Hola, responde OK si me escuchas.").strip() or "Hola."
-    messages = [{"role": "user", "content": mensaje}]
+    messages = [
+        {"role": "system", "content": "Responde SIEMPRE en español."},
+        {"role": "user", "content": mensaje},
+    ]
     try:
         out = _call_openrouter(messages)
     except HTTPException:
