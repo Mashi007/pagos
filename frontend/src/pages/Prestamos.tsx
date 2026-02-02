@@ -1,5 +1,5 @@
 import { PrestamosList } from '../components/prestamos/PrestamosList'
-import { DollarSign, Megaphone } from 'lucide-react'
+import { DollarSign, Bell } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 
 export function Prestamos() {
@@ -14,7 +14,7 @@ export function Prestamos() {
       <Card className="border-blue-100 bg-blue-50/50">
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
-            <Megaphone className="h-4 w-4 text-blue-600" />
+            <Bell className="h-4 w-4 text-blue-600" />
             Novedades
           </CardTitle>
         </CardHeader>

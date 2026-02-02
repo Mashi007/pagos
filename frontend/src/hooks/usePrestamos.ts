@@ -42,7 +42,7 @@ export function usePrestamos(
 ) {
   return useQuery({
     queryKey: prestamoKeys.list(filters, page),
-    queryFn: () => {
+    queryFn: async () => {
       console.log('ðŸ” [usePrestamos] Obteniendo préstamos:', { filters, page, perPage })
       const result = await prestamoService.getPrestamos(filters, page, perPage)
       console.log('ðŸ” [usePrestamos] Resultado recibido:', {
