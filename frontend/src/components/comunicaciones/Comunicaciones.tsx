@@ -33,8 +33,7 @@ import { ticketsService, TicketCreate, Ticket, TicketUpdate } from '../../servic
 import { userService } from '../../services/userService'
 import { toast } from 'sonner'
 import { useSimpleAuth } from '../../store/simpleAuthStore'
-import { mockComunicaciones, mockNombresClientes } from '../../data/mockComunicaciones'
-import { conversacionesWhatsAppService } from '../../services/conversacionesWhatsAppService'
+import { mockNombresClientes } from '../../data/mockComunicaciones'
 
 interface ComunicacionesProps {
   clienteId?: number
@@ -102,7 +101,7 @@ export function Comunicaciones({
   // Estado para usuarios (para asignación y escalación)
   const [usuarios, setUsuarios] = useState<Array<{ id: number; nombre: string; apellido: string; email: string; is_admin: boolean }>>([])
 
-  // Query: placeholderData = mock para que la lista se vea desde el inicio (no pantalla en blanco)
+  // Query: datos reales desde API (conversacion_cobranza para WhatsApp)
   const {
     data: comunicacionesData,
     isLoading,
@@ -111,18 +110,13 @@ export function Comunicaciones({
   } = useQuery({
     queryKey: ['comunicaciones', clienteId],
     queryFn: () => comunicacionesService.listarComunicaciones(1, 100, undefined, clienteId),
-    placeholderData: {
-      comunicaciones: mockComunicaciones,
-      paginacion: { page: 1, per_page: 100, total: 0, pages: 0 },
-    },
     retry: 1,
   })
 
-  // Datos para listar: API vacía o error → mock; si hay datos reales → usarlos
+  // Usar datos de la API (puede ser [] si no hay conversaciones aún). Si no hay respuesta aún, lista vacía.
   const todasComunicaciones = useMemo(() => {
-    const tieneReales = comunicacionesData?.comunicaciones && comunicacionesData.comunicaciones.length > 0
-    if (tieneReales) return comunicacionesData!.comunicaciones
-    return mockComunicaciones
+    if (comunicacionesData?.comunicaciones) return comunicacionesData.comunicaciones
+    return []
   }, [comunicacionesData?.comunicaciones])
 
   // Cargar usuarios al montar
@@ -456,28 +450,20 @@ export function Comunicaciones({
     setEnviando(true)
     try {
       if (conversacionActual.tipo === 'whatsapp') {
-        // Enviar mensaje de WhatsApp
-        // El contacto es el número que envió el mensaje (from_contact para INBOUND)
-        // Necesitamos obtener el número correcto desde la última comunicación
         const ultimaComunicacion = conversacionActual.ultimaComunicacion
-        const numeroDestino = ultimaComunicacion.direccion === 'INBOUND' 
-          ? ultimaComunicacion.from_contact 
+        const numeroDestino = ultimaComunicacion.direccion === 'INBOUND'
+          ? ultimaComunicacion.from_contact
           : ultimaComunicacion.to_contact
-        
-        const resultado = await conversacionesWhatsAppService.enviarMensaje(
-          numeroDestino,
-          mensajeTexto,
-          conversacionActual.cliente_id || undefined
-        )
-        
+
+        const resultado = await comunicacionesService.enviarWhatsApp(numeroDestino, mensajeTexto)
+
         if (resultado.success) {
-          toast.success('Mensaje enviado exitosamente')
+          toast.success('Mensaje enviado')
           setMensajeTexto('')
           setAsuntoEmail('')
-          // âœ… invalidateQueries ya dispara refetch automáticamente
           queryClient.invalidateQueries({ queryKey: ['comunicaciones'] })
         } else {
-          toast.error('Error enviando mensaje')
+          toast.error(resultado.mensaje || 'Error enviando mensaje')
         }
       } else if (conversacionActual.tipo === 'email') {
         // TODO: Implementar envío de email
@@ -788,7 +774,7 @@ export function Comunicaciones({
                 />
               )}
               
-              {/* En modo automático, mostrar info; en manual, mostrar input */}
+              {/* En modo automático: info; en manual: caja de texto para responder desde aquí */}
               {conversacionActual.tipo === 'whatsapp' && modoAutomatico ? (
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                   <div className="flex items-start gap-2">
@@ -796,9 +782,36 @@ export function Comunicaciones({
                     <div className="flex-1">
                       <p className="text-sm font-medium text-blue-900">Bot Automático Activo</p>
                       <p className="text-xs text-blue-700 mt-1">
-                        El bot responderá automáticamente a los mensajes recibidos. Cambia a modo manual para enviar mensajes personalizados.
+                        El bot responderá automáticamente a los mensajes recibidos. Cambia a modo manual para responder tú desde esta misma pantalla.
                       </p>
                     </div>
+                  </div>
+                </div>
+              ) : conversacionActual.tipo === 'whatsapp' && !modoAutomatico ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-gray-600 font-medium">Modo Manual — Responde desde aquí</p>
+                  <div className="flex gap-2">
+                    <Textarea
+                      placeholder="Escribe tu mensaje..."
+                      value={mensajeTexto}
+                      onChange={(e) => setMensajeTexto(e.target.value)}
+                      className="flex-1 min-h-[80px]"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                          handleEnviarMensaje()
+                        }
+                      }}
+                    />
+                    <Button onClick={handleEnviarMensaje} disabled={!mensajeTexto.trim() || enviando}>
+                      {enviando ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Enviando...
+                        </>
+                      ) : (
+                        'Enviar'
+                      )}
+                    </Button>
                   </div>
                 </div>
               ) : (

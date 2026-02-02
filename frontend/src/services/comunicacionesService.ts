@@ -79,6 +79,26 @@ class ComunicacionesService {
   }
 
   /**
+   * Enviar mensaje de WhatsApp desde Comunicaciones (modo manual).
+   * Usa Configuración > WhatsApp. Respeta modo_pruebas.
+   */
+  async enviarWhatsApp(toNumber: string, message: string): Promise<{
+    success: boolean
+    mensaje?: string
+    telefono_destino?: string
+  }> {
+    const response = await apiClient.post<{
+      success: boolean
+      mensaje?: string
+      telefono_destino?: string
+    }>(`${this.baseUrl}/enviar-whatsapp`, {
+      to_number: toNumber,
+      message,
+    })
+    return response
+  }
+
+  /**
    * Crear cliente automáticamente desde una comunicación
    */
   async crearClienteAutomatico(

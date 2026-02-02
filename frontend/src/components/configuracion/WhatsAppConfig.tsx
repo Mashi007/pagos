@@ -258,6 +258,15 @@ export function WhatsAppConfig() {
             </div>
           </div>
 
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <p className="font-semibold text-blue-900 mb-2">¿Cuándo hace falta plantilla aprobada?</p>
+            <ul className="text-sm text-blue-800 space-y-1.5">
+              <li><strong>No hace falta plantilla</strong> cuando <strong>tú respondes</strong> al cliente dentro de las 24 h desde su último mensaje: flujo de cobranza (pedir cédula, foto de pago, confirmación), respuestas del bot a mensajes entrantes. Todo eso funciona con mensaje de texto libre.</li>
+              <li><strong>Sí hace falta plantilla</strong> cuando <strong>tú inicias</strong> la conversación o han pasado más de 24 h desde que el cliente te escribió: notificaciones proactivas (recordatorios de pago, cuota vence), mensaje de prueba a un número que no te ha escrito. Para esos envíos Meta exige una plantilla aprobada en Meta Business Manager (WhatsApp → Plantillas de mensaje).</li>
+            </ul>
+            <p className="text-xs text-blue-700 mt-2">Resumen: para trabajar con el bot de cobranza (ellos te escriben, tú respondes) no necesitas plantilla. Para enviar recordatorios o notificaciones sin que te hayan escrito antes, sí.</p>
+          </div>
+
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <label className="text-sm font-medium block mb-2">API URL</label>
@@ -331,6 +340,9 @@ export function WhatsAppConfig() {
               <p className="text-xs text-gray-500 mt-1">
                 Token secreto para verificar webhooks de Meta. Debe ser el mismo que configures en Meta Developers.
               </p>
+              <p className="text-xs text-amber-700 mt-2 font-medium">
+                Para que lleguen mensajes a Comunicaciones: en Meta Developers → WhatsApp → Configuración, pon <strong>URL del webhook</strong>: <code className="bg-amber-100 px-1 rounded">https://TU_DOMINIO/api/v1/whatsapp/webhook</code> (ej. <code className="bg-amber-100 px-1 rounded">https://rapicredit.onrender.com/api/v1/whatsapp/webhook</code>). El Verify Token de Meta debe coincidir con el de arriba.
+              </p>
             </div>
           </div>
 
@@ -348,7 +360,7 @@ export function WhatsAppConfig() {
                     onChange={(e) => setModoPruebas(e.target.value)}
                     className="rounded"
                   />
-                  <span className="text-sm">Producción (Envíos reales a clientes)</span>
+                  <span className="text-sm">Producción (Envíos reales a cualquier número)</span>
                 </label>
                 <label className="flex items-center space-x-2 cursor-pointer">
                   <input
@@ -359,9 +371,14 @@ export function WhatsAppConfig() {
                     onChange={(e) => setModoPruebas(e.target.value)}
                     className="rounded"
                   />
-                  <span className="text-sm">Pruebas (Todos los mensajes a número de prueba)</span>
+                  <span className="text-sm">Pruebas (Solo mensaje de prueba a número de prueba)</span>
                 </label>
               </div>
+              {modoPruebas === 'false' && (
+                <p className="text-xs text-gray-500 mt-2">
+                  Con token permanente y app en producción en Meta, puedes enviar a cualquier número. La primera vez que contactas un número, Meta puede exigir una plantilla aprobada o que el usuario te haya escrito en las últimas 24 h.
+                </p>
+              )}
             </div>
 
             {modoPruebas === 'true' && (
@@ -509,20 +526,20 @@ export function WhatsAppConfig() {
               {modoPruebas === 'false' && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
                   <p className="text-sm text-green-800 font-semibold mb-1">
-                    âœ… Modo Producción activo
+                    ✓ Modo Producción activo
                   </p>
                   <p className="text-xs text-green-700">
-                    El mensaje de prueba se enviará <strong>REALMENTE</strong> al destinatario especificado.
+                    El mensaje se enviará al número que indiques en Teléfono de Destino (o a cualquier número que uses en Notificaciones/Cobranzas).
                   </p>
                 </div>
               )}
               {modoPruebas === 'true' && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
                   <p className="text-sm text-yellow-800 font-semibold mb-1">
-                    âš ï¸ Modo Pruebas activo
+                    ⚠ Modo Pruebas activo
                   </p>
                   <p className="text-xs text-yellow-700">
-                    El mensaje se redirigirá a la dirección de pruebas configurada ({telefonoPruebas || 'no configurada'}).
+                    El mensaje de prueba se redirige al Teléfono de Pruebas ({telefonoPruebas || 'no configurada'}). Las notificaciones a clientes siguen yendo al número real de cada cliente.
                   </p>
                 </div>
               )}
