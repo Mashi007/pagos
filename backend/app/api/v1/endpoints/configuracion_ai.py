@@ -30,6 +30,21 @@ from sqlalchemy import func
 router = APIRouter()
 
 CLAVE_AI = "configuracion_ai"
+# Clave opcional en tabla configuracion: JSON array de {"pregunta": "...", "campo": "..."} para
+# personalizar preguntas habituales desde la app (Configuración > AI > Preguntas habituales).
+CLAVE_PREGUNTAS_HABITUALES_AI = "preguntas_habituales_ai"
+
+# Preguntas habituales por defecto (se usa si no hay lista en BD).
+# Se inyecta en el system prompt para familiarizar al modelo con cómo responder cada tipo de pregunta.
+PREGUNTAS_HABITUALES_CAMPOS = (
+    "Preguntas habituales y dato a usar: "
+    "'cuántos créditos aprobados' / 'créditos aprobados' -> prestamos_aprobados; "
+    "'total de financiamiento' / 'financiamiento total' -> total_financiamiento_aprobado (o total_financiamiento_todos si preguntan por todos); "
+    "'cuántos clientes' -> clientes_total; "
+    "'cuántos préstamos' -> prestamos_total; "
+    "'cuotas pagadas' / 'cuotas pendientes' -> cuotas_pagadas, cuotas_pendientes, cuotas_total; "
+    "'recaudado' / 'cuánto se ha cobrado en cuotas' -> suma_montos_cuotas_pagadas."
+)
 
 # Prompt del sistema para respuestas rápidas usando solo datos de get_db (BD).
 # Instruye al modelo a responder únicamente con los datos disponibles en el contexto inyectado.
@@ -86,36 +101,87 @@ def _load_ai_config_from_db(db: Session) -> None:
         pass
 
 
+def _safe_decimal(value: Any) -> str:
+    """Formatea un valor numérico/Decimal para el contexto (evitar None o exponencial)."""
+    if value is None:
+        return "0"
+    try:
+        f = float(value)
+        return f"{f:,.2f}" if f != int(f) else f"{int(f):,}"
+    except (TypeError, ValueError):
+        return str(value)
+
+
 def _build_chat_context(db: Session) -> str:
     """
     Construye un resumen compacto de la BD (get_db) para el system prompt.
-    Una sola ronda de consultas agregadas para respuestas rápidas; el modelo
-    debe responder solo con estos datos disponibles.
+    Incluye conteos y totales (financiamiento, cuotas) para que el modelo pueda
+    responder preguntas como "total de financiamiento", "créditos aprobados", etc.
     """
     lines: list[str] = []
     try:
         total_clientes = db.query(func.count(Cliente.id)).scalar() or 0
         total_prestamos = db.query(func.count(Prestamo.id)).scalar() or 0
         prestamos_aprobados = db.query(func.count(Prestamo.id)).filter(Prestamo.estado == "APROBADO").scalar() or 0
+        # Total de financiamiento: suma de total_financiamiento (aprobados y total)
+        total_financiamiento_aprobado = db.query(func.coalesce(func.sum(Prestamo.total_financiamiento), 0)).filter(
+            Prestamo.estado == "APROBADO"
+        ).scalar() or 0
+        total_financiamiento_todos = db.query(func.coalesce(func.sum(Prestamo.total_financiamiento), 0)).scalar() or 0
         total_cuotas = db.query(func.count(Cuota.id)).scalar() or 0
-        cuotas_pagadas = db.query(func.count(Cuota.id)).filter(Cuota.fecha_pago.isnot(None)).scalar() or 0
-        cuotas_pendientes = total_cuotas - cuotas_pagadas
+        cuotas_pagadas_count = db.query(func.count(Cuota.id)).filter(Cuota.fecha_pago.isnot(None)).scalar() or 0
+        cuotas_pendientes = total_cuotas - cuotas_pagadas_count
+        suma_cuotas_pagadas = db.query(func.coalesce(func.sum(Cuota.monto), 0)).filter(
+            Cuota.fecha_pago.isnot(None)
+        ).scalar() or 0
         lines.append(f"clientes_total={total_clientes}")
         lines.append(f"prestamos_total={total_prestamos}; prestamos_aprobados={prestamos_aprobados}")
-        lines.append(f"cuotas_total={total_cuotas}; cuotas_pagadas={cuotas_pagadas}; cuotas_pendientes={cuotas_pendientes}")
+        lines.append(
+            f"total_financiamiento_aprobado={_safe_decimal(total_financiamiento_aprobado)}; "
+            f"total_financiamiento_todos={_safe_decimal(total_financiamiento_todos)}"
+        )
+        lines.append(
+            f"cuotas_total={total_cuotas}; cuotas_pagadas={cuotas_pagadas_count}; cuotas_pendientes={cuotas_pendientes}; "
+            f"suma_montos_cuotas_pagadas={_safe_decimal(suma_cuotas_pagadas)}"
+        )
     except Exception:
         lines.append("(error al cargar datos)")
     return "\n".join(lines)
 
 
+def _get_preguntas_habituales_block(db: Session) -> str:
+    """
+    Devuelve el bloque de texto 'preguntas habituales -> campos' para el system prompt.
+    Si en BD existe configuracion con clave CLAVE_PREGUNTAS_HABITUALES_AI y valor JSON array
+    de {"pregunta": "...", "campo": "..."}, se usa esa lista; si no, se usa PREGUNTAS_HABITUALES_CAMPOS.
+    Así se pueden familiarizar más preguntas desde la app sin tocar código.
+    """
+    try:
+        row = db.get(Configuracion, CLAVE_PREGUNTAS_HABITUALES_AI)
+        if row and row.valor:
+            data = json.loads(row.valor)
+            if isinstance(data, list) and len(data) > 0:
+                parts = []
+                for item in data:
+                    if isinstance(item, dict) and item.get("pregunta") and item.get("campo"):
+                        parts.append(f"'{item['pregunta']}' -> {item['campo']}")
+                if parts:
+                    return "Preguntas habituales y dato a usar: " + "; ".join(parts) + "."
+    except Exception:
+        pass
+    return PREGUNTAS_HABITUALES_CAMPOS
+
+
 def _build_chat_system_prompt(db: Session) -> str:
     """
-    Arma el system prompt completo: instrucciones + bloque 'Datos disponibles (get_db)'.
-    Estructura pensada para respuestas rápidas y uso explícito solo de datos de get_db.
+    Arma el system prompt completo: instrucciones + preguntas habituales -> campos
+    + bloque 'Datos disponibles (get_db)'. Así el modelo sabe qué dato usar para cada pregunta típica.
     """
     datos_bd = _build_chat_context(db)
+    preguntas_block = _get_preguntas_habituales_block(db)
     return (
         f"{CHAT_SYSTEM_PROMPT_INSTRUCCIONES}\n\n"
+        f"{preguntas_block}\n\n"
         f"Datos disponibles (get_db):\n{datos_bd}"
     )
 

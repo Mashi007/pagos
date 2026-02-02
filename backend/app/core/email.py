@@ -52,10 +52,17 @@ def send_email(
 
         port = int(cfg.get("smtp_port") or 587)
         all_recipients = to_emails + cc_list
-        with smtplib.SMTP(cfg["smtp_host"], port) as server:
-            server.starttls()
-            server.login(cfg["smtp_user"], cfg["smtp_password"])
-            server.sendmail(msg["From"], all_recipients, msg.as_string())
+        use_tls = (cfg.get("smtp_use_tls") or "true").lower() == "true"
+        if port == 465:
+            with smtplib.SMTP_SSL(cfg["smtp_host"], port) as server:
+                server.login(cfg["smtp_user"], cfg["smtp_password"])
+                server.sendmail(msg["From"], all_recipients, msg.as_string())
+        else:
+            with smtplib.SMTP(cfg["smtp_host"], port) as server:
+                if use_tls:
+                    server.starttls()
+                server.login(cfg["smtp_user"], cfg["smtp_password"])
+                server.sendmail(msg["From"], all_recipients, msg.as_string())
         logger.info("Correo enviado a %s: %s", to_emails, subject)
         return True
     except Exception as e:

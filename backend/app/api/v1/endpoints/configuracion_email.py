@@ -180,16 +180,59 @@ class ProbarEmailRequest(BaseModel):
     mensaje: Optional[str] = None
 
 
+def _destino_prueba(cfg: dict[str, Any], payload: ProbarEmailRequest) -> str:
+    """Destino del email de prueba: en modo pruebas usa email_pruebas; si no, el del payload."""
+    modo_pruebas = (cfg.get("modo_pruebas") or "true").lower() == "true"
+    if modo_pruebas and (cfg.get("email_pruebas") or "").strip():
+        return (cfg["email_pruebas"] or "").strip()
+    if (payload.email_destino or "").strip():
+        return payload.email_destino.strip()
+    return ""
+
+
 @router.post(
     "/probar",
-    summary="[Stub] Prueba de envío SMTP; registra la petición pero no envía correo real.",
+    summary="Envía un email de prueba por SMTP con la configuración guardada.",
 )
 def post_email_probar(payload: ProbarEmailRequest = Body(...), db: Session = Depends(get_db)):
-    """Prueba de envío SMTP (usa config persistida en BD). Stub: no envía correo real."""
+    """Envía un correo de prueba por SMTP (usa config persistida en BD). En modo pruebas redirige a email_pruebas."""
     _load_email_config_from_db(db)
+    _sync_stub_from_settings()
+    from app.core.email_config_holder import sync_from_db
+    from app.core.email import send_email
+
+    sync_from_db()
+    cfg = _email_config_stub
+    if not all([cfg.get("smtp_host"), (cfg.get("smtp_user") or "").strip()]):
+        raise HTTPException(
+            status_code=400,
+            detail="Configura servidor SMTP y usuario antes de enviar la prueba.",
+        )
+    if not cfg.get("smtp_password") or (cfg.get("smtp_password") or "").strip() in ("", "***"):
+        raise HTTPException(
+            status_code=400,
+            detail="Falta contraseña SMTP (Gmail requiere Contraseña de aplicación). Guárdala en Configuración y vuelve a probar.",
+        )
+
+    destino = _destino_prueba(cfg, payload)
+    if not destino or "@" not in destino:
+        raise HTTPException(
+            status_code=400,
+            detail="Indica un email de destino o activa Modo Pruebas y configura el Email de Pruebas.",
+        )
+
+    subject = (payload.subject or "").strip() or "Prueba de email - RapiCredit"
+    body = (payload.mensaje or "").strip() or "Este es un correo de prueba enviado desde la configuración de email."
+    ok = send_email(to_emails=[destino], subject=subject, body_text=body)
+    if not ok:
+        raise HTTPException(
+            status_code=502,
+            detail="No se pudo enviar el correo. Revisa servidor SMTP, puerto (587 o 465), TLS y contraseña de aplicación.",
+        )
+    logger.info("Email de prueba enviado a %s", destino)
     return {
-        "mensaje": "Prueba de envío registrada. Implementa envío SMTP en el backend para enviar realmente.",
-        "email_destino": payload.email_destino or "",
+        "mensaje": "Correo de prueba enviado correctamente.",
+        "email_destino": destino,
     }
 
 
