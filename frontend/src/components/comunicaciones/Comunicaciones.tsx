@@ -101,7 +101,7 @@ export function Comunicaciones({
   // Estado para usuarios (para asignación y escalación)
   const [usuarios, setUsuarios] = useState<Array<{ id: number; nombre: string; apellido: string; email: string; is_admin: boolean }>>([])
 
-  // Query: datos reales desde API (conversacion_cobranza para WhatsApp)
+  // Query: datos reales desde API (conversacion_cobranza para WhatsApp). Se actualiza cada 15 s para ver mensajes nuevos.
   const {
     data: comunicacionesData,
     isLoading,
@@ -111,6 +111,7 @@ export function Comunicaciones({
     queryKey: ['comunicaciones', clienteId],
     queryFn: () => comunicacionesService.listarComunicaciones(1, 100, undefined, clienteId),
     retry: 1,
+    refetchInterval: 15000, // Actualizar lista cada 15 segundos (mensajes entrantes por webhook)
   })
 
   // Usar datos de la API (puede ser [] si no hay conversaciones aún). Si no hay respuesta aún, lista vacía.
@@ -511,9 +512,12 @@ export function Comunicaciones({
         <div className="p-3 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-white">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-lg font-bold text-gray-900">Comunicaciones</h2>
-            <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={isLoading} className="hover:bg-blue-100">
-              <RefreshCw className={`h-4 w-4 text-blue-600 ${isLoading ? 'animate-spin' : ''}`} />
-            </Button>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">Se actualiza cada 15 s</span>
+              <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={isLoading} className="hover:bg-blue-100">
+                <RefreshCw className={`h-4 w-4 text-blue-600 ${isLoading ? 'animate-spin' : ''}`} />
+              </Button>
+            </div>
           </div>
           <div className="relative">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
