@@ -358,6 +358,13 @@ app.get('/', (req, res) => {
   res.redirect(302, FRONTEND_BASE + (req.url !== '/' ? req.url : ''));
 });
 
+// Si el navegador pide /assets/* (sin /pagos), redirigir a /pagos/assets/* para evitar MIME type error
+// (p. ej. caché con index.html antiguo que usaba base '/' o script con src="/assets/...")
+app.get('/assets/*', (req, res) => {
+  const subpath = req.path.slice('/assets'.length) || '/';
+  res.redirect(302, FRONTEND_BASE + '/assets' + subpath + (req.originalUrl?.includes('?') ? '?' + req.originalUrl.split('?')[1] : ''));
+});
+
 // Activar frontend en https://rapicredit.onrender.com/reportes -> redirigir a /pagos/reportes
 const qs = (req) => (req.originalUrl && req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '');
 app.get('/reportes', (req, res) => {
