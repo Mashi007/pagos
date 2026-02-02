@@ -5,7 +5,7 @@ import { pagoService } from '../services/pagoService'
 export function usePagosKPIs(mes?: number, año?: number) {
   return useQuery({
     queryKey: ['pagos-kpis', mes, año],
-    queryFn: () => pagoService.getKPIs(mes, año),
+    queryFn: ({ signal }) => pagoService.getKPIs(mes, año, { signal }),
     staleTime: 60 * 1000, // ✅ Cache de 1 minuto - datos frescos pero no excesivo polling
     refetchOnMount: true,
     refetchOnWindowFocus: true, // ✅ Refrescar al enfocar ventana

@@ -59,9 +59,9 @@ export function DashboardPagos() {
   // Cargar estadísticas de pagos
   const { data: pagosStats, isLoading: pagosStatsLoading, refetch } = useQuery({
     queryKey: ['pagos-stats', filtros],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const params = construirFiltrosObject()
-      return await pagoService.getStats(params)
+      return await pagoService.getStats(params, { signal })
     },
     staleTime: 2 * 60 * 1000, // ✓ ACTUALIZADO: 2 minutos para datos más frescos
     refetchOnWindowFocus: true, // ✓ ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
@@ -72,8 +72,8 @@ export function DashboardPagos() {
   // Si hay filtros activos, usar queryKey con filtros para datos específicos
   const { data: kpisPagos, isLoading: loadingKPIs } = useQuery({
     queryKey: tieneFiltrosActivos ? ['kpis-pagos', filtros] : ['kpis-pagos'],
-    queryFn: async () => {
-      const response = await apiClient.get('/api/v1/pagos/kpis') as {
+    queryFn: async ({ signal }) => {
+      const response = await apiClient.get('/api/v1/pagos/kpis', { signal }) as {
         montoCobradoMes: number
         saldoPorCobrar: number
         clientesEnMora: number
@@ -90,7 +90,7 @@ export function DashboardPagos() {
   // Cargar pagos por estado
   const { data: pagosPorEstado, isLoading: loadingPagosEstado } = useQuery({
     queryKey: ['pagos-por-estado', filtros],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const params = construirFiltrosObject()
       const queryParams = new URLSearchParams()
       Object.entries(params).forEach(([key, value]) => {
@@ -98,7 +98,8 @@ export function DashboardPagos() {
       })
       const queryString = queryParams.toString()
       const response = await apiClient.get(
-        `/api/v1/pagos/stats${queryString ? '?' + queryString : ''}`
+        `/api/v1/pagos/stats${queryString ? '?' + queryString : ''}`,
+        { signal }
       ) as {
         total_pagos: number
         total_pagado: number

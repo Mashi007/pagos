@@ -122,7 +122,7 @@ class PagoService {
     modelo?: string
     fecha_inicio?: string
     fecha_fin?: string
-  }): Promise<{
+  }, config?: { signal?: AbortSignal }): Promise<{
     total_pagos: number
     pagos_por_estado: Record<string, number>
     total_pagado: number
@@ -139,11 +139,11 @@ class PagoService {
     if (filters?.fecha_fin) params.append('fecha_fin', filters.fecha_fin)
 
     const queryString = params.toString()
-    return await apiClient.get(`${this.baseUrl}/stats${queryString ? '?' + queryString : ''}`)
+    return await apiClient.get(`${this.baseUrl}/stats${queryString ? '?' + queryString : ''}`, config)
   }
 
   // Obtener KPIs de pagos (mes y año específicos o actual)
-  async getKPIs(mes?: number, año?: number): Promise<{
+  async getKPIs(mes?: number, año?: number, config?: { signal?: AbortSignal }): Promise<{
     montoCobradoMes: number
     saldoPorCobrar: number
     clientesEnMora: number
@@ -156,7 +156,7 @@ class PagoService {
     if (año !== undefined) params.append('año', año.toString())
 
     const queryString = params.toString()
-    return await apiClient.get(`${this.baseUrl}/kpis${queryString ? '?' + queryString : ''}`)
+    return await apiClient.get(`${this.baseUrl}/kpis${queryString ? '?' + queryString : ''}`, config)
   }
 
   // Obtener últimos pagos por cédula (resumen)
