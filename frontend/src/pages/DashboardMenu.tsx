@@ -117,10 +117,11 @@ export function DashboardMenu() {
       }
       return response
     },
-    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
-    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
-    enabled: true, // âœ… Prioridad máxima - carga inmediatamente
-    retry: false, // No reintentar automáticamente en caso de error 401
+    staleTime: 30 * 1000, // 30 segundos para que el dashboard refleje cambios recientes (préstamos/pagos)
+    refetchOnWindowFocus: true,
+    refetchOnMount: true, // Refetch al entrar a la página para que siempre se actualice
+    enabled: true,
+    retry: false,
   })
 
   // Batch 2: IMPORTANTE - Dashboard admin (gráfico principal, carga después de KPIs)
@@ -156,59 +157,24 @@ export function DashboardMenu() {
     enabled: true, // âœ… Carga después de Batch 1
   })
 
-  // Batch 3: MEDIA - Gráficos secundarios rápidos (cargar después de Batch 2, en paralelo limitado)
-  // âœ… Lazy loading: Solo cargar cuando KPIs estén listos para reducir carga inicial
-  // âœ… ACTUALIZADO: Incluye período en queryKey y aplica filtro de período
-  // âœ… ACTUALIZADO: Muestra datos desde septiembre 2024. Período por gráfico.
+  // Batch 3: Morosidad por día (desde tabla cuotas: cartera - cobrado por día)
   const periodoTendencia = getPeriodoGrafico('tendencia')
-  const { data: datosTendencia, isLoading: loadingTendencia } = useQuery({
-    queryKey: ['financiamiento-tendencia', periodoTendencia, JSON.stringify(filtros)],
+  const diasMorosidad = periodoTendencia === 'dia' ? 7 : periodoTendencia === 'semana' ? 14 : periodoTendencia === 'mes' ? 30 : 90
+  const { data: datosMorosidadPorDia, isLoading: loadingMorosidadPorDia } = useQuery({
+    queryKey: ['morosidad-por-dia', periodoTendencia, diasMorosidad, JSON.stringify(filtros)],
     queryFn: async () => {
-      const params = construirFiltrosObject(periodoTendencia) // âœ… Pasar período para calcular fechas
       const queryParams = new URLSearchParams()
-
-      // âœ… CORRECCIÓN: Para este gráfico específico, NO pasar fecha_inicio del período
-      // En su lugar, usar el parámetro 'meses' para mostrar los últimos 12 meses
-      // Esto asegura que siempre se muestren múltiples meses independientemente del período seleccionado
-      // Solo pasar fecha_inicio si viene de filtros explícitos del usuario (no del período)
-      const fechaInicioFiltro = filtros.fecha_inicio && filtros.fecha_inicio !== '' ? filtros.fecha_inicio : null
-      
-      if (fechaInicioFiltro) {
-        // Si el usuario especificó fecha_inicio explícitamente en filtros, usarla
-        const fechaInicioDate = new Date(fechaInicioFiltro)
-        const fechaMinima = new Date('2024-09-01')
-        if (fechaInicioDate < fechaMinima) {
-          queryParams.append('fecha_inicio', '2024-09-01')
-        } else {
-          queryParams.append('fecha_inicio', fechaInicioFiltro)
-        }
-      } else {
-        // Si no hay fecha_inicio explícita, usar septiembre 2024 como fecha de inicio mínima
-        queryParams.append('fecha_inicio', '2024-09-01') // Desde septiembre 2024
-      }
-
-      // âœ… Pasar solo filtros de analista, concesionario y modelo (NO fecha_inicio ni fecha_fin del período)
-      Object.entries(params).forEach(([key, value]) => {
-        // No pasar fecha_inicio ni fecha_fin del período (ya se manejan arriba o se ignoran)
-        // Solo pasar filtros de analista, concesionario y modelo
-        if (key !== 'fecha_inicio' && key !== 'fecha_fin' && value) {
-          queryParams.append(key, value.toString())
-        }
-      })
-      
-      // âœ… SIEMPRE agregar parámetro meses=12 para mostrar últimos 12 meses
-      // Esto asegura que se muestren múltiples meses independientemente del período
-      queryParams.append('meses', '12')
-
+      queryParams.append('dias', String(diasMorosidad))
+      if (filtros.fecha_inicio) queryParams.append('fecha_inicio', filtros.fecha_inicio)
+      if (filtros.fecha_fin) queryParams.append('fecha_fin', filtros.fecha_fin)
       const response = await apiClient.get(
-        `/api/v1/dashboard/financiamiento-tendencia-mensual?${queryParams.toString()}`
-      ) as { meses: Array<{ mes: string; cantidad_nuevos: number; monto_nuevos: number; total_acumulado: number; monto_cuotas_programadas: number; monto_pagado: number; morosidad: number; morosidad_mensual: number }> }
-      const meses = response.meses
-      return meses
+        `/api/v1/dashboard/morosidad-por-dia?${queryParams.toString()}`
+      ) as { dias: Array<{ fecha: string; dia: string; morosidad: number }> }
+      return response.dias ?? []
     },
-    staleTime: 5 * 60 * 1000, // âœ… ACTUALIZADO: 5 minutos para datos históricos más frescos
-    enabled: !!kpisPrincipales, // âœ… Solo carga después de KPIs (lazy loading)
-    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
+    staleTime: 2 * 60 * 1000,
+    enabled: !!kpisPrincipales,
+    refetchOnWindowFocus: true,
   })
 
   // Batch 3: Gráficos secundarios rápidos. Período por gráfico.
@@ -511,7 +477,7 @@ export function DashboardMenu() {
       // Invalidar y refrescar todas las queries relacionadas con el dashboard
       await queryClient.invalidateQueries({ queryKey: ['kpis-principales-menu'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['dashboard-menu'], exact: false })
-      await queryClient.invalidateQueries({ queryKey: ['financiamiento-tendencia'], exact: false })
+      await queryClient.invalidateQueries({ queryKey: ['morosidad-por-dia'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['prestamos-concesionario'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['prestamos-modelo'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['financiamiento-rangos'], exact: false })
@@ -525,7 +491,7 @@ export function DashboardMenu() {
       // Refrescar todas las queries activas
       await queryClient.refetchQueries({ queryKey: ['kpis-principales-menu'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['dashboard-menu'], exact: false })
-      await queryClient.refetchQueries({ queryKey: ['financiamiento-tendencia'], exact: false })
+      await queryClient.refetchQueries({ queryKey: ['morosidad-por-dia'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['prestamos-concesionario'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['prestamos-modelo'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['financiamiento-rangos'], exact: false })
@@ -951,66 +917,47 @@ export function DashboardMenu() {
                 </Card>
               </motion.div>
 
-            {/* Gráfico de Áreas - Indicadores Financieros - Ancho Completo */}
+            {/* Morosidad por día - desde tabla cuotas (cartera - cobrado por día) */}
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.35 }}
               >
                 <Card className="shadow-lg border border-gray-200/90 rounded-xl overflow-hidden bg-white">
-                  <CardHeader className="bg-gradient-to-r from-green-50/90 to-emerald-50/90 border-b border-gray-200/80 pb-3">
+                  <CardHeader className="bg-gradient-to-r from-red-50/90 to-orange-50/90 border-b border-gray-200/80 pb-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
-                        <DollarSign className="h-5 w-5 text-green-600" />
-                        <span>Indicadores Financieros</span>
+                        <AlertTriangle className="h-5 w-5 text-red-600" />
+                        <span>Morosidad por día</span>
                       </CardTitle>
                       <div className="flex items-center gap-2">
                         <SelectorPeriodoGrafico chartId="tendencia" />
                         <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
-                          {getRangoFechasLabelGrafico('tendencia')}
+                          {periodoTendencia === 'dia' ? '7 días' : periodoTendencia === 'semana' ? '14 días' : periodoTendencia === 'mes' ? '30 días' : '90 días'}
                         </Badge>
                       </div>
                     </div>
                   </CardHeader>
                   <CardContent className="p-6 pt-4">
-                    {datosTendencia && datosTendencia.length > 0 ? (
-                      <ChartWithDateRangeSlider data={datosTendencia} dataKey="mes" chartHeight={400}>
+                    {loadingMorosidadPorDia ? (
+                      <div className="flex items-center justify-center py-16 text-gray-500">Cargando morosidad por día...</div>
+                    ) : datosMorosidadPorDia && datosMorosidadPorDia.length > 0 ? (
+                      <ChartWithDateRangeSlider data={datosMorosidadPorDia} dataKey="fecha" chartHeight={400}>
                         {(filteredData) => (
                           <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={filteredData} margin={{ top: 14, right: 24, left: 12, bottom: 14 }}>
-                              <defs>
-                                <linearGradient id="colorFinanciamiento" x1="0" y1="0" x2="0" y2="1">
-                                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
-                                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1}/>
-                                </linearGradient>
-                                <linearGradient id="colorPagosProgramados" x1="0" y1="0" x2="0" y2="1">
-                                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
-                                  <stop offset="95%" stopColor="#10b981" stopOpacity={0.1}/>
-                                </linearGradient>
-                                <linearGradient id="colorPagosReales" x1="0" y1="0" x2="0" y2="1">
-                                  <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.8}/>
-                                  <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.1}/>
-                                </linearGradient>
-                                <linearGradient id="colorMorosidad" x1="0" y1="0" x2="0" y2="1">
-                                  <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8}/>
-                                  <stop offset="95%" stopColor="#ef4444" stopOpacity={0.1}/>
-                                </linearGradient>
-                              </defs>
+                            <ComposedChart data={filteredData} margin={{ top: 14, right: 24, left: 12, bottom: 14 }}>
                               <CartesianGrid {...chartCartesianGrid} />
-                              <XAxis dataKey="mes" angle={-45} textAnchor="end" tick={chartAxisTick} height={80} />
-                              <YAxis tick={chartAxisTick} tickFormatter={(value) => `$${(value / 1000).toFixed(0)}K`} label={{ value: 'Monto (USD)', angle: -90, position: 'insideLeft', style: { fill: '#374151', fontSize: 13 } }} />
-                              <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number, name: string) => { const labels: Record<string, string> = { 'monto_nuevos': 'Total Financiamiento', 'monto_cuotas_programadas': 'Total Pagos Programados', 'monto_pagado': 'Total Pagos Reales', 'morosidad_mensual': 'Morosidad' }; return [formatCurrency(value), labels[name] || name]; }} labelFormatter={(label) => `Mes: ${label}`} />
+                              <XAxis dataKey="dia" angle={-45} textAnchor="end" tick={chartAxisTick} height={80} />
+                              <YAxis tick={chartAxisTick} tickFormatter={(value) => `$${value >= 1000 ? (value / 1000).toFixed(1) + 'K' : value}`} label={{ value: 'Morosidad (USD)', angle: -90, position: 'insideLeft', style: { fill: '#374151', fontSize: 13 } }} />
+                              <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [formatCurrency(value), 'Morosidad']} labelFormatter={(label, payload) => payload?.[0]?.payload?.fecha ? `Fecha: ${payload[0].payload.fecha}` : label} />
                               <Legend {...chartLegendStyle} />
-                              <Area type="monotone" dataKey="monto_nuevos" stroke="#3b82f6" fillOpacity={0.6} fill="url(#colorFinanciamiento)" name="Total Financiamiento" />
-                              <Area type="monotone" dataKey="monto_cuotas_programadas" stroke="#10b981" fillOpacity={0.6} fill="url(#colorPagosProgramados)" name="Total Pagos Programados" />
-                              <Area type="monotone" dataKey="monto_pagado" stroke="#f59e0b" fillOpacity={0.6} fill="url(#colorPagosReales)" name="Total Pagos Reales" />
-                              <Area type="monotone" dataKey="morosidad_mensual" stroke="#ef4444" fillOpacity={0.6} fill="url(#colorMorosidad)" name="Morosidad" />
-                            </AreaChart>
+                              <Bar dataKey="morosidad" fill="#ef4444" name="Morosidad" radius={[4, 4, 0, 0]} maxBarSize={48} />
+                            </ComposedChart>
                           </ResponsiveContainer>
                         )}
                       </ChartWithDateRangeSlider>
                     ) : (
-                      <div className="flex items-center justify-center py-16 text-gray-500">No hay datos para el período seleccionado</div>
+                      <div className="flex items-center justify-center py-16 text-gray-500">No hay datos de morosidad por día para el período seleccionado</div>
                     )}
                   </CardContent>
                 </Card>

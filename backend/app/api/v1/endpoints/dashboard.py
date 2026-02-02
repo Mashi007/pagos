@@ -3,7 +3,7 @@ Endpoints del dashboard. Usa datos reales de la BD cuando existen (clientes);
 el resto permanece stub hasta tener modelos de préstamos/pagos/cuotas.
 """
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models.cliente import Cliente
+from app.models.cuota import Cuota
 from app.models.prestamo import Prestamo
 
 logger = logging.getLogger(__name__)
@@ -197,6 +198,18 @@ def _ultimo_dia_del_mes(d: datetime) -> datetime:
     return ultimo
 
 
+def _primer_ultimo_dia_mes(d: datetime) -> tuple[date, date]:
+    """Devuelve (primer_día, último_día) del mes de d como date."""
+    y, m = d.year, d.month
+    inicio = date(y, m, 1)
+    # Último día del mes
+    if m == 12:
+        fin = date(y, 12, 31)
+    else:
+        fin = date(y, m + 1, 1) - timedelta(days=1)
+    return inicio, fin
+
+
 @router.get("/admin")
 def get_dashboard_admin(
     periodo: Optional[str] = Query(None),
@@ -204,43 +217,50 @@ def get_dashboard_admin(
     fecha_fin: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Dashboard admin: evolucion_mensual con datos reales (cartera desde Cliente); financieros/meta stub."""
+    """Dashboard admin: evolucion_mensual desde tabla cuotas. Cartera = suma mensual monto (programado por vencimiento), Cobrado = suma mensual monto pagado, Morosidad = diferencia."""
     meses = _ultimos_12_meses()
     evolucion = []
     try:
         hoy = datetime.now(timezone.utc)
         for i, m in enumerate(meses):
             fin_mes = hoy - timedelta(days=30 * (11 - i))
-            ultimo_dia = _ultimo_dia_del_mes(fin_mes.replace(tzinfo=timezone.utc) if fin_mes.tzinfo is None else fin_mes)
+            if fin_mes.tzinfo is None:
+                fin_mes = fin_mes.replace(tzinfo=timezone.utc)
+            inicio_d, fin_d = _primer_ultimo_dia_mes(fin_mes)
+            # Cartera = suma mensual monto_programado: SUM(monto) de cuotas con fecha_vencimiento en el mes
             cartera = db.scalar(
-                select(func.coalesce(func.sum(Cliente.total_financiamiento), 0)).select_from(Cliente).where(
-                    Cliente.fecha_registro <= ultimo_dia,
-                    Cliente.total_financiamiento.isnot(None),
-                    Cliente.total_financiamiento > 0,
+                select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
+                    Cuota.fecha_vencimiento >= inicio_d,
+                    Cuota.fecha_vencimiento <= fin_d,
                 )
             ) or 0
+            # Cobrado = suma mensual monto_pagado: SUM(monto) de cuotas pagadas con fecha_pago en el mes
+            cobrado = db.scalar(
+                select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
+                    Cuota.pagado.is_(True),
+                    Cuota.fecha_pago.isnot(None),
+                    func.date(Cuota.fecha_pago) >= inicio_d,
+                    func.date(Cuota.fecha_pago) <= fin_d,
+                )
+            ) or 0
+            cartera_f = _safe_float(cartera)
+            cobrado_f = _safe_float(cobrado)
+            morosidad_f = max(0.0, cartera_f - cobrado_f)
             evolucion.append({
                 "mes": m["mes"],
-                "cartera": _safe_float(cartera),
-                "cobrado": 0.0,
-                "morosidad": 0.0,
+                "cartera": cartera_f,
+                "cobrado": cobrado_f,
+                "morosidad": morosidad_f,
             })
+        origen = "bd"
     except Exception as e:
-        logger.exception("Error en dashboard admin: %s", e)
+        logger.exception("Error en dashboard admin (evolucion desde cuotas): %s", e)
         evolucion = [
             {"mes": m["mes"], "cartera": 0.0, "cobrado": 0.0, "morosidad": 0.0}
             for m in meses
         ]
-    # Si no hay datos reales (toda la cartera en 0), mostrar datos de ejemplo para que el gráfico no quede vacío
-    tiene_datos_reales = any(_safe_float(e.get("cartera", 0)) > 0 for e in evolucion)
-    if not tiene_datos_reales and evolucion:
-        evolucion = [
-            {"mes": m["mes"], "cartera": m["cartera"], "cobrado": m["cobrado"], "morosidad": m["morosidad"]}
-            for m in meses
-        ]
-        origen = "demo"
-    else:
         origen = "bd"
+    # Si no hay ningún dato en cuotas, el gráfico mostrará ceros; no usamos demo para no confundir
     return {
         "financieros": {
             "ingresosCapital": 0.0,
@@ -291,6 +311,60 @@ def get_financiamiento_tendencia_mensual(
     except Exception as e:
         logger.exception("Error en financiamiento-tendencia-mensual: %s", e)
         return {"meses": _ultimos_12_meses()}
+
+
+@router.get("/morosidad-por-dia")
+def get_morosidad_por_dia(
+    fecha_inicio: Optional[str] = Query(None),
+    fecha_fin: Optional[str] = Query(None),
+    dias: Optional[int] = Query(30, ge=7, le=90),
+    db: Session = Depends(get_db),
+):
+    """Morosidad por día desde tabla cuotas: por cada día, cartera (suma monto vencido ese día) menos cobrado (suma monto pagado ese día)."""
+    try:
+        hoy_utc = datetime.now(timezone.utc)
+        hoy_date = date(hoy_utc.year, hoy_utc.month, hoy_utc.day)
+        if fecha_inicio and fecha_fin:
+            try:
+                inicio = date.fromisoformat(fecha_inicio)
+                fin = date.fromisoformat(fecha_fin)
+            except ValueError:
+                fin = hoy_date
+                inicio = fin - timedelta(days=dias or 30)
+        else:
+            fin = hoy_date
+            inicio = fin - timedelta(days=dias or 30)
+        if (fin - inicio).days > 90:
+            fin = inicio + timedelta(days=90)
+        resultado = []
+        nombres_mes = ("Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic")
+        d = inicio
+        while d <= fin:
+            # Cartera del día = suma monto de cuotas con fecha_vencimiento = d
+            cartera_dia = db.scalar(
+                select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
+                    Cuota.fecha_vencimiento == d,
+                )
+            ) or 0
+            # Cobrado del día = suma monto de cuotas pagadas con fecha_pago en d
+            cobrado_dia = db.scalar(
+                select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
+                    Cuota.pagado.is_(True),
+                    Cuota.fecha_pago.isnot(None),
+                    func.date(Cuota.fecha_pago) == d,
+                )
+            ) or 0
+            morosidad_dia = max(0.0, _safe_float(cartera_dia) - _safe_float(cobrado_dia))
+            resultado.append({
+                "fecha": d.isoformat(),
+                "dia": f"{d.day} {nombres_mes[d.month - 1]}",
+                "morosidad": round(morosidad_dia, 2),
+            })
+            d += timedelta(days=1)
+        return {"dias": resultado}
+    except Exception as e:
+        logger.exception("Error en morosidad-por-dia: %s", e)
+        return {"dias": []}
 
 
 @router.get("/prestamos-por-concesionario")

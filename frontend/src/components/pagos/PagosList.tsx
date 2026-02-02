@@ -113,6 +113,8 @@ export function PagosList() {
                 await queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false }) // ✓ Invalidar KPIs específicamente
                 await queryClient.invalidateQueries({ queryKey: ['kpis'], exact: false })
                 await queryClient.invalidateQueries({ queryKey: ['dashboard'], exact: false })
+                await queryClient.invalidateQueries({ queryKey: ['kpis-principales-menu'], exact: false })
+                await queryClient.invalidateQueries({ queryKey: ['dashboard-menu'], exact: false })
                 await queryClient.invalidateQueries({ queryKey: ['pagos-ultimos'], exact: false })
                 // Refetch inmediato de KPIs y pagos
                 await queryClient.refetchQueries({ queryKey: ['pagos-kpis'], exact: false })
@@ -400,6 +402,8 @@ export function PagosList() {
               await queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false }) // âœ… Invalidar específicamente pagos-kpis
               await queryClient.invalidateQueries({ queryKey: ['kpis'], exact: false })
               await queryClient.invalidateQueries({ queryKey: ['dashboard'], exact: false })
+              await queryClient.invalidateQueries({ queryKey: ['kpis-principales-menu'], exact: false })
+              await queryClient.invalidateQueries({ queryKey: ['dashboard-menu'], exact: false })
 
               // Invalidar también la query de últimos pagos (resumen)
               await queryClient.invalidateQueries({ queryKey: ['pagos-ultimos'], exact: false })
