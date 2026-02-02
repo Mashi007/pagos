@@ -19,5 +19,5 @@
 
 # Static assets - should not redirect
 /assets/*   200
+/logos/*    200
 /favicon.ico 200
-/logo*.svg  200

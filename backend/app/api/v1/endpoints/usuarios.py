@@ -6,11 +6,12 @@ GET /api/v1/usuarios/ con page, page_size, is_active.
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Depends
 
 from app.core.config import settings
+from app.core.deps import get_current_user
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 _ISO_NOW = datetime.now(timezone.utc).isoformat()
 

@@ -36,6 +36,9 @@ const sizeMap = {
   xl: 'w-20 h-20',
 }
 
+// Logo por defecto (public/logos/rAPI.png); respeta base path (ej. /pagos/)
+const DEFAULT_LOGO_SRC = `${(import.meta.env.BASE_URL || '/').replace(/\/?$/, '')}/logos/rAPI.png`
+
 // Generar IDs únicos para evitar conflictos si hay múltiples logos en la página
 const uniqueId = `logo-${Math.random().toString(36).substr(2, 9)}`
 
@@ -387,7 +390,10 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
       }
     }
 
-    checkCustomLogo()
+    // Retrasar fetch para no competir con auth/redirect y reducir NS_BINDING_ABORTED + "operation is insecure"
+    const startId = setTimeout(() => {
+      checkCustomLogo()
+    }, 200)
 
     // Listener para cambios en el caché compartido
     const handleCacheUpdate = (url: string | null, version: number) => {
@@ -685,6 +691,7 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
     window.addEventListener('logoUpdated', handleLogoUpdate as EventListener)
 
     return () => {
+      clearTimeout(startId)
       // âœ… Cancelar peticiones en curso si el componente se desmonta
       if (controller) {
         controller.abort()
@@ -753,37 +760,15 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
     )
   }
 
-  // Si ya verificamos y no hay logo personalizado, mostrar SVG por defecto
-  // También mostrar SVG mientras verificamos (hasChecked === false)
+  // Si ya verificamos y no hay logo personalizado, mostrar logo por defecto (public/logos/rAPI.png)
   return (
-    <svg
-      className={cn(sizeMap[size], className)}
-      viewBox="0 0 48 48"
-      xmlns="http://www.w3.org/2000/svg"
+    <img
+      src={DEFAULT_LOGO_SRC}
+      alt="RAPICREDIT Logo"
+      className={cn(sizeMap[size], className, 'object-contain')}
       role="img"
-      aria-label="RAPICREDIT Logo"
-    >
-      {/* Letra R estilizada en azul oscuro (#2A3B8F) */}
-      <g>
-        {/* Tallo vertical principal */}
-        <path d="M 8 4 L 8 32 L 16 32 L 16 28 L 12 28 L 12 4 Z" fill="#2A3B8F"/>
-        
-        {/* Curva superior de la R (bowl) */}
-        <path 
-          d="M 12 4 Q 12 8 18 8 Q 24 8 26 12 Q 26 16 20 16 L 16 16 Q 14 16 12 14 Z" 
-          fill="#2A3B8F"
-        />
-        
-        {/* Pierna diagonal de la R (extiende hacia abajo y derecha) */}
-        <path 
-          d="M 12 20 L 12 24 L 20 24 L 28 32 L 32 32 L 24 24 L 24 20 Z" 
-          fill="#2A3B8F"
-        />
-      </g>
-
-      {/* Círculo naranja sólido (#F57F20) debajo y ligeramente a la izquierda */}
-      <circle cx="10" cy="40" r="5.5" fill="#F57F20"/>
-    </svg>
+      loading="eager"
+    />
   )
 }
 

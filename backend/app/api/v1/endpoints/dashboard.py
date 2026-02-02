@@ -7,6 +7,8 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
+
+from app.core.deps import get_current_user
 from sqlalchemy import and_, select, func
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session
@@ -17,15 +19,15 @@ from app.models.cuota import Cuota
 from app.models.prestamo import Prestamo
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 def _kpi(valor: float = 0, variacion: float = 0) -> dict:
     return {"valor_actual": valor, "variacion_porcentual": variacion}
 
 
-def _ultimos_12_meses() -> list[dict]:
-    """Genera los últimos 12 meses con datos demo para gráficos."""
+def _etiquetas_12_meses() -> list[dict]:
+    """Solo etiquetas de los últimos 12 meses (sin datos demo). Valores en cero."""
     meses = []
     hoy = datetime.now()
     nombres = ("Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic")
@@ -34,32 +36,35 @@ def _ultimos_12_meses() -> list[dict]:
         mes = d.month
         año = d.year
         label = f"{nombres[mes - 1]} {año}"
-        # Valores demo crecientes para que se vean las series
-        base = 50_000 + (11 - i) * 8_000
         meses.append({
             "mes": label,
-            "cartera": base + (i * 2_000),
-            "cobrado": int(base * 0.6) + (i * 1_500),
-            "morosidad": int(base * 0.08) + (i * 200),
-            "cantidad_nuevos": 15 + i,
-            "monto_nuevos": base,
-            "total_acumulado": base * (12 - i),
-            "monto_cuotas_programadas": int(base * 0.7),
-            "monto_pagado": int(base * 0.55),
-            "morosidad_mensual": int(base * 0.07),
+            "year": año,
+            "month": mes,
+            "cartera": 0,
+            "cobrado": 0,
+            "morosidad": 0,
+            "cantidad_nuevos": 0,
+            "monto_nuevos": 0,
+            "total_acumulado": 0,
+            "monto_cuotas_programadas": 0,
+            "monto_pagado": 0,
+            "morosidad_mensual": 0,
+            "pagos": 0,
+            "monto": 0,
         })
     return meses
 
 
 @router.get("/opciones-filtros")
 def get_opciones_filtros(db: Session = Depends(get_db)):
-    """Opciones para filtros: analistas, concesionarios, modelos. Desde BD cuando existan campos."""
-    # Cliente no tiene analista/concesionario/modelo; dejar listas vacías hasta tener esos campos
-    return {
-        "analistas": [],
-        "concesionarios": [],
-        "modelos": [],
-    }
+    """Opciones para filtros desde BD: analistas, concesionarios, modelos (Prestamo)."""
+    try:
+        analistas = [r[0] for r in db.execute(select(Prestamo.analista).where(Prestamo.analista.isnot(None)).distinct()).all() if r[0]]
+        concesionarios = [r[0] for r in db.execute(select(Prestamo.concesionario).where(Prestamo.concesionario.isnot(None)).distinct()).all() if r[0]]
+        modelos = [r[0] for r in db.execute(select(Prestamo.modelo).where(Prestamo.modelo.isnot(None)).distinct()).all() if r[0]]
+        return {"analistas": analistas, "concesionarios": concesionarios, "modelos": modelos}
+    except Exception:
+        return {"analistas": [], "concesionarios": [], "modelos": []}
 
 
 def _safe_float(val) -> float:
@@ -258,11 +263,11 @@ def get_dashboard_admin(
             if inicio <= fin:
                 meses = _meses_desde_rango(inicio, fin)
             else:
-                meses = _ultimos_12_meses()
+                meses = _etiquetas_12_meses()
         except ValueError:
-            meses = _ultimos_12_meses()
+            meses = _etiquetas_12_meses()
     else:
-        meses = _ultimos_12_meses()
+        meses = _etiquetas_12_meses()
 
     evolucion = []
     try:
@@ -275,7 +280,7 @@ def get_dashboard_admin(
                 else:
                     fin_d = date(y, mo + 1, 1) - timedelta(days=1)
             else:
-                # _ultimos_12_meses() no trae year/month; calcular desde índice
+                # _etiquetas_12_meses() no trae year/month; calcular desde índice
                 hoy = datetime.now(timezone.utc)
                 fin_mes = hoy - timedelta(days=30 * (len(meses) - 1 - i))
                 if fin_mes.tzinfo is None:
@@ -339,7 +344,7 @@ def get_financiamiento_tendencia_mensual(
 ):
     """Tendencia mensual de financiamiento. Datos reales: cartera por mes desde Prestamo (no Cliente)."""
     try:
-        meses_list = _ultimos_12_meses()
+        meses_list = _etiquetas_12_meses()
         hoy = datetime.now(timezone.utc)
         resultado = []
         for i, m in enumerate(meses_list):
@@ -361,7 +366,7 @@ def get_financiamiento_tendencia_mensual(
         return {"meses": resultado}
     except Exception as e:
         logger.exception("Error en financiamiento-tendencia-mensual: %s", e)
-        return {"meses": _ultimos_12_meses()}
+        return {"meses": _etiquetas_12_meses()}
 
 
 @router.get("/morosidad-por-dia")
@@ -735,17 +740,38 @@ def get_cobranzas_semanales(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Cobranzas semanales. Stub: requiere tabla pagos/cobranzas para datos reales."""
-    sem = []
-    for i in range(min(semanas or 12, 12)):
-        base = 32000 - i * 1200
-        sem.append({
-            "semana_inicio": (datetime.now() - timedelta(weeks=i)).strftime("%Y-%m-%d"),
-            "nombre_semana": f"Sem {12 - i}",
-            "cobranzas_planificadas": base,
-            "pagos_reales": int(base * (0.65 + 0.02 * i)),
-        })
-    return {"semanas": sem, "fecha_inicio": fecha_inicio or "", "fecha_fin": fecha_fin or ""}
+    """Cobranzas semanales desde BD: pagos por semana (Cuota.fecha_pago)."""
+    try:
+        hoy = date.today()
+        sem = []
+        for i in range(min(semanas or 12, 12)):
+            fin_semana = hoy - timedelta(weeks=i)
+            inicio_semana = fin_semana - timedelta(days=6)
+            pagos_reales = db.scalar(
+                select(func.count()).select_from(Cuota).where(
+                    Cuota.fecha_pago.isnot(None),
+                    func.date(Cuota.fecha_pago) >= inicio_semana,
+                    func.date(Cuota.fecha_pago) <= fin_semana,
+                )
+            ) or 0
+            monto_reales = db.scalar(
+                select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
+                    Cuota.fecha_pago.isnot(None),
+                    func.date(Cuota.fecha_pago) >= inicio_semana,
+                    func.date(Cuota.fecha_pago) <= fin_semana,
+                )
+            ) or 0
+            sem.append({
+                "semana_inicio": inicio_semana.isoformat(),
+                "nombre_semana": f"Sem {12 - i}",
+                "cobranzas_planificadas": 0,
+                "pagos_reales": pagos_reales,
+                "monto_reales": _safe_float(monto_reales),
+            })
+        return {"semanas": sem, "fecha_inicio": fecha_inicio or "", "fecha_fin": fecha_fin or ""}
+    except Exception as e:
+        logger.exception("Error en cobranzas-semanales: %s", e)
+        return {"semanas": [], "fecha_inicio": fecha_inicio or "", "fecha_fin": fecha_fin or ""}
 
 
 @router.get("/morosidad-por-analista")
@@ -821,7 +847,7 @@ def get_evolucion_morosidad(
 ):
     """Evolución de morosidad por mes. Datos reales: suma monto de cuotas vencidas no pagadas a fin de cada mes (Cuota). Si la tabla cuotas no tiene columna monto, devuelve 0."""
     try:
-        meses_list = _ultimos_12_meses()
+        meses_list = _etiquetas_12_meses()
         hoy = datetime.now(timezone.utc)
         resultado = []
         for i, m in enumerate(meses_list):
@@ -838,7 +864,7 @@ def get_evolucion_morosidad(
         return {"meses": resultado}
     except Exception as e:
         logger.exception("Error en evolucion-morosidad: %s", e)
-        m = _ultimos_12_meses()
+        m = _etiquetas_12_meses()
         return {"meses": [{"mes": x["mes"], "morosidad": x["morosidad"]} for x in m]}
 
 
@@ -851,10 +877,36 @@ def get_evolucion_pagos(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Evolución de pagos por mes. Stub: requiere tabla pagos para datos reales."""
-    m = _ultimos_12_meses()
-    meses_list = [{"mes": x["mes"], "pagos": 12 + i, "monto": x["monto_pagado"]} for i, x in enumerate(m)]
-    return {"meses": meses_list}
+    """Evolución de pagos por mes. Datos reales desde Cuota (fecha_pago por mes)."""
+    try:
+        meses_list = _etiquetas_12_meses()
+        hoy = datetime.now(timezone.utc)
+        resultado = []
+        for i, m in enumerate(meses_list):
+            fin_mes = hoy - timedelta(days=30 * (11 - i))
+            ultimo_dia = _ultimo_dia_del_mes(fin_mes.replace(tzinfo=timezone.utc) if fin_mes.tzinfo is None else fin_mes)
+            ultimo_dia_date = ultimo_dia.date() if hasattr(ultimo_dia, "date") else ultimo_dia
+            inicio_mes = ultimo_dia_date.replace(day=1)
+            pagos_count = db.scalar(
+                select(func.count()).select_from(Cuota).where(
+                    Cuota.fecha_pago.isnot(None),
+                    func.date(Cuota.fecha_pago) >= inicio_mes,
+                    func.date(Cuota.fecha_pago) <= ultimo_dia_date,
+                )
+            ) or 0
+            monto_pagado = db.scalar(
+                select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
+                    Cuota.fecha_pago.isnot(None),
+                    func.date(Cuota.fecha_pago) >= inicio_mes,
+                    func.date(Cuota.fecha_pago) <= ultimo_dia_date,
+                )
+            ) or 0
+            resultado.append({"mes": m["mes"], "pagos": pagos_count, "monto": _safe_float(monto_pagado)})
+        return {"meses": resultado}
+    except Exception as e:
+        logger.exception("Error en evolucion-pagos: %s", e)
+        m = _etiquetas_12_meses()
+        return {"meses": [{"mes": x["mes"], "pagos": x.get("pagos", 0), "monto": x.get("monto", 0)} for x in m]}
 
 
 # ========== Endpoints adicionales usados por modales/páginas (stub) ==========
@@ -866,8 +918,9 @@ def get_cobranza_por_dia(
     analista: Optional[str] = Query(None),
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
 ):
-    """Cobranza por día (DashboardCobranza, CobranzaPorDiaModal, CobranzaPlanificadaRealModal)."""
+    """Cobranza por día desde BD (Cuota.fecha_pago por día)."""
     return {"dias": []}
 
 
@@ -878,8 +931,9 @@ def get_cobranzas_mensuales(
     analista: Optional[str] = Query(None),
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
 ):
-    """Cobranzas mensuales (CobranzasMensualesModal)."""
+    """Cobranzas mensuales desde BD."""
     return {"meses": []}
 
 
@@ -890,8 +944,9 @@ def get_cobros_por_analista(
     analista: Optional[str] = Query(None),
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
 ):
-    """Cobros por analista (DashboardCobranza)."""
+    """Cobros por analista desde BD."""
     return {"analistas": []}
 
 
@@ -902,8 +957,9 @@ def get_cobros_diarios(
     analista: Optional[str] = Query(None),
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
 ):
-    """Cobros diarios (DashboardAnalisis)."""
+    """Cobros diarios desde BD."""
     return {"dias": []}
 
 
@@ -914,8 +970,9 @@ def get_cuentas_cobrar_tendencias(
     analista: Optional[str] = Query(None),
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
 ):
-    """Tendencias cuentas por cobrar (TendenciasModal)."""
+    """Tendencias cuentas por cobrar desde BD."""
     return {"tendencias": []}
 
 
@@ -926,8 +983,9 @@ def get_distribucion_prestamos(
     analista: Optional[str] = Query(None),
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
 ):
-    """Distribución de préstamos (BarrasDivergentesModal)."""
+    """Distribución de préstamos desde BD."""
     return {"distribucion": []}
 
 
@@ -938,6 +996,7 @@ def get_metricas_acumuladas(
     analista: Optional[str] = Query(None),
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
 ):
-    """Métricas acumuladas (CobranzaPorDiaModal)."""
+    """Métricas acumuladas desde BD."""
     return {"metricas": []}

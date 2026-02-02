@@ -132,9 +132,9 @@ export function LoginForm() {
           transition={{ delay: SPRING_DELAY, type: "spring", stiffness: SPRING_STIFFNESS }}
           className="mx-auto"
         >
-          {/* Logo RapiCredit (R azul + punto naranja) */}
+          {/* Logo RapiCredit: forceDefault para no llamar a /api en login (público) y branding consistente */}
           <div className="w-24 h-24 mx-auto mb-4 bg-white rounded-2xl flex items-center justify-center shadow-2xl p-3 border-4 border-white/90 ring-4 ring-gray-100/60">
-            <Logo size="xl" forceDefault className="drop-shadow-xl brightness-110 contrast-125" />
+            <Logo size="lg" forceDefault className="drop-shadow-xl brightness-110 contrast-125" />
           </div>
         </motion.div>
 

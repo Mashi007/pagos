@@ -7,6 +7,8 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Query, Depends, HTTPException
+
+from app.core.deps import get_current_user
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import ProgrammingError
@@ -17,7 +19,7 @@ from app.models.cliente import Cliente
 from app.schemas.ticket import TicketCreate, TicketUpdate, TicketResponse, ClienteDataTicket
 from app.core.email import notify_ticket_created, notify_ticket_updated
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 # Columnas de Ticket sin fecha_creacion/fecha_actualizacion (fallback si la BD no tiene esas columnas)

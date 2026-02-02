@@ -1,10 +1,12 @@
 """
-Endpoints de autenticación (login, refresh, me)
+Endpoints de autenticación (login, refresh, me, logout)
 """
+import time
+from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.config import settings
@@ -24,6 +26,11 @@ from app.schemas.auth import (
 
 router = APIRouter()
 security = HTTPBearer(auto_error=False)
+
+# Rate limiting en memoria: IP -> lista de timestamps de intentos de login
+_LOGIN_ATTEMPTS: dict[str, list[float]] = defaultdict(list)
+_LOGIN_RATE_LIMIT_WINDOW = 60  # segundos
+_LOGIN_RATE_LIMIT_MAX = 5  # intentos por ventana
 
 
 @router.get("/status")
@@ -53,26 +60,54 @@ def _fake_user(email: str) -> UserResponse:
     )
 
 
+def _get_client_ip(request: Request) -> str:
+    """Obtiene la IP del cliente (respeta X-Forwarded-For si está detrás de proxy)."""
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _check_login_rate_limit(ip: str) -> None:
+    """Lanza 429 si se supera el límite de intentos de login por IP."""
+    now = time.time()
+    attempts = _LOGIN_ATTEMPTS[ip]
+    # Eliminar intentos fuera de la ventana
+    attempts[:] = [t for t in attempts if now - t < _LOGIN_RATE_LIMIT_WINDOW]
+    if len(attempts) >= _LOGIN_RATE_LIMIT_MAX:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Demasiados intentos de inicio de sesión. Espere un minuto e intente de nuevo.",
+        )
+    attempts.append(now)
+
+
 @router.post("/login", response_model=LoginResponse)
-def login(credentials: LoginRequest):
-    """Login con email y contraseña (usuario admin desde env)."""
+def login(credentials: LoginRequest, request: Request):
+    """Login con email y contraseña (usuario admin desde env). Rate limit por IP."""
+    client_ip = _get_client_ip(request)
+    _check_login_rate_limit(client_ip)
+
     if not settings.ADMIN_EMAIL or not settings.ADMIN_PASSWORD:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Autenticación no configurada. Configure ADMIN_EMAIL y ADMIN_PASSWORD en el servidor.",
         )
     email = credentials.email.lower().strip()
-    if email != settings.ADMIN_EMAIL.lower().strip():
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Credenciales incorrectas",
-        )
+    admin_email_normalized = settings.ADMIN_EMAIL.lower().strip()
     hashed = get_password_hash(settings.ADMIN_PASSWORD)
-    if not verify_password(credentials.password, hashed):
+    # Siempre ejecutar verificación de contraseña para mitigar timing (enumeración de emails)
+    password_ok = verify_password(credentials.password, hashed)
+    email_ok = email == admin_email_normalized
+
+    if not (email_ok and password_ok):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciales incorrectas",
         )
+    # Login exitoso: quitar los intentos recientes de esta IP (opcional, evita castigo tras acierto)
+    _LOGIN_ATTEMPTS[client_ip] = []
+
     user = _fake_user(settings.ADMIN_EMAIL)
     access_token = create_access_token(subject=user.email, extra={"email": user.email})
     refresh_token = create_refresh_token(subject=user.email)
@@ -83,6 +118,12 @@ def login(credentials: LoginRequest):
         expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         user=user,
     )
+
+
+@router.post("/logout")
+def logout():
+    """Cierre de sesión. El cliente debe eliminar tokens localmente. Respuesta 200 para coherencia."""
+    return {"message": "Sesión cerrada"}
 
 
 @router.post("/refresh")

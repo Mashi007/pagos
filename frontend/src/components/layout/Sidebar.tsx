@@ -328,7 +328,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                   <div className="absolute inset-0 rounded-2xl bg-gradient-to-b from-white/60 to-transparent pointer-events-none" />
                   {/* Borde interno sutil para profundidad */}
                   <div className="absolute inset-[1px] rounded-[15px] border border-white/50 pointer-events-none" />
-                  <Logo size="lg" forceDefault className="drop-shadow-xl brightness-110 contrast-125 relative z-10" />
+                  <Logo size="lg" className="drop-shadow-xl brightness-110 contrast-125 relative z-10" />
                 </motion.div>
               </div>
             )}
@@ -351,7 +351,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                   <div className="absolute inset-0 rounded-xl bg-gradient-to-b from-white/60 to-transparent pointer-events-none" />
                   {/* Borde interno sutil para profundidad */}
                   <div className="absolute inset-[1px] rounded-[9px] border border-white/50 pointer-events-none" />
-                  <Logo size="md" forceDefault className="drop-shadow-lg brightness-110 contrast-125 relative z-10" />
+                  <Logo size="md" className="drop-shadow-lg brightness-110 contrast-125 relative z-10" />
                 </div>
               </div>
             )}

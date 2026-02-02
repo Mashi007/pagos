@@ -1,14 +1,21 @@
 """
 Endpoints de validadores (cédula, teléfono, email, fecha).
 GET /validadores/configuracion-validadores devuelve la configuración para el frontend.
-Sin implementación completa se devuelve stub para evitar 404 en Configuración > Validadores.
+Datos desde BD si existe clave configuracion; si no, estructura mínima (config de app).
 """
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
 
-router = APIRouter()
+from app.core.database import get_db
+from app.core.deps import get_current_user
+from app.models.configuracion import Configuracion
+
+router = APIRouter(dependencies=[Depends(get_current_user)])
+
+CLAVE_VALIDADORES = "configuracion_validadores"
 
 
 def _stub_validador(descripcion: str, ejemplos_validos: list, ejemplos_invalidos: list) -> dict:
@@ -30,12 +37,8 @@ def _stub_validador(descripcion: str, ejemplos_validos: list, ejemplos_invalidos
     }
 
 
-@router.get("/configuracion-validadores")
-def get_configuracion_validadores():
-    """
-    Configuración de validadores para el frontend (ValidadoresConfig).
-    Estructura mínima para que la UI no falle; sin backend de validación real.
-    """
+def _config_validadores_default() -> dict:
+    """Estructura por defecto de validadores (sin datos mock; definición de reglas)."""
     return {
         "titulo": "Configuración de validadores",
         "fecha_consulta": datetime.utcnow().isoformat() + "Z",
@@ -74,3 +77,20 @@ def get_configuracion_validadores():
         "configuracion_frontend": {},
         "endpoints_validacion": {},
     }
+
+
+@router.get("/configuracion-validadores")
+def get_configuracion_validadores(db: Session = Depends(get_db)):
+    """
+    Configuración de validadores desde BD (clave configuracion_validadores) o por defecto.
+    """
+    try:
+        row = db.get(Configuracion, CLAVE_VALIDADORES)
+        if row and row.valor:
+            import json
+            data = json.loads(row.valor)
+            if isinstance(data, dict):
+                return data
+    except Exception:
+        pass
+    return _config_validadores_default()

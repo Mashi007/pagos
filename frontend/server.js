@@ -365,6 +365,10 @@ app.get('/assets/*', (req, res) => {
   res.redirect(302, FRONTEND_BASE + '/assets' + subpath + (req.originalUrl?.includes('?') ? '?' + req.originalUrl.split('?')[1] : ''));
 });
 
+// Favicon: redirigir favicon.svg (antiguo) a logos/rAPI.png para no 404 ni servir archivo viejo
+app.get('/favicon.svg', (req, res) => res.redirect(302, FRONTEND_BASE + '/logos/rAPI.png'));
+app.get(FRONTEND_BASE + '/favicon.svg', (req, res) => res.redirect(302, FRONTEND_BASE + '/logos/rAPI.png'));
+
 // Activar frontend en https://rapicredit.onrender.com/reportes -> redirigir a /pagos/reportes
 const qs = (req) => (req.originalUrl && req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '');
 app.get('/reportes', (req, res) => {

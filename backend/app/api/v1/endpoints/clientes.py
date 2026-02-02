@@ -9,6 +9,8 @@ import logging
 from typing import Optional, Any
 
 from fastapi import APIRouter, Query, Depends, HTTPException
+
+from app.core.deps import get_current_user
 from pydantic import BaseModel, ValidationError
 from sqlalchemy import select, func, or_
 from sqlalchemy.orm import Session
@@ -19,7 +21,7 @@ from app.models.cliente import Cliente
 from app.schemas.cliente import ClienteResponse, ClienteCreate, ClienteUpdate
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 def _row_to_cliente_response(row: Any) -> ClienteResponse:

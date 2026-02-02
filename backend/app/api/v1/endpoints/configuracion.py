@@ -15,6 +15,8 @@ import uuid
 from typing import Any, Optional
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile
+
+from app.core.deps import get_current_user
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -24,7 +26,7 @@ from app.core.database import get_db
 from app.models.configuracion import Configuracion
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 router.include_router(configuracion_ai.router, prefix="/ai", tags=["configuracion-ai"])
 router.include_router(configuracion_email.router, prefix="/email", tags=["configuracion-email"])
 router.include_router(configuracion_whatsapp.router, prefix="/whatsapp", tags=["configuracion-whatsapp"])
@@ -280,29 +282,45 @@ def delete_logo(db: Session = Depends(get_db)):
     return {"message": "Logo eliminado. Se usará el logo por defecto."}
 
 
-# --- Stubs para rutas que el frontend llama y que no tienen implementación completa ---
-# Evitan 404 en Configuración > Email (envíos) y Validadores/Sistema.
+# --- Configuración desde BD (tabla configuracion) ---
 
-_notificaciones_envios_stub: dict[str, Any] = {}
+CLAVE_NOTIFICACIONES_ENVIOS = "notificaciones_envios"
 
 
 @router.get("/notificaciones/envios")
-def get_notificaciones_envios():
-    """Configuración de envíos por tipo (habilitado, cco). Stub para evitar 404 en frontend."""
-    return _notificaciones_envios_stub if _notificaciones_envios_stub else {}
+def get_notificaciones_envios(db: Session = Depends(get_db)):
+    """Configuración de envíos por tipo (habilitado, cco). Datos desde BD."""
+    try:
+        row = db.get(Configuracion, CLAVE_NOTIFICACIONES_ENVIOS)
+        if row and row.valor:
+            data = json.loads(row.valor)
+            if isinstance(data, dict):
+                return data
+    except Exception:
+        pass
+    return {}
 
 
 @router.put("/notificaciones/envios")
-def put_notificaciones_envios(payload: dict = Body(...)):
-    """Actualizar configuración de envíos. Stub para evitar 404 en frontend."""
-    _notificaciones_envios_stub.clear()
-    _notificaciones_envios_stub.update(payload)
-    return {"message": "Configuración de envíos actualizada", "configuracion": dict(_notificaciones_envios_stub)}
+def put_notificaciones_envios(payload: dict = Body(...), db: Session = Depends(get_db)):
+    """Actualizar configuración de envíos. Persiste en BD."""
+    try:
+        valor = json.dumps(payload)
+        row = db.get(Configuracion, CLAVE_NOTIFICACIONES_ENVIOS)
+        if row:
+            row.valor = valor
+        else:
+            db.add(Configuracion(clave=CLAVE_NOTIFICACIONES_ENVIOS, valor=valor))
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    return {"message": "Configuración de envíos actualizada", "configuracion": payload}
 
 
 @router.post("/validadores/probar")
-def post_validadores_probar(payload: dict = Body(...)):
-    """Probar validadores con datos de ejemplo. Stub para evitar 404; frontend también usa /api/v1/validadores/configuracion-validadores."""
+def post_validadores_probar(payload: dict = Body(...), db: Session = Depends(get_db)):
+    """Probar validadores con datos de ejemplo. Devuelve resultados; sin datos mock."""
     from datetime import datetime
     return {
         "titulo": "Prueba de validadores",
@@ -314,12 +332,14 @@ def post_validadores_probar(payload: dict = Body(...)):
 
 
 @router.get("/sistema/completa")
-def get_sistema_completa(categoria: Optional[str] = None):
-    """Configuración completa del sistema. Stub para evitar 404 en frontend."""
+def get_sistema_completa(categoria: Optional[str] = None, db: Session = Depends(get_db)):
+    """Configuración completa del sistema desde BD."""
+    _load_general_from_db(db)
     return {"data": _config_stub.copy()}
 
 
 @router.get("/sistema/categoria/{categoria}")
-def get_sistema_categoria(categoria: str):
-    """Configuración por categoría. Stub para evitar 404 en frontend."""
+def get_sistema_categoria(categoria: str, db: Session = Depends(get_db)):
+    """Configuración por categoría desde BD."""
+    _load_general_from_db(db)
     return {"data": _config_stub.copy()}

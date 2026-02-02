@@ -2,12 +2,12 @@
 Schemas para autenticación
 """
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, Field
 
 
 class LoginRequest(BaseModel):
-    email: str
-    password: str
+    email: EmailStr
+    password: str = Field(..., min_length=6, description="Mínimo 6 caracteres")
     remember: Optional[bool] = True
 
 

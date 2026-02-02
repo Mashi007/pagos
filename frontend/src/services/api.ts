@@ -1,7 +1,7 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, AxiosProgressEvent, AxiosResponse } from 'axios'
 import toast from 'react-hot-toast'
 import { getErrorMessage, isAxiosError } from '../types/errors'
-import { env } from '../config/env'
+import { env, BASE_PATH } from '../config/env'
 import {
   safeGetItem,
   safeGetSessionItem,
@@ -36,6 +36,9 @@ const SLOW_ENDPOINT_TIMEOUT_MS = 60000 // Para endpoints que pueden tardar más
 
 // Configuración base de Axios
 const API_BASE_URL = env.API_URL
+
+// Ruta de login con base path (ej. /pagos/login cuando BASE_PATH es /pagos)
+const LOGIN_PATH = `${BASE_PATH}/login`.replace(/\/+/g, '/')
 
 // ✅ Función para decodificar JWT y verificar expiración
 function isTokenExpired(token: string): boolean {
@@ -131,9 +134,9 @@ class ApiClient {
               this.cancelAllPendingRequests()
               clearAuthStorage()
 
-              if (window.location.pathname !== '/login' && !this.isRedirectingToLogin) {
+              if (window.location.pathname !== LOGIN_PATH && !this.isRedirectingToLogin) {
                 this.isRedirectingToLogin = true
-                window.location.replace('/login')
+                window.location.replace(LOGIN_PATH)
               }
 
               const error = new Error('Token inválido. Por favor, inicia sesión nuevamente.')
@@ -149,9 +152,9 @@ class ApiClient {
               clearAuthStorage()
 
               // Redirigir inmediatamente si no estamos ya en login
-              if (window.location.pathname !== '/login' && !this.isRedirectingToLogin) {
+              if (window.location.pathname !== LOGIN_PATH && !this.isRedirectingToLogin) {
                 this.isRedirectingToLogin = true
-                window.location.replace('/login')
+                window.location.replace(LOGIN_PATH)
               }
 
               const error = new Error('Token expirado. Redirigiendo al login...')
@@ -298,7 +301,7 @@ class ApiClient {
             clearAuthStorage()
 
             // Evitar mostrar toasts durante el redirect
-            const isAlreadyRedirecting = window.location.pathname === '/login' || this.isRedirectingToLogin
+            const isAlreadyRedirecting = window.location.pathname === LOGIN_PATH || this.isRedirectingToLogin
 
             if (!isAlreadyRedirecting) {
               this.isRedirectingToLogin = true
@@ -308,8 +311,8 @@ class ApiClient {
                 console.warn('🔄 Refresh token falló. Redirigiendo al login...', refreshError)
               }
 
-              // ✅ Redirigir inmediatamente sin delay para evitar más requests
-              window.location.replace('/login')
+              // ✅ Redirigir inmediatamente sin delay para evitar más requests (respeta BASE_PATH)
+              window.location.replace(LOGIN_PATH)
             }
 
             return Promise.reject(refreshError)

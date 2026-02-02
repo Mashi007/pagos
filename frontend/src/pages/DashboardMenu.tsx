@@ -172,7 +172,7 @@ export function DashboardMenu() {
 
   // Batch 3: Morosidad por día (desde tabla cuotas). Respeta rango del período (ej. desde 2025).
   const periodoTendencia = getPeriodoGrafico('tendencia') || periodo || 'ultimos_12_meses'
-  const diasMorosidad = periodoTendencia === 'dia' ? 7 : periodoTendencia === 'semana' ? 14 : periodoTendencia === 'mes' ? 30 : 90
+  const diasMorosidad = (periodoTendencia === 'dia' || periodoTendencia === 'día') ? 7 : periodoTendencia === 'semana' ? 14 : periodoTendencia === 'mes' ? 30 : 90
   const { data: datosMorosidadPorDia, isLoading: loadingMorosidadPorDia } = useQuery({
     queryKey: ['morosidad-por-dia', periodoTendencia, diasMorosidad, JSON.stringify(filtros)],
     queryFn: async () => {
@@ -399,8 +399,9 @@ export function DashboardMenu() {
 
       // También refrescar la query de kpisPrincipales usando su refetch
       await refetch()
+      toast.success('Datos actualizados correctamente')
     } catch (error) {
-      console.error('âŒ [DashboardMenu] Error al refrescar queries:', error)
+      toast.error('Error al actualizar los datos. Intenta de nuevo.')
     } finally {
       setIsRefreshing(false)
     }
@@ -479,6 +480,7 @@ export function DashboardMenu() {
         .map(r => ({
           ...r,
           categoriaFormateada: r.categoria.replace(/,/g, ''),
+          cantidad: r.cantidad_prestamos,
         }))
     } catch (error) {
       console.error('Error procesando datos de financiamiento por rangos:', error)
@@ -767,7 +769,7 @@ export function DashboardMenu() {
                       <div className="flex items-center gap-2">
                         <SelectorPeriodoGrafico chartId="tendencia" />
                         <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
-                          {periodoTendencia === 'dia' ? '7 días' : periodoTendencia === 'semana' ? '14 días' : periodoTendencia === 'mes' ? '30 días' : '90 días'}
+                          {(periodoTendencia === 'dia' || periodoTendencia === 'día') ? '7 días' : periodoTendencia === 'semana' ? '14 días' : periodoTendencia === 'mes' ? '30 días' : '90 días'}
                         </Badge>
                       </div>
                     </div>

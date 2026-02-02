@@ -1,12 +1,29 @@
 """
-Endpoints de KPIs (stub para que el frontend no reciba 404).
+Endpoints de KPIs. Datos reales desde BD (Prestamo, Cuota).
 GET /kpis/dashboard usado por DashboardFinanciamiento y DashboardCuotas.
 """
+from datetime import date
 from typing import Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
-router = APIRouter()
+from app.core.database import get_db
+from app.core.deps import get_current_user
+from app.models.cuota import Cuota
+from app.models.prestamo import Prestamo
+
+router = APIRouter(dependencies=[Depends(get_current_user)])
+
+
+def _safe_float(val) -> float:
+    if val is None:
+        return 0.0
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 @router.get("/dashboard")
@@ -16,10 +33,31 @@ def get_kpis_dashboard(
     analista: Optional[str] = Query(None),
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
 ):
-    """KPIs del dashboard (stub). Frontend: DashboardFinanciamiento, DashboardCuotas."""
+    """KPIs del dashboard desde BD: total_prestamos, total_morosidad, kpis (lista)."""
+    hoy = date.today()
+    q_prestamos = select(Prestamo).where(Prestamo.estado == "APROBADO")
+    if analista:
+        q_prestamos = q_prestamos.where(Prestamo.analista == analista)
+    if concesionario:
+        q_prestamos = q_prestamos.where(Prestamo.concesionario == concesionario)
+    if modelo:
+        q_prestamos = q_prestamos.where(Prestamo.modelo == modelo)
+    total_prestamos = db.scalar(select(func.count()).select_from(q_prestamos.subquery())) or 0
+    # Morosidad: suma monto de cuotas vencidas no pagadas
+    total_morosidad = db.scalar(
+        select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
+            Cuota.fecha_pago.is_(None),
+            Cuota.fecha_vencimiento < hoy,
+        )
+    ) or 0
+    kpis = [
+        {"nombre": "Total préstamos", "valor": total_prestamos, "variacion": 0},
+        {"nombre": "Morosidad", "valor": _safe_float(total_morosidad), "variacion": 0},
+    ]
     return {
-        "kpis": [],
-        "total_prestamos": 0,
-        "total_morosidad": 0,
+        "kpis": kpis,
+        "total_prestamos": total_prestamos,
+        "total_morosidad": _safe_float(total_morosidad),
     }

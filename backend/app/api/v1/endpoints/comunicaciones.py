@@ -5,12 +5,14 @@ Las comunicaciones de clientes se reciben por WhatsApp (webhook) o email; se pue
 """
 from typing import Optional
 from fastapi import APIRouter, Query, Depends
+
+from app.core.deps import get_current_user
 from pydantic import BaseModel
 
 from app.core.database import get_db
 from sqlalchemy.orm import Session
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 @router.get("", response_model=dict)

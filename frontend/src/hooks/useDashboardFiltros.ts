@@ -72,6 +72,7 @@ export function useDashboardFiltros(filtros: DashboardFiltros) {
     let fecha_fin: Date = new Date(hoy)
 
     switch (periodo) {
+      case 'día':
       case 'dia':
         fecha_inicio = new Date(hoy)
         fecha_inicio.setHours(0, 0, 0, 0)

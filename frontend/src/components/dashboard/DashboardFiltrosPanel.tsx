@@ -47,16 +47,13 @@ export function DashboardFiltrosPanel({
   }, [filtros, showFiltros])
 
   const handleLimpiarFiltros = () => {
-    console.log('ðŸ§¹ Limpiando filtros...')
     const filtrosVacios: DashboardFiltros = {}
     setFiltrosTemporales(filtrosVacios)
     setFiltros(filtrosVacios)
     setShowFiltros(false) // Cerrar popover después de limpiar
   }
 
-  // âœ… Función para aplicar filtros
   const handleAplicarFiltros = () => {
-    console.log('âœ… Aplicando filtros:', filtrosTemporales)
     setFiltros(filtrosTemporales)
     setShowFiltros(false) // Cerrar popover después de aplicar
   }
@@ -111,7 +108,6 @@ export function DashboardFiltrosPanel({
                     ...filtrosTemporales,
                     analista: value === '__ALL__' ? undefined : value,
                   }
-                  console.log('ðŸ” [Filtro Analista] Cambiando filtro temporal:', { anterior: filtrosTemporales.analista, nuevo: nuevoFiltro.analista, todosLosFiltros: nuevoFiltro })
                   setFiltrosTemporales(nuevoFiltro)
                 }}
                 disabled={loadingOpcionesFiltros}
@@ -159,7 +155,6 @@ export function DashboardFiltrosPanel({
                     ...filtrosTemporales,
                     concesionario: value === '__ALL__' ? undefined : value,
                   }
-                  console.log('ðŸ” [Filtro Concesionario] Cambiando filtro temporal:', { anterior: filtrosTemporales.concesionario, nuevo: nuevoFiltro.concesionario, todosLosFiltros: nuevoFiltro })
                   setFiltrosTemporales(nuevoFiltro)
                 }}
                 disabled={loadingOpcionesFiltros}
@@ -207,7 +202,6 @@ export function DashboardFiltrosPanel({
                     ...filtrosTemporales,
                     modelo: value === '__ALL__' ? undefined : value,
                   }
-                  console.log('ðŸ” [Filtro Modelo] Cambiando filtro temporal:', { anterior: filtrosTemporales.modelo, nuevo: nuevoFiltro.modelo, todosLosFiltros: nuevoFiltro })
                   setFiltrosTemporales(nuevoFiltro)
                 }}
                 disabled={loadingOpcionesFiltros}
@@ -257,7 +251,6 @@ export function DashboardFiltrosPanel({
                       ...filtrosTemporales,
                       fecha_inicio: e.target.value || undefined,
                     }
-                    console.log('ðŸ” [Filtro Fecha Inicio] Cambiando filtro temporal:', { anterior: filtrosTemporales.fecha_inicio, nuevo: nuevoFiltro.fecha_inicio, todosLosFiltros: nuevoFiltro })
                     setFiltrosTemporales(nuevoFiltro)
                   }}
                 />
@@ -272,7 +265,6 @@ export function DashboardFiltrosPanel({
                       ...filtrosTemporales,
                       fecha_fin: e.target.value || undefined,
                     }
-                    console.log('ðŸ” [Filtro Fecha Fin] Cambiando filtro temporal:', { anterior: filtrosTemporales.fecha_fin, nuevo: nuevoFiltro.fecha_fin, todosLosFiltros: nuevoFiltro })
                     setFiltrosTemporales(nuevoFiltro)
                   }}
                 />

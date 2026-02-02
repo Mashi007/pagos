@@ -8,14 +8,15 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.deps import get_current_user
 from app.core.email import send_email
 from app.api.v1.endpoints.notificaciones import get_notificaciones_tabs_data
 
-router_previas = APIRouter()
-router_dia_pago = APIRouter()
-router_retrasadas = APIRouter()
-router_prejudicial = APIRouter()
-router_mora_61 = APIRouter()
+router_previas = APIRouter(dependencies=[Depends(get_current_user)])
+router_dia_pago = APIRouter(dependencies=[Depends(get_current_user)])
+router_retrasadas = APIRouter(dependencies=[Depends(get_current_user)])
+router_prejudicial = APIRouter(dependencies=[Depends(get_current_user)])
+router_mora_61 = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 def _enviar_correos_items(items: List[dict], asunto_base: str, cuerpo_base: str) -> dict:

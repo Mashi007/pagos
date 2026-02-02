@@ -7,6 +7,8 @@ from datetime import date
 from typing import List
 
 from fastapi import APIRouter, Depends
+
+from app.core.deps import get_current_user
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -14,7 +16,7 @@ from app.core.database import get_db
 from app.models.cuota import Cuota
 from app.models.cliente import Cliente
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 def _item(cliente: Cliente, cuota: Cuota, dias_atraso: int = None) -> dict:
