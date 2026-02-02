@@ -26,10 +26,14 @@ from app.core.database import get_db
 from app.models.configuracion import Configuracion
 
 logger = logging.getLogger(__name__)
+# Router con auth para todo excepto logo (general, upload, delete, sub-routers)
 router = APIRouter(dependencies=[Depends(get_current_user)])
 router.include_router(configuracion_ai.router, prefix="/ai", tags=["configuracion-ai"])
 router.include_router(configuracion_email.router, prefix="/email", tags=["configuracion-email"])
 router.include_router(configuracion_whatsapp.router, prefix="/whatsapp", tags=["configuracion-whatsapp"])
+
+# Router sin auth para GET/HEAD logo (login, correos, etc. pueden cargar el logo sin token)
+router_logo = APIRouter()
 
 CLAVE_CONFIG_GENERAL = "configuracion_general"
 CLAVE_LOGO_IMAGEN = "logo_imagen"
@@ -167,11 +171,12 @@ def _logo_exists_and_type(filename: str, db: Session) -> tuple[bool, Optional[st
     return True, _content_type_for_filename(safe)
 
 
-@router.get("/logo/{filename}")
+@router_logo.get("/logo/{filename}")
 def get_logo(filename: str, db: Session = Depends(get_db)):
     """
     Sirve el logo por nombre de archivo. Primero intenta LOGO_UPLOAD_DIR; si no hay o no existe,
     sirve desde BD (logo_imagen en base64) para que funcione en Render sin disco persistente.
+    ⚠️ PÚBLICO: no exige auth (login, correos, preview en Configuración).
     """
     safe = _safe_filename(filename)
     if not safe:
@@ -195,11 +200,13 @@ def get_logo(filename: str, db: Session = Depends(get_db)):
     return Response(content=content, media_type=media_type)
 
 
-@router.head("/logo/{filename}")
+@router_logo.head("/logo/{filename}")
 def head_logo(filename: str, db: Session = Depends(get_db)):
     """
     HEAD para el logo: el frontend usa HEAD para comprobar si existe sin descargar.
     Sin este endpoint, algunos proxies/dev devuelven 405 Method Not Allowed.
+    ⚠️ PÚBLICO: no debe exigir auth (login, correos, etc. cargan el logo sin token).
+    Si devuelve 401, revisar que ningún middleware aplique auth a este router.
     """
     exists, media_type = _logo_exists_and_type(filename, db)
     if not exists:

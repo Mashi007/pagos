@@ -143,7 +143,7 @@ export function Configuracion() {
   })
   const [estadoCarga, setEstadoCarga] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
 
-  // Sincronizar sección con el parámetro tab de la URL (al cambiar tab por navegación)
+  // Sincronizar sección con el parámetro tab de la URL (al cambiar tab por navegación o al abrir /pagos/configuracion?tab=ai)
   useEffect(() => {
     const tab = searchParams.get('tab')
     if (tab === 'email') {
@@ -188,10 +188,18 @@ export function Configuracion() {
       
       // ✅ Verificar si hay logo personalizado
       if (config.logo_filename) {
-        // Verificar que el logo realmente existe haciendo una petición HEAD
+        // Verificar que el logo realmente existe haciendo una petición HEAD.
+        // En producción env.API_URL es '' → URL relativa /api/... (mismo origen, proxy en server.js).
+        // credentials: 'same-origin' evita 401 si el servidor espera cookie de sesión.
         try {
-          const logoUrl = `${env.API_URL}/api/v1/configuracion/logo/${config.logo_filename}?t=${Date.now()}`
-          const headResponse = await fetch(logoUrl, { method: 'HEAD' })
+          const base = (env.API_URL || '').replace(/\/$/, '')
+          const logoUrl = `${base}/api/v1/configuracion/logo/${config.logo_filename}?t=${Date.now()}`
+          const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token')
+          const headResponse = await fetch(logoUrl, {
+            method: 'HEAD',
+            credentials: 'same-origin',
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          })
           
           if (headResponse.ok) {
             // El logo existe, mostrar opción de eliminar
@@ -1520,7 +1528,7 @@ export function Configuracion() {
       case 'baseDatos': return renderSeccionBaseDatos()
       // case 'integraciones': return renderSeccionIntegraciones() // OCULTO
       case 'facturacion': return renderSeccionFacturacion()
-      case 'inteligenciaArtificial': return renderSeccionInteligenciaArtificial()
+      case 'inteligenciaArtificial': return <AIConfig />
       case 'validadores': return <ValidadoresConfig />
       case 'concesionarios': return <ConcesionariosConfig />
       case 'analistas': return <AnalistasConfig />

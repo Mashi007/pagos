@@ -110,6 +110,7 @@ def get_tickets(
             err_msg = str(pe)
             if "fecha_creacion" not in err_msg and "fecha_actualizacion" not in err_msg and "does not exist" not in err_msg.lower():
                 raise
+            db.rollback()  # transacción abortada; permitir siguiente consulta
             q_fallback = select(*_TICKET_COLUMNS_FALLBACK).select_from(Ticket)
             if cliente_id is not None:
                 q_fallback = q_fallback.where(Ticket.cliente_id == cliente_id)
@@ -137,6 +138,7 @@ def get_tickets(
     except HTTPException:
         raise
     except Exception as e:
+        db.rollback()
         logger.exception("Error en listado de tickets: %s", e)
         raise HTTPException(
             status_code=500,

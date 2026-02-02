@@ -271,11 +271,11 @@ function App() {
             }
           />
 
-          {/* Chat AI */}
+          {/* Chat AI — accesible por cualquier usuario autenticado (no solo admin) */}
           <Route
             path="chat-ai"
             element={
-              <SimpleProtectedRoute requireAdmin={true}>
+              <SimpleProtectedRoute>
                 <ChatAI />
               </SimpleProtectedRoute>
             }

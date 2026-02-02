@@ -13,7 +13,7 @@ const STALE_TIME_LONG = 10 * 60 * 1000 // 10 minutos
 export const prestamoKeys = {
   all: ['prestamos'] as const,
   lists: () => [...prestamoKeys.all, 'list'] as const,
-  list: (filters?: { search?: string; estado?: string }) => [...prestamoKeys.lists(), filters] as const,
+  list: (filters?: PrestamoFilters, page?: number) => [...prestamoKeys.lists(), filters, page] as const,
   details: () => [...prestamoKeys.all, 'detail'] as const,
   detail: (id: number) => [...prestamoKeys.details(), id] as const,
   search: (query: string) => [...prestamoKeys.all, 'search', query] as const,
@@ -41,7 +41,7 @@ export function usePrestamos(
   perPage: number = DEFAULT_PER_PAGE
 ) {
   return useQuery({
-    queryKey: prestamoKeys.list(filters),
+    queryKey: prestamoKeys.list(filters, page),
     queryFn: async () => {
       console.log('ðŸ” [usePrestamos] Obteniendo préstamos:', { filters, page, perPage })
       const result = await prestamoService.getPrestamos(filters, page, perPage)

@@ -2,7 +2,7 @@
 API v1
 """
 from fastapi import APIRouter
-from app.api.v1.endpoints import whatsapp, auth, configuracion, pagos, prestamos, notificaciones, notificaciones_tabs, dashboard, kpis, auditoria, cobranzas, clientes, tickets, comunicaciones, validadores, usuarios
+from app.api.v1.endpoints import whatsapp, auth, configuracion, pagos, prestamos, notificaciones, notificaciones_tabs, dashboard, kpis, auditoria, cobranzas, clientes, tickets, comunicaciones, validadores, usuarios, reportes, modelos_vehiculos
 
 api_router = APIRouter()
 
@@ -20,7 +20,13 @@ api_router.include_router(
     tags=["whatsapp"],
 )
 
-# Configuración general (stub: general, logo)
+# Logo público primero (GET/HEAD sin auth) para que /configuracion/logo/{filename} no requiera token
+api_router.include_router(
+    configuracion.router_logo,
+    prefix="/configuracion",
+    tags=["configuracion"],
+)
+# Configuración general (general, upload-logo, delete logo; con auth)
 api_router.include_router(
     configuracion.router,
     prefix="/configuracion",
@@ -103,6 +109,13 @@ api_router.include_router(
     tags=["cobranzas"],
 )
 
+# Reportes (dashboard/resumen con datos reales BD)
+api_router.include_router(
+    reportes.router,
+    prefix="/reportes",
+    tags=["reportes"],
+)
+
 # Clientes (conectado a BD: listado paginado, stats, CRUD, cambio de estado)
 api_router.include_router(
     clientes.router,
@@ -136,4 +149,11 @@ api_router.include_router(
     usuarios.router,
     prefix="/usuarios",
     tags=["usuarios"],
+)
+
+# Modelos de vehículos (solo lectura desde distinct Prestamo.modelo; CRUD 501).
+api_router.include_router(
+    modelos_vehiculos.router,
+    prefix="/modelos-vehiculos",
+    tags=["modelos-vehiculos"],
 )

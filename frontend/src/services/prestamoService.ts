@@ -51,38 +51,21 @@ class PrestamoService {
     }
     const url = buildUrl(this.baseUrl, params)
 
-    const response = await apiClient.get<any>(url)
+    // apiClient.get devuelve el cuerpo de la respuesta (backend devuelve { prestamos, total, page, per_page, total_pages })
+    const body = await apiClient.get<any>(url)
 
-    // ✅ DEBUG: Log para diagnosticar problemas
-    console.log('🔍 [PrestamoService] Respuesta de getPrestamos:', {
-      url,
-      responseType: typeof response,
-      responseKeys: response && typeof response === 'object' ? Object.keys(response) : [],
-      hasData: !!response?.data,
-      dataIsArray: Array.isArray(response?.data),
-      dataLength: Array.isArray(response?.data) ? response.data.length : 'N/A',
-      total: response?.total,
-      page: response?.page,
-      per_page: response?.per_page,
-      total_pages: response?.total_pages,
-      fullResponse: response
-    })
+    // Backend devuelve "prestamos", no "data"; el frontend espera result.data como array
+    const items = Array.isArray(body?.prestamos) ? body.prestamos : (body?.data ?? [])
+    const total = body?.total ?? 0
+    const perPageResp = body?.per_page ?? perPage
 
-    // Adaptar respuesta del backend al formato esperado
     const result = {
-      data: response.data || [],
-      total: response.total || 0,
-      page: response.page || page,
-      per_page: response.per_page || perPage,
-      total_pages: response.total_pages || Math.ceil((response.total || 0) / perPage)
+      data: items,
+      total,
+      page: body?.page ?? page,
+      per_page: perPageResp,
+      total_pages: body?.total_pages ?? (total ? Math.ceil(total / perPageResp) : 0)
     }
-
-    console.log('🔍 [PrestamoService] Resultado adaptado:', {
-      dataLength: Array.isArray(result.data) ? result.data.length : 'N/A',
-      total: result.total,
-      page: result.page,
-      total_pages: result.total_pages
-    })
 
     return result
   }

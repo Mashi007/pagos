@@ -385,7 +385,22 @@ app.get('/reportes/*', (req, res) => {
   res.redirect(302, FRONTEND_BASE + '/reportes' + subpath + qs(req));
 });
 
+// /prestamos sin base -> redirigir a /pagos/prestamos (evita 404 al abrir o compartir /prestamos)
+app.get('/prestamos', (req, res) => {
+  res.redirect(302, FRONTEND_BASE + '/prestamos' + qs(req));
+});
+app.get('/prestamos/*', (req, res) => {
+  const subpath = req.path.slice('/prestamos'.length);
+  res.redirect(302, FRONTEND_BASE + '/prestamos' + subpath + qs(req));
+});
+
+// Rutas SPA sin base: redirigir a /pagos/... para que Render sirva correctamente (ej. /chat-ai -> /pagos/chat-ai)
+app.get('/chat-ai', (req, res) => {
+  res.redirect(302, FRONTEND_BASE + '/chat-ai' + qs(req));
+});
+
 // SPA fallback solo para /pagos y /pagos/* (el proxy ya atendió /api/*)
+// Incluye /pagos/chat-ai, /pagos/dashboard, etc.: cualquier ruta que no sea archivo estático recibe index.html
 // Sirve index.html reescribiendo /assets/ -> /pagos/assets/ para evitar 302 cuando el build no aplica base
 function sendSpaIndex(req, res) {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -407,8 +422,24 @@ function sendSpaIndex(req, res) {
   }
 }
 app.get(FRONTEND_BASE, sendSpaIndex);
+// Rutas explícitas para SPA (garantizar index.html y que React Router renderice)
+app.get(FRONTEND_BASE + '/chat-ai', (req, res) => {
+  res.status(200);
+  sendSpaIndex(req, res);
+});
+app.get(FRONTEND_BASE + '/notificaciones', (req, res) => {
+  res.status(200);
+  sendSpaIndex(req, res);
+});
+// Con barra final: redirigir a sin barra para consistencia con React Router
+app.get(FRONTEND_BASE + '/chat-ai/', (req, res) => {
+  res.redirect(302, FRONTEND_BASE + '/chat-ai' + qs(req));
+});
+app.get(FRONTEND_BASE + '/notificaciones/', (req, res) => {
+  res.redirect(302, FRONTEND_BASE + '/notificaciones' + qs(req));
+});
 app.get(FRONTEND_BASE + '/*', (req, res, next) => {
-  // No servir index.html para rutas que parecen archivos estáticos
+  // No servir index.html para rutas que parecen archivos estáticos (assets)
   const subPath = req.path.slice(FRONTEND_BASE.length) || '/';
   if (subPath.startsWith('/assets/')) {
     if (req.path.endsWith('.js')) res.type('application/javascript');
@@ -419,6 +450,8 @@ app.get(FRONTEND_BASE + '/*', (req, res, next) => {
   if (staticFileExtensions.some(ext => req.path.endsWith(ext))) {
     return res.status(404).send('Not Found');
   }
+  // Cualquier otra ruta bajo /pagos (ej. /pagos/dashboard, /pagos/configuracion) recibe index.html para SPA
+  res.status(200);
   sendSpaIndex(req, res);
 });
 
