@@ -2,7 +2,7 @@
 API v1
 """
 from fastapi import APIRouter
-from app.api.v1.endpoints import whatsapp, auth, configuracion, pagos, prestamos, notificaciones, notificaciones_tabs, dashboard, kpis, auditoria, cobranzas, clientes, tickets, comunicaciones, validadores, usuarios, reportes, modelos_vehiculos, analistas, ai_training
+from app.api.v1.endpoints import whatsapp, auth, configuracion, configuracion_informe_pagos, pagos, prestamos, notificaciones, notificaciones_tabs, dashboard, kpis, auditoria, cobranzas, clientes, tickets, comunicaciones, validadores, usuarios, reportes, modelos_vehiculos, analistas, ai_training
 
 api_router = APIRouter()
 
@@ -25,6 +25,12 @@ api_router.include_router(
     configuracion.router_logo,
     prefix="/configuracion",
     tags=["configuracion"],
+)
+# Callback Google OAuth (público; Google redirige aquí tras autorizar)
+api_router.include_router(
+    configuracion_informe_pagos.router_google_callback,
+    prefix="/configuracion/informe-pagos",
+    tags=["configuracion-informe-pagos"],
 )
 # Configuración general (general, upload-logo, delete logo; con auth)
 api_router.include_router(

@@ -2,6 +2,7 @@
 OCR sobre imagen de papeleta (Google Cloud Vision).
 Extrae texto y trata de identificar: fecha, nombre_banco, numero_deposito, cantidad.
 Si no se encuentra un campo, se devuelve "NA" para digitalización manual a partir del link.
+Usa OAuth o cuenta de servicio según informe_pagos_config.
 """
 import re
 import logging
@@ -13,22 +14,30 @@ NA = "NA"
 
 MIN_CARACTERES_PARA_CLARA = 50  # Si el OCR detecta al menos esto, se considera imagen "suficientemente clara" (bajado de 80 para papeletas legibles)
 
+VISION_SCOPE = ["https://www.googleapis.com/auth/cloud-vision"]
+
+
+def _get_vision_client():
+    """Cliente de Vision API con credenciales (OAuth o cuenta de servicio). Devuelve None si no hay credenciales."""
+    from app.core.informe_pagos_config_holder import sync_from_db
+    from app.core.google_credentials import get_google_credentials
+    from google.cloud import vision
+
+    sync_from_db()
+    credentials = get_google_credentials(VISION_SCOPE)
+    if not credentials:
+        return None
+    return vision.ImageAnnotatorClient(credentials=credentials)
+
 
 def _vision_full_text(image_bytes: bytes) -> str:
     """Ejecuta Vision text_detection y devuelve el texto completo; vacío si falla o sin credenciales."""
-    from app.core.informe_pagos_config_holder import get_google_credentials_json, sync_from_db
-    sync_from_db()
-    creds_json = get_google_credentials_json()
-    if not creds_json:
+    client = _get_vision_client()
+    if not client:
         logger.warning("Claridad de imagen no comprobada: credenciales Google (Vision) no configuradas; se tratará como no clara.")
         return ""
     try:
-        import json
-        from google.oauth2 import service_account
         from google.cloud import vision
-        creds_dict = json.loads(creds_json)
-        credentials = service_account.Credentials.from_service_account_info(creds_dict)
-        client = vision.ImageAnnotatorClient(credentials=credentials)
         image = vision.Image(content=image_bytes)
         response = client.text_detection(image=image)
         if response.error.message:
@@ -59,21 +68,14 @@ def extract_from_image(image_bytes: bytes) -> Dict[str, str]:
     Ejecuta OCR (Google Vision) sobre la imagen y devuelve:
     { "fecha_deposito", "nombre_banco", "numero_deposito", "cantidad" }.
     Cualquier campo no detectado se devuelve como "NA".
+    Usa OAuth o cuenta de servicio según informe_pagos_config.
     """
-    from app.core.informe_pagos_config_holder import get_google_credentials_json, sync_from_db
-    sync_from_db()
-    creds_json = get_google_credentials_json()
-    if not creds_json:
-        logger.warning("OCR: credenciales Google no configuradas.")
+    client = _get_vision_client()
+    if not client:
+        logger.warning("OCR: credenciales Google (Vision) no configuradas.")
         return {"fecha_deposito": NA, "nombre_banco": NA, "numero_deposito": NA, "cantidad": NA}
     try:
-        import json
-        from google.oauth2 import service_account
         from google.cloud import vision
-
-        creds_dict = json.loads(creds_json)
-        credentials = service_account.Credentials.from_service_account_info(creds_dict)
-        client = vision.ImageAnnotatorClient(credentials=credentials)
         image = vision.Image(content=image_bytes)
         response = client.text_detection(image=image)
         if response.error.message:

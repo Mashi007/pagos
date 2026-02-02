@@ -1,12 +1,14 @@
 """
 Subida de imágenes a Google Drive y obtención de link público.
-Usa configuración desde informe_pagos_config_holder (google_drive_folder_id, google_credentials_json).
+Usa OAuth o cuenta de servicio según informe_pagos_config (folder_id + credentials o refresh_token).
 """
 import io
 import logging
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+DRIVE_SCOPE = ["https://www.googleapis.com/auth/drive.file"]
 
 
 def upload_image_and_get_link(
@@ -16,28 +18,21 @@ def upload_image_and_get_link(
 ) -> Optional[str]:
     """
     Sube la imagen a la carpeta de Google Drive configurada y devuelve el link para ver/compartir.
-    Si no hay config o falla, devuelve None.
+    Si no hay config o falla, devuelve None. Usa OAuth (refresh_token) o cuenta de servicio.
     """
-    from app.core.informe_pagos_config_holder import (
-        get_google_drive_folder_id,
-        get_google_credentials_json,
-        sync_from_db,
-    )
+    from app.core.informe_pagos_config_holder import get_google_drive_folder_id, sync_from_db
+    from app.core.google_credentials import get_google_credentials
+
     sync_from_db()
     folder_id = get_google_drive_folder_id()
-    creds_json = get_google_credentials_json()
-    if not folder_id or not creds_json:
-        logger.warning("Google Drive no configurado (folder_id o credentials). Configura en Configuración > Informe pagos.")
+    credentials = get_google_credentials(DRIVE_SCOPE)
+    if not folder_id or not credentials:
+        logger.warning("Google Drive no configurado (folder_id o credentials/OAuth). Configura en Configuración > Informe pagos.")
         return None
     try:
-        import json
-        from google.oauth2 import service_account
         from googleapiclient.discovery import build
         from googleapiclient.http import MediaIoBaseUpload
 
-        creds_dict = json.loads(creds_json)
-        scopes = ["https://www.googleapis.com/auth/drive.file"]
-        credentials = service_account.Credentials.from_service_account_info(creds_dict, scopes=scopes)
         drive = build("drive", "v3", credentials=credentials)
 
         file_metadata = {"name": filename, "parents": [folder_id]}

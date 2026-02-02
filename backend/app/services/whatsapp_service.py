@@ -74,7 +74,7 @@ MENSAJE_RESPONDE_SI_NO = "Por favor responde Sí o No: ¿El reporte de pago es a
 MENSAJE_CONTINUAMOS_SIN_CONFIRMAR = "Continuamos. Envía una foto clara de tu papeleta de depósito a 20 cm."
 MENSAJE_ENVIA_FOTO = "Por favor envía una foto clara de tu papeleta de depósito a 20 cm."
 MENSAJE_FOTO_POCO_CLARA = "La imagen no está lo suficientemente clara. Toma otra foto a 20 cm de tu papeleta. Intento {n}/3."
-MENSAJE_RECIBIDO = "Hemos recibido tu papeleta. Gracias."
+MENSAJE_RECIBIDO = "Gracias. (Cédula {cedula} reportada.)"
 OBSERVACION_NO_CONFIRMA = "No confirma identidad"
 
 # Validación cédula: debe empezar por E, J o V (una de las 3 letras) + 6 a 11 dígitos. Acepta E1234567, V12345678, J1234567, EVJ1234567.
@@ -420,4 +420,4 @@ class WhatsAppService:
         conv.observacion = None
         conv.updated_at = datetime.utcnow()
         db.commit()
-        return {"status": "image_saved", "pagos_whatsapp_id": row_pw.id, "cedula_cliente": cedula_guardada, "response_text": MENSAJE_RECIBIDO}
+        return {"status": "image_saved", "pagos_whatsapp_id": row_pw.id, "cedula_cliente": cedula_guardada, "response_text": MENSAJE_RECIBIDO.format(cedula=cedula_guardada or "N/A")}

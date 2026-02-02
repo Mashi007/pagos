@@ -54,6 +54,29 @@ def get_google_credentials_json() -> str:
     return (cfg.get("google_credentials_json") or "").strip()
 
 
+def get_google_oauth_client_id() -> str:
+    """Client ID del cliente OAuth (Drive/Sheets cuando no hay cuenta de servicio)."""
+    cfg = get_informe_pagos_config()
+    return (cfg.get("google_oauth_client_id") or "").strip()
+
+
+def get_google_oauth_client_secret() -> str:
+    """Client secret del cliente OAuth."""
+    cfg = get_informe_pagos_config()
+    return (cfg.get("google_oauth_client_secret") or "").strip()
+
+
+def get_google_oauth_refresh_token() -> str:
+    """Refresh token OAuth (obtenido tras autorizar una vez con Google)."""
+    cfg = get_informe_pagos_config()
+    return (cfg.get("google_oauth_refresh_token") or "").strip()
+
+
+def use_google_oauth() -> bool:
+    """True si debemos usar OAuth (refresh_token) en lugar de cuenta de servicio para Drive/Sheets."""
+    return bool(get_google_oauth_refresh_token())
+
+
 def get_google_sheets_id() -> str:
     """ID de la hoja de cálculo (desde la URL)."""
     cfg = get_informe_pagos_config()

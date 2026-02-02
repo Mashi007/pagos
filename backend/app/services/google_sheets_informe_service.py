@@ -1,6 +1,7 @@
 """
 Escribe filas de informe de papeletas en Google Sheets.
 Una pestaña por periodo (6am, 1pm, 4h30). Columnas: Cédula, Fecha, Nombre banco, Número depósito, Cantidad, Link imagen, Observación.
+Usa OAuth o cuenta de servicio según informe_pagos_config.
 """
 import logging
 from typing import List, Optional
@@ -11,22 +12,20 @@ logger = logging.getLogger(__name__)
 # Nombres de pestaña por periodo (clave interna)
 PERIODOS = {"6am": "6am", "1pm": "1pm", "4h30": "4h30"}
 
+SHEETS_SCOPE = ["https://www.googleapis.com/auth/spreadsheets"]
+
 
 def _get_sheets_service():
-    """Construye el cliente de Google Sheets con credenciales del config."""
-    from app.core.informe_pagos_config_holder import get_google_credentials_json, get_google_sheets_id, sync_from_db
-    import json
-    from google.oauth2 import service_account
+    """Construye el cliente de Google Sheets con credenciales (OAuth o cuenta de servicio)."""
+    from app.core.informe_pagos_config_holder import get_google_sheets_id, sync_from_db
+    from app.core.google_credentials import get_google_credentials
     from googleapiclient.discovery import build
 
     sync_from_db()
-    creds_json = get_google_credentials_json()
     sheet_id = get_google_sheets_id()
-    if not creds_json or not sheet_id:
+    credentials = get_google_credentials(SHEETS_SCOPE)
+    if not credentials or not sheet_id:
         return None, None
-    creds_dict = json.loads(creds_json)
-    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
-    credentials = service_account.Credentials.from_service_account_info(creds_dict, scopes=scopes)
     service = build("sheets", "v4", credentials=credentials)
     return service, sheet_id
 

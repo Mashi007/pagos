@@ -118,6 +118,14 @@ class Settings(BaseSettings):
     )
     
     # ============================================
+    # Google OAuth (Drive/Sheets cuando no hay cuenta de servicio)
+    # ============================================
+    BACKEND_PUBLIC_URL: Optional[str] = Field(
+        None,
+        description="URL pública del backend para OAuth redirect_uri (ej. https://pagos-f2qf.onrender.com)"
+    )
+
+    # ============================================
     # CORS
     # ============================================
     CORS_ORIGINS: Optional[str] = Field(
