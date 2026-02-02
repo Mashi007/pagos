@@ -53,7 +53,7 @@ if (!rootElement) {
     ReactDOM.createRoot(rootElement).render(
       <React.StrictMode>
         <QueryClientProvider client={queryClient}>
-          <BrowserRouter>
+          <BrowserRouter basename="/pagos">
             <App />
             <Toaster
               position="top-right"

@@ -288,13 +288,12 @@ def get_dashboard_admin(
                     Cuota.fecha_vencimiento <= fin_d,
                 )
             ) or 0
-            # Cobrado = suma mensual monto de cuotas pagadas con fecha_pago en el mes
+            # Cobrado = suma mensual monto de cuotas pagadas (fecha_pago no nula) con fecha_pago en el mes
             cobrado = db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
-                    Cuota.pagado.is_(True),
                     Cuota.fecha_pago.isnot(None),
-                    func.date(Cuota.fecha_pago) >= inicio_d,
-                    func.date(Cuota.fecha_pago) <= fin_d,
+                    Cuota.fecha_pago >= inicio_d,
+                    Cuota.fecha_pago <= fin_d,
                 )
             ) or 0
             cartera_f = _safe_float(cartera)
@@ -398,12 +397,11 @@ def get_morosidad_por_dia(
                     Cuota.fecha_vencimiento == d,
                 )
             ) or 0
-            # Cobrado del día = suma monto de cuotas pagadas con fecha_pago en d
+            # Cobrado del día = suma monto de cuotas pagadas (fecha_pago no nula) con fecha_pago en d
             cobrado_dia = db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
-                    Cuota.pagado.is_(True),
                     Cuota.fecha_pago.isnot(None),
-                    func.date(Cuota.fecha_pago) == d,
+                    Cuota.fecha_pago == d,
                 )
             ) or 0
             morosidad_dia = max(0.0, _safe_float(cartera_dia) - _safe_float(cobrado_dia))
@@ -681,7 +679,7 @@ def get_composicion_morosidad(
                     func.count().label("n"),
                     func.coalesce(func.sum(Cuota.monto), 0).label("m"),
                 ).select_from(Cuota).where(
-                    Cuota.pagado.is_(False),
+                    Cuota.fecha_pago.is_(None),
                     dias_atraso >= min_d,
                 )
             else:
@@ -689,7 +687,7 @@ def get_composicion_morosidad(
                     func.count().label("n"),
                     func.coalesce(func.sum(Cuota.monto), 0).label("m"),
                 ).select_from(Cuota).where(
-                    Cuota.pagado.is_(False),
+                    Cuota.fecha_pago.is_(None),
                     dias_atraso >= min_d,
                     dias_atraso <= max_d,
                 )
@@ -763,27 +761,13 @@ def get_morosidad_por_analista(
     try:
         hoy = date.today()
         # Cuotas vencidas: no pagadas y fecha_vencimiento < hoy (monto puede no existir en la tabla)
-        try:
-            cuotas_vencidas = db.execute(
-                select(Cuota.id, Cuota.cliente_id, Cuota.monto).select_from(Cuota).where(
-                    Cuota.pagado.is_(False),
-                    Cuota.fecha_vencimiento < hoy,
-                )
-            ).all()
-            usar_monto = True
-        except ProgrammingError as pe:
-            if "monto" in str(pe).lower() and "does not exist" in str(pe).lower():
-                db.rollback()
-                cuotas_vencidas = db.execute(
-                    select(Cuota.id, Cuota.cliente_id).select_from(Cuota).where(
-                        Cuota.pagado.is_(False),
-                        Cuota.fecha_vencimiento < hoy,
-                    )
-                ).all()
-                usar_monto = False
-            else:
-                db.rollback()
-                raise
+        cuotas_vencidas = db.execute(
+            select(Cuota.id, Cuota.cliente_id, Cuota.monto).select_from(Cuota).where(
+                Cuota.fecha_pago.is_(None),
+                Cuota.fecha_vencimiento < hoy,
+            )
+        ).all()
+        usar_monto = True
         # Prestamos APROBADO: un préstamo por cliente (el más reciente) para asignar analista
         prestamos_por_cliente = (
             db.execute(
@@ -844,18 +828,12 @@ def get_evolucion_morosidad(
             fin_mes = hoy - timedelta(days=30 * (11 - i))
             ultimo_dia = _ultimo_dia_del_mes(fin_mes.replace(tzinfo=timezone.utc) if fin_mes.tzinfo is None else fin_mes)
             ultimo_dia_date = ultimo_dia.date() if hasattr(ultimo_dia, "date") else ultimo_dia
-            try:
-                moro = db.scalar(
-                    select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
-                        Cuota.pagado.is_(False),
-                        Cuota.fecha_vencimiento <= ultimo_dia_date,
-                    )
-                ) or 0
-            except ProgrammingError as pe:
-                if "monto" in str(pe).lower() and "does not exist" in str(pe).lower():
-                    moro = 0
-                else:
-                    raise
+            moro = db.scalar(
+                select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
+                    Cuota.fecha_pago.is_(None),
+                    Cuota.fecha_vencimiento <= ultimo_dia_date,
+                )
+            ) or 0
             resultado.append({"mes": m["mes"], "morosidad": _safe_float(moro)})
         return {"meses": resultado}
     except Exception as e:

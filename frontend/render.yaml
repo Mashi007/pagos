@@ -14,8 +14,8 @@ services:
       - key: NODE_VERSION
         value: 20.19.0
       - key: VITE_API_URL
-        value: https://pagos-f2qf.onrender.com
+        value: https://rapicredit.onrender.com
       - key: API_BASE_URL
-        value: https://pagos-f2qf.onrender.com
+        value: https://rapicredit.onrender.com
       - key: NODE_ENV
         value: production

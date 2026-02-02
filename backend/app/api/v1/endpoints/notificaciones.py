@@ -95,11 +95,11 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
     Se usa la fecha del servidor; actualizar a las 2am con cron si se desea.
     """
     hoy = date.today()
-    # Cuotas no pagadas con su cliente
+    # Cuotas no pagadas (fecha_pago nula) con su cliente
     q = (
         select(Cuota, Cliente)
         .join(Cliente, Cuota.cliente_id == Cliente.id)
-        .where(Cuota.pagado == False)  # noqa: E712
+        .where(Cuota.fecha_pago.is_(None))
     )
     rows = db.execute(q).all()
 
@@ -152,7 +152,7 @@ def actualizar_notificaciones(db: Session = Depends(get_db)):
     Llamar desde cron a las 2am (ej: 0 2 * * * curl -X POST .../notificaciones/actualizar).
     """
     hoy = date.today()
-    q = select(Cuota).where(Cuota.pagado == False, Cuota.fecha_vencimiento <= hoy)  # noqa: E712
+    q = select(Cuota).where(Cuota.fecha_pago.is_(None), Cuota.fecha_vencimiento <= hoy)
     cuotas = db.execute(q).scalars().all()
     # Solo contamos cuotas en mora; no actualizamos clientes.dias_mora (no existe en la BD)
     clientes_actualizados = 0
@@ -171,7 +171,7 @@ def get_notificaciones_tabs_data(db: Session):
     q = (
         select(Cuota, Cliente)
         .join(Cliente, Cuota.cliente_id == Cliente.id)
-        .where(Cuota.pagado == False)  # noqa: E712
+        .where(Cuota.fecha_pago.is_(None))
     )
     rows = db.execute(q).all()
 
@@ -215,7 +215,7 @@ def get_notificaciones_tabs_data(db: Session):
     prejudicial: List[dict] = []
     subq = (
         select(Cuota.cliente_id, func.count(Cuota.id).label("total"))
-        .where(Cuota.pagado == False, Cuota.fecha_vencimiento < hoy)  # noqa: E712
+        .where(Cuota.fecha_pago.is_(None), Cuota.fecha_vencimiento < hoy)
         .group_by(Cuota.cliente_id)
         .having(func.count(Cuota.id) >= 3)
     )
@@ -227,13 +227,13 @@ def get_notificaciones_tabs_data(db: Session):
         # Primera cuota atrasada para mostrar en la tarjeta
         primera = db.execute(
             select(Cuota)
-            .where(Cuota.cliente_id == cliente_id, Cuota.pagado == False, Cuota.fecha_vencimiento < hoy)  # noqa: E712
+            .where(Cuota.cliente_id == cliente_id, Cuota.fecha_pago.is_(None), Cuota.fecha_vencimiento < hoy)
             .order_by(Cuota.fecha_vencimiento.asc())
             .limit(1)
         ).scalars().first()
         cuota_ref = primera
         if not cuota_ref:
-            cuota_ref = Cuota(cliente_id=cliente_id, numero_cuota=0, fecha_vencimiento=hoy, monto=0, pagado=False)
+            cuota_ref = type("DummyCuota", (), {"fecha_vencimiento": hoy, "numero_cuota": 0, "monto": 0})()
         item = _item_tab(cliente, cuota_ref)
         item["total_cuotas_atrasadas"] = total_cuotas
         prejudicial.append(item)

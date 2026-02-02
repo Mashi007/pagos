@@ -117,7 +117,7 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: process.env.VITE_API_URL || 'https://pagos-f2qf.onrender.com',
+        target: process.env.VITE_API_URL || 'https://rapicredit.onrender.com',
         changeOrigin: true,
         secure: true,
       },
@@ -259,13 +259,14 @@ export default defineConfig({
     // Optimizaciones adicionales
     assetsInlineLimit: 4096, // Inline assets pequeños (< 4KB)
   },
-  base: '/',
+  // Base path para servir la app en https://rapicredit.onrender.com/pagos
+  base: '/pagos/',
   preview: {
     port: 4173,
     host: true,
   },
   // Configuración para Render
   define: {
-    'process.env.VITE_API_URL': JSON.stringify(process.env.VITE_API_URL || 'https://pagos-f2qf.onrender.com'),
+    'process.env.VITE_API_URL': JSON.stringify(process.env.VITE_API_URL || 'https://rapicredit.onrender.com'),
   },
 })

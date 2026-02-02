@@ -8,7 +8,7 @@ console.log('🚀 Configurando RAPICREDIT - Sistema de Préstamos y Cobranza...\
 // Crear archivo .env si no existe
 const envPath = path.join(__dirname, '.env');
 const envContent = `# API Configuration
-VITE_API_URL=https://pagos-f2qf.onrender.com
+VITE_API_URL=https://rapicredit.onrender.com
 
 # Environment
 VITE_NODE_ENV=development
@@ -40,5 +40,6 @@ console.log('\n👤 Usuarios de prueba:');
 console.log('- admin@sistema.com / admin123');
 console.log('- gerente@sistema.com / gerente123');
 console.log('- analista@sistema.com / analista123');
-console.log('\n🌐 API Backend: https://pagos-f2qf.onrender.com');
-console.log('📚 Documentación: https://pagos-f2qf.onrender.com/docs');
+console.log('\n🌐 Frontend/API: https://rapicredit.onrender.com');
+console.log('📋 Préstamos: https://rapicredit.onrender.com/prestamos');
+console.log('📚 Documentación: https://rapicredit.onrender.com/docs');
