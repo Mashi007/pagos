@@ -8,7 +8,7 @@ import json
 import logging
 from typing import Any, Optional
 
-from fastapi import APIRouter, Body, Depends
+from fastapi import APIRouter, Body, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -126,3 +126,128 @@ def put_whatsapp_configuracion(payload: WhatsAppConfigUpdate = Body(...), db: Se
     if out.get("webhook_verify_token"):
         out["webhook_verify_token"] = "***"
     return {"message": "Configuración WhatsApp actualizada", "configuracion": out}
+
+
+class ProbarWhatsAppRequest(BaseModel):
+    telefono_destino: Optional[str] = None
+    mensaje: Optional[str] = None
+
+
+@router.post("/probar")
+def post_whatsapp_probar(payload: ProbarWhatsAppRequest = Body(...), db: Session = Depends(get_db)):
+    """
+    Envía un mensaje de prueba por WhatsApp con la configuración guardada.
+    En modo pruebas usa telefono_pruebas si no se envía telefono_destino.
+    """
+    _load_whatsapp_from_db(db)
+    if not _whatsapp_stub:
+        _whatsapp_stub.update(_default_config())
+    cfg = _whatsapp_stub
+    modo_pruebas = (cfg.get("modo_pruebas") or "true").lower() == "true"
+    telefono_pruebas = (cfg.get("telefono_pruebas") or "").strip()
+    destino = (payload.telefono_destino or "").strip() or (telefono_pruebas if modo_pruebas else "")
+    mensaje = (payload.mensaje or "").strip() or "Mensaje de prueba desde RapiCredit."
+    if not destino or len(destino) < 10:
+        raise HTTPException(
+            status_code=400,
+            detail="Indica un teléfono de destino o configura Teléfono de Pruebas en modo pruebas.",
+        )
+    from app.core.whatsapp_send import send_whatsapp_text
+    ok = send_whatsapp_text(destino, mensaje)
+    if ok:
+        return {
+            "success": True,
+            "mensaje": "Mensaje de prueba enviado correctamente.",
+            "telefono_destino": destino,
+        }
+    return {
+        "success": False,
+        "mensaje": "No se pudo enviar. Revisa Access Token, Phone Number ID y que el número tenga formato internacional.",
+        "telefono_destino": destino,
+    }
+
+
+@router.get("/test-completo")
+def get_whatsapp_test_completo(db: Session = Depends(get_db)):
+    """
+    Test completo de configuración WhatsApp: verifica conexión con Meta API.
+    Devuelve tests (conexión) y resumen (total, exitosos, fallidos, advertencias) para el frontend.
+    """
+    _load_whatsapp_from_db(db)
+    if not _whatsapp_stub:
+        _whatsapp_stub.update(_default_config())
+    cfg = _whatsapp_stub
+    api_url = (cfg.get("api_url") or "https://graph.facebook.com/v18.0").rstrip("/")
+    token = (cfg.get("access_token") or "").strip()
+    phone_number_id = (cfg.get("phone_number_id") or "").strip()
+    # Meta espera el ID numérico (ej. 1038026026054793), no el número de teléfono (+58...)
+    phone_number_id_digits = "".join(c for c in phone_number_id if c.isdigit()) if phone_number_id else ""
+
+    tests: dict[str, Any] = {}
+    exitosos = 0
+    fallidos = 0
+    advertencias = 0
+
+    # Test 1: Conexión con Meta API (GET phone number info)
+    conexion_exito = False
+    conexion_mensaje = ""
+    conexion_error: Optional[str] = None
+    conexion_detalles: Optional[dict] = None
+    if not token or token == "***":
+        conexion_mensaje = "Falta Access Token. Configura el token en Meta Developers y guárdalo aquí."
+        conexion_error = "access_token_no_configurado"
+    elif not phone_number_id_digits:
+        conexion_mensaje = "Falta Phone Number ID. Usa el Identificador del número de teléfono de Meta (número largo, no el +58...)."
+        conexion_error = "phone_number_id_no_configurado"
+    else:
+        try:
+            import httpx
+            url = f"{api_url}/{phone_number_id_digits}"
+            params = {"fields": "verified_name,display_phone_number"}
+            with httpx.Client(timeout=15.0) as client:
+                r = client.get(
+                    url,
+                    params=params,
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+            if r.is_success:
+                data = r.json() if r.text else {}
+                conexion_exito = True
+                conexion_mensaje = "Conexión con Meta API correcta."
+                conexion_detalles = data
+                exitosos += 1
+            else:
+                try:
+                    err = r.json()
+                    msg = err.get("error", {}).get("message", r.text[:200])
+                except Exception:
+                    msg = r.text[:200] if r.text else f"HTTP {r.status_code}"
+                conexion_mensaje = msg
+                conexion_error = msg
+                fallidos += 1
+        except Exception as e:
+            conexion_mensaje = str(e)[:200]
+            conexion_error = str(e)[:200]
+            fallidos += 1
+
+    tests["conexion"] = {
+        "nombre": "Conexión Meta API",
+        "exito": conexion_exito,
+        "mensaje": conexion_mensaje,
+        "detalles": conexion_detalles,
+        "error": conexion_error,
+    }
+
+    total = exitosos + fallidos
+    if total == 0:
+        advertencias = 1
+    resumen = {
+        "total": max(total, 1),
+        "exitosos": exitosos,
+        "fallidos": fallidos,
+        "advertencias": advertencias,
+    }
+    return {
+        "tests": tests,
+        "resumen": resumen,
+    }
