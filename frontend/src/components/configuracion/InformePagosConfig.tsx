@@ -320,13 +320,15 @@ export function InformePagosConfig() {
                   </Button>
                   <Input
                     type={mostrarOauthSecret ? 'text' : 'password'}
-                    placeholder={config.google_oauth_client_secret === '***' ? '*** (guardado)' : 'Client secret'}
-                    value={config.google_oauth_client_secret === '***' ? '' : (oauthSecretEdit || (config.google_oauth_client_secret ?? ''))}
+                    placeholder={config.google_oauth_client_secret === '***' ? 'Escribe aquí el nuevo secret para cambiarlo' : 'Client secret'}
+                    value={config.google_oauth_client_secret === '***' ? oauthSecretEdit : (oauthSecretEdit || (config.google_oauth_client_secret ?? ''))}
                     onChange={(e) => setOauthSecretEdit(e.target.value)}
                     className="flex-1"
                   />
                 </div>
-                <p className="text-xs text-gray-500 mt-1">No se muestra después de guardar.</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  No se muestra después de guardar. Para añadir o cambiar el secret: escribe el valor en el campo y pulsa Guardar configuración.
+                </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 {oauthConectado && (
