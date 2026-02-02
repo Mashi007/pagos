@@ -25,6 +25,7 @@ import { Badge } from '../../components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog'
 import { LoadingSpinner } from '../../components/ui/loading-spinner'
+import { BASE_PATH } from '../../config/env'
 import {
   conversacionesWhatsAppService,
   ConversacionWhatsApp,
@@ -350,7 +351,7 @@ export function ConversacionesWhatsApp({
         estado: 'abierto',
       })
       // Navegar a tickets
-      window.location.href = '/tickets-atencion'
+      window.location.href = BASE_PATH + '/tickets-atencion'
     } catch (error: any) {
       console.error('Error creando ticket:', error)
       toast.error(error?.response?.data?.detail || 'Error creando ticket')

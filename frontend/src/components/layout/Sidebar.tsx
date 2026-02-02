@@ -143,11 +143,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       icon: FileText,
     },
     {
-      title: 'Auditoría',
-      href: '/auditoria',
-      icon: Shield,
-    },
-    {
       title: 'Chat AI',
       href: '/chat-ai',
       icon: Brain,

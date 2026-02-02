@@ -28,6 +28,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ClienteAtrasado, CobranzasPorAnalista } from '../services/cobranzasService'
 import { InformesCobranzas } from '../components/cobranzas/InformesCobranzas'
 import { toast } from 'sonner'
+import { BASE_PATH } from '../config/env'
 import { userService } from '../services/userService'
 
 export function Cobranzas() {
@@ -432,7 +433,7 @@ export function Cobranzas() {
             duration: 5000,
             action: {
               label: 'Ver Historial',
-              onClick: () => window.location.href = '/notificaciones'
+              onClick: () => window.location.href = BASE_PATH + '/notificaciones'
             }
           }
         )
@@ -519,7 +520,7 @@ export function Cobranzas() {
           </Button>
           <Button
             variant="outline"
-            onClick={() => window.location.href = '/notificaciones'}
+            onClick={() => window.location.href = BASE_PATH + '/notificaciones'}
             className="flex items-center gap-2"
           >
             <Eye className="h-4 w-4" />

@@ -10,7 +10,6 @@
 /reportes     /index.html   200
 /configuracion /index.html   200
 /aprobaciones /index.html   200
-/auditoria    /index.html   200
 /notificaciones /index.html   200
 /carga-masiva /index.html   200
 /setup        /index.html   200

@@ -155,7 +155,7 @@ export class AuthService {
 
       // Redirigir al login después de un delay para mostrar mensaje y limpiar storage
       setTimeout(() => {
-        window.location.href = '/login'
+        window.location.href = (import.meta.env.BASE_URL || '/').replace(/\/$/, '') + '/login'
       }, 500) // Aumentado a 500ms para dar tiempo a mostrar el mensaje
     }
 

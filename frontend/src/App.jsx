@@ -11,7 +11,6 @@ import Notificaciones from './pages/Notificaciones';
 import Analistas from './pages/Analistas';
 import Concesionarios from './pages/Concesionarios';
 import Usuarios from './pages/Usuarios';
-import Auditoria from './pages/Auditoria';
 import Reportes from './pages/Reportes';
 import Configuracion from './pages/Configuracion';
 import EmbudoClientes from './pages/EmbudoClientes';
@@ -87,7 +86,6 @@ function App() {
           <Route path="embudo-concesionarios" element={<EmbudoConcesionarios />} />
           
           {/* Sistema */}
-          <Route path="auditoria" element={<Auditoria />} />
           <Route path="reportes" element={<Reportes />} />
           <Route path="configuracion" element={<Configuracion />} />
           

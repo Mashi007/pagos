@@ -8,6 +8,9 @@
 const DEFAULT_APP_NAME = "Sistema de Préstamos y Cobranza"
 const DEFAULT_APP_VERSION = "1.0.0"
 
+// Base path de la app (ej. /pagos para https://rapicredit.onrender.com/pagos)
+export const BASE_PATH = (import.meta.env.BASE_URL || '/').replace(/\/$/, '') || '';
+
 interface EnvConfig {
   API_URL: string;
   NODE_ENV: string;

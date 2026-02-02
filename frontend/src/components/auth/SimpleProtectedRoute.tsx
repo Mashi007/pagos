@@ -3,6 +3,7 @@ import React from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useSimpleAuth } from '../../store/simpleAuthStore'
 import { LoadingSpinner } from '../../components/ui/loading-spinner'
+import { BASE_PATH } from '../../config/env'
 
 interface SimpleProtectedRouteProps {
   children: React.ReactNode
@@ -60,7 +61,7 @@ export function SimpleProtectedRoute({
             </p>
           </div>
           <button
-            onClick={() => window.location.href = fallbackPath}
+            onClick={() => window.location.href = BASE_PATH + fallbackPath}
             className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium"
           >
             Ir al Login
@@ -111,7 +112,7 @@ export function SimpleProtectedRoute({
             </button>
 
             <button
-              onClick={() => window.location.href = '/dashboard'}
+              onClick={() => window.location.href = BASE_PATH + '/dashboard'}
               className="w-full bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition-colors font-medium"
             >
               Ir al Dashboard

@@ -320,16 +320,20 @@ if (existsSync(assetsPath)) {
   console.error(`❌ Esto causará que los módulos JavaScript no se carguen correctamente`);
 }
 
+// Base path para frontend: https://rapicredit.onrender.com/pagos
+const FRONTEND_BASE = '/pagos';
+
 // Middleware para loggear peticiones de archivos estáticos
 app.use((req, res, next) => {
   // Solo loggear en desarrollo - en producción estos logs son ruido
-  if (isDevelopment && (req.path.startsWith('/assets/') || req.path.endsWith('.js') || req.path.endsWith('.css') || req.path.endsWith('.svg'))) {
+  if (isDevelopment && (req.path.startsWith(FRONTEND_BASE + '/assets/') || req.path.endsWith('.js') || req.path.endsWith('.css') || req.path.endsWith('.svg'))) {
     console.log(`📦 Frontend: Petición de archivo estático recibida: ${req.method} ${req.path}`);
   }
   next();
 });
 
-app.use(express.static(distPath, staticOptions));
+// Servir estáticos bajo /pagos (index.html, /pagos/assets/*, etc.)
+app.use(FRONTEND_BASE, express.static(distPath, staticOptions));
 
 // Health check endpoint - IMPORTANTE para Render
 // Render usa esto para verificar que el servicio está vivo
@@ -349,61 +353,24 @@ app.head('/health', (req, res) => {
   res.status(200).end();
 });
 
-// Manejar SPA routing - todas las rutas sirven index.html (el proxy ya atendió /api/*)
-// IMPORTANTE: Esto debe ir DESPUÉS del proxy y express.static
-// Solo maneja rutas que NO son archivos estáticos ni APIs
-// IMPORTANTE: NO es una página estática - es una SPA que hace peticiones dinámicas al backend
-app.get('*', (req, res) => {
-  // Solo procesar si NO es una ruta de API
-  // Las rutas de API ya fueron manejadas por el proxy
-  if (req.path.startsWith('/api')) {
-    // Esto no debería pasar si el proxy está funcionando correctamente
-    console.warn(`⚠️  Ruta /api no capturada por proxy: ${req.method} ${req.path}`);
-    return res.status(404).json({ error: 'API endpoint not found' });
-  }
+// Redirigir raíz a /pagos (frontend en https://rapicredit.onrender.com/pagos)
+app.get('/', (req, res) => {
+  res.redirect(302, FRONTEND_BASE + (req.url !== '/' ? req.url : ''));
+});
 
-  // ✅ CRÍTICO: Si es una ruta de assets y no se encontró el archivo, devolver 404
-  // NO servir index.html para archivos de assets que no existen
-  // IMPORTANTE: No devolver JSON para archivos estáticos, solo 404 simple
-  // NOTA: Es normal que algunos archivos no se encuentren después de un nuevo build
-  // (el navegador puede tener cache del index.html anterior con hashes antiguos)
-  if (req.path.startsWith('/assets/')) {
-    // Solo loggear en desarrollo - en producción es ruido normal
-    if (isDevelopment) {
-      console.error(`❌ Archivo estático no encontrado: ${req.path}`);
-    }
-    // Determinar el tipo MIME apropiado basado en la extensión
-    if (req.path.endsWith('.js')) {
-      res.type('application/javascript');
-    } else if (req.path.endsWith('.css')) {
-      res.type('text/css');
-    }
-    return res.status(404).send('Not Found');
-  }
+// Activar frontend en https://rapicredit.onrender.com/reportes -> redirigir a /pagos/reportes
+const qs = (req) => (req.originalUrl && req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '');
+app.get('/reportes', (req, res) => {
+  res.redirect(302, FRONTEND_BASE + '/reportes' + qs(req));
+});
+app.get('/reportes/*', (req, res) => {
+  const subpath = req.path.slice('/reportes'.length);
+  res.redirect(302, FRONTEND_BASE + '/reportes' + subpath + qs(req));
+});
 
-  // ✅ También devolver 404 para otros archivos estáticos que no existen (favicon, imágenes, etc.)
-  const staticFileExtensions = ['.js', '.css', '.svg', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.woff', '.woff2', '.ttf', '.eot'];
-  const isStaticFile = staticFileExtensions.some(ext => req.path.endsWith(ext));
-  if (isStaticFile) {
-    // Solo loggear en desarrollo - en producción es ruido normal
-    if (isDevelopment) {
-      console.error(`❌ Archivo estático no encontrado: ${req.path}`);
-    }
-    // Establecer tipo MIME apropiado según la extensión
-    if (req.path.endsWith('.js')) {
-      res.type('application/javascript');
-    } else if (req.path.endsWith('.css')) {
-      res.type('text/css');
-    } else if (req.path.endsWith('.svg')) {
-      res.type('image/svg+xml');
-    }
-    return res.status(404).send('Not Found');
-  }
-
-  // Si llegamos aquí, NO es un archivo estático
-  // Es una ruta de la SPA (como /clientes, /dashboard) → servir index.html
-  // React Router manejará la ruta en el cliente
-  // CRÍTICO: No cachear index.html para evitar 404 en chunks tras un nuevo deploy
+// SPA fallback solo para /pagos y /pagos/* (el proxy ya atendió /api/*)
+// Sirve index.html para que React Router maneje la ruta en el cliente
+function sendSpaIndex(req, res) {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
@@ -418,6 +385,21 @@ app.get('*', (req, res) => {
       }
     }
   });
+}
+app.get(FRONTEND_BASE, sendSpaIndex);
+app.get(FRONTEND_BASE + '/*', (req, res, next) => {
+  // No servir index.html para rutas que parecen archivos estáticos
+  const subPath = req.path.slice(FRONTEND_BASE.length) || '/';
+  if (subPath.startsWith('/assets/')) {
+    if (req.path.endsWith('.js')) res.type('application/javascript');
+    else if (req.path.endsWith('.css')) res.type('text/css');
+    return res.status(404).send('Not Found');
+  }
+  const staticFileExtensions = ['.js', '.css', '.svg', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.woff', '.woff2', '.ttf', '.eot'];
+  if (staticFileExtensions.some(ext => req.path.endsWith(ext))) {
+    return res.status(404).send('Not Found');
+  }
+  sendSpaIndex(req, res);
 });
 
 // ============================================

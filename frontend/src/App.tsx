@@ -8,12 +8,14 @@ import { Layout } from './components/layout/Layout'
 // Auth
 import { SimpleProtectedRoute } from './components/auth/SimpleProtectedRoute'
 import { useSimpleAuth } from './store/simpleAuthStore'
+import { BASE_PATH } from './config/env'
 
 /** En rutas públicas (/, /login) solo muestra el Outlet. En el resto muestra Layout con Outlet para que el dashboard y demás carguen. */
 function RootLayoutWrapper() {
   const location = useLocation()
   const { isAuthenticated } = useSimpleAuth()
-  const isPublic = location.pathname === '/' || location.pathname === '/login'
+  const base = BASE_PATH || '/'
+  const isPublic = location.pathname === base || location.pathname === base + '/' || location.pathname === base + '/login'
   if (isPublic) return <Outlet />
   return (
     <SimpleProtectedRoute>
@@ -73,7 +75,6 @@ import Prestamos from './pages/Prestamos'
 import Amortizacion from './pages/Amortizacion'
 import Reportes from './pages/Reportes'
 import Cobranzas from './pages/Cobranzas'
-import Auditoria from './pages/Auditoria'
 import ChatAI from './pages/ChatAI'
 import Notificaciones from './pages/Notificaciones'
 import Analistas from './pages/Analistas'
@@ -301,16 +302,6 @@ function App() {
             element={
               <SimpleProtectedRoute requireAdmin={true}>
                 <ModelosVehiculos />
-              </SimpleProtectedRoute>
-            }
-          />
-
-          {/* Auditoría */}
-          <Route
-            path="auditoria"
-            element={
-              <SimpleProtectedRoute requireAdmin={true}>
-                <Auditoria />
               </SimpleProtectedRoute>
             }
           />

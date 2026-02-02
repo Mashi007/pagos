@@ -20,7 +20,6 @@ Allow: /reportes
 Disallow: /admin
 Disallow: /configuracion
 Disallow: /usuarios
-Disallow: /auditoria
 Disallow: /api/
 Disallow: /_internal/
 

@@ -26,6 +26,7 @@ import { toast } from 'sonner'
 import { apiClient } from '../../services/api'
 import { aiTrainingService, ConversacionAI, MetricasEntrenamiento } from '../../services/aiTrainingService'
 import { PromptEditor } from './PromptEditor'
+import { BASE_PATH } from '../../config/env'
 
 interface Recomendacion {
   tipo: 'recoleccion' | 'calidad' | 'entrenar' | 'mas_datos'
@@ -446,7 +447,7 @@ export function EntrenamientoMejorado() {
                                     } else if (rec.tipo === 'calidad') {
                                       setActiveTab('calidad')
                                     } else if (rec.tipo === 'entrenar') {
-                                      window.location.href = '/configuracion?tab=ai&subtab=fine-tuning'
+                                      window.location.href = BASE_PATH + '/configuracion?tab=ai&subtab=fine-tuning'
                                     } else {
                                       toast.info('Consulta la pestaña de Recolección para más información')
                                     }
@@ -676,7 +677,7 @@ export function EntrenamientoMejorado() {
                     </Button>
                     <Button
                       variant="outline"
-                      onClick={() => window.location.href = '/configuracion?tab=ai&subtab=fine-tuning'}
+                      onClick={() => window.location.href = BASE_PATH + '/configuracion?tab=ai&subtab=fine-tuning'}
                       className="w-full justify-start"
                       size="lg"
                     >

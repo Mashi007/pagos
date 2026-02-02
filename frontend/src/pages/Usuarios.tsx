@@ -14,6 +14,7 @@ import { clearAuthStorage } from '../utils/storage'
 import { toast } from 'sonner'
 import { getErrorMessage, getErrorDetail } from '../types/errors'
 import { logger } from '../utils/logger'
+import { BASE_PATH } from '../config/env'
 
 export function Usuarios() {
   const { user: currentUser } = useSimpleAuth()
@@ -239,7 +240,7 @@ export function Usuarios() {
           // Limpiar sesión y redirigir al login
           clearAuthStorage()
           setTimeout(() => {
-            window.location.href = '/login'
+            window.location.href = BASE_PATH + '/login'
           }, 1000)
         } else {
           toast.success('Usuario actualizado exitosamente')

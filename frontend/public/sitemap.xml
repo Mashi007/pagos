@@ -92,12 +92,4 @@
     <priority>0.6</priority>
   </url>
 
-  <!-- 📊 Auditoría -->
-  <url>
-    <loc>https://rapicredit.onrender.com/auditoria</loc>
-    <lastmod>2025-10-22</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.5</priority>
-  </url>
-
 </urlset>

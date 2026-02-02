@@ -6,6 +6,7 @@ import { Textarea } from '../components/ui/textarea'
 import { Badge } from '../components/ui/badge'
 import { toast } from 'sonner'
 import { apiClient } from '../services/api'
+import { BASE_PATH } from '../config/env'
 
 interface Mensaje {
   id: string
@@ -273,7 +274,7 @@ export function ChatAI() {
                 <p className="font-semibold text-amber-900 mb-1">AI no configurado</p>
                 <p className="text-sm text-amber-700">
                   Para usar Chat AI, necesitas configurar y activar la Inteligencia Artificial en{' '}
-                  <a href="/configuracion?tab=ai" className="underline font-medium">
+                  <a href={BASE_PATH + '/configuracion?tab=ai'} className="underline font-medium">
                     Configuración &gt; Inteligencia Artificial
                   </a>
                 </p>

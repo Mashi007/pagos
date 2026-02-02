@@ -8,6 +8,7 @@ import { Badge } from '../../components/ui/badge'
 import { toast } from 'sonner'
 import { validarEmail, validarConfiguracionGmail, validarConfiguracionImapGmail } from '../../utils/validators'
 import { emailConfigService, notificacionService, type Notificacion } from '../../services/notificacionService'
+import { BASE_PATH } from '../../config/env'
 
 interface EmailConfigData {
   smtp_host: string
@@ -824,7 +825,7 @@ export function EmailConfig() {
                 Notificación automática de tickets (CRM)
               </h3>
               <p className="text-sm text-blue-800 mb-2">
-                Cuando se crea o actualiza un ticket en <a href="/crm/tickets" className="underline font-medium">CRM → Tickets</a>, se envía un correo automáticamente <strong>desde el email configurado arriba</strong> hacia los contactos que indiques aquí.
+                Cuando se crea o actualiza un ticket en <a href={BASE_PATH + '/crm/tickets'} className="underline font-medium">CRM → Tickets</a>, se envía un correo automáticamente <strong>desde el email configurado arriba</strong> hacia los contactos que indiques aquí.
               </p>
               <p className="text-xs text-blue-700">
                 Introduce uno o varios emails separados por coma (contactos prestablecidos). Ej: <code className="bg-blue-100 px-1 rounded">soporte@empresa.com, gerencia@empresa.com</code>
