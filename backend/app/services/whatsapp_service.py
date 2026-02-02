@@ -6,7 +6,7 @@ Las imágenes se guardan en pagos_whatsapp con link_imagen (Google Drive).
 import re
 import logging
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 
@@ -76,6 +76,38 @@ MENSAJE_ENVIA_FOTO = "Por favor envía una foto clara de tu papeleta de depósit
 MENSAJE_FOTO_POCO_CLARA = "La imagen no está lo suficientemente clara. Toma otra foto a 20 cm de tu papeleta. Intento {n}/3."
 MENSAJE_RECIBIDO = "Gracias. (Cédula {cedula} reportada.)"
 OBSERVACION_NO_CONFIRMA = "No confirma identidad"
+
+# Si la conversación lleva más de esta cantidad de horas sin actividad, se trata como nuevo caso (bienvenida de nuevo).
+HORAS_INACTIVIDAD_NUEVO_CASO = 24
+
+
+def _conversacion_obsoleta(conv: ConversacionCobranza, horas: int = HORAS_INACTIVIDAD_NUEVO_CASO) -> bool:
+    """True si la conversación no tiene actividad desde hace más de `horas` horas; así se trata como nuevo reporte."""
+    if not conv or not getattr(conv, "updated_at", None):
+        return True
+    try:
+        ultima = conv.updated_at
+        if getattr(ultima, "tzinfo", None) is not None:
+            ultima = ultima.replace(tzinfo=None)
+        delta = datetime.utcnow() - ultima
+        return delta > timedelta(hours=horas)
+    except (TypeError, ValueError):
+        return True
+
+
+def _reiniciar_como_nuevo_caso(conv: ConversacionCobranza, db: Session) -> None:
+    """Reinicia la conversación para tratarla como nuevo caso (nuevo reporte de pago)."""
+    conv.estado = "esperando_cedula"
+    conv.cedula = None
+    conv.nombre_cliente = None
+    conv.intento_foto = 0
+    conv.intento_confirmacion = 0
+    conv.observacion = None
+    conv.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(conv)
+    logger.info("Conversación %s reiniciada como nuevo caso (inactividad > %s h).", conv.telefono, HORAS_INACTIVIDAD_NUEVO_CASO)
+
 
 # Validación cédula: debe empezar por E, J o V (una de las 3 letras) + 6 a 11 dígitos. Acepta E1234567, V12345678, J1234567, EVJ1234567.
 CEDULA_PATTERN_E = re.compile(r"^[Ee]\d{6,11}$")
@@ -251,6 +283,10 @@ class WhatsAppService:
             db.commit()
             db.refresh(conv)
             return {"status": "welcome", "response_text": MENSAJE_BIENVENIDA}
+        # Si lleva mucho tiempo sin actividad, tratar como nuevo caso (nuevo reporte de pago)
+        if _conversacion_obsoleta(conv):
+            _reiniciar_como_nuevo_caso(conv, db)
+            return {"status": "welcome", "response_text": MENSAJE_BIENVENIDA}
         if conv.estado == "esperando_cedula":
             if not _validar_cedula_evj(text):
                 return {"status": "cedula_invalida", "response_text": MENSAJE_CEDULA_INVALIDA}
@@ -313,7 +349,13 @@ class WhatsAppService:
         if len(phone) < 10:
             phone = message.from_
         conv = db.execute(select(ConversacionCobranza).where(ConversacionCobranza.telefono == phone)).scalar_one_or_none()
-        if not conv or conv.estado != "esperando_foto" or not conv.cedula:
+        if not conv:
+            return {"status": "need_cedula", "response_text": MENSAJE_BIENVENIDA}
+        # Si lleva mucho tiempo sin actividad, tratar como nuevo caso (pedir cédula de nuevo)
+        if _conversacion_obsoleta(conv):
+            _reiniciar_como_nuevo_caso(conv, db)
+            return {"status": "need_cedula", "response_text": MENSAJE_BIENVENIDA}
+        if conv.estado != "esperando_foto" or not conv.cedula:
             return {"status": "need_cedula", "response_text": MENSAJE_BIENVENIDA}
         whatsapp_sync_from_db()
         cfg = get_whatsapp_config()
