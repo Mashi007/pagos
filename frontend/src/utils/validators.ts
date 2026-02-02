@@ -116,12 +116,17 @@ export function validarIdioma(idioma: string): boolean {
 // Códigos de país comunes (sin +). Si el "Phone Number ID" empieza por estos y tiene 10-14 dígitos, es un número de teléfono, no el ID de Meta.
 const PREFIJOS_NUMERO_TELEFONO = ['58', '57', '593', '52', '54', '51', '56', '598', '595', '55', '59']
 
-/** True si el valor parece un número de teléfono (ej. 5804244545242) y NO el Phone Number ID de Meta (ej. 953020801227915). */
+/** True si el valor parece un número de teléfono y NO el Phone Number ID de Meta (ej. 1038026026054793). */
 export function pareceNumeroTelefonoParaMeta(phoneNumberId: string): boolean {
   if (!phoneNumberId || typeof phoneNumberId !== 'string') return false
   const digits = phoneNumberId.replace(/\D/g, '')
   if (digits.length < 10 || digits.length > 14) return false
-  return PREFIJOS_NUMERO_TELEFONO.some(prefix => digits === prefix || digits.startsWith(prefix))
+  // Número con código de país (58..., 57..., etc.)
+  if (PREFIJOS_NUMERO_TELEFONO.some(prefix => digits === prefix || digits.startsWith(prefix))) return true
+  // Número local sin código: 10 dígitos que empiezan por 4 (Venezuela móvil 424..., 414...) o 04 (0424...)
+  if (digits.length === 10 && digits.startsWith('4')) return true
+  if (digits.length === 11 && digits.startsWith('04')) return true
+  return false
 }
 
 // Validación de Phone Number ID (solo números; avisar si parece número de teléfono)

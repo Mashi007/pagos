@@ -272,16 +272,16 @@ export function WhatsAppConfig() {
               <Input
                 value={config.phone_number_id}
                 onChange={(e) => handleChange('phone_number_id', e.target.value)}
-                placeholder="953020801227915"
+                placeholder="1038026026054793"
                 className={pareceNumeroTelefonoParaMeta(config.phone_number_id || '') ? 'border-amber-500 bg-amber-50' : ''}
               />
               {pareceNumeroTelefonoParaMeta(config.phone_number_id || '') && (
                 <p className="text-xs text-amber-700 mt-1 font-medium">
-                  Parece un número de teléfono (+58, +57…). Meta requiere el <strong>ID numérico</strong> (ej. 953020801227915) desde Business Suite → WhatsApp → tu número → ID, no el número con código de país.
+                  Has puesto un número de teléfono (ej. 4244545242 o +58…). Meta pide el <strong>ID numérico largo</strong> (ej. 1038026026054793), que ves en Meta Developers → WhatsApp → Enviar y recibir mensajes → “Identificador del número de teléfono”. No es el mismo que el número +58 424 4545242.
                 </p>
               )}
               <p className="text-xs text-gray-500 mt-1">
-                ID numérico de Meta (Business Suite → WhatsApp → tu número). No uses el número con código de país (+58 Venezuela, etc.); ese es el número de destino, no el ID.
+                ID numérico largo de Meta (15–16 dígitos), en Business Suite o Meta Developers → WhatsApp → tu número → “Identificador del número de teléfono”. No uses el número de teléfono (424… ni +58…); ese es el número de destino.
               </p>
             </div>
           </div>
@@ -576,28 +576,45 @@ export function WhatsAppConfig() {
 
           {/* Resultado de la prueba */}
           {resultadoPrueba && (
-            <div className={`p-4 rounded-lg border ${
-              resultadoPrueba.mensaje?.includes('enviado')
-                ? 'bg-green-50 border-green-200'
-                : 'bg-red-50 border-red-200'
-            }`}>
-              <div className="flex items-start gap-2">
-                {resultadoPrueba.mensaje?.includes('enviado') ? (
-                  <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
-                ) : (
-                  <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
-                )}
-                <div className="flex-1">
-                  <p className={`font-medium ${
-                    resultadoPrueba.mensaje?.includes('enviado') ? 'text-green-900' : 'text-red-900'
-                  }`}>
-                    {resultadoPrueba.mensaje}
-                  </p>
-                  {resultadoPrueba.error && (
-                    <p className="text-sm text-red-600 mt-1">{resultadoPrueba.error}</p>
+            <div className="space-y-2">
+              <div className={`p-4 rounded-lg border ${
+                resultadoPrueba.mensaje?.includes('enviado')
+                  ? 'bg-green-50 border-green-200'
+                  : 'bg-red-50 border-red-200'
+              }`}>
+                <div className="flex items-start gap-2">
+                  {resultadoPrueba.mensaje?.includes('enviado') ? (
+                    <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
+                  ) : (
+                    <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
                   )}
+                  <div className="flex-1">
+                    <p className={`font-medium ${
+                      resultadoPrueba.mensaje?.includes('enviado') ? 'text-green-900' : 'text-red-900'
+                    }`}>
+                      {resultadoPrueba.mensaje}
+                    </p>
+                    {resultadoPrueba.telefono_destino && (
+                      <p className="text-sm text-gray-600 mt-1">
+                        Destino: {resultadoPrueba.telefono_destino}
+                      </p>
+                    )}
+                    {resultadoPrueba.error && (
+                      <p className="text-sm text-red-600 mt-1">{resultadoPrueba.error}</p>
+                    )}
+                  </div>
                 </div>
               </div>
+              {resultadoPrueba.mensaje?.includes('enviado') && (
+                <div className="p-3 rounded-lg border border-blue-200 bg-blue-50 text-sm text-blue-900">
+                  <p className="font-medium mb-1">¿No te llega el mensaje?</p>
+                  <ul className="list-disc list-inside space-y-0.5 text-blue-800">
+                    <li>El mensaje se envió a <strong>{resultadoPrueba.telefono_destino || 'el número indicado'}</strong>. En modo Pruebas, ese es el &quot;Teléfono de Pruebas&quot; configurado arriba. Si esperas recibirlo en otro número (ej. +58…), pon ese número en Teléfono de Pruebas.</li>
+                    <li>Ese número debe estar añadido como <strong>número de prueba</strong> en Meta Developers (WhatsApp → Enviar y recibir mensajes → números de prueba).</li>
+                    <li>Para <strong>iniciar conversación</strong> con un número que no te ha escrito antes, Meta puede exigir una <strong>plantilla aprobada</strong>. Crea una en Meta Business Manager (WhatsApp → Plantillas de mensaje) o haz que el usuario te escriba primero para abrir la ventana de 24 h.</li>
+                  </ul>
+                </div>
+              )}
             </div>
           )}
         </CardContent>

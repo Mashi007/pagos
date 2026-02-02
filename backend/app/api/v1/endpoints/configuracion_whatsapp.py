@@ -153,17 +153,19 @@ def post_whatsapp_probar(payload: ProbarWhatsAppRequest = Body(...), db: Session
             detail="Indica un teléfono de destino o configura Teléfono de Pruebas en modo pruebas.",
         )
     from app.core.whatsapp_send import send_whatsapp_text
-    ok = send_whatsapp_text(destino, mensaje)
+    ok, error_meta = send_whatsapp_text(destino, mensaje)
     if ok:
         return {
             "success": True,
             "mensaje": "Mensaje de prueba enviado correctamente.",
             "telefono_destino": destino,
         }
+    mensaje_fallo = error_meta or "No se pudo enviar. Revisa Access Token, Phone Number ID y formato internacional."
     return {
         "success": False,
-        "mensaje": "No se pudo enviar. Revisa Access Token, Phone Number ID y que el número tenga formato internacional.",
+        "mensaje": mensaje_fallo,
         "telefono_destino": destino,
+        "error": error_meta,
     }
 
 

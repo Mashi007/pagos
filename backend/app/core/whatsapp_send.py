@@ -20,16 +20,17 @@ def _normalize_phone(phone: str) -> str:
     return digits
 
 
-def send_whatsapp_text(to_phone: str, body: str) -> bool:
+def send_whatsapp_text(to_phone: str, body: str) -> tuple[bool, str | None]:
     """
     Envía un mensaje de texto por WhatsApp (Meta Cloud API).
     Usa config desde BD (Configuración > WhatsApp). to_phone: número con o sin +.
-    Devuelve True si se envió, False si no hay config o falló.
+    Devuelve (True, None) si se envió, (False, mensaje_error) si no hay config o falló.
+    mensaje_error puede ser el detalle de Meta (ej. plantilla requerida).
     """
     phone = _normalize_phone(to_phone)
     if not phone or len(phone) < 10:
         logger.debug("Número WhatsApp inválido o vacío: %s", to_phone)
-        return False
+        return False, "Número inválido o vacío"
     whatsapp_sync_from_db()
     cfg = get_whatsapp_config()
     token = (cfg.get("access_token") or "").strip()
@@ -37,10 +38,10 @@ def send_whatsapp_text(to_phone: str, body: str) -> bool:
     api_url = (cfg.get("api_url") or "https://graph.facebook.com/v18.0").rstrip("/")
     if not token or not phone_number_id:
         logger.warning("WhatsApp no configurado (token o phone_number_id). Configura en Configuración > WhatsApp.")
-        return False
+        return False, "Falta configurar Access Token o Phone Number ID"
     body = (body or "").strip()[:4096]
     if not body:
-        return False
+        return False, "Mensaje vacío"
     try:
         import httpx
         url = f"{api_url}/{phone_number_id}/messages"
@@ -62,9 +63,24 @@ def send_whatsapp_text(to_phone: str, body: str) -> bool:
             )
         if r.is_success:
             logger.info("WhatsApp enviado a %s", phone[:6] + "***")
-            return True
-        logger.warning("WhatsApp API error %s: %s", r.status_code, r.text[:200])
-        return False
+            return True, None
+        # Extraer mensaje de Meta para plantilla requerida u otros errores
+        error_detail: str | None = None
+        try:
+            err = r.json()
+            msg = (err.get("error") or {}).get("message", "")
+            if msg:
+                error_detail = msg
+                if "template" in msg.lower() or "plantilla" in msg.lower() or "reusable" in msg.lower():
+                    error_detail = (
+                        "Meta exige una plantilla aprobada para iniciar conversación con este número. "
+                        "Crea y aprueba una plantilla en Meta Business Manager (WhatsApp > Plantillas de mensaje) "
+                        "o envía primero desde ese número a tu negocio para abrir la ventana de 24 h."
+                    )
+        except Exception:
+            error_detail = r.text[:200] if r.text else f"HTTP {r.status_code}"
+        logger.warning("WhatsApp API error %s: %s", r.status_code, error_detail or r.text[:200])
+        return False, error_detail or "Error al enviar"
     except Exception as e:
         logger.exception("Error enviando WhatsApp: %s", e)
-        return False
+        return False, str(e)[:200]

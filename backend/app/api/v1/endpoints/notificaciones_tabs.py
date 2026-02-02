@@ -73,7 +73,8 @@ def _enviar_correos_items(
         # WhatsApp (config desde Configuración > WhatsApp; mismo cuerpo que email)
         telefono = (item.get("telefono") or "").strip()
         if telefono:
-            if send_whatsapp_text(telefono, cuerpo):
+            ok, _ = send_whatsapp_text(telefono, cuerpo)
+            if ok:
                 enviados_whatsapp += 1
             else:
                 fallidos_whatsapp += 1
