@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { FileText, Save, Eye, EyeOff, CheckCircle, AlertCircle, Link, RefreshCw, HardDrive, Sheet, ScanText } from 'lucide-react'
+import { FileText, Save, Eye, EyeOff, CheckCircle, AlertCircle, Link, RefreshCw, Database, FileSpreadsheet } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -182,7 +182,7 @@ export function InformePagosConfig() {
               {estado ? (
                 <>
                   <div className={`flex items-start gap-2 rounded-md p-3 ${estado.drive.conectado ? 'bg-green-50 dark:bg-green-950/30' : 'bg-red-50 dark:bg-red-950/30'}`}>
-                    <HardDrive className={`h-5 w-5 shrink-0 mt-0.5 ${estado.drive.conectado ? 'text-green-600' : 'text-red-600'}`} />
+                    <Database className={`h-5 w-5 shrink-0 mt-0.5 ${estado.drive.conectado ? 'text-green-600' : 'text-red-600'}`} />
                     <div className="min-w-0">
                       <span className="text-sm font-medium block">
                         Google Drive
@@ -194,7 +194,7 @@ export function InformePagosConfig() {
                     </div>
                   </div>
                   <div className={`flex items-start gap-2 rounded-md p-3 ${estado.sheets.conectado ? 'bg-green-50 dark:bg-green-950/30' : 'bg-red-50 dark:bg-red-950/30'}`}>
-                    <Sheet className={`h-5 w-5 shrink-0 mt-0.5 ${estado.sheets.conectado ? 'text-green-600' : 'text-red-600'}`} />
+                    <FileSpreadsheet className={`h-5 w-5 shrink-0 mt-0.5 ${estado.sheets.conectado ? 'text-green-600' : 'text-red-600'}`} />
                     <div className="min-w-0">
                       <span className="text-sm font-medium block">
                         Google Sheets
@@ -206,7 +206,7 @@ export function InformePagosConfig() {
                     </div>
                   </div>
                   <div className={`flex items-start gap-2 rounded-md p-3 ${estado.ocr.conectado ? 'bg-green-50 dark:bg-green-950/30' : 'bg-red-50 dark:bg-red-950/30'}`}>
-                    <ScanText className={`h-5 w-5 shrink-0 mt-0.5 ${estado.ocr.conectado ? 'text-green-600' : 'text-red-600'}`} />
+                    <FileText className={`h-5 w-5 shrink-0 mt-0.5 ${estado.ocr.conectado ? 'text-green-600' : 'text-red-600'}`} />
                     <div className="min-w-0">
                       <span className="text-sm font-medium block">
                         OCR (Vision)
