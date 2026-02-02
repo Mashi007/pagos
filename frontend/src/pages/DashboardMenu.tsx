@@ -956,12 +956,16 @@ export function DashboardMenu() {
                       <div>
                         <h4 className="text-sm font-semibold text-gray-700 mb-2">Por mes (período seleccionado)</h4>
                         {datosConcesionarios.por_mes?.length > 0 ? (() => {
-                          const meses = [...new Set(datosConcesionarios.por_mes.map((d) => d.mes))].sort()
-                          const porConcesionario = datosConcesionarios.por_mes.reduce<Record<string, Record<string, number>>>((acc, { mes, concesionario, cantidad }) => {
-                            if (!acc[concesionario]) acc[concesionario] = {}
-                            acc[concesionario][mes] = cantidad
-                            return acc
-                          }, {})
+                          type PorMesRow = { mes: string; concesionario: string; cantidad: number }
+                          const meses: string[] = [...new Set((datosConcesionarios.por_mes as PorMesRow[]).map((d) => d.mes))].sort()
+                          const porConcesionario = (datosConcesionarios.por_mes as PorMesRow[]).reduce(
+                            (acc: Record<string, Record<string, number>>, { mes, concesionario, cantidad }) => {
+                              if (!acc[concesionario]) acc[concesionario] = {}
+                              acc[concesionario][mes] = cantidad
+                              return acc
+                            },
+                            {} as Record<string, Record<string, number>>
+                          )
                           const concesionarios = Object.keys(porConcesionario).sort()
                           return (
                             <div className="overflow-x-auto rounded-md border border-gray-200">
@@ -969,19 +973,19 @@ export function DashboardMenu() {
                                 <TableHeader>
                                   <TableRow className="bg-gray-50">
                                     <TableHead className="font-semibold">Concesionario</TableHead>
-                                    {meses.map((m) => (
+                                    {meses.map((m: string) => (
                                       <TableHead key={m} className="text-center whitespace-nowrap">{m}</TableHead>
                                     ))}
                                     <TableHead className="text-center font-semibold">Total</TableHead>
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                  {concesionarios.map((c) => {
+                                  {concesionarios.map((c: string) => {
                                     const total = meses.reduce((s, m) => s + (porConcesionario[c][m] ?? 0), 0)
                                     return (
                                       <TableRow key={c}>
                                         <TableCell className="font-medium">{c}</TableCell>
-                                        {meses.map((m) => (
+                                        {meses.map((m: string) => (
                                           <TableCell key={m} className="text-center">{porConcesionario[c][m] ?? 0}</TableCell>
                                         ))}
                                         <TableCell className="text-center font-medium">{total}</TableCell>
@@ -1060,12 +1064,16 @@ export function DashboardMenu() {
                       <div>
                         <h4 className="text-sm font-semibold text-gray-700 mb-2">Por mes (período seleccionado)</h4>
                         {datosModelos.por_mes?.length > 0 ? (() => {
-                          const meses = [...new Set(datosModelos.por_mes.map((d) => d.mes))].sort()
-                          const porModelo = datosModelos.por_mes.reduce<Record<string, Record<string, number>>>((acc, { mes, modelo, cantidad }) => {
-                            if (!acc[modelo]) acc[modelo] = {}
-                            acc[modelo][mes] = cantidad
-                            return acc
-                          }, {})
+                          type PorMesModeloRow = { mes: string; modelo: string; cantidad: number }
+                          const meses: string[] = [...new Set((datosModelos.por_mes as PorMesModeloRow[]).map((d) => d.mes))].sort()
+                          const porModelo = (datosModelos.por_mes as PorMesModeloRow[]).reduce(
+                            (acc: Record<string, Record<string, number>>, { mes, modelo, cantidad }) => {
+                              if (!acc[modelo]) acc[modelo] = {}
+                              acc[modelo][mes] = cantidad
+                              return acc
+                            },
+                            {} as Record<string, Record<string, number>>
+                          )
                           const modelos = Object.keys(porModelo).sort()
                           return (
                             <div className="overflow-x-auto rounded-md border border-gray-200">
@@ -1073,19 +1081,19 @@ export function DashboardMenu() {
                                 <TableHeader>
                                   <TableRow className="bg-gray-50">
                                     <TableHead className="font-semibold">Modelo</TableHead>
-                                    {meses.map((m) => (
+                                    {meses.map((m: string) => (
                                       <TableHead key={m} className="text-center whitespace-nowrap">{m}</TableHead>
                                     ))}
                                     <TableHead className="text-center font-semibold">Total</TableHead>
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                  {modelos.map((mod) => {
+                                  {modelos.map((mod: string) => {
                                     const total = meses.reduce((s, m) => s + (porModelo[mod][m] ?? 0), 0)
                                     return (
                                       <TableRow key={mod}>
                                         <TableCell className="font-medium">{mod}</TableCell>
-                                        {meses.map((m) => (
+                                        {meses.map((m: string) => (
                                           <TableCell key={m} className="text-center">{porModelo[mod][m] ?? 0}</TableCell>
                                         ))}
                                         <TableCell className="text-center font-medium">{total}</TableCell>
