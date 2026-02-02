@@ -106,7 +106,7 @@ export function InformePagosConfig() {
               </Button>
               <Textarea
                 placeholder='{"type":"service_account",...}'
-                value={config.google_credentials_json === '***' ? credencialesEdit : (credencialesEdit || config.google_credentials_json ?? '')}
+                value={config.google_credentials_json === '***' ? credencialesEdit : (credencialesEdit || (config.google_credentials_json ?? ''))}
                 onChange={(e) => setCredencialesEdit(e.target.value)}
                 className="font-mono text-xs min-h-[120px]"
                 rows={6}

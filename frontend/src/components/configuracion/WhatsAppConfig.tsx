@@ -6,7 +6,7 @@ import { Input } from '../../components/ui/input'
 import { Textarea } from '../../components/ui/textarea'
 import { Badge } from '../../components/ui/badge'
 import { toast } from 'sonner'
-import { validarTelefono, validarConfiguracionWhatsApp, normalizarTelefonoParaIngreso } from '../../utils/validators'
+import { validarTelefono, validarConfiguracionWhatsApp, normalizarTelefonoParaIngreso, pareceNumeroTelefonoParaMeta } from '../../utils/validators'
 import { whatsappConfigService, notificacionService, type Notificacion, type WhatsAppConfig } from '../../services/notificacionService'
 
 export function WhatsAppConfig() {
@@ -272,8 +272,14 @@ export function WhatsAppConfig() {
               <Input
                 value={config.phone_number_id}
                 onChange={(e) => handleChange('phone_number_id', e.target.value)}
-                placeholder="123456789012345"
+                placeholder="953020801227915"
+                className={pareceNumeroTelefonoParaMeta(config.phone_number_id || '') ? 'border-amber-500 bg-amber-50' : ''}
               />
+              {pareceNumeroTelefonoParaMeta(config.phone_number_id || '') && (
+                <p className="text-xs text-amber-700 mt-1 font-medium">
+                  Parece un número de teléfono (+58, +57…). Meta requiere el <strong>ID numérico</strong> (ej. 953020801227915) desde Business Suite → WhatsApp → tu número → ID, no el número con código de país.
+                </p>
+              )}
               <p className="text-xs text-gray-500 mt-1">
                 ID numérico de Meta (Business Suite → WhatsApp → tu número). No uses el número con código de país (+58 Venezuela, etc.); ese es el número de destino, no el ID.
               </p>

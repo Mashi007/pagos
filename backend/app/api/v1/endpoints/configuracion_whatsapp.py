@@ -183,6 +183,14 @@ def get_whatsapp_test_completo(db: Session = Depends(get_db)):
     # Meta espera el ID numérico (ej. 1038026026054793), no el número de teléfono (+58...)
     phone_number_id_digits = "".join(c for c in phone_number_id if c.isdigit()) if phone_number_id else ""
 
+    # Detectar si el usuario puso el número de teléfono en lugar del Phone Number ID de Meta
+    _prefijos_telefono = ("58", "57", "593", "52", "54", "51", "56", "598", "595", "55", "59")
+    parece_numero_telefono = (
+        len(phone_number_id_digits) >= 10
+        and len(phone_number_id_digits) <= 14
+        and any(phone_number_id_digits == p or phone_number_id_digits.startswith(p) for p in _prefijos_telefono)
+    )
+
     tests: dict[str, Any] = {}
     exitosos = 0
     fallidos = 0
@@ -199,6 +207,14 @@ def get_whatsapp_test_completo(db: Session = Depends(get_db)):
     elif not phone_number_id_digits:
         conexion_mensaje = "Falta Phone Number ID. Usa el Identificador del número de teléfono de Meta (número largo, no el +58...)."
         conexion_error = "phone_number_id_no_configurado"
+    elif parece_numero_telefono:
+        conexion_mensaje = (
+            "Has ingresado lo que parece un número de teléfono (+58, +57, etc.). "
+            "Meta requiere el Phone Number ID: el ID numérico que ves en Meta Business Suite → WhatsApp → tu número (ej. 953020801227915), "
+            "no el número con código de país. Copia el ID desde la configuración de tu número en Meta."
+        )
+        conexion_error = "phone_number_id_es_numero_telefono"
+        fallidos = 1
     else:
         try:
             import httpx

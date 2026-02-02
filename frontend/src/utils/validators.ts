@@ -113,7 +113,18 @@ export function validarIdioma(idioma: string): boolean {
   return idiomasValidos.includes(idioma)
 }
 
-// Validación de Phone Number ID (solo números)
+// Códigos de país comunes (sin +). Si el "Phone Number ID" empieza por estos y tiene 10-14 dígitos, es un número de teléfono, no el ID de Meta.
+const PREFIJOS_NUMERO_TELEFONO = ['58', '57', '593', '52', '54', '51', '56', '598', '595', '55', '59']
+
+/** True si el valor parece un número de teléfono (ej. 5804244545242) y NO el Phone Number ID de Meta (ej. 953020801227915). */
+export function pareceNumeroTelefonoParaMeta(phoneNumberId: string): boolean {
+  if (!phoneNumberId || typeof phoneNumberId !== 'string') return false
+  const digits = phoneNumberId.replace(/\D/g, '')
+  if (digits.length < 10 || digits.length > 14) return false
+  return PREFIJOS_NUMERO_TELEFONO.some(prefix => digits === prefix || digits.startsWith(prefix))
+}
+
+// Validación de Phone Number ID (solo números; avisar si parece número de teléfono)
 export function validarPhoneNumberID(phoneNumberId: string): { valido: boolean; error?: string } {
   if (!phoneNumberId || typeof phoneNumberId !== 'string') {
     return { valido: false, error: 'Phone Number ID es requerido' }
@@ -121,6 +132,12 @@ export function validarPhoneNumberID(phoneNumberId: string): { valido: boolean; 
   const limpio = phoneNumberId.trim()
   if (!/^\d+$/.test(limpio)) {
     return { valido: false, error: 'Phone Number ID debe contener solo números (sin espacios ni caracteres especiales)' }
+  }
+  if (pareceNumeroTelefonoParaMeta(limpio)) {
+    return {
+      valido: false,
+      error: 'Parece un número de teléfono (+58, +57, etc.). Debes usar el ID numérico de Meta (Business Suite → WhatsApp → tu número → ID), no el número con código de país.'
+    }
   }
   return { valido: true }
 }
