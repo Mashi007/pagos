@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { FileText, Save, Eye, EyeOff, CheckCircle, AlertCircle, Link2 } from 'lucide-react'
+import { FileText, Save, Eye, EyeOff, CheckCircle, AlertCircle, Link } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -216,7 +216,7 @@ export function InformePagosConfig() {
                   onClick={handleConectarGoogle}
                   className="inline-flex items-center gap-1"
                 >
-                  <Link2 className="h-4 w-4" />
+                  <Link className="h-4 w-4" />
                   Conectar con Google (OAuth)
                 </Button>
               </div>
