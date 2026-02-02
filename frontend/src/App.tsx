@@ -135,22 +135,14 @@ function App() {
         <Routes>
         {/* Una sola raíz path="/" para que Layout reciba correctamente las rutas hijas (dashboard, clientes, etc.) */}
         <Route path="/" element={<RootLayoutWrapper />}>
-          {/* Página de bienvenida (index) */}
+          {/* Raíz /pagos/ → redirigir a login (formulario visible) o dashboard si ya está autenticado */}
           <Route
             index
             element={
               isAuthenticated ? (
                 <Navigate to="/dashboard/menu" replace />
               ) : (
-                <motion.div
-                  key="welcome"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: ANIMATION_DURATION }}
-                >
-                  <Welcome />
-                </motion.div>
+                <Navigate to="/login" replace />
               )
             }
           />

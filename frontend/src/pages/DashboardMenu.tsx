@@ -233,7 +233,8 @@ export function DashboardMenu() {
         // Si el error es 500 o de red, lanzar el error para que React Query lo maneje
         // Si es otro error, retornar respuesta vacía para no romper el dashboard
         const err = error as { response?: { status?: number }; code?: string }
-        if (err?.response?.status >= 500 || err?.code === 'ERR_NETWORK' || err?.code === 'ECONNABORTED') {
+        const status = err?.response?.status
+        if ((status != null && status >= 500) || err?.code === 'ERR_NETWORK' || err?.code === 'ECONNABORTED') {
           throw error
         }
         return {
