@@ -219,11 +219,23 @@ def get_whatsapp_test_completo(db: Session = Depends(get_db)):
             else:
                 try:
                     err = r.json()
-                    msg = err.get("error", {}).get("message", r.text[:200])
+                    api_msg = err.get("error", {}).get("message", r.text[:200] if r.text else "")
                 except Exception:
-                    msg = r.text[:200] if r.text else f"HTTP {r.status_code}"
-                conexion_mensaje = msg
-                conexion_error = msg
+                    api_msg = r.text[:200] if r.text else f"HTTP {r.status_code}"
+                    code = None
+                # Mensaje amigable para el error típico de Meta (ID no existe o permisos)
+                if api_msg and ("does not exist" in api_msg or "missing permissions" in api_msg or "does not support" in api_msg):
+                    conexion_mensaje = (
+                        "Meta rechazó la petición. Posibles causas: (1) El Phone Number ID no es el correcto: "
+                        "debe ser el ID numérico que muestra Meta en Business Suite > WhatsApp > Número de teléfono, "
+                        "no el número de teléfono con código de país (+58, etc.). (2) El Access Token no tiene permisos "
+                        "whatsapp_business_management y/o whatsapp_business_messaging. (3) El número no está asociado "
+                        "a tu app en Meta Developers. Revisa en developers.facebook.com."
+                    )
+                    conexion_error = api_msg
+                else:
+                    conexion_mensaje = api_msg
+                    conexion_error = api_msg
                 fallidos += 1
         except Exception as e:
             conexion_mensaje = str(e)[:200]

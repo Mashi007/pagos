@@ -1,6 +1,7 @@
 """
-Scheduler para tareas programadas. Reportes de cobranzas a las 6:00 y 13:00.
-Usa APScheduler con sesión de BD (get_db pattern) para actualizar reportes.
+Scheduler para tareas programadas.
+- Reportes de cobranzas: 6:00 y 13:00.
+- Informe de pagos (email con link Google Sheet): 6:00, 13:00 y 16:30 (America/Caracas).
 """
 import logging
 from typing import Optional
@@ -39,8 +40,17 @@ def _job_actualizar_reportes_cobranzas() -> None:
         db.close()
 
 
+def _job_informe_pagos_email() -> None:
+    """Job que envía email con link a Google Sheet del informe de pagos (6:00, 13:00, 16:30)."""
+    try:
+        from app.core.informe_pagos_email import enviar_informe_pagos_email
+        enviar_informe_pagos_email()
+    except Exception as e:
+        logger.exception("Error en job informe_pagos_email: %s", e)
+
+
 def start_scheduler() -> None:
-    """Inicia el scheduler con los cron 6:00 y 13:00 para reportes de cobranzas."""
+    """Inicia el scheduler: reportes cobranzas 6:00 y 13:00; informe pagos email 6:00, 13:00 y 16:30."""
     global _scheduler
     if _scheduler is not None:
         logger.warning("Scheduler ya está iniciado.")
@@ -58,9 +68,28 @@ def start_scheduler() -> None:
         id="reportes_cobranzas_1pm",
         name="Actualizar reportes cobranzas 13:00",
     )
+    # Informe de pagos: email con link a Google Sheet a las 6:00, 13:00 y 16:30
+    _scheduler.add_job(
+        _job_informe_pagos_email,
+        CronTrigger(hour=6, minute=0, timezone=SCHEDULER_TZ),
+        id="informe_pagos_6am",
+        name="Email informe pagos 6:00",
+    )
+    _scheduler.add_job(
+        _job_informe_pagos_email,
+        CronTrigger(hour=13, minute=0, timezone=SCHEDULER_TZ),
+        id="informe_pagos_1pm",
+        name="Email informe pagos 13:00",
+    )
+    _scheduler.add_job(
+        _job_informe_pagos_email,
+        CronTrigger(hour=16, minute=30, timezone=SCHEDULER_TZ),
+        id="informe_pagos_4h30",
+        name="Email informe pagos 16:30",
+    )
     _scheduler.start()
     logger.info(
-        "Scheduler iniciado: reportes cobranzas a las 6:00 y 13:00 (%s).",
+        "Scheduler iniciado: reportes cobranzas 6:00 y 13:00; informe pagos email 6:00, 13:00 y 16:30 (%s).",
         SCHEDULER_TZ,
     )
 

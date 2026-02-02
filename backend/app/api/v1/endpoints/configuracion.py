@@ -21,7 +21,7 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.v1.endpoints import configuracion_ai, configuracion_email, configuracion_whatsapp
+from app.api.v1.endpoints import configuracion_ai, configuracion_email, configuracion_whatsapp, configuracion_informe_pagos
 from app.core.database import get_db
 from app.models.configuracion import Configuracion
 
@@ -31,6 +31,7 @@ router = APIRouter(dependencies=[Depends(get_current_user)])
 router.include_router(configuracion_ai.router, prefix="/ai", tags=["configuracion-ai"])
 router.include_router(configuracion_email.router, prefix="/email", tags=["configuracion-email"])
 router.include_router(configuracion_whatsapp.router, prefix="/whatsapp", tags=["configuracion-whatsapp"])
+router.include_router(configuracion_informe_pagos.router, prefix="/informe-pagos", tags=["configuracion-informe-pagos"])
 
 # Router sin auth para GET/HEAD logo (login, correos, etc. pueden cargar el logo sin token)
 router_logo = APIRouter()

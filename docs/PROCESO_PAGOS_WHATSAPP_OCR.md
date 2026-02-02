@@ -68,14 +68,11 @@ Más campos de control: id, pagos_whatsapp_id, periodo_envio (8am/2pm/5pm), fech
 
 | Variable / Sección | Uso |
 |--------------------|-----|
-| **Google Cloud (OCR)** | Credenciales (JSON service account) para Vision API o Document AI. |
-| **GOOGLE_APPLICATION_CREDENTIALS** o JSON en BD | Ruta al JSON o contenido para OCR. |
-| **Google Sheets** | ID de la hoja, nombre de libro; credenciales para escribir. |
-| **GOOGLE_SHEETS_ID** | ID de la hoja (ej. desde la URL). |
-| **Pestañas** | Nombres: "8am", "2pm", "5pm" (o configurables). |
-| **Email (SMTP)** | Ya existe; se usa para los 3 correos diarios. |
-| **Destinatarios informe pagos** | Lista de emails que reciben el informe (8am, 2pm, 5pm). |
-| **Horarios envío** | 08:00, 14:00, 17:00 (zona Venezuela = America/Caracas). |
-| **Zona horaria** | America/Caracas. |
-| **Texto genérico correo** | Plantilla: "Envío informe de pagos de [fecha] - [8 AM / 2 PM / 5 PM]. Ver detalle: [LINK GOOGLE SHEET]". |
-| **Sin pagos** | Texto: "Sin pagos en este periodo." (se envía igual el correo). |
+| **Configuración > Informe pagos** | Google Drive folder ID, credenciales Google (JSON service account para Drive + Sheets + Vision), Google Sheet ID, destinatarios del informe. |
+| **Google Drive** | Carpeta donde se suben las imágenes; se genera link público por imagen. |
+| **Google Sheets** | ID de la hoja; pestañas "6am", "1pm", "4h30" (creadas automáticamente si no existen). |
+| **OCR** | Mismas credenciales Google (Vision API habilitada en el proyecto). |
+| **Email (SMTP)** | Configuración > Email; se usa para los 3 correos diarios (6:00, 13:00, 16:30). |
+| **Destinatarios informe pagos** | Lista de emails (separados por coma) que reciben el link a la hoja. |
+| **Horarios envío** | 6:00, 13:00, 16:30 (America/Caracas). |
+| **Comunicaciones** | Página Comunicaciones enlaza a Config AI, WhatsApp, Email e Informe pagos para verificar integración. |

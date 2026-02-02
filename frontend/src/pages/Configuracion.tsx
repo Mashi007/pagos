@@ -47,6 +47,7 @@ import { ModelosVehiculosConfig } from '../components/configuracion/ModelosVehic
 import { EmailConfig } from '../components/configuracion/EmailConfig'
 import { WhatsAppConfig } from '../components/configuracion/WhatsAppConfig'
 import { AIConfig } from '../components/configuracion/AIConfig'
+import { InformePagosConfig } from '../components/configuracion/InformePagosConfig'
 import { configuracionGeneralService, ConfiguracionGeneral } from '../services/configuracionGeneralService'
 import { apiClient } from '../services/api'
 import { toast } from 'sonner'
@@ -139,6 +140,7 @@ export function Configuracion() {
     if (tab === 'email') return 'emailConfig'
     if (tab === 'whatsapp') return 'whatsappConfig'
     if (tab === 'ai') return 'aiConfig'
+    if (tab === 'informe-pagos') return 'informePagosConfig'
     return 'general'
   })
   const [estadoCarga, setEstadoCarga] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
@@ -152,6 +154,8 @@ export function Configuracion() {
       setSeccionActiva('whatsappConfig')
     } else if (tab === 'ai') {
       setSeccionActiva('aiConfig')
+    } else if (tab === 'informe-pagos') {
+      setSeccionActiva('informePagosConfig')
     }
   }, [searchParams])
   const [mostrarPassword, setMostrarPassword] = useState(false)
@@ -1522,6 +1526,7 @@ export function Configuracion() {
       case 'emailConfig': return <EmailConfig />
       case 'whatsappConfig': return <WhatsAppConfig />
       case 'aiConfig': return <AIConfig />
+      case 'informePagosConfig': return <InformePagosConfig />
       case 'programador': return renderSeccionProgramador()
       case 'auditoria': return renderSeccionAuditoria()
       // case 'seguridad': return renderSeccionSeguridad() // OCULTO
@@ -1569,7 +1574,7 @@ export function Configuracion() {
               <div className="flex space-x-2">
                 {/* ✅ Ocultar botón "Guardar" en secciones que tienen su propio botón de guardar */}
                 {/* emailConfig y whatsappConfig tienen sus propios botones de guardar */}
-                {seccionActiva !== 'emailConfig' && seccionActiva !== 'whatsappConfig' && seccionActiva !== 'aiConfig' && (
+                {seccionActiva !== 'emailConfig' && seccionActiva !== 'whatsappConfig' && seccionActiva !== 'aiConfig' && seccionActiva !== 'informePagosConfig' && (
                   <>
                     {cambiosPendientes && (
                       <Badge variant="warning" className="animate-pulse">

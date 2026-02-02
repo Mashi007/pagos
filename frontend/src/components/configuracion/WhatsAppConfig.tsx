@@ -6,7 +6,7 @@ import { Input } from '../../components/ui/input'
 import { Textarea } from '../../components/ui/textarea'
 import { Badge } from '../../components/ui/badge'
 import { toast } from 'sonner'
-import { validarTelefono, validarConfiguracionWhatsApp } from '../../utils/validators'
+import { validarTelefono, validarConfiguracionWhatsApp, normalizarTelefonoParaIngreso } from '../../utils/validators'
 import { whatsappConfigService, notificacionService, type Notificacion, type WhatsAppConfig } from '../../services/notificacionService'
 
 export function WhatsAppConfig() {
@@ -128,7 +128,7 @@ export function WhatsAppConfig() {
 
       if (telefonoPruebaDestino && telefonoPruebaDestino.trim()) {
         if (!validarTelefono(telefonoPruebaDestino)) {
-          toast.error('Por favor ingresa un número de teléfono válido con código de país (ej: +584121234567)')
+          toast.error('Ingresa un número válido con código de país (ej. +58 424 1234567)')
           setProbando(false)
           return
         }
@@ -274,6 +274,9 @@ export function WhatsAppConfig() {
                 onChange={(e) => handleChange('phone_number_id', e.target.value)}
                 placeholder="123456789012345"
               />
+              <p className="text-xs text-gray-500 mt-1">
+                ID numérico de Meta (Business Suite → WhatsApp → tu número). No uses el número con código de país (+58 Venezuela, etc.); ese es el número de destino, no el ID.
+              </p>
             </div>
           </div>
 
@@ -363,13 +366,15 @@ export function WhatsAppConfig() {
                   </label>
                   <Input
                     type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
                     value={telefonoPruebas}
-                    onChange={(e) => setTelefonoPruebas(e.target.value)}
-                    placeholder="+584121234567"
+                    onChange={(e) => setTelefonoPruebas(normalizarTelefonoParaIngreso(e.target.value))}
+                    placeholder="+58 424 1234567"
                     className="max-w-md"
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    En modo pruebas, todos los mensajes se enviarán a este número en lugar de a los clientes reales.
+                    Formato: código de país + número (ej. Venezuela +58 424 1234567). En modo pruebas, todos los mensajes se enviarán a este número.
                   </p>
                 </div>
               </div>
@@ -523,13 +528,15 @@ export function WhatsAppConfig() {
                   </label>
                   <Input
                     type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
                     value={telefonoPruebaDestino}
-                    onChange={(e) => setTelefonoPruebaDestino(e.target.value)}
-                    placeholder="+584121234567"
+                    onChange={(e) => setTelefonoPruebaDestino(normalizarTelefonoParaIngreso(e.target.value))}
+                    placeholder="+58 424 1234567"
                     className="max-w-md"
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    Debe incluir código de país (ej: +584121234567). Si no especificas, se usará el teléfono de pruebas.
+                    Formato: código de país + número (ej. Venezuela +58 424 1234567). Si no especificas, se usará el teléfono de pruebas.
                   </p>
                 </div>
 

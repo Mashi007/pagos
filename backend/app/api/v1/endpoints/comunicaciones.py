@@ -29,6 +29,8 @@ def listar_comunicaciones(
     """
     Listado de comunicaciones (WhatsApp/Email). Configuración en configuracion?tab=whatsapp.
     Stub: devuelve lista vacía hasta tener tabla comunicaciones o integración con Meta/IMAP.
+    Cuando exista fuente de datos: filtrar por tipo, cliente_id, requiere_respuesta, direccion;
+    paginar con page/per_page; devolver formato ComunicacionUnificada (id, tipo, from_contact, body, timestamp, etc.).
     """
     return {
         "comunicaciones": [],

@@ -21,6 +21,38 @@ export function validarTelefono(telefono: string): boolean {
   return telefonoRegex.test(telefonoLimpio)
 }
 
+/**
+ * Normaliza el valor mientras el usuario escribe un teléfono.
+ * - Solo permite dígitos y un + al inicio.
+ * - Venezuela: 10 dígitos que empiezan por 4 (ej. 4241234567) o 0+10 dígitos (04241234567) → se antepone +58.
+ * - Otros: código país + número (máx. 15 dígitos). Resultado siempre con + al inicio.
+ */
+export function normalizarTelefonoParaIngreso(raw: string): string {
+  if (raw == null) return ''
+  let digits = String(raw).replace(/\D/g, '')
+  if (digits.length === 0) return ''
+  // Venezuela: 0 + 10 dígitos (04241234567) → quitar el 0
+  if (digits.startsWith('0') && digits.length === 11) digits = digits.slice(1)
+  // Venezuela: 10 dígitos empezando por 4 (móvil) → anteponer 58
+  if (digits.length <= 10 && digits.startsWith('4')) digits = '58' + digits
+  digits = digits.slice(0, 15)
+  return '+' + digits
+}
+
+/**
+ * Formato legible para mostrar (ej. +584241234567 → +58 424 1234567).
+ * Útil para placeholder o resumen; el input puede mostrar el valor normalizado sin espacios.
+ */
+export function formatearTelefonoParaMostrar(telefono: string): string {
+  if (!telefono || typeof telefono !== 'string') return ''
+  const digits = telefono.replace(/\D/g, '')
+  if (digits.length === 0) return ''
+  if (digits.startsWith('58') && digits.length === 12) {
+    return `+58 ${digits.slice(2, 5)} ${digits.slice(5)}`
+  }
+  return (telefono.startsWith('+') ? '' : '+') + digits.replace(/(\d{1,3})(?=\d)/g, '$1 ').trim()
+}
+
 // Validación de URL
 export function validarURL(url: string): boolean {
   if (!url || typeof url !== 'string') return false

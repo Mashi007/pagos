@@ -28,13 +28,36 @@ export function ComunicacionesPage() {
               {configurada ? ' Configuración WhatsApp cargada.' : ' Configura WhatsApp y Email para enviar y recibir.'}
             </span>
           </div>
-          <Link
-            to="/configuracion?tab=whatsapp"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800"
-          >
-            <Settings className="h-4 w-4" />
-            Configurar en Configuración (WhatsApp)
-          </Link>
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              to="/configuracion?tab=whatsapp"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800"
+            >
+              <Settings className="h-4 w-4" />
+              WhatsApp
+            </Link>
+            <Link
+              to="/configuracion?tab=email"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800"
+            >
+              <Settings className="h-4 w-4" />
+              Email
+            </Link>
+            <Link
+              to="/configuracion?tab=ai"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800"
+            >
+              <Settings className="h-4 w-4" />
+              AI
+            </Link>
+            <Link
+              to="/configuracion?tab=informe-pagos"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800"
+            >
+              <Settings className="h-4 w-4" />
+              Informe pagos (Drive, Sheets, OCR)
+            </Link>
+          </div>
         </CardContent>
       </Card>
       <Comunicaciones

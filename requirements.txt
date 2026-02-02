@@ -108,6 +108,13 @@ redis>=5.0.0,<6.0.0
 sentry-sdk[fastapi]>=2.0.0
 
 # ============================================
+# GOOGLE (Drive, Sheets, Vision OCR - informe papeletas)
+# ============================================
+google-api-python-client>=2.100.0
+google-auth>=2.25.0
+google-cloud-vision>=3.5.0
+
+# ============================================
 # PRODUCTION SERVER
 # ============================================
 gunicorn==23.0.0
