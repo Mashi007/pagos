@@ -49,6 +49,11 @@ def _vision_full_text(image_bytes: bytes) -> str:
         return ""
 
 
+def get_full_text(image_bytes: bytes) -> str:
+    """Texto completo extraído por OCR (Vision). Para uso por IA de respuesta de imagen."""
+    return _vision_full_text(image_bytes or b"")
+
+
 def imagen_suficientemente_clara(image_bytes: bytes, min_chars: int = MIN_CARACTERES_PARA_CLARA) -> bool:
     """
     True si el OCR detecta al menos min_chars de texto (imagen legible).

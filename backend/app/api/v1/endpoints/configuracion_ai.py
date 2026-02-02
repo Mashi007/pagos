@@ -11,7 +11,6 @@ Estructura para respuestas rápidas y datos de get_db:
 Ref: https://openrouter.ai/docs/api-reference/chat/completion
 """
 import json
-import urllib.request
 import urllib.error
 from typing import Any, Optional
 
@@ -23,6 +22,7 @@ import logging
 
 from app.core.config import settings
 from app.core.database import get_db, engine
+from app.core.openrouter_client import call_openrouter as _openrouter_call
 from app.models.configuracion import Configuracion
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
@@ -206,39 +206,22 @@ def _get_model() -> str:
     return (m or MODELO_RECOMENDADO).strip()
 
 
-# Timeout para llamadas a OpenRouter (segundos). Acotado para respuestas rápidas.
-OPENROUTER_TIMEOUT = 45
-
-
 def _call_openrouter(messages: list[dict], model: Optional[str] = None, temperature: float = 0.7, max_tokens: int = 1000) -> dict:
-    """Llama a OpenRouter API. La clave solo se usa aquí desde settings."""
+    """Llama a OpenRouter API usando el cliente compartido. La clave solo se usa aquí desde config."""
     key = _get_openrouter_key()
     if not key:
         raise HTTPException(
             status_code=503,
             detail="AI no configurada: ingresa tu API Key de OpenRouter en Configuración > Inteligencia Artificial (o configura OPENROUTER_API_KEY en variables de entorno del servidor). Obtén la clave en https://openrouter.ai/keys",
         )
-    url = "https://openrouter.ai/api/v1/chat/completions"
-    body = {
-        "model": model or _get_model(),
-        "messages": messages,
-        "temperature": float(_ai_config_stub.get("temperatura") or temperature),
-        "max_tokens": int(_ai_config_stub.get("max_tokens") or max_tokens),
-    }
-    data = json.dumps(body).encode("utf-8")
-    req = urllib.request.Request(
-        url,
-        data=data,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {key}",
-            "HTTP-Referer": "https://rapicredit.onrender.com",
-        },
-        method="POST",
-    )
     try:
-        with urllib.request.urlopen(req, timeout=OPENROUTER_TIMEOUT) as resp:
-            out = json.loads(resp.read().decode())
+        return _openrouter_call(
+            messages=messages,
+            api_key=key,
+            model=model or _get_model(),
+            temperature=float(_ai_config_stub.get("temperatura") or temperature),
+            max_tokens=int(_ai_config_stub.get("max_tokens") or max_tokens),
+        )
     except urllib.error.HTTPError as e:
         body_err = e.read().decode() if e.fp else ""
         try:
@@ -249,7 +232,6 @@ def _call_openrouter(messages: list[dict], model: Optional[str] = None, temperat
         raise HTTPException(status_code=min(e.code, 502), detail=f"OpenRouter: {detail}")
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Error llamando a OpenRouter: {e}")
-    return out
 
 
 # --- GET /configuracion/ai/configuracion: devolver config SIN la clave (persistida en BD)

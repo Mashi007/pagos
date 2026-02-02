@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { FileText, Save, Eye, EyeOff, CheckCircle, AlertCircle, Link } from 'lucide-react'
+import { FileText, Save, Eye, EyeOff, CheckCircle, AlertCircle, Link, RefreshCw, HardDrive, Sheet, ScanText } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -24,6 +24,17 @@ function getBackendBaseUrl(): string {
   return base ? base.replace(/\/$/, '') : (typeof window !== 'undefined' ? window.location.origin : '')
 }
 
+export interface EstadoConexion {
+  conectado: boolean
+  detalle: string
+}
+
+export interface EstadoConexiones {
+  drive: EstadoConexion
+  sheets: EstadoConexion
+  ocr: EstadoConexion
+}
+
 export function InformePagosConfig() {
   const [config, setConfig] = useState<InformePagosConfigData>({})
   const [guardando, setGuardando] = useState(false)
@@ -31,10 +42,27 @@ export function InformePagosConfig() {
   const [mostrarOauthSecret, setMostrarOauthSecret] = useState(false)
   const [credencialesEdit, setCredencialesEdit] = useState('')
   const [oauthSecretEdit, setOauthSecretEdit] = useState('')
+  const [estado, setEstado] = useState<EstadoConexiones | null>(null)
+  const [verificandoEstado, setVerificandoEstado] = useState(false)
 
   useEffect(() => {
     cargarConfiguracion()
   }, [])
+
+  const verificarEstadoConexiones = async () => {
+    try {
+      setVerificandoEstado(true)
+      const data = await apiClient.get<EstadoConexiones>('/api/v1/configuracion/informe-pagos/estado')
+      setEstado(data)
+    } catch (error) {
+      console.error('Error verificando estado:', error)
+      toast.error('No se pudo verificar el estado de Drive, Sheets y OCR')
+      setEstado(null)
+    } finally {
+      setVerificandoEstado(false)
+    }
+  }
+
 
   // Detectar vuelta de Google OAuth (callback redirige con ?google_oauth=ok|error)
   useEffect(() => {
@@ -67,6 +95,7 @@ export function InformePagosConfig() {
       if (data.google_oauth_client_secret && data.google_oauth_client_secret !== '***') {
         setOauthSecretEdit(data.google_oauth_client_secret)
       }
+      await verificarEstadoConexiones()
     } catch (error) {
       console.error('Error cargando configuración informe pagos:', error)
       toast.error('Error cargando configuración')
@@ -131,6 +160,72 @@ export function InformePagosConfig() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Estado real de conexiones (Drive, Sheets, OCR) */}
+          <div className="rounded-lg border bg-muted/40 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-semibold text-foreground">Estado de conexiones</h4>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={verificarEstadoConexiones}
+                disabled={verificandoEstado}
+              >
+                <RefreshCw className={`h-4 w-4 mr-1 ${verificandoEstado ? 'animate-spin' : ''}`} />
+                {verificandoEstado ? 'Verificando…' : 'Verificar ahora'}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Se comprueba con llamadas reales a Drive, Sheets y Vision (OCR). Sin indicios aquí no hay conexión.
+            </p>
+            <div className="grid gap-2 sm:grid-cols-3">
+              {estado ? (
+                <>
+                  <div className={`flex items-start gap-2 rounded-md p-3 ${estado.drive.conectado ? 'bg-green-50 dark:bg-green-950/30' : 'bg-red-50 dark:bg-red-950/30'}`}>
+                    <HardDrive className={`h-5 w-5 shrink-0 mt-0.5 ${estado.drive.conectado ? 'text-green-600' : 'text-red-600'}`} />
+                    <div className="min-w-0">
+                      <span className="text-sm font-medium block">
+                        Google Drive
+                        <span className={`ml-2 text-xs font-normal ${estado.drive.conectado ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
+                          {estado.drive.conectado ? 'Conectado' : 'No conectado'}
+                        </span>
+                      </span>
+                      <span className="text-xs block mt-0.5">{estado.drive.detalle}</span>
+                    </div>
+                  </div>
+                  <div className={`flex items-start gap-2 rounded-md p-3 ${estado.sheets.conectado ? 'bg-green-50 dark:bg-green-950/30' : 'bg-red-50 dark:bg-red-950/30'}`}>
+                    <Sheet className={`h-5 w-5 shrink-0 mt-0.5 ${estado.sheets.conectado ? 'text-green-600' : 'text-red-600'}`} />
+                    <div className="min-w-0">
+                      <span className="text-sm font-medium block">
+                        Google Sheets
+                        <span className={`ml-2 text-xs font-normal ${estado.sheets.conectado ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
+                          {estado.sheets.conectado ? 'Conectado' : 'No conectado'}
+                        </span>
+                      </span>
+                      <span className="text-xs block mt-0.5">{estado.sheets.detalle}</span>
+                    </div>
+                  </div>
+                  <div className={`flex items-start gap-2 rounded-md p-3 ${estado.ocr.conectado ? 'bg-green-50 dark:bg-green-950/30' : 'bg-red-50 dark:bg-red-950/30'}`}>
+                    <ScanText className={`h-5 w-5 shrink-0 mt-0.5 ${estado.ocr.conectado ? 'text-green-600' : 'text-red-600'}`} />
+                    <div className="min-w-0">
+                      <span className="text-sm font-medium block">
+                        OCR (Vision)
+                        <span className={`ml-2 text-xs font-normal ${estado.ocr.conectado ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
+                          {estado.ocr.conectado ? 'Conectado' : 'No conectado'}
+                        </span>
+                      </span>
+                      <span className="text-xs block mt-0.5">{estado.ocr.detalle}</span>
+                    </div>
+                  </div>
+                </>
+              ) : verificandoEstado ? (
+                <p className="text-sm text-muted-foreground col-span-3">Verificando Drive, Sheets y OCR…</p>
+              ) : (
+                <p className="text-sm text-muted-foreground col-span-3">Guarda la configuración (carpeta, hoja, credenciales u OAuth) y pulsa &quot;Verificar ahora&quot; para comprobar las conexiones.</p>
+              )}
+            </div>
+          </div>
+
           <div>
             <label className="text-sm font-medium block mb-2">ID carpeta Google Drive</label>
             <Input

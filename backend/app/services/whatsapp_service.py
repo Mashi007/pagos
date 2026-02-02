@@ -341,22 +341,30 @@ class WhatsAppService:
         if not image_bytes:
             return {"status": "image_empty", "note": "Imagen vacía"}
         conv.intento_foto = (conv.intento_foto or 0) + 1
-        # Verificación real de claridad: Google Vision OCR; si detecta suficiente texto, se acepta en el primer intento
-        clara = False
+        # Evaluación por IA: texto OCR + prompt corto → aceptable + mensaje conversacional (gracias o pedir otra foto)
+        ocr_text = ""
         try:
-            from app.services.ocr_service import imagen_suficientemente_clara
-            clara = imagen_suficientemente_clara(image_bytes)
+            from app.services.ocr_service import get_full_text
+            ocr_text = get_full_text(image_bytes) or ""
         except Exception as e:
-            logger.debug("Claridad imagen no comprobada: %s", e)
-        aceptar = clara or conv.intento_foto >= 3
+            logger.debug("OCR texto para IA: %s", e)
+        try:
+            from app.services.ai_imagen_respuesta import evaluar_imagen_y_respuesta
+            aceptable, mensaje_ia = evaluar_imagen_y_respuesta(ocr_text, conv.cedula or "", db)
+        except Exception as e:
+            logger.warning("IA imagen falló, usando fallback por claridad: %s", e)
+            from app.services.ocr_service import imagen_suficientemente_clara
+            aceptable = imagen_suficientemente_clara(image_bytes)
+            mensaje_ia = MENSAJE_RECIBIDO.format(cedula=conv.cedula or "N/A") if aceptable else MENSAJE_FOTO_POCO_CLARA.format(n=conv.intento_foto)
+        aceptar = aceptable or conv.intento_foto >= 3
         if not aceptar:
-            logger.info("Foto papeleta rechazada por claridad (intento %d/3); se pide otra foto.", conv.intento_foto)
+            logger.info("Foto papeleta no aceptada por IA (intento %d/3); respuesta: %s", conv.intento_foto, mensaje_ia[:50])
             conv.updated_at = datetime.utcnow()
             db.commit()
             return {
                 "status": "photo_retry",
                 "intento_foto": conv.intento_foto,
-                "response_text": MENSAJE_FOTO_POCO_CLARA.format(n=conv.intento_foto),
+                "response_text": mensaje_ia,
             }
         # Imagen clara (primer intento) o tercer intento: guardar en Drive, pagos_whatsapp, OCR, pagos_informes, Sheet
         link_imagen = None
@@ -423,4 +431,6 @@ class WhatsAppService:
         conv.observacion = None
         conv.updated_at = datetime.utcnow()
         db.commit()
-        return {"status": "image_saved", "pagos_whatsapp_id": row_pw.id, "cedula_cliente": cedula_guardada, "response_text": MENSAJE_RECIBIDO.format(cedula=cedula_guardada or "N/A")}
+        # Respuesta al usuario: agradecimiento (mensaje IA si aceptable; si aceptamos por 3er intento, mensaje fijo)
+        response_text = mensaje_ia if aceptable else MENSAJE_RECIBIDO.format(cedula=cedula_guardada or "N/A")
+        return {"status": "image_saved", "pagos_whatsapp_id": row_pw.id, "cedula_cliente": cedula_guardada, "response_text": response_text}

@@ -180,6 +180,99 @@ def google_oauth_callback(
     return RedirectResponse(url=redirect_ok, status_code=302)
 
 
+def _verificar_drive() -> dict:
+    """Prueba real de conexión a Google Drive: subir un archivo de prueba y borrarlo."""
+    import io
+    from app.core.informe_pagos_config_holder import get_google_drive_folder_id
+    from app.core.google_credentials import get_google_credentials
+
+    folder_id = get_google_drive_folder_id()
+    creds = get_google_credentials(["https://www.googleapis.com/auth/drive.file"])
+    if not creds:
+        return {"conectado": False, "detalle": "Sin credenciales (cuenta de servicio JSON u OAuth con 'Conectar con Google')."}
+    if not folder_id:
+        return {"conectado": False, "detalle": "No hay ID de carpeta configurado."}
+    try:
+        from googleapiclient.discovery import build
+        from googleapiclient.http import MediaIoBaseUpload
+        drive = build("drive", "v3", credentials=creds)
+        meta = {"name": "_test_conexion_pagos.txt", "parents": [folder_id]}
+        media = MediaIoBaseUpload(io.BytesIO(b"ok"), mimetype="text/plain", resumable=False)
+        f = drive.files().create(body=meta, media_body=media, fields="id").execute()
+        file_id = f.get("id")
+        if file_id:
+            drive.files().delete(fileId=file_id).execute()
+        return {"conectado": True, "detalle": "Conexión correcta. La carpeta es accesible para subir imágenes."}
+    except Exception as e:
+        msg = str(e).strip() or "Error desconocido"
+        if "404" in msg or "not found" in msg.lower():
+            return {"conectado": False, "detalle": "Carpeta no encontrada o sin acceso. Comprueba el ID y que la carpeta esté compartida con la cuenta."}
+        if "403" in msg or "permission" in msg.lower() or "forbidden" in msg.lower():
+            return {"conectado": False, "detalle": "Sin permiso. Comparte la carpeta con la cuenta de servicio o la cuenta OAuth."}
+        return {"conectado": False, "detalle": f"Error: {msg[:200]}"}
+
+
+def _verificar_sheets() -> dict:
+    """Prueba real de conexión a Google Sheets (lectura de metadatos de la hoja)."""
+    from app.core.informe_pagos_config_holder import get_google_sheets_id
+    from app.core.google_credentials import get_google_credentials
+
+    sheet_id = get_google_sheets_id()
+    creds = get_google_credentials(["https://www.googleapis.com/auth/spreadsheets"])
+    if not creds:
+        return {"conectado": False, "detalle": "Sin credenciales (cuenta de servicio JSON u OAuth con 'Conectar con Google')."}
+    if not sheet_id:
+        return {"conectado": False, "detalle": "No hay ID de hoja configurado."}
+    try:
+        from googleapiclient.discovery import build
+        service = build("sheets", "v4", credentials=creds)
+        service.spreadsheets().get(spreadsheetId=sheet_id).execute()
+        return {"conectado": True, "detalle": "Conexión correcta. La hoja es accesible."}
+    except Exception as e:
+        msg = str(e).strip() or "Error desconocido"
+        if "404" in msg or "not found" in msg.lower():
+            return {"conectado": False, "detalle": "Hoja no encontrada o sin acceso. Comprueba el ID y que la hoja esté compartida con la cuenta."}
+        if "403" in msg or "permission" in msg.lower() or "forbidden" in msg.lower():
+            return {"conectado": False, "detalle": "Sin permiso. Comparte la hoja con la cuenta de servicio o la cuenta OAuth."}
+        return {"conectado": False, "detalle": f"Error: {msg[:200]}"}
+
+
+def _verificar_ocr() -> dict:
+    """Prueba real de conexión a Google Cloud Vision (OCR). Una llamada mínima a la API."""
+    from app.core.google_credentials import get_google_credentials
+
+    creds = get_google_credentials(["https://www.googleapis.com/auth/cloud-vision"])
+    if not creds:
+        return {"conectado": False, "detalle": "Sin credenciales (cuenta de servicio JSON u OAuth con 'Conectar con Google')."}
+    try:
+        from google.cloud import vision
+        client = vision.ImageAnnotatorClient(credentials=creds)
+        # Imagen mínima 1x1 pixel JPEG para no gastar ancho de banda; la API responde aunque no haya texto
+        minimal_jpeg = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t\x08\n\x0c\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a\x1f\x1e\x1d\x1a\x1c\x1c $.\' \",#\x1c\x1c(7),01444\x1f\'9=82<.7\xff\xc0\x00\x0b\x08\x00\x01\x00\x01\x01\x01\x11\x00\xff\xc4\x00\x1f\x00\x00\x01\x05\x01\x01\x01\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0b\xff\xda\x00\x0c\x03\x01\x00\x02\x10\x03\x10\x00\x00\x00\x01\xff\xd9"
+        image = vision.Image(content=minimal_jpeg)
+        client.text_detection(image=image)
+        return {"conectado": True, "detalle": "Conexión correcta. Vision API (OCR) operativa."}
+    except Exception as e:
+        msg = str(e).strip() or "Error desconocido"
+        if "403" in msg or "permission" in msg.lower() or "forbidden" in msg.lower() or "Vision API has not been used" in msg:
+            return {"conectado": False, "detalle": "Vision API no habilitada o sin permiso. Actívala en Google Cloud Console para el proyecto."}
+        return {"conectado": False, "detalle": f"Error: {msg[:200]}"}
+
+
+@router.get("/estado")
+def get_estado_conexiones(db: Session = Depends(get_db)):
+    """
+    Verifica con llamadas reales si Drive, Sheets y OCR (Vision) están conectados y operativos.
+    Devuelve para cada uno: conectado (bool) y detalle (mensaje para el usuario).
+    """
+    sync_from_db()
+    return {
+        "drive": _verificar_drive(),
+        "sheets": _verificar_sheets(),
+        "ocr": _verificar_ocr(),
+    }
+
+
 @router.get("/configuracion", response_model=dict)
 def get_informe_pagos_configuracion(db: Session = Depends(get_db)):
     """
