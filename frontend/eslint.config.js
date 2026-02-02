@@ -14,7 +14,7 @@ export default [
       sourceType: 'module',
       parser: typescriptParser,
       parserOptions: { ecmaFeatures: { jsx: true } },
-      globals: { ...globals.browser, ...globals.node, React: 'readonly', JSX: 'readonly', NodeJS: 'readonly', EventListener: 'readonly' },
+      globals: { ...globals.browser, ...globals.node, React: 'readonly', JSX: 'readonly', NodeJS: 'readonly', EventListener: 'readonly', BlobPart: 'readonly' },
     },
     plugins: {
       '@typescript-eslint': typescript,
@@ -38,6 +38,9 @@ export default [
       'no-empty': 'warn',
       'no-case-declarations': 'warn',
       'no-useless-escape': 'warn',
+      'no-useless-catch': 'warn',
+      'no-self-assign': 'warn',
+      'no-control-regex': 'warn',
       '@typescript-eslint/no-empty-object-type': 'warn',
       'react-hooks/rules-of-hooks': 'warn',
     },
@@ -53,6 +56,13 @@ export default [
       '@typescript-eslint/no-unused-vars': 'warn',
       'no-case-declarations': 'off',
       'no-redeclare': 'off',
+    },
+  },
+  // Tests: vitest globals
+  {
+    files: ['**/*.test.ts', '**/*.test.tsx', '**/tests/**/*.ts', '**/tests/**/*.tsx'],
+    languageOptions: {
+      globals: { vi: 'readonly', expect: 'readonly', describe: 'readonly', it: 'readonly', beforeEach: 'readonly', afterEach: 'readonly' },
     },
   },
 ]

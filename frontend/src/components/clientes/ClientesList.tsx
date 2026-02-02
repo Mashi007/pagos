@@ -139,7 +139,7 @@ export function ClientesList() {
     isError,
     error: error ? {
       message: error instanceof Error ? error.message : String(error),
-      ...(error as Record<string, unknown>)?.response?.data
+      ...((error as { response?: { data?: Record<string, unknown> } })?.response?.data ?? {})
     } : null,
     clientesData: clientesResponse,
     hasData: !!clientesResponse,
