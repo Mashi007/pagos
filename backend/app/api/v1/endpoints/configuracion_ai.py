@@ -558,11 +558,16 @@ def _inspector_tablas_campos() -> dict[str, list[dict]]:
 @router.get("/tablas-campos")
 def get_tablas_campos(db: Session = Depends(get_db)):
     """
-    Lista tablas y campos del esquema de la BD (para Catálogo de Campos).
-    El frontend usa tablas_campos y total_tablas.
+    Lista tablas y campos del esquema de la BD (para Catálogo de Campos y Fine-tuning).
+    El frontend usa tablas_campos, total_tablas y fecha_consulta.
     """
+    from datetime import datetime, timezone
     tablas_campos = _inspector_tablas_campos()
-    return {"tablas_campos": tablas_campos, "total_tablas": len(tablas_campos)}
+    return {
+        "tablas_campos": tablas_campos,
+        "total_tablas": len(tablas_campos),
+        "fecha_consulta": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 def _definicion_to_dict(row: DefinicionCampo) -> dict:
