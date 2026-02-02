@@ -40,8 +40,6 @@ import type {
   DashboardAdminResponse,
   FinanciamientoPorRangosResponse,
   ComposicionMorosidadResponse,
-  PrestamosPorConcesionarioResponse,
-  PrestamosPorModeloResponse,
   CobranzasSemanalesResponse,
   MorosidadPorAnalistaItem,
 } from '../types/dashboard'
@@ -177,42 +175,6 @@ export function DashboardMenu() {
   })
 
   // Batch 3: Gráficos secundarios rápidos. Período por gráfico; filtros (fecha_inicio/fecha_fin) se envían siempre.
-  const periodoConcesionario = getPeriodoGrafico('concesionario') || periodo || 'ultimos_12_meses'
-  const { data: datosConcesionarios, isLoading: loadingConcesionarios } = useQuery({
-    queryKey: ['prestamos-concesionario', periodoConcesionario, JSON.stringify(filtros)],
-    queryFn: async () => {
-      const obj = construirFiltrosObject(periodoConcesionario)
-      const queryParams = new URLSearchParams()
-      Object.entries(obj).forEach(([key, value]) => {
-        if (value != null && value !== '') queryParams.append(key, String(value))
-      })
-      if (!queryParams.has('periodo') && periodoConcesionario) queryParams.append('periodo', periodoConcesionario)
-      const response = await apiClient.get(`/api/v1/dashboard/prestamos-por-concesionario?${queryParams.toString()}`)
-      return response as PrestamosPorConcesionarioResponse
-    },
-    staleTime: 2 * 60 * 1000,
-    refetchOnWindowFocus: true,
-    enabled: true,
-  })
-
-  const periodoModelo = getPeriodoGrafico('modelo') || periodo || 'ultimos_12_meses'
-  const { data: datosModelos, isLoading: loadingModelos } = useQuery({
-    queryKey: ['prestamos-modelo', periodoModelo, JSON.stringify(filtros)],
-    queryFn: async () => {
-      const obj = construirFiltrosObject(periodoModelo)
-      const queryParams = new URLSearchParams()
-      Object.entries(obj).forEach(([key, value]) => {
-        if (value != null && value !== '') queryParams.append(key, String(value))
-      })
-      if (!queryParams.has('periodo') && periodoModelo) queryParams.append('periodo', periodoModelo)
-      const response = await apiClient.get(`/api/v1/dashboard/prestamos-por-modelo?${queryParams.toString()}`)
-      return response as PrestamosPorModeloResponse
-    },
-    staleTime: 2 * 60 * 1000,
-    refetchOnWindowFocus: true,
-    enabled: true,
-  })
-
   // Batch 4: BAJA - Gráficos menos críticos. Período con fallback para incluir 2025.
   const periodoRangos = getPeriodoGrafico('rangos') || periodo || 'ultimos_12_meses'
   const { data: datosFinanciamientoRangos, isLoading: loadingFinanciamientoRangos, isError: errorFinanciamientoRangos, error: errorFinanciamientoRangosDetail, refetch: refetchFinanciamientoRangos } = useQuery({
@@ -324,8 +286,6 @@ export function DashboardMenu() {
       await queryClient.invalidateQueries({ queryKey: ['kpis-principales-menu'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['dashboard-menu'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['morosidad-por-dia'], exact: false })
-      await queryClient.invalidateQueries({ queryKey: ['prestamos-concesionario'], exact: false })
-      await queryClient.invalidateQueries({ queryKey: ['prestamos-modelo'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['financiamiento-rangos'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['composicion-morosidad'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['cobranzas-mensuales'], exact: false })
@@ -336,8 +296,6 @@ export function DashboardMenu() {
       await queryClient.refetchQueries({ queryKey: ['kpis-principales-menu'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['dashboard-menu'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['morosidad-por-dia'], exact: false })
-      await queryClient.refetchQueries({ queryKey: ['prestamos-concesionario'], exact: false })
-      await queryClient.refetchQueries({ queryKey: ['prestamos-modelo'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['financiamiento-rangos'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['composicion-morosidad'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['morosidad-analista'], exact: false })
@@ -799,227 +757,6 @@ export function DashboardMenu() {
             </motion.div>
 
         </div>
-
-        {/* GRÁFICOS DE DISTRIBUCIÓN */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Préstamos por Concesionario */}
-          <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 }}
-              >
-                <Card className="shadow-lg border border-gray-200/90 rounded-xl overflow-hidden bg-white">
-                <CardHeader className="bg-gradient-to-r from-purple-50/90 to-pink-50/90 border-b border-gray-200/80 pb-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
-                      <BarChart3 className="h-5 w-5 text-purple-600" />
-                      <span>Préstamos por Concesionario</span>
-                    </CardTitle>
-                    <div className="flex items-center gap-2">
-                      <SelectorPeriodoGrafico chartId="concesionario" />
-                      <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
-                        {getRangoFechasLabelGrafico('concesionario')}
-                      </Badge>
-                    </div>
-                  </div>
-                </CardHeader>
-                  <CardContent className="p-6 pt-4">
-                  {loadingConcesionarios ? (
-                    <div className="flex items-center justify-center py-16 text-gray-500">Cargando...</div>
-                  ) : datosConcesionarios && (datosConcesionarios.por_mes?.length > 0 || datosConcesionarios.acumulado?.length > 0) ? (
-                    <div className="space-y-6">
-                      {/* Tabla por mes: préstamos aprobados por concesionario en el período */}
-                      <div>
-                        <h4 className="text-sm font-semibold text-gray-700 mb-2">Por mes (período seleccionado)</h4>
-                        {datosConcesionarios.por_mes?.length > 0 ? (() => {
-                          type PorMesRow = { mes: string; concesionario: string; cantidad: number }
-                          const meses: string[] = [...new Set((datosConcesionarios.por_mes as PorMesRow[]).map((d) => d.mes))].sort()
-                          const porConcesionario = (datosConcesionarios.por_mes as PorMesRow[]).reduce(
-                            (acc: Record<string, Record<string, number>>, { mes, concesionario, cantidad }) => {
-                              if (!acc[concesionario]) acc[concesionario] = {}
-                              acc[concesionario][mes] = cantidad
-                              return acc
-                            },
-                            {} as Record<string, Record<string, number>>
-                          )
-                          const concesionarios = Object.keys(porConcesionario).sort()
-                          return (
-                            <div className="overflow-x-auto rounded-md border border-gray-200">
-                              <Table>
-                                <TableHeader>
-                                  <TableRow className="bg-gray-50">
-                                    <TableHead className="font-semibold">Concesionario</TableHead>
-                                    {meses.map((m: string) => (
-                                      <TableHead key={m} className="text-center whitespace-nowrap">{m}</TableHead>
-                                    ))}
-                                    <TableHead className="text-center font-semibold">Total</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                  {concesionarios.map((c: string) => {
-                                    const total = meses.reduce((s, m) => s + (porConcesionario[c][m] ?? 0), 0)
-                                    return (
-                                      <TableRow key={c}>
-                                        <TableCell className="font-medium">{c}</TableCell>
-                                        {meses.map((m: string) => (
-                                          <TableCell key={m} className="text-center">{porConcesionario[c][m] ?? 0}</TableCell>
-                                        ))}
-                                        <TableCell className="text-center font-medium">{total}</TableCell>
-                                      </TableRow>
-                                    )
-                                  })}
-                                </TableBody>
-                              </Table>
-                            </div>
-                          )
-                        })() : (
-                          <p className="text-sm text-gray-500 py-2">No hay datos por mes en el período.</p>
-                        )}
-                      </div>
-                      {/* Tabla acumulada: préstamos aprobados por concesionario desde el inicio */}
-                      <div>
-                        <h4 className="text-sm font-semibold text-gray-700 mb-2">Acumulado (desde el inicio)</h4>
-                        {datosConcesionarios.acumulado?.length > 0 ? (
-                          <div className="overflow-x-auto rounded-md border border-gray-200">
-                            <Table>
-                              <TableHeader>
-                                <TableRow className="bg-gray-50">
-                                  <TableHead className="font-semibold">Concesionario</TableHead>
-                                  <TableHead className="text-right font-semibold">Cantidad</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {datosConcesionarios.acumulado.map((row) => (
-                                  <TableRow key={row.concesionario}>
-                                    <TableCell className="font-medium">{row.concesionario}</TableCell>
-                                    <TableCell className="text-right">{row.cantidad_acumulada.toLocaleString('es-EC')}</TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </div>
-                        ) : (
-                          <p className="text-sm text-gray-500 py-2">No hay datos acumulados.</p>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-center py-16 text-gray-500">No hay datos para mostrar</div>
-                  )}
-                </CardContent>
-                </Card>
-              </motion.div>
-
-          {/* Préstamos por Modelo */}
-          <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.6 }}
-              >
-                <Card className="shadow-lg border border-gray-200/90 rounded-xl overflow-hidden bg-white">
-                <CardHeader className="bg-gradient-to-r from-amber-50/90 to-orange-50/90 border-b border-gray-200/80 pb-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
-                      <BarChart3 className="h-5 w-5 text-amber-600" />
-                      <span>Préstamos por Modelo</span>
-                    </CardTitle>
-                    <div className="flex items-center gap-2">
-                      <SelectorPeriodoGrafico chartId="modelo" />
-                      <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
-                        {getRangoFechasLabelGrafico('modelo')}
-                      </Badge>
-                    </div>
-                  </div>
-                </CardHeader>
-                  <CardContent className="p-6 pt-4">
-                  {loadingModelos ? (
-                    <div className="flex items-center justify-center py-16 text-gray-500">Cargando...</div>
-                  ) : datosModelos && (datosModelos.por_mes?.length > 0 || datosModelos.acumulado?.length > 0) ? (
-                    <div className="space-y-6">
-                      {/* Tabla por mes: préstamos aprobados por modelo en el período */}
-                      <div>
-                        <h4 className="text-sm font-semibold text-gray-700 mb-2">Por mes (período seleccionado)</h4>
-                        {datosModelos.por_mes?.length > 0 ? (() => {
-                          type PorMesModeloRow = { mes: string; modelo: string; cantidad: number }
-                          const meses: string[] = [...new Set((datosModelos.por_mes as PorMesModeloRow[]).map((d) => d.mes))].sort()
-                          const porModelo = (datosModelos.por_mes as PorMesModeloRow[]).reduce(
-                            (acc: Record<string, Record<string, number>>, { mes, modelo, cantidad }) => {
-                              if (!acc[modelo]) acc[modelo] = {}
-                              acc[modelo][mes] = cantidad
-                              return acc
-                            },
-                            {} as Record<string, Record<string, number>>
-                          )
-                          const modelos = Object.keys(porModelo).sort()
-                          return (
-                            <div className="overflow-x-auto rounded-md border border-gray-200">
-                              <Table>
-                                <TableHeader>
-                                  <TableRow className="bg-gray-50">
-                                    <TableHead className="font-semibold">Modelo</TableHead>
-                                    {meses.map((m: string) => (
-                                      <TableHead key={m} className="text-center whitespace-nowrap">{m}</TableHead>
-                                    ))}
-                                    <TableHead className="text-center font-semibold">Total</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                  {modelos.map((mod: string) => {
-                                    const total = meses.reduce((s, m) => s + (porModelo[mod][m] ?? 0), 0)
-                                    return (
-                                      <TableRow key={mod}>
-                                        <TableCell className="font-medium">{mod}</TableCell>
-                                        {meses.map((m: string) => (
-                                          <TableCell key={m} className="text-center">{porModelo[mod][m] ?? 0}</TableCell>
-                                        ))}
-                                        <TableCell className="text-center font-medium">{total}</TableCell>
-                                      </TableRow>
-                                    )
-                                  })}
-                                </TableBody>
-                              </Table>
-                            </div>
-                          )
-                        })() : (
-                          <p className="text-sm text-gray-500 py-2">No hay datos por mes en el período.</p>
-                        )}
-                      </div>
-                      {/* Tabla acumulada: préstamos aprobados por modelo desde el inicio */}
-                      <div>
-                        <h4 className="text-sm font-semibold text-gray-700 mb-2">Acumulado (desde el inicio)</h4>
-                        {datosModelos.acumulado?.length > 0 ? (
-                          <div className="overflow-x-auto rounded-md border border-gray-200">
-                            <Table>
-                              <TableHeader>
-                                <TableRow className="bg-gray-50">
-                                  <TableHead className="font-semibold">Modelo</TableHead>
-                                  <TableHead className="text-right font-semibold">Cantidad</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {datosModelos.acumulado.map((row) => (
-                                  <TableRow key={row.modelo}>
-                                    <TableCell className="font-medium">{row.modelo}</TableCell>
-                                    <TableCell className="text-right">{row.cantidad_acumulada.toLocaleString('es-EC')}</TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </div>
-                        ) : (
-                          <p className="text-sm text-gray-500 py-2">No hay datos acumulados.</p>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-center py-16 text-gray-500">No hay datos para mostrar</div>
-                  )}
-                  </CardContent>
-                </Card>
-              </motion.div>
-        </div>
-
-
 
         {/* GRÁFICOS DE MOROSIDAD */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

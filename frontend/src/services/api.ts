@@ -165,12 +165,14 @@ class ApiClient {
           }
         }
 
-        // ✅ Crear AbortController para este request y rastrearlo
-        const controller = new AbortController()
-        const requestId = `${config.method}-${config.url}-${Date.now()}`
-        config.signal = controller.signal
-        ;(config as any).__requestId = requestId // Guardar ID para limpiar después
-        this.requestCancellers.set(requestId, controller)
+        // ✅ Usar signal del caller (p. ej. React Query) si existe; si no, crear uno para rastreo
+        if (!config.signal) {
+          const controller = new AbortController()
+          const requestId = `${config.method}-${config.url}-${Date.now()}`
+          config.signal = controller.signal
+          ;(config as any).__requestId = requestId
+          this.requestCancellers.set(requestId, controller)
+        }
 
         return config
       },
@@ -497,7 +499,7 @@ class ApiClient {
 
   // Métodos HTTP
   async get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
-    // Detectar endpoints lentos y usar timeout extendido
+    // Detectar endpoints lentos y usar timeout extendido (p. ej. Render tarda 3–5 s en frío)
     const isSlowEndpoint = url.includes('/dashboard/') ||
                           url.includes('/notificaciones-previas') ||
                           url.includes('/admin') ||
@@ -506,7 +508,9 @@ class ApiClient {
                           url.includes('/ml-impago/modelos') ||
                           url.includes('/ml-riesgo/modelos') ||
                           url.includes('/ai/training/') ||
-                          url.includes('/cobranzas/') // ✅ Agregar endpoints de cobranzas como lentos
+                          url.includes('/cobranzas/') ||
+                          url.includes('/pagos/kpis') ||
+                          url.includes('/pagos/stats')
 
     // ✅ Timeout especial para clientes-atrasados que puede procesar muchos registros (2868+)
     const isClientesAtrasados = url.includes('/cobranzas/clientes-atrasados')
