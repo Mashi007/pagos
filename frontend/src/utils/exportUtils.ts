@@ -92,7 +92,7 @@ export const exportarAPDF = async (cuotas: Cuota[], prestamo: PrestamoInfo) => {
       import('jspdf-autotable')
     ])
 
-    // jspdf 3.x usa named export
+    // jspdf 4.x usa named export
     const { jsPDF } = jsPDFModule
     // jspdf-autotable 5.x usa default export
     const autoTable = autoTableModule.default

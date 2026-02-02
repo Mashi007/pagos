@@ -7,6 +7,13 @@
 // Constantes de almacenamiento
 const INVALID_VALUES = ['', 'undefined', 'null']
 
+// Detectar error de seguridad/almacenamiento no disponible ("The operation is insecure")
+function isStorageError(e: unknown): boolean {
+  if (e instanceof DOMException) return true
+  if (e instanceof Error && (e.name === 'SecurityError' || e.name === 'QuotaExceededError')) return true
+  return false
+}
+
 // Función helper para obtener item de storage
 const getStorageItem = (storage: Storage, key: string, fallback: any = null) => {
   try {
@@ -19,8 +26,9 @@ const getStorageItem = (storage: Storage, key: string, fallback: any = null) => 
     } catch {
       return item
     }
-  } catch {
-    return fallback
+  } catch (e) {
+    if (isStorageError(e)) return fallback
+    throw e
   }
 }
 
@@ -32,8 +40,9 @@ const setStorageItem = (storage: Storage, key: string, value: any) => {
     if (stringValue === 'undefined') return false
     storage.setItem(key, stringValue)
     return true
-  } catch {
-    return false
+  } catch (e) {
+    if (isStorageError(e)) return false
+    throw e
   }
 }
 
@@ -42,65 +51,111 @@ const removeStorageItem = (storage: Storage, key: string) => {
   try {
     storage.removeItem(key)
     return true
-  } catch {
-    return false
+  } catch (e) {
+    if (isStorageError(e)) return false
+    throw e
   }
 }
 
-// Verificar si localStorage está disponible
-const isLocalStorageAvailable = (): boolean => {
+// Cache de disponibilidad para no llamar a setItem/removeItem en cada acceso
+// (reduce "demasiadas llamadas" a la API de almacenamiento)
+let _localStorageAvailable: boolean | null = null
+let _sessionStorageAvailable: boolean | null = null
+
+function checkLocalStorageOnce(): boolean {
+  if (_localStorageAvailable !== null) return _localStorageAvailable
   try {
     const test = '__localStorage_test__'
     localStorage.setItem(test, test)
     localStorage.removeItem(test)
-    return true
-  } catch {
-    return false
+    _localStorageAvailable = true
+  } catch (e) {
+    if (isStorageError(e)) {
+      _localStorageAvailable = false
+    } else {
+      throw e
+    }
   }
+  return _localStorageAvailable
 }
 
-// Verificar si sessionStorage está disponible
-const isSessionStorageAvailable = (): boolean => {
+function checkSessionStorageOnce(): boolean {
+  if (_sessionStorageAvailable !== null) return _sessionStorageAvailable
   try {
     const test = '__sessionStorage_test__'
     sessionStorage.setItem(test, test)
     sessionStorage.removeItem(test)
-    return true
-  } catch {
-    return false
+    _sessionStorageAvailable = true
+  } catch (e) {
+    if (isStorageError(e)) {
+      _sessionStorageAvailable = false
+    } else {
+      throw e
+    }
+  }
+  return _sessionStorageAvailable
+}
+
+// Funciones de localStorage con verificación de disponibilidad (una sola prueba por tipo)
+export const safeGetItem = (key: string, fallback: any = null) => {
+  if (!checkLocalStorageOnce()) return fallback
+  try {
+    return getStorageItem(localStorage, key, fallback)
+  } catch (e) {
+    if (isStorageError(e)) return fallback
+    throw e
   }
 }
 
-// Funciones de localStorage con verificación de disponibilidad
-export const safeGetItem = (key: string, fallback: any = null) => {
-  if (!isLocalStorageAvailable()) return fallback
-  return getStorageItem(localStorage, key, fallback)
-}
-
 export const safeSetItem = (key: string, value: any) => {
-  if (!isLocalStorageAvailable()) return false
-  return setStorageItem(localStorage, key, value)
+  if (!checkLocalStorageOnce()) return false
+  try {
+    return setStorageItem(localStorage, key, value)
+  } catch (e) {
+    if (isStorageError(e)) return false
+    throw e
+  }
 }
 
 export const safeRemoveItem = (key: string) => {
-  if (!isLocalStorageAvailable()) return false
-  return removeStorageItem(localStorage, key)
+  if (!checkLocalStorageOnce()) return false
+  try {
+    return removeStorageItem(localStorage, key)
+  } catch (e) {
+    if (isStorageError(e)) return false
+    throw e
+  }
 }
 
-// Funciones de sessionStorage con verificación de disponibilidad
+// Funciones de sessionStorage con verificación de disponibilidad (una sola prueba por tipo)
 export const safeGetSessionItem = (key: string, fallback: any = null) => {
-  if (!isSessionStorageAvailable()) return fallback
-  return getStorageItem(sessionStorage, key, fallback)
+  if (!checkSessionStorageOnce()) return fallback
+  try {
+    return getStorageItem(sessionStorage, key, fallback)
+  } catch (e) {
+    if (isStorageError(e)) return fallback
+    throw e
+  }
 }
 
 export const safeSetSessionItem = (key: string, value: any) => {
-  if (!isSessionStorageAvailable()) return false
-  return setStorageItem(sessionStorage, key, value)
+  if (!checkSessionStorageOnce()) return false
+  try {
+    return setStorageItem(sessionStorage, key, value)
+  } catch (e) {
+    if (isStorageError(e)) return false
+    throw e
+  }
 }
 
 export const safeRemoveSessionItem = (key: string) => {
-  if (!isSessionStorageAvailable()) return false
-  return removeStorageItem(sessionStorage, key)
+  if (!checkSessionStorageOnce()) return false
+  try {
+    return removeStorageItem(sessionStorage, key)
+  } catch (e) {
+    if (isStorageError(e)) return false
+    throw e
+  }
 }
 
 // Función para limpiar todo el almacenamiento de autenticación

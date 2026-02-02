@@ -28,6 +28,7 @@ interface SimpleAuthState {
 }
 
 // Función para verificar si hay datos de autenticación en almacenamiento
+// (maneja contextos inseguros: iframe, storage deshabilitado, "operation is insecure")
 const hasAuthData = (): boolean => {
   try {
     const rememberMe = safeGetItem('remember_me', false)
@@ -44,9 +45,14 @@ const hasAuthData = (): boolean => {
 }
 
 export const useSimpleAuthStore = create<SimpleAuthState>((set) => {
-  // ✅ Verificar si hay datos de auth de forma segura
-  const hasAuth = hasAuthData()
-  
+  // Verificar si hay datos de auth de forma segura (no lanzar si storage no disponible)
+  let hasAuth = false
+  try {
+    hasAuth = hasAuthData()
+  } catch {
+    hasAuth = false
+  }
+
   return {
     // Estado inicial - si hay datos de auth, empezar como loading para evitar redirecciones
     user: null,

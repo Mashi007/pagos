@@ -87,8 +87,13 @@ const saveLogoMetadata = (filename: string | null) => {
   }
 }
 
-// Inicializar caché con metadatos guardados
-const initialMetadata = loadLogoMetadata()
+// Inicializar caché con metadatos guardados (evita DOMException "operation is insecure" en contextos restrictivos)
+let initialMetadata: Partial<LogoCache> = {}
+try {
+  initialMetadata = loadLogoMetadata()
+} catch {
+  // Storage no disponible o contexto inseguro (iframe, privado, etc.)
+}
 const logoCache: LogoCache = {
   logoUrl: initialMetadata.logoUrl || null,
   isChecking: false,

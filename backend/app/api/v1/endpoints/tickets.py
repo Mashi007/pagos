@@ -9,6 +9,7 @@ from typing import Optional
 from fastapi import APIRouter, Query, Depends, HTTPException
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import ProgrammingError
 
 from app.core.database import get_db
 from app.models.ticket import Ticket
@@ -19,7 +20,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _ticket_to_response(t: Ticket, cliente_row: Optional[Cliente] = None) -> dict:
+# Columnas de Ticket sin fecha_creacion/fecha_actualizacion (fallback si la BD no tiene esas columnas)
+_TICKET_COLUMNS_FALLBACK = (
+    Ticket.id, Ticket.titulo, Ticket.descripcion, Ticket.cliente_id, Ticket.estado,
+    Ticket.prioridad, Ticket.tipo, Ticket.asignado_a, Ticket.asignado_a_id,
+    Ticket.escalado_a_id, Ticket.escalado, Ticket.fecha_limite,
+    Ticket.conversacion_whatsapp_id, Ticket.comunicacion_email_id, Ticket.creado_por_id,
+    Ticket.archivos,
+)
+
+
+def _ticket_to_response(t, cliente_row: Optional[Cliente] = None) -> dict:
     """Construye respuesta de ticket con datos de cliente (camelCase para frontend). Tolerante a NULL."""
     cliente_nombre = None
     cliente_data = None
@@ -90,7 +101,24 @@ def get_tickets(
 
         total = db.scalar(count_q) or 0
         q = q.order_by(Ticket.id.desc()).offset((page - 1) * per_page).limit(per_page)
-        rows = db.execute(q).scalars().all()
+        try:
+            rows = db.execute(q).scalars().all()
+        except ProgrammingError as pe:
+            # BD sin fecha_creacion/fecha_actualizacion: consultar solo columnas existentes
+            err_msg = str(pe)
+            if "fecha_creacion" not in err_msg and "fecha_actualizacion" not in err_msg and "does not exist" not in err_msg.lower():
+                raise
+            q_fallback = select(*_TICKET_COLUMNS_FALLBACK).select_from(Ticket)
+            if cliente_id is not None:
+                q_fallback = q_fallback.where(Ticket.cliente_id == cliente_id)
+            if estado and estado.strip():
+                q_fallback = q_fallback.where(Ticket.estado == estado.strip().lower())
+            if prioridad and prioridad.strip():
+                q_fallback = q_fallback.where(Ticket.prioridad == prioridad.strip().lower())
+            if tipo and tipo.strip():
+                q_fallback = q_fallback.where(Ticket.tipo == tipo.strip().lower())
+            q_fallback = q_fallback.order_by(Ticket.id.desc()).offset((page - 1) * per_page).limit(per_page)
+            rows = db.execute(q_fallback).all()
         # Cargar clientes para los tickets que tienen cliente_id
         clientes_map = {}
         if rows:
@@ -104,6 +132,8 @@ def get_tickets(
             "tickets": tickets_list,
             "paginacion": {"page": page, "per_page": per_page, "total": total, "pages": total_pages},
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("Error en listado de tickets: %s", e)
         raise HTTPException(
@@ -115,7 +145,17 @@ def get_tickets(
 @router.get("/{ticket_id}", response_model=dict)
 def get_ticket(ticket_id: int, db: Session = Depends(get_db)):
     """Obtener un ticket por ID con datos del cliente."""
-    row = db.get(Ticket, ticket_id)
+    try:
+        row = db.get(Ticket, ticket_id)
+    except ProgrammingError as pe:
+        # BD sin fecha_creacion/fecha_actualizacion: cargar solo columnas existentes
+        if "fecha_creacion" not in str(pe) and "fecha_actualizacion" not in str(pe) and "does not exist" not in str(pe).lower():
+            raise
+        row = db.execute(
+            select(*_TICKET_COLUMNS_FALLBACK).select_from(Ticket).where(Ticket.id == ticket_id)
+        ).first()
+        if not row:
+            raise HTTPException(status_code=404, detail="Ticket no encontrado")
     if not row:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
     cliente_row = db.get(Cliente, row.cliente_id) if row.cliente_id else None
