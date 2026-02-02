@@ -67,13 +67,13 @@ def _backend_base_url() -> str:
 
 @router.get("/google/authorize")
 def google_oauth_authorize(
-    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Redirige al usuario a Google para autorizar acceso a Drive y Sheets.
-    Tras autorizar, Google redirige a /google/callback; ahí se guarda el refresh_token.
+    Devuelve la URL de redirección a Google para autorizar acceso a Drive y Sheets.
+    El frontend debe llamar a este endpoint CON el token (Authorization) y luego
+    redirigir al usuario a redirect_url. Tras autorizar, Google redirige a /google/callback.
     """
     sync_from_db()
     client_id = get_google_oauth_client_id()
@@ -101,7 +101,8 @@ def google_oauth_authorize(
         "state": state,
     }
     url = f"{GOOGLE_AUTH_URI}?{urllib.parse.urlencode(params)}"
-    return RedirectResponse(url=url, status_code=302)
+    # Devolver JSON para que el frontend llame con token y luego redirija (no se puede enviar Bearer en window.location)
+    return {"redirect_url": url}
 
 
 @router_google_callback.get("/google/callback")

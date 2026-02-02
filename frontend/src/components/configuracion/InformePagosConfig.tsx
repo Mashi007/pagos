@@ -137,15 +137,24 @@ export function InformePagosConfig() {
     }
   }
 
-  const handleConectarGoogle = () => {
+  const handleConectarGoogle = async () => {
     const clientId = (config.google_oauth_client_id ?? '').trim()
     if (!clientId) {
       toast.error('Guarda primero el Client ID (y Client Secret) y luego pulsa Conectar con Google.')
       return
     }
-    const base = getBackendBaseUrl()
-    const url = `${base}/api/v1/configuracion/informe-pagos/google/authorize`
-    window.location.href = url
+    try {
+      const res = await apiClient.get<{ redirect_url: string }>('/api/v1/configuracion/informe-pagos/google/authorize')
+      const redirectUrl = res?.redirect_url
+      if (redirectUrl) {
+        window.location.href = redirectUrl
+      } else {
+        toast.error('No se pudo obtener la URL de autorización de Google.')
+      }
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail ?? err?.message ?? 'Error al conectar con Google.'
+      toast.error(typeof detail === 'string' ? detail : 'Error al conectar con Google.')
+    }
   }
 
   const oauthConectado = !!(config.google_oauth_refresh_token && config.google_oauth_refresh_token !== '')
