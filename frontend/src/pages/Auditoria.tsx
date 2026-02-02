@@ -46,7 +46,7 @@ export function Auditoria() {
     }, 5 * 60 * 1000) // 5 minutos (actualizado desde 30 minutos)
 
     return () => clearInterval(interval)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [])
 
   const cargarAuditoria = async () => {

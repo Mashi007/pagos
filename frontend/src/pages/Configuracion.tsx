@@ -51,6 +51,11 @@ import { configuracionGeneralService, ConfiguracionGeneral } from '../services/c
 import { apiClient } from '../services/api'
 import { toast } from 'sonner'
 import UsuariosConfig from '../components/configuracion/UsuariosConfig'
+import {
+  SECCIONES_CONFIGURACION,
+  NOMBRES_SECCION_ESPECIAL,
+  findSeccionById as findSeccionByIdHelper,
+} from '../constants/configuracionSecciones'
 
 // Mock data para configuración
 const mockConfiguracion = {
@@ -199,14 +204,14 @@ export function Configuracion() {
             setHasCustomLogo(false)
             setLogoPreview(null)
             setLogoInfo(null)
-            console.warn(`âš ï¸ Logo ${config.logo_filename} no encontrado en el servidor`)
+            console.warn(`âš ï¸ Logo ${config.logo_filename} no encontrado en el servidor`)
           }
         } catch (logoError) {
           // Si hay error verificando, asumir que no existe
           setHasCustomLogo(false)
           setLogoPreview(null)
           setLogoInfo(null)
-          console.warn(`âš ï¸ Error verificando logo:`, logoError)
+          console.warn(`âš ï¸ Error verificando logo:`, logoError)
         }
       } else {
         // Si el servidor no devuelve logo_filename: no borrar el preview cuando
@@ -278,52 +283,10 @@ export function Configuracion() {
     }
   }
 
-  const seccionesList = [
-    { id: 'general', nombre: 'General', icono: Globe },
-    {
-      id: 'herramientas',
-      nombre: 'Herramientas',
-      icono: Wrench,
-      submenu: true,
-      items: [
-        { id: 'notificaciones', nombre: 'Notificaciones', icono: Bell },
-        { id: 'emailConfig', nombre: 'Configuración Email', icono: Mail },
-        { id: 'whatsappConfig', nombre: 'Configuración WhatsApp', icono: MessageSquare },
-        { id: 'plantillas', nombre: 'Plantillas', icono: FileText, href: '/herramientas/plantillas' },
-        { id: 'scheduler', nombre: 'Programador', icono: Calendar, href: '/scheduler' },
-        { id: 'programador', nombre: 'Programador (Config)', icono: Calendar },
-        { id: 'auditoria', nombre: 'Auditoría', icono: FileText },
-      ]
-    },
-    // { id: 'seguridad', nombre: 'Seguridad', icono: Shield }, // OCULTO - No necesario por ahora
-    { id: 'baseDatos', nombre: 'Base de Datos', icono: Database },
-    // { id: 'integraciones', nombre: 'Integraciones', icono: Settings }, // OCULTO
-    { id: 'facturacion', nombre: 'Facturación', icono: DollarSign },
-    { id: 'inteligenciaArtificial', nombre: 'Inteligencia Artificial', icono: Brain },
-    { id: 'validadores', nombre: 'Validadores', icono: CheckSquare },
-    { id: 'concesionarios', nombre: 'Concesionarios', icono: Building },
-    { id: 'analistas', nombre: 'Asesores', icono: Users },
-    { id: 'modelosVehiculos', nombre: 'Modelos de Vehículos', icono: Car },
-    { id: 'usuarios', nombre: 'Usuarios', icono: Users },
-  ]
+  const seccionesList = SECCIONES_CONFIGURACION
   const secciones = seccionesList
-  // Buscar sección por id (top-level o dentro de herramientas.items) para título
-  const findSeccionById = (id: string) => {
-    for (const s of seccionesList) {
-      if ((s as { id?: string }).id === id) return s as { id: string; nombre: string; icono: typeof Settings }
-      const items = (s as { items?: { id: string; nombre: string; icono: typeof Settings }[] }).items
-      if (items) {
-        const found = items.find((i) => i.id === id)
-        if (found) return found
-      }
-    }
-    return null
-  }
-  const nombresSeccionEspecial: Record<string, { nombre: string; icono: typeof Mail }> = {
-    emailConfig: { nombre: 'Configuración Email', icono: Mail },
-    whatsappConfig: { nombre: 'Configuración WhatsApp', icono: MessageSquare },
-    aiConfig: { nombre: 'Configuración AI', icono: Brain },
-  }
+  const findSeccionById = (id: string) => findSeccionByIdHelper(seccionesList, id)
+  const nombresSeccionEspecial = NOMBRES_SECCION_ESPECIAL
 
   const handleGuardar = async () => {
     try {
@@ -386,7 +349,7 @@ export function Configuracion() {
 
               toast.success('Logo guardado exitosamente en la base de datos')
             } else {
-              console.warn('âš ï¸ Logo filename en BD no coincide:', {
+              console.warn('âš ï¸ Logo filename en BD no coincide:', {
                 esperado: logoInfo.filename,
                 encontrado: updatedConfig.logo_filename
               })

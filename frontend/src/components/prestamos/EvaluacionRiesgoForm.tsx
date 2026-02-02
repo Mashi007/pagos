@@ -330,7 +330,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
 
     const correo = user?.email || 'usuario@dominio'
     const confirmacion = window.confirm(
-      'âš ï¸ CONFIRMACIÓN IMPORTANTE\n\n' +
+      'âš ï¸ CONFIRMACIÓN IMPORTANTE\n\n' +
       `Yo (correo: ${correo}) declaro que he revisado los documentos y que los mismos respaldan:\n` +
       'âœ“ Los ingresos coinciden con documentos\n' +
       'âœ“ Los gastos son verificables\n' +
@@ -495,7 +495,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
           {/* Aviso de pendientes */}
           {!todasSeccionesCompletas && (
             <div className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2 rounded">
-              <strong>âš ï¸ Debe completar todos los 7 criterios antes de evaluar.</strong> Faltan: {
+              <strong>âš ï¸ Debe completar todos los 7 criterios antes de evaluar.</strong> Faltan: {
                 [
                   !seccion1Completa && 'Criterio 1',
                   !seccion2Completa && 'Criterio 2',
@@ -1258,7 +1258,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                 } else if (porcentaje >= 5) {
                   puntos = 3
                   categoria = 'Ajustado'
-                  icono = 'âš ï¸'
+                  icono = 'âš ï¸'
                 } else {
                   puntos = 0
                   categoria = 'Insuficiente'
@@ -1320,7 +1320,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                     {saldoResidual < 0 && (
                       <div className="bg-red-100 p-2 rounded border border-red-300 mt-3">
                         <p className="text-xs text-red-800 font-semibold">
-                          âš ï¸ ALERTA: El cliente tendría un deficit de ${Math.abs(saldoResidual).toFixed(2)} USD mensual
+                          âš ï¸ ALERTA: El cliente tendría un deficit de ${Math.abs(saldoResidual).toFixed(2)} USD mensual
                         </p>
                       </div>
                     )}
@@ -1598,17 +1598,17 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                         )}
                         {resultado.clasificacion_riesgo === 'E' && resultado.prediccion_ml.riesgo_level === 'Alto' && (
                           <div className="mt-2 text-xs text-red-700 bg-red-100 p-2 rounded">
-                            âš ï¸ Ambos métodos coinciden: Cliente de alto riesgo
+                            âš ï¸ Ambos métodos coinciden: Cliente de alto riesgo
                           </div>
                         )}
                         {((resultado.clasificacion_riesgo === 'A' || resultado.clasificacion_riesgo === 'B') && resultado.prediccion_ml.riesgo_level === 'Alto') && (
                           <div className="mt-2 text-xs text-amber-700 bg-amber-100 p-2 rounded">
-                            âš ï¸ Discrepancia detectada: El ML sugiere mayor riesgo que el sistema de puntos
+                            âš ï¸ Discrepancia detectada: El ML sugiere mayor riesgo que el sistema de puntos
                           </div>
                         )}
                         {((resultado.clasificacion_riesgo === 'D' || resultado.clasificacion_riesgo === 'E') && resultado.prediccion_ml.riesgo_level === 'Bajo') && (
                           <div className="mt-2 text-xs text-amber-700 bg-amber-100 p-2 rounded">
-                            âš ï¸ Discrepancia detectada: El ML sugiere menor riesgo que el sistema de puntos
+                            âš ï¸ Discrepancia detectada: El ML sugiere menor riesgo que el sistema de puntos
                           </div>
                         )}
                       </div>

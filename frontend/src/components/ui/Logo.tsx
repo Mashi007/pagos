@@ -308,7 +308,7 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
                   return
                 } else {
                   // Logo no existe (404), marcar como no encontrado
-                  console.warn('âš ï¸ Logo no encontrado en servidor (HEAD 404):', config.logo_filename)
+                  console.warn('âš ï¸ Logo no encontrado en servidor (HEAD 404):', config.logo_filename)
                   logoCache.logoNotFound = true
                   logoCache.logoUrl = null
                   logoCache.logoFilename = null // âœ… Limpiar nombre del archivo
@@ -329,7 +329,7 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
                 // Si HEAD falla, asumir que no existe (evitar requests repetidos)
                 const error = headError as { name?: string }
                 if (error?.name !== 'AbortError') {
-                  console.warn('âš ï¸ Error verificando logo (HEAD), asumiendo que no existe:', getErrorMessage(headError))
+                  console.warn('âš ï¸ Error verificando logo (HEAD), asumiendo que no existe:', getErrorMessage(headError))
                 }
                 logoCache.logoNotFound = true
                 logoCache.logoUrl = null
@@ -360,7 +360,7 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
           // Si falla obtener la configuración, marcar como verificado y no hacer más intentos
           const error = configError as { name?: string }
           if (error?.name !== 'AbortError') {
-            console.warn('âš ï¸ No se pudo obtener logo_filename desde configuración:', getErrorMessage(configError))
+            console.warn('âš ï¸ No se pudo obtener logo_filename desde configuración:', getErrorMessage(configError))
           }
           logoCache.hasChecked = true
           logoCache.lastCheckTime = Date.now() // âœ… Guardar timestamp de verificación (incluso si falló)
@@ -374,7 +374,7 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
       } catch (error: unknown) {
         const err = error as { name?: string }
         if (err?.name !== 'AbortError') {
-          console.warn('âš ï¸ Error cargando logo:', getErrorMessage(error))
+          console.warn('âš ï¸ Error cargando logo:', getErrorMessage(error))
         }
       }
 
@@ -482,7 +482,7 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
                   newLogoUrl = `${logoPath}?t=${Date.now()}`
                   console.debug('âœ… Logo recargado desde configuración (BD):', config.logo_filename)
                 } else {
-                  console.warn('âš ï¸ Logo no encontrado al recargar desde configuración:', config.logo_filename)
+                  console.warn('âš ï¸ Logo no encontrado al recargar desde configuración:', config.logo_filename)
                   logoCache.logoNotFound = true
                   logoCache.logoUrl = null
                   logoCache.logoFilename = null // âœ… Limpiar nombre del archivo
@@ -493,7 +493,7 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
                   return
                 }
               } catch (headError) {
-                console.warn('âš ï¸ Error verificando logo al recargar:', headError)
+                console.warn('âš ï¸ Error verificando logo al recargar:', headError)
                 logoCache.logoNotFound = true
                 logoCache.logoUrl = null
                 logoCache.hasChecked = true
@@ -511,7 +511,7 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
                   newLogoUrl = `${logoPath}?t=${Date.now()}`
                   console.debug('âœ… Logo actualizado desde evento (fallback):', filename)
                 } else {
-                  console.warn('âš ï¸ Logo no encontrado en fallback:', filename)
+                  console.warn('âš ï¸ Logo no encontrado en fallback:', filename)
                   logoCache.logoNotFound = true
                   logoCache.logoUrl = null
                   logoCache.logoFilename = null // âœ… Limpiar nombre del archivo
@@ -522,7 +522,7 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
                   return
                 }
               } catch (headError) {
-                console.warn('âš ï¸ Error verificando logo en fallback:', headError)
+                console.warn('âš ï¸ Error verificando logo en fallback:', headError)
                 logoCache.logoNotFound = true
                 logoCache.logoUrl = null
                 logoCache.hasChecked = true
@@ -570,7 +570,7 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
             }
           })
           .catch(err => {
-            console.warn('âš ï¸ Error recargando logo desde configuración:', err)
+            console.warn('âš ï¸ Error recargando logo desde configuración:', err)
             // Fallback: usar valores del evento directamente, pero verificar primero
             let newLogoUrl: string | null = null
             if (url) {
@@ -734,7 +734,7 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
           }}
           onError={(e) => {
             // âœ… Si falla la carga (404 o imagen corrupta), marcar como no encontrado y limpiar caché
-            console.warn('âš ï¸ Error cargando logo (GET falló o imagen inválida), limpiando caché:', customLogoUrl)
+            console.warn('âš ï¸ Error cargando logo (GET falló o imagen inválida), limpiando caché:', customLogoUrl)
             logoCache.logoNotFound = true
             logoCache.logoUrl = null
             logoCache.logoFilename = null

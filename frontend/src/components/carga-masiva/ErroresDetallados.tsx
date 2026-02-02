@@ -17,15 +17,13 @@ const CARD_PADDING = 4
 const ICON_SIZE = 5
 const ICON_SIZE_SMALL = 4
 const SPACE_BETWEEN = 3
-const BORDER_RADIUS = 2
 const MAX_WIDTH_MD = 'md'
-const MAX_WIDTH_LG = 'lg'
 
 interface ErrorDetail {
   row: number
   cedula: string
   error: string
-  data: any
+  data: Record<string, unknown>
   tipo: 'cliente' | 'pago'
 }
 
@@ -59,9 +57,9 @@ export function ErroresDetallados({ errores, tipo, onDescargarErrores }: Errores
       const correccionSugerida = generarCorreccionSugerida(error)
       return [
         error.cedula,
-        error.data.nombre || error.data.fecha || '',
-        error.data.telefono || error.data.monto_pagado || '',
-        error.data.email || error.data.documento_pago || '',
+        String(error.data.nombre ?? error.data.fecha ?? ''),
+        String(error.data.telefono ?? error.data.monto_pagado ?? ''),
+        String(error.data.email ?? error.data.documento_pago ?? ''),
         error.error,
         correccionSugerida
       ]

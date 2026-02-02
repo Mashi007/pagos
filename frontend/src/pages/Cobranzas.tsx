@@ -30,6 +30,7 @@ import { InformesCobranzas } from '../components/cobranzas/InformesCobranzas'
 import { toast } from 'sonner'
 import { BASE_PATH } from '../config/env'
 import { userService } from '../services/userService'
+import { validarRangoDias as validarRangoDiasUtil } from '../utils/cobranzas'
 
 export function Cobranzas() {
   const [tabActiva, setTabActiva] = useState('cuotas')
@@ -37,24 +38,13 @@ export function Cobranzas() {
   const [rangoDiasMin, setRangoDiasMin] = useState<number | undefined>(undefined)
   const [rangoDiasMax, setRangoDiasMax] = useState<number | undefined>(undefined)
   const [errorRangoDias, setErrorRangoDias] = useState<string | null>(null)
-  
-  // ✅ Función de validación de rango de días
+
   const validarRangoDias = (min: number | undefined, max: number | undefined): boolean => {
-    if (min !== undefined && max !== undefined && min > max) {
-      setErrorRangoDias('Los días mínimos no pueden ser mayores que los días máximos')
-      return false
-    }
-    if (min !== undefined && min < 0) {
-      setErrorRangoDias('Los días mínimos deben ser un número positivo')
-      return false
-    }
-    if (max !== undefined && max < 0) {
-      setErrorRangoDias('Los días máximos deben ser un número positivo')
-      return false
-    }
-    setErrorRangoDias(null)
-    return true
+    const result = validarRangoDiasUtil(min, max)
+    setErrorRangoDias(result.error)
+    return result.valid
   }
+
   const [filtroCuotasMinimas, setFiltroCuotasMinimas] = useState<number | undefined>(undefined)
   const [soloCuotasImpagas, setSoloCuotasImpagas] = useState(true)
   const [procesandoNotificaciones, setProcesandoNotificaciones] = useState(false)

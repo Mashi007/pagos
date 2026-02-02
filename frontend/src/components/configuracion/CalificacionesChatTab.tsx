@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, CheckCircle, XCircle, Loader2, Search, Filter, Zap, AlertCircle } from 'lucide-react'
+import { X, CheckCircle, Loader2, Search, Filter, Zap, AlertCircle } from 'lucide-react'
 import { Card, CardContent } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'

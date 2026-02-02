@@ -599,7 +599,7 @@ export function PrestamosList() {
                     {data.total > 0 ? (
                       <>
                         <p className="text-lg font-semibold text-red-600 mb-2">
-                          âš ï¸ Problema detectado: El sistema reporta {data.total} préstamos, pero no se pudieron mostrar.
+                          âš ï¸ Problema detectado: El sistema reporta {data.total} préstamos, pero no se pudieron mostrar.
                         </p>
                         <p className="text-sm mb-4">
                           Esto puede deberse a un problema en la respuesta del servidor o en el formato de los datos.

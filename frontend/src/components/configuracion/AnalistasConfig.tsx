@@ -1,10 +1,8 @@
 // frontend/src/components/configuracion/AnalistasConfig.tsx
 import { useState } from 'react'
-import { motion } from 'framer-motion'
 import {
   Users,
   Plus,
-  Search,
   Edit,
   Trash2,
   UserCheck,
@@ -17,7 +15,7 @@ import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { Badge } from '../../components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
-import { Analista, AnalistaCreate, AnalistaUpdate } from '../../services/analistaService'
+import { Analista, AnalistaCreate } from '../../services/analistaService'
 import { useAnalistasActivos, useCreateAnalista, useUpdateAnalista, useDeleteAnalista } from '../../hooks/useAnalistas'
 import toast from 'react-hot-toast'
 
@@ -87,7 +85,7 @@ export function AnalistasConfig() {
   const handleDelete = async (id: number) => {
     try {
       const confirmar = window.confirm(
-        'âš ï¸ ¿Estás seguro de que quieres ELIMINAR este analista?\n\n' +
+        'âš ï¸ ¿Estás seguro de que quieres ELIMINAR este analista?\n\n' +
         'Esta acción NO se puede deshacer.'
       )
 

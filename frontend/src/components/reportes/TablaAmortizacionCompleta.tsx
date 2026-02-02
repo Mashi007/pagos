@@ -1140,7 +1140,7 @@ export function TablaAmortizacionCompleta() {
                   <p className="text-xs text-gray-500 mt-1">
                     {pagoEditando.numero_documento && /[eE]/.test(pagoEditando.numero_documento) ? (
                       <span className="text-yellow-600">
-                        âš ï¸ Formato científico detectado. Se normalizará automáticamente al guardar.
+                        âš ï¸ Formato científico detectado. Se normalizará automáticamente al guardar.
                       </span>
                     ) : (
                       'Los números científicos se normalizarán automáticamente'

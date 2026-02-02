@@ -1,106 +1,170 @@
-﻿# ============================================
-# .cursorignore - Excluir archivos del anÃ¡lisis de Cursor
 # ============================================
-# Este archivo le dice a Cursor quÃ© archivos y carpetas NO debe indexar/analizar
-# para evitar problemas de rendimiento y errores de serializaciÃ³n
+# .cursorignore - Optimizado para Rendimiento
+# ============================================
+# Este archivo excluye SOLO lo necesario para mantener Cursor rápido
+# SIN afectar la funcionalidad ni el análisis de tu código fuente
 
 # ============================================
-# Node.js / Frontend
+# CRÍTICO - Node.js / Frontend (Miles de archivos)
 # ============================================
-node_modules/
 **/node_modules/
-frontend/node_modules/
 frontend/dist/
 frontend/build/
 frontend/.next/
 frontend/out/
+.nuxt/
+.parcel-cache/
+
+# Package manager cache (NO son código fuente)
+.npm/
+.yarn/
+.pnpm-store/
 
 # ============================================
-# Python / Backend
+# CRÍTICO - Python / Backend (Miles de archivos)
 # ============================================
-.venv/
-venv/
-**/venv/
 **/.venv/
-backend/.venv/
-backend/venv/
+**/venv/
 backend/env/
-__pycache__/
 **/__pycache__/
 *.pyc
 *.pyo
 *.pyd
 .Python
 
-# ============================================
-# CachÃ©s y archivos temporales
-# ============================================
-.mypy_cache/
-**/.mypy_cache/
-backend/.mypy_cache/
-.pytest_cache/
-**/.pytest_cache/
-backend/.pytest_cache/
-*.cache
-.cache/
+# Python distribution / packaging (archivos generados)
+**/*.egg-info/
+.eggs/
+develop-eggs/
+wheels/
+*.egg
 
 # ============================================
-# Build outputs
+# Cachés (archivos temporales regenerables)
+# ============================================
+.cache/
+**/.mypy_cache/
+**/.pytest_cache/
+*.cache
+.tox/
+.coverage
+.hypothesis/
+htmlcov/
+
+# ============================================
+# Control de versiones (no necesita indexación)
+# ============================================
+.git/
+
+# ============================================
+# Build outputs (archivos compilados, no código fuente)
 # ============================================
 dist/
 build/
-*.egg-info/
-.eggs/
-eggs/
+out/
+target/
 
 # ============================================
-# Logs
+# Logs (archivos de texto grandes sin valor para análisis)
 # ============================================
 *.log
 logs/
+log/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+lerna-debug.log*
 
 # ============================================
-# Archivos binarios grandes
+# Archivos binarios (no analizables por Cursor)
 # ============================================
 *.exe
 *.dll
 *.so
 *.dylib
-*.pyd
 chromedriver*
 selenium-manager
 
+# Media files (no son código)
+*.mp4
+*.mov
+*.avi
+*.mp3
+*.wav
+
+# Archivos comprimidos (no analizables)
+*.zip
+*.tar
+*.gz
+*.rar
+*.7z
+
 # ============================================
-# Base de datos
+# Base de datos (archivos binarios grandes)
 # ============================================
 *.db
 *.sqlite
 *.sqlite3
+*.dump
 
 # ============================================
-# Archivos temporales
+# Archivos temporales (regenerables)
 # ============================================
 *.tmp
 *.temp
 *.bak
 *.backup
 *.old
+*.swp
+*.swo
+*~
 
 # ============================================
-# Carpetas de otros proyectos (NO pertenecen a "pagos")
+# IDE / Editores (configuraciones locales)
 # ============================================
-# Estas carpetas pueden estar causando que Cursor indexe archivos
-# de otros proyectos, generando errores de serializaciÃ³n
+.vscode/
+.idea/
+.cursor/
+*.iml
+.DS_Store
+Thumbs.db
 
-# Archivos muy grandes (>1500 líneas) - aligera indexado y rendimiento
-frontend/src/components/configuracion/FineTuningTab.tsx
-frontend/src/components/configuracion/AIConfig.tsx
-frontend/src/components/clientes/ExcelUploader.tsx
-frontend/src/components/prestamos/EvaluacionRiesgoForm.tsx
-frontend/src/pages/Configuracion.tsx
-frontend/src/components/clientes/CrearClienteForm.tsx
-frontend/src/pages/DashboardMenu.tsx
-frontend/src/pages/Cobranzas.tsx
+# ============================================
+# Testing outputs (reportes generados)
+# ============================================
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+cypress/videos/
+cypress/screenshots/
+
+# ============================================
+# Environment (archivos sensibles, no código)
+# ============================================
+.env
+.env.*
+.env.local
+.env.production
+secrets/
+*.key
+*.pem
+*.cert
+
+# ============================================
+# Documentación generada (no código fuente)
+# ============================================
+docs/_build/
+site/
+_site/
+
+# ============================================
+# NOTA IMPORTANTE SOBRE ARCHIVOS GRANDES
+# ============================================
+# NO EXCLUIMOS archivos de código fuente, incluso si son grandes.
+# Razones:
+# 1. Cursor necesita analizarlos para autocompletado correcto
+# 2. El agente necesita contexto completo del proyecto
+# 3. Las exclusiones anteriores (node_modules, venv, etc.) ya mejoran
+#    el rendimiento suficientemente
+# 4. Archivos grandes de código se deben refactorizar, no excluir

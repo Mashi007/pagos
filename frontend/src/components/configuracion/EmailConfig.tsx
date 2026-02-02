@@ -63,7 +63,7 @@ export function EmailConfig() {
     problemas: string[]
     conexion_smtp?: { success: boolean, message?: string }
   } | null>(null)
-  const [verificandoEstado, setVerificandoEstado] = useState<boolean>(false)
+  const [, setVerificandoEstado] = useState<boolean>(false)
 
   // Estado de envíos
   const [enviosRecientes, setEnviosRecientes] = useState<Notificacion[]>([])
@@ -111,7 +111,7 @@ export function EmailConfig() {
            (estado.conexion_smtp?.message?.toLowerCase().includes('contraseña de aplicación') ?? false)
 
         setRequiereAppPassword(Boolean(requiereAppPass))
-        setMensajeVinculacion(estado.mensaje || 'âš ï¸ Gmail rechazó la conexión. Verifica tus credenciales.')
+        setMensajeVinculacion(estado.mensaje || 'âš ï¸ Gmail rechazó la conexión. Verifica tus credenciales.')
 
         if (process.env.NODE_ENV === 'development') {
           console.log('âŒ Gmail rechazó:', {
@@ -386,7 +386,7 @@ export function EmailConfig() {
       if (nuevaVinculacion) {
         toast.success(nuevoMensaje || 'âœ… Sistema vinculado correctamente con Google', { duration: 10000 })
       } else if (nuevoRequiereAppPassword) {
-        toast.warning(nuevoMensaje || 'âš ï¸ Configuración guardada pero requiere App Password', { duration: 15000 })
+        toast.warning(nuevoMensaje || 'âš ï¸ Configuración guardada pero requiere App Password', { duration: 15000 })
       } else {
         toast.success('Configuración guardada exitosamente')
       }
@@ -501,7 +501,7 @@ export function EmailConfig() {
                 <p className="text-xs text-gray-600">
                   {emailActivo
                     ? 'âœ… El sistema está enviando emails automáticamente'
-                    : 'âš ï¸ El sistema NO enviará emails. Activa el servicio para habilitar envíos.'}
+                    : 'âš ï¸ El sistema NO enviará emails. Activa el servicio para habilitar envíos.'}
                 </p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
@@ -547,7 +547,7 @@ export function EmailConfig() {
                 </div>
               )}
 
-              {/* âš ï¸ Estado: Requiere App Password (prioridad sobre otros estados) */}
+              {/* âš ï¸ Estado: Requiere App Password (prioridad sobre otros estados) */}
               {requiereAppPassword && !vinculacionConfirmada && (
                 <div className="bg-white border-2 border-amber-400 rounded-lg p-4">
                   <div className="flex items-center gap-3">
@@ -948,7 +948,7 @@ export function EmailConfig() {
 
               {modoPruebas === 'true' && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
-                  <p className="text-sm text-yellow-800 font-semibold mb-1">âš ï¸ Modo Pruebas activo</p>
+                  <p className="text-sm text-yellow-800 font-semibold mb-1">âš ï¸ Modo Pruebas activo</p>
                   <p className="text-xs text-yellow-700">
                     El email se redirigirá a {emailPruebas || 'la dirección de pruebas configurada'}.
                   </p>

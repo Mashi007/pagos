@@ -150,7 +150,7 @@ export function ChatAI() {
           const mensajeError: Mensaje = {
             id: (Date.now() + 1).toString(),
             tipo: 'ai',
-            contenido: `âš ï¸ ${errorDetail}\n\nðŸ’¡ Tip: Asegúrate de que tu pregunta incluya términos relacionados con:\n• Clientes, préstamos, pagos, cuotas\n• Morosidad, estadísticas, datos\n• Fechas, montos, análisis\n• O cualquier término relacionado con la base de datos del sistema`,
+            contenido: `âš ï¸ ${errorDetail}\n\nðŸ’¡ Tip: Asegúrate de que tu pregunta incluya términos relacionados con:\n• Clientes, préstamos, pagos, cuotas\n• Morosidad, estadísticas, datos\n• Fechas, montos, análisis\n• O cualquier término relacionado con la base de datos del sistema`,
             timestamp: new Date(),
             error: true
           }

@@ -16,7 +16,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
 import { Badge } from '../../components/ui/badge'
-import { SearchableSelect } from '../../components/ui/searchable-select'
+import {} from '../../components/ui/searchable-select'
 // exceljs se importa dinámicamente para reducir el bundle inicial
 import { clienteService } from '../../services/clienteService'
 import { useQueryClient } from '@tanstack/react-query'
@@ -65,13 +65,13 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   const [excelData, setExcelData] = useState<ExcelRow[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
+  const [_isSaving, setIsSaving] = useState(false)
   const [showValidationModal, setShowValidationModal] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
 
   // Estado para tracking de errores en dropdowns
-  const [dropdownErrors, setDropdownErrors] = useState<{[key: string]: boolean}>({})
+  const [_dropdownErrors, setDropdownErrors] = useState<{[key: string]: boolean}>({})
 
   // Estado para notificaciones toast con tracking de violaciones
   const [toasts, setToasts] = useState<Array<{
@@ -264,7 +264,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
       clearTimeout(timeoutId)
       setServiceStatus(response.ok ? 'online' : 'offline')
-    } catch (error) {
+    } catch {
       setServiceStatus('offline')
     }
   }
@@ -287,7 +287,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     return excelData
   }
 
-  const getPendingClients = (): ExcelRow[] => {
+  const _getPendingClients = (): ExcelRow[] => {
     return excelData.filter(row => !savedClients.has(row._rowIndex))
   }
 
@@ -323,7 +323,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     try {
       // âœ… VALIDACIÓN PREVIA: Verificar que NO hay errores antes de intentar guardar
       if (row._hasErrors) {
-        alert('âš ï¸ NO SE PUEDE GUARDAR: Hay campos vacíos o con errores en esta fila.\n\nPor favor, complete todos los campos obligatorios en la tabla antes de guardar.')
+        alert('âš ï¸ NO SE PUEDE GUARDAR: Hay campos vacíos o con errores en esta fila.\n\nPor favor, complete todos los campos obligatorios en la tabla antes de guardar.')
         return false
       }
 
@@ -463,7 +463,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
             console.log(`âœ… Cliente ${i + 1}/${validClients.length} guardado exitosamente: ${client.cedula}`)
           } else {
             failed++
-            console.log(`âš ï¸ Cliente ${i + 1}/${validClients.length} no se guardó (result: ${result}): ${client.cedula}`)
+            console.log(`âš ï¸ Cliente ${i + 1}/${validClients.length} no se guardó (result: ${result}): ${client.cedula}`)
           }
         } catch (error: any) {
           failed++
@@ -507,7 +507,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
             }, 2000)
           } else {
             // âœ… HAY clientes pendientes, mostrar advertencia
-            addToast('warning', `âš ï¸ Quedan ${remaining.length} clientes por verificar`)
+            addToast('warning', `âš ï¸ Quedan ${remaining.length} clientes por verificar`)
           }
 
           return remaining
@@ -545,7 +545,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   }
 
   // ðŸ’¡ FUNCIÓN PARA OBTENER SUGERENCIAS ESPECÍFICAS
-  const getSuggestion = (field: string, value: string): string => {
+  const _getSuggestion = (field: string, value: string): string => {
     switch (field) {
       case 'nombres':
         if (value.trim().split(/\s+/).length < 2) {
@@ -604,8 +604,8 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         const ano = String(fechaBase.getFullYear())
 
         return `${dia}/${mes}/${ano}`
-      } catch (error) {
-        console.warn('Error convirtiendo fecha Excel:', strValue, error)
+      } catch (err) {
+        console.warn('Error convirtiendo fecha Excel:', strValue, err)
         return strValue
       }
     }
@@ -778,7 +778,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         }
 
         // âœ… Validar que tenga al menos 18 años exactos
-        const edad = hoyNac.getFullYear() - anoNum
+        const _edad = hoyNac.getFullYear() - anoNum
         const fecha18 = new Date(anoNum + 18, mesNum - 1, diaNum)
 
         if (fecha18 > hoyNac) {
@@ -809,7 +809,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       console.log('ðŸ“Š Procesando archivo Excel:', file.name)
 
       // âœ… VALIDACIÓN DE SEGURIDAD: Validar archivo antes de procesar
-      const { validateExcelFile, validateWorkbookStructure, validateExcelData, sanitizeFileName } = await import('../../utils/excelValidation')
+      const { validateExcelFile, validateExcelData, sanitizeFileName } = await import('../../utils/excelValidation')
 
       if (!isMounted()) return
 
@@ -917,9 +917,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       // Validar dropdowns después de procesar
       updateDropdownErrors(processedData)
 
-    } catch (error) {
-      console.error('âŒ Error procesando Excel:', error)
-      alert(`Error procesando el archivo: ${error instanceof Error ? error.message : 'Error desconocido'}`)
+    } catch (err) {
+      console.error('âŒ Error procesando Excel:', err)
+      alert(`Error procesando el archivo: ${err instanceof Error ? err.message : 'Error desconocido'}`)
     } finally {
       if (isMounted()) {
         setIsProcessing(false)
@@ -1007,7 +1007,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
       // Sistema de notificaciones anterior (comentado para usar el nuevo)
       // if (!validation.isValid) {
-      //   addToast('error', `Campo "${field}": ${validation.message}`, getSuggestion(field, value))
+      //   addToast('error', `Campo "${field}": ${validation.message}`, _getSuggestion(field, value))
       // } else {
       //   addToast('success', `Campo "${field}" es válido`)
       // }
@@ -1028,7 +1028,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   }
 
   // ðŸ’¾ GUARDAR DATOS VALIDADOS
-  const handleSaveData = async () => {
+  const _handleSaveData = async () => {
     // Filtrar solo registros completamente válidos
     const validData = excelData.filter(row => {
       const hasNoErrors = !row._hasErrors
@@ -1127,8 +1127,8 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         alert('No se pudo guardar ningún cliente. Revisa los errores.')
       }
 
-    } catch (error) {
-      console.error('âŒ Error en proceso de guardado:', error)
+    } catch (err) {
+      console.error('âŒ Error en proceso de guardado:', err)
       alert('Error al guardar los datos. Intenta nuevamente.')
     } finally {
       setIsSaving(false)
@@ -1549,7 +1549,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 type="text"
                                 value={row.fecha_nacimiento}
                                 onChange={(e) => {
-                                  let value = e.target.value
+                                  const value = e.target.value
                                   // Limpiar todos los caracteres no numéricos y barras
                                   const onlyDigits = value.replace(/\D/g, '')
 
@@ -1587,7 +1587,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 }}
                                 onBlur={(e) => {
                                   // Al perder el foco, auto-completar con 0 si falta
-                                  let value = e.target.value
+                                  const value = e.target.value
                                   if (!value) return
 
                                   // Si no tiene barras, no formatear

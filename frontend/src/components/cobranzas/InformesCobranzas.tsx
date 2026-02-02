@@ -6,13 +6,11 @@ import { Input } from '../../components/ui/input'
 import { Badge } from '../../components/ui/badge'
 import {
   FileText,
-  Download,
   FileSpreadsheet,
   BarChart3,
   TrendingUp,
   Clock,
   Users,
-  DollarSign,
   Eye
 } from 'lucide-react'
 import { cobranzasService } from '../../services/cobranzasService'

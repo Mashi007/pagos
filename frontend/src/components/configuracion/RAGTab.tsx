@@ -515,7 +515,7 @@ export function RAGTab() {
                                 {doc.activo && !doc.contenido_procesado && (
                                   <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
                                     <AlertCircle className="h-3 w-3 mr-1" />
-                                    âš ï¸ No disponible para AI
+                                    âš ï¸ No disponible para AI
                                   </Badge>
                                 )}
                                 {doc.activo && doc.contenido_procesado && (

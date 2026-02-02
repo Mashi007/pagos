@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
-import { AlertTriangle, X, CheckCircle2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import {
   Dialog,
@@ -61,7 +61,7 @@ export const AdvertenciaFormatoCientifico: React.FC<AdvertenciaFormatoCientifico
       <Alert className="mb-4 border-yellow-200 bg-yellow-50">
         <AlertTriangle className="h-4 w-4 text-yellow-600" />
         <AlertTitle className="text-yellow-800">
-          âš ï¸ Advertencia: Problema de Formato Científico en Números de Documento
+          âš ï¸ Advertencia: Problema de Formato Científico en Números de Documento
         </AlertTitle>
         <AlertDescription className="text-yellow-700 space-y-2">
           <p>
@@ -121,7 +121,7 @@ export const AdvertenciaFormatoCientifico: React.FC<AdvertenciaFormatoCientifico
             </div>
 
             <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
-              <h4 className="font-semibold text-yellow-900 mb-2">âš ï¸ Importante:</h4>
+              <h4 className="font-semibold text-yellow-900 mb-2">âš ï¸ Importante:</h4>
               <ul className="list-disc list-inside space-y-1 text-yellow-800 text-sm">
                 <li>Los números en formato científico se normalizan automáticamente al guardar</li>
                 <li>Si el número original tenía más dígitos que los recuperables, estos se perderán</li>

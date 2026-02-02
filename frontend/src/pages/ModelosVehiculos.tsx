@@ -64,7 +64,7 @@ export function ModelosVehiculos() {
     try {
       // Confirmar eliminación permanente
       const confirmar = window.confirm(
-        'âš ï¸ ¿Estás seguro de que quieres ELIMINAR PERMANENTEMENTE este modelo?\n\n' +
+        'âš ï¸ ¿Estás seguro de que quieres ELIMINAR PERMANENTEMENTE este modelo?\n\n' +
         'Esta acción NO se puede deshacer y el modelo será borrado completamente de la base de datos.'
       )
 

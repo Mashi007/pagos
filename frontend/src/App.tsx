@@ -1,4 +1,4 @@
-import { useEffect, useState, Suspense } from 'react'
+import { useEffect, Suspense } from 'react'
 import { Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -13,7 +13,7 @@ import { BASE_PATH } from './config/env'
 /** En rutas públicas (/, /login) solo muestra el Outlet. En el resto muestra Layout con Outlet para que el dashboard y demás carguen. */
 function RootLayoutWrapper() {
   const location = useLocation()
-  const { isAuthenticated } = useSimpleAuth()
+  useSimpleAuth()
   const base = BASE_PATH || '/'
   const isPublic = location.pathname === base || location.pathname === base + '/' || location.pathname === base + '/login'
   if (isPublic) return <Outlet />
@@ -36,7 +36,6 @@ import Plantillas from './pages/Plantillas'
 import Programador from './pages/Programador'
 import Clientes from './pages/Clientes'
 import Prestamos from './pages/Prestamos'
-import Amortizacion from './pages/Amortizacion'
 import Reportes from './pages/Reportes'
 import Cobranzas from './pages/Cobranzas'
 import ChatAI from './pages/ChatAI'
@@ -44,8 +43,6 @@ import Notificaciones from './pages/Notificaciones'
 import Analistas from './pages/Analistas'
 import PagosPage from './pages/PagosPage'
 import AmortizacionPage from './pages/AmortizacionPage'
-import ReportesPage from './pages/ReportesPage'
-import VisualizacionBD from './pages/VisualizacionBD'
 import Validadores from './pages/Validadores'
 import Concesionarios from './pages/Concesionarios'
 import ModelosVehiculos from './pages/ModelosVehiculos'

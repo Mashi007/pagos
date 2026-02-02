@@ -163,7 +163,7 @@ export function Programador() {
 
       {!schedulerActivo && (
         <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded">
-          âš ï¸ El scheduler no está activo. Las tareas programadas no se ejecutarán automáticamente.
+          âš ï¸ El scheduler no está activo. Las tareas programadas no se ejecutarán automáticamente.
         </div>
       )}
 

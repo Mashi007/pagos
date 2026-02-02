@@ -2,26 +2,7 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { logger } from '../../utils/logger'
 import { getErrorMessage, isAxiosError, getErrorDetail } from '../../types/errors'
-import {
-  User,
-  CreditCard,
-  Phone,
-  Mail,
-  DollarSign,
-  Calendar,
-  Users,
-  Building,
-  Save,
-  X,
-  AlertTriangle,
-  CheckCircle,
-  XCircle,
-  Download,
-  FileSpreadsheet,
-  MapPin,
-  Briefcase,
-  FileText,
-} from 'lucide-react'
+import { User, CreditCard, Phone, Mail, Calendar, Save, X, CheckCircle, XCircle, FileSpreadsheet, MapPin, Briefcase, FileText,  } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -97,7 +78,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
   }
 
   // Función para convertir fecha de ISO a DD/MM/YYYY
-  const convertirFechaDeISO = (fechaISO: string): string => {
+  const _convertirFechaDeISO = (fechaISO: string): string => {
     // Si ya está en formato DD/MM/YYYY, devolverla tal cual
     if (fechaISO.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
       return fechaISO
@@ -174,7 +155,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       console.log('ðŸ“ Datos completos del cliente recibidos:', JSON.stringify(cliente, null, 2))
 
       // Dividir nombres si vienen unificados de la BD
-      let nombresValue = cliente.nombres || ''
+      const nombresValue = cliente.nombres || ''
 
       // Función local para convertir fecha
       const convertirFechaLocal = (fechaISO: string): string => {
@@ -239,8 +220,8 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
               ciudad: String(parsed.ciudad || '').trim(),
               estadoDireccion: String(parsed.estado || parsed.estadoDireccion || '').trim()
             }
-          } catch (error) {
-            console.warn('Error parseando JSON de dirección:', error, 'Dirección:', direccionLimpia.substring(0, 100))
+          } catch (err) {
+            console.warn('Error parseando JSON de dirección:', err, 'Dirección:', direccionLimpia.substring(0, 100))
             // Si falla el parseo, intentar extraer valores manualmente
             try {
               const calleMatch = direccionLimpia.match(/"callePrincipal"\s*:\s*"([^"]*)"/i)
@@ -698,7 +679,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
           message: mensajeCompleto
         }
       }
-    } catch (error) {
+    } catch {
       // Si el servicio falla, usar validación básica como fallback
       if (!value) {
         return { field, isValid: false, message: `${field} es obligatorio` }
@@ -886,31 +867,31 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
 
     // âœ… VALIDACIÓN: Permitir vacío solo si el usuario ingresó 'NN'
     if ((!formData.callePrincipal || !formData.callePrincipal.trim()) && !isNN(formData.callePrincipal)) {
-      alert('âš ï¸ ERROR: Debe completar el campo Calle Principal')
+      alert('âš ï¸ ERROR: Debe completar el campo Calle Principal')
       return
     }
     if ((!formData.parroquia || !formData.parroquia.trim()) && !isNN(formData.parroquia)) {
-      alert('âš ï¸ ERROR: Debe completar el campo Parroquia')
+      alert('âš ï¸ ERROR: Debe completar el campo Parroquia')
       return
     }
     if ((!formData.municipio || !formData.municipio.trim()) && !isNN(formData.municipio)) {
-      alert('âš ï¸ ERROR: Debe completar el campo Municipio')
+      alert('âš ï¸ ERROR: Debe completar el campo Municipio')
       return
     }
     if ((!formData.ciudad || !formData.ciudad.trim()) && !isNN(formData.ciudad)) {
-      alert('âš ï¸ ERROR: Debe completar el campo Ciudad')
+      alert('âš ï¸ ERROR: Debe completar el campo Ciudad')
       return
     }
     if ((!formData.estadoDireccion || !formData.estadoDireccion.trim()) && !isNN(formData.estadoDireccion)) {
-      alert('âš ï¸ ERROR: Debe completar el campo Estado')
+      alert('âš ï¸ ERROR: Debe completar el campo Estado')
       return
     }
     if ((!formData.fechaNacimiento || !formData.fechaNacimiento.trim()) && !isNN(formData.fechaNacimiento)) {
-      alert('âš ï¸ ERROR: Debe completar el campo Fecha de Nacimiento')
+      alert('âš ï¸ ERROR: Debe completar el campo Fecha de Nacimiento')
       return
     }
     if ((!formData.ocupacion || !formData.ocupacion.trim()) && !isNN(formData.ocupacion)) {
-      alert('âš ï¸ ERROR: Debe completar el campo Ocupación')
+      alert('âš ï¸ ERROR: Debe completar el campo Ocupación')
       return
     }
 
@@ -918,7 +899,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     if (formData.descripcion && formData.descripcion.trim() && !isNN(formData.descripcion)) {
       const descripcionValidation = validateDescripcion(formData.descripcion)
       if (!descripcionValidation.isValid) {
-        alert(`âš ï¸ ERROR: ${descripcionValidation.message}`)
+        alert(`âš ï¸ ERROR: ${descripcionValidation.message}`)
         return
       }
     }
@@ -1087,7 +1068,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       })
 
       // Mostrar mensaje de error al usuario
-      let errorMessageUser = 'Error al crear el cliente. Por favor, intente nuevamente.'
+      let _errorMessageUser = 'Error al crear el cliente. Por favor, intente nuevamente.'
       let tipoDuplicado = ''
 
       if (isAxiosError(error)) {
@@ -1098,18 +1079,18 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
           const detailText = errorDetail || ''
           if (detailText.includes('cédula') && detailText.includes('nombre')) {
             tipoDuplicado = 'cedula_nombre'
-            errorMessageUser = errorDetail || 'No se puede crear un cliente con la misma cédula y el mismo nombre completo. Ya existe un cliente con esos datos.'
+            _errorMessageUser = errorDetail || 'No se puede crear un cliente con la misma cédula y el mismo nombre completo. Ya existe un cliente con esos datos.'
           } else if (detailText.includes('email')) {
             tipoDuplicado = 'email'
-            errorMessageUser = errorDetail || 'No se puede crear un cliente con el mismo email. Ya existe un cliente con ese email.'
+            _errorMessageUser = errorDetail || 'No se puede crear un cliente con el mismo email. Ya existe un cliente con ese email.'
           } else {
             // Error de cliente duplicado genérico
-            errorMessageUser = errorDetail || 'No se puede crear un cliente con datos duplicados. Ya existe un cliente con estos datos.'
+            _errorMessageUser = errorDetail || 'No se puede crear un cliente con datos duplicados. Ya existe un cliente con estos datos.'
           }
         } else if (errorDetail) {
-          errorMessageUser = errorDetail
+          _errorMessageUser = errorDetail
         } else if (responseData?.message) {
-          errorMessageUser = responseData.message
+          _errorMessageUser = responseData.message
         }
       }
 
@@ -1134,8 +1115,8 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         }
 
         const friendly = existingId
-          ? `âš ï¸ ADVERTENCIA: Ya existe un cliente con ${mensajeDuplicado}.\n\nCliente existente ID: ${existingId}\n\nNo se puede crear un nuevo cliente con datos duplicados.\n\n¿Deseas abrir el cliente existente para editarlo?`
-          : `âš ï¸ ADVERTENCIA: Ya existe un cliente con ${mensajeDuplicado}.\n\nNo se puede crear un nuevo cliente con datos duplicados.\n\n¿Deseas buscar el cliente existente?`
+          ? `âš ï¸ ADVERTENCIA: Ya existe un cliente con ${mensajeDuplicado}.\n\nCliente existente ID: ${existingId}\n\nNo se puede crear un nuevo cliente con datos duplicados.\n\n¿Deseas abrir el cliente existente para editarlo?`
+          : `âš ï¸ ADVERTENCIA: Ya existe un cliente con ${mensajeDuplicado}.\n\nNo se puede crear un nuevo cliente con datos duplicados.\n\n¿Deseas buscar el cliente existente?`
         
         const wantsEdit = window.confirm(friendly)
         if (wantsEdit) {
@@ -1146,7 +1127,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
           }
         }
       } else {
-        alert(`âš ï¸ ${errorMessage}`)
+        alert(`âš ï¸ ${errorMessage}`)
       }
     } finally {
       // âœ… CORRECCIÓN: Siempre ejecutar setIsSubmitting(false) en finally

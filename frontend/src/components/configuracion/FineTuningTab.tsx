@@ -30,6 +30,7 @@ import { Badge } from '../../components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
 import { aiTrainingService, ConversacionAI, FineTuningJob } from '../../services/aiTrainingService'
 import { toast } from 'sonner'
+import { MINIMO_CONVERSACIONES_ENTRENAMIENTO, detectarFeedbackNegativo } from '../../constants/fineTuning'
 
 export function FineTuningTab() {
   const [conversaciones, setConversaciones] = useState<ConversacionAI[]>([])
@@ -115,7 +116,7 @@ export function FineTuningTab() {
   // Cargar tablas y campos al montar el componente
   useEffect(() => {
     cargarTablasCampos()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [])
 
   // Limpiar campo seleccionado cuando cambia la tabla
@@ -266,17 +267,15 @@ export function FineTuningTab() {
         const conversacionesCalificadas = conversaciones.filter(
           (c) => c.calificacion && c.calificacion >= 4
         ).length + 1 // +1 porque acabamos de calificar una
-        const MINIMO_REQUERIDO = 10
-
-        if (conversacionesCalificadas >= MINIMO_REQUERIDO) {
+        if (conversacionesCalificadas >= MINIMO_CONVERSACIONES_ENTRENAMIENTO) {
           toast.success(
             `âœ… Conversación calificada (${calificacion} estrellas) - Lista para entrenamiento. ` +
-            `Total listas: ${conversacionesCalificadas} - ¡Ya puedes preparar datos! (Mínimo ${MINIMO_REQUERIDO} requerido)`
+            `Total listas: ${conversacionesCalificadas} - ¡Ya puedes preparar datos! (Mínimo ${MINIMO_CONVERSACIONES_ENTRENAMIENTO} requerido)`
           )
         } else {
           toast.success(
             `âœ… Conversación calificada (${calificacion} estrellas) - Lista para entrenamiento. ` +
-            `Total listas: ${conversacionesCalificadas} (necesitas ${MINIMO_REQUERIDO - conversacionesCalificadas} más para entrenar)`
+            `Total listas: ${conversacionesCalificadas} (necesitas ${MINIMO_CONVERSACIONES_ENTRENAMIENTO - conversacionesCalificadas} más para entrenar)`
           )
         }
       } else {
@@ -306,43 +305,15 @@ export function FineTuningTab() {
     }
   }
 
-  // Función para detectar feedback negativo (similar a la del backend)
-  const detectarFeedbackNegativo = (feedback: string | null | undefined): boolean => {
-    if (!feedback) return false
-
-    const feedbackLower = feedback.toLowerCase()
-
-    // Palabras clave que indican feedback negativo (mismo que backend)
-    const palabrasNegativas = [
-      "mal", "malo", "incorrecto", "error", "equivocado", "confuso",
-      "no entendí", "no entiendo", "poco claro", "poco clara",
-      "incompleto", "incompleta", "faltante", "falta", "deficiente",
-      "mejorar", "debería", "deberia", "podría", "podria",
-      "sería mejor", "no me gusta", "no me sirve", "no ayuda",
-      "no es útil", "muy técnico", "muy técnica", "demasiado complejo",
-      "compleja", "no responde", "no contesta", "no es lo que busco",
-      "no es lo que necesito",
-    ]
-
-    // Contar palabras negativas
-    const conteoNegativo = palabrasNegativas.filter(palabra => feedbackLower.includes(palabra)).length
-
-    // Si hay 2 o más palabras negativas, considerar feedback negativo
-    return conteoNegativo >= 2
-  }
-
   const handlePrepararDatos = async () => {
     setPreparando(true)
     try {
       const conversacionesCalificadas = conversaciones.filter((c) => c.calificacion && c.calificacion >= 4)
       const conversacionesSeleccionadas = conversacionesCalificadas.map((c) => c.id)
 
-      // Mínimo requerido por OpenAI para fine-tuning: 10 conversaciones
-      const MINIMO_CONVERSACIONES = 10
-
-      if (conversacionesSeleccionadas.length < MINIMO_CONVERSACIONES) {
+      if (conversacionesSeleccionadas.length < MINIMO_CONVERSACIONES_ENTRENAMIENTO) {
         toast.error(
-          `Se necesita al menos ${MINIMO_CONVERSACIONES} conversaciones calificadas (4+ estrellas) para entrenar un modelo. OpenAI requiere mínimo 10 ejemplos. Actualmente tienes ${conversacionesSeleccionadas.length}.`
+          `Se necesita al menos ${MINIMO_CONVERSACIONES_ENTRENAMIENTO} conversaciones calificadas (4+ estrellas) para entrenar un modelo. OpenAI requiere mínimo 10 ejemplos. Actualmente tienes ${conversacionesSeleccionadas.length}.`
         )
         setPreparando(false)
         return
@@ -355,8 +326,8 @@ export function FineTuningTab() {
         )
         const conversacionesDespuesFiltrado = conversacionesCalificadas.length - conversacionesConFeedbackNegativo.length
 
-        if (conversacionesDespuesFiltrado < MINIMO_CONVERSACIONES) {
-          const mensaje = `âš ï¸ Advertencia: Después de filtrar feedback negativo, solo quedarían ${conversacionesDespuesFiltrado} conversaciones (se excluirían ${conversacionesConFeedbackNegativo.length}). Se necesitan al menos ${MINIMO_CONVERSACIONES} conversaciones.\n\n¿Deseas continuar de todas formas? El proceso fallará si quedan menos de ${MINIMO_CONVERSACIONES} conversaciones.`
+        if (conversacionesDespuesFiltrado < MINIMO_CONVERSACIONES_ENTRENAMIENTO) {
+          const mensaje = `âš ï¸ Advertencia: Después de filtrar feedback negativo, solo quedarían ${conversacionesDespuesFiltrado} conversaciones (se excluirían ${conversacionesConFeedbackNegativo.length}). Se necesitan al menos ${MINIMO_CONVERSACIONES_ENTRENAMIENTO} conversaciones.\n\n¿Deseas continuar de todas formas? El proceso fallará si quedan menos de ${MINIMO_CONVERSACIONES_ENTRENAMIENTO} conversaciones.`
 
           const continuar = window.confirm(mensaje)
           if (!continuar) {
@@ -885,7 +856,7 @@ export function FineTuningTab() {
                 </div>
                 {filtrarFeedbackNegativo && (
                   <div className="text-xs text-red-700 mt-2 font-semibold">
-                    âš ï¸ Estas conversaciones se excluirán automáticamente
+                    âš ï¸ Estas conversaciones se excluirán automáticamente
                   </div>
                 )}
               </div>
@@ -1343,7 +1314,6 @@ export function FineTuningTab() {
               {(() => {
                 const conversacionesListas = conversaciones.filter((c) => c.calificacion && c.calificacion >= 4)
                 const totalListas = conversacionesListas.length
-                const MINIMO_REQUERIDO = 10
 
                 // Calcular impacto del filtrado de feedback negativo
                 let conversacionesConFeedbackNegativo = 0
@@ -1355,15 +1325,15 @@ export function FineTuningTab() {
                   conversacionesDespuesFiltrado = totalListas - conversacionesConFeedbackNegativo
                 }
 
-                const puedePreparar = totalListas >= MINIMO_REQUERIDO
-                const puedePrepararDespuesFiltrado = conversacionesDespuesFiltrado >= MINIMO_REQUERIDO
+                const puedePreparar = totalListas >= MINIMO_CONVERSACIONES_ENTRENAMIENTO
+                const puedePrepararDespuesFiltrado = conversacionesDespuesFiltrado >= MINIMO_CONVERSACIONES_ENTRENAMIENTO
 
                 return (
                   <div className="flex items-center gap-2 flex-wrap">
                     {totalListas > 0 && (
                       <Badge variant={puedePreparar ? "default" : "secondary"} className="mr-2">
                         {totalListas} lista{totalListas !== 1 ? 's' : ''} para entrenamiento
-                        {!puedePreparar && totalListas < MINIMO_REQUERIDO && ` (${MINIMO_REQUERIDO - totalListas} más necesaria${MINIMO_REQUERIDO - totalListas !== 1 ? 's' : ''})`}
+                        {!puedePreparar && totalListas < MINIMO_CONVERSACIONES_ENTRENAMIENTO && ` (${MINIMO_CONVERSACIONES_ENTRENAMIENTO - totalListas} más necesaria${MINIMO_CONVERSACIONES_ENTRENAMIENTO - totalListas !== 1 ? 's' : ''})`}
                       </Badge>
                     )}
                     <div className="flex items-center gap-2">
@@ -1382,7 +1352,7 @@ export function FineTuningTab() {
                           className="text-xs"
                         >
                           {conversacionesConFeedbackNegativo} excluidas â†’ {conversacionesDespuesFiltrado} disponibles
-                          {!puedePrepararDespuesFiltrado && ` (necesitas ${MINIMO_REQUERIDO - conversacionesDespuesFiltrado} más)`}
+                          {!puedePrepararDespuesFiltrado && ` (necesitas ${MINIMO_CONVERSACIONES_ENTRENAMIENTO - conversacionesDespuesFiltrado} más)`}
                         </Badge>
                       )}
                     </div>
@@ -1885,7 +1855,7 @@ export function FineTuningTab() {
                     <li><strong>gpt-4o:</strong> 2-4 horas (depende del tamaño del archivo)</li>
                   </ul>
                   <p className="mt-1 text-blue-600">
-                    <strong>âš ï¸ Nota:</strong> Para fine-tuning, se recomienda usar <code className="bg-blue-100 px-1 rounded">gpt-4o-2024-08-06</code> (versión específica). gpt-3.5-turbo y gpt-4o-mini no soportan fine-tuning.
+                    <strong>âš ï¸ Nota:</strong> Para fine-tuning, se recomienda usar <code className="bg-blue-100 px-1 rounded">gpt-4o-2024-08-06</code> (versión específica). gpt-3.5-turbo y gpt-4o-mini no soportan fine-tuning.
                   </p>
                   <p className="mt-2 text-blue-700">
                     El sistema actualiza automáticamente el estado cada 10 segundos. Los jobs pueden tardar más tiempo si OpenAI tiene alta demanda.
@@ -1934,7 +1904,7 @@ export function FineTuningTab() {
                       <div className="flex items-start gap-2">
                         <AlertCircle className="h-4 w-4 text-yellow-700 mt-0.5 flex-shrink-0" />
                         <div className="text-yellow-800">
-                          <strong>âš ï¸ Modelo obsoleto:</strong> Este job usa <code className="bg-yellow-200 px-1 rounded">{job.modelo_base}</code>, que ya no está disponible para fine-tuning.
+                          <strong>âš ï¸ Modelo obsoleto:</strong> Este job usa <code className="bg-yellow-200 px-1 rounded">{job.modelo_base}</code>, que ya no está disponible para fine-tuning.
                           Los nuevos jobs usarán <code className="bg-yellow-200 px-1 rounded">gpt-4o</code> automáticamente.
                         </div>
                       </div>

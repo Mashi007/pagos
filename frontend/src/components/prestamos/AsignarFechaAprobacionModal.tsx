@@ -96,7 +96,7 @@ export function AsignarFechaAprobacionModal({ prestamo, onClose, onSuccess }: As
                 <h5 className="font-semibold text-green-900 mb-4">ðŸ“… Fecha de Aprobación y Desembolso:</h5>
                 <div className="bg-blue-50 p-3 rounded border border-blue-200 mb-4">
                   <p className="text-sm font-medium text-blue-900 mb-2">
-                    âš ï¸ Requisitos para desembolsar:
+                    âš ï¸ Requisitos para desembolsar:
                   </p>
                   <ul className="text-xs text-blue-800 list-disc list-inside space-y-1">
                     <li>Calificación mínima de evaluación de riesgo: 70 puntos</li>

@@ -4,13 +4,10 @@ import {
   Search,
   Filter,
   Plus,
-  Eye,
   Edit,
   Trash2,
-  MoreHorizontal,
   Phone,
   Mail,
-  User,
   Calendar,
   MessageSquare,
   RefreshCw
@@ -29,8 +26,8 @@ import { ClientesKPIs } from './ClientesKPIs'
 import { useDebounce } from '../../hooks/useDebounce'
 import { useClientesStats } from '../../hooks/useClientesStats'
 import { useSimpleAuth } from '../../store/simpleAuthStore'
-import { formatCurrency, formatDate } from '../../utils'
-import { ClienteFilters } from '../../types'
+import { formatDate } from '../../utils'
+import { ClienteFilters, PaginatedResponse, Cliente } from '../../types'
 import { useClientes } from '../../hooks/useClientes'
 import { useQueryClient } from '@tanstack/react-query'
 import { clienteService } from '../../services/clienteService'
@@ -58,12 +55,6 @@ export function ClientesList() {
   const debouncedSearch = useDebounce(searchTerm, 300)
 
   // Funciones para manejar acciones
-  const handleVerCliente = (cliente: { id: number; cedula?: string; nombre?: string; [key: string]: unknown }) => {
-    setClienteSeleccionado(cliente)
-    // Aquí podrías abrir un modal o navegar a una página de detalles
-    console.log('Ver cliente:', cliente)
-  }
-
   const handleEditarCliente = async (cliente: { id: number; [key: string]: unknown }) => {
     try {
       // âœ… Obtener cliente completo desde la API para asegurar todos los campos
@@ -123,8 +114,7 @@ export function ClientesList() {
     queryClient.invalidateQueries({ queryKey: ['clientes'] })
     queryClient.invalidateQueries({ queryKey: ['clientes-stats'] }) // âœ… Actualizar estadísticas
   }
-  const { user } = useSimpleAuth()
-  const canViewAllClients = true // Todos pueden ver todos los clientes
+  useSimpleAuth()
   const queryClient = useQueryClient()
 
   // Queries
@@ -141,21 +131,23 @@ export function ClientesList() {
     perPage
   )
 
+  const clientesResponse = clientesData as PaginatedResponse<Cliente> | undefined
+
   // âœ… DEBUG: Log para diagnosticar problemas
   console.log('ðŸ” [ClientesList] Estado de la query:', {
     isLoading,
     isError,
     error: error ? {
       message: error instanceof Error ? error.message : String(error),
-      ...(error as any)?.response?.data
+      ...(error as Record<string, unknown>)?.response?.data
     } : null,
-    clientesData,
-    hasData: !!clientesData,
-    dataLength: clientesData?.data?.length || 0,
-    total: clientesData?.total,
-    page: clientesData?.page,
-    per_page: clientesData?.per_page,
-    total_pages: clientesData?.total_pages
+    clientesData: clientesResponse,
+    hasData: !!clientesResponse,
+    dataLength: clientesResponse?.data?.length || 0,
+    total: clientesResponse?.total,
+    page: clientesResponse?.page,
+    per_page: clientesResponse?.per_page,
+    total_pages: clientesResponse?.total_pages
   })
 
   // Estadísticas de clientes
@@ -188,13 +180,13 @@ export function ClientesList() {
   ]
 
   // âœ… CORRECCIÓN: Usar datos reales si existen, sino usar mock solo si no hay respuesta del servidor
-  // Si clientesData existe (incluso si data es un array vacío), usar los datos reales
-  const clientes = clientesData?.data !== undefined 
-    ? (Array.isArray(clientesData.data) ? clientesData.data : [])
-    : mockClientes // Solo usar mock si no hay respuesta del servidor (clientesData es undefined)
-  
-  const totalPages = clientesData?.total_pages || 1
-  const total = clientesData?.total || 0
+  // Si clientesResponse existe (incluso si data es un array vacío), usar los datos reales
+  const clientes = clientesResponse?.data !== undefined 
+    ? (Array.isArray(clientesResponse.data) ? clientesResponse.data : [])
+    : mockClientes // Solo usar mock si no hay respuesta del servidor (clientesResponse es undefined)
+
+  const totalPages = clientesResponse?.total_pages || 1
+  const total = clientesResponse?.total || 0
 
   // âœ… DEBUG: Log de datos finales
   console.log('âœ… [ClientesList] Datos finales para renderizar:', {
@@ -202,10 +194,10 @@ export function ClientesList() {
     usingMock: clientes === mockClientes,
     totalPages,
     total,
-    hasClientesData: !!clientesData,
-    clientesDataType: typeof clientesData?.data,
-    isArray: Array.isArray(clientesData?.data),
-    clientesDataKeys: clientesData ? Object.keys(clientesData) : []
+    hasClientesData: !!clientesResponse,
+    clientesDataType: typeof clientesResponse?.data,
+    isArray: Array.isArray(clientesResponse?.data),
+    clientesDataKeys: clientesResponse ? Object.keys(clientesResponse) : []
   })
 
   const handleSearch = (value: string) => {
@@ -524,10 +516,10 @@ export function ClientesList() {
                           <LoadingSpinner size="sm" />
                           <span className="ml-2">Cargando clientes...</span>
                         </div>
-                      ) : clientesData?.total === 0 ? (
+                      ) : clientesResponse?.total === 0 ? (
                         'No hay clientes que coincidan con los filtros seleccionados'
-                      ) : clientesData?.total && clientesData.total > 0 ? (
-                        `Se encontraron ${clientesData.total} clientes pero no se pudieron cargar. Verifica la consola para más detalles.`
+                      ) : clientesResponse?.total && clientesResponse.total > 0 ? (
+                        `Se encontraron ${clientesResponse.total} clientes pero no se pudieron cargar. Verifica la consola para más detalles.`
                       ) : (
                         'No se pudieron cargar los clientes. Verifica la consola para más detalles.'
                       )}
@@ -649,11 +641,11 @@ export function ClientesList() {
       </Card>
 
       {/* Paginación */}
-      {(totalPages > 1 || clientesData?.total) && (
+      {(totalPages > 1 || clientesResponse?.total) && (
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <div className="text-sm text-gray-700">
-              Mostrando {((currentPage - 1) * perPage) + 1} - {Math.min(currentPage * perPage, clientesData?.total || 0)} de {clientesData?.total || 0} clientes
+              Mostrando {((currentPage - 1) * perPage) + 1} - {Math.min(currentPage * perPage, clientesResponse?.total || 0)} de {clientesResponse?.total || 0} clientes
             </div>
             <div className="flex items-center gap-2">
               <label className="text-sm text-gray-700 whitespace-nowrap">
@@ -723,7 +715,7 @@ export function ClientesList() {
                 const clienteCompleto = await clienteService.getCliente(String(clienteId))
                 setClienteSeleccionado(clienteCompleto)
                 setShowEditarCliente(true)
-              } catch (e) {
+              } catch {
                 // Fallback: abrir con ID solamente
                 setClienteSeleccionado({ id: clienteId })
                 setShowEditarCliente(true)
@@ -771,7 +763,7 @@ export function ClientesList() {
                     Eliminar Cliente
                   </h3>
                   <p className="text-sm text-red-600 font-medium">
-                    âš ï¸ ELIMINACIÓN PERMANENTE - No se puede deshacer
+                    âš ï¸ ELIMINACIÓN PERMANENTE - No se puede deshacer
                   </p>
                 </div>
               </div>
@@ -784,7 +776,7 @@ export function ClientesList() {
                   </span>?
                 </p>
                 <p className="text-sm text-red-600 mt-2 font-medium">
-                  âš ï¸ El cliente será eliminado completamente de la base de datos.
+                  âš ï¸ El cliente será eliminado completamente de la base de datos.
                 </p>
                 <p className="text-sm text-gray-500 mt-1">
                   Cédula: {clienteSeleccionado.cedula}

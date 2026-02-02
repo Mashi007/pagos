@@ -676,7 +676,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
   const categoriasOrden = [
     { key: 'Notificación Previa', color: 'blue', borderColor: 'border-blue-500', icon: 'ðŸ“…' },
     { key: 'Día de Pago', color: 'green', borderColor: 'border-green-500', icon: 'ðŸ’°' },
-    { key: 'Notificación Retrasada', color: 'orange', borderColor: 'border-orange-500', icon: 'âš ï¸' },
+    { key: 'Notificación Retrasada', color: 'orange', borderColor: 'border-orange-500', icon: 'âš ï¸' },
     { key: 'Prejudicial', color: 'red', borderColor: 'border-red-500', icon: 'ðŸš¨' },
   ]
 
@@ -823,7 +823,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
 
                   {/* Retraso */}
                   <div>
-                    <h4 className="text-sm font-semibold mb-2 text-orange-700">âš ï¸ Días de Retraso</h4>
+                    <h4 className="text-sm font-semibold mb-2 text-orange-700">âš ï¸ Días de Retraso</h4>
                     <div className="grid grid-cols-3 gap-2">
                       {tiposPorCategoria.retraso.map(t => (
                         <label key={t.valor} className="flex items-center gap-2 p-2 border rounded hover:bg-white cursor-pointer">

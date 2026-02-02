@@ -10,13 +10,10 @@ import {
   RefreshCw,
   Search,
   AlertCircle,
-  CheckCircle,
-  XCircle,
   Plus,
   FileText,
   Clock,
   X,
-  Upload,
   Zap,
   Settings,
 } from 'lucide-react'
@@ -26,17 +23,14 @@ import { Input } from '../../components/ui/input'
 import { Textarea } from '../../components/ui/textarea'
 import { Badge } from '../../components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
-import { LoadingSpinner } from '../../components/ui/loading-spinner'
 import {
   comunicacionesService,
   ComunicacionUnificada,
   CrearClienteAutomaticoRequest,
 } from '../../services/comunicacionesService'
 import { CrearClienteForm } from '../../components/clientes/CrearClienteForm'
-import { clienteService } from '../../services/clienteService'
 import { ticketsService, TicketCreate, Ticket, TicketUpdate } from '../../services/ticketsService'
 import { userService } from '../../services/userService'
-import { formatDate } from '../../utils'
 import { toast } from 'sonner'
 import { useSimpleAuth } from '../../store/simpleAuthStore'
 import { mockComunicaciones, mockNombresClientes } from '../../data/mockComunicaciones'
@@ -64,8 +58,8 @@ interface ConversacionAgrupada {
 
 export function Comunicaciones({
   clienteId,
-  mostrarFiltros = true,
-  mostrarEstadisticas = false,
+  mostrarFiltros: _mostrarFiltros = true,
+  mostrarEstadisticas: _mostrarEstadisticas = false,
 }: ComunicacionesProps) {
   const { user } = useSimpleAuth()
   const queryClient = useQueryClient()
@@ -89,7 +83,7 @@ export function Comunicaciones({
   
   // Estado para creación de cliente y ticket
   const [mostrarCrearCliente, setMostrarCrearCliente] = useState(false)
-  const [creandoClienteAuto, setCreandoClienteAuto] = useState(false)
+  const [, setCreandoClienteAuto] = useState(false)
   const [clienteRecienCreado, setClienteRecienCreado] = useState<{ contacto: string; tipo: string } | null>(null)
   const [ticketForm, setTicketForm] = useState({
     titulo: '',
@@ -113,7 +107,6 @@ export function Comunicaciones({
     data: comunicacionesData,
     isLoading,
     isError,
-    error,
     refetch,
   } = useQuery({
     queryKey: ['comunicaciones', clienteId],
@@ -158,7 +151,7 @@ export function Comunicaciones({
       if (!grupos.has(id)) {
         // Determinar nombre del cliente o contacto
         let nombre = comm.from_contact
-        let esNuevo = !comm.cliente_id
+        const esNuevo = !comm.cliente_id
         
         // Si tiene cliente_id, intentar obtener nombre del cliente
         if (comm.cliente_id) {
@@ -861,7 +854,7 @@ export function Comunicaciones({
               </h3>
               {conversacionActual.esNuevo && (
                 <p className="text-xs text-orange-600 mt-2 font-medium bg-orange-50 px-2 py-1 rounded">
-                  âš ï¸ Crea un cliente para gestionar tickets
+                  âš ï¸ Crea un cliente para gestionar tickets
                 </p>
               )}
             </div>

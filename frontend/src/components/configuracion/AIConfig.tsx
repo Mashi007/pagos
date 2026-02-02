@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Brain, Save, Eye, EyeOff, Upload, FileText, Trash2, BarChart3, CheckCircle, AlertCircle, Loader2, TestTube, ChevronRight, MessageSquare, User, Edit, Zap, RotateCcw, Copy, Settings, DollarSign, Database, X } from 'lucide-react'
+import { Brain, Save, FileText, Trash2, CheckCircle, AlertCircle, Loader2, ChevronRight, MessageSquare, User, Edit, Zap, RotateCcw, Copy, Settings, Database, X } from 'lucide-react'
 import { Card, CardContent } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -9,7 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/ta
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
 import { toast } from 'sonner'
 import { apiClient } from '../../services/api'
-// TrainingDashboard eliminado - redundante con EntrenamientoMejorado
+import { type AIConfigState, type DocumentoAI, type MensajeChatAI } from '../../types/aiConfig'
+import { OPENROUTER_MODELS } from '../../constants/aiModels'
 import { FineTuningTab } from './FineTuningTab'
 import { RAGTab } from './RAGTab'
 import { EntrenamientoMejorado } from './EntrenamientoMejorado'
@@ -17,51 +18,18 @@ import { DiccionarioSemanticoTab } from './DiccionarioSemanticoTab'
 import { DefinicionesCamposTab } from './DefinicionesCamposTab'
 import { CalificacionesChatTab } from './CalificacionesChatTab'
 
-interface AIConfig {
-  configured?: boolean
-  provider?: string
-  openai_api_key?: string
-  modelo: string
-  temperatura: string
-  max_tokens: string
-  activo: string
-}
-
-interface DocumentoAI {
-  id: number
-  titulo: string
-  descripcion: string | null
-  nombre_archivo: string
-  tipo_archivo: string
-  tamaño_bytes: number | null
-  contenido_procesado: boolean
-  activo: boolean
-  creado_en: string
-  actualizado_en: string
-}
-
-/** Modelos OpenRouter recomendados (buen balance costo/calidad). Ref: https://openrouter.ai/docs/guides/overview/models */
-const OPENROUTER_MODELS = [
-  { id: 'openai/gpt-4o-mini', label: 'GPT-4o Mini (OpenAI) — Recomendado, económico' },
-  { id: 'openai/gpt-4o', label: 'GPT-4o (OpenAI) — Más capaz' },
-  { id: 'google/gemini-2.0-flash-001', label: 'Gemini 2.0 Flash (Google) — Rápido y barato' },
-  { id: 'anthropic/claude-3-5-haiku', label: 'Claude 3.5 Haiku (Anthropic) — Buen balance' },
-  { id: 'anthropic/claude-3-5-sonnet', label: 'Claude 3.5 Sonnet (Anthropic) — Más preciso' },
-  { id: 'meta-llama/llama-3.1-70b-instruct', label: 'Llama 3.1 70B (Meta) — Open source' },
-]
-
 export function AIConfig() {
-  const [config, setConfig] = useState<AIConfig>({
+  const [config, setConfig] = useState<AIConfigState>({
     modelo: 'openai/gpt-4o-mini',
     temperatura: '0.7',
     max_tokens: '1000',
     activo: 'false',
   })
 
-  const [mostrarToken] = useState(false)
+  const [_mostrarToken] = useState(false)
   const [guardando, setGuardando] = useState(false)
   const [documentos, setDocumentos] = useState<DocumentoAI[]>([])
-  const [cargandoDocumentos, setCargandoDocumentos] = useState(false)
+  const [_cargandoDocumentos, setCargandoDocumentos] = useState(false)
 
   // Formulario de nuevo documento
   const [nuevoDocumento, setNuevoDocumento] = useState({
@@ -69,34 +37,23 @@ export function AIConfig() {
     descripcion: '',
     archivo: null as File | null,
   })
-  const [subiendoDocumento, setSubiendoDocumento] = useState(false)
+  const [_subiendoDocumento, setSubiendoDocumento] = useState(false)
 
   // Estado para editar documento
-  const [editandoDocumento, setEditandoDocumento] = useState<number | null>(null)
+  const [_editandoDocumento, setEditandoDocumento] = useState<number | null>(null)
   const [documentoEditado, setDocumentoEditado] = useState({
     titulo: '',
     descripcion: '',
   })
-  const [actualizandoDocumento, setActualizandoDocumento] = useState(false)
-  const [procesandoDocumento, setProcesandoDocumento] = useState<number | null>(null)
+  const [_actualizandoDocumento, setActualizandoDocumento] = useState(false)
+  const [_procesandoDocumento, setProcesandoDocumento] = useState<number | null>(null)
 
   // Estado para pruebas (chat)
   const [probando, setProbando] = useState(false)
   const [preguntaPrueba, setPreguntaPrueba] = useState('')
   const [usarDocumentos, setUsarDocumentos] = useState(true)
-  const [resultadoPrueba, setResultadoPrueba] = useState<any>(null)
-  const [mensajesChat, setMensajesChat] = useState<Array<{
-    id: string
-    tipo: 'user' | 'ai'
-    texto: string
-    timestamp: Date
-    metadata?: {
-      tokens?: number
-      tiempo?: number
-      modelo?: string
-      documentos?: number
-    }
-  }>>([])
+  const [_resultadoPrueba, setResultadoPrueba] = useState<any>(null)
+  const [mensajesChat, setMensajesChat] = useState<MensajeChatAI[]>([])
   const chatEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [activeTab, setActiveTab] = useState('configuracion')
@@ -129,7 +86,7 @@ export function AIConfig() {
           })
           toast.success('Configuración verificada y guardada')
           await cargarConfiguracion()
-        } catch (saveError: any) {
+        } catch (_saveError: any) {
           toast.error('Error al guardar. Guarda manualmente.')
         }
       }
@@ -144,9 +101,9 @@ export function AIConfig() {
 
   const cargarConfiguracion = async () => {
     try {
-      const data = await apiClient.get<AIConfig>('/api/v1/configuracion/ai/configuracion')
+      const data = await apiClient.get<AIConfigState>('/api/v1/configuracion/ai/configuracion')
       // Asegurar que todos los campos tengan valores por defecto si vienen como null/undefined
-      const configCargada: AIConfig = {
+      const configCargada: AIConfigState = {
         configured: !!data.configured,
         provider: data.provider || 'openrouter',
         modelo: data.modelo || 'openai/gpt-4o-mini',
@@ -182,7 +139,7 @@ export function AIConfig() {
   }
 
 
-  const handleChange = (campo: keyof AIConfig, valor: string) => {
+  const handleChange = (campo: keyof AIConfigState, valor: string) => {
     setConfig(prev => ({ ...prev, [campo]: valor }))
   }
 
@@ -212,7 +169,7 @@ export function AIConfig() {
     await verificarConfiguracion(true)
   }
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const _handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
       // Validar tipo de archivo
@@ -232,7 +189,7 @@ export function AIConfig() {
     }
   }
 
-  const handleSubirDocumento = async () => {
+  const _handleSubirDocumento = async () => {
     if (!nuevoDocumento.titulo.trim()) {
       toast.error('El título es requerido')
       return
@@ -315,7 +272,7 @@ export function AIConfig() {
     }
   }
 
-  const handleEliminarDocumento = async (id: number) => {
+  const _handleEliminarDocumento = async (id: number) => {
     if (!confirm('¿Está seguro de eliminar este documento?')) {
       return
     }
@@ -331,7 +288,7 @@ export function AIConfig() {
     }
   }
 
-  const handleIniciarEdicion = (doc: DocumentoAI) => {
+  const _handleIniciarEdicion = (doc: DocumentoAI) => {
     setEditandoDocumento(doc.id)
     setDocumentoEditado({
       titulo: doc.titulo,
@@ -339,12 +296,12 @@ export function AIConfig() {
     })
   }
 
-  const handleCancelarEdicion = () => {
+  const _handleCancelarEdicion = () => {
     setEditandoDocumento(null)
     setDocumentoEditado({ titulo: '', descripcion: '' })
   }
 
-  const handleActualizarDocumento = async (id: number) => {
+  const _handleActualizarDocumento = async (id: number) => {
     if (!documentoEditado.titulo.trim()) {
       toast.error('El título es requerido')
       return
@@ -369,14 +326,14 @@ export function AIConfig() {
     }
   }
 
-  const handleActivarDesactivarDocumento = async (id: number, activo: boolean) => {
+  const _handleActivarDesactivarDocumento = async (id: number, activo: boolean) => {
     // Encontrar el documento para validar
     const documento = documentos.find(doc => doc.id === id)
 
     // Si se está intentando activar, verificar que esté procesado
     if (activo && documento && !documento.contenido_procesado) {
       const confirmar = confirm(
-        'âš ï¸ Este documento no está procesado.\n\n' +
+        'âš ï¸ Este documento no está procesado.\n\n' +
         'Para que el AI pueda usar este documento como contexto, debe estar:\n' +
         '1. âœ… Procesado (extraer texto del archivo)\n' +
         '2. âœ… Activo\n' +
@@ -400,7 +357,7 @@ export function AIConfig() {
         return
       } else {
         // Si no quiere procesar, solo activar (pero mostrar advertencia)
-        toast.warning('âš ï¸ Documento activado pero no procesado. El AI no podrá usarlo como contexto hasta que sea procesado.')
+        toast.warning('âš ï¸ Documento activado pero no procesado. El AI no podrá usarlo como contexto hasta que sea procesado.')
       }
     }
 
@@ -415,7 +372,7 @@ export function AIConfig() {
     }
   }
 
-  const formatearTamaño = (bytes: number | null) => {
+  const _formatearTamaño = (bytes: number | null) => {
     if (!bytes) return '0 B'
     if (bytes < 1024) return `${bytes} B`
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`
@@ -820,13 +777,13 @@ INSTRUCCIONES ESPECÍFICAS PARA BÃšSQUEDAS Y CONSULTAS:
 - Si no encuentras: "âŒ No se encontró ningún cliente con la cédula [cedula] en la base de datos."
 
 RESTRICCIONES IMPORTANTES:
-- âš ï¸ PROHIBIDO INVENTAR DATOS: Solo usa la información proporcionada en el resumen. NO inventes, NO uses tu conocimiento de entrenamiento, NO asumas datos.
-- âš ï¸ NO hagas suposiciones sobre datos faltantes
-- âš ï¸ NO uses promedios históricos como datos reales sin aclararlo
-- âš ï¸ FECHA ACTUAL: La fecha y hora actual están incluidas en el resumen. DEBES usar EXACTAMENTE esa información.
-- âš ï¸ DATOS DE BD: Solo usa los números y estadísticas del resumen. Si no está en el resumen, di que no tienes esa información específica.
-- âš ï¸ NO INVENTES: Si no tienes la información exacta, di "No tengo esa información específica en el resumen proporcionado" en lugar de inventar.
-- âš ï¸ ANÁLISIS PROFESIONAL: Como especialista, proporciona análisis y contexto cuando sea relevante, pero siempre basado en los datos del resumen.
+- âš ï¸ PROHIBIDO INVENTAR DATOS: Solo usa la información proporcionada en el resumen. NO inventes, NO uses tu conocimiento de entrenamiento, NO asumas datos.
+- âš ï¸ NO hagas suposiciones sobre datos faltantes
+- âš ï¸ NO uses promedios históricos como datos reales sin aclararlo
+- âš ï¸ FECHA ACTUAL: La fecha y hora actual están incluidas en el resumen. DEBES usar EXACTAMENTE esa información.
+- âš ï¸ DATOS DE BD: Solo usa los números y estadísticas del resumen. Si no está en el resumen, di que no tienes esa información específica.
+- âš ï¸ NO INVENTES: Si no tienes la información exacta, di "No tengo esa información específica en el resumen proporcionado" en lugar de inventar.
+- âš ï¸ ANÁLISIS PROFESIONAL: Como especialista, proporciona análisis y contexto cuando sea relevante, pero siempre basado en los datos del resumen.
 - Si faltan datos para un análisis completo, indícalo claramente
 - Para tendencias, necesitas al menos 2 períodos de comparación
 - Si hay valores atípicos, señálalos
@@ -1203,7 +1160,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                 <p className="text-xs text-gray-600">
                   {config.activo === 'true'
                     ? 'âœ… El sistema está usando AI para generar respuestas automáticas'
-                    : 'âš ï¸ El sistema NO usará AI. Activa el servicio para habilitar respuestas inteligentes.'}
+                    : 'âš ï¸ El sistema NO usará AI. Activa el servicio para habilitar respuestas inteligentes.'}
                 </p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
@@ -1266,7 +1223,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
             </div>
           )}
 
-          {/* âš ï¸ Estado: API Key no válida o no configurada */}
+          {/* âš ï¸ Estado: API Key no válida o no configurada */}
           {config.configured && !configuracionCorrecta && !verificandoConfig && (
             <div className="bg-white border-2 border-amber-400 rounded-xl p-5 shadow-sm">
               <div className="flex items-center gap-3">

@@ -214,8 +214,8 @@ export function WhatsAppConfig() {
         toast.success(`âœ… Test completo: ${resumen.exitosos}/${resumen.total} tests exitosos`)
         console.log('âœ… [RESULTADO FINAL] Todos los tests pasaron - WhatsApp está configurado correctamente')
       } else {
-        toast.warning(`âš ï¸ Test completo: ${resumen.exitosos}/${resumen.total} exitosos, ${resumen.fallidos} fallidos`)
-        console.warn('âš ï¸ [RESULTADO FINAL] Algunos tests fallaron - Revisa la configuración')
+        toast.warning(`âš ï¸ Test completo: ${resumen.exitosos}/${resumen.total} exitosos, ${resumen.fallidos} fallidos`)
+        console.warn('âš ï¸ [RESULTADO FINAL] Algunos tests fallaron - Revisa la configuración')
       }
     } catch (error: any) {
       console.error('âŒ [ERROR] Error ejecutando test completo:', error)
@@ -435,7 +435,7 @@ export function WhatsAppConfig() {
                         <p>âœ… Exitosos: {resultadoTestCompleto.resumen.exitosos}</p>
                         <p>âŒ Fallidos: {resultadoTestCompleto.resumen.fallidos}</p>
                         {resultadoTestCompleto.resumen.advertencias > 0 && (
-                          <p>âš ï¸ Advertencias: {resultadoTestCompleto.resumen.advertencias}</p>
+                          <p>âš ï¸ Advertencias: {resultadoTestCompleto.resumen.advertencias}</p>
                         )}
                       </div>
                     )}
@@ -508,7 +508,7 @@ export function WhatsAppConfig() {
               {modoPruebas === 'true' && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
                   <p className="text-sm text-yellow-800 font-semibold mb-1">
-                    âš ï¸ Modo Pruebas activo
+                    âš ï¸ Modo Pruebas activo
                   </p>
                   <p className="text-xs text-yellow-700">
                     El mensaje se redirigirá a la dirección de pruebas configurada ({telefonoPruebas || 'no configurada'}).

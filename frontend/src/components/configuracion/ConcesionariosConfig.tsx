@@ -3,7 +3,6 @@ import { useState, useEffect } from 'react'
 import {
   Building,
   Plus,
-  Search,
   Edit,
   Trash2,
   UserCheck,
@@ -16,7 +15,7 @@ import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { Badge } from '../../components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
-import { Concesionario, ConcesionarioUpdate, ConcesionarioCreate } from '../../services/concesionarioService'
+import { Concesionario, ConcesionarioCreate } from '../../services/concesionarioService'
 import { useConcesionarios, useDeleteConcesionario, useUpdateConcesionario, useCreateConcesionario } from '../../hooks/useConcesionarios'
 import toast from 'react-hot-toast'
 
@@ -51,7 +50,7 @@ export function ConcesionariosConfig() {
     try {
       // Confirmar eliminación permanente
       const confirmar = window.confirm(
-        'âš ï¸ ¿Estás seguro de que quieres ELIMINAR PERMANENTEMENTE este concesionario?\n\n' +
+        'âš ï¸ ¿Estás seguro de que quieres ELIMINAR PERMANENTEMENTE este concesionario?\n\n' +
         'Esta acción NO se puede deshacer y el concesionario será borrado completamente de la base de datos.'
       )
 

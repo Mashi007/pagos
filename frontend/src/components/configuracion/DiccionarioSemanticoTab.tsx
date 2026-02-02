@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { FileText, Plus, Edit, Trash2, Search, Filter, CheckCircle, XCircle, Loader2, Info, Zap, ChevronRight, X } from 'lucide-react'
+import { FileText, Plus, Edit, Trash2, Search, Filter, CheckCircle, XCircle, Loader2, Info, Zap, ChevronRight } from 'lucide-react'
 import { Card, CardContent } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -36,7 +36,7 @@ export function DiccionarioSemanticoTab() {
   const [guardando, setGuardando] = useState(false)
   
   // Estado para procesamiento con ChatGPT
-  const [procesandoPalabra, setProcesandoPalabra] = useState<string | null>(null)
+  const [, setProcesandoPalabra] = useState<string | null>(null)
   const [mostrarModalProcesar, setMostrarModalProcesar] = useState(false)
   const [palabraProcesando, setPalabraProcesando] = useState<DiccionarioSemantico | null>(null)
   const [preguntaChatGPT, setPreguntaChatGPT] = useState<string>('')

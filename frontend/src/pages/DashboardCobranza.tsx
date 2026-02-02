@@ -263,7 +263,7 @@ export function DashboardCobranza() {
               bgColor="bg-indigo-100"
               borderColor="border-indigo-500"
               format="number"
-              // âš ï¸ TODO: Conectar con endpoint de pagos conciliados del mes actual
+              // âš ï¸ TODO: Conectar con endpoint de pagos conciliados del mes actual
               // Debe consultar: COUNT(*) FROM pagos WHERE conciliado = TRUE AND fecha_pago >= primer_dia_mes
             />
             <KpiCardLarge
@@ -275,7 +275,7 @@ export function DashboardCobranza() {
               bgColor="bg-amber-100"
               borderColor="border-amber-500"
               format="text"
-              // âš ï¸ TODO: Calcular desde base de datos
+              // âš ï¸ TODO: Calcular desde base de datos
               // Debe calcular: AVG(DATEDIFF(fecha_pago, fecha_vencimiento)) de cuotas pagadas
             />
           </div>

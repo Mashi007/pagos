@@ -104,7 +104,7 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId }: R
         const numeroFloat = parseFloat(numeroDocumentoNormalizado)
         numeroDocumentoNormalizado = Math.floor(numeroFloat).toString()
         // Mostrar advertencia al usuario
-        console.warn(`âš ï¸ Número de documento normalizado de formato científico: ${formData.numero_documento} -> ${numeroDocumentoNormalizado}`)
+        console.warn(`âš ï¸ Número de documento normalizado de formato científico: ${formData.numero_documento} -> ${numeroDocumentoNormalizado}`)
       } catch (e) {
         console.error('Error normalizando número de documento:', e)
       }
@@ -289,7 +289,7 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId }: R
                         <span className="font-medium">âœ… Cédulas coinciden</span>
                       ) : (
                         <div>
-                          <span className="font-medium">âš ï¸ Cédulas no coinciden</span>
+                          <span className="font-medium">âš ï¸ Cédulas no coinciden</span>
                           <p className="mt-1">
                             Cédula del pago: <strong>{formData.cedula_cliente}</strong><br />
                             Cédula del préstamo: <strong>{prestamoSeleccionado.cedula}</strong><br />

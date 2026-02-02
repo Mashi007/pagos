@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -12,7 +12,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../..
 import { AlertWithIcon } from '../../components/ui/alert'
 import { Logo } from '../../components/ui/Logo'
 import { useSimpleAuth } from '../../store/simpleAuthStore'
-import { LoginForm as LoginFormType } from '../../types'
 import { isAxiosError } from '../../types/errors'
 
 // Constantes de configuración
@@ -20,14 +19,6 @@ const MIN_PASSWORD_LENGTH = 6
 const ANIMATION_DURATION = 0.5
 const SPRING_DELAY = 0.2
 const SPRING_STIFFNESS = 200
-const LOGO_SIZE_LARGE = 24
-const LOGO_SIZE_SMALL = 16
-const TEXT_SIZE_LARGE = 3
-const TEXT_SIZE_MEDIUM = 1
-const SPACING_SMALL = 4
-const SPACING_MEDIUM = 6
-const BUTTON_HEIGHT = 12
-const ICON_SIZE = 4
 
 // Schema de validación
 const loginSchema = z.object({

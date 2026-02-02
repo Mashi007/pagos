@@ -28,7 +28,7 @@ const mapeoTipos = {
 const categoriasOrden = [
   { key: 'Notificación Previa', color: 'blue', icon: 'ðŸ“…' },
   { key: 'Día de Pago', color: 'green', icon: 'ðŸ’°' },
-  { key: 'Notificación Retrasada', color: 'orange', icon: 'âš ï¸' },
+  { key: 'Notificación Retrasada', color: 'orange', icon: 'âš ï¸' },
   { key: 'Prejudicial', color: 'red', icon: 'ðŸš¨' },
 ]
 

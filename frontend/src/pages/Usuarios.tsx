@@ -98,7 +98,7 @@ export function Usuarios() {
     try {
       // Confirmar eliminación permanente
       const confirmar = window.confirm(
-        'âš ï¸ ¿Estás seguro de que quieres ELIMINAR PERMANENTEMENTE este usuario?\n\n' +
+        'âš ï¸ ¿Estás seguro de que quieres ELIMINAR PERMANENTEMENTE este usuario?\n\n' +
         'Esta acción NO se puede deshacer y el usuario será borrado completamente de la base de datos.'
       )
 

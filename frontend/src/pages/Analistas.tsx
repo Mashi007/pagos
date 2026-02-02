@@ -52,7 +52,7 @@ export function Analistas() {
     try {
       // Confirmar eliminación permanente
       const confirmar = window.confirm(
-        'âš ï¸ ¿Estás seguro de que quieres ELIMINAR PERMANENTEMENTE este analista?\n\n' +
+        'âš ï¸ ¿Estás seguro de que quieres ELIMINAR PERMANENTEMENTE este analista?\n\n' +
         'Esta acción NO se puede deshacer y el analista será borrado completamente de la base de datos.'
       )
 
