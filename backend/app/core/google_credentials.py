@@ -63,6 +63,15 @@ def _credentials_oauth(scopes: List[str]) -> Optional[Any]:
         return None
 
 
+def _is_service_account_info(creds_dict: dict) -> bool:
+    """Comprueba si el dict tiene el formato de cuenta de servicio (no OAuth client)."""
+    return bool(
+        isinstance(creds_dict, dict)
+        and creds_dict.get("client_email")
+        and (creds_dict.get("token_uri") or creds_dict.get("private_key"))
+    )
+
+
 def _credentials_service_account(scopes: List[str]) -> Optional[Any]:
     """Credenciales desde JSON de cuenta de servicio."""
     from app.core.informe_pagos_config_holder import get_google_credentials_json
@@ -73,6 +82,12 @@ def _credentials_service_account(scopes: List[str]) -> Optional[Any]:
         return None
     try:
         creds_dict = json.loads(creds_json)
+        if not _is_service_account_info(creds_dict):
+            logger.warning(
+                "El JSON de 'Credenciales Google' no es de cuenta de servicio (falta client_email/token_uri). "
+                "Si usas OAuth, deja este campo vacío y usa 'Conectar con Google (OAuth)'."
+            )
+            return None
         return service_account.Credentials.from_service_account_info(creds_dict, scopes=scopes)
     except Exception as e:
         logger.exception("Error cargando credenciales de cuenta de servicio: %s", e)
