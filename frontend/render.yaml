@@ -7,7 +7,7 @@ services:
     branch: main
     autoDeploy: true
     rootDir: frontend
-    buildCommand: npm install && npm run build
+    buildCommand: npm ci && npm run build
     startCommand: npm run render-start
     healthCheckPath: /health
     envVars:
