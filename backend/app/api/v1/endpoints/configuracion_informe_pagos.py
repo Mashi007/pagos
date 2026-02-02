@@ -183,15 +183,20 @@ def google_oauth_callback(
 def _verificar_drive() -> dict:
     """Prueba real de conexión a Google Drive: subir un archivo de prueba y borrarlo."""
     import io
-    from app.core.informe_pagos_config_holder import get_google_drive_folder_id
+    from app.core.informe_pagos_config_holder import get_google_drive_folder_id, use_google_oauth
     from app.core.google_credentials import get_google_credentials
 
     folder_id = get_google_drive_folder_id()
     creds = get_google_credentials(["https://www.googleapis.com/auth/drive.file"])
     if not creds:
-        return {"conectado": False, "detalle": "Sin credenciales (cuenta de servicio JSON u OAuth con 'Conectar con Google')."}
+        detalle = "Sin credenciales (cuenta de servicio JSON u OAuth con 'Conectar con Google')."
+        if use_google_oauth():
+            detalle = (
+                "Token OAuth expirado o revocado. Haz clic en 'Conectar con Google' de nuevo en esta sección."
+            )
+        return {"conectado": False, "detalle": detalle}
     if not folder_id:
-        return {"conectado": False, "detalle": "No hay ID de carpeta configurado."}
+        return {"conectado": False, "detalle": "No hay ID de carpeta configurado. Indica el ID de la carpeta de Drive en la configuración."}
     try:
         from googleapiclient.discovery import build
         from googleapiclient.http import MediaIoBaseUpload
@@ -204,46 +209,75 @@ def _verificar_drive() -> dict:
             drive.files().delete(fileId=file_id).execute()
         return {"conectado": True, "detalle": "Conexión correcta. La carpeta es accesible para subir imágenes."}
     except Exception as e:
+        logger.debug("Verificación Drive fallida: %s", e, exc_info=True)
         msg = str(e).strip() or "Error desconocido"
         if "404" in msg or "not found" in msg.lower():
-            return {"conectado": False, "detalle": "Carpeta no encontrada o sin acceso. Comprueba el ID y que la carpeta esté compartida con la cuenta."}
+            return {"conectado": False, "detalle": "Carpeta no encontrada o sin acceso. Comprueba el ID de carpeta y que esté compartida con la cuenta de servicio (email del JSON) o con la cuenta que usaste en 'Conectar con Google'."}
         if "403" in msg or "permission" in msg.lower() or "forbidden" in msg.lower():
-            return {"conectado": False, "detalle": "Sin permiso. Comparte la carpeta con la cuenta de servicio o la cuenta OAuth."}
+            return {"conectado": False, "detalle": "Sin permiso. Comparte la carpeta en Drive con rol Editor: con el email de la cuenta de servicio (client_email del JSON) o con la cuenta Google que autorizaste."}
         return {"conectado": False, "detalle": f"Error: {msg[:200]}"}
 
 
 def _verificar_sheets() -> dict:
-    """Prueba real de conexión a Google Sheets (lectura de metadatos de la hoja)."""
-    from app.core.informe_pagos_config_holder import get_google_sheets_id
+    """Prueba real de conexión a Google Sheets: lectura de metadatos y escritura de una fila de prueba (luego se borra)."""
+    from app.core.informe_pagos_config_holder import get_google_sheets_id, use_google_oauth
     from app.core.google_credentials import get_google_credentials
 
     sheet_id = get_google_sheets_id()
     creds = get_google_credentials(["https://www.googleapis.com/auth/spreadsheets"])
     if not creds:
-        return {"conectado": False, "detalle": "Sin credenciales (cuenta de servicio JSON u OAuth con 'Conectar con Google')."}
+        detalle = "Sin credenciales (cuenta de servicio JSON u OAuth con 'Conectar con Google')."
+        if use_google_oauth():
+            detalle = "Token OAuth expirado o revocado. Haz clic en 'Conectar con Google' de nuevo en esta sección."
+        return {"conectado": False, "detalle": detalle}
     if not sheet_id:
         return {"conectado": False, "detalle": "No hay ID de hoja configurado."}
     try:
         from googleapiclient.discovery import build
         service = build("sheets", "v4", credentials=creds)
-        service.spreadsheets().get(spreadsheetId=sheet_id).execute()
-        return {"conectado": True, "detalle": "Conexión correcta. La hoja es accesible."}
+        # 1) Lectura: comprobar que la hoja existe y tenemos acceso
+        spreadsheet = service.spreadsheets().get(spreadsheetId=sheet_id).execute()
+        sheets = spreadsheet.get("sheets") or []
+        if not sheets:
+            return {"conectado": False, "detalle": "La hoja no tiene pestañas. Añade al menos una pestaña."}
+        first_sheet = sheets[0]
+        tab_title = (first_sheet.get("properties") or {}).get("title") or "Hoja 1"
+        # 2) Escritura: escribir una fila de prueba en fila 1000 (no tocar cabeceras) y borrarla
+        range_write = f"'{tab_title}'!A1000:G1000"
+        body = {"values": [["_verif_conexion", datetime.utcnow().isoformat(), "", "", "", "", ""]]}
+        service.spreadsheets().values().update(
+            spreadsheetId=sheet_id,
+            range=range_write,
+            valueInputOption="USER_ENTERED",
+            body=body,
+        ).execute()
+        service.spreadsheets().values().clear(
+            spreadsheetId=sheet_id,
+            range=range_write,
+            body={},
+        ).execute()
+        return {"conectado": True, "detalle": "Conexión correcta. La hoja es accesible para lectura y escritura (informe de pagos)."}
     except Exception as e:
+        logger.debug("Verificación Sheets fallida: %s", e, exc_info=True)
         msg = str(e).strip() or "Error desconocido"
         if "404" in msg or "not found" in msg.lower():
             return {"conectado": False, "detalle": "Hoja no encontrada o sin acceso. Comprueba el ID y que la hoja esté compartida con la cuenta."}
         if "403" in msg or "permission" in msg.lower() or "forbidden" in msg.lower():
-            return {"conectado": False, "detalle": "Sin permiso. Comparte la hoja con la cuenta de servicio o la cuenta OAuth."}
+            return {"conectado": False, "detalle": "Sin permiso. Comparte la hoja con rol Editor con la cuenta de servicio (client_email del JSON) o con la cuenta que usaste en 'Conectar con Google'."}
         return {"conectado": False, "detalle": f"Error: {msg[:200]}"}
 
 
 def _verificar_ocr() -> dict:
     """Prueba real de conexión a Google Cloud Vision (OCR). Una llamada mínima a la API."""
+    from app.core.informe_pagos_config_holder import use_google_oauth
     from app.core.google_credentials import get_google_credentials
 
     creds = get_google_credentials(["https://www.googleapis.com/auth/cloud-vision"])
     if not creds:
-        return {"conectado": False, "detalle": "Sin credenciales (cuenta de servicio JSON u OAuth con 'Conectar con Google')."}
+        detalle = "Sin credenciales (cuenta de servicio JSON u OAuth con 'Conectar con Google')."
+        if use_google_oauth():
+            detalle = "Token OAuth expirado o revocado. Haz clic en 'Conectar con Google' de nuevo en esta sección."
+        return {"conectado": False, "detalle": detalle}
     try:
         from google.cloud import vision
         client = vision.ImageAnnotatorClient(credentials=creds)

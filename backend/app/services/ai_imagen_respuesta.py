@@ -18,17 +18,19 @@ logger = logging.getLogger(__name__)
 CLAVE_AI = "configuracion_ai"
 MIN_CARACTERES_FALLBACK = 50
 
-# Mensajes de respaldo si la IA no está configurada o falla
-MENSAJE_FALLBACK_GRACIAS = "Gracias. (Cédula {cedula} reportada.)"
-MENSAJE_FALLBACK_MALA = "Necesitamos un recibo de pago válido (papeleta de depósito). Envía una foto clara de tu papeleta a 20 cm."
+# Mensajes de respaldo si la IA no está configurada o falla (siempre explícitos: bien / mal / no es recibo)
+MENSAJE_FALLBACK_GRACIAS = "La imagen está bien. Gracias. (Cédula {cedula} reportada.)"
+MENSAJE_FALLBACK_MALA = "La imagen no es válida. Necesitamos un recibo de pago (papeleta de depósito), no un papel cualquiera. Envía una foto clara de tu papeleta a 20 cm."
 
 SYSTEM_PROMPT = (
     "Eres un asistente de cobranza. Te dan el texto extraído por OCR de una foto que el cliente envió como papeleta de depósito. "
-    "Debes decidir si la imagen es ACEPTABLE como recibo de pago (legible, es una papeleta/comprobante de depósito) o NO. "
-    "Si la imagen no es un recibo de pago válido (ej. selfie, documento distinto, imagen borrosa o irrelevante), es NO aceptable. "
+    "Debes decidir si la imagen es ACEPTABLE como recibo de pago (legible, es una papeleta/comprobante de depósito bancario) o NO. "
+    "Si NO es un recibo de pago válido (selfie, documento distinto, imagen borrosa, o un papel cualquiera), es NO aceptable. "
     "Responde ÚNICAMENTE con un JSON válido, sin markdown ni texto extra, con exactamente dos campos: "
     '"aceptable" (true o false) y "mensaje" (una sola frase corta en español). '
-    "Si aceptable: mensaje debe agradecer y puede mencionar la cédula. Si no aceptable: mensaje debe pedir que adjunte un recibo de pago válido (papeleta de depósito) y tome la foto a 20 cm."
+    "REGLAS para el mensaje: "
+    "Si aceptable=true: el mensaje DEBE empezar o contener claramente que LA IMAGEN ESTÁ BIEN (ej. 'La imagen está bien. Gracias...' o 'Recibo válido. Gracias...'). "
+    "Si aceptable=false: el mensaje DEBE decir claramente que LA IMAGEN NO ES VÁLIDA o NO ES UN RECIBO (ej. 'La imagen no es válida...', 'Esto no es un recibo de pago...', 'No es una papeleta válida...'). Así el usuario sabe si está mal o si envió un papel cualquiera."
 )
 
 
@@ -104,6 +106,13 @@ def evaluar_imagen_y_respuesta(ocr_text: str, cedula: str, db: Session) -> Tuple
         mensaje = (obj.get("mensaje") or "").strip()
         if not mensaje:
             mensaje = MENSAJE_FALLBACK_GRACIAS.format(cedula=cedula or "N/A") if aceptable else MENSAJE_FALLBACK_MALA
+        else:
+            # Asegurar que el usuario siempre reciba feedback explícito: "está bien" / "no es válida" / "no es recibo"
+            m_low = mensaje.lower()
+            if aceptable and not any(x in m_low for x in ("bien", "válido", "valido", "gracias", "recibido")):
+                mensaje = "La imagen está bien. " + mensaje
+            elif not aceptable and not any(x in m_low for x in ("no es", "no válid", "inválid", "recibo", "papeleta", "papel cualquiera")):
+                mensaje = "La imagen no es válida. " + mensaje
         return (aceptable, mensaje)
     except (json.JSONDecodeError, TypeError) as e:
         logger.debug("IA imagen: respuesta no es JSON válido: %s", e)

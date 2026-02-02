@@ -71,6 +71,10 @@ MENSAJE_CEDULA_INVALIDA = (
 )
 MENSAJE_VUELVE_CEDULA = "Por favor escribe de nuevo tu número de cédula (E, J o V seguido de 6 a 11 números)."
 MENSAJE_RESPONDE_SI_NO = "Por favor responde Sí o No: ¿El reporte de pago es a cargo de {nombre}?"
+# Si envían foto pero aún no han confirmado (Sí/No), no se pide cédula de nuevo; se recuerda el paso actual.
+MENSAJE_PRIMERO_CONFIRMA_LUEGO_FOTO = (
+    "Primero confirma con Sí o No que el reporte de pago es a tu nombre. Después envía la foto de tu papeleta de depósito."
+)
 MENSAJE_CONTINUAMOS_SIN_CONFIRMAR = "Continuamos. Envía una foto clara de tu papeleta de depósito (recibo de pago válido) a 20 cm."
 MENSAJE_ENVIA_FOTO = "Por favor adjunta una foto clara de tu papeleta de depósito o recibo de pago válido, a 20 cm."
 MENSAJE_FOTO_POCO_CLARA = "Necesitamos un recibo de pago válido (papeleta de depósito). La imagen no es válida o no se ve bien. Toma otra foto a 20 cm de tu papeleta. Intento {n}/3."
@@ -279,9 +283,32 @@ class WhatsAppService:
                 if result.get("response_text"):
                     await _send_whatsapp_async(message.from_, result["response_text"])
                     guardar_mensaje_whatsapp(db, message.from_, "OUTBOUND", result["response_text"], "text")
+            elif message.type == "document" and message.document and db:
+                body_doc = (message.document.caption or "").strip() or (message.document.filename or "[Documento]")
+                guardar_mensaje_whatsapp(db, message.from_, "INBOUND", body_doc, "image")
+                mime = (message.document.mime_type or "").strip().lower()
+                fname = (message.document.filename or "").strip().lower()
+                es_imagen = mime.startswith("image/") or any(fname.endswith(ext) for ext in (".jpg", ".jpeg", ".png", ".gif", ".webp"))
+                if es_imagen:
+                    result = await self._process_image_message(message, db, media_id=message.document.id)
+                    message_data.update(result)
+                    if result.get("response_text"):
+                        await _send_whatsapp_async(message.from_, result["response_text"])
+                        guardar_mensaje_whatsapp(db, message.from_, "OUTBOUND", result["response_text"], "text")
+                else:
+                    msg = "Por favor envía una foto (imagen) de tu papeleta de depósito, no un documento (PDF u otro archivo)."
+                    message_data["status"] = "document_no_imagen"
+                    message_data["response_text"] = msg
+                    await _send_whatsapp_async(message.from_, msg)
+                    guardar_mensaje_whatsapp(db, message.from_, "OUTBOUND", msg, "text")
             else:
                 message_data["status"] = "unsupported_type"
                 message_data["note"] = f"Tipo {message.type} no soportado"
+                msg = "Solo puedo procesar texto e imágenes. Para reportar tu pago envía una foto clara de tu papeleta de depósito."
+                message_data["response_text"] = msg
+                await _send_whatsapp_async(message.from_, msg)
+                if db:
+                    guardar_mensaje_whatsapp(db, message.from_, "OUTBOUND", msg, "text")
             if contact:
                 message_data["contact_wa_id"] = contact.wa_id
                 if contact.profile:
@@ -373,44 +400,61 @@ class WhatsAppService:
             return {"status": "remind_foto", "response_text": MENSAJE_ENVIA_FOTO}
         return {"status": "processed"}
 
-    async def _process_image_message(self, message: WhatsAppMessage, db: Session) -> Dict[str, Any]:
-        """Descarga imagen; si hay conversación en esperando_foto: intento 1/2 → pedir de nuevo, 3 → Drive + pagos_whatsapp + OCR + digitalizar."""
+    async def _process_image_message(self, message: WhatsAppMessage, db: Session, media_id: Optional[str] = None) -> Dict[str, Any]:
+        """Descarga imagen (por message.image.id o media_id si es documento tipo imagen); si hay conversación en esperando_foto: intento 1/2 → pedir de nuevo, 3 → Drive + pagos_whatsapp + OCR + digitalizar."""
+        media_id = media_id or (message.image and message.image.id)
+        if not media_id:
+            logger.info("Imagen no digitalizada: falta ID de media (no_digitaliza=image_no_id)")
+            return {"status": "image_no_id", "note": "Falta ID de media", "response_text": MENSAJE_ENVIA_FOTO}
         phone = "".join(c for c in message.from_ if c.isdigit())
         if len(phone) < 10:
             phone = message.from_
         conv = db.execute(select(ConversacionCobranza).where(ConversacionCobranza.telefono == phone)).scalar_one_or_none()
         if not conv:
+            logger.info("Imagen no digitalizada: no hay conversación para teléfono %s (no_digitaliza=need_cedula)", phone[:6] + "***")
             return {"status": "need_cedula", "response_text": MENSAJE_BIENVENIDA}
         # Si lleva mucho tiempo sin actividad, tratar como nuevo caso (pedir cédula de nuevo)
         if _conversacion_obsoleta(conv):
             _reiniciar_como_nuevo_caso(conv, db)
+            logger.info("Imagen no digitalizada: conversación obsoleta, reiniciada (no_digitaliza=need_cedula)")
             return {"status": "need_cedula", "response_text": MENSAJE_BIENVENIDA}
+        # Protocolo: no volver a pedir cédula si ya la dio. Si está en confirmación, pedir Sí/No primero; luego foto.
+        if conv.estado == "esperando_cedula":
+            logger.info("Imagen no digitalizada: estado=esperando_cedula (no_digitaliza=need_cedula)")
+            return {"status": "need_cedula", "response_text": MENSAJE_BIENVENIDA}
+        if conv.estado == "esperando_confirmacion":
+            nombre = conv.nombre_cliente or conv.cedula or "el titular"
+            logger.info("Imagen no digitalizada: estado=esperando_confirmacion, pedir Sí/No primero (no_digitaliza=primero_confirmar)")
+            return {"status": "primero_confirmar", "response_text": MENSAJE_PRIMERO_CONFIRMA_LUEGO_FOTO}
         if conv.estado != "esperando_foto" or not conv.cedula:
+            logger.info("Imagen no digitalizada: estado=%s o sin cédula (no_digitaliza=need_cedula)", conv.estado or "?")
             return {"status": "need_cedula", "response_text": MENSAJE_BIENVENIDA}
         whatsapp_sync_from_db()
         cfg = get_whatsapp_config()
         token = (cfg.get("access_token") or "").strip()
         api_url = (cfg.get("api_url") or "https://graph.facebook.com/v18.0").rstrip("/")
         if not token:
-            logger.warning("Access token WhatsApp no configurado.")
+            logger.warning("Imagen no digitalizada: Access token WhatsApp no configurado (no_digitaliza=image_skipped)")
             return {"status": "image_skipped", "note": "Token no configurado"}
         try:
             import httpx
             async with httpx.AsyncClient(timeout=30.0) as client:
-                r = await client.get(f"{api_url}/{message.image.id}", headers={"Authorization": f"Bearer {token}"})
+                r = await client.get(f"{api_url}/{media_id}", headers={"Authorization": f"Bearer {token}"})
                 r.raise_for_status()
                 data = r.json()
                 media_url = data.get("url")
                 if not media_url:
+                    logger.info("Imagen no digitalizada: Meta no devolvió URL del media (no_digitaliza=image_no_url)")
                     return {"status": "image_no_url", "note": "Meta no devolvió URL"}
                 r2 = await client.get(media_url, headers={"Authorization": f"Bearer {token}"})
                 r2.raise_for_status()
                 image_bytes = r2.content
         except Exception as e:
-            logger.exception("Error descargando imagen: %s", e)
+            logger.exception("Imagen no digitalizada: error descargando imagen (no_digitaliza=image_error): %s", e)
             db.rollback()
             return {"status": "image_error", "note": str(e)}
         if not image_bytes:
+            logger.info("Imagen no digitalizada: imagen vacía (no_digitaliza=image_empty)")
             return {"status": "image_empty", "note": "Imagen vacía"}
         conv.intento_foto = (conv.intento_foto or 0) + 1
         # Evaluación por IA: texto OCR + prompt corto → aceptable + mensaje conversacional (gracias o pedir otra foto)
@@ -430,7 +474,10 @@ class WhatsAppService:
             mensaje_ia = MENSAJE_RECIBIDO.format(cedula=conv.cedula or "N/A") if aceptable else MENSAJE_FOTO_POCO_CLARA.format(n=conv.intento_foto)
         aceptar = aceptable or conv.intento_foto >= 3
         if not aceptar:
-            logger.info("Foto papeleta no aceptada por IA (intento %d/3); respuesta: %s", conv.intento_foto, mensaje_ia[:50])
+            logger.info(
+                "Imagen no digitalizada: IA no aceptó, intento %d/3 (no_digitaliza=photo_retry); respuesta: %s",
+                conv.intento_foto, mensaje_ia[:80],
+            )
             conv.updated_at = datetime.utcnow()
             db.commit()
             return {
@@ -438,7 +485,8 @@ class WhatsAppService:
                 "intento_foto": conv.intento_foto,
                 "response_text": mensaje_ia,
             }
-        # Imagen clara (primer intento) o tercer intento: guardar en Drive, pagos_whatsapp, OCR, pagos_informes, Sheet
+        # Imagen aceptada (IA) o tercer intento: guardar en Drive, pagos_whatsapp, OCR, pagos_informes, Sheet
+        logger.info("Digitalizando imagen: cedula=%s intento=%d aceptable=%s", conv.cedula, conv.intento_foto, aceptable)
         link_imagen = None
         try:
             from app.services.google_drive_service import upload_image_and_get_link
@@ -488,13 +536,18 @@ class WhatsAppService:
         )
         db.add(informe)
         db.commit()
+        db.refresh(informe)
+        logger.info(
+            "Imagen digitalizada: pagos_whatsapp_id=%s pagos_informe_id=%s cedula=%s fecha_dep=%s banco=%s",
+            row_pw.id, informe.id, conv.cedula, fecha_dep, nombre_banco,
+        )
         try:
             from app.services.google_sheets_informe_service import append_row
             sheet_ok = append_row(conv.cedula, fecha_dep, nombre_banco, numero_dep, cantidad, link_imagen, periodo, observacion=observacion_informe)
             if not sheet_ok:
-                logger.warning("Sheets: no se escribió la fila. Revisa OAuth conectado, ID hoja y que la hoja esté compartida con la cuenta OAuth.")
+                logger.warning("Sheets: no se escribió la fila (digitalización en BD OK). Revisa OAuth conectado, ID hoja y que la hoja esté compartida con la cuenta OAuth.")
         except Exception as e:
-            logger.exception("Error escribiendo en Sheet: %s", e)
+            logger.exception("Error escribiendo en Sheet (digitalización en BD OK): %s", e)
         cedula_guardada = conv.cedula
         conv.intento_foto = 0
         conv.estado = "esperando_cedula"

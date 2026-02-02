@@ -25,14 +25,24 @@ class WhatsAppImage(BaseModel):
     caption: Optional[str] = None
 
 
+class WhatsAppDocument(BaseModel):
+    """Contenido de mensaje de documento/archivo (Meta API). Incluye imágenes enviadas como archivo."""
+    id: str = Field(..., description="ID del media en Meta")
+    sha256: Optional[str] = None
+    mime_type: Optional[str] = None
+    caption: Optional[str] = None
+    filename: Optional[str] = None
+
+
 class WhatsAppMessage(BaseModel):
     """Mensaje recibido de WhatsApp"""
     from_: str = Field(..., alias="from", description="Número de teléfono remitente")
     id: str = Field(..., description="ID único del mensaje")
     timestamp: str = Field(..., description="Timestamp del mensaje")
-    type: str = Field(..., description="Tipo de mensaje (text, image, etc.)")
+    type: str = Field(..., description="Tipo de mensaje (text, image, document, etc.)")
     text: Optional[WhatsAppText] = None
     image: Optional[WhatsAppImage] = None
+    document: Optional[WhatsAppDocument] = None
 
     class Config:
         populate_by_name = True

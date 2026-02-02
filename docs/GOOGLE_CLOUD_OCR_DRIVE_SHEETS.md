@@ -1,5 +1,81 @@
 # Google Cloud: qué necesitas para OCR, Drive y Sheets
 
+## ¿Garantía de conexión perfecta con Sheet, Drive y OCR?
+
+**Sí, siempre que la verificación de la app lo confirme.** La app no “confía” en la config: hace **llamadas reales** a las APIs de Google y te dice si cada una responde bien.
+
+| Servicio | Qué se comprueba |
+|----------|------------------|
+| **Drive** | Subida de un archivo de prueba en la carpeta configurada y borrado inmediato (misma operación que las papeletas). |
+| **Sheets** | Lectura de la hoja y **escritura** de una fila de prueba en una fila alta (luego se borra). Así se garantiza que el informe de pagos podrá escribir. |
+| **OCR (Vision)** | Una llamada mínima a `text_detection`. Si responde, Vision API está operativa. |
+
+Si en **Configuración → Informe pagos → Estado de conexiones** los tres muestran **Conectado** y el detalle indica “Conexión correcta…”, entonces **hay conexión correcta** con Drive, Sheets y OCR con la configuración actual. Si alguno falla, el mensaje indica qué revisar (credenciales, ID, compartir con la cuenta).
+
+La conexión depende de tu entorno (credenciales, IDs, carpetas/hojas compartidas). La app no puede garantizarla “desde fuera”; lo que hace es **verificarla con pruebas reales** y mostrarte el resultado.
+
+---
+
+## Revisar la conexión con Google Drive
+
+La app comprueba la conexión con Drive de forma real: sube un archivo de prueba en la carpeta configurada y lo borra. Eso se hace al cargar la pestaña **Informe pagos** y al pulsar **Verificar ahora** en "Estado de conexiones".
+
+### Qué se comprueba
+
+1. **Credenciales:** Cuenta de servicio (JSON) o OAuth (tras "Conectar con Google"). Si faltan o el token OAuth está expirado, verás "Sin credenciales" o "Token OAuth expirado o revocado...".
+2. **ID de carpeta:** Debe estar rellenado. Si no, verás "No hay ID de carpeta configurado...".
+3. **Acceso a la carpeta:** Se intenta crear un archivo `_test_conexion_pagos.txt` en esa carpeta y luego borrarlo. Si la carpeta no existe o la cuenta no tiene permiso, falla.
+
+### Mensajes típicos y qué hacer
+
+| Mensaje | Causa | Qué hacer |
+|--------|--------|-----------|
+| **Sin credenciales** | No hay JSON de cuenta de servicio ni OAuth completado. | Pega el JSON en "Credenciales Google" o haz "Conectar con Google" y autoriza. |
+| **Token OAuth expirado o revocado** | Usas OAuth y el refresh falló. | Haz clic de nuevo en "Conectar con Google" y vuelve a autorizar. |
+| **No hay ID de carpeta configurado** | El campo "ID de carpeta Drive" está vacío. | Copia el ID de la URL de la carpeta (entre `/folders/` y el final) y pégalo en la configuración. |
+| **Carpeta no encontrada o sin acceso** | ID incorrecto o la carpeta no está compartida con la cuenta. | Comprueba el ID; comparte la carpeta con el email de la cuenta de servicio (JSON) o con la cuenta que usaste en "Conectar con Google", rol **Editor**. |
+| **Sin permiso** | La cuenta no tiene permiso de escritura en la carpeta. | Comparte la carpeta en Drive con rol **Editor** con esa cuenta. |
+| **Conexión correcta** | La prueba de subida/borrado funcionó. | No hace falta cambiar nada. |
+
+### Dónde se usa Drive en el flujo
+
+- **WhatsApp:** Cuando el usuario envía una foto de papeleta aceptada, la imagen se sube a esa carpeta y se guarda el enlace en `pagos_whatsapp.link_imagen` y en el informe. Si Drive falla en ese momento, el backend guarda `link_imagen=NA` y registra un warning en logs.
+
+---
+
+## Evaluación de la conexión según documentación Google Cloud
+
+Revisión de cómo la app implementa la conexión frente a la [documentación oficial de Google](https://developers.google.com/drive/api/guides/about-auth) y [Vision API](https://cloud.google.com/vision/docs/authentication).
+
+### Drive API
+
+| Requisito oficial | Implementación en la app | ¿Correcto? |
+|-------------------|---------------------------|------------|
+| **Scope** recomendado para crear/modificar archivos que la app abre o que el usuario comparte con la app | Uso de `https://www.googleapis.com/auth/drive.file` (scope no sensible, per-file access). | Sí. Coincide con la documentación: *"Create new Drive files, or modify existing files, that you open with an app or that the user shares with an app"*. |
+| **Cuenta de servicio** o **OAuth** | Se soportan ambos: JSON de cuenta de servicio o OAuth (client_id, client_secret, refresh_token). | Sí. |
+| **Refresh token** en almacenamiento seguro | El refresh_token se guarda en BD (tabla `configuracion`, clave `informe_pagos_config`). Se usa para obtener access_token al vuelo. | Sí. La doc indica *"Save refresh tokens in secure, long-term storage"*. |
+| **Carpeta compartida** con la cuenta | Con cuenta de servicio: la carpeta debe estar compartida con el `client_email` del JSON (rol Editor). Con OAuth: la carpeta está en la Drive del usuario que autorizó. | Sí. Los mensajes de verificación lo indican (404/403 y texto de ayuda). |
+
+Conclusión: la conexión con Drive está alineada con la documentación (scope `drive.file`, credenciales SA u OAuth, verificación real con subida/borrado de archivo de prueba).
+
+### Vision API (OCR)
+
+| Requisito oficial | Implementación en la app | ¿Correcto? |
+|-------------------|---------------------------|------------|
+| **Autenticación** | Se usan las mismas credenciales que para Drive/Sheets: `get_google_credentials(["https://www.googleapis.com/auth/cloud-vision"])` (cuenta de servicio o OAuth). | Sí. Vision acepta credenciales de cuenta de servicio u OAuth con el scope adecuado. |
+| **Cliente** | `vision.ImageAnnotatorClient(credentials=creds)` con creds inyectadas (no solo `GOOGLE_APPLICATION_CREDENTIALS`). | Sí. Permite usar la config de la app (JSON u OAuth) sin depender del entorno. |
+
+Conclusión: la conexión con Vision (OCR) es correcta; la verificación de estado hace una llamada mínima a `text_detection` para comprobar que la API responde.
+
+### Posibles mejoras (opcionales)
+
+- **Variable de entorno** `GOOGLE_APPLICATION_CREDENTIALS`: la doc recomienda usarla para desarrollo local con archivo JSON. La app no la usa porque las credenciales vienen de la BD; es coherente para un entorno multi-tenant/configurable.
+- **Scope Drive más amplio**: si en el futuro se necesitara acceder a archivos que la app no ha creado ni el usuario ha abierto con la app, habría que valorar `drive` o `drive.readonly` (scopes restringidos y con requisitos de verificación). Con la carpeta compartida con la cuenta de servicio, `drive.file` es suficiente.
+
+En resumen: la conexión con Google Cloud (Drive, Sheets, Vision) está bien planteada según la documentación oficial y la verificación de estado comprueba con llamadas reales que todo funciona.
+
+---
+
 ## Configurar Google Drive para el proyecto (paso a paso)
 
 Usa **el mismo proyecto** donde tienes el cliente OAuth "Cobranzas" (ej. `cobranzas-485720`). No hace falta crear otro proyecto.
