@@ -11,6 +11,48 @@ logger = logging.getLogger(__name__)
 
 NA = "NA"
 
+MIN_CARACTERES_PARA_CLARA = 50  # Si el OCR detecta al menos esto, se considera imagen "suficientemente clara" (bajado de 80 para papeletas legibles)
+
+
+def _vision_full_text(image_bytes: bytes) -> str:
+    """Ejecuta Vision text_detection y devuelve el texto completo; vacío si falla o sin credenciales."""
+    from app.core.informe_pagos_config_holder import get_google_credentials_json, sync_from_db
+    sync_from_db()
+    creds_json = get_google_credentials_json()
+    if not creds_json:
+        logger.warning("Claridad de imagen no comprobada: credenciales Google (Vision) no configuradas; se tratará como no clara.")
+        return ""
+    try:
+        import json
+        from google.oauth2 import service_account
+        from google.cloud import vision
+        creds_dict = json.loads(creds_json)
+        credentials = service_account.Credentials.from_service_account_info(creds_dict)
+        client = vision.ImageAnnotatorClient(credentials=credentials)
+        image = vision.Image(content=image_bytes)
+        response = client.text_detection(image=image)
+        if response.error.message:
+            return ""
+        texts = response.text_annotations
+        return (texts[0].description if texts else "") or ""
+    except Exception as e:
+        logger.debug("Vision full_text: %s", e)
+        return ""
+
+
+def imagen_suficientemente_clara(image_bytes: bytes, min_chars: int = MIN_CARACTERES_PARA_CLARA) -> bool:
+    """
+    True si el OCR detecta al menos min_chars de texto (imagen legible).
+    Se usa en el flujo de cobranza para aceptar la foto en el primer intento si está clara.
+    """
+    if not image_bytes or len(image_bytes) < 500:
+        return False
+    full_text = _vision_full_text(image_bytes)
+    num_chars = len(full_text.strip())
+    # Log para ajustar umbral: si no hay credenciales Google, full_text viene vacío y siempre "no clara"
+    logger.debug("Claridad imagen: Vision devolvió %d caracteres (mínimo %d); clara=%s", num_chars, min_chars, num_chars >= min_chars)
+    return num_chars >= min_chars
+
 
 def extract_from_image(image_bytes: bytes) -> Dict[str, str]:
     """

@@ -27,6 +27,7 @@ import {
   comunicacionesService,
   ComunicacionUnificada,
   CrearClienteAutomaticoRequest,
+  MensajeWhatsappItem,
 } from '../../services/comunicacionesService'
 import { CrearClienteForm } from '../../components/clientes/CrearClienteForm'
 import { ticketsService, TicketCreate, Ticket, TicketUpdate } from '../../services/ticketsService'
@@ -150,8 +151,7 @@ export function Comunicaciones({
         
         // Si tiene cliente_id, intentar obtener nombre del cliente
         if (comm.cliente_id) {
-          // Usar nombre del mockdata si está disponible
-          nombre = mockNombresClientes[comm.cliente_id] || `Cliente #${comm.cliente_id}`
+          nombre = comm.nombre_contacto || mockNombresClientes[comm.cliente_id] || `Cliente #${comm.cliente_id}`
         }
 
         // Determinar si está leído (procesado = true)
@@ -243,18 +243,53 @@ export function Comunicaciones({
   }, [clienteRecienCreado, conversacionesAgrupadas])
 
   // Cargar mensajes cuando se selecciona una conversación
+  // Cargar mensajes: WhatsApp = historial real desde API; Email = filtro de comunicaciones
   useEffect(() => {
     if (!conversacionActual) return
-    
-    // âœ… Verificar si ya están cargados usando ref (no causa re-renders)
-    if (conversacionesCargadasRef.current.has(conversacionActual.id)) {
-      return // Ya están cargados, no hacer nada
+
+    if (conversacionActual.tipo === 'whatsapp') {
+      setCargandoMensajes(conversacionActual.id)
+      comunicacionesService
+        .listarMensajesWhatsApp(conversacionActual.contacto)
+        .then((res) => {
+          const items: ComunicacionUnificada[] = (res.mensajes || []).map((m: MensajeWhatsappItem) => ({
+            id: m.id,
+            tipo: 'whatsapp' as const,
+            from_contact: conversacionActual!.contacto,
+            to_contact: '',
+            subject: null,
+            body: m.body ?? '',
+            timestamp: m.timestamp,
+            direccion: m.direccion,
+            cliente_id: conversacionActual!.cliente_id,
+            ticket_id: null,
+            requiere_respuesta: false,
+            procesado: true,
+            respuesta_enviada: false,
+            creado_en: m.timestamp,
+          }))
+          setMensajesCargados(prev => {
+            const nuevoMap = new Map(prev)
+            nuevoMap.set(conversacionActual!.id, items)
+            return nuevoMap
+          })
+          conversacionesCargadasRef.current.add(conversacionActual.id)
+        })
+        .catch(() => {
+          setMensajesCargados(prev => {
+            const nuevoMap = new Map(prev)
+            nuevoMap.set(conversacionActual!.id, [])
+            return nuevoMap
+          })
+          conversacionesCargadasRef.current.add(conversacionActual.id)
+        })
+        .finally(() => setCargandoMensajes(null))
+      return
     }
-    
-    // Cargar mensajes de esta conversación específica
+
+    if (conversacionesCargadasRef.current.has(conversacionActual.id)) return
+
     setCargandoMensajes(conversacionActual.id)
-    
-    // Filtrar comunicaciones de esta conversación específica
     const mensajes = todasComunicaciones.filter(
       (comm) => {
         const idBase = comm.cliente_id ? `cliente_${comm.cliente_id}` : `contacto_${comm.from_contact}`
@@ -262,13 +297,7 @@ export function Comunicaciones({
         return id === conversacionActual.id
       }
     )
-    
-    // Ordenar por fecha/hora
-    mensajes.sort((a, b) => {
-      return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    })
-    
-    // Actualizar mensajes cargados y marcar como cargado en el ref
+    mensajes.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
     setMensajesCargados(prev => {
       const nuevoMap = new Map(prev)
       nuevoMap.set(conversacionActual.id, mensajes)
@@ -276,7 +305,7 @@ export function Comunicaciones({
       return nuevoMap
     })
     setCargandoMensajes(null)
-  }, [conversacionActual, todasComunicaciones.length]) // âœ… Solo dependencias estables - removido mensajesCargados (usa ref para verificar)
+  }, [conversacionActual, todasComunicaciones.length])
 
   // Obtener mensajes de la conversación actual
   const mensajesOrdenados = useMemo(() => {
@@ -463,6 +492,30 @@ export function Comunicaciones({
           setMensajeTexto('')
           setAsuntoEmail('')
           queryClient.invalidateQueries({ queryKey: ['comunicaciones'] })
+          // Refrescar historial para mostrar el mensaje recién enviado
+          comunicacionesService.listarMensajesWhatsApp(conversacionActual.contacto).then((res) => {
+            const items: ComunicacionUnificada[] = (res.mensajes || []).map((m: MensajeWhatsappItem) => ({
+              id: m.id,
+              tipo: 'whatsapp' as const,
+              from_contact: conversacionActual!.contacto,
+              to_contact: '',
+              subject: null,
+              body: m.body ?? '',
+              timestamp: m.timestamp,
+              direccion: m.direccion,
+              cliente_id: conversacionActual!.cliente_id,
+              ticket_id: null,
+              requiere_respuesta: false,
+              procesado: true,
+              respuesta_enviada: false,
+              creado_en: m.timestamp,
+            }))
+            setMensajesCargados(prev => {
+              const nuevoMap = new Map(prev)
+              nuevoMap.set(conversacionActual!.id, items)
+              return nuevoMap
+            })
+          }).catch(() => {})
         } else {
           toast.error(resultado.mensaje || 'Error enviando mensaje')
         }
@@ -617,6 +670,11 @@ export function Comunicaciones({
                         {conversacion.ultimaComunicacion.body?.substring(0, 60) || conversacion.ultimaComunicacion.subject || '[Sin contenido]'}
                         {conversacion.ultimaComunicacion.body && conversacion.ultimaComunicacion.body.length > 60 && '...'}
                       </div>
+                      {conversacion.tipo === 'whatsapp' && conversacion.ultimaComunicacion.cedula && (
+                        <div className="text-xs text-gray-700 mt-1 font-medium">
+                          Cédula: {conversacion.ultimaComunicacion.cedula}
+                        </div>
+                      )}
                       <div className="text-xs text-gray-400 mt-2 flex items-center gap-1">
                         <Clock className="h-3 w-3" />
                         {formatearFecha(conversacion.ultimaComunicacion.timestamp)}
@@ -676,6 +734,11 @@ export function Comunicaciones({
                       )}
                       {conversacionActual.contacto}
                     </p>
+                    {conversacionActual.tipo === 'whatsapp' && conversacionActual.ultimaComunicacion?.cedula && (
+                      <p className="text-sm text-gray-700 mt-1 font-medium">
+                        Cédula: {conversacionActual.ultimaComunicacion.cedula}
+                      </p>
+                    )}
                   </div>
                 </div>
                 {conversacionActual.esNuevo && (

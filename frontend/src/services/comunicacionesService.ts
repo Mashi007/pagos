@@ -16,6 +16,12 @@ export interface ComunicacionUnificada {
   procesado: boolean
   respuesta_enviada: boolean
   creado_en: string
+  /** Nombre del contacto (bot cobranza WhatsApp). */
+  nombre_contacto?: string | null
+  /** Cédula capturada en el flujo de cobranza (cuando ya la envió el usuario). */
+  cedula?: string | null
+  /** Estado del flujo: esperando_cedula, esperando_confirmacion, esperando_foto, etc. */
+  estado_cobranza?: string | null
 }
 
 export interface PaginacionComunicaciones {
@@ -28,6 +34,19 @@ export interface PaginacionComunicaciones {
 export interface ListaComunicacionesResponse {
   comunicaciones: ComunicacionUnificada[]
   paginacion: PaginacionComunicaciones
+}
+
+/** Mensaje del historial WhatsApp (copia de la conversación). */
+export interface MensajeWhatsappItem {
+  id: number
+  body: string
+  direccion: 'INBOUND' | 'OUTBOUND'
+  message_type: string
+  timestamp: string
+}
+
+export interface ListaMensajesWhatsAppResponse {
+  mensajes: MensajeWhatsappItem[]
 }
 
 export interface CrearClienteAutomaticoRequest {
@@ -62,6 +81,16 @@ class ComunicacionesService {
 
     const url = buildUrl(this.baseUrl, params)
     const response = await apiClient.get<ListaComunicacionesResponse>(url)
+    return response
+  }
+
+  /**
+   * Historial de mensajes WhatsApp de una conversación (copia de lo hablado con el cliente).
+   */
+  async listarMensajesWhatsApp(telefono: string): Promise<ListaMensajesWhatsAppResponse> {
+    const params = { telefono, limit: 200 }
+    const url = buildUrl(`${this.baseUrl}/mensajes`, params)
+    const response = await apiClient.get<ListaMensajesWhatsAppResponse>(url)
     return response
   }
 

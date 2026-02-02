@@ -15,10 +15,11 @@ from app.models.user import User
 from app.models.definicion_campo import DefinicionCampo
 from app.models.conversacion_ai import ConversacionAI
 from app.models.diccionario_semantico import DiccionarioSemantico
+from app.models.mensaje_whatsapp import MensajeWhatsapp
 
 __all__ = [
     "Base", "Cliente", "Prestamo", "Ticket", "Cuota", "PagosWhatsapp",
-    "ConversacionCobranza", "PagosInforme",
+    "ConversacionCobranza", "PagosInforme", "MensajeWhatsapp",
     "Configuracion", "Auditoria", "User", "DefinicionCampo", "ConversacionAI", "DiccionarioSemantico",
 ]
 

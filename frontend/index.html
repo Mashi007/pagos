@@ -47,42 +47,33 @@
     <!-- IMPORTANTE: Este script debe ejecutarse ANTES de cualquier otro para interceptar warnings tempranos -->
     <script>
       // ✅ Interceptar errores de CSS ANTES de que se muestren en consola
-      // Esto debe ejecutarse lo más temprano posible
       (function() {
         'use strict';
         const originalWarn = console.warn;
         const originalError = console.error;
-
-        // Interceptar console.warn inmediatamente
-        console.warn = function(...args) {
-          const message = args.map(arg => String(arg)).join(' ').toLowerCase();
-          // Capturar el mensaje específico: "Juego de reglas ignoradas debido a un mal selector"
-          if (message.includes('juego de reglas') ||
-              message.includes('ignoradas') ||
-              message.includes('mal selector') ||
-              message.includes('bad selector') ||
-              message.includes('debido a un mal selector') ||
-              (message.includes('index-') && message.includes('.css:')) ||
-              /index-[a-z0-9]+\.css:\d+:\d+/.test(message)) {
-            return; // Suprimir el warning
-          }
-          originalWarn.apply(console, args);
+        function toMessage(args) {
+          return args.map(function(arg) {
+            if (arg != null && typeof arg === 'object' && typeof arg.message === 'string') return arg.message;
+            if (arg != null && typeof arg === 'object' && typeof arg.defaultMessage === 'string') return arg.defaultMessage;
+            return String(arg);
+          }).join(' ');
+        }
+        function shouldSuppressCSS(msg) {
+          if (!msg || typeof msg !== 'string') return false;
+          var m = msg.toLowerCase();
+          return m.indexOf('juego de reglas') !== -1 || m.indexOf('reglas ignoradas') !== -1 ||
+            m.indexOf('mal selector') !== -1 || m.indexOf('bad selector') !== -1 ||
+            m.indexOf('debido a un mal selector') !== -1 ||
+            (m.indexOf('index-') !== -1 && m.indexOf('.css') !== -1 && (m.indexOf('ignoradas') !== -1 || m.indexOf('selector') !== -1)) ||
+            /index-[a-z0-9]+\.css:\d+:\d+/.test(msg);
+        }
+        console.warn = function() {
+          if (shouldSuppressCSS(toMessage(arguments))) return;
+          originalWarn.apply(console, arguments);
         };
-
-        // Interceptar console.error inmediatamente
-        console.error = function(...args) {
-          const message = args.map(arg => String(arg)).join(' ').toLowerCase();
-          // Capturar el mensaje específico: "Juego de reglas ignoradas debido a un mal selector"
-          if (message.includes('juego de reglas') ||
-              message.includes('ignoradas') ||
-              message.includes('mal selector') ||
-              message.includes('bad selector') ||
-              message.includes('debido a un mal selector') ||
-              (message.includes('index-') && message.includes('.css:')) ||
-              /index-[a-z0-9]+\.css:\d+:\d+/.test(message)) {
-            return; // Suprimir el error
-          }
-          originalError.apply(console, args);
+        console.error = function() {
+          if (shouldSuppressCSS(toMessage(arguments))) return;
+          originalError.apply(console, arguments);
         };
       })();
     </script>
@@ -93,6 +84,14 @@
         const originalWarn = console.warn;
         const originalError = console.error;
 
+        // Construir mensaje: si algún arg es objeto con .message, usarlo (navegador a veces envía así el warning CSS)
+        function getMessage(args) {
+          return args.map(function(arg) {
+            if (arg != null && typeof arg === 'object' && typeof arg.message === 'string') return arg.message;
+            if (arg != null && typeof arg === 'object' && typeof arg.defaultMessage === 'string') return arg.defaultMessage;
+            return typeof arg === 'string' ? arg : (arg && typeof arg.toString === 'function' ? arg.toString() : String(arg));
+          }).join(' ');
+        }
         // Función para verificar si un mensaje debe ser suprimido
         function shouldSuppress(message) {
           if (!message || typeof message !== 'string') return false;
@@ -193,38 +192,17 @@
         }
 
         // Interceptar console.warn
-        console.warn = function(...args) {
-          // Convertir todos los argumentos a string y unirlos
-          const message = args.map(arg => {
-            if (typeof arg === 'string') return arg;
-            if (arg && typeof arg.toString === 'function') return arg.toString();
-            return String(arg);
-          }).join(' ');
-
-          // Si el mensaje debe ser suprimido, no mostrarlo
-          if (shouldSuppress(message)) {
-            return; // Silenciar el warning
-          }
-
-          // Mostrar otros warnings normalmente
-          originalWarn.apply(console, args);
+        console.warn = function() {
+          const message = getMessage(arguments);
+          if (shouldSuppress(message)) return;
+          originalWarn.apply(console, arguments);
         };
 
         // También interceptar console.error para capturar errores similares
-        console.error = function(...args) {
-          const message = args.map(arg => {
-            if (typeof arg === 'string') return arg;
-            if (arg && typeof arg.toString === 'function') return arg.toString();
-            return String(arg);
-          }).join(' ');
-
-          // Suprimir errores de CSS conocidos también
-          if (shouldSuppress(message)) {
-            return; // Silenciar el error
-          }
-
-          // Mostrar otros errores normalmente
-          originalError.apply(console, args);
+        console.error = function() {
+          const message = getMessage(arguments);
+          if (shouldSuppress(message)) return;
+          originalError.apply(console, arguments);
         };
       })();
     </script>

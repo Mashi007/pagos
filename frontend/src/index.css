@@ -165,3 +165,56 @@
   border: 2px solid #fff;
   box-shadow: 0 1px 3px rgba(0,0,0,0.2);
 }
+
+/* Toggle switch: estilos del knob en CSS puro para evitar selector inválido (after:content-[''] etc.) */
+.toggle-switch-track {
+  @apply w-11 h-6 bg-gray-200 rounded-full peer;
+}
+.toggle-switch-track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  height: 1.25rem;
+  width: 1.25rem;
+  background-color: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 9999px;
+  transition: transform 0.2s;
+}
+.peer:focus + .toggle-switch-track {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.3);
+}
+.peer:checked + .toggle-switch-track::after {
+  transform: translateX(100%);
+}
+.peer:checked + .toggle-switch-track {
+  background-color: #2563eb;
+}
+
+.toggle-switch-track-lg {
+  @apply w-14 h-7 bg-gray-200 rounded-full peer;
+}
+.toggle-switch-track-lg::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  height: 1.5rem;
+  width: 1.5rem;
+  background-color: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 9999px;
+  transition: transform 0.2s;
+}
+.peer:focus + .toggle-switch-track-lg {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.3);
+}
+.peer:checked + .toggle-switch-track-lg::after {
+  transform: translateX(100%);
+}
+.peer:checked + .toggle-switch-track-lg {
+  background-color: #2563eb;
+}

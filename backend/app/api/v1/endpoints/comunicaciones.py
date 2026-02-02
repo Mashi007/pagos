@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.models.conversacion_cobranza import ConversacionCobranza
 from app.models.cliente import Cliente
+from app.models.mensaje_whatsapp import MensajeWhatsapp
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -98,6 +99,8 @@ def listar_comunicaciones(
             "respuesta_enviada": True,
             "creado_en": row.updated_at.isoformat() if row.updated_at else "",
             "nombre_contacto": nombre,
+            "cedula": (row.cedula or "").strip() or None,
+            "estado_cobranza": row.estado or None,
         })
 
     pages = (total + per_page - 1) // per_page if per_page else 0
@@ -105,6 +108,39 @@ def listar_comunicaciones(
         "comunicaciones": comunicaciones,
         "paginacion": {"page": page, "per_page": per_page, "total": total, "pages": pages},
     }
+
+
+@router.get("/mensajes", response_model=dict)
+def listar_mensajes_whatsapp(
+    telefono: str = Query(..., description="Teléfono de la conversación (ej. +593983000700)"),
+    limit: int = Query(200, ge=1, le=500),
+    db: Session = Depends(get_db),
+):
+    """
+    Historial de mensajes WhatsApp de una conversación (copia de lo hablado con el cliente).
+    Devuelve mensajes ordenados por fecha para mostrar en Comunicaciones.
+    """
+    phone = _digits(telefono)
+    if len(phone) < 8:
+        return {"mensajes": []}
+    rows = (
+        db.query(MensajeWhatsapp)
+        .where(MensajeWhatsapp.telefono == phone)
+        .order_by(MensajeWhatsapp.timestamp.asc())
+        .limit(limit)
+        .all()
+    )
+    mensajes = [
+        {
+            "id": r.id,
+            "body": r.body or "",
+            "direccion": r.direccion,
+            "message_type": r.message_type or "text",
+            "timestamp": r.timestamp.isoformat() if r.timestamp else "",
+        }
+        for r in rows
+    ]
+    return {"mensajes": mensajes}
 
 
 @router.get("/por-responder", response_model=dict)
@@ -133,6 +169,7 @@ def enviar_whatsapp(payload: EnviarWhatsAppRequest, db: Session = Depends(get_db
     """
     from app.core.whatsapp_send import send_whatsapp_text
     from app.core.whatsapp_config_holder import get_whatsapp_config, sync_from_db as whatsapp_sync_from_db
+    from app.services.whatsapp_service import guardar_mensaje_whatsapp
     to_number = (payload.to_number or "").strip()
     message = (payload.message or "").strip()
     if not to_number or len(to_number) < 10:
@@ -146,6 +183,7 @@ def enviar_whatsapp(payload: EnviarWhatsAppRequest, db: Session = Depends(get_db
     destino = telefono_pruebas if modo_pruebas and telefono_pruebas else to_number
     ok, error_meta = send_whatsapp_text(destino, message)
     if ok:
+        guardar_mensaje_whatsapp(db, destino, "OUTBOUND", message, "text")
         return {"success": True, "mensaje": "Mensaje enviado.", "telefono_destino": destino}
     return {"success": False, "mensaje": error_meta or "No se pudo enviar.", "telefono_destino": destino}
 

@@ -1,121 +1,73 @@
-# Requisitos de Google Cloud para OCR, Drive y Sheets (Informe pagos)
+# Google Cloud: qué necesitas para OCR, Drive y Sheets
 
-Para que el flujo de cobranza (imágenes de papeletas → OCR → Drive → Google Sheets) funcione, necesitas **un solo proyecto de Google Cloud** y **una cuenta de servicio** que use estas APIs.
+## Confirmación: ¿a qué cuentas está conectado?
 
----
+**No está conectado a cuentas personales de Google** (no hay login con tu Gmail).  
+La aplicación usa **una sola cuenta de servicio de Google Cloud** (Service Account). Esa cuenta es la que hace:
 
-## 1. Qué usa la aplicación
+- **OCR y claridad de imagen** → Google Cloud **Vision API**
+- **Subir papeletas** → Google **Drive API**
+- **Escribir el informe** → Google **Sheets API**
 
-| Función | API de Google | Uso |
-|--------|----------------|-----|
-| **OCR** (extraer texto de la imagen) | **Cloud Vision API** | Text Detection sobre la foto de la papeleta |
-| **Guardar imagen y obtener link** | **Google Drive API** (v3) | Subir archivo a una carpeta y generar link “cualquiera con el enlace puede ver” |
-| **Digitalizar en hoja** | **Google Sheets API** (v4) | Añadir filas en una hoja (pestañas 6am, 1pm, 4h30) |
-
-Las tres usan **las mismas credenciales**: una **cuenta de servicio** (archivo JSON).
+Todo con el **mismo JSON de la cuenta de servicio**.
 
 ---
 
-## 2. Pasos en Google Cloud Console
+## Qué necesitas en Google Cloud
 
-### 2.1 Proyecto
+### 1. Proyecto en Google Cloud
 
 1. Entra en [Google Cloud Console](https://console.cloud.google.com/).
-2. Crea un proyecto nuevo o elige uno existente (por ejemplo “RapiCredit” o “Informe-pagos”).
+2. Crea un proyecto (o usa uno existente).
 
-### 2.2 Activar APIs
+### 2. Activar las APIs
 
-En **APIs y servicios → Biblioteca** activa:
+En **APIs y servicios → Biblioteca**, activa:
 
-| API | Nombre en consola | Para qué |
-|-----|-------------------|----------|
-| **Cloud Vision API** | “Cloud Vision API” | OCR (text_detection) |
-| **Google Drive API** | “Google Drive API” | Subir imágenes y obtener link |
-| **Google Sheets API** | “Google Sheets API” | Escribir filas en la hoja del informe |
+| API | Uso en la app |
+|-----|----------------|
+| **Cloud Vision API** | OCR de papeletas y comprobación de claridad de imagen (≥50 caracteres) |
+| **Google Drive API** | Subir la foto de la papeleta y obtener el link |
+| **Google Sheets API** | Añadir filas al informe de pagos |
 
-- Busca cada una por nombre y pulsa **Activar**.
+### 3. Cuenta de servicio y JSON
 
-### 2.3 Cuenta de servicio
+1. **APIs y servicios → Credenciales → Crear credenciales → Cuenta de servicio**.
+2. Ponle un nombre (ej. `rapicredit-informe-pagos`) y crea.
+3. En la cuenta de servicio, pestaña **Claves** → **Añadir clave → Crear clave nueva → JSON** → descarga el archivo.
+4. Ese JSON es el que se configura en la app como **Credenciales Google (JSON)**.
 
-1. **APIs y servicios → Credenciales**.
-2. **+ Crear credenciales → Cuenta de servicio**.
-3. Nombre (ej. `informe-pagos-app`), ID se genera solo.
-4. **Crear y continuar** (rol opcional; se puede dejar sin rol y dar acceso por “compartir” en Drive/Sheets).
-5. **Listo** (no hace falta añadir usuarios).
-6. En la tabla de cuentas de servicio, abre la que creaste → pestaña **Claves**.
-7. **Añadir clave → Crear clave nueva → JSON** → Descargar.
-8. Guarda ese JSON en un lugar seguro; **no lo subas a repositorios públicos**.  
-   Ese JSON es el que pegarás (o cargarás) en **Configuración > Informe pagos → Credenciales Google (cuenta de servicio JSON)**.
+### 4. Permisos en Drive y Sheets
 
-Anota el **email de la cuenta de servicio** (ej. `informe-pagos-app@tu-proyecto.iam.gserviceaccount.com`). Lo usarás para compartir la carpeta de Drive y la hoja de Sheets.
+- **Drive:** Crea una carpeta donde quieras guardar las papeletas. Comparte la carpeta con el **email de la cuenta de servicio** (ej. `nombre@proyecto.iam.gserviceaccount.com`) como **Editor**. El ID de esa carpeta (de la URL) es el **ID de carpeta Drive** que configuras en la app.
+- **Sheets:** Crea o usa una hoja de cálculo para el informe. Comparte la hoja con el mismo email de la cuenta de servicio como **Editor**. El **ID de la hoja** es el que aparece en la URL:  
+  `https://docs.google.com/spreadsheets/d/ESTE_ES_EL_ID/edit`
 
 ---
 
-## 3. Google Drive: carpeta para las imágenes
+## Dónde se configura en la app
 
-1. En [Google Drive](https://drive.google.com/) crea una **carpeta** (ej. “Papeletas RapiCredit”).
-2. Abre la carpeta y mira la URL. El **ID de la carpeta** es la parte entre `folders/` y el siguiente `?` o el final:
-   - URL: `https://drive.google.com/drive/folders/1ABC...xyz`
-   - **ID de carpeta:** `1ABC...xyz`
-3. **Compartir** la carpeta:
-   - Clic derecho en la carpeta → **Compartir**.
-   - Añade el **email de la cuenta de servicio** (el del JSON).
-   - Rol: **Editor** (para que la app pueda crear archivos y enlaces “cualquiera con el enlace”).
-   - Guardar.
+Todo se guarda en **Configuración → Informe pagos** (tab/pestaña de informe de pagos):
 
-Ese **ID de carpeta** es el que configuras en **Configuración > Informe pagos → ID carpeta Google Drive**.
+| Campo en la app | Descripción |
+|-----------------|-------------|
+| **Credenciales Google (JSON)** | Contenido completo del archivo JSON descargado de la cuenta de servicio. |
+| **ID de carpeta Drive** | ID de la carpeta de Drive donde se suben las imágenes. |
+| **ID de hoja Sheets** | ID de la hoja de cálculo del informe. |
 
----
+Esa configuración se persiste en la base de datos (tabla `configuracion`, clave `informe_pagos_config`). El backend lee de ahí para:
 
-## 4. Google Sheets: hoja del informe
-
-1. Crea una **hoja de cálculo** en [Google Sheets](https://sheets.google.com/) (nombre ej. “Informe pagos RapiCredit”).
-2. El **ID de la hoja** está en la URL:
-   - URL: `https://docs.google.com/spreadsheets/d/1XYZ...abc/edit`
-   - **ID de hoja:** `1XYZ...abc`
-3. **Compartir** la hoja:
-   - **Compartir** (arriba a la derecha).
-   - Añade el **mismo email de la cuenta de servicio**.
-   - Rol: **Editor**.
-   - Guardar.
-
-Ese **ID de hoja** es el que configuras en **Configuración > Informe pagos → ID Google Sheet**.  
-La app crea sola las pestañas **6am**, **1pm** y **4h30** si no existen.
+- **OCR / claridad:** `ocr_service.py` usa Vision con `google_credentials_json`. Si no hay credenciales, la claridad no se comprueba y la imagen se trata como “no clara” hasta el 3.º intento.
+- **Drive:** `google_drive_service.py` sube la imagen con las mismas credenciales y `google_drive_folder_id`.
+- **Sheets:** `google_sheets_informe_service.py` escribe en la hoja con las mismas credenciales y `google_sheets_id`.
 
 ---
 
-## 5. Resumen: qué configurar en la app
+## Resumen
 
-En **Configuración > Informe pagos (Drive, Sheets, OCR)** necesitas:
-
-| Campo en la app | Origen |
-|-----------------|--------|
-| **ID carpeta Google Drive** | ID de la carpeta de Drive (URL: `.../folders/ESTE_ID`). Carpeta compartida con el email de la cuenta de servicio como Editor. |
-| **Credenciales Google (cuenta de servicio JSON)** | Contenido completo del archivo JSON descargado en “Cuenta de servicio → Claves → JSON”. |
-| **ID Google Sheet** | ID de la hoja de cálculo (URL: `.../d/ESTE_ID/...`). Hoja compartida con el email de la cuenta de servicio como Editor. |
-| **Destinatarios del informe (emails)** | Emails que recibirán el link a la hoja (6:00, 13:00, 16:30). |
-
----
-
-## 6. Checklist rápido
-
-- [ ] Proyecto en Google Cloud creado o elegido.
-- [ ] **Cloud Vision API** activada.
-- [ ] **Google Drive API** activada.
-- [ ] **Google Sheets API** activada.
-- [ ] Cuenta de servicio creada y **clave JSON** descargada.
-- [ ] Carpeta en Drive creada, **compartida con el email de la cuenta de servicio (Editor)** y **ID de carpeta** copiado.
-- [ ] Hoja de Sheets creada, **compartida con el email de la cuenta de servicio (Editor)** y **ID de hoja** copiado.
-- [ ] En la app: **Configuración > Informe pagos** rellenado con ID carpeta, JSON de credenciales, ID hoja y destinatarios.
-
----
-
-## 7. Enlaces útiles
-
-- [Google Cloud Console](https://console.cloud.google.com/)
-- [Activar Cloud Vision API](https://console.cloud.google.com/apis/library/vision.googleapis.com)
-- [Activar Google Drive API](https://console.cloud.google.com/apis/library/drive.googleapis.com)
-- [Activar Google Sheets API](https://console.cloud.google.com/apis/library/sheets.googleapis.com)
-- [Crear cuenta de servicio (doc oficial)](https://cloud.google.com/iam/docs/create-service-account)
-
-Con esto tienes todo lo que requiere Google Cloud para configurar OCR (Vision), Drive y Sheets en esta aplicación.
+| Pregunta | Respuesta |
+|----------|-----------|
+| ¿A qué cuentas de Google está conectado? | A **ninguna cuenta personal**. Solo a **una cuenta de servicio** (Service Account) de Google Cloud. |
+| ¿Qué necesito de Google Cloud? | Proyecto, **Vision API**, **Drive API** y **Sheets API** activadas, una **cuenta de servicio** y su **clave JSON**. |
+| ¿El OCR usa la misma cuenta? | Sí. **OCR (Vision)** usa el mismo JSON que Drive y Sheets. |
+| ¿Dónde pongo el JSON y los IDs? | En la app: **Configuración → Informe pagos** (Credenciales Google, ID carpeta Drive, ID hoja Sheets). |

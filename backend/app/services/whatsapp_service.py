@@ -1,6 +1,6 @@
 """
 Servicio para manejar mensajes entrantes de WhatsApp (Meta API).
-Flujo cobranza: bienvenida → cédula EVJ (6-11 dígitos) → foto papeleta (máx. 3 intentos) → guardar en Drive + OCR + digitalizar.
+Flujo cobranza: bienvenida → cédula (E, J o V + 6-11 dígitos) → foto papeleta (máx. 3 intentos) → guardar en Drive + OCR + digitalizar.
 Las imágenes se guardan en pagos_whatsapp con link_imagen (Google Drive).
 """
 import re
@@ -16,14 +16,48 @@ from app.models.cliente import Cliente
 from app.models.pagos_whatsapp import PagosWhatsapp
 from app.models.conversacion_cobranza import ConversacionCobranza
 from app.models.pagos_informe import PagosInforme
+from app.models.mensaje_whatsapp import MensajeWhatsapp
 
 logger = logging.getLogger(__name__)
+
+
+def _telefono_normalizado(phone: str) -> str:
+    """Teléfono solo dígitos para guardar/consultar historial."""
+    return re.sub(r"\D", "", (phone or "").strip())
+
+
+def guardar_mensaje_whatsapp(
+    db: Session,
+    telefono: str,
+    direccion: str,
+    body: str,
+    message_type: str = "text",
+) -> None:
+    """Guarda un mensaje en el historial para mostrar copia de la conversación en Comunicaciones."""
+    if not telefono or direccion not in ("INBOUND", "OUTBOUND"):
+        return
+    phone = _telefono_normalizado(telefono)
+    if len(phone) < 8:
+        return
+    try:
+        row = MensajeWhatsapp(
+            telefono=phone,
+            direccion=direccion,
+            body=(body or "").strip() or None,
+            message_type=message_type or "text",
+            timestamp=datetime.utcnow(),
+        )
+        db.add(row)
+        db.commit()
+    except Exception as e:
+        logger.debug("No se pudo guardar mensaje en historial: %s", e)
+        db.rollback()
 
 # Mensajes del flujo (Configuración AI / WhatsApp puede personalizarlos después)
 MENSAJE_BIENVENIDA = (
     "Hola, bienvenido al servicio de cobranza de Rapicredit. "
     "Primero ingresa tu número de cédula sin guiones intermedios "
-    "(formato: inicia con EVJ, ninguna otra letra, seguido de entre 6 y 11 números, sin signos intermedios; puede ser mayúsculas o minúsculas)."
+    "(formato: debe empezar por una de las 3 letras E, J o V, seguido de entre 6 y 11 números; puede ser mayúsculas o minúsculas)."
 )
 MENSAJE_CONFIRMACION = "Confirma que el siguiente reporte de pago se realizará a cargo de {nombre}. ¿Sí o No?"
 MENSAJE_CONFIRMACION_SIN_NOMBRE = "Confirma que el siguiente reporte de pago se realizará a cargo del titular de la cédula {cedula}. ¿Sí o No?"
@@ -32,10 +66,10 @@ MENSAJE_GRACIAS_PIDE_FOTO = (
     "Si no está clara se te pedirá que vuelvas a tomar la foto; máximo 3 intentos. Al tercero se almacena."
 )
 MENSAJE_CEDULA_INVALIDA = (
-    "La cédula debe iniciar con EVJ (ninguna otra letra) seguido de entre 6 y 11 números, sin guiones ni signos. "
-    "Ejemplo: EVJ1234567. Vuelve a ingresarla."
+    "La cédula debe empezar por una de las 3 letras E, J o V, seguido de entre 6 y 11 números, sin guiones ni signos. "
+    "Ejemplos: E1234567, V12345678, J1234567 o EVJ1234567. Vuelve a ingresarla."
 )
-MENSAJE_VUELVE_CEDULA = "Por favor escribe de nuevo tu número de cédula (EVJ seguido de 6 a 11 números)."
+MENSAJE_VUELVE_CEDULA = "Por favor escribe de nuevo tu número de cédula (E, J o V seguido de 6 a 11 números)."
 MENSAJE_RESPONDE_SI_NO = "Por favor responde Sí o No: ¿El reporte de pago es a cargo de {nombre}?"
 MENSAJE_CONTINUAMOS_SIN_CONFIRMAR = "Continuamos. Envía una foto clara de tu papeleta de depósito a 20 cm."
 MENSAJE_ENVIA_FOTO = "Por favor envía una foto clara de tu papeleta de depósito a 20 cm."
@@ -43,8 +77,11 @@ MENSAJE_FOTO_POCO_CLARA = "La imagen no está lo suficientemente clara. Toma otr
 MENSAJE_RECIBIDO = "Hemos recibido tu papeleta. Gracias."
 OBSERVACION_NO_CONFIRMA = "No confirma identidad"
 
-# Validación cédula: EVJ (mayúscula o minúscula) + 6 a 11 dígitos, sin espacios ni guiones
-CEDULA_PATTERN = re.compile(r"^[Ee][Vv][Jj]\d{6,11}$")
+# Validación cédula: debe empezar por E, J o V (una de las 3 letras) + 6 a 11 dígitos. Acepta E1234567, V12345678, J1234567, EVJ1234567.
+CEDULA_PATTERN_E = re.compile(r"^[Ee]\d{6,11}$")
+CEDULA_PATTERN_J = re.compile(r"^[Jj]\d{6,11}$")
+CEDULA_PATTERN_V = re.compile(r"^[Vv]\d{6,11}$")
+CEDULA_PATTERN_EVJ = re.compile(r"^[Ee][Vv][Jj]\d{6,11}$")
 
 
 def _normalize_cedula_input(text: str) -> str:
@@ -53,17 +90,24 @@ def _normalize_cedula_input(text: str) -> str:
 
 
 def _validar_cedula_evj(text: str) -> bool:
-    """True si el texto es EVJ seguido de 6 a 11 números (puede ser mayúsculas o minúsculas)."""
+    """True si el texto empieza por E, J o V seguido de 6 a 11 números (p. ej. E1234567, V12345678, EVJ1234567)."""
     s = _normalize_cedula_input(text)
-    return bool(CEDULA_PATTERN.match(s)) if s else False
+    if not s:
+        return False
+    return bool(
+        CEDULA_PATTERN_E.match(s)
+        or CEDULA_PATTERN_J.match(s)
+        or CEDULA_PATTERN_V.match(s)
+        or CEDULA_PATTERN_EVJ.match(s)
+    )
 
 
 def _cedula_normalizada(text: str) -> str:
-    """Devuelve la cédula en formato EVJ + números (mayúsculas)."""
+    """Devuelve la cédula con letras en mayúsculas (E, J, V o EVJ + números)."""
     s = _normalize_cedula_input(text)
-    if not CEDULA_PATTERN.match(s):
+    if not _validar_cedula_evj(s):
         return s
-    return "EVJ" + s[3:]
+    return s.upper()
 
 
 def _es_respuesta_si(text: str) -> bool:
@@ -169,15 +213,20 @@ class WhatsAppService:
             }
             if message.type == "text" and message.text and db:
                 message_data["text_content"] = message.text.body
+                guardar_mensaje_whatsapp(db, message.from_, "INBOUND", message.text.body, "text")
                 result = await self._process_text_cobranza(message.text.body, message.from_, db)
                 message_data.update(result)
                 if result.get("response_text"):
                     await _send_whatsapp_async(message.from_, result["response_text"])
+                    guardar_mensaje_whatsapp(db, message.from_, "OUTBOUND", result["response_text"], "text")
             elif message.type == "image" and message.image and db:
+                body_imagen = (message.image.caption or "").strip() if message.image.caption else "[Imagen]"
+                guardar_mensaje_whatsapp(db, message.from_, "INBOUND", body_imagen, "image")
                 result = await self._process_image_message(message, db)
                 message_data.update(result)
                 if result.get("response_text"):
                     await _send_whatsapp_async(message.from_, result["response_text"])
+                    guardar_mensaje_whatsapp(db, message.from_, "OUTBOUND", result["response_text"], "text")
             else:
                 message_data["status"] = "unsupported_type"
                 message_data["note"] = f"Tipo {message.type} no soportado"
@@ -191,7 +240,7 @@ class WhatsAppService:
             return {"success": False, "error": str(e), "message_id": getattr(message, "id", None)}
 
     async def _process_text_cobranza(self, text: str, from_number: str, db: Session) -> Dict[str, Any]:
-        """Flujo: bienvenida → cédula EVJ → confirmación (Sí/No, máx. 3 intentos) → pedir foto. Respuestas por nombre cuando hay cliente."""
+        """Flujo: bienvenida → cédula (E, J o V + 6-11 dígitos) → confirmación (Sí/No, máx. 3 intentos) → pedir foto. Respuestas por nombre cuando hay cliente."""
         phone = "".join(c for c in from_number if c.isdigit())
         if len(phone) < 10:
             phone = from_number
@@ -292,7 +341,16 @@ class WhatsAppService:
         if not image_bytes:
             return {"status": "image_empty", "note": "Imagen vacía"}
         conv.intento_foto = (conv.intento_foto or 0) + 1
-        if conv.intento_foto < 3:
+        # Verificación real de claridad: Google Vision OCR; si detecta suficiente texto, se acepta en el primer intento
+        clara = False
+        try:
+            from app.services.ocr_service import imagen_suficientemente_clara
+            clara = imagen_suficientemente_clara(image_bytes)
+        except Exception as e:
+            logger.debug("Claridad imagen no comprobada: %s", e)
+        aceptar = clara or conv.intento_foto >= 3
+        if not aceptar:
+            logger.info("Foto papeleta rechazada por claridad (intento %d/3); se pide otra foto.", conv.intento_foto)
             conv.updated_at = datetime.utcnow()
             db.commit()
             return {
@@ -300,7 +358,7 @@ class WhatsAppService:
                 "intento_foto": conv.intento_foto,
                 "response_text": MENSAJE_FOTO_POCO_CLARA.format(n=conv.intento_foto),
             }
-        # Tercer intento: guardar en Drive, pagos_whatsapp, OCR, pagos_informes, Sheet
+        # Imagen clara (primer intento) o tercer intento: guardar en Drive, pagos_whatsapp, OCR, pagos_informes, Sheet
         link_imagen = None
         try:
             from app.services.google_drive_service import upload_image_and_get_link
