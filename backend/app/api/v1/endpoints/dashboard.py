@@ -293,12 +293,13 @@ def get_dashboard_admin(
                     Cuota.fecha_vencimiento <= fin_d,
                 )
             ) or 0
-            # Cobrado = suma mensual monto de cuotas pagadas (fecha_pago no nula) con fecha_pago en el mes
+            # Cobrado = suma mensual monto de cuotas pagadas con fecha_pago (solo parte fecha) en el mes.
+            # func.date() asegura que TIMESTAMP WITHOUT TZ se compare por fecha; igual que en pagos/reportes.
             cobrado = db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
                     Cuota.fecha_pago.isnot(None),
-                    Cuota.fecha_pago >= inicio_d,
-                    Cuota.fecha_pago <= fin_d,
+                    func.date(Cuota.fecha_pago) >= inicio_d,
+                    func.date(Cuota.fecha_pago) <= fin_d,
                 )
             ) or 0
             cartera_f = _safe_float(cartera)
@@ -406,7 +407,7 @@ def get_morosidad_por_dia(
             cobrado_dia = db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
                     Cuota.fecha_pago.isnot(None),
-                    Cuota.fecha_pago == d,
+                    func.date(Cuota.fecha_pago) == d,
                 )
             ) or 0
             morosidad_dia = max(0.0, _safe_float(cartera_dia) - _safe_float(cobrado_dia))
@@ -419,6 +420,43 @@ def get_morosidad_por_dia(
         return {"dias": resultado}
     except Exception as e:
         logger.exception("Error en morosidad-por-dia: %s", e)
+        return {"dias": []}
+
+
+@router.get("/proyeccion-cobro-30-dias")
+def get_proyeccion_cobro_30_dias(db: Session = Depends(get_db)):
+    """Proyección de cobro: monto programado por día desde hoy hasta hoy+30. Por cada día suma monto de cuotas con fecha_vencimiento ese día (programado total y pendiente sin pagar)."""
+    try:
+        hoy_utc = datetime.now(timezone.utc)
+        hoy_date = date(hoy_utc.year, hoy_utc.month, hoy_utc.day)
+        fin_date = hoy_date + timedelta(days=30)
+        resultado = []
+        nombres_mes = ("Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic")
+        d = hoy_date
+        while d <= fin_date:
+            # Monto programado del día = suma monto de cuotas con fecha_vencimiento = d
+            programado = db.scalar(
+                select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
+                    Cuota.fecha_vencimiento == d,
+                )
+            ) or 0
+            # Monto pendiente = solo cuotas no pagadas (fecha_pago nula) con vencimiento ese día
+            pendiente = db.scalar(
+                select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
+                    Cuota.fecha_vencimiento == d,
+                    Cuota.fecha_pago.is_(None),
+                )
+            ) or 0
+            resultado.append({
+                "fecha": d.isoformat(),
+                "dia": f"{d.day} {nombres_mes[d.month - 1]}",
+                "monto_programado": round(_safe_float(programado), 2),
+                "monto_pendiente": round(_safe_float(pendiente), 2),
+            })
+            d += timedelta(days=1)
+        return {"dias": resultado}
+    except Exception as e:
+        logger.exception("Error en proyeccion-cobro-30-dias: %s", e)
         return {"dias": []}
 
 
