@@ -8,8 +8,23 @@
 const DEFAULT_APP_NAME = "Sistema de Préstamos y Cobranza"
 const DEFAULT_APP_VERSION = "1.0.0"
 
-// Base path de la app (ej. /pagos para https://rapicredit.onrender.com/pagos)
-export const BASE_PATH = (import.meta.env.BASE_URL || '/').replace(/\/$/, '') || '';
+/**
+ * Base path de la app (ej. /pagos para https://rapicredit.onrender.com/pagos).
+ * Emparejamiento con basename:
+ * - Vite (vite.config.ts): base: '/pagos/' → import.meta.env.BASE_URL = '/pagos/'
+ * - Aquí: BASE_PATH = '/pagos' (sin barra final)
+ * - main.tsx: <BrowserRouter basename={BASE_PATH || '/'}> → Router usa /pagos
+ * - server.js: FRONTEND_BASE = '/pagos' (estáticos y SPA fallback)
+ * - App.tsx: rutas públicas por pathname relativo al basename: '/' y '/login'
+ * Fallback: si la URL es /pagos/chat-ai (o cualquier /pagos/*), usar /pagos aunque BASE_URL falle en build.
+ */
+function getBasePath(): string {
+  const fromVite = (import.meta.env.BASE_URL || '/').replace(/\/$/, '') || '';
+  if (fromVite) return fromVite;
+  if (typeof window !== 'undefined' && window.location.pathname.startsWith('/pagos')) return '/pagos';
+  return '/';
+}
+export const BASE_PATH = getBasePath();
 
 interface EnvConfig {
   API_URL: string;

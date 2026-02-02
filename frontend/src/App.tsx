@@ -8,14 +8,14 @@ import { Layout } from './components/layout/Layout'
 // Auth
 import { SimpleProtectedRoute } from './components/auth/SimpleProtectedRoute'
 import { useSimpleAuth } from './store/simpleAuthStore'
-import { BASE_PATH } from './config/env'
 
-/** En rutas públicas (/, /login) solo muestra el Outlet. En el resto muestra Layout con Outlet para que el dashboard y demás carguen. */
+/** En rutas públicas (/, /login) solo muestra el Outlet. En el resto muestra Layout con Outlet para que el dashboard y demás carguen.
+ * Con basename="/pagos", location.pathname es relativo al basename: "/" para raíz, "/login" para login (no incluye /pagos). */
 function RootLayoutWrapper() {
   const location = useLocation()
   useSimpleAuth()
-  const base = BASE_PATH || '/'
-  const isPublic = location.pathname === base || location.pathname === base + '/' || location.pathname === base + '/login'
+  const pathname = location.pathname.replace(/\/$/, '') || '/'
+  const isPublic = pathname === '/' || pathname === '/login'
   if (isPublic) return <Outlet />
   return (
     <SimpleProtectedRoute>
@@ -166,9 +166,11 @@ function App() {
             element={<Prestamos />}
           />
 
-          {/* Pagos */}
-          <Route path="pagos" element={<PagosPage />} />
-          <Route path="pagos/:id" element={<PagosPage />} />
+          {/* Pagos (URL: /pagos/pagos con basename /pagos) */}
+          <Route path="pagos">
+            <Route index element={<PagosPage />} />
+            <Route path=":id" element={<PagosPage />} />
+          </Route>
 
           {/* Amortización */}
           <Route path="amortizacion" element={<AmortizacionPage />} />

@@ -645,9 +645,9 @@ export function PrestamosList() {
                       {data.data.map((prestamo: any) => (
                       <TableRow key={prestamo.id}>
                         <TableCell>
-                          <div className="font-medium">{prestamo.nombres}</div>
+                          <div className="font-medium">{prestamo.nombres ?? prestamo.nombre_cliente ?? `Cliente #${prestamo.cliente_id ?? '-'}`}</div>
                         </TableCell>
-                        <TableCell>{prestamo.cedula}</TableCell>
+                        <TableCell>{prestamo.cedula ?? prestamo.cedula_cliente ?? '-'}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
                             <DollarSign className="h-4 w-4 text-green-600" />
@@ -673,7 +673,7 @@ export function PrestamosList() {
                         <TableCell>
                           <div className="flex items-center gap-1 text-sm text-gray-600">
                             <Calendar className="h-4 w-4" />
-                            {formatDate(prestamo.fecha_registro)}
+                            {formatDate(prestamo.fecha_registro ?? prestamo.fecha_creacion)}
                           </div>
                         </TableCell>
                         <TableCell className="text-right">

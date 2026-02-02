@@ -6,8 +6,8 @@ import { Toaster } from 'react-hot-toast'
 import App from './App.tsx'
 import './index.css'
 
-// Validación de variables de entorno
-import './config/env'
+// Validación de variables de entorno; BASE_PATH es la única fuente de verdad para basename (emparejado con Vite base y server.js FRONTEND_BASE)
+import { BASE_PATH } from './config/env'
 
 // Constantes de configuración
 const STALE_TIME_MINUTES = 5
@@ -53,7 +53,7 @@ if (!rootElement) {
     ReactDOM.createRoot(rootElement).render(
       <React.StrictMode>
         <QueryClientProvider client={queryClient}>
-          <BrowserRouter basename="/pagos">
+          <BrowserRouter basename={BASE_PATH || '/'}>
             <App />
             <Toaster
               position="top-right"

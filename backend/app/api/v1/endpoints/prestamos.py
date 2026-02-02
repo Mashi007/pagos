@@ -13,7 +13,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
-from app.schemas.prestamo import PrestamoCreate, PrestamoResponse, PrestamoUpdate
+from app.schemas.prestamo import PrestamoCreate, PrestamoResponse, PrestamoUpdate, PrestamoListResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -30,9 +30,11 @@ def listar_prestamos(
     concesionario: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Listado paginado de préstamos desde BD."""
-    q = select(Prestamo)
+    """Listado paginado de préstamos desde BD con nombres y cédula del cliente (join)."""
     count_q = select(func.count()).select_from(Prestamo)
+    q = select(Prestamo, Cliente.nombres, Cliente.cedula).select_from(Prestamo).join(
+        Cliente, Prestamo.cliente_id == Cliente.id
+    )
     if cliente_id is not None:
         q = q.where(Prestamo.cliente_id == cliente_id)
         count_q = count_q.where(Prestamo.cliente_id == cliente_id)
@@ -48,8 +50,25 @@ def listar_prestamos(
         count_q = count_q.where(Prestamo.concesionario == concesionario.strip())
     total = db.scalar(count_q) or 0
     q = q.order_by(Prestamo.id.desc()).offset((page - 1) * per_page).limit(per_page)
-    rows = db.execute(q).scalars().all()
-    items = [PrestamoResponse.model_validate(r) for r in rows]
+    rows = db.execute(q).all()
+    items = []
+    for row in rows:
+        p, nombres, cedula = row[0], row[1], row[2]
+        item = PrestamoListResponse(
+            id=p.id,
+            cliente_id=p.cliente_id,
+            total_financiamiento=p.total_financiamiento,
+            estado=p.estado,
+            concesionario=p.concesionario,
+            modelo=p.modelo,
+            analista=p.analista,
+            fecha_creacion=p.fecha_creacion,
+            fecha_actualizacion=getattr(p, "fecha_actualizacion", None),
+            fecha_registro=p.fecha_creacion,
+            nombres=nombres,
+            cedula=cedula,
+        )
+        items.append(item)
     total_pages = (total + per_page - 1) // per_page if total else 0
     return {
         "prestamos": items,

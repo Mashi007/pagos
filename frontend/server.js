@@ -418,8 +418,18 @@ function sendSpaIndex(req, res) {
   }
   try {
     let html = readFileSync(indexPath, 'utf8');
+    // <base href="/pagos/"> para que rutas relativas (ej. assets/xxx.js) se resuelvan bien en /pagos/chat-ai
+    const baseTag = `<base href="${FRONTEND_BASE}/">`;
+    if (!html.includes('<base ')) {
+      html = html.replace(/<head[^>]*>/, (m) => m + baseTag);
+    }
     // Siempre corregir rutas sin base: "/assets/ -> /pagos/assets/ para evitar 302 (build puede no aplicar base)
-    html = html.replace(/src="\/assets\//g, `src="${FRONTEND_BASE}/assets/`).replace(/href="\/assets\//g, `href="${FRONTEND_BASE}/assets/`);
+    // Incluir comillas simples por si el build emite src='/assets/...'
+    html = html
+      .replace(/src="\/assets\//g, `src="${FRONTEND_BASE}/assets/`)
+      .replace(/href="\/assets\//g, `href="${FRONTEND_BASE}/assets/`)
+      .replace(/src='\/assets\//g, `src='${FRONTEND_BASE}/assets/`)
+      .replace(/href='\/assets\//g, `href='${FRONTEND_BASE}/assets/`);
     res.type('html').send(html);
   } catch (err) {
     console.error(`❌ Error sirviendo index.html para ${req.method} ${req.path}:`, err);

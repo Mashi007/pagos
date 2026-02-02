@@ -45,3 +45,12 @@ class PrestamoResponse(BaseModel):
     analista: Optional[str] = None
     fecha_creacion: Optional[datetime] = None
     fecha_actualizacion: Optional[datetime] = None
+
+
+class PrestamoListResponse(PrestamoResponse):
+    """Préstamo para listado: incluye nombres y cedula del cliente (join)."""
+    nombres: Optional[str] = None
+    cedula: Optional[str] = None
+    fecha_registro: Optional[datetime] = None
+    numero_cuotas: Optional[int] = None
+    modalidad_pago: Optional[str] = None

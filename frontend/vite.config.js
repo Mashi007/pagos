@@ -14,7 +14,8 @@ export default defineConfig({
       }
     }
   },
-  base: '/',
+  // Debe coincidir con vite.config.ts para emparejamiento con basename (server.js FRONTEND_BASE = /pagos)
+  base: '/pagos/',
   define: {
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development')
   }
