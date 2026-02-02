@@ -6,6 +6,7 @@ export interface AIConfigState {
   configured?: boolean
   provider?: string
   openai_api_key?: string
+  modelo_recomendado?: string
   modelo: string
   temperatura: string
   max_tokens: string

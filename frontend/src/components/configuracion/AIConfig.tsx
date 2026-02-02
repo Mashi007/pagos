@@ -106,6 +106,8 @@ export function AIConfig() {
       const configCargada: AIConfigState = {
         configured: !!data.configured,
         provider: data.provider || 'openrouter',
+        openai_api_key: data.openai_api_key ?? '',
+        modelo_recomendado: data.modelo_recomendado || 'openai/gpt-4o-mini',
         modelo: data.modelo || 'openai/gpt-4o-mini',
         temperatura: data.temperatura || '0.7',
         max_tokens: data.max_tokens || '1000',
@@ -146,11 +148,15 @@ export function AIConfig() {
   const handleGuardar = async () => {
     setGuardando(true)
     try {
+      const tokenParaEnviar = config.openai_api_key && config.openai_api_key !== '***'
+        ? config.openai_api_key
+        : '***'
       await apiClient.put('/api/v1/configuracion/ai/configuracion', {
         modelo: config.modelo,
         temperatura: config.temperatura,
         max_tokens: config.max_tokens,
         activo: config.activo,
+        openai_api_key: tokenParaEnviar,
       })
       toast.success('Configuración de AI guardada')
 
@@ -392,7 +398,7 @@ export function AIConfig() {
     }
 
     if (!config.configured) {
-      toast.error('Configura OPENROUTER_API_KEY en las variables de entorno del backend (dashboard de Render) y reinicia el servicio.')
+      toast.error('Ingresa tu API Key de OpenRouter en el campo de arriba y guarda, o configura OPENROUTER_API_KEY en variables de entorno del servidor.')
       return
     }
 
@@ -1174,11 +1180,15 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                         // Si hay token válido y se está activando, guardar automáticamente
                         if (e.target.checked && config.configured) {
                           try {
+                            const tokenParaEnviar = config.openai_api_key && config.openai_api_key !== '***'
+                              ? config.openai_api_key
+                              : '***'
                             await apiClient.put('/api/v1/configuracion/ai/configuracion', {
                               modelo: config.modelo,
                               temperatura: config.temperatura,
                               max_tokens: config.max_tokens,
                               activo: nuevoEstado,
+                              openai_api_key: tokenParaEnviar,
                             })
                             toast.success('âœ… AI activado y guardado automáticamente')
                             await cargarConfiguracion()
@@ -1238,9 +1248,9 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                     API Key no válida o no configurada
                   </p>
                   <div className="text-sm text-gray-600 space-y-1">
-                    <p>1. Verifica que tu API Key comience con "sk-"</p>
-                    <p>2. Asegúrate de que la API Key sea válida y tenga créditos disponibles</p>
-                    <p>3. Obtén una nueva API Key en: <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">platform.openai.com/api-keys</a></p>
+                    <p>1. Ingresa tu API Key de OpenRouter en el campo de abajo (o obtén una en <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">openrouter.ai/keys</a>)</p>
+                    <p>2. Activa el servicio AI con el interruptor de arriba y guarda</p>
+                    <p>3. El modelo recomendado es GPT-4o Mini (buen balance costo/velocidad)</p>
                   </div>
                 </div>
               </div>
@@ -1262,7 +1272,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                     Configuración incompleta
                   </p>
                   <p className="text-sm text-gray-600">
-                    Configura la variable <strong>OPENROUTER_API_KEY</strong> en el dashboard del backend (Render, etc.). La clave nunca se envía ni se muestra en el frontend por seguridad.
+                    Ingresa tu API Key de OpenRouter en el campo de abajo y activa el servicio. También puedes configurar <strong>OPENROUTER_API_KEY</strong> en variables de entorno del servidor.
                   </p>
                 </div>
               </div>
@@ -1271,10 +1281,18 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
 
           <Card className="shadow-sm border-gray-200">
             <CardContent className="pt-6 space-y-4">
-              <div className="rounded-lg bg-blue-50 border border-blue-200 p-4">
-                <p className="text-sm font-medium text-blue-900 mb-1">API key solo en el servidor</p>
-                <p className="text-xs text-blue-800">
-                  Añade <strong>OPENROUTER_API_KEY</strong> en las variables de entorno del backend (dashboard de Render u otro host). Obtén la clave en <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="underline">openrouter.ai/keys</a>. La clave nunca se expone en el frontend.
+              <div>
+                <label className="text-sm font-medium block mb-2">API Key / Token (OpenRouter)</label>
+                <Input
+                  type="password"
+                  autoComplete="off"
+                  value={config.openai_api_key === '***' ? '' : (config.openai_api_key ?? '')}
+                  onChange={(e) => handleChange('openai_api_key', e.target.value)}
+                  placeholder={config.openai_api_key === '***' ? '•••••••• (ya configurada — deja en blanco para no cambiar)' : 'Pega tu API key de OpenRouter'}
+                  className="font-mono text-sm"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Obtén tu clave en <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">openrouter.ai/keys</a>. Si ya está configurada, deja el campo en blanco para no sobrescribir.
                 </p>
               </div>
 
@@ -1287,10 +1305,20 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                     </SelectTrigger>
                     <SelectContent>
                       {OPENROUTER_MODELS.map((m) => (
-                        <SelectItem key={m.id} value={m.id}>{m.label}</SelectItem>
+                        <SelectItem key={m.id} value={m.id}>
+                          <span className="flex items-center gap-2">
+                            {m.label}
+                            {config.modelo_recomendado && m.id === config.modelo_recomendado && (
+                              <Badge variant="secondary" className="text-xs">Recomendado</Badge>
+                            )}
+                          </span>
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  {config.modelo_recomendado && (
+                    <p className="text-xs text-gray-500 mt-1">Recomendado: GPT-4o Mini — buen balance costo y velocidad</p>
+                  )}
                 </div>
 
                 <div>

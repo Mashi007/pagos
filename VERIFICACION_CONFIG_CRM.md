@@ -73,9 +73,23 @@ Con esto, la configuración cuando se implemente en el módulo de configuración
 
 ---
 
-## 4. Checklist final
+## 4. Notificaciones: integración Email, WhatsApp y get_db (reglas de negocio)
+
+- **get_db:** Todos los endpoints de Notificaciones inyectan `db: Session = Depends(get_db)` (lista, resumen, clientes-retrasados, actualizar, pestañas GET/POST enviar). Los datos vienen de BD (cuotas, clientes, configuracion).
+- **Configuración de envíos (notificaciones_envios):** Cargada desde BD en cada POST `/enviar` vía `get_notificaciones_envios_config(db)`. Por cada tipo (PAGO_5_DIAS_ANTES, PAGO_DIA_0, PREJUDICIAL, MORA_61, etc.) se respeta `habilitado` (si false no se envía) y `cco` (se añade al correo).
+- **Email:** Envío con `send_email()` (sync_from_db en core/email); CCO por tipo soportado en `send_email(..., cc_emails=...)`.
+- **WhatsApp:** Envío con `send_whatsapp_text()` (app/core/whatsapp_send.py) usando config desde BD (whatsapp_config_holder). Si el item tiene `telefono`, se envía el mismo cuerpo por WhatsApp. Respuesta incluye `enviados_whatsapp`, `fallidos_whatsapp`.
+
+Con esto Notificaciones cumple procesos y reglas de negocio: datos reales desde BD, config desde BD, canales Email y WhatsApp integrados a Configuración.
+
+---
+
+## 5. Checklist final
 
 - [x] Notificaciones usan config Email desde BD (sync_from_db en send_email).
+- [x] Notificaciones usan config envíos (habilitado/CCO) desde BD (notificaciones_envios).
+- [x] Notificaciones envían por WhatsApp cuando hay teléfono (config desde Configuración > WhatsApp).
+- [x] Todos los procesos de Notificaciones usan get_db (lista, resumen, tabs, enviar).
 - [x] Tickets CRM usan contactos de notificación desde config Email (tickets_notify_emails).
 - [x] Comunicaciones muestran estado WhatsApp y enlace a Configuración > WhatsApp.
 - [x] WhatsApp webhook y servicio usan config desde BD vía whatsapp_config_holder.

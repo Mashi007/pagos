@@ -43,12 +43,16 @@
 - **GET /chat/calificaciones:** Implementado con `get_db`. Lee desde `configuracion` y filtra por query params `calificacion`, `procesado`.
 - **PUT /chat/calificaciones/{id}/procesar:** Implementado con `get_db`. Actualiza el ítem en el JSON por `id` y marca como procesado con notas.
 
-### 2.2 Contexto de BD para respuestas del chat
+### 2.2 Contexto de BD para respuestas del chat (estructura para respuestas rápidas y solo datos get_db)
 
-En **POST /chat** se añade una función que consulta la BD (clientes, préstamos, cuotas, etc.) y genera un resumen numérico y descriptivo. Ese resumen se incluye en el primer mensaje de sistema al llamar a OpenRouter, de forma que el modelo pueda responder preguntas sobre "cuántos préstamos hay", "clientes en mora", etc., con datos reales.
+En **POST /chat** se usa una estructura pensada para respuestas rápidas y uso explícito solo de datos de get_db:
 
-- **Tablas/consultas usadas:** según modelos disponibles (Cliente, Prestamo, Cuota, etc.) y `get_db` inyectado en el endpoint.
-- **Formato:** texto en el system message, por ejemplo: "Contexto actual de la base de datos: ..." para no cambiar la API de OpenRouter.
+- **CHAT_SYSTEM_PROMPT_INSTRUCCIONES:** prompt del sistema que exige al modelo usar ÚNICAMENTE los datos del bloque "Datos disponibles (get_db)", responder con cualquier dato disponible, ser conciso y no inventar cifras.
+- **_build_chat_context(db):** una sola ronda de consultas agregadas (count) a Cliente, Prestamo, Cuota; salida compacta (menos tokens = más rápido).
+- **_build_chat_system_prompt(db):** arma el system prompt completo: instrucciones + bloque "Datos disponibles (get_db):" + contexto. El modelo debe responder solo con datos disponibles ahí.
+- **OPENROUTER_TIMEOUT:** timeout acotado (45 s) para no bloquear.
+
+- **Tablas/consultas usadas:** Cliente, Prestamo, Cuota vía `get_db`; formato texto compacto en el system message.
 
 ---
 

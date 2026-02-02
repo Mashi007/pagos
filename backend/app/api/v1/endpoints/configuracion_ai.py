@@ -2,6 +2,12 @@
 Endpoints de configuración AI usando OpenRouter.
 La API key se lee SOLO de variables de entorno (OPENROUTER_API_KEY); nunca se expone al frontend.
 Configuración (modelo, temperatura, max_tokens, activo) se persiste en BD (tabla configuracion).
+
+Estructura para respuestas rápidas y datos de get_db:
+- CHAT_SYSTEM_PROMPT_INSTRUCCIONES: prompt que exige usar solo datos del bloque 'Datos disponibles (get_db)'.
+- _build_chat_context(db): una ronda de consultas agregadas (count) para armar ese bloque de forma compacta.
+- _build_chat_system_prompt(db): instrucciones + 'Datos disponibles (get_db):' + contexto; el modelo debe
+  responder con cualquier dato disponible ahí. OPENROUTER_TIMEOUT acota la espera.
 Ref: https://openrouter.ai/docs/api-reference/chat/completion
 """
 import json
@@ -38,20 +44,32 @@ CHAT_SYSTEM_PROMPT_INSTRUCCIONES = (
     "indica que solo respondes consultas sobre estos datos."
 )
 
+# Modelo recomendado para OpenRouter (balance costo/velocidad/calidad para Chat y GPT).
+MODELO_RECOMENDADO = "openai/gpt-4o-mini"
+
 # Valores por defecto (se sobrescriben desde BD si existe)
 _DEFAULT_AI_CONFIG: dict[str, Any] = {
     "modelo": None,
     "temperatura": "0.7",
     "max_tokens": "1000",
     "activo": "true",
+    "openrouter_api_key": None,  # Token OpenRouter; también se puede usar OPENROUTER_API_KEY en env
 }
 
 # Caché en memoria sincronizado con BD
 _ai_config_stub: dict[str, Any] = dict(_DEFAULT_AI_CONFIG)
 
 
+def _is_api_key_masked(value: Any) -> bool:
+    """True si el frontend envía valor enmascarado (no sobrescribir el token real)."""
+    if value is None:
+        return True
+    s = (value if isinstance(value, str) else str(value)).strip()
+    return s == "" or s == "***" or s == "••••••"
+
+
 def _load_ai_config_from_db(db: Session) -> None:
-    """Carga configuración AI desde BD y actualiza _ai_config_stub."""
+    """Carga configuración AI desde BD y actualiza _ai_config_stub (incluye openrouter_api_key; no se expone en GET)."""
     global _ai_config_stub
     try:
         row = db.get(Configuracion, CLAVE_AI)
@@ -61,6 +79,8 @@ def _load_ai_config_from_db(db: Session) -> None:
                 for k in ("modelo", "temperatura", "max_tokens", "activo"):
                     if k in data and data[k] is not None:
                         _ai_config_stub[k] = str(data[k])
+                if "openrouter_api_key" in data and data["openrouter_api_key"]:
+                    _ai_config_stub["openrouter_api_key"] = str(data["openrouter_api_key"]).strip()
     except Exception:
         pass
 
@@ -100,21 +120,31 @@ def _build_chat_system_prompt(db: Session) -> str:
 
 
 def _get_openrouter_key() -> Optional[str]:
-    """API key solo desde entorno; nunca desde body ni BD."""
-    key = getattr(settings, "OPENROUTER_API_KEY", None) or ""
-    return key.strip() or None
+    """API key: primero desde BD (configuración guardada en app), luego desde entorno OPENROUTER_API_KEY."""
+    key_bd = (_ai_config_stub.get("openrouter_api_key") or "").strip()
+    if key_bd:
+        return key_bd
+    key_env = getattr(settings, "OPENROUTER_API_KEY", None) or ""
+    return key_env.strip() or None
 
 
 def _get_model() -> str:
-    m = _ai_config_stub.get("modelo") or getattr(settings, "OPENROUTER_MODEL", None) or "openai/gpt-4o-mini"
-    return (m or "openai/gpt-4o-mini").strip()
+    m = _ai_config_stub.get("modelo") or getattr(settings, "OPENROUTER_MODEL", None) or MODELO_RECOMENDADO
+    return (m or MODELO_RECOMENDADO).strip()
+
+
+# Timeout para llamadas a OpenRouter (segundos). Acotado para respuestas rápidas.
+OPENROUTER_TIMEOUT = 45
 
 
 def _call_openrouter(messages: list[dict], model: Optional[str] = None, temperature: float = 0.7, max_tokens: int = 1000) -> dict:
     """Llama a OpenRouter API. La clave solo se usa aquí desde settings."""
     key = _get_openrouter_key()
     if not key:
-        raise HTTPException(status_code=503, detail="AI no configurada: falta OPENROUTER_API_KEY en el servidor. Configúrala en variables de entorno (dashboard de Render, etc.).")
+        raise HTTPException(
+            status_code=503,
+            detail="AI no configurada: ingresa tu API Key de OpenRouter en Configuración > Inteligencia Artificial (o configura OPENROUTER_API_KEY en variables de entorno del servidor). Obtén la clave en https://openrouter.ai/keys",
+        )
     url = "https://openrouter.ai/api/v1/chat/completions"
     body = {
         "model": model or _get_model(),
@@ -134,7 +164,7 @@ def _call_openrouter(messages: list[dict], model: Optional[str] = None, temperat
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        with urllib.request.urlopen(req, timeout=OPENROUTER_TIMEOUT) as resp:
             out = json.loads(resp.read().decode())
     except urllib.error.HTTPError as e:
         body_err = e.read().decode() if e.fp else ""
@@ -154,7 +184,8 @@ def _call_openrouter(messages: list[dict], model: Optional[str] = None, temperat
 def get_ai_configuracion(db: Session = Depends(get_db)):
     """
     Devuelve la configuración AI para el frontend (desde BD).
-    NUNCA incluye la API key; solo 'configured' (true si OPENROUTER_API_KEY está definida).
+    NUNCA incluye el token real: openai_api_key es "***" si hay clave (BD o env), "" si no.
+    modelo_recomendado para que el frontend muestre el GPT recomendado.
     """
     _load_ai_config_from_db(db)
     key = _get_openrouter_key()
@@ -163,10 +194,10 @@ def get_ai_configuracion(db: Session = Depends(get_db)):
         "configured": bool(key),
         "provider": "openrouter",
         "modelo": modelo,
+        "modelo_recomendado": MODELO_RECOMENDADO,
         "temperatura": _ai_config_stub.get("temperatura", "0.7"),
         "max_tokens": _ai_config_stub.get("max_tokens", "1000"),
         "activo": _ai_config_stub.get("activo", "true"),
-        # Compatibilidad con frontend que esperaba openai_api_key: no enviar la clave, solo un placeholder
         "openai_api_key": "***" if key else "",
     }
 
@@ -176,33 +207,40 @@ class AIConfigUpdate(BaseModel):
     temperatura: Optional[str] = None
     max_tokens: Optional[str] = None
     activo: Optional[str] = None
+    openai_api_key: Optional[str] = None  # Token OpenRouter; si es *** o vacío no se sobrescribe
+    openrouter_api_key: Optional[str] = None  # Alias para el mismo token
 
 
 @router.put("/configuracion")
 def put_ai_configuracion(payload: AIConfigUpdate = Body(...), db: Session = Depends(get_db)):
     """
-    Actualiza modelo, temperatura, max_tokens, activo y persiste en BD.
-    La API key NUNCA se acepta ni se guarda aquí; solo desde variables de entorno.
+    Actualiza modelo, temperatura, max_tokens, activo y opcionalmente el token OpenRouter.
+    Si openai_api_key u openrouter_api_key viene con *** o vacío, no se sobrescribe el token guardado.
     """
     _load_ai_config_from_db(db)
     data = payload.model_dump(exclude_none=True)
     for k in ("modelo", "temperatura", "max_tokens", "activo"):
         if k in data and data[k] is not None:
             _ai_config_stub[k] = str(data[k])
-    # Persistir en BD
+    token_nuevo = data.get("openrouter_api_key") or data.get("openai_api_key")
+    if token_nuevo is not None and not _is_api_key_masked(token_nuevo):
+        _ai_config_stub["openrouter_api_key"] = str(token_nuevo).strip()
+    # Persistir en BD (incluye openrouter_api_key si está en el stub)
     try:
         row = db.get(Configuracion, CLAVE_AI)
-        valor_json = json.dumps({
+        payload_bd = {
             "modelo": _ai_config_stub.get("modelo"),
             "temperatura": _ai_config_stub.get("temperatura"),
             "max_tokens": _ai_config_stub.get("max_tokens"),
             "activo": _ai_config_stub.get("activo"),
-        })
+        }
+        if _ai_config_stub.get("openrouter_api_key"):
+            payload_bd["openrouter_api_key"] = _ai_config_stub["openrouter_api_key"]
+        valor_json = json.dumps(payload_bd)
         if row:
             row.valor = valor_json
         else:
-            row = Configuracion(clave=CLAVE_AI, valor=valor_json)
-            db.add(row)
+            db.add(Configuracion(clave=CLAVE_AI, valor=valor_json))
         db.commit()
     except Exception:
         db.rollback()
