@@ -412,14 +412,15 @@ def get_prestamos_por_modelo(
 
 
 def _rangos_financiamiento():
-    """Definición de rangos de monto para agrupar total_financiamiento."""
+    """Bandas de $200 USD: cantidad de préstamos por total_financiamiento (tabla prestamos)."""
     return [
         (0, 200, "$0 - $200"),
         (200, 400, "$200 - $400"),
         (400, 600, "$400 - $600"),
         (600, 800, "$600 - $800"),
         (800, 1000, "$800 - $1,000"),
-        (1000, 999999999, "$1,000+"),
+        (1000, 1200, "$1,000 - $1,200"),
+        (1200, 999999999, "Más de $1,200"),
     ]
 
 
@@ -432,39 +433,28 @@ def get_financiamiento_por_rangos(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Financiamiento por rangos. Datos reales: agrupa Cliente por total_financiamiento."""
+    """Bandas por total_financiamiento: cantidad de préstamos (COUNT) por banda desde tabla prestamos, no suma en dólares."""
     try:
         rangos_def = _rangos_financiamiento()
         resultado = []
         total_p = 0
-        total_m = 0.0
         for min_val, max_val, cat in rangos_def:
             if max_val >= 999999999:
-                q = select(
-                    func.count().label("n"),
-                    func.coalesce(func.sum(Cliente.total_financiamiento), 0).label("m"),
-                ).select_from(Cliente).where(
-                    Cliente.total_financiamiento.isnot(None),
-                    Cliente.total_financiamiento >= min_val,
+                q = select(func.count().label("n")).select_from(Prestamo).where(
+                    Prestamo.total_financiamiento.isnot(None),
+                    Prestamo.total_financiamiento >= min_val,
                 )
             else:
-                q = select(
-                    func.count().label("n"),
-                    func.coalesce(func.sum(Cliente.total_financiamiento), 0).label("m"),
-                ).select_from(Cliente).where(
-                    Cliente.total_financiamiento.isnot(None),
-                    Cliente.total_financiamiento >= min_val,
-                    Cliente.total_financiamiento < max_val,
+                q = select(func.count().label("n")).select_from(Prestamo).where(
+                    Prestamo.total_financiamiento.isnot(None),
+                    Prestamo.total_financiamiento >= min_val,
+                    Prestamo.total_financiamiento < max_val,
                 )
-            row = db.execute(q).one()
-            n, m = int(row.n or 0), _safe_float(row.m)
+            n = int(db.scalar(q) or 0)
             total_p += n
-            total_m += m
-            resultado.append({"categoria": cat, "cantidad_prestamos": n, "monto_total": m})
+            resultado.append({"categoria": cat, "cantidad_prestamos": n, "monto_total": 0.0})
         if total_p == 0:
             total_p = 1
-        if total_m == 0:
-            total_m = 1.0
         return {
             "rangos": [
                 {
@@ -472,32 +462,32 @@ def get_financiamiento_por_rangos(
                     "cantidad_prestamos": r["cantidad_prestamos"],
                     "monto_total": r["monto_total"],
                     "porcentaje_cantidad": round(100 * r["cantidad_prestamos"] / total_p, 1),
-                    "porcentaje_monto": round(100 * r["monto_total"] / total_m, 1),
+                    "porcentaje_monto": 0.0,
                 }
                 for r in resultado
             ],
             "total_prestamos": total_p,
-            "total_monto": total_m,
+            "total_monto": 0.0,
         }
     except Exception as e:
         logger.exception("Error en financiamiento-por-rangos: %s", e)
         rangos = [
-            ("$0 - $200", 85, 12000),
-            ("$200 - $400", 120, 36000),
-            ("$400 - $600", 95, 47500),
-            ("$600 - $800", 70, 49000),
-            ("$800 - $1,000", 45, 40500),
-            ("$1,000+", 32, 55000),
+            ("$0 - $200", 0),
+            ("$200 - $400", 0),
+            ("$400 - $600", 0),
+            ("$600 - $800", 0),
+            ("$800 - $1,000", 0),
+            ("$1,000 - $1,200", 0),
+            ("Más de $1,200", 0),
         ]
-        total_p = sum(r[1] for r in rangos)
-        total_m = sum(r[2] for r in rangos)
+        total_p = max(1, sum(r[1] for r in rangos))
         return {
             "rangos": [
-                {"categoria": c, "cantidad_prestamos": n, "monto_total": m, "porcentaje_cantidad": round(100 * n / total_p, 1), "porcentaje_monto": round(100 * m / total_m, 1)}
-                for c, n, m in rangos
+                {"categoria": c, "cantidad_prestamos": n, "monto_total": 0.0, "porcentaje_cantidad": round(100 * n / total_p, 1), "porcentaje_monto": 0.0}
+                for c, n in rangos
             ],
             "total_prestamos": total_p,
-            "total_monto": float(total_m),
+            "total_monto": 0.0,
         }
 
 

@@ -568,102 +568,23 @@ export function DashboardMenu() {
   const chartAxisTick = { fontSize: 13, fill: '#374151', fontWeight: 500 }
   const chartLegendStyle = { wrapperStyle: { paddingTop: 14 }, iconType: 'rect' as const, iconSize: 12 }
 
-  // Procesar datos de financiamiento por rangos en bandas de $200 USD
+  // Bandas desde backend: $0-$200, $200-$400, ..., $800-$1000, $1000-$1200, Más de $1200 (cantidad de préstamos por banda)
   const datosBandas200 = useMemo(() => {
     try {
       if (!datosFinanciamientoRangos?.rangos || datosFinanciamientoRangos.rangos.length === 0) {
         return []
       }
-
-      // Crear bandas de $200 USD
-      const bandas: Record<string, number> = {}
-      const montosExtraidos = datosFinanciamientoRangos.rangos.map(r => {
-        // Extraer el monto máximo del rango
-        const match = r.categoria.match(/\$(\d+)/g)
-        if (match) {
-          const montos = match.map(m => parseInt(m.replace('$', '').replace(/,/g, '')))
-          return Math.max(...montos)
-        }
-        return 0
-      }).filter(m => !isNaN(m) && m > 0) // Filtrar valores inválidos
-      
-      // Si no hay montos válidos, retornar array vacío
-      if (montosExtraidos.length === 0) {
-        return []
-      }
-      
-      const maxMonto = Math.max(...montosExtraidos)
-
-    // Inicializar todas las bandas de $200 desde $0 hasta el máximo
-    for (let i = 0; i <= maxMonto; i += 200) {
-      const bandaMax = i + 200
-      const etiqueta = bandaMax > maxMonto && i > 0
-        ? `$${i.toLocaleString()}+`
-        : `$${i.toLocaleString()} - $${bandaMax.toLocaleString()}`
-      bandas[etiqueta] = 0
-    }
-
-    // Distribuir los préstamos de los rangos existentes en las nuevas bandas de $200
-    datosFinanciamientoRangos.rangos.forEach(rango => {
-      const cantidad = rango.cantidad_prestamos
-      const montoPromedio = rango.monto_total / (cantidad || 1)
-
-      // Extraer límites del rango
-      const match = rango.categoria.match(/\$(\d+)/g)
-      if (match) {
-        const montos = match.map(m => parseInt(m.replace('$', '').replace(/,/g, '')))
-        const minRango = montos[0] || 0
-        const maxRango = rango.categoria.includes('+') ? maxMonto : (montos[1] || montos[0] + 300)
-
-        // Distribuir proporcionalmente en las bandas de $200
-        for (let i = 0; i <= maxMonto; i += 200) {
-          const bandaMin = i
-          const bandaMax = i + 200
-
-          // Calcular intersección entre el rango y la banda
-          const interseccionMin = Math.max(bandaMin, minRango)
-          const interseccionMax = Math.min(bandaMax, maxRango)
-
-          if (interseccionMin < interseccionMax) {
-            const porcentaje = (interseccionMax - interseccionMin) / (maxRango - minRango)
-            const cantidadAsignada = Math.round(cantidad * porcentaje)
-
-            const etiqueta = bandaMax > maxMonto && i > 0
-              ? `$${i.toLocaleString()}+`
-              : `$${i.toLocaleString()} - $${bandaMax.toLocaleString()}`
-
-            if (bandas[etiqueta] !== undefined) {
-              bandas[etiqueta] += cantidadAsignada
-            }
-          }
-        }
-      }
-    })
-
-    // Convertir a array y ordenar por monto (descendente)
-    const bandasArray = Object.entries(bandas)
-      .map(([categoria, cantidad]) => {
-        // Extraer el monto mínimo para ordenar (capturar todos los dígitos y comas después del $)
-        const match = categoria.match(/\$([\d,]+)/)
-        const montoMin = match ? parseInt(match[1].replace(/,/g, '')) : 0
-        return {
-          categoria,
-          cantidad,
-          montoMin
-        }
-      })
-      .filter(item => item.cantidad > 0) // Solo mostrar bandas con datos
-      .sort((a, b) => b.montoMin - a.montoMin) // Ordenar de mayor a menor (valores grandes arriba)
-
-      // Formatear etiquetas de manera más legible
-      // El orden es descendente (mayor a menor), así los valores más grandes aparecen arriba en el gráfico vertical
-      return bandasArray.map(item => ({
-        ...item,
-        categoriaFormateada: item.categoria.replace(/,/g, '') // Remover comas para mejor visualización
-      }))
+      // Orden descendente (mayor banda arriba en el gráfico horizontal): Más de $1200 primero, luego $1000-$1200, etc.
+      const orden = ['Más de $1,200', '$1,000 - $1,200', '$800 - $1,000', '$600 - $800', '$400 - $600', '$200 - $400', '$0 - $200']
+      return [...datosFinanciamientoRangos.rangos]
+        .sort((a, b) => orden.indexOf(b.categoria) - orden.indexOf(a.categoria))
+        .map(r => ({
+          ...r,
+          categoriaFormateada: r.categoria.replace(/,/g, ''),
+        }))
     } catch (error) {
       console.error('Error procesando datos de financiamiento por rangos:', error)
-      return [] // Retornar array vacío en caso de error
+      return []
     }
   }, [datosFinanciamientoRangos])
 
