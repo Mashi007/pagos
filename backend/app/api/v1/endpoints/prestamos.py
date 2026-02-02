@@ -1,0 +1,137 @@
+"""
+Endpoints de préstamos. Datos reales desde BD (tabla prestamos).
+Todos los endpoints usan Depends(get_db). No hay stubs ni datos demo.
+"""
+import logging
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
+from app.core.database import get_db
+from app.core.deps import get_current_user
+from app.models.cliente import Cliente
+from app.models.prestamo import Prestamo
+from app.schemas.prestamo import PrestamoCreate, PrestamoResponse, PrestamoUpdate
+
+logger = logging.getLogger(__name__)
+router = APIRouter(dependencies=[Depends(get_current_user)])
+
+
+@router.get("", response_model=dict)
+@router.get("/", include_in_schema=False, response_model=dict)
+def listar_prestamos(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+    cliente_id: Optional[int] = Query(None),
+    estado: Optional[str] = Query(None),
+    analista: Optional[str] = Query(None),
+    concesionario: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Listado paginado de préstamos desde BD."""
+    q = select(Prestamo)
+    count_q = select(func.count()).select_from(Prestamo)
+    if cliente_id is not None:
+        q = q.where(Prestamo.cliente_id == cliente_id)
+        count_q = count_q.where(Prestamo.cliente_id == cliente_id)
+    if estado and estado.strip():
+        est = estado.strip().upper()
+        q = q.where(Prestamo.estado == est)
+        count_q = count_q.where(Prestamo.estado == est)
+    if analista and analista.strip():
+        q = q.where(Prestamo.analista == analista.strip())
+        count_q = count_q.where(Prestamo.analista == analista.strip())
+    if concesionario and concesionario.strip():
+        q = q.where(Prestamo.concesionario == concesionario.strip())
+        count_q = count_q.where(Prestamo.concesionario == concesionario.strip())
+    total = db.scalar(count_q) or 0
+    q = q.order_by(Prestamo.id.desc()).offset((page - 1) * per_page).limit(per_page)
+    rows = db.execute(q).scalars().all()
+    items = [PrestamoResponse.model_validate(r) for r in rows]
+    total_pages = (total + per_page - 1) // per_page if total else 0
+    return {
+        "prestamos": items,
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": total_pages,
+    }
+
+
+@router.get("/stats", response_model=dict)
+def get_prestamos_stats(db: Session = Depends(get_db)):
+    """Estadísticas de préstamos desde BD (total, por estado)."""
+    total = db.scalar(select(func.count()).select_from(Prestamo)) or 0
+    rows = db.execute(
+        select(Prestamo.estado, func.count()).select_from(Prestamo).group_by(Prestamo.estado)
+    ).all()
+    por_estado = {r[0]: r[1] for r in rows}
+    return {"total": total, "por_estado": por_estado}
+
+
+@router.get("/{prestamo_id}", response_model=PrestamoResponse)
+def get_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
+    """Obtiene un préstamo por ID desde BD."""
+    row = db.get(Prestamo, prestamo_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+    return PrestamoResponse.model_validate(row)
+
+
+@router.post("", response_model=PrestamoResponse, status_code=201)
+def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db)):
+    """Crea un préstamo en BD. Valida que cliente_id exista."""
+    cliente = db.get(Cliente, payload.cliente_id)
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+    row = Prestamo(
+        cliente_id=payload.cliente_id,
+        total_financiamiento=payload.total_financiamiento,
+        estado=payload.estado or "PENDIENTE",
+        concesionario=payload.concesionario,
+        modelo=payload.modelo,
+        analista=payload.analista,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return PrestamoResponse.model_validate(row)
+
+
+@router.put("/{prestamo_id}", response_model=PrestamoResponse)
+def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Depends(get_db)):
+    """Actualiza un préstamo en BD."""
+    row = db.get(Prestamo, prestamo_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+    if payload.cliente_id is not None:
+        cliente = db.get(Cliente, payload.cliente_id)
+        if not cliente:
+            raise HTTPException(status_code=404, detail="Cliente no encontrado")
+        row.cliente_id = payload.cliente_id
+    if payload.total_financiamiento is not None:
+        row.total_financiamiento = payload.total_financiamiento
+    if payload.estado is not None:
+        row.estado = payload.estado
+    if payload.concesionario is not None:
+        row.concesionario = payload.concesionario
+    if payload.modelo is not None:
+        row.modelo = payload.modelo
+    if payload.analista is not None:
+        row.analista = payload.analista
+    db.commit()
+    db.refresh(row)
+    return PrestamoResponse.model_validate(row)
+
+
+@router.delete("/{prestamo_id}", status_code=204)
+def delete_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
+    """Elimina un préstamo en BD."""
+    row = db.get(Prestamo, prestamo_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+    db.delete(row)
+    db.commit()
+    return None

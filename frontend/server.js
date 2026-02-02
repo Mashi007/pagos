@@ -1,7 +1,7 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { existsSync, readdirSync } from 'fs';
+import { existsSync, readdirSync, readFileSync } from 'fs';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import compression from 'compression';
 
@@ -369,6 +369,12 @@ app.get('/assets/*', (req, res) => {
 app.get('/favicon.svg', (req, res) => res.redirect(302, FRONTEND_BASE + '/logos/rAPI.png'));
 app.get(FRONTEND_BASE + '/favicon.svg', (req, res) => res.redirect(302, FRONTEND_BASE + '/logos/rAPI.png'));
 
+// /logos/* sin base: redirigir a /pagos/logos/* (evita 404 cuando BASE_URL no se aplica)
+app.get(/^\/logos\//, (req, res) => {
+  const subpath = req.path.slice(6); // '/logos'.length
+  res.redirect(302, FRONTEND_BASE + '/logos' + subpath + (req.originalUrl?.includes('?') ? '?' + req.originalUrl.split('?')[1] : ''));
+});
+
 // Activar frontend en https://rapicredit.onrender.com/reportes -> redirigir a /pagos/reportes
 const qs = (req) => (req.originalUrl && req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '');
 app.get('/reportes', (req, res) => {
@@ -380,7 +386,7 @@ app.get('/reportes/*', (req, res) => {
 });
 
 // SPA fallback solo para /pagos y /pagos/* (el proxy ya atendió /api/*)
-// Sirve index.html para que React Router maneje la ruta en el cliente
+// Sirve index.html reescribiendo /assets/ -> /pagos/assets/ para evitar 302 cuando el build no aplica base
 function sendSpaIndex(req, res) {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.setHeader('Pragma', 'no-cache');
@@ -388,14 +394,19 @@ function sendSpaIndex(req, res) {
   if (isDevelopment) {
     console.log(`📄 Frontend (SPA): Sirviendo index.html para ruta: ${req.method} ${req.path}`);
   }
-  res.sendFile(indexPath, (err) => {
-    if (err) {
-      console.error(`❌ Error sirviendo index.html para ${req.method} ${req.path}:`, err);
-      if (!res.headersSent) {
-        res.status(404).send('Página no encontrada');
-      }
+  try {
+    let html = readFileSync(indexPath, 'utf8');
+    // Corregir rutas sin base: /assets/ -> /pagos/assets/ para que no haya 302 en cada recurso
+    if (!html.includes(FRONTEND_BASE + '/assets/')) {
+      html = html.replace(/src="\/assets\//g, `src="${FRONTEND_BASE}/assets/`).replace(/href="\/assets\//g, `href="${FRONTEND_BASE}/assets/`);
     }
-  });
+    res.type('html').send(html);
+  } catch (err) {
+    console.error(`❌ Error sirviendo index.html para ${req.method} ${req.path}:`, err);
+    if (!res.headersSent) {
+      res.status(404).send('Página no encontrada');
+    }
+  }
 }
 app.get(FRONTEND_BASE, sendSpaIndex);
 app.get(FRONTEND_BASE + '/*', (req, res, next) => {

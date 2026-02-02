@@ -117,14 +117,14 @@ export function LoginForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4 overflow-y-auto">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: ANIMATION_DURATION }}
-        className="w-full max-w-md"
+        className="w-full max-w-md my-4"
       >
-        <Card className="shadow-2xl border-0">
+        <Card className="shadow-2xl border-0 overflow-visible">
           <CardHeader className="space-y-4 text-center">
         <motion.div
           initial={{ scale: 0 }}

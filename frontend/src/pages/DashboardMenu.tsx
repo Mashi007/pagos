@@ -33,6 +33,18 @@ import { formatCurrency } from '../utils'
 import { apiClient } from '../services/api'
 import { toast } from 'sonner'
 import { useDashboardFiltros, type DashboardFiltros } from '../hooks/useDashboardFiltros'
+import { getPeriodoEtiqueta, PERIODOS_VALORES } from '../constants/dashboard'
+import type {
+  KpisPrincipalesResponse,
+  OpcionesFiltrosResponse,
+  DashboardAdminResponse,
+  FinanciamientoPorRangosResponse,
+  ComposicionMorosidadResponse,
+  PrestamosPorConcesionarioResponse,
+  PrestamosPorModeloResponse,
+  CobranzasSemanalesResponse,
+  MorosidadPorAnalistaItem,
+} from '../types/dashboard'
 import { DashboardFiltrosPanel } from '../components/dashboard/DashboardFiltrosPanel'
 import { KpiCardLarge } from '../components/dashboard/KpiCardLarge'
 import { ChartWithDateRangeSlider } from '../components/dashboard/ChartWithDateRangeSlider'
@@ -86,9 +98,9 @@ export function DashboardMenu() {
   // Batch 1: CRÍTICO - Opciones de filtros y KPIs principales (carga inmediata)
   const { data: opcionesFiltros, isLoading: loadingOpcionesFiltros, isError: errorOpcionesFiltros } = useQuery({
     queryKey: ['opciones-filtros'],
-    queryFn: async () => {
+    queryFn: async (): Promise<OpcionesFiltrosResponse> => {
       const response = await apiClient.get('/api/v1/dashboard/opciones-filtros')
-      return response as { analistas: string[]; concesionarios: string[]; modelos: string[] }
+      return response as OpcionesFiltrosResponse
     },
     staleTime: 30 * 60 * 1000, // 30 minutos - cambian muy poco
     refetchOnWindowFocus: false, // No recargar automáticamente
@@ -99,8 +111,8 @@ export function DashboardMenu() {
   // âœ… ACTUALIZADO: Incluye período en queryKey y aplica filtro de período
   const { data: kpisPrincipales, isLoading: loadingKPIs, isError: errorKPIs, refetch } = useQuery({
     queryKey: ['kpis-principales-menu', periodo, JSON.stringify(filtros)],
-    queryFn: async () => {
-      const params = construirFiltrosObject(periodo) // âœ… Pasar período para calcular fechas
+    queryFn: async (): Promise<KpisPrincipalesResponse> => {
+      const params = construirFiltrosObject(periodo)
       const queryParams = new URLSearchParams()
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
@@ -108,20 +120,8 @@ export function DashboardMenu() {
       const queryString = queryParams.toString()
       const response = await apiClient.get(
         `/api/v1/dashboard/kpis-principales${queryString ? '?' + queryString : ''}`
-      ) as {
-        total_prestamos: { valor_actual: number; variacion_porcentual: number }
-        creditos_nuevos_mes: { valor_actual: number; variacion_porcentual: number }
-        total_clientes: { valor_actual: number; variacion_porcentual: number }
-        clientes_por_estado?: {
-          activos: { valor_actual: number; variacion_porcentual: number }
-          inactivos: { valor_actual: number; variacion_porcentual: number }
-          finalizados: { valor_actual: number; variacion_porcentual: number }
-        }
-        total_morosidad_usd: { valor_actual: number; variacion_porcentual: number }
-        cuotas_programadas?: { valor_actual: number }
-        porcentaje_cuotas_pagadas?: number
-      }
-      return response
+      )
+      return response as KpisPrincipalesResponse
     },
     staleTime: 30 * 1000, // 30 segundos para que el dashboard refleje cambios recientes (préstamos/pagos)
     refetchOnWindowFocus: true,
@@ -134,9 +134,8 @@ export function DashboardMenu() {
   const periodoEvolucion = getPeriodoGrafico('evolucion') || periodo || 'ultimos_12_meses'
   const { data: datosDashboard, isLoading: loadingDashboard } = useQuery({
     queryKey: ['dashboard-menu', periodoEvolucion, JSON.stringify(filtros)],
-    queryFn: async () => {
+    queryFn: async (): Promise<DashboardAdminResponse> => {
       try {
-        // Incluir fecha_inicio/fecha_fin del período para que la evolución muestre desde el año seleccionado (ej. 2025)
         const obj = construirFiltrosObject(periodoEvolucion)
         const params = new URLSearchParams()
         Object.entries(obj).forEach(([key, value]) => {
@@ -144,24 +143,10 @@ export function DashboardMenu() {
         })
         if (!params.has('periodo') && periodoEvolucion) params.append('periodo', periodoEvolucion)
         const queryString = params.toString()
-        // Usar timeout extendido para endpoints lentos
-        const response = await apiClient.get(`/api/v1/dashboard/admin${queryString ? `?${queryString}` : ''}`, { timeout: 60000 }) as {
-          financieros?: {
-            ingresosCapital: number
-            ingresosInteres: number
-            ingresosMora: number
-            totalCobrado: number
-            totalCobradoAnterior: number
-          }
-          meta_mensual?: number
-          avance_meta?: number
-          evolucion_mensual?: Array<{ mes: string; cartera: number; cobrado: number; morosidad: number }>
-          evolucion_origen?: 'demo' | 'bd'
-        }
-        return response
+        const response = await apiClient.get(`/api/v1/dashboard/admin${queryString ? `?${queryString}` : ''}`, { timeout: 60000 })
+        return response as DashboardAdminResponse
       } catch (error) {
-        console.warn('Error cargando dashboard:', error)
-        return {}
+        return {} as DashboardAdminResponse
       }
     },
     staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
@@ -181,9 +166,9 @@ export function DashboardMenu() {
       queryParams.append('dias', String(diasMorosidad))
       if (obj.fecha_inicio) queryParams.append('fecha_inicio', obj.fecha_inicio)
       if (obj.fecha_fin) queryParams.append('fecha_fin', obj.fecha_fin)
-      const response = await apiClient.get(
+      const response = await apiClient.get<{ dias: Array<{ fecha: string; dia: string; morosidad: number }> }>(
         `/api/v1/dashboard/morosidad-por-dia?${queryParams.toString()}`
-      ) as { dias: Array<{ fecha: string; dia: string; morosidad: number }> }
+      )
       return response.dias ?? []
     },
     staleTime: 2 * 60 * 1000,
@@ -202,9 +187,8 @@ export function DashboardMenu() {
         if (value != null && value !== '') queryParams.append(key, String(value))
       })
       if (!queryParams.has('periodo') && periodoConcesionario) queryParams.append('periodo', periodoConcesionario)
-      return await apiClient.get(
-        `/api/v1/dashboard/prestamos-por-concesionario?${queryParams.toString()}`
-      ) as { por_mes: Array<{ mes: string; concesionario: string; cantidad: number }>; acumulado: Array<{ concesionario: string; cantidad_acumulada: number }> }
+      const response = await apiClient.get(`/api/v1/dashboard/prestamos-por-concesionario?${queryParams.toString()}`)
+      return response as PrestamosPorConcesionarioResponse
     },
     staleTime: 2 * 60 * 1000,
     refetchOnWindowFocus: true,
@@ -221,9 +205,8 @@ export function DashboardMenu() {
         if (value != null && value !== '') queryParams.append(key, String(value))
       })
       if (!queryParams.has('periodo') && periodoModelo) queryParams.append('periodo', periodoModelo)
-      return await apiClient.get(
-        `/api/v1/dashboard/prestamos-por-modelo?${queryParams.toString()}`
-      ) as { por_mes: Array<{ mes: string; modelo: string; cantidad: number }>; acumulado: Array<{ modelo: string; cantidad_acumulada: number }> }
+      const response = await apiClient.get(`/api/v1/dashboard/prestamos-por-modelo?${queryParams.toString()}`)
+      return response as PrestamosPorModeloResponse
     },
     staleTime: 2 * 60 * 1000,
     refetchOnWindowFocus: true,
@@ -243,32 +226,21 @@ export function DashboardMenu() {
         })
         const response = await apiClient.get(
           `/api/v1/dashboard/financiamiento-por-rangos?${queryParams.toString()}`,
-          { timeout: 60000 } // âœ… Timeout extendido para queries pesadas
-        ) as {
-          rangos: Array<{
-            categoria: string
-            cantidad_prestamos: number
-            monto_total: number
-            porcentaje_cantidad: number
-            porcentaje_monto: number
-          }>
-          total_prestamos: number
-          total_monto: number
-        }
-        return response
-      } catch (error: any) {
-        console.error('âŒ [DashboardMenu] Error cargando financiamiento por rangos:', error)
+          { timeout: 60000 }
+        )
+        return response as FinanciamientoPorRangosResponse
+      } catch (error: unknown) {
         // Si el error es 500 o de red, lanzar el error para que React Query lo maneje
         // Si es otro error, retornar respuesta vacía para no romper el dashboard
-        if (error?.response?.status >= 500 || error?.code === 'ERR_NETWORK' || error?.code === 'ECONNABORTED') {
-          throw error // Lanzar para que React Query muestre el error
+        const err = error as { response?: { status?: number }; code?: string }
+        if (err?.response?.status >= 500 || err?.code === 'ERR_NETWORK' || err?.code === 'ECONNABORTED') {
+          throw error
         }
-        // Para otros errores, retornar respuesta vacía
         return {
           rangos: [],
           total_prestamos: 0,
           total_monto: 0.0,
-        }
+        } satisfies FinanciamientoPorRangosResponse
       }
     },
     staleTime: 5 * 60 * 1000,
@@ -289,16 +261,8 @@ export function DashboardMenu() {
       })
       const response = await apiClient.get(
         `/api/v1/dashboard/composicion-morosidad?${queryParams.toString()}`
-      ) as {
-        puntos: Array<{
-          categoria: string
-          monto: number
-          cantidad_cuotas: number
-        }>
-        total_morosidad: number
-        total_cuotas: number
-      }
-      return response
+      )
+      return response as ComposicionMorosidadResponse
     },
     staleTime: 2 * 60 * 1000,
     refetchOnWindowFocus: true,
@@ -316,31 +280,11 @@ export function DashboardMenu() {
         if (value) queryParams.append(key, value.toString())
       })
       queryParams.append('semanas', '12') // Últimas 12 semanas
-      const response = await apiClient.get<{
-        semanas: Array<{
-          semana_inicio: string
-          nombre_semana: string
-          cobranzas_planificadas: number
-          pagos_reales: number
-        }>
-        fecha_inicio: string
-        fecha_fin: string
-      }>(
+      const response = await apiClient.get(
         `/api/v1/dashboard/cobranzas-semanales?${queryParams.toString()}`,
         { timeout: 60000 }
       )
-      // âœ… Logging para diagnóstico (solo en desarrollo)
-      if (process.env.NODE_ENV === 'development' && response && response.semanas) {
-        const semanasConDatos = response.semanas.filter(
-          s => s.cobranzas_planificadas > 0 || s.pagos_reales > 0
-        )
-        console.log(
-          `ðŸ“Š [CobranzasSemanales] Total semanas: ${response.semanas.length}, ` +
-          `Semanas con datos: ${semanasConDatos.length}`,
-          semanasConDatos.length > 0 ? semanasConDatos : 'Sin datos'
-        )
-      }
-      return response
+      return response as CobranzasSemanalesResponse
     },
     staleTime: 15 * 60 * 1000,
     enabled: true,
@@ -356,10 +300,10 @@ export function DashboardMenu() {
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
       })
-      const response = await apiClient.get(
+      const response = await apiClient.get<{ analistas: MorosidadPorAnalistaItem[] }>(
         `/api/v1/dashboard/morosidad-por-analista?${queryParams.toString()}`
-      ) as { analistas: Array<{ analista: string; cantidad_cuotas_vencidas: number; monto_vencido: number }> }
-      return response.analistas
+      )
+      return response.analistas ?? []
     },
     staleTime: 2 * 60 * 1000,
     refetchOnWindowFocus: true,
@@ -419,8 +363,7 @@ export function DashboardMenu() {
       const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' }
       return `${fIni.toLocaleDateString('es-ES', opts)} – ${fFin.toLocaleDateString('es-ES', opts)}`
     }
-    const labels: Record<string, string> = { ultimos_12_meses: 'Últimos 12 meses', día: 'Hoy', semana: 'Esta semana', mes: 'Este mes', año: 'Este año' }
-    return labels[periodo] || 'Últimos 12 meses'
+    return getPeriodoEtiqueta(periodo)
   }, [periodo, filtros, construirFiltrosObject])
 
   /** Etiqueta de rango de fechas para un gráfico (usa período del gráfico o el general) */
@@ -433,8 +376,7 @@ export function DashboardMenu() {
       const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' }
       return `${fIni.toLocaleDateString('es-ES', opts)} – ${fFin.toLocaleDateString('es-ES', opts)}`
     }
-    const labels: Record<string, string> = { ultimos_12_meses: 'Últimos 12 meses', día: 'Hoy', semana: 'Esta semana', mes: 'Este mes', año: 'Este año' }
-    return labels[p] || 'Últimos 12 meses'
+    return getPeriodoEtiqueta(p)
   }
 
   /** Selector de período por gráfico (dropdown para cada tarjeta) */
@@ -448,11 +390,11 @@ export function DashboardMenu() {
       </SelectTrigger>
       <SelectContent>
         <SelectItem value="general">General (barra superior)</SelectItem>
-        <SelectItem value="ultimos_12_meses">Últimos 12 meses</SelectItem>
-        <SelectItem value="día">Hoy</SelectItem>
-        <SelectItem value="semana">Esta semana</SelectItem>
-        <SelectItem value="mes">Este mes</SelectItem>
-        <SelectItem value="año">Este año</SelectItem>
+        {PERIODOS_VALORES.map((p) => (
+          <SelectItem key={p} value={p}>
+            {getPeriodoEtiqueta(p)}
+          </SelectItem>
+        ))}
       </SelectContent>
     </Select>
   )
@@ -557,11 +499,11 @@ export function DashboardMenu() {
                       <SelectValue placeholder="Período" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="ultimos_12_meses">Últimos 12 meses</SelectItem>
-                      <SelectItem value="día">Hoy</SelectItem>
-                      <SelectItem value="semana">Esta semana</SelectItem>
-                      <SelectItem value="mes">Este mes</SelectItem>
-                      <SelectItem value="año">Este año</SelectItem>
+                      {PERIODOS_VALORES.map((p) => (
+                        <SelectItem key={p} value={p}>
+                          {getPeriodoEtiqueta(p)}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-gray-100">

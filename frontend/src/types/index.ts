@@ -147,6 +147,9 @@ export interface AuthTokens {
   expires_in: number
 }
 
+// Tipos del dashboard (respuestas API)
+export * from './dashboard'
+
 // Tipos para filtros y búsquedas
 export interface ClienteFilters {
   search?: string

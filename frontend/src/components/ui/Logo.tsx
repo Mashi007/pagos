@@ -125,6 +125,7 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
   const [hasChecked, setHasChecked] = useState(forceDefault ? true : logoCache.hasChecked)
   const [logoVersion, setLogoVersion] = useState(logoCache.version)
   const [imageLoaded, setImageLoaded] = useState(false) // âœ… Estado para controlar cuando la imagen está completamente cargada
+  const [defaultLogoFailed, setDefaultLogoFailed] = useState(false) // fallback cuando rAPI.png no carga (404 o no existe en build)
   const isMounted = useIsMounted()
 
   useEffect(() => {
@@ -760,7 +761,22 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
     )
   }
 
-  // Si ya verificamos y no hay logo personalizado, mostrar logo por defecto (public/logos/rAPI.png)
+  // Si ya verificamos y no hay logo personalizado: imagen rAPI.png o fallback SVG si falla la carga
+  if (defaultLogoFailed) {
+    return (
+      <svg
+        className={cn(sizeMap[size], className)}
+        viewBox="0 0 48 48"
+        xmlns="http://www.w3.org/2000/svg"
+        role="img"
+        aria-label="RAPICREDIT Logo"
+      >
+        <rect width="48" height="48" rx="8" fill="#1e40af" />
+        <text x="24" y="32" textAnchor="middle" fill="white" fontSize="20" fontWeight="bold" fontFamily="system-ui">R</text>
+        <circle cx="38" cy="38" r="6" fill="#f59e0b" />
+      </svg>
+    )
+  }
   return (
     <img
       src={DEFAULT_LOGO_SRC}
@@ -768,6 +784,9 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
       className={cn(sizeMap[size], className, 'object-contain')}
       role="img"
       loading="eager"
+      onError={() => {
+        if (isMounted()) setDefaultLogoFailed(true)
+      }}
     />
   )
 }

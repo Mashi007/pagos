@@ -717,7 +717,7 @@ def get_composicion_morosidad(
         }
 
 
-@router.get("/cobranza-fechas-especificas")
+@router.get("/cobranza-fechas-especificas", summary="[Stub] Requiere tabla pagos/cobranzas para datos reales.")
 def get_cobranza_fechas_especificas(
     fecha_inicio: Optional[str] = Query(None),
     fecha_fin: Optional[str] = Query(None),
@@ -730,7 +730,7 @@ def get_cobranza_fechas_especificas(
     return {"dias": []}
 
 
-@router.get("/cobranzas-semanales")
+@router.get("/cobranzas-semanales", summary="[Stub] Valores fijos hasta tener tabla pagos/cobranzas.")
 def get_cobranzas_semanales(
     fecha_inicio: Optional[str] = Query(None),
     fecha_fin: Optional[str] = Query(None),
@@ -868,7 +868,7 @@ def get_evolucion_morosidad(
         return {"meses": [{"mes": x["mes"], "morosidad": x["morosidad"]} for x in m]}
 
 
-@router.get("/evolucion-pagos")
+@router.get("/evolucion-pagos", summary="[Stub] Devuelve datos demo hasta tener tabla pagos.")
 def get_evolucion_pagos(
     fecha_inicio: Optional[str] = Query(None),
     meses: Optional[int] = Query(12),
@@ -911,7 +911,7 @@ def get_evolucion_pagos(
 
 # ========== Endpoints adicionales usados por modales/páginas (stub) ==========
 
-@router.get("/cobranza-por-dia")
+@router.get("/cobranza-por-dia", summary="[Stub] Devuelve dias vacíos hasta tener tabla pagos/cobranzas.")
 def get_cobranza_por_dia(
     fecha_inicio: Optional[str] = Query(None),
     fecha_fin: Optional[str] = Query(None),
@@ -924,7 +924,7 @@ def get_cobranza_por_dia(
     return {"dias": []}
 
 
-@router.get("/cobranzas-mensuales")
+@router.get("/cobranzas-mensuales", summary="[Stub] Devuelve meses vacíos hasta tener tabla pagos/cobranzas.")
 def get_cobranzas_mensuales(
     fecha_inicio: Optional[str] = Query(None),
     fecha_fin: Optional[str] = Query(None),
@@ -937,7 +937,7 @@ def get_cobranzas_mensuales(
     return {"meses": []}
 
 
-@router.get("/cobros-por-analista")
+@router.get("/cobros-por-analista", summary="[Stub] Devuelve analistas vacíos hasta tener tabla pagos.")
 def get_cobros_por_analista(
     fecha_inicio: Optional[str] = Query(None),
     fecha_fin: Optional[str] = Query(None),
@@ -950,7 +950,7 @@ def get_cobros_por_analista(
     return {"analistas": []}
 
 
-@router.get("/cobros-diarios")
+@router.get("/cobros-diarios", summary="[Stub] Devuelve dias vacíos hasta tener tabla pagos.")
 def get_cobros_diarios(
     fecha_inicio: Optional[str] = Query(None),
     fecha_fin: Optional[str] = Query(None),
@@ -963,7 +963,7 @@ def get_cobros_diarios(
     return {"dias": []}
 
 
-@router.get("/cuentas-cobrar-tendencias")
+@router.get("/cuentas-cobrar-tendencias", summary="[Stub] Devuelve tendencias vacías hasta tener datos.")
 def get_cuentas_cobrar_tendencias(
     fecha_inicio: Optional[str] = Query(None),
     fecha_fin: Optional[str] = Query(None),
@@ -976,7 +976,7 @@ def get_cuentas_cobrar_tendencias(
     return {"tendencias": []}
 
 
-@router.get("/distribucion-prestamos")
+@router.get("/distribucion-prestamos", summary="[Stub] Devuelve distribucion vacía hasta tener datos.")
 def get_distribucion_prestamos(
     fecha_inicio: Optional[str] = Query(None),
     fecha_fin: Optional[str] = Query(None),
@@ -989,7 +989,7 @@ def get_distribucion_prestamos(
     return {"distribucion": []}
 
 
-@router.get("/metricas-acumuladas")
+@router.get("/metricas-acumuladas", summary="[Stub] Devuelve metricas vacías hasta tener datos.")
 def get_metricas_acumuladas(
     fecha_inicio: Optional[str] = Query(None),
     fecha_fin: Optional[str] = Query(None),
