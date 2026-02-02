@@ -135,7 +135,7 @@ class NotificacionService {
     if (estado) params.append('estado', estado)
     if (canal) params.append('canal', canal)
 
-    return await apiClient.get<{ items: Notificacion[], total: number, page: number, page_size: number, total_pages: number }>(`${this.baseUrl}/?${params}`)
+    return await apiClient.get<{ items: Notificacion[], total: number, page: number, page_size: number, total_pages: number }>(`${this.baseUrl}?${params}`)
   }
 
   async obtenerEstadisticas(): Promise<NotificacionStats> {

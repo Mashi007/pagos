@@ -84,6 +84,7 @@ def _persist_email_config(db: Session) -> None:
     except Exception as e:
         logger.exception("Error persistiendo config email en BD: %s", e)
         db.rollback()
+        raise
 
 
 @router.get("/configuracion")

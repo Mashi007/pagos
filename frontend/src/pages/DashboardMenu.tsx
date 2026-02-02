@@ -121,9 +121,9 @@ export function DashboardMenu() {
       )
       return response as KpisPrincipalesResponse
     },
-    staleTime: 30 * 1000, // 30 segundos para que el dashboard refleje cambios recientes (préstamos/pagos)
-    refetchOnWindowFocus: true,
-    refetchOnMount: true, // Refetch al entrar a la página para que siempre se actualice
+    staleTime: 4 * 60 * 60 * 1000, // 4 h: el backend actualiza caché a las 6:00, 13:00, 16:00
+    refetchOnWindowFocus: false,
+    refetchOnMount: false, // Usar caché; el backend refresca 3 veces al día
     enabled: true,
     retry: false,
   })
@@ -147,10 +147,10 @@ export function DashboardMenu() {
         return {} as DashboardAdminResponse
       }
     },
-    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
-    retry: 1, // Solo un retry para evitar múltiples intentos
-    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
-    enabled: true, // âœ… Carga después de Batch 1
+    staleTime: 4 * 60 * 60 * 1000, // 4 h: backend actualiza caché a las 6:00, 13:00, 16:00
+    retry: 1,
+    refetchOnWindowFocus: false, // Evitar refetch al cambiar de pestaña (carga lenta)
+    enabled: true,
   })
 
   // Batch 3: Morosidad por día (desde tabla cuotas). Respeta rango del período (ej. desde 2025).
@@ -169,9 +169,9 @@ export function DashboardMenu() {
       )
       return response.dias ?? []
     },
-    staleTime: 2 * 60 * 1000,
+    staleTime: 4 * 60 * 60 * 1000, // 4 h: alineado con refresh backend 6/13/16
     enabled: true,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
   })
 
   // Batch 3: Gráficos secundarios rápidos. Período por gráfico; filtros (fecha_inicio/fecha_fin) se envían siempre.
@@ -206,9 +206,9 @@ export function DashboardMenu() {
         } satisfies FinanciamientoPorRangosResponse
       }
     },
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: true,
-    enabled: true, // Cargar aunque admin esté vacío para que los gráficos muestren datos
+    staleTime: 4 * 60 * 60 * 1000, // 4 h: alineado con refresh backend
+    refetchOnWindowFocus: false,
+    enabled: true,
     retry: 1, // âœ… Permitir 1 reintento para errores de red
     retryDelay: 2000, // Esperar 2 segundos antes de reintentar
   })
@@ -227,8 +227,8 @@ export function DashboardMenu() {
       )
       return response as ComposicionMorosidadResponse
     },
-    staleTime: 2 * 60 * 1000,
-    refetchOnWindowFocus: true,
+    staleTime: 4 * 60 * 60 * 1000,
+    refetchOnWindowFocus: false,
     enabled: true,
   })
 
@@ -268,8 +268,8 @@ export function DashboardMenu() {
       )
       return response.analistas ?? []
     },
-    staleTime: 2 * 60 * 1000,
-    refetchOnWindowFocus: true,
+    staleTime: 4 * 60 * 60 * 1000,
+    refetchOnWindowFocus: false,
     enabled: true,
   })
 

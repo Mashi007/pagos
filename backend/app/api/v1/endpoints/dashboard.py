@@ -1,10 +1,12 @@
 """
 Endpoints del dashboard. Usa datos reales de la BD cuando existen (clientes);
 el resto permanece stub hasta tener modelos de préstamos/pagos/cuotas.
+Caché de dashboard/admin: se actualiza 3 veces al día (6:00, 13:00, 16:00) para cargas rápidas.
 """
 import logging
+import threading
 from datetime import date, datetime, timedelta, timezone
-from typing import Optional
+from typing import Optional, Any
 
 from fastapi import APIRouter, Depends, Query
 
@@ -13,13 +15,24 @@ from sqlalchemy import and_, select, func
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db
+from app.core.database import get_db, SessionLocal
 from app.models.cliente import Cliente
 from app.models.cuota import Cuota
 from app.models.prestamo import Prestamo
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
+
+# Caché para todos los gráficos del dashboard. Se actualiza a las 6:00, 13:00, 16:00 (hora local).
+_DASHBOARD_ADMIN_CACHE: dict[str, Any] = {"data": None, "refreshed_at": None}
+_CACHE_KPIS: dict[str, Any] = {"data": None, "refreshed_at": None}
+_CACHE_MOROSIDAD_DIA: dict[str, Any] = {"data": None, "refreshed_at": None}
+_CACHE_FINANCIAMIENTO_RANGOS: dict[str, Any] = {"data": None, "refreshed_at": None}
+_CACHE_COMPOSICION_MOROSIDAD: dict[str, Any] = {"data": None, "refreshed_at": None}
+_CACHE_COBRANZAS_SEMANALES: dict[str, Any] = {"data": None, "refreshed_at": None}
+_CACHE_MOROSIDAD_ANALISTA: dict[str, Any] = {"data": None, "refreshed_at": None}
+_CACHE_REFRESH_HOURS = (6, 13, 16)  # 6 AM, 1 PM, 4 PM (hora local del servidor)
+_lock = threading.Lock()
 
 
 def _kpi(valor: float = 0, variacion: float = 0) -> dict:
@@ -92,23 +105,21 @@ def _rango_y_anterior(fecha_inicio: date, fecha_fin: date):
     return inicio_dt, fin_dt, inicio_ant_dt, fin_ant_dt
 
 
-@router.get("/kpis-principales")
-def get_kpis_principales(
-    fecha_inicio: Optional[str] = Query(None),
-    fecha_fin: Optional[str] = Query(None),
-    analista: Optional[str] = Query(None),
-    concesionario: Optional[str] = Query(None),
-    modelo: Optional[str] = Query(None),
-    db: Session = Depends(get_db),
-):
-    """KPIs principales del dashboard. Respeta fecha_inicio/fecha_fin cuando se envían; si no, usa mes actual y anterior."""
+def _compute_kpis_principales(
+    db: Session,
+    fecha_inicio: Optional[str],
+    fecha_fin: Optional[str],
+    analista: Optional[str],
+    concesionario: Optional[str],
+    modelo: Optional[str],
+) -> dict:
+    """Calcula KPIs principales (usado por endpoint y por refresh de caché)."""
     try:
         total_clientes = db.scalar(select(func.count()).select_from(Cliente)) or 0
         activos = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "ACTIVO")) or 0
         inactivos = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "INACTIVO")) or 0
         finalizados = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "FINALIZADO")) or 0
 
-        # Determinar rango: si vienen fecha_inicio/fecha_fin, usarlos; si no, mes actual y anterior
         usar_rango = fecha_inicio and fecha_fin
         try:
             inicio_dt = fin_dt = inicio_ant_dt = fin_ant_dt = None
@@ -128,7 +139,6 @@ def get_kpis_principales(
             inicio_dt, fin_dt = inicio_mes_actual, fin_mes_actual
             inicio_ant_dt, fin_ant_dt = inicio_mes_anterior, fin_mes_anterior
 
-        # Total préstamos = cantidad aprobados en el período (respeta analista/concesionario/modelo)
         conds = [Prestamo.estado == "APROBADO", Prestamo.fecha_creacion >= inicio_dt, Prestamo.fecha_creacion <= fin_dt]
         if analista:
             conds.append(Prestamo.analista == analista)
@@ -140,7 +150,6 @@ def get_kpis_principales(
             select(func.count()).select_from(Prestamo).where(and_(*conds))
         ) or 0
 
-        # Créditos nuevos = suma total_financiamiento en el período; variación vs período anterior
         total_mes_actual = db.scalar(
             select(func.coalesce(func.sum(Prestamo.total_financiamiento), 0)).select_from(Prestamo).where(and_(
                 Prestamo.estado == "APROBADO",
@@ -168,12 +177,7 @@ def get_kpis_principales(
         else:
             variacion_creditos = 0.0
 
-        # Cuotas programadas y % pagadas: la BD real no tiene monto_programado/monto_pagado en prestamos; usar 0
-        sum_prog = 0.0
-        sum_pag = 0.0
-        porcentaje_cuotas_pagadas = 0.0
         morosidad_actual = 0.0
-        morosidad_anterior = 0.0
         variacion_morosidad = 0.0
 
         return {
@@ -186,8 +190,8 @@ def get_kpis_principales(
                 "finalizados": _kpi(_safe_float(finalizados), 0.0),
             },
             "total_morosidad_usd": _kpi(round(morosidad_actual, 2), round(variacion_morosidad, 1)),
-            "cuotas_programadas": {"valor_actual": sum_prog},
-            "porcentaje_cuotas_pagadas": round(porcentaje_cuotas_pagadas, 1),
+            "cuotas_programadas": {"valor_actual": 0.0},
+            "porcentaje_cuotas_pagadas": 0.0,
         }
     except Exception as e:
         logger.exception("Error en kpis-principales: %s", e)
@@ -204,10 +208,35 @@ def get_kpis_principales(
                 "inactivos": _kpi(0.0, 0.0),
                 "finalizados": _kpi(0.0, 0.0),
             },
-            "total_morosidad_usd": _kpi(0.0, 0.0),  # fallback en error
+            "total_morosidad_usd": _kpi(0.0, 0.0),
             "cuotas_programadas": {"valor_actual": 0.0},
             "porcentaje_cuotas_pagadas": 0.0,
         }
+
+
+@router.get("/kpis-principales")
+def get_kpis_principales(
+    fecha_inicio: Optional[str] = Query(None),
+    fecha_fin: Optional[str] = Query(None),
+    analista: Optional[str] = Query(None),
+    concesionario: Optional[str] = Query(None),
+    modelo: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """KPIs principales. Con caché 3 veces/día (6:00, 13:00, 16:00) cuando no se envían fechas ni filtros."""
+    use_cache = not (fecha_inicio or fecha_fin or analista or concesionario or modelo)
+    if use_cache:
+        with _lock:
+            cached = _CACHE_KPIS["data"]
+            refreshed = _CACHE_KPIS.get("refreshed_at")
+        if cached is not None and refreshed is not None and datetime.now() < _next_refresh_local():
+            return cached
+    data = _compute_kpis_principales(db, fecha_inicio, fecha_fin, analista, concesionario, modelo)
+    if use_cache:
+        with _lock:
+            _CACHE_KPIS["data"] = data
+            _CACHE_KPIS["refreshed_at"] = datetime.now()
+    return data
 
 
 def _ultimo_dia_del_mes(d: datetime) -> datetime:
@@ -247,15 +276,24 @@ def _meses_desde_rango(fecha_inicio: date, fecha_fin: date) -> list[dict]:
     return meses
 
 
-@router.get("/admin")
-def get_dashboard_admin(
-    periodo: Optional[str] = Query(None),
-    fecha_inicio: Optional[str] = Query(None),
-    fecha_fin: Optional[str] = Query(None),
-    db: Session = Depends(get_db),
-):
-    """Dashboard admin: evolucion_mensual desde tabla cuotas. Cartera = suma mensual monto (programado por vencimiento), Cobrado = suma mensual monto pagado, Morosidad = diferencia. Respeta fecha_inicio/fecha_fin para mostrar desde el año seleccionado (ej. 2025)."""
-    # Si hay rango explícito, usarlo; si no, últimos 12 meses desde hoy
+def _next_refresh_local() -> datetime:
+    """Próxima hora de refresco: 6:00, 13:00 o 16:00 (hora local del servidor)."""
+    now = datetime.now()
+    candidates = []
+    for h in _CACHE_REFRESH_HOURS:
+        t = now.replace(hour=h, minute=0, second=0, microsecond=0)
+        if t <= now:
+            t += timedelta(days=1)
+        candidates.append(t)
+    return min(candidates)
+
+
+def _compute_dashboard_admin(
+    db: Session,
+    fecha_inicio: Optional[str],
+    fecha_fin: Optional[str],
+) -> dict:
+    """Calcula la respuesta de dashboard/admin (evolucion_mensual desde cuotas)."""
     if fecha_inicio and fecha_fin:
         try:
             inicio = date.fromisoformat(fecha_inicio)
@@ -280,21 +318,17 @@ def get_dashboard_admin(
                 else:
                     fin_d = date(y, mo + 1, 1) - timedelta(days=1)
             else:
-                # _etiquetas_12_meses() no trae year/month; calcular desde índice
                 hoy = datetime.now(timezone.utc)
                 fin_mes = hoy - timedelta(days=30 * (len(meses) - 1 - i))
                 if fin_mes.tzinfo is None:
                     fin_mes = fin_mes.replace(tzinfo=timezone.utc)
                 inicio_d, fin_d = _primer_ultimo_dia_mes(fin_mes)
-            # Cartera = suma mensual monto de cuotas con fecha_vencimiento en el mes
             cartera = db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
                     Cuota.fecha_vencimiento >= inicio_d,
                     Cuota.fecha_vencimiento <= fin_d,
                 )
             ) or 0
-            # Cobrado = suma mensual monto de cuotas pagadas con fecha_pago (solo parte fecha) en el mes.
-            # func.date() asegura que TIMESTAMP WITHOUT TZ se compare por fecha; igual que en pagos/reportes.
             cobrado = db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
                     Cuota.fecha_pago.isnot(None),
@@ -334,6 +368,129 @@ def get_dashboard_admin(
     }
 
 
+def _refresh_dashboard_admin_cache() -> None:
+    """Actualiza la caché de dashboard/admin en background (usa sesión propia)."""
+    db = SessionLocal()
+    try:
+        data = _compute_dashboard_admin(db, None, None)
+        with _lock:
+            _DASHBOARD_ADMIN_CACHE["data"] = data
+            _DASHBOARD_ADMIN_CACHE["refreshed_at"] = datetime.now()
+        logger.info("Caché dashboard/admin actualizada (6:00 / 13:00 / 16:00).")
+    except Exception as e:
+        logger.exception("Error al actualizar caché dashboard/admin: %s", e)
+    finally:
+        db.close()
+
+
+def _refresh_all_dashboard_caches() -> None:
+    """Actualiza todas las cachés de gráficos del dashboard (6:00, 13:00, 16:00)."""
+    _refresh_dashboard_admin_cache()
+    db = SessionLocal()
+    try:
+        # KPIs principales (default: sin fechas ni filtros)
+        try:
+            data = _compute_kpis_principales(db, None, None, None, None, None)
+            with _lock:
+                _CACHE_KPIS["data"] = data
+                _CACHE_KPIS["refreshed_at"] = datetime.now()
+        except Exception as e:
+            logger.exception("Error al actualizar caché kpis-principales: %s", e)
+        # Morosidad por día (default: sin fechas, dias=30)
+        try:
+            data = _compute_morosidad_por_dia(db, None, None, 30)
+            with _lock:
+                _CACHE_MOROSIDAD_DIA["data"] = data
+                _CACHE_MOROSIDAD_DIA["refreshed_at"] = datetime.now()
+        except Exception as e:
+            logger.exception("Error al actualizar caché morosidad-por-dia: %s", e)
+        # Financiamiento por rangos (default: sin filtros)
+        try:
+            data = _compute_financiamiento_por_rangos(db, None, None, None, None, None)
+            with _lock:
+                _CACHE_FINANCIAMIENTO_RANGOS["data"] = data
+                _CACHE_FINANCIAMIENTO_RANGOS["refreshed_at"] = datetime.now()
+        except Exception as e:
+            logger.exception("Error al actualizar caché financiamiento-por-rangos: %s", e)
+        # Composición morosidad (default: sin filtros)
+        try:
+            data = _compute_composicion_morosidad(db, None, None, None, None, None)
+            with _lock:
+                _CACHE_COMPOSICION_MOROSIDAD["data"] = data
+                _CACHE_COMPOSICION_MOROSIDAD["refreshed_at"] = datetime.now()
+        except Exception as e:
+            logger.exception("Error al actualizar caché composicion-morosidad: %s", e)
+        # Cobranzas semanales (default: semanas=12)
+        try:
+            data = _compute_cobranzas_semanales(db, None, None, 12, None, None, None)
+            with _lock:
+                _CACHE_COBRANZAS_SEMANALES["data"] = data
+                _CACHE_COBRANZAS_SEMANALES["refreshed_at"] = datetime.now()
+        except Exception as e:
+            logger.exception("Error al actualizar caché cobranzas-semanales: %s", e)
+        # Morosidad por analista (default: sin filtros)
+        try:
+            data = _compute_morosidad_por_analista(db, None, None, None, None, None)
+            with _lock:
+                _CACHE_MOROSIDAD_ANALISTA["data"] = data
+                _CACHE_MOROSIDAD_ANALISTA["refreshed_at"] = datetime.now()
+        except Exception as e:
+            logger.exception("Error al actualizar caché morosidad-por-analista: %s", e)
+        logger.info("Cachés de gráficos del dashboard actualizadas (6:00 / 13:00 / 16:00).")
+    finally:
+        db.close()
+
+
+def _dashboard_cache_worker() -> None:
+    """Worker que refresca todas las cachés del dashboard a las 6:00, 13:00 y 16:00 (hora local)."""
+    while True:
+        try:
+            next_refresh = _next_refresh_local()
+            wait_secs = (next_refresh - datetime.now()).total_seconds()
+            if wait_secs > 0:
+                import time
+                time.sleep(wait_secs)
+            _refresh_all_dashboard_caches()
+        except Exception as e:
+            logger.exception("Error en worker de caché dashboard: %s", e)
+            import time
+            time.sleep(3600)
+
+
+def start_dashboard_cache_refresh() -> None:
+    """Inicia el hilo que actualiza la caché del dashboard a las 6:00, 13:00 y 16:00."""
+    t = threading.Thread(target=_dashboard_cache_worker, daemon=True)
+    t.start()
+    logger.info("Worker de caché dashboard iniciado (refresh 6:00, 13:00, 16:00).")
+
+
+@router.get("/admin")
+def get_dashboard_admin(
+    periodo: Optional[str] = Query(None),
+    fecha_inicio: Optional[str] = Query(None),
+    fecha_fin: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Dashboard admin: evolucion_mensual desde tabla cuotas. Con caché 3 veces/día (6:00, 13:00, 16:00) cuando no se envían fechas."""
+    use_cache = not (fecha_inicio and fecha_fin)
+    if use_cache:
+        with _lock:
+            cached = _DASHBOARD_ADMIN_CACHE["data"]
+            refreshed = _DASHBOARD_ADMIN_CACHE.get("refreshed_at")
+        if cached is not None and refreshed is not None:
+            now = datetime.now()
+            next_refresh = _next_refresh_local()
+            if now < next_refresh:
+                return cached
+        # Caché vacía o expirada: calcular y guardar
+        data = _compute_dashboard_admin(db, fecha_inicio, fecha_fin)
+        with _lock:
+            _DASHBOARD_ADMIN_CACHE["data"] = data
+            _DASHBOARD_ADMIN_CACHE["refreshed_at"] = datetime.now()
+        return data
+    return _compute_dashboard_admin(db, fecha_inicio, fecha_fin)
+
+
 @router.get("/financiamiento-tendencia-mensual")
 def get_financiamiento_tendencia_mensual(
     fecha_inicio: Optional[str] = Query(None),
@@ -370,14 +527,13 @@ def get_financiamiento_tendencia_mensual(
         return {"meses": _etiquetas_12_meses()}
 
 
-@router.get("/morosidad-por-dia")
-def get_morosidad_por_dia(
-    fecha_inicio: Optional[str] = Query(None),
-    fecha_fin: Optional[str] = Query(None),
-    dias: Optional[int] = Query(30, ge=7, le=90),
-    db: Session = Depends(get_db),
-):
-    """Morosidad por día desde tabla cuotas: por cada día, cartera (suma monto vencido ese día) menos cobrado (suma monto pagado ese día)."""
+def _compute_morosidad_por_dia(
+    db: Session,
+    fecha_inicio: Optional[str],
+    fecha_fin: Optional[str],
+    dias: Optional[int],
+) -> dict:
+    """Calcula morosidad por día (usado por endpoint y por refresh de caché)."""
     try:
         hoy_utc = datetime.now(timezone.utc)
         hoy_date = date(hoy_utc.year, hoy_utc.month, hoy_utc.day)
@@ -397,13 +553,11 @@ def get_morosidad_por_dia(
         nombres_mes = ("Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic")
         d = inicio
         while d <= fin:
-            # Cartera del día = suma monto de cuotas con fecha_vencimiento = d
             cartera_dia = db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
                     Cuota.fecha_vencimiento == d,
                 )
             ) or 0
-            # Cobrado del día = suma monto de cuotas pagadas (fecha_pago no nula) con fecha_pago en d
             cobrado_dia = db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
                     Cuota.fecha_pago.isnot(None),
@@ -421,6 +575,29 @@ def get_morosidad_por_dia(
     except Exception as e:
         logger.exception("Error en morosidad-por-dia: %s", e)
         return {"dias": []}
+
+
+@router.get("/morosidad-por-dia")
+def get_morosidad_por_dia(
+    fecha_inicio: Optional[str] = Query(None),
+    fecha_fin: Optional[str] = Query(None),
+    dias: Optional[int] = Query(30, ge=7, le=90),
+    db: Session = Depends(get_db),
+):
+    """Morosidad por día. Con caché 3 veces/día (6:00, 13:00, 16:00) cuando no se envían fechas."""
+    use_cache = not (fecha_inicio and fecha_fin)
+    if use_cache:
+        with _lock:
+            cached = _CACHE_MOROSIDAD_DIA["data"]
+            refreshed = _CACHE_MOROSIDAD_DIA.get("refreshed_at")
+        if cached is not None and refreshed is not None and datetime.now() < _next_refresh_local():
+            return cached
+    data = _compute_morosidad_por_dia(db, fecha_inicio, fecha_fin, dias)
+    if use_cache:
+        with _lock:
+            _CACHE_MOROSIDAD_DIA["data"] = data
+            _CACHE_MOROSIDAD_DIA["refreshed_at"] = datetime.now()
+    return data
 
 
 @router.get("/proyeccion-cobro-30-dias")
@@ -616,27 +793,23 @@ def _rangos_financiamiento():
     ]
 
 
-@router.get("/financiamiento-por-rangos")
-def get_financiamiento_por_rangos(
-    fecha_inicio: Optional[str] = Query(None),
-    fecha_fin: Optional[str] = Query(None),
-    analista: Optional[str] = Query(None),
-    concesionario: Optional[str] = Query(None),
-    modelo: Optional[str] = Query(None),
-    db: Session = Depends(get_db),
-):
-    """Bandas por total_financiamiento: cantidad de préstamos (COUNT) por banda desde tabla prestamos. Si fecha_inicio/fecha_fin se envían, filtra por fecha_creacion; si no, resumen desde el inicio (todos)."""
+def _compute_financiamiento_por_rangos(
+    db: Session,
+    fecha_inicio: Optional[str],
+    fecha_fin: Optional[str],
+    analista: Optional[str],
+    concesionario: Optional[str],
+    modelo: Optional[str],
+) -> dict:
+    """Calcula financiamiento por rangos (usado por endpoint y por refresh de caché)."""
     try:
-        # Filtro de fechas: si viene rango, filtrar por fecha_creacion; si no, todos los préstamos (desde el inicio)
-        filtro_fecha = True
-        if fecha_inicio and fecha_fin:
+        filtro_fecha = bool(fecha_inicio and fecha_fin)
+        if filtro_fecha:
             try:
                 inicio = date.fromisoformat(fecha_inicio)
                 fin = date.fromisoformat(fecha_fin)
             except ValueError:
                 filtro_fecha = False
-        else:
-            filtro_fecha = False
 
         rangos_def = _rangos_financiamiento()
         resultado = []
@@ -699,8 +872,8 @@ def get_financiamiento_por_rangos(
         }
 
 
-@router.get("/composicion-morosidad")
-def get_composicion_morosidad(
+@router.get("/financiamiento-por-rangos")
+def get_financiamiento_por_rangos(
     fecha_inicio: Optional[str] = Query(None),
     fecha_fin: Optional[str] = Query(None),
     analista: Optional[str] = Query(None),
@@ -708,13 +881,36 @@ def get_composicion_morosidad(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Composición de morosidad. Datos reales: agrupa Cuota por días de mora (1-30, 31-60, 61-90, 90+)."""
+    """Bandas por total_financiamiento. Con caché 3 veces/día (6:00, 13:00, 16:00) cuando no se envían filtros."""
+    use_cache = not (fecha_inicio or fecha_fin or analista or concesionario or modelo)
+    if use_cache:
+        with _lock:
+            cached = _CACHE_FINANCIAMIENTO_RANGOS["data"]
+            refreshed = _CACHE_FINANCIAMIENTO_RANGOS.get("refreshed_at")
+        if cached is not None and refreshed is not None and datetime.now() < _next_refresh_local():
+            return cached
+    data = _compute_financiamiento_por_rangos(db, fecha_inicio, fecha_fin, analista, concesionario, modelo)
+    if use_cache:
+        with _lock:
+            _CACHE_FINANCIAMIENTO_RANGOS["data"] = data
+            _CACHE_FINANCIAMIENTO_RANGOS["refreshed_at"] = datetime.now()
+    return data
+
+
+def _compute_composicion_morosidad(
+    db: Session,
+    fecha_inicio: Optional[str],
+    fecha_fin: Optional[str],
+    analista: Optional[str],
+    concesionario: Optional[str],
+    modelo: Optional[str],
+) -> dict:
+    """Calcula composición de morosidad (usado por endpoint y por refresh de caché)."""
     try:
         bandas = [(1, 30, "1-30 días"), (31, 60, "31-60 días"), (61, 90, "61-90 días"), (91, 999999, "90+ días")]
         puntos = []
         total_monto = 0.0
         total_cuotas = 0
-        # Días de atraso = CURRENT_DATE - fecha_vencimiento (solo cuotas no pagadas)
         dias_atraso = func.current_date() - Cuota.fecha_vencimiento
         for min_d, max_d, cat in bandas:
             if max_d >= 999999:
@@ -755,6 +951,31 @@ def get_composicion_morosidad(
         }
 
 
+@router.get("/composicion-morosidad")
+def get_composicion_morosidad(
+    fecha_inicio: Optional[str] = Query(None),
+    fecha_fin: Optional[str] = Query(None),
+    analista: Optional[str] = Query(None),
+    concesionario: Optional[str] = Query(None),
+    modelo: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Composición de morosidad. Con caché 3 veces/día (6:00, 13:00, 16:00) cuando no se envían filtros."""
+    use_cache = not (fecha_inicio or fecha_fin or analista or concesionario or modelo)
+    if use_cache:
+        with _lock:
+            cached = _CACHE_COMPOSICION_MOROSIDAD["data"]
+            refreshed = _CACHE_COMPOSICION_MOROSIDAD.get("refreshed_at")
+        if cached is not None and refreshed is not None and datetime.now() < _next_refresh_local():
+            return cached
+    data = _compute_composicion_morosidad(db, fecha_inicio, fecha_fin, analista, concesionario, modelo)
+    if use_cache:
+        with _lock:
+            _CACHE_COMPOSICION_MOROSIDAD["data"] = data
+            _CACHE_COMPOSICION_MOROSIDAD["refreshed_at"] = datetime.now()
+    return data
+
+
 @router.get("/cobranza-fechas-especificas", summary="[Stub] Requiere tabla pagos/cobranzas para datos reales.")
 def get_cobranza_fechas_especificas(
     fecha_inicio: Optional[str] = Query(None),
@@ -768,17 +989,16 @@ def get_cobranza_fechas_especificas(
     return {"dias": []}
 
 
-@router.get("/cobranzas-semanales", summary="[Stub] Valores fijos hasta tener tabla pagos/cobranzas.")
-def get_cobranzas_semanales(
-    fecha_inicio: Optional[str] = Query(None),
-    fecha_fin: Optional[str] = Query(None),
-    semanas: Optional[int] = Query(12),
-    analista: Optional[str] = Query(None),
-    concesionario: Optional[str] = Query(None),
-    modelo: Optional[str] = Query(None),
-    db: Session = Depends(get_db),
-):
-    """Cobranzas semanales desde BD: pagos por semana (Cuota.fecha_pago)."""
+def _compute_cobranzas_semanales(
+    db: Session,
+    fecha_inicio: Optional[str],
+    fecha_fin: Optional[str],
+    semanas: Optional[int],
+    analista: Optional[str],
+    concesionario: Optional[str],
+    modelo: Optional[str],
+) -> dict:
+    """Calcula cobranzas semanales (usado por endpoint y por refresh de caché)."""
     try:
         hoy = date.today()
         sem = []
@@ -812,27 +1032,74 @@ def get_cobranzas_semanales(
         return {"semanas": [], "fecha_inicio": fecha_inicio or "", "fecha_fin": fecha_fin or ""}
 
 
-@router.get("/morosidad-por-analista")
-def get_morosidad_por_analista(
+@router.get("/cobranzas-semanales", summary="[Stub] Valores fijos hasta tener tabla pagos/cobranzas.")
+def get_cobranzas_semanales(
     fecha_inicio: Optional[str] = Query(None),
     fecha_fin: Optional[str] = Query(None),
+    semanas: Optional[int] = Query(12),
     analista: Optional[str] = Query(None),
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Morosidad por analista: cuotas vencidas (tabla cuotas) por analista (préstamo). Devuelve cantidad de cuotas vencidas y monto vencido en USD por analista."""
+    """Cobranzas semanales. Con caché 3 veces/día (6:00, 13:00, 16:00) cuando no se envían filtros."""
+    use_cache = not (fecha_inicio or fecha_fin or analista or concesionario or modelo)
+    if use_cache:
+        with _lock:
+            cached = _CACHE_COBRANZAS_SEMANALES["data"]
+            refreshed = _CACHE_COBRANZAS_SEMANALES.get("refreshed_at")
+        if cached is not None and refreshed is not None and datetime.now() < _next_refresh_local():
+            return cached
+    data = _compute_cobranzas_semanales(db, fecha_inicio, fecha_fin, semanas, analista, concesionario, modelo)
+    if use_cache:
+        with _lock:
+            _CACHE_COBRANZAS_SEMANALES["data"] = data
+            _CACHE_COBRANZAS_SEMANALES["refreshed_at"] = datetime.now()
+    return data
+
+
+def _compute_morosidad_por_analista(
+    db: Session,
+    fecha_inicio: Optional[str],
+    fecha_fin: Optional[str],
+    analista: Optional[str],
+    concesionario: Optional[str],
+    modelo: Optional[str],
+) -> dict:
+    """
+    Calcula morosidad por analista (usado por endpoint y por refresh de caché).
+
+    CAMPOS / TABLAS DE ORIGEN:
+    - Tabla CUOTA (cuotas): id, cliente_id, monto (columna BD: monto_cuota), fecha_pago, fecha_vencimiento.
+      Cuota "vencida" = fecha_pago IS NULL y fecha_vencimiento en rango (o < hoy si no hay rango).
+    - Tabla PRESTAMO (prestamos): cliente_id, analista, estado, fecha_creacion (fecha_registro).
+      Se usa el préstamo APROBADO más reciente por cliente (orden fecha_creacion DESC) para asignar analista.
+    - Salida: por cada analista (o "Sin analista" si el cliente no tiene préstamo con analista):
+      cantidad_cuotas_vencidas (conteo), monto_vencido (suma Cuota.monto).
+    """
     try:
         hoy = date.today()
-        # Cuotas vencidas: no pagadas y fecha_vencimiento < hoy (monto puede no existir en la tabla)
+        # Si hay rango de fechas, filtrar cuotas con vencimiento en ese rango y no pagadas
+        if fecha_inicio and fecha_fin:
+            try:
+                inicio = date.fromisoformat(fecha_inicio)
+                fin = date.fromisoformat(fecha_fin)
+                cond_vencimiento = and_(
+                    Cuota.fecha_vencimiento >= inicio,
+                    Cuota.fecha_vencimiento <= fin,
+                )
+            except ValueError:
+                cond_vencimiento = Cuota.fecha_vencimiento < hoy
+        else:
+            cond_vencimiento = Cuota.fecha_vencimiento < hoy
+
         cuotas_vencidas = db.execute(
             select(Cuota.id, Cuota.cliente_id, Cuota.monto).select_from(Cuota).where(
                 Cuota.fecha_pago.is_(None),
-                Cuota.fecha_vencimiento < hoy,
+                cond_vencimiento,
             )
         ).all()
         usar_monto = True
-        # Prestamos APROBADO: un préstamo por cliente (el más reciente) para asignar analista
         prestamos_por_cliente = (
             db.execute(
                 select(Prestamo.cliente_id, Prestamo.analista)
@@ -846,7 +1113,6 @@ def get_morosidad_por_analista(
         for cliente_id, analista_val in prestamos_por_cliente:
             if cliente_id not in cliente_a_analista:
                 cliente_a_analista[cliente_id] = analista_val or "Sin analista"
-        # Agrupar cuotas vencidas por analista
         por_analista = {}
         for row in cuotas_vencidas:
             cliente_id = row.cliente_id
@@ -872,6 +1138,31 @@ def get_morosidad_por_analista(
         except Exception:
             pass
         return {"analistas": []}
+
+
+@router.get("/morosidad-por-analista")
+def get_morosidad_por_analista(
+    fecha_inicio: Optional[str] = Query(None),
+    fecha_fin: Optional[str] = Query(None),
+    analista: Optional[str] = Query(None),
+    concesionario: Optional[str] = Query(None),
+    modelo: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Morosidad por analista. Con caché 3 veces/día (6:00, 13:00, 16:00) cuando no se envían filtros."""
+    use_cache = not (fecha_inicio or fecha_fin or analista or concesionario or modelo)
+    if use_cache:
+        with _lock:
+            cached = _CACHE_MOROSIDAD_ANALISTA["data"]
+            refreshed = _CACHE_MOROSIDAD_ANALISTA.get("refreshed_at")
+        if cached is not None and refreshed is not None and datetime.now() < _next_refresh_local():
+            return cached
+    data = _compute_morosidad_por_analista(db, fecha_inicio, fecha_fin, analista, concesionario, modelo)
+    if use_cache:
+        with _lock:
+            _CACHE_MOROSIDAD_ANALISTA["data"] = data
+            _CACHE_MOROSIDAD_ANALISTA["refreshed_at"] = datetime.now()
+    return data
 
 
 @router.get("/evolucion-morosidad")
