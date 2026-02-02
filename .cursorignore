@@ -95,4 +95,12 @@ selenium-manager
 # Estas carpetas pueden estar causando que Cursor indexe archivos
 # de otros proyectos, generando errores de serializaciÃ³n
 
-
+# Archivos muy grandes (>1500 líneas) - aligera indexado y rendimiento
+frontend/src/components/configuracion/FineTuningTab.tsx
+frontend/src/components/configuracion/AIConfig.tsx
+frontend/src/components/clientes/ExcelUploader.tsx
+frontend/src/components/prestamos/EvaluacionRiesgoForm.tsx
+frontend/src/pages/Configuracion.tsx
+frontend/src/components/clientes/CrearClienteForm.tsx
+frontend/src/pages/DashboardMenu.tsx
+frontend/src/pages/Cobranzas.tsx
