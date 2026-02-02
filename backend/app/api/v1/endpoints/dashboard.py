@@ -7,7 +7,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select, func
+from sqlalchemy import and_, select, func
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session
 
@@ -72,6 +72,21 @@ def _safe_float(val) -> float:
         return 0.0
 
 
+def _rango_y_anterior(fecha_inicio: date, fecha_fin: date):
+    """Dado un rango (inicio, fin), devuelve (inicio_dt, fin_dt, inicio_ant_dt, fin_ant_dt) para filtrar por fecha_creacion.
+    Período anterior = mismo número de días antes de fecha_inicio.
+    """
+    from datetime import time as dt_time
+    inicio_dt = datetime.combine(fecha_inicio, dt_time(0, 0, 0, 0))
+    fin_dt = datetime.combine(fecha_fin, dt_time(23, 59, 59, 999999))
+    delta_dias = (fecha_fin - fecha_inicio).days + 1
+    fin_ant = fecha_inicio - timedelta(days=1)
+    inicio_ant = fin_ant - timedelta(days=delta_dias - 1)
+    inicio_ant_dt = datetime.combine(inicio_ant, dt_time(0, 0, 0, 0))
+    fin_ant_dt = datetime.combine(fin_ant, dt_time(23, 59, 59, 999999))
+    return inicio_dt, fin_dt, inicio_ant_dt, fin_ant_dt
+
+
 @router.get("/kpis-principales")
 def get_kpis_principales(
     fecha_inicio: Optional[str] = Query(None),
@@ -81,38 +96,65 @@ def get_kpis_principales(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """KPIs principales del dashboard. Datos reales: clientes desde Cliente; total préstamos desde prestamos (estado APROBADO)."""
+    """KPIs principales del dashboard. Respeta fecha_inicio/fecha_fin cuando se envían; si no, usa mes actual y anterior."""
     try:
         total_clientes = db.scalar(select(func.count()).select_from(Cliente)) or 0
         activos = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "ACTIVO")) or 0
         inactivos = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "INACTIVO")) or 0
         finalizados = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "FINALIZADO")) or 0
-        # Total préstamos = cantidad de préstamos aprobados (tabla prestamos, estado = APROBADO)
+
+        # Determinar rango: si vienen fecha_inicio/fecha_fin, usarlos; si no, mes actual y anterior
+        usar_rango = fecha_inicio and fecha_fin
+        try:
+            inicio_dt = fin_dt = inicio_ant_dt = fin_ant_dt = None
+            if usar_rango:
+                inicio = date.fromisoformat(fecha_inicio)
+                fin = date.fromisoformat(fecha_fin)
+                inicio_dt, fin_dt, inicio_ant_dt, fin_ant_dt = _rango_y_anterior(inicio, fin)
+        except (ValueError, TypeError):
+            usar_rango = False
+
+        if not usar_rango:
+            now_utc = datetime.now(timezone.utc)
+            inicio_mes_actual = now_utc.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            fin_mes_actual = (inicio_mes_actual + timedelta(days=32)).replace(day=1) - timedelta(seconds=1)
+            inicio_mes_anterior = (inicio_mes_actual - timedelta(days=1)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            fin_mes_anterior = inicio_mes_actual - timedelta(seconds=1)
+            inicio_dt, fin_dt = inicio_mes_actual, fin_mes_actual
+            inicio_ant_dt, fin_ant_dt = inicio_mes_anterior, fin_mes_anterior
+
+        # Total préstamos = cantidad aprobados en el período (respeta analista/concesionario/modelo)
+        conds = [Prestamo.estado == "APROBADO", Prestamo.fecha_creacion >= inicio_dt, Prestamo.fecha_creacion <= fin_dt]
+        if analista:
+            conds.append(Prestamo.analista == analista)
+        if concesionario:
+            conds.append(Prestamo.concesionario == concesionario)
+        if modelo:
+            conds.append(Prestamo.modelo == modelo)
         total_prestamos = db.scalar(
-            select(func.count()).select_from(Prestamo).where(Prestamo.estado == "APROBADO")
+            select(func.count()).select_from(Prestamo).where(and_(*conds))
         ) or 0
 
-        # Créditos nuevos = suma total_financiamiento de prestamos (estado APROBADO) solo del mes en curso
-        # Indicador % = comparar total mes presente vs mes anterior
-        now_utc = datetime.now(timezone.utc)
-        inicio_mes_actual = now_utc.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        fin_mes_actual = (inicio_mes_actual + timedelta(days=32)).replace(day=1) - timedelta(seconds=1)
-        inicio_mes_anterior = (inicio_mes_actual - timedelta(days=1)).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        fin_mes_anterior = inicio_mes_actual - timedelta(seconds=1)
-
+        # Créditos nuevos = suma total_financiamiento en el período; variación vs período anterior
         total_mes_actual = db.scalar(
-            select(func.coalesce(func.sum(Prestamo.total_financiamiento), 0)).select_from(Prestamo).where(
+            select(func.coalesce(func.sum(Prestamo.total_financiamiento), 0)).select_from(Prestamo).where(and_(
                 Prestamo.estado == "APROBADO",
-                Prestamo.fecha_creacion >= inicio_mes_actual,
-                Prestamo.fecha_creacion <= fin_mes_actual,
-            )
+                Prestamo.fecha_creacion >= inicio_dt,
+                Prestamo.fecha_creacion <= fin_dt,
+                *([] if not analista else [Prestamo.analista == analista]),
+                *([] if not concesionario else [Prestamo.concesionario == concesionario]),
+                *([] if not modelo else [Prestamo.modelo == modelo]),
+            ))
         ) or 0
+        conds_ant = [Prestamo.estado == "APROBADO", Prestamo.fecha_creacion >= inicio_ant_dt, Prestamo.fecha_creacion <= fin_ant_dt]
+        if analista:
+            conds_ant.append(Prestamo.analista == analista)
+        if concesionario:
+            conds_ant.append(Prestamo.concesionario == concesionario)
+        if modelo:
+            conds_ant.append(Prestamo.modelo == modelo)
         total_mes_anterior = db.scalar(
-            select(func.coalesce(func.sum(Prestamo.total_financiamiento), 0)).select_from(Prestamo).where(
-                Prestamo.estado == "APROBADO",
-                Prestamo.fecha_creacion >= inicio_mes_anterior,
-                Prestamo.fecha_creacion <= fin_mes_anterior,
-            )
+            select(func.coalesce(func.sum(Prestamo.total_financiamiento), 0)).select_from(Prestamo).where(and_(*conds_ant))
         ) or 0
 
         creditos_nuevos_valor = _safe_float(total_mes_actual)
@@ -121,44 +163,13 @@ def get_kpis_principales(
         else:
             variacion_creditos = 0.0
 
-        # Cuotas programadas = suma monto_programado de prestamos en el mes. % cuotas pagadas = suma(monto_pagado) / suma(monto_programado) * 100
-        total_monto_programado = db.scalar(
-            select(func.coalesce(func.sum(Prestamo.monto_programado), 0)).select_from(Prestamo).where(
-                Prestamo.fecha_creacion >= inicio_mes_actual,
-                Prestamo.fecha_creacion <= fin_mes_actual,
-            )
-        ) or 0
-        total_monto_pagado = db.scalar(
-            select(func.coalesce(func.sum(Prestamo.monto_pagado), 0)).select_from(Prestamo).where(
-                Prestamo.fecha_creacion >= inicio_mes_actual,
-                Prestamo.fecha_creacion <= fin_mes_actual,
-            )
-        ) or 0
-        sum_prog = _safe_float(total_monto_programado)
-        sum_pag = _safe_float(total_monto_pagado)
-        porcentaje_cuotas_pagadas = (sum_pag / sum_prog * 100.0) if sum_prog and sum_prog != 0 else 0.0
-
-        # Morosidad total mensual = (suma monto_programado - suma monto_pagado) del mes. Comparar con el mismo indicador del mes anterior.
-        total_monto_programado_ant = db.scalar(
-            select(func.coalesce(func.sum(Prestamo.monto_programado), 0)).select_from(Prestamo).where(
-                Prestamo.fecha_creacion >= inicio_mes_anterior,
-                Prestamo.fecha_creacion <= fin_mes_anterior,
-            )
-        ) or 0
-        total_monto_pagado_ant = db.scalar(
-            select(func.coalesce(func.sum(Prestamo.monto_pagado), 0)).select_from(Prestamo).where(
-                Prestamo.fecha_creacion >= inicio_mes_anterior,
-                Prestamo.fecha_creacion <= fin_mes_anterior,
-            )
-        ) or 0
-        sum_prog_ant = _safe_float(total_monto_programado_ant)
-        sum_pag_ant = _safe_float(total_monto_pagado_ant)
-        morosidad_actual = max(0.0, sum_prog - sum_pag)
-        morosidad_anterior = max(0.0, sum_prog_ant - sum_pag_ant)
-        if morosidad_anterior and morosidad_anterior != 0:
-            variacion_morosidad = ((morosidad_actual - morosidad_anterior) / morosidad_anterior) * 100.0
-        else:
-            variacion_morosidad = 0.0
+        # Cuotas programadas y % pagadas: la BD real no tiene monto_programado/monto_pagado en prestamos; usar 0
+        sum_prog = 0.0
+        sum_pag = 0.0
+        porcentaje_cuotas_pagadas = 0.0
+        morosidad_actual = 0.0
+        morosidad_anterior = 0.0
+        variacion_morosidad = 0.0
 
         return {
             "total_prestamos": _kpi(_safe_float(total_prestamos), 0.0),
@@ -175,6 +186,10 @@ def get_kpis_principales(
         }
     except Exception as e:
         logger.exception("Error en kpis-principales: %s", e)
+        try:
+            db.rollback()
+        except Exception:
+            pass
         return {
             "total_prestamos": _kpi(0.0, 0.0),
             "creditos_nuevos_mes": _kpi(0.0, 0.0),
@@ -758,6 +773,7 @@ def get_morosidad_por_analista(
             usar_monto = True
         except ProgrammingError as pe:
             if "monto" in str(pe).lower() and "does not exist" in str(pe).lower():
+                db.rollback()
                 cuotas_vencidas = db.execute(
                     select(Cuota.id, Cuota.cliente_id).select_from(Cuota).where(
                         Cuota.pagado.is_(False),
@@ -766,6 +782,7 @@ def get_morosidad_por_analista(
                 ).all()
                 usar_monto = False
             else:
+                db.rollback()
                 raise
         # Prestamos APROBADO: un préstamo por cliente (el más reciente) para asignar analista
         prestamos_por_cliente = (
@@ -802,6 +819,10 @@ def get_morosidad_por_analista(
         return {"analistas": resultado}
     except Exception as e:
         logger.exception("Error en morosidad-por-analista: %s", e)
+        try:
+            db.rollback()
+        except Exception:
+            pass
         return {"analistas": []}
 
 

@@ -2,13 +2,35 @@
 Holder de configuración de email en tiempo de ejecución.
 Usado por core/email.py para enviar (SMTP) y por tickets para destinos de notificación.
 La API configuracion/email actualiza este holder al guardar; si no se ha guardado, se usan settings (.env).
+Para que Notificaciones/CRM usen la config guardada en BD, sync_from_db() carga desde la tabla configuracion antes de enviar.
 """
+import json
 from typing import Any, List, Optional
 
 from app.core.config import settings
 
 # Config actual: smtp_*, from_email, from_name, tickets_notify_emails (str, emails separados por coma)
 _current: dict[str, Any] = {}
+
+CLAVE_EMAIL_CONFIG = "email_config"
+
+
+def sync_from_db() -> None:
+    """Carga la configuración de email desde la tabla configuracion y actualiza el holder. Así Notificaciones/CRM usan la config guardada en Configuración > Email."""
+    try:
+        from app.core.database import SessionLocal
+        from app.models.configuracion import Configuracion
+        db = SessionLocal()
+        try:
+            row = db.get(Configuracion, CLAVE_EMAIL_CONFIG)
+            if row and row.valor:
+                data = json.loads(row.valor)
+                if isinstance(data, dict):
+                    update_from_api(data)
+        finally:
+            db.close()
+    except Exception:
+        pass
 
 
 def init_from_settings() -> None:

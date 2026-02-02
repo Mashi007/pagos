@@ -271,9 +271,9 @@ export function DashboardMenu() {
         }
       }
     },
-    staleTime: 5 * 60 * 1000, // âœ… ACTUALIZADO: 5 minutos para datos más frescos
-    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
-    enabled: !!datosDashboard, // âœ… Lazy loading - carga después de dashboard admin
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: true,
+    enabled: true, // Cargar aunque admin esté vacío para que los gráficos muestren datos
     retry: 1, // âœ… Permitir 1 reintento para errores de red
     retryDelay: 2000, // Esperar 2 segundos antes de reintentar
   })
@@ -300,9 +300,9 @@ export function DashboardMenu() {
       }
       return response
     },
-    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
-    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
-    enabled: !!datosDashboard, // âœ… Lazy loading - carga después de dashboard admin
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: true,
+    enabled: true,
   })
 
 
@@ -342,9 +342,9 @@ export function DashboardMenu() {
       }
       return response
     },
-    staleTime: 15 * 60 * 1000, // 15 minutos - optimizado para datos históricos
-    enabled: !!datosDashboard, // âœ… Lazy loading - carga después de dashboard admin
-    refetchOnWindowFocus: false, // Reducir peticiones automáticas
+    staleTime: 15 * 60 * 1000,
+    enabled: true,
+    refetchOnWindowFocus: false,
   })
 
   const periodoMorosidadAnalista = getPeriodoGrafico('morosidad-analista')
@@ -361,9 +361,9 @@ export function DashboardMenu() {
       ) as { analistas: Array<{ analista: string; cantidad_cuotas_vencidas: number; monto_vencido: number }> }
       return response.analistas
     },
-    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
-    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
-    enabled: !!datosDashboard, // âœ… Lazy loading - carga después de dashboard admin
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: true,
+    enabled: true,
   })
 
   const [isRefreshing, setIsRefreshing] = useState(false)

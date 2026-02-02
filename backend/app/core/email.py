@@ -5,7 +5,7 @@ Usa SMTP desde email_config_holder (configuración del dashboard) o desde settin
 import logging
 from typing import List, Optional
 
-from app.core.email_config_holder import get_smtp_config, get_tickets_notify_emails
+from app.core.email_config_holder import get_smtp_config, get_tickets_notify_emails, sync_from_db
 
 logger = logging.getLogger(__name__)
 
@@ -18,11 +18,13 @@ def send_email(
 ) -> bool:
     """
     Envía un correo vía SMTP (desde el email configurado en Configuración > Email o .env).
+    Antes de enviar sincroniza el holder con la BD para que Notificaciones/CRM usen la config guardada.
     to_emails: lista de direcciones destino.
     Devuelve True si se envió, False si no hay SMTP configurado o falló.
     """
     if not to_emails:
         return False
+    sync_from_db()
     cfg = get_smtp_config()
     if not all([cfg.get("smtp_host"), cfg.get("smtp_user"), cfg.get("smtp_password")]):
         logger.warning("SMTP no configurado (SMTP_HOST/USER/PASSWORD). No se envía correo.")

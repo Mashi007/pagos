@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
-import { Settings, Zap, Copy, X, Bell, Calendar, AlertTriangle, Shield, ChevronUp, ChevronDown } from 'lucide-react'
+import { Settings, Zap, Copy, X, Bell, Calendar, AlertTriangle, Shield, ChevronUp, ChevronDown, Mail } from 'lucide-react'
 import { emailConfigService } from '../../services/notificacionService'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -233,6 +234,25 @@ export function ConfiguracionNotificaciones() {
             Las plantillas permiten personalizar los mensajes usando variables como {'{{nombre}}'}, {'{{monto}}'}, {'{{fecha_vencimiento}}'}, etc.
           </CardDescription>
         </CardHeader>
+      </Card>
+
+      {/* Enlace a Configuración > Email (Gmail/SMTP) para que los correos se envíen con la config guardada */}
+      <Card className="border-blue-100 bg-blue-50/50">
+        <CardContent className="py-3 px-4 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-sm text-gray-700">
+            <Mail className="h-4 w-4 text-blue-600" />
+            <span>
+              Los correos de notificaciones usan la configuración de <strong>Gmail/SMTP</strong> guardada en Configuración &gt; Email.
+            </span>
+          </div>
+          <Link
+            to="/configuracion?tab=email"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800"
+          >
+            <Settings className="h-4 w-4" />
+            Configurar en Configuración (Email)
+          </Link>
+        </CardContent>
       </Card>
 
       {/* Control de Envíos por Pestaña */}
