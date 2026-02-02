@@ -41,3 +41,8 @@ class LoginResponse(BaseModel):
 
 class RefreshRequest(BaseModel):
     refresh_token: str
+
+
+class AdminResetPasswordRequest(BaseModel):
+    """Solo uso interno: sincroniza contraseña del usuario en BD con ADMIN_PASSWORD."""
+    email: EmailStr

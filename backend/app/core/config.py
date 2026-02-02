@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     # Usuario admin único (auth sin tabla users). Opcional.
     ADMIN_EMAIL: Optional[str] = Field(None, description="Email del usuario admin para login")
     ADMIN_PASSWORD: Optional[str] = Field(None, description="Contraseña del usuario admin para login")
+    # Secreto para endpoint interno de restablecer contraseña (sincronizar usuario BD con ADMIN_PASSWORD).
+    RESET_PASSWORD_SECRET: Optional[str] = Field(None, description="Secreto para POST /api/v1/auth/admin/reset-password (header X-Admin-Secret)")
     
     @validator('SECRET_KEY')
     def validate_secret_key(cls, v):

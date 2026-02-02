@@ -6,7 +6,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
@@ -22,6 +22,7 @@ from app.core.security import (
 from app.core.user_utils import user_to_response
 from app.models.user import User
 from app.schemas.auth import (
+    AdminResetPasswordRequest,
     LoginRequest,
     LoginResponse,
     RefreshRequest,
@@ -35,6 +36,48 @@ security = HTTPBearer(auto_error=False)
 _LOGIN_ATTEMPTS: dict[str, list[float]] = defaultdict(list)
 _LOGIN_RATE_LIMIT_WINDOW = 60  # segundos
 _LOGIN_RATE_LIMIT_MAX = 5  # intentos por ventana
+
+
+def _require_reset_secret(x_admin_secret: Optional[str] = Header(None, alias="X-Admin-Secret")) -> None:
+    """Exige que X-Admin-Secret coincida con RESET_PASSWORD_SECRET. Solo para uso interno."""
+    if not settings.RESET_PASSWORD_SECRET or not settings.RESET_PASSWORD_SECRET.strip():
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Configure RESET_PASSWORD_SECRET en el servidor para usar este endpoint.",
+        )
+    if not x_admin_secret or x_admin_secret.strip() != settings.RESET_PASSWORD_SECRET.strip():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Secreto inválido",
+        )
+
+
+@router.post("/admin/reset-password")
+def admin_reset_password(
+    body: AdminResetPasswordRequest,
+    db: Session = Depends(get_db),
+    _: None = Depends(_require_reset_secret),
+):
+    """
+    Uso interno: restablece la contraseña del usuario con el email dado
+    a la contraseña actual ADMIN_PASSWORD. Así puedes alinear el usuario en BD con Render
+    sin tocar la base a mano. Requiere header X-Admin-Secret = RESET_PASSWORD_SECRET.
+    """
+    if not settings.ADMIN_PASSWORD or not settings.ADMIN_PASSWORD.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="ADMIN_PASSWORD no está configurado en el servidor.",
+        )
+    email = body.email.lower().strip()
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No existe un usuario con ese email.",
+        )
+    user.password_hash = get_password_hash(settings.ADMIN_PASSWORD)
+    db.commit()
+    return {"message": "Contraseña actualizada. El usuario puede iniciar sesión con ADMIN_PASSWORD."}
 
 
 @router.get("/status")
