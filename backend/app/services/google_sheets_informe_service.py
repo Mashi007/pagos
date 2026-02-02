@@ -48,7 +48,7 @@ def append_row(
     """
     service, sheet_id = _get_sheets_service()
     if not service or not sheet_id:
-        logger.warning("Google Sheets no configurado.")
+        logger.warning("Google Sheets no configurado (falta ID hoja o credenciales/OAuth). Revisa Configuración > Informe pagos y que la hoja esté compartida con la cuenta OAuth.")
         return False
     tab_name = PERIODOS.get(periodo_envio) or periodo_envio
     try:

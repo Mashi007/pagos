@@ -56,6 +56,7 @@
 
 - Mensajes: bienvenida, cédula, confirmación, foto (20 cm), foto poco clara (intento n/3), **MENSAJE_RECIBIDO = "Gracias. (Cédula {cedula} reportada.)"**. OK.
 - Flujo: cédula → confirmación → imagen (claridad, 3 intentos) → Drive + OCR + Sheet + pagos_whatsapp + pagos_informe. OK.
+- Si la subida a Drive falla: se registra **WARNING** "Drive: subida fallida o no configurada; link_imagen=NA. Revisa OAuth conectado, ID carpeta y que la carpeta esté compartida con la cuenta OAuth." y se continúa con link_imagen="NA".
 
 ---
 
@@ -93,7 +94,25 @@
 
 ---
 
-## 6. Recomendaciones
+## 6. Si la imagen no aparece en Drive
+
+1. **OAuth conectado:** En Configuración → Informe pagos debe verse "OAuth conectado". Si no, guardar Client ID y Secret y pulsar "Conectar con Google (OAuth)".
+2. **Carpeta compartida:** La carpeta con ID configurado debe estar **compartida con la cuenta de Google** usada en OAuth, rol **Editor**.
+3. **ID correcto:** Usar exactamente `1PwYB4-e2-Uh69gCj0sIa9_tI2b4qUHl4` (con **I** mayúscula en `tI2b4q`).
+4. **Logs backend:** Buscar "Google Drive no configurado", "Drive: subida fallida o no configurada" o "Error subiendo imagen a Google Drive" al enviar una papeleta.
+
+---
+
+## 6.1 Si no aparece la fila en Google Sheets
+
+1. **OAuth conectado:** Igual que Drive; debe verse "OAuth conectado" en Informe pagos.
+2. **Hoja compartida:** La hoja **Papeletas_WhatsApp** (ID `1YkUw8v3XEUM07vIkHiqvxFIKfq4-BHN_JtDcvR4rCRU`) debe estar **compartida con la misma cuenta de Google** usada en OAuth, rol **Editor**.
+3. **ID hoja en la app:** En Configuración → Informe pagos, **ID Google Sheet** = `1YkUw8v3XEUM07vIkHiqvxFIKfq4-BHN_JtDcvR4rCRU` (solo el ID, sin URL). Guardar.
+4. **Logs backend:** Buscar "Google Sheets no configurado", "Sheets: no se escribió la fila" o "Error escribiendo en Google Sheets" al enviar una papeleta.
+
+---
+
+## 7. Recomendaciones
 
 1. **Variables de entorno:** Asegurar `BACKEND_PUBLIC_URL` en producción (ej. `https://pagos-f2qf.onrender.com`) para que el redirect_uri sea correcto.
 2. **Redirect post-OAuth:** Las URLs `redirect_ok` y `redirect_fail` están fijas a `https://rapicredit.onrender.com/pagos/configuracion?...`. Si el frontend cambia de dominio, habría que hacerlas configurables (ej. desde `settings` o BD).
@@ -102,7 +121,7 @@
 
 ---
 
-## 7. Checklist de despliegue
+## 8. Checklist de despliegue
 
 - [ ] BACKEND_PUBLIC_URL configurado en Render (backend).
 - [ ] En Google Cloud: URI de redirección = `https://pagos-f2qf.onrender.com/api/v1/configuracion/informe-pagos/google/callback`.

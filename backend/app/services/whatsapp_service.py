@@ -366,6 +366,7 @@ class WhatsAppService:
         except Exception as e:
             logger.exception("Error subiendo a Drive: %s", e)
         if not link_imagen:
+            logger.warning("Drive: subida fallida o no configurada; link_imagen=NA. Revisa OAuth conectado, ID carpeta y que la carpeta esté compartida con la cuenta OAuth.")
             link_imagen = "NA"
         row_pw = PagosWhatsapp(
             fecha=datetime.utcnow(),
@@ -409,7 +410,9 @@ class WhatsAppService:
         db.commit()
         try:
             from app.services.google_sheets_informe_service import append_row
-            append_row(conv.cedula, fecha_dep, nombre_banco, numero_dep, cantidad, link_imagen, periodo, observacion=observacion_informe)
+            sheet_ok = append_row(conv.cedula, fecha_dep, nombre_banco, numero_dep, cantidad, link_imagen, periodo, observacion=observacion_informe)
+            if not sheet_ok:
+                logger.warning("Sheets: no se escribió la fila. Revisa OAuth conectado, ID hoja y que la hoja esté compartida con la cuenta OAuth.")
         except Exception as e:
             logger.exception("Error escribiendo en Sheet: %s", e)
         cedula_guardada = conv.cedula
