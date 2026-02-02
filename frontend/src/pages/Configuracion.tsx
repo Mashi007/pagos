@@ -315,22 +315,12 @@ export function Configuracion() {
         // Si hay un logo preview, significa que se subió un logo
         // Verificar explícitamente que el logo esté guardado en la BD
         if (logoPreview && logoInfo) {
-          console.log('✅ Verificando que logo esté guardado en BD:', logoInfo)
-
-          // Verificar que el logo_filename esté persistido en la BD
-          const configResponse = await fetch('/api/v1/configuracion/general')
-          if (!configResponse.ok) {
-            throw new Error(`Error ${configResponse.status} obteniendo configuración`)
-          }
-
-          const updatedConfig = await configResponse.json()
-          console.log('✅ Configuración general recargada:', updatedConfig)
+          // Verificar que el logo_filename esté persistido en la BD (usa apiClient para base URL correcta)
+          const updatedConfig = await configuracionGeneralService.obtenerConfiguracionGeneral()
 
           // Verificar que logo_filename esté en la BD y coincida con el logo subido
           if (updatedConfig.logo_filename) {
             if (updatedConfig.logo_filename === logoInfo.filename) {
-              console.log('✅ Logo confirmado y guardado correctamente en BD:', updatedConfig.logo_filename)
-
               // Actualizar estado local con configuración recargada
               setConfiguracionGeneral(updatedConfig)
 
@@ -349,17 +339,12 @@ export function Configuracion() {
 
               toast.success('Logo guardado exitosamente en la base de datos')
             } else {
-              console.warn('âš ï¸ Logo filename en BD no coincide:', {
-                esperado: logoInfo.filename,
-                encontrado: updatedConfig.logo_filename
-              })
               toast.warning('El logo se guardó pero hay una discrepancia. Por favor, verifica.')
               // Continuar con el guardado aunque haya discrepancia
               setLogoPreview(null)
               setLogoInfo(null)
             }
           } else {
-            console.error('âŒ Logo filename NO encontrado en configuración después de guardar')
             toast.error('Error: El logo no se guardó correctamente en la base de datos. Por favor, intenta subirlo nuevamente.')
             // No limpiar estado para que el usuario pueda intentar de nuevo
             throw new Error('Logo no encontrado en BD después de guardar')

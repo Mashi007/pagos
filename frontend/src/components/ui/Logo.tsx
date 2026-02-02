@@ -3,6 +3,11 @@ import { cn } from '../../utils'
 import { getErrorMessage, isAxiosError } from '../../types/errors'
 import { safeGetItem, safeSetItem } from '../../utils/storage'
 import { useIsMounted } from '../../hooks/useIsMounted'
+import { apiClient } from '../../services/api'
+import { env } from '../../config/env'
+
+/** Base URL del API para peticiones (vacío = mismo origen). */
+const getApiBase = () => (env.API_URL || '').replace(/\/$/, '')
 
 interface LogoProps {
   className?: string
@@ -62,8 +67,8 @@ const loadLogoMetadata = (): Partial<LogoCache> => {
   try {
     const cached = safeGetItem('logo_metadata', null)
     if (cached && cached.logoFilename) {
-      // Construir URL del logo desde el nombre del archivo cacheado
-      const logoPath = `/api/v1/configuracion/logo/${cached.logoFilename}`
+      const base = getApiBase()
+      const logoPath = `${base}/api/v1/configuracion/logo/${cached.logoFilename}`
       return {
         logoUrl: `${logoPath}?t=${Date.now()}`,
         logoFilename: cached.logoFilename,
@@ -205,30 +210,31 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
       timeoutId = setTimeout(() => controller?.abort(), 5000) // Timeout de 5 segundos
 
       try {
-        // PRIMERO: Intentar obtener el nombre del logo desde la configuración general
+        // PRIMERO: Intentar obtener el nombre del logo desde la configuración general (apiClient = base URL correcta)
         try {
-          const configResponse = await fetch('/api/v1/configuracion/general', {
+          const config = await apiClient.get<{ logo_filename?: string }>('/api/v1/configuracion/general', {
             signal: controller.signal,
           })
 
-          // âœ… Verificar si el componente sigue montado antes de continuar
+          // Verificar si el componente sigue montado antes de continuar
           if (!isMounted()) {
             clearTimeout(timeoutId)
             return
           }
 
-          if (configResponse.ok) {
-            const config = await configResponse.json()
-            if (config.logo_filename) {
-              // âœ… Si tenemos el nombre del logo, verificar primero si existe antes de intentar cargar
-              const logoPath = `/api/v1/configuracion/logo/${config.logo_filename}`
+          if (config?.logo_filename) {
+            const base = getApiBase()
+            const logoPath = `${base}/api/v1/configuracion/logo/${config.logo_filename}`
 
-              // Verificar si el logo existe con HEAD request (más ligero que GET)
-              try {
-                const headResponse = await fetch(logoPath, {
-                  method: 'HEAD',
-                  signal: controller.signal,
-                })
+            // Verificar si el logo existe con HEAD request (más ligero que GET)
+            try {
+              const headResponse = await fetch(logoPath, {
+                method: 'HEAD',
+                signal: controller.signal,
+                headers: apiClient.defaults.headers?.Authorization
+                  ? { Authorization: apiClient.defaults.headers.Authorization as string }
+                  : {},
+              })
 
                 // âœ… Verificar si el componente sigue montado antes de continuar
                 if (!isMounted()) {
@@ -312,7 +318,6 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
                   return
                 } else {
                   // Logo no existe (404), marcar como no encontrado
-                  console.warn('âš ï¸ Logo no encontrado en servidor (HEAD 404):', config.logo_filename)
                   logoCache.logoNotFound = true
                   logoCache.logoUrl = null
                   logoCache.logoFilename = null // âœ… Limpiar nombre del archivo
@@ -347,18 +352,14 @@ export function Logo({ className, size = 'md', forceDefault = false }: LogoProps
                 notifyLogoListeners(null, logoCache.version) // âœ… Notificar a todas las instancias
                 return
               }
-            } else {
-              // Si no hay logo_filename en la configuración, no hay logo personalizado
-              // No hacer solicitudes HEAD innecesarias
-              logoCache.hasChecked = true
-              logoCache.lastCheckTime = Date.now() // âœ… Guardar timestamp de verificación
-              logoCache.isChecking = false
-              if (isMounted()) {
-                setHasChecked(true)
-              }
-              clearTimeout(timeoutId)
-              return
-            }
+          } else {
+            // Si no hay logo_filename en la configuración, no hay logo personalizado
+            logoCache.hasChecked = true
+            logoCache.lastCheckTime = Date.now()
+            logoCache.isChecking = false
+            if (isMounted()) setHasChecked(true)
+            clearTimeout(timeoutId)
+            return
           }
         } catch (configError: unknown) {
           // Si falla obtener la configuración, marcar como verificado y no hacer más intentos
