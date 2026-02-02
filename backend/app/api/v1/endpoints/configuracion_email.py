@@ -226,12 +226,16 @@ def post_email_probar(payload: ProbarEmailRequest = Body(...), db: Session = Dep
     body = (payload.mensaje or "").strip() or "Este es un correo de prueba enviado desde la configuración de email."
     ok, error_msg = send_email(to_emails=[destino], subject=subject, body_text=body)
     if not ok:
-        raise HTTPException(
-            status_code=502,
-            detail=error_msg or "No se pudo enviar el correo. Revisa servidor SMTP, puerto (587 o 465), TLS y contraseña de aplicación.",
-        )
+        # Devolver 200 con success=false para que el frontend muestre el mensaje sin tratar como error de red (502)
+        logger.warning("Email de prueba falló: %s", error_msg)
+        return {
+            "success": False,
+            "mensaje": error_msg or "No se pudo enviar el correo. Revisa servidor SMTP, puerto (587 o 465), TLS y contraseña de aplicación.",
+            "email_destino": destino,
+        }
     logger.info("Email de prueba enviado a %s", destino)
     return {
+        "success": True,
         "mensaje": "Correo de prueba enviado correctamente.",
         "email_destino": destino,
     }

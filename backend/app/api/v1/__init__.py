@@ -2,7 +2,7 @@
 API v1
 """
 from fastapi import APIRouter
-from app.api.v1.endpoints import whatsapp, auth, configuracion, pagos, prestamos, notificaciones, notificaciones_tabs, dashboard, kpis, auditoria, cobranzas, clientes, tickets, comunicaciones, validadores, usuarios, reportes, modelos_vehiculos, analistas
+from app.api.v1.endpoints import whatsapp, auth, configuracion, pagos, prestamos, notificaciones, notificaciones_tabs, dashboard, kpis, auditoria, cobranzas, clientes, tickets, comunicaciones, validadores, usuarios, reportes, modelos_vehiculos, analistas, ai_training
 
 api_router = APIRouter()
 
@@ -163,4 +163,11 @@ api_router.include_router(
     analistas.router,
     prefix="/analistas",
     tags=["analistas"],
+)
+
+# AI Training (métricas de conversaciones, fine-tuning, RAG, ML riesgo).
+api_router.include_router(
+    ai_training.router,
+    prefix="/ai/training",
+    tags=["ai-training"],
 )

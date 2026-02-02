@@ -5,6 +5,9 @@ Usa SMTP desde email_config_holder (configuración del dashboard) o desde settin
 import logging
 from typing import List, Optional, Tuple
 
+# Timeout para conexión y envío SMTP (evita 502 por proxy cuando Gmail/red tardan)
+SMTP_TIMEOUT_SECONDS = 25
+
 from app.core.email_config_holder import get_smtp_config, get_tickets_notify_emails, sync_from_db
 
 logger = logging.getLogger(__name__)
@@ -19,8 +22,8 @@ def _sanitize_smtp_error(exc: Exception) -> str:
     lower = msg.lower()
     if "username and password not accepted" in lower or "authentication failed" in lower:
         return "Usuario o contraseña no aceptados. Usa una Contraseña de aplicación (App Password) de Gmail."
-    if "connection refused" in lower or "timed out" in lower:
-        return "No se pudo conectar al servidor SMTP. Revisa host, puerto (587 o 465) y firewall."
+    if "connection refused" in lower or "timed out" in lower or "timeout" in lower:
+        return "La conexión al servidor SMTP tardó demasiado o fue rechazada. Revisa host, puerto (587) y que el servidor no esté en suspensión (Render). Vuelve a intentar."
     if "ssl" in lower or "certificate" in lower:
         return "Error SSL/TLS. Prueba puerto 587 con STARTTLS o 465 con SSL."
     # Limitar longitud y quitar posibles rutas internas
@@ -69,11 +72,11 @@ def send_email(
         all_recipients = to_emails + cc_list
         use_tls = (cfg.get("smtp_use_tls") or "true").lower() == "true"
         if port == 465:
-            with smtplib.SMTP_SSL(cfg["smtp_host"], port) as server:
+            with smtplib.SMTP_SSL(cfg["smtp_host"], port, timeout=SMTP_TIMEOUT_SECONDS) as server:
                 server.login(cfg["smtp_user"], cfg["smtp_password"])
                 server.sendmail(msg["From"], all_recipients, msg.as_string())
         else:
-            with smtplib.SMTP(cfg["smtp_host"], port) as server:
+            with smtplib.SMTP(cfg["smtp_host"], port, timeout=SMTP_TIMEOUT_SECONDS) as server:
                 if use_tls:
                     server.starttls()
                 server.login(cfg["smtp_user"], cfg["smtp_password"])

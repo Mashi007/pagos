@@ -105,14 +105,29 @@ export function EntrenamientoMejorado() {
     }
   }
 
+  const metricasPorDefecto: MetricasEntrenamiento = {
+    conversaciones: { total: 0, con_calificacion: 0, promedio_calificacion: 0, listas_entrenamiento: 0 },
+    fine_tuning: { jobs_totales: 0, jobs_exitosos: 0, jobs_fallidos: 0 },
+    rag: { documentos_con_embeddings: 0, total_embeddings: 0 },
+    ml_riesgo: { modelos_disponibles: 0 },
+  }
+
   const cargarMetricas = async () => {
     setCargandoMetricas(true)
     try {
       const data = await aiTrainingService.getMetricasEntrenamiento()
-      setMetricas(data)
+      if (data && data.conversaciones && data.fine_tuning && data.rag && data.ml_riesgo) {
+        setMetricas(data as MetricasEntrenamiento)
+      } else {
+        setMetricas({ ...metricasPorDefecto, ...data } as MetricasEntrenamiento)
+      }
     } catch (error: any) {
       console.error('Error cargando métricas:', error)
-      toast.error('Error al cargar métricas de entrenamiento')
+      if (error?.response?.status === 404) {
+        setMetricas(metricasPorDefecto)
+      } else {
+        toast.error('Error al cargar métricas de entrenamiento')
+      }
     } finally {
       setCargandoMetricas(false)
     }
@@ -147,19 +162,20 @@ export function EntrenamientoMejorado() {
   }
 
   const calcularProgresoEntrenamiento = () => {
-    if (!metricas) return 0
+    if (!metricas?.conversaciones) return 0
     const totalNecesario = 50 // Recomendado para buen entrenamiento
-    const totalDisponible = metricas.conversaciones.listas_entrenamiento
+    const totalDisponible = metricas.conversaciones.listas_entrenamiento ?? 0
     return Math.min((totalDisponible / totalNecesario) * 100, 100)
   }
 
   const obtenerRecomendaciones = (): Recomendacion[] => {
     const recomendaciones: Recomendacion[] = []
     
-    if (!metricas) return recomendaciones
+    if (!metricas?.conversaciones) return recomendaciones
+    const conv = metricas.conversaciones
 
     // Recomendación 1: Recolección automática
-    if (metricas.conversaciones.total < 20) {
+    if ((conv.total ?? 0) < 20) {
       recomendaciones.push({
         tipo: 'recoleccion',
         titulo: recoleccionAutomaticaActiva 
@@ -175,11 +191,11 @@ export function EntrenamientoMejorado() {
     }
 
     // Recomendación 2: Calidad de datos
-    if (metricas.conversaciones.con_calificacion > 0 && metricas.conversaciones.promedio_calificacion < 3.5) {
+    if ((conv.con_calificacion ?? 0) > 0 && (conv.promedio_calificacion ?? 0) < 3.5) {
       recomendaciones.push({
         tipo: 'calidad',
         titulo: 'Mejorar Calidad de Conversaciones',
-        descripcion: `El promedio de calificaciones es ${metricas.conversaciones.promedio_calificacion.toFixed(1)}/5. Revisa y mejora las conversaciones con baja calificación.`,
+        descripcion: `El promedio de calificaciones es ${(conv.promedio_calificacion ?? 0).toFixed(1)}/5. Revisa y mejora las conversaciones con baja calificación.`,
         accion: 'Revisar',
         icono: <Target className="h-5 w-5" />,
         color: 'amber',
@@ -187,11 +203,11 @@ export function EntrenamientoMejorado() {
     }
 
     // Recomendación 3: Entrenamiento listo
-    if (metricas.conversaciones.listas_entrenamiento >= 10) {
+    if ((conv.listas_entrenamiento ?? 0) >= 10) {
       recomendaciones.push({
         tipo: 'entrenar',
         titulo: '¡Listo para Entrenar!',
-        descripcion: `Tienes ${metricas.conversaciones.listas_entrenamiento} conversaciones listas. Puedes iniciar el fine-tuning ahora.`,
+        descripcion: `Tienes ${conv.listas_entrenamiento ?? 0} conversaciones listas. Puedes iniciar el fine-tuning ahora.`,
         accion: 'Entrenar',
         icono: <Play className="h-5 w-5" />,
         color: 'green',
@@ -199,11 +215,11 @@ export function EntrenamientoMejorado() {
     }
 
     // Recomendación 4: Más datos
-    if (metricas.conversaciones.listas_entrenamiento < 10) {
+    if ((conv.listas_entrenamiento ?? 0) < 10) {
       recomendaciones.push({
         tipo: 'mas_datos',
         titulo: 'Necesitas Más Conversaciones',
-        descripcion: `Tienes ${metricas.conversaciones.listas_entrenamiento} conversaciones listas. Se recomiendan al menos 10 para entrenar (ideal: 50+).`,
+        descripcion: `Tienes ${conv.listas_entrenamiento ?? 0} conversaciones listas. Se recomiendan al menos 10 para entrenar (ideal: 50+).`,
         accion: 'Ver Cómo',
         icono: <Info className="h-5 w-5" />,
         color: 'blue',
@@ -237,11 +253,11 @@ export function EntrenamientoMejorado() {
                   <p className="text-sm font-semibold text-blue-700 uppercase tracking-wide">Conversaciones</p>
                 </div>
                 <p className="text-3xl font-bold text-blue-900 mb-1">
-                  {metricas?.conversaciones.total || 0}
+                  {metricas?.conversaciones?.total ?? 0}
                 </p>
                 <div className="flex items-center gap-2 mt-2">
                   <Badge variant="outline" className="bg-white/50 border-blue-300 text-blue-700 text-xs">
-                    {metricas?.conversaciones.listas_entrenamiento || 0} listas
+                    {metricas?.conversaciones?.listas_entrenamiento ?? 0} listas
                   </Badge>
                 </div>
               </div>
@@ -258,14 +274,14 @@ export function EntrenamientoMejorado() {
                   <p className="text-sm font-semibold text-green-700 uppercase tracking-wide">Calificación</p>
                 </div>
                 <p className="text-3xl font-bold text-green-900 mb-1">
-                  {metricas?.conversaciones.promedio_calificacion
+                  {metricas?.conversaciones?.promedio_calificacion != null
                     ? metricas.conversaciones.promedio_calificacion.toFixed(1)
                     : '0.0'}
                   <span className="text-lg text-green-600 ml-1">/5</span>
                 </p>
                 <div className="flex items-center gap-2 mt-2">
                   <Badge variant="outline" className="bg-white/50 border-green-300 text-green-700 text-xs">
-                    {metricas?.conversaciones.con_calificacion || 0} calificadas
+                    {metricas?.conversaciones?.con_calificacion ?? 0} calificadas
                   </Badge>
                 </div>
               </div>
@@ -282,18 +298,18 @@ export function EntrenamientoMejorado() {
                   <p className="text-sm font-semibold text-purple-700 uppercase tracking-wide">Modelos</p>
                 </div>
                 <p className="text-3xl font-bold text-purple-900 mb-1">
-                  {metricas?.fine_tuning.jobs_exitosos || 0}
+                  {metricas?.fine_tuning?.jobs_exitosos ?? 0}
                 </p>
                 <div className="flex items-center gap-2 mt-2">
                   <Badge 
                     variant="outline" 
                     className={`bg-white/50 text-xs ${
-                      metricas?.fine_tuning.modelo_activo 
+                      metricas?.fine_tuning?.modelo_activo 
                         ? 'border-purple-300 text-purple-700' 
                         : 'border-gray-300 text-gray-600'
                     }`}
                   >
-                    {metricas?.fine_tuning.modelo_activo ? 'âœ“ Activo' : 'Sin activar'}
+                    {metricas?.fine_tuning?.modelo_activo ? '✓ Activo' : 'Sin activar'}
                   </Badge>
                 </div>
               </div>
@@ -317,7 +333,7 @@ export function EntrenamientoMejorado() {
                   className="h-2.5 bg-orange-200"
                 />
                 <p className="text-xs text-orange-600 mt-2">
-                  {metricas?.conversaciones.listas_entrenamiento || 0} / 50 conversaciones
+                  {metricas?.conversaciones?.listas_entrenamiento ?? 0} / 50 conversaciones
                 </p>
               </div>
             </div>
@@ -691,7 +707,7 @@ export function EntrenamientoMejorado() {
             </div>
 
             {/* Estadísticas de recolección - Mejorado */}
-            {metricas && (
+            {metricas?.conversaciones && (
               <Card className="border-gray-200 shadow-sm">
                 <CardContent className="pt-6">
                   <div className="flex items-center justify-between mb-6">
@@ -703,25 +719,25 @@ export function EntrenamientoMejorado() {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
                       <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-2">Total</p>
-                      <p className="text-3xl font-bold text-blue-900">{metricas.conversaciones.total}</p>
+                      <p className="text-3xl font-bold text-blue-900">{metricas.conversaciones.total ?? 0}</p>
                       <p className="text-xs text-blue-600 mt-1">conversaciones</p>
                     </div>
                     <div className="p-4 bg-purple-50 rounded-xl border border-purple-200">
                       <p className="text-xs font-semibold text-purple-700 uppercase tracking-wide mb-2">Calificadas</p>
-                      <p className="text-3xl font-bold text-purple-900">{metricas.conversaciones.con_calificacion}</p>
+                      <p className="text-3xl font-bold text-purple-900">{metricas.conversaciones.con_calificacion ?? 0}</p>
                       <p className="text-xs text-purple-600 mt-1">con calificación</p>
                     </div>
                     <div className="p-4 bg-green-50 rounded-xl border border-green-200">
                       <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-2">Listas</p>
                       <p className="text-3xl font-bold text-green-900">
-                        {metricas.conversaciones.listas_entrenamiento}
+                        {metricas.conversaciones.listas_entrenamiento ?? 0}
                       </p>
                       <p className="text-xs text-green-600 mt-1">4+ estrellas</p>
                     </div>
                     <div className="p-4 bg-orange-50 rounded-xl border border-orange-200">
                       <p className="text-xs font-semibold text-orange-700 uppercase tracking-wide mb-2">Promedio</p>
                       <p className="text-3xl font-bold text-orange-900">
-                        {metricas.conversaciones.promedio_calificacion.toFixed(1)}
+                        {(metricas.conversaciones.promedio_calificacion ?? 0).toFixed(1)}
                       </p>
                       <p className="text-xs text-orange-600 mt-1">de 5.0</p>
                     </div>

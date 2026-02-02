@@ -452,11 +452,15 @@ export function EmailConfig() {
 
       setResultadoPrueba(resultado)
 
-      if (resultado.mensaje?.includes('enviado')) {
+      if (resultado.success === false) {
+        const mensaje = resultado.mensaje || 'No se pudo enviar el correo.'
+        toast.error(mensaje)
+        setResultadoPrueba({ ...resultado, error: mensaje })
+        setEmailEnviadoExitoso(false)
+      } else if (resultado.mensaje?.includes('enviado')) {
         toast.success(`Email de prueba enviado exitosamente a ${resultado.email_destino || 'tu correo'}`)
-        setEmailEnviadoExitoso(true) // âœ… Marcar como enviado exitosamente
+        setEmailEnviadoExitoso(true)
 
-        // âœ… Reactivar botón después de 3 segundos
         setTimeout(() => {
           setEmailEnviadoExitoso(false)
         }, 3000)
