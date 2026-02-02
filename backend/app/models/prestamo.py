@@ -18,5 +18,8 @@ class Prestamo(Base):
     monto_programado = Column(Numeric(14, 2), nullable=True)   # Total cuotas programadas (mes o vida del préstamo)
     monto_pagado = Column(Numeric(14, 2), nullable=True)       # Total pagado
     estado = Column(String(20), nullable=False, index=True, default="PENDIENTE")  # PENDIENTE, APROBADO, RECHAZADO, etc.
+    concesionario = Column(String(255), nullable=True, index=True)  # Para dashboard: préstamos por concesionario
+    modelo = Column(String(255), nullable=True, index=True)  # Para dashboard: préstamos por modelo
+    analista = Column(String(255), nullable=True, index=True)  # Para dashboard: morosidad por analista
     fecha_creacion = Column(DateTime(timezone=False), nullable=False, server_default=func.now())
     fecha_actualizacion = Column(DateTime(timezone=False), nullable=True, onupdate=func.now())

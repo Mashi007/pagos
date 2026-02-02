@@ -19,10 +19,8 @@ interface TreemapMorosidadModalProps {
 
 interface AnalistaMorosidadData {
   analista: string
-  total_morosidad: number
-  cantidad_clientes: number
-  cantidad_cuotas_atrasadas: number
-  promedio_morosidad_por_cliente: number
+  cantidad_cuotas_vencidas: number
+  monto_vencido: number
 }
 
 interface TreemapMorosidadResponse {
@@ -67,13 +65,11 @@ export function TreemapMorosidadModal({ isOpen, onClose }: TreemapMorosidadModal
     setIsRefreshing(false)
   }
 
-  // Preparar datos para Treemap
+  // Preparar datos para Treemap (tamaño por monto vencido)
   const datosTreemap = morosidadData?.analistas.map((a) => ({
     name: a.analista,
-    value: a.total_morosidad,
-    cantidad_clientes: a.cantidad_clientes,
-    cantidad_cuotas_atrasadas: a.cantidad_cuotas_atrasadas,
-    promedio_morosidad_por_cliente: a.promedio_morosidad_por_cliente,
+    value: a.monto_vencido,
+    cantidad_cuotas_vencidas: a.cantidad_cuotas_vencidas,
   })) || []
 
   // Colores para el treemap (gradiente)
@@ -88,32 +84,23 @@ export function TreemapMorosidadModal({ isOpen, onClose }: TreemapMorosidadModal
   const maxValue = Math.max(...datosTreemap.map((d) => d.value), 0)
 
   // Tooltip personalizado
-  const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ payload?: { name?: string; value?: number; cantidad_clientes?: number; cantidad_cuotas_atrasadas?: number; promedio_morosidad_por_cliente?: number } }> }) => {
+  const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ payload?: { name?: string; value?: number; cantidad_cuotas_vencidas?: number } }> }) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload
       if (!data) return null
 
       const value = typeof data.value === 'number' ? data.value : 0
-      const cantidadClientes = typeof data.cantidad_clientes === 'number' ? data.cantidad_clientes : 0
-      const cantidadCuotas = typeof data.cantidad_cuotas_atrasadas === 'number' ? data.cantidad_cuotas_atrasadas : 0
-      const promedio = typeof data.promedio_morosidad_por_cliente === 'number' ? data.promedio_morosidad_por_cliente : 0
+      const cantidadCuotas = typeof data.cantidad_cuotas_vencidas === 'number' ? data.cantidad_cuotas_vencidas : 0
 
       return (
         <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-lg">
           <p className="font-bold text-lg mb-2">{typeof data.name === 'string' ? data.name : 'N/A'}</p>
           <p className="text-sm mb-1">
-            <span className="font-semibold">Morosidad Total:</span>{' '}
+            <span className="font-semibold">Dólares vencidos:</span>{' '}
             <span className="text-red-600">{formatCurrency(value)}</span>
           </p>
           <p className="text-sm mb-1">
-            <span className="font-semibold">Clientes:</span> {cantidadClientes}
-          </p>
-          <p className="text-sm mb-1">
-            <span className="font-semibold">Cuotas Atrasadas:</span> {cantidadCuotas}
-          </p>
-          <p className="text-sm">
-            <span className="font-semibold">Promedio por Cliente:</span>{' '}
-            {formatCurrency(promedio)}
+            <span className="font-semibold">Cuotas vencidas:</span> {cantidadCuotas}
           </p>
         </div>
       )
@@ -186,7 +173,7 @@ export function TreemapMorosidadModal({ isOpen, onClose }: TreemapMorosidadModal
         {/* Gráfico Treemap */}
         <Card>
           <CardHeader>
-            <CardTitle>Morosidad por Analista (Clientes con morosidad desde 1 día)</CardTitle>
+            <CardTitle>Morosidad por Analista (cuotas vencidas y dólares vencidos)</CardTitle>
           </CardHeader>
           <CardContent>
             {loadingMorosidad ? (

@@ -285,7 +285,7 @@ def get_financiamiento_tendencia_mensual(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Tendencia mensual de financiamiento. Datos reales: cartera por mes desde Cliente."""
+    """Tendencia mensual de financiamiento. Datos reales: cartera por mes desde Prestamo (no Cliente)."""
     try:
         meses_list = _ultimos_12_meses()
         hoy = datetime.now(timezone.utc)
@@ -294,10 +294,9 @@ def get_financiamiento_tendencia_mensual(
             fin_mes = hoy - timedelta(days=30 * (11 - i))
             ultimo_dia = _ultimo_dia_del_mes(fin_mes.replace(tzinfo=timezone.utc) if fin_mes.tzinfo is None else fin_mes)
             cartera = db.scalar(
-                select(func.coalesce(func.sum(Cliente.total_financiamiento), 0)).select_from(Cliente).where(
-                    Cliente.fecha_registro <= ultimo_dia,
-                    Cliente.total_financiamiento.isnot(None),
-                    Cliente.total_financiamiento > 0,
+                select(func.coalesce(func.sum(Prestamo.total_financiamiento), 0)).select_from(Prestamo).where(
+                    Prestamo.fecha_creacion <= ultimo_dia,
+                    Prestamo.estado == "APROBADO",
                 )
             ) or 0
             resultado.append({
@@ -367,6 +366,22 @@ def get_morosidad_por_dia(
         return {"dias": []}
 
 
+def _parse_fechas_concesionario(fecha_inicio: Optional[str], fecha_fin: Optional[str]):
+    """Parsea fechas o devuelve rango últimos 12 meses."""
+    hoy = datetime.now(timezone.utc)
+    hoy_date = date(hoy.year, hoy.month, hoy.day)
+    if fecha_inicio and fecha_fin:
+        try:
+            inicio = date.fromisoformat(fecha_inicio)
+            fin = date.fromisoformat(fecha_fin)
+            return inicio, fin
+        except ValueError:
+            pass
+    fin = hoy_date
+    inicio = fin - timedelta(days=365)
+    return inicio, fin
+
+
 @router.get("/prestamos-por-concesionario")
 def get_prestamos_por_concesionario(
     fecha_inicio: Optional[str] = Query(None),
@@ -376,17 +391,59 @@ def get_prestamos_por_concesionario(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Préstamos por concesionario. Stub: Cliente no tiene campo concesionario; requiere tabla/columna."""
-    datos = [
-        ("Concesionario A", 420, 33.7),
-        ("Concesionario B", 318, 25.5),
-        ("Concesionario C", 245, 19.6),
-        ("Concesionario D", 164, 13.2),
-        ("Concesionario E", 100, 8.0),
-    ]
-    return {
-        "concesionarios": [{"concesionario": n, "total_prestamos": int(c * 1200), "cantidad_prestamos": c, "porcentaje": p} for n, c, p in datos],
-    }
+    """Préstamos aprobados por concesionario: por_mes (en el período) y acumulado desde el inicio. Origen: tabla prestamos, campo concesionario."""
+    try:
+        inicio, fin = _parse_fechas_concesionario(fecha_inicio, fecha_fin)
+        # Mes como YYYY-MM para agrupar
+        mes_expr = func.to_char(
+            func.date_trunc("month", Prestamo.fecha_creacion),
+            "YYYY-MM",
+        )
+        concesionario_label = func.coalesce(Prestamo.concesionario, "Sin concesionario").label("concesionario")
+
+        # Por mes: préstamos APROBADO en [inicio, fin], agrupado por mes y concesionario
+        q_por_mes = (
+            select(
+                mes_expr.label("mes"),
+                concesionario_label,
+                func.count().label("cantidad"),
+            )
+            .select_from(Prestamo)
+            .where(
+                Prestamo.estado == "APROBADO",
+                func.date(Prestamo.fecha_creacion) >= inicio,
+                func.date(Prestamo.fecha_creacion) <= fin,
+            )
+            .group_by(mes_expr, Prestamo.concesionario)
+            .order_by(mes_expr, func.count().desc())
+        )
+        rows_por_mes = db.execute(q_por_mes).all()
+        por_mes = [
+            {"mes": r.mes, "concesionario": r.concesionario, "cantidad": r.cantidad}
+            for r in rows_por_mes
+        ]
+
+        # Acumulado: todos los préstamos APROBADO desde el inicio, por concesionario
+        q_acum = (
+            select(
+                func.coalesce(Prestamo.concesionario, "Sin concesionario").label("concesionario"),
+                func.count().label("cantidad_acumulada"),
+            )
+            .select_from(Prestamo)
+            .where(Prestamo.estado == "APROBADO")
+            .group_by(Prestamo.concesionario)
+            .order_by(func.count().desc())
+        )
+        rows_acum = db.execute(q_acum).all()
+        acumulado = [
+            {"concesionario": r.concesionario, "cantidad_acumulada": r.cantidad_acumulada}
+            for r in rows_acum
+        ]
+
+        return {"por_mes": por_mes, "acumulado": acumulado}
+    except Exception as e:
+        logger.exception("Error en prestamos-por-concesionario: %s", e)
+        return {"por_mes": [], "acumulado": []}
 
 
 @router.get("/prestamos-por-modelo")
@@ -398,17 +455,58 @@ def get_prestamos_por_modelo(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Préstamos por modelo. Stub: Cliente no tiene campo modelo; requiere tabla/columna."""
-    datos = [
-        ("Modelo X", 380, 30.5),
-        ("Modelo Y", 295, 23.6),
-        ("Modelo Z", 220, 17.6),
-        ("Modelo W", 182, 14.6),
-        ("Otros", 170, 13.6),
-    ]
-    return {
-        "modelos": [{"modelo": n, "total_prestamos": int(c * 1500), "cantidad_prestamos": c, "porcentaje": p} for n, c, p in datos],
-    }
+    """Préstamos aprobados por modelo: por_mes (en el período) y acumulado desde el inicio. Origen: tabla prestamos, campo modelo."""
+    try:
+        inicio, fin = _parse_fechas_concesionario(fecha_inicio, fecha_fin)
+        mes_expr = func.to_char(
+            func.date_trunc("month", Prestamo.fecha_creacion),
+            "YYYY-MM",
+        )
+        modelo_label = func.coalesce(Prestamo.modelo, "Sin modelo").label("modelo")
+
+        # Por mes: préstamos APROBADO en [inicio, fin], agrupado por mes y modelo
+        q_por_mes = (
+            select(
+                mes_expr.label("mes"),
+                modelo_label,
+                func.count().label("cantidad"),
+            )
+            .select_from(Prestamo)
+            .where(
+                Prestamo.estado == "APROBADO",
+                func.date(Prestamo.fecha_creacion) >= inicio,
+                func.date(Prestamo.fecha_creacion) <= fin,
+            )
+            .group_by(mes_expr, Prestamo.modelo)
+            .order_by(mes_expr, func.count().desc())
+        )
+        rows_por_mes = db.execute(q_por_mes).all()
+        por_mes = [
+            {"mes": r.mes, "modelo": r.modelo, "cantidad": r.cantidad}
+            for r in rows_por_mes
+        ]
+
+        # Acumulado: todos los préstamos APROBADO desde el inicio, por modelo
+        q_acum = (
+            select(
+                func.coalesce(Prestamo.modelo, "Sin modelo").label("modelo"),
+                func.count().label("cantidad_acumulada"),
+            )
+            .select_from(Prestamo)
+            .where(Prestamo.estado == "APROBADO")
+            .group_by(Prestamo.modelo)
+            .order_by(func.count().desc())
+        )
+        rows_acum = db.execute(q_acum).all()
+        acumulado = [
+            {"modelo": r.modelo, "cantidad_acumulada": r.cantidad_acumulada}
+            for r in rows_acum
+        ]
+
+        return {"por_mes": por_mes, "acumulado": acumulado}
+    except Exception as e:
+        logger.exception("Error en prestamos-por-modelo: %s", e)
+        return {"por_mes": [], "acumulado": []}
 
 
 def _rangos_financiamiento():
@@ -500,31 +598,31 @@ def get_composicion_morosidad(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Composición de morosidad. Datos reales: agrupa Cliente por dias_mora (1-30, 31-60, 61-90, 90+)."""
+    """Composición de morosidad. Datos reales: agrupa Cuota por días de mora (1-30, 31-60, 61-90, 90+)."""
     try:
         bandas = [(1, 30, "1-30 días"), (31, 60, "31-60 días"), (61, 90, "61-90 días"), (91, 999999, "90+ días")]
         puntos = []
         total_monto = 0.0
         total_cuotas = 0
+        # Días de atraso = CURRENT_DATE - fecha_vencimiento (solo cuotas no pagadas)
+        dias_atraso = func.current_date() - Cuota.fecha_vencimiento
         for min_d, max_d, cat in bandas:
             if max_d >= 999999:
                 q = select(
                     func.count().label("n"),
-                    func.coalesce(func.sum(Cliente.total_financiamiento), 0).label("m"),
-                ).select_from(Cliente).where(
-                    Cliente.dias_mora.isnot(None),
-                    Cliente.dias_mora >= min_d,
-                    Cliente.total_financiamiento.isnot(None),
+                    func.coalesce(func.sum(Cuota.monto), 0).label("m"),
+                ).select_from(Cuota).where(
+                    Cuota.pagado.is_(False),
+                    dias_atraso >= min_d,
                 )
             else:
                 q = select(
                     func.count().label("n"),
-                    func.coalesce(func.sum(Cliente.total_financiamiento), 0).label("m"),
-                ).select_from(Cliente).where(
-                    Cliente.dias_mora.isnot(None),
-                    Cliente.dias_mora >= min_d,
-                    Cliente.dias_mora <= max_d,
-                    Cliente.total_financiamiento.isnot(None),
+                    func.coalesce(func.sum(Cuota.monto), 0).label("m"),
+                ).select_from(Cuota).where(
+                    Cuota.pagado.is_(False),
+                    dias_atraso >= min_d,
+                    dias_atraso <= max_d,
                 )
             row = db.execute(q).one()
             n, m = int(row.n or 0), _safe_float(row.m)
@@ -592,15 +690,50 @@ def get_morosidad_por_analista(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Morosidad por analista. Stub: Cliente no tiene campo analista; requiere tabla analistas/asignación."""
-    return {
-        "analistas": [
-            {"analista": "Analista 1", "total_morosidad": 15200, "cantidad_clientes": 45},
-            {"analista": "Analista 2", "total_morosidad": 11800, "cantidad_clientes": 38},
-            {"analista": "Analista 3", "total_morosidad": 9500, "cantidad_clientes": 32},
-            {"analista": "Analista 4", "total_morosidad": 6000, "cantidad_clientes": 22},
-        ],
-    }
+    """Morosidad por analista: cuotas vencidas (tabla cuotas) por analista (préstamo). Devuelve cantidad de cuotas vencidas y monto vencido en USD por analista."""
+    try:
+        hoy = date.today()
+        # Cuotas vencidas: no pagadas y fecha_vencimiento < hoy
+        cuotas_vencidas = db.execute(
+            select(Cuota.id, Cuota.cliente_id, Cuota.monto).select_from(Cuota).where(
+                Cuota.pagado.is_(False),
+                Cuota.fecha_vencimiento < hoy,
+            )
+        ).all()
+        # Prestamos APROBADO: un préstamo por cliente (el más reciente) para asignar analista
+        prestamos_por_cliente = (
+            db.execute(
+                select(Prestamo.cliente_id, Prestamo.analista)
+                .select_from(Prestamo)
+                .where(Prestamo.estado == "APROBADO", Prestamo.analista.isnot(None))
+                .order_by(Prestamo.cliente_id, Prestamo.fecha_creacion.desc())
+            )
+            .all()
+        )
+        cliente_a_analista = {}
+        for cliente_id, analista_val in prestamos_por_cliente:
+            if cliente_id not in cliente_a_analista:
+                cliente_a_analista[cliente_id] = analista_val or "Sin analista"
+        # Agrupar cuotas vencidas por analista
+        por_analista = {}
+        for cid, cliente_id, monto in cuotas_vencidas:
+            a = cliente_a_analista.get(cliente_id, "Sin analista")
+            if a not in por_analista:
+                por_analista[a] = {"cantidad_cuotas_vencidas": 0, "monto_vencido": 0.0}
+            por_analista[a]["cantidad_cuotas_vencidas"] += 1
+            por_analista[a]["monto_vencido"] += _safe_float(monto)
+        resultado = [
+            {
+                "analista": a,
+                "cantidad_cuotas_vencidas": d["cantidad_cuotas_vencidas"],
+                "monto_vencido": round(d["monto_vencido"], 2),
+            }
+            for a, d in sorted(por_analista.items(), key=lambda x: -x[1]["monto_vencido"])
+        ]
+        return {"analistas": resultado}
+    except Exception as e:
+        logger.exception("Error en morosidad-por-analista: %s", e)
+        return {"analistas": []}
 
 
 @router.get("/evolucion-morosidad")
@@ -612,7 +745,7 @@ def get_evolucion_morosidad(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Evolución de morosidad por mes. Datos reales: suma dias_mora * monto proxy por mes desde Cliente."""
+    """Evolución de morosidad por mes. Datos reales: suma monto de cuotas vencidas no pagadas a fin de cada mes (Cuota)."""
     try:
         meses_list = _ultimos_12_meses()
         hoy = datetime.now(timezone.utc)
@@ -620,12 +753,11 @@ def get_evolucion_morosidad(
         for i, m in enumerate(meses_list):
             fin_mes = hoy - timedelta(days=30 * (11 - i))
             ultimo_dia = _ultimo_dia_del_mes(fin_mes.replace(tzinfo=timezone.utc) if fin_mes.tzinfo is None else fin_mes)
+            ultimo_dia_date = ultimo_dia.date() if hasattr(ultimo_dia, "date") else ultimo_dia
             moro = db.scalar(
-                select(func.coalesce(func.sum(Cliente.dias_mora * Cliente.total_financiamiento), 0)).select_from(Cliente).where(
-                    Cliente.fecha_registro <= ultimo_dia,
-                    Cliente.dias_mora.isnot(None),
-                    Cliente.dias_mora > 0,
-                    Cliente.total_financiamiento.isnot(None),
+                select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
+                    Cuota.pagado.is_(False),
+                    Cuota.fecha_vencimiento <= ultimo_dia_date,
                 )
             ) or 0
             resultado.append({"mes": m["mes"], "morosidad": _safe_float(moro)})

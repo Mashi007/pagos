@@ -1,9 +1,9 @@
 """
 Modelo SQLAlchemy para Cliente.
-Columnas de la tabla public.clientes en la BD.
-Incluye campos opcionales para dashboard (total_financiamiento, dias_mora, etc.).
+Columnas exactas de la tabla public.clientes en la BD (sin columnas que no existan).
+La tabla clientes NO tiene total_financiamiento ni dias_mora (eso está en prestamos / se calcula desde cuotas).
 """
-from sqlalchemy import Column, Integer, String, Date, DateTime, Text, Numeric, text
+from sqlalchemy import Column, Integer, String, Date, DateTime, Text, text
 
 from app.core.database import Base
 
@@ -24,6 +24,3 @@ class Cliente(Base):
     fecha_actualizacion = Column(DateTime(timezone=False), nullable=False, server_default=text("CURRENT_TIMESTAMP"))
     usuario_registro = Column(String(50), nullable=False)
     notas = Column(Text, nullable=False)
-    # Opcionales: para dashboard y reportes (añadir en BD si no existen)
-    total_financiamiento = Column(Numeric(14, 2), nullable=True)
-    dias_mora = Column(Integer, nullable=True, default=0)

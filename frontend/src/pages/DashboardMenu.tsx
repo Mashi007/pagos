@@ -24,6 +24,7 @@ import {
   DollarSign,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
 import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
@@ -54,6 +55,11 @@ import {
   ComposedChart,
   ScatterChart,
   Scatter,
+  RadarChart,
+  Radar,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
 } from 'recharts'
 
 // Submenús eliminados: financiamiento, cuotas, cobranza, analisis, pagos
@@ -65,7 +71,7 @@ export function DashboardMenu() {
   const queryClient = useQueryClient()
 
   const [filtros, setFiltros] = useState<DashboardFiltros>({})
-  const [periodo, setPeriodo] = useState('año') // Período general (por defecto: "Este año")
+  const [periodo, setPeriodo] = useState('ultimos_12_meses') // Por defecto últimos 12 meses para que los gráficos muestren datos recientes
   /** Período por gráfico: cada gráfico puede usar el general o uno propio. Key = id del gráfico, value = día|semana|mes|año o '' = usar general */
   const [periodoPorGrafico, setPeriodoPorGrafico] = useState<Record<string, string>>({})
   const { construirParams, construirFiltrosObject, tieneFiltrosActivos, cantidadFiltrosActivos } = useDashboardFiltros(filtros)
@@ -187,18 +193,13 @@ export function DashboardMenu() {
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
       })
-      const response = await apiClient.get(
+      return await apiClient.get(
         `/api/v1/dashboard/prestamos-por-concesionario?${queryParams.toString()}`
-      ) as { concesionarios: Array<{ concesionario: string; total_prestamos: number; cantidad_prestamos: number; porcentaje: number }> }
-      // âœ… Ordenar de mayor a menor por cantidad_prestamos (cantidad real, no monto)
-      const concesionariosOrdenados = response.concesionarios
-        .sort((a, b) => b.cantidad_prestamos - a.cantidad_prestamos)
-        .slice(0, 10) // Top 10
-      return concesionariosOrdenados
+      ) as { por_mes: Array<{ mes: string; concesionario: string; cantidad: number }>; acumulado: Array<{ concesionario: string; cantidad_acumulada: number }> }
     },
-    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
-    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
-    enabled: !!kpisPrincipales, // âœ… Lazy loading - carga después de KPIs
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: true,
+    enabled: !!kpisPrincipales,
   })
 
   const periodoModelo = getPeriodoGrafico('modelo')
@@ -210,18 +211,13 @@ export function DashboardMenu() {
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
       })
-      const response = await apiClient.get(
+      return await apiClient.get(
         `/api/v1/dashboard/prestamos-por-modelo?${queryParams.toString()}`
-      ) as { modelos: Array<{ modelo: string; total_prestamos: number; cantidad_prestamos: number; porcentaje: number }> }
-      // âœ… Ordenar de mayor a menor por cantidad_prestamos (cantidad real, no monto)
-      const modelosOrdenados = response.modelos
-        .sort((a, b) => b.cantidad_prestamos - a.cantidad_prestamos)
-        .slice(0, 10) // Top 10
-      return modelosOrdenados
+      ) as { por_mes: Array<{ mes: string; modelo: string; cantidad: number }>; acumulado: Array<{ modelo: string; cantidad_acumulada: number }> }
     },
-    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
-    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
-    enabled: !!kpisPrincipales, // âœ… Lazy loading - carga después de KPIs
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: true,
+    enabled: !!kpisPrincipales,
   })
 
   // Batch 4: BAJA - Gráficos menos críticos (cargar después de Batch 3, lazy loading)
@@ -301,32 +297,6 @@ export function DashboardMenu() {
   })
 
 
-  // Datos de cobranza para fechas específicas (mañana, hoy, 3 días atrás)
-  // âœ… OPTIMIZACIÓN: Aumentar staleTime y deshabilitar refetchOnWindowFocus para evitar llamadas redundantes
-  const { data: datosCobranzaFechas, isLoading: loadingCobranzaFechas } = useQuery({
-    queryKey: ['cobranza-fechas-especificas', JSON.stringify(filtros)],
-    queryFn: async () => {
-      const params = construirFiltrosObject()
-      const queryParams = new URLSearchParams()
-      Object.entries(params).forEach(([key, value]) => {
-        if (value) queryParams.append(key, value.toString())
-      })
-      const response = await apiClient.get<{
-        dias: Array<{
-          fecha: string
-          nombre_fecha: string
-          cobranza_planificada: number
-          cobranza_real: number
-        }>
-      }>(`/api/v1/dashboard/cobranza-fechas-especificas?${queryParams.toString()}`)
-      return response
-    },
-    staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
-    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
-    enabled: true,
-    retry: 1, // Solo un retry para evitar múltiples intentos
-  })
-
   const periodoCobranzasSemanales = getPeriodoGrafico('cobranzas-semanales')
   const { data: datosCobranzasSemanales, isLoading: loadingCobranzasSemanales } = useQuery({
     queryKey: ['cobranzas-semanales', periodoCobranzasSemanales, JSON.stringify(filtros)],
@@ -379,12 +349,8 @@ export function DashboardMenu() {
       })
       const response = await apiClient.get(
         `/api/v1/dashboard/morosidad-por-analista?${queryParams.toString()}`
-      ) as { analistas: Array<{ analista: string; total_morosidad: number; cantidad_clientes: number }> }
-      // âœ… Ordenar de mayor a menor por total_morosidad
-      const analistasOrdenados = response.analistas
-        .sort((a, b) => b.total_morosidad - a.total_morosidad)
-        .slice(0, 10) // Top 10
-      return analistasOrdenados
+      ) as { analistas: Array<{ analista: string; cantidad_cuotas_vencidas: number; monto_vencido: number }> }
+      return response.analistas
     },
     staleTime: 2 * 60 * 1000, // âœ… ACTUALIZADO: 2 minutos para datos más frescos
     refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
@@ -521,8 +487,8 @@ export function DashboardMenu() {
       const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' }
       return `${fIni.toLocaleDateString('es-ES', opts)} – ${fFin.toLocaleDateString('es-ES', opts)}`
     }
-    const labels: Record<string, string> = { día: 'Hoy', semana: 'Esta semana', mes: 'Este mes', año: 'Este año' }
-    return labels[periodo] || 'Este año'
+    const labels: Record<string, string> = { ultimos_12_meses: 'Últimos 12 meses', día: 'Hoy', semana: 'Esta semana', mes: 'Este mes', año: 'Este año' }
+    return labels[periodo] || 'Últimos 12 meses'
   }, [periodo, filtros, construirFiltrosObject])
 
   /** Etiqueta de rango de fechas para un gráfico (usa período del gráfico o el general) */
@@ -535,8 +501,8 @@ export function DashboardMenu() {
       const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' }
       return `${fIni.toLocaleDateString('es-ES', opts)} – ${fFin.toLocaleDateString('es-ES', opts)}`
     }
-    const labels: Record<string, string> = { día: 'Hoy', semana: 'Esta semana', mes: 'Este mes', año: 'Este año' }
-    return labels[p] || 'Este año'
+    const labels: Record<string, string> = { ultimos_12_meses: 'Últimos 12 meses', día: 'Hoy', semana: 'Esta semana', mes: 'Este mes', año: 'Este año' }
+    return labels[p] || 'Últimos 12 meses'
   }
 
   /** Selector de período por gráfico (dropdown para cada tarjeta) */
@@ -550,6 +516,7 @@ export function DashboardMenu() {
       </SelectTrigger>
       <SelectContent>
         <SelectItem value="general">General (barra superior)</SelectItem>
+        <SelectItem value="ultimos_12_meses">Últimos 12 meses</SelectItem>
         <SelectItem value="día">Hoy</SelectItem>
         <SelectItem value="semana">Esta semana</SelectItem>
         <SelectItem value="mes">Este mes</SelectItem>
@@ -653,10 +620,11 @@ export function DashboardMenu() {
                     <span className="text-sm font-semibold text-gray-700">Filtros</span>
                   </div>
                   <Select value={periodo} onValueChange={(v) => setPeriodo(v)}>
-                    <SelectTrigger className="w-[140px] h-9 border-gray-200 bg-gray-50/80">
+                    <SelectTrigger className="w-[180px] h-9 border-gray-200 bg-gray-50/80">
                       <SelectValue placeholder="Período" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="ultimos_12_meses">Últimos 12 meses</SelectItem>
                       <SelectItem value="día">Hoy</SelectItem>
                       <SelectItem value="semana">Esta semana</SelectItem>
                       <SelectItem value="mes">Este mes</SelectItem>
@@ -774,6 +742,20 @@ export function DashboardMenu() {
           </div>
         ) : datosDashboard ? (
           <div className="space-y-6">
+            {/* Aviso cuando no hay datos en los gráficos */}
+            {kpisPrincipales && Number(kpisPrincipales.total_prestamos?.valor_actual ?? 0) === 0 && (!datosDashboard?.evolucion_mensual?.length || datosDashboard.evolucion_mensual.every((e: { cartera: number; cobrado: number }) => !e.cartera && !e.cobrado)) ? (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.15 }}>
+                <Card className="border-amber-200 bg-amber-50/80">
+                  <CardContent className="p-4 flex items-center gap-3">
+                    <Info className="h-5 w-5 text-amber-600 shrink-0" />
+                    <p className="text-sm text-amber-800">
+                      Los gráficos están vacíos porque no hay datos en el período. Cargue <strong>préstamos</strong> y <strong>cuotas</strong> en el sistema para ver la información. Puede usar la opción <strong>Últimos 12 meses</strong> si ya tiene datos de meses anteriores.
+                    </p>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ) : null}
+
             {/* Gráfico de Evolución Mensual */}
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -940,55 +922,6 @@ export function DashboardMenu() {
               </Card>
             </motion.div>
 
-          {/* GRÁFICO DE COBRANZA FECHAS ESPECÍFICAS */}
-          <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.45 }}
-              className="h-full"
-            >
-              <Card className="shadow-lg border border-gray-200/90 rounded-xl overflow-hidden bg-white h-full flex flex-col">
-                <CardHeader className="bg-gradient-to-r from-blue-50/90 to-indigo-50/90 border-b border-gray-200/80 pb-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
-                      <BarChart3 className="h-5 w-5 text-blue-600" />
-                      <span>Cobranza Planificada vs Real</span>
-                    </CardTitle>
-                    <div className="flex items-center gap-2">
-                      <SelectorPeriodoGrafico chartId="cobranzas-semanales" />
-                      <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
-                        {getRangoFechasLabelGrafico('cobranzas-semanales')}
-                      </Badge>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-6 flex-1">
-                  {loadingCobranzaFechas ? (
-                    <div className="h-[450px] flex items-center justify-center">
-                      <div className="animate-pulse text-gray-400">Cargando...</div>
-                    </div>
-                  ) : datosCobranzaFechas?.dias?.length ? (
-                    <ChartWithDateRangeSlider data={datosCobranzaFechas.dias} dataKey="nombre_fecha" chartHeight={450}>
-                      {(filteredData) => (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={filteredData} margin={{ top: 14, right: 24, left: 12, bottom: 14 }}>
-                            <CartesianGrid {...chartCartesianGrid} />
-                            <XAxis dataKey="nombre_fecha" tick={chartAxisTick} />
-                            <YAxis domain={[0, 'dataMax']} tickCount={6} tick={chartAxisTick} tickFormatter={(value) => value >= 1000 ? `$${(value / 1000).toFixed(1)}K` : `$${value}`} label={{ value: 'Monto (USD)', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fontSize: 13, fontWeight: 600 } }} />
-                            <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [formatCurrency(value), '']} labelFormatter={(label) => `Fecha: ${label}`} />
-                            <Legend {...chartLegendStyle} />
-                            <Bar dataKey="cobranza_planificada" fill="#3b82f6" name="Planificado" radius={[4, 4, 0, 0]} />
-                            <Bar dataKey="cobranza_real" fill="#10b981" name="Real" radius={[4, 4, 0, 0]} />
-                          </BarChart>
-                        </ResponsiveContainer>
-                      )}
-                    </ChartWithDateRangeSlider>
-                  ) : (
-                    <div className="flex items-center justify-center py-16 text-gray-500">No hay datos para mostrar</div>
-                  )}
-                </CardContent>
-              </Card>
-            </motion.div>
         </div>
 
         {/* GRÁFICOS DE DISTRIBUCIÓN */}
@@ -1014,29 +947,86 @@ export function DashboardMenu() {
                     </div>
                   </div>
                 </CardHeader>
-                  <CardContent className="p-6 pt-4 flex items-center justify-center">
-                  {datosConcesionarios && datosConcesionarios.length > 0 ? (
-                  <ChartWithDateRangeSlider data={datosConcesionarios} dataKey="concesionario" chartHeight={400}>
-                    {(filteredData) => (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={filteredData} layout="vertical" margin={{ top: 12, right: 24, left: 140, bottom: 12 }}>
-                          <CartesianGrid {...chartCartesianGrid} />
-                          <XAxis type="number" allowDecimals={false} tick={chartAxisTick} tickFormatter={(value) => value.toLocaleString('es-EC')} />
-                          <YAxis type="category" dataKey="concesionario" width={140} tick={chartAxisTick} />
-                          <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [`${Math.round(value).toLocaleString('es-EC')} préstamos`, 'Cantidad']} labelFormatter={(label) => `Concesionario: ${label}`} />
-                          <Bar dataKey="cantidad_prestamos" fill="#8b5cf6" radius={[0, 4, 4, 0]}>
-                            {filteredData.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={COLORS_CONCESIONARIOS[index % COLORS_CONCESIONARIOS.length]} />
-                            ))}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    )}
-                  </ChartWithDateRangeSlider>
+                  <CardContent className="p-6 pt-4">
+                  {loadingConcesionarios ? (
+                    <div className="flex items-center justify-center py-16 text-gray-500">Cargando...</div>
+                  ) : datosConcesionarios && (datosConcesionarios.por_mes?.length > 0 || datosConcesionarios.acumulado?.length > 0) ? (
+                    <div className="space-y-6">
+                      {/* Tabla por mes: préstamos aprobados por concesionario en el período */}
+                      <div>
+                        <h4 className="text-sm font-semibold text-gray-700 mb-2">Por mes (período seleccionado)</h4>
+                        {datosConcesionarios.por_mes?.length > 0 ? (() => {
+                          const meses = [...new Set(datosConcesionarios.por_mes.map((d) => d.mes))].sort()
+                          const porConcesionario = datosConcesionarios.por_mes.reduce<Record<string, Record<string, number>>>((acc, { mes, concesionario, cantidad }) => {
+                            if (!acc[concesionario]) acc[concesionario] = {}
+                            acc[concesionario][mes] = cantidad
+                            return acc
+                          }, {})
+                          const concesionarios = Object.keys(porConcesionario).sort()
+                          return (
+                            <div className="overflow-x-auto rounded-md border border-gray-200">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow className="bg-gray-50">
+                                    <TableHead className="font-semibold">Concesionario</TableHead>
+                                    {meses.map((m) => (
+                                      <TableHead key={m} className="text-center whitespace-nowrap">{m}</TableHead>
+                                    ))}
+                                    <TableHead className="text-center font-semibold">Total</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {concesionarios.map((c) => {
+                                    const total = meses.reduce((s, m) => s + (porConcesionario[c][m] ?? 0), 0)
+                                    return (
+                                      <TableRow key={c}>
+                                        <TableCell className="font-medium">{c}</TableCell>
+                                        {meses.map((m) => (
+                                          <TableCell key={m} className="text-center">{porConcesionario[c][m] ?? 0}</TableCell>
+                                        ))}
+                                        <TableCell className="text-center font-medium">{total}</TableCell>
+                                      </TableRow>
+                                    )
+                                  })}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          )
+                        })() : (
+                          <p className="text-sm text-gray-500 py-2">No hay datos por mes en el período.</p>
+                        )}
+                      </div>
+                      {/* Tabla acumulada: préstamos aprobados por concesionario desde el inicio */}
+                      <div>
+                        <h4 className="text-sm font-semibold text-gray-700 mb-2">Acumulado (desde el inicio)</h4>
+                        {datosConcesionarios.acumulado?.length > 0 ? (
+                          <div className="overflow-x-auto rounded-md border border-gray-200">
+                            <Table>
+                              <TableHeader>
+                                <TableRow className="bg-gray-50">
+                                  <TableHead className="font-semibold">Concesionario</TableHead>
+                                  <TableHead className="text-right font-semibold">Cantidad</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {datosConcesionarios.acumulado.map((row) => (
+                                  <TableRow key={row.concesionario}>
+                                    <TableCell className="font-medium">{row.concesionario}</TableCell>
+                                    <TableCell className="text-right">{row.cantidad_acumulada.toLocaleString('es-EC')}</TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-500 py-2">No hay datos acumulados.</p>
+                        )}
+                      </div>
+                    </div>
                   ) : (
                     <div className="flex items-center justify-center py-16 text-gray-500">No hay datos para mostrar</div>
                   )}
-                  </CardContent>
+                </CardContent>
                 </Card>
               </motion.div>
 
@@ -1061,25 +1051,82 @@ export function DashboardMenu() {
                     </div>
                   </div>
                 </CardHeader>
-                  <CardContent className="p-6 pt-4 flex items-center justify-center">
-                  {datosModelos && datosModelos.length > 0 ? (
-                  <ChartWithDateRangeSlider data={datosModelos} dataKey="modelo" chartHeight={400}>
-                    {(filteredData) => (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={filteredData} layout="vertical" margin={{ top: 12, right: 24, left: 140, bottom: 12 }}>
-                          <CartesianGrid {...chartCartesianGrid} />
-                          <XAxis type="number" allowDecimals={false} tick={chartAxisTick} tickFormatter={(value) => value.toLocaleString('es-EC')} />
-                          <YAxis type="category" dataKey="modelo" width={140} tick={chartAxisTick} />
-                          <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [`${Math.round(value).toLocaleString('es-EC')} préstamos`, 'Cantidad']} labelFormatter={(label) => `Modelo: ${label}`} />
-                          <Bar dataKey="cantidad_prestamos" fill="#f59e0b" radius={[0, 4, 4, 0]}>
-                            {filteredData.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={COLORS_CONCESIONARIOS[index % COLORS_CONCESIONARIOS.length]} />
-                            ))}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    )}
-                  </ChartWithDateRangeSlider>
+                  <CardContent className="p-6 pt-4">
+                  {loadingModelos ? (
+                    <div className="flex items-center justify-center py-16 text-gray-500">Cargando...</div>
+                  ) : datosModelos && (datosModelos.por_mes?.length > 0 || datosModelos.acumulado?.length > 0) ? (
+                    <div className="space-y-6">
+                      {/* Tabla por mes: préstamos aprobados por modelo en el período */}
+                      <div>
+                        <h4 className="text-sm font-semibold text-gray-700 mb-2">Por mes (período seleccionado)</h4>
+                        {datosModelos.por_mes?.length > 0 ? (() => {
+                          const meses = [...new Set(datosModelos.por_mes.map((d) => d.mes))].sort()
+                          const porModelo = datosModelos.por_mes.reduce<Record<string, Record<string, number>>>((acc, { mes, modelo, cantidad }) => {
+                            if (!acc[modelo]) acc[modelo] = {}
+                            acc[modelo][mes] = cantidad
+                            return acc
+                          }, {})
+                          const modelos = Object.keys(porModelo).sort()
+                          return (
+                            <div className="overflow-x-auto rounded-md border border-gray-200">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow className="bg-gray-50">
+                                    <TableHead className="font-semibold">Modelo</TableHead>
+                                    {meses.map((m) => (
+                                      <TableHead key={m} className="text-center whitespace-nowrap">{m}</TableHead>
+                                    ))}
+                                    <TableHead className="text-center font-semibold">Total</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {modelos.map((mod) => {
+                                    const total = meses.reduce((s, m) => s + (porModelo[mod][m] ?? 0), 0)
+                                    return (
+                                      <TableRow key={mod}>
+                                        <TableCell className="font-medium">{mod}</TableCell>
+                                        {meses.map((m) => (
+                                          <TableCell key={m} className="text-center">{porModelo[mod][m] ?? 0}</TableCell>
+                                        ))}
+                                        <TableCell className="text-center font-medium">{total}</TableCell>
+                                      </TableRow>
+                                    )
+                                  })}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          )
+                        })() : (
+                          <p className="text-sm text-gray-500 py-2">No hay datos por mes en el período.</p>
+                        )}
+                      </div>
+                      {/* Tabla acumulada: préstamos aprobados por modelo desde el inicio */}
+                      <div>
+                        <h4 className="text-sm font-semibold text-gray-700 mb-2">Acumulado (desde el inicio)</h4>
+                        {datosModelos.acumulado?.length > 0 ? (
+                          <div className="overflow-x-auto rounded-md border border-gray-200">
+                            <Table>
+                              <TableHeader>
+                                <TableRow className="bg-gray-50">
+                                  <TableHead className="font-semibold">Modelo</TableHead>
+                                  <TableHead className="text-right font-semibold">Cantidad</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {datosModelos.acumulado.map((row) => (
+                                  <TableRow key={row.modelo}>
+                                    <TableCell className="font-medium">{row.modelo}</TableCell>
+                                    <TableCell className="text-right">{row.cantidad_acumulada.toLocaleString('es-EC')}</TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-500 py-2">No hay datos acumulados.</p>
+                        )}
+                      </div>
+                    </div>
                   ) : (
                     <div className="flex items-center justify-center py-16 text-gray-500">No hay datos para mostrar</div>
                   )}
@@ -1137,7 +1184,7 @@ export function DashboardMenu() {
               </Card>
             </motion.div>
 
-          {/* Morosidad por Analista - Ancho Completo */}
+          {/* Morosidad por Analista - Red tela de araña: cuotas vencidas y dólares vencidos por analista */}
           <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1160,21 +1207,39 @@ export function DashboardMenu() {
                   </div>
                 </CardHeader>
                 <CardContent className="p-6 flex-1">
-                  {datosMorosidadAnalista && datosMorosidadAnalista.length > 0 ? (
-                  <ChartWithDateRangeSlider data={datosMorosidadAnalista} dataKey="analista" chartHeight={400}>
-                    {(filteredData) => (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={filteredData} margin={{ top: 12, right: 24, left: 16, bottom: 80 }} barCategoryGap="5%">
-                          <CartesianGrid {...chartCartesianGrid} />
-                          <XAxis dataKey="analista" angle={-45} textAnchor="end" height={100} tick={{ ...chartAxisTick, fontSize: 11 }} interval={0} width={undefined} />
-                          <YAxis tick={chartAxisTick} label={{ value: 'Morosidad Total', angle: -90, position: 'insideLeft', style: { fill: '#374151', fontSize: 13 } }} width={80} />
-                          <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [formatCurrency(value), 'Morosidad Total']} labelFormatter={(label) => `Analista: ${label}`} />
-                          <Legend {...chartLegendStyle} />
-                          <Bar dataKey="total_morosidad" fill="#f97316" name="Morosidad Total" radius={[4, 4, 0, 0]} maxBarSize={120} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    )}
-                  </ChartWithDateRangeSlider>
+                  {loadingMorosidadAnalista ? (
+                    <div className="flex items-center justify-center py-16 text-gray-500">Cargando...</div>
+                  ) : datosMorosidadAnalista && datosMorosidadAnalista.length > 0 ? (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {/* Red tela de araña: cuántas cuotas vencidas por analista */}
+                      <div>
+                        <h4 className="text-sm font-semibold text-gray-700 mb-3 text-center">Cuotas vencidas por analista</h4>
+                        <ResponsiveContainer width="100%" height={320}>
+                          <RadarChart data={datosMorosidadAnalista} margin={{ top: 16, right: 24, left: 24, bottom: 16 }}>
+                            <PolarGrid stroke="#e5e7eb" />
+                            <PolarAngleAxis dataKey="analista" tick={{ fontSize: 11 }} />
+                            <PolarRadiusAxis angle={90} tick={{ fontSize: 10 }} />
+                            <Radar name="Cuotas vencidas" dataKey="cantidad_cuotas_vencidas" stroke="#f97316" fill="#f97316" fillOpacity={0.5} />
+                            <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [value.toLocaleString('es-EC'), 'Cuotas vencidas']} labelFormatter={(label) => `Analista: ${label}`} />
+                            <Legend />
+                          </RadarChart>
+                        </ResponsiveContainer>
+                      </div>
+                      {/* Red tela de araña: dólares vencidos por analista */}
+                      <div>
+                        <h4 className="text-sm font-semibold text-gray-700 mb-3 text-center">Dólares vencidos por analista</h4>
+                        <ResponsiveContainer width="100%" height={320}>
+                          <RadarChart data={datosMorosidadAnalista} margin={{ top: 16, right: 24, left: 24, bottom: 16 }}>
+                            <PolarGrid stroke="#e5e7eb" />
+                            <PolarAngleAxis dataKey="analista" tick={{ fontSize: 11 }} />
+                            <PolarRadiusAxis angle={90} tick={{ fontSize: 10 }} tickFormatter={(v) => `$${v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}`} />
+                            <Radar name="Dólares vencidos" dataKey="monto_vencido" stroke="#ea580c" fill="#ea580c" fillOpacity={0.5} />
+                            <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [formatCurrency(value), 'Dólares vencidos']} labelFormatter={(label) => `Analista: ${label}`} />
+                            <Legend />
+                          </RadarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
                   ) : (
                     <div className="flex items-center justify-center py-16 text-gray-500">No hay datos para mostrar</div>
                   )}

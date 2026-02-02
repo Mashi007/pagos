@@ -40,19 +40,19 @@ class ClienteUpdate(BaseModel):
 
 
 class ClienteResponse(BaseModel):
-    """Respuesta de cliente (columnas de la tabla clientes)."""
+    """Respuesta de cliente (columnas de la tabla clientes). Tolerante a NULLs en BD."""
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    cedula: str
-    nombres: str
-    telefono: str
-    email: str
-    direccion: str
-    fecha_nacimiento: date
-    ocupacion: str
-    estado: str
-    fecha_registro: datetime
-    fecha_actualizacion: datetime
-    usuario_registro: str
-    notas: str
+    cedula: str = ""
+    nombres: str = ""
+    telefono: str = ""
+    email: str = ""
+    direccion: str = ""
+    fecha_nacimiento: Optional[date] = None
+    ocupacion: str = ""
+    estado: str = "ACTIVO"
+    fecha_registro: Optional[datetime] = None
+    fecha_actualizacion: Optional[datetime] = None
+    usuario_registro: str = ""
+    notas: str = ""

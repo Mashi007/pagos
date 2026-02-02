@@ -108,23 +108,28 @@ export function Comunicaciones({
   // Estado para usuarios (para asignación y escalación)
   const [usuarios, setUsuarios] = useState<Array<{ id: number; nombre: string; apellido: string; email: string; is_admin: boolean }>>([])
 
-  // Query para obtener todas las comunicaciones (sin paginación para agrupar)
+  // Query: placeholderData = mock para que la lista se vea desde el inicio (no pantalla en blanco)
   const {
     data: comunicacionesData,
     isLoading,
+    isError,
     error,
     refetch,
   } = useQuery({
     queryKey: ['comunicaciones', clienteId],
     queryFn: () => comunicacionesService.listarComunicaciones(1, 100, undefined, clienteId),
+    placeholderData: {
+      comunicaciones: mockComunicaciones,
+      paginacion: { page: 1, per_page: 100, total: 0, pages: 0 },
+    },
+    retry: 1,
   })
 
-  // âœ… Optimizado: Usar useMemo para evitar recálculos innecesarios
+  // Datos para listar: API vacía o error → mock; si hay datos reales → usarlos
   const todasComunicaciones = useMemo(() => {
-    const usarMockData = (!comunicacionesData?.comunicaciones || comunicacionesData.comunicaciones.length === 0) || process.env.NODE_ENV === 'development'
-    return usarMockData && (!comunicacionesData?.comunicaciones || comunicacionesData.comunicaciones.length === 0) 
-      ? mockComunicaciones 
-      : (comunicacionesData?.comunicaciones || [])
+    const tieneReales = comunicacionesData?.comunicaciones && comunicacionesData.comunicaciones.length > 0
+    if (tieneReales) return comunicacionesData!.comunicaciones
+    return mockComunicaciones
   }, [comunicacionesData?.comunicaciones])
 
   // Cargar usuarios al montar
@@ -542,18 +547,22 @@ export function Comunicaciones({
           </div>
         </div>
 
-        {/* Lista de conversaciones */}
+        {/* Lista de conversaciones: siempre mostrar lista (mock o real); no bloquear con spinner */}
         <div className="flex-1 overflow-y-auto">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+          {isError && (
+            <div className="px-3 py-2 bg-amber-50 border-b border-amber-200 flex items-center gap-2 text-amber-800 text-xs">
+              <AlertCircle className="h-4 w-4 flex-shrink-0" />
+              <span>Mostrando datos de ejemplo. Error al conectar con el servidor.</span>
+              <Button variant="ghost" size="sm" onClick={() => refetch()} className="h-6 text-amber-700 ml-auto">Reintentar</Button>
             </div>
-          ) : error ? (
-            <div className="text-center py-12 px-4">
-              <AlertCircle className="h-8 w-8 mx-auto mb-2 text-red-500" />
-              <p className="text-sm text-red-600">Error cargando comunicaciones</p>
+          )}
+          {isLoading && (
+            <div className="px-3 py-2 bg-blue-50 border-b border-blue-200 flex items-center gap-2 text-blue-700 text-xs">
+              <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" />
+              <span>Actualizando comunicaciones...</span>
             </div>
-          ) : conversacionesFiltradas.length === 0 ? (
+          )}
+          {conversacionesFiltradas.length === 0 ? (
             <div className="text-center py-12 px-4">
               <MessageSquare className="h-8 w-8 mx-auto mb-2 text-gray-400" />
               <p className="text-sm text-gray-500">No hay conversaciones</p>

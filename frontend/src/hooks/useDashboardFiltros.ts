@@ -101,6 +101,13 @@ export function useDashboardFiltros(filtros: DashboardFiltros) {
         fecha_fin = new Date(hoy.getFullYear(), 11, 31)
         fecha_fin.setHours(23, 59, 59, 999)
         break
+      case 'ultimos_12_meses':
+        fecha_fin = new Date(hoy)
+        fecha_fin.setHours(23, 59, 59, 999)
+        fecha_inicio = new Date(hoy)
+        fecha_inicio.setMonth(fecha_inicio.getMonth() - 12)
+        fecha_inicio.setHours(0, 0, 0, 0)
+        break
       default:
         fecha_inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1)
         fecha_inicio.setHours(0, 0, 0, 0)

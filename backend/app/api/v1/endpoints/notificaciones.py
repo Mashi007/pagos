@@ -54,6 +54,29 @@ def _item_tab(cliente: Cliente, cuota: Cuota, dias_atraso: int = None, dias_ante
     return d
 
 
+@router.get("")
+def get_notificaciones_lista(
+    page: int = 1,
+    per_page: int = 20,
+    estado: str = None,
+    canal: str = None,
+):
+    """
+    Listado paginado de notificaciones (envíos). El frontend Email/WhatsApp Config lo usa para 'envíos recientes'.
+    Sin tabla de notificaciones en BD se devuelve lista vacía para evitar 404.
+    """
+    total = 0
+    total_pages = 0
+    items = []
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": per_page,
+        "total_pages": total_pages,
+    }
+
+
 @router.get("/estadisticas/resumen")
 def get_notificaciones_resumen():
     """Resumen para sidebar. El frontend espera: no_leidas, total."""
@@ -124,25 +147,15 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
 @router.post("/actualizar")
 def actualizar_notificaciones(db: Session = Depends(get_db)):
     """
-    Recalcular dias_mora en clientes desde cuotas no pagadas.
+    Recalcular mora desde cuotas no pagadas. La tabla clientes no tiene columna dias_mora;
+    los datos de mora se calculan al vuelo desde cuotas en get_clientes_retrasados.
     Llamar desde cron a las 2am (ej: 0 2 * * * curl -X POST .../notificaciones/actualizar).
     """
     hoy = date.today()
     q = select(Cuota).where(Cuota.pagado == False, Cuota.fecha_vencimiento <= hoy)  # noqa: E712
     cuotas = db.execute(q).scalars().all()
-    # Por cliente_id, max días atraso
-    max_dias: dict = {}
-    for c in cuotas:
-        dias = (hoy - c.fecha_vencimiento).days
-        if c.cliente_id not in max_dias or max_dias[c.cliente_id] < dias:
-            max_dias[c.cliente_id] = dias
+    # Solo contamos cuotas en mora; no actualizamos clientes.dias_mora (no existe en la BD)
     clientes_actualizados = 0
-    for cliente_id, dias in max_dias.items():
-        c = db.get(Cliente, cliente_id)
-        if c and getattr(c, "dias_mora", None) != dias:
-            c.dias_mora = dias
-            clientes_actualizados += 1
-    db.commit()
     return {"mensaje": "Actualización ejecutada.", "clientes_actualizados": clientes_actualizados}
 
 

@@ -6,12 +6,13 @@ Endpoints de clientes: CONECTADOS A LA TABLA REAL `clientes` (public.clientes).
   usan Depends(get_db) y consultas contra la tabla clientes. No hay stubs ni datos demo.
 """
 import logging
-from typing import Optional
+from typing import Optional, Any
 
 from fastapi import APIRouter, Query, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from sqlalchemy import select, func, or_
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import ProgrammingError, OperationalError
 
 from app.core.database import get_db
 from app.models.cliente import Cliente
@@ -19,6 +20,27 @@ from app.schemas.cliente import ClienteResponse, ClienteCreate, ClienteUpdate
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def _row_to_cliente_response(row: Any) -> ClienteResponse:
+    """Convierte una fila ORM a ClienteResponse tolerando NULLs y tipos de BD."""
+    date_keys = {"fecha_nacimiento", "fecha_registro", "fecha_actualizacion"}
+    d: dict[str, Any] = {}
+    for key in ("id", "cedula", "nombres", "telefono", "email", "direccion", "fecha_nacimiento",
+                "ocupacion", "estado", "fecha_registro", "fecha_actualizacion", "usuario_registro", "notas"):
+        try:
+            v = getattr(row, key, None)
+            if v is None:
+                if key == "id":
+                    v = 0
+                elif key in date_keys:
+                    pass
+                else:
+                    v = ""
+            d[key] = v
+        except Exception:
+            d[key] = None if key in date_keys else ("" if key != "id" else 0)
+    return ClienteResponse.model_validate(d)
 
 
 @router.get("", summary="Listado paginado", response_model=dict)
@@ -34,8 +56,24 @@ def get_clientes(
     Listado paginado de clientes desde la BD.
     Filtros: search (cedula, nombres, email, telefono), estado (ACTIVO, INACTIVO, MORA, FINALIZADO).
     """
+    # Columnas que existen en la tabla clientes (sin total_financiamiento ni dias_mora).
+    _cols = (
+        Cliente.id,
+        Cliente.cedula,
+        Cliente.nombres,
+        Cliente.telefono,
+        Cliente.email,
+        Cliente.direccion,
+        Cliente.fecha_nacimiento,
+        Cliente.ocupacion,
+        Cliente.estado,
+        Cliente.fecha_registro,
+        Cliente.fecha_actualizacion,
+        Cliente.usuario_registro,
+        Cliente.notas,
+    )
     try:
-        q = select(Cliente)
+        q = select(*_cols)
         count_q = select(func.count()).select_from(Cliente)
 
         if search and search.strip():
@@ -46,8 +84,10 @@ def get_clientes(
                 Cliente.email.ilike(t),
                 Cliente.telefono.ilike(t),
             )
-            q = q.where(filtro)
+            q = q.select_from(Cliente).where(filtro)
             count_q = count_q.where(filtro)
+        else:
+            q = q.select_from(Cliente)
         if estado and estado.strip():
             est = estado.strip().upper()
             q = q.where(Cliente.estado == est)
@@ -56,20 +96,47 @@ def get_clientes(
         total = db.scalar(count_q) or 0
         q = q.order_by(Cliente.id.desc()).offset((page - 1) * per_page).limit(per_page)
         result = db.execute(q)
-        rows = result.scalars().all()
+        rows = result.all()
 
         total_pages = (total + per_page - 1) // per_page if total else 0
 
+        clientes_list = []
+        for r in rows:
+            try:
+                clientes_list.append(_row_to_cliente_response(r))
+            except (ValidationError, TypeError, AttributeError) as ve:
+                logger.warning("Fila cliente id=%s omitida por validación: %s", getattr(r, "id", "?"), ve)
+                continue
+        if rows and not clientes_list:
+            logger.error("Ninguna fila pudo serializarse; revisar esquema de tabla clientes.")
+            raise HTTPException(
+                status_code=500,
+                detail="Error al cargar el listado de clientes: datos no compatibles con el esquema.",
+            )
         return {
-            "clientes": [ClienteResponse.model_validate(r) for r in rows],
+            "clientes": clientes_list,
             "total": total,
             "page": page,
             "per_page": per_page,
             "total_pages": total_pages,
         }
+    except (ProgrammingError, OperationalError) as e:
+        logger.exception("Error de BD en listado de clientes: %s", e)
+        hint = " Revisa que la tabla clientes tenga las columnas: id, cedula, nombres, telefono, email, direccion, fecha_nacimiento, ocupacion, estado, fecha_registro, fecha_actualizacion, usuario_registro, notas."
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al cargar el listado de clientes: {e!s}.{hint}",
+        ) from e
+    except ValidationError as ve:
+        logger.exception("Error de validación en listado de clientes: %s", ve)
+        raise HTTPException(status_code=500, detail=f"Error al cargar el listado de clientes: {ve!s}") from ve
     except Exception as e:
         logger.exception("Error en listado de clientes: %s", e)
-        raise HTTPException(status_code=500, detail="Error al cargar el listado de clientes") from e
+        err_msg = str(e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al cargar el listado de clientes: {err_msg}",
+        ) from e
 
 
 @router.get("/stats")

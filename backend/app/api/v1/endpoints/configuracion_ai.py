@@ -174,3 +174,12 @@ def post_ai_probar(payload: ProbarRequest = Body(...)):
         "modelo_usado": out.get("model"),
         "tokens_usados": (out.get("usage") or {}).get("total_tokens"),
     }
+
+
+@router.get("/documentos")
+def get_ai_documentos():
+    """
+    Listado de documentos para RAG/IA. El frontend AIConfig lo usa.
+    Sin persistencia de documentos se devuelve lista vacía para evitar 404.
+    """
+    return {"total": 0, "documentos": []}

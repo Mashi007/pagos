@@ -21,7 +21,14 @@ engine = create_engine(
     max_overflow=10,
 )
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# expire_on_commit=False evita el error F405: al cerrar la sesión los objetos no se "expiran",
+# así la serialización de la respuesta (Pydantic/model_validate) no intenta lazy load fuera de la sesión.
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine,
+    expire_on_commit=False,
+)
 Base = declarative_base()
 
 
