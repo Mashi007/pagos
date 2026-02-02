@@ -165,11 +165,21 @@ def get_email_estado(db: Session = Depends(get_db)):
         problemas.append("Falta email de usuario")
     if not cfg.get("smtp_password") or cfg.get("smtp_password") == "***":
         problemas.append("Falta contraseña de aplicación (Gmail requiere App Password)")
+    # No marcar conexion_smtp.success = True solo por tener campos; eso confunde si la contraseña es incorrecta.
+    # La conexión real se verifica con POST /probar (Enviar Email de Prueba).
+    mensaje_estado = (
+        "Datos completos. Usa 'Enviar Email de Prueba' para verificar la conexión con Gmail."
+        if configurada
+        else "Completa SMTP y, si usas Gmail, contraseña de aplicación."
+    )
     return {
         "configurada": configurada,
-        "mensaje": "Configuración correcta" if configurada else "Completa SMTP y, si usas Gmail, contraseña de aplicación.",
+        "mensaje": mensaje_estado,
         "problemas": problemas,
-        "conexion_smtp": {"success": configurada, "message": None},
+        "conexion_smtp": {
+            "success": False,
+            "message": "Usa 'Enviar Email de Prueba' para verificar la conexión." if configurada else None,
+        },
         "modo_pruebas": (cfg.get("modo_pruebas") or "true").lower() == "true",
         "email_pruebas": cfg.get("email_pruebas") or None,
     }

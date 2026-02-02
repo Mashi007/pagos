@@ -457,10 +457,19 @@ export function EmailConfig() {
         toast.error(mensaje)
         setResultadoPrueba({ ...resultado, error: mensaje })
         setEmailEnviadoExitoso(false)
+        // Si falla por usuario/contraseña, mostrar aviso de App Password
+        const esErrorCredenciales = /usuario|contraseña|app password|contraseña de aplicación/i.test(mensaje)
+        if (esErrorCredenciales) {
+          setRequiereAppPassword(true)
+          setVinculacionConfirmada(false)
+          setMensajeVinculacion(mensaje)
+        }
       } else if (resultado.mensaje?.includes('enviado')) {
         toast.success(`Email de prueba enviado exitosamente a ${resultado.email_destino || 'tu correo'}`)
         setEmailEnviadoExitoso(true)
-
+        setVinculacionConfirmada(true)
+        setRequiereAppPassword(false)
+        setMensajeVinculacion(null)
         setTimeout(() => {
           setEmailEnviadoExitoso(false)
         }, 3000)
@@ -474,6 +483,12 @@ export function EmailConfig() {
       toast.error(`Error probando configuración: ${mensajeError}`)
       setResultadoPrueba({ error: mensajeError })
       setEmailEnviadoExitoso(false)
+      const esErrorCredenciales = /usuario|contraseña|app password|contraseña de aplicación/i.test(String(mensajeError))
+      if (esErrorCredenciales) {
+        setRequiereAppPassword(true)
+        setVinculacionConfirmada(false)
+        setMensajeVinculacion(String(mensajeError))
+      }
     } finally {
       setProbando(false)
     }
@@ -581,6 +596,25 @@ export function EmailConfig() {
               )}
 
               {/* âŒ Estado: No configurado o con problemas (solo si no requiere App Password) */}
+              {/* Datos completos, pendiente de verificar con Enviar Email de Prueba */}
+              {estadoConfiguracion?.configurada && !vinculacionConfirmada && !requiereAppPassword && (
+                <div className="bg-white border-2 border-amber-400 rounded-lg p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                      <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
+                      <div className="w-4 h-4 bg-amber-500 rounded-full shadow-lg"></div>
+                      <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-gray-900">Datos completos</p>
+                      <p className="text-sm text-gray-600">
+                        Usa &quot;Enviar Email de Prueba&quot; para verificar la conexión con Gmail. Si falla con &quot;usuario o contraseña no aceptados&quot;, usa una <strong>Contraseña de aplicación</strong> (no la contraseña normal).
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {!vinculacionConfirmada && !requiereAppPassword && estadoConfiguracion && !estadoConfiguracion.configurada && (
                 <div className="bg-white border-2 border-red-500 rounded-lg p-4">
                   <div className="flex items-center gap-3">

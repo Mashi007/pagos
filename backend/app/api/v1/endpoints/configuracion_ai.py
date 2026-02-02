@@ -28,6 +28,7 @@ from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.cuota import Cuota
 from app.models.definicion_campo import DefinicionCampo
+from app.models.diccionario_semantico import DiccionarioSemantico
 from sqlalchemy import func
 from sqlalchemy import inspect as sa_inspect
 
@@ -767,3 +768,131 @@ def delete_definiciones_campos(definicion_id: int, db: Session = Depends(get_db)
     db.delete(row)
     db.commit()
     return {"message": "Definición eliminada"}
+
+
+# --- Diccionario semántico (Configuración > AI > Diccionario semántico) ---
+
+def _parse_json_list(s: Optional[str]):
+    if not s or not s.strip():
+        return []
+    try:
+        out = json.loads(s)
+        return out if isinstance(out, list) else []
+    except Exception:
+        return []
+
+
+def _diccionario_to_dict(row: DiccionarioSemantico) -> dict:
+    return {
+        "id": row.id,
+        "palabra": row.palabra or "",
+        "definicion": row.definicion or "",
+        "categoria": row.categoria,
+        "campo_relacionado": row.campo_relacionado,
+        "tabla_relacionada": row.tabla_relacionada,
+        "sinonimos": _parse_json_list(row.sinonimos),
+        "ejemplos_uso": _parse_json_list(row.ejemplos_uso),
+        "activo": bool(row.activo),
+        "orden": int(row.orden or 0),
+        "creado_en": row.creado_en.isoformat() if row.creado_en else "",
+        "actualizado_en": row.actualizado_en.isoformat() if row.actualizado_en else "",
+    }
+
+
+@router.get("/diccionario-semantico")
+def get_diccionario_semantico(db: Session = Depends(get_db)):
+    """Lista entradas del diccionario semántico."""
+    rows = db.query(DiccionarioSemantico).order_by(DiccionarioSemantico.orden, DiccionarioSemantico.palabra).all()
+    entradas = [_diccionario_to_dict(r) for r in rows]
+    return {"entradas": entradas, "total": len(entradas)}
+
+
+@router.get("/diccionario-semantico/categorias")
+def get_diccionario_semantico_categorias(db: Session = Depends(get_db)):
+    """Lista categorías distintas del diccionario."""
+    from sqlalchemy import distinct
+    cats = db.query(distinct(DiccionarioSemantico.categoria)).where(DiccionarioSemantico.categoria.isnot(None)).all()
+    lista = sorted([c[0] for c in cats if c[0]])
+    return {"categorias": lista, "total": len(lista)}
+
+
+class DiccionarioSemanticoCreate(BaseModel):
+    palabra: str
+    definicion: str
+    categoria: Optional[str] = None
+    campo_relacionado: Optional[str] = None
+    tabla_relacionada: Optional[str] = None
+    sinonimos: Optional[list[str]] = None
+    ejemplos_uso: Optional[list[str]] = None
+    activo: bool = True
+    orden: int = 0
+
+
+class DiccionarioSemanticoUpdate(BaseModel):
+    palabra: Optional[str] = None
+    definicion: Optional[str] = None
+    categoria: Optional[str] = None
+    campo_relacionado: Optional[str] = None
+    tabla_relacionada: Optional[str] = None
+    sinonimos: Optional[list[str]] = None
+    ejemplos_uso: Optional[list[str]] = None
+    activo: Optional[bool] = None
+    orden: Optional[int] = None
+
+
+@router.post("/diccionario-semantico")
+def post_diccionario_semantico(payload: DiccionarioSemanticoCreate = Body(...), db: Session = Depends(get_db)):
+    """Crea entrada en el diccionario semántico."""
+    if not (payload.palabra or "").strip() or not (payload.definicion or "").strip():
+        raise HTTPException(status_code=400, detail="Palabra y definición son obligatorios")
+    sinon = json.dumps(payload.sinonimos) if payload.sinonimos else None
+    ejem = json.dumps(payload.ejemplos_uso) if payload.ejemplos_uso else None
+    row = DiccionarioSemantico(
+        palabra=payload.palabra.strip(),
+        definicion=payload.definicion.strip(),
+        categoria=payload.categoria or None,
+        campo_relacionado=payload.campo_relacionado or None,
+        tabla_relacionada=payload.tabla_relacionada or None,
+        sinonimos=sinon,
+        ejemplos_uso=ejem,
+        activo=payload.activo,
+        orden=payload.orden,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return _diccionario_to_dict(row)
+
+
+@router.put("/diccionario-semantico/{entrada_id}")
+def put_diccionario_semantico(entrada_id: int, payload: DiccionarioSemanticoUpdate = Body(...), db: Session = Depends(get_db)):
+    """Actualiza entrada del diccionario semántico."""
+    row = db.get(DiccionarioSemantico, entrada_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Entrada no encontrada")
+    data = payload.model_dump(exclude_unset=True)
+    for k, v in data.items():
+        if k in ("sinonimos", "ejemplos_uso") and v is not None:
+            setattr(row, k, json.dumps(v))
+        elif hasattr(row, k):
+            setattr(row, k, v)
+    db.commit()
+    db.refresh(row)
+    return _diccionario_to_dict(row)
+
+
+@router.delete("/diccionario-semantico/{entrada_id}")
+def delete_diccionario_semantico(entrada_id: int, db: Session = Depends(get_db)):
+    """Elimina entrada del diccionario semántico."""
+    row = db.get(DiccionarioSemantico, entrada_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Entrada no encontrada")
+    db.delete(row)
+    db.commit()
+    return {"message": "Entrada eliminada"}
+
+
+@router.post("/diccionario-semantico/procesar")
+def post_diccionario_semantico_procesar(payload: dict = Body(...)):
+    """Procesa entrada con IA para mejorar definición (stub)."""
+    return {"mensaje": "Procesamiento con IA no implementado aún", "definicion_mejorada": payload.get("definicion", "")}
