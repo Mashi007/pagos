@@ -1,11 +1,13 @@
 """
 Aplicación principal FastAPI
 """
-from fastapi import FastAPI
+import time
+import logging
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from app.core.config import settings
 from app.api.v1 import api_router
-import logging
 
 # Configurar logging
 logging.basicConfig(
@@ -14,6 +16,23 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+class RequestLogMiddleware(BaseHTTPMiddleware):
+    """Registra método, ruta, código de estado y tiempo para correlacionar con logs de Render."""
+    async def dispatch(self, request: Request, call_next):
+        start = time.perf_counter()
+        response = await call_next(request)
+        elapsed_ms = int((time.perf_counter() - start) * 1000)
+        logger.info(
+            "request method=%s path=%s status=%s elapsed_ms=%s",
+            request.method,
+            request.url.path,
+            response.status_code,
+            elapsed_ms,
+        )
+        return response
+
+
 # Crear aplicación FastAPI
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -21,6 +40,9 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc"
 )
+
+# Log de cada request (método, ruta, status, tiempo) para depuración en Render
+app.add_middleware(RequestLogMiddleware)
 
 # Configurar CORS
 app.add_middleware(

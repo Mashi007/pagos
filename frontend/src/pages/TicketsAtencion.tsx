@@ -96,10 +96,11 @@ export function TicketsAtencion() {
   // Búsqueda de clientes para agregar al ticket (incluir todos los estados)
   const { data: clientesBuscados = [], isLoading: isLoadingSearch } = useSearchClientes(searchCliente, true)
 
-  // Query para obtener tickets desde la BD (API real; sin mock)
+  // Query: placeholderData para que la página se vea desde el inicio (no pantalla en blanco)
   const {
     data: ticketsData,
     isLoading: isLoadingTickets,
+    isError: isErrorTickets,
     error: errorTickets,
     refetch: refetchTickets,
   } = useQuery({
@@ -113,6 +114,7 @@ export function TicketsAtencion() {
       })
       return response ?? { tickets: [], paginacion: { page: 1, per_page: 20, total: 0, pages: 0 } }
     },
+    placeholderData: { tickets: [], paginacion: { page: 1, per_page: 20, total: 0, pages: 0 } },
   })
 
   const tickets: TicketLocal[] = ticketsData?.tickets?.map((t) => ({
@@ -767,20 +769,19 @@ export function TicketsAtencion() {
           </div>
         </CardHeader>
         <CardContent>
-          {isLoadingTickets ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-              <span className="ml-3 text-gray-600">Cargando tickets...</span>
+          {isErrorTickets && (
+            <div className="mb-4 px-4 py-2 bg-amber-50 border border-amber-200 rounded flex items-center justify-between gap-2 text-sm text-amber-800">
+              <span>Error al cargar tickets.</span>
+              <Button variant="outline" size="sm" onClick={() => refetchTickets()}>Reintentar</Button>
             </div>
-          ) : errorTickets ? (
-            <div className="text-center py-12">
-              <AlertCircle className="h-12 w-12 mx-auto mb-4 text-red-500" />
-              <p className="text-red-600 mb-4">Error cargando tickets</p>
-              <Button variant="outline" onClick={() => refetchTickets()}>
-                Reintentar
-              </Button>
+          )}
+          {isLoadingTickets && (
+            <div className="mb-4 px-4 py-2 bg-blue-50 border border-blue-200 rounded flex items-center gap-2 text-sm text-blue-700">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Actualizando tickets...</span>
             </div>
-          ) : ticketsFiltrados.length === 0 ? (
+          )}
+          {ticketsFiltrados.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
               <FileText className="h-12 w-12 mx-auto mb-4 text-gray-400" />
               {tickets.length === 0 ? (

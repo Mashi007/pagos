@@ -138,6 +138,7 @@ def put_email_configuracion(payload: EmailConfigUpdate = Body(...), db: Session 
         _email_config_stub[k] = v
     update_from_api(_email_config_stub)
     _persist_email_config(db)
+    logger.info("Configuración email actualizada y persistida en BD (campos: %s)", list(data.keys()))
     return {
         "message": "Configuración guardada",
         "vinculacion_confirmada": False,

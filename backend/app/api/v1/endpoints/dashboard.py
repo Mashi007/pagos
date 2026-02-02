@@ -8,6 +8,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select, func
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -210,6 +211,22 @@ def _primer_ultimo_dia_mes(d: datetime) -> tuple[date, date]:
     return inicio, fin
 
 
+def _meses_desde_rango(fecha_inicio: date, fecha_fin: date) -> list[dict]:
+    """Genera lista de meses (label, año, mes) entre fecha_inicio y fecha_fin (por mes natural)."""
+    nombres = ("Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic")
+    meses = []
+    y, m = fecha_inicio.year, fecha_inicio.month
+    fin_y, fin_m = fecha_fin.year, fecha_fin.month
+    while (y, m) <= (fin_y, fin_m):
+        label = f"{nombres[m - 1]} {y}"
+        meses.append({"mes": label, "year": y, "month": m})
+        if m == 12:
+            y, m = y + 1, 1
+        else:
+            m += 1
+    return meses
+
+
 @router.get("/admin")
 def get_dashboard_admin(
     periodo: Optional[str] = Query(None),
@@ -217,24 +234,46 @@ def get_dashboard_admin(
     fecha_fin: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Dashboard admin: evolucion_mensual desde tabla cuotas. Cartera = suma mensual monto (programado por vencimiento), Cobrado = suma mensual monto pagado, Morosidad = diferencia."""
-    meses = _ultimos_12_meses()
+    """Dashboard admin: evolucion_mensual desde tabla cuotas. Cartera = suma mensual monto (programado por vencimiento), Cobrado = suma mensual monto pagado, Morosidad = diferencia. Respeta fecha_inicio/fecha_fin para mostrar desde el año seleccionado (ej. 2025)."""
+    # Si hay rango explícito, usarlo; si no, últimos 12 meses desde hoy
+    if fecha_inicio and fecha_fin:
+        try:
+            inicio = date.fromisoformat(fecha_inicio)
+            fin = date.fromisoformat(fecha_fin)
+            if inicio <= fin:
+                meses = _meses_desde_rango(inicio, fin)
+            else:
+                meses = _ultimos_12_meses()
+        except ValueError:
+            meses = _ultimos_12_meses()
+    else:
+        meses = _ultimos_12_meses()
+
     evolucion = []
     try:
-        hoy = datetime.now(timezone.utc)
         for i, m in enumerate(meses):
-            fin_mes = hoy - timedelta(days=30 * (11 - i))
-            if fin_mes.tzinfo is None:
-                fin_mes = fin_mes.replace(tzinfo=timezone.utc)
-            inicio_d, fin_d = _primer_ultimo_dia_mes(fin_mes)
-            # Cartera = suma mensual monto_programado: SUM(monto) de cuotas con fecha_vencimiento en el mes
+            if "year" in m and "month" in m:
+                y, mo = m["year"], m["month"]
+                inicio_d = date(y, mo, 1)
+                if mo == 12:
+                    fin_d = date(y, 12, 31)
+                else:
+                    fin_d = date(y, mo + 1, 1) - timedelta(days=1)
+            else:
+                # _ultimos_12_meses() no trae year/month; calcular desde índice
+                hoy = datetime.now(timezone.utc)
+                fin_mes = hoy - timedelta(days=30 * (len(meses) - 1 - i))
+                if fin_mes.tzinfo is None:
+                    fin_mes = fin_mes.replace(tzinfo=timezone.utc)
+                inicio_d, fin_d = _primer_ultimo_dia_mes(fin_mes)
+            # Cartera = suma mensual monto de cuotas con fecha_vencimiento en el mes
             cartera = db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
                     Cuota.fecha_vencimiento >= inicio_d,
                     Cuota.fecha_vencimiento <= fin_d,
                 )
             ) or 0
-            # Cobrado = suma mensual monto_pagado: SUM(monto) de cuotas pagadas con fecha_pago en el mes
+            # Cobrado = suma mensual monto de cuotas pagadas con fecha_pago en el mes
             cobrado = db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
                     Cuota.pagado.is_(True),
@@ -260,7 +299,6 @@ def get_dashboard_admin(
             for m in meses
         ]
         origen = "bd"
-    # Si no hay ningún dato en cuotas, el gráfico mostrará ceros; no usamos demo para no confundir
     return {
         "financieros": {
             "ingresosCapital": 0.0,
@@ -531,8 +569,19 @@ def get_financiamiento_por_rangos(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Bandas por total_financiamiento: cantidad de préstamos (COUNT) por banda desde tabla prestamos, no suma en dólares."""
+    """Bandas por total_financiamiento: cantidad de préstamos (COUNT) por banda desde tabla prestamos. Si fecha_inicio/fecha_fin se envían, filtra por fecha_creacion; si no, resumen desde el inicio (todos)."""
     try:
+        # Filtro de fechas: si viene rango, filtrar por fecha_creacion; si no, todos los préstamos (desde el inicio)
+        filtro_fecha = True
+        if fecha_inicio and fecha_fin:
+            try:
+                inicio = date.fromisoformat(fecha_inicio)
+                fin = date.fromisoformat(fecha_fin)
+            except ValueError:
+                filtro_fecha = False
+        else:
+            filtro_fecha = False
+
         rangos_def = _rangos_financiamiento()
         resultado = []
         total_p = 0
@@ -547,6 +596,11 @@ def get_financiamiento_por_rangos(
                     Prestamo.total_financiamiento.isnot(None),
                     Prestamo.total_financiamiento >= min_val,
                     Prestamo.total_financiamiento < max_val,
+                )
+            if filtro_fecha:
+                q = q.where(
+                    func.date(Prestamo.fecha_creacion) >= inicio,
+                    func.date(Prestamo.fecha_creacion) <= fin,
                 )
             n = int(db.scalar(q) or 0)
             total_p += n
@@ -693,13 +747,26 @@ def get_morosidad_por_analista(
     """Morosidad por analista: cuotas vencidas (tabla cuotas) por analista (préstamo). Devuelve cantidad de cuotas vencidas y monto vencido en USD por analista."""
     try:
         hoy = date.today()
-        # Cuotas vencidas: no pagadas y fecha_vencimiento < hoy
-        cuotas_vencidas = db.execute(
-            select(Cuota.id, Cuota.cliente_id, Cuota.monto).select_from(Cuota).where(
-                Cuota.pagado.is_(False),
-                Cuota.fecha_vencimiento < hoy,
-            )
-        ).all()
+        # Cuotas vencidas: no pagadas y fecha_vencimiento < hoy (monto puede no existir en la tabla)
+        try:
+            cuotas_vencidas = db.execute(
+                select(Cuota.id, Cuota.cliente_id, Cuota.monto).select_from(Cuota).where(
+                    Cuota.pagado.is_(False),
+                    Cuota.fecha_vencimiento < hoy,
+                )
+            ).all()
+            usar_monto = True
+        except ProgrammingError as pe:
+            if "monto" in str(pe).lower() and "does not exist" in str(pe).lower():
+                cuotas_vencidas = db.execute(
+                    select(Cuota.id, Cuota.cliente_id).select_from(Cuota).where(
+                        Cuota.pagado.is_(False),
+                        Cuota.fecha_vencimiento < hoy,
+                    )
+                ).all()
+                usar_monto = False
+            else:
+                raise
         # Prestamos APROBADO: un préstamo por cliente (el más reciente) para asignar analista
         prestamos_por_cliente = (
             db.execute(
@@ -716,12 +783,14 @@ def get_morosidad_por_analista(
                 cliente_a_analista[cliente_id] = analista_val or "Sin analista"
         # Agrupar cuotas vencidas por analista
         por_analista = {}
-        for cid, cliente_id, monto in cuotas_vencidas:
+        for row in cuotas_vencidas:
+            cliente_id = row.cliente_id
+            monto = _safe_float(getattr(row, "monto", 0)) if usar_monto else 0.0
             a = cliente_a_analista.get(cliente_id, "Sin analista")
             if a not in por_analista:
                 por_analista[a] = {"cantidad_cuotas_vencidas": 0, "monto_vencido": 0.0}
             por_analista[a]["cantidad_cuotas_vencidas"] += 1
-            por_analista[a]["monto_vencido"] += _safe_float(monto)
+            por_analista[a]["monto_vencido"] += monto
         resultado = [
             {
                 "analista": a,
@@ -745,7 +814,7 @@ def get_evolucion_morosidad(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Evolución de morosidad por mes. Datos reales: suma monto de cuotas vencidas no pagadas a fin de cada mes (Cuota)."""
+    """Evolución de morosidad por mes. Datos reales: suma monto de cuotas vencidas no pagadas a fin de cada mes (Cuota). Si la tabla cuotas no tiene columna monto, devuelve 0."""
     try:
         meses_list = _ultimos_12_meses()
         hoy = datetime.now(timezone.utc)
@@ -754,12 +823,18 @@ def get_evolucion_morosidad(
             fin_mes = hoy - timedelta(days=30 * (11 - i))
             ultimo_dia = _ultimo_dia_del_mes(fin_mes.replace(tzinfo=timezone.utc) if fin_mes.tzinfo is None else fin_mes)
             ultimo_dia_date = ultimo_dia.date() if hasattr(ultimo_dia, "date") else ultimo_dia
-            moro = db.scalar(
-                select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
-                    Cuota.pagado.is_(False),
-                    Cuota.fecha_vencimiento <= ultimo_dia_date,
-                )
-            ) or 0
+            try:
+                moro = db.scalar(
+                    select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
+                        Cuota.pagado.is_(False),
+                        Cuota.fecha_vencimiento <= ultimo_dia_date,
+                    )
+                ) or 0
+            except ProgrammingError as pe:
+                if "monto" in str(pe).lower() and "does not exist" in str(pe).lower():
+                    moro = 0
+                else:
+                    raise
             resultado.append({"mes": m["mes"], "morosidad": _safe_float(moro)})
         return {"meses": resultado}
     except Exception as e:

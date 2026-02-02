@@ -168,7 +168,7 @@ export function Configuracion() {
     }
   }, [seccionActiva, navigate])
 
-  const cargarConfiguracionGeneral = async () => {
+  const cargarConfiguracionGeneral = async (preserveLogoStateIfMissing = false) => {
     try {
       setLoading(true)
       setEstadoCarga('loading')
@@ -176,7 +176,8 @@ export function Configuracion() {
       console.log('ðŸ”„ Cargando configuración general...')
 
       const config = await configuracionGeneralService.obtenerConfiguracionGeneral()
-      console.log('✅ Configuración general cargada:', config)
+      console.log('Configuración general cargada:', config)
+      console.log('logo_filename en servidor:', config.logo_filename ?? '(no devuelto)')
 
       setConfiguracionGeneral(config)
       
@@ -208,9 +209,14 @@ export function Configuracion() {
           console.warn(`âš ï¸ Error verificando logo:`, logoError)
         }
       } else {
-        setHasCustomLogo(false)
-        setLogoPreview(null)
-        setLogoInfo(null)
+        // Si el servidor no devuelve logo_filename: no borrar el preview cuando
+        // acabamos de subir (preserveLogoStateIfMissing) para que no desaparezca
+        // hasta que el backend persista y devuelva logo_filename (p. ej. tras redesplegar).
+        if (!preserveLogoStateIfMissing) {
+          setHasCustomLogo(false)
+          setLogoPreview(null)
+          setLogoInfo(null)
+        }
       }
 
       // Actualizar también el mock para compatibilidad
@@ -545,8 +551,9 @@ export function Configuracion() {
         detail: { filename: result.filename, url: result.url }
       }))
       
-      // Recargar configuración general para actualizar logo_filename en la BD
-      await cargarConfiguracionGeneral()
+      // Recargar configuración general; si el backend aún no devuelve logo_filename,
+      // mantener el preview del logo recién subido (preserveLogoStateIfMissing = true)
+      await cargarConfiguracionGeneral(true)
     } catch (error: unknown) {
       console.error('Error cargando logo:', error)
       let errorMessage = getErrorMessage(error)

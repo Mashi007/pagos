@@ -27,14 +27,24 @@ const TABS: { id: TabId; label: string; icon: typeof Calendar }[] = [
   { id: 'configuracion', label: 'Configuración', icon: Settings },
 ]
 
+const PLACEHOLDER_NOTIFICACIONES: ClientesRetrasadosResponse = {
+  actualizado_en: new Date().toISOString(),
+  dias_5: [],
+  dias_3: [],
+  dias_1: [],
+  hoy: [],
+  mora_61: { cuotas: [], total_cuotas: 0 },
+}
+
 export function Notificaciones() {
   const [activeTab, setActiveTab] = useState<TabId>('dias_5')
 
-  const { data, isLoading, error, refetch, isFetching } = useQuery({
+  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['notificaciones-clientes-retrasados'],
     queryFn: () => notificacionService.getClientesRetrasados(),
     staleTime: 2 * 60 * 1000,
     refetchOnWindowFocus: true,
+    placeholderData: PLACEHOLDER_NOTIFICACIONES,
   })
 
   const [enviando, setEnviando] = useState(false)
@@ -193,18 +203,19 @@ export function Notificaciones() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {isLoading ? (
-              <div className="flex flex-col items-center justify-center py-12 text-gray-500">
-                <RefreshCw className="w-8 h-8 animate-spin mb-2" />
-                <p>Cargando datos...</p>
+            {isError && (
+              <div className="mb-4 px-4 py-2 bg-amber-50 border border-amber-200 rounded flex items-center justify-between gap-2 text-sm text-amber-800">
+                <span>Error al cargar. Comprueba que exista la tabla <code className="bg-gray-100 px-1">cuotas</code>.</span>
+                <Button variant="outline" size="sm" onClick={() => refetch()}>Reintentar</Button>
               </div>
-            ) : error ? (
-              <div className="text-center py-8 text-red-600">
-                <AlertTriangle className="w-10 h-10 mx-auto mb-2" />
-                <p>Error al cargar. Comprueba que exista la tabla <code className="bg-gray-100 px-1">cuotas</code> y que tenga datos.</p>
-                <Button variant="outline" className="mt-4" onClick={() => refetch()}>Reintentar</Button>
+            )}
+            {isLoading && (
+              <div className="mb-4 px-4 py-2 bg-blue-50 border border-blue-200 rounded flex items-center gap-2 text-sm text-blue-700">
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                <span>Cargando datos...</span>
               </div>
-            ) : activeTab === 'mora_61' ? (
+            )}
+            {activeTab === 'mora_61' ? (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>

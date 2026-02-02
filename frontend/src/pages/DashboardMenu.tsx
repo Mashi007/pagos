@@ -130,15 +130,22 @@ export function DashboardMenu() {
     retry: false,
   })
 
-  // Batch 2: IMPORTANTE - Dashboard admin (gráfico principal, carga después de KPIs)
-  const periodoEvolucion = getPeriodoGrafico('evolucion')
+  // Batch 2: IMPORTANTE - Dashboard admin (gráfico principal). Siempre con período que incluya 2025 si hay datos.
+  const periodoEvolucion = getPeriodoGrafico('evolucion') || periodo || 'ultimos_12_meses'
   const { data: datosDashboard, isLoading: loadingDashboard } = useQuery({
     queryKey: ['dashboard-menu', periodoEvolucion, JSON.stringify(filtros)],
     queryFn: async () => {
       try {
-        const params = construirParams(periodoEvolucion)
+        // Incluir fecha_inicio/fecha_fin del período para que la evolución muestre desde el año seleccionado (ej. 2025)
+        const obj = construirFiltrosObject(periodoEvolucion)
+        const params = new URLSearchParams()
+        Object.entries(obj).forEach(([key, value]) => {
+          if (value != null && value !== '') params.append(key, String(value))
+        })
+        if (!params.has('periodo') && periodoEvolucion) params.append('periodo', periodoEvolucion)
+        const queryString = params.toString()
         // Usar timeout extendido para endpoints lentos
-        const response = await apiClient.get(`/api/v1/dashboard/admin?${params}`, { timeout: 60000 }) as {
+        const response = await apiClient.get(`/api/v1/dashboard/admin${queryString ? `?${queryString}` : ''}`, { timeout: 60000 }) as {
           financieros?: {
             ingresosCapital: number
             ingresosInteres: number
@@ -163,66 +170,68 @@ export function DashboardMenu() {
     enabled: true, // âœ… Carga después de Batch 1
   })
 
-  // Batch 3: Morosidad por día (desde tabla cuotas: cartera - cobrado por día)
-  const periodoTendencia = getPeriodoGrafico('tendencia')
+  // Batch 3: Morosidad por día (desde tabla cuotas). Respeta rango del período (ej. desde 2025).
+  const periodoTendencia = getPeriodoGrafico('tendencia') || periodo || 'ultimos_12_meses'
   const diasMorosidad = periodoTendencia === 'dia' ? 7 : periodoTendencia === 'semana' ? 14 : periodoTendencia === 'mes' ? 30 : 90
   const { data: datosMorosidadPorDia, isLoading: loadingMorosidadPorDia } = useQuery({
     queryKey: ['morosidad-por-dia', periodoTendencia, diasMorosidad, JSON.stringify(filtros)],
     queryFn: async () => {
+      const obj = construirFiltrosObject(periodoTendencia)
       const queryParams = new URLSearchParams()
       queryParams.append('dias', String(diasMorosidad))
-      if (filtros.fecha_inicio) queryParams.append('fecha_inicio', filtros.fecha_inicio)
-      if (filtros.fecha_fin) queryParams.append('fecha_fin', filtros.fecha_fin)
+      if (obj.fecha_inicio) queryParams.append('fecha_inicio', obj.fecha_inicio)
+      if (obj.fecha_fin) queryParams.append('fecha_fin', obj.fecha_fin)
       const response = await apiClient.get(
         `/api/v1/dashboard/morosidad-por-dia?${queryParams.toString()}`
       ) as { dias: Array<{ fecha: string; dia: string; morosidad: number }> }
       return response.dias ?? []
     },
     staleTime: 2 * 60 * 1000,
-    enabled: !!kpisPrincipales,
+    enabled: true,
     refetchOnWindowFocus: true,
   })
 
-  // Batch 3: Gráficos secundarios rápidos. Período por gráfico.
-  const periodoConcesionario = getPeriodoGrafico('concesionario')
+  // Batch 3: Gráficos secundarios rápidos. Período por gráfico; filtros (fecha_inicio/fecha_fin) se envían siempre.
+  const periodoConcesionario = getPeriodoGrafico('concesionario') || periodo || 'ultimos_12_meses'
   const { data: datosConcesionarios, isLoading: loadingConcesionarios } = useQuery({
     queryKey: ['prestamos-concesionario', periodoConcesionario, JSON.stringify(filtros)],
     queryFn: async () => {
-      const params = construirFiltrosObject(periodoConcesionario)
+      const obj = construirFiltrosObject(periodoConcesionario)
       const queryParams = new URLSearchParams()
-      Object.entries(params).forEach(([key, value]) => {
-        if (value) queryParams.append(key, value.toString())
+      Object.entries(obj).forEach(([key, value]) => {
+        if (value != null && value !== '') queryParams.append(key, String(value))
       })
+      if (!queryParams.has('periodo') && periodoConcesionario) queryParams.append('periodo', periodoConcesionario)
       return await apiClient.get(
         `/api/v1/dashboard/prestamos-por-concesionario?${queryParams.toString()}`
       ) as { por_mes: Array<{ mes: string; concesionario: string; cantidad: number }>; acumulado: Array<{ concesionario: string; cantidad_acumulada: number }> }
     },
     staleTime: 2 * 60 * 1000,
     refetchOnWindowFocus: true,
-    enabled: !!kpisPrincipales,
+    enabled: true,
   })
 
-  const periodoModelo = getPeriodoGrafico('modelo')
+  const periodoModelo = getPeriodoGrafico('modelo') || periodo || 'ultimos_12_meses'
   const { data: datosModelos, isLoading: loadingModelos } = useQuery({
     queryKey: ['prestamos-modelo', periodoModelo, JSON.stringify(filtros)],
     queryFn: async () => {
-      const params = construirFiltrosObject(periodoModelo)
+      const obj = construirFiltrosObject(periodoModelo)
       const queryParams = new URLSearchParams()
-      Object.entries(params).forEach(([key, value]) => {
-        if (value) queryParams.append(key, value.toString())
+      Object.entries(obj).forEach(([key, value]) => {
+        if (value != null && value !== '') queryParams.append(key, String(value))
       })
+      if (!queryParams.has('periodo') && periodoModelo) queryParams.append('periodo', periodoModelo)
       return await apiClient.get(
         `/api/v1/dashboard/prestamos-por-modelo?${queryParams.toString()}`
       ) as { por_mes: Array<{ mes: string; modelo: string; cantidad: number }>; acumulado: Array<{ modelo: string; cantidad_acumulada: number }> }
     },
     staleTime: 2 * 60 * 1000,
     refetchOnWindowFocus: true,
-    enabled: !!kpisPrincipales,
+    enabled: true,
   })
 
-  // Batch 4: BAJA - Gráficos menos críticos (cargar después de Batch 3, lazy loading)
-  // Período por gráfico
-  const periodoRangos = getPeriodoGrafico('rangos')
+  // Batch 4: BAJA - Gráficos menos críticos. Período con fallback para incluir 2025.
+  const periodoRangos = getPeriodoGrafico('rangos') || periodo || 'ultimos_12_meses'
   const { data: datosFinanciamientoRangos, isLoading: loadingFinanciamientoRangos, isError: errorFinanciamientoRangos, error: errorFinanciamientoRangosDetail, refetch: refetchFinanciamientoRangos } = useQuery({
     queryKey: ['financiamiento-rangos', periodoRangos, JSON.stringify(filtros)],
     queryFn: async () => {
@@ -357,80 +366,6 @@ export function DashboardMenu() {
     enabled: !!datosDashboard, // âœ… Lazy loading - carga después de dashboard admin
   })
 
-  const periodoEvolucionMorosidad = getPeriodoGrafico('evolucion-morosidad')
-  const { data: datosEvolucionMorosidad, isLoading: loadingEvolucionMorosidad } = useQuery({
-    queryKey: ['evolucion-morosidad-menu', periodoEvolucionMorosidad, JSON.stringify(filtros)],
-    queryFn: async () => {
-      const params = construirFiltrosObject(periodoEvolucionMorosidad)
-      const queryParams = new URLSearchParams()
-      
-      // âœ… CORRECCIÓN: NO pasar fecha_inicio del período para este gráfico
-      // En su lugar, usar el parámetro 'meses' para mostrar los últimos 12 meses
-      // Solo pasar fecha_inicio si viene de filtros explícitos del usuario
-      const fechaInicioFiltro = filtros.fecha_inicio && filtros.fecha_inicio !== '' ? filtros.fecha_inicio : null
-      if (fechaInicioFiltro) {
-        queryParams.append('fecha_inicio', fechaInicioFiltro)
-      }
-      
-      Object.entries(params).forEach(([key, value]) => {
-        // No pasar fecha_inicio ni fecha_fin del período
-        if (key !== 'fecha_inicio' && key !== 'fecha_fin' && value) {
-          queryParams.append(key, value.toString())
-        }
-      })
-      
-      // âœ… SIEMPRE agregar parámetro meses=12 para mostrar últimos 12 meses
-      queryParams.append('meses', '12')
-      
-      const response = await apiClient.get(
-        `/api/v1/dashboard/evolucion-morosidad?${queryParams.toString()}`
-      ) as { meses: Array<{ mes: string; morosidad: number }> }
-      return response.meses
-    },
-    staleTime: 5 * 60 * 1000, // âœ… ACTUALIZADO: 5 minutos para datos históricos más frescos
-    refetchOnWindowFocus: true, // âœ… ACTUALIZADO: Recargar al enfocar ventana para datos actualizados
-    enabled: !!datosDashboard, // âœ… Lazy loading - carga después de dashboard admin
-  })
-
-  const periodoEvolucionPagos = getPeriodoGrafico('evolucion-pagos')
-  const { data: datosEvolucionPagos, isLoading: loadingEvolucionPagos } = useQuery({
-    queryKey: ['evolucion-pagos-menu', periodoEvolucionPagos, JSON.stringify(filtros)],
-    queryFn: async () => {
-      const params = construirFiltrosObject(periodoEvolucionPagos)
-      const queryParams = new URLSearchParams()
-      
-      // âœ… CORRECCIÓN: NO pasar fecha_inicio del período para este gráfico
-      // En su lugar, usar el parámetro 'meses' para mostrar los últimos 12 meses
-      // Solo pasar fecha_inicio si viene de filtros explícitos del usuario
-      const fechaInicioFiltro = filtros.fecha_inicio && filtros.fecha_inicio !== '' ? filtros.fecha_inicio : null
-      if (fechaInicioFiltro) {
-        queryParams.append('fecha_inicio', fechaInicioFiltro)
-      }
-      
-      Object.entries(params).forEach(([key, value]) => {
-        // No pasar fecha_inicio ni fecha_fin del período
-        if (key !== 'fecha_inicio' && key !== 'fecha_fin' && value) {
-          queryParams.append(key, value.toString())
-        }
-      })
-      
-      // âœ… SIEMPRE agregar parámetro meses=12 para mostrar últimos 12 meses
-      queryParams.append('meses', '12')
-      
-      // Usar timeout extendido para endpoints lentos
-      const response = await apiClient.get(
-        `/api/v1/dashboard/evolucion-pagos?${queryParams.toString()}`,
-        { timeout: 60000 }
-      ) as { meses: Array<{ mes: string; pagos: number; monto: number }> }
-      return response.meses
-    },
-    staleTime: 15 * 60 * 1000, // 15 minutos - optimizado para datos históricos
-    retry: 1,
-    refetchOnWindowFocus: false, // Reducir peticiones automáticas
-    enabled: !!datosDashboard, // âœ… Lazy loading - carga después de dashboard admin
-  })
-
-
   const [isRefreshing, setIsRefreshing] = useState(false)
 
   // NOTA: No necesitamos invalidar queries manualmente aquí
@@ -451,8 +386,6 @@ export function DashboardMenu() {
       await queryClient.invalidateQueries({ queryKey: ['cobranzas-mensuales'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['cobranzas-semanales'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['morosidad-analista'], exact: false })
-      await queryClient.invalidateQueries({ queryKey: ['evolucion-morosidad-menu'], exact: false })
-      await queryClient.invalidateQueries({ queryKey: ['evolucion-pagos-menu'], exact: false })
 
       // Refrescar todas las queries activas
       await queryClient.refetchQueries({ queryKey: ['kpis-principales-menu'], exact: false })
@@ -463,8 +396,6 @@ export function DashboardMenu() {
       await queryClient.refetchQueries({ queryKey: ['financiamiento-rangos'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['composicion-morosidad'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['morosidad-analista'], exact: false })
-      await queryClient.refetchQueries({ queryKey: ['evolucion-morosidad-menu'], exact: false })
-      await queryClient.refetchQueries({ queryKey: ['evolucion-pagos-menu'], exact: false })
 
       // También refrescar la query de kpisPrincipales usando su refetch
       await refetch()
@@ -1255,99 +1186,6 @@ export function DashboardMenu() {
               </Card>
             </motion.div>
         </div>
-
-        {/* GRÁFICOS DE EVOLUCIÓN */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Evolución de Morosidad */}
-          <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 1.0 }}
-            >
-              <Card className="shadow-lg border-2 border-gray-200">
-                <CardHeader className="bg-gradient-to-r from-red-50 to-pink-50 border-b-2 border-red-200">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
-                      <LineChart className="h-6 w-6 text-red-600" />
-                      <span>Evolución de Morosidad</span>
-                    </CardTitle>
-                    <div className="flex items-center gap-2">
-                      <SelectorPeriodoGrafico chartId="evolucion-morosidad" />
-                      <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
-                        {getRangoFechasLabelGrafico('evolucion-morosidad')}
-                      </Badge>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-6">
-                  {datosEvolucionMorosidad && datosEvolucionMorosidad.length > 0 ? (
-                  <ChartWithDateRangeSlider data={datosEvolucionMorosidad} dataKey="mes" chartHeight={300}>
-                    {(filteredData) => (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <RechartsLineChart data={filteredData} margin={{ top: 12, right: 20, left: 12, bottom: 12 }}>
-                          <CartesianGrid {...chartCartesianGrid} />
-                          <XAxis dataKey="mes" tick={chartAxisTick} />
-                          <YAxis tick={chartAxisTick} />
-                          <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [formatCurrency(value), 'Morosidad']} />
-                          <Legend {...chartLegendStyle} />
-                          <Line type="monotone" dataKey="morosidad" stroke="#ef4444" strokeWidth={2} name="Morosidad" dot={{ r: 4 }} />
-                        </RechartsLineChart>
-                      </ResponsiveContainer>
-                    )}
-                  </ChartWithDateRangeSlider>
-                  ) : (
-                    <div className="flex items-center justify-center py-16 text-gray-500">No hay datos para mostrar</div>
-                  )}
-                  </CardContent>
-                </Card>
-              </motion.div>
-
-          {/* Evolución de Pagos */}
-          <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 1.1 }}
-              >
-                <Card className="shadow-lg border border-gray-200/90 rounded-xl overflow-hidden bg-white">
-                <CardHeader className="bg-gradient-to-r from-green-50/90 to-emerald-50/90 border-b border-gray-200/80 pb-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
-                      <LineChart className="h-5 w-5 text-green-600" />
-                      <span>Evolución de Pagos</span>
-                    </CardTitle>
-                    <div className="flex items-center gap-2">
-                      <SelectorPeriodoGrafico chartId="evolucion-pagos" />
-                      <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
-                        {getRangoFechasLabelGrafico('evolucion-pagos')}
-                      </Badge>
-                    </div>
-                  </div>
-                </CardHeader>
-                  <CardContent className="p-6 pt-4">
-                  {datosEvolucionPagos && datosEvolucionPagos.length > 0 ? (
-                  <ChartWithDateRangeSlider data={datosEvolucionPagos} dataKey="mes" chartHeight={320}>
-                    {(filteredData) => (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={filteredData} margin={{ top: 12, right: 24, left: 12, bottom: 12 }}>
-                          <CartesianGrid {...chartCartesianGrid} />
-                          <XAxis dataKey="mes" tick={chartAxisTick} />
-                          <YAxis yAxisId="left" tick={chartAxisTick} />
-                          <YAxis yAxisId="right" orientation="right" tick={chartAxisTick} />
-                          <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number, name: string) => [name === 'Monto Total' ? formatCurrency(value) : value, name]} />
-                          <Legend {...chartLegendStyle} />
-                          <Bar yAxisId="left" dataKey="pagos" fill="#10b981" name="Cantidad Pagos" radius={[4, 4, 0, 0]} />
-                          <Line yAxisId="right" type="monotone" dataKey="monto" stroke="#3b82f6" strokeWidth={2} name="Monto Total" dot={{ r: 4 }} />
-                        </ComposedChart>
-                      </ResponsiveContainer>
-                    )}
-                  </ChartWithDateRangeSlider>
-                  ) : (
-                    <div className="flex items-center justify-center py-16 text-gray-500">No hay datos para mostrar</div>
-                  )}
-                  </CardContent>
-                </Card>
-              </motion.div>
-            </div>
 
       </div>
     </div>
