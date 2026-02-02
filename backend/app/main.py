@@ -59,29 +59,47 @@ app.add_middleware(
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
 
+def _startup_db_with_retry(engine, max_attempts: int = 5, delay_sec: float = 2.0):
+    """Intenta crear tablas y verificar BD con reintentos (evita fallo por BD no lista en Render)."""
+    from sqlalchemy import text
+    from app.models import Base, Cliente, Prestamo, Ticket, Cuota, PagosWhatsapp, Configuracion, Auditoria, User, DefinicionCampo, ConversacionAI, DiccionarioSemantico  # noqa: F401
+    last_error = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            Base.metadata.create_all(bind=engine)
+            logger.info("Base de datos: tablas creadas o ya existentes.")
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            logger.info("Conexión a BD verificada.")
+            return
+        except Exception as e:
+            last_error = e
+            logger.warning(
+                "Intento %s/%s de conexión a BD falló: %s. Reintentando en %.1fs...",
+                attempt, max_attempts, e, delay_sec,
+            )
+            if attempt < max_attempts:
+                time.sleep(delay_sec)
+    logger.error("No se pudo conectar a la BD tras %s intentos: %s", max_attempts, last_error)
+    raise last_error
+
+
 @app.on_event("startup")
 def on_startup():
     """Crear tablas en la BD si no existen. Inicializar config de email desde .env. Iniciar scheduler de reportes cobranzas."""
-    from sqlalchemy import text
     from app.core.database import engine
-    from app.models import Base, Cliente, Prestamo, Ticket, Cuota, PagosWhatsapp, Configuracion, Auditoria, User, DefinicionCampo, ConversacionAI, DiccionarioSemantico  # noqa: F401 - registran tablas en Base.metadata
     from app.core.email_config_holder import init_from_settings as init_email_config
     from app.core.scheduler import start_scheduler
 
     init_email_config()
     logger.info("Configuración de email (SMTP/tickets) inicializada desde variables de entorno.")
 
-    # Crear todas las tablas (incluye clientes) si no existen
-    Base.metadata.create_all(bind=engine)
-    logger.info("Base de datos: tablas creadas o ya existentes.")
-
-    # Verificar que la tabla clientes existe y está accesible
+    # Crear tablas y verificar BD con reintentos (Render puede tener la BD aún no lista en el primer worker)
     try:
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1 FROM clientes LIMIT 1"))
-        logger.info("Tabla clientes: conectada y accesible.")
+        _startup_db_with_retry(engine)
     except Exception as e:
-        logger.warning("Tabla clientes: verificación fallida (puede ser tabla vacía o recién creada): %s", e)
+        logger.exception("Startup BD falló tras reintentos: %s", e)
+        raise
 
     # Scheduler: reportes de cobranzas a las 6:00 y 13:00 (America/Caracas)
     try:
