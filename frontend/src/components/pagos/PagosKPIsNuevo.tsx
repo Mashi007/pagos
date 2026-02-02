@@ -41,7 +41,8 @@ export function PagosKPIsNuevo() {
     )
   }
 
-  if (error) {
+  const isCancelled = (error as any)?.code === 'ERR_CANCELED' || (error as any)?.message?.includes?.('Request aborted')
+  if (error && !isCancelled) {
     return (
       <div className="space-y-6">
         <div className="flex justify-between items-center">

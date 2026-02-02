@@ -368,6 +368,12 @@ class ApiClient {
       toast.error(getErrorMessage(error))
       return
     }
+    // No mostrar toast ni log para peticiones canceladas (p. ej. desmontaje o React Query)
+    const code = (error as any).code
+    const msg = error.message || ''
+    if (code === 'ERR_CANCELED' || msg.includes('Request aborted') || (error as any).isCancelled) {
+      return
+    }
 
     if (error.response) {
       // Error del servidor
@@ -457,6 +463,9 @@ class ApiClient {
       // Error de red - puede ser que el servidor esté reiniciando
       const errorCode = (error as any).code || ''
       const errorMessage = error.message || ''
+      if (errorCode === 'ERR_CANCELED' || errorMessage.includes('Request aborted')) {
+        return
+      }
 
       // Log detallado para diagnóstico
       console.error('❌ [ApiClient] Error de conexión:', {

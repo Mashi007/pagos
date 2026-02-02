@@ -126,13 +126,11 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       title: 'Pagos',
       href: '/pagos',
       icon: CreditCard,
-      badge: counts.pagosPendientes > 0 ? String(counts.pagosPendientes) : undefined,
     },
     {
       title: 'Cobranzas',
       href: '/cobranzas',
       icon: AlertTriangle,
-      badge: counts.cuotasEnMora > 0 ? String(counts.cuotasEnMora) : undefined,
     },
     {
       title: 'Reportes',

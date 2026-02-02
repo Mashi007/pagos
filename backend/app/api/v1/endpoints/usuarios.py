@@ -20,7 +20,7 @@ _ISO_NOW = datetime.now(timezone.utc).isoformat()
 @router.get("/", include_in_schema=False, response_model=dict)
 def listar_usuarios(
     page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=500),
+    page_size: int = Query(50, ge=1, le=2000),
     is_active: Optional[bool] = Query(None),
 ):
     """

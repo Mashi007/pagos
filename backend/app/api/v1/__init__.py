@@ -2,7 +2,7 @@
 API v1
 """
 from fastapi import APIRouter
-from app.api.v1.endpoints import whatsapp, auth, configuracion, pagos, prestamos, notificaciones, notificaciones_tabs, dashboard, kpis, auditoria, cobranzas, clientes, tickets, comunicaciones, validadores, usuarios, reportes, modelos_vehiculos
+from app.api.v1.endpoints import whatsapp, auth, configuracion, pagos, prestamos, notificaciones, notificaciones_tabs, dashboard, kpis, auditoria, cobranzas, clientes, tickets, comunicaciones, validadores, usuarios, reportes, modelos_vehiculos, analistas
 
 api_router = APIRouter()
 
@@ -156,4 +156,11 @@ api_router.include_router(
     modelos_vehiculos.router,
     prefix="/modelos-vehiculos",
     tags=["modelos-vehiculos"],
+)
+
+# Analistas (solo lectura desde distinct Prestamo.analista; GET /activos para dropdowns).
+api_router.include_router(
+    analistas.router,
+    prefix="/analistas",
+    tags=["analistas"],
 )

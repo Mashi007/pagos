@@ -101,36 +101,32 @@ def get_pagos_stats(
             if modelo:
                 q = q.where(Prestamo.modelo == modelo)
         return q
-    # Cuotas pagadas / pendientes / atrasadas (con filtros)
+    # Cuotas pagadas / pendientes / atrasadas (con filtros). Usar solo subquery como FROM
+    # para evitar SAWarning "cartesian product" (no referenciar Cuota en el select exterior).
+    def _count_from_subquery(q):
+        subq = q.subquery()
+        return db.scalar(select(func.count()).select_from(subq)) or 0
+
     q_base = _cuota_base()
-    cuotas_pagadas = db.scalar(
-        select(func.count()).select_from(q_base.where(Cuota.fecha_pago.isnot(None)).subquery())
-    ) or 0
+    cuotas_pagadas = _count_from_subquery(q_base.where(Cuota.fecha_pago.isnot(None)))
     q_base = _cuota_base()
-    cuotas_pendientes = db.scalar(
-        select(func.count()).select_from(q_base.where(Cuota.fecha_pago.is_(None)).subquery())
-    ) or 0
+    cuotas_pendientes = _count_from_subquery(q_base.where(Cuota.fecha_pago.is_(None)))
     q_base = _cuota_base()
-    cuotas_atrasadas = db.scalar(
-        select(func.count()).select_from(
-            q_base.where(Cuota.fecha_pago.is_(None), Cuota.fecha_vencimiento < hoy).subquery()
-        )
-    ) or 0
+    cuotas_atrasadas = _count_from_subquery(
+        q_base.where(Cuota.fecha_pago.is_(None), Cuota.fecha_vencimiento < hoy)
+    )
     q_base = _cuota_base()
+    subq_pagado = q_base.where(Cuota.fecha_pago.isnot(None)).subquery()
     total_pagado = db.scalar(
-        select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(
-            q_base.where(Cuota.fecha_pago.isnot(None)).subquery()
-        )
+        select(func.coalesce(func.sum(subq_pagado.c.monto), 0)).select_from(subq_pagado)
     ) or 0
     q_base = _cuota_base()
-    pagos_hoy = db.scalar(
-        select(func.count()).select_from(
-            q_base.where(
-                Cuota.fecha_pago.isnot(None),
-                func.date(Cuota.fecha_pago) == hoy,
-            ).subquery()
+    pagos_hoy = _count_from_subquery(
+        q_base.where(
+            Cuota.fecha_pago.isnot(None),
+            func.date(Cuota.fecha_pago) == hoy,
         )
-    ) or 0
+    )
     # Pagos por estado (mismos filtros)
     q_estado = select(Cuota.estado, func.count()).select_from(Cuota)
     if analista or concesionario or modelo:
