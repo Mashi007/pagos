@@ -42,13 +42,14 @@ if (!existsSync(indexPath)) {
 }
 
 const html = readFileSync(indexPath, 'utf8')
-const scriptMatch = html.match(/src="\/assets\/(index-[^"]+\.js)"/)
+// Con base: '/pagos/', Vite genera src="/pagos/assets/index-xxx.js"; con base: '/' sería /assets/
+const scriptMatch = html.match(/src="(\/pagos)?\/assets\/(index-[^"]+\.js)"/)
 if (!scriptMatch) {
-  console.error('❌ verify-build: index.html no referencia el entry JS en /assets/')
+  console.error('❌ verify-build: index.html no referencia el entry JS en /assets/ o /pagos/assets/')
   process.exit(1)
 }
 
-const entryJs = scriptMatch[1]
+const entryJs = scriptMatch[2]
 if (!jsFiles.includes(entryJs)) {
   console.error(`❌ verify-build: index.html referencia ${entryJs} pero no existe en dist/assets/`)
   process.exit(1)
