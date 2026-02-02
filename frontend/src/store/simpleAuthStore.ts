@@ -45,7 +45,8 @@ const hasAuthData = (): boolean => {
 }
 
 export const useSimpleAuthStore = create<SimpleAuthState>((set) => {
-  // Verificar si hay datos de auth de forma segura (no lanzar si storage no disponible)
+  // Verificar si hay datos de auth de forma segura (no lanzar si storage no disponible
+  // o en contextos "insecure": iframe, storage bloqueado, demasiadas llamadas a location/history)
   let hasAuth = false
   try {
     hasAuth = hasAuthData()

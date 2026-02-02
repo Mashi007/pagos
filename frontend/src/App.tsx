@@ -1,5 +1,5 @@
-import { useEffect, Suspense } from 'react'
-import { Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom'
+import React, { useEffect, Suspense, useRef } from 'react'
+import { Routes, Route, Navigate, useLocation, useNavigate, Outlet } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 
 // Layout
@@ -87,17 +87,45 @@ const PageLoader = () => (
   </div>
 )
 
+// Una sola ejecución de init auth por sesión (evita doble llamada en StrictMode
+// y reduce "demasiadas llamadas a location/history" → "The operation is insecure")
+let _authInitDone = false
+
 function App() {
   const { isAuthenticated, isLoading, initializeAuth } = useSimpleAuth()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const redirectDoneRef = useRef(false)
 
   useEffect(() => {
-    // Inicializar autenticación desde almacenamiento seguro CON VERIFICACIÓN AUTOMÁTICA
+    if (_authInitDone) return
+    _authInitDone = true
     initializeAuth()
   }, [initializeAuth])
 
+  // Un único redirect cuando está autenticado en / o /login (evita múltiples
+  // <Navigate> y demasiadas llamadas a la API de historial)
+  useEffect(() => {
+    if (!isAuthenticated || isLoading) return
+    const pathname = location.pathname.replace(/\/$/, '') || '/'
+    if (pathname !== '/' && pathname !== '/login') return
+    if (redirectDoneRef.current) return
+    redirectDoneRef.current = true
+    try {
+      navigate('/dashboard/menu', { replace: true })
+    } catch {
+      redirectDoneRef.current = false
+    }
+  }, [isAuthenticated, isLoading, location.pathname, navigate])
+
   // Mostrar loader solo si está cargando Y hay datos de auth (para evitar flash)
-  // Si no hay datos de auth, isLoading será false desde el inicio
   if (isLoading) {
+    return <PageLoader />
+  }
+
+  // Mientras hacemos el único redirect, mostrar loader para no pintar brevemente login
+  const pathname = location.pathname.replace(/\/$/, '') || '/'
+  if (isAuthenticated && (pathname === '/' || pathname === '/login')) {
     return <PageLoader />
   }
 

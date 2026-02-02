@@ -147,6 +147,20 @@ services:
 
 ---
 
+## 📜 Logs de shutdown (normal en Render)
+
+Al reiniciar o desplegar, en los logs pueden aparecer:
+
+- **`Error while closing socket [Errno 9] Bad file descriptor`**  
+  Es un mensaje conocido de Gunicorn/Uvicorn al cerrar workers. No afecta al servicio ni a las peticiones; se puede ignorar.
+
+- **`Worker (pid:XX) was sent SIGTERM!`** / **`Shutting down: Master`**  
+  Indican que la plataforma (Render) ha pedido el apagado del proceso (nuevo deploy, health check, plan free con spin-down, etc.). El arranque posterior con `Booting worker` y `Application startup complete` confirma que el servicio ha vuelto a levantar correctamente.
+
+En `render.yaml` se usa **`--graceful-timeout 30`** para dar tiempo a los workers a terminar peticiones antes de cerrar y reducir mensajes de cierre brusco.
+
+---
+
 ## 🎯 Respuesta Directa
 
 **NO**, las variables de WhatsApp **NO se generan automáticamente** en Render. Debes:

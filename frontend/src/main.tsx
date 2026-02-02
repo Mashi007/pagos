@@ -176,6 +176,16 @@ window.addEventListener('error', (event) => {
       return false
     }
   }
+
+  // ✅ "The operation is insecure" (Demasiadas llamadas a location/history o contexto restringido)
+  if (event.error && (event.error.message === 'The operation is insecure' || event.error?.name === 'SecurityError')) {
+    const stack = (event.error?.stack || '').toLowerCase()
+    if (stack.includes('history') || stack.includes('location') || stack.includes('replaceState') || stack.includes('pushState')) {
+      event.preventDefault()
+      event.stopPropagation()
+      return false
+    }
+  }
 }, true) // ✅ Usar capture phase para interceptar errores antes de que se propaguen
 
 // Manejador global de promesas rechazadas no manejadas

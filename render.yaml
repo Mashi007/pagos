@@ -15,7 +15,9 @@ services:
     name: pagos-backend
     env: python
     buildCommand: pip install -r ../requirements.txt
-    startCommand: gunicorn app.main:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --worker-class uvicorn.workers.UvicornWorker
+    # graceful-timeout: tiempo para que los workers terminen peticiones al recibir SIGTERM
+    # (reduce "Error while closing socket [Errno 9] Bad file descriptor" en shutdown)
+    startCommand: gunicorn app.main:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --graceful-timeout 30 --worker-class uvicorn.workers.UvicornWorker
     rootDir: backend
     envVars:
       - key: PYTHON_VERSION
