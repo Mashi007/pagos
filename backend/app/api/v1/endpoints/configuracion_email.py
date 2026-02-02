@@ -130,6 +130,7 @@ def _is_password_masked(v: str) -> bool:
 @router.put("/configuracion")
 def put_email_configuracion(payload: EmailConfigUpdate = Body(...), db: Session = Depends(get_db)):
     """Actualiza configuración SMTP, IMAP y contactos para notificación de tickets. Persiste en BD."""
+    _load_email_config_from_db(db)
     data = payload.model_dump(exclude_none=True)
     for k, v in data.items():
         if k not in _email_config_stub:
@@ -223,11 +224,11 @@ def post_email_probar(payload: ProbarEmailRequest = Body(...), db: Session = Dep
 
     subject = (payload.subject or "").strip() or "Prueba de email - RapiCredit"
     body = (payload.mensaje or "").strip() or "Este es un correo de prueba enviado desde la configuración de email."
-    ok = send_email(to_emails=[destino], subject=subject, body_text=body)
+    ok, error_msg = send_email(to_emails=[destino], subject=subject, body_text=body)
     if not ok:
         raise HTTPException(
             status_code=502,
-            detail="No se pudo enviar el correo. Revisa servidor SMTP, puerto (587 o 465), TLS y contraseña de aplicación.",
+            detail=error_msg or "No se pudo enviar el correo. Revisa servidor SMTP, puerto (587 o 465), TLS y contraseña de aplicación.",
         )
     logger.info("Email de prueba enviado a %s", destino)
     return {

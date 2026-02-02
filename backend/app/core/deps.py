@@ -7,19 +7,40 @@ from typing import Optional
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.orm import Session
 
+from app.core.database import get_db
 from app.core.security import decode_token
+from app.core.user_utils import user_to_response
+from app.models.user import User
 from app.schemas.auth import UserResponse
 
 security = HTTPBearer(auto_error=True)
 
 
+def _fake_user_response(email: str) -> UserResponse:
+    """Usuario mínimo cuando no existe en BD (admin desde env)."""
+    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return UserResponse(
+        id=1,
+        email=email.lower(),
+        nombre="Admin",
+        apellido="Sistema",
+        cargo="Administrador",
+        is_admin=True,
+        is_active=True,
+        created_at=now,
+        updated_at=now,
+        last_login=now,
+    )
+
+
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
 ) -> UserResponse:
     """
-    Obtiene el usuario actual a partir del Bearer token.
-    Usar como dependencia en routers que requieran autenticación.
+    Obtiene el usuario actual a partir del Bearer token (desde BD o admin env).
     """
     if not credentials or not credentials.credentials:
         raise HTTPException(
@@ -39,29 +60,20 @@ def get_current_user(
             detail="Token inválido",
         )
     email = sub if "@" in sub else f"{sub}@admin.local"
-    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    return UserResponse(
-        id=1,
-        email=email.lower(),
-        nombre="Admin",
-        apellido="Sistema",
-        cargo="Administrador",
-        is_admin=True,
-        is_active=True,
-        created_at=now,
-        updated_at=now,
-        last_login=now,
-    )
+    u = db.query(User).filter(User.email == email).first()
+    if u and u.is_active:
+        return user_to_response(u)
+    return _fake_user_response(email)
 
 
 def get_current_user_optional(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(
         HTTPBearer(auto_error=False)
     ),
+    db: Session = Depends(get_db),
 ) -> Optional[UserResponse]:
     """
     Usuario actual si hay Bearer token válido; None en caso contrario.
-    Útil para endpoints que cambian comportamiento según si hay sesión.
     """
     if not credentials or not credentials.credentials:
         return None
@@ -72,16 +84,7 @@ def get_current_user_optional(
     if not sub:
         return None
     email = sub if "@" in sub else f"{sub}@admin.local"
-    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    return UserResponse(
-        id=1,
-        email=email.lower(),
-        nombre="Admin",
-        apellido="Sistema",
-        cargo="Administrador",
-        is_admin=True,
-        is_active=True,
-        created_at=now,
-        updated_at=now,
-        last_login=now,
-    )
+    u = db.query(User).filter(User.email == email).first()
+    if u and u.is_active:
+        return user_to_response(u)
+    return _fake_user_response(email)

@@ -9,6 +9,7 @@ from app.models.cuota import Cuota
 from app.models.pagos_whatsapp import PagosWhatsapp
 from app.models.configuracion import Configuracion
 from app.models.auditoria import Auditoria
+from app.models.user import User
 
-__all__ = ["Base", "Cliente", "Prestamo", "Ticket", "Cuota", "PagosWhatsapp", "Configuracion", "Auditoria"]
+__all__ = ["Base", "Cliente", "Prestamo", "Ticket", "Cuota", "PagosWhatsapp", "Configuracion", "Auditoria", "User"]
 

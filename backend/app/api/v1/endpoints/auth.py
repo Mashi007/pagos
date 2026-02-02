@@ -8,8 +8,10 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.database import get_db
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -17,6 +19,8 @@ from app.core.security import (
     get_password_hash,
     verify_password,
 )
+from app.core.user_utils import user_to_response
+from app.models.user import User
 from app.schemas.auth import (
     LoginRequest,
     LoginResponse,
@@ -83,20 +87,49 @@ def _check_login_rate_limit(ip: str) -> None:
 
 
 @router.post("/login", response_model=LoginResponse)
-def login(credentials: LoginRequest, request: Request):
-    """Login con email y contraseña (usuario admin desde env). Rate limit por IP."""
+def login(credentials: LoginRequest, request: Request, db: Session = Depends(get_db)):
+    """Login con email y contraseña. Primero busca usuario en BD; si no existe, usa admin desde env."""
     client_ip = _get_client_ip(request)
     _check_login_rate_limit(client_ip)
 
+    email = credentials.email.lower().strip()
+
+    # 1) Buscar usuario en BD
+    u = db.query(User).filter(User.email == email).first()
+    if u:
+        if not u.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Credenciales incorrectas",
+            )
+        if not verify_password(credentials.password, u.password_hash):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Credenciales incorrectas",
+            )
+        _LOGIN_ATTEMPTS[client_ip] = []
+        u.last_login = datetime.utcnow()
+        db.commit()
+        db.refresh(u)
+        user = user_to_response(u)
+        access_token = create_access_token(subject=user.email, extra={"email": user.email})
+        refresh_token = create_refresh_token(subject=user.email)
+        return LoginResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            token_type="bearer",
+            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            user=user,
+        )
+
+    # 2) Fallback: admin desde env
     if not settings.ADMIN_EMAIL or not settings.ADMIN_PASSWORD:
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Autenticación no configurada. Configure ADMIN_EMAIL y ADMIN_PASSWORD en el servidor.",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciales incorrectas",
         )
-    email = credentials.email.lower().strip()
     admin_email_normalized = settings.ADMIN_EMAIL.lower().strip()
     hashed = get_password_hash(settings.ADMIN_PASSWORD)
-    # Siempre ejecutar verificación de contraseña para mitigar timing (enumeración de emails)
     password_ok = verify_password(credentials.password, hashed)
     email_ok = email == admin_email_normalized
 
@@ -105,9 +138,7 @@ def login(credentials: LoginRequest, request: Request):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciales incorrectas",
         )
-    # Login exitoso: quitar los intentos recientes de esta IP (opcional, evita castigo tras acierto)
     _LOGIN_ATTEMPTS[client_ip] = []
-
     user = _fake_user(settings.ADMIN_EMAIL)
     access_token = create_access_token(subject=user.email, extra={"email": user.email})
     refresh_token = create_refresh_token(subject=user.email)
@@ -127,7 +158,7 @@ def logout():
 
 
 @router.post("/refresh")
-def refresh(body: RefreshRequest):
+def refresh(body: RefreshRequest, db: Session = Depends(get_db)):
     """Obtener nuevo access_token desde refresh_token."""
     payload = decode_token(body.refresh_token)
     if not payload or payload.get("type") != "refresh":
@@ -142,7 +173,11 @@ def refresh(body: RefreshRequest):
             detail="Token inválido",
         )
     email = sub if "@" in sub else f"{sub}@admin.local"
-    user = _fake_user(email)
+    u = db.query(User).filter(User.email == email).first()
+    if u and u.is_active:
+        user = user_to_response(u)
+    else:
+        user = _fake_user(email)
     access_token = create_access_token(subject=user.email, extra={"email": user.email})
     new_refresh = create_refresh_token(subject=user.email)
     return {
@@ -155,8 +190,11 @@ def refresh(body: RefreshRequest):
 
 
 @router.get("/me", response_model=UserResponse)
-def me(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)):
-    """Devuelve el usuario actual a partir del Bearer token."""
+def me(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    db: Session = Depends(get_db),
+):
+    """Devuelve el usuario actual a partir del Bearer token (desde BD o admin env)."""
     if not credentials or not credentials.credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -175,4 +213,7 @@ def me(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)):
             detail="Token inválido",
         )
     email = sub if "@" in sub else f"{sub}@admin.local"
+    u = db.query(User).filter(User.email == email).first()
+    if u and u.is_active:
+        return user_to_response(u)
     return _fake_user(email)

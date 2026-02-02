@@ -63,7 +63,8 @@ def _enviar_correos_items(
         if correo and "@" in correo:
             cco = tipo_cfg.get("cco") or []
             cc_list = [e.strip() for e in cco if e and isinstance(e, str) and "@" in e.strip()] if isinstance(cco, list) else []
-            if send_email([correo], asunto_base, cuerpo, cc_emails=cc_list or None):
+            ok, _ = send_email([correo], asunto_base, cuerpo, cc_emails=cc_list or None)
+            if ok:
                 enviados += 1
             else:
                 fallidos += 1
