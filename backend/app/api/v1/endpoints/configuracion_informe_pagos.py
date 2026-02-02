@@ -333,11 +333,13 @@ def put_informe_pagos_configuracion(
 ):
     """
     Actualizar configuración informe de pagos. Persiste en BD (clave informe_pagos_config).
-    Si envías google_credentials_json vacío o "***", no se sobrescribe el valor guardado.
+    - google_credentials_json: si envías "***" o no envías la clave, no se sobrescribe.
+      Si envías "" (cadena vacía), se limpia el campo (para usar solo OAuth).
     """
     sync_from_db()
     data = payload.model_dump(exclude_none=True)
-    if data.get("google_credentials_json") in ("", "***", None):
+    # Solo no sobrescribir cuando es "***" o la clave no viene; "" sí limpia el campo
+    if data.get("google_credentials_json") == "***":
         data.pop("google_credentials_json", None)
     update_from_api(data)
     valor = json.dumps(get_informe_pagos_config())

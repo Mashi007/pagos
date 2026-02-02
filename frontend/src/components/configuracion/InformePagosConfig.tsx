@@ -91,6 +91,8 @@ export function InformePagosConfig() {
       setConfig(data)
       if (data.google_credentials_json && data.google_credentials_json !== '***') {
         setCredencialesEdit(data.google_credentials_json)
+      } else if (data.google_credentials_json === '***') {
+        setCredencialesEdit('***')
       }
       if (data.google_oauth_client_secret && data.google_oauth_client_secret !== '***') {
         setOauthSecretEdit(data.google_oauth_client_secret)
@@ -115,8 +117,11 @@ export function InformePagosConfig() {
         google_sheets_id: config.google_sheets_id || undefined,
         destinatarios_informe_emails: config.destinatarios_informe_emails || undefined,
       }
-      if (credencialesEdit && credencialesEdit.trim() && credencialesEdit !== '***') {
-        payload.google_credentials_json = credencialesEdit.trim()
+      // Enviar siempre el campo: vacío para limpiar (usar solo OAuth), o el valor si se editó
+      if (credencialesEdit === '***') {
+        // No incluir para no sobrescribir el valor guardado
+      } else {
+        payload.google_credentials_json = (credencialesEdit ?? '').trim()
       }
       if (oauthSecretEdit && oauthSecretEdit.trim() && oauthSecretEdit !== '***') {
         payload.google_oauth_client_secret = oauthSecretEdit.trim()
