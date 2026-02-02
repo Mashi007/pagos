@@ -168,7 +168,7 @@
 
 /* Toggle switch: estilos del knob en CSS puro para evitar selector inválido (after:content-[''] etc.) */
 .toggle-switch-track {
-  @apply w-11 h-6 bg-gray-200 rounded-full peer;
+  @apply w-11 h-6 bg-gray-200 rounded-full;
 }
 .toggle-switch-track::after {
   content: "";
@@ -194,7 +194,7 @@
 }
 
 .toggle-switch-track-lg {
-  @apply w-14 h-7 bg-gray-200 rounded-full peer;
+  @apply w-14 h-7 bg-gray-200 rounded-full;
 }
 .toggle-switch-track-lg::after {
   content: "";

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   MessageSquare,
@@ -313,6 +313,40 @@ export function Comunicaciones({
     return mensajesCargados.get(conversacionActual.id) || []
   }, [conversacionActual, mensajesCargados])
 
+  // Refrescar historial de la conversación WhatsApp abierta cada 15 s (mensajes nuevos por webhook)
+  const refetchMensajesActuales = useCallback(() => {
+    if (!conversacionActual || conversacionActual.tipo !== 'whatsapp') return
+    comunicacionesService.listarMensajesWhatsApp(conversacionActual.contacto).then((res) => {
+      const items: ComunicacionUnificada[] = (res.mensajes || []).map((m: MensajeWhatsappItem) => ({
+        id: m.id,
+        tipo: 'whatsapp' as const,
+        from_contact: conversacionActual!.contacto,
+        to_contact: '',
+        subject: null,
+        body: m.body ?? '',
+        timestamp: m.timestamp,
+        direccion: m.direccion,
+        cliente_id: conversacionActual!.cliente_id,
+        ticket_id: null,
+        requiere_respuesta: false,
+        procesado: true,
+        respuesta_enviada: false,
+        creado_en: m.timestamp,
+      }))
+      setMensajesCargados(prev => {
+        const nuevoMap = new Map(prev)
+        nuevoMap.set(conversacionActual!.id, items)
+        return nuevoMap
+      })
+    }).catch(() => {})
+  }, [conversacionActual])
+
+  useEffect(() => {
+    if (!conversacionActual || conversacionActual.tipo !== 'whatsapp') return
+    const interval = setInterval(refetchMensajesActuales, 15000)
+    return () => clearInterval(interval)
+  }, [conversacionActual, refetchMensajesActuales])
+
   // Cargar tickets del cliente cuando se selecciona una conversación
   useEffect(() => {
     if (conversacionActual?.cliente_id) {
@@ -567,7 +601,16 @@ export function Comunicaciones({
             <h2 className="text-lg font-bold text-gray-900">Comunicaciones</h2>
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-500">Se actualiza cada 15 s</span>
-              <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={isLoading} className="hover:bg-blue-100">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  refetch()
+                  refetchMensajesActuales()
+                }}
+                disabled={isLoading}
+                className="hover:bg-blue-100"
+              >
                 <RefreshCw className={`h-4 w-4 text-blue-600 ${isLoading ? 'animate-spin' : ''}`} />
               </Button>
             </div>
