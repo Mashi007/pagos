@@ -166,4 +166,18 @@ En los logs del backend, cada caso en que **no** se digitaliza queda identificad
 
 **Resumen:** La imagen no se digitaliza si el flujo no está en "esperando_foto" con cédula, si falla la descarga, o si la IA no la acepta y es intento 1 o 2. Al tercer intento siempre se digitaliza.
 
+---
+
+## 8. Mismo número se contacta más de una vez al día
+
+Hay **una sola fila por teléfono** en `conversacion_cobranza` (campo `telefono` único). Tras **cada reporte completado** (foto aceptada o 3.er intento), esa misma fila se **reinicia**: `estado=esperando_cedula`, `cedula=None`, `nombre_cliente=None`, etc.
+
+Por tanto:
+
+- **Mismo número, mismo día, después de haber completado un reporte:** El siguiente mensaje recibe de nuevo la **bienvenida** y puede hacer un **segundo reporte** (cédula → confirmación → foto). No hay límite de “un reporte por número por día”: puede reportar varios pagos el mismo día.
+- **Mismo número, mismo día, sin haber completado:** Sigue en el mismo flujo (por ejemplo `esperando_foto`); los mensajes se procesan en orden (ej. intentos 1, 2, 3 de foto).
+- **Mismo número, tras más de 24 h sin escribir:** Se trata como **nuevo caso** (inactividad): se reinicia la conversación y recibe bienvenida de nuevo.
+
+En BD: cada reporte completado genera **una fila nueva** en `pagos_whatsapp` y `pagos_informe`; el mismo teléfono puede tener varias filas en un mismo día.
+
 Con esto puedes auditar el flujo paso a paso tanto en BD como en logs y en la UI de Comunicaciones.

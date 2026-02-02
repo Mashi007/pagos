@@ -118,6 +118,64 @@ A partir de ahí, cuando el bot reciba una foto de papeleta (tras cédula y conf
 
 ---
 
+## Configuración por caso (página Informe pagos)
+
+En **Configuración → Informe pagos** (`/pagos/configuracion?tab=informe-pagos`) puedes usar **solo una** de las dos formas de credenciales: **cuenta de servicio (JSON)** o **OAuth**. No hace falta rellenar las dos.
+
+---
+
+### Caso 1: Solo cuenta de servicio (JSON)
+
+**Qué llenar en la página:**
+
+| Campo en la página | Qué poner |
+|--------------------|-----------|
+| **ID carpeta Google Drive** | ID de la carpeta (de la URL `.../folders/ESTE_ID`). Ej: `1ABC...xyz`. |
+| **Credenciales Google (cuenta de servicio JSON)** | Todo el contenido del archivo `.json` descargado de Google Cloud (cuenta de servicio → Claves → JSON). Empieza por `{"type":"service_account",...}`. |
+| **ID Google Sheet** *(opcional)* | Si quieres informe en Sheets: ID de la hoja (de la URL `.../d/ESTE_ID/edit`). |
+| **Destinatarios del informe (emails)** *(opcional)* | Emails separados por coma que reciben el link a las 6:00, 13:00 y 16:30. Ej: `a@ejemplo.com, b@ejemplo.com`. |
+
+**Dejar vacío:** Client ID (OAuth), Client Secret (OAuth). No uses el botón "Conectar con Google".
+
+**Después:** Pulsa **Guardar configuración** y luego **Verificar ahora**. Drive, Sheets y OCR deben pasar a Conectado si la carpeta y la hoja están compartidas con el `client_email` del JSON (rol Editor).
+
+---
+
+### Caso 2: Solo OAuth (sin JSON de cuenta de servicio)
+
+**En Google Cloud Console (antes):**
+
+1. **APIs y servicios → Credenciales → Crear credenciales → ID de cliente de OAuth** (tipo "Aplicación web").
+2. En **URIs de redirección autorizados** añade exactamente esta URL (usando la URL base de tu backend):
+   - Si el backend es `https://rapicredit.onrender.com`:  
+     `https://rapicredit.onrender.com/api/v1/configuracion/informe-pagos/google/callback`
+   - Si usas otro dominio (ej. `https://pagos-xxx.onrender.com`):  
+     `https://pagos-xxx.onrender.com/api/v1/configuracion/informe-pagos/google/callback`
+3. Copia el **Client ID** y el **Client secret** del cliente OAuth.
+
+**Qué llenar en la página:**
+
+| Campo en la página | Qué poner |
+|--------------------|-----------|
+| **ID carpeta Google Drive** | ID de la carpeta donde se guardan las papeletas (de la URL de la carpeta). Esa carpeta debe estar en la **cuenta de Google** con la que vas a hacer "Conectar con Google". |
+| **Client ID (OAuth)** | El Client ID del cliente OAuth. Ej: `123456789-xxx.apps.googleusercontent.com`. |
+| **Client Secret (OAuth)** | El Client secret del cliente OAuth. |
+| **ID Google Sheet** *(opcional)* | ID de la hoja de informe. La hoja debe ser de la **misma cuenta de Google** que autorices. |
+| **Destinatarios del informe (emails)** *(opcional)* | Emails separados por coma. |
+
+**Dejar vacío:** No pegues nada en "Credenciales Google (cuenta de servicio JSON)".
+
+**Pasos:**
+
+1. Guarda la configuración (**Guardar configuración**).
+2. Pulsa **Conectar con Google (OAuth)**. Se abrirá Google para que autorices con una cuenta de Google (esa cuenta debe ser la dueña de la carpeta y la hoja, o tenerlas compartidas con ella).
+3. Tras autorizar, volverás a la página con un mensaje de éxito; el sistema habrá guardado el token OAuth.
+4. Pulsa **Verificar ahora**. Drive, Sheets y OCR deben pasar a Conectado.
+
+Si "Verificar ahora" sigue mostrando "Sin credenciales" o "Token OAuth expirado...", comprueba que la **URI de redirección** en Google Cloud coincida exactamente con la del backend (sin barra final, con `/api/v1/configuracion/informe-pagos/google/callback`).
+
+---
+
 ## Confirmación: ¿a qué cuentas está conectado?
 
 **No está conectado a cuentas personales de Google** (no hay login con tu Gmail).  

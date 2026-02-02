@@ -178,6 +178,37 @@ export function InformePagosConfig() {
             <p className="text-xs text-muted-foreground">
               Se comprueba con llamadas reales a Drive, Sheets y Vision (OCR). Sin indicios aquí no hay conexión.
             </p>
+            {/* Resumen: Conexión OK / no OK */}
+            {estado ? (
+              <div
+                className={`flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold ${
+                  estado.drive.conectado && estado.sheets.conectado && estado.ocr.conectado
+                    ? 'bg-green-100 text-green-800 dark:bg-green-950/50 dark:text-green-300'
+                    : 'bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-300'
+                }`}
+              >
+                {estado.drive.conectado && estado.sheets.conectado && estado.ocr.conectado ? (
+                  <>
+                    <CheckCircle className="h-5 w-5 shrink-0" />
+                    Conexión OK — Drive, Sheets y OCR operativos.
+                  </>
+                ) : (
+                  <>
+                    <AlertCircle className="h-5 w-5 shrink-0" />
+                    Conexión no OK — Revisa credenciales, ID de carpeta/hoja y comparte con la cuenta.
+                  </>
+                )}
+              </div>
+            ) : verificandoEstado ? (
+              <div className="flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium bg-muted text-muted-foreground">
+                <RefreshCw className="h-5 w-5 shrink-0 animate-spin" />
+                Verificando conexiones…
+              </div>
+            ) : (
+              <div className="rounded-lg px-4 py-3 text-sm text-muted-foreground bg-muted/60">
+                Sin verificar. Guarda la configuración y pulsa &quot;Verificar ahora&quot; para ver si la conexión es OK.
+              </div>
+            )}
             <div className="grid gap-2 sm:grid-cols-3">
               {estado ? (
                 <>
