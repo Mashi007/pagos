@@ -423,6 +423,15 @@ function sendSpaIndex(req, res) {
     if (!html.includes('<base ')) {
       html = html.replace(/<head[^>]*>/, (m) => m + baseTag);
     }
+    // Si el HTML sigue con script de dev (/src/main.tsx), sustituir por el entry real para que cargue la app
+    if (html.includes('/src/main.tsx') || html.includes('/src/main.jsx')) {
+      const entryJs = (existsSync(assetsPath) && readdirSync(assetsPath).find((f) => f.startsWith('index-') && f.endsWith('.js'))) || null;
+      if (entryJs) {
+        html = html
+          .replace(/src="[^"]*\/src\/main\.(tsx|jsx)"/, `src="${FRONTEND_BASE}/assets/${entryJs}"`)
+          .replace(/src='[^']*\/src\/main\.(tsx|jsx)'/, `src='${FRONTEND_BASE}/assets/${entryJs}'`);
+      }
+    }
     // Siempre corregir rutas sin base: "/assets/ -> /pagos/assets/ para evitar 302 (build puede no aplicar base)
     // Incluir comillas simples por si el build emite src='/assets/...'
     html = html

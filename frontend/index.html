@@ -12,10 +12,10 @@
     <title>RAPICREDIT - Sistema de Préstamos y Cobranza</title>
     <!-- Estilos críticos inline para prevenir FOUC (Flash of Unstyled Content) -->
     <style>
-      /* Ocultar contenido hasta que los estilos estén cargados */
+      /* Mostrar #root en cuanto haya contenido; solo ocultar brevemente para evitar FOUC */
       #root:not(.styles-loaded) {
-        visibility: hidden;
-        opacity: 0;
+        visibility: visible;
+        opacity: 1;
       }
       /* Estilos básicos para evitar layout shift */
       body {
@@ -28,10 +28,21 @@
         min-height: 100vh;
         transition: opacity 0.2s ease-in;
       }
+      /* Placeholder visible mientras carga la app; React lo reemplaza al montar */
+      .app-loading-placeholder {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        padding: 1rem;
+        text-align: center;
+        color: #1e40af;
+        font-size: 1.125rem;
+      }
     </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div class="app-loading-placeholder" aria-live="polite">Cargando RapiCredit…</div></div>
     <!-- Script para suprimir warnings de CSS conocidos (selectores malformados) -->
     <!-- IMPORTANTE: Este script debe ejecutarse ANTES de cualquier otro para interceptar warnings tempranos -->
     <script>

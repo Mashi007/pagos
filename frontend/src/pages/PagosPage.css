@@ -35,3 +35,75 @@
   border-radius: 6px;
   margin-bottom: 1rem;
 }
+
+.pagos-section {
+  margin-bottom: 2rem;
+}
+
+.pagos-section-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 1rem 0;
+}
+
+.pagos-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 1rem;
+}
+
+.pagos-card {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.pagos-card--highlight {
+  background: #eff6ff;
+  border-color: #3b82f6;
+}
+
+.pagos-card-label {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.pagos-card-value {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.pagos-estados {
+  margin-top: 1.5rem;
+}
+
+.pagos-estados-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 0.5rem 0;
+}
+
+.pagos-estados-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.pagos-estados-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.pagos-empty {
+  color: #6b7280;
+  margin: 0;
+}
