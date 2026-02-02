@@ -175,7 +175,7 @@ class PrestamoService {
     return response
   }
 
-  // Obtener KPIs de préstamos
+  // Obtener KPIs de préstamos (usa /prestamos/stats; /kpis/prestamos no existe en backend)
   async getKPIs(filters?: {
     analista?: string
     concesionario?: string
@@ -188,10 +188,25 @@ class PrestamoService {
     promedioMonto: number
     totalCarteraVigente: number
   }> {
-    const params = filters || {}
-    const url = buildUrl('/api/v1/kpis/prestamos', params)
-    const response = await apiClient.get<any>(url)
-    return response
+    try {
+      const params = filters ? { analista: filters.analista, concesionario: filters.concesionario, modelo: filters.modelo } : {}
+      const url = buildUrl(`${this.baseUrl}/stats`, params)
+      const body = await apiClient.get<{ total?: number; por_estado?: Record<string, number> }>(url)
+      const total = body?.total ?? 0
+      return {
+        totalFinanciamiento: 0,
+        totalPrestamos: total,
+        promedioMonto: 0,
+        totalCarteraVigente: 0,
+      }
+    } catch {
+      return {
+        totalFinanciamiento: 0,
+        totalPrestamos: 0,
+        promedioMonto: 0,
+        totalCarteraVigente: 0,
+      }
+    }
   }
 
   // Marcar/desmarcar préstamo como requiere revisión

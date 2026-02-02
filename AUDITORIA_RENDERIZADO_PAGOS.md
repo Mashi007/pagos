@@ -110,3 +110,22 @@ HEAD https://rapicredit.onrender.com/api/v1/configuracion/logo/logo-bcb7da1c.png
 - **Logo que no se muestra:** Causado por **401** en HEAD del logo. La página sí renderiza; el bloqueo es que el frontend considera “logo no encontrado” y muestra el aviso. Con el backend devolviendo 200/404 para GET/HEAD logo y el frontend usando URL relativa + `credentials: 'same-origin'`, el logo debería mostrarse cuando exista.
 - **Selector CSS:** Afecta solo a un conjunto de reglas; no suele impedir que la página se pinte. Conviene localizar y corregir el selector en el CSS generado.
 - **Resto de la página:** Las XHR de configuración general, AI, documentos, KPIs y notificaciones responden 200; la carga de datos y el renderizado de la vista Configuración (incl. tab AI) deberían ser correctos una vez resuelto el 401 del logo y revisado el CSS si se observan bloques sin estilo.
+
+---
+
+## 9. /pagos/cobranzas — "no renderiza"
+
+**URL:** `https://rapicredit.onrender.com/pagos/cobranzas`
+
+**Cambios realizados (2025-02-02):**
+
+1. **server.js**
+   - Ruta explícita `GET /pagos/cobranzas` que sirve `index.html` (igual que `/pagos/chat-ai` y `/pagos/notificaciones`).
+   - Redirección `GET /cobranzas` → `302 /pagos/cobranzas`.
+   - Redirección `GET /pagos/cobranzas/` → `302 /pagos/cobranzas` (sin barra final).
+
+2. **Si sigue sin verse contenido, comprobar:**
+   - **Auth:** Cobranzas está detrás de `SimpleProtectedRoute`; sin sesión se redirige a login.
+   - **API:** La página llama a resumen, clientes atrasados y por analista. En Render el frontend debe tener `API_BASE_URL` apuntando al backend; si no, las peticiones `/api/*` fallan y la vista puede quedar en loading o con toasts de error.
+   - **Chunks 404:** El build usa `base: '/pagos/'` en vite.config.ts; si aún hay 404 en `/assets/*`, revisar que el HTML servido tenga rutas con prefijo `/pagos/assets/` (sendSpaIndex ya reescribe).
+   - **Pantalla en blanco:** `#root` está oculto hasta añadir `styles-loaded` (máx. 2 s). Si hay error de JS antes, revisar consola (F12).
