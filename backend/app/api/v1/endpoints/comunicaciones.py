@@ -21,7 +21,7 @@ router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 def _digits(s: str) -> str:
-    return re.sub(r"\D", "", (s or "").strip()
+    return re.sub(r"\D", "", (s or "").strip())
 
 
 def _cliente_id_por_telefono(db: Session, telefono: str) -> Optional[int]:
