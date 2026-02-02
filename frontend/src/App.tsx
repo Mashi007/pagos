@@ -1,4 +1,4 @@
-import { useEffect, useState, lazy, Suspense } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -24,48 +24,12 @@ function RootLayoutWrapper() {
   )
 }
 
-// Helper: ante fallo de carga de chunk (404 tras deploy), recargar página para obtener assets actualizados.
-// Tipado explícito para evitar TS2322: ComponentType<never> no asignable a ComponentType<unknown>.
-function lazyWithRetry(
-  factory: () => Promise<{ default: React.ComponentType<unknown> }>
-): React.LazyExoticComponent<React.ComponentType<unknown>> {
-  return lazy(() =>
-    factory().catch((err: unknown) => {
-      const msg = (err && typeof (err as Error).message === 'string'
-        ? (err as Error).message
-        : err != null ? String(err) : ''
-      ).toLowerCase()
-      const isChunkLoadError =
-        msg.indexOf('dynamically imported module') !== -1 ||
-        msg.indexOf('error loading dynamically imported') !== -1 ||
-        msg.indexOf('failed to fetch') !== -1 ||
-        msg.indexOf('error loading') !== -1 ||
-        msg.indexOf('loading dynamically imported') !== -1 ||
-        msg.indexOf('imported module') !== -1 ||
-        msg.indexOf('/assets/') !== -1 ||
-        (msg.indexOf('chunk') !== -1 && msg.indexOf('load') !== -1)
-      if (isChunkLoadError && typeof window !== 'undefined') {
-        const base = window.location.pathname + window.location.search
-        const sep = base.indexOf('?') !== -1 ? '&' : '?'
-        window.location.replace(base + sep + '_=' + Date.now())
-        return new Promise<{ default: React.ComponentType<unknown> }>(() => {}) // no resolver para no renderizar estado roto
-      }
-      throw err
-    })
-  ) as React.LazyExoticComponent<React.ComponentType<unknown>>
-}
-
 // Constantes de configuración
 const ANIMATION_DURATION = 0.3
 
-// Pages - Welcome y Login siguen lazy (pantallas pre-auth). Resto import directo para evitar 404 de chunks en Render.
-// Aserción de tipo para evitar ComponentType<never> en build estricto (Render).
-const Welcome = lazyWithRetry(() =>
-  import('./pages/Welcome').then(m => ({ default: m.Welcome as React.ComponentType<unknown> }))
-)
-const Login = lazyWithRetry(() =>
-  import('./pages/Login').then(m => ({ default: m.Login as React.ComponentType<unknown> }))
-)
+// Pages - Welcome y Login import directo para evitar React #321 (Invalid hook call) en chunks lazy con framer-motion/context.
+import { Welcome } from './pages/Welcome'
+import { Login } from './pages/Login'
 import DashboardMenu from './pages/DashboardMenu'
 import Configuracion from './pages/Configuracion'
 import Plantillas from './pages/Plantillas'
