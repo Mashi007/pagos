@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.whatsapp_config_holder import sync_from_db as whatsapp_sync_from_db
 from app.models.configuracion import Configuracion
 
 logger = logging.getLogger(__name__)
@@ -117,6 +118,7 @@ def put_whatsapp_configuracion(payload: WhatsAppConfigUpdate = Body(...), db: Se
             continue
         _whatsapp_stub[k] = v
     _save_whatsapp_to_db(db)
+    whatsapp_sync_from_db()
     logger.info("Configuración WhatsApp actualizada y persistida en BD (campos: %s)", list(data.keys()))
     out = _whatsapp_stub.copy()
     if out.get("access_token"):

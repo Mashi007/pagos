@@ -61,11 +61,12 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 
 @app.on_event("startup")
 def on_startup():
-    """Crear tablas en la BD si no existen. Inicializar config de email desde .env."""
+    """Crear tablas en la BD si no existen. Inicializar config de email desde .env. Iniciar scheduler de reportes cobranzas."""
     from sqlalchemy import text
     from app.core.database import engine
     from app.models import Base, Cliente, Prestamo, Ticket, Cuota, PagosWhatsapp, Configuracion, Auditoria  # noqa: F401 - registran tablas en Base.metadata
     from app.core.email_config_holder import init_from_settings as init_email_config
+    from app.core.scheduler import start_scheduler
 
     init_email_config()
     logger.info("Configuración de email (SMTP/tickets) inicializada desde variables de entorno.")
@@ -81,6 +82,22 @@ def on_startup():
         logger.info("Tabla clientes: conectada y accesible.")
     except Exception as e:
         logger.warning("Tabla clientes: verificación fallida (puede ser tabla vacía o recién creada): %s", e)
+
+    # Scheduler: reportes de cobranzas a las 6:00 y 13:00 (America/Caracas)
+    try:
+        start_scheduler()
+    except Exception as e:
+        logger.exception("No se pudo iniciar el scheduler de reportes cobranzas: %s", e)
+
+
+@app.on_event("shutdown")
+def on_shutdown():
+    """Detener scheduler al cerrar la aplicación."""
+    try:
+        from app.core.scheduler import stop_scheduler
+        stop_scheduler()
+    except Exception as e:
+        logger.warning("Al detener scheduler: %s", e)
 
 
 @app.get("/")

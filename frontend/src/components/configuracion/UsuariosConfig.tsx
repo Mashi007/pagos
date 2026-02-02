@@ -23,6 +23,7 @@ import {
 import { userService, type UserCreate, type UserUpdate } from '../../services/userService'
 import { User } from '../../types'
 import { toast } from 'react-hot-toast'
+import { apiClient } from '../../services/api'
 
 export default function UsuariosConfig() {
   const [usuarios, setUsuarios] = useState<User[]>([])
@@ -38,40 +39,32 @@ export default function UsuariosConfig() {
   // Función para validar email con el sistema
   const validateEmailWithSystem = async (email: string) => {
     try {
-      const response = await fetch('/api/v1/validadores/validar-campo', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('access_token') || sessionStorage.getItem('access_token')}`
-        },
-        body: JSON.stringify({
-          campo: 'email',
-          valor: email,
-          pais: 'VENEZUELA'
-        })
+      const { data: result } = await apiClient.post<{
+        validacion?: { valido: boolean; valor_formateado?: string; error?: string; sugerencia?: string }
+      }>('/api/v1/validadores/validar-campo', {
+        campo: 'email',
+        valor: email,
+        pais: 'VENEZUELA'
       })
 
-      if (response.ok) {
-        const result = await response.json()
+      if (result) {
         if (result.validacion && result.validacion.valido) {
           return {
             isValid: true,
             formattedValue: result.validacion.valor_formateado
           }
-        } else {
-          // Mostrar error y sugerencia si está disponible
-          const errorMsg = result.validacion?.error || 'Formato de email inválido'
-          const sugerencia = result.validacion?.sugerencia || ''
-          const mensajeCompleto = sugerencia ? `${errorMsg}. ${sugerencia}` : errorMsg
-
-          return {
-            isValid: false,
-            message: mensajeCompleto
-          }
+        }
+        // Mostrar error y sugerencia si está disponible
+        const errorMsg = result.validacion?.error || 'Formato de email inválido'
+        const sugerencia = result.validacion?.sugerencia || ''
+        const mensajeCompleto = sugerencia ? `${errorMsg}. ${sugerencia}` : errorMsg
+        return {
+          isValid: false,
+          message: mensajeCompleto
         }
       }
-    } catch (error) {
-      console.warn('Error validando email con backend, usando validación local:', error)
+    } catch {
+      // Endpoint no disponible o error de red: usar validación local
     }
 
     // Fallback: validación local

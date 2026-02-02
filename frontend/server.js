@@ -396,10 +396,8 @@ function sendSpaIndex(req, res) {
   }
   try {
     let html = readFileSync(indexPath, 'utf8');
-    // Corregir rutas sin base: /assets/ -> /pagos/assets/ para que no haya 302 en cada recurso
-    if (!html.includes(FRONTEND_BASE + '/assets/')) {
-      html = html.replace(/src="\/assets\//g, `src="${FRONTEND_BASE}/assets/`).replace(/href="\/assets\//g, `href="${FRONTEND_BASE}/assets/`);
-    }
+    // Siempre corregir rutas sin base: "/assets/ -> /pagos/assets/ para evitar 302 (build puede no aplicar base)
+    html = html.replace(/src="\/assets\//g, `src="${FRONTEND_BASE}/assets/`).replace(/href="\/assets\//g, `href="${FRONTEND_BASE}/assets/`);
     res.type('html').send(html);
   } catch (err) {
     console.error(`❌ Error sirviendo index.html para ${req.method} ${req.path}:`, err);

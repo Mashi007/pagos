@@ -1,12 +1,14 @@
 """
 Endpoints de cobranzas. Datos reales desde BD (Cuota, Prestamo, Cliente).
 Estructura de respuestas compatible con cobranzasService.ts.
+Informes: JSON, PDF y Excel generados con datos reales.
 """
+import io
 from datetime import date, datetime, timedelta
 from typing import Any, List, Optional
 
 from fastapi import APIRouter, Body, Depends, Query
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -26,6 +28,241 @@ def _safe_float(val) -> float:
         return float(val)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _generar_excel_clientes_atrasados(clientes: List[dict], resumen: dict) -> bytes:
+    """Genera Excel para informe clientes atrasados."""
+    import openpyxl
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Clientes Atrasados"
+    ws.append(["Cédula", "Nombres", "Teléfono", "Email", "Estado"])
+    for c in clientes:
+        ws.append([
+            c.get("cedula") or "",
+            c.get("nombres") or "",
+            c.get("telefono") or "",
+            c.get("email") or "",
+            c.get("estado") or "",
+        ])
+    ws2 = wb.create_sheet("Resumen")
+    ws2.append(["Indicador", "Valor"])
+    ws2.append(["Total cuotas vencidas", resumen.get("total_cuotas_vencidas", 0)])
+    ws2.append(["Monto total adeudado", resumen.get("monto_total_adeudado", 0)])
+    ws2.append(["Clientes atrasados", resumen.get("clientes_atrasados", 0)])
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def _generar_excel_rendimiento_analista(datos: List[dict]) -> bytes:
+    """Genera Excel para informe rendimiento por analista."""
+    import openpyxl
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Rendimiento por Analista"
+    ws.append(["Analista", "Cantidad clientes", "Monto total"])
+    for r in datos:
+        ws.append([
+            r.get("analista") or "",
+            r.get("cantidad_clientes", 0),
+            r.get("monto_total", 0),
+        ])
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def _generar_excel_montos_periodo(datos: List[dict]) -> bytes:
+    """Genera Excel para informe montos vencidos por período."""
+    import openpyxl
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Montos por período"
+    ws.append(["Mes", "Mes (display)", "Cantidad cuotas", "Monto total"])
+    for r in datos:
+        ws.append([
+            r.get("mes") or "",
+            r.get("mes_display") or "",
+            r.get("cantidad_cuotas", 0),
+            r.get("monto_total", 0),
+        ])
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def _generar_excel_antiguedad_saldos(datos: List[dict]) -> bytes:
+    """Genera Excel para informe antigüedad de saldos (puede estar vacío)."""
+    import openpyxl
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Antigüedad de saldos"
+    ws.append(["Rango", "Cantidad cuotas", "Monto total", "Porcentaje"])
+    for r in (datos or []):
+        ws.append([
+            r.get("rango") or "",
+            r.get("cantidad_cuotas", 0),
+            r.get("monto_total", 0),
+            r.get("porcentaje", 0),
+        ])
+    if not datos:
+        ws.append(["Sin datos", "", "", ""])
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def _generar_excel_resumen_ejecutivo(resumen: dict) -> bytes:
+    """Genera Excel para resumen ejecutivo."""
+    import openpyxl
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Resumen ejecutivo"
+    ws.append(["Indicador", "Valor"])
+    ws.append(["Total cuotas vencidas", resumen.get("total_cuotas_vencidas", 0)])
+    ws.append(["Monto total adeudado", resumen.get("monto_total_adeudado", 0)])
+    ws.append(["Clientes atrasados", resumen.get("clientes_atrasados", 0)])
+    if resumen.get("diagnosticos"):
+        ws.append([])
+        ws.append(["Diagnóstico"])
+        for k, v in resumen["diagnosticos"].items():
+            ws.append([str(k), str(v)])
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def _generar_pdf_clientes_atrasados(clientes: List[dict], resumen: dict) -> bytes:
+    """Genera PDF para informe clientes atrasados."""
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import letter
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=letter)
+    styles = getSampleStyleSheet()
+    story = []
+    story.append(Paragraph("Informe: Clientes Atrasados", styles["Title"]))
+    story.append(Spacer(1, 12))
+    story.append(Paragraph("Resumen", styles["Heading2"]))
+    resumen_data = [
+        ["Total cuotas vencidas", str(resumen.get("total_cuotas_vencidas", 0))],
+        ["Monto total adeudado", str(resumen.get("monto_total_adeudado", 0))],
+        ["Clientes atrasados", str(resumen.get("clientes_atrasados", 0))],
+    ]
+    t1 = Table(resumen_data)
+    t1.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.grey), ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke)]))
+    story.append(t1)
+    story.append(Spacer(1, 16))
+    story.append(Paragraph("Detalle de clientes", styles["Heading2"]))
+    if clientes:
+        headers = ["Cédula", "Nombres", "Teléfono", "Email"]
+        rows = [headers] + [[str(c.get(k, "")) for k in ["cedula", "nombres", "telefono", "email"]] for c in clientes]
+        t2 = Table(rows)
+        t2.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.grey), ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke), ("FONTSIZE", (0, 0), (-1, -1), 8)]))
+        story.append(t2)
+    else:
+        story.append(Paragraph("No hay clientes atrasados.", styles["Normal"]))
+    doc.build(story)
+    return buf.getvalue()
+
+
+def _generar_pdf_rendimiento_analista(datos: List[dict]) -> bytes:
+    """Genera PDF para informe rendimiento por analista."""
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import letter
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=letter)
+    styles = getSampleStyleSheet()
+    story = [Paragraph("Informe: Rendimiento por Analista", styles["Title"]), Spacer(1, 12)]
+    if datos:
+        rows = [["Analista", "Cantidad clientes", "Monto total"]] + [[str(r.get("analista", "")), str(r.get("cantidad_clientes", 0)), str(r.get("monto_total", 0))] for r in datos]
+        t = Table(rows)
+        t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.grey), ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke)]))
+        story.append(t)
+    else:
+        story.append(Paragraph("No hay datos.", styles["Normal"]))
+    doc.build(story)
+    return buf.getvalue()
+
+
+def _generar_pdf_montos_periodo(datos: List[dict]) -> bytes:
+    """Genera PDF para informe montos vencidos por período."""
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import letter
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=letter)
+    styles = getSampleStyleSheet()
+    story = [Paragraph("Informe: Montos vencidos por período", styles["Title"]), Spacer(1, 12)]
+    if datos:
+        rows = [["Mes", "Cantidad cuotas", "Monto total"]] + [[str(r.get("mes_display") or r.get("mes", "")), str(r.get("cantidad_cuotas", 0)), str(r.get("monto_total", 0))] for r in datos]
+        t = Table(rows)
+        t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.grey), ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke)]))
+        story.append(t)
+    else:
+        story.append(Paragraph("No hay datos.", styles["Normal"]))
+    doc.build(story)
+    return buf.getvalue()
+
+
+def _generar_pdf_antiguedad_saldos(datos: List[dict]) -> bytes:
+    """Genera PDF para informe antigüedad de saldos."""
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import letter
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=letter)
+    styles = getSampleStyleSheet()
+    story = [Paragraph("Informe: Antigüedad de saldos", styles["Title"]), Spacer(1, 12)]
+    if datos:
+        rows = [["Rango", "Cantidad cuotas", "Monto total", "Porcentaje"]] + [[str(r.get("rango", "")), str(r.get("cantidad_cuotas", 0)), str(r.get("monto_total", 0)), str(r.get("porcentaje", 0))] for r in datos]
+        t = Table(rows)
+        t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.grey), ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke)]))
+        story.append(t)
+    else:
+        story.append(Paragraph("No hay datos.", styles["Normal"]))
+    doc.build(story)
+    return buf.getvalue()
+
+
+def _generar_pdf_resumen_ejecutivo(resumen: dict) -> bytes:
+    """Genera PDF para resumen ejecutivo."""
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import letter
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=letter)
+    styles = getSampleStyleSheet()
+    story = [Paragraph("Resumen ejecutivo - Cobranzas", styles["Title"]), Spacer(1, 12)]
+    rows = [
+        ["Total cuotas vencidas", str(resumen.get("total_cuotas_vencidas", 0))],
+        ["Monto total adeudado", str(resumen.get("monto_total_adeudado", 0))],
+        ["Clientes atrasados", str(resumen.get("clientes_atrasados", 0))],
+    ]
+    t = Table(rows)
+    t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.grey), ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke)]))
+    story.append(t)
+    if resumen.get("diagnosticos"):
+        story.append(Spacer(1, 12))
+        story.append(Paragraph("Diagnóstico", styles["Heading2"]))
+        diag = resumen["diagnosticos"]
+        rows2 = [[str(k), str(v)] for k, v in diag.items()]
+        t2 = Table(rows2)
+        story.append(t2)
+    doc.build(story)
+    return buf.getvalue()
+
+
+def _nombre_archivo_informe(slug: str, ext: str) -> str:
+    """Nombre de archivo para descarga: informe_<slug>_YYYY-MM-DD.<ext>."""
+    return f"informe_{slug}_{date.today().isoformat()}.{ext}"
 
 
 # ---------------------------------------------------------------------------
@@ -80,6 +317,15 @@ def get_diagnostico(db: Session = Depends(get_db)):
             "cuotas_perdidas_por_user_admin": 0,
         },
     }
+
+
+def ejecutar_actualizacion_reportes(db: Session) -> dict[str, Any]:
+    """
+    Ejecuta la lógica de actualización de reportes de cobranzas (resumen + diagnóstico).
+    Usado por el scheduler a las 6:00 y 13:00. Retorna el resumen para logging.
+    """
+    resumen = get_resumen(incluir_admin=False, incluir_diagnostico=True, db=db)
+    return resumen
 
 
 def _diagnostico_desde_bd(db: Session) -> dict[str, Any]:
@@ -290,7 +536,7 @@ def get_montos_por_mes(
 
 
 # ---------------------------------------------------------------------------
-# Informes (JSON desde BD; PDF/Excel vacío)
+# Informes (JSON, PDF y Excel desde BD)
 # ---------------------------------------------------------------------------
 
 @router.get("/informes/clientes-atrasados")
@@ -302,14 +548,28 @@ def get_informe_clientes_atrasados(
     db: Session = Depends(get_db),
 ):
     """Informe clientes atrasados desde BD. formato=json|pdf|excel."""
-    if formato in ("pdf", "excel"):
-        return Response(status_code=200, content=b"", media_type="application/octet-stream")
     clientes = get_clientes_atrasados(
         dias_retraso_min=dias_retraso_min,
         dias_retraso_max=dias_retraso_max,
         db=db,
     )
     resumen = get_resumen(incluir_diagnostico=False, db=db)
+    if formato == "excel":
+        content = _generar_excel_clientes_atrasados(clientes, resumen)
+        filename = _nombre_archivo_informe("clientes_atrasados", "xlsx")
+        return Response(
+            content=content,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+    if formato == "pdf":
+        content = _generar_pdf_clientes_atrasados(clientes, resumen)
+        filename = _nombre_archivo_informe("clientes_atrasados", "pdf")
+        return Response(
+            content=content,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
     return {"clientes": clientes, "resumen": resumen}
 
 
@@ -318,9 +578,25 @@ def get_informe_rendimiento_analista(
     formato: str = Query("json"),
     db: Session = Depends(get_db),
 ):
-    if formato in ("pdf", "excel"):
-        return Response(status_code=200, content=b"", media_type="application/octet-stream")
-    return get_cobranzas_por_analista(db=db)
+    """Informe rendimiento por analista. formato=json|pdf|excel."""
+    datos = get_cobranzas_por_analista(db=db)
+    if formato == "excel":
+        content = _generar_excel_rendimiento_analista(datos)
+        filename = _nombre_archivo_informe("rendimiento_analista", "xlsx")
+        return Response(
+            content=content,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+    if formato == "pdf":
+        content = _generar_pdf_rendimiento_analista(datos)
+        filename = _nombre_archivo_informe("rendimiento_analista", "pdf")
+        return Response(
+            content=content,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+    return datos
 
 
 @router.get("/informes/montos-vencidos-periodo")
@@ -330,23 +606,71 @@ def get_informe_montos_periodo(
     formato: Optional[str] = Query("json"),
     db: Session = Depends(get_db),
 ):
-    if formato in ("pdf", "excel"):
-        return Response(status_code=200, content=b"", media_type="application/octet-stream")
-    return get_montos_por_mes(db=db)
+    """Informe montos vencidos por período. formato=json|pdf|excel."""
+    datos = get_montos_por_mes(db=db)
+    if formato == "excel":
+        content = _generar_excel_montos_periodo(datos)
+        filename = _nombre_archivo_informe("montos_periodo", "xlsx")
+        return Response(
+            content=content,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+    if formato == "pdf":
+        content = _generar_pdf_montos_periodo(datos)
+        filename = _nombre_archivo_informe("montos_periodo", "pdf")
+        return Response(
+            content=content,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+    return datos
 
 
 @router.get("/informes/antiguedad-saldos")
 def get_informe_antiguedad_saldos(formato: str = Query("json"), db: Session = Depends(get_db)):
-    if formato in ("pdf", "excel"):
-        return Response(status_code=200, content=b"", media_type="application/octet-stream")
-    return []
+    """Informe antigüedad de saldos. formato=json|pdf|excel. JSON devuelve lista (puede estar vacía)."""
+    datos: List[dict] = []  # Sin consulta específica de rangos por ahora; estructura lista vacía
+    if formato == "excel":
+        content = _generar_excel_antiguedad_saldos(datos)
+        filename = _nombre_archivo_informe("antiguedad_saldos", "xlsx")
+        return Response(
+            content=content,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+    if formato == "pdf":
+        content = _generar_pdf_antiguedad_saldos(datos)
+        filename = _nombre_archivo_informe("antiguedad_saldos", "pdf")
+        return Response(
+            content=content,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+    return datos
 
 
 @router.get("/informes/resumen-ejecutivo")
 def get_informe_resumen_ejecutivo(formato: str = Query("json"), db: Session = Depends(get_db)):
-    if formato in ("pdf", "excel"):
-        return Response(status_code=200, content=b"", media_type="application/octet-stream")
-    return get_resumen(incluir_diagnostico=True, db=db)
+    """Informe resumen ejecutivo. formato=json|pdf|excel."""
+    resumen = get_resumen(incluir_diagnostico=True, db=db)
+    if formato == "excel":
+        content = _generar_excel_resumen_ejecutivo(resumen)
+        filename = _nombre_archivo_informe("resumen_ejecutivo", "xlsx")
+        return Response(
+            content=content,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+    if formato == "pdf":
+        content = _generar_pdf_resumen_ejecutivo(resumen)
+        filename = _nombre_archivo_informe("resumen_ejecutivo", "pdf")
+        return Response(
+            content=content,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
+    return resumen
 
 
 # ---------------------------------------------------------------------------

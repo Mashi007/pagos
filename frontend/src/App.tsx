@@ -1,5 +1,5 @@
-import React, { useEffect, Suspense, useRef } from 'react'
-import { Routes, Route, Navigate, useLocation, useNavigate, Outlet } from 'react-router-dom'
+import React, { useEffect, Suspense } from 'react'
+import { Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 
 // Layout
@@ -93,9 +93,6 @@ let _authInitDone = false
 
 function App() {
   const { isAuthenticated, isLoading, initializeAuth } = useSimpleAuth()
-  const location = useLocation()
-  const navigate = useNavigate()
-  const redirectDoneRef = useRef(false)
 
   useEffect(() => {
     if (_authInitDone) return
@@ -103,29 +100,8 @@ function App() {
     initializeAuth()
   }, [initializeAuth])
 
-  // Un único redirect cuando está autenticado en / o /login (evita múltiples
-  // <Navigate> y demasiadas llamadas a la API de historial)
-  useEffect(() => {
-    if (!isAuthenticated || isLoading) return
-    const pathname = location.pathname.replace(/\/$/, '') || '/'
-    if (pathname !== '/' && pathname !== '/login') return
-    if (redirectDoneRef.current) return
-    redirectDoneRef.current = true
-    try {
-      navigate('/dashboard/menu', { replace: true })
-    } catch {
-      redirectDoneRef.current = false
-    }
-  }, [isAuthenticated, isLoading, location.pathname, navigate])
-
   // Mostrar loader solo si está cargando Y hay datos de auth (para evitar flash)
   if (isLoading) {
-    return <PageLoader />
-  }
-
-  // Mientras hacemos el único redirect, mostrar loader para no pintar brevemente login
-  const pathname = location.pathname.replace(/\/$/, '') || '/'
-  if (isAuthenticated && (pathname === '/' || pathname === '/login')) {
     return <PageLoader />
   }
 
@@ -135,19 +111,27 @@ function App() {
         <Routes>
         {/* Una sola raíz path="/" para que Layout reciba correctamente las rutas hijas (dashboard, clientes, etc.) */}
         <Route path="/" element={<RootLayoutWrapper />}>
-          {/* Raíz /pagos/ → redirigir a login (formulario visible) o dashboard si ya está autenticado */}
+          {/* Raíz /pagos/ → mostrar Login directamente (sin Navigate) para evitar "operation is insecure" por historial */}
           <Route
             index
             element={
               isAuthenticated ? (
                 <Navigate to="/dashboard/menu" replace />
               ) : (
-                <Navigate to="/login" replace />
+                <motion.div
+                  key="login-index"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: ANIMATION_DURATION }}
+                >
+                  <Login />
+                </motion.div>
               )
             }
           />
 
-          {/* Login */}
+          {/* Login: misma pantalla que index cuando no autenticado */}
           <Route
             path="login"
             element={

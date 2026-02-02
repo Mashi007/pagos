@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 
 from app.schemas.whatsapp import WhatsAppMessage, WhatsAppContact
-from app.core.config import settings
+from app.core.whatsapp_config_holder import get_whatsapp_config, sync_from_db as whatsapp_sync_from_db
 from app.models.cliente import Cliente
 from app.models.pagos_whatsapp import PagosWhatsapp
 
@@ -90,10 +90,12 @@ class WhatsAppService:
             row = db.execute(q).scalars().first()
             if row:
                 cedula_cliente = row
-        token = getattr(settings, "WHATSAPP_ACCESS_TOKEN", None)
-        api_url = getattr(settings, "WHATSAPP_GRAPH_URL", "https://graph.facebook.com/v18.0")
+        whatsapp_sync_from_db()
+        cfg = get_whatsapp_config()
+        token = (cfg.get("access_token") or "").strip()
+        api_url = (cfg.get("api_url") or "https://graph.facebook.com/v18.0").rstrip("/")
         if not token:
-            logger.warning("WHATSAPP_ACCESS_TOKEN no configurado; no se puede descargar imagen")
+            logger.warning("Access token WhatsApp no configurado; no se puede descargar imagen. Configura en Configuración > WhatsApp.")
             return {"status": "image_skipped", "note": "Token no configurado"}
         try:
             import httpx

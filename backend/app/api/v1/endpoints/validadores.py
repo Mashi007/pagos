@@ -6,7 +6,10 @@ Datos desde BD si existe clave configuracion; si no, estructura mínima (config 
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends
+import re
+
+from fastapi import APIRouter, Depends, Body
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -94,3 +97,55 @@ def get_configuracion_validadores(db: Session = Depends(get_db)):
     except Exception:
         pass
     return _config_validadores_default()
+
+
+class ValidarCampoRequest(BaseModel):
+    """Request para validar un campo (email, teléfono, etc.)."""
+    campo: str
+    valor: str
+    pais: str | None = None
+
+
+@router.post(
+    "/validar-campo",
+    summary="[Stub] Valida un campo (email, etc.) con reglas básicas; no sustituye validación de negocio.",
+)
+def post_validar_campo(
+    payload: ValidarCampoRequest = Body(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Valida el valor de un campo. Stub: solo validación de formato (ej. email).
+    Devuelve validacion.valido, valor_formateado, error y sugerencia para el frontend.
+    """
+    campo = (payload.campo or "").strip().lower()
+    valor = (payload.valor or "").strip()
+
+    if campo == "email":
+        # Validación básica de formato (compatible con frontend)
+        email_pattern = re.compile(
+            r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+        )
+        valor_lower = valor.lower()
+        if email_pattern.match(valor_lower):
+            return {
+                "validacion": {
+                    "valido": True,
+                    "valor_formateado": valor_lower,
+                }
+            }
+        return {
+            "validacion": {
+                "valido": False,
+                "error": "Formato de email inválido",
+                "sugerencia": "Use formato usuario@dominio.com",
+            }
+        }
+
+    # Otros campos: aceptar por ahora (stub)
+    return {
+        "validacion": {
+            "valido": True,
+            "valor_formateado": valor,
+        }
+    }

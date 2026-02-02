@@ -179,9 +179,12 @@ class ProbarEmailRequest(BaseModel):
     mensaje: Optional[str] = None
 
 
-@router.post("/probar")
+@router.post(
+    "/probar",
+    summary="[Stub] Prueba de envío SMTP; registra la petición pero no envía correo real.",
+)
 def post_email_probar(payload: ProbarEmailRequest = Body(...), db: Session = Depends(get_db)):
-    """Prueba de envío SMTP (usa config persistida en BD)."""
+    """Prueba de envío SMTP (usa config persistida en BD). Stub: no envía correo real."""
     _load_email_config_from_db(db)
     return {
         "mensaje": "Prueba de envío registrada. Implementa envío SMTP en el backend para enviar realmente.",
@@ -193,9 +196,12 @@ class ProbarImapRequest(BaseModel):
     pass
 
 
-@router.post("/probar-imap")
+@router.post(
+    "/probar-imap",
+    summary="[Stub] Prueba configuración IMAP; no abre conexión real al servidor.",
+)
 def post_email_probar_imap(payload: ProbarImapRequest = Body(...), db: Session = Depends(get_db)):
-    """Prueba de conexión IMAP (usa config persistida en BD)."""
+    """Prueba de conexión IMAP (usa config persistida en BD). Stub: no verifica conexión real."""
     _load_email_config_from_db(db)
     cfg = _email_config_stub
     imap_ok = bool(

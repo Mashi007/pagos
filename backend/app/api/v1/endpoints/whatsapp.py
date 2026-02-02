@@ -15,6 +15,7 @@ from app.schemas.whatsapp import (
 from app.services.whatsapp_service import WhatsAppService
 from app.core.config import settings
 from app.core.security_whatsapp import verify_webhook_signature
+from app.core.whatsapp_config_holder import get_webhook_verify_token, get_whatsapp_config, sync_from_db as whatsapp_sync_from_db
 from app.core.database import get_db
 from sqlalchemy.orm import Session
 
@@ -39,16 +40,17 @@ async def verify_webhook(
         El hub.challenge si el token es válido
     """
     try:
-        # Obtener el token de verificación desde configuración
-        verify_token = getattr(settings, "WHATSAPP_VERIFY_TOKEN", None)
-        
+        whatsapp_sync_from_db()
+        # Token de verificación desde BD (Configuración > WhatsApp) o .env
+        verify_token = get_webhook_verify_token()
         if not verify_token:
-            logger.error("WHATSAPP_VERIFY_TOKEN no configurado en settings")
+            verify_token = getattr(settings, "WHATSAPP_VERIFY_TOKEN", None)
+        if not verify_token:
+            logger.error("Token de verificación del webhook no configurado. Configura en Configuración > WhatsApp o WHATSAPP_VERIFY_TOKEN.")
             raise HTTPException(
                 status_code=500,
                 detail="Webhook verification token no configurado"
             )
-        
         # Verificar el token usando comparación timing-safe
         if hub_mode == "subscribe" and secrets.compare_digest(hub_verify_token, verify_token):
             logger.info("Webhook de WhatsApp verificado exitosamente")
@@ -91,8 +93,10 @@ async def receive_webhook(
         # Obtener el cuerpo del request en bytes para verificación de firma
         body_bytes = await request.body()
         
+        whatsapp_sync_from_db()
         # Verificar firma del webhook (si está configurado) ANTES de procesar
-        app_secret = getattr(settings, "WHATSAPP_APP_SECRET", None)
+        cfg_wa = get_whatsapp_config()
+        app_secret = (cfg_wa.get("app_secret") or "").strip() or getattr(settings, "WHATSAPP_APP_SECRET", None)
         if app_secret and x_hub_signature_256:
             if not verify_webhook_signature(body_bytes, x_hub_signature_256, app_secret):
                 logger.warning("Firma del webhook inválida - posible request malicioso")
