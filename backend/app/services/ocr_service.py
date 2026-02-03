@@ -122,7 +122,10 @@ def extract_from_image(image_bytes: bytes) -> Dict[str, str]:
     base_na = {"fecha_deposito": NA, "nombre_banco": NA, "numero_deposito": NA, "numero_documento": NA, "cantidad": NA}
     client = _get_vision_client()
     if not client:
-        logger.warning("OCR: credenciales Google (Vision) no configuradas.")
+        logger.warning(
+            "OCR: credenciales Google (Vision) no configuradas. Revisa Configuración > Informe pagos: "
+            "cuenta de servicio JSON o 'Conectar con Google' (OAuth). Todos los campos se devuelven como NA."
+        )
         return {**base_na, "humano": ""}
     try:
         from app.core.informe_pagos_config_holder import get_ocr_keywords_numero_documento
@@ -130,7 +133,10 @@ def extract_from_image(image_bytes: bytes) -> Dict[str, str]:
         image = vision.Image(content=image_bytes)
         response = client.document_text_detection(image=image)
         if response.error.message:
-            logger.warning("Vision API error: %s", response.error.message)
+            logger.warning(
+                "OCR: Vision API devolvió error. Revisa que Vision API esté habilitada y con facturación en Google Cloud. Error: %s",
+                response.error.message,
+            )
             return {**base_na, "humano": ""}
         doc = response.full_text_annotation
         if _requiere_revision_humana_from_doc(doc):

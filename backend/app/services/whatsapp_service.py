@@ -455,7 +455,10 @@ class WhatsAppService:
         token = (cfg.get("access_token") or "").strip()
         api_url = (cfg.get("api_url") or "https://graph.facebook.com/v18.0").rstrip("/")
         if not token:
-            logger.warning("Imagen no digitalizada: Access token WhatsApp no configurado (no_digitaliza=image_skipped)")
+            logger.warning(
+                "Imagen no digitalizada: Access token WhatsApp no configurado (no_digitaliza=image_skipped). "
+                "Usuario ve 'No pudimos procesar tu imagen'; nada en Drive."
+            )
             return {"status": "image_skipped", "note": "Token no configurado", "response_text": MENSAJE_IMAGEN_NO_PROCESADA}
         try:
             import httpx
@@ -465,18 +468,26 @@ class WhatsAppService:
                 data = r.json()
                 media_url = data.get("url")
                 if not media_url:
-                    logger.info("Imagen no digitalizada: Meta no devolvió URL del media (no_digitaliza=image_no_url)")
+                    logger.warning(
+                        "Imagen no digitalizada: Meta no devolvió URL del media (no_digitaliza=image_no_url). "
+                        "Usuario ve 'No pudimos procesar'; nada en Drive."
+                    )
                     return {"status": "image_no_url", "note": "Meta no devolvió URL", "response_text": MENSAJE_IMAGEN_NO_PROCESADA}
                 r2 = await client.get(media_url, headers={"Authorization": f"Bearer {token}"})
                 r2.raise_for_status()
                 image_bytes = r2.content
         except Exception as e:
-            logger.exception("Imagen no digitalizada: error descargando imagen (no_digitaliza=image_error): %s", e)
+            logger.exception(
+                "Imagen no digitalizada: error descargando imagen (no_digitaliza=image_error). "
+                "Usuario ve 'No pudimos procesar'; nada en Drive. Error: %s", e
+            )
             db.rollback()
-            # Incluir en note que es fallo de descarga para distinguir de fallo Drive/Sheet en logs
             return {"status": "image_error", "note": f"descarga: {e!s}", "response_text": MENSAJE_IMAGEN_NO_PROCESADA}
         if not image_bytes:
-            logger.info("Imagen no digitalizada: imagen vacía (no_digitaliza=image_empty)")
+            logger.warning(
+                "Imagen no digitalizada: imagen vacía (no_digitaliza=image_empty). "
+                "Usuario ve 'No pudimos procesar'; nada en Drive."
+            )
             return {"status": "image_empty", "note": "Imagen vacía", "response_text": MENSAJE_IMAGEN_NO_PROCESADA}
         conv.intento_foto = (conv.intento_foto or 0) + 1
         # OCR sobre toda imagen (sin depender del análisis): probar que está activo/configurado y tener datos si aceptamos
@@ -600,12 +611,14 @@ class WhatsAppService:
                 response_text = MENSAJE_RECIBIDO.format(cedula=cedula_guardada or "N/A")
             return {"status": "image_saved", "pagos_whatsapp_id": row_pw.id, "cedula_cliente": cedula_guardada, "response_text": response_text}
         except Exception as e:
-            logger.exception("Error en digitalización (Drive/OCR/BD/Sheet): %s", e)
+            logger.exception(
+                "Digitalización fallida (Drive/OCR/BD/Sheet). Usuario ve 'No pudimos procesar'; puede no haber nada en Drive. Error: %s",
+                e,
+            )
             try:
                 db.rollback()
             except Exception:
                 pass
-            # 3.er intento: aunque falle Drive/Sheet, dar respuesta de cierre (te contactaremos). Así no repite 3 veces el mismo mensaje genérico.
             if conv.intento_foto >= 3:
                 response_cierre = MENSAJE_RECIBIDO_TERCER_INTENTO.format(cedula=conv.cedula or "N/A")
             else:

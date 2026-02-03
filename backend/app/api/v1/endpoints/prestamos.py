@@ -63,9 +63,9 @@ def listar_prestamos(
             cuotas_por_prestamo[pid] = cnt
     items = []
     for row in rows:
-        p, nombres, cedula = row[0], row[1], row[2]
-        numero_cuotas = cuotas_por_prestamo.get(p.id) or getattr(p, "numero_cuotas", None)
-        modalidad_pago = getattr(p, "modalidad_pago", None)
+        p, nombres_cliente, cedula_cliente = row[0], row[1], row[2]
+        # Cuotas: preferir conteo desde tabla cuotas; si no hay, usar columna numero_cuotas
+        numero_cuotas = cuotas_por_prestamo.get(p.id) if cuotas_por_prestamo.get(p.id) is not None else p.numero_cuotas
         item = PrestamoListResponse(
             id=p.id,
             cliente_id=p.cliente_id,
@@ -75,12 +75,13 @@ def listar_prestamos(
             modelo=p.modelo,
             analista=p.analista,
             fecha_creacion=p.fecha_creacion,
-            fecha_actualizacion=getattr(p, "fecha_actualizacion", None),
-            fecha_registro=p.fecha_creacion,
-            nombres=nombres,
-            cedula=cedula,
+            fecha_actualizacion=p.fecha_actualizacion,
+            fecha_registro=p.fecha_registro,
+            fecha_aprobacion=p.fecha_aprobacion,
+            nombres=nombres_cliente or p.nombres,
+            cedula=cedula_cliente or p.cedula,
             numero_cuotas=numero_cuotas,
-            modalidad_pago=modalidad_pago,
+            modalidad_pago=p.modalidad_pago,
         )
         items.append(item)
     total_pages = (total + per_page - 1) // per_page if total else 0
@@ -115,19 +116,26 @@ def get_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
 
 @router.post("", response_model=PrestamoResponse, status_code=201)
 def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db)):
-    """Crea un préstamo en BD. Valida que cliente_id exista."""
+    """Crea un préstamo en BD. Valida que cliente_id exista. cedula/nombres se toman del Cliente."""
     cliente = db.get(Cliente, payload.cliente_id)
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
+    from datetime import date
+    hoy = date.today()
     row = Prestamo(
         cliente_id=payload.cliente_id,
+        cedula=cliente.cedula or "",
+        nombres=cliente.nombres or "",
         total_financiamiento=payload.total_financiamiento,
-        estado=payload.estado or "PENDIENTE",
+        fecha_requerimiento=payload.fecha_requerimiento or hoy,
+        modalidad_pago=payload.modalidad_pago or "MENSUAL",
+        numero_cuotas=payload.numero_cuotas or 12,
+        cuota_periodo=payload.cuota_periodo or 0,
+        producto=payload.producto or "Financiamiento",
+        estado=payload.estado or "DRAFT",
         concesionario=payload.concesionario,
-        modelo=payload.modelo,
-        analista=payload.analista,
-        modalidad_pago=payload.modalidad_pago,
-        numero_cuotas=payload.numero_cuotas,
+        modelo_vehiculo=payload.modelo,
+        analista=payload.analista or "",
     )
     db.add(row)
     db.commit()
@@ -153,7 +161,7 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
     if payload.concesionario is not None:
         row.concesionario = payload.concesionario
     if payload.modelo is not None:
-        row.modelo = payload.modelo
+        row.modelo_vehiculo = payload.modelo
     if payload.analista is not None:
         row.analista = payload.analista
     if payload.modalidad_pago is not None:

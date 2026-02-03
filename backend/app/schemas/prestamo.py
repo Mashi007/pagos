@@ -1,8 +1,8 @@
 """
 Schemas Pydantic para Préstamo (request/response).
-Alineados con la tabla public.prestamos en la BD.
+Alineados con la tabla public.prestamos en la BD (columnas confirmadas).
 """
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
@@ -12,16 +12,19 @@ from pydantic import BaseModel, ConfigDict
 class PrestamoBase(BaseModel):
     cliente_id: int
     total_financiamiento: Decimal
-    estado: str = "PENDIENTE"
+    estado: str = "DRAFT"
     concesionario: Optional[str] = None
     modelo: Optional[str] = None
-    analista: Optional[str] = None
+    analista: str = ""
     modalidad_pago: Optional[str] = None  # MENSUAL, QUINCENAL, SEMANAL
     numero_cuotas: Optional[int] = None
+    fecha_requerimiento: Optional[date] = None
+    cuota_periodo: Optional[Decimal] = None
+    producto: Optional[str] = None
 
 
 class PrestamoCreate(PrestamoBase):
-    """Campos para crear préstamo."""
+    """Campos para crear préstamo. cedula/nombres se rellenan desde Cliente si no se envían."""
 
 
 class PrestamoUpdate(BaseModel):
@@ -34,6 +37,9 @@ class PrestamoUpdate(BaseModel):
     analista: Optional[str] = None
     modalidad_pago: Optional[str] = None
     numero_cuotas: Optional[int] = None
+    fecha_requerimiento: Optional[date] = None
+    cuota_periodo: Optional[Decimal] = None
+    producto: Optional[str] = None
 
 
 class PrestamoResponse(BaseModel):
@@ -43,7 +49,7 @@ class PrestamoResponse(BaseModel):
     id: int
     cliente_id: int
     total_financiamiento: Decimal
-    estado: str = "PENDIENTE"
+    estado: str = "DRAFT"
     concesionario: Optional[str] = None
     modelo: Optional[str] = None
     analista: Optional[str] = None
@@ -51,6 +57,8 @@ class PrestamoResponse(BaseModel):
     numero_cuotas: Optional[int] = None
     fecha_creacion: Optional[datetime] = None
     fecha_actualizacion: Optional[datetime] = None
+    fecha_registro: Optional[datetime] = None
+    fecha_aprobacion: Optional[datetime] = None
 
 
 class PrestamoListResponse(PrestamoResponse):

@@ -109,6 +109,22 @@ Ningún paso “no definido”: todos los caminos tienen manejo de error y respu
 
 ---
 
+## 3.1 Por qué no funciona el OCR (diagnóstico)
+
+Si el OCR no extrae datos (todo sale "NA" o la imagen se considera "no clara" siempre), revisar en este orden:
+
+| # | Comprobación | Dónde / Cómo |
+|---|----------------|---------------|
+| 1 | **Credenciales Google** | **Configuración > Informe pagos.** Debe haber **o bien** JSON de cuenta de servicio (pegado en "Credenciales Google") **o bien** OAuth: Client ID, Client Secret y haber hecho clic en "Conectar con Google" para obtener el refresh token. Si no hay ninguna, el OCR devuelve todo NA. |
+| 2 | **Estado OCR en la app** | En Configuración > Informe pagos, revisar el **estado de conexiones** (Drive, Sheets, OCR). O llamar `GET /api/v1/configuracion/informe-pagos/estado` (con token). El campo `ocr` tiene `conectado: true/false` y `detalle` con el mensaje exacto (ej. "Sin credenciales", "Token OAuth expirado", "Vision API no habilitada"). |
+| 3 | **Vision API habilitada** | En [Google Cloud Console](https://console.cloud.google.com/) → tu proyecto → **APIs y servicios** → **Biblioteca** → buscar "Cloud Vision API" → **Habilitar**. |
+| 4 | **Facturación activa** | Vision API requiere una cuenta de facturación vinculada al proyecto (aunque haya créditos gratuitos). En Cloud Console → Facturación. |
+| 5 | **Proyecto correcto** | Si usas cuenta de servicio, el JSON debe ser del **mismo proyecto** donde habilitaste Vision API. Si usas OAuth, la cuenta de Google con la que autorizaste debe tener acceso al proyecto que tiene Vision habilitada. |
+
+**Logs en Render:** al enviar una foto, si el OCR no tiene credenciales verás: `"OCR: credenciales Google (Vision) no configuradas"`. Si Vision devuelve error: `"OCR: Vision API devolvió error"` con el mensaje de la API.
+
+---
+
 ## 4. Resumen: qué puede impedir que el OCR funcione en MVP
 
 | Problema | Síntoma | Solución |
@@ -120,3 +136,31 @@ Ningún paso “no definido”: todos los caminos tienen manejo de error y respu
 | Config no guardada | `informe_pagos_config` no existe en `configuracion` | Guardar al menos una vez la configuración en Configuración > Informe pagos |
 
 No hay procesos “no definidos”: el flujo está implementado de extremo a extremo; los fallos son por configuración o por esquema de BD desactualizado.
+
+---
+
+## 5. Mensaje «No pudimos procesar tu imagen» y nada en Drive
+
+Cuando el usuario recibe ese mensaje y **no aparece nada en Drive**, el flujo se cortó **antes** de subir la imagen o **durante** la subida/guardado. La causa real se ve en los **logs del backend** (p. ej. Render).
+
+### 5.1 Causas posibles (orden de ejecución)
+
+| Causa | Log típico (buscar en Render) | Qué hacer |
+|------|-------------------------------|-----------|
+| **Token WhatsApp no configurado** | `no_digitaliza=image_skipped` / "Token no configurado" | Configuración > WhatsApp: guardar Access token. |
+| **Meta no devolvió URL de la imagen** | `no_digitaliza=image_no_url` / "Meta no devolvió URL" | Reintentar; si persiste, revisar app Meta/WhatsApp Business. |
+| **Error al descargar la imagen** | `no_digitaliza=image_error` / "error descargando imagen" + excepción | Conectividad Render con graph.facebook.com; timeout 30 s. |
+| **Imagen vacía** | `no_digitaliza=image_empty` | Revisar que el webhook reciba bien el media_id. |
+| **Fallo en digitalización (Drive/BD/Sheet)** | "Digitalización fallida (Drive/OCR/BD/Sheet)" + excepción | Drive: carpeta/credenciales/OAuth. BD: columna faltante. Sheets: opcional. |
+
+Si hay excepción no capturada, en el log aparecerá `Error procesando mensaje WhatsApp:` con el traceback.
+
+### 5.2 Cómo localizar la causa en Render
+
+1. Servicio en Render → **Logs**.
+2. Buscar en el momento del envío de la foto: `no_digitaliza=`, `Imagen no digitalizada:`, `Digitalización fallida`.
+3. Si el error es de BD (p. ej. columna no existe), ejecutar `migracion_mvp_ocr_todas_columnas.sql`.
+
+### 5.3 Resumen
+
+**Nada en Drive** + "No pudimos procesar" = el flujo no llegó a subir o falló antes de confirmar. Revisar **logs en el instante del envío** para ver si fue: token, descarga (Meta/red), o Drive/BD/Sheet.
