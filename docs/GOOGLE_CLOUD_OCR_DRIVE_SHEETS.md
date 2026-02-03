@@ -65,18 +65,22 @@ Conclusión: la conexión con Drive está alineada con la documentación (scope 
 | **Autenticación** | Se usan las mismas credenciales que para Drive/Sheets: `get_google_credentials(["https://www.googleapis.com/auth/cloud-vision"])` (cuenta de servicio o OAuth). | Sí. Vision acepta credenciales de cuenta de servicio u OAuth con el scope adecuado. |
 | **Cliente** | `vision.ImageAnnotatorClient(credentials=creds)` con creds inyectadas (no solo `GOOGLE_APPLICATION_CREDENTIALS`). | Sí. Permite usar la config de la app (JSON u OAuth) sin depender del entorno. |
 
-Conclusión: la conexión con Vision (OCR) es correcta; la verificación de estado hace una llamada mínima a `text_detection` para comprobar que la API responde.
+La app usa **DOCUMENT_TEXT_DETECTION** (no `text_detection`), optimizado para documentos densos: recibos, facturas, papeletas de depósito con texto **manuscrito**, **impreso (letra tipo)** o **mixto** (ambas fuentes en el mismo documento). La verificación de estado hace una llamada mínima a `document_text_detection` para comprobar que la API responde.
+
+Conclusión: la conexión con Vision (OCR) es correcta.
 
 ### Requisitos para que el proceso OCR funcione (checklist)
 
-Para que el flujo WhatsApp → imagen → OCR → BD/Sheet funcione, debe estar decidido/configurado:
+El OCR está preparado para **recibos**, **facturas** y **papeletas de depósito** con texto manuscrito, letra tipo (impreso) o ambos en el mismo documento. Para que el flujo WhatsApp → imagen → OCR → BD/Sheet funcione, debe estar decidido/configurado:
 
 | Requisito | Dónde |
 |-----------|--------|
 | **Credenciales Google** | Configuración > Informe pagos: cuenta de servicio (JSON) o OAuth ("Conectar con Google"). |
 | **Cloud Vision API habilitada** | Google Cloud Console > APIs y servicios > Biblioteca > Cloud Vision API > Habilitar. |
 | **Facturación activa** | El proyecto de Google Cloud debe tener una cuenta de facturación vinculada (Vision la exige). |
-| **Mapeo de campos** | fecha OCR → Fecha, nombre_banco → Nombre en cabecera, numero_deposito → Número depósito, numero_documento → Número de documento (formato variable; se ubica por **palabras clave** configurables en Informe pagos), cantidad → Cantidad; Cédula y Observación del flujo WhatsApp; Link imagen de Drive. |
+| **Mapeo de campos** | fecha OCR → Fecha, nombre_banco → Nombre en cabecera, numero_deposito → Número depósito, numero_documento → Número de documento, cantidad → Cantidad; columna **HUMANO** cuando >80% del texto es de baja confianza (manuscrito/ilegible)—en ese caso **no se inventan datos**; Cédula y Observación del flujo WhatsApp; Link imagen de Drive. |
+
+**Regla HUMANO (evitar errores):** Cuando más del 80% del texto detectado por OCR tiene confianza baja (p. ej. documento mayormente manuscrito o ilegible), se escribe **HUMANO** en la columna correspondiente y **no se rellenan** los campos extraídos (fecha, banco, número depósito, número de documento, cantidad): quedan en "NA". Así se evita inventar datos y se indica que un humano debe revisar la imagen.
 
 Si falta alguno, OCR devuelve "NA" en los campos o la verificación de estado muestra OCR "No conectado".
 

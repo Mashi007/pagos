@@ -1,5 +1,8 @@
 """
-OCR sobre imagen de papeleta (Google Cloud Vision).
+OCR sobre imagen de recibo/factura/papeleta de depósito (Google Cloud Vision).
+Usa DOCUMENT_TEXT_DETECTION, optimizado para documentos densos: texto manuscrito, impreso (letra tipo) o mixto.
+Apto para: recibos, facturas, papeletas de depósito con una o ambas fuentes de texto.
+
 Mapeo de campos:
   - Una fecha       → fecha de depósito
   - Cantidad        → total en dólares o bolívares (cantidad total)
@@ -8,6 +11,7 @@ Mapeo de campos:
 Extrae además numero_deposito (referencia) y numero_documento (número de documento/recibo; formato variable: solo números, letras o mixto).
 numero_documento se ubica por palabras clave configurables en Informe pagos (ej. "numero de documento", "numero de recibo"); si no hay config, se usan unas por defecto.
 Si no se encuentra un campo, se devuelve "NA".
+Regla HUMANO (evitar errores, no inventar): cuando más del 80% del texto detectado tiene confianza baja (manuscrito/ilegible), se devuelve humano="HUMANO" y todos los campos extraídos en NA; no se inventan datos.
 Usa OAuth o cuenta de servicio según informe_pagos_config.
 
 Requisitos para que el proceso OCR funcione:
@@ -26,6 +30,11 @@ NA = "NA"
 
 MIN_CARACTERES_PARA_CLARA = 50  # Si el OCR detecta al menos esto, se considera imagen "suficientemente clara" (bajado de 80 para papeletas legibles)
 
+# Regla HUMANO: si más del 80% del texto detectado tiene confianza baja (manuscrito/ilegible), se marca HUMANO y NO se inventan datos (campos NA).
+UMBRAL_CONFIANZA_BAJA = 0.85  # Palabras con confidence < esto se consideran "baja confianza"
+PORCENTAJE_MINIMO_PARA_HUMANO = 0.80  # Si (palabras baja confianza / total) >= esto → requiere revisión humana
+VALOR_HUMANO = "HUMANO"  # Valor fijo para la columna HUMANO; no inventar cuando esté marcado
+
 VISION_SCOPE = ["https://www.googleapis.com/auth/cloud-vision"]
 
 
@@ -43,7 +52,7 @@ def _get_vision_client():
 
 
 def _vision_full_text(image_bytes: bytes) -> str:
-    """Ejecuta Vision text_detection y devuelve el texto completo; vacío si falla o sin credenciales."""
+    """Ejecuta Vision document_text_detection (documentos densos: manuscrito, impreso o mixto) y devuelve el texto completo; vacío si falla o sin credenciales."""
     client = _get_vision_client()
     if not client:
         logger.warning("Claridad de imagen no comprobada: credenciales Google (Vision) no configuradas; se tratará como no clara.")
@@ -51,11 +60,11 @@ def _vision_full_text(image_bytes: bytes) -> str:
     try:
         from google.cloud import vision
         image = vision.Image(content=image_bytes)
-        response = client.text_detection(image=image)
+        response = client.document_text_detection(image=image)
         if response.error.message:
             return ""
-        texts = response.text_annotations
-        return (texts[0].description if texts else "") or ""
+        doc = response.full_text_annotation
+        return (doc.text if doc else "") or ""
     except Exception as e:
         logger.debug("Vision full_text: %s", e)
         return ""
@@ -80,34 +89,61 @@ def imagen_suficientemente_clara(image_bytes: bytes, min_chars: int = MIN_CARACT
     return num_chars >= min_chars
 
 
+def _requiere_revision_humana_from_doc(doc) -> bool:
+    """Calcula si el documento requiere revisión humana (no inventar) a partir de full_text_annotation."""
+    if not doc:
+        return False
+    total = 0
+    baja_confianza = 0
+    try:
+        for page in doc.pages:
+            for block in page.blocks:
+                for para in block.paragraphs:
+                    for word in para.words:
+                        conf = getattr(word, "confidence", None)
+                        if conf is not None:
+                            total += 1
+                            if conf < UMBRAL_CONFIANZA_BAJA:
+                                baja_confianza += 1
+    except (AttributeError, TypeError) as e:
+        logger.debug("No se pudo calcular confianza OCR (usando doc.pages): %s", e)
+        return False
+    if total == 0:
+        return False
+    return (baja_confianza / total) >= PORCENTAJE_MINIMO_PARA_HUMANO
+
+
 def extract_from_image(image_bytes: bytes) -> Dict[str, str]:
     """
     Ejecuta OCR (Google Vision) sobre la imagen y devuelve:
-    - fecha_deposito: fecha de depósito
-    - nombre_banco: nombre en la cabecera (banco/institución)
-    - numero_deposito: referencia/depósito
-    - cantidad: cantidad total en dólares o bolívares
-    Cualquier campo no detectado se devuelve como "NA".
+    - fecha_deposito, nombre_banco, numero_deposito, numero_documento, cantidad (o "NA" si no detectado)
+    - humano: "HUMANO" si más del 80% del texto es de baja confianza (manuscrito/ilegible); en ese caso NO se inventan datos (todos los campos NA).
     """
+    base_na = {"fecha_deposito": NA, "nombre_banco": NA, "numero_deposito": NA, "numero_documento": NA, "cantidad": NA}
     client = _get_vision_client()
     if not client:
         logger.warning("OCR: credenciales Google (Vision) no configuradas.")
-        return {"fecha_deposito": NA, "nombre_banco": NA, "numero_deposito": NA, "numero_documento": NA, "cantidad": NA}
+        return {**base_na, "humano": ""}
     try:
         from app.core.informe_pagos_config_holder import get_ocr_keywords_numero_documento
         from google.cloud import vision
         image = vision.Image(content=image_bytes)
-        response = client.text_detection(image=image)
+        response = client.document_text_detection(image=image)
         if response.error.message:
             logger.warning("Vision API error: %s", response.error.message)
-            return {"fecha_deposito": NA, "nombre_banco": NA, "numero_deposito": NA, "numero_documento": NA, "cantidad": NA}
-        texts = response.text_annotations
-        full_text = (texts[0].description if texts else "") or ""
+            return {**base_na, "humano": ""}
+        doc = response.full_text_annotation
+        if _requiere_revision_humana_from_doc(doc):
+            logger.info("OCR: >80%% texto baja confianza → HUMANO; no se inventan datos.")
+            return {**base_na, "humano": VALOR_HUMANO}
+        full_text = (doc.text if doc else "") or ""
         keywords_doc = get_ocr_keywords_numero_documento()
-        return _parse_papeleta_text(full_text, keywords_numero_documento=keywords_doc)
+        result = _parse_papeleta_text(full_text, keywords_numero_documento=keywords_doc)
+        result["humano"] = ""
+        return result
     except Exception as e:
         logger.exception("Error en OCR: %s", e)
-        return {"fecha_deposito": NA, "nombre_banco": NA, "numero_deposito": NA, "numero_documento": NA, "cantidad": NA}
+        return {**base_na, "humano": ""}
 
 
 def _parse_papeleta_text(text: str, keywords_numero_documento: Optional[list] = None) -> Dict[str, str]:

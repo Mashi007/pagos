@@ -245,7 +245,7 @@ def _verificar_sheets() -> dict:
         first_sheet = sheets[0]
         tab_title = (first_sheet.get("properties") or {}).get("title") or "Hoja 1"
         # 2) Escritura: escribir una fila de prueba en fila 1000 (no tocar cabeceras) y borrarla
-        range_write = f"'{tab_title}'!A1000:H1000"
+        range_write = f"'{tab_title}'!A1000:I1000"
         body = {"values": [["_verif_conexion", datetime.utcnow().isoformat(), "", "", "", "", "", ""]]}
         service.spreadsheets().values().update(
             spreadsheetId=sheet_id,
@@ -286,7 +286,7 @@ def _verificar_ocr() -> dict:
         # Imagen mínima 1x1 pixel JPEG para no gastar ancho de banda; la API responde aunque no haya texto
         minimal_jpeg = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t\x08\n\x0c\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a\x1f\x1e\x1d\x1a\x1c\x1c $.\' \",#\x1c\x1c(7),01444\x1f\'9=82<.7\xff\xc0\x00\x0b\x08\x00\x01\x00\x01\x01\x01\x11\x00\xff\xc4\x00\x1f\x00\x00\x01\x05\x01\x01\x01\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0b\xff\xda\x00\x0c\x03\x01\x00\x02\x10\x03\x10\x00\x00\x00\x01\xff\xd9"
         image = vision.Image(content=minimal_jpeg)
-        client.text_detection(image=image)
+        client.document_text_detection(image=image)
         return {"conectado": True, "detalle": "Conexión correcta. Vision API (OCR) operativa."}
     except Exception as e:
         msg = str(e).strip() or "Error desconocido"

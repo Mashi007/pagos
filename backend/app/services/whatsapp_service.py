@@ -515,6 +515,7 @@ class WhatsAppService:
         numero_dep = "NA"
         numero_doc = "NA"
         cantidad = "NA"
+        humano_col = None  # "HUMANO" cuando >80% texto de baja confianza (manuscrito/ilegible); no se inventan datos
         try:
             from app.services.ocr_service import extract_from_image
             ocr_data = extract_from_image(image_bytes)
@@ -523,6 +524,7 @@ class WhatsAppService:
             numero_dep = ocr_data.get("numero_deposito") or "NA"
             numero_doc = ocr_data.get("numero_documento") or "NA"
             cantidad = ocr_data.get("cantidad") or "NA"
+            humano_col = (ocr_data.get("humano") or "").strip() or None
         except Exception as e:
             logger.exception("Error OCR: %s", e)
         observacion_informe = conv.observacion or None
@@ -533,6 +535,7 @@ class WhatsAppService:
             numero_deposito=numero_dep,
             numero_documento=numero_doc,
             cantidad=cantidad,
+            humano=humano_col,
             link_imagen=link_imagen,
             observacion=observacion_informe,
             pagos_whatsapp_id=row_pw.id,
@@ -548,7 +551,7 @@ class WhatsAppService:
         )
         try:
             from app.services.google_sheets_informe_service import append_row
-            sheet_ok = append_row(conv.cedula, fecha_dep, nombre_banco, numero_dep, numero_doc, cantidad, link_imagen, periodo, observacion=observacion_informe)
+            sheet_ok = append_row(conv.cedula, fecha_dep, nombre_banco, numero_dep, numero_doc, cantidad, link_imagen, periodo, observacion=observacion_informe, humano=humano_col or "")
             if not sheet_ok:
                 logger.warning("Sheets: no se escribió la fila (digitalización en BD OK). Revisa OAuth conectado, ID hoja y que la hoja esté compartida con la cuenta OAuth.")
         except Exception as e:

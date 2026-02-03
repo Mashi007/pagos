@@ -18,6 +18,7 @@ class PagosInforme(Base):
     numero_deposito = Column(String(100), nullable=True)
     numero_documento = Column(String(100), nullable=True)  # Nº doc/recibo; formato variable (números, letras o mixto); se ubica por palabras clave configurables
     cantidad = Column(String(50), nullable=True)
+    humano = Column(String(20), nullable=True)  # "HUMANO" cuando >80% del texto es de baja confianza (manuscrito/ilegible); no se inventan datos
     link_imagen = Column(Text, nullable=False)
     observacion = Column(Text, nullable=True)
     pagos_whatsapp_id = Column(Integer, ForeignKey("pagos_whatsapp.id", ondelete="SET NULL"), nullable=True)

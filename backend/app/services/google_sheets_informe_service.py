@@ -13,16 +13,17 @@ logger = logging.getLogger(__name__)
 # Nombres de pestaña por periodo (clave interna)
 PERIODOS = {"6am": "6am", "1pm": "1pm", "4h30": "4h30"}
 
-# Columnas del informe (orden A→H). Origen de cada una para no dejar ninguna sin ubicar:
+# Columnas del informe (orden A→I). Origen de cada una para no dejar ninguna sin ubicar:
 #  A Cédula             → flujo WhatsApp (usuario escribe)
 #  B Fecha              → fecha de depósito (OCR)
 #  C Nombre en cabecera → banco, nombre en la cabecera del documento (OCR)
 #  D Número depósito    → referencia/depósito (OCR)
 #  E Número de documento → número doc/recibo; formato variable; OCR por palabras clave configurables
 #  F Cantidad           → total en dólares o bolívares (OCR)
-#  G Link imagen        → URL de la imagen en Google Drive
-#  H Observación        → ej. "No confirma identidad" (flujo WhatsApp)
-CABECERAS_INFORME = ["Cédula", "Fecha", "Nombre en cabecera", "Número depósito", "Número de documento", "Cantidad", "Link imagen", "Observación"]
+#  G HUMANO             → "HUMANO" cuando >80% del texto es de baja confianza (manuscrito/ilegible); no se inventan datos
+#  H Link imagen        → URL de la imagen en Google Drive
+#  I Observación        → ej. "No confirma identidad" (flujo WhatsApp)
+CABECERAS_INFORME = ["Cédula", "Fecha", "Nombre en cabecera", "Número depósito", "Número de documento", "Cantidad", "HUMANO", "Link imagen", "Observación"]
 
 SHEETS_SCOPE = ["https://www.googleapis.com/auth/spreadsheets"]
 
@@ -52,12 +53,14 @@ def append_row(
     link_imagen: str,
     periodo_envio: str,
     observacion: Optional[str] = None,
+    humano: Optional[str] = None,
 ) -> bool:
     """
     Añade una fila a la pestaña del periodo en la hoja configurada.
     periodo_envio: "6am" | "1pm" | "4h30"
     observacion: ej. "No confirma identidad" si no confirmó en 3 intentos.
-    Crea la pestaña si no existe (cabeceras: Cédula, Fecha, Nombre en cabecera, Número depósito, Número de documento, Cantidad, Link imagen, Observación).
+    humano: "HUMANO" cuando >80% del texto OCR es de baja confianza (manuscrito/ilegible); no se inventan datos.
+    Crea la pestaña si no existe (cabeceras incluyen HUMANO).
     """
     service, sheet_id = _get_sheets_service()
     if not service or not sheet_id:
@@ -66,9 +69,10 @@ def append_row(
     tab_name = PERIODOS.get(periodo_envio) or periodo_envio
     try:
         ensure_sheet_tab(sheet_id, tab_name)
-        range_name = f"'{tab_name}'!A:H"
+        range_name = f"'{tab_name}'!A:I"
         obs = (observacion or "").strip() or ""
-        body = {"values": [[cedula, fecha_deposito, nombre_banco, numero_deposito, numero_documento or "", cantidad, link_imagen, obs]]}
+        humano_val = (humano or "").strip() or ""
+        body = {"values": [[cedula, fecha_deposito, nombre_banco, numero_deposito, numero_documento or "", cantidad, humano_val, link_imagen, obs]]}
         service.spreadsheets().values().append(
             spreadsheetId=sheet_id,
             range=range_name,
@@ -85,7 +89,7 @@ def append_row(
 def ensure_sheet_tab(sheet_id: str, tab_name: str, headers: Optional[List[str]] = None) -> bool:
     """
     Asegura que exista la pestaña con nombre tab_name y opcionalmente la fila de cabecera.
-    headers: Cédula, Fecha, Nombre en cabecera, Número depósito, Número de documento, Cantidad, Link imagen, Observación.
+    headers: Cédula, Fecha, Nombre en cabecera, Número depósito, Número de documento, Cantidad, HUMANO, Link imagen, Observación.
     """
     service, _ = _get_sheets_service()
     if not service:
@@ -103,7 +107,7 @@ def ensure_sheet_tab(sheet_id: str, tab_name: str, headers: Optional[List[str]] 
         ).execute()
         service.spreadsheets().values().update(
             spreadsheetId=sheet_id,
-            range=f"'{tab_name}'!A1:H1",
+            range=f"'{tab_name}'!A1:I1",
             valueInputOption="USER_ENTERED",
             body={"values": [headers]},
         ).execute()
