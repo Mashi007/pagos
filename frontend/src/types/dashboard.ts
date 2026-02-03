@@ -73,12 +73,14 @@ export interface ComposicionMorosidadPunto {
   categoria: string
   monto: number
   cantidad_cuotas: number
+  cantidad_prestamos: number
 }
 
 export interface ComposicionMorosidadResponse {
   puntos: ComposicionMorosidadPunto[]
   total_morosidad: number
   total_cuotas: number
+  total_prestamos?: number
 }
 
 export interface PrestamosPorConcesionarioResponse {

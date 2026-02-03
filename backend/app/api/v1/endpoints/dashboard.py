@@ -11,7 +11,7 @@ from typing import Optional, Any
 from fastapi import APIRouter, Depends, Query
 
 from app.core.deps import get_current_user
-from sqlalchemy import and_, or_, select, func
+from sqlalchemy import and_, distinct, or_, select, func
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session
 
@@ -74,7 +74,7 @@ def get_opciones_filtros(db: Session = Depends(get_db)):
     try:
         analistas = [r[0] for r in db.execute(select(Prestamo.analista).where(Prestamo.analista.isnot(None)).distinct()).all() if r[0]]
         concesionarios = [r[0] for r in db.execute(select(Prestamo.concesionario).where(Prestamo.concesionario.isnot(None)).distinct()).all() if r[0]]
-        modelos = [r[0] for r in db.execute(select(Prestamo.modelo).where(Prestamo.modelo.isnot(None)).distinct()).all() if r[0]]
+        modelos = [r[0] for r in db.execute(select(Prestamo.modelo_vehiculo).where(Prestamo.modelo_vehiculo.isnot(None)).distinct()).all() if r[0]]
         return {"analistas": analistas, "concesionarios": concesionarios, "modelos": modelos}
     except Exception:
         return {"analistas": [], "concesionarios": [], "modelos": []}
@@ -148,7 +148,7 @@ def _compute_kpis_principales(
         if concesionario:
             conds.append(Prestamo.concesionario == concesionario)
         if modelo:
-            conds.append(Prestamo.modelo == modelo)
+            conds.append(Prestamo.modelo_vehiculo == modelo)
         total_prestamos = db.scalar(
             select(func.count()).select_from(Prestamo).where(and_(*conds))
         ) or 0
@@ -160,7 +160,7 @@ def _compute_kpis_principales(
                 Prestamo.fecha_registro <= fin_dt,
                 *([] if not analista else [Prestamo.analista == analista]),
                 *([] if not concesionario else [Prestamo.concesionario == concesionario]),
-                *([] if not modelo else [Prestamo.modelo == modelo]),
+                *([] if not modelo else [Prestamo.modelo_vehiculo == modelo]),
             ))
         ) or 0
         conds_ant = [Prestamo.estado == "APROBADO", Prestamo.fecha_registro >= inicio_ant_dt, Prestamo.fecha_registro <= fin_ant_dt]
@@ -169,7 +169,7 @@ def _compute_kpis_principales(
         if concesionario:
             conds_ant.append(Prestamo.concesionario == concesionario)
         if modelo:
-            conds_ant.append(Prestamo.modelo == modelo)
+            conds_ant.append(Prestamo.modelo_vehiculo == modelo)
         total_mes_anterior = db.scalar(
             select(func.coalesce(func.sum(Prestamo.total_financiamiento), 0)).select_from(Prestamo).where(and_(*conds_ant))
         ) or 0
@@ -193,7 +193,7 @@ def _compute_kpis_principales(
         if concesionario:
             conds_moro.append(Prestamo.concesionario == concesionario)
         if modelo:
-            conds_moro.append(Prestamo.modelo == modelo)
+            conds_moro.append(Prestamo.modelo_vehiculo == modelo)
         morosidad_actual = _safe_float(
             db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).join(Prestamo, Cuota.prestamo_id == Prestamo.id).where(and_(*conds_moro))
@@ -212,7 +212,7 @@ def _compute_kpis_principales(
         if concesionario:
             conds_moro_ant.append(Prestamo.concesionario == concesionario)
         if modelo:
-            conds_moro_ant.append(Prestamo.modelo == modelo)
+            conds_moro_ant.append(Prestamo.modelo_vehiculo == modelo)
         morosidad_mes_anterior = _safe_float(
             db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).join(Prestamo, Cuota.prestamo_id == Prestamo.id).where(and_(*conds_moro_ant))
@@ -237,7 +237,7 @@ def _compute_kpis_principales(
         if concesionario:
             conds_cuota.append(Prestamo.concesionario == concesionario)
         if modelo:
-            conds_cuota.append(Prestamo.modelo == modelo)
+            conds_cuota.append(Prestamo.modelo_vehiculo == modelo)
         monto_cuotas_programadas = db.scalar(
             select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).join(Prestamo, Cuota.prestamo_id == Prestamo.id).where(and_(*conds_cuota))
         ) or 0
@@ -825,7 +825,7 @@ def get_prestamos_por_modelo(
             func.date_trunc("month", Prestamo.fecha_registro),
             "YYYY-MM",
         )
-        modelo_label = func.coalesce(Prestamo.modelo, "Sin modelo").label("modelo")
+        modelo_label = func.coalesce(Prestamo.modelo_vehiculo, "Sin modelo").label("modelo")
 
         # Por mes: préstamos APROBADO en [inicio, fin], agrupado por mes y modelo
         q_por_mes = (
@@ -840,7 +840,7 @@ def get_prestamos_por_modelo(
                 func.date(Prestamo.fecha_registro) >= inicio,
                 func.date(Prestamo.fecha_registro) <= fin,
             )
-            .group_by(mes_expr, Prestamo.modelo)
+            .group_by(mes_expr, Prestamo.modelo_vehiculo)
             .order_by(mes_expr, func.count().desc())
         )
         rows_por_mes = db.execute(q_por_mes).all()
@@ -852,12 +852,12 @@ def get_prestamos_por_modelo(
         # Acumulado: todos los préstamos APROBADO desde el inicio, por modelo
         q_acum = (
             select(
-                func.coalesce(Prestamo.modelo, "Sin modelo").label("modelo"),
+                func.coalesce(Prestamo.modelo_vehiculo, "Sin modelo").label("modelo"),
                 func.count().label("cantidad_acumulada"),
             )
             .select_from(Prestamo)
             .where(Prestamo.estado == "APROBADO")
-            .group_by(Prestamo.modelo)
+            .group_by(Prestamo.modelo_vehiculo)
             .order_by(func.count().desc())
         )
         rows_acum = db.execute(q_acum).all()
@@ -907,7 +907,7 @@ def _compute_financiamiento_por_rangos(
         if concesionario:
             conds_base.append(Prestamo.concesionario == concesionario)
         if modelo:
-            conds_base.append(Prestamo.modelo == modelo)
+            conds_base.append(Prestamo.modelo_vehiculo == modelo)
 
         rangos_def = _rangos_financiamiento()
         resultado = []
@@ -1005,12 +1005,14 @@ def _compute_composicion_morosidad(
         puntos = []
         total_monto = 0.0
         total_cuotas = 0
+        total_prestamos = 0
         dias_atraso = func.current_date() - Cuota.fecha_vencimiento
         for min_d, max_d, cat in bandas:
             if max_d >= 999999:
                 q = select(
                     func.count().label("n"),
                     func.coalesce(func.sum(Cuota.monto), 0).label("m"),
+                    func.count(distinct(Cuota.prestamo_id)).label("np"),
                 ).select_from(Cuota).where(
                     Cuota.fecha_pago.is_(None),
                     dias_atraso >= min_d,
@@ -1019,29 +1021,32 @@ def _compute_composicion_morosidad(
                 q = select(
                     func.count().label("n"),
                     func.coalesce(func.sum(Cuota.monto), 0).label("m"),
+                    func.count(distinct(Cuota.prestamo_id)).label("np"),
                 ).select_from(Cuota).where(
                     Cuota.fecha_pago.is_(None),
                     dias_atraso >= min_d,
                     dias_atraso <= max_d,
                 )
             row = db.execute(q).one()
-            n, m = int(row.n or 0), _safe_float(row.m)
+            n, m, np = int(row.n or 0), _safe_float(row.m), int(row.np or 0)
             total_cuotas += n
             total_monto += m
-            puntos.append({"categoria": cat, "monto": m, "cantidad_cuotas": n})
-        return {"puntos": puntos, "total_morosidad": total_monto, "total_cuotas": total_cuotas}
+            total_prestamos += np
+            puntos.append({"categoria": cat, "monto": m, "cantidad_cuotas": n, "cantidad_prestamos": np})
+        return {"puntos": puntos, "total_morosidad": total_monto, "total_cuotas": total_cuotas, "total_prestamos": total_prestamos}
     except Exception as e:
         logger.exception("Error en composicion-morosidad: %s", e)
         puntos = [
-            ("1-30 días", 12000, 45),
-            ("31-60 días", 8500, 28),
-            ("61-90 días", 6200, 18),
-            ("90+ días", 15800, 32),
+            ("1-30 días", 12000, 45, 12),
+            ("31-60 días", 8500, 28, 9),
+            ("61-90 días", 6200, 18, 6),
+            ("90+ días", 15800, 32, 10),
         ]
         return {
-            "puntos": [{"categoria": c, "monto": m, "cantidad_cuotas": n} for c, m, n in puntos],
+            "puntos": [{"categoria": c, "monto": m, "cantidad_cuotas": n, "cantidad_prestamos": np} for c, m, n, np in puntos],
             "total_morosidad": sum(p[1] for p in puntos),
             "total_cuotas": sum(p[2] for p in puntos),
+            "total_prestamos": sum(p[3] for p in puntos),
         }
 
 
@@ -1178,7 +1183,7 @@ def _compute_morosidad_por_analista(
         if concesionario:
             conds.append(Prestamo.concesionario == concesionario)
         if modelo:
-            conds.append(Prestamo.modelo == modelo)
+            conds.append(Prestamo.modelo_vehiculo == modelo)
 
         analista_label = func.coalesce(Prestamo.analista, "Sin analista")
         q = (

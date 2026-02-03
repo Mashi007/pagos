@@ -370,41 +370,76 @@ def get_clientes_atrasados(
     incluir_ml: bool = Query(True),
     db: Session = Depends(get_db),
 ):
-    """Lista de clientes con cuotas atrasadas desde BD."""
+    """
+    Lista de préstamos con cuotas atrasadas desde BD.
+    Una fila por préstamo: cedula, nombres, analista, cuotas_vencidas, total_adeudado, fecha_primera_vencida.
+    Compatible con la pestaña 'Clientes con Cuotas Impagas'.
+    """
     hoy = date.today()
-    subq = (
-        select(Cuota.cliente_id)
+    q = (
+        select(
+            Prestamo.id.label("prestamo_id"),
+            Cliente.cedula,
+            Cliente.nombres,
+            Cliente.telefono,
+            Cliente.email,
+            Cliente.estado,
+            func.coalesce(Prestamo.analista, "Sin analista").label("analista"),
+            func.count().label("cuotas_vencidas"),
+            func.coalesce(func.sum(Cuota.monto), 0).label("total_adeudado"),
+            func.min(Cuota.fecha_vencimiento).label("fecha_primera_vencida"),
+        )
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
         .where(
             Cuota.fecha_pago.is_(None),
             Cuota.fecha_vencimiento < hoy,
-            Cuota.cliente_id.isnot(None),
         )
-        .distinct()
+        .group_by(Prestamo.id, Prestamo.analista, Cliente.id, Cliente.cedula, Cliente.nombres, Cliente.telefono, Cliente.email, Cliente.estado)
     )
     if dias_retraso is not None:
         limite = hoy - timedelta(days=dias_retraso)
-        subq = subq.where(Cuota.fecha_vencimiento <= limite)
+        q = q.where(Cuota.fecha_vencimiento <= limite)
     if dias_retraso_min is not None:
         limite_min = hoy - timedelta(days=dias_retraso_min)
-        subq = subq.where(Cuota.fecha_vencimiento >= limite_min)
+        q = q.where(Cuota.fecha_vencimiento >= limite_min)
     if dias_retraso_max is not None:
         limite_max = hoy - timedelta(days=dias_retraso_max)
-        subq = subq.where(Cuota.fecha_vencimiento <= limite_max)
-    ids = [r[0] for r in db.execute(subq).all() if r[0]]
-    if not ids:
-        return []
-    clientes = db.execute(select(Cliente).where(Cliente.id.in_(ids))).scalars().all()
-    return [
-        {
-            "id": c.id,
-            "cedula": c.cedula,
-            "nombres": c.nombres,
-            "telefono": c.telefono,
-            "email": c.email,
-            "estado": c.estado,
+        q = q.where(Cuota.fecha_vencimiento <= limite_max)
+    rows = db.execute(q).all()
+    out: List[dict] = []
+    for r in rows:
+        item = {
+            "cedula": r.cedula,
+            "nombres": r.nombres,
+            "analista": r.analista,
+            "telefono": r.telefono or "",
+            "email": r.email or "",
+            "estado": r.estado or "",
+            "prestamo_id": r.prestamo_id,
+            "cuotas_vencidas": r.cuotas_vencidas,
+            "total_adeudado": _safe_float(r.total_adeudado),
+            "fecha_primera_vencida": r.fecha_primera_vencida.isoformat() if r.fecha_primera_vencida else None,
         }
-        for c in clientes
-    ]
+        if incluir_ml:
+            prestamo = db.get(Prestamo, r.prestamo_id)
+            if prestamo:
+                nivel = getattr(prestamo, "ml_impago_nivel_riesgo_manual", None) or getattr(prestamo, "ml_impago_nivel_riesgo_calculado", None)
+                prob = getattr(prestamo, "ml_impago_probabilidad_manual", None) or getattr(prestamo, "ml_impago_probabilidad_calculada", None)
+                if nivel is not None or prob is not None:
+                    item["ml_impago"] = {
+                        "nivel_riesgo": nivel or "N/A",
+                        "probabilidad_impago": _safe_float(prob),
+                        "prediccion": f"Riesgo {nivel or 'N/A'}",
+                        "es_manual": getattr(prestamo, "ml_impago_nivel_riesgo_manual", None) is not None,
+                    }
+                else:
+                    item["ml_impago"] = None
+            else:
+                item["ml_impago"] = None
+        out.append(item)
+    return out
 
 
 @router.get("/clientes-por-cantidad-pagos")

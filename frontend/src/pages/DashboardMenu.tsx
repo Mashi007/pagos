@@ -790,7 +790,7 @@ export function DashboardMenu() {
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={filteredData} layout="vertical" margin={{ top: 14, right: 24, left: 120, bottom: 24 }}>
                           <CartesianGrid {...chartCartesianGrid} />
-                          <XAxis type="number" domain={[600, 1400]} tick={chartAxisTick} tickFormatter={(value) => value.toLocaleString('es-EC')} label={{ value: 'Cantidad de Préstamos', position: 'insideBottom', offset: -10, style: { textAnchor: 'middle', fill: '#374151', fontSize: 13, fontWeight: 600 } }} allowDecimals={false} />
+                          <XAxis type="number" domain={[600, 'auto']} tick={chartAxisTick} tickFormatter={(value) => value.toLocaleString('es-EC')} label={{ value: 'Cantidad de Préstamos', position: 'insideBottom', offset: -10, style: { textAnchor: 'middle', fill: '#374151', fontSize: 13, fontWeight: 600 } }} allowDecimals={false} />
                           <YAxis type="category" dataKey="categoriaFormateada" width={115} tick={{ fontSize: 11, fill: '#4b5563', fontWeight: 500 }} interval={0} tickLine={false} />
                           <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [`${value.toLocaleString('es-EC')} préstamos`, 'Cantidad']} labelFormatter={(label) => `Banda: ${label}`} cursor={{ fill: 'rgba(99, 102, 241, 0.08)' }} />
                           <Legend {...chartLegendStyle} />
@@ -894,14 +894,18 @@ export function DashboardMenu() {
                   ) : datosMorosidadAnalista && datosMorosidadAnalista.length > 0 ? (
                     <>
                       <h4 className="text-sm font-semibold text-gray-700 mb-3 text-center">Cuotas vencidas por analista</h4>
-                      <ResponsiveContainer width="100%" height={340}>
-                        <RadarChart data={datosMorosidadAnalista} margin={{ top: 16, right: 24, left: 24, bottom: 16 }}>
-                          <PolarGrid stroke="#e5e7eb" />
-                          <PolarAngleAxis dataKey="analista" tick={{ fontSize: 11 }} />
-                          <PolarRadiusAxis angle={90} tick={{ fontSize: 10 }} />
-                          <Radar name="Cuotas vencidas" dataKey="cantidad_cuotas_vencidas" stroke="#f97316" fill="#f97316" fillOpacity={0.5} />
+                      <ResponsiveContainer width="100%" height={400}>
+                        <RadarChart data={datosMorosidadAnalista} margin={{ top: 24, right: 32, left: 32, bottom: 24 }} cx="50%" cy="50%" outerRadius="75%">
+                          <PolarGrid stroke="#e5e7eb" strokeWidth={1} />
+                          <PolarAngleAxis
+                            dataKey="analista"
+                            tick={{ fontSize: 11, fill: '#374151', fontWeight: 500 }}
+                            tickFormatter={(name) => (name && name.length > 18 ? `${name.slice(0, 16)}…` : name)}
+                          />
+                          <PolarRadiusAxis angle={90} tick={{ fontSize: 11, fill: '#6b7280' }} domain={[0, 'auto']} />
+                          <Radar name="Cuotas vencidas" dataKey="cantidad_cuotas_vencidas" stroke="#ea580c" strokeWidth={2} fill="#f97316" fillOpacity={0.4} />
                           <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [value.toLocaleString('es-EC'), 'Cuotas vencidas']} labelFormatter={(label) => `Analista: ${label}`} />
-                          <Legend />
+                          <Legend {...chartLegendStyle} />
                         </RadarChart>
                       </ResponsiveContainer>
                     </>
@@ -939,16 +943,25 @@ export function DashboardMenu() {
                     <div className="flex items-center justify-center py-16 text-gray-500">Cargando...</div>
                   ) : datosMorosidadAnalista && datosMorosidadAnalista.length > 0 ? (
                     <>
-                      <h4 className="text-sm font-semibold text-gray-700 mb-3 text-center">Dólares vencidos por analista</h4>
-                      <p className="text-xs text-gray-500 mb-2 text-center">Suma de monto_cuota de cuotas vencidas (hoy &gt; fecha_vencimiento, sin pagar) por analista</p>
-                      <ResponsiveContainer width="100%" height={Math.max(340, Math.min(500, datosMorosidadAnalista.length * 24))}>
-                        <BarChart data={datosMorosidadAnalista} layout="vertical" margin={{ top: 8, right: 24, left: 140, bottom: 8 }}>
-                          <CartesianGrid {...chartCartesianGrid} />
-                          <XAxis type="number" tickFormatter={(v) => `$${v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v}`} tick={chartAxisTick} />
-                          <YAxis type="category" dataKey="analista" width={130} tick={{ fontSize: 11 }} interval={0} />
-                          <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [formatCurrency(value), 'Dólares vencidos']} labelFormatter={(label) => `Analista: ${label}`} cursor={{ fill: 'rgba(234, 88, 12, 0.08)' }} />
-                          <Legend />
-                          <Bar dataKey="monto_vencido" name="Dólares vencidos" fill="#ea580c" radius={[0, 4, 4, 0]} maxBarSize={32} />
+                      <h4 className="text-sm font-semibold text-gray-700 mb-1 text-center">Dólares vencidos por analista</h4>
+                      <p className="text-xs text-gray-500 mb-3 text-center max-w-2xl mx-auto">Suma de monto_cuota de cuotas vencidas (hoy &gt; fecha_vencimiento, sin pagar) por analista</p>
+                      <ResponsiveContainer width="100%" height={Math.max(380, Math.min(620, datosMorosidadAnalista.length * 28))}>
+                        <BarChart data={datosMorosidadAnalista} layout="vertical" margin={{ top: 12, right: 32, left: 16, bottom: 12 }} barCategoryGap="12%">
+                          <CartesianGrid {...chartCartesianGrid} horizontal={false} />
+                          <XAxis type="number" tickFormatter={(v) => `$${v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v}`} tick={chartAxisTick} axisLine={{ stroke: '#e5e7eb' }} />
+                          <YAxis
+                            type="category"
+                            dataKey="analista"
+                            width={200}
+                            tick={{ fontSize: 12, fill: '#374151', fontWeight: 500 }}
+                            interval={0}
+                            tickLine={false}
+                            axisLine={{ stroke: '#e5e7eb' }}
+                            tickFormatter={(name) => (name && name.length > 24 ? `${name.slice(0, 22)}…` : name)}
+                          />
+                          <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [formatCurrency(value), 'Dólares vencidos']} labelFormatter={(label) => `Analista: ${label}`} cursor={{ fill: 'rgba(234, 88, 12, 0.06)' }} />
+                          <Legend {...chartLegendStyle} />
+                          <Bar dataKey="monto_vencido" name="Dólares vencidos" fill="#ea580c" radius={[0, 4, 4, 0]} maxBarSize={28} />
                         </BarChart>
                       </ResponsiveContainer>
                     </>
