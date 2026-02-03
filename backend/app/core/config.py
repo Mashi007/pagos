@@ -77,6 +77,13 @@ class Settings(BaseSettings):
         None,
         description="App Secret de Meta para verificar firma de webhooks (recomendado)"
     )
+
+    # URL para aviso cuando el webhook de WhatsApp falla (ej. Slack Incoming Webhook).
+    # Si está configurada, se envía un POST con el mensaje de error.
+    ALERT_WEBHOOK_URL: Optional[str] = Field(
+        None,
+        description="URL (ej. Slack Incoming Webhook) para alertas cuando falla el procesamiento del webhook de WhatsApp"
+    )
     
     # ============================================
     # Email

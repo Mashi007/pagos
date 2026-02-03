@@ -5,6 +5,7 @@ import logging
 import secrets
 from fastapi import APIRouter, Request, HTTPException, Query, Depends, Header
 from typing import Optional
+from app.core.alert_webhook import send_webhook_alert
 from app.schemas.whatsapp import (
     WhatsAppWebhookPayload,
     WhatsAppWebhookChallenge,
@@ -158,16 +159,27 @@ async def receive_webhook(
                                     f"ID: {result.get('message_id')}"
                                 )
                             else:
+                                err_msg = result.get("error") or "Error desconocido"
                                 logger.error(
                                     f"Error procesando mensaje - "
                                     f"ID: {result.get('message_id')}, "
-                                    f"Error: {result.get('error')}"
+                                    f"Error: {err_msg}"
+                                )
+                                send_webhook_alert(
+                                    "Error procesando mensaje WhatsApp",
+                                    context="whatsapp_webhook",
+                                    detail=f"message_id={result.get('message_id')} error={err_msg}",
                                 )
                                 
                         except Exception as e:
                             logger.error(
                                 f"Error procesando mensaje individual: {str(e)}",
                                 exc_info=True
+                            )
+                            send_webhook_alert(
+                                "Excepción en webhook WhatsApp",
+                                context="whatsapp_webhook",
+                                detail=str(e),
                             )
                 
                 # Procesar estados de mensajes (opcional)
@@ -187,6 +199,11 @@ async def receive_webhook(
         
     except Exception as e:
         logger.error(f"Error procesando webhook de WhatsApp: {str(e)}", exc_info=True)
+        send_webhook_alert(
+            "Webhook WhatsApp: excepción no controlada (5xx)",
+            context="whatsapp_webhook",
+            detail=str(e),
+        )
         # No exponer detalles del error en producción
         error_message = "Error procesando webhook" if not settings.DEBUG else str(e)
         return WhatsAppResponse(

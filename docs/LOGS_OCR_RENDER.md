@@ -19,6 +19,7 @@ En el panel de **Logs** del servicio backend en Render, usa estos filtros:
 | Paso 4–5: BD y Sheet | `Digitalizando` / `pagos_whatsapp guardado` / `Escribiendo Sheet` / `append_row` |
 | Paso 6: confirmación de datos | `esperando_confirmacion_datos` / `Confirmación datos` |
 | Fallo global de digitalización | `digitalización fallida` |
+| Rastreo por papeleta (ID en BD) | `Informe guardado en BD id=` |
 
 ---
 
@@ -38,16 +39,17 @@ Si todo va bien, deberías ver algo como esto **en el mismo minuto** (por un mis
 10. `[INFORME_PAGOS] Drive upload INICIO | filename=... bytes=...`
 11. `[INFORME_PAGOS] Drive upload OK | file_id=...`
 12. `[INFORME_PAGOS] pagos_whatsapp guardado | id=... telefono=...`
-13. `[INFORME_PAGOS] OK digitalización completa | pagos_whatsapp_id=... pagos_informe_id=...`
-14. `[INFORME_PAGOS] Escribiendo Sheet | telefono=...`
-15. `[INFORME_PAGOS] Sheets append_row OK | cedula=... tab=...`
-16. `[INFORME_PAGOS] FLUJO_OCR OK hasta Sheet | estado=esperando_confirmacion_datos informe_id=...`
+13. `Informe guardado en BD id=... | cedula=... cantidad=...` (rastreo por papeleta)
+14. `[INFORME_PAGOS] OK digitalización completa | pagos_whatsapp_id=... pagos_informe_id=...`
+15. `[INFORME_PAGOS] Escribiendo Sheet | telefono=...`
+16. `[INFORME_PAGOS] Sheets append_row OK | cedula=... tab=...`
+17. `[INFORME_PAGOS] FLUJO_OCR OK hasta Sheet | estado=esperando_confirmacion_datos informe_id=...`
 
 Si el usuario luego escribe **SÍ** o corrige datos:
 
-17. `[INFORME_PAGOS] Confirmación datos: estado=esperando_confirmacion_datos informe_id=...`
-18. `[INFORME_PAGOS] Confirmación datos: cliente confirmó SÍ` **o** `cliente editó campos | informe_id=... campos=[...]`
-19. Si editó: `[INFORME_PAGOS] Sheets update_row INICIO | informe_id=...` y luego `Sheets update_row OK`
+18. `[INFORME_PAGOS] Confirmación datos: estado=esperando_confirmacion_datos informe_id=...`
+19. `[INFORME_PAGOS] Confirmación datos: cliente confirmó SÍ` **o** `cliente editó campos | informe_id=... campos=[...]`
+20. Si editó: `[INFORME_PAGOS] Sheets update_row INICIO | informe_id=...` y luego `Sheets update_row OK`
 
 ---
 
@@ -72,3 +74,20 @@ Si el usuario luego escribe **SÍ** o corrige datos:
 - **ERROR/EXCEPTION**: excepciones; en Render suelen incluir traceback.
 
 En producción conviene tener al menos **INFO** para el tag `[INFORME_PAGOS]` para poder seguir todo el flujo y usar esta guía.
+
+---
+
+## 5. Alertas cuando falla el webhook de WhatsApp
+
+Si configuras **ALERT_WEBHOOK_URL** (variable de entorno en Render), el backend envía un aviso cuando:
+
+- Hay un error procesando un mensaje (ej. fallo en OCR/BD).
+- Se lanza una excepción no controlada en el webhook.
+
+**Ejemplo: Slack Incoming Webhook**
+
+1. En Slack: *Apps* → *Incoming Webhooks* → crear webhook y copiar la URL.
+2. En Render: servicio backend → *Environment* → añadir variable `ALERT_WEBHOOK_URL` = esa URL.
+3. Al fallar el webhook recibirás un mensaje en el canal con el detalle del error.
+
+Si no configuras `ALERT_WEBHOOK_URL`, no se envía nada; el comportamiento es opcional.

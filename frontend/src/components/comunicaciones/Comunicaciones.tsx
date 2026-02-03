@@ -556,7 +556,9 @@ export function Comunicaciones({
                 size="sm"
                 onClick={() => {
                   refetch()
-                  refetchMensajesActuales()
+                  if (conversacionActual?.tipo === 'whatsapp' && conversacionActual?.contacto) {
+                    queryClient.invalidateQueries({ queryKey: ['comunicaciones-mensajes', conversacionActual.contacto] })
+                  }
                 }}
                 disabled={isLoading}
                 className="hover:bg-blue-100"

@@ -718,6 +718,10 @@ class WhatsAppService:
             db.commit()
             db.refresh(informe)
             logger.info(
+                "Informe guardado en BD id=%s | cedula=%s cantidad=%s",
+                informe.id, conv.cedula, cantidad,
+            )
+            logger.info(
                 "%s OK digitalización completa | pagos_whatsapp_id=%s pagos_informe_id=%s telefono=%s cedula=%s banco=%s",
                 LOG_TAG_INFORME, row_pw.id, informe.id, phone_mask, conv.cedula, nombre_banco,
             )
