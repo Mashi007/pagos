@@ -881,7 +881,7 @@ def get_prestamos_por_modelo(
 
 
 def _rangos_financiamiento():
-    """Bandas de $200 USD: cantidad de préstamos por total_financiamiento (tabla prestamos)."""
+    """Bandas por total_financiamiento (tabla prestamos). Incluye $1,200-$1,400 y Más de $1,400."""
     return [
         (0, 200, "$0 - $200"),
         (200, 400, "$200 - $400"),
@@ -889,7 +889,8 @@ def _rangos_financiamiento():
         (600, 800, "$600 - $800"),
         (800, 1000, "$800 - $1,000"),
         (1000, 1200, "$1,000 - $1,200"),
-        (1200, 999999999, "Más de $1,200"),
+        (1200, 1400, "$1,200 - $1,400"),
+        (1400, 999999999, "Más de $1,400"),
     ]
 
 
@@ -959,7 +960,8 @@ def _compute_financiamiento_por_rangos(
             ("$600 - $800", 0),
             ("$800 - $1,000", 0),
             ("$1,000 - $1,200", 0),
-            ("Más de $1,200", 0),
+            ("$1,200 - $1,400", 0),
+            ("Más de $1,400", 0),
         ]
         total_p = max(1, sum(r[1] for r in rangos))
         return {

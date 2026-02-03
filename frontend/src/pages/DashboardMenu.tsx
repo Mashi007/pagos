@@ -383,14 +383,14 @@ export function DashboardMenu() {
   const chartAxisTick = { fontSize: 13, fill: '#374151', fontWeight: 500 }
   const chartLegendStyle = { wrapperStyle: { paddingTop: 14 }, iconType: 'rect' as const, iconSize: 12 }
 
-  // Bandas desde backend: $0-$200, $200-$400, ..., $800-$1000, $1000-$1200, Más de $1200 (cantidad de préstamos por banda)
+  // Bandas desde backend: $0-$200 ... $1000-$1200, $1200-$1400, Más de $1400 (cantidad de préstamos por banda)
   const datosBandas200 = useMemo(() => {
     try {
       if (!datosFinanciamientoRangos?.rangos || datosFinanciamientoRangos.rangos.length === 0) {
         return []
       }
-      // Orden descendente (mayor banda arriba en el gráfico horizontal): Más de $1200 primero, luego $1000-$1200, etc.
-      const orden = ['Más de $1,200', '$1,000 - $1,200', '$800 - $1,000', '$600 - $800', '$400 - $600', '$200 - $400', '$0 - $200']
+      // Orden descendente (mayor banda arriba): Más de $1400, $1200-$1400, $1000-$1200, ...
+      const orden = ['Más de $1,400', '$1,200 - $1,400', '$1,000 - $1,200', '$800 - $1,000', '$600 - $800', '$400 - $600', '$200 - $400', '$0 - $200']
       return [...datosFinanciamientoRangos.rangos]
         .sort((a, b) => orden.indexOf(b.categoria) - orden.indexOf(a.categoria))
         .map(r => ({
@@ -790,7 +790,7 @@ export function DashboardMenu() {
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={filteredData} layout="vertical" margin={{ top: 14, right: 24, left: 120, bottom: 24 }}>
                           <CartesianGrid {...chartCartesianGrid} />
-                          <XAxis type="number" domain={[0, 'dataMax']} tick={chartAxisTick} tickFormatter={(value) => value.toLocaleString('es-EC')} label={{ value: 'Cantidad de Préstamos', position: 'insideBottom', offset: -10, style: { textAnchor: 'middle', fill: '#374151', fontSize: 13, fontWeight: 600 } }} allowDecimals={false} />
+                          <XAxis type="number" domain={[600, 1400]} tick={chartAxisTick} tickFormatter={(value) => value.toLocaleString('es-EC')} label={{ value: 'Cantidad de Préstamos', position: 'insideBottom', offset: -10, style: { textAnchor: 'middle', fill: '#374151', fontSize: 13, fontWeight: 600 } }} allowDecimals={false} />
                           <YAxis type="category" dataKey="categoriaFormateada" width={115} tick={{ fontSize: 11, fill: '#4b5563', fontWeight: 500 }} interval={0} tickLine={false} />
                           <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [`${value.toLocaleString('es-EC')} préstamos`, 'Cantidad']} labelFormatter={(label) => `Banda: ${label}`} cursor={{ fill: 'rgba(99, 102, 241, 0.08)' }} />
                           <Legend {...chartLegendStyle} />
