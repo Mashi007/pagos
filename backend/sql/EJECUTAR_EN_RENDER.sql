@@ -40,6 +40,14 @@ ALTER TABLE pagos_informes ADD COLUMN IF NOT EXISTS observacion TEXT;
 ALTER TABLE pagos_informes ADD COLUMN IF NOT EXISTS link_imagen TEXT;
 ALTER TABLE pagos_informes ADD COLUMN IF NOT EXISTS cantidad VARCHAR(50);
 
+-- Permitir NULL en banco_entidad_financiera (la app usa nombre_banco; evita NotNullViolation)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'pagos_informes' AND column_name = 'banco_entidad_financiera') THEN
+    ALTER TABLE pagos_informes ALTER COLUMN banco_entidad_financiera DROP NOT NULL;
+  END IF;
+END $$;
+
 -- -----------------------------------------------------------------------------
 -- 3) conversacion_cobranza: tabla (si no existe) y columnas flujo cobranza/confirmación
 -- -----------------------------------------------------------------------------

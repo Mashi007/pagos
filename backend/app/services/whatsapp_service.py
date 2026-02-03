@@ -746,6 +746,10 @@ class WhatsAppService:
                 "%s %s | digitalización fallida (Drive/OCR/BD/Sheet) telefono=%s cedula=%s error=%s",
                 LOG_TAG_FALLO, "digitalizacion", phone_mask, conv.cedula, e,
             )
+            logger.error(
+                "%s CAUSA mensaje 'No pudimos procesar': tipo=%s mensaje=%s",
+                LOG_TAG_FALLO, type(e).__name__, str(e),
+            )
             try:
                 db.rollback()
             except Exception:

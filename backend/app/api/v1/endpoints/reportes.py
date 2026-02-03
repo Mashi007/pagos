@@ -273,7 +273,7 @@ def _generar_pdf_cartera(data: dict) -> bytes:
 @router.get("/exportar/cartera")
 def exportar_cartera(
     db: Session = Depends(get_db),
-    formato: str = Query("excel", regex="^(excel|pdf)$"),
+    formato: str = Query("excel", pattern="^(excel|pdf)$"),
     fecha_corte: Optional[str] = Query(None),
 ):
     """Exporta reporte de cartera en Excel o PDF. Datos reales desde BD."""
@@ -392,7 +392,7 @@ def _generar_pdf_pagos(data: dict) -> bytes:
 @router.get("/exportar/pagos")
 def exportar_pagos(
     db: Session = Depends(get_db),
-    formato: str = Query("excel", regex="^(excel|pdf)$"),
+    formato: str = Query("excel", pattern="^(excel|pdf)$"),
     fecha_inicio: str = Query(...),
     fecha_fin: str = Query(...),
 ):
@@ -521,7 +521,7 @@ def _generar_excel_morosidad(data: dict) -> bytes:
 @router.get("/exportar/morosidad")
 def exportar_morosidad(
     db: Session = Depends(get_db),
-    formato: str = Query("excel", regex="^(excel|pdf)$"),
+    formato: str = Query("excel", pattern="^(excel|pdf)$"),
     fecha_corte: Optional[str] = Query(None),
 ):
     """Exporta reporte de morosidad en Excel o PDF."""
@@ -582,7 +582,7 @@ def get_reporte_financiero(
 @router.get("/exportar/financiero")
 def exportar_financiero(
     db: Session = Depends(get_db),
-    formato: str = Query("excel", regex="^(excel|pdf)$"),
+    formato: str = Query("excel", pattern="^(excel|pdf)$"),
     fecha_corte: Optional[str] = Query(None),
 ):
     """Exporta reporte financiero en Excel o PDF."""
@@ -649,7 +649,7 @@ def get_reporte_asesores(
 @router.get("/exportar/asesores")
 def exportar_asesores(
     db: Session = Depends(get_db),
-    formato: str = Query("excel", regex="^(excel|pdf)$"),
+    formato: str = Query("excel", pattern="^(excel|pdf)$"),
     fecha_corte: Optional[str] = Query(None),
 ):
     """Exporta reporte asesores en Excel o PDF."""
@@ -725,7 +725,7 @@ def get_reporte_productos(
 @router.get("/exportar/productos")
 def exportar_productos(
     db: Session = Depends(get_db),
-    formato: str = Query("excel", regex="^(excel|pdf)$"),
+    formato: str = Query("excel", pattern="^(excel|pdf)$"),
     fecha_corte: Optional[str] = Query(None),
 ):
     """Exporta reporte productos en Excel o PDF."""
