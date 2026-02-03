@@ -5,6 +5,7 @@ La config se guarda en tabla configuracion (clave informe_pagos_config).
 """
 import json
 import logging
+import re
 from typing import Any, List
 
 logger = logging.getLogger(__name__)
@@ -81,6 +82,51 @@ def get_google_sheets_id() -> str:
     """ID de la hoja de cálculo (desde la URL)."""
     cfg = get_informe_pagos_config()
     return (cfg.get("google_sheets_id") or "").strip()
+
+
+def get_ocr_keywords_numero_documento() -> List[str]:
+    """
+    Palabras clave para ubicar 'Número de documento' en el texto OCR (sin formato estándar).
+    Ej: "numero de documento", "numero de recibo", "nº doc". Si la línea contiene alguna, se extrae el valor (números, letras o mixto).
+    Valor en config: string separado por comas o saltos de línea; o lista JSON. Si vacío, se usan las por defecto.
+    """
+    cfg = get_informe_pagos_config()
+    raw = cfg.get("ocr_keywords_numero_documento")
+    if raw is None or raw == "":
+        return _default_keywords_numero_documento()
+    if isinstance(raw, list):
+        return [str(x).strip() for x in raw if str(x).strip()]
+    s = str(raw).strip()
+    if not s:
+        return _default_keywords_numero_documento()
+    # Aceptar separado por comas o por saltos de línea
+    keywords = []
+    for part in re.split(r"[\n,]+", s):
+        k = part.strip()
+        if k:
+            keywords.append(k)
+    return keywords if keywords else _default_keywords_numero_documento()
+
+
+def _default_keywords_numero_documento() -> List[str]:
+    """Palabras clave por defecto para ubicar número de documento en OCR."""
+    return [
+        "numero de documento",
+        "numero de recibo",
+        "número de documento",
+        "número de recibo",
+        "numero documento",
+        "numero recibo",
+        "nº documento",
+        "nº recibo",
+        "nº doc",
+        "no. documento",
+        "no. recibo",
+        "documento n°",
+        "recibo n°",
+        "documento no",
+        "recibo no",
+    ]
 
 
 def get_destinatarios_informe_emails() -> List[str]:

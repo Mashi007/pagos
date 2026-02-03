@@ -513,6 +513,7 @@ class WhatsAppService:
         fecha_dep = "NA"
         nombre_banco = "NA"
         numero_dep = "NA"
+        numero_doc = "NA"
         cantidad = "NA"
         try:
             from app.services.ocr_service import extract_from_image
@@ -520,6 +521,7 @@ class WhatsAppService:
             fecha_dep = ocr_data.get("fecha_deposito") or "NA"
             nombre_banco = ocr_data.get("nombre_banco") or "NA"
             numero_dep = ocr_data.get("numero_deposito") or "NA"
+            numero_doc = ocr_data.get("numero_documento") or "NA"
             cantidad = ocr_data.get("cantidad") or "NA"
         except Exception as e:
             logger.exception("Error OCR: %s", e)
@@ -529,6 +531,7 @@ class WhatsAppService:
             fecha_deposito=fecha_dep,
             nombre_banco=nombre_banco,
             numero_deposito=numero_dep,
+            numero_documento=numero_doc,
             cantidad=cantidad,
             link_imagen=link_imagen,
             observacion=observacion_informe,
@@ -545,7 +548,7 @@ class WhatsAppService:
         )
         try:
             from app.services.google_sheets_informe_service import append_row
-            sheet_ok = append_row(conv.cedula, fecha_dep, nombre_banco, numero_dep, cantidad, link_imagen, periodo, observacion=observacion_informe)
+            sheet_ok = append_row(conv.cedula, fecha_dep, nombre_banco, numero_dep, numero_doc, cantidad, link_imagen, periodo, observacion=observacion_informe)
             if not sheet_ok:
                 logger.warning("Sheets: no se escribió la fila (digitalización en BD OK). Revisa OAuth conectado, ID hoja y que la hoja esté compartida con la cuenta OAuth.")
         except Exception as e:

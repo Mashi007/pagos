@@ -46,6 +46,7 @@ class InformePagosConfigUpdate(BaseModel):
     google_sheets_id: Optional[str] = None
     destinatarios_informe_emails: Optional[str] = None
     horarios_envio: Optional[list] = None
+    ocr_keywords_numero_documento: Optional[str] = None  # Palabras clave para ubicar "Número de documento" en OCR (separadas por coma o salto de línea)
 
 
 GOOGLE_OAUTH_SCOPES = " ".join([
@@ -244,8 +245,8 @@ def _verificar_sheets() -> dict:
         first_sheet = sheets[0]
         tab_title = (first_sheet.get("properties") or {}).get("title") or "Hoja 1"
         # 2) Escritura: escribir una fila de prueba en fila 1000 (no tocar cabeceras) y borrarla
-        range_write = f"'{tab_title}'!A1000:G1000"
-        body = {"values": [["_verif_conexion", datetime.utcnow().isoformat(), "", "", "", "", ""]]}
+        range_write = f"'{tab_title}'!A1000:H1000"
+        body = {"values": [["_verif_conexion", datetime.utcnow().isoformat(), "", "", "", "", "", ""]]}
         service.spreadsheets().values().update(
             spreadsheetId=sheet_id,
             range=range_write,

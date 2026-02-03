@@ -1,6 +1,7 @@
 """
 Escribe filas de informe de papeletas en Google Sheets.
-Una pestaña por periodo (6am, 1pm, 4h30). Columnas: Cédula, Fecha, Nombre banco, Número depósito, Cantidad, Link imagen, Observación.
+Una pestaña por periodo (6am, 1pm, 4h30).
+Cabeceras: Cédula, Fecha (fecha de depósito), Nombre en cabecera (banco), Número depósito, Cantidad (total USD/Bs), Link imagen, Observación.
 Usa OAuth o cuenta de servicio según informe_pagos_config.
 """
 import logging
@@ -11,6 +12,17 @@ logger = logging.getLogger(__name__)
 
 # Nombres de pestaña por periodo (clave interna)
 PERIODOS = {"6am": "6am", "1pm": "1pm", "4h30": "4h30"}
+
+# Columnas del informe (orden A→H). Origen de cada una para no dejar ninguna sin ubicar:
+#  A Cédula             → flujo WhatsApp (usuario escribe)
+#  B Fecha              → fecha de depósito (OCR)
+#  C Nombre en cabecera → banco, nombre en la cabecera del documento (OCR)
+#  D Número depósito    → referencia/depósito (OCR)
+#  E Número de documento → número doc/recibo; formato variable; OCR por palabras clave configurables
+#  F Cantidad           → total en dólares o bolívares (OCR)
+#  G Link imagen        → URL de la imagen en Google Drive
+#  H Observación        → ej. "No confirma identidad" (flujo WhatsApp)
+CABECERAS_INFORME = ["Cédula", "Fecha", "Nombre en cabecera", "Número depósito", "Número de documento", "Cantidad", "Link imagen", "Observación"]
 
 SHEETS_SCOPE = ["https://www.googleapis.com/auth/spreadsheets"]
 
@@ -35,6 +47,7 @@ def append_row(
     fecha_deposito: str,
     nombre_banco: str,
     numero_deposito: str,
+    numero_documento: str,
     cantidad: str,
     link_imagen: str,
     periodo_envio: str,
@@ -44,7 +57,7 @@ def append_row(
     Añade una fila a la pestaña del periodo en la hoja configurada.
     periodo_envio: "6am" | "1pm" | "4h30"
     observacion: ej. "No confirma identidad" si no confirmó en 3 intentos.
-    Crea la pestaña si no existe (con cabeceras: Cédula, Fecha, Nombre banco, Número depósito, Cantidad, Link imagen, Observación).
+    Crea la pestaña si no existe (cabeceras: Cédula, Fecha, Nombre en cabecera, Número depósito, Número de documento, Cantidad, Link imagen, Observación).
     """
     service, sheet_id = _get_sheets_service()
     if not service or not sheet_id:
@@ -53,9 +66,9 @@ def append_row(
     tab_name = PERIODOS.get(periodo_envio) or periodo_envio
     try:
         ensure_sheet_tab(sheet_id, tab_name)
-        range_name = f"'{tab_name}'!A:G"
+        range_name = f"'{tab_name}'!A:H"
         obs = (observacion or "").strip() or ""
-        body = {"values": [[cedula, fecha_deposito, nombre_banco, numero_deposito, cantidad, link_imagen, obs]]}
+        body = {"values": [[cedula, fecha_deposito, nombre_banco, numero_deposito, numero_documento or "", cantidad, link_imagen, obs]]}
         service.spreadsheets().values().append(
             spreadsheetId=sheet_id,
             range=range_name,
@@ -72,13 +85,13 @@ def append_row(
 def ensure_sheet_tab(sheet_id: str, tab_name: str, headers: Optional[List[str]] = None) -> bool:
     """
     Asegura que exista la pestaña con nombre tab_name y opcionalmente la fila de cabecera.
-    headers: ["Cédula", "Fecha", "Nombre banco", "Número depósito", "Cantidad", "Link imagen", "Observación"]
+    headers: Cédula, Fecha, Nombre en cabecera, Número depósito, Número de documento, Cantidad, Link imagen, Observación.
     """
     service, _ = _get_sheets_service()
     if not service:
         return False
     if headers is None:
-        headers = ["Cédula", "Fecha", "Nombre banco", "Número depósito", "Cantidad", "Link imagen", "Observación"]
+        headers = CABECERAS_INFORME
     try:
         spreadsheet = service.spreadsheets().get(spreadsheetId=sheet_id).execute()
         sheet_titles = [s.get("properties", {}).get("title") for s in spreadsheet.get("sheets", [])]
@@ -90,7 +103,7 @@ def ensure_sheet_tab(sheet_id: str, tab_name: str, headers: Optional[List[str]] 
         ).execute()
         service.spreadsheets().values().update(
             spreadsheetId=sheet_id,
-            range=f"'{tab_name}'!A1:G1",
+            range=f"'{tab_name}'!A1:H1",
             valueInputOption="USER_ENTERED",
             body={"values": [headers]},
         ).execute()

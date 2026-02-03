@@ -17,6 +17,7 @@ export interface InformePagosConfigData {
   google_sheets_id?: string
   destinatarios_informe_emails?: string
   horarios_envio?: Array<{ hour: number; minute: number }>
+  ocr_keywords_numero_documento?: string
 }
 
 function getBackendBaseUrl(): string {
@@ -372,6 +373,19 @@ export function InformePagosConfig() {
               value={config.google_sheets_id ?? ''}
               onChange={(e) => handleChange('google_sheets_id', e.target.value)}
             />
+          </div>
+          <div>
+            <label className="text-sm font-medium block mb-2">Palabras clave para Número de documento (OCR)</label>
+            <Textarea
+              placeholder="numero de documento, numero de recibo, nº doc, no. recibo..."
+              value={config.ocr_keywords_numero_documento ?? ''}
+              onChange={(e) => handleChange('ocr_keywords_numero_documento', e.target.value)}
+              className="min-h-[80px]"
+              rows={3}
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Frases con las que el OCR ubica la columna &quot;Número de documento&quot; en el texto (formato variable: solo números, letras o mixto). Una por línea o separadas por coma. Si está vacío se usan unas por defecto (ej. numero de documento, numero de recibo).
+            </p>
           </div>
           <div>
             <label className="text-sm font-medium block mb-2">Destinatarios del informe (emails)</label>

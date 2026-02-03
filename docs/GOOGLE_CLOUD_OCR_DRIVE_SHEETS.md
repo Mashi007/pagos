@@ -67,6 +67,19 @@ Conclusión: la conexión con Drive está alineada con la documentación (scope 
 
 Conclusión: la conexión con Vision (OCR) es correcta; la verificación de estado hace una llamada mínima a `text_detection` para comprobar que la API responde.
 
+### Requisitos para que el proceso OCR funcione (checklist)
+
+Para que el flujo WhatsApp → imagen → OCR → BD/Sheet funcione, debe estar decidido/configurado:
+
+| Requisito | Dónde |
+|-----------|--------|
+| **Credenciales Google** | Configuración > Informe pagos: cuenta de servicio (JSON) o OAuth ("Conectar con Google"). |
+| **Cloud Vision API habilitada** | Google Cloud Console > APIs y servicios > Biblioteca > Cloud Vision API > Habilitar. |
+| **Facturación activa** | El proyecto de Google Cloud debe tener una cuenta de facturación vinculada (Vision la exige). |
+| **Mapeo de campos** | fecha OCR → Fecha, nombre_banco → Nombre en cabecera, numero_deposito → Número depósito, numero_documento → Número de documento (formato variable; se ubica por **palabras clave** configurables en Informe pagos), cantidad → Cantidad; Cédula y Observación del flujo WhatsApp; Link imagen de Drive. |
+
+Si falta alguno, OCR devuelve "NA" en los campos o la verificación de estado muestra OCR "No conectado".
+
 ### Posibles mejoras (opcionales)
 
 - **Variable de entorno** `GOOGLE_APPLICATION_CREDENTIALS`: la doc recomienda usarla para desarrollo local con archivo JSON. La app no la usa porque las credenciales vienen de la BD; es coherente para un entorno multi-tenant/configurable.

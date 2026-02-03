@@ -16,6 +16,7 @@ class PagosInforme(Base):
     fecha_deposito = Column(String(50), nullable=True)
     nombre_banco = Column(String(255), nullable=True)
     numero_deposito = Column(String(100), nullable=True)
+    numero_documento = Column(String(100), nullable=True)  # Nº doc/recibo; formato variable (números, letras o mixto); se ubica por palabras clave configurables
     cantidad = Column(String(50), nullable=True)
     link_imagen = Column(Text, nullable=False)
     observacion = Column(Text, nullable=True)
