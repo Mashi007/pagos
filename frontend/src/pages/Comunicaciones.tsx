@@ -8,6 +8,7 @@ import { Card, CardContent } from '../components/ui/card'
 export function ComunicacionesPage() {
   const [searchParams] = useSearchParams()
   const clienteId = searchParams.get('cliente_id')
+  const conversacionIdParam = searchParams.get('conversacion_id')
 
   const { data: configWhatsApp } = useQuery({
     queryKey: ['config-whatsapp-comunicaciones'],
@@ -62,6 +63,7 @@ export function ComunicacionesPage() {
       </Card>
       <Comunicaciones
         clienteId={clienteId ? parseInt(clienteId, 10) : undefined}
+        conversacionIdFromUrl={conversacionIdParam ? parseInt(conversacionIdParam, 10) : undefined}
         mostrarFiltros={true}
         mostrarEstadisticas={true}
       />

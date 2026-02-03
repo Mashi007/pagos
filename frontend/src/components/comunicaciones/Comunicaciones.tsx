@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   MessageSquare,
@@ -38,6 +39,8 @@ import { mockNombresClientes } from '../../data/mockComunicaciones'
 
 interface ComunicacionesProps {
   clienteId?: number
+  /** ID de comunicación (p. ej. desde CRM Tickets → "Ver WhatsApp"); al cargar se selecciona esa conversación */
+  conversacionIdFromUrl?: number
   mostrarFiltros?: boolean
   mostrarEstadisticas?: boolean
 }
@@ -58,6 +61,7 @@ interface ConversacionAgrupada {
 
 export function Comunicaciones({
   clienteId,
+  conversacionIdFromUrl,
   mostrarFiltros: _mostrarFiltros = true,
   mostrarEstadisticas: _mostrarEstadisticas = false,
 }: ComunicacionesProps) {
@@ -99,8 +103,13 @@ export function Comunicaciones({
   const [ticketsCliente, setTicketsCliente] = useState<Ticket[]>([])
   const [ticketEditando, setTicketEditando] = useState<Ticket | null>(null)
   
-  // Estado para usuarios (para asignación y escalación)
-  const [usuarios, setUsuarios] = useState<Array<{ id: number; nombre: string; apellido: string; email: string; is_admin: boolean }>>([])
+  // Usuarios desde API (para Responsable y escalación) — conectado a /api/v1/usuarios
+  const { data: usuariosData, isLoading: cargandoUsuarios } = useQuery({
+    queryKey: ['usuarios-activos'],
+    queryFn: () => userService.listarUsuarios(1, 200, true),
+    staleTime: 60_000,
+  })
+  const usuarios = useMemo(() => usuariosData?.items ?? [], [usuariosData?.items])
 
   // Query: datos reales desde API (conversacion_cobranza para WhatsApp). Se actualiza cada 15 s para ver mensajes nuevos.
   const {
@@ -121,18 +130,15 @@ export function Comunicaciones({
     return []
   }, [comunicacionesData?.comunicaciones])
 
-  // Cargar usuarios al montar
+  // Al abrir desde CRM Tickets (Ver WhatsApp): seleccionar la conversación que tiene esa comunicación
   useEffect(() => {
-    const cargarUsuarios = async () => {
-      try {
-        const response = await userService.listarUsuarios(1, 100, true)
-        setUsuarios(response.items || [])
-      } catch (error) {
-        console.error('Error cargando usuarios:', error)
-      }
-    }
-    cargarUsuarios()
-  }, [])
+    if (conversacionIdFromUrl == null || todasComunicaciones.length === 0) return
+    const comm = todasComunicaciones.find((c) => c.id === conversacionIdFromUrl)
+    if (!comm) return
+    const idBase = comm.cliente_id ? `cliente_${comm.cliente_id}` : `contacto_${comm.from_contact}`
+    const groupId = `${idBase}_${comm.tipo}`
+    setConversacionSeleccionada(groupId)
+  }, [conversacionIdFromUrl, todasComunicaciones])
 
   // Agrupar comunicaciones por cliente/contacto Y TIPO (separadas)
   // PRIMERO por leído/no leído, LUEGO por fecha/hora
@@ -411,7 +417,7 @@ export function Comunicaciones({
         conversacion_whatsapp_id: comunicacionSeleccionada.tipo === 'whatsapp' ? comunicacionSeleccionada.id : undefined,
         comunicacion_email_id: comunicacionSeleccionada.tipo === 'email' ? comunicacionSeleccionada.id : undefined,
         asignado_a: ticketForm.responsable_id ? usuarios.find(u => u.id === ticketForm.responsable_id)?.email : undefined,
-        asignado_a_id: ticketForm.responsable_id,
+        asignado_a_id: ticketForm.responsable_id ?? undefined,
         fecha_limite: ticketForm.fecha_limite || undefined,
         archivos: archivosJson || undefined,
       }
@@ -916,17 +922,32 @@ export function Comunicaciones({
               </div>
               <p className="text-sm text-gray-600 font-medium">Selecciona una conversación para ver los tickets</p>
               <p className="text-xs text-gray-400 mt-2">Los tickets aparecerán aquí</p>
+              <Link
+                to="/crm/tickets"
+                className="inline-block mt-3 text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
+              >
+                Ver todos los tickets en CRM
+              </Link>
             </div>
           </div>
         ) : (
           <>
             <div className="p-3 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-white">
-              <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                <div className="p-1.5 rounded-lg bg-blue-100">
-                  <FileText className="h-5 w-5 text-blue-600" />
-                </div>
-                Tickets
-              </h3>
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-blue-100">
+                    <FileText className="h-5 w-5 text-blue-600" />
+                  </div>
+                  Tickets
+                </h3>
+                <Link
+                  to="/crm/tickets"
+                  className="text-xs font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                  title="Ver todos los tickets en CRM"
+                >
+                  Ver en CRM
+                </Link>
+              </div>
               {conversacionActual.esNuevo && (
                 <p className="text-xs text-orange-600 mt-2 font-medium bg-orange-50 px-2 py-1 rounded">
                   âš ï¸ Crea un cliente para gestionar tickets
@@ -999,20 +1020,29 @@ export function Comunicaciones({
                       />
                     </div>
                     
-                    {/* Responsable */}
+                    {/* Responsable: unido a usuarios (API /api/v1/usuarios) */}
                     <div>
                       <label className="text-xs text-gray-600 mb-1 block">Responsable</label>
                       <Select
                         value={ticketForm.responsable_id?.toString() || ''}
-                        onValueChange={(value) => setTicketForm({ ...ticketForm, responsable_id: parseInt(value) })}
+                        onValueChange={(value) => setTicketForm({ ...ticketForm, responsable_id: value ? parseInt(value) : undefined })}
+                        disabled={cargandoUsuarios}
                       >
                         <SelectTrigger className="text-xs">
-                          <SelectValue placeholder="Seleccionar responsable" />
+                          <SelectValue
+                            placeholder={
+                              cargandoUsuarios
+                                ? 'Cargando responsables...'
+                                : usuarios.length === 0
+                                  ? 'No hay usuarios activos'
+                                  : 'Seleccionar responsable'
+                            }
+                          />
                         </SelectTrigger>
                         <SelectContent>
                           {usuarios.map((u) => (
                             <SelectItem key={u.id} value={u.id.toString()}>
-                              {u.nombre} {u.apellido} {u.is_admin ? '(Admin)' : ''}
+                              {u.nombre} {u.apellido} {u.is_admin ? ' (Admin)' : ''}
                             </SelectItem>
                           ))}
                         </SelectContent>
