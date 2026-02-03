@@ -37,6 +37,23 @@ Para que la app pueda **escribir** en la hoja, tiene que tener acceso a tu cuent
 
 Si en lugar de OAuth usas **cuenta de servicio** (JSON), asegúrate de que ese JSON esté guardado en la configuración y que la hoja **Papeletas_WhatsApp** esté compartida con el email de la cuenta de servicio (ej. `xxx@yyy.iam.gserviceaccount.com`) con permiso de **Editor**.
 
+### Si OAuth redirige con error (`google_oauth=error`)
+
+La app muestra un mensaje según el motivo. Revisa:
+
+1. **URI de redirección en Google Cloud**  
+   En [Google Cloud Console](https://console.cloud.google.com/) → APIs y servicios → Credenciales → tu cliente OAuth 2.0 → **URIs de redirección autorizados** debe estar **exactamente** (sin barra final):
+   ```
+   https://pagos-f2qf.onrender.com/api/v1/configuracion/informe-pagos/google/callback
+   ```
+   Si usas otro dominio para el backend, sustituye por esa URL base + `/api/v1/configuracion/informe-pagos/google/callback`.
+
+2. **Mismo backend para «Conectar» y callback**  
+   El botón «Conectar con Google» debe llamar a la API del **mismo** backend que recibe el callback (p. ej. `pagos-f2qf.onrender.com`). Si el frontend usa otra API (p. ej. rapicredit.onrender.com) para obtener la URL de autorización, el estado no coincidirá y verás error de sesión. Configura la URL de la API del informe de pagos para que apunte al backend que tiene el callback.
+
+3. **Client ID y Client Secret**  
+   Deben ser los del mismo proyecto y cliente OAuth en Google Cloud. Si los cambiaste, vuelve a pegar en la configuración y guarda antes de «Conectar con Google».
+
 ---
 
 ## 4. Comprobar

@@ -66,11 +66,12 @@ export function InformePagosConfig() {
   }
 
 
-  // Detectar vuelta de Google OAuth (callback redirige con ?google_oauth=ok|error)
+  // Detectar vuelta de Google OAuth (callback redirige con ?google_oauth=ok|error y opcional reason=)
   useEffect(() => {
     if (typeof window === 'undefined') return
     const params = new URLSearchParams(window.location.search)
     const result = params.get('google_oauth')
+    const reason = params.get('reason')
     if (result === 'ok') {
       toast.success('Cuenta de Google conectada correctamente. Drive y Sheets usarán OAuth.')
       cargarConfiguracion()
@@ -78,9 +79,19 @@ export function InformePagosConfig() {
       url.searchParams.delete('google_oauth')
       window.history.replaceState({}, '', url.pathname + (url.search || '') + (url.hash || ''))
     } else if (result === 'error') {
-      toast.error('No se pudo conectar con Google. Comprueba Client ID, Client Secret y la URL de redirección en Google Cloud.')
+      const mensajes: Record<string, string> = {
+        no_code: 'Google no devolvió autorización (cancelaste o hubo un error). Vuelve a intentar «Conectar con Google».',
+        state_invalid: 'Sesión de autorización no encontrada. Asegúrate de que la app que abre «Conectar con Google» use la API del mismo backend (pagos-f2qf.onrender.com) y vuelve a intentar.',
+        state_expired: 'La ventana de autorización tardó más de 10 minutos. Vuelve a hacer clic en «Conectar con Google».',
+        no_credentials: 'Faltan Client ID o Client Secret en la configuración de Informe pagos.',
+        token_exchange: 'Error al intercambiar el código por tokens. Comprueba que en Google Cloud la «URI de redirección autorizada» sea exactamente: https://pagos-f2qf.onrender.com/api/v1/configuracion/informe-pagos/google/callback (sin barra final) y que Client ID/Secret coincidan.',
+        no_refresh_token: 'Google no devolvió refresh_token. Vuelve a «Conectar con Google» y autoriza de nuevo.',
+      }
+      const msg = reason && mensajes[reason] ? mensajes[reason] : 'No se pudo conectar con Google. Comprueba Client ID, Client Secret y la URL de redirección en Google Cloud.'
+      toast.error(msg)
       const url = new URL(window.location.href)
       url.searchParams.delete('google_oauth')
+      url.searchParams.delete('reason')
       window.history.replaceState({}, '', url.pathname + (url.search || '') + (url.hash || ''))
     }
   }, [])

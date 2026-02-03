@@ -119,15 +119,18 @@ def google_oauth_callback(
     Redirige al frontend con ?google_oauth=ok o ?google_oauth=error.
     """
     redirect_ok = "https://rapicredit.onrender.com/pagos/configuracion?tab=informe-pagos&google_oauth=ok"
-    redirect_fail = "https://rapicredit.onrender.com/pagos/configuracion?tab=informe-pagos&google_oauth=error"
+    def _fail(reason: str) -> RedirectResponse:
+        u = f"https://rapicredit.onrender.com/pagos/configuracion?tab=informe-pagos&google_oauth=error&reason={reason}"
+        return RedirectResponse(url=u, status_code=302)
+
     if error or not code or not state:
         logger.warning("Google OAuth callback error o sin code/state: error=%s", error)
-        return RedirectResponse(url=redirect_fail, status_code=302)
+        return _fail("no_code")
     state_key = f"google_oauth_state_{state}"
     row = db.get(Configuracion, state_key)
     if not row or not row.valor:
         logger.warning("Google OAuth state no encontrado o expirado")
-        return RedirectResponse(url=redirect_fail, status_code=302)
+        return _fail("state_invalid")
     try:
         data = json.loads(row.valor)
         created = datetime.fromisoformat(data["created_at"])
@@ -135,11 +138,11 @@ def google_oauth_callback(
             db.delete(row)
             db.commit()
             logger.warning("Google OAuth state expirado")
-            return RedirectResponse(url=redirect_fail, status_code=302)
+            return _fail("state_expired")
     except Exception:
         db.delete(row)
         db.commit()
-        return RedirectResponse(url=redirect_fail, status_code=302)
+        return _fail("state_expired")
     db.delete(row)
     db.commit()
     sync_from_db()
@@ -147,7 +150,7 @@ def google_oauth_callback(
     client_secret = get_google_oauth_client_secret()
     if not client_id or not client_secret:
         logger.warning("Google OAuth: client_id o client_secret no configurados")
-        return RedirectResponse(url=redirect_fail, status_code=302)
+        return _fail("no_credentials")
     base = _backend_base_url()
     redirect_uri = f"{base}{settings.API_V1_STR}/configuracion/informe-pagos/google/callback"
     payload = {
@@ -164,11 +167,11 @@ def google_oauth_callback(
             tokens = r.json()
     except Exception as e:
         logger.exception("Google OAuth token exchange failed: %s", e)
-        return RedirectResponse(url=redirect_fail, status_code=302)
+        return _fail("token_exchange")
     refresh_token = tokens.get("refresh_token")
     if not refresh_token:
         logger.warning("Google OAuth: no refresh_token in response")
-        return RedirectResponse(url=redirect_fail, status_code=302)
+        return _fail("no_refresh_token")
     cfg = get_informe_pagos_config()
     cfg["google_oauth_refresh_token"] = refresh_token
     update_from_api(cfg)
