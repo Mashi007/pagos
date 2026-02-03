@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.cliente import Cliente
+from app.models.cuota import Cuota
 from app.models.prestamo import Prestamo
 from app.schemas.prestamo import PrestamoCreate, PrestamoResponse, PrestamoUpdate, PrestamoListResponse
 
@@ -51,9 +52,20 @@ def listar_prestamos(
     total = db.scalar(count_q) or 0
     q = q.order_by(Prestamo.id.desc()).offset((page - 1) * per_page).limit(per_page)
     rows = db.execute(q).all()
+    prestamo_ids = [row[0].id for row in rows]
+    # Conteo de cuotas por préstamo (para mostrar en columna Cuotas)
+    cuotas_por_prestamo = {}
+    if prestamo_ids:
+        cuenta = select(Cuota.prestamo_id, func.count()).select_from(Cuota).where(
+            Cuota.prestamo_id.in_(prestamo_ids)
+        ).group_by(Cuota.prestamo_id)
+        for pid, cnt in db.execute(cuenta).all():
+            cuotas_por_prestamo[pid] = cnt
     items = []
     for row in rows:
         p, nombres, cedula = row[0], row[1], row[2]
+        numero_cuotas = cuotas_por_prestamo.get(p.id) or getattr(p, "numero_cuotas", None)
+        modalidad_pago = getattr(p, "modalidad_pago", None)
         item = PrestamoListResponse(
             id=p.id,
             cliente_id=p.cliente_id,
@@ -67,6 +79,8 @@ def listar_prestamos(
             fecha_registro=p.fecha_creacion,
             nombres=nombres,
             cedula=cedula,
+            numero_cuotas=numero_cuotas,
+            modalidad_pago=modalidad_pago,
         )
         items.append(item)
     total_pages = (total + per_page - 1) // per_page if total else 0
@@ -112,6 +126,8 @@ def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db)):
         concesionario=payload.concesionario,
         modelo=payload.modelo,
         analista=payload.analista,
+        modalidad_pago=payload.modalidad_pago,
+        numero_cuotas=payload.numero_cuotas,
     )
     db.add(row)
     db.commit()
@@ -140,6 +156,10 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
         row.modelo = payload.modelo
     if payload.analista is not None:
         row.analista = payload.analista
+    if payload.modalidad_pago is not None:
+        row.modalidad_pago = payload.modalidad_pago
+    if payload.numero_cuotas is not None:
+        row.numero_cuotas = payload.numero_cuotas
     db.commit()
     db.refresh(row)
     return PrestamoResponse.model_validate(row)

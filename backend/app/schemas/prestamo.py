@@ -16,6 +16,8 @@ class PrestamoBase(BaseModel):
     concesionario: Optional[str] = None
     modelo: Optional[str] = None
     analista: Optional[str] = None
+    modalidad_pago: Optional[str] = None  # MENSUAL, QUINCENAL, SEMANAL
+    numero_cuotas: Optional[int] = None
 
 
 class PrestamoCreate(PrestamoBase):
@@ -30,6 +32,8 @@ class PrestamoUpdate(BaseModel):
     concesionario: Optional[str] = None
     modelo: Optional[str] = None
     analista: Optional[str] = None
+    modalidad_pago: Optional[str] = None
+    numero_cuotas: Optional[int] = None
 
 
 class PrestamoResponse(BaseModel):
@@ -43,6 +47,8 @@ class PrestamoResponse(BaseModel):
     concesionario: Optional[str] = None
     modelo: Optional[str] = None
     analista: Optional[str] = None
+    modalidad_pago: Optional[str] = None
+    numero_cuotas: Optional[int] = None
     fecha_creacion: Optional[datetime] = None
     fecha_actualizacion: Optional[datetime] = None
 

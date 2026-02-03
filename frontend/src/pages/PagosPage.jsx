@@ -13,21 +13,27 @@ function PagosPage() {
   }, []);
 
   const loadData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const [kpisRes, statsRes] = await Promise.all([
-        pagoService.getKPIs(),
-        pagoService.getStats(),
-      ]);
-      setKpis(kpisRes);
-      setStats(statsRes);
-    } catch (err) {
-      console.error('Error cargando datos de pagos:', err);
-      setError(err?.response?.data?.detail || 'Error al cargar los datos de pagos');
-    } finally {
-      setLoading(false);
+    setLoading(true);
+    setError(null);
+    const [kpisSettled, statsSettled] = await Promise.allSettled([
+      pagoService.getKPIs(),
+      pagoService.getStats(),
+    ]);
+    setKpis(kpisSettled.status === 'fulfilled' ? kpisSettled.value : null);
+    setStats(statsSettled.status === 'fulfilled' ? statsSettled.value : null);
+    const errors = [];
+    if (kpisSettled.status === 'rejected') {
+      console.error('Error cargando KPIs de pagos:', kpisSettled.reason);
+      errors.push('Indicadores (KPIs)');
     }
+    if (statsSettled.status === 'rejected') {
+      console.error('Error cargando estadísticas de pagos:', statsSettled.reason);
+      errors.push('Estadísticas');
+    }
+    if (errors.length) {
+      setError(`No se pudieron cargar: ${errors.join(', ')}. El resto se muestra si está disponible.`);
+    }
+    setLoading(false);
   };
 
   const formatMoneda = (n) => {

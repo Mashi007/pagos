@@ -19,7 +19,7 @@ import { EvaluacionRiesgoForm } from './EvaluacionRiesgoForm'
 import { PrestamoDetalleModal } from './PrestamoDetalleModal'
 import { FormularioAprobacionCondiciones } from './FormularioAprobacionCondiciones'
 import { AsignarFechaAprobacionModal } from './AsignarFechaAprobacionModal'
-import { formatDate } from '../../utils'
+import { formatCurrency, formatDate } from '../../utils'
 import { prestamoService } from '../../services/prestamoService'
 import { toast } from 'sonner'
 
@@ -650,11 +650,9 @@ export function PrestamosList() {
                         <TableCell>{prestamo.cedula ?? prestamo.cedula_cliente ?? '-'}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
-                            <DollarSign className="h-4 w-4 text-green-600" />
-                            <span className="font-semibold">
-                              {typeof prestamo.total_financiamiento === 'number'
-                                ? prestamo.total_financiamiento.toFixed(2)
-                                : '0.00'}
+                            <DollarSign className="h-4 w-4 text-green-600 shrink-0" />
+                            <span className="font-semibold text-green-700">
+                              {formatCurrency(Number(prestamo.total_financiamiento ?? 0))}
                             </span>
                           </div>
                         </TableCell>
@@ -662,9 +660,9 @@ export function PrestamosList() {
                           {prestamo.modalidad_pago === 'MENSUAL' ? 'Mensual' :
                            prestamo.modalidad_pago === 'QUINCENAL' ? 'Quincenal' :
                            prestamo.modalidad_pago === 'SEMANAL' ? 'Semanal' :
-                           prestamo.modalidad_pago}
+                           prestamo.modalidad_pago ?? '—'}
                         </TableCell>
-                        <TableCell>{prestamo.numero_cuotas}</TableCell>
+                        <TableCell>{prestamo.numero_cuotas != null ? prestamo.numero_cuotas : '—'}</TableCell>
                         <TableCell>
                           <Badge className={getEstadoBadge(prestamo.estado)}>
                             {getEstadoLabel(prestamo.estado)}

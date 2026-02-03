@@ -18,5 +18,7 @@ class Prestamo(Base):
     concesionario = Column(String(255), nullable=True, index=True)
     modelo = Column("modelo_vehiculo", String(255), nullable=True, index=True)
     analista = Column(String(255), nullable=True, index=True)
+    modalidad_pago = Column(String(50), nullable=True)  # MENSUAL, QUINCENAL, SEMANAL
+    numero_cuotas = Column(Integer, nullable=True)  # número de cuotas del plan
     fecha_creacion = Column("fecha_registro", DateTime(timezone=False), nullable=False, server_default=func.now())
     fecha_actualizacion = Column(DateTime(timezone=False), nullable=False, server_default=func.now(), onupdate=func.now())
