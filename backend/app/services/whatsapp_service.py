@@ -89,6 +89,11 @@ MENSAJE_RECIBIDO_TERCER_INTENTO = (
     "Si no tenemos clara la imagen, te contactaremos. Para otras consultas: 0424-4359435."
 )
 OBSERVACION_NO_CONFIRMA = "No confirma identidad"
+# Cuando falla descarga/configuración/procesamiento de imagen: siempre responder para no dejar al usuario sin respuesta.
+MENSAJE_IMAGEN_NO_PROCESADA = (
+    "No pudimos procesar tu imagen en este momento. Por favor intenta enviar otra foto clara de tu papeleta a 20 cm, "
+    "o llama al 0424-4359435 para que te atiendan."
+)
 # Cuando piden algo que no es reportar pago (información, hablar con alguien, etc.), se les indica que llamen.
 MENSAJE_OTRA_INFORMACION = (
     "Para otras consultas te atendemos por teléfono. Llama al 0424-4359435 y un asistente te atenderá."
@@ -325,6 +330,12 @@ class WhatsAppService:
             return {"success": True, "message_id": message.id, "data": message_data}
         except Exception as e:
             self.logger.error("Error procesando mensaje WhatsApp: %s", str(e), exc_info=True)
+            # Si fue imagen, enviar al menos un mensaje al usuario para no dejar el bot "desconectado"
+            if (message.type == "image" or (message.type == "document" and message.document)) and message.from_:
+                try:
+                    await _send_whatsapp_async(message.from_, MENSAJE_IMAGEN_NO_PROCESADA)
+                except Exception:
+                    pass
             return {"success": False, "error": str(e), "message_id": getattr(message, "id", None)}
 
     async def _process_text_cobranza(self, text: str, from_number: str, db: Session) -> Dict[str, Any]:
@@ -445,7 +456,7 @@ class WhatsAppService:
         api_url = (cfg.get("api_url") or "https://graph.facebook.com/v18.0").rstrip("/")
         if not token:
             logger.warning("Imagen no digitalizada: Access token WhatsApp no configurado (no_digitaliza=image_skipped)")
-            return {"status": "image_skipped", "note": "Token no configurado"}
+            return {"status": "image_skipped", "note": "Token no configurado", "response_text": MENSAJE_IMAGEN_NO_PROCESADA}
         try:
             import httpx
             async with httpx.AsyncClient(timeout=30.0) as client:
@@ -455,18 +466,32 @@ class WhatsAppService:
                 media_url = data.get("url")
                 if not media_url:
                     logger.info("Imagen no digitalizada: Meta no devolvió URL del media (no_digitaliza=image_no_url)")
-                    return {"status": "image_no_url", "note": "Meta no devolvió URL"}
+                    return {"status": "image_no_url", "note": "Meta no devolvió URL", "response_text": MENSAJE_IMAGEN_NO_PROCESADA}
                 r2 = await client.get(media_url, headers={"Authorization": f"Bearer {token}"})
                 r2.raise_for_status()
                 image_bytes = r2.content
         except Exception as e:
             logger.exception("Imagen no digitalizada: error descargando imagen (no_digitaliza=image_error): %s", e)
             db.rollback()
-            return {"status": "image_error", "note": str(e)}
+            return {"status": "image_error", "note": str(e), "response_text": MENSAJE_IMAGEN_NO_PROCESADA}
         if not image_bytes:
             logger.info("Imagen no digitalizada: imagen vacía (no_digitaliza=image_empty)")
-            return {"status": "image_empty", "note": "Imagen vacía"}
+            return {"status": "image_empty", "note": "Imagen vacía", "response_text": MENSAJE_IMAGEN_NO_PROCESADA}
         conv.intento_foto = (conv.intento_foto or 0) + 1
+        # OCR sobre toda imagen (sin depender del análisis): probar que está activo/configurado y tener datos si aceptamos
+        ocr_data_early = {"fecha_deposito": "NA", "nombre_banco": "NA", "numero_deposito": "NA", "numero_documento": "NA", "cantidad": "NA", "humano": ""}
+        try:
+            from app.services.ocr_service import extract_from_image
+            ocr_data_early = extract_from_image(image_bytes)
+            logger.info(
+                "OCR ejecutado (toda imagen): banco=%s, fecha=%s, cantidad=%s, humano=%s",
+                ocr_data_early.get("nombre_banco") or "NA",
+                ocr_data_early.get("fecha_deposito") or "NA",
+                ocr_data_early.get("cantidad") or "NA",
+                ocr_data_early.get("humano") or "",
+            )
+        except Exception as e:
+            logger.warning("OCR no aplicado (verificar Vision/config): %s", e)
         # Evaluación por IA: texto OCR + prompt corto → aceptable + mensaje conversacional (gracias o pedir otra foto)
         ocr_text = ""
         try:
@@ -496,89 +521,86 @@ class WhatsAppService:
                 "intento_foto": conv.intento_foto,
                 "response_text": mensaje_ia,
             }
-        # Imagen aceptada (IA) o tercer intento: guardar en Drive, pagos_whatsapp, OCR, pagos_informes, Sheet
+        # Imagen aceptada (IA) o tercer intento: guardar en Drive, pagos_whatsapp, OCR, pagos_informes, Sheet. Si algo falla, igual responder al usuario.
         logger.info("Digitalizando imagen: cedula=%s intento=%d aceptable=%s", conv.cedula, conv.intento_foto, aceptable)
-        link_imagen = None
         try:
-            from app.services.google_drive_service import upload_image_and_get_link
-            link_imagen = upload_image_and_get_link(image_bytes, filename=f"papeleta_{phone}_{datetime.utcnow().strftime('%Y%m%d%H%M')}.jpg")
+            link_imagen = None
+            try:
+                from app.services.google_drive_service import upload_image_and_get_link
+                link_imagen = upload_image_and_get_link(image_bytes, filename=f"papeleta_{phone}_{datetime.utcnow().strftime('%Y%m%d%H%M')}.jpg")
+            except Exception as e:
+                logger.exception("Error subiendo a Drive: %s", e)
+            if not link_imagen:
+                logger.warning("Drive: subida fallida o no configurada; link_imagen=NA. Revisa OAuth conectado, ID carpeta y que la carpeta esté compartida con la cuenta OAuth.")
+                link_imagen = "NA"
+            row_pw = PagosWhatsapp(
+                fecha=datetime.utcnow(),
+                cedula_cliente=conv.cedula,
+                imagen=image_bytes,
+                link_imagen=link_imagen,
+            )
+            db.add(row_pw)
+            db.commit()
+            db.refresh(row_pw)
+            logger.info("Imagen guardada pagos_whatsapp id=%s cedula=%s link=%s", row_pw.id, conv.cedula, link_imagen[:50] if link_imagen else "N/A")
+            # Usar datos OCR ya obtenidos para toda imagen (no volver a llamar Vision)
+            periodo = _periodo_envio_actual()
+            fecha_dep = ocr_data_early.get("fecha_deposito") or "NA"
+            nombre_banco = ocr_data_early.get("nombre_banco") or "NA"
+            numero_dep = ocr_data_early.get("numero_deposito") or "NA"
+            numero_doc = ocr_data_early.get("numero_documento") or "NA"
+            cantidad = ocr_data_early.get("cantidad") or "NA"
+            humano_col = (ocr_data_early.get("humano") or "").strip() or None
+            observacion_informe = conv.observacion or None
+            informe = PagosInforme(
+                cedula=conv.cedula,
+                fecha_deposito=fecha_dep,
+                nombre_banco=nombre_banco,
+                numero_deposito=numero_dep,
+                numero_documento=numero_doc,
+                cantidad=cantidad,
+                humano=humano_col,
+                link_imagen=link_imagen,
+                observacion=observacion_informe,
+                pagos_whatsapp_id=row_pw.id,
+                periodo_envio=periodo,
+                fecha_informe=datetime.utcnow(),
+            )
+            db.add(informe)
+            db.commit()
+            db.refresh(informe)
+            logger.info(
+                "Imagen digitalizada: pagos_whatsapp_id=%s pagos_informe_id=%s cedula=%s fecha_dep=%s banco=%s",
+                row_pw.id, informe.id, conv.cedula, fecha_dep, nombre_banco,
+            )
+            try:
+                from app.services.google_sheets_informe_service import append_row
+                logger.info("Escribiendo fila en Sheet: cedula=%s link_imagen=%s", conv.cedula, "OK" if link_imagen and link_imagen != "NA" else "NA")
+                sheet_ok = append_row(conv.cedula, fecha_dep, nombre_banco, numero_dep, numero_doc, cantidad, link_imagen, periodo, observacion=observacion_informe, humano=humano_col or "")
+                if not sheet_ok:
+                    logger.warning("Sheets: no se escribió la fila (digitalización en BD OK). Revisa Configuración > Informe pagos: credenciales, ID hoja, y que la hoja esté compartida con la cuenta.")
+            except Exception as e:
+                logger.exception("Error escribiendo en Sheet (digitalización en BD OK): %s", e)
+            cedula_guardada = conv.cedula
+            conv.intento_foto = 0
+            conv.estado = "esperando_cedula"
+            conv.cedula = None
+            conv.nombre_cliente = None
+            conv.observacion = None
+            conv.updated_at = datetime.utcnow()
+            db.commit()
+            # Respuesta al usuario: si la imagen fue aceptada por IA/claridad → mensaje_ia; si aceptamos por 3.er intento → indicar que si no está clara los contactaremos
+            if aceptable:
+                response_text = mensaje_ia
+            elif aceptado_por_tercer_intento:
+                response_text = MENSAJE_RECIBIDO_TERCER_INTENTO.format(cedula=cedula_guardada or "N/A")
+            else:
+                response_text = MENSAJE_RECIBIDO.format(cedula=cedula_guardada or "N/A")
+            return {"status": "image_saved", "pagos_whatsapp_id": row_pw.id, "cedula_cliente": cedula_guardada, "response_text": response_text}
         except Exception as e:
-            logger.exception("Error subiendo a Drive: %s", e)
-        if not link_imagen:
-            logger.warning("Drive: subida fallida o no configurada; link_imagen=NA. Revisa OAuth conectado, ID carpeta y que la carpeta esté compartida con la cuenta OAuth.")
-            link_imagen = "NA"
-        row_pw = PagosWhatsapp(
-            fecha=datetime.utcnow(),
-            cedula_cliente=conv.cedula,
-            imagen=image_bytes,
-            link_imagen=link_imagen,
-        )
-        db.add(row_pw)
-        db.commit()
-        db.refresh(row_pw)
-        logger.info("Imagen guardada pagos_whatsapp id=%s cedula=%s link=%s", row_pw.id, conv.cedula, link_imagen[:50] if link_imagen else "N/A")
-        # OCR y digitalización (NA si falta campo; link siempre). Si OCR falla, se guarda igual en BD y Sheet con NA.
-        periodo = _periodo_envio_actual()
-        fecha_dep = "NA"
-        nombre_banco = "NA"
-        numero_dep = "NA"
-        numero_doc = "NA"
-        cantidad = "NA"
-        humano_col = None  # "HUMANO" cuando >80% texto de baja confianza (manuscrito/ilegible); no se inventan datos
-        try:
-            from app.services.ocr_service import extract_from_image
-            ocr_data = extract_from_image(image_bytes)
-            fecha_dep = ocr_data.get("fecha_deposito") or "NA"
-            nombre_banco = ocr_data.get("nombre_banco") or "NA"
-            numero_dep = ocr_data.get("numero_deposito") or "NA"
-            numero_doc = ocr_data.get("numero_documento") or "NA"
-            cantidad = ocr_data.get("cantidad") or "NA"
-            humano_col = (ocr_data.get("humano") or "").strip() or None
-        except Exception as e:
-            logger.exception("Error OCR: %s; se guardará fila en BD y Sheet con campos NA.", e)
-        observacion_informe = conv.observacion or None
-        informe = PagosInforme(
-            cedula=conv.cedula,
-            fecha_deposito=fecha_dep,
-            nombre_banco=nombre_banco,
-            numero_deposito=numero_dep,
-            numero_documento=numero_doc,
-            cantidad=cantidad,
-            humano=humano_col,
-            link_imagen=link_imagen,
-            observacion=observacion_informe,
-            pagos_whatsapp_id=row_pw.id,
-            periodo_envio=periodo,
-            fecha_informe=datetime.utcnow(),
-        )
-        db.add(informe)
-        db.commit()
-        db.refresh(informe)
-        logger.info(
-            "Imagen digitalizada: pagos_whatsapp_id=%s pagos_informe_id=%s cedula=%s fecha_dep=%s banco=%s",
-            row_pw.id, informe.id, conv.cedula, fecha_dep, nombre_banco,
-        )
-        try:
-            from app.services.google_sheets_informe_service import append_row
-            logger.info("Escribiendo fila en Sheet: cedula=%s link_imagen=%s", conv.cedula, "OK" if link_imagen and link_imagen != "NA" else "NA")
-            sheet_ok = append_row(conv.cedula, fecha_dep, nombre_banco, numero_dep, numero_doc, cantidad, link_imagen, periodo, observacion=observacion_informe, humano=humano_col or "")
-            if not sheet_ok:
-                logger.warning("Sheets: no se escribió la fila (digitalización en BD OK). Revisa Configuración > Informe pagos: credenciales, ID hoja, y que la hoja esté compartida con la cuenta.")
-        except Exception as e:
-            logger.exception("Error escribiendo en Sheet (digitalización en BD OK): %s", e)
-        cedula_guardada = conv.cedula
-        conv.intento_foto = 0
-        conv.estado = "esperando_cedula"
-        conv.cedula = None
-        conv.nombre_cliente = None
-        conv.observacion = None
-        conv.updated_at = datetime.utcnow()
-        db.commit()
-        # Respuesta al usuario: si la imagen fue aceptada por IA/claridad → mensaje_ia; si aceptamos por 3.er intento → indicar que si no está clara los contactaremos
-        if aceptable:
-            response_text = mensaje_ia
-        elif aceptado_por_tercer_intento:
-            response_text = MENSAJE_RECIBIDO_TERCER_INTENTO.format(cedula=cedula_guardada or "N/A")
-        else:
-            response_text = MENSAJE_RECIBIDO.format(cedula=cedula_guardada or "N/A")
-        return {"status": "image_saved", "pagos_whatsapp_id": row_pw.id, "cedula_cliente": cedula_guardada, "response_text": response_text}
+            logger.exception("Error en digitalización (Drive/OCR/BD/Sheet): %s", e)
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            return {"status": "image_error", "note": str(e), "response_text": MENSAJE_IMAGEN_NO_PROCESADA}
