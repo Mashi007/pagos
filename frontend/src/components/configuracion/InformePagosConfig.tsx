@@ -19,6 +19,8 @@ export interface InformePagosConfigData {
   destinatarios_informe_emails?: string
   horarios_envio?: Array<{ hour: number; minute: number }>
   ocr_keywords_numero_documento?: string
+  ocr_keywords_nombre_banco?: string
+  ocr_keywords_numero_deposito?: string
 }
 
 function getBackendBaseUrl(): string {
@@ -401,18 +403,44 @@ export function InformePagosConfig() {
               Si la hoja se ve vacía: pon aquí <strong>Hoja 1</strong> para que las filas se escriban en la primera pestaña. Si lo dejas vacío, se usan pestañas por horario (6am, 1pm, 4h30).
             </p>
           </div>
-          <div>
-            <label className="text-sm font-medium block mb-2">Palabras clave para Número de documento (OCR)</label>
-            <Textarea
-              placeholder="numero de documento, numero de recibo, nº doc, no. recibo..."
-              value={config.ocr_keywords_numero_documento ?? ''}
-              onChange={(e) => handleChange('ocr_keywords_numero_documento', e.target.value)}
-              className="min-h-[80px]"
-              rows={3}
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Frases con las que el OCR ubica la columna &quot;Número de documento&quot; en el texto (formato variable: solo números, letras o mixto). Una por línea o separadas por coma. Si está vacío se usan unas por defecto (ej. numero de documento, numero de recibo).
+          <div className="space-y-4">
+            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Sinónimos para que el OCR aprenda</h4>
+            <p className="text-xs text-gray-500">
+              Palabras o frases que el OCR usa para localizar cada dato en el comprobante. Se rellenan las columnas <strong>C (Institución financiera)</strong> y <strong>D (Documento)</strong> de la hoja. Una por línea o separadas por coma; si está vacío se usan valores por defecto.
             </p>
+            <div>
+              <label className="text-sm font-medium block mb-2">Columna C — Institución financiera</label>
+              <Textarea
+                placeholder="banco, institución financiera, entidad financiera, c.a., s.a...."
+                value={config.ocr_keywords_nombre_banco ?? ''}
+                onChange={(e) => handleChange('ocr_keywords_nombre_banco', e.target.value)}
+                className="min-h-[60px]"
+                rows={2}
+              />
+              <p className="text-xs text-gray-500 mt-1">Sinónimos con los que el OCR identifica el nombre del banco o institución en el comprobante.</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium block mb-2">Columna D — Documento (número de comprobante o recibo)</label>
+              <Textarea
+                placeholder="n°, nº, numero de documento, numero de recibo, comprobante de venta, ci, ruc..."
+                value={config.ocr_keywords_numero_documento ?? ''}
+                onChange={(e) => handleChange('ocr_keywords_numero_documento', e.target.value)}
+                className="min-h-[80px]"
+                rows={3}
+              />
+              <p className="text-xs text-gray-500 mt-1">Frases con las que el OCR ubica el número de documento (ej. N° 052-055-000112796). Si está vacío se usan unas por defecto.</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium block mb-2">Columna D — Documento (referencia / número de depósito)</label>
+              <Textarea
+                placeholder="comprobante, recibo, ref, referencia, depósito, ruc..."
+                value={config.ocr_keywords_numero_deposito ?? ''}
+                onChange={(e) => handleChange('ocr_keywords_numero_deposito', e.target.value)}
+                className="min-h-[60px]"
+                rows={2}
+              />
+              <p className="text-xs text-gray-500 mt-1">Si la línea contiene alguna de estas palabras, se busca un número largo (10+ dígitos) como valor de respaldo para la columna Documento.</p>
+            </div>
           </div>
           <div>
             <label className="text-sm font-medium block mb-2">Destinatarios del informe (emails)</label>

@@ -105,33 +105,68 @@ def get_sheet_tab_principal() -> str:
     return (cfg.get("sheet_tab_principal") or "").strip()
 
 
-def get_ocr_keywords_numero_documento() -> List[str]:
-    """
-    Palabras clave para ubicar 'Número de documento' en el texto OCR (sin formato estándar).
-    Ej: "numero de documento", "numero de recibo", "nº doc". Si la línea contiene alguna, se extrae el valor (números, letras o mixto).
-    Valor en config: string separado por comas o saltos de línea; o lista JSON. Si vacío, se usan las por defecto.
-    """
-    cfg = get_informe_pagos_config()
-    raw = cfg.get("ocr_keywords_numero_documento")
+def _parse_keywords_from_config(raw: Any, default_list: List[str]) -> List[str]:
+    """Parsea palabras clave desde config (string separado por coma/salto de línea o lista)."""
     if raw is None or raw == "":
-        return _default_keywords_numero_documento()
+        return default_list
     if isinstance(raw, list):
         return [str(x).strip() for x in raw if str(x).strip()]
     s = str(raw).strip()
     if not s:
-        return _default_keywords_numero_documento()
-    # Aceptar separado por comas o por saltos de línea
-    keywords = []
-    for part in re.split(r"[\n,]+", s):
-        k = part.strip()
-        if k:
-            keywords.append(k)
-    return keywords if keywords else _default_keywords_numero_documento()
+        return default_list
+    return [k for part in re.split(r"[\n,]+", s) if (k := part.strip())]
+
+
+def get_ocr_keywords_nombre_banco() -> List[str]:
+    """
+    Palabras clave para ubicar 'Institución financiera' (nombre del banco) en el texto OCR.
+    Si la línea contiene alguna, se toma como nombre del banco/institución.
+    """
+    cfg = get_informe_pagos_config()
+    raw = cfg.get("ocr_keywords_nombre_banco")
+    return _parse_keywords_from_config(raw, _default_keywords_nombre_banco())
+
+
+def _default_keywords_nombre_banco() -> List[str]:
+    return [
+        "banco", "bank", "bancaria", "c.a.", "ca ", "s.a.", "sa ",
+        "institución financiera", "institucion financiera", "entidad financiera",
+    ]
+
+
+def get_ocr_keywords_numero_deposito() -> List[str]:
+    """
+    Palabras clave para ubicar 'Número de depósito' / referencia en el texto OCR.
+    Si la línea contiene alguna, se busca un número largo (10+ dígitos) como valor.
+    """
+    cfg = get_informe_pagos_config()
+    raw = cfg.get("ocr_keywords_numero_deposito")
+    return _parse_keywords_from_config(raw, _default_keywords_numero_deposito())
+
+
+def _default_keywords_numero_deposito() -> List[str]:
+    return [
+        "ref", "referencia", "depósito", "deposito", "nº", "no.", "nro", "número", "numero",
+        "comprobante", "recibo", "documento", "ruc",
+    ]
+
+
+def get_ocr_keywords_numero_documento() -> List[str]:
+    """
+    Palabras clave para ubicar 'Documento' (número de comprobante/recibo) en el texto OCR.
+    Ej: "numero de documento", "n°", "comprobante de venta". Si la línea contiene alguna, se extrae el valor.
+    """
+    cfg = get_informe_pagos_config()
+    raw = cfg.get("ocr_keywords_numero_documento")
+    return _parse_keywords_from_config(raw, _default_keywords_numero_documento())
 
 
 def _default_keywords_numero_documento() -> List[str]:
     """Palabras clave por defecto para ubicar número de documento en OCR."""
     return [
+        "n°",  # Comprobantes: "N° 052-055-000112796"
+        "nº",
+        "comprobante de venta",
         "numero de documento",
         "numero de recibo",
         "número de documento",
@@ -147,6 +182,8 @@ def _default_keywords_numero_documento() -> List[str]:
         "recibo n°",
         "documento no",
         "recibo no",
+        "ci",
+        "ruc",
     ]
 
 

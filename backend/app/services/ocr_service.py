@@ -18,7 +18,7 @@ Requisitos para que el proceso OCR funcione:
   1. Credenciales Google configuradas en Configuración > Informe pagos (cuenta de servicio JSON o OAuth).
   2. Cloud Vision API habilitada en el proyecto de Google Cloud.
   3. Facturación activa en el proyecto (Vision requiere cuenta de facturación vinculada).
-  4. Mapeo a columnas: fecha_deposito→Sheet Fecha, nombre_banco→Nombre en cabecera, numero_deposito→Número depósito, cantidad→Cantidad; cédula y link_imagen/observación vienen del flujo.
+  4. Mapeo a columnas en la hoja: fecha_deposito→Fecha, nombre_banco→Institución financiera, numero_documento/numero_deposito→Documento, cantidad→Cantidad; cédula y link_imagen vienen del flujo.
 """
 import re
 import logging
@@ -160,7 +160,11 @@ def extract_from_image(image_bytes: bytes) -> Dict[str, str]:
         )
         return {**base_na, "humano": ""}
     try:
-        from app.core.informe_pagos_config_holder import get_ocr_keywords_numero_documento
+        from app.core.informe_pagos_config_holder import (
+            get_ocr_keywords_nombre_banco,
+            get_ocr_keywords_numero_deposito,
+            get_ocr_keywords_numero_documento,
+        )
         from google.cloud import vision
         image = vision.Image(content=image_bytes)
         logger.info("%s [OCR] Paso 3/4: document_text_detection (extract)", LOG_TAG_INFORME)
@@ -178,8 +182,12 @@ def extract_from_image(image_bytes: bytes) -> Dict[str, str]:
             return {**base_na, "humano": VALOR_HUMANO}
         full_text = (doc.text if doc else "") or ""
         logger.info("%s [OCR] Paso 3/4 OK: texto extraído len=%d preview=%s", LOG_TAG_INFORME, len(full_text), (full_text[:120] + "..." if len(full_text) > 120 else full_text))
-        keywords_doc = get_ocr_keywords_numero_documento()
-        result = _parse_papeleta_text(full_text, keywords_numero_documento=keywords_doc)
+        result = _parse_papeleta_text(
+            full_text,
+            keywords_nombre_banco=get_ocr_keywords_nombre_banco(),
+            keywords_numero_deposito=get_ocr_keywords_numero_deposito(),
+            keywords_numero_documento=get_ocr_keywords_numero_documento(),
+        )
         result["humano"] = ""
         logger.info(
             "%s [OCR] Paso 4/4 parse resultado: fecha=%s banco=%s numero_dep=%s numero_doc=%s cantidad=%s",
@@ -196,15 +204,17 @@ def extract_from_image(image_bytes: bytes) -> Dict[str, str]:
         return {**base_na, "humano": ""}
 
 
-def _parse_papeleta_text(text: str, keywords_numero_documento: Optional[list] = None) -> Dict[str, str]:
+def _parse_papeleta_text(
+    text: str,
+    keywords_nombre_banco: Optional[list] = None,
+    keywords_numero_deposito: Optional[list] = None,
+    keywords_numero_documento: Optional[list] = None,
+) -> Dict[str, str]:
     """
-    Extrae del texto OCR según mapeo:
-    - fecha_deposito: una fecha = fecha de depósito (etiqueta Fecha/Date o patrón dd/mm/yyyy)
-    - cantidad: cantidad total en dólares o bolívares (línea Total o último monto con decimales)
-    - nombre_banco: banco = nombre en la cabecera (primeras líneas o línea con BANCO/institución)
-    - numero_deposito: número de referencia/depósito
-    - numero_documento: número de documento/recibo; formato variable (números, letras o mixto); se ubica por palabras clave (keywords_numero_documento)
-    La cédula no se extrae aquí; viene del flujo WhatsApp (usuario la escribe).
+    Extrae del texto OCR según mapeo. Las listas de palabras clave son configurables (Informe pagos).
+    - nombre_banco: línea que contenga alguna keyword (banco, institución financiera, ...)
+    - numero_deposito: línea con keyword + número largo (ref, comprobante, recibo, ...)
+    - numero_documento: línea con keyword (n°, numero de documento, comprobante de venta, ...)
     """
     result = {"fecha_deposito": NA, "nombre_banco": NA, "numero_deposito": NA, "numero_documento": NA, "cantidad": NA}
     if not text or not text.strip():
@@ -268,13 +278,13 @@ def _parse_papeleta_text(text: str, keywords_numero_documento: Optional[list] = 
             if result["cantidad"] != NA:
                 break
 
-    # --- Banco = nombre en la cabecera: primeras líneas o línea que contenga BANCO/institución
-    bank_keywords = ["banco", "bank", "bancaria", "c.a.", "ca ", "s.a.", "sa "]
-    for line in lines[:5]:
+    # --- Banco = nombre en la cabecera (keywords configurables: banco, institución financiera, ...)
+    bank_keywords = keywords_nombre_banco or []
+    for line in lines[:8]:
         if not line or len(line) < 4:
             continue
         lower = line.lower()
-        if any(k in lower for k in bank_keywords):
+        if bank_keywords and any(k.strip().lower() in lower for k in bank_keywords if k):
             result["nombre_banco"] = line[:255]
             break
         if len(line) >= 8 and len(line) <= 120 and not re.match(r"^\d[\d\s.,]*$", line):
@@ -283,12 +293,12 @@ def _parse_papeleta_text(text: str, keywords_numero_documento: Optional[list] = 
     if result["nombre_banco"] == NA and len(lines) >= 1 and len(lines[0]) > 2:
         result["nombre_banco"] = lines[0][:255]
 
-    # --- Número de depósito/referencia: preferir línea con ref/referencia/depósito/nº; luego cualquier 10+ dígitos
+    # --- Número de depósito/referencia: línea con keyword (comprobante, recibo, ref, ...) + número 10+ dígitos
     ref_re = re.compile(r"\b(\d{10,})\b")
-    ref_keywords = ["ref", "referencia", "depósito", "deposito", "nº", "no.", "nro", "número", "numero"]
+    ref_keywords = keywords_numero_deposito or []
     for line in lines:
         lower = line.lower()
-        if any(k in lower for k in ref_keywords):
+        if ref_keywords and any(k.strip().lower() in lower for k in ref_keywords if k):
             m = ref_re.search(line)
             if m:
                 result["numero_deposito"] = m.group(1)
@@ -300,7 +310,7 @@ def _parse_papeleta_text(text: str, keywords_numero_documento: Optional[list] = 
                 result["numero_deposito"] = m.group(1)
                 break
 
-    # --- Número de documento/recibo: formato variable (solo números, letras o mixto); se ubica por palabras clave configurables
+    # --- Número de documento/recibo: palabras clave configurables (n°, comprobante de venta, ...)
     keywords_doc = keywords_numero_documento or []
     for line in lines:
         if not line or result["numero_documento"] != NA:

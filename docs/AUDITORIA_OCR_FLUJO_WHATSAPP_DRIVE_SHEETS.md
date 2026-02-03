@@ -82,10 +82,10 @@ No hay un endpoint específico “solo OCR”; el OCR se ejecuta dentro del fluj
 | Proceso / servicio | Rol |
 |--------------------|-----|
 | `whatsapp_service._process_image_message` | Orquesta: descarga imagen, OCR, IA/claridad, subida Drive, insert `pagos_whatsapp`, insert `pagos_informes`, `append_row` Sheets, reset conversación. |
-| `ocr_service.extract_from_image` | Vision API → extrae fecha, banco, número depósito, número documento, cantidad (y “HUMANO” si baja confianza). |
+| `ocr_service.extract_from_image` | Vision API → extrae fecha, nombre_banco (→ Institución financiera), numero_documento/numero_deposito (→ Documento), cantidad (y “HUMANO” si baja confianza). |
 | `ocr_service.get_full_text` | Texto completo para IA de respuesta. |
 | `google_drive_service.upload_image_and_get_link` | Sube bytes a la carpeta configurada y devuelve `webViewLink` (o `None` si falla). |
-| `google_sheets_informe_service.append_row` | Añade una fila a la pestaña configurada (o 6am/1pm/4h30). No lanza si falla; retorna `False`. |
+| `google_sheets_informe_service.append_row` | Añade una fila con columnas: Cédula, Fecha, Institución financiera, Documento, Cantidad, Link imagen. Pestaña: configurada o 6am/1pm/4h30. No lanza si falla; retorna `False`. |
 | `configuracion_informe_pagos._verificar_drive/sheets/ocr` | Pruebas reales de conexión para el endpoint `/estado`. |
 
 **Regla de negocio (datos reales):** Los datos mostrados en dashboard/informes deben venir de la BD; el flujo usa `get_db` y escribe en `pagos_whatsapp` y `pagos_informes`. No hay stubs en este flujo.

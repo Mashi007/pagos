@@ -59,7 +59,7 @@ La app muestra un mensaje según el motivo. Revisa:
 ## 4. Comprobar
 
 - Envía de nuevo una **foto de papeleta** por WhatsApp (flujo cobranza).
-- Si todo está bien, en la hoja debería aparecer una **nueva fila** con: Cédula, Fecha, Nombre en cabecera (banco), Número depósito, Número de documento, Cantidad, HUMANO, Link imagen, Observación.
+- Si todo está bien, en la hoja debería aparecer una **nueva fila** con: **Cédula**, **Fecha**, **Institución financiera**, **Documento**, **Cantidad**, **Link imagen**.
 - En los **logs del backend** (Render) puedes buscar: `Sheets append_row OK` o `Sheets no configurado` / `google_sheets_id vacío` si algo falla.
 
 ---

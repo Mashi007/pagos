@@ -47,7 +47,9 @@ class InformePagosConfigUpdate(BaseModel):
     sheet_tab_principal: Optional[str] = None  # Ej. "Hoja 1": escribe en esta pestaña en lugar de 6am/1pm/4h30
     destinatarios_informe_emails: Optional[str] = None
     horarios_envio: Optional[list] = None
-    ocr_keywords_numero_documento: Optional[str] = None  # Palabras clave para ubicar "Número de documento" en OCR (separadas por coma o salto de línea)
+    ocr_keywords_numero_documento: Optional[str] = None  # Palabras clave para columna "Documento" en OCR (n°, comprobante, recibo, ...)
+    ocr_keywords_nombre_banco: Optional[str] = None  # Sinónimos para columna "Institución financiera" (banco, institución, c.a., ...)
+    ocr_keywords_numero_deposito: Optional[str] = None  # Sinónimos para valor de respaldo en "Documento" (comprobante, recibo, ref, ...)
 
 
 GOOGLE_OAUTH_SCOPES = " ".join([

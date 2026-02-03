@@ -78,9 +78,9 @@ El OCR está preparado para **recibos**, **facturas** y **papeletas de depósito
 | **Credenciales Google** | Configuración > Informe pagos: cuenta de servicio (JSON) o OAuth ("Conectar con Google"). |
 | **Cloud Vision API habilitada** | Google Cloud Console > APIs y servicios > Biblioteca > Cloud Vision API > Habilitar. |
 | **Facturación activa** | El proyecto de Google Cloud debe tener una cuenta de facturación vinculada (Vision la exige). |
-| **Mapeo de campos** | fecha OCR → Fecha, nombre_banco → Nombre en cabecera, numero_deposito → Número depósito, numero_documento → Número de documento, cantidad → Cantidad; columna **HUMANO** cuando >80% del texto es de baja confianza (manuscrito/ilegible)—en ese caso **no se inventan datos**; Cédula y Observación del flujo WhatsApp; Link imagen de Drive. |
+| **Mapeo de campos (hoja)** | A Cédula, B Fecha, C Institución financiera, D Documento, E Cantidad, F Link imagen. El OCR extrae fecha, nombre_banco, numero_documento/numero_deposito y cantidad; cédula y link vienen del flujo. El flag HUMANO (revisión humana) se usa solo en BD, no se escribe en la hoja. |
 
-**Regla HUMANO (evitar errores):** Cuando más del 80% del texto detectado por OCR tiene confianza baja (p. ej. documento mayormente manuscrito o ilegible), se escribe **HUMANO** en la columna correspondiente y **no se rellenan** los campos extraídos (fecha, banco, número depósito, número de documento, cantidad): quedan en "NA". Así se evita inventar datos y se indica que un humano debe revisar la imagen.
+**Regla HUMANO (evitar errores):** Cuando más del 80% del texto detectado por OCR tiene confianza baja (p. ej. documento mayormente manuscrito o ilegible), se marca HUMANO en BD y **no se rellenan** los campos extraídos: quedan en "NA". Así se evita inventar datos y se indica que un humano debe revisar la imagen.
 
 Si falta alguno, OCR devuelve "NA" en los campos o la verificación de estado muestra OCR "No conectado".
 

@@ -728,7 +728,7 @@ class WhatsAppService:
             try:
                 from app.services.google_sheets_informe_service import append_row
                 logger.info("%s Escribiendo Sheet | telefono=%s cedula=%s", LOG_TAG_INFORME, phone_mask, conv.cedula)
-                sheet_ok = append_row(conv.cedula, fecha_dep, nombre_banco, numero_dep, numero_doc, cantidad, link_imagen, periodo, observacion=observacion_informe, humano=humano_col or "")
+                sheet_ok = append_row(conv.cedula, fecha_dep, nombre_banco, numero_dep, numero_doc, cantidad, link_imagen, periodo, observacion=observacion_informe)
                 if not sheet_ok:
                     logger.warning("%s Sheets no escribió fila (BD OK) | telefono=%s cedula=%s", LOG_TAG_INFORME, phone_mask, conv.cedula)
             except Exception as e:
@@ -742,18 +742,18 @@ class WhatsAppService:
             response_text = _mensaje_confirmacion_datos_ocr(conv.cedula, cantidad, numero_doc, db)
             return {"status": "image_saved_confirmar_datos", "pagos_whatsapp_id": row_pw.id, "pagos_informe_id": informe.id, "response_text": response_text}
         except Exception as e:
+            try:
+                db.rollback()
+            except Exception:
+                pass
             logger.exception(
                 "%s %s | digitalización fallida (Drive/OCR/BD/Sheet) telefono=%s cedula=%s error=%s",
-                LOG_TAG_FALLO, "digitalizacion", phone_mask, conv.cedula, e,
+                LOG_TAG_FALLO, "digitalizacion", phone_mask, getattr(conv, "cedula", "?"), e,
             )
             logger.error(
                 "%s CAUSA mensaje 'No pudimos procesar': tipo=%s mensaje=%s",
                 LOG_TAG_FALLO, type(e).__name__, str(e),
             )
-            try:
-                db.rollback()
-            except Exception:
-                pass
             if conv.intento_foto >= 3:
                 response_cierre = MENSAJE_RECIBIDO_TERCER_INTENTO.format(cedula=conv.cedula or "N/A")
             else:
