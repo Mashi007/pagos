@@ -4,7 +4,7 @@ Endpoints de pagos. Datos reales desde BD.
 - GET /pagos/kpis y GET /pagos/stats desde Cuota/Prestamo; zona horaria America/Caracas.
 """
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, time as dt_time
 from typing import Optional
 from zoneinfo import ZoneInfo
 
@@ -43,11 +43,13 @@ def _safe_float(val) -> float:
 
 def _pago_to_response(row: Pago, cuotas_atrasadas: Optional[int] = None) -> dict:
     """Convierte fila Pago a dict para el frontend (campos en snake_case; fechas ISO)."""
+    fp = row.fecha_pago
+    fecha_pago_str = fp.date().isoformat() if hasattr(fp, "date") and fp else (fp.isoformat() if fp else "")
     return {
         "id": row.id,
         "cedula_cliente": row.cedula_cliente or "",
         "prestamo_id": row.prestamo_id,
-        "fecha_pago": row.fecha_pago.isoformat() if row.fecha_pago else "",
+        "fecha_pago": fecha_pago_str,
         "monto_pagado": float(row.monto_pagado) if row.monto_pagado is not None else 0,
         "numero_documento": row.numero_documento or "",
         "institucion_bancaria": row.institucion_bancaria,
@@ -90,15 +92,15 @@ def listar_pagos(
         if fecha_desde:
             try:
                 fd = date.fromisoformat(fecha_desde)
-                q = q.where(Pago.fecha_pago >= fd)
-                count_q = count_q.where(Pago.fecha_pago >= fd)
+                q = q.where(Pago.fecha_pago >= datetime.combine(fd, dt_time.min))
+                count_q = count_q.where(Pago.fecha_pago >= datetime.combine(fd, dt_time.min))
             except ValueError:
                 pass
         if fecha_hasta:
             try:
                 fh = date.fromisoformat(fecha_hasta)
-                q = q.where(Pago.fecha_pago <= fh)
-                count_q = count_q.where(Pago.fecha_pago <= fh)
+                q = q.where(Pago.fecha_pago <= datetime.combine(fh, dt_time.max))
+                count_q = count_q.where(Pago.fecha_pago <= datetime.combine(fh, dt_time.max))
             except ValueError:
                 pass
         if analista and analista.strip():
@@ -135,15 +137,18 @@ def obtener_pago(pago_id: int, db: Session = Depends(get_db)):
 @router.post("/", include_in_schema=False, response_model=dict, status_code=201)
 def crear_pago(payload: PagoCreate, db: Session = Depends(get_db)):
     """Crea un pago en la tabla pagos."""
+    ref = (payload.numero_documento or "").strip() or "N/A"
+    fecha_pago_ts = datetime.combine(payload.fecha_pago, dt_time.min)
     row = Pago(
         cedula_cliente=payload.cedula_cliente.strip(),
         prestamo_id=payload.prestamo_id,
-        fecha_pago=payload.fecha_pago,
+        fecha_pago=fecha_pago_ts,
         monto_pagado=payload.monto_pagado,
-        numero_documento=(payload.numero_documento or "").strip(),
+        numero_documento=(payload.numero_documento or "").strip() or None,
         institucion_bancaria=payload.institucion_bancaria.strip() if payload.institucion_bancaria else None,
         estado="PENDIENTE",
         notas=payload.notas.strip() if payload.notas else None,
+        referencia_pago=ref,
     )
     db.add(row)
     db.commit()
@@ -167,6 +172,8 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
             setattr(row, k, v.strip())
         elif k == "cedula_cliente" and v is not None:
             setattr(row, k, v.strip())
+        elif k == "fecha_pago" and v is not None:
+            setattr(row, k, datetime.combine(v, dt_time.min) if isinstance(v, date) and not isinstance(v, datetime) else v)
         else:
             setattr(row, k, v)
     db.commit()
