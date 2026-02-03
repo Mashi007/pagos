@@ -99,11 +99,11 @@ export function PagosList() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Encabezado (mismo formato que Préstamos) */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Módulo de Pagos</h1>
-          <p className="text-gray-500 mt-1">Gestión de pagos de clientes</p>
+          <h1 className="text-3xl font-bold text-gray-900">Pagos</h1>
+          <p className="text-gray-600 mt-1">Gestión de pagos y conciliación</p>
         </div>
         <div className="flex gap-3">
           <CargaMasivaMenu
@@ -156,51 +156,64 @@ export function PagosList() {
 
         {/* Tab: Todos los Pagos */}
         <TabsContent value="todos">
-          {/* Filtros */}
+          {/* Filtros (mismo formato que Préstamos: Card + etiquetas por campo) */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Filter className="w-5 h-5" />
+                <Filter className="h-5 w-5 text-gray-600" />
                 Filtros de Búsqueda
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                <Input
-                  placeholder="Cédula de identidad"
-                  value={filters.cedula}
-                  onChange={e => handleFilterChange('cedula', e.target.value)}
-                />
-                <Select value={filters.estado || 'all'} onValueChange={value => handleFilterChange('estado', value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Estado" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos</SelectItem>
-                    <SelectItem value="PAGADO">Pagado</SelectItem>
-                    <SelectItem value="PENDIENTE">Pendiente</SelectItem>
-                    <SelectItem value="ATRASADO">Atrasado</SelectItem>
-                    <SelectItem value="PARCIAL">Parcial</SelectItem>
-                    <SelectItem value="ADELANTADO">Adelantado</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Input
-                  type="date"
-                  placeholder="Fecha desde"
-                  value={filters.fechaDesde}
-                  onChange={e => handleFilterChange('fechaDesde', e.target.value)}
-                />
-                <Input
-                  type="date"
-                  placeholder="Fecha hasta"
-                  value={filters.fechaHasta}
-                  onChange={e => handleFilterChange('fechaHasta', e.target.value)}
-                />
-                <Input
-                  placeholder="Analista"
-                  value={filters.analista}
-                  onChange={e => handleFilterChange('analista', e.target.value)}
-                />
+            <CardContent className="pt-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">Cédula de identidad</label>
+                  <Input
+                    placeholder="Cédula"
+                    value={filters.cedula}
+                    onChange={e => handleFilterChange('cedula', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">Estado</label>
+                  <Select value={filters.estado || 'all'} onValueChange={value => handleFilterChange('estado', value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Estado" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="PAGADO">Pagado</SelectItem>
+                      <SelectItem value="PENDIENTE">Pendiente</SelectItem>
+                      <SelectItem value="ATRASADO">Atrasado</SelectItem>
+                      <SelectItem value="PARCIAL">Parcial</SelectItem>
+                      <SelectItem value="ADELANTADO">Adelantado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">Fecha desde</label>
+                  <Input
+                    type="date"
+                    value={filters.fechaDesde}
+                    onChange={e => handleFilterChange('fechaDesde', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">Fecha hasta</label>
+                  <Input
+                    type="date"
+                    value={filters.fechaHasta}
+                    onChange={e => handleFilterChange('fechaHasta', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">Analista</label>
+                  <Input
+                    placeholder="Analista"
+                    value={filters.analista}
+                    onChange={e => handleFilterChange('analista', e.target.value)}
+                  />
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -257,9 +270,6 @@ export function PagosList() {
                 </div>
               ) : (
                 <>
-                  <div className="mb-4 text-sm text-gray-600">
-                    Mostrando {data.pagos.length} de {data.total} pagos (Página {data.page} de {data.total_pages})
-                  </div>
                   <div className="border rounded-lg overflow-hidden">
                     <Table>
                       <TableHeader>
@@ -344,26 +354,30 @@ export function PagosList() {
                       </TableBody>
                     </Table>
                   </div>
-                  {/* Paginación */}
+                  {/* Paginación (mismo formato que Préstamos) */}
                   {data.total_pages > 1 && (
-                    <div className="flex justify-between items-center mt-4">
-                      <Button
-                        variant="outline"
-                        disabled={page === 1}
-                        onClick={() => setPage(p => Math.max(1, p - 1))}
-                      >
-                        Anterior
-                      </Button>
-                      <span className="text-sm text-gray-600">
-                        Página {data.page} de {data.total_pages}
-                      </span>
-                      <Button
-                        variant="outline"
-                        disabled={page >= data.total_pages}
-                        onClick={() => setPage(p => Math.min(data.total_pages, p + 1))}
-                      >
-                        Siguiente
-                      </Button>
+                    <div className="flex items-center justify-between mt-4">
+                      <div className="text-sm text-gray-600">
+                        Página {data.page} de {data.total_pages} ({data.total} total)
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={page === 1}
+                          onClick={() => setPage(p => Math.max(1, p - 1))}
+                        >
+                          Anterior
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={page >= data.total_pages}
+                          onClick={() => setPage(p => Math.min(data.total_pages, p + 1))}
+                        >
+                          Siguiente
+                        </Button>
+                      </div>
                     </div>
                   )}
                 </>

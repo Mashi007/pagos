@@ -1,15 +1,14 @@
 """
-Endpoints de pagos. Datos reales desde BD (Cuota, Prestamo, Cliente).
-GET /pagos/kpis y GET /pagos/stats con consultas a BD; ceros cuando no hay datos.
-Monto cobrado (mes) y Pagos hoy usan fecha en zona horaria del negocio (America/Caracas)
-para que coincida con el día local aunque el servidor esté en UTC.
+Endpoints de pagos. Datos reales desde BD.
+- Tabla pagos: GET/POST/PUT/DELETE /pagos/ (listado y CRUD para /pagos/pagos).
+- GET /pagos/kpis y GET /pagos/stats desde Cuota/Prestamo; zona horaria America/Caracas.
 """
 import logging
 from datetime import date, datetime
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException, Body
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
@@ -18,6 +17,8 @@ from app.core.deps import get_current_user
 from app.models.cliente import Cliente
 from app.models.cuota import Cuota
 from app.models.prestamo import Prestamo
+from app.models.pago import Pago
+from app.schemas.pago import PagoCreate, PagoUpdate, PagoResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -38,6 +39,150 @@ def _safe_float(val) -> float:
         return float(val)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _pago_to_response(row: Pago, cuotas_atrasadas: Optional[int] = None) -> dict:
+    """Convierte fila Pago a dict para el frontend (campos en snake_case; fechas ISO)."""
+    return {
+        "id": row.id,
+        "cedula_cliente": row.cedula_cliente or "",
+        "prestamo_id": row.prestamo_id,
+        "fecha_pago": row.fecha_pago.isoformat() if row.fecha_pago else "",
+        "monto_pagado": float(row.monto_pagado) if row.monto_pagado is not None else 0,
+        "numero_documento": row.numero_documento or "",
+        "institucion_bancaria": row.institucion_bancaria,
+        "estado": row.estado or "PENDIENTE",
+        "fecha_registro": row.fecha_registro.isoformat() if row.fecha_registro else None,
+        "fecha_conciliacion": row.fecha_conciliacion.isoformat() if row.fecha_conciliacion else None,
+        "conciliado": bool(row.conciliado),
+        "verificado_concordancia": getattr(row, "verificado_concordancia", None) or None,
+        "usuario_registro": row.usuario_registro or "",
+        "notas": row.notas,
+        "documento_nombre": getattr(row, "documento_nombre", None),
+        "documento_tipo": getattr(row, "documento_tipo", None),
+        "documento_ruta": getattr(row, "documento_ruta", None),
+        "cuotas_atrasadas": cuotas_atrasadas,
+    }
+
+
+@router.get("", response_model=dict)
+@router.get("/", include_in_schema=False, response_model=dict)
+def listar_pagos(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+    cedula: Optional[str] = Query(None),
+    estado: Optional[str] = Query(None),
+    fecha_desde: Optional[str] = Query(None),
+    fecha_hasta: Optional[str] = Query(None),
+    analista: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Listado paginado desde la tabla pagos. Filtros: cedula, estado, fecha_desde, fecha_hasta, analista (vía prestamo)."""
+    try:
+        q = select(Pago)
+        count_q = select(func.count()).select_from(Pago)
+        if cedula and cedula.strip():
+            q = q.where(Pago.cedula_cliente.ilike(f"%{cedula.strip()}%"))
+            count_q = count_q.where(Pago.cedula_cliente.ilike(f"%{cedula.strip()}%"))
+        if estado and estado.strip():
+            q = q.where(Pago.estado == estado.strip().upper())
+            count_q = count_q.where(Pago.estado == estado.strip().upper())
+        if fecha_desde:
+            try:
+                fd = date.fromisoformat(fecha_desde)
+                q = q.where(Pago.fecha_pago >= fd)
+                count_q = count_q.where(Pago.fecha_pago >= fd)
+            except ValueError:
+                pass
+        if fecha_hasta:
+            try:
+                fh = date.fromisoformat(fecha_hasta)
+                q = q.where(Pago.fecha_pago <= fh)
+                count_q = count_q.where(Pago.fecha_pago <= fh)
+            except ValueError:
+                pass
+        if analista and analista.strip():
+            q = q.join(Prestamo, Pago.prestamo_id == Prestamo.id).where(Prestamo.analista == analista.strip())
+            count_q = count_q.join(Prestamo, Pago.prestamo_id == Prestamo.id).where(Prestamo.analista == analista.strip())
+        total = db.scalar(count_q) or 0
+        q = q.order_by(Pago.id.desc()).offset((page - 1) * per_page).limit(per_page)
+        rows = db.execute(q).scalars().all()
+        items = [_pago_to_response(r) for r in rows]
+        total_pages = (total + per_page - 1) // per_page if total else 0
+        return {
+            "pagos": items,
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+            "total_pages": total_pages,
+        }
+    except Exception as e:
+        logger.exception("Error en GET /pagos: %s", e)
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get("/{pago_id}", response_model=dict)
+def obtener_pago(pago_id: int, db: Session = Depends(get_db)):
+    """Obtiene un pago por ID desde la tabla pagos."""
+    row = db.get(Pago, pago_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Pago no encontrado")
+    return _pago_to_response(row)
+
+
+@router.post("", response_model=dict, status_code=201)
+@router.post("/", include_in_schema=False, response_model=dict, status_code=201)
+def crear_pago(payload: PagoCreate, db: Session = Depends(get_db)):
+    """Crea un pago en la tabla pagos."""
+    row = Pago(
+        cedula_cliente=payload.cedula_cliente.strip(),
+        prestamo_id=payload.prestamo_id,
+        fecha_pago=payload.fecha_pago,
+        monto_pagado=payload.monto_pagado,
+        numero_documento=(payload.numero_documento or "").strip(),
+        institucion_bancaria=payload.institucion_bancaria.strip() if payload.institucion_bancaria else None,
+        estado="PENDIENTE",
+        notas=payload.notas.strip() if payload.notas else None,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return _pago_to_response(row)
+
+
+@router.put("/{pago_id}", response_model=dict)
+def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get_db)):
+    """Actualiza un pago en la tabla pagos."""
+    row = db.get(Pago, pago_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Pago no encontrado")
+    data = payload.model_dump(exclude_unset=True)
+    for k, v in data.items():
+        if k == "notas" and v is not None:
+            setattr(row, k, v.strip() or None)
+        elif k == "institucion_bancaria" and v is not None:
+            setattr(row, k, v.strip() or None)
+        elif k == "numero_documento" and v is not None:
+            setattr(row, k, v.strip())
+        elif k == "cedula_cliente" and v is not None:
+            setattr(row, k, v.strip())
+        else:
+            setattr(row, k, v)
+    db.commit()
+    db.refresh(row)
+    return _pago_to_response(row)
+
+
+@router.delete("/{pago_id}", status_code=204)
+def eliminar_pago(pago_id: int, db: Session = Depends(get_db)):
+    """Elimina un pago de la tabla pagos."""
+    row = db.get(Pago, pago_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Pago no encontrado")
+    db.delete(row)
+    db.commit()
+    return None
 
 
 @router.get("/kpis")
