@@ -832,7 +832,7 @@ export function DashboardMenu() {
               </Card>
             </motion.div>
 
-          {/* Préstamos aprobados por modelo de vehículo (pastel %) */}
+          {/* Préstamos aprobados por modelo de vehículo (barras horizontales) */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -843,7 +843,7 @@ export function DashboardMenu() {
               <CardHeader className="bg-gradient-to-r from-violet-50/90 to-purple-50/90 border-b border-gray-200/80 pb-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
-                    <PieChart className="h-5 w-5 text-violet-600" />
+                    <BarChart3 className="h-5 w-5 text-violet-600" />
                     <span>Préstamos aprobados por modelo de vehículo</span>
                   </CardTitle>
                   <div className="flex items-center gap-2">
@@ -862,40 +862,48 @@ export function DashboardMenu() {
                   (() => {
                     const acumulado = datosPrestamosPorModelo.acumulado
                     const total = acumulado.reduce((s, d) => s + d.cantidad_acumulada, 0)
-                    const PIE_COLORS = ['#6366f1', '#8b5cf6', '#a855f7', '#c084fc', '#d8b4fe', '#7c3aed', '#5b21b6', '#4c1d95', '#6d28d9', '#3730a3']
-                    const dataPie = acumulado.map((d, i) => ({
-                      name: d.modelo || 'Sin modelo',
-                      value: d.cantidad_acumulada,
+                    const dataBarras = acumulado.map((d) => ({
+                      modelo: d.modelo || 'Sin modelo',
+                      cantidad: d.cantidad_acumulada,
                       porcentaje: total > 0 ? (d.cantidad_acumulada / total) * 100 : 0,
-                      fill: PIE_COLORS[i % PIE_COLORS.length],
                     }))
+                    const numItems = dataBarras.length
+                    const chartHeight = Math.max(380, Math.min(620, numItems * 26))
                     return (
-                      <ResponsiveContainer width="100%" height={450}>
-                        <RechartsPieChart margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
-                          <Pie
-                            data={dataPie}
-                            dataKey="value"
-                            nameKey="name"
-                            cx="50%"
-                            cy="50%"
-                            outerRadius="70%"
-                            label={({ name, porcentaje }) => `${name}: ${porcentaje.toFixed(1)}%`}
-                            labelLine={{ stroke: '#64748b', strokeWidth: 1 }}
-                          >
-                            {dataPie.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={entry.fill} stroke="#fff" strokeWidth={1.5} />
-                            ))}
-                          </Pie>
+                      <ResponsiveContainer width="100%" height={chartHeight}>
+                        <BarChart data={dataBarras} layout="vertical" margin={{ top: 12, right: 48, left: 16, bottom: 12 }} barCategoryGap="10%" barGap={4}>
+                          <CartesianGrid {...chartCartesianGrid} horizontal={false} />
+                          <XAxis
+                            type="number"
+                            domain={[0, 100]}
+                            tickFormatter={(v) => `${v}%`}
+                            tick={chartAxisTick}
+                            axisLine={{ stroke: '#e5e7eb' }}
+                            label={{ value: '% del total', position: 'insideBottom', offset: -8, style: { fill: '#6b7280', fontSize: 12 } }}
+                          />
+                          <YAxis
+                            type="category"
+                            dataKey="modelo"
+                            width={140}
+                            tick={{ fontSize: 11, fill: '#374151', fontWeight: 500 }}
+                            interval={0}
+                            tickLine={false}
+                            axisLine={{ stroke: '#e5e7eb' }}
+                            tickFormatter={(name) => (name && name.length > 22 ? `${name.slice(0, 20)}…` : name)}
+                          />
                           <Tooltip
                             contentStyle={chartTooltipStyle.contentStyle}
                             labelStyle={chartTooltipStyle.labelStyle}
-                            formatter={(value: number, name: string, props: { payload?: { porcentaje: number } }) => [
-                              `${value.toLocaleString('es-EC')} préstamos (${(props.payload?.porcentaje ?? 0).toFixed(1)}%)`,
-                              name,
+                            formatter={(value: number, _name: string, props: { payload?: { cantidad: number; porcentaje: number } }) => [
+                              `${props.payload?.cantidad?.toLocaleString('es-EC') ?? value} préstamos (${(value ?? props.payload?.porcentaje ?? 0).toFixed(1)}%)`,
+                              '% del total',
                             ]}
+                            labelFormatter={(label) => `Modelo: ${label}`}
+                            cursor={{ fill: 'rgba(99, 102, 241, 0.06)' }}
                           />
-                          <Legend {...chartLegendStyle} formatter={(value, entry) => `${value} (${(entry.payload as { porcentaje?: number })?.porcentaje?.toFixed(1) ?? '0'}%)`} />
-                        </RechartsPieChart>
+                          <Legend {...chartLegendStyle} />
+                          <Bar dataKey="porcentaje" name="% del total" fill="#6366f1" radius={[0, 4, 4, 0]} maxBarSize={22} />
+                        </BarChart>
                       </ResponsiveContainer>
                     )
                   })()
