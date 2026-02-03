@@ -888,11 +888,11 @@ export function DashboardMenu() {
                   {loadingMorosidadAnalista ? (
                     <div className="flex items-center justify-center py-16 text-gray-500">Cargando...</div>
                   ) : datosMorosidadAnalista && datosMorosidadAnalista.length > 0 ? (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      {/* Red tela de araña: cuántas cuotas vencidas por analista */}
-                      <div>
+                    <div className="flex flex-col gap-8">
+                      {/* Fila 1: Cuotas vencidas por analista (ancho completo) */}
+                      <div className="w-full">
                         <h4 className="text-sm font-semibold text-gray-700 mb-3 text-center">Cuotas vencidas por analista</h4>
-                        <ResponsiveContainer width="100%" height={320}>
+                        <ResponsiveContainer width="100%" height={340}>
                           <RadarChart data={datosMorosidadAnalista} margin={{ top: 16, right: 24, left: 24, bottom: 16 }}>
                             <PolarGrid stroke="#e5e7eb" />
                             <PolarAngleAxis dataKey="analista" tick={{ fontSize: 11 }} />
@@ -903,18 +903,18 @@ export function DashboardMenu() {
                           </RadarChart>
                         </ResponsiveContainer>
                       </div>
-                      {/* Suma en dólares por analista (misma lógica: cuotas vencidas, agrupado por analista del préstamo) */}
-                      <div>
+                      {/* Fila 2: Dólares vencidos por analista (ancho completo) */}
+                      <div className="w-full">
                         <h4 className="text-sm font-semibold text-gray-700 mb-3 text-center">Dólares vencidos por analista</h4>
                         <p className="text-xs text-gray-500 mb-2 text-center">Suma de monto_cuota de cuotas vencidas (hoy &gt; fecha_vencimiento, sin pagar) por analista</p>
-                        <ResponsiveContainer width="100%" height={320}>
-                          <BarChart data={datosMorosidadAnalista} layout="vertical" margin={{ top: 8, right: 24, left: 80, bottom: 8 }}>
+                        <ResponsiveContainer width="100%" height={Math.max(340, Math.min(500, datosMorosidadAnalista.length * 24))}>
+                          <BarChart data={datosMorosidadAnalista} layout="vertical" margin={{ top: 8, right: 24, left: 140, bottom: 8 }}>
                             <CartesianGrid {...chartCartesianGrid} />
                             <XAxis type="number" tickFormatter={(v) => `$${v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v}`} tick={chartAxisTick} />
-                            <YAxis type="category" dataKey="analista" width={76} tick={{ fontSize: 11 }} interval={0} />
+                            <YAxis type="category" dataKey="analista" width={130} tick={{ fontSize: 11 }} interval={0} />
                             <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [formatCurrency(value), 'Dólares vencidos']} labelFormatter={(label) => `Analista: ${label}`} cursor={{ fill: 'rgba(234, 88, 12, 0.08)' }} />
                             <Legend />
-                            <Bar dataKey="monto_vencido" name="Dólares vencidos" fill="#ea580c" radius={[0, 4, 4, 0]} maxBarSize={28} />
+                            <Bar dataKey="monto_vencido" name="Dólares vencidos" fill="#ea580c" radius={[0, 4, 4, 0]} maxBarSize={32} />
                           </BarChart>
                         </ResponsiveContainer>
                       </div>

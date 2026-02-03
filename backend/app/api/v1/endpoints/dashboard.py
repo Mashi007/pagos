@@ -139,7 +139,10 @@ def _compute_kpis_principales(
             inicio_dt, fin_dt = inicio_mes_actual, fin_mes_actual
             inicio_ant_dt, fin_ant_dt = inicio_mes_anterior, fin_mes_anterior
 
-        conds = [Prestamo.estado == "APROBADO", Prestamo.fecha_creacion >= inicio_dt, Prestamo.fecha_creacion <= fin_dt]
+        # Total préstamos: con rango = count en el rango; sin rango = count total (todos aprobados) para que la tarjeta no quede en 0
+        conds = [Prestamo.estado == "APROBADO"]
+        if usar_rango:
+            conds.extend([Prestamo.fecha_creacion >= inicio_dt, Prestamo.fecha_creacion <= fin_dt])
         if analista:
             conds.append(Prestamo.analista == analista)
         if concesionario:
