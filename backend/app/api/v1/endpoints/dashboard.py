@@ -11,7 +11,7 @@ from typing import Optional, Any
 from fastapi import APIRouter, Depends, Query
 
 from app.core.deps import get_current_user
-from sqlalchemy import and_, select, func
+from sqlalchemy import and_, or_, select, func
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session
 
@@ -177,8 +177,76 @@ def _compute_kpis_principales(
         else:
             variacion_creditos = 0.0
 
-        morosidad_actual = 0.0
-        variacion_morosidad = 0.0
+        # Morosidad total: suma monto_cuota de cuotas vencidas y no pagadas (fecha_pago IS NULL, fecha_vencimiento < hoy)
+        hoy = date.today()
+        conds_moro = [
+            Cuota.prestamo_id == Prestamo.id,
+            Prestamo.estado == "APROBADO",
+            Cuota.fecha_pago.is_(None),
+            Cuota.fecha_vencimiento < hoy,
+        ]
+        if analista:
+            conds_moro.append(Prestamo.analista == analista)
+        if concesionario:
+            conds_moro.append(Prestamo.concesionario == concesionario)
+        if modelo:
+            conds_moro.append(Prestamo.modelo == modelo)
+        morosidad_actual = _safe_float(
+            db.scalar(
+                select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).join(Prestamo, Cuota.prestamo_id == Prestamo.id).where(and_(*conds_moro))
+            )
+        )
+        # Variación vs mes anterior: morosidad a fin del período anterior (cuotas vencidas y no pagadas a esa fecha)
+        fin_anterior_d = fin_ant_dt.date()
+        conds_moro_ant = [
+            Cuota.prestamo_id == Prestamo.id,
+            Prestamo.estado == "APROBADO",
+            Cuota.fecha_vencimiento <= fin_anterior_d,
+            or_(Cuota.fecha_pago.is_(None), Cuota.fecha_pago > fin_anterior_d),
+        ]
+        if analista:
+            conds_moro_ant.append(Prestamo.analista == analista)
+        if concesionario:
+            conds_moro_ant.append(Prestamo.concesionario == concesionario)
+        if modelo:
+            conds_moro_ant.append(Prestamo.modelo == modelo)
+        morosidad_mes_anterior = _safe_float(
+            db.scalar(
+                select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).join(Prestamo, Cuota.prestamo_id == Prestamo.id).where(and_(*conds_moro_ant))
+            )
+        )
+        if morosidad_mes_anterior and morosidad_mes_anterior != 0:
+            variacion_morosidad = ((morosidad_actual - morosidad_mes_anterior) / morosidad_mes_anterior) * 100.0
+        else:
+            variacion_morosidad = 0.0
+
+        # Cuotas programadas del mes: suma monto_cuota con fecha_vencimiento en el período (join Prestamo para filtros)
+        inicio_d = inicio if usar_rango else inicio_dt.date()
+        fin_d = fin if usar_rango else fin_dt.date()
+        conds_cuota = [
+            Cuota.prestamo_id == Prestamo.id,
+            Prestamo.estado == "APROBADO",
+            Cuota.fecha_vencimiento >= inicio_d,
+            Cuota.fecha_vencimiento <= fin_d,
+        ]
+        if analista:
+            conds_cuota.append(Prestamo.analista == analista)
+        if concesionario:
+            conds_cuota.append(Prestamo.concesionario == concesionario)
+        if modelo:
+            conds_cuota.append(Prestamo.modelo == modelo)
+        monto_cuotas_programadas = db.scalar(
+            select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).join(Prestamo, Cuota.prestamo_id == Prestamo.id).where(and_(*conds_cuota))
+        ) or 0
+        total_programado = _safe_float(monto_cuotas_programadas)
+        # % Cuotas pagadas: porcentaje por cantidad de registros (cuotas con fecha_pago no nulo = pagadas)
+        total_cuotas_periodo = db.scalar(
+            select(func.count()).select_from(Cuota).join(Prestamo, Cuota.prestamo_id == Prestamo.id).where(and_(*conds_cuota))
+        ) or 0
+        cuotas_pagadas_count = db.scalar(
+            select(func.count()).select_from(Cuota).join(Prestamo, Cuota.prestamo_id == Prestamo.id).where(and_(*conds_cuota, Cuota.fecha_pago.isnot(None)))
+        ) or 0
+        porcentaje_cuotas = (float(cuotas_pagadas_count) / float(total_cuotas_periodo) * 100.0) if total_cuotas_periodo else 0.0
 
         return {
             "total_prestamos": _kpi(_safe_float(total_prestamos), 0.0),
@@ -190,8 +258,8 @@ def _compute_kpis_principales(
                 "finalizados": _kpi(_safe_float(finalizados), 0.0),
             },
             "total_morosidad_usd": _kpi(round(morosidad_actual, 2), round(variacion_morosidad, 1)),
-            "cuotas_programadas": {"valor_actual": 0.0},
-            "porcentaje_cuotas_pagadas": 0.0,
+            "cuotas_programadas": {"valor_actual": round(total_programado, 2)},
+            "porcentaje_cuotas_pagadas": round(porcentaje_cuotas, 1),
         }
     except Exception as e:
         logger.exception("Error en kpis-principales: %s", e)
@@ -323,17 +391,20 @@ def _compute_dashboard_admin(
                 if fin_mes.tzinfo is None:
                     fin_mes = fin_mes.replace(tzinfo=timezone.utc)
                 inicio_d, fin_d = _primer_ultimo_dia_mes(fin_mes)
+            # Cartera: suma monto_cuota de cuotas con vencimiento en el mes
             cartera = db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
                     Cuota.fecha_vencimiento >= inicio_d,
                     Cuota.fecha_vencimiento <= fin_d,
                 )
             ) or 0
+            # Cobrado: suma monto_cuota de cuotas que vencían en este mes y ya están pagadas (por fecha_vencimiento, no por fecha_pago)
+            # Así el cobrado se reparte por mes de vencimiento y no se concentra solo en el mes en que se registró el pago
             cobrado = db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
+                    Cuota.fecha_vencimiento >= inicio_d,
+                    Cuota.fecha_vencimiento <= fin_d,
                     Cuota.fecha_pago.isnot(None),
-                    func.date(Cuota.fecha_pago) >= inicio_d,
-                    func.date(Cuota.fecha_pago) <= fin_d,
                 )
             ) or 0
             cartera_f = _safe_float(cartera)
@@ -801,15 +872,20 @@ def _compute_financiamiento_por_rangos(
     concesionario: Optional[str],
     modelo: Optional[str],
 ) -> dict:
-    """Calcula financiamiento por rangos (usado por endpoint y por refresh de caché)."""
+    """Calcula financiamiento por rangos: cuenta préstamos APROBADOS desde el inicio por banda de total_financiamiento.
+    No se filtra por fecha: se tabulan todos los préstamos aprobados (tabla prestamos) en cada segmento definido."""
     try:
-        filtro_fecha = bool(fecha_inicio and fecha_fin)
-        if filtro_fecha:
-            try:
-                inicio = date.fromisoformat(fecha_inicio)
-                fin = date.fromisoformat(fecha_fin)
-            except ValueError:
-                filtro_fecha = False
+        # Siempre todos los préstamos desde el inicio; opcionalmente filtros por analista/concesionario/modelo
+        conds_base = [
+            Prestamo.estado == "APROBADO",
+            Prestamo.total_financiamiento.isnot(None),
+        ]
+        if analista:
+            conds_base.append(Prestamo.analista == analista)
+        if concesionario:
+            conds_base.append(Prestamo.concesionario == concesionario)
+        if modelo:
+            conds_base.append(Prestamo.modelo == modelo)
 
         rangos_def = _rangos_financiamiento()
         resultado = []
@@ -817,19 +893,14 @@ def _compute_financiamiento_por_rangos(
         for min_val, max_val, cat in rangos_def:
             if max_val >= 999999999:
                 q = select(func.count().label("n")).select_from(Prestamo).where(
-                    Prestamo.total_financiamiento.isnot(None),
+                    and_(*conds_base),
                     Prestamo.total_financiamiento >= min_val,
                 )
             else:
                 q = select(func.count().label("n")).select_from(Prestamo).where(
-                    Prestamo.total_financiamiento.isnot(None),
+                    and_(*conds_base),
                     Prestamo.total_financiamiento >= min_val,
                     Prestamo.total_financiamiento < max_val,
-                )
-            if filtro_fecha:
-                q = q.where(
-                    func.date(Prestamo.fecha_creacion) >= inicio,
-                    func.date(Prestamo.fecha_creacion) <= fin,
                 )
             n = int(db.scalar(q) or 0)
             total_p += n

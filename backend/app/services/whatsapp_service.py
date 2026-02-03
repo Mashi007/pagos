@@ -473,7 +473,8 @@ class WhatsAppService:
         except Exception as e:
             logger.exception("Imagen no digitalizada: error descargando imagen (no_digitaliza=image_error): %s", e)
             db.rollback()
-            return {"status": "image_error", "note": str(e), "response_text": MENSAJE_IMAGEN_NO_PROCESADA}
+            # Incluir en note que es fallo de descarga para distinguir de fallo Drive/Sheet en logs
+            return {"status": "image_error", "note": f"descarga: {e!s}", "response_text": MENSAJE_IMAGEN_NO_PROCESADA}
         if not image_bytes:
             logger.info("Imagen no digitalizada: imagen vacía (no_digitaliza=image_empty)")
             return {"status": "image_empty", "note": "Imagen vacía", "response_text": MENSAJE_IMAGEN_NO_PROCESADA}
@@ -507,8 +508,9 @@ class WhatsAppService:
             from app.services.ocr_service import imagen_suficientemente_clara
             aceptable = imagen_suficientemente_clara(image_bytes)
             mensaje_ia = MENSAJE_RECIBIDO.format(cedula=conv.cedula or "N/A") if aceptable else MENSAJE_FOTO_POCO_CLARA.format(n=conv.intento_foto)
-        aceptar = aceptable or conv.intento_foto >= 3
-        aceptado_por_tercer_intento = aceptar and not aceptable  # True cuando aceptamos solo por ser 3.er intento
+        # Aceptar a la primera: procesar siempre (Drive + OCR + BD + Sheet) para comprobar si el fallo es flujo o OCR/conexión.
+        aceptar = aceptable or conv.intento_foto >= 1
+        aceptado_por_tercer_intento = aceptar and not aceptable and conv.intento_foto >= 3  # True solo si aceptamos por ser 3.er intento (no por IA)
         if not aceptar:
             logger.info(
                 "Imagen no digitalizada: IA no aceptó, intento %d/3 (no_digitaliza=photo_retry); respuesta: %s",
@@ -603,4 +605,9 @@ class WhatsAppService:
                 db.rollback()
             except Exception:
                 pass
-            return {"status": "image_error", "note": str(e), "response_text": MENSAJE_IMAGEN_NO_PROCESADA}
+            # 3.er intento: aunque falle Drive/Sheet, dar respuesta de cierre (te contactaremos). Así no repite 3 veces el mismo mensaje genérico.
+            if conv.intento_foto >= 3:
+                response_cierre = MENSAJE_RECIBIDO_TERCER_INTENTO.format(cedula=conv.cedula or "N/A")
+            else:
+                response_cierre = MENSAJE_IMAGEN_NO_PROCESADA
+            return {"status": "image_error", "note": str(e), "response_text": response_cierre}
