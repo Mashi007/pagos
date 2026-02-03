@@ -93,6 +93,14 @@ MENSAJE_RECIBIDO_TERCER_INTENTO = (
     "Si no tenemos clara la imagen, te contactaremos. Para otras consultas: 0424-4359435."
 )
 OBSERVACION_NO_CONFIRMA = "No confirma identidad"
+# Confirmación de recepción (IA solo para respuestas bot; OCR extrae y decide). Tras OCR se envían datos al chat.
+MENSAJE_RECIBIMOS_COMPROBANTE = (
+    "Recibimos tu comprobante (papeleta/recibo de pago). "
+    "Estos son los datos que leímos. Responde *SÍ* para confirmar o escribe las correcciones "
+    "(ej: Fecha 01/02/2025, Cantidad 100.50)."
+)
+MENSAJE_DATOS_CONFIRMADOS = "Gracias. Datos confirmados y registrados. Si necesitas algo más, llama al 0424-4359435."
+MENSAJE_DATOS_ACTUALIZADOS = "Gracias. Hemos actualizado los datos con tus correcciones. Quedó registrado."
 # Cuando falla descarga/configuración/procesamiento de imagen: siempre responder para no dejar al usuario sin respuesta.
 MENSAJE_IMAGEN_NO_PROCESADA = (
     "No pudimos procesar tu imagen en este momento. Por favor intenta enviar otra foto clara de tu papeleta a 20 cm, "
@@ -129,6 +137,7 @@ def _reiniciar_como_nuevo_caso(conv: ConversacionCobranza, db: Session) -> None:
     conv.intento_foto = 0
     conv.intento_confirmacion = 0
     conv.observacion = None
+    conv.pagos_informe_id_pendiente = None
     conv.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(conv)
@@ -178,6 +187,61 @@ def _es_respuesta_no(text: str) -> bool:
     """True si el texto se interpreta como No."""
     t = (text or "").strip().lower()
     return t in ("no", "n", "negativo", "incorrecto")
+
+
+# Solo estos campos se confirman/editan con el cliente: cédula, cantidad, número de documento.
+CAMPOS_CONFIRMACION = ("cedula", "cantidad", "numero_documento")
+
+
+def _parsear_edicion_confirmacion(text: str) -> Dict[str, Any]:
+    """
+    Parsea correcciones del cliente solo para: cédula, cantidad, número de documento.
+    Usado en esperando_confirmacion_datos. No modifica otras columnas.
+    """
+    out: Dict[str, Any] = {}
+    if not text or len(text.strip()) < 2:
+        return out
+    t = text.strip()
+    # Cantidad: número con opcional . o , decimal
+    m = re.search(r"(?:cantidad|total|monto)\s*[:\-]?\s*([\d\s.,]+)", t, re.I)
+    if m:
+        val = re.sub(r"\s", "", m.group(1).replace(",", "."))
+        if re.match(r"^\d+\.?\d*$", val):
+            out["cantidad"] = val
+    # Número documento
+    m = re.search(r"(?:n(?:umero|º|úmero)?\s*(?:documento|doc|recibo)\s*[:\-]?)\s*([^\n,]+?)(?=\s*(?:,|$))", t, re.I)
+    if m:
+        out["numero_documento"] = m.group(1).strip()[:100]
+    # Cédula: E/J/V + dígitos
+    m = re.search(r"(?:cedula|cédula|cedula)\s*[:\-]?\s*([EeVvJj]\d{6,11})", t, re.I)
+    if m:
+        out["cedula"] = m.group(1).strip().upper()[:20]
+    return out
+
+
+def _parsear_edicion_datos_informe(text: str) -> Dict[str, Any]:
+    """
+    Parsea mensaje del usuario con correcciones (todos los campos).
+    En el flujo de confirmación usamos _parsear_edicion_confirmacion (solo cedula, cantidad, numero_documento).
+    """
+    return _parsear_edicion_confirmacion(text)
+
+
+def _mensaje_confirmacion_datos_ocr(cedula: str, cantidad: str, numero_documento: str, db: Session) -> str:
+    """
+    Mensaje para confirmar únicamente cédula, cantidad y número de documento.
+    Se escribe primero en Google Sheet; luego se pide al cliente que confirme. IA genera la conversación.
+    """
+    try:
+        from app.services.ai_imagen_respuesta import generar_mensaje_confirmacion_datos
+        return generar_mensaje_confirmacion_datos(cedula, cantidad, numero_documento, db)
+    except Exception as e:
+        logger.debug("IA confirmación datos: %s", e)
+    return (
+        "Recibimos tu comprobante. Datos leídos:\n\n"
+        f"• Cédula: {cedula or '—'}\n• Cantidad: {cantidad or '—'}\n• Nº documento: {numero_documento or '—'}\n\n"
+        "Responde *SÍ* para confirmar o escribe las correcciones (ej: Cantidad 100.50, Nº documento 12345)."
+    )
 
 
 # Palabras/frases que sugieren que piden otra cosa (no reportar pago): información, hablar con alguien, etc.
@@ -366,6 +430,69 @@ class WhatsAppService:
             if _pide_otra_informacion(text):
                 return {"status": "otra_informacion", "response_text": MENSAJE_OTRA_INFORMACION}
             return {"status": "welcome", "response_text": MENSAJE_BIENVENIDA}
+        # Tras OCR: cliente confirma datos o escribe correcciones; actualizamos columnas si edita
+        if conv.estado == "esperando_confirmacion_datos":
+            informe_id = getattr(conv, "pagos_informe_id_pendiente", None)
+            phone_mask = (phone[:6] + "***") if len(phone) >= 6 else "***"
+            logger.info("%s Confirmación datos: estado=esperando_confirmacion_datos informe_id=%s telefono=%s", LOG_TAG_INFORME, informe_id, phone_mask)
+            if not informe_id or not db:
+                logger.warning("%s Confirmación datos: sin informe_id o db, reiniciando flujo", LOG_TAG_FALLO)
+                conv.estado = "esperando_cedula"
+                conv.pagos_informe_id_pendiente = None
+                conv.updated_at = datetime.utcnow()
+                db.commit()
+                return {"status": "processed", "response_text": MENSAJE_BIENVENIDA}
+            informe = db.get(PagosInforme, informe_id)
+            if not informe:
+                logger.warning("%s Confirmación datos: informe_id=%s no encontrado en BD", LOG_TAG_FALLO, informe_id)
+                conv.estado = "esperando_cedula"
+                conv.pagos_informe_id_pendiente = None
+                conv.updated_at = datetime.utcnow()
+                db.commit()
+                return {"status": "processed", "response_text": "No encontramos el registro. " + MENSAJE_BIENVENIDA}
+            if _es_respuesta_si(text):
+                logger.info("%s Confirmación datos: cliente confirmó SÍ | informe_id=%s telefono=%s", LOG_TAG_INFORME, informe_id, phone_mask)
+                conv.pagos_informe_id_pendiente = None
+                conv.intento_foto = 0
+                conv.estado = "esperando_cedula"
+                cedula_guardada = conv.cedula
+                conv.cedula = None
+                conv.nombre_cliente = None
+                conv.observacion = None
+                conv.updated_at = datetime.utcnow()
+                db.commit()
+                return {"status": "datos_confirmados", "response_text": MENSAJE_DATOS_CONFIRMADOS}
+            edits = _parsear_edicion_confirmacion((text or "").strip())
+            # Solo actualizar cédula, cantidad y numero_documento; no generar otra fila, solo editar la misma
+            edits = {k: v for k, v in edits.items() if k in CAMPOS_CONFIRMACION and v is not None}
+            if edits:
+                logger.info("%s Confirmación datos: cliente editó campos | informe_id=%s campos=%s", LOG_TAG_INFORME, informe_id, list(edits.keys()))
+                for k, v in edits.items():
+                    if hasattr(informe, k):
+                        if k == "cedula" and isinstance(v, str):
+                            setattr(informe, k, v[:20])
+                        elif k == "cantidad" and isinstance(v, str):
+                            setattr(informe, k, v[:50])
+                        elif k == "numero_documento" and isinstance(v, str):
+                            setattr(informe, k, v[:100])
+                db.commit()
+                db.refresh(informe)
+                try:
+                    from app.services.google_sheets_informe_service import update_row_for_informe
+                    update_row_for_informe(informe)
+                except Exception as e:
+                    logger.warning("%s No se pudo actualizar Sheet con correcciones: %s", LOG_TAG_INFORME, e)
+                conv.pagos_informe_id_pendiente = None
+                conv.intento_foto = 0
+                conv.estado = "esperando_cedula"
+                conv.cedula = None
+                conv.nombre_cliente = None
+                conv.observacion = None
+                conv.updated_at = datetime.utcnow()
+                db.commit()
+                return {"status": "datos_actualizados", "response_text": MENSAJE_DATOS_ACTUALIZADOS}
+            logger.info("%s Confirmación datos: respuesta no SÍ ni edición parseable | informe_id=%s telefono=%s", LOG_TAG_INFORME, informe_id, phone_mask)
+            return {"status": "pide_confirmar_o_editar", "response_text": "Responde *SÍ* para confirmar o escribe las correcciones (ej: Cantidad 100.50, Nº documento 12345)."}
         if conv.estado == "esperando_cedula":
             if not _validar_cedula_evj(text):
                 if _pide_otra_informacion(text):
@@ -453,9 +580,16 @@ class WhatsAppService:
         if conv.estado == "esperando_confirmacion":
             logger.info("%s Imagen rechazada estado=esperando_confirmacion | telefono=%s (no_digitaliza=primero_confirmar)", LOG_TAG_INFORME, phone_mask)
             return {"status": "primero_confirmar", "response_text": MENSAJE_PRIMERO_CONFIRMA_LUEGO_FOTO}
+        if conv.estado == "esperando_confirmacion_datos":
+            logger.info("%s Imagen ignorada estado=esperando_confirmacion_datos | telefono=%s", LOG_TAG_INFORME, phone_mask)
+            return {"status": "confirma_o_edita_texto", "response_text": "Responde *SÍ* para confirmar (cédula, cantidad y Nº documento) o escribe las correcciones por texto (ej: Cantidad 100.50, Nº documento 12345)."}
         if conv.estado != "esperando_foto" or not conv.cedula:
             logger.info("%s Imagen rechazada estado=%s sin cedula | telefono=%s (no_digitaliza=need_cedula)", LOG_TAG_INFORME, conv.estado or "?", phone_mask)
             return {"status": "need_cedula", "response_text": MENSAJE_BIENVENIDA}
+        logger.info(
+            "%s FLUJO_OCR INICIO | pasos: 1=descarga 2=OCR 3=Drive 4=BD 5=Sheet 6=confirmacion | telefono=%s media_id=%s cedula=%s",
+            LOG_TAG_INFORME, phone_mask, media_id, conv.cedula,
+        )
         logger.info("%s Inicio procesamiento imagen | telefono=%s media_id=%s cedula=%s intento_foto=%s", LOG_TAG_INFORME, phone_mask, media_id, conv.cedula, conv.intento_foto or 0)
         whatsapp_sync_from_db()
         cfg = get_whatsapp_config()
@@ -507,25 +641,23 @@ class WhatsAppService:
                 "%s [OCR] FALLO extract_from_image (Vision/config) | telefono=%s error=%s",
                 LOG_TAG_FALLO, phone_mask, e,
             )
-        # Evaluación por IA: texto OCR + prompt corto → aceptable + mensaje conversacional (gracias o pedir otra foto)
-        ocr_text = ""
-        try:
-            from app.services.ocr_service import get_full_text
-            ocr_text = get_full_text(image_bytes) or ""
-            logger.info("%s [OCR] get_full_text para IA | telefono=%s len=%d", LOG_TAG_INFORME, phone_mask, len(ocr_text))
-        except Exception as e:
-            logger.warning("%s [OCR] get_full_text falló (texto para IA) | telefono=%s error=%s", LOG_TAG_INFORME, phone_mask, e, exc_info=True)
-        try:
-            from app.services.ai_imagen_respuesta import evaluar_imagen_y_respuesta
-            aceptable, mensaje_ia = evaluar_imagen_y_respuesta(ocr_text, conv.cedula or "", db)
-        except Exception as e:
-            logger.warning("IA imagen falló, usando fallback por claridad: %s", e)
-            from app.services.ocr_service import imagen_suficientemente_clara
-            aceptable = imagen_suficientemente_clara(image_bytes)
-            mensaje_ia = MENSAJE_RECIBIDO.format(cedula=conv.cedula or "N/A") if aceptable else MENSAJE_FOTO_POCO_CLARA.format(n=conv.intento_foto)
-        # Aceptar a la primera: procesar siempre (Drive + OCR + BD + Sheet) para comprobar si el fallo es flujo o OCR/conexión.
-        aceptar = aceptable or conv.intento_foto >= 1
-        aceptado_por_tercer_intento = aceptar and not aceptable and conv.intento_foto >= 3  # True solo si aceptamos por ser 3.er intento (no por IA)
+        # Decisión "aceptable" solo por OCR: si extrajo al menos un dato útil o marcó HUMANO (revisión humana), es aceptable.
+        # La IA no decide; solo se usa opcionalmente para el mensaje cuando hay bastante texto.
+        def _aceptable_por_ocr(data: dict) -> bool:
+            if not data:
+                return False
+            na_vals = (None, "NA", "")
+            campos_utiles = ("nombre_banco", "fecha_deposito", "cantidad", "numero_deposito", "numero_documento")
+            alguno = any((data.get(k) or "").strip() not in na_vals for k in campos_utiles)
+            humano = (data.get("humano") or "").strip() == "HUMANO"
+            return bool(alguno or humano)
+        aceptable = _aceptable_por_ocr(ocr_data_early)
+        logger.info("%s [OCR] Decisión por OCR: aceptable=%s (datos extraídos o HUMANO)", LOG_TAG_INFORME, aceptable)
+        # IA no evalúa documento; solo se usa para respuestas del bot en otros contextos. Mensaje según aceptable.
+        mensaje_ia = MENSAJE_RECIBIDO.format(cedula=conv.cedula or "N/A") if aceptable else MENSAJE_FOTO_POCO_CLARA.format(n=conv.intento_foto)
+        # OCR decide: si no extrajo nada, pedir otra foto (photo_retry); en el 3.º intento aceptar siempre.
+        aceptar = aceptable or conv.intento_foto >= 3
+        aceptado_por_tercer_intento = aceptar and not aceptable and conv.intento_foto >= 3
         if not aceptar:
             logger.info(
                 "%s Imagen no aceptada por IA intento %d/3 (no_digitaliza=photo_retry) | telefono=%s",
@@ -597,22 +729,14 @@ class WhatsAppService:
                     logger.warning("%s Sheets no escribió fila (BD OK) | telefono=%s cedula=%s", LOG_TAG_INFORME, phone_mask, conv.cedula)
             except Exception as e:
                 logger.exception("%s %s | Sheet append_row exception | telefono=%s error=%s", LOG_TAG_FALLO, "digitalizacion", phone_mask, e)
-            cedula_guardada = conv.cedula
-            conv.intento_foto = 0
-            conv.estado = "esperando_cedula"
-            conv.cedula = None
-            conv.nombre_cliente = None
-            conv.observacion = None
+            # Enviar al chat los datos extraídos por OCR para que el cliente confirme o edite (IA no evalúa documento)
+            conv.estado = "esperando_confirmacion_datos"
+            conv.pagos_informe_id_pendiente = informe.id
             conv.updated_at = datetime.utcnow()
             db.commit()
-            # Respuesta al usuario: si la imagen fue aceptada por IA/claridad → mensaje_ia; si aceptamos por 3.er intento → indicar que si no está clara los contactaremos
-            if aceptable:
-                response_text = mensaje_ia
-            elif aceptado_por_tercer_intento:
-                response_text = MENSAJE_RECIBIDO_TERCER_INTENTO.format(cedula=cedula_guardada or "N/A")
-            else:
-                response_text = MENSAJE_RECIBIDO.format(cedula=cedula_guardada or "N/A")
-            return {"status": "image_saved", "pagos_whatsapp_id": row_pw.id, "cedula_cliente": cedula_guardada, "response_text": response_text}
+            logger.info("%s FLUJO_OCR OK hasta Sheet | estado=esperando_confirmacion_datos informe_id=%s telefono=%s", LOG_TAG_INFORME, informe.id, phone_mask)
+            response_text = _mensaje_confirmacion_datos_ocr(conv.cedula, cantidad, numero_doc, db)
+            return {"status": "image_saved_confirmar_datos", "pagos_whatsapp_id": row_pw.id, "pagos_informe_id": informe.id, "response_text": response_text}
         except Exception as e:
             logger.exception(
                 "%s %s | digitalización fallida (Drive/OCR/BD/Sheet) telefono=%s cedula=%s error=%s",

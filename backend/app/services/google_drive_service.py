@@ -32,27 +32,30 @@ def upload_image_and_get_link(
     if not folder_id or not credentials:
         logger.warning("%s %s | Drive no configurado (folder_id o credenciales/OAuth).", LOG_TAG_FALLO, "drive")
         return None
+    logger.info("%s Drive upload INICIO | filename=%s bytes=%d folder_id=%s", LOG_TAG_INFORME, filename, len(image_bytes or b""), (folder_id[:8] + "..." if folder_id and len(folder_id) > 8 else folder_id or ""))
     try:
         from googleapiclient.discovery import build
         from googleapiclient.http import MediaIoBaseUpload
 
         drive = build("drive", "v3", credentials=credentials)
-
         file_metadata = {"name": filename, "parents": [folder_id]}
         media = MediaIoBaseUpload(io.BytesIO(image_bytes), mimetype=mime_type, resumable=False)
         file = drive.files().create(body=file_metadata, media_body=media, fields="id,webViewLink").execute()
         file_id = file.get("id")
         if not file_id:
+            logger.warning("%s Drive upload: create no devolvió file_id", LOG_TAG_FALLO)
             return None
-        # Permitir que cualquiera con el link pueda ver
         drive.permissions().create(
             fileId=file_id,
             body={"type": "anyone", "role": "reader"},
         ).execute()
         link = file.get("webViewLink")
         if link:
+            logger.info("%s Drive upload OK | file_id=%s link_len=%d", LOG_TAG_INFORME, file_id, len(link))
             return link
-        return f"https://drive.google.com/file/d/{file_id}/view"
+        out = f"https://drive.google.com/file/d/{file_id}/view"
+        logger.info("%s Drive upload OK | file_id=%s (webViewLink construido)", LOG_TAG_INFORME, file_id)
+        return out
     except Exception as e:
         logger.exception("%s %s | Drive upload error: %s", LOG_TAG_FALLO, "drive", e)
         return None

@@ -1,8 +1,8 @@
 """
 Modelo para estado de conversación del flujo de cobranza por WhatsApp.
-Flujo: esperando_cedula → esperando_confirmacion (Sí/No, máx. 3 intentos) → esperando_foto (intento 1/2/3) → guardado.
+Flujo: esperando_cedula → esperando_confirmacion → esperando_foto → (OCR) esperando_confirmacion_datos → guardado.
 """
-from sqlalchemy import Column, Integer, String, DateTime, Text
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey
 from sqlalchemy.sql import text
 
 from app.core.database import Base
@@ -19,5 +19,6 @@ class ConversacionCobranza(Base):
     intento_foto = Column(Integer, nullable=False, default=0)
     intento_confirmacion = Column(Integer, nullable=False, default=0)
     observacion = Column(Text, nullable=True)
+    pagos_informe_id_pendiente = Column(Integer, ForeignKey("pagos_informes.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=False), nullable=False, server_default=text("CURRENT_TIMESTAMP"))
     updated_at = Column(DateTime(timezone=False), nullable=False, server_default=text("CURRENT_TIMESTAMP"))

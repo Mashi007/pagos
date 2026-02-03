@@ -121,8 +121,81 @@ def evaluar_imagen_y_respuesta(ocr_text: str, cedula: str, db: Session) -> Tuple
 
 
 def _fallback_aceptable_y_mensaje(ocr_text: str, cedula: str) -> Tuple[bool, str]:
-    """Fallback cuando no hay IA: aceptable si hay suficiente texto; mensajes fijos."""
-    aceptable = len((ocr_text or "").strip()) >= MIN_CARACTERES_FALLBACK
+    """Fallback cuando no hay IA: aceptable si hay suficiente texto; mensajes fijos.
+    Si no hay texto OCR (vacío o muy corto), aceptamos para no bloquear al usuario (p. ej. Vision no configurado)."""
+    text = (ocr_text or "").strip()
+    if len(text) < 20:
+        # Sin texto OCR no podemos evaluar; no rechazar para que el documento "pase" y se procese
+        return (True, MENSAJE_FALLBACK_GRACIAS.format(cedula=cedula or "N/A"))
+    aceptable = len(text) >= MIN_CARACTERES_FALLBACK
     if aceptable:
         return (True, MENSAJE_FALLBACK_GRACIAS.format(cedula=cedula or "N/A"))
     return (False, MENSAJE_FALLBACK_MALA)
+
+
+# --- Confirmación de datos (solo cédula, cantidad, número de documento) con IA ---
+PROMPT_CONFIRMACION_DATOS = (
+    "Eres un asistente de cobranza por WhatsApp. Acabas de recibir un comprobante de pago del cliente. "
+    "Debes escribir UN SOLO mensaje corto y amable que: (1) confirme que recibiste el comprobante, "
+    "(2) muestre estos tres datos que leímos: Cédula, Cantidad y Número de documento, "
+    "(3) pida al cliente que responda SÍ para confirmar o que escriba las correcciones si algo está mal. "
+    "Incluye los tres datos de forma clara (ej: Cédula: X, Cantidad: Y, Nº documento: Z). "
+    "Tono cercano y profesional. Responde ÚNICAMENTE con el texto del mensaje, sin JSON ni markdown."
+)
+
+
+def generar_mensaje_confirmacion_datos(cedula: str, cantidad: str, numero_documento: str, db: Session) -> str:
+    """
+    Genera con IA un mensaje de conversación para que el cliente confirme solo estos datos:
+    cédula, cantidad y número de documento. Si la IA falla, devuelve mensaje fijo con los 3 campos.
+    """
+    cfg = _load_ai_config(db)
+    api_key = cfg.get("api_key")
+    cedula = (cedula or "").strip() or "—"
+    cantidad = (cantidad or "").strip() or "—"
+    numero_documento = (numero_documento or "").strip() or "—"
+    if cantidad.upper() == "NA":
+        cantidad = "—"
+    if numero_documento.upper() == "NA":
+        numero_documento = "—"
+    if not api_key:
+        logger.debug("IA confirmación datos: sin API key, usando mensaje fijo")
+        return _fallback_mensaje_confirmacion_datos(cedula, cantidad, numero_documento)
+    logger.info("IA confirmación datos: generando mensaje para cedula=%s cantidad=%s nro_doc=%s", cedula[:6] + "***" if len(cedula or "") > 6 else cedula, cantidad, (numero_documento[:20] + "..." if len(numero_documento or "") > 20 else numero_documento))
+    user_content = (
+        f"Datos leídos del comprobante:\n- Cédula: {cedula}\n- Cantidad: {cantidad}\n- Número de documento: {numero_documento}\n\n"
+        "Genera el mensaje para WhatsApp pidiendo confirmar o corregir solo estos tres datos."
+    )
+    messages = [
+        {"role": "system", "content": PROMPT_CONFIRMACION_DATOS},
+        {"role": "user", "content": user_content},
+    ]
+    try:
+        out = call_openrouter(
+            messages=messages,
+            api_key=api_key,
+            model=cfg["model"],
+            temperature=0.4,
+            max_tokens=280,
+        )
+        choices = out.get("choices") or []
+        if choices:
+            content = (choices[0].get("message") or {}).get("content") or ""
+            msg = content.strip()
+            if msg and len(msg) >= 30:
+                return msg
+    except Exception as e:
+        logger.warning("OpenRouter (confirmación datos): %s", e, exc_info=True)
+    logger.info("IA confirmación datos: usando fallback (IA no respondió o falló)")
+    return _fallback_mensaje_confirmacion_datos(cedula, cantidad, numero_documento)
+
+
+def _fallback_mensaje_confirmacion_datos(cedula: str, cantidad: str, numero_documento: str) -> str:
+    """Mensaje fijo cuando la IA no está disponible."""
+    return (
+        "Recibimos tu comprobante. Estos son los datos que leímos:\n\n"
+        f"• Cédula: {cedula}\n"
+        f"• Cantidad: {cantidad}\n"
+        f"• Nº documento: {numero_documento}\n\n"
+        "Responde *SÍ* para confirmar o escribe las correcciones (ej: Cantidad 100.50, Nº documento 12345)."
+    )
