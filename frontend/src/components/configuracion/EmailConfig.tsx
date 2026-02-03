@@ -531,7 +531,7 @@ export function EmailConfig() {
                     setEmailActivo(e.target.checked)
                     toast.info(e.target.checked ? 'Email activado - Los envíos se habilitarán al guardar' : 'Email desactivado - Los envíos se deshabilitarán al guardar')
                   }}
-                  className="sr-only peer"
+                  className="sr-only peer toggle-input-peer"
                 />
                 <div className="toggle-switch-track-lg"></div>
                 <span className="ml-3 text-sm font-medium text-gray-700">

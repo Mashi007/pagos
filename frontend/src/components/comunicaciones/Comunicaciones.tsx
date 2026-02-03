@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   MessageSquare,
@@ -242,51 +242,48 @@ export function Comunicaciones({
     }
   }, [clienteRecienCreado, conversacionesAgrupadas])
 
-  // Cargar mensajes cuando se selecciona una conversación (solo cuando cambia id/contacto para evitar peticiones duplicadas)
+  // Query de mensajes WhatsApp para la conversación abierta: un solo refetch cada 15s (evita múltiples setInterval/XHR duplicados)
   const conversacionId = conversacionActual?.id ?? null
   const conversacionContacto = conversacionActual?.contacto ?? null
   const conversacionTipo = conversacionActual?.tipo
+  const whatsappContacto = conversacionActual?.tipo === 'whatsapp' ? conversacionActual.contacto : null
 
+  const {
+    data: mensajesWhatsAppData,
+    isFetching: mensajesWhatsAppFetching,
+  } = useQuery({
+    queryKey: ['comunicaciones-mensajes', whatsappContacto],
+    queryFn: async () => {
+      if (!whatsappContacto) return []
+      const res = await comunicacionesService.listarMensajesWhatsApp(whatsappContacto)
+      return (res.mensajes || []).map((m: MensajeWhatsappItem) => ({
+        id: m.id,
+        tipo: 'whatsapp' as const,
+        from_contact: whatsappContacto,
+        to_contact: '',
+        subject: null,
+        body: m.body ?? '',
+        timestamp: m.timestamp,
+        direccion: m.direccion,
+        cliente_id: conversacionActual?.cliente_id ?? null,
+        ticket_id: null,
+        requiere_respuesta: false,
+        procesado: true,
+        respuesta_enviada: false,
+        creado_en: m.timestamp,
+      })) as ComunicacionUnificada[]
+    },
+    enabled: !!whatsappContacto,
+    refetchInterval: 15000,
+    staleTime: 10000,
+  })
+
+  // Cargar mensajes cuando se selecciona una conversación (solo email; WhatsApp lo cubre useQuery arriba)
   useEffect(() => {
     if (!conversacionActual) return
 
     if (conversacionActual.tipo === 'whatsapp') {
-      setCargandoMensajes(conversacionActual.id)
-      comunicacionesService
-        .listarMensajesWhatsApp(conversacionActual.contacto)
-        .then((res) => {
-          const items: ComunicacionUnificada[] = (res.mensajes || []).map((m: MensajeWhatsappItem) => ({
-            id: m.id,
-            tipo: 'whatsapp' as const,
-            from_contact: conversacionActual!.contacto,
-            to_contact: '',
-            subject: null,
-            body: m.body ?? '',
-            timestamp: m.timestamp,
-            direccion: m.direccion,
-            cliente_id: conversacionActual!.cliente_id,
-            ticket_id: null,
-            requiere_respuesta: false,
-            procesado: true,
-            respuesta_enviada: false,
-            creado_en: m.timestamp,
-          }))
-          setMensajesCargados(prev => {
-            const nuevoMap = new Map(prev)
-            nuevoMap.set(conversacionActual!.id, items)
-            return nuevoMap
-          })
-          conversacionesCargadasRef.current.add(conversacionActual.id)
-        })
-        .catch(() => {
-          setMensajesCargados(prev => {
-            const nuevoMap = new Map(prev)
-            nuevoMap.set(conversacionActual!.id, [])
-            return nuevoMap
-          })
-          conversacionesCargadasRef.current.add(conversacionActual.id)
-        })
-        .finally(() => setCargandoMensajes(null))
+      conversacionesCargadasRef.current.add(conversacionActual.id)
       return
     }
 
@@ -310,45 +307,18 @@ export function Comunicaciones({
     setCargandoMensajes(null)
   }, [conversacionId, conversacionContacto, conversacionTipo, todasComunicaciones.length])
 
-  // Obtener mensajes de la conversación actual
+  // Obtener mensajes de la conversación actual (WhatsApp desde query; email desde estado)
   const mensajesOrdenados = useMemo(() => {
     if (!conversacionActual) return []
+    if (conversacionActual.tipo === 'whatsapp' && mensajesWhatsAppData !== undefined)
+      return mensajesWhatsAppData
     return mensajesCargados.get(conversacionActual.id) || []
-  }, [conversacionActual, mensajesCargados])
+  }, [conversacionActual, mensajesWhatsAppData, mensajesCargados])
 
-  // Refrescar historial de la conversación WhatsApp abierta cada 15 s (mensajes nuevos por webhook)
-  const refetchMensajesActuales = useCallback(() => {
-    if (!conversacionActual || conversacionActual.tipo !== 'whatsapp') return
-    comunicacionesService.listarMensajesWhatsApp(conversacionActual.contacto).then((res) => {
-      const items: ComunicacionUnificada[] = (res.mensajes || []).map((m: MensajeWhatsappItem) => ({
-        id: m.id,
-        tipo: 'whatsapp' as const,
-        from_contact: conversacionActual!.contacto,
-        to_contact: '',
-        subject: null,
-        body: m.body ?? '',
-        timestamp: m.timestamp,
-        direccion: m.direccion,
-        cliente_id: conversacionActual!.cliente_id,
-        ticket_id: null,
-        requiere_respuesta: false,
-        procesado: true,
-        respuesta_enviada: false,
-        creado_en: m.timestamp,
-      }))
-      setMensajesCargados(prev => {
-        const nuevoMap = new Map(prev)
-        nuevoMap.set(conversacionActual!.id, items)
-        return nuevoMap
-      })
-    }).catch(() => {})
-  }, [conversacionActual])
-
-  useEffect(() => {
-    if (!conversacionActual || conversacionActual.tipo !== 'whatsapp') return
-    const interval = setInterval(refetchMensajesActuales, 15000)
-    return () => clearInterval(interval)
-  }, [conversacionActual, refetchMensajesActuales])
+  // Loading: WhatsApp desde query; email desde estado
+  const cargandoMensajesActual = conversacionActual?.tipo === 'whatsapp'
+    ? mensajesWhatsAppFetching
+    : cargandoMensajes === conversacionActual?.id
 
   // Cargar tickets del cliente cuando se selecciona una conversación
   useEffect(() => {
@@ -529,30 +499,7 @@ export function Comunicaciones({
           setMensajeTexto('')
           setAsuntoEmail('')
           queryClient.invalidateQueries({ queryKey: ['comunicaciones'] })
-          // Refrescar historial para mostrar el mensaje recién enviado
-          comunicacionesService.listarMensajesWhatsApp(conversacionActual.contacto).then((res) => {
-            const items: ComunicacionUnificada[] = (res.mensajes || []).map((m: MensajeWhatsappItem) => ({
-              id: m.id,
-              tipo: 'whatsapp' as const,
-              from_contact: conversacionActual!.contacto,
-              to_contact: '',
-              subject: null,
-              body: m.body ?? '',
-              timestamp: m.timestamp,
-              direccion: m.direccion,
-              cliente_id: conversacionActual!.cliente_id,
-              ticket_id: null,
-              requiere_respuesta: false,
-              procesado: true,
-              respuesta_enviada: false,
-              creado_en: m.timestamp,
-            }))
-            setMensajesCargados(prev => {
-              const nuevoMap = new Map(prev)
-              nuevoMap.set(conversacionActual!.id, items)
-              return nuevoMap
-            })
-          }).catch(() => {})
+          queryClient.invalidateQueries({ queryKey: ['comunicaciones-mensajes', conversacionActual.contacto] })
         } else {
           toast.error(resultado.mensaje || 'Error enviando mensaje')
         }
@@ -802,7 +749,7 @@ export function Comunicaciones({
 
             {/* Mensajes */}
             <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-gray-50">
-              {cargandoMensajes === conversacionActual.id ? (
+              {cargandoMensajesActual ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
                 </div>

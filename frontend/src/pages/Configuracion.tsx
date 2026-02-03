@@ -1199,7 +1199,7 @@ export function Configuracion() {
                 <input
                   type="checkbox"
                   checked={true}
-                  className="sr-only peer"
+                  className="sr-only peer toggle-input-peer"
                 />
                 <div className="toggle-switch-track"></div>
               </label>
@@ -1216,7 +1216,7 @@ export function Configuracion() {
                 <input
                   type="checkbox"
                   checked={true}
-                  className="sr-only peer"
+                  className="sr-only peer toggle-input-peer"
                 />
                 <div className="toggle-switch-track"></div>
               </label>
@@ -1233,7 +1233,7 @@ export function Configuracion() {
                 <input
                   type="checkbox"
                   checked={false}
-                  className="sr-only peer"
+                  className="sr-only peer toggle-input-peer"
                 />
                 <div className="toggle-switch-track"></div>
               </label>
@@ -1279,7 +1279,7 @@ export function Configuracion() {
                 <input
                   type="checkbox"
                   checked={true}
-                  className="sr-only peer"
+                  className="sr-only peer toggle-input-peer"
                 />
                 <div className="toggle-switch-track"></div>
               </label>
@@ -1296,7 +1296,7 @@ export function Configuracion() {
                 <input
                   type="checkbox"
                   checked={true}
-                  className="sr-only peer"
+                  className="sr-only peer toggle-input-peer"
                 />
                 <div className="toggle-switch-track"></div>
               </label>
@@ -1313,7 +1313,7 @@ export function Configuracion() {
                 <input
                   type="checkbox"
                   checked={true}
-                  className="sr-only peer"
+                  className="sr-only peer toggle-input-peer"
                 />
                 <div className="toggle-switch-track"></div>
               </label>
@@ -1433,7 +1433,7 @@ export function Configuracion() {
                   type="checkbox"
                   checked={configuracion.inteligenciaArtificial.aiScoringEnabled}
                   onChange={(e) => handleCambio('inteligenciaArtificial', 'aiScoringEnabled', e.target.checked)}
-                  className="sr-only peer"
+                  className="sr-only peer toggle-input-peer"
                 />
                 <div className="toggle-switch-track"></div>
               </label>
@@ -1451,7 +1451,7 @@ export function Configuracion() {
                   type="checkbox"
                   checked={configuracion.inteligenciaArtificial.aiPredictionEnabled}
                   onChange={(e) => handleCambio('inteligenciaArtificial', 'aiPredictionEnabled', e.target.checked)}
-                  className="sr-only peer"
+                  className="sr-only peer toggle-input-peer"
                 />
                 <div className="toggle-switch-track"></div>
               </label>
@@ -1469,7 +1469,7 @@ export function Configuracion() {
                   type="checkbox"
                   checked={configuracion.inteligenciaArtificial.aiChatbotEnabled}
                   onChange={(e) => handleCambio('inteligenciaArtificial', 'aiChatbotEnabled', e.target.checked)}
-                  className="sr-only peer"
+                  className="sr-only peer toggle-input-peer"
                 />
                 <div className="toggle-switch-track"></div>
               </label>

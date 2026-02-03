@@ -1201,7 +1201,7 @@ RECUERDA: Si la pregunta NO es sobre la base de datos, debes rechazarla con el m
                           toast.info(e.target.checked ? 'AI activado - Las respuestas inteligentes se habilitarán al guardar' : 'AI desactivado - Las respuestas inteligentes se deshabilitarán al guardar')
                         }
                       }}
-                      className="sr-only peer"
+                      className="sr-only peer toggle-input-peer"
                     />
                 <div className="toggle-switch-track-lg"></div>
                 <span className="ml-3 text-sm font-medium text-gray-700">

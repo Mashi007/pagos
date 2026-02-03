@@ -182,14 +182,15 @@
   border-radius: 9999px;
   transition: transform 0.2s;
 }
-.peer:focus + .toggle-switch-track {
+/* Usar clase específica para evitar "mal selector" con .peer genérico */
+.toggle-input-peer:focus + .toggle-switch-track {
   outline: none;
   box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.3);
 }
-.peer:checked + .toggle-switch-track::after {
+.toggle-input-peer:checked + .toggle-switch-track::after {
   transform: translateX(100%);
 }
-.peer:checked + .toggle-switch-track {
+.toggle-input-peer:checked + .toggle-switch-track {
   background-color: #2563eb;
 }
 
@@ -208,13 +209,13 @@
   border-radius: 9999px;
   transition: transform 0.2s;
 }
-.peer:focus + .toggle-switch-track-lg {
+.toggle-input-peer:focus + .toggle-switch-track-lg {
   outline: none;
   box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.3);
 }
-.peer:checked + .toggle-switch-track-lg::after {
+.toggle-input-peer:checked + .toggle-switch-track-lg::after {
   transform: translateX(100%);
 }
-.peer:checked + .toggle-switch-track-lg {
+.toggle-input-peer:checked + .toggle-switch-track-lg {
   background-color: #2563eb;
 }
