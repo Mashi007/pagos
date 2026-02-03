@@ -34,6 +34,7 @@ class Settings(BaseSettings):
         description="Clave secreta para JWT"
     )
     ALGORITHM: str = "HS256"
+    # Sesión: el access token expira a los N minutos; sin actividad (y sin refresh) la sesión termina. 30 = 30 min sin actividad.
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
     # Usuario admin único (auth sin tabla users). Opcional.

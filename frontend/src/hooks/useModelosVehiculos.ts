@@ -1,6 +1,7 @@
 // frontend/src/hooks/useModelosVehiculos.ts
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { modeloVehiculoService, ModeloVehiculo, ModeloVehiculoCreate, ModeloVehiculoUpdate } from '../services/modeloVehiculoService'
+import { hasValidToken } from '../utils/token'
 import toast from 'react-hot-toast'
 
 // Constantes de configuración
@@ -30,18 +31,20 @@ export function useModelosVehiculos(filters?: any) {
   })
 }
 
-// Hook para obtener modelos de vehículos activos
+// Hook para obtener modelos de vehículos activos (solo cuando hay sesión válida; evita "Sesión expirada" en login)
 export function useModelosVehiculosActivos() {
   return useQuery({
     queryKey: modeloVehiculoKeys.activos(),
     queryFn: async () => {
       try {
         return await modeloVehiculoService.listarModelosActivos()
-      } catch (error) {
+      } catch (error: any) {
+        if (error?.message?.includes?.('Sesión expirada')) return []
         console.error('Error obteniendo modelos de vehículos activos:', error)
-        return [] // Devolver array vacío en caso de error
+        return []
       }
     },
+    enabled: hasValidToken(),
     staleTime: STALE_TIME_LONG,
     retry: RETRY_COUNT,
     retryDelay: RETRY_DELAY,

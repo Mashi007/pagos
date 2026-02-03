@@ -1,6 +1,7 @@
 // frontend/src/hooks/useConcesionarios.ts
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { concesionarioService, Concesionario, ConcesionarioCreate, ConcesionarioUpdate } from '../services/concesionarioService'
+import { hasValidToken } from '../utils/token'
 import toast from 'react-hot-toast'
 
 // Constantes de configuración
@@ -30,18 +31,20 @@ export function useConcesionarios(filters?: any) {
   })
 }
 
-// Hook para obtener concesionarios activos
+// Hook para obtener concesionarios activos (solo cuando hay sesión válida; evita "Sesión expirada" en login)
 export function useConcesionariosActivos() {
   return useQuery({
     queryKey: concesionarioKeys.activos(),
     queryFn: async () => {
       try {
         return await concesionarioService.listarConcesionariosActivos()
-      } catch (error) {
+      } catch (error: any) {
+        if (error?.message?.includes?.('Sesión expirada')) return []
         console.error('Error obteniendo concesionarios activos:', error)
-        return [] // Devolver array vacío en caso de error
+        return []
       }
     },
+    enabled: hasValidToken(),
     staleTime: STALE_TIME_LONG,
     retry: RETRY_COUNT,
     retryDelay: RETRY_DELAY,

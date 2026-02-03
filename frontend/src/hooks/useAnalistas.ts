@@ -1,6 +1,7 @@
 // frontend/src/hooks/useAnalistas.ts
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { analistaService, Analista, AnalistaCreate, AnalistaUpdate } from '../services/analistaService'
+import { hasValidToken } from '../utils/token'
 import toast from 'react-hot-toast'
 
 // Constantes de configuración
@@ -30,18 +31,20 @@ export function useAnalistas(filters?: any) {
   })
 }
 
-// Hook para obtener analistas activos
+// Hook para obtener analistas activos (solo cuando hay sesión válida; evita "Sesión expirada" en login)
 export function useAnalistasActivos() {
   return useQuery({
     queryKey: analistaKeys.activos(),
     queryFn: async () => {
       try {
         return await analistaService.listarAnalistasActivos()
-      } catch (error) {
+      } catch (error: any) {
+        if (error?.message?.includes?.('Sesión expirada')) return []
         console.error('Error obteniendo analistas activos:', error)
-        return [] // Devolver array vacío en caso de error
+        return []
       }
     },
+    enabled: hasValidToken(),
     staleTime: STALE_TIME_LONG,
     retry: RETRY_COUNT,
     retryDelay: RETRY_DELAY,

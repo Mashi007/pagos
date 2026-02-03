@@ -11,6 +11,7 @@ import {
   safeRemoveSessionItem,
   clearAuthStorage
 } from '../utils/storage'
+import { isTokenExpired } from '../utils/token'
 
 const safeClear = () => {
   try {
@@ -39,35 +40,6 @@ const API_BASE_URL = env.API_URL
 
 // Ruta de login con base path (ej. /pagos/login cuando BASE_PATH es /pagos)
 const LOGIN_PATH = `${BASE_PATH}/login`.replace(/\/+/g, '/')
-
-// ✅ Función para decodificar JWT y verificar expiración
-function isTokenExpired(token: string): boolean {
-  try {
-    // JWT tiene formato: header.payload.signature
-    const parts = token.split('.')
-    if (parts.length !== 3) return true
-
-    // Decodificar payload (base64url)
-    const payload = parts[1]
-    // Reemplazar caracteres base64url y agregar padding si es necesario
-    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/')
-    const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4)
-    const decoded = JSON.parse(atob(padded))
-
-    // Verificar expiración (exp está en segundos Unix timestamp)
-    if (decoded.exp) {
-      const expirationTime = decoded.exp * 1000 // Convertir a milisegundos
-      const now = Date.now()
-      // Considerar expirado si falta menos de 5 segundos (margen de seguridad)
-      return now >= (expirationTime - 5000)
-    }
-
-    return false // Si no tiene exp, asumir que no expira
-  } catch (error) {
-    // Si hay error al decodificar, asumir que está expirado
-    return true
-  }
-}
 
 class ApiClient {
   private client: AxiosInstance

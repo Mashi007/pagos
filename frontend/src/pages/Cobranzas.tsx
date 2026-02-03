@@ -31,6 +31,7 @@ import { toast } from 'sonner'
 import { BASE_PATH } from '../config/env'
 import { userService } from '../services/userService'
 import { validarRangoDias as validarRangoDiasUtil } from '../utils/cobranzas'
+import { hasValidToken } from '../utils/token'
 
 export function Cobranzas() {
   const [tabActiva, setTabActiva] = useState('cuotas')
@@ -139,16 +140,22 @@ export function Cobranzas() {
     retryDelay: 1000,
   })
 
-  // Query para obtener analistas activos (para el dropdown de analistas)
+  // Query para obtener analistas activos (solo con sesión válida; evita "Sesión expirada" en consola)
   const {
     data: analistasData,
     isLoading: cargandoAnalistasData
   } = useQuery({
     queryKey: ['analistas-activos'],
     queryFn: async () => {
-      const { analistaService } = await import('../services/analistaService')
-      return await analistaService.listarAnalistasActivos()
+      try {
+        const { analistaService } = await import('../services/analistaService')
+        return await analistaService.listarAnalistasActivos()
+      } catch (err: any) {
+        if (err?.message?.includes?.('Sesión expirada')) return []
+        throw err
+      }
     },
+    enabled: hasValidToken(),
     retry: 2,
     retryDelay: 1000,
   })

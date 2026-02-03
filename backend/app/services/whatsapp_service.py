@@ -507,7 +507,7 @@ class WhatsAppService:
         db.commit()
         db.refresh(row_pw)
         logger.info("Imagen guardada pagos_whatsapp id=%s cedula=%s link=%s", row_pw.id, conv.cedula, link_imagen[:50] if link_imagen else "N/A")
-        # OCR y digitalización (NA si falta campo; link siempre)
+        # OCR y digitalización (NA si falta campo; link siempre). Si OCR falla, se guarda igual en BD y Sheet con NA.
         periodo = _periodo_envio_actual()
         fecha_dep = "NA"
         nombre_banco = "NA"
@@ -525,7 +525,7 @@ class WhatsAppService:
             cantidad = ocr_data.get("cantidad") or "NA"
             humano_col = (ocr_data.get("humano") or "").strip() or None
         except Exception as e:
-            logger.exception("Error OCR: %s", e)
+            logger.exception("Error OCR: %s; se guardará fila en BD y Sheet con campos NA.", e)
         observacion_informe = conv.observacion or None
         informe = PagosInforme(
             cedula=conv.cedula,
@@ -550,9 +550,10 @@ class WhatsAppService:
         )
         try:
             from app.services.google_sheets_informe_service import append_row
+            logger.info("Escribiendo fila en Sheet: cedula=%s link_imagen=%s", conv.cedula, "OK" if link_imagen and link_imagen != "NA" else "NA")
             sheet_ok = append_row(conv.cedula, fecha_dep, nombre_banco, numero_dep, numero_doc, cantidad, link_imagen, periodo, observacion=observacion_informe, humano=humano_col or "")
             if not sheet_ok:
-                logger.warning("Sheets: no se escribió la fila (digitalización en BD OK). Revisa OAuth conectado, ID hoja y que la hoja esté compartida con la cuenta OAuth.")
+                logger.warning("Sheets: no se escribió la fila (digitalización en BD OK). Revisa Configuración > Informe pagos: credenciales, ID hoja, y que la hoja esté compartida con la cuenta.")
         except Exception as e:
             logger.exception("Error escribiendo en Sheet (digitalización en BD OK): %s", e)
         cedula_guardada = conv.cedula
