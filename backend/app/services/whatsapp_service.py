@@ -85,13 +85,12 @@ MENSAJE_OTRA_INFORMACION = (
     "Para otras consultas te atendemos por teléfono. Llama al 0424-4359435 y un asistente te atenderá."
 )
 
-# Si la conversación lleva más de esta cantidad de horas sin actividad, se trata como nuevo caso (pedir cédula de nuevo).
-# 0.5 = 30 min: el mismo número puede reportar muchas veces; cada vez que vuelva después de 30 min se pide cédula otra vez.
-HORAS_INACTIVIDAD_NUEVO_CASO = 0.5
+# Si la conversación lleva más de esta cantidad de minutos sin actividad, se trata como nuevo caso (pedir cédula e imagen de nuevo).
+MINUTOS_INACTIVIDAD_NUEVO_CASO = 5
 
 
-def _conversacion_obsoleta(conv: ConversacionCobranza, horas: int = HORAS_INACTIVIDAD_NUEVO_CASO) -> bool:
-    """True si la conversación no tiene actividad desde hace más de `horas` horas; así se trata como nuevo reporte."""
+def _conversacion_obsoleta(conv: ConversacionCobranza, minutos: int = MINUTOS_INACTIVIDAD_NUEVO_CASO) -> bool:
+    """True si la conversación no tiene actividad desde hace más de `minutos` minutos; así se trata como nuevo reporte (volver a cédula e imagen)."""
     if not conv or not getattr(conv, "updated_at", None):
         return True
     try:
@@ -99,7 +98,7 @@ def _conversacion_obsoleta(conv: ConversacionCobranza, horas: int = HORAS_INACTI
         if getattr(ultima, "tzinfo", None) is not None:
             ultima = ultima.replace(tzinfo=None)
         delta = datetime.utcnow() - ultima
-        return delta > timedelta(hours=horas)
+        return delta > timedelta(minutes=minutos)
     except (TypeError, ValueError):
         return True
 
@@ -115,7 +114,7 @@ def _reiniciar_como_nuevo_caso(conv: ConversacionCobranza, db: Session) -> None:
     conv.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(conv)
-    logger.info("Conversación %s reiniciada como nuevo caso (inactividad > %s h).", conv.telefono, HORAS_INACTIVIDAD_NUEVO_CASO)
+    logger.info("Conversación %s reiniciada como nuevo caso (inactividad > %s min).", conv.telefono, MINUTOS_INACTIVIDAD_NUEVO_CASO)
 
 
 # Validación cédula: debe empezar por E, J o V (una de las 3 letras) + 6 a 11 dígitos. Acepta E1234567, V12345678, J1234567, EVJ1234567.
