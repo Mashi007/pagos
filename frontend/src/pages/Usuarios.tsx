@@ -227,7 +227,7 @@ export function Usuarios() {
           updateData.password = formData.password.trim()
         }
 
-        await userService.actualizarUsuario(editingUsuario.id, updateData)
+        const updatedUser = await userService.actualizarUsuario(editingUsuario.id, updateData)
 
         // âœ… Si se cambió la contraseña del usuario actual, forzar logout y redirigir al login
         if (passwordChanged && currentUser && editingUsuario.id === currentUser.id) {
@@ -239,6 +239,8 @@ export function Usuarios() {
           }, 1000)
         } else {
           toast.success('Usuario actualizado exitosamente')
+          // Actualizar lista en local para evitar GET extra que podría 401 y redirigir al login
+          setUsuarios(prev => prev.map(u => u.id === editingUsuario.id ? updatedUser : u))
         }
       } else {
         // Crear nuevo usuario
@@ -257,8 +259,10 @@ export function Usuarios() {
         }
         // Si está vacío, no incluirlo (será null en la BD)
 
-        await userService.crearUsuario(createData)
+        const newUser = await userService.crearUsuario(createData)
         toast.success('Usuario creado exitosamente')
+        // Añadir a la lista en local para evitar GET extra que podría 401 y redirigir al login
+        setUsuarios(prev => [...prev, newUser])
       }
 
       setShowCreateForm(false)
@@ -268,7 +272,6 @@ export function Usuarios() {
         userId: editingUsuario?.id,
         email: formData.email
       })
-      cargarUsuarios()
     } catch (err: unknown) {
       logger.apiError('/api/v1/usuarios', err, {
         action: editingUsuario ? 'actualizarUsuario' : 'crearUsuario',

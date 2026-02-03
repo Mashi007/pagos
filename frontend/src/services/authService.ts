@@ -44,24 +44,37 @@ export class AuthService {
         email: credentials.email.toLowerCase().trim()
       }
 
-      const response = await apiClient.post<LoginResponse>('/api/v1/auth/login', normalizedCredentials)
+      const raw = await apiClient.post<LoginResponse>('/api/v1/auth/login', normalizedCredentials)
+      // Aceptar respuesta directa o envuelta en .data (por proxy o middleware)
+      const response: LoginResponse = (raw as any)?.data != null ? (raw as any).data : raw
 
-      // Guardar tokens de forma segura
-      if (response.access_token) {
-        if (credentials.remember) {
-          safeSetItem('access_token', response.access_token)
-          safeSetItem('refresh_token', response.refresh_token)
-          safeSetItem('user', response.user)
-          safeSetItem('remember_me', true)
-        } else {
-          safeSetSessionItem('access_token', response.access_token)
-          safeSetSessionItem('refresh_token', response.refresh_token)
-          safeSetSessionItem('user', response.user)
-        }
+      const accessToken = response?.access_token
+      const refreshToken = response?.refresh_token
+      const user = response?.user
 
-        // ✅ Resetear el flag de refresh token expirado después de login exitoso
-        apiClient.resetRefreshTokenExpired()
+      if (!accessToken || typeof accessToken !== 'string') {
+        console.error('Login: el servidor no devolvió access_token.', { hasUser: !!user })
+        throw new Error('El servidor no devolvió un token de sesión. Intenta de nuevo.')
       }
+
+      // Limpiar sesión anterior para no mezclar localStorage y sessionStorage
+      clearAuthStorage()
+
+      const remember = Boolean(credentials.remember)
+      if (remember) {
+        safeSetItem('access_token', accessToken)
+        safeSetItem('refresh_token', refreshToken ?? '')
+        safeSetItem('user', user ?? null)
+        safeSetItem('remember_me', true)
+      } else {
+        safeSetSessionItem('access_token', accessToken)
+        safeSetSessionItem('refresh_token', refreshToken ?? '')
+        safeSetSessionItem('user', user ?? null)
+        safeRemoveItem('remember_me')
+      }
+
+      // Resetear el flag de refresh token expirado después de login exitoso
+      apiClient.resetRefreshTokenExpired()
 
       return response
     } catch (error: any) {
