@@ -1167,60 +1167,47 @@ def _compute_morosidad_por_analista(
     modelo: Optional[str],
 ) -> dict:
     """
-    Calcula morosidad por analista (usado por endpoint y por refresh de caché).
-    Siempre considera todas las cuotas vencidas y no pagadas a la fecha (fecha_vencimiento < hoy).
-    No se filtra por rango de fechas: el gráfico muestra la morosidad actual por analista.
-
-    CAMPOS / TABLAS DE ORIGEN:
-    - Tabla CUOTA (cuotas): id, cliente_id, monto (columna BD: monto_cuota), fecha_pago, fecha_vencimiento.
-      Cuota "vencida" = fecha_pago IS NULL y fecha_vencimiento < hoy.
-    - Tabla PRESTAMO (prestamos): cliente_id, analista, estado, fecha_creacion (fecha_registro).
-      Se usa el préstamo APROBADO más reciente por cliente (orden fecha_creacion DESC) para asignar analista.
-    - Salida: por cada analista (o "Sin analista" si el cliente no tiene préstamo con analista):
-      cantidad_cuotas_vencidas (conteo), monto_vencido (suma Cuota.monto).
+    Cuotas vencidas por analista: cuotas donde hoy > fecha_vencimiento y sin pagar (fecha_pago IS NULL).
+    El analista se toma del préstamo de cada cuota: cuotas JOIN prestamos ON cuotas.prestamo_id = prestamos.id.
+    Por cada analista: cantidad de cuotas vencidas y suma de monto (dólares vencidos).
     """
     try:
         hoy = date.today()
-        # Siempre morosidad actual: cuotas vencidas y no pagadas (sin filtrar por rango de fechas)
-        cond_vencimiento = Cuota.fecha_vencimiento < hoy
+        conds = [
+            Cuota.prestamo_id == Prestamo.id,
+            Prestamo.estado == "APROBADO",
+            Cuota.fecha_pago.is_(None),
+            Cuota.fecha_vencimiento < hoy,
+        ]
+        if analista:
+            conds.append(Prestamo.analista == analista)
+        if concesionario:
+            conds.append(Prestamo.concesionario == concesionario)
+        if modelo:
+            conds.append(Prestamo.modelo == modelo)
 
-        cuotas_vencidas = db.execute(
-            select(Cuota.id, Cuota.cliente_id, Cuota.monto).select_from(Cuota).where(
-                Cuota.fecha_pago.is_(None),
-                cond_vencimiento,
+        analista_label = func.coalesce(Prestamo.analista, "Sin analista")
+        q = (
+            select(
+                analista_label.label("analista"),
+                func.count().label("cantidad_cuotas_vencidas"),
+                func.coalesce(func.sum(Cuota.monto), 0).label("monto_vencido"),
             )
-        ).all()
-        usar_monto = True
-        prestamos_por_cliente = (
-            db.execute(
-                select(Prestamo.cliente_id, Prestamo.analista)
-                .select_from(Prestamo)
-                .where(Prestamo.estado == "APROBADO", Prestamo.analista.isnot(None))
-                .order_by(Prestamo.cliente_id, Prestamo.fecha_creacion.desc())
-            )
-            .all()
+            .select_from(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .where(and_(*conds))
+            .group_by(analista_label)
         )
-        cliente_a_analista = {}
-        for cliente_id, analista_val in prestamos_por_cliente:
-            if cliente_id not in cliente_a_analista:
-                cliente_a_analista[cliente_id] = analista_val or "Sin analista"
-        por_analista = {}
-        for row in cuotas_vencidas:
-            cliente_id = row.cliente_id
-            monto = _safe_float(getattr(row, "monto", 0)) if usar_monto else 0.0
-            a = cliente_a_analista.get(cliente_id, "Sin analista")
-            if a not in por_analista:
-                por_analista[a] = {"cantidad_cuotas_vencidas": 0, "monto_vencido": 0.0}
-            por_analista[a]["cantidad_cuotas_vencidas"] += 1
-            por_analista[a]["monto_vencido"] += monto
+        rows = db.execute(q).all()
         resultado = [
             {
-                "analista": a,
-                "cantidad_cuotas_vencidas": d["cantidad_cuotas_vencidas"],
-                "monto_vencido": round(d["monto_vencido"], 2),
+                "analista": str(r[0]) if r[0] else "Sin analista",
+                "cantidad_cuotas_vencidas": int(r[1]),
+                "monto_vencido": round(_safe_float(r[2]), 2),
             }
-            for a, d in sorted(por_analista.items(), key=lambda x: -x[1]["monto_vencido"])
+            for r in rows
         ]
+        resultado.sort(key=lambda x: -x["monto_vencido"])
         return {"analistas": resultado}
     except Exception as e:
         logger.exception("Error en morosidad-por-analista: %s", e)

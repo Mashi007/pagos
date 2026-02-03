@@ -903,18 +903,19 @@ export function DashboardMenu() {
                           </RadarChart>
                         </ResponsiveContainer>
                       </div>
-                      {/* Red tela de araña: dólares vencidos por analista */}
+                      {/* Suma en dólares por analista (misma lógica: cuotas vencidas, agrupado por analista del préstamo) */}
                       <div>
                         <h4 className="text-sm font-semibold text-gray-700 mb-3 text-center">Dólares vencidos por analista</h4>
+                        <p className="text-xs text-gray-500 mb-2 text-center">Suma de monto_cuota de cuotas vencidas (hoy &gt; fecha_vencimiento, sin pagar) por analista</p>
                         <ResponsiveContainer width="100%" height={320}>
-                          <RadarChart data={datosMorosidadAnalista} margin={{ top: 16, right: 24, left: 24, bottom: 16 }}>
-                            <PolarGrid stroke="#e5e7eb" />
-                            <PolarAngleAxis dataKey="analista" tick={{ fontSize: 11 }} />
-                            <PolarRadiusAxis angle={90} tick={{ fontSize: 10 }} tickFormatter={(v) => `$${v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}`} />
-                            <Radar name="Dólares vencidos" dataKey="monto_vencido" stroke="#ea580c" fill="#ea580c" fillOpacity={0.5} />
-                            <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [formatCurrency(value), 'Dólares vencidos']} labelFormatter={(label) => `Analista: ${label}`} />
+                          <BarChart data={datosMorosidadAnalista} layout="vertical" margin={{ top: 8, right: 24, left: 80, bottom: 8 }}>
+                            <CartesianGrid {...chartCartesianGrid} />
+                            <XAxis type="number" tickFormatter={(v) => `$${v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v}`} tick={chartAxisTick} />
+                            <YAxis type="category" dataKey="analista" width={76} tick={{ fontSize: 11 }} interval={0} />
+                            <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [formatCurrency(value), 'Dólares vencidos']} labelFormatter={(label) => `Analista: ${label}`} cursor={{ fill: 'rgba(234, 88, 12, 0.08)' }} />
                             <Legend />
-                          </RadarChart>
+                            <Bar dataKey="monto_vencido" name="Dólares vencidos" fill="#ea580c" radius={[0, 4, 4, 0]} maxBarSize={28} />
+                          </BarChart>
                         </ResponsiveContainer>
                       </div>
                     </div>
