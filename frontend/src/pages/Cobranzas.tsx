@@ -134,7 +134,7 @@ export function Cobranzas() {
     queryKey: ['usuarios-activos'],
     queryFn: async () => {
       const response = await userService.listarUsuarios(1, 1000, true)
-      return response.items.filter((u: any) => u.is_active && !u.is_admin)
+      return response.items.filter((u: any) => u.is_active && (u.rol || 'operativo') !== 'administrador')
     },
     retry: 2,
     retryDelay: 1000,

@@ -1042,7 +1042,7 @@ export function Comunicaciones({
                         <SelectContent>
                           {usuarios.map((u) => (
                             <SelectItem key={u.id} value={u.id.toString()}>
-                              {u.nombre} {u.apellido} {u.is_admin ? ' (Admin)' : ''}
+                              {u.nombre} {u.apellido} {(u.rol || 'operativo') === 'administrador' ? ' (Admin)' : ''}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -1178,7 +1178,7 @@ export function Comunicaciones({
                           <SelectValue placeholder="Seleccionar admin" />
                         </SelectTrigger>
                         <SelectContent>
-                          {usuarios.filter(u => u.is_admin).map((u) => (
+                          {usuarios.filter(u => (u.rol || 'operativo') === 'administrador').map((u) => (
                             <SelectItem key={u.id} value={u.id.toString()}>
                               {u.nombre} {u.apellido}
                             </SelectItem>

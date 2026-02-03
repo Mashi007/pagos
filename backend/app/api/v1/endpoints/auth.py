@@ -99,7 +99,7 @@ def _fake_user(email: str) -> UserResponse:
         nombre="Admin",
         apellido="Sistema",
         cargo="Administrador",
-        is_admin=True,
+        rol="administrador",
         is_active=True,
         created_at=now,
         updated_at=now,

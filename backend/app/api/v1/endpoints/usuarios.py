@@ -47,8 +47,14 @@ def listar_usuarios(
 
 @router.get("/verificar-admin", response_model=dict)
 def verificar_admin(db: Session = Depends(get_db)):
-    """Indica si existe al menos un usuario admin activo (para mostrar avisos en frontend)."""
-    tiene = db.query(User).filter(User.is_admin == True, User.is_active == True).limit(1).first() is not None
+    """Indica si existe al menos un usuario administrador activo (para mostrar avisos en frontend)."""
+    tiene = (
+        db.query(User)
+        .filter(User.rol == "administrador", User.is_active == True)
+        .limit(1)
+        .first()
+        is not None
+    )
     return {"tiene_admin": tiene}
 
 
@@ -77,7 +83,7 @@ def crear_usuario(body: UserCreate, db: Session = Depends(get_db)):
         nombre=body.nombre.strip(),
         apellido=(body.apellido or "").strip(),
         cargo=body.cargo.strip() if body.cargo else None,
-        is_admin=body.is_admin,
+        rol=body.rol,
         is_active=body.is_active,
         created_at=now,
         updated_at=now,
@@ -110,8 +116,8 @@ def actualizar_usuario(user_id: int, body: UserUpdate, db: Session = Depends(get
         u.apellido = body.apellido.strip()
     if body.cargo is not None:
         u.cargo = body.cargo.strip() if body.cargo else None
-    if body.is_admin is not None:
-        u.is_admin = body.is_admin
+    if body.rol is not None:
+        u.rol = body.rol
     if body.is_active is not None:
         u.is_active = body.is_active
     if body.password is not None and body.password.strip():

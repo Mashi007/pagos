@@ -30,7 +30,7 @@ export function Usuarios() {
     email: '',
     nombre: '',
     apellido: '',
-    is_admin: false,  // Cambio clave: rol â†’ is_admin
+    rol: 'operativo',  // Cambio clave: rol â†’ is_admin
     password: '',
     cargo: 'Usuario', // Valor por defecto para evitar error de NOT NULL
     is_active: true
@@ -141,7 +141,7 @@ export function Usuarios() {
       email: usuario.email,
       nombre: usuario.nombre,
       apellido: usuario.apellido,
-      is_admin: usuario.is_admin,  // Cambio clave: rol â†’ is_admin
+      rol: usuario.rol || 'operativo',  // Cambio clave: rol â†’ is_admin
       password: '',
       cargo: usuario.cargo || '', // Si es null, usar string vacío (no 'Usuario')
       is_active: usuario.is_active
@@ -192,7 +192,7 @@ export function Usuarios() {
           email: formData.email,
           nombre: formData.nombre,
           apellido: formData.apellido,
-          is_admin: Boolean(formData.is_admin), // âœ… Forzar conversión a booleano explícito
+          rol: formData.rol,
           is_active: formData.is_active,
         }
 
@@ -209,11 +209,6 @@ export function Usuarios() {
           email: editingUsuario.email,
           nombre: editingUsuario.nombre,
           apellido: editingUsuario.apellido,
-          is_admin: updateData.is_admin,
-          is_admin_type: typeof updateData.is_admin,
-          formData_is_admin: formData.is_admin,
-          formData_is_admin_type: typeof formData.is_admin,
-          endpoint: `/api/v1/usuarios/${editingUsuario.id}`
         })
 
         // Incluir cargo del formulario (valor que el usuario está editando)
@@ -251,7 +246,7 @@ export function Usuarios() {
           email: formData.email,
           nombre: formData.nombre,
           apellido: formData.apellido,
-          is_admin: formData.is_admin,
+          rol: formData.rol,
           is_active: formData.is_active,
           password: formData.password,
         }
@@ -292,7 +287,7 @@ export function Usuarios() {
       email: '',
       nombre: '',
       apellido: '',
-      is_admin: false,  // Cambio clave: rol â†’ is_admin
+      rol: 'operativo',  // Cambio clave: rol â†’ is_admin
       password: '',
       cargo: 'Usuario', // Valor por defecto
       is_active: true
@@ -312,8 +307,8 @@ export function Usuarios() {
     (usuario.email && usuario.email.toLowerCase().includes(searchTerm.toLowerCase()))
   )
 
-  const getRoleBadgeColor = (is_admin: boolean) => {  // Cambio clave: rol â†’ is_admin
-    return is_admin ? 'bg-red-600' : 'bg-blue-600'  // Cambio clave: rol â†’ is_admin
+  const getRoleBadgeColor = (rol: string) => {  // Cambio clave: rol â†’ is_admin
+    return rol === 'administrador' ? 'bg-red-600' : 'bg-blue-600'  // Cambio clave: rol â†’ is_admin
   }
 
   return (
@@ -383,7 +378,7 @@ export function Usuarios() {
               <div>
                 <p className="text-sm text-gray-500">Administradores</p>
                 <p className="text-2xl font-bold text-red-600">
-                  {usuarios.filter(u => u.is_admin).length}  {/* Cambio clave: rol â†’ is_admin */}
+                  {usuarios.filter(u => (u.rol || 'operativo') === 'administrador').length}  {/* Cambio clave: rol â†’ is_admin */}
                 </p>
                 <p className="text-xs text-gray-400 mt-1">
                   {loading ? 'Cargando...' : 'Pueden crear usuarios'}
@@ -491,8 +486,8 @@ export function Usuarios() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge className={getRoleBadgeColor(usuario.is_admin)}>  {/* Cambio clave: rol â†’ is_admin */}
-                        {usuario.is_admin ? 'Administrador' : 'Usuario'}  {/* Cambio clave: rol â†’ is_admin */}
+                      <Badge className={getRoleBadgeColor(usuario.rol || 'operativo')}>  {/* Cambio clave: rol â†’ is_admin */}
+                        {(usuario.rol || 'operativo') === 'administrador' ? 'Administrador' : 'Operativo'}  {/* Cambio clave: rol â†’ is_admin */}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-gray-600">
@@ -622,17 +617,17 @@ export function Usuarios() {
               </div>
 
               <div>
-                <label htmlFor="is_admin" className="block text-sm font-medium text-gray-700">Tipo de Usuario</label>
+                <label htmlFor="rol" className="block text-sm font-medium text-gray-700">Nivel de usuario</label>
                 <Select
-                  value={formData.is_admin ? 'ADMIN' : 'USER'}
-                  onValueChange={(value) => setFormData({ ...formData, is_admin: value === 'ADMIN' })}
+                  value={formData.rol || 'operativo'}
+                  onValueChange={(value: 'administrador' | 'operativo') => setFormData({ ...formData, rol: value })}
                 >
                   <SelectTrigger className="mt-1">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="USER">Usuario Normal</SelectItem>
-                    <SelectItem value="ADMIN">Administrador</SelectItem>
+                    <SelectItem value="operativo">Operativo</SelectItem>
+                    <SelectItem value="administrador">Administrador</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

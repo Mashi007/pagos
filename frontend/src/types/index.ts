@@ -3,13 +3,15 @@
  * Definiciones centralizadas para mantener consistencia entre frontend y backend
  */
 
+export type UserRol = 'administrador' | 'operativo'
+
 export interface User {
   id: number
   email: string
   nombre: string
   apellido: string
   cargo?: string
-  is_admin: boolean
+  rol: UserRol
   is_active: boolean
   created_at: string
   updated_at?: string

@@ -1,8 +1,9 @@
 """
 Modelo SQLAlchemy para Usuario (auth y gestión de usuarios).
-Tabla: usuarios. Campos: email, password_hash, nombre, apellido, cargo, is_admin, is_active, timestamps.
+Tabla: usuarios. Campos: email, password_hash, nombre, apellido, cargo, rol, is_active, timestamps.
+Rol: 'administrador' | 'operativo'.
 """
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text, text
+from sqlalchemy import Boolean, Column, DateTime, Integer, String, text
 
 from app.core.database import Base
 
@@ -16,7 +17,7 @@ class User(Base):
     nombre = Column(String(100), nullable=False)
     apellido = Column(String(100), nullable=False, server_default=text("''"))
     cargo = Column(String(100), nullable=True)
-    is_admin = Column(Boolean, nullable=False, server_default=text("false"))
+    rol = Column(String(20), nullable=False, server_default=text("'operativo'"))
     is_active = Column(Boolean, nullable=False, server_default=text("true"))
     created_at = Column(DateTime(timezone=False), nullable=False, server_default=text("CURRENT_TIMESTAMP"))
     updated_at = Column(DateTime(timezone=False), nullable=False, server_default=text("CURRENT_TIMESTAMP"))

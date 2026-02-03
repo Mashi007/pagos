@@ -78,7 +78,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
   // Variables derivadas del usuario
   const userInitials = user ? `${user.nombre?.charAt(0) || ''}${user.apellido?.charAt(0) || ''}`.toUpperCase() : 'U'
   const userName = user ? `${user.nombre} ${user.apellido}` : 'Usuario'
-  const userRoleDisplay = user?.is_admin ? 'Administrador' : 'Usuario'
+  const userRoleDisplay = (user?.rol || 'operativo') === 'administrador' ? 'Administrador' : 'Operativo'
 
   const handleLogout = async () => {
     await logout()
@@ -148,7 +148,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       isSubmenu: true,
       children: [
         // Solo Admin: Plantillas de notificaciones
-        ...(user?.is_admin ? [{ title: 'Plantillas', href: '/herramientas/plantillas', icon: Mail }] : []),
+        ...((user?.rol || 'operativo') === 'administrador' ? [{ title: 'Plantillas', href: '/herramientas/plantillas', icon: Mail }] : []),
         { title: 'Programador', href: '/scheduler', icon: Calendar },
       ],
     },
@@ -163,7 +163,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         { title: 'Configuración WhatsApp', href: '/configuracion?tab=whatsapp', icon: MessageSquare },
         { title: 'Configuración AI', href: '/configuracion?tab=ai', icon: Brain },
         // Herramientas dentro de Configuración
-        ...(user?.is_admin ? [{ title: 'Plantillas', href: '/herramientas/plantillas', icon: FileText }] : []),
+        ...((user?.rol || 'operativo') === 'administrador' ? [{ title: 'Plantillas', href: '/herramientas/plantillas', icon: FileText }] : []),
         { title: 'Programador', href: '/scheduler', icon: Calendar },
         { title: 'Analistas', href: '/analistas', icon: Users },
         { title: 'Concesionarios', href: '/concesionarios', icon: Building },
@@ -197,12 +197,11 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     })
   }, [location.pathname, location.search])
 
-  // TEMPORAL: Mostrar todos los elementos del menú sin filtros de permisos
+  // Operativo: no ve Configuración (ni auditoría); solo Administrador puede acceder a esos módulos
   const filteredMenuItems = menuItems.filter((item) => {
-    // Mostrar todos los elementos por ahora
+    const isAdmin = (user?.rol || 'operativo') === 'administrador'
+    if (item.title === 'Configuración') return isAdmin
     return true
-    // if (!item.requiredRoles) return true
-    // return hasAnyRole(item.requiredRoles)
   })
 
   const isActiveRoute = (href: string) => {
@@ -591,11 +590,13 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
                           <User className="h-4 w-4" />
                           <span>Mi Perfil</span>
                         </button>
-                        <button className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition-colors flex items-center space-x-2">
-                          <Settings className="h-4 w-4" />
-                          <span>Configuración</span>
-                        </button>
-                        {user?.is_admin === false && (
+                        {(user?.rol || 'operativo') === 'administrador' && (
+                          <NavLink to="/configuracion" className="block w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition-colors flex items-center space-x-2">
+                            <Settings className="h-4 w-4" />
+                            <span>Configuración</span>
+                          </NavLink>
+                        )}
+                        {(user?.rol || 'operativo') !== 'administrador' && (
                           <button
                             onClick={async () => {
                               try {

@@ -26,7 +26,7 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
   // Variables derivadas del usuario
   const userInitials = user ? `${user.nombre?.charAt(0) || ''}${user.apellido?.charAt(0) || ''}`.toUpperCase() : 'U'
   const userName = user ? `${user.nombre} ${user.apellido}` : 'Usuario'
-  const userRole = user?.is_admin ? 'Administrador' : 'Usuario'  // Cambio clave: rol â†’ is_admin
+  const userRole = (user?.rol || 'operativo') === 'administrador' ? 'Administrador' : 'Operativo'  // Cambio clave: rol â†’ is_admin
 
   // Mock de notificaciones - en producción vendrían del backend
   const notifications = [
@@ -197,7 +197,7 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
                         <div className="font-medium text-gray-900">
                           {userName}
                         </div>
-                        <Badge className={getRoleColor(user?.is_admin || false)}>
+                        <Badge className={getRoleColor((user?.rol || 'operativo') === 'administrador')}>
                           {userRole}
                         </Badge>
                       </div>
@@ -213,7 +213,7 @@ export function Header({ onMenuClick, isSidebarOpen }: HeaderProps) {
                       <Settings className="h-4 w-4" />
                       <span>Configuración</span>
                     </button>
-                    {user?.is_admin === false && (
+                    {(user?.rol || 'operativo') !== 'administrador' && (
                       <button
                         onClick={async () => {
                           try {

@@ -1,10 +1,13 @@
 """
 Schemas para API de usuarios (crear, actualizar, respuesta).
 UserResponse se reutiliza desde app.schemas.auth.
+Rol: administrador | operativo.
 """
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, EmailStr, Field
+
+RolType = Literal["administrador", "operativo"]
 
 
 class UserCreate(BaseModel):
@@ -12,7 +15,7 @@ class UserCreate(BaseModel):
     nombre: str = Field(..., min_length=1, max_length=100)
     apellido: str = Field("", max_length=100)
     cargo: Optional[str] = Field(None, max_length=100)
-    is_admin: bool = False
+    rol: RolType = "operativo"
     is_active: bool = True
     password: str = Field(..., min_length=6, max_length=100)
 
@@ -22,6 +25,6 @@ class UserUpdate(BaseModel):
     nombre: Optional[str] = Field(None, min_length=1, max_length=100)
     apellido: Optional[str] = Field(None, max_length=100)
     cargo: Optional[str] = Field(None, max_length=100)
-    is_admin: Optional[bool] = None
+    rol: Optional[RolType] = None
     is_active: Optional[bool] = None
     password: Optional[str] = Field(None, min_length=6, max_length=100)

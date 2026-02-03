@@ -1,8 +1,7 @@
 // frontend/src/services/userService.ts
 import { apiClient as api } from './api'
-import { User } from '../types'  // IMPORTAR desde types centralizado
+import { User, UserRol } from '../types'
 
-// Re-exportar User para compatibilidad
 export type { User } from '../types'
 
 export interface UserCreate {
@@ -10,7 +9,7 @@ export interface UserCreate {
   nombre: string
   apellido: string
   cargo?: string
-  is_admin: boolean  // Cambio clave: rol → is_admin
+  rol: UserRol
   password: string
   is_active: boolean
 }
@@ -20,7 +19,7 @@ export interface UserUpdate {
   nombre?: string
   apellido?: string
   cargo?: string
-  is_admin?: boolean  // Cambio clave: rol → is_admin
+  rol?: UserRol
   password?: string
   is_active?: boolean
 }

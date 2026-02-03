@@ -5,6 +5,18 @@
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
+-- 0) usuarios: reemplazo is_admin por rol (administrador | operativo)
+-- -----------------------------------------------------------------------------
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS rol VARCHAR(20) NOT NULL DEFAULT 'operativo';
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'usuarios' AND column_name = 'is_admin') THEN
+    UPDATE usuarios SET rol = 'administrador' WHERE is_admin = true;
+    ALTER TABLE usuarios DROP COLUMN is_admin;
+  END IF;
+END $$;
+
+-- -----------------------------------------------------------------------------
 -- 1) pagos_whatsapp: columna link_imagen (URL de imagen en Google Drive)
 -- -----------------------------------------------------------------------------
 ALTER TABLE pagos_whatsapp ADD COLUMN IF NOT EXISTS link_imagen TEXT;

@@ -320,7 +320,7 @@ describe('Sidebar', () => {
     email: 'test@example.com',
     nombre: 'Test',
     apellido: 'User',
-    is_admin: false,
+    rol: 'operativo',
     is_active: true
   }
 
@@ -333,7 +333,7 @@ describe('Sidebar', () => {
   })
 
   it('debería mostrar opciones de admin para usuarios admin', () => {
-    const adminUser = { ...mockUser, is_admin: true }
+    const adminUser = { ...mockUser, rol: 'administrador' as const }
     renderWithRouter(<Sidebar user={adminUser} />)
 
     expect(screen.getByText(/configuración/i)).toBeInTheDocument()
@@ -354,7 +354,7 @@ describe('Header', () => {
     email: 'test@example.com',
     nombre: 'Test',
     apellido: 'User',
-    is_admin: false,
+    rol: 'operativo',
     is_active: true
   }
 

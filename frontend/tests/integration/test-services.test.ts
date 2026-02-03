@@ -57,7 +57,7 @@ describe('useAuth', () => {
       email: 'test@example.com',
       nombre: 'Test',
       apellido: 'User',
-      is_admin: false,
+      rol: 'operativo',
       is_active: true
     }
 
@@ -381,7 +381,7 @@ describe('authService', () => {
       email: 'test@example.com',
       nombre: 'Test',
       apellido: 'User',
-      is_admin: false,
+      rol: 'operativo',
       is_active: true
     }
 

@@ -80,9 +80,9 @@ export default function UsuariosConfig() {
     email: '',
     nombre: '',
     apellido: '',
-    is_admin: false,  // Cambio clave: rol â†’ is_admin
+    rol: 'operativo',  // Cambio clave: rol â†’ is_admin
     password: '',
-    cargo: 'Usuario', // Valor por defecto para evitar error de NOT NULL
+    cargo: 'Usuario',
     is_active: true
   })
 
@@ -158,7 +158,7 @@ export default function UsuariosConfig() {
           nombre: formData.nombre,
           apellido: formData.apellido,
           cargo: formData.cargo, // Incluir cargo para preservarlo
-          is_admin: formData.is_admin,  // Cambio clave: rol â†’ is_admin
+          rol: formData.rol,  // Cambio clave: rol â†’ is_admin
           is_active: formData.is_active
         }
 
@@ -175,7 +175,7 @@ export default function UsuariosConfig() {
           email: emailValidation.formattedValue || formData.email.toLowerCase(),
           nombre: formData.nombre,
           apellido: formData.apellido,
-          is_admin: formData.is_admin,
+          rol: formData.rol,
           password: formData.password,
           cargo: formData.cargo,
           is_active: formData.is_active
@@ -200,7 +200,7 @@ export default function UsuariosConfig() {
       nombre: usuario.nombre,
       apellido: usuario.apellido,
       cargo: usuario.cargo || 'Usuario', // Preservar cargo existente
-      is_admin: usuario.is_admin,  // Cambio clave: rol â†’ is_admin
+      rol: usuario.rol || 'operativo',  // Cambio clave: rol â†’ is_admin
       password: '', // No pre-llenar password
       is_active: usuario.is_active
     })
@@ -232,7 +232,7 @@ export default function UsuariosConfig() {
       email: '',
       nombre: '',
       apellido: '',
-      is_admin: false,  // Cambio clave: rol â†’ is_admin
+      rol: 'operativo',  // Cambio clave: rol â†’ is_admin
       password: '',
       is_active: true
     })
@@ -260,7 +260,7 @@ export default function UsuariosConfig() {
             Gestión de Usuarios
           </h2>
           <p className="text-sm text-gray-600 mt-1">
-            Administra usuarios del sistema - Todos tienen acceso completo
+            Administra usuarios: Administrador (acceso total). Operativo: no puede realizar cambios en configuración ni auditoría.
           </p>
         </div>
         <Button
@@ -361,6 +361,9 @@ export default function UsuariosConfig() {
                     Usuario
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Rol
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Estado
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -374,7 +377,7 @@ export default function UsuariosConfig() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredUsuarios.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                    <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
                       No se encontraron usuarios
                     </td>
                   </tr>
@@ -399,6 +402,13 @@ export default function UsuariosConfig() {
                             </div>
                           </div>
                         </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          (usuario.rol || 'operativo') === 'administrador' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
+                        }`}>
+                          {(usuario.rol || 'operativo') === 'administrador' ? 'Administrador' : 'Operativo'}
+                        </span>
                       </td>
                       <td className="px-6 py-4">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -555,32 +565,32 @@ export default function UsuariosConfig() {
                 {/* Rol */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Tipo de Usuario
+                    Nivel de usuario
                   </label>
                   <div className="flex items-center space-x-4">
                     <label className="flex items-center">
                       <input
                         type="radio"
-                        name="is_admin"
-                        checked={!formData.is_admin}
-                        onChange={() => setFormData({ ...formData, is_admin: false })}
+                        name="rol"
+                        checked={formData.rol === 'operativo'}
+                        onChange={() => setFormData({ ...formData, rol: 'operativo' })}
                         className="mr-2"
                       />
-                      <span className="text-sm text-gray-700">Usuario Normal</span>
+                      <span className="text-sm text-gray-700">Operativo</span>
                     </label>
                     <label className="flex items-center">
                       <input
                         type="radio"
-                        name="is_admin"
-                        checked={formData.is_admin}
-                        onChange={() => setFormData({ ...formData, is_admin: true })}
+                        name="rol"
+                        checked={formData.rol === 'administrador'}
+                        onChange={() => setFormData({ ...formData, rol: 'administrador' })}
                         className="mr-2"
                       />
                       <span className="text-sm text-gray-700">Administrador</span>
                     </label>
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
-                    Los administradores tienen acceso completo al sistema
+                    Administrador: acceso total. Operativo: no puede realizar cambios en módulos de configuración ni auditoría.
                   </p>
                 </div>
 
@@ -725,13 +735,27 @@ export default function UsuariosConfig() {
                   </div>
                 </div>
 
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Rol</p>
+                  <p className="text-sm text-gray-900 mt-1">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      (viewingUser.rol || 'operativo') === 'administrador' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
+                    }`}>
+                      {(viewingUser.rol || 'operativo') === 'administrador' ? 'Administrador' : 'Operativo'}
+                    </span>
+                  </p>
+                </div>
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4 mt-4">
                   <div className="flex items-start gap-2">
                     <Shield className="h-5 w-5 text-green-600 mt-0.5" />
                     <div>
-                      <p className="text-sm font-medium text-green-900">Acceso Completo</p>
+                      <p className="text-sm font-medium text-green-900">
+                        {(viewingUser.rol || 'operativo') === 'administrador' ? 'Acceso total' : 'Acceso operativo'}
+                      </p>
                       <p className="text-xs text-green-700 mt-1">
-                        Todos los usuarios tienen acceso completo a todas las funcionalidades del sistema
+                        {(viewingUser.rol || 'operativo') === 'administrador'
+                          ? 'Acceso total: usuarios, configuración y todas las funcionalidades.'
+                          : 'No puede realizar cambios en módulos de configuración ni auditoría.'}
                       </p>
                     </div>
                   </div>

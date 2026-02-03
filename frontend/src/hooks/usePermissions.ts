@@ -12,7 +12,7 @@ export function usePermissions() {
    * Verifica si el usuario es administrador
    */
   const isAdmin = (): boolean => {
-    return user?.is_admin === true
+    return (user?.rol || 'operativo') === 'administrador'
   }
 
   /**

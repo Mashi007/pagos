@@ -24,7 +24,7 @@ class UserResponse(BaseModel):
     nombre: str
     apellido: str
     cargo: Optional[str] = None
-    is_admin: bool
+    rol: str  # 'administrador' | 'operativo'
     is_active: bool
     created_at: str
     updated_at: Optional[str] = None
