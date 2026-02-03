@@ -267,6 +267,91 @@ class ReporteService {
   }
 
   /**
+   * Exporta reporte de pagos en Excel o PDF
+   */
+  async exportarReportePagos(
+    fechaInicio: string,
+    fechaFin: string,
+    formato: 'excel' | 'pdf'
+  ): Promise<Blob> {
+    const params = new URLSearchParams({ formato, fecha_inicio: fechaInicio, fecha_fin: fechaFin })
+    const axiosInstance = apiClient.getAxiosInstance()
+    const response = await axiosInstance.get(
+      `${this.baseUrl}/exportar/pagos?${params.toString()}`,
+      { responseType: 'blob' }
+    )
+    return response.data as Blob
+  }
+
+  /**
+   * Exporta reporte de morosidad en Excel o PDF
+   */
+  async exportarReporteMorosidad(
+    formato: 'excel' | 'pdf',
+    fechaCorte?: string
+  ): Promise<Blob> {
+    const params = new URLSearchParams({ formato })
+    if (fechaCorte) params.set('fecha_corte', fechaCorte)
+    const axiosInstance = apiClient.getAxiosInstance()
+    const response = await axiosInstance.get(
+      `${this.baseUrl}/exportar/morosidad?${params.toString()}`,
+      { responseType: 'blob' }
+    )
+    return response.data as Blob
+  }
+
+  /**
+   * Exporta reporte financiero en Excel o PDF
+   */
+  async exportarReporteFinanciero(
+    formato: 'excel' | 'pdf',
+    fechaCorte?: string
+  ): Promise<Blob> {
+    const params = new URLSearchParams({ formato })
+    if (fechaCorte) params.set('fecha_corte', fechaCorte)
+    const axiosInstance = apiClient.getAxiosInstance()
+    const response = await axiosInstance.get(
+      `${this.baseUrl}/exportar/financiero?${params.toString()}`,
+      { responseType: 'blob' }
+    )
+    return response.data as Blob
+  }
+
+  /**
+   * Exporta reporte de asesores en Excel o PDF
+   */
+  async exportarReporteAsesores(
+    formato: 'excel' | 'pdf',
+    fechaCorte?: string
+  ): Promise<Blob> {
+    const params = new URLSearchParams({ formato })
+    if (fechaCorte) params.set('fecha_corte', fechaCorte)
+    const axiosInstance = apiClient.getAxiosInstance()
+    const response = await axiosInstance.get(
+      `${this.baseUrl}/exportar/asesores?${params.toString()}`,
+      { responseType: 'blob' }
+    )
+    return response.data as Blob
+  }
+
+  /**
+   * Exporta reporte de productos en Excel o PDF
+   */
+  async exportarReporteProductos(
+    formato: 'excel' | 'pdf',
+    fechaCorte?: string
+  ): Promise<Blob> {
+    const params = new URLSearchParams({ formato })
+    if (fechaCorte) params.set('fecha_corte', fechaCorte)
+    const axiosInstance = apiClient.getAxiosInstance()
+    const response = await axiosInstance.get(
+      `${this.baseUrl}/exportar/productos?${params.toString()}`,
+      { responseType: 'blob' }
+    )
+    return response.data as Blob
+  }
+
+  /**
    * Descarga un archivo (Excel, PDF, CSV)
    */
   async downloadFile(

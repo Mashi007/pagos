@@ -106,12 +106,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       children: [
         { title: 'Clientes', href: '/clientes', icon: Users },
         { title: 'Tickets Atención', href: '/crm/tickets', icon: FileText },
-        {
-          title: 'Notificaciones',
-          href: '/notificaciones',
-          icon: Bell,
-          badge: counts.notificacionesNoLeidas > 0 ? String(counts.notificacionesNoLeidas) : undefined,
-        },
         { title: 'Comunicaciones', href: '/comunicaciones', icon: MessageSquare },
       ],
     },
@@ -131,6 +125,12 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       title: 'Cobranzas',
       href: '/cobranzas',
       icon: AlertTriangle,
+    },
+    {
+      title: 'Notificaciones',
+      href: '/notificaciones',
+      icon: Bell,
+      badge: counts.notificacionesNoLeidas > 0 ? String(counts.notificacionesNoLeidas) : undefined,
     },
     {
       title: 'Reportes',

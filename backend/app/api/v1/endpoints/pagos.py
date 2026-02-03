@@ -1,10 +1,13 @@
 """
 Endpoints de pagos. Datos reales desde BD (Cuota, Prestamo, Cliente).
 GET /pagos/kpis y GET /pagos/stats con consultas a BD; ceros cuando no hay datos.
+Monto cobrado (mes) y Pagos hoy usan fecha en zona horaria del negocio (America/Caracas)
+para que coincida con el día local aunque el servidor esté en UTC.
 """
 import logging
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import and_, func, select
@@ -18,6 +21,14 @@ from app.models.prestamo import Prestamo
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
+
+# Zona horaria del negocio para "hoy" e "inicio_mes" (Monto cobrado mes, Pagos hoy)
+TZ_NEGOCIO = "America/Caracas"
+
+
+def _hoy_local() -> date:
+    """Fecha de hoy en la zona horaria del negocio (evita que servidor UTC desfase el día)."""
+    return datetime.now(ZoneInfo(TZ_NEGOCIO)).date()
 
 
 def _safe_float(val) -> float:
@@ -40,7 +51,7 @@ def get_pagos_kpis(
     montoCobradoMes, saldoPorCobrar, clientesAlDia.
     """
     try:
-        hoy = date.today()
+        hoy = _hoy_local()
         cuotas_pendientes = db.scalar(
             select(func.count()).select_from(Cuota).where(Cuota.fecha_pago.is_(None))
         ) or 0
@@ -112,7 +123,7 @@ def get_pagos_stats(
     Estadísticas de pagos desde BD: total_pagos, total_pagado, pagos_por_estado,
     cuotas_pagadas, cuotas_pendientes, cuotas_atrasadas, pagos_hoy.
     """
-    hoy = date.today()
+    hoy = _hoy_local()
     use_filters = bool(analista or concesionario or modelo)
 
     def _q_cuotas():

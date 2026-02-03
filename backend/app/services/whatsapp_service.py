@@ -488,26 +488,33 @@ class WhatsAppService:
         conv.intento_foto = (conv.intento_foto or 0) + 1
         # OCR sobre toda imagen (sin depender del análisis): probar que está activo/configurado y tener datos si aceptamos
         ocr_data_early = {"fecha_deposito": "NA", "nombre_banco": "NA", "numero_deposito": "NA", "numero_documento": "NA", "cantidad": "NA", "humano": ""}
+        logger.info("%s [OCR] INICIO extract_from_image | telefono=%s image_bytes=%d", LOG_TAG_INFORME, phone_mask, len(image_bytes or b""))
         try:
             from app.services.ocr_service import extract_from_image
             ocr_data_early = extract_from_image(image_bytes)
             logger.info(
-                "%s OCR ejecutado | telefono=%s banco=%s fecha=%s cantidad=%s humano=%s",
+                "%s [OCR] RESULTADO extract_from_image | telefono=%s banco=%s fecha=%s numero_dep=%s numero_doc=%s cantidad=%s humano=%s",
                 LOG_TAG_INFORME, phone_mask,
                 ocr_data_early.get("nombre_banco") or "NA",
                 ocr_data_early.get("fecha_deposito") or "NA",
+                ocr_data_early.get("numero_deposito") or "NA",
+                ocr_data_early.get("numero_documento") or "NA",
                 ocr_data_early.get("cantidad") or "NA",
                 ocr_data_early.get("humano") or "",
             )
         except Exception as e:
-            logger.warning("%s OCR extract_from_image falló (Vision/config) | telefono=%s error=%s", LOG_TAG_INFORME, phone_mask, e)
+            logger.exception(
+                "%s [OCR] FALLO extract_from_image (Vision/config) | telefono=%s error=%s",
+                LOG_TAG_FALLO, phone_mask, e,
+            )
         # Evaluación por IA: texto OCR + prompt corto → aceptable + mensaje conversacional (gracias o pedir otra foto)
         ocr_text = ""
         try:
             from app.services.ocr_service import get_full_text
             ocr_text = get_full_text(image_bytes) or ""
+            logger.info("%s [OCR] get_full_text para IA | telefono=%s len=%d", LOG_TAG_INFORME, phone_mask, len(ocr_text))
         except Exception as e:
-            logger.debug("OCR texto para IA: %s", e)
+            logger.warning("%s [OCR] get_full_text falló (texto para IA) | telefono=%s error=%s", LOG_TAG_INFORME, phone_mask, e, exc_info=True)
         try:
             from app.services.ai_imagen_respuesta import evaluar_imagen_y_respuesta
             aceptable, mensaje_ia = evaluar_imagen_y_respuesta(ocr_text, conv.cedula or "", db)

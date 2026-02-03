@@ -15,6 +15,7 @@ export interface InformePagosConfigData {
   google_oauth_client_secret?: string
   google_oauth_refresh_token?: string
   google_sheets_id?: string
+  sheet_tab_principal?: string
   destinatarios_informe_emails?: string
   horarios_envio?: Array<{ hour: number; minute: number }>
   ocr_keywords_numero_documento?: string
@@ -116,6 +117,7 @@ export function InformePagosConfig() {
         ...config,
         google_drive_folder_id: config.google_drive_folder_id || undefined,
         google_sheets_id: config.google_sheets_id || undefined,
+        sheet_tab_principal: (config.sheet_tab_principal ?? '').trim() || undefined,
         destinatarios_informe_emails: config.destinatarios_informe_emails || undefined,
       }
       // Enviar siempre el campo: vacío para limpiar (usar solo OAuth), o el valor si se editó
@@ -373,6 +375,20 @@ export function InformePagosConfig() {
               value={config.google_sheets_id ?? ''}
               onChange={(e) => handleChange('google_sheets_id', e.target.value)}
             />
+            <p className="text-xs text-gray-500 mt-1">
+              ID que aparece en la URL: docs.google.com/spreadsheets/d/<strong>ESTE_ID</strong>/edit
+            </p>
+          </div>
+          <div>
+            <label className="text-sm font-medium block mb-2">Pestaña donde escribir (opcional)</label>
+            <Input
+              placeholder='Ej: Hoja 1 (vacío = pestañas 6am, 1pm, 4h30)'
+              value={config.sheet_tab_principal ?? ''}
+              onChange={(e) => handleChange('sheet_tab_principal', e.target.value)}
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Si la hoja se ve vacía: pon aquí <strong>Hoja 1</strong> para que las filas se escriban en la primera pestaña. Si lo dejas vacío, se usan pestañas por horario (6am, 1pm, 4h30).
+            </p>
           </div>
           <div>
             <label className="text-sm font-medium block mb-2">Palabras clave para Número de documento (OCR)</label>

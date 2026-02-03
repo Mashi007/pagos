@@ -83,7 +83,7 @@ Tabla clave-valor con al menos la fila `informe_pagos_config` (clave) y el JSON 
 3. Si no hay credenciales Vision, OCR devuelve todo "NA" pero el flujo sigue; la fila se guarda en BD con NA y opcionalmente en Sheets.
 4. Subida a Drive (`upload_image_and_get_link`) → si falla, se guarda `link_imagen = "NA"`.
 5. Insert en `pagos_whatsapp` y en `pagos_informes`.
-6. `append_row` a Google Sheets (pestaña por periodo); si Sheets no está configurado o falla, solo se registra en logs y la digitalización en BD queda OK.
+6. `append_row` a Google Sheets. Por defecto se escribe en pestañas **6am**, **1pm** o **4h30** según la hora; si en Configuración > Informe pagos pones **Pestaña donde escribir** = `Hoja 1`, todas las filas van a esa pestaña (útil cuando la hoja se ve vacía porque estabas mirando "Hoja 1"). Si Sheets no está configurado o falla, solo se registra en logs y la digitalización en BD queda OK.
 
 Ningún paso “no definido”: todos los caminos tienen manejo de error y respuesta al usuario.
 
@@ -106,6 +106,7 @@ Ningún paso “no definido”: todos los caminos tienen manejo de error y respu
    ```
    (con token de usuario). Debe devolver `ocr.conectado: true` si Vision está bien configurado.
 3. **Flujo real:** enviar una foto de papeleta por WhatsApp tras cédula y confirmación; revisar que no haya error 500 y que aparezca fila en `pagos_informes` (y opcionalmente en la hoja de cálculo).
+4. **La hoja se ve vacía:** por defecto los datos se escriben en las pestañas **6am**, **1pm** y **4h30** (no en "Hoja 1"). Revisa si existen esas pestañas al final de la hoja. Si quieres que todo aparezca en la primera pestaña, en Configuración > Informe pagos rellena **Pestaña donde escribir** con `Hoja 1` y guarda.
 
 ---
 
@@ -161,6 +162,25 @@ Si hay excepción no capturada, en el log aparecerá `Error procesando mensaje W
 2. **Búsqueda recomendada:** `INFORME_PAGOS` — muestra todo el flujo de imagen (inicio, descarga, OCR, Drive, BD, Sheets). Para solo fallos: `INFORME_PAGOS FALLO` o `FALLO`.
 3. Cada línea incluye `telefono=***` (enmascarado), `status=`, `note=` o `error=` según el caso.
 4. Si el error es de BD (p. ej. columna no existe), ejecutar `migracion_mvp_ocr_todas_columnas.sql`.
+
+### 5.2.1 Traza de logs del OCR (dónde se rompe)
+
+Tras una auditoría del servicio OCR, los logs siguen esta secuencia. **Busca en orden** para ver en qué paso falla:
+
+| Paso | Mensaje a buscar | Significado |
+|------|------------------|-------------|
+| Config | `sync_from_db OK` o `sync_from_db FALLO` | Config informe pagos cargada desde BD (o error al cargar). |
+| Creds | `get_google_credentials: usando OAuth` o `cuenta de servicio` | Origen de credenciales (OAuth vs JSON). |
+| 1/4 | `[OCR] Paso 1/4: sync_from_db` → `Paso 1/4 OK: cliente Vision creado` o `Paso 1/4 FALLO` | Credenciales Vision y creación del cliente. Si FALLO: sin credenciales o cliente no creado. |
+| 2/4 | `[OCR] Paso 2/4: document_text_detection` → `Paso 2/4 OK: Vision texto len=` o `Paso 2/4 FALLO` | Llamada a Vision API. Si FALLO: error de API (code/message) o excepción. |
+| 3/4 | `[OCR] Paso 3/4 OK: texto extraído len=` | Texto recibido de Vision; siguiente es el parse. |
+| 4/4 | `[OCR] Paso 4/4 parse resultado: fecha= banco= ...` | Resultado del parse (si todo NA, el problema puede ser formato de papeleta o keywords). |
+| WhatsApp | `[OCR] INICIO extract_from_image` → `[OCR] RESULTADO extract_from_image` o `[OCR] FALLO extract_from_image` | Flujo WhatsApp: entrada a OCR y resultado o excepción (con traceback). |
+
+- **Si no aparece "Paso 1/4 OK":** credenciales no configuradas, JSON inválido o OAuth expirado (revisar Configuración > Informe pagos y "Verificar ahora").
+- **Si "Paso 1/4 OK" pero "Paso 2/4 FALLO":** Vision API no habilitada, facturación o error de red; el mensaje incluye `code=` y `message=`.
+- **Si "Paso 2/4 OK" con len=0:** la imagen no tiene texto reconocible o formato no soportado.
+- **Si "Paso 4/4" con todo NA:** Vision devolvió texto pero el parse no encontró fecha/banco/cantidad (revisar formato de papeleta o keywords en config).
 
 ### 5.3 Resumen
 

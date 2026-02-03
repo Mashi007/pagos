@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.cuota import Cuota
 from app.models.cliente import Cliente
+from app.models.prestamo import Prestamo
 from app.models.configuracion import Configuracion
 
 CLAVE_NOTIFICACIONES_ENVIOS = "notificaciones_envios"
@@ -116,10 +117,11 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
     Se usa la fecha del servidor; actualizar a las 2am con cron si se desea.
     """
     hoy = date.today()
-    # Cuotas no pagadas (fecha_pago nula) con su cliente
+    # Cuotas no pagadas (fecha_pago nula) con su cliente vía préstamo (cuotas pueden tener cliente_id NULL)
     q = (
         select(Cuota, Cliente)
-        .join(Cliente, Cuota.cliente_id == Cliente.id)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
         .where(Cuota.fecha_pago.is_(None))
     )
     rows = db.execute(q).all()
@@ -165,19 +167,21 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
     }
 
 
-@router.post("/actualizar")
-def actualizar_notificaciones(db: Session = Depends(get_db)):
+def ejecutar_actualizacion_notificaciones(db: Session) -> dict:
     """
-    Recalcular mora desde cuotas no pagadas. La tabla clientes no tiene columna dias_mora;
-    los datos de mora se calculan al vuelo desde cuotas en get_clientes_retrasados.
-    Llamar desde cron a las 2am (ej: 0 2 * * * curl -X POST .../notificaciones/actualizar).
+    Lógica de actualización de notificaciones (mora desde cuotas no pagadas).
+    Usado por el endpoint POST /actualizar y por el scheduler a las 2:00.
     """
     hoy = date.today()
     q = select(Cuota).where(Cuota.fecha_pago.is_(None), Cuota.fecha_vencimiento <= hoy)
-    cuotas = db.execute(q).scalars().all()
-    # Solo contamos cuotas en mora; no actualizamos clientes.dias_mora (no existe en la BD)
-    clientes_actualizados = 0
-    return {"mensaje": "Actualización ejecutada.", "clientes_actualizados": clientes_actualizados}
+    db.execute(q).scalars().all()
+    return {"mensaje": "Actualización ejecutada.", "clientes_actualizados": 0}
+
+
+@router.post("/actualizar")
+def actualizar_notificaciones(db: Session = Depends(get_db)):
+    """Recalcular mora desde cuotas no pagadas. También se ejecuta por scheduler a las 2:00."""
+    return ejecutar_actualizacion_notificaciones(db)
 
 
 def get_notificaciones_tabs_data(db: Session):
@@ -191,7 +195,8 @@ def get_notificaciones_tabs_data(db: Session):
     hoy = date.today()
     q = (
         select(Cuota, Cliente)
-        .join(Cliente, Cuota.cliente_id == Cliente.id)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
         .where(Cuota.fecha_pago.is_(None))
     )
     rows = db.execute(q).all()

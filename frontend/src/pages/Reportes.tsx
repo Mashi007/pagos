@@ -105,6 +105,7 @@ export function Reportes() {
   const [filterTipo, setFilterTipo] = useState('Todos')
   const [filterEstado, setFilterEstado] = useState('Todos')
   const [selectedPeriodo, setSelectedPeriodo] = useState('mes')
+  const [formatoExportacion, setFormatoExportacion] = useState<'excel' | 'pdf'>('excel')
   const [generandoReporte, setGenerandoReporte] = useState<string | null>(null)
   const queryClient = useQueryClient()
 
@@ -123,67 +124,66 @@ export function Reportes() {
     refetchInterval: 5 * 60 * 1000, // Refrescar cada 5 minutos automáticamente
   })
 
-  // Funciones para generar reportes
+  // Descargar blob como archivo
+  const descargarBlob = (blob: Blob, nombre: string) => {
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = nombre
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+  }
+
+  // Funciones para generar reportes (datos reales desde BD; descarga Excel o PDF según corresponda)
   const generarReporte = async (tipo: string, formato: 'excel' | 'pdf' = 'excel') => {
     try {
       setGenerandoReporte(tipo)
       toast.loading(`Generando reporte de ${tipo}...`)
 
       const fechaCorte = new Date().toISOString().split('T')[0]
+      const ext = formato === 'excel' ? 'xlsx' : 'pdf'
 
       if (tipo === 'CARTERA') {
         const blob = await reporteService.exportarReporteCartera(formato, fechaCorte)
-
-        // Crear enlace de descarga
-        const url = window.URL.createObjectURL(blob)
-        const link = document.createElement('a')
-        link.href = url
-        link.download = `reporte_cartera_${fechaCorte}.${formato === 'excel' ? 'xlsx' : 'pdf'}`
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-        window.URL.revokeObjectURL(url)
-
+        descargarBlob(blob, `reporte_cartera_${fechaCorte}.${ext}`)
         toast.dismiss()
-        toast.success(`Reporte de ${tipo} generado exitosamente`)
+        toast.success(`Reporte de ${tipo} descargado`)
         queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
         queryClient.invalidateQueries({ queryKey: ['kpis'] })
       } else if (tipo === 'PAGOS') {
-        // Para pagos, necesitamos fechas de inicio y fin
         const fechaFin = new Date()
         const fechaInicio = new Date()
         fechaInicio.setMonth(fechaInicio.getMonth() - 1)
-
-        const reporte = await reporteService.getReportePagos(
-          fechaInicio.toISOString().split('T')[0],
-          fechaFin.toISOString().split('T')[0]
-        )
-
+        const fi = fechaInicio.toISOString().split('T')[0]
+        const ff = fechaFin.toISOString().split('T')[0]
+        const blob = await reporteService.exportarReportePagos(fi, ff, formato)
+        descargarBlob(blob, `reporte_pagos_${fi}_${ff}.${ext}`)
         toast.dismiss()
-        toast.success(`Reporte de ${tipo} obtenido exitosamente`)
-        console.log('Reporte de pagos:', reporte)
+        toast.success(`Reporte de ${tipo} descargado`)
         queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
         queryClient.invalidateQueries({ queryKey: ['kpis'] })
       } else if (tipo === 'MOROSIDAD') {
-        const reporte = await reporteService.getReporteMorosidad(fechaCorte)
+        const blob = await reporteService.exportarReporteMorosidad(formato, fechaCorte)
+        descargarBlob(blob, `reporte_morosidad_${fechaCorte}.${ext}`)
         toast.dismiss()
-        toast.success(`Reporte de ${tipo} obtenido exitosamente`)
-        console.log('Reporte de morosidad:', reporte)
+        toast.success(`Reporte de ${tipo} descargado`)
       } else if (tipo === 'FINANCIERO') {
-        const reporte = await reporteService.getReporteFinanciero(fechaCorte)
+        const blob = await reporteService.exportarReporteFinanciero(formato, fechaCorte)
+        descargarBlob(blob, `reporte_financiero_${fechaCorte}.${ext}`)
         toast.dismiss()
-        toast.success(`Reporte de ${tipo} obtenido exitosamente`)
-        console.log('Reporte financiero:', reporte)
+        toast.success(`Reporte de ${tipo} descargado`)
       } else if (tipo === 'ASESORES') {
-        const reporte = await reporteService.getReporteAsesores(fechaCorte)
+        const blob = await reporteService.exportarReporteAsesores(formato, fechaCorte)
+        descargarBlob(blob, `reporte_asesores_${fechaCorte}.${ext}`)
         toast.dismiss()
-        toast.success(`Reporte de ${tipo} obtenido exitosamente`)
-        console.log('Reporte de asesores:', reporte)
+        toast.success(`Reporte de ${tipo} descargado`)
       } else if (tipo === 'PRODUCTOS') {
-        const reporte = await reporteService.getReporteProductos(fechaCorte)
+        const blob = await reporteService.exportarReporteProductos(formato, fechaCorte)
+        descargarBlob(blob, `reporte_productos_${fechaCorte}.${ext}`)
         toast.dismiss()
-        toast.success(`Reporte de ${tipo} obtenido exitosamente`)
-        console.log('Reporte de productos:', reporte)
+        toast.success(`Reporte de ${tipo} descargado`)
       } else {
         toast.dismiss()
         toast.info(`Generación de reporte ${tipo} próximamente disponible`)
@@ -361,9 +361,23 @@ export function Reportes() {
           <CardTitle className="flex items-center">
             <RefreshCw className="mr-2 h-5 w-5" /> Generar Nuevo Reporte
           </CardTitle>
-          <CardDescription>Selecciona el tipo de reporte y configuración para generar.</CardDescription>
+          <CardDescription>
+            Selecciona el formato de descarga (Excel o PDF) y el tipo de reporte. Los datos se generan en tiempo real desde la base de datos.
+          </CardDescription>
         </CardHeader>
         <CardContent>
+          <div className="flex items-center gap-4 mb-4">
+            <span className="text-sm font-medium text-gray-700">Formato de descarga:</span>
+            <Select value={formatoExportacion} onValueChange={(v: 'excel' | 'pdf') => setFormatoExportacion(v)}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="excel">Excel (.xlsx)</SelectItem>
+                <SelectItem value="pdf">PDF</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {tiposReporte.map((tipo) => {
               const IconComponent = tipo.icon
@@ -378,7 +392,7 @@ export function Reportes() {
                   }`}
                   onClick={() => {
                     if (isDisponible && !isGenerando) {
-                      generarReporte(tipo.value, 'excel')
+                      generarReporte(tipo.value, formatoExportacion)
                     } else if (!isDisponible) {
                       toast.info(`El reporte de ${tipo.label} estará disponible próximamente`)
                     }

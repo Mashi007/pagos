@@ -288,13 +288,19 @@ def get_resumen(
             Cuota.fecha_pago.is_(None)
         )
     ) or 0
-    clientes_atrasados = db.scalar(
-        select(func.count(func.distinct(Cuota.cliente_id))).select_from(Cuota).where(
+    # Clientes atrasados: distinct clientes con al menos una cuota vencida (vía préstamo si cuotas.cliente_id no está poblado)
+    subq_clientes = (
+        select(Prestamo.cliente_id)
+        .select_from(Prestamo)
+        .join(Cuota, Cuota.prestamo_id == Prestamo.id)
+        .where(
             Cuota.fecha_pago.is_(None),
             Cuota.fecha_vencimiento < hoy,
-            Cuota.cliente_id.isnot(None),
+            Prestamo.cliente_id.isnot(None),
         )
-    ) or 0
+        .distinct()
+    )
+    clientes_atrasados = db.scalar(select(func.count()).select_from(subq_clientes.subquery())) or 0
     data: dict[str, Any] = {
         "total_cuotas_vencidas": total_cuotas_vencidas,
         "monto_total_adeudado": _safe_float(monto_total_adeudado),

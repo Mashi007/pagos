@@ -25,15 +25,26 @@ def sync_from_db() -> None:
         db = SessionLocal()
         try:
             row = db.get(Configuracion, CLAVE_INFORME_PAGOS_CONFIG)
-            if row and row.valor:
-                data = json.loads(row.valor)
-                if isinstance(data, dict):
-                    _current.clear()
-                    _current.update(data)
+            if not row or not row.valor:
+                logger.info("[INFORME_PAGOS] sync_from_db: no hay fila o valor en BD (clave=%s); config vacía.", CLAVE_INFORME_PAGOS_CONFIG)
+                _current.clear()
+                return
+            data = json.loads(row.valor)
+            if not isinstance(data, dict):
+                logger.warning("[INFORME_PAGOS] sync_from_db: valor en BD no es dict; config no actualizada.")
+                return
+            _current.clear()
+            _current.update(data)
+            has_json = bool((data.get("google_credentials_json") or "").strip())
+            has_oauth = bool((data.get("google_oauth_refresh_token") or "").strip())
+            logger.info(
+                "[INFORME_PAGOS] sync_from_db OK: config cargada desde BD (cuenta_servicio=%s oauth=%s).",
+                has_json, has_oauth,
+            )
         finally:
             db.close()
     except Exception as e:
-        logger.debug("No se pudo cargar informe_pagos_config: %s", e)
+        logger.warning("[INFORME_PAGOS] sync_from_db FALLO: no se pudo cargar informe_pagos_config: %s", e, exc_info=True)
 
 
 def get_informe_pagos_config() -> dict[str, Any]:
@@ -82,6 +93,16 @@ def get_google_sheets_id() -> str:
     """ID de la hoja de cálculo (desde la URL)."""
     cfg = get_informe_pagos_config()
     return (cfg.get("google_sheets_id") or "").strip()
+
+
+def get_sheet_tab_principal() -> str:
+    """
+    Nombre de la pestaña donde escribir (ej. "Hoja 1").
+    Si está vacío, se usan pestañas por periodo: 6am, 1pm, 4h30.
+    Útil para que los datos aparezcan en la pestaña por defecto en lugar de en 6am/1pm/4h30.
+    """
+    cfg = get_informe_pagos_config()
+    return (cfg.get("sheet_tab_principal") or "").strip()
 
 
 def get_ocr_keywords_numero_documento() -> List[str]:

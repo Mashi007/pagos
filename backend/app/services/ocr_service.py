@@ -26,7 +26,9 @@ from typing import Dict, Any, List, Optional
 
 logger = logging.getLogger(__name__)
 
-# Mismo prefijo que whatsapp_service para buscar en Render: "INFORME_PAGOS" o "INFORME_PAGOS FALLO".
+# Mismo prefijo que whatsapp_service para buscar en Render.
+# Diagnóstico: buscar "[INFORME_PAGOS]" (flujo) o "[INFORME_PAGOS] FALLO" (errores).
+# Pasos OCR: 1/4=credenciales+cliente Vision, 2/4=document_text_detection, 3/4=texto extraído, 4/4=parse resultado.
 LOG_TAG_INFORME = "[INFORME_PAGOS]"
 LOG_TAG_FALLO = "[INFORME_PAGOS] FALLO"
 
@@ -48,29 +50,49 @@ def _get_vision_client():
     from app.core.google_credentials import get_google_credentials
     from google.cloud import vision
 
+    logger.info("%s [OCR] Paso 1/4: sync_from_db + get_google_credentials(Vision)", LOG_TAG_INFORME)
     sync_from_db()
     credentials = get_google_credentials(VISION_SCOPE)
     if not credentials:
+        logger.warning(
+            "%s [OCR] Paso 1/4 FALLO: credenciales Google (Vision) no disponibles. "
+            "Comprueba Configuración > Informe pagos (JSON cuenta de servicio u OAuth con Conectar con Google).",
+            LOG_TAG_FALLO,
+        )
         return None
-    return vision.ImageAnnotatorClient(credentials=credentials)
+    try:
+        client = vision.ImageAnnotatorClient(credentials=credentials)
+        logger.info("%s [OCR] Paso 1/4 OK: cliente Vision creado", LOG_TAG_INFORME)
+        return client
+    except Exception as e:
+        logger.exception("%s [OCR] Paso 1/4 FALLO: crear ImageAnnotatorClient: %s", LOG_TAG_FALLO, e)
+        return None
 
 
 def _vision_full_text(image_bytes: bytes) -> str:
     """Ejecuta Vision document_text_detection (documentos densos: manuscrito, impreso o mixto) y devuelve el texto completo; vacío si falla o sin credenciales."""
     client = _get_vision_client()
     if not client:
-        logger.warning("%s Vision no configurado (get_full_text); se tratará como no clara.", LOG_TAG_INFORME)
+        logger.warning("%s [OCR] Vision no configurado (get_full_text); se tratará como no clara.", LOG_TAG_INFORME)
         return ""
     try:
         from google.cloud import vision
         image = vision.Image(content=image_bytes)
+        logger.info("%s [OCR] Paso 2/4: document_text_detection llamando Vision API (bytes=%d)", LOG_TAG_INFORME, len(image_bytes or b""))
         response = client.document_text_detection(image=image)
         if response.error.message:
+            code = getattr(response.error, "code", None)
+            logger.warning(
+                "%s [OCR] Paso 2/4 FALLO: Vision API devolvió error code=%s message=%s",
+                LOG_TAG_FALLO, code, response.error.message,
+            )
             return ""
         doc = response.full_text_annotation
-        return (doc.text if doc else "") or ""
+        text = (doc.text if doc else "") or ""
+        logger.info("%s [OCR] Paso 2/4 OK: Vision texto len=%d", LOG_TAG_INFORME, len(text))
+        return text
     except Exception as e:
-        logger.debug("%s Vision full_text exception: %s", LOG_TAG_INFORME, e)
+        logger.exception("%s [OCR] Paso 2/4 FALLO: document_text_detection exception: %s", LOG_TAG_FALLO, e)
         return ""
 
 
@@ -85,11 +107,13 @@ def imagen_suficientemente_clara(image_bytes: bytes, min_chars: int = MIN_CARACT
     Se usa en el flujo de cobranza para aceptar la foto en el primer intento si está clara.
     """
     if not image_bytes or len(image_bytes) < 500:
+        logger.info("%s [OCR] Claridad: imagen vacía o muy pequeña (bytes=%d); no clara", LOG_TAG_INFORME, len(image_bytes or b""))
         return False
     full_text = _vision_full_text(image_bytes)
     num_chars = len(full_text.strip())
-    logger.debug("%s Claridad imagen: Vision %d caracteres (mín %d); clara=%s", LOG_TAG_INFORME, num_chars, min_chars, num_chars >= min_chars)
-    return num_chars >= min_chars
+    clara = num_chars >= min_chars
+    logger.info("%s [OCR] Claridad: Vision %d caracteres (mín %d); clara=%s", LOG_TAG_INFORME, num_chars, min_chars, clara)
+    return clara
 
 
 def _requiere_revision_humana_from_doc(doc) -> bool:
@@ -123,6 +147,11 @@ def extract_from_image(image_bytes: bytes) -> Dict[str, str]:
     - humano: "HUMANO" si más del 80% del texto es de baja confianza (manuscrito/ilegible); en ese caso NO se inventan datos (todos los campos NA).
     """
     base_na = {"fecha_deposito": NA, "nombre_banco": NA, "numero_deposito": NA, "numero_documento": NA, "cantidad": NA}
+    size = len(image_bytes or b"")
+    logger.info("%s [OCR] extract_from_image INICIO | bytes=%d", LOG_TAG_INFORME, size)
+    if size < 100:
+        logger.warning("%s [OCR] extract_from_image: imagen demasiado pequeña (bytes=%d); devolviendo NA", LOG_TAG_FALLO, size)
+        return {**base_na, "humano": ""}
     client = _get_vision_client()
     if not client:
         logger.warning(
@@ -134,11 +163,13 @@ def extract_from_image(image_bytes: bytes) -> Dict[str, str]:
         from app.core.informe_pagos_config_holder import get_ocr_keywords_numero_documento
         from google.cloud import vision
         image = vision.Image(content=image_bytes)
+        logger.info("%s [OCR] Paso 3/4: document_text_detection (extract)", LOG_TAG_INFORME)
         response = client.document_text_detection(image=image)
         if response.error.message:
+            code = getattr(response.error, "code", None)
             logger.warning(
-                "%s %s | Vision API error (habilitar/facturación GCP): %s",
-                LOG_TAG_FALLO, "ocr", response.error.message,
+                "%s %s | Vision API error code=%s (habilitar Vision API y facturación en GCP): %s",
+                LOG_TAG_FALLO, "ocr", code, response.error.message,
             )
             return {**base_na, "humano": ""}
         doc = response.full_text_annotation
@@ -146,9 +177,19 @@ def extract_from_image(image_bytes: bytes) -> Dict[str, str]:
             logger.info("%s OCR >80%% baja confianza → HUMANO (no inventar datos).", LOG_TAG_INFORME)
             return {**base_na, "humano": VALOR_HUMANO}
         full_text = (doc.text if doc else "") or ""
+        logger.info("%s [OCR] Paso 3/4 OK: texto extraído len=%d preview=%s", LOG_TAG_INFORME, len(full_text), (full_text[:120] + "..." if len(full_text) > 120 else full_text))
         keywords_doc = get_ocr_keywords_numero_documento()
         result = _parse_papeleta_text(full_text, keywords_numero_documento=keywords_doc)
         result["humano"] = ""
+        logger.info(
+            "%s [OCR] Paso 4/4 parse resultado: fecha=%s banco=%s numero_dep=%s numero_doc=%s cantidad=%s",
+            LOG_TAG_INFORME,
+            result.get("fecha_deposito"),
+            result.get("nombre_banco"),
+            result.get("numero_deposito"),
+            result.get("numero_documento"),
+            result.get("cantidad"),
+        )
         return result
     except Exception as e:
         logger.exception("%s %s | extract_from_image exception: %s", LOG_TAG_FALLO, "ocr", e)

@@ -44,6 +44,7 @@ class InformePagosConfigUpdate(BaseModel):
     google_oauth_client_id: Optional[str] = None
     google_oauth_client_secret: Optional[str] = None
     google_sheets_id: Optional[str] = None
+    sheet_tab_principal: Optional[str] = None  # Ej. "Hoja 1": escribe en esta pestaña en lugar de 6am/1pm/4h30
     destinatarios_informe_emails: Optional[str] = None
     horarios_envio: Optional[list] = None
     ocr_keywords_numero_documento: Optional[str] = None  # Palabras clave para ubicar "Número de documento" en OCR (separadas por coma o salto de línea)
@@ -274,24 +275,29 @@ def _verificar_ocr() -> dict:
     from app.core.informe_pagos_config_holder import use_google_oauth
     from app.core.google_credentials import get_google_credentials
 
+    logger.info("[INFORME_PAGOS] _verificar_ocr: obteniendo credenciales Vision...")
     creds = get_google_credentials(["https://www.googleapis.com/auth/cloud-vision"])
     if not creds:
         detalle = "Sin credenciales (cuenta de servicio JSON u OAuth con 'Conectar con Google')."
         if use_google_oauth():
             detalle = "Token OAuth expirado o revocado. Haz clic en 'Conectar con Google' de nuevo en esta sección."
+        logger.warning("[INFORME_PAGOS] _verificar_ocr: sin credenciales → %s", detalle)
         return {"conectado": False, "detalle": detalle}
     try:
         from google.cloud import vision
         client = vision.ImageAnnotatorClient(credentials=creds)
-        # Imagen mínima 1x1 pixel JPEG para no gastar ancho de banda; la API responde aunque no haya texto
         minimal_jpeg = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t\x08\n\x0c\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a\x1f\x1e\x1d\x1a\x1c\x1c $.\' \",#\x1c\x1c(7),01444\x1f\'9=82<.7\xff\xc0\x00\x0b\x08\x00\x01\x00\x01\x01\x01\x11\x00\xff\xc4\x00\x1f\x00\x00\x01\x05\x01\x01\x01\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0b\xff\xda\x00\x0c\x03\x01\x00\x02\x10\x03\x10\x00\x00\x00\x01\xff\xd9"
         image = vision.Image(content=minimal_jpeg)
         client.document_text_detection(image=image)
+        logger.info("[INFORME_PAGOS] _verificar_ocr: Vision API OK.")
         return {"conectado": True, "detalle": "Conexión correcta. Vision API (OCR) operativa."}
     except Exception as e:
         msg = str(e).strip() or "Error desconocido"
+        logger.exception("[INFORME_PAGOS] _verificar_ocr FALLO: %s", e)
         if "403" in msg or "permission" in msg.lower() or "forbidden" in msg.lower() or "Vision API has not been used" in msg:
             return {"conectado": False, "detalle": "Vision API no habilitada o sin permiso. Actívala en Google Cloud Console para el proyecto."}
+        if "401" in msg or "invalid_grant" in msg.lower() or "token" in msg.lower():
+            return {"conectado": False, "detalle": "Token OAuth expirado o inválido. Reconecta con 'Conectar con Google'."}
         return {"conectado": False, "detalle": f"Error: {msg[:200]}"}
 
 

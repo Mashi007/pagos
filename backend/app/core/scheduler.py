@@ -1,7 +1,17 @@
 """
-Scheduler para tareas programadas.
-- Reportes de cobranzas: 6:00 y 13:00.
-- Informe de pagos (email con link Google Sheet): 6:00, 13:00 y 16:30 (America/Caracas).
+Scheduler para tareas programadas (zona America/Caracas).
+
+Actualización periódica de informes y reportes:
+- 02:00  Notificaciones (actualizar mora / datos para seguimiento).
+- 06:00  Reportes cobranzas (resumen + diagnóstico).
+- 06:00  Informe de pagos por email (link Google Sheet).
+- 13:00  Reportes cobranzas.
+- 13:00  Informe de pagos por email.
+- 16:00  Caché dashboard (hilo aparte en main: 6:00, 13:00, 16:00).
+- 16:30  Informe de pagos por email.
+
+Los informes de Cobranzas (clientes atrasados, rendimiento analista, montos por mes, etc.)
+se generan bajo demanda al solicitar JSON/PDF/Excel; no se precalculan.
 """
 import logging
 from typing import Optional
@@ -10,7 +20,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from app.core.database import SessionLocal
-from app.api.v1.endpoints import cobranzas
+from app.api.v1.endpoints import cobranzas, notificaciones
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +28,21 @@ logger = logging.getLogger(__name__)
 SCHEDULER_TZ = "America/Caracas"
 
 _scheduler: Optional[BackgroundScheduler] = None
+
+
+def _job_actualizar_notificaciones() -> None:
+    """Job 2:00. Actualización de notificaciones (mora desde cuotas)."""
+    db = SessionLocal()
+    try:
+        result = notificaciones.ejecutar_actualizacion_notificaciones(db)
+        logger.info(
+            "Notificaciones actualizadas: %s",
+            result.get("clientes_actualizados", 0),
+        )
+    except Exception as e:
+        logger.exception("Error en job actualizar_notificaciones: %s", e)
+    finally:
+        db.close()
 
 
 def _job_actualizar_reportes_cobranzas() -> None:
@@ -50,12 +75,20 @@ def _job_informe_pagos_email() -> None:
 
 
 def start_scheduler() -> None:
-    """Inicia el scheduler: reportes cobranzas 6:00 y 13:00; informe pagos email 6:00, 13:00 y 16:30."""
+    """Inicia el scheduler: notificaciones 2:00; cobranzas 6:00 y 13:00; informe pagos 6:00, 13:00 y 16:30."""
     global _scheduler
     if _scheduler is not None:
         logger.warning("Scheduler ya está iniciado.")
         return
     _scheduler = BackgroundScheduler(timezone=SCHEDULER_TZ)
+    # 2:00 - Notificaciones
+    _scheduler.add_job(
+        _job_actualizar_notificaciones,
+        CronTrigger(hour=2, minute=0, timezone=SCHEDULER_TZ),
+        id="notificaciones_2am",
+        name="Actualizar notificaciones 2:00",
+    )
+    # 6:00 y 13:00 - Reportes cobranzas
     _scheduler.add_job(
         _job_actualizar_reportes_cobranzas,
         CronTrigger(hour=6, minute=0, timezone=SCHEDULER_TZ),
@@ -89,7 +122,7 @@ def start_scheduler() -> None:
     )
     _scheduler.start()
     logger.info(
-        "Scheduler iniciado: reportes cobranzas 6:00 y 13:00; informe pagos email 6:00, 13:00 y 16:30 (%s).",
+        "Scheduler iniciado: notificaciones 2:00; cobranzas 6:00 y 13:00; informe pagos 6:00, 13:00 y 16:30 (%s).",
         SCHEDULER_TZ,
     )
 

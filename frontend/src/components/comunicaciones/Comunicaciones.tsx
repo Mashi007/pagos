@@ -242,8 +242,11 @@ export function Comunicaciones({
     }
   }, [clienteRecienCreado, conversacionesAgrupadas])
 
-  // Cargar mensajes cuando se selecciona una conversación
-  // Cargar mensajes: WhatsApp = historial real desde API; Email = filtro de comunicaciones
+  // Cargar mensajes cuando se selecciona una conversación (solo cuando cambia id/contacto para evitar peticiones duplicadas)
+  const conversacionId = conversacionActual?.id ?? null
+  const conversacionContacto = conversacionActual?.contacto ?? null
+  const conversacionTipo = conversacionActual?.tipo
+
   useEffect(() => {
     if (!conversacionActual) return
 
@@ -305,7 +308,7 @@ export function Comunicaciones({
       return nuevoMap
     })
     setCargandoMensajes(null)
-  }, [conversacionActual, todasComunicaciones.length])
+  }, [conversacionId, conversacionContacto, conversacionTipo, todasComunicaciones.length])
 
   // Obtener mensajes de la conversación actual
   const mensajesOrdenados = useMemo(() => {

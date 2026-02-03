@@ -31,6 +31,13 @@ CABECERAS_INFORME = ["Cédula", "Fecha", "Nombre en cabecera", "Número depósit
 SHEETS_SCOPE = ["https://www.googleapis.com/auth/spreadsheets"]
 
 
+def _mask_sheet_id(sheet_id: str) -> str:
+    """Muestra solo últimos 4 caracteres del ID para logs (evitar exponer ID completo)."""
+    if not sheet_id or len(sheet_id) <= 4:
+        return "****"
+    return f"...{sheet_id[-4:]}"
+
+
 def _get_sheets_service():
     """Construye el cliente de Google Sheets con credenciales (OAuth o cuenta de servicio)."""
     from app.core.informe_pagos_config_holder import get_google_sheets_id, sync_from_db
@@ -40,10 +47,18 @@ def _get_sheets_service():
     sync_from_db()
     sheet_id = get_google_sheets_id()
     credentials = get_google_credentials(SHEETS_SCOPE)
-    if not credentials or not sheet_id:
+    if not credentials:
+        logger.warning("%s Sheets: credenciales no configuradas (OAuth o cuenta de servicio).", LOG_TAG_FALLO)
         return None, None
-    service = build("sheets", "v4", credentials=credentials)
-    return service, sheet_id
+    if not sheet_id:
+        logger.warning("%s Sheets: google_sheets_id vacío. Configura el ID en Informe pagos (desde la URL de la hoja).", LOG_TAG_FALLO)
+        return None, None
+    try:
+        service = build("sheets", "v4", credentials=credentials)
+        return service, sheet_id
+    except Exception as e:
+        logger.exception("%s Sheets: error al crear cliente: %s", LOG_TAG_FALLO, e)
+        return None, None
 
 
 def append_row(
@@ -59,17 +74,23 @@ def append_row(
     humano: Optional[str] = None,
 ) -> bool:
     """
-    Añade una fila a la pestaña del periodo en la hoja configurada.
-    periodo_envio: "6am" | "1pm" | "4h30"
-    observacion: ej. "No confirma identidad" si no confirmó en 3 intentos.
-    humano: "HUMANO" cuando >80% del texto OCR es de baja confianza (manuscrito/ilegible); no se inventan datos.
+    Añade una fila a la pestaña configurada.
+    Si sheet_tab_principal está configurado (ej. "Hoja 1"), se escribe ahí; si no, se usa la pestaña del periodo (6am, 1pm, 4h30).
     Crea la pestaña si no existe (cabeceras incluyen HUMANO).
     """
+    from app.core.informe_pagos_config_holder import get_sheet_tab_principal
+
     service, sheet_id = _get_sheets_service()
     if not service or not sheet_id:
         logger.warning("%s %s | Sheets no configurado (ID hoja o credenciales/OAuth).", LOG_TAG_FALLO, "sheets")
         return False
-    tab_name = PERIODOS.get(periodo_envio) or periodo_envio
+    tab_principal = get_sheet_tab_principal()
+    if tab_principal:
+        tab_name = tab_principal
+        logger.info("%s Sheets append_row → pestaña '%s' (sheet_tab_principal) | sheet_id=%s", LOG_TAG_INFORME, tab_name, _mask_sheet_id(sheet_id))
+    else:
+        tab_name = PERIODOS.get(periodo_envio) or periodo_envio
+        logger.info("%s Sheets append_row → pestaña '%s' (periodo %s) | sheet_id=%s", LOG_TAG_INFORME, tab_name, periodo_envio, _mask_sheet_id(sheet_id))
     try:
         ensure_sheet_tab(sheet_id, tab_name)
         range_name = f"'{tab_name}'!A:I"
@@ -83,9 +104,10 @@ def append_row(
             insertDataOption="INSERT_ROWS",
             body=body,
         ).execute()
+        logger.info("%s Sheets append_row OK | cedula=%s tab=%s", LOG_TAG_INFORME, cedula, tab_name)
         return True
     except Exception as e:
-        logger.exception("%s %s | Sheets append error: %s", LOG_TAG_FALLO, "sheets", e)
+        logger.exception("%s %s | Sheets append error (tab=%s): %s", LOG_TAG_FALLO, "sheets", tab_name, e)
         return False
 
 
