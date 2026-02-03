@@ -77,8 +77,17 @@ MENSAJE_PRIMERO_CONFIRMA_LUEGO_FOTO = (
 )
 MENSAJE_CONTINUAMOS_SIN_CONFIRMAR = "Continuamos. Envía una foto clara de tu papeleta de depósito (recibo de pago válido) a 20 cm."
 MENSAJE_ENVIA_FOTO = "Por favor adjunta una foto clara de tu papeleta de depósito o recibo de pago válido, a 20 cm."
-MENSAJE_FOTO_POCO_CLARA = "Necesitamos un recibo de pago válido (papeleta de depósito). La imagen no es válida o no se ve bien. Toma otra foto a 20 cm de tu papeleta. Intento {n}/3."
-MENSAJE_RECIBIDO = "Gracias. (Cédula {cedula} reportada.)"
+MENSAJE_FOTO_POCO_CLARA = (
+    "Necesitamos un recibo de pago válido (papeleta de depósito). La imagen no es válida o no se ve bien. "
+    "Toma otra foto a 20 cm de tu papeleta. Intento {n}/3. Al tercer intento se almacenará la que envíes. "
+    "Si tienes dudas, llama al 0424-4359435."
+)
+MENSAJE_RECIBIDO = "Gracias. Tu reporte de pago (cédula {cedula}) quedó registrado. Si necesitas algo más, llama al 0424-4359435."
+# Al aceptar por 3.er intento (imagen no clara): siempre se acepta y se indica que si no está clara los contactaremos.
+MENSAJE_RECIBIDO_TERCER_INTENTO = (
+    "Gracias. Hemos registrado tu reporte (cédula {cedula}). "
+    "Si no tenemos clara la imagen, te contactaremos. Para otras consultas: 0424-4359435."
+)
 OBSERVACION_NO_CONFIRMA = "No confirma identidad"
 # Cuando piden algo que no es reportar pago (información, hablar con alguien, etc.), se les indica que llamen.
 MENSAJE_OTRA_INFORMACION = (
@@ -474,6 +483,7 @@ class WhatsAppService:
             aceptable = imagen_suficientemente_clara(image_bytes)
             mensaje_ia = MENSAJE_RECIBIDO.format(cedula=conv.cedula or "N/A") if aceptable else MENSAJE_FOTO_POCO_CLARA.format(n=conv.intento_foto)
         aceptar = aceptable or conv.intento_foto >= 3
+        aceptado_por_tercer_intento = aceptar and not aceptable  # True cuando aceptamos solo por ser 3.er intento
         if not aceptar:
             logger.info(
                 "Imagen no digitalizada: IA no aceptó, intento %d/3 (no_digitaliza=photo_retry); respuesta: %s",
@@ -564,6 +574,11 @@ class WhatsAppService:
         conv.observacion = None
         conv.updated_at = datetime.utcnow()
         db.commit()
-        # Respuesta al usuario: agradecimiento (mensaje IA si aceptable; si aceptamos por 3er intento, mensaje fijo)
-        response_text = mensaje_ia if aceptable else MENSAJE_RECIBIDO.format(cedula=cedula_guardada or "N/A")
+        # Respuesta al usuario: si la imagen fue aceptada por IA/claridad → mensaje_ia; si aceptamos por 3.er intento → indicar que si no está clara los contactaremos
+        if aceptable:
+            response_text = mensaje_ia
+        elif aceptado_por_tercer_intento:
+            response_text = MENSAJE_RECIBIDO_TERCER_INTENTO.format(cedula=cedula_guardada or "N/A")
+        else:
+            response_text = MENSAJE_RECIBIDO.format(cedula=cedula_guardada or "N/A")
         return {"status": "image_saved", "pagos_whatsapp_id": row_pw.id, "cedula_cliente": cedula_guardada, "response_text": response_text}
