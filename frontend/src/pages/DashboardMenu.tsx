@@ -42,6 +42,7 @@ import type {
   ComposicionMorosidadResponse,
   CobranzasSemanalesResponse,
   MorosidadPorAnalistaItem,
+  PrestamosPorModeloResponse,
 } from '../types/dashboard'
 import { DashboardFiltrosPanel } from '../components/dashboard/DashboardFiltrosPanel'
 import { KpiCardLarge } from '../components/dashboard/KpiCardLarge'
@@ -211,6 +212,24 @@ export function DashboardMenu() {
     enabled: true,
     retry: 1, // âœ… Permitir 1 reintento para errores de red
     retryDelay: 2000, // Esperar 2 segundos antes de reintentar
+  })
+
+  const { data: datosPrestamosPorModelo, isLoading: loadingPrestamosPorModelo } = useQuery({
+    queryKey: ['prestamos-por-modelo', periodoRangos, JSON.stringify(filtros)],
+    queryFn: async (): Promise<PrestamosPorModeloResponse> => {
+      const params = construirFiltrosObject(periodoRangos)
+      const queryParams = new URLSearchParams()
+      Object.entries(params).forEach(([key, value]) => {
+        if (value) queryParams.append(key, value.toString())
+      })
+      const response = await apiClient.get(
+        `/api/v1/dashboard/prestamos-por-modelo?${queryParams.toString()}`
+      )
+      return response as PrestamosPorModeloResponse
+    },
+    staleTime: 4 * 60 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    enabled: true,
   })
 
   const periodoComposicionMorosidad = getPeriodoGrafico('composicion-morosidad')
@@ -813,11 +832,84 @@ export function DashboardMenu() {
               </Card>
             </motion.div>
 
+          {/* Préstamos aprobados por modelo de vehículo (pastel %) */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.42 }}
+            className="h-full"
+          >
+            <Card className="shadow-lg border border-gray-200/90 rounded-xl overflow-hidden bg-white h-full flex flex-col">
+              <CardHeader className="bg-gradient-to-r from-violet-50/90 to-purple-50/90 border-b border-gray-200/80 pb-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
+                    <PieChart className="h-5 w-5 text-violet-600" />
+                    <span>Préstamos aprobados por modelo de vehículo</span>
+                  </CardTitle>
+                  <div className="flex items-center gap-2">
+                    <SelectorPeriodoGrafico chartId="rangos" />
+                    <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
+                      {getRangoFechasLabelGrafico('rangos')}
+                    </Badge>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-600 mt-1">Distribución en porcentaje (acumulado)</p>
+              </CardHeader>
+              <CardContent className="p-6 flex-1">
+                {loadingPrestamosPorModelo ? (
+                  <div className="flex items-center justify-center py-16 text-gray-500">Cargando...</div>
+                ) : datosPrestamosPorModelo?.acumulado?.length ? (
+                  (() => {
+                    const acumulado = datosPrestamosPorModelo.acumulado
+                    const total = acumulado.reduce((s, d) => s + d.cantidad_acumulada, 0)
+                    const PIE_COLORS = ['#6366f1', '#8b5cf6', '#a855f7', '#c084fc', '#d8b4fe', '#7c3aed', '#5b21b6', '#4c1d95', '#6d28d9', '#3730a3']
+                    const dataPie = acumulado.map((d, i) => ({
+                      name: d.modelo || 'Sin modelo',
+                      value: d.cantidad_acumulada,
+                      porcentaje: total > 0 ? (d.cantidad_acumulada / total) * 100 : 0,
+                      fill: PIE_COLORS[i % PIE_COLORS.length],
+                    }))
+                    return (
+                      <ResponsiveContainer width="100%" height={450}>
+                        <RechartsPieChart margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
+                          <Pie
+                            data={dataPie}
+                            dataKey="value"
+                            nameKey="name"
+                            cx="50%"
+                            cy="50%"
+                            outerRadius="70%"
+                            label={({ name, porcentaje }) => `${name}: ${porcentaje.toFixed(1)}%`}
+                            labelLine={{ stroke: '#64748b', strokeWidth: 1 }}
+                          >
+                            {dataPie.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.fill} stroke="#fff" strokeWidth={1.5} />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            contentStyle={chartTooltipStyle.contentStyle}
+                            labelStyle={chartTooltipStyle.labelStyle}
+                            formatter={(value: number, name: string, props: { payload?: { porcentaje: number } }) => [
+                              `${value.toLocaleString('es-EC')} préstamos (${(props.payload?.porcentaje ?? 0).toFixed(1)}%)`,
+                              name,
+                            ]}
+                          />
+                          <Legend {...chartLegendStyle} formatter={(value, entry) => `${value} (${(entry.payload as { porcentaje?: number })?.porcentaje?.toFixed(1) ?? '0'}%)`} />
+                        </RechartsPieChart>
+                      </ResponsiveContainer>
+                    )
+                  })()
+                ) : (
+                  <div className="flex items-center justify-center py-16 text-gray-500">No hay datos para mostrar</div>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
         </div>
 
         {/* GRÁFICOS DE MOROSIDAD */}
-        <div className="grid grid-cols-1 gap-6">
-          {/* Composición de Morosidad */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Composición de Morosidad (monto en USD) */}
           <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -829,7 +921,7 @@ export function DashboardMenu() {
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
                       <BarChart3 className="h-5 w-5 text-red-600" />
-                      <span>Composición de Morosidad</span>
+                      <span>Composición de Morosidad (USD)</span>
                     </CardTitle>
                     <div className="flex items-center gap-2">
                       <SelectorPeriodoGrafico chartId="composicion-morosidad" />
@@ -847,10 +939,10 @@ export function DashboardMenu() {
                         <BarChart data={filteredData} margin={{ top: 12, right: 24, left: 12, bottom: 12 }}>
                           <CartesianGrid {...chartCartesianGrid} />
                           <XAxis dataKey="categoria" tick={chartAxisTick} />
-                          <YAxis tick={chartAxisTick} />
-                          <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} />
+                          <YAxis tick={chartAxisTick} tickFormatter={(v) => (v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`)} label={{ value: 'Monto (USD)', angle: -90, position: 'insideLeft', style: { fill: '#374151', fontSize: 12 } }} />
+                          <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [typeof value === 'number' ? `$${value.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : value, 'Monto (USD)']} />
                           <Legend {...chartLegendStyle} />
-                          <Bar dataKey="monto" fill="#ef4444" name="Monto en Morosidad" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="monto" fill="#ef4444" name="Monto en Morosidad (USD)" radius={[4, 4, 0, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
                     )}
@@ -862,6 +954,51 @@ export function DashboardMenu() {
               </Card>
             </motion.div>
 
+          {/* Cantidad de préstamos en mora por rango de días */}
+          <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.82 }}
+              className="h-full"
+            >
+              <Card className="shadow-lg border border-gray-200/90 rounded-xl overflow-hidden bg-white h-full flex flex-col">
+                <CardHeader className="bg-gradient-to-r from-rose-50/90 to-red-50/90 border-b border-gray-200/80 pb-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
+                      <BarChart3 className="h-5 w-5 text-rose-600" />
+                      <span>Cantidad de préstamos en mora</span>
+                    </CardTitle>
+                    <div className="flex items-center gap-2">
+                      <SelectorPeriodoGrafico chartId="composicion-morosidad" />
+                      <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
+                        {getRangoFechasLabelGrafico('composicion-morosidad')}
+                      </Badge>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-600 mt-1">Por rango de días de atraso (1-30, 31-60, 61-90, 90+ días)</p>
+                </CardHeader>
+                <CardContent className="p-6 flex-1">
+                  {datosComposicionMorosidad?.puntos?.length ? (
+                  <ChartWithDateRangeSlider data={datosComposicionMorosidad.puntos} dataKey="categoria" chartHeight={400}>
+                    {(filteredData) => (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={filteredData} margin={{ top: 12, right: 24, left: 12, bottom: 12 }}>
+                          <CartesianGrid {...chartCartesianGrid} />
+                          <XAxis dataKey="categoria" tick={chartAxisTick} />
+                          <YAxis tick={chartAxisTick} allowDecimals={false} label={{ value: 'Cantidad de préstamos', angle: -90, position: 'insideLeft', style: { fill: '#374151', fontSize: 12 } }} />
+                          <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [typeof value === 'number' ? value.toLocaleString('es-EC') : value, 'Préstamos']} />
+                          <Legend {...chartLegendStyle} />
+                          <Bar dataKey="cantidad_prestamos" fill="#be123c" name="Cantidad de préstamos" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                  </ChartWithDateRangeSlider>
+                  ) : (
+                    <div className="flex items-center justify-center py-16 text-gray-500">No hay datos para mostrar</div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
         </div>
 
         {/* Morosidad por Analista: 1 gráfico por fila, bloques independientes */}
