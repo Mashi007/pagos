@@ -816,7 +816,7 @@ export function DashboardMenu() {
         </div>
 
         {/* GRÁFICOS DE MOROSIDAD */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 gap-6">
           {/* Composición de Morosidad */}
           <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -862,19 +862,23 @@ export function DashboardMenu() {
               </Card>
             </motion.div>
 
-          {/* Morosidad por Analista - Red tela de araña: cuotas vencidas y dólares vencidos por analista */}
+        </div>
+
+        {/* Morosidad por Analista: 1 gráfico por fila, bloques independientes */}
+        <div className="flex flex-col gap-6 mt-6">
+          {/* Fila 1: solo Cuotas vencidas por analista (radar) */}
           <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.9 }}
-              className="h-full lg:col-span-2"
+              className="w-full"
             >
-              <Card className="shadow-lg border border-gray-200/90 rounded-xl overflow-hidden bg-white h-full flex flex-col">
+              <Card className="shadow-lg border border-gray-200/90 rounded-xl overflow-hidden bg-white w-full">
                 <CardHeader className="bg-gradient-to-r from-orange-50/90 to-amber-50/90 border-b border-gray-200/80 pb-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
                       <Users className="h-5 w-5 text-orange-600" />
-                      <span>Morosidad por Analista</span>
+                      <span>Morosidad por Analista — Cuotas vencidas</span>
                     </CardTitle>
                     <div className="flex items-center gap-2">
                       <SelectorPeriodoGrafico chartId="morosidad-analista" />
@@ -884,41 +888,70 @@ export function DashboardMenu() {
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent className="p-6 flex-1">
+                <CardContent className="p-6">
                   {loadingMorosidadAnalista ? (
                     <div className="flex items-center justify-center py-16 text-gray-500">Cargando...</div>
                   ) : datosMorosidadAnalista && datosMorosidadAnalista.length > 0 ? (
-                    <div className="flex flex-col gap-8">
-                      {/* Fila 1: Cuotas vencidas por analista (ancho completo) */}
-                      <div className="w-full">
-                        <h4 className="text-sm font-semibold text-gray-700 mb-3 text-center">Cuotas vencidas por analista</h4>
-                        <ResponsiveContainer width="100%" height={340}>
-                          <RadarChart data={datosMorosidadAnalista} margin={{ top: 16, right: 24, left: 24, bottom: 16 }}>
-                            <PolarGrid stroke="#e5e7eb" />
-                            <PolarAngleAxis dataKey="analista" tick={{ fontSize: 11 }} />
-                            <PolarRadiusAxis angle={90} tick={{ fontSize: 10 }} />
-                            <Radar name="Cuotas vencidas" dataKey="cantidad_cuotas_vencidas" stroke="#f97316" fill="#f97316" fillOpacity={0.5} />
-                            <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [value.toLocaleString('es-EC'), 'Cuotas vencidas']} labelFormatter={(label) => `Analista: ${label}`} />
-                            <Legend />
-                          </RadarChart>
-                        </ResponsiveContainer>
-                      </div>
-                      {/* Fila 2: Dólares vencidos por analista (ancho completo) */}
-                      <div className="w-full">
-                        <h4 className="text-sm font-semibold text-gray-700 mb-3 text-center">Dólares vencidos por analista</h4>
-                        <p className="text-xs text-gray-500 mb-2 text-center">Suma de monto_cuota de cuotas vencidas (hoy &gt; fecha_vencimiento, sin pagar) por analista</p>
-                        <ResponsiveContainer width="100%" height={Math.max(340, Math.min(500, datosMorosidadAnalista.length * 24))}>
-                          <BarChart data={datosMorosidadAnalista} layout="vertical" margin={{ top: 8, right: 24, left: 140, bottom: 8 }}>
-                            <CartesianGrid {...chartCartesianGrid} />
-                            <XAxis type="number" tickFormatter={(v) => `$${v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v}`} tick={chartAxisTick} />
-                            <YAxis type="category" dataKey="analista" width={130} tick={{ fontSize: 11 }} interval={0} />
-                            <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [formatCurrency(value), 'Dólares vencidos']} labelFormatter={(label) => `Analista: ${label}`} cursor={{ fill: 'rgba(234, 88, 12, 0.08)' }} />
-                            <Legend />
-                            <Bar dataKey="monto_vencido" name="Dólares vencidos" fill="#ea580c" radius={[0, 4, 4, 0]} maxBarSize={32} />
-                          </BarChart>
-                        </ResponsiveContainer>
-                      </div>
+                    <>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-3 text-center">Cuotas vencidas por analista</h4>
+                      <ResponsiveContainer width="100%" height={340}>
+                        <RadarChart data={datosMorosidadAnalista} margin={{ top: 16, right: 24, left: 24, bottom: 16 }}>
+                          <PolarGrid stroke="#e5e7eb" />
+                          <PolarAngleAxis dataKey="analista" tick={{ fontSize: 11 }} />
+                          <PolarRadiusAxis angle={90} tick={{ fontSize: 10 }} />
+                          <Radar name="Cuotas vencidas" dataKey="cantidad_cuotas_vencidas" stroke="#f97316" fill="#f97316" fillOpacity={0.5} />
+                          <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [value.toLocaleString('es-EC'), 'Cuotas vencidas']} labelFormatter={(label) => `Analista: ${label}`} />
+                          <Legend />
+                        </RadarChart>
+                      </ResponsiveContainer>
+                    </>
+                  ) : (
+                    <div className="flex items-center justify-center py-16 text-gray-500">No hay datos para mostrar</div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+
+          {/* Fila 2: solo Dólares vencidos por analista (barras) */}
+          <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.95 }}
+              className="w-full"
+            >
+              <Card className="shadow-lg border border-gray-200/90 rounded-xl overflow-hidden bg-white w-full">
+                <CardHeader className="bg-gradient-to-r from-amber-50/90 to-orange-50/90 border-b border-gray-200/80 pb-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
+                      <DollarSign className="h-5 w-5 text-amber-600" />
+                      <span>Morosidad por Analista — Dólares vencidos</span>
+                    </CardTitle>
+                    <div className="flex items-center gap-2">
+                      <SelectorPeriodoGrafico chartId="morosidad-analista" />
+                      <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
+                        {getRangoFechasLabelGrafico('morosidad-analista')}
+                      </Badge>
                     </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-6">
+                  {loadingMorosidadAnalista ? (
+                    <div className="flex items-center justify-center py-16 text-gray-500">Cargando...</div>
+                  ) : datosMorosidadAnalista && datosMorosidadAnalista.length > 0 ? (
+                    <>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-3 text-center">Dólares vencidos por analista</h4>
+                      <p className="text-xs text-gray-500 mb-2 text-center">Suma de monto_cuota de cuotas vencidas (hoy &gt; fecha_vencimiento, sin pagar) por analista</p>
+                      <ResponsiveContainer width="100%" height={Math.max(340, Math.min(500, datosMorosidadAnalista.length * 24))}>
+                        <BarChart data={datosMorosidadAnalista} layout="vertical" margin={{ top: 8, right: 24, left: 140, bottom: 8 }}>
+                          <CartesianGrid {...chartCartesianGrid} />
+                          <XAxis type="number" tickFormatter={(v) => `$${v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v}`} tick={chartAxisTick} />
+                          <YAxis type="category" dataKey="analista" width={130} tick={{ fontSize: 11 }} interval={0} />
+                          <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [formatCurrency(value), 'Dólares vencidos']} labelFormatter={(label) => `Analista: ${label}`} cursor={{ fill: 'rgba(234, 88, 12, 0.08)' }} />
+                          <Legend />
+                          <Bar dataKey="monto_vencido" name="Dólares vencidos" fill="#ea580c" radius={[0, 4, 4, 0]} maxBarSize={32} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </>
                   ) : (
                     <div className="flex items-center justify-center py-16 text-gray-500">No hay datos para mostrar</div>
                   )}

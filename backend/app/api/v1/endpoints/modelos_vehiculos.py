@@ -1,5 +1,5 @@
 """
-Endpoints de modelos de vehículos. Lectura desde BD: distinct Prestamo.modelo.
+Endpoints de modelos de vehículos. Lectura desde BD: distinct Prestamo.modelo_vehiculo.
 Sin tabla modelo_vehiculo: listado y activos desde préstamos; CRUD devuelve 501.
 """
 from datetime import datetime, timezone
@@ -23,13 +23,14 @@ def _modelos_from_db(
     activo: Optional[bool] = None,
     search: Optional[str] = None,
 ) -> tuple[list[dict], int]:
-    """Obtiene lista de modelos (distinct Prestamo.modelo) con id sintético. activo/search se ignoran (todos activos)."""
-    q = select(Prestamo.modelo).where(Prestamo.modelo.isnot(None), Prestamo.modelo != "").distinct()
+    """Obtiene lista de modelos (distinct Prestamo.modelo_vehiculo) con id sintético. activo/search se ignoran (todos activos)."""
+    col = Prestamo.modelo_vehiculo
+    q = select(col).where(col.isnot(None), col != "").distinct()
     if search and search.strip():
-        q = q.where(Prestamo.modelo.ilike(f"%{search.strip()}%"))
+        q = q.where(col.ilike(f"%{search.strip()}%"))
     count_q = select(func.count()).select_from(q.subquery())
     total = db.scalar(count_q) or 0
-    q = q.order_by(Prestamo.modelo).offset(skip)
+    q = q.order_by(col).offset(skip)
     if limit is not None:
         q = q.limit(limit)
     rows = db.execute(q).scalars().all()

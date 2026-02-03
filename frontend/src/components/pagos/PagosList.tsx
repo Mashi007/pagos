@@ -20,6 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/ca
 import { Badge } from '../../components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/tabs'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import { pagoService, type Pago } from '../../services/pagoService'
 import { RegistrarPagoForm } from './RegistrarPagoForm'
 import { CargaMasivaMenu } from './CargaMasivaMenu'
@@ -259,43 +260,52 @@ export function PagosList() {
                   <div className="mb-4 text-sm text-gray-600">
                     Mostrando {data.pagos.length} de {data.total} pagos (Página {data.page} de {data.total_pages})
                   </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b">
-                          <th className="px-4 py-3 text-left">ID</th>
-                          <th className="px-4 py-3 text-left">Cédula</th>
-                          <th className="px-4 py-3 text-left">Estado</th>
-                          <th className="px-4 py-3 text-center">Cuotas Atrasadas</th>
-                          <th className="px-4 py-3 text-left">Monto</th>
-                          <th className="px-4 py-3 text-left">Fecha Pago</th>
-                          <th className="px-4 py-3 text-left">Conciliado</th>
-                          <th className="px-4 py-3 text-left">Acciones</th>
-                        </tr>
-                      </thead>
-                      <tbody>
+                  <div className="border rounded-lg overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>ID</TableHead>
+                          <TableHead>Cédula</TableHead>
+                          <TableHead>Estado</TableHead>
+                          <TableHead className="text-center">Cuotas Atrasadas</TableHead>
+                          <TableHead>Monto</TableHead>
+                          <TableHead>Fecha Pago</TableHead>
+                          <TableHead>Nº Documento</TableHead>
+                          <TableHead>Institución</TableHead>
+                          <TableHead>Conciliado</TableHead>
+                          <TableHead>Notas</TableHead>
+                          <TableHead className="text-right">Acciones</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
                         {data.pagos.map((pago: Pago) => (
-                          <tr key={pago.id} className="border-b hover:bg-gray-50">
-                            <td className="px-4 py-3">{pago.id}</td>
-                            <td className="px-4 py-3">{pago.cedula_cliente}</td>
-                            <td className="px-4 py-3">{getEstadoBadge(pago.estado)}</td>
-                            <td className="px-4 py-3 text-center">
+                          <TableRow key={pago.id}>
+                            <TableCell>{pago.id}</TableCell>
+                            <TableCell>{pago.cedula_cliente}</TableCell>
+                            <TableCell>{getEstadoBadge(pago.estado)}</TableCell>
+                            <TableCell className="text-center">
                               <span className={pago.cuotas_atrasadas && pago.cuotas_atrasadas > 0 ? 'text-red-600 font-semibold' : ''}>
                                 {pago.cuotas_atrasadas ?? 0}
                               </span>
-                            </td>
-                            <td className="px-4 py-3">${typeof pago.monto_pagado === 'number' ? pago.monto_pagado.toFixed(2) : parseFloat(String(pago.monto_pagado || 0)).toFixed(2)}</td>
-                            <td className="px-4 py-3">{new Date(pago.fecha_pago).toLocaleDateString()}</td>
-                            <td className="px-4 py-3">
-                              {/* âœ… Usar verificado_concordancia si existe (columna "SI"/"NO" de BD), sino usar conciliado (boolean) */}
+                            </TableCell>
+                            <TableCell>
+                              ${typeof pago.monto_pagado === 'number' ? pago.monto_pagado.toFixed(2) : parseFloat(String(pago.monto_pagado || 0)).toFixed(2)}
+                            </TableCell>
+                            <TableCell>{new Date(pago.fecha_pago).toLocaleDateString()}</TableCell>
+                            <TableCell>{pago.numero_documento ?? '—'}</TableCell>
+                            <TableCell>{pago.institucion_bancaria ?? '—'}</TableCell>
+                            <TableCell>
                               {(pago.verificado_concordancia === 'SI' || pago.conciliado) ? (
                                 <Badge className="bg-green-500 text-white">SI</Badge>
                               ) : (
                                 <Badge className="bg-gray-500 text-white">NO</Badge>
                               )}
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="flex gap-2">
+                            </TableCell>
+                            <TableCell className="max-w-[180px] truncate" title={pago.notas ?? ''}>
+                              {pago.notas ?? '—'}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-2">
                                 <Button
                                   size="sm"
                                   variant="outline"
@@ -328,11 +338,11 @@ export function PagosList() {
                                   <Trash2 className="w-4 h-4" />
                                 </Button>
                               </div>
-                            </td>
-                          </tr>
+                            </TableCell>
+                          </TableRow>
                         ))}
-                      </tbody>
-                    </table>
+                      </TableBody>
+                    </Table>
                   </div>
                   {/* Paginación */}
                   {data.total_pages > 1 && (

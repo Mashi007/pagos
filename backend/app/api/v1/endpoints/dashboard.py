@@ -91,7 +91,7 @@ def _safe_float(val) -> float:
 
 
 def _rango_y_anterior(fecha_inicio: date, fecha_fin: date):
-    """Dado un rango (inicio, fin), devuelve (inicio_dt, fin_dt, inicio_ant_dt, fin_ant_dt) para filtrar por fecha_creacion.
+    """Dado un rango (inicio, fin), devuelve (inicio_dt, fin_dt, inicio_ant_dt, fin_ant_dt) para filtrar por fecha_registro.
     Período anterior = mismo número de días antes de fecha_inicio.
     """
     from datetime import time as dt_time
@@ -142,7 +142,7 @@ def _compute_kpis_principales(
         # Total préstamos: con rango = count en el rango; sin rango = count total (todos aprobados) para que la tarjeta no quede en 0
         conds = [Prestamo.estado == "APROBADO"]
         if usar_rango:
-            conds.extend([Prestamo.fecha_creacion >= inicio_dt, Prestamo.fecha_creacion <= fin_dt])
+            conds.extend([Prestamo.fecha_registro >= inicio_dt, Prestamo.fecha_registro <= fin_dt])
         if analista:
             conds.append(Prestamo.analista == analista)
         if concesionario:
@@ -156,14 +156,14 @@ def _compute_kpis_principales(
         total_mes_actual = db.scalar(
             select(func.coalesce(func.sum(Prestamo.total_financiamiento), 0)).select_from(Prestamo).where(and_(
                 Prestamo.estado == "APROBADO",
-                Prestamo.fecha_creacion >= inicio_dt,
-                Prestamo.fecha_creacion <= fin_dt,
+                Prestamo.fecha_registro >= inicio_dt,
+                Prestamo.fecha_registro <= fin_dt,
                 *([] if not analista else [Prestamo.analista == analista]),
                 *([] if not concesionario else [Prestamo.concesionario == concesionario]),
                 *([] if not modelo else [Prestamo.modelo == modelo]),
             ))
         ) or 0
-        conds_ant = [Prestamo.estado == "APROBADO", Prestamo.fecha_creacion >= inicio_ant_dt, Prestamo.fecha_creacion <= fin_ant_dt]
+        conds_ant = [Prestamo.estado == "APROBADO", Prestamo.fecha_registro >= inicio_ant_dt, Prestamo.fecha_registro <= fin_ant_dt]
         if analista:
             conds_ant.append(Prestamo.analista == analista)
         if concesionario:
@@ -270,19 +270,8 @@ def _compute_kpis_principales(
             db.rollback()
         except Exception:
             pass
-        return {
-            "total_prestamos": _kpi(0.0, 0.0),
-            "creditos_nuevos_mes": _kpi(0.0, 0.0),
-            "total_clientes": _kpi(0.0, 0.0),
-            "clientes_por_estado": {
-                "activos": _kpi(0.0, 0.0),
-                "inactivos": _kpi(0.0, 0.0),
-                "finalizados": _kpi(0.0, 0.0),
-            },
-            "total_morosidad_usd": _kpi(0.0, 0.0),
-            "cuotas_programadas": {"valor_actual": 0.0},
-            "porcentaje_cuotas_pagadas": 0.0,
-        }
+        # Re-lanzar para que el endpoint devuelva 500 y no cachee ceros
+        raise
 
 
 @router.get("/kpis-principales")
@@ -584,7 +573,7 @@ def get_financiamiento_tendencia_mensual(
             ultimo_dia = _ultimo_dia_del_mes(fin_mes.replace(tzinfo=timezone.utc) if fin_mes.tzinfo is None else fin_mes)
             cartera = db.scalar(
                 select(func.coalesce(func.sum(Prestamo.total_financiamiento), 0)).select_from(Prestamo).where(
-                    Prestamo.fecha_creacion <= ultimo_dia,
+                    Prestamo.fecha_registro <= ultimo_dia,
                     Prestamo.estado == "APROBADO",
                 )
             ) or 0
@@ -770,7 +759,7 @@ def get_prestamos_por_concesionario(
         inicio, fin = _parse_fechas_concesionario(fecha_inicio, fecha_fin)
         # Mes como YYYY-MM para agrupar
         mes_expr = func.to_char(
-            func.date_trunc("month", Prestamo.fecha_creacion),
+            func.date_trunc("month", Prestamo.fecha_registro),
             "YYYY-MM",
         )
         concesionario_label = func.coalesce(Prestamo.concesionario, "Sin concesionario").label("concesionario")
@@ -785,8 +774,8 @@ def get_prestamos_por_concesionario(
             .select_from(Prestamo)
             .where(
                 Prestamo.estado == "APROBADO",
-                func.date(Prestamo.fecha_creacion) >= inicio,
-                func.date(Prestamo.fecha_creacion) <= fin,
+                func.date(Prestamo.fecha_registro) >= inicio,
+                func.date(Prestamo.fecha_registro) <= fin,
             )
             .group_by(mes_expr, Prestamo.concesionario)
             .order_by(mes_expr, func.count().desc())
@@ -833,7 +822,7 @@ def get_prestamos_por_modelo(
     try:
         inicio, fin = _parse_fechas_concesionario(fecha_inicio, fecha_fin)
         mes_expr = func.to_char(
-            func.date_trunc("month", Prestamo.fecha_creacion),
+            func.date_trunc("month", Prestamo.fecha_registro),
             "YYYY-MM",
         )
         modelo_label = func.coalesce(Prestamo.modelo, "Sin modelo").label("modelo")
@@ -848,8 +837,8 @@ def get_prestamos_por_modelo(
             .select_from(Prestamo)
             .where(
                 Prestamo.estado == "APROBADO",
-                func.date(Prestamo.fecha_creacion) >= inicio,
-                func.date(Prestamo.fecha_creacion) <= fin,
+                func.date(Prestamo.fecha_registro) >= inicio,
+                func.date(Prestamo.fecha_registro) <= fin,
             )
             .group_by(mes_expr, Prestamo.modelo)
             .order_by(mes_expr, func.count().desc())
