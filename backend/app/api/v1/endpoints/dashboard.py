@@ -1139,10 +1139,12 @@ def _compute_morosidad_por_analista(
 ) -> dict:
     """
     Calcula morosidad por analista (usado por endpoint y por refresh de caché).
+    Siempre considera todas las cuotas vencidas y no pagadas a la fecha (fecha_vencimiento < hoy).
+    No se filtra por rango de fechas: el gráfico muestra la morosidad actual por analista.
 
     CAMPOS / TABLAS DE ORIGEN:
     - Tabla CUOTA (cuotas): id, cliente_id, monto (columna BD: monto_cuota), fecha_pago, fecha_vencimiento.
-      Cuota "vencida" = fecha_pago IS NULL y fecha_vencimiento en rango (o < hoy si no hay rango).
+      Cuota "vencida" = fecha_pago IS NULL y fecha_vencimiento < hoy.
     - Tabla PRESTAMO (prestamos): cliente_id, analista, estado, fecha_creacion (fecha_registro).
       Se usa el préstamo APROBADO más reciente por cliente (orden fecha_creacion DESC) para asignar analista.
     - Salida: por cada analista (o "Sin analista" si el cliente no tiene préstamo con analista):
@@ -1150,19 +1152,8 @@ def _compute_morosidad_por_analista(
     """
     try:
         hoy = date.today()
-        # Si hay rango de fechas, filtrar cuotas con vencimiento en ese rango y no pagadas
-        if fecha_inicio and fecha_fin:
-            try:
-                inicio = date.fromisoformat(fecha_inicio)
-                fin = date.fromisoformat(fecha_fin)
-                cond_vencimiento = and_(
-                    Cuota.fecha_vencimiento >= inicio,
-                    Cuota.fecha_vencimiento <= fin,
-                )
-            except ValueError:
-                cond_vencimiento = Cuota.fecha_vencimiento < hoy
-        else:
-            cond_vencimiento = Cuota.fecha_vencimiento < hoy
+        # Siempre morosidad actual: cuotas vencidas y no pagadas (sin filtrar por rango de fechas)
+        cond_vencimiento = Cuota.fecha_vencimiento < hoy
 
         cuotas_vencidas = db.execute(
             select(Cuota.id, Cuota.cliente_id, Cuota.monto).select_from(Cuota).where(
