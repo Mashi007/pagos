@@ -146,11 +146,11 @@ En **Configuración → Informe pagos** (`/pagos/configuracion?tab=informe-pagos
 **En Google Cloud Console (antes):**
 
 1. **APIs y servicios → Credenciales → Crear credenciales → ID de cliente de OAuth** (tipo "Aplicación web").
-2. En **URIs de redirección autorizados** añade exactamente esta URL (usando la URL base de tu backend):
-   - Si el backend es `https://rapicredit.onrender.com`:  
+2. En **URIs de redirección autorizados** añade **exactamente** la URL que usa el backend (sin barra final). Si no tienes `BACKEND_PUBLIC_URL` en el servidor, el backend usa por defecto:
+   - **`https://pagos-f2qf.onrender.com/api/v1/configuracion/informe-pagos/google/callback`**
+   - Si en Render tienes `BACKEND_PUBLIC_URL=https://rapicredit.onrender.com`, entonces usa:  
      `https://rapicredit.onrender.com/api/v1/configuracion/informe-pagos/google/callback`
-   - Si usas otro dominio (ej. `https://pagos-xxx.onrender.com`):  
-     `https://pagos-xxx.onrender.com/api/v1/configuracion/informe-pagos/google/callback`
+   - Si Google muestra "redirect_uri_mismatch", la URI que envía la app **no** está en esta lista: entra en tu cliente OAuth → **URIs de redirección autorizados** y añade la URL exacta que aparece en el mensaje de error (o la de arriba según tu backend).
 3. Copia el **Client ID** y el **Client secret** del cliente OAuth.
 
 **Qué llenar en la página:**

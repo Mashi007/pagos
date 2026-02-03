@@ -85,8 +85,9 @@ MENSAJE_OTRA_INFORMACION = (
     "Para otras consultas te atendemos por teléfono. Llama al 0424-4359435 y un asistente te atenderá."
 )
 
-# Si la conversación lleva más de esta cantidad de horas sin actividad, se trata como nuevo caso (bienvenida de nuevo).
-HORAS_INACTIVIDAD_NUEVO_CASO = 24
+# Si la conversación lleva más de esta cantidad de horas sin actividad, se trata como nuevo caso (pedir cédula de nuevo).
+# 0.5 = 30 min: el mismo número puede reportar muchas veces; cada vez que vuelva después de 30 min se pide cédula otra vez.
+HORAS_INACTIVIDAD_NUEVO_CASO = 0.5
 
 
 def _conversacion_obsoleta(conv: ConversacionCobranza, horas: int = HORAS_INACTIVIDAD_NUEVO_CASO) -> bool:
@@ -342,7 +343,8 @@ class WhatsAppService:
             if not _validar_cedula_evj(text):
                 if _pide_otra_informacion(text):
                     return {"status": "otra_informacion", "response_text": MENSAJE_OTRA_INFORMACION}
-                return {"status": "cedula_invalida", "response_text": MENSAJE_CEDULA_INVALIDA}
+                # Siempre mostrar bienvenida/instrucción cuando aún no han dado cédula válida (flujo debe pedir cédula claro)
+                return {"status": "cedula_invalida", "response_text": MENSAJE_BIENVENIDA}
             cedula = _cedula_normalizada(text)
             nombre_cliente = _buscar_nombre_cliente_por_cedula(db, cedula)
             conv.cedula = cedula
