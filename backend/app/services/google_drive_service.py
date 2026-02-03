@@ -8,6 +8,9 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+LOG_TAG_INFORME = "[INFORME_PAGOS]"
+LOG_TAG_FALLO = "[INFORME_PAGOS] FALLO"
+
 DRIVE_SCOPE = ["https://www.googleapis.com/auth/drive.file"]
 
 
@@ -27,7 +30,7 @@ def upload_image_and_get_link(
     folder_id = get_google_drive_folder_id()
     credentials = get_google_credentials(DRIVE_SCOPE)
     if not folder_id or not credentials:
-        logger.warning("Google Drive no configurado (folder_id o credentials/OAuth). Configura en Configuración > Informe pagos.")
+        logger.warning("%s %s | Drive no configurado (folder_id o credenciales/OAuth).", LOG_TAG_FALLO, "drive")
         return None
     try:
         from googleapiclient.discovery import build
@@ -51,5 +54,5 @@ def upload_image_and_get_link(
             return link
         return f"https://drive.google.com/file/d/{file_id}/view"
     except Exception as e:
-        logger.exception("Error subiendo imagen a Google Drive: %s", e)
+        logger.exception("%s %s | Drive upload error: %s", LOG_TAG_FALLO, "drive", e)
         return None

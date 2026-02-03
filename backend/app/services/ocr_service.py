@@ -26,6 +26,10 @@ from typing import Dict, Any, List, Optional
 
 logger = logging.getLogger(__name__)
 
+# Mismo prefijo que whatsapp_service para buscar en Render: "INFORME_PAGOS" o "INFORME_PAGOS FALLO".
+LOG_TAG_INFORME = "[INFORME_PAGOS]"
+LOG_TAG_FALLO = "[INFORME_PAGOS] FALLO"
+
 NA = "NA"
 
 MIN_CARACTERES_PARA_CLARA = 50  # Si el OCR detecta al menos esto, se considera imagen "suficientemente clara" (bajado de 80 para papeletas legibles)
@@ -55,7 +59,7 @@ def _vision_full_text(image_bytes: bytes) -> str:
     """Ejecuta Vision document_text_detection (documentos densos: manuscrito, impreso o mixto) y devuelve el texto completo; vacío si falla o sin credenciales."""
     client = _get_vision_client()
     if not client:
-        logger.warning("Claridad de imagen no comprobada: credenciales Google (Vision) no configuradas; se tratará como no clara.")
+        logger.warning("%s Vision no configurado (get_full_text); se tratará como no clara.", LOG_TAG_INFORME)
         return ""
     try:
         from google.cloud import vision
@@ -66,7 +70,7 @@ def _vision_full_text(image_bytes: bytes) -> str:
         doc = response.full_text_annotation
         return (doc.text if doc else "") or ""
     except Exception as e:
-        logger.debug("Vision full_text: %s", e)
+        logger.debug("%s Vision full_text exception: %s", LOG_TAG_INFORME, e)
         return ""
 
 
@@ -84,8 +88,7 @@ def imagen_suficientemente_clara(image_bytes: bytes, min_chars: int = MIN_CARACT
         return False
     full_text = _vision_full_text(image_bytes)
     num_chars = len(full_text.strip())
-    # Log para ajustar umbral: si no hay credenciales Google, full_text viene vacío y siempre "no clara"
-    logger.debug("Claridad imagen: Vision devolvió %d caracteres (mínimo %d); clara=%s", num_chars, min_chars, num_chars >= min_chars)
+    logger.debug("%s Claridad imagen: Vision %d caracteres (mín %d); clara=%s", LOG_TAG_INFORME, num_chars, min_chars, num_chars >= min_chars)
     return num_chars >= min_chars
 
 
@@ -123,8 +126,8 @@ def extract_from_image(image_bytes: bytes) -> Dict[str, str]:
     client = _get_vision_client()
     if not client:
         logger.warning(
-            "OCR: credenciales Google (Vision) no configuradas. Revisa Configuración > Informe pagos: "
-            "cuenta de servicio JSON o 'Conectar con Google' (OAuth). Todos los campos se devuelven como NA."
+            "%s %s | credenciales Vision no configuradas; todos los campos NA.",
+            LOG_TAG_FALLO, "ocr",
         )
         return {**base_na, "humano": ""}
     try:
@@ -134,13 +137,13 @@ def extract_from_image(image_bytes: bytes) -> Dict[str, str]:
         response = client.document_text_detection(image=image)
         if response.error.message:
             logger.warning(
-                "OCR: Vision API devolvió error. Revisa que Vision API esté habilitada y con facturación en Google Cloud. Error: %s",
-                response.error.message,
+                "%s %s | Vision API error (habilitar/facturación GCP): %s",
+                LOG_TAG_FALLO, "ocr", response.error.message,
             )
             return {**base_na, "humano": ""}
         doc = response.full_text_annotation
         if _requiere_revision_humana_from_doc(doc):
-            logger.info("OCR: >80%% texto baja confianza → HUMANO; no se inventan datos.")
+            logger.info("%s OCR >80%% baja confianza → HUMANO (no inventar datos).", LOG_TAG_INFORME)
             return {**base_na, "humano": VALOR_HUMANO}
         full_text = (doc.text if doc else "") or ""
         keywords_doc = get_ocr_keywords_numero_documento()
@@ -148,7 +151,7 @@ def extract_from_image(image_bytes: bytes) -> Dict[str, str]:
         result["humano"] = ""
         return result
     except Exception as e:
-        logger.exception("Error en OCR: %s", e)
+        logger.exception("%s %s | extract_from_image exception: %s", LOG_TAG_FALLO, "ocr", e)
         return {**base_na, "humano": ""}
 
 

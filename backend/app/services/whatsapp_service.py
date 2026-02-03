@@ -20,6 +20,10 @@ from app.models.mensaje_whatsapp import MensajeWhatsapp
 
 logger = logging.getLogger(__name__)
 
+# Prefijo único para buscar en logs (Render): "INFORME_PAGOS" = flujo imagen; "INFORME_PAGOS FALLO" = solo errores.
+LOG_TAG_INFORME = "[INFORME_PAGOS]"
+LOG_TAG_FALLO = "[INFORME_PAGOS] FALLO"
+
 
 def _telefono_normalizado(phone: str) -> str:
     """Teléfono solo dígitos para guardar/consultar historial."""
@@ -329,7 +333,11 @@ class WhatsAppService:
                     message_data["contact_name"] = contact.profile.get("name")
             return {"success": True, "message_id": message.id, "data": message_data}
         except Exception as e:
-            self.logger.error("Error procesando mensaje WhatsApp: %s", str(e), exc_info=True)
+            self.logger.error(
+                "%s %s | excepción no capturada: %s",
+                LOG_TAG_FALLO, "mensaje_whatsapp", str(e),
+                exc_info=True,
+            )
             # Si fue imagen, enviar al menos un mensaje al usuario para no dejar el bot "desconectado"
             if (message.type == "image" or (message.type == "document" and message.document)) and message.from_:
                 try:
@@ -424,41 +432,37 @@ class WhatsAppService:
     async def _process_image_message(self, message: WhatsAppMessage, db: Session, media_id: Optional[str] = None) -> Dict[str, Any]:
         """Descarga imagen (por message.image.id o media_id si es documento tipo imagen); si hay conversación en esperando_foto: intento 1/2 → pedir de nuevo, 3 → Drive + pagos_whatsapp + OCR + digitalizar."""
         media_id = media_id or (message.image and message.image.id)
-        if not media_id:
-            logger.info("Imagen no digitalizada: falta ID de media (no_digitaliza=image_no_id)")
-            return {"status": "image_no_id", "note": "Falta ID de media", "response_text": MENSAJE_ENVIA_FOTO}
         phone = "".join(c for c in message.from_ if c.isdigit())
         if len(phone) < 10:
             phone = message.from_
+        phone_mask = (phone[:6] + "***") if len(phone) >= 6 else "***"
+        if not media_id:
+            logger.warning("%s %s | status=image_no_id note=Falta ID de media telefono=%s", LOG_TAG_FALLO, "no_digitaliza", phone_mask)
+            return {"status": "image_no_id", "note": "Falta ID de media", "response_text": MENSAJE_ENVIA_FOTO}
         conv = db.execute(select(ConversacionCobranza).where(ConversacionCobranza.telefono == phone)).scalar_one_or_none()
         if not conv:
-            logger.info("Imagen no digitalizada: no hay conversación para teléfono %s (no_digitaliza=need_cedula)", phone[:6] + "***")
+            logger.info("%s Inicio imagen sin conversación | telefono=%s (no_digitaliza=need_cedula)", LOG_TAG_INFORME, phone_mask)
             return {"status": "need_cedula", "response_text": MENSAJE_BIENVENIDA}
-        # Si lleva mucho tiempo sin actividad, tratar como nuevo caso (pedir cédula de nuevo)
         if _conversacion_obsoleta(conv):
             _reiniciar_como_nuevo_caso(conv, db)
-            logger.info("Imagen no digitalizada: conversación obsoleta, reiniciada (no_digitaliza=need_cedula)")
+            logger.info("%s Conversación obsoleta reiniciada | telefono=%s (no_digitaliza=need_cedula)", LOG_TAG_INFORME, phone_mask)
             return {"status": "need_cedula", "response_text": MENSAJE_BIENVENIDA}
-        # Protocolo: no volver a pedir cédula si ya la dio. Si está en confirmación, pedir Sí/No primero; luego foto.
         if conv.estado == "esperando_cedula":
-            logger.info("Imagen no digitalizada: estado=esperando_cedula (no_digitaliza=need_cedula)")
+            logger.info("%s Imagen rechazada estado=esperando_cedula | telefono=%s (no_digitaliza=need_cedula)", LOG_TAG_INFORME, phone_mask)
             return {"status": "need_cedula", "response_text": MENSAJE_BIENVENIDA}
         if conv.estado == "esperando_confirmacion":
-            nombre = conv.nombre_cliente or conv.cedula or "el titular"
-            logger.info("Imagen no digitalizada: estado=esperando_confirmacion, pedir Sí/No primero (no_digitaliza=primero_confirmar)")
+            logger.info("%s Imagen rechazada estado=esperando_confirmacion | telefono=%s (no_digitaliza=primero_confirmar)", LOG_TAG_INFORME, phone_mask)
             return {"status": "primero_confirmar", "response_text": MENSAJE_PRIMERO_CONFIRMA_LUEGO_FOTO}
         if conv.estado != "esperando_foto" or not conv.cedula:
-            logger.info("Imagen no digitalizada: estado=%s o sin cédula (no_digitaliza=need_cedula)", conv.estado or "?")
+            logger.info("%s Imagen rechazada estado=%s sin cedula | telefono=%s (no_digitaliza=need_cedula)", LOG_TAG_INFORME, conv.estado or "?", phone_mask)
             return {"status": "need_cedula", "response_text": MENSAJE_BIENVENIDA}
+        logger.info("%s Inicio procesamiento imagen | telefono=%s media_id=%s cedula=%s intento_foto=%s", LOG_TAG_INFORME, phone_mask, media_id, conv.cedula, conv.intento_foto or 0)
         whatsapp_sync_from_db()
         cfg = get_whatsapp_config()
         token = (cfg.get("access_token") or "").strip()
         api_url = (cfg.get("api_url") or "https://graph.facebook.com/v18.0").rstrip("/")
         if not token:
-            logger.warning(
-                "Imagen no digitalizada: Access token WhatsApp no configurado (no_digitaliza=image_skipped). "
-                "Usuario ve 'No pudimos procesar tu imagen'; nada en Drive."
-            )
+            logger.warning("%s %s | status=image_skipped note=Token WhatsApp no configurado telefono=%s", LOG_TAG_FALLO, "no_digitaliza", phone_mask)
             return {"status": "image_skipped", "note": "Token no configurado", "response_text": MENSAJE_IMAGEN_NO_PROCESADA}
         try:
             import httpx
@@ -468,27 +472,19 @@ class WhatsAppService:
                 data = r.json()
                 media_url = data.get("url")
                 if not media_url:
-                    logger.warning(
-                        "Imagen no digitalizada: Meta no devolvió URL del media (no_digitaliza=image_no_url). "
-                        "Usuario ve 'No pudimos procesar'; nada en Drive."
-                    )
+                    logger.warning("%s %s | status=image_no_url note=Meta no devolvió URL telefono=%s", LOG_TAG_FALLO, "no_digitaliza", phone_mask)
                     return {"status": "image_no_url", "note": "Meta no devolvió URL", "response_text": MENSAJE_IMAGEN_NO_PROCESADA}
                 r2 = await client.get(media_url, headers={"Authorization": f"Bearer {token}"})
                 r2.raise_for_status()
                 image_bytes = r2.content
         except Exception as e:
-            logger.exception(
-                "Imagen no digitalizada: error descargando imagen (no_digitaliza=image_error). "
-                "Usuario ve 'No pudimos procesar'; nada en Drive. Error: %s", e
-            )
+            logger.exception("%s %s | status=image_error note=descarga fallida telefono=%s error=%s", LOG_TAG_FALLO, "no_digitaliza", phone_mask, e)
             db.rollback()
             return {"status": "image_error", "note": f"descarga: {e!s}", "response_text": MENSAJE_IMAGEN_NO_PROCESADA}
         if not image_bytes:
-            logger.warning(
-                "Imagen no digitalizada: imagen vacía (no_digitaliza=image_empty). "
-                "Usuario ve 'No pudimos procesar'; nada en Drive."
-            )
+            logger.warning("%s %s | status=image_empty note=Imagen vacía telefono=%s", LOG_TAG_FALLO, "no_digitaliza", phone_mask)
             return {"status": "image_empty", "note": "Imagen vacía", "response_text": MENSAJE_IMAGEN_NO_PROCESADA}
+        logger.info("%s Imagen descargada | telefono=%s bytes=%d", LOG_TAG_INFORME, phone_mask, len(image_bytes) or 0)
         conv.intento_foto = (conv.intento_foto or 0) + 1
         # OCR sobre toda imagen (sin depender del análisis): probar que está activo/configurado y tener datos si aceptamos
         ocr_data_early = {"fecha_deposito": "NA", "nombre_banco": "NA", "numero_deposito": "NA", "numero_documento": "NA", "cantidad": "NA", "humano": ""}
@@ -496,14 +492,15 @@ class WhatsAppService:
             from app.services.ocr_service import extract_from_image
             ocr_data_early = extract_from_image(image_bytes)
             logger.info(
-                "OCR ejecutado (toda imagen): banco=%s, fecha=%s, cantidad=%s, humano=%s",
+                "%s OCR ejecutado | telefono=%s banco=%s fecha=%s cantidad=%s humano=%s",
+                LOG_TAG_INFORME, phone_mask,
                 ocr_data_early.get("nombre_banco") or "NA",
                 ocr_data_early.get("fecha_deposito") or "NA",
                 ocr_data_early.get("cantidad") or "NA",
                 ocr_data_early.get("humano") or "",
             )
         except Exception as e:
-            logger.warning("OCR no aplicado (verificar Vision/config): %s", e)
+            logger.warning("%s OCR extract_from_image falló (Vision/config) | telefono=%s error=%s", LOG_TAG_INFORME, phone_mask, e)
         # Evaluación por IA: texto OCR + prompt corto → aceptable + mensaje conversacional (gracias o pedir otra foto)
         ocr_text = ""
         try:
@@ -524,8 +521,8 @@ class WhatsAppService:
         aceptado_por_tercer_intento = aceptar and not aceptable and conv.intento_foto >= 3  # True solo si aceptamos por ser 3.er intento (no por IA)
         if not aceptar:
             logger.info(
-                "Imagen no digitalizada: IA no aceptó, intento %d/3 (no_digitaliza=photo_retry); respuesta: %s",
-                conv.intento_foto, mensaje_ia[:80],
+                "%s Imagen no aceptada por IA intento %d/3 (no_digitaliza=photo_retry) | telefono=%s",
+                LOG_TAG_INFORME, conv.intento_foto, phone_mask,
             )
             conv.updated_at = datetime.utcnow()
             db.commit()
@@ -534,17 +531,16 @@ class WhatsAppService:
                 "intento_foto": conv.intento_foto,
                 "response_text": mensaje_ia,
             }
-        # Imagen aceptada (IA) o tercer intento: guardar en Drive, pagos_whatsapp, OCR, pagos_informes, Sheet. Si algo falla, igual responder al usuario.
-        logger.info("Digitalizando imagen: cedula=%s intento=%d aceptable=%s", conv.cedula, conv.intento_foto, aceptable)
+        logger.info("%s Digitalizando (Drive+BD+Sheet) | telefono=%s cedula=%s intento=%d aceptable=%s", LOG_TAG_INFORME, phone_mask, conv.cedula, conv.intento_foto, aceptable)
         try:
             link_imagen = None
             try:
                 from app.services.google_drive_service import upload_image_and_get_link
                 link_imagen = upload_image_and_get_link(image_bytes, filename=f"papeleta_{phone}_{datetime.utcnow().strftime('%Y%m%d%H%M')}.jpg")
             except Exception as e:
-                logger.exception("Error subiendo a Drive: %s", e)
+                logger.exception("%s %s | Drive upload exception | telefono=%s error=%s", LOG_TAG_FALLO, "digitalizacion", phone_mask, e)
             if not link_imagen:
-                logger.warning("Drive: subida fallida o no configurada; link_imagen=NA. Revisa OAuth conectado, ID carpeta y que la carpeta esté compartida con la cuenta OAuth.")
+                logger.warning("%s Drive subida fallida o no configurada link_imagen=NA | telefono=%s", LOG_TAG_INFORME, phone_mask)
                 link_imagen = "NA"
             row_pw = PagosWhatsapp(
                 fecha=datetime.utcnow(),
@@ -555,7 +551,7 @@ class WhatsAppService:
             db.add(row_pw)
             db.commit()
             db.refresh(row_pw)
-            logger.info("Imagen guardada pagos_whatsapp id=%s cedula=%s link=%s", row_pw.id, conv.cedula, link_imagen[:50] if link_imagen else "N/A")
+            logger.info("%s pagos_whatsapp guardado | id=%s telefono=%s cedula=%s link=%s", LOG_TAG_INFORME, row_pw.id, phone_mask, conv.cedula, (link_imagen[:50] + "..." if link_imagen and len(link_imagen) > 50 else link_imagen or "NA"))
             # Usar datos OCR ya obtenidos para toda imagen (no volver a llamar Vision)
             periodo = _periodo_envio_actual()
             fecha_dep = ocr_data_early.get("fecha_deposito") or "NA"
@@ -583,17 +579,17 @@ class WhatsAppService:
             db.commit()
             db.refresh(informe)
             logger.info(
-                "Imagen digitalizada: pagos_whatsapp_id=%s pagos_informe_id=%s cedula=%s fecha_dep=%s banco=%s",
-                row_pw.id, informe.id, conv.cedula, fecha_dep, nombre_banco,
+                "%s OK digitalización completa | pagos_whatsapp_id=%s pagos_informe_id=%s telefono=%s cedula=%s banco=%s",
+                LOG_TAG_INFORME, row_pw.id, informe.id, phone_mask, conv.cedula, nombre_banco,
             )
             try:
                 from app.services.google_sheets_informe_service import append_row
-                logger.info("Escribiendo fila en Sheet: cedula=%s link_imagen=%s", conv.cedula, "OK" if link_imagen and link_imagen != "NA" else "NA")
+                logger.info("%s Escribiendo Sheet | telefono=%s cedula=%s", LOG_TAG_INFORME, phone_mask, conv.cedula)
                 sheet_ok = append_row(conv.cedula, fecha_dep, nombre_banco, numero_dep, numero_doc, cantidad, link_imagen, periodo, observacion=observacion_informe, humano=humano_col or "")
                 if not sheet_ok:
-                    logger.warning("Sheets: no se escribió la fila (digitalización en BD OK). Revisa Configuración > Informe pagos: credenciales, ID hoja, y que la hoja esté compartida con la cuenta.")
+                    logger.warning("%s Sheets no escribió fila (BD OK) | telefono=%s cedula=%s", LOG_TAG_INFORME, phone_mask, conv.cedula)
             except Exception as e:
-                logger.exception("Error escribiendo en Sheet (digitalización en BD OK): %s", e)
+                logger.exception("%s %s | Sheet append_row exception | telefono=%s error=%s", LOG_TAG_FALLO, "digitalizacion", phone_mask, e)
             cedula_guardada = conv.cedula
             conv.intento_foto = 0
             conv.estado = "esperando_cedula"
@@ -612,8 +608,8 @@ class WhatsAppService:
             return {"status": "image_saved", "pagos_whatsapp_id": row_pw.id, "cedula_cliente": cedula_guardada, "response_text": response_text}
         except Exception as e:
             logger.exception(
-                "Digitalización fallida (Drive/OCR/BD/Sheet). Usuario ve 'No pudimos procesar'; puede no haber nada en Drive. Error: %s",
-                e,
+                "%s %s | digitalización fallida (Drive/OCR/BD/Sheet) telefono=%s cedula=%s error=%s",
+                LOG_TAG_FALLO, "digitalizacion", phone_mask, conv.cedula, e,
             )
             try:
                 db.rollback()

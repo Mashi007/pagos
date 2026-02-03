@@ -10,6 +10,9 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+LOG_TAG_INFORME = "[INFORME_PAGOS]"
+LOG_TAG_FALLO = "[INFORME_PAGOS] FALLO"
+
 # Nombres de pestaña por periodo (clave interna)
 PERIODOS = {"6am": "6am", "1pm": "1pm", "4h30": "4h30"}
 
@@ -64,7 +67,7 @@ def append_row(
     """
     service, sheet_id = _get_sheets_service()
     if not service or not sheet_id:
-        logger.warning("Google Sheets no configurado (falta ID hoja o credenciales/OAuth). Revisa Configuración > Informe pagos y que la hoja esté compartida con la cuenta OAuth.")
+        logger.warning("%s %s | Sheets no configurado (ID hoja o credenciales/OAuth).", LOG_TAG_FALLO, "sheets")
         return False
     tab_name = PERIODOS.get(periodo_envio) or periodo_envio
     try:
@@ -82,7 +85,7 @@ def append_row(
         ).execute()
         return True
     except Exception as e:
-        logger.exception("Error escribiendo en Google Sheets: %s", e)
+        logger.exception("%s %s | Sheets append error: %s", LOG_TAG_FALLO, "sheets", e)
         return False
 
 
@@ -113,7 +116,7 @@ def ensure_sheet_tab(sheet_id: str, tab_name: str, headers: Optional[List[str]] 
         ).execute()
         return True
     except Exception as e:
-        logger.exception("Error creando pestaña en Sheets: %s", e)
+        logger.exception("%s %s | Sheets ensure_sheet_tab error: %s", LOG_TAG_FALLO, "sheets", e)
         return False
 
 

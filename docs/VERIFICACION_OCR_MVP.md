@@ -158,9 +158,30 @@ Si hay excepción no capturada, en el log aparecerá `Error procesando mensaje W
 ### 5.2 Cómo localizar la causa en Render
 
 1. Servicio en Render → **Logs**.
-2. Buscar en el momento del envío de la foto: `no_digitaliza=`, `Imagen no digitalizada:`, `Digitalización fallida`.
-3. Si el error es de BD (p. ej. columna no existe), ejecutar `migracion_mvp_ocr_todas_columnas.sql`.
+2. **Búsqueda recomendada:** `INFORME_PAGOS` — muestra todo el flujo de imagen (inicio, descarga, OCR, Drive, BD, Sheets). Para solo fallos: `INFORME_PAGOS FALLO` o `FALLO`.
+3. Cada línea incluye `telefono=***` (enmascarado), `status=`, `note=` o `error=` según el caso.
+4. Si el error es de BD (p. ej. columna no existe), ejecutar `migracion_mvp_ocr_todas_columnas.sql`.
 
 ### 5.3 Resumen
 
 **Nada en Drive** + "No pudimos procesar" = el flujo no llegó a subir o falló antes de confirmar. Revisar **logs en el instante del envío** para ver si fue: token, descarga (Meta/red), o Drive/BD/Sheet.
+
+---
+
+## 6. Estado del checklist (según tu verificación)
+
+Con lo que comprobaste en Google, en la app y en Drive, este es el estado de la lista. Marca ✅ lo que ya verificaste; lo que no tenga ✅ sigue pendiente de comprobar si algo falla.
+
+| # | Comprobación | Estado | Nota |
+|---|------------------------------|--------|------|
+| 1 | Credenciales Google (OAuth o cuenta de servicio) | ✅ | OAuth conectado; estado Drive/Sheets/OCR operativos. |
+| 2 | Estado OCR en la app (Verificar ahora) | ✅ | "Conexión correcta. Vision API (OCR) operativa." |
+| 3 | Vision API habilitada en Google Cloud | ✅ | Cloud Vision API → "API habilitada". |
+| 4 | Facturación activa en el proyecto GCP | ✅ | Facturación → "Cuenta pagada" (proyecto cobranzas-485720). |
+| 5 | Proyecto correcto (mismo que Vision/credenciales) | ✅ | Implícito: estado OCR OK y archivos en Drive. |
+| 6 | Columnas BD (pagos_informes, etc.) | ✅ | Migración aplicada; imágenes llegan a Drive y se guardan. |
+| 7 | Token WhatsApp configurado | ✅ | Cuando hay imagen en Drive, la descarga desde Meta funcionó. |
+| 8 | Descarga de imagen desde Meta | ✅ | En los envíos que acaban en Drive, la descarga funciona. |
+| 9 | Flujo real: foto → Drive + BD + Sheets | ✅ | Carpeta Pagos_imagenes con papeleta_*.jpg; flujo operativo. |
+
+**Resumen:** Todo lo de la lista está **destacado (verificado)**. Si en algún envío concreto el usuario sigue viendo "No pudimos procesar" y no aparece archivo en Drive, en ese caso revisar los logs de Render en ese momento (sección 5) para ver la causa puntual (p. ej. timeout o error puntual de Meta).
