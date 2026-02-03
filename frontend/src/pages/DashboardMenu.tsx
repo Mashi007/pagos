@@ -273,6 +273,19 @@ export function DashboardMenu() {
     enabled: true,
   })
 
+  const { data: datosMontoProgramadoSemana, isLoading: loadingMontoProgramadoSemana } = useQuery({
+    queryKey: ['monto-programado-proxima-semana'],
+    queryFn: async () => {
+      const response = await apiClient.get<{ dias: { fecha: string; dia: string; monto_programado: number }[] }>(
+        '/api/v1/dashboard/monto-programado-proxima-semana'
+      )
+      return response.dias ?? []
+    },
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    enabled: true,
+  })
+
   const [isRefreshing, setIsRefreshing] = useState(false)
 
   // NOTA: No necesitamos invalidar queries manualmente aquí
@@ -291,6 +304,7 @@ export function DashboardMenu() {
       await queryClient.invalidateQueries({ queryKey: ['cobranzas-mensuales'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['cobranzas-semanales'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['morosidad-analista'], exact: false })
+      await queryClient.invalidateQueries({ queryKey: ['monto-programado-proxima-semana'], exact: false })
 
       // Refrescar todas las queries activas
       await queryClient.refetchQueries({ queryKey: ['kpis-principales-menu'], exact: false })
@@ -299,6 +313,7 @@ export function DashboardMenu() {
       await queryClient.refetchQueries({ queryKey: ['financiamiento-rangos'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['composicion-morosidad'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['morosidad-analista'], exact: false })
+      await queryClient.refetchQueries({ queryKey: ['monto-programado-proxima-semana'], exact: false })
 
       // También refrescar la query de kpisPrincipales usando su refetch
       await refetch()
@@ -695,6 +710,48 @@ export function DashboardMenu() {
                       </ChartWithDateRangeSlider>
                     ) : (
                       <div className="flex items-center justify-center py-16 text-gray-500">No hay datos de morosidad por día para el período seleccionado</div>
+                    )}
+                  </CardContent>
+                </Card>
+              </motion.div>
+
+            {/* Monto programado por día: hoy hasta una semana después */}
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.36 }}
+              >
+                <Card className="shadow-lg border border-gray-200/90 rounded-xl overflow-hidden bg-white">
+                  <CardHeader className="bg-gradient-to-r from-emerald-50/90 to-teal-50/90 border-b border-gray-200/80 pb-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
+                        <DollarSign className="h-5 w-5 text-emerald-600" />
+                        <span>Monto programado por día</span>
+                      </CardTitle>
+                      <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
+                        Hoy hasta 1 semana
+                      </Badge>
+                    </div>
+                    <CardDescription className="text-gray-600 text-sm">
+                      Suma de monto_cuota (cuotas con vencimiento cada día) desde hoy hasta 7 días después
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-6 pt-4">
+                    {loadingMontoProgramadoSemana ? (
+                      <div className="flex items-center justify-center py-16 text-gray-500">Cargando...</div>
+                    ) : datosMontoProgramadoSemana && datosMontoProgramadoSemana.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={340}>
+                        <BarChart data={datosMontoProgramadoSemana} margin={{ top: 14, right: 24, left: 12, bottom: 14 }}>
+                          <CartesianGrid {...chartCartesianGrid} />
+                          <XAxis dataKey="dia" angle={-35} textAnchor="end" tick={chartAxisTick} height={72} />
+                          <YAxis tick={chartAxisTick} tickFormatter={(value) => `$${value >= 1000 ? (value / 1000).toFixed(1) + 'K' : value}`} label={{ value: 'Monto (USD)', angle: -90, position: 'insideLeft', style: { fill: '#374151', fontSize: 13 } }} />
+                          <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [formatCurrency(value), 'Monto programado']} labelFormatter={(_, payload) => payload?.[0]?.payload?.fecha ? `Fecha: ${payload[0].payload.fecha}` : ''} />
+                          <Legend {...chartLegendStyle} />
+                          <Bar dataKey="monto_programado" name="Monto programado" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={56} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex items-center justify-center py-16 text-gray-500">No hay datos de monto programado para los próximos 7 días</div>
                     )}
                   </CardContent>
                 </Card>

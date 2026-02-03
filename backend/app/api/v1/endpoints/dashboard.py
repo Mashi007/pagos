@@ -708,6 +708,35 @@ def get_proyeccion_cobro_30_dias(db: Session = Depends(get_db)):
         return {"dias": []}
 
 
+@router.get("/monto-programado-proxima-semana")
+def get_monto_programado_proxima_semana(db: Session = Depends(get_db)):
+    """Monto programado por día desde hoy hasta una semana después (7 días).
+    Por cada día: suma de monto_cuota de cuotas con fecha_vencimiento ese día (tabla cuotas)."""
+    try:
+        hoy_utc = datetime.now(timezone.utc)
+        hoy_date = date(hoy_utc.year, hoy_utc.month, hoy_utc.day)
+        fin_date = hoy_date + timedelta(days=7)
+        resultado = []
+        nombres_mes = ("Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic")
+        d = hoy_date
+        while d <= fin_date:
+            programado = db.scalar(
+                select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
+                    Cuota.fecha_vencimiento == d,
+                )
+            ) or 0
+            resultado.append({
+                "fecha": d.isoformat(),
+                "dia": f"{d.day} {nombres_mes[d.month - 1]}",
+                "monto_programado": round(_safe_float(programado), 2),
+            })
+            d += timedelta(days=1)
+        return {"dias": resultado}
+    except Exception as e:
+        logger.exception("Error en monto-programado-proxima-semana: %s", e)
+        return {"dias": []}
+
+
 def _parse_fechas_concesionario(fecha_inicio: Optional[str], fecha_fin: Optional[str]):
     """Parsea fechas o devuelve rango últimos 12 meses."""
     hoy = datetime.now(timezone.utc)
