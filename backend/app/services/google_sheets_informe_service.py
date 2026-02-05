@@ -1,7 +1,7 @@
 """
 Escribe filas de informe de papeletas en Google Sheets.
 Una pestaña por periodo (6am, 1pm, 4h30) o una sola pestaña si sheet_tab_principal está configurado.
-Mapeo fijo A→F para que la información OCR se organice igual en todas las pestañas.
+Mapeo A→J: Cédula, Fecha, Institución, Documento, Cantidad, Link imagen, Nombre cliente, Estado conciliación, Timestamp, Teléfono.
 Usa OAuth o cuenta de servicio según informe_pagos_config.
 """
 import logging
@@ -14,18 +14,22 @@ LOG_TAG_INFORME = "[INFORME_PAGOS]"
 LOG_TAG_FALLO = "[INFORME_PAGOS] FALLO"
 
 # --- Mapeo Google Sheet (única fuente de verdad) ---
-# Una sola columna "Documento" (número de comprobante; si falta, se usa numero_deposito como respaldo). Sin columna Observación.
-# Orden: A Cédula, B Fecha, C Institución financiera, D Documento, E Cantidad, F Link imagen.
+# Orden A→J: Cédula, Fecha, Institución financiera, Documento, Cantidad, Link imagen,
+#            Nombre cliente (G), Estado conciliación (H), Timestamp registro (I), Teléfono (J).
 _MAPEO_COLUMNAS_SHEET = [
     (0, "Cédula", "cedula"),
     (1, "Fecha", "fecha_deposito"),
     (2, "Institución financiera", "nombre_banco"),
-    (3, "Documento", "numero_documento"),  # valor = numero_documento o fallback numero_deposito (ver _row_from_informe)
+    (3, "Documento", "numero_documento"),
     (4, "Cantidad", "cantidad"),
     (5, "Link imagen", "link_imagen"),
+    (6, "Nombre cliente", "nombre_cliente"),
+    (7, "Estado conciliación", "estado_conciliacion"),
+    (8, "Timestamp registro", "fecha_informe"),
+    (9, "Teléfono", "telefono"),
 ]
 CABECERAS_INFORME = [cabecera for _, cabecera, _ in _MAPEO_COLUMNAS_SHEET]
-NUM_COLUMNAS = len(CABECERAS_INFORME)  # 6 (A-F)
+NUM_COLUMNAS = len(CABECERAS_INFORME)  # 10 (A-J)
 
 # Nombres de pestaña por periodo (6am, 1pm, 4h30). Si sheet_tab_principal está configurado, se usa esa pestaña para todo.
 PERIODOS = {"6am": "6am", "1pm": "1pm", "4h30": "4h30"}
@@ -35,11 +39,17 @@ SHEETS_SCOPE = ["https://www.googleapis.com/auth/spreadsheets"]
 
 
 def _row_from_informe(informe: Any) -> List[str]:
-    """Construye la fila de valores para Sheet en el orden A→F. Columna Documento = numero_documento o numero_deposito si falta."""
+    """Construye la fila de valores para Sheet en el orden A→J."""
     out: List[str] = []
     for _, _label, campo in _MAPEO_COLUMNAS_SHEET:
         if campo == "numero_documento":
             val = getattr(informe, "numero_documento", None) or getattr(informe, "numero_deposito", None)
+        elif campo == "fecha_informe":
+            val = getattr(informe, "fecha_informe", None)
+            if hasattr(val, "isoformat"):
+                val = val.isoformat() if val else ""
+            else:
+                val = str(val) if val else ""
         else:
             val = getattr(informe, campo, None)
         if val is None:
@@ -95,10 +105,14 @@ def append_row(
     link_imagen: str,
     periodo_envio: str,
     observacion: Optional[str] = None,
+    nombre_cliente: Optional[str] = None,
+    estado_conciliacion: Optional[str] = None,
+    timestamp_registro: Optional[datetime] = None,
+    telefono: Optional[str] = None,
 ) -> bool:
     """
-    Añade una fila a la pestaña. Columna "Documento" = numero_documento o, si falta, numero_deposito.
-    Orden A→F: Cédula, Fecha, Institución financiera, Documento, Cantidad, Link imagen.
+    Añade una fila a la pestaña. Orden A→J: Cédula, Fecha, Institución, Documento, Cantidad, Link imagen,
+    Nombre cliente (G), Estado conciliación (H), Timestamp (I), Teléfono (J).
     """
     from app.core.informe_pagos_config_holder import get_sheet_tab_principal
 
@@ -110,6 +124,7 @@ def append_row(
     tab_name = _nombre_pestaña(periodo_envio or "", tab_principal)
     logger.info("%s Sheets append_row → pestaña '%s' (periodo=%s) | sheet_id=%s", LOG_TAG_INFORME, tab_name, periodo_envio, _mask_sheet_id(sheet_id))
     doc_value = (numero_documento or "").strip() or (numero_deposito or "").strip()
+    ts_str = (timestamp_registro.isoformat() if hasattr(timestamp_registro, "isoformat") and timestamp_registro else "") if timestamp_registro else ""
     try:
         ensure_sheet_tab(sheet_id, tab_name)
         row = [
@@ -119,10 +134,14 @@ def append_row(
             doc_value,
             (cantidad or "").strip(),
             (link_imagen or "").strip(),
+            (nombre_cliente or "").strip(),
+            (estado_conciliacion or "").strip(),
+            ts_str,
+            (telefono or "").strip(),
         ]
         if len(row) != NUM_COLUMNAS:
             logger.warning("%s Sheets append_row: fila con %d columnas (esperado %d)", LOG_TAG_FALLO, len(row), NUM_COLUMNAS)
-        range_name = _range_pestaña(tab_name)
+        range_name = _range_pestaña(tab_name)  # A:J
         body = {"values": [row]}
         service.spreadsheets().values().append(
             spreadsheetId=sheet_id,
@@ -140,8 +159,8 @@ def append_row(
 
 def update_row_for_informe(informe: Any) -> bool:
     """
-    Actualiza la misma fila en Google Sheets (no crea otra). Busca por link_imagen (col F).
-    Usa el mismo mapeo A→F que append_row. Pestaña: sheet_tab_principal o 6am/1pm/4h30 por periodo_envio.
+    Actualiza la misma fila en Google Sheets. Busca por link_imagen (col F).
+    Usa mapeo A→J. Pestaña: sheet_tab_principal o 6am/1pm/4h30 por periodo_envio.
     """
     from app.core.informe_pagos_config_holder import get_sheet_tab_principal
     service, sheet_id = _get_sheets_service()
@@ -152,7 +171,7 @@ def update_row_for_informe(informe: Any) -> bool:
     informe_id = getattr(informe, "id", None)
     logger.info("%s Sheets update_row INICIO | informe_id=%s cedula=%s tab=%s", LOG_TAG_INFORME, informe_id, (informe.cedula or "").strip(), tab_name)
     try:
-        range_all = _range_pestaña(tab_name, "A2:F")
+        range_all = _range_pestaña(tab_name, "A2:J")
         result = service.spreadsheets().values().get(spreadsheetId=sheet_id, range=range_all).execute()
         rows = result.get("values") or []
         link = (informe.link_imagen or "").strip()
@@ -178,7 +197,7 @@ def update_row_for_informe(informe: Any) -> bool:
         body = {"values": [row_values]}
         service.spreadsheets().values().update(
             spreadsheetId=sheet_id,
-            range=_range_pestaña(tab_name, f"A{row_index}:F{row_index}"),
+            range=_range_pestaña(tab_name, f"A{row_index}:J{row_index}"),
             valueInputOption="USER_ENTERED",
             body=body,
         ).execute()
@@ -190,17 +209,17 @@ def update_row_for_informe(informe: Any) -> bool:
 
 
 def _range_pestaña(tab_name: str, fila: Optional[str] = None) -> str:
-    """Rango con pestaña entre comillas simples (p. ej. '6am'!A:F o 'Hoja 1'!A2:F)."""
+    """Rango con pestaña entre comillas simples (p. ej. '6am'!A:J o 'Hoja 1'!A2:J)."""
     safe = (tab_name or "").replace("'", "''")
     if fila:
         return f"'{safe}'!{fila}"
-    return f"'{safe}'!A:F"
+    return f"'{safe}'!A:J"
 
 
 def ensure_sheet_tab(sheet_id: str, tab_name: str, headers: Optional[List[str]] = None) -> bool:
     """
-    Asegura que exista la pestaña con nombre tab_name y escribe la fila de cabecera A1:F1.
-    Cabeceras = CABECERAS_INFORME (Cédula, Fecha, Institución financiera, Documento, Cantidad, Link imagen). Si la pestaña ya existe, no sobrescribe.
+    Asegura que exista la pestaña con nombre tab_name y escribe la fila de cabecera A1:J1.
+    Cabeceras = CABECERAS_INFORME (A→J). Si la pestaña ya existe, no sobrescribe.
     """
     service, _ = _get_sheets_service()
     if not service:
@@ -218,7 +237,7 @@ def ensure_sheet_tab(sheet_id: str, tab_name: str, headers: Optional[List[str]] 
         ).execute()
         service.spreadsheets().values().update(
             spreadsheetId=sheet_id,
-            range=_range_pestaña(tab_name, "A1:F1"),
+            range=_range_pestaña(tab_name, "A1:J1"),
             valueInputOption="USER_ENTERED",
             body={"values": [headers]},
         ).execute()

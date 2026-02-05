@@ -13,6 +13,7 @@ import {
   Trash2,
   FileText,
   AlertTriangle,
+  RefreshCw,
 } from 'lucide-react'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -74,6 +75,18 @@ export function PagosList() {
     )
   }
 
+  const handleRefresh = async () => {
+    try {
+      await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
+      await queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false })
+      await queryClient.refetchQueries({ queryKey: ['pagos'], exact: false })
+      await queryClient.refetchQueries({ queryKey: ['pagos-kpis'], exact: false })
+      toast.success('Datos actualizados correctamente')
+    } catch (error: unknown) {
+      toast.error('Error al actualizar los datos')
+    }
+  }
+
   const handleDescargarPagosConErrores = async () => {
     try {
       toast.loading('Generando informe de pagos con errores...', { id: 'descargar-errores' })
@@ -99,6 +112,9 @@ export function PagosList() {
 
   return (
     <div className="space-y-6">
+      {/* KPIs primero (mismo orden que Préstamos) */}
+      <PagosKPIsNuevo />
+
       {/* Encabezado (mismo formato que Préstamos) */}
       <div className="flex justify-between items-center">
         <div>
@@ -106,6 +122,16 @@ export function PagosList() {
           <p className="text-gray-600 mt-1">Gestión de pagos y conciliación</p>
         </div>
         <div className="flex gap-3">
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={handleRefresh}
+            className="px-6 py-6 text-base font-semibold"
+            disabled={isLoading}
+          >
+            <RefreshCw className={`w-5 h-5 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            Actualizar
+          </Button>
           <CargaMasivaMenu
             onSuccess={async () => {
               try {
@@ -126,14 +152,19 @@ export function PagosList() {
               }
             }}
           />
-          <Button onClick={() => setShowRegistrarPago(true)}>
+          <Button
+            size="lg"
+            onClick={() => setShowRegistrarPago(true)}
+            className="px-8 py-6 text-base font-semibold min-w-[200px]"
+          >
             <Plus className="w-5 h-5 mr-2" />
             Registrar Pago
           </Button>
           <Button
             variant="outline"
+            size="lg"
             onClick={handleDescargarPagosConErrores}
-            className="border-red-500 text-red-600 hover:bg-red-50"
+            className="px-6 py-6 text-base font-semibold border-red-500 text-red-600 hover:bg-red-50"
           >
             <AlertTriangle className="w-5 h-5 mr-2" />
             Pagos con Errores
@@ -143,9 +174,6 @@ export function PagosList() {
 
       {/* Advertencia sobre formato científico */}
       <AdvertenciaFormatoCientifico />
-
-      {/* KPIs de Pagos */}
-      <PagosKPIsNuevo />
 
       {/* Pestañas */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>

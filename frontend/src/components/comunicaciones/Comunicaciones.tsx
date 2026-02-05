@@ -154,14 +154,12 @@ export function Comunicaciones({
       const id = `${idBase}_${comm.tipo}` // Separar WhatsApp y Email
       
       if (!grupos.has(id)) {
-        // Determinar nombre del cliente o contacto
-        let nombre = comm.from_contact
-        const esNuevo = !comm.cliente_id
-        
-        // Si tiene cliente_id, intentar obtener nombre del cliente
-        if (comm.cliente_id) {
-          nombre = comm.nombre_contacto || mockNombresClientes[comm.cliente_id] || `Cliente #${comm.cliente_id}`
+        // Nombre: priorizar nombre_contacto (cuando cedula coincide en BD y se guarda nombre_cliente)
+        let nombre = (comm.nombre_contacto && comm.nombre_contacto.trim()) ? comm.nombre_contacto.trim() : comm.from_contact
+        if (comm.cliente_id && !(comm.nombre_contacto && comm.nombre_contacto.trim())) {
+          nombre = mockNombresClientes[comm.cliente_id] || `Cliente #${comm.cliente_id}`
         }
+        const esNuevo = !comm.cliente_id
 
         // Determinar si está leído (procesado = true)
         const leido = comm.procesado
@@ -574,10 +572,11 @@ export function Comunicaciones({
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-lg font-bold text-gray-900">Comunicaciones</h2>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500">Se actualiza cada 15 s</span>
               <Button
                 variant="ghost"
                 size="sm"
+                title="Actualizar manualmente"
+                aria-label="Actualizar comunicaciones"
                 onClick={() => {
                   refetch()
                   if (conversacionActual?.tipo === 'whatsapp' && conversacionActual?.contacto) {

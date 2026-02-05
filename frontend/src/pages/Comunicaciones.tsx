@@ -56,7 +56,14 @@ export function ComunicacionesPage() {
               className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800"
             >
               <Settings className="h-4 w-4" />
-              Informe pagos (Drive, Sheets, OCR)
+              Informe pagos (Drive, Sheets)
+            </Link>
+            <Link
+              to="/configuracion?tab=ocr"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800"
+            >
+              <Settings className="h-4 w-4" />
+              OCR
             </Link>
           </div>
         </CardContent>

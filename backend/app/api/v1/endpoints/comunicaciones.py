@@ -82,7 +82,13 @@ def listar_comunicaciones(
     for row in rows:
         telefono_display = row.telefono if (row.telefono or "").startswith("+") else f"+{row.telefono}"
         cid = _cliente_id_por_telefono(db, row.telefono)
-        nombre = (row.nombre_cliente or "").strip() or telefono_display
+        # Nombre: primero el guardado al validar cédula (nombre_cliente), luego nombre del cliente por teléfono
+        nombre = (row.nombre_cliente or "").strip()
+        if not nombre and cid:
+            cliente_row = db.get(Cliente, cid)
+            if cliente_row and cliente_row.nombres:
+                nombre = (cliente_row.nombres or "").strip()
+        nombre = nombre or telefono_display
         comunicaciones.append({
             "id": row.id,
             "tipo": "whatsapp",

@@ -10,6 +10,7 @@ function PagosPage() {
         <h1 className="text-3xl font-bold text-gray-900">Pagos</h1>
       </div>
 
+      {/* Card informativa (mismo formato que Préstamos) */}
       <Card className="border-blue-100 bg-blue-50/50">
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">

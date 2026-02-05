@@ -25,3 +25,7 @@ class PagosInforme(Base):
     periodo_envio = Column(String(20), nullable=False, index=True)
     fecha_informe = Column(DateTime(timezone=False), nullable=False, server_default=text("CURRENT_TIMESTAMP"))
     created_at = Column(DateTime(timezone=False), nullable=False, server_default=text("CURRENT_TIMESTAMP"))
+    # Columnas alineadas con Google Sheets G, H, J (I = fecha_informe)
+    nombre_cliente = Column(String(255), nullable=True)
+    estado_conciliacion = Column(String(50), nullable=True)  # CONCILIADO, REVISAR, REVISAR_MONTO
+    telefono = Column(String(30), nullable=True, index=True)

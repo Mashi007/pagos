@@ -51,6 +51,11 @@ ALTER TABLE pagos_informes ADD COLUMN IF NOT EXISTS humano VARCHAR(20);
 ALTER TABLE pagos_informes ADD COLUMN IF NOT EXISTS observacion TEXT;
 ALTER TABLE pagos_informes ADD COLUMN IF NOT EXISTS link_imagen TEXT;
 ALTER TABLE pagos_informes ADD COLUMN IF NOT EXISTS cantidad VARCHAR(50);
+ALTER TABLE pagos_informes ADD COLUMN IF NOT EXISTS nombre_cliente VARCHAR(255);
+ALTER TABLE pagos_informes ADD COLUMN IF NOT EXISTS estado_conciliacion VARCHAR(50);
+ALTER TABLE pagos_informes ADD COLUMN IF NOT EXISTS telefono VARCHAR(30);
+CREATE INDEX IF NOT EXISTS ix_pagos_informes_estado_conciliacion ON pagos_informes (estado_conciliacion);
+CREATE INDEX IF NOT EXISTS ix_pagos_informes_telefono ON pagos_informes (telefono);
 
 -- Permitir NULL en banco_entidad_financiera (la app usa nombre_banco; evita NotNullViolation)
 DO $$

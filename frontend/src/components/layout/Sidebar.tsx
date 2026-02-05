@@ -162,6 +162,8 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         { title: 'Configuración Email', href: '/configuracion?tab=email', icon: Mail },
         { title: 'Configuración WhatsApp', href: '/configuracion?tab=whatsapp', icon: MessageSquare },
         { title: 'Configuración AI', href: '/configuracion?tab=ai', icon: Brain },
+        { title: 'Informe pagos (Drive, Sheets)', href: '/configuracion?tab=informe-pagos', icon: FileText },
+        { title: 'OCR', href: '/configuracion?tab=ocr', icon: FileText },
         // Herramientas dentro de Configuración
         ...((user?.rol || 'operativo') === 'administrador' ? [{ title: 'Plantillas', href: '/herramientas/plantillas', icon: FileText }] : []),
         { title: 'Programador', href: '/scheduler', icon: Calendar },

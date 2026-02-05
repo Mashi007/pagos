@@ -452,6 +452,7 @@ class WhatsAppService:
                 return {"status": "processed", "response_text": "No encontramos el registro. " + MENSAJE_BIENVENIDA}
             if _es_respuesta_si(text):
                 logger.info("%s Confirmación datos: cliente confirmó SÍ | informe_id=%s telefono=%s", LOG_TAG_INFORME, informe_id, phone_mask)
+                informe.estado_conciliacion = "CONCILIADO"
                 conv.pagos_informe_id_pendiente = None
                 conv.intento_foto = 0
                 conv.estado = "esperando_cedula"
@@ -461,12 +462,19 @@ class WhatsAppService:
                 conv.observacion = None
                 conv.updated_at = datetime.utcnow()
                 db.commit()
+                db.refresh(informe)
+                try:
+                    from app.services.google_sheets_informe_service import update_row_for_informe
+                    update_row_for_informe(informe)
+                except Exception as e:
+                    logger.warning("%s No se pudo actualizar Sheet con estado CONCILIADO: %s", LOG_TAG_INFORME, e)
                 return {"status": "datos_confirmados", "response_text": MENSAJE_DATOS_CONFIRMADOS}
             edits = _parsear_edicion_confirmacion((text or "").strip())
             # Solo actualizar cédula, cantidad y numero_documento; no generar otra fila, solo editar la misma
             edits = {k: v for k, v in edits.items() if k in CAMPOS_CONFIRMACION and v is not None}
             if edits:
                 logger.info("%s Confirmación datos: cliente editó campos | informe_id=%s campos=%s", LOG_TAG_INFORME, informe_id, list(edits.keys()))
+                informe.estado_conciliacion = "REVISAR"
                 for k, v in edits.items():
                     if hasattr(informe, k):
                         if k == "cedula" and isinstance(v, str):
@@ -713,6 +721,9 @@ class WhatsAppService:
                 pagos_whatsapp_id=row_pw.id,
                 periodo_envio=periodo,
                 fecha_informe=datetime.utcnow(),
+                nombre_cliente=(conv.nombre_cliente or "").strip() or None,
+                estado_conciliacion=None,
+                telefono=phone,
             )
             db.add(informe)
             db.commit()
@@ -728,7 +739,14 @@ class WhatsAppService:
             try:
                 from app.services.google_sheets_informe_service import append_row
                 logger.info("%s Escribiendo Sheet | telefono=%s cedula=%s", LOG_TAG_INFORME, phone_mask, conv.cedula)
-                sheet_ok = append_row(conv.cedula, fecha_dep, nombre_banco, numero_dep, numero_doc, cantidad, link_imagen, periodo, observacion=observacion_informe)
+                sheet_ok = append_row(
+                    conv.cedula, fecha_dep, nombre_banco, numero_dep, numero_doc, cantidad, link_imagen, periodo,
+                    observacion=observacion_informe,
+                    nombre_cliente=(conv.nombre_cliente or "").strip() or "",
+                    estado_conciliacion="",
+                    timestamp_registro=informe.fecha_informe,
+                    telefono=phone or "",
+                )
                 if not sheet_ok:
                     logger.warning("%s Sheets no escribió fila (BD OK) | telefono=%s cedula=%s", LOG_TAG_INFORME, phone_mask, conv.cedula)
             except Exception as e:

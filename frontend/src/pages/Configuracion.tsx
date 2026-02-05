@@ -140,12 +140,12 @@ export function Configuracion() {
     if (tab === 'email') return 'emailConfig'
     if (tab === 'whatsapp') return 'whatsappConfig'
     if (tab === 'ai') return 'aiConfig'
-    if (tab === 'informe-pagos') return 'informePagosConfig'
+    if (tab === 'informe-pagos' || tab === 'ocr') return 'informePagosConfig'
     return 'general'
   })
   const [estadoCarga, setEstadoCarga] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
 
-  // Sincronizar sección con el parámetro tab de la URL (al cambiar tab por navegación o al abrir /pagos/configuracion?tab=ai)
+  // Sincronizar sección con el parámetro tab de la URL (tab=ocr abre la misma sección que informe-pagos)
   useEffect(() => {
     const tab = searchParams.get('tab')
     if (tab === 'email') {
@@ -154,7 +154,7 @@ export function Configuracion() {
       setSeccionActiva('whatsappConfig')
     } else if (tab === 'ai') {
       setSeccionActiva('aiConfig')
-    } else if (tab === 'informe-pagos') {
+    } else if (tab === 'informe-pagos' || tab === 'ocr') {
       setSeccionActiva('informePagosConfig')
     }
   }, [searchParams])
