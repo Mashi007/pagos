@@ -189,26 +189,18 @@ function App() {
             element={<Cobranzas />}
           />
 
-          {/* Notificaciones (dentro de CRM en sidebar; URL /pagos/notificaciones) */}
+          {/* Notificaciones (dentro de CRM en sidebar) */}
           <Route path="notificaciones" element={<Notificaciones />} />
+          <Route path="notificaciones/plantillas" element={<SimpleProtectedRoute requireAdmin={true}><Plantillas /></SimpleProtectedRoute>} />
 
-          {/* Herramientas: misma página por compatibilidad con enlaces antiguos */}
-          <Route path="herramientas/notificaciones" element={<Notificaciones />} />
+          {/* Herramientas: redirecciones por compatibilidad con enlaces antiguos */}
+          <Route path="herramientas/notificaciones" element={<Navigate to="/notificaciones" replace />} />
+          <Route path="herramientas/plantillas" element={<Navigate to="/notificaciones/plantillas" replace />} />
 
           {/* Comunicaciones (Unificado WhatsApp y Email) */}
           <Route path="comunicaciones" element={<ComunicacionesPage />} />
           {/* Conversaciones WhatsApp (Legacy - mantener por compatibilidad) */}
           <Route path="conversaciones-whatsapp" element={<ConversacionesWhatsAppPage />} />
-
-          {/* Herramientas: Plantillas (solo admin) */}
-          <Route
-            path="herramientas/plantillas"
-            element={
-              <SimpleProtectedRoute requireAdmin={true}>
-                <Plantillas />
-              </SimpleProtectedRoute>
-            }
-          />
 
           {/* Scheduler */}
           <Route

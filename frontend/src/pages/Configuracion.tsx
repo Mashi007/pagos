@@ -171,7 +171,7 @@ export function Configuracion() {
   // Navegar a rutas externas cuando se seleccionan secciones con href
   useEffect(() => {
     if (seccionActiva === 'plantillas') {
-      navigate('/herramientas/plantillas')
+      navigate('/notificaciones/plantillas')
     } else if (seccionActiva === 'scheduler') {
       navigate('/scheduler')
     }

@@ -472,11 +472,23 @@ app.get(FRONTEND_BASE + '/notificaciones/', (req, res) => {
   res.redirect(302, FRONTEND_BASE + '/notificaciones' + qs(req));
 });
 app.get(FRONTEND_BASE + '/herramientas/notificaciones', (req, res) => {
+  res.redirect(302, FRONTEND_BASE + '/notificaciones' + qs(req));
+});
+app.get(FRONTEND_BASE + '/herramientas/notificaciones/', (req, res) => {
+  res.redirect(302, FRONTEND_BASE + '/notificaciones' + qs(req));
+});
+app.get(FRONTEND_BASE + '/herramientas/plantillas', (req, res) => {
+  res.redirect(302, FRONTEND_BASE + '/notificaciones/plantillas' + qs(req));
+});
+app.get(FRONTEND_BASE + '/herramientas/plantillas/', (req, res) => {
+  res.redirect(302, FRONTEND_BASE + '/notificaciones/plantillas' + qs(req));
+});
+app.get(FRONTEND_BASE + '/notificaciones/plantillas', (req, res) => {
   res.status(200);
   sendSpaIndex(req, res);
 });
-app.get(FRONTEND_BASE + '/herramientas/notificaciones/', (req, res) => {
-  res.redirect(302, FRONTEND_BASE + '/herramientas/notificaciones' + qs(req));
+app.get(FRONTEND_BASE + '/notificaciones/plantillas/', (req, res) => {
+  res.redirect(302, FRONTEND_BASE + '/notificaciones/plantillas' + qs(req));
 });
 // Página de Pagos (lista de pagos) — garantizar que renderice
 app.get(FRONTEND_BASE + '/pagos', (req, res) => {

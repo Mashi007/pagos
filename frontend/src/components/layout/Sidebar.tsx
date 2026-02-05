@@ -15,7 +15,6 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronLeft,
-  Wrench,
   Building,
   Car,
   CheckCircle,
@@ -108,6 +107,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         { title: 'Tickets Atención', href: '/crm/tickets', icon: FileText },
         { title: 'Comunicaciones', href: '/comunicaciones', icon: MessageSquare },
         { title: 'Notificaciones', href: '/notificaciones', icon: Bell },
+        ...((user?.rol || 'operativo') === 'administrador' ? [{ title: 'Plantillas', href: '/notificaciones/plantillas', icon: Mail }] : []),
       ],
     },
     // Ventas: oculto y en pausa (no afectar otros procesos)
@@ -138,20 +138,12 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       icon: Brain,
     },
     {
-      title: 'Herramientas',
-      icon: Wrench,
-      isSubmenu: true,
-      children: [
-        ...((user?.rol || 'operativo') === 'administrador' ? [{ title: 'Plantillas', href: '/herramientas/plantillas', icon: Mail }] : []),
-        { title: 'Programador', href: '/scheduler', icon: Calendar },
-      ],
-    },
-    {
       title: 'Configuración',
       icon: Settings,
       isSubmenu: true,
       children: [
         { title: 'General', href: '/configuracion', icon: Settings },
+        { title: 'Programador', href: '/scheduler', icon: Calendar },
         { title: 'Validadores', href: '/validadores', icon: CheckCircle },
         { title: 'Configuración Email', href: '/configuracion?tab=email', icon: Mail },
         { title: 'Configuración WhatsApp', href: '/configuracion?tab=whatsapp', icon: MessageSquare },

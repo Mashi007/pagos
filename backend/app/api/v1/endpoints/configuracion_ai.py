@@ -106,6 +106,8 @@ def _load_ai_config_from_db(db: Session) -> None:
                         _ai_config_stub[k] = str(data[k])
                 if "openrouter_api_key" in data and data["openrouter_api_key"]:
                     _ai_config_stub["openrouter_api_key"] = str(data["openrouter_api_key"]).strip()
+                if "prompt_personalizado" in data and data["prompt_personalizado"] is not None:
+                    _ai_config_stub["prompt_personalizado"] = str(data["prompt_personalizado"])
     except Exception:
         pass
 
@@ -210,10 +212,14 @@ def _get_preguntas_habituales_block(db: Session) -> str:
 
 def _build_chat_system_prompt(db: Session) -> str:
     """
-    Arma el system prompt completo: instrucciones + preguntas habituales -> campos
-    + bloque 'Datos disponibles (get_db)'. Así el modelo sabe qué dato usar para cada pregunta típica.
+    Arma el system prompt completo. Si hay prompt_personalizado en config, se usa como base
+    y se añade el bloque 'Datos disponibles (get_db)'. Si no, instrucciones + preguntas habituales + datos.
     """
+    _load_ai_config_from_db(db)
     datos_bd = _build_chat_context(db)
+    prompt_custom = (_ai_config_stub.get("prompt_personalizado") or "").strip()
+    if prompt_custom:
+        return f"{prompt_custom}\n\nDatos disponibles (get_db):\n{datos_bd}"
     preguntas_block = _get_preguntas_habituales_block(db)
     return (
         f"{CHAT_SYSTEM_PROMPT_INSTRUCCIONES}\n\n"
@@ -338,6 +344,8 @@ def put_ai_configuracion(payload: AIConfigUpdate = Body(...), db: Session = Depe
         }
         if _ai_config_stub.get("openrouter_api_key"):
             payload_bd["openrouter_api_key"] = _ai_config_stub["openrouter_api_key"]
+        if "prompt_personalizado" in _ai_config_stub:
+            payload_bd["prompt_personalizado"] = _ai_config_stub["prompt_personalizado"]
         valor_json = json.dumps(payload_bd)
         if row:
             row.valor = valor_json
@@ -347,6 +355,205 @@ def put_ai_configuracion(payload: AIConfigUpdate = Body(...), db: Session = Depe
     except Exception:
         db.rollback()
     return get_ai_configuracion(db)
+
+
+# --- Prompt personalizado (GET/PUT /ai/prompt) ---
+
+CLAVE_PROMPT_VARIABLES = "configuracion_ai_prompt_variables"
+
+
+def _get_prompt_personalizado(db: Session) -> str:
+    """Lee el prompt personalizado desde la config AI (misma fila que modelo, etc.)."""
+    _load_ai_config_from_db(db)
+    return (_ai_config_stub.get("prompt_personalizado") or "").strip()
+
+
+def _set_prompt_personalizado(db: Session, texto: str) -> None:
+    """Persiste el prompt personalizado en la fila configuracion_ai."""
+    row = db.get(Configuracion, CLAVE_AI)
+    data = {}
+    if row and row.valor:
+        try:
+            data = json.loads(row.valor)
+            if not isinstance(data, dict):
+                data = {}
+        except Exception:
+            data = {}
+    data["prompt_personalizado"] = texto
+    global _ai_config_stub
+    _ai_config_stub["prompt_personalizado"] = texto
+    valor_json = json.dumps(data)
+    if row:
+        row.valor = valor_json
+    else:
+        db.add(Configuracion(clave=CLAVE_AI, valor=valor_json))
+    db.commit()
+
+
+def _get_prompt_variables_list(db: Session) -> list[dict]:
+    """Lee la lista de variables del prompt desde configuracion (JSON array)."""
+    try:
+        row = db.get(Configuracion, CLAVE_PROMPT_VARIABLES)
+        if row and row.valor:
+            data = json.loads(row.valor)
+            if isinstance(data, list):
+                return data
+    except Exception:
+        pass
+    return []
+
+
+def _set_prompt_variables_list(db: Session, variables: list[dict]) -> None:
+    """Persiste la lista de variables del prompt."""
+    row = db.get(Configuracion, CLAVE_PROMPT_VARIABLES)
+    valor_json = json.dumps(variables)
+    if row:
+        row.valor = valor_json
+    else:
+        db.add(Configuracion(clave=CLAVE_PROMPT_VARIABLES, valor=valor_json))
+    db.commit()
+
+
+class PromptPutBody(BaseModel):
+    prompt: str = ""
+
+
+@router.get("/prompt")
+def get_ai_prompt(db: Session = Depends(get_db)):
+    """
+    Devuelve el prompt personalizado y si se está usando el por defecto.
+    Incluye variables personalizadas para el frontend (Editor de prompt).
+    """
+    prompt_text = _get_prompt_personalizado(db)
+    variables = _get_prompt_variables_list(db)
+    # Asegurar que cada item tenga id, variable, descripcion, activo, orden
+    variables_ok = []
+    for i, v in enumerate(variables):
+        if not isinstance(v, dict):
+            continue
+        variables_ok.append({
+            "id": v.get("id", i + 1),
+            "variable": v.get("variable", ""),
+            "descripcion": v.get("descripcion", ""),
+            "activo": v.get("activo", True),
+            "orden": v.get("orden", i),
+        })
+    return {
+        "prompt_personalizado": prompt_text,
+        "tiene_prompt_personalizado": bool(prompt_text),
+        "usando_prompt_default": not bool(prompt_text),
+        "variables_personalizadas": variables_ok,
+    }
+
+
+@router.put("/prompt")
+def put_ai_prompt(payload: PromptPutBody = Body(...), db: Session = Depends(get_db)):
+    """Guarda el prompt personalizado. Si prompt está vacío, se restaura el por defecto."""
+    texto = (payload.prompt or "").strip()
+    _set_prompt_personalizado(db, texto)
+    return get_ai_prompt(db)
+
+
+# --- Variables del prompt (GET/POST/PUT/DELETE /ai/prompt/variables) ---
+
+class PromptVariableCreate(BaseModel):
+    variable: str
+    descripcion: str
+    activo: Optional[bool] = True
+    orden: Optional[int] = None
+
+
+class PromptVariableUpdate(BaseModel):
+    variable: Optional[str] = None
+    descripcion: Optional[str] = None
+    activo: Optional[bool] = None
+
+
+@router.get("/prompt/variables")
+def get_ai_prompt_variables(db: Session = Depends(get_db)):
+    """Lista las variables personalizadas del prompt."""
+    variables = _get_prompt_variables_list(db)
+    out = []
+    for i, v in enumerate(variables):
+        if not isinstance(v, dict):
+            continue
+        out.append({
+            "id": v.get("id", i + 1),
+            "variable": v.get("variable", ""),
+            "descripcion": v.get("descripcion", ""),
+            "activo": v.get("activo", True),
+            "orden": v.get("orden", i),
+        })
+    return {"variables": out, "total": len(out)}
+
+
+@router.post("/prompt/variables")
+def post_ai_prompt_variable(payload: PromptVariableCreate = Body(...), db: Session = Depends(get_db)):
+    """Crea una variable para el prompt."""
+    variables = _get_prompt_variables_list(db)
+    max_id = max((v.get("id") for v in variables if isinstance(v, dict) and v.get("id") is not None), default=0)
+    try:
+        max_id = max(int(max_id), 0)
+    except (TypeError, ValueError):
+        max_id = 0
+    new_id = max_id + 1
+    variable = (payload.variable or "").strip()
+    if not variable:
+        raise HTTPException(status_code=400, detail="variable es requerida")
+    if not variable.startswith("{"):
+        variable = "{" + variable
+    if not variable.endswith("}"):
+        variable = variable + "}"
+    orden = payload.orden if payload.orden is not None else len(variables)
+    new_var = {
+        "id": new_id,
+        "variable": variable,
+        "descripcion": (payload.descripcion or "").strip(),
+        "activo": payload.activo if payload.activo is not None else True,
+        "orden": orden,
+    }
+    variables.append(new_var)
+    _set_prompt_variables_list(db, variables)
+    return new_var
+
+
+@router.put("/prompt/variables/{variable_id}")
+def put_ai_prompt_variable(
+    variable_id: int,
+    payload: PromptVariableUpdate = Body(...),
+    db: Session = Depends(get_db),
+):
+    """Actualiza una variable del prompt."""
+    variables = _get_prompt_variables_list(db)
+    for v in variables:
+        if not isinstance(v, dict):
+            continue
+        if v.get("id") == variable_id:
+            if payload.variable is not None:
+                var = (payload.variable or "").strip()
+                if not var.startswith("{"):
+                    var = "{" + var
+                if not var.endswith("}"):
+                    var = var + "}"
+                v["variable"] = var
+            if payload.descripcion is not None:
+                v["descripcion"] = (payload.descripcion or "").strip()
+            if payload.activo is not None:
+                v["activo"] = bool(payload.activo)
+            _set_prompt_variables_list(db, variables)
+            return v
+    raise HTTPException(status_code=404, detail="Variable no encontrada")
+
+
+@router.delete("/prompt/variables/{variable_id}")
+def delete_ai_prompt_variable(variable_id: int, db: Session = Depends(get_db)):
+    """Elimina una variable del prompt."""
+    variables = _get_prompt_variables_list(db)
+    new_list = [v for v in variables if isinstance(v, dict) and v.get("id") != variable_id]
+    if len(new_list) == len(variables):
+        raise HTTPException(status_code=404, detail="Variable no encontrada")
+    _set_prompt_variables_list(db, new_list)
+    return {"ok": True}
 
 
 class ChatRequest(BaseModel):
