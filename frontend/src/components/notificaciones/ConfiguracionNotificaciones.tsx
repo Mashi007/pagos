@@ -147,7 +147,7 @@ export function ConfiguracionNotificaciones() {
             Configuración por criterio
           </CardTitle>
           <CardDescription>
-            Cada pestaña de notificaciones tiene su plantilla, correos (CCO), activación y hora de envío. Las plantillas se gestionan en Notificaciones &rarr; Plantillas.
+            Cada pestaña de notificaciones tiene su plantilla, correos (CCO), activación y hora de envío. Las plantillas se gestionan en Configuración &rarr; Plantillas.
           </CardDescription>
         </CardHeader>
       </Card>
@@ -288,11 +288,11 @@ export function ConfiguracionNotificaciones() {
 
       <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t">
         <Link
-          to="/notificaciones/plantillas"
+          to="/configuracion?tab=plantillas"
           className="text-sm text-blue-600 hover:text-blue-800 inline-flex items-center gap-1"
         >
           <FileText className="h-4 w-4" />
-          Gestionar plantillas en Notificaciones
+          Gestionar plantillas en Configuración
         </Link>
         <Button
           onClick={guardarConfiguracionEnvios}

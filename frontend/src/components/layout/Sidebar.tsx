@@ -107,7 +107,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         { title: 'Tickets Atención', href: '/crm/tickets', icon: FileText },
         { title: 'Comunicaciones', href: '/comunicaciones', icon: MessageSquare },
         { title: 'Notificaciones', href: '/notificaciones', icon: Bell },
-        ...((user?.rol || 'operativo') === 'administrador' ? [{ title: 'Plantillas', href: '/notificaciones/plantillas', icon: Mail }] : []),
       ],
     },
     // Ventas: oculto y en pausa (no afectar otros procesos)
@@ -143,6 +142,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       isSubmenu: true,
       children: [
         { title: 'General', href: '/configuracion', icon: Settings },
+        { title: 'Plantillas', href: '/configuracion?tab=plantillas', icon: Mail },
         { title: 'Programador', href: '/scheduler', icon: Calendar },
         { title: 'Validadores', href: '/validadores', icon: CheckCircle },
         { title: 'Configuración Email', href: '/configuracion?tab=email', icon: Mail },

@@ -52,6 +52,7 @@ import { configuracionGeneralService, ConfiguracionGeneral } from '../services/c
 import { apiClient } from '../services/api'
 import { toast } from 'sonner'
 import UsuariosConfig from '../components/configuracion/UsuariosConfig'
+import Plantillas from './Plantillas'
 import {
   SECCIONES_CONFIGURACION,
   NOMBRES_SECCION_ESPECIAL,
@@ -141,6 +142,7 @@ export function Configuracion() {
     if (tab === 'whatsapp') return 'whatsappConfig'
     if (tab === 'ai') return 'aiConfig'
     if (tab === 'informe-pagos' || tab === 'ocr') return 'informePagosConfig'
+    if (tab === 'plantillas') return 'plantillas'
     return 'general'
   })
   const [estadoCarga, setEstadoCarga] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
@@ -156,6 +158,8 @@ export function Configuracion() {
       setSeccionActiva('aiConfig')
     } else if (tab === 'informe-pagos' || tab === 'ocr') {
       setSeccionActiva('informePagosConfig')
+    } else if (tab === 'plantillas') {
+      setSeccionActiva('plantillas')
     }
   }, [searchParams])
   const [mostrarPassword, setMostrarPassword] = useState(false)
@@ -170,9 +174,7 @@ export function Configuracion() {
 
   // Navegar a rutas externas cuando se seleccionan secciones con href
   useEffect(() => {
-    if (seccionActiva === 'plantillas') {
-      navigate('/notificaciones/plantillas')
-    } else if (seccionActiva === 'scheduler') {
+    if (seccionActiva === 'scheduler') {
       navigate('/scheduler')
     }
   }, [seccionActiva, navigate])
@@ -1515,14 +1517,15 @@ export function Configuracion() {
   )
 
   const renderContenidoSeccion = () => {
-    // Si la sección tiene href, no renderizar contenido (la navegación se maneja en useEffect)
-    if (seccionActiva === 'plantillas' || seccionActiva === 'scheduler') {
+    // Si la sección tiene href externo, no renderizar contenido (la navegación se maneja en useEffect)
+    if (seccionActiva === 'scheduler') {
       return null
     }
-    
+
     switch (seccionActiva) {
       case 'general': return renderSeccionGeneral()
       case 'notificaciones': return renderSeccionNotificaciones()
+      case 'plantillas': return <Plantillas />
       case 'emailConfig': return <EmailConfig />
       case 'whatsappConfig': return <WhatsAppConfig />
       case 'aiConfig': return <AIConfig />
@@ -1574,7 +1577,7 @@ export function Configuracion() {
               <div className="flex space-x-2">
                 {/* ✅ Ocultar botón "Guardar" en secciones que tienen su propio botón de guardar */}
                 {/* emailConfig y whatsappConfig tienen sus propios botones de guardar */}
-                {seccionActiva !== 'emailConfig' && seccionActiva !== 'whatsappConfig' && seccionActiva !== 'aiConfig' && seccionActiva !== 'informePagosConfig' && (
+                {seccionActiva !== 'emailConfig' && seccionActiva !== 'whatsappConfig' && seccionActiva !== 'aiConfig' && seccionActiva !== 'informePagosConfig' && seccionActiva !== 'plantillas' && (
                   <>
                     {cambiosPendientes && (
                       <Badge variant="warning" className="animate-pulse">

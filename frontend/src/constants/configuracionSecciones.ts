@@ -48,7 +48,8 @@ export const SECCIONES_CONFIGURACION: SeccionConfig[] = [
       { id: 'emailConfig', nombre: 'Configuración Email', icono: Mail },
       { id: 'whatsappConfig', nombre: 'Configuración WhatsApp', icono: MessageSquare },
       { id: 'informePagosConfig', nombre: 'Informe pagos (Drive, Sheets, OCR)', icono: FileText },
-      { id: 'plantillas', nombre: 'Plantillas', icono: FileText, href: '/notificaciones/plantillas' },
+      { id: 'plantillas', nombre: 'Plantillas', icono: FileText },
+      // sin href: se muestra como sección dentro de Configuración (tab=plantillas)
       { id: 'scheduler', nombre: 'Programador', icono: Calendar, href: '/scheduler' },
       { id: 'programador', nombre: 'Programador (Config)', icono: Calendar },
       { id: 'auditoria', nombre: 'Auditoría', icono: FileText },

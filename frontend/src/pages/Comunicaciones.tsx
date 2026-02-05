@@ -1,8 +1,8 @@
-import { useSearchParams, Link } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { Comunicaciones } from '../components/comunicaciones/Comunicaciones'
 import { useQuery } from '@tanstack/react-query'
 import { whatsappConfigService } from '../services/notificacionService'
-import { MessageSquare, Settings } from 'lucide-react'
+import { MessageSquare } from 'lucide-react'
 import { Card, CardContent } from '../components/ui/card'
 
 export function ComunicacionesPage() {
@@ -21,51 +21,12 @@ export function ComunicacionesPage() {
   return (
     <div className="container mx-auto py-6 space-y-4">
       <Card className="border-blue-100 bg-blue-50/50">
-        <CardContent className="py-3 px-4 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2 text-sm text-gray-700">
-            <MessageSquare className="h-4 w-4 text-blue-600" />
-            <span>
-              Comunicaciones de clientes por <strong>WhatsApp</strong> o <strong>Email</strong>. Puedes responder por ambos.
-              {configurada ? ' Configuración WhatsApp cargada.' : ' Configura WhatsApp y Email para enviar y recibir.'}
-            </span>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Link
-              to="/configuracion?tab=whatsapp"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800"
-            >
-              <Settings className="h-4 w-4" />
-              WhatsApp
-            </Link>
-            <Link
-              to="/configuracion?tab=email"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800"
-            >
-              <Settings className="h-4 w-4" />
-              Email
-            </Link>
-            <Link
-              to="/configuracion?tab=ai"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800"
-            >
-              <Settings className="h-4 w-4" />
-              AI
-            </Link>
-            <Link
-              to="/configuracion?tab=informe-pagos"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800"
-            >
-              <Settings className="h-4 w-4" />
-              Informe pagos (Drive, Sheets)
-            </Link>
-            <Link
-              to="/configuracion?tab=ocr"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800"
-            >
-              <Settings className="h-4 w-4" />
-              OCR
-            </Link>
-          </div>
+        <CardContent className="py-3 px-4 flex flex-wrap items-center gap-2">
+          <MessageSquare className="h-4 w-4 text-blue-600 shrink-0" />
+          <span className="text-sm text-gray-700">
+            Comunicaciones de clientes por <strong>WhatsApp</strong> o <strong>Email</strong>. Puedes responder por ambos.
+            {configurada ? ' Configuración WhatsApp cargada.' : ' Configura WhatsApp y Email en Configuración para enviar y recibir.'}
+          </span>
         </CardContent>
       </Card>
       <Comunicaciones

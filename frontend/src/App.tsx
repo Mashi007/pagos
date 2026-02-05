@@ -32,7 +32,6 @@ import { Welcome } from './pages/Welcome'
 import { Login } from './pages/Login'
 import DashboardMenu from './pages/DashboardMenu'
 import Configuracion from './pages/Configuracion'
-import Plantillas from './pages/Plantillas'
 import Programador from './pages/Programador'
 import Clientes from './pages/Clientes'
 import Prestamos from './pages/Prestamos'
@@ -191,11 +190,11 @@ function App() {
 
           {/* Notificaciones (dentro de CRM en sidebar) */}
           <Route path="notificaciones" element={<Notificaciones />} />
-          <Route path="notificaciones/plantillas" element={<SimpleProtectedRoute requireAdmin={true}><Plantillas /></SimpleProtectedRoute>} />
 
-          {/* Herramientas: redirecciones por compatibilidad con enlaces antiguos */}
+          {/* Redirecciones: plantillas viven en Configuración */}
+          <Route path="notificaciones/plantillas" element={<Navigate to="/configuracion?tab=plantillas" replace />} />
           <Route path="herramientas/notificaciones" element={<Navigate to="/notificaciones" replace />} />
-          <Route path="herramientas/plantillas" element={<Navigate to="/notificaciones/plantillas" replace />} />
+          <Route path="herramientas/plantillas" element={<Navigate to="/configuracion?tab=plantillas" replace />} />
 
           {/* Comunicaciones (Unificado WhatsApp y Email) */}
           <Route path="comunicaciones" element={<ComunicacionesPage />} />
