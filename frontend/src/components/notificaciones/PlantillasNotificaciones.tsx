@@ -51,8 +51,14 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
     return parts.join('\n\n')
   }, [encabezado, cuerpo, firma])
 
-  const variablesSugeridas = [
-    'nombre', 'monto', 'fecha_vencimiento', 'numero_cuota', 'credito_id', 'cedula', 'dias_atraso'
+  /** Variables que el sistema sustituye al enviar (sin burocracia de tablas/BD). Insertar en asunto/cuerpo. */
+  const VARIABLES_NOTIFICACION = [
+    { key: 'nombre', label: 'Nombre' },
+    { key: 'cedula', label: 'Cédula' },
+    { key: 'fecha_vencimiento', label: 'Fecha venc.' },
+    { key: 'numero_cuota', label: 'Nº cuota' },
+    { key: 'monto', label: 'Monto' },
+    { key: 'dias_atraso', label: 'Días atraso' },
   ]
 
   // Tipos organizados por categorías
@@ -729,7 +735,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-lg font-semibold">Armar plantilla</h2>
-            <p className="text-sm text-gray-500">Complete el formulario y use el banco de variables para construir su plantilla</p>
+            <p className="text-sm text-gray-500">Elige el caso, escribe asunto y cuerpo, inserta variables y guarda. Luego asígnala en Notificaciones → Configuración.</p>
           </div>
           <div className="flex gap-2">
             <Button onClick={importar} variant="outline" size="sm" title="Importar plantilla">
@@ -751,17 +757,26 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
             </div>
             <div>
               <label className="text-sm text-gray-600 mb-2 block">
-                Tipos de Notificación {selected ? '(Edición - Solo un tipo)' : '(Seleccione uno o más para crear múltiples plantillas)'}
+                Aplicar al caso
               </label>
 
               {selected ? (
-                // Al editar, mostrar solo el tipo actual
-                <select value={tipo} onChange={e=>setTipo(e.target.value)} className="w-full border rounded px-3 py-2 text-sm">
+                <select value={tipo} onChange={e=>setTipo(e.target.value)} className="w-full border rounded px-3 py-2 text-sm bg-white">
                   <option value="">Seleccione...</option>
-                  {tiposSugeridos.map(t => <option key={t} value={t}>{t}</option>)}
+                  {todosLosTipos.map(t => <option key={t.valor} value={t.valor}>{t.label}</option>)}
                 </select>
               ) : (
-                // Al crear, mostrar selector múltiple por categorías
+                <select
+                  value={tiposSeleccionados[0] || ''}
+                  onChange={e => setTiposSeleccionados(e.target.value ? [e.target.value] : [])}
+                  className="w-full border rounded px-3 py-2 text-sm bg-white"
+                >
+                  <option value="">Seleccione un caso...</option>
+                  {todosLosTipos.map(t => <option key={t.valor} value={t.valor}>{t.label}</option>)}
+                </select>
+              )}
+            </div>
+            <div className="sr-only">
                 <div className="border rounded-lg p-4 bg-gray-50 space-y-4">
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-gray-600">
@@ -881,11 +896,32 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
                     </div>
                   )}
                 </div>
-              )}
             </div>
             <div className="flex items-center gap-2">
               <input id="activa" type="checkbox" checked={activa} onChange={e=>setActiva(e.target.checked)} />
               <label htmlFor="activa" className="text-sm">Habilitar envío automático a las 3:00 AM</label>
+            </div>
+          </div>
+
+          {/* Variables listas para insertar (sin burocracia) */}
+          <div className="rounded-lg bg-blue-50 border border-blue-200 p-3">
+            <p className="text-xs font-semibold text-blue-900 mb-2">Insertar variable en asunto o cuerpo (clic):</p>
+            <div className="flex flex-wrap gap-2">
+              {VARIABLES_NOTIFICACION.map(({ key, label }) => (
+                <Button
+                  key={key}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="bg-white border-blue-300 text-blue-800 hover:bg-blue-100 font-mono text-xs"
+                  onClick={() => {
+                    insertarVariable(key)
+                    toast.success(`{{${key}}} insertado`, { duration: 1200 })
+                  }}
+                >
+                  {`{{${key}}}`}
+                </Button>
+              ))}
             </div>
           </div>
 

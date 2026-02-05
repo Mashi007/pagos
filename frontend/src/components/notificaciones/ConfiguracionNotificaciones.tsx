@@ -144,163 +144,114 @@ export function ConfiguracionNotificaciones() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-xl">
             <Settings className="h-5 w-5 text-blue-600" />
-            Configuración por criterio
+            Configuración por caso
           </CardTitle>
           <CardDescription>
-            Cada pestaña de notificaciones tiene su plantilla, correos (CCO), activación y hora de envío. Las plantillas se gestionan en Configuración &rarr; Plantillas.
+            Asigna una plantilla a cada caso, activa el envío y guarda. Las plantillas se crean en Configuración → Plantillas (texto + variables).
           </CardDescription>
         </CardHeader>
       </Card>
 
-      <Card className="border-blue-100 bg-blue-50/50">
-        <CardContent className="py-3 px-4 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2 text-sm text-gray-700">
-            <Mail className="h-4 w-4 text-blue-600" />
-            <span>Los correos se envían con la cuenta configurada en <strong>Configuración &gt; Email</strong> (Gmail/SMTP).</span>
-          </div>
-          <Link
-            to="/configuracion?tab=email"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800"
-          >
-            <LinkIcon className="h-4 w-4" />
-            Ir a Configuración (Email)
-          </Link>
-        </CardContent>
-      </Card>
-
-      <div className="grid grid-cols-1 gap-4">
-        {CRITERIOS.map(({ tipo, label, categoria, color }) => {
-          const config = getConfig(tipo)
-          const col = COLORES[color]
-          const listaPlantillas = plantillasPorTipo(tipo)
-
-          return (
-            <Card key={tipo} className={`${col.bg} ${col.border} border-2 overflow-hidden`}>
-              <CardContent className="p-0">
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 p-5">
-                  {/* Fila 1: Título + ON/OFF */}
-                  <div className="md:col-span-12 flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <h3 className={`font-bold text-lg ${col.text}`}>{label}</h3>
-                      <p className={`text-sm ${col.accent} opacity-80`}>{categoria}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-xs font-medium ${!config.habilitado ? 'text-gray-700' : 'text-gray-400'}`}>OFF</span>
-                      <button
-                        type="button"
-                        onClick={() => toggleEnvio(tipo)}
-                        className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ${
-                          config.habilitado ? 'bg-blue-600' : 'bg-gray-300'
-                        }`}
-                      >
-                        <span
-                          className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform shadow ${
-                            config.habilitado ? 'translate-x-6' : 'translate-x-1'
-                          }`}
+      <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-200">
+              <th className="text-left py-3 px-4 font-semibold text-gray-700">Caso</th>
+              <th className="text-left py-3 px-4 font-semibold text-gray-700">Plantilla</th>
+              <th className="text-center py-3 px-4 font-semibold text-gray-700 w-24">Envío</th>
+              <th className="text-left py-3 px-4 font-semibold text-gray-700 w-32">Opciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {CRITERIOS.map(({ tipo, label, categoria, color }) => {
+              const config = getConfig(tipo)
+              const col = COLORES[color]
+              const listaPlantillas = plantillasPorTipo(tipo)
+              return (
+                <tr key={tipo} className={`border-b border-gray-100 ${col.bg}`}>
+                  <td className="py-3 px-4">
+                    <span className={`font-medium ${col.text}`}>{label}</span>
+                    <span className={`block text-xs ${col.accent} opacity-80`}>{categoria}</span>
+                  </td>
+                  <td className="py-3 px-4">
+                    <Select
+                      value={config.plantilla_id ? String(config.plantilla_id) : '__ninguna__'}
+                      onValueChange={(v) => setConfig(tipo, { plantilla_id: v === '__ninguna__' ? null : parseInt(v, 10) })}
+                      disabled={!config.habilitado}
+                    >
+                      <SelectTrigger className="w-full max-w-xs bg-white border-gray-200">
+                        <SelectValue placeholder="Seleccionar" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__ninguna__">Texto por defecto</SelectItem>
+                        {listaPlantillas.map((p) => (
+                          <SelectItem key={p.id} value={String(p.id)}>{p.nombre || `#${p.id}`}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </td>
+                  <td className="py-3 px-4 text-center">
+                    <button
+                      type="button"
+                      onClick={() => toggleEnvio(tipo)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ${
+                        config.habilitado ? 'bg-blue-600' : 'bg-gray-300'
+                      }`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ${config.habilitado ? 'translate-x-5' : 'translate-x-1'}`} />
+                    </button>
+                  </td>
+                  <td className="py-3 px-4">
+                    <details className="group">
+                      <summary className="cursor-pointer text-blue-600 hover:text-blue-800 text-xs font-medium list-none">
+                        CCO / hora
+                      </summary>
+                      <div className="mt-2 space-y-2 pl-0">
+                        <Input
+                          type="time"
+                          value={config.programador || HORA_DEFAULT}
+                          onChange={(e) => setConfig(tipo, { programador: e.target.value })}
+                          disabled={!config.habilitado}
+                          className="h-8 text-xs bg-white w-28"
                         />
-                      </button>
-                      <span className={`text-xs font-medium ${config.habilitado ? 'text-gray-700' : 'text-gray-400'}`}>ON</span>
-                    </div>
-                  </div>
-
-                  {/* Fila 2: Plantilla */}
-                  <div className="md:col-span-12 md:grid md:grid-cols-12 md:gap-4">
-                    <div className="md:col-span-4">
-                      <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
-                        <FileText className="h-4 w-4" />
-                        Plantilla a enviar
-                      </label>
-                      <Select
-                        value={config.plantilla_id ? String(config.plantilla_id) : '__ninguna__'}
-                        onValueChange={(v) => setConfig(tipo, { plantilla_id: v === '__ninguna__' ? null : parseInt(v, 10) })}
-                        disabled={!config.habilitado}
-                      >
-                        <SelectTrigger className="w-full bg-white">
-                          <SelectValue placeholder="Seleccionar plantilla" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__ninguna__">Sin plantilla (texto por defecto)</SelectItem>
-                          {listaPlantillas.map((p) => (
-                            <SelectItem key={p.id} value={String(p.id)}>
-                              {p.nombre || `Plantilla #${p.id}`}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="md:col-span-4">
-                      <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
-                        <Clock className="h-4 w-4" />
-                        Programador (hora)
-                      </label>
-                      <Input
-                        type="time"
-                        value={config.programador || HORA_DEFAULT}
-                        onChange={(e) => setConfig(tipo, { programador: e.target.value })}
-                        disabled={!config.habilitado}
-                        className="bg-white"
-                      />
-                    </div>
-
-                    <div className="md:col-span-4" />
-                  </div>
-
-                  {/* Fila 3: Correos CCO */}
-                  <div className="md:col-span-12">
-                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-                      <Mail className="h-4 w-4" />
-                      Copia (CCO) – hasta 3 correos
-                    </label>
-                    <div className="space-y-2">
-                      {[0, 1, 2].map((index) => (
-                        <div key={index} className="flex items-center gap-2">
-                          <Input
-                            type="email"
-                            placeholder={`ejemplo${index + 1}@correo.com`}
-                            value={config.cco[index] || ''}
-                            onChange={(e) => actualizarCCO(tipo, index, e.target.value)}
-                            className="flex-1 bg-white"
-                            disabled={!config.habilitado}
-                          />
-                          {config.cco[index] && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => eliminarCCO(tipo, index)}
+                        {[0, 1, 2].map((i) => (
+                          <div key={i} className="flex gap-1">
+                            <Input
+                              type="email"
+                              placeholder="CCO"
+                              value={config.cco[i] || ''}
+                              onChange={(e) => actualizarCCO(tipo, i, e.target.value)}
+                              className="h-8 text-xs flex-1 bg-white"
                               disabled={!config.habilitado}
-                              className="shrink-0 hover:bg-red-100 hover:text-red-600"
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )
-        })}
+                            />
+                            {config.cco[i] && (
+                              <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => eliminarCCO(tipo, i)}>
+                                <X className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t">
-        <Link
-          to="/configuracion?tab=plantillas"
-          className="text-sm text-blue-600 hover:text-blue-800 inline-flex items-center gap-1"
-        >
-          <FileText className="h-4 w-4" />
-          Gestionar plantillas en Configuración
-        </Link>
-        <Button
-          onClick={guardarConfiguracionEnvios}
-          disabled={guardandoEnvios}
-          className="bg-blue-600 hover:bg-blue-700"
-        >
-          <Settings className="h-4 w-4 mr-2" />
-          {guardandoEnvios ? 'Guardando...' : 'Guardar configuración'}
+      <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
+        <div className="flex items-center gap-3 text-sm text-gray-600">
+          <Link to="/configuracion?tab=email" className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800">
+            <Mail className="h-4 w-4" /> Email (SMTP)
+          </Link>
+          <Link to="/configuracion?tab=plantillas" className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800">
+            <FileText className="h-4 w-4" /> Crear/editar plantillas
+          </Link>
+        </div>
+        <Button onClick={guardarConfiguracionEnvios} disabled={guardandoEnvios} className="bg-blue-600 hover:bg-blue-700">
+          {guardandoEnvios ? 'Guardando...' : 'Guardar'}
         </Button>
       </div>
     </div>
