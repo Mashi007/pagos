@@ -39,6 +39,8 @@ MIN_CARACTERES_PARA_CLARA = 50  # Si el OCR detecta al menos esto, se considera 
 # Regla HUMANO: si más del 80% del texto detectado tiene confianza baja (manuscrito/ilegible), se marca HUMANO y NO se inventan datos (campos NA).
 UMBRAL_CONFIANZA_BAJA = 0.85  # Palabras con confidence < esto se consideran "baja confianza"
 PORCENTAJE_MINIMO_PARA_HUMANO = 0.80  # Si (palabras baja confianza / total) >= esto → requiere revisión humana
+# Spec: OCR mínimo 70% confianza. Si la confianza media del documento es menor, se requiere revisión humana (no inventar).
+UMBRAL_CONFIANZA_MINIMA_OCR = 0.70
 VALOR_HUMANO = "HUMANO"  # Valor fijo para la columna HUMANO; no inventar cuando esté marcado
 
 VISION_SCOPE = ["https://www.googleapis.com/auth/cloud-vision"]
@@ -116,12 +118,12 @@ def imagen_suficientemente_clara(image_bytes: bytes, min_chars: int = MIN_CARACT
     return clara
 
 
-def _requiere_revision_humana_from_doc(doc) -> bool:
-    """Calcula si el documento requiere revisión humana (no inventar) a partir de full_text_annotation."""
+def _confianza_media_from_doc(doc) -> float:
+    """Calcula la confianza media del OCR (0.0–1.0) a partir de full_text_annotation. 0.0 si no hay doc o sin palabras."""
     if not doc:
-        return False
+        return 0.0
     total = 0
-    baja_confianza = 0
+    suma_confianza = 0.0
     try:
         for page in doc.pages:
             for block in page.blocks:
@@ -130,6 +132,30 @@ def _requiere_revision_humana_from_doc(doc) -> bool:
                         conf = getattr(word, "confidence", None)
                         if conf is not None:
                             total += 1
+                            suma_confianza += float(conf)
+    except (AttributeError, TypeError) as e:
+        logger.debug("No se pudo calcular confianza OCR (usando doc.pages): %s", e)
+        return 0.0
+    return (suma_confianza / total) if total else 0.0
+
+
+def _requiere_revision_humana_from_doc(doc) -> bool:
+    """Calcula si el documento requiere revisión humana (no inventar) a partir de full_text_annotation.
+    Spec: OCR mínimo 70% confianza. Se requiere revisión si: (1) confianza media < 70%, o (2) >= 80% palabras con confianza baja."""
+    if not doc:
+        return False
+    total = 0
+    baja_confianza = 0
+    suma_confianza = 0.0
+    try:
+        for page in doc.pages:
+            for block in page.blocks:
+                for para in block.paragraphs:
+                    for word in para.words:
+                        conf = getattr(word, "confidence", None)
+                        if conf is not None:
+                            total += 1
+                            suma_confianza += float(conf)
                             if conf < UMBRAL_CONFIANZA_BAJA:
                                 baja_confianza += 1
     except (AttributeError, TypeError) as e:
@@ -137,16 +163,22 @@ def _requiere_revision_humana_from_doc(doc) -> bool:
         return False
     if total == 0:
         return False
+    # Spec: rechazar si confianza media < 70%
+    confianza_media = suma_confianza / total if total else 0
+    if confianza_media < UMBRAL_CONFIANZA_MINIMA_OCR:
+        logger.info("%s [OCR] Confianza media %.2f < %.2f → HUMANO (spec mín 70%%)", LOG_TAG_INFORME, confianza_media, UMBRAL_CONFIANZA_MINIMA_OCR)
+        return True
     return (baja_confianza / total) >= PORCENTAJE_MINIMO_PARA_HUMANO
 
 
-def extract_from_image(image_bytes: bytes) -> Dict[str, str]:
+def extract_from_image(image_bytes: bytes) -> Dict[str, Any]:
     """
     Ejecuta OCR (Google Vision) sobre la imagen y devuelve:
     - fecha_deposito, nombre_banco, numero_deposito, numero_documento, cantidad (o "NA" si no detectado)
     - humano: "HUMANO" si más del 80% del texto es de baja confianza (manuscrito/ilegible); en ese caso NO se inventan datos (todos los campos NA).
+    - confianza_media: float 0.0–1.0 (confianza media del OCR); para estado conciliación: >= 0.90 → conciliado, < 0.90 → revisión.
     """
-    base_na = {"fecha_deposito": NA, "nombre_banco": NA, "numero_deposito": NA, "numero_documento": NA, "cantidad": NA}
+    base_na = {"fecha_deposito": NA, "nombre_banco": NA, "numero_deposito": NA, "numero_documento": NA, "cantidad": NA, "confianza_media": 0.0}
     size = len(image_bytes or b"")
     logger.info("%s [OCR] extract_from_image INICIO | bytes=%d", LOG_TAG_INFORME, size)
     if size < 100:
@@ -177,9 +209,10 @@ def extract_from_image(image_bytes: bytes) -> Dict[str, str]:
             )
             return {**base_na, "humano": ""}
         doc = response.full_text_annotation
+        conf_media = _confianza_media_from_doc(doc)
         if _requiere_revision_humana_from_doc(doc):
             logger.info("%s OCR >80%% baja confianza → HUMANO (no inventar datos).", LOG_TAG_INFORME)
-            return {**base_na, "humano": VALOR_HUMANO}
+            return {**base_na, "humano": VALOR_HUMANO, "confianza_media": conf_media}
         full_text = (doc.text if doc else "") or ""
         logger.info("%s [OCR] Paso 3/4 OK: texto extraído len=%d preview=%s", LOG_TAG_INFORME, len(full_text), (full_text[:120] + "..." if len(full_text) > 120 else full_text))
         result = _parse_papeleta_text(
@@ -189,14 +222,16 @@ def extract_from_image(image_bytes: bytes) -> Dict[str, str]:
             keywords_numero_documento=get_ocr_keywords_numero_documento(),
         )
         result["humano"] = ""
+        result["confianza_media"] = conf_media
         logger.info(
-            "%s [OCR] Paso 4/4 parse resultado: fecha=%s banco=%s numero_dep=%s numero_doc=%s cantidad=%s",
+            "%s [OCR] Paso 4/4 parse resultado: fecha=%s banco=%s numero_dep=%s numero_doc=%s cantidad=%s confianza_media=%.2f",
             LOG_TAG_INFORME,
             result.get("fecha_deposito"),
             result.get("nombre_banco"),
             result.get("numero_deposito"),
             result.get("numero_documento"),
             result.get("cantidad"),
+            conf_media,
         )
         return result
     except Exception as e:

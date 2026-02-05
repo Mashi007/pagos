@@ -94,6 +94,16 @@ class Settings(BaseSettings):
         None,
         description="URL (ej. Slack Incoming Webhook) para alertas cuando falla el procesamiento del webhook de WhatsApp"
     )
+    # Teléfono de soporte mostrado cuando el usuario supera máx intentos (cédula inválida, etc.).
+    SUPPORT_PHONE: str = Field(
+        default="0424-4359435",
+        description="Teléfono de soporte para estado ERROR_MAX_INTENTOS del bot de cobranza",
+    )
+    # Segundos de espera entre mensajes del bot (humanización: simular "escribiendo"). Spec: 2.
+    MESSAGE_DELAY_SECONDS: float = Field(
+        default=2.0,
+        description="Delay en segundos entre mensajes consecutivos del bot (bienvenida en varios mensajes)",
+    )
     
     # ============================================
     # Email

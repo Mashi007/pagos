@@ -16,9 +16,14 @@ class ConversacionCobranza(Base):
     cedula = Column(String(20), nullable=True)
     nombre_cliente = Column(String(100), nullable=True)
     estado = Column(String(30), nullable=False, default="esperando_cedula")
+    intento_cedula = Column(Integer, nullable=False, default=0)
     intento_foto = Column(Integer, nullable=False, default=0)
     intento_confirmacion = Column(Integer, nullable=False, default=0)
     observacion = Column(Text, nullable=True)
     pagos_informe_id_pendiente = Column(Integer, ForeignKey("pagos_informes.id", ondelete="SET NULL"), nullable=True)
+    # Confirmación punto a punto: 0=cedula, 1=cantidad, 2=numero_documento
+    confirmacion_paso = Column(Integer, nullable=False, default=0)
+    # Si está puesto, esperamos que el cliente escriba el valor correcto para este campo
+    confirmacion_esperando_valor = Column(String(30), nullable=True)
     created_at = Column(DateTime(timezone=False), nullable=False, server_default=text("CURRENT_TIMESTAMP"))
     updated_at = Column(DateTime(timezone=False), nullable=False, server_default=text("CURRENT_TIMESTAMP"))

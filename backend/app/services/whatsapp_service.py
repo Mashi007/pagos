@@ -3,16 +3,19 @@ Servicio para manejar mensajes entrantes de WhatsApp (Meta API).
 Flujo cobranza: bienvenida → cédula (E, J o V + 6-11 dígitos) → foto papeleta (máx. 3 intentos) → guardar en Drive + OCR + digitalizar.
 Las imágenes se guardan en pagos_whatsapp con link_imagen (Google Drive).
 Si la imagen no es clara tras 3 intentos se acepta igual, se crea un ticket automático con todo el respaldo y se envía copia al correo configurado (ej. itmaster@rapicreditca.com).
+Reglas de humanización: mensajes cortos, MESSAGE_DELAY entre envíos, emojis profesionales; INICIO → 3 mensajes de bienvenida → ESPERANDO_CEDULA; máx 3 intentos cédula → ERROR_MAX_INTENTOS.
 """
+import asyncio
 import json
 import re
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 
 from app.schemas.whatsapp import WhatsAppMessage, WhatsAppContact
+from app.core.config import settings
 from app.core.whatsapp_config_holder import get_whatsapp_config, sync_from_db as whatsapp_sync_from_db
 from app.models.cliente import Cliente
 from app.models.pagos_whatsapp import PagosWhatsapp
@@ -60,7 +63,20 @@ def guardar_mensaje_whatsapp(
         logger.debug("No se pudo guardar mensaje en historial: %s", e)
         db.rollback()
 
-# Mensajes del flujo (Configuración AI / WhatsApp puede personalizarlos después)
+# --- Humanización: delay entre mensajes (spec 2 seg) ---
+def _get_message_delay() -> float:
+    return getattr(settings, "MESSAGE_DELAY_SECONDS", 2.0)
+
+
+def _get_support_phone() -> str:
+    return (getattr(settings, "SUPPORT_PHONE", None) or "0424-4359435").strip()
+
+
+# Mensajes del flujo. INICIO: 3 mensajes cortos (humanización); luego ESPERANDO_CEDULA.
+MENSAJE_BIENVENIDA_1 = "¡Hola! 👋 Bienvenido al sistema de registro de pagos de Rapicredit."
+MENSAJE_BIENVENIDA_2 = "Soy tu asistente virtual y te ayudaré a procesar tu comprobante en un momento."
+MENSAJE_BIENVENIDA_3 = "Para comenzar, por favor indícame tu número de cédula (ejemplo: V-12345678)."
+# Fallback: un solo bloque (si no se usa envío humanizado)
 MENSAJE_BIENVENIDA = (
     "Hola, bienvenido al servicio de cobranza de Rapicredit. "
     "Primero ingresa tu número de cédula sin guiones intermedios "
@@ -76,6 +92,16 @@ MENSAJE_GRACIAS_PIDE_FOTO = (
 MENSAJE_CEDULA_INVALIDA = (
     "La cédula debe empezar por una de las 3 letras E, J o V, seguido de entre 6 y 11 números, sin guiones ni signos. "
     "Ejemplos: E1234567, V12345678, J1234567 o EVJ1234567. Vuelve a ingresarla."
+)
+# Amable, con ejemplo (humanización). {ejemplo} = V-12345678.
+MENSAJE_CEDULA_INVALIDA_AMABLE = (
+    "El formato no es correcto. 😅 Por favor usa una de las letras V, E o J seguido de 6 a 11 números. "
+    "Ejemplo: V-12345678"
+)
+# Tras 3 intentos fallidos de cédula. {telefono} = SUPPORT_PHONE.
+MENSAJE_ERROR_MAX_INTENTOS = (
+    "Has superado el número máximo de intentos para este paso. "
+    "Por favor contacta a soporte al {telefono} y un asistente te ayudará. 📞"
 )
 MENSAJE_VUELVE_CEDULA = "Por favor escribe de nuevo tu número de cédula (E, J o V seguido de 6 a 11 números)."
 MENSAJE_RESPONDE_SI_NO = "Por favor responde Sí o No: ¿El reporte de pago es a cargo de {nombre}?"
@@ -116,7 +142,8 @@ MENSAJE_OTRA_INFORMACION = (
 )
 
 # Si la conversación lleva más de esta cantidad de minutos sin actividad, se trata como nuevo caso (pedir cédula e imagen de nuevo).
-MINUTOS_INACTIVIDAD_NUEVO_CASO = 5
+# Spec: timeout sesión 15 minutos.
+MINUTOS_INACTIVIDAD_NUEVO_CASO = 15
 
 
 def _conversacion_obsoleta(conv: ConversacionCobranza, minutos: int = MINUTOS_INACTIVIDAD_NUEVO_CASO) -> bool:
@@ -138,6 +165,7 @@ def _reiniciar_como_nuevo_caso(conv: ConversacionCobranza, db: Session) -> None:
     conv.estado = "esperando_cedula"
     conv.cedula = None
     conv.nombre_cliente = None
+    conv.intento_cedula = 0
     conv.intento_foto = 0
     conv.intento_confirmacion = 0
     conv.observacion = None
@@ -148,15 +176,41 @@ def _reiniciar_como_nuevo_caso(conv: ConversacionCobranza, db: Session) -> None:
     logger.info("Conversación %s reiniciada como nuevo caso (inactividad > %s min).", conv.telefono, MINUTOS_INACTIVIDAD_NUEVO_CASO)
 
 
-# Validación cédula: debe empezar por E, J o V (una de las 3 letras) + 6 a 11 dígitos. Acepta E1234567, V12345678, J1234567, EVJ1234567.
+async def _enviar_mensajes_con_delay(
+    to_phone: str,
+    mensajes: List[str],
+    db: Optional[Session] = None,
+    delay_seconds: Optional[float] = None,
+) -> None:
+    """
+    Envía varios mensajes con delay entre ellos (humanización: simular que el bot escribe).
+    Guarda cada mensaje en historial si db está disponible.
+    """
+    delay = delay_seconds if delay_seconds is not None else _get_message_delay()
+    for i, texto in enumerate(mensajes):
+        if not (texto or "").strip():
+            continue
+        try:
+            await _send_whatsapp_async(to_phone, texto.strip())
+            if db:
+                guardar_mensaje_whatsapp(db, to_phone, "OUTBOUND", texto.strip(), "text")
+        except Exception as e:
+            logger.warning("Error enviando mensaje %d/%d (bienvenida): %s", i + 1, len(mensajes), e)
+        if i < len(mensajes) - 1 and delay > 0:
+            await asyncio.sleep(delay)
+
+
+# Validación cédula venezolana: spec ^[VEJvej]-?\d{6,11}$. Una letra E, J o V (o EVJ) + 6 a 11 dígitos. Guión opcional (se normaliza).
 CEDULA_PATTERN_E = re.compile(r"^[Ee]\d{6,11}$")
 CEDULA_PATTERN_J = re.compile(r"^[Jj]\d{6,11}$")
 CEDULA_PATTERN_V = re.compile(r"^[Vv]\d{6,11}$")
 CEDULA_PATTERN_EVJ = re.compile(r"^[Ee][Vv][Jj]\d{6,11}$")
+# Patrón unificado spec (guión opcional): ^[VEJvej]-?\d{6,11}$
+CEDULA_PATTERN_SPEC = re.compile(r"^[VEJvej]-?\d{6,11}$", re.IGNORECASE)
 
 
 def _normalize_cedula_input(text: str) -> str:
-    """Quita espacios y guiones del texto para validar cédula."""
+    """Quita espacios y guiones del texto para validar cédula (spec: V/E/J + 6-11 dígitos, guión opcional)."""
     return (text or "").strip().replace(" ", "").replace("-", "").replace("_", "")
 
 
@@ -193,8 +247,37 @@ def _es_respuesta_no(text: str) -> bool:
     return t in ("no", "n", "negativo", "incorrecto")
 
 
-# Solo estos campos se confirman/editan con el cliente: cédula, cantidad, número de documento.
+# Solo estos campos se confirman/editan con el cliente: cédula, cantidad, número de documento (orden para confirmación punto a punto).
 CAMPOS_CONFIRMACION = ("cedula", "cantidad", "numero_documento")
+ORDEN_CAMPOS_CONFIRMACION = ("cedula", "cantidad", "numero_documento")
+
+
+def _nombre_campo_para_usuario(campo: str) -> str:
+    """Nombre legible del campo para mensajes al usuario."""
+    return {"cedula": "cédula", "cantidad": "cantidad", "numero_documento": "Nº documento"}.get(campo, campo)
+
+
+def _valor_campo_informe(informe: PagosInforme, campo: str) -> str:
+    """Valor actual del campo en el informe para mostrar en la pregunta."""
+    if campo == "cedula":
+        return (getattr(informe, "cedula", None) or "").strip() or "—"
+    if campo == "cantidad":
+        return (getattr(informe, "cantidad", None) or "").strip() or "—"
+    if campo == "numero_documento":
+        return (getattr(informe, "numero_documento", None) or "").strip() or "—"
+    return "—"
+
+
+def _mensaje_pregunta_si_no(campo: str, valor: str) -> str:
+    """Mensaje: ¿El [campo] es X? Responde Sí o No."""
+    nombre = _nombre_campo_para_usuario(campo)
+    return f"¿La {nombre} es *{valor}*? Responde *Sí* o *No*."
+
+
+def _mensaje_pide_escribir_campo(campo: str) -> str:
+    """Mensaje: Por favor escribe la [campo] correcta."""
+    nombre = _nombre_campo_para_usuario(campo)
+    return f"Por favor escribe la {nombre} correcta."
 
 
 def _parsear_edicion_confirmacion(text: str) -> Dict[str, Any]:
@@ -482,25 +565,41 @@ class WhatsAppService:
             return {"success": False, "error": str(e), "message_id": getattr(message, "id", None)}
 
     async def _process_text_cobranza(self, text: str, from_number: str, db: Session) -> Dict[str, Any]:
-        """Flujo: bienvenida → cédula (E, J o V + 6-11 dígitos) → confirmación (Sí/No, máx. 3 intentos) → pedir foto. Respuestas por nombre cuando hay cliente."""
+        """Flujo: bienvenida → cédula (E, J o V + 6-11 dígitos) → confirmación (Sí/No, máx. 3 intentos) → pedir foto.
+        Spec máx 3 intentos por campo: implementado 3 para confirmación identidad (Sí/No) y 3 para foto; confirmación de datos (banco/doc/monto) es un solo paso con ediciones por texto."""
         phone = "".join(c for c in from_number if c.isdigit())
         if len(phone) < 10:
             phone = from_number
         conv = db.execute(select(ConversacionCobranza).where(ConversacionCobranza.telefono == phone)).scalar_one_or_none()
         if not conv:
-            conv = ConversacionCobranza(telefono=phone, estado="esperando_cedula", intento_foto=0, intento_confirmacion=0)
+            conv = ConversacionCobranza(telefono=phone, estado="esperando_cedula", intento_cedula=0, intento_foto=0, intento_confirmacion=0)
             db.add(conv)
             db.commit()
             db.refresh(conv)
             if _pide_otra_informacion(text):
                 return {"status": "otra_informacion", "response_text": MENSAJE_OTRA_INFORMACION}
-            return {"status": "welcome", "response_text": MENSAJE_BIENVENIDA}
+            # INICIO: 3 mensajes cortos con delay (humanización). No devolver response_text para no duplicar envío.
+            await _enviar_mensajes_con_delay(
+                from_number,
+                [MENSAJE_BIENVENIDA_1, MENSAJE_BIENVENIDA_2, MENSAJE_BIENVENIDA_3],
+                db=db,
+            )
+            return {"status": "welcome"}
+        # Estado ERROR_MAX_INTENTOS: pedir contacto a soporte
+        if getattr(conv, "estado", None) == "error_max_intentos":
+            msg = MENSAJE_ERROR_MAX_INTENTOS.format(telefono=_get_support_phone())
+            return {"status": "error_max_intentos", "response_text": msg}
         # Si lleva mucho tiempo sin actividad, tratar como nuevo caso (nuevo reporte de pago)
         if _conversacion_obsoleta(conv):
             _reiniciar_como_nuevo_caso(conv, db)
             if _pide_otra_informacion(text):
                 return {"status": "otra_informacion", "response_text": MENSAJE_OTRA_INFORMACION}
-            return {"status": "welcome", "response_text": MENSAJE_BIENVENIDA}
+            await _enviar_mensajes_con_delay(
+                from_number,
+                [MENSAJE_BIENVENIDA_1, MENSAJE_BIENVENIDA_2, MENSAJE_BIENVENIDA_3],
+                db=db,
+            )
+            return {"status": "welcome"}
         # Tras OCR: cliente confirma datos o escribe correcciones; actualizamos columnas si edita
         if conv.estado == "esperando_confirmacion_datos":
             informe_id = getattr(conv, "pagos_informe_id_pendiente", None)
@@ -509,6 +608,7 @@ class WhatsAppService:
             if not informe_id or not db:
                 logger.warning("%s Confirmación datos: sin informe_id o db, reiniciando flujo", LOG_TAG_FALLO)
                 conv.estado = "esperando_cedula"
+                conv.intento_cedula = 0
                 conv.pagos_informe_id_pendiente = None
                 conv.updated_at = datetime.utcnow()
                 db.commit()
@@ -517,6 +617,7 @@ class WhatsAppService:
             if not informe:
                 logger.warning("%s Confirmación datos: informe_id=%s no encontrado en BD", LOG_TAG_FALLO, informe_id)
                 conv.estado = "esperando_cedula"
+                conv.intento_cedula = 0
                 conv.pagos_informe_id_pendiente = None
                 conv.updated_at = datetime.utcnow()
                 db.commit()
@@ -526,6 +627,7 @@ class WhatsAppService:
                 informe.estado_conciliacion = "CONCILIADO"
                 conv.pagos_informe_id_pendiente = None
                 conv.intento_foto = 0
+                conv.intento_cedula = 0
                 conv.estado = "esperando_cedula"
                 cedula_guardada = conv.cedula
                 conv.cedula = None
@@ -563,6 +665,7 @@ class WhatsAppService:
                     logger.warning("%s No se pudo actualizar Sheet con correcciones: %s", LOG_TAG_INFORME, e)
                 conv.pagos_informe_id_pendiente = None
                 conv.intento_foto = 0
+                conv.intento_cedula = 0
                 conv.estado = "esperando_cedula"
                 conv.cedula = None
                 conv.nombre_cliente = None
@@ -576,13 +679,24 @@ class WhatsAppService:
             if not _validar_cedula_evj(text):
                 if _pide_otra_informacion(text):
                     return {"status": "otra_informacion", "response_text": MENSAJE_OTRA_INFORMACION}
-                # Siempre mostrar bienvenida/instrucción cuando aún no han dado cédula válida (flujo debe pedir cédula claro)
-                return {"status": "cedula_invalida", "response_text": MENSAJE_BIENVENIDA}
+                # ESPERANDO_CEDULA: error amable, ejemplo; máx 3 intentos → ERROR_MAX_INTENTOS
+                intento_cedula = getattr(conv, "intento_cedula", 0) or 0
+                intento_cedula += 1
+                conv.intento_cedula = intento_cedula
+                conv.updated_at = datetime.utcnow()
+                db.commit()
+                if intento_cedula >= 3:
+                    conv.estado = "error_max_intentos"
+                    db.commit()
+                    msg = MENSAJE_ERROR_MAX_INTENTOS.format(telefono=_get_support_phone())
+                    return {"status": "error_max_intentos", "response_text": msg}
+                return {"status": "cedula_invalida", "response_text": MENSAJE_CEDULA_INVALIDA_AMABLE}
             cedula = _cedula_normalizada(text)
             nombre_cliente = _buscar_nombre_cliente_por_cedula(db, cedula)
             conv.cedula = cedula
             conv.nombre_cliente = nombre_cliente
             conv.estado = "esperando_confirmacion"
+            conv.intento_cedula = 0
             conv.intento_confirmacion = 1
             conv.intento_foto = 0
             conv.observacion = None
@@ -607,6 +721,7 @@ class WhatsAppService:
                 conv.estado = "esperando_cedula"
                 conv.cedula = None
                 conv.nombre_cliente = None
+                conv.intento_cedula = 0
                 conv.intento_confirmacion = 0
                 conv.observacion = None
                 conv.updated_at = datetime.utcnow()
@@ -653,6 +768,8 @@ class WhatsAppService:
             _reiniciar_como_nuevo_caso(conv, db)
             logger.info("%s Conversación obsoleta reiniciada | telefono=%s (no_digitaliza=need_cedula)", LOG_TAG_INFORME, phone_mask)
             return {"status": "need_cedula", "response_text": MENSAJE_BIENVENIDA}
+        if getattr(conv, "estado", None) == "error_max_intentos":
+            return {"status": "error_max_intentos", "response_text": MENSAJE_ERROR_MAX_INTENTOS.format(telefono=_get_support_phone())}
         if conv.estado == "esperando_cedula":
             logger.info("%s Imagen rechazada estado=esperando_cedula | telefono=%s (no_digitaliza=need_cedula)", LOG_TAG_INFORME, phone_mask)
             return {"status": "need_cedula", "response_text": MENSAJE_BIENVENIDA}
@@ -779,6 +896,9 @@ class WhatsAppService:
             cantidad = ocr_data_early.get("cantidad") or "NA"
             humano_col = (ocr_data_early.get("humano") or "").strip() or None
             observacion_informe = conv.observacion or None
+            # Estado conciliación por confianza OCR: >= 90% → CONCILIADO, < 90% → REVISION (columna H)
+            confianza_media = float(ocr_data_early.get("confianza_media") or 0)
+            estado_conciliacion = "CONCILIADO" if confianza_media >= 0.90 else "REVISION"
             informe = PagosInforme(
                 cedula=conv.cedula,
                 fecha_deposito=fecha_dep,
@@ -793,7 +913,7 @@ class WhatsAppService:
                 periodo_envio=periodo,
                 fecha_informe=datetime.utcnow(),
                 nombre_cliente=(conv.nombre_cliente or "").strip() or None,
-                estado_conciliacion=None,
+                estado_conciliacion=estado_conciliacion,
                 telefono=phone,
             )
             db.add(informe)
@@ -814,7 +934,7 @@ class WhatsAppService:
                     conv.cedula, fecha_dep, nombre_banco, numero_dep, numero_doc, cantidad, link_imagen, periodo,
                     observacion=observacion_informe,
                     nombre_cliente=(conv.nombre_cliente or "").strip() or "",
-                    estado_conciliacion="",
+                    estado_conciliacion=estado_conciliacion,
                     timestamp_registro=informe.fecha_informe,
                     telefono=phone or "",
                 )
@@ -822,16 +942,20 @@ class WhatsAppService:
                     logger.warning("%s Sheets no escribió fila (BD OK) | telefono=%s cedula=%s", LOG_TAG_INFORME, phone_mask, conv.cedula)
             except Exception as e:
                 logger.exception("%s %s | Sheet append_row exception | telefono=%s error=%s", LOG_TAG_FALLO, "digitalizacion", phone_mask, e)
-            # Enviar al chat los datos extraídos por OCR para que el cliente confirme o edite (IA no evalúa documento)
+            # Enviar al chat: confirmación punto a punto (cada campo Sí/No; si No, pedir que escriba el valor)
             conv.estado = "esperando_confirmacion_datos"
             conv.pagos_informe_id_pendiente = informe.id
+            conv.confirmacion_paso = 0
+            conv.confirmacion_esperando_valor = None
             conv.updated_at = datetime.utcnow()
             db.commit()
             logger.info("%s FLUJO_OCR OK hasta Sheet | estado=esperando_confirmacion_datos informe_id=%s telefono=%s", LOG_TAG_INFORME, informe.id, phone_mask)
             # Si se aceptó por 3.er intento pero la imagen no era clara: crear ticket automático y enviar copia al correo configurado (ej. itmaster@rapicreditca.com)
             if aceptado_por_tercer_intento:
                 _crear_ticket_recibo_no_claro(db, conv, informe, row_pw, link_imagen, phone, ocr_data_early)
-            response_text = _mensaje_confirmacion_datos_ocr(conv.cedula, cantidad, numero_doc, db)
+            # Primera pregunta: solo cédula (punto a punto)
+            valor_cedula = _valor_campo_informe(informe, "cedula")
+            response_text = "Recibimos tu comprobante. " + _mensaje_pregunta_si_no("cedula", valor_cedula)
             return {"status": "image_saved_confirmar_datos", "pagos_whatsapp_id": row_pw.id, "pagos_informe_id": informe.id, "response_text": response_text}
         except Exception as e:
             try:
