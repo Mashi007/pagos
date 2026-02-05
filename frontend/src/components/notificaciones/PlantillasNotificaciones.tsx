@@ -1115,7 +1115,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
                 Insertar
               </Button>
               <div className="text-xs text-gray-500">
-                O escriba manualmente: {variablesSugeridas.slice(0, 3).map(v => `{{${v}}}`).join(', ')}...
+                O escriba manualmente: {VARIABLES_NOTIFICACION.slice(0, 3).map(v => `{{${v.key}}}`).join(', ')}...
               </div>
             </div>
           </div>
