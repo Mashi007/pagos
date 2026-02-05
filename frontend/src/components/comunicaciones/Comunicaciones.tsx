@@ -78,8 +78,9 @@ export function Comunicaciones({
   const [cargandoMensajes, setCargandoMensajes] = useState<string | null>(null)
   // âœ… Ref para rastrear conversaciones cargadas sin causar re-renders
   const conversacionesCargadasRef = useRef<Set<string>>(new Set())
-  // Ref al final de la lista de mensajes: mantener scroll en el último mensaje al actualizar cada 15 s
+  // Ref al final de la lista de mensajes y al contenedor con scroll: mantener vista en el último mensaje al actualizar
   const chatEndRef = useRef<HTMLDivElement>(null)
+  const mensajesScrollRef = useRef<HTMLDivElement>(null)
   
   // Estado para envío de mensajes
   const [mensajeTexto, setMensajeTexto] = useState('')
@@ -328,13 +329,19 @@ export function Comunicaciones({
     ? mensajesWhatsAppFetching
     : cargandoMensajes === conversacionActual?.id
 
-  // Mantener scroll en el último mensaje al actualizar (cada 15 s); evita que la vista salte arriba
+  // Mantener scroll en el último mensaje al actualizar (refetch cada 15 s): la vista debe quedar abajo
   useEffect(() => {
     if (!conversacionActual || mensajesOrdenados.length === 0) return
-    const t = requestAnimationFrame(() => {
-      chatEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' })
+    const el = mensajesScrollRef.current
+    if (!el) return
+    const scrollToBottom = () => {
+      el.scrollTop = el.scrollHeight
+    }
+    const raf = requestAnimationFrame(() => {
+      scrollToBottom()
+      requestAnimationFrame(scrollToBottom)
     })
-    return () => cancelAnimationFrame(t)
+    return () => cancelAnimationFrame(raf)
   }, [conversacionActual?.id, mensajesOrdenados.length, mensajesOrdenados])
 
   // Cargar tickets del cliente cuando se selecciona una conversación
@@ -766,8 +773,8 @@ export function Comunicaciones({
               </div>
             </div>
 
-            {/* Mensajes */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-gray-50">
+            {/* Mensajes: min-h-0 para que flex-1 acote altura y el scroll sea dentro de este div */}
+            <div ref={mensajesScrollRef} className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3 bg-gray-50">
               {cargandoMensajesActual ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="h-6 w-6 animate-spin text-blue-600" />

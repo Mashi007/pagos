@@ -1,5 +1,6 @@
 import { apiClient, ApiResponse } from './api'
 import { User, AuthTokens } from '../types'
+import { BASE_PATH } from '../config/env'
 import {
   safeSetItem,
   safeGetItem,
@@ -88,6 +89,14 @@ export class AuthService {
     }
   }
 
+  // Olvido de contraseña: notifica a itmaster@rapicreditca.com para envío de nueva contraseña
+  async forgotPassword(email: string): Promise<{ message: string }> {
+    const normalized = email.toLowerCase().trim()
+    const raw = await apiClient.post<{ message: string }>('/api/v1/auth/forgot-password', { email: normalized })
+    const data = (raw as any)?.data != null ? (raw as any).data : raw
+    return data
+  }
+
   // Logout de usuario - CON LIMPIEZA SEGURA
   async logout(): Promise<void> {
     try {
@@ -166,9 +175,9 @@ export class AuthService {
       // Limpiar almacenamiento de autenticación
       clearAuthStorage()
 
-      // Redirigir al login después de un delay para mostrar mensaje y limpiar storage
+      // Redirigir al login (BASE_PATH para coherencia con basename /pagos)
       setTimeout(() => {
-        window.location.href = (import.meta.env.BASE_URL || '/').replace(/\/$/, '') + '/login'
+        window.location.href = `${BASE_PATH}/login`.replace(/\/+/g, '/')
       }, 500) // Aumentado a 500ms para dar tiempo a mostrar el mensaje
     }
 

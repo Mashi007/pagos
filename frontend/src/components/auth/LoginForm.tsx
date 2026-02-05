@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Eye, EyeOff, Mail, Lock } from 'lucide-react'
+import { Eye, EyeOff, Mail, Lock, Loader2 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useNavigate, useLocation } from 'react-router-dom'
 
@@ -10,9 +10,18 @@ import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
 import { AlertWithIcon } from '../../components/ui/alert'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../../components/ui/dialog'
 import { Logo } from '../../components/ui/Logo'
 import { useSimpleAuth } from '../../store/simpleAuthStore'
 import { isAxiosError } from '../../types/errors'
+import { authService } from '../../services/authService'
 
 // Constantes de configuración
 const MIN_PASSWORD_LENGTH = 6
@@ -35,8 +44,15 @@ const loginSchema = z.object({
 
 type LoginFormData = z.infer<typeof loginSchema>
 
+const FORGOT_EMAIL_DESTINO = 'itmaster@rapicreditca.com'
+
 export function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
+  const [forgotOpen, setForgotOpen] = useState(false)
+  const [forgotEmail, setForgotEmail] = useState('')
+  const [forgotLoading, setForgotLoading] = useState(false)
+  const [forgotSuccess, setForgotSuccess] = useState(false)
+  const [forgotError, setForgotError] = useState<string | null>(null)
   const { login, isLoading, error, clearError } = useSimpleAuth()
   const navigate = useNavigate()
   const location = useLocation()
@@ -45,21 +61,18 @@ export function LoginForm() {
 
   const {
     register,
+    control,
     handleSubmit,
     formState: { errors },
     setError,
-    watch,
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
       email: '',
       password: '',
-      remember: true, // Por defecto activado para persistencia
+      remember: true, // Recordarme activo por defecto (localStorage)
     },
   })
-
-  // Observar el valor del checkbox para reflejar su estado
-  const rememberChecked = watch('remember')
 
   const onSubmit = async (data: LoginFormData) => {
     try {
@@ -103,6 +116,10 @@ export function LoginForm() {
         const errorMessage = errorDetail || 'Credenciales incorrectas. Verifica tu email y contraseña.'
         setError('root', {
           message: errorMessage
+        })
+      } else if (error.response?.status === 429) {
+        setError('root', {
+          message: 'Demasiados intentos de inicio de sesión. Espere un minuto e intente de nuevo.'
         })
       } else {
         // Extraer mensaje del backend para otros errores
@@ -204,24 +221,35 @@ export function LoginForm() {
               </div>
 
               <div className="flex items-center justify-between">
-                <label className="flex items-center space-x-2 cursor-pointer">
-                  <input
-                    {...register('remember')}
-                    type="checkbox"
-                    checked={rememberChecked}
-                    className="rounded border-gray-300 text-primary focus:ring-primary"
-                  />
-                  <span className="text-sm text-muted-foreground">
-                    Recordarme
-                  </span>
-                </label>
+                <Controller
+                  name="remember"
+                  control={control}
+                  render={({ field }) => (
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={field.value === true}
+                        onChange={(e) => field.onChange(e.target.checked)}
+                        onBlur={field.onBlur}
+                        ref={field.ref}
+                        className="rounded border-gray-300 text-primary focus:ring-primary"
+                        aria-checked={field.value === true}
+                      />
+                      <span className="text-sm text-muted-foreground">
+                        Recordarme
+                      </span>
+                    </label>
+                  )}
+                />
 
                 <button
                   type="button"
                   className="text-sm text-primary hover:underline"
                   onClick={() => {
-                    // TODO: Implementar recuperación de contraseña
-                    alert('Funcionalidad próximamente disponible')
+                    setForgotOpen(true)
+                    setForgotSuccess(false)
+                    setForgotError(null)
+                    setForgotEmail('')
                   }}
                 >
                   ¿Olvidó su contraseña?
@@ -237,6 +265,78 @@ export function LoginForm() {
                 {isLoading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
               </Button>
             </form>
+
+            {/* Modal Olvidó su contraseña: envía notificación a itmaster@rapicreditca.com */}
+            <Dialog open={forgotOpen} onOpenChange={setForgotOpen}>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Restablecer contraseña</DialogTitle>
+                  <DialogDescription>
+                    Indique su correo electrónico. Se enviará una notificación a {FORGOT_EMAIL_DESTINO} para el envío de una nueva contraseña.
+                  </DialogDescription>
+                </DialogHeader>
+                {forgotSuccess ? (
+                  <p className="text-sm text-green-700 py-2">
+                    Solicitud enviada. Se ha notificado al administrador. Recibirá un correo en {FORGOT_EMAIL_DESTINO} para gestionar el restablecimiento de su contraseña.
+                  </p>
+                ) : (
+                  <>
+                    <div className="py-2">
+                      <Input
+                        type="email"
+                        placeholder="su@correo.com"
+                        value={forgotEmail}
+                        onChange={(e) => setForgotEmail(e.target.value)}
+                        label="Correo electrónico"
+                        leftIcon={<Mail className="w-4 h-4" />}
+                        disabled={forgotLoading}
+                      />
+                    </div>
+                    {forgotError && (
+                      <p className="text-sm text-red-600 mt-2">{forgotError}</p>
+                    )}
+                    <DialogFooter>
+                      <Button
+                        variant="outline"
+                        onClick={() => setForgotOpen(false)}
+                        disabled={forgotLoading}
+                      >
+                        Cerrar
+                      </Button>
+                      <Button
+                        onClick={async () => {
+                          const email = forgotEmail.trim()
+                          if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                            setForgotError('Indique un correo válido.')
+                            return
+                          }
+                          setForgotError(null)
+                          setForgotLoading(true)
+                          try {
+                            await authService.forgotPassword(email)
+                            setForgotSuccess(true)
+                          } catch (e: any) {
+                            setForgotError(e?.response?.data?.detail || e?.message || 'Error al enviar la solicitud.')
+                          } finally {
+                            setForgotLoading(false)
+                          }
+                        }}
+                        disabled={forgotLoading || !forgotEmail.trim()}
+                      >
+                        {forgotLoading ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Enviando...
+                          </>
+                        ) : (
+                          'Enviar solicitud'
+                        )}
+                      </Button>
+                    </DialogFooter>
+                  </>
+                )}
+              </DialogContent>
+            </Dialog>
 
         <div className="text-center text-sm text-muted-foreground">
           <p className="font-semibold text-blue-600">RAPICREDIT v1.0</p>

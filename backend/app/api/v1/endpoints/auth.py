@@ -1,6 +1,7 @@
 """
-Endpoints de autenticación (login, refresh, me, logout)
+Endpoints de autenticación (login, refresh, me, logout, forgot-password)
 """
+import logging
 import time
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -12,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.email import send_email
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -23,12 +25,14 @@ from app.core.user_utils import user_to_response
 from app.models.user import User
 from app.schemas.auth import (
     AdminResetPasswordRequest,
+    ForgotPasswordRequest,
     LoginRequest,
     LoginResponse,
     RefreshRequest,
     UserResponse,
 )
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 security = HTTPBearer(auto_error=False)
 
@@ -36,6 +40,11 @@ security = HTTPBearer(auto_error=False)
 _LOGIN_ATTEMPTS: dict[str, list[float]] = defaultdict(list)
 _LOGIN_RATE_LIMIT_WINDOW = 60  # segundos
 _LOGIN_RATE_LIMIT_MAX = 5  # intentos por ventana
+
+# Rate limiting olvido de contraseña: IP -> timestamps (evitar abuso de envío de correos)
+_FORGOT_ATTEMPTS: dict[str, list[float]] = defaultdict(list)
+_FORGOT_RATE_LIMIT_WINDOW = 900  # 15 minutos
+_FORGOT_RATE_LIMIT_MAX = 3  # solicitudes por ventana
 
 
 def _require_reset_secret(x_admin_secret: Optional[str] = Header(None, alias="X-Admin-Secret")) -> None:
@@ -90,6 +99,42 @@ def auth_status():
     }
 
 
+@router.post("/forgot-password")
+def forgot_password(body: ForgotPasswordRequest, request: Request, db: Session = Depends(get_db)):
+    """
+    Solicitud de olvido de contraseña. Envía un correo a FORGOT_PASSWORD_NOTIFY_EMAIL
+    (por defecto itmaster@rapicreditca.com) con el email del solicitante para que el
+    administrador pueda enviar una nueva contraseña o restablecerla.
+    Siempre devuelve 200 para no revelar si el email existe en el sistema.
+    Rate limit: 3 solicitudes por IP cada 15 minutos.
+    """
+    client_ip = _get_client_ip(request)
+    _check_forgot_rate_limit(client_ip)
+    email = body.email.lower().strip()
+    destino = (getattr(settings, "FORGOT_PASSWORD_NOTIFY_EMAIL", None) or "itmaster@rapicreditca.com").strip()
+    if not destino or "@" not in destino:
+        logger.warning("FORGOT_PASSWORD_NOTIFY_EMAIL no configurado. No se envía correo de olvido de contraseña.")
+        return {"message": "Solicitud registrada. Si el correo está registrado, recibirá instrucciones."}
+
+    # Comprobar si el usuario existe (solo para el contenido del correo; no cambiamos la respuesta al cliente)
+    user = db.query(User).filter(User.email == email).first()
+    nombre_solicitante = f"{user.nombre} {user.apellido}".strip() if user else "Usuario no encontrado en BD"
+    existe = user is not None
+
+    asunto = "[RapiCredit] Solicitud de restablecimiento de contraseña"
+    cuerpo = (
+        f"Un usuario ha solicitado restablecer su contraseña.\n\n"
+        f"Correo del solicitante: {email}\n"
+        f"Nombre (si existe en BD): {nombre_solicitante}\n"
+        f"¿Existe en el sistema? {'Sí' if existe else 'No'}\n\n"
+        "Puede restablecer la contraseña desde el panel de Usuarios o enviar una nueva al solicitante."
+    )
+    ok, err = send_email([destino], asunto, cuerpo)
+    if not ok:
+        logger.warning("Error enviando correo de olvido de contraseña a %s: %s", destino, err)
+    return {"message": "Si el correo está registrado, se ha notificado al administrador para el restablecimiento de contraseña."}
+
+
 def _fake_user(email: str) -> UserResponse:
     """Usuario mínimo para auth sin tabla users (admin desde env)."""
     now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -125,6 +170,19 @@ def _check_login_rate_limit(ip: str) -> None:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Demasiados intentos de inicio de sesión. Espere un minuto e intente de nuevo.",
+        )
+    attempts.append(now)
+
+
+def _check_forgot_rate_limit(ip: str) -> None:
+    """Lanza 429 si se supera el límite de solicitudes de olvido de contraseña por IP."""
+    now = time.time()
+    attempts = _FORGOT_ATTEMPTS[ip]
+    attempts[:] = [t for t in attempts if now - t < _FORGOT_RATE_LIMIT_WINDOW]
+    if len(attempts) >= _FORGOT_RATE_LIMIT_MAX:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Demasiadas solicitudes de restablecimiento. Espere 15 minutos e intente de nuevo.",
         )
     attempts.append(now)
 

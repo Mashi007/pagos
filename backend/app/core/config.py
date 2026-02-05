@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     ADMIN_PASSWORD: Optional[str] = Field(None, description="Contraseña del usuario admin para login")
     # Secreto para endpoint interno de restablecer contraseña (sincronizar usuario BD con ADMIN_PASSWORD).
     RESET_PASSWORD_SECRET: Optional[str] = Field(None, description="Secreto para POST /api/v1/auth/admin/reset-password (header X-Admin-Secret)")
+    # Email al que se envía la notificación cuando un usuario solicita "Olvidé mi contraseña" (para envío de nueva).
+    FORGOT_PASSWORD_NOTIFY_EMAIL: str = Field(
+        default="itmaster@rapicreditca.com",
+        description="Destino del correo de solicitud de restablecimiento de contraseña",
+    )
     
     @validator('SECRET_KEY')
     def validate_secret_key(cls, v):

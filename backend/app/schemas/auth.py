@@ -46,3 +46,8 @@ class RefreshRequest(BaseModel):
 class AdminResetPasswordRequest(BaseModel):
     """Solo uso interno: sincroniza contraseña del usuario en BD con ADMIN_PASSWORD."""
     email: EmailStr
+
+
+class ForgotPasswordRequest(BaseModel):
+    """Solicitud pública de olvido de contraseña. Se notifica al administrador por correo."""
+    email: EmailStr

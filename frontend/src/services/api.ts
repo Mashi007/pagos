@@ -78,8 +78,8 @@ class ApiClient {
           return Promise.reject(error)
         }
 
-        // NO agregar token a endpoints de autenticación
-        const authEndpoints = ['/api/v1/auth/login', '/api/v1/auth/refresh']
+        // NO agregar token a endpoints de autenticación ni olvido de contraseña
+        const authEndpoints = ['/api/v1/auth/login', '/api/v1/auth/refresh', '/api/v1/auth/forgot-password']
         const isAuthEndpoint = authEndpoints.some(endpoint => config.url?.includes(endpoint))
 
         if (!isAuthEndpoint) {
