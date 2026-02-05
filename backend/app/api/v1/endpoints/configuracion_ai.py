@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 import logging
 
 from app.core.config import settings
-from app.core.database import get_db, engine
+from app.core.database import get_db, engine, SessionLocal
 from app.core.openrouter_client import call_openrouter as _openrouter_call
 from app.models.configuracion import Configuracion
 from app.models.cliente import Cliente
@@ -29,7 +29,7 @@ from app.models.prestamo import Prestamo
 from app.models.cuota import Cuota
 from app.models.definicion_campo import DefinicionCampo
 from app.models.diccionario_semantico import DiccionarioSemantico
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy import inspect as sa_inspect
 
 logger = logging.getLogger(__name__)
@@ -120,26 +120,50 @@ def _safe_decimal(value: Any) -> str:
 
 def _build_chat_context(db: Session) -> str:
     """
-    Construye un resumen compacto de la BD (get_db) para el system prompt.
-    Incluye conteos y totales (financiamiento, cuotas) para que el modelo pueda
-    responder preguntas como "total de financiamiento", "créditos aprobados", etc.
+    Construye un resumen compacto de la BD para el system prompt.
+    Una sola consulta agregada (1 round-trip) para minimizar tiempo de conexión y
+    evitar múltiples accesos que puedan demorar o fallar. SQLAlchemy 2 (select + scalar_subquery).
     """
     lines: list[str] = []
     try:
-        total_clientes = db.query(func.count(Cliente.id)).scalar() or 0
-        total_prestamos = db.query(func.count(Prestamo.id)).scalar() or 0
-        prestamos_aprobados = db.query(func.count(Prestamo.id)).filter(Prestamo.estado == "APROBADO").scalar() or 0
-        # Total de financiamiento: suma de total_financiamiento (aprobados y total)
-        total_financiamiento_aprobado = db.query(func.coalesce(func.sum(Prestamo.total_financiamiento), 0)).filter(
-            Prestamo.estado == "APROBADO"
-        ).scalar() or 0
-        total_financiamiento_todos = db.query(func.coalesce(func.sum(Prestamo.total_financiamiento), 0)).scalar() or 0
-        total_cuotas = db.query(func.count(Cuota.id)).scalar() or 0
-        cuotas_pagadas_count = db.query(func.count(Cuota.id)).filter(Cuota.fecha_pago.isnot(None)).scalar() or 0
+        # Una única ejecución: todos los escalares en una sola consulta (mejor práctica AI-BD).
+        stmt = select(
+            select(func.count(Cliente.id)).scalar_subquery().label("total_clientes"),
+            select(func.count(Prestamo.id)).scalar_subquery().label("total_prestamos"),
+            select(func.count(Prestamo.id))
+            .where(Prestamo.estado == "APROBADO")
+            .scalar_subquery()
+            .label("prestamos_aprobados"),
+            select(func.coalesce(func.sum(Prestamo.total_financiamiento), 0))
+            .where(Prestamo.estado == "APROBADO")
+            .scalar_subquery()
+            .label("total_financiamiento_aprobado"),
+            select(func.coalesce(func.sum(Prestamo.total_financiamiento), 0))
+            .scalar_subquery()
+            .label("total_financiamiento_todos"),
+            select(func.count(Cuota.id)).scalar_subquery().label("total_cuotas"),
+            select(func.count(Cuota.id))
+            .where(Cuota.fecha_pago.isnot(None))
+            .scalar_subquery()
+            .label("cuotas_pagadas_count"),
+            select(func.coalesce(func.sum(Cuota.monto), 0))
+            .where(Cuota.fecha_pago.isnot(None))
+            .scalar_subquery()
+            .label("suma_cuotas_pagadas"),
+        )
+        row = db.execute(stmt).first()
+        if not row:
+            lines.append("(sin datos)")
+            return "\n".join(lines)
+        total_clientes = int(row[0] or 0)
+        total_prestamos = int(row[1] or 0)
+        prestamos_aprobados = int(row[2] or 0)
+        total_financiamiento_aprobado = row[3] or 0
+        total_financiamiento_todos = row[4] or 0
+        total_cuotas = int(row[5] or 0)
+        cuotas_pagadas_count = int(row[6] or 0)
         cuotas_pendientes = total_cuotas - cuotas_pagadas_count
-        suma_cuotas_pagadas = db.query(func.coalesce(func.sum(Cuota.monto), 0)).filter(
-            Cuota.fecha_pago.isnot(None)
-        ).scalar() or 0
+        suma_cuotas_pagadas = row[7] or 0
         lines.append(f"clientes_total={total_clientes}")
         lines.append(f"prestamos_total={total_prestamos}; prestamos_aprobados={prestamos_aprobados}")
         lines.append(
@@ -150,7 +174,8 @@ def _build_chat_context(db: Session) -> str:
             f"cuotas_total={total_cuotas}; cuotas_pagadas={cuotas_pagadas_count}; cuotas_pendientes={cuotas_pendientes}; "
             f"suma_montos_cuotas_pagadas={_safe_decimal(suma_cuotas_pagadas)}"
         )
-    except Exception:
+    except Exception as e:
+        logger.exception("AI chat: error al cargar contexto desde BD (tablas clientes/prestamos/cuotas): %s", e)
         lines.append("(error al cargar datos)")
     return "\n".join(lines)
 
@@ -190,6 +215,20 @@ def _build_chat_system_prompt(db: Session) -> str:
         f"{preguntas_block}\n\n"
         f"Datos disponibles (get_db):\n{datos_bd}"
     )
+
+
+def _build_chat_system_prompt_with_short_session() -> str:
+    """
+    Construye el system prompt usando una sesión de corta duración, que se cierra
+    antes de llamar a OpenRouter. Así no se retiene una conexión de BD durante
+    la llamada externa (hasta 45s), cumpliendo buenas prácticas AI-BD.
+    """
+    session = SessionLocal()
+    try:
+        _load_ai_config_from_db(session)
+        return _build_chat_system_prompt(session)
+    finally:
+        session.close()
 
 
 def _get_openrouter_key() -> Optional[str]:
@@ -310,19 +349,19 @@ class ChatRequest(BaseModel):
 
 
 @router.post("/chat")
-def post_ai_chat(payload: ChatRequest = Body(...), db: Session = Depends(get_db)):
+def post_ai_chat(payload: ChatRequest = Body(...)):
     """
-    Chat completions vía OpenRouter. Usa get_db para cargar config y para inyectar
-    'Datos disponibles (get_db)' en el system prompt. El prompt exige respuestas
-    rápidas y solo con datos disponibles en ese bloque.
+    Chat completions vía OpenRouter. Carga config y contexto desde BD en una
+    sesión de corta duración que se cierra antes de llamar a OpenRouter, para
+    no retener conexión durante la llamada externa (mejores prácticas AI-BD).
     """
-    _load_ai_config_from_db(db)
     pregunta = (payload.pregunta or "").strip()
     if not pregunta:
         raise HTTPException(status_code=400, detail="La pregunta no puede estar vacía")
+    # Construir prompt con sesión corta; conexión liberada antes de OpenRouter
+    system_prompt = _build_chat_system_prompt_with_short_session()
     if _ai_config_stub.get("activo", "true").lower() != "true":
         raise HTTPException(status_code=400, detail="El servicio AI está desactivado en configuración")
-    system_prompt = _build_chat_system_prompt(db)
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": pregunta},
@@ -352,9 +391,13 @@ class ProbarRequest(BaseModel):
 
 
 @router.post("/probar")
-def post_ai_probar(payload: ProbarRequest = Body(...), db: Session = Depends(get_db)):
-    """Prueba la conexión con OpenRouter y devuelve la respuesta para el chat de prueba. Carga config desde BD."""
-    _load_ai_config_from_db(db)
+def post_ai_probar(payload: ProbarRequest = Body(...)):
+    """Prueba la conexión con OpenRouter. Carga config desde BD en sesión corta (no retiene conexión durante la llamada)."""
+    session = SessionLocal()
+    try:
+        _load_ai_config_from_db(session)
+    finally:
+        session.close()
     mensaje = (payload.mensaje or payload.pregunta or "Hola, responde OK si me escuchas.").strip() or "Hola."
     messages = [
         {"role": "system", "content": "Responde SIEMPRE en español."},
