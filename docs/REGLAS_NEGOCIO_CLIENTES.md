@@ -129,7 +129,7 @@
 | Datos reales | Todo el módulo usa BD real vía `get_db`; sin stubs. |
 | Estados | Solo `ACTIVO`, `INACTIVO`, `MORA`, `FINALIZADO`. |
 | Alta | Todos los campos obligatorios del schema; validaciones de formato en frontend (nombres 2–7 palabras, teléfono +58, email, dirección estructurada, etc.). |
-| Duplicados | No misma cédula+nombres ni mismo email (regla deseada; validación explícita pendiente en backend). |
+| Duplicados | No misma cédula+nombres ni mismo email; validado en backend (409 con existing_id); frontend muestra "Abrir cliente existente". |
 | Edición | Solo campos enviados; sin cambios no se actualiza. |
 | Eliminación | Borrado físico; confirmación en UI. |
 | Listado | Paginado, búsqueda por cédula/nombres/email/teléfono, filtro por estado. |

@@ -1074,7 +1074,9 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       if (isAxiosError(error)) {
         const errorDetail = getErrorDetail(error)
         const responseData = error.response?.data as { message?: string } | undefined
-        if (error.response?.status === 400) {
+        const status = error.response?.status
+        // Backend devuelve 409 para duplicados (cedula+nombres o email); tratamos igual que 400
+        if (status === 400 || status === 409) {
           // Detectar qué tipo de duplicado es
           const detailText = errorDetail || ''
           if (detailText.includes('cédula') && detailText.includes('nombre')) {
@@ -1102,8 +1104,8 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         existingId = Number(match[1])
       }
 
-      // Notificar y ofrecer abrir en edición
-      if (isAxiosError(error) && error.response?.status === 400) {
+      // Notificar y ofrecer abrir en edición (backend devuelve 409 para duplicados)
+      if (isAxiosError(error) && (error.response?.status === 400 || error.response?.status === 409)) {
         // Mensaje amigable específico según el tipo de duplicado
         let mensajeDuplicado = ''
         if (tipoDuplicado === 'cedula_nombre') {

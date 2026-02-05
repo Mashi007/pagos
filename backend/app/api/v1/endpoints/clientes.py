@@ -190,9 +190,49 @@ def get_cliente(cliente_id: int, db: Session = Depends(get_db)):
     return ClienteResponse.model_validate(row)
 
 
+def _normalize_for_duplicate(s: str) -> str:
+    """Normaliza string para comparación de duplicados (strip, case)."""
+    return (s or "").strip()
+
+
 @router.post("", response_model=ClienteResponse, status_code=201)
 def create_cliente(payload: ClienteCreate, db: Session = Depends(get_db)):
-    """Crear cliente en la BD."""
+    """
+    Crear cliente en la BD.
+    No se admiten duplicados: misma cédula+nombres o mismo email (si no vacío) → 409 con existing_id.
+    """
+    cedula_norm = _normalize_for_duplicate(payload.cedula)
+    nombres_norm = _normalize_for_duplicate(payload.nombres)
+    email_norm = _normalize_for_duplicate(payload.email)
+
+    # Duplicado por cédula + nombres (mismo par identifica al mismo cliente)
+    existing_cedula_nombres = db.execute(
+        select(Cliente.id).where(
+            Cliente.cedula == cedula_norm,
+            Cliente.nombres == nombres_norm,
+        )
+    ).first()
+    if existing_cedula_nombres:
+        existing_id = existing_cedula_nombres[0]
+        detail = (
+            f"Ya existe un cliente con la misma cédula y el mismo nombre completo. "
+            f"Cliente existente ID: {existing_id}"
+        )
+        raise HTTPException(status_code=409, detail=detail)
+
+    # Duplicado por email (solo si el email no está vacío)
+    if email_norm:
+        existing_email = db.execute(
+            select(Cliente.id).where(Cliente.email == email_norm)
+        ).first()
+        if existing_email:
+            existing_id = existing_email[0]
+            detail = (
+                f"Ya existe un cliente con el mismo email. "
+                f"Cliente existente ID: {existing_id}"
+            )
+            raise HTTPException(status_code=409, detail=detail)
+
     row = Cliente(
         cedula=payload.cedula,
         nombres=payload.nombres,
@@ -213,11 +253,46 @@ def create_cliente(payload: ClienteCreate, db: Session = Depends(get_db)):
 
 @router.put("/{cliente_id}", response_model=ClienteResponse)
 def update_cliente(cliente_id: int, payload: ClienteUpdate, db: Session = Depends(get_db)):
-    """Actualizar cliente."""
+    """
+    Actualizar cliente.
+    No se permite dejar cédula+nombres o email duplicados con otro cliente (distinto id) → 409.
+    """
     row = db.get(Cliente, cliente_id)
     if not row:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
     data = payload.model_dump(exclude_unset=True)
+
+    # Validar duplicados solo para campos que se están actualizando
+    if "cedula" in data or "nombres" in data:
+        cedula_norm = _normalize_for_duplicate(data.get("cedula") or getattr(row, "cedula") or "")
+        nombres_norm = _normalize_for_duplicate(data.get("nombres") or getattr(row, "nombres") or "")
+        if cedula_norm and nombres_norm:
+            existing = db.execute(
+                select(Cliente.id).where(
+                    Cliente.cedula == cedula_norm,
+                    Cliente.nombres == nombres_norm,
+                    Cliente.id != cliente_id,
+                )
+            ).first()
+            if existing:
+                detail = (
+                    f"Ya existe otro cliente con la misma cédula y el mismo nombre completo. "
+                    f"Cliente existente ID: {existing[0]}"
+                )
+                raise HTTPException(status_code=409, detail=detail)
+    if "email" in data:
+        email_norm = _normalize_for_duplicate(data.get("email") or "")
+        if email_norm:
+            existing = db.execute(
+                select(Cliente.id).where(Cliente.email == email_norm, Cliente.id != cliente_id)
+            ).first()
+            if existing:
+                detail = (
+                    f"Ya existe otro cliente con el mismo email. "
+                    f"Cliente existente ID: {existing[0]}"
+                )
+                raise HTTPException(status_code=409, detail=detail)
+
     for k, v in data.items():
         setattr(row, k, v)
     db.commit()
