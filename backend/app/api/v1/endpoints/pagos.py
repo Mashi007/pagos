@@ -374,119 +374,6 @@ def exportar_pagos_errores(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.get("/{pago_id}", response_model=dict)
-def obtener_pago(pago_id: int, db: Session = Depends(get_db)):
-    """Obtiene un pago por ID desde la tabla pagos."""
-    row = db.get(Pago, pago_id)
-    if not row:
-        raise HTTPException(status_code=404, detail="Pago no encontrado")
-    return _pago_to_response(row)
-
-
-@router.post("", response_model=dict, status_code=201)
-@router.post("/", include_in_schema=False, response_model=dict, status_code=201)
-def crear_pago(payload: PagoCreate, db: Session = Depends(get_db)):
-    """Crea un pago en la tabla pagos."""
-    ref = (payload.numero_documento or "").strip() or "N/A"
-    fecha_pago_ts = datetime.combine(payload.fecha_pago, dt_time.min)
-    row = Pago(
-        cedula_cliente=payload.cedula_cliente.strip(),
-        prestamo_id=payload.prestamo_id,
-        fecha_pago=fecha_pago_ts,
-        monto_pagado=payload.monto_pagado,
-        numero_documento=(payload.numero_documento or "").strip() or None,
-        institucion_bancaria=payload.institucion_bancaria.strip() if payload.institucion_bancaria else None,
-        estado="PENDIENTE",
-        notas=payload.notas.strip() if payload.notas else None,
-        referencia_pago=ref,
-    )
-    db.add(row)
-    db.commit()
-    db.refresh(row)
-    return _pago_to_response(row)
-
-
-@router.put("/{pago_id}", response_model=dict)
-def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get_db)):
-    """Actualiza un pago en la tabla pagos."""
-    row = db.get(Pago, pago_id)
-    if not row:
-        raise HTTPException(status_code=404, detail="Pago no encontrado")
-    data = payload.model_dump(exclude_unset=True)
-    for k, v in data.items():
-        if k == "notas" and v is not None:
-            setattr(row, k, v.strip() or None)
-        elif k == "institucion_bancaria" and v is not None:
-            setattr(row, k, v.strip() or None)
-        elif k == "numero_documento" and v is not None:
-            setattr(row, k, v.strip())
-        elif k == "cedula_cliente" and v is not None:
-            setattr(row, k, v.strip())
-        elif k == "fecha_pago" and v is not None:
-            setattr(row, k, datetime.combine(v, dt_time.min) if isinstance(v, date) and not isinstance(v, datetime) else v)
-        else:
-            setattr(row, k, v)
-    db.commit()
-    db.refresh(row)
-    return _pago_to_response(row)
-
-
-@router.delete("/{pago_id}", status_code=204)
-def eliminar_pago(pago_id: int, db: Session = Depends(get_db)):
-    """Elimina un pago de la tabla pagos."""
-    row = db.get(Pago, pago_id)
-    if not row:
-        raise HTTPException(status_code=404, detail="Pago no encontrado")
-    db.delete(row)
-    db.commit()
-    return None
-
-
-@router.post("/{pago_id}/aplicar-cuotas", response_model=dict)
-def aplicar_pago_a_cuotas(pago_id: int, db: Session = Depends(get_db)):
-    """
-    Aplica el monto del pago a cuotas pendientes del préstamo (por orden de número de cuota).
-    Marca cuotas con fecha_pago y estado PAGADO hasta agotar el monto.
-    """
-    pago = db.get(Pago, pago_id)
-    if not pago:
-        raise HTTPException(status_code=404, detail="Pago no encontrado")
-    prestamo_id = pago.prestamo_id
-    if not prestamo_id:
-        return {
-            "success": False,
-            "cuotas_completadas": 0,
-            "message": "El pago no tiene préstamo asociado.",
-        }
-    monto_restante = float(pago.monto_pagado) if pago.monto_pagado else 0
-    if monto_restante <= 0:
-        return {"success": True, "cuotas_completadas": 0, "message": "Monto del pago es cero."}
-    fecha_pago_date = pago.fecha_pago.date() if hasattr(pago.fecha_pago, "date") and pago.fecha_pago else date.today()
-    cuotas_pendientes = (
-        db.execute(
-            select(Cuota)
-            .where(Cuota.prestamo_id == prestamo_id, Cuota.fecha_pago.is_(None))
-            .order_by(Cuota.numero_cuota)
-        )
-    ).scalars().all()
-    cuotas_completadas = 0
-    for row in cuotas_pendientes:
-        c = row[0]
-        monto_cuota = float(c.monto) if c.monto is not None else 0
-        if monto_restante <= 0 or monto_cuota <= 0:
-            break
-        c.fecha_pago = fecha_pago_date
-        c.estado = "PAGADO"
-        cuotas_completadas += 1
-        monto_restante -= monto_cuota
-    db.commit()
-    return {
-        "success": True,
-        "cuotas_completadas": cuotas_completadas,
-        "message": f"Se aplicó el pago a {cuotas_completadas} cuota(s).",
-    }
-
-
 @router.get("/kpis")
 def get_pagos_kpis(
     fecha_inicio: Optional[str] = Query(None),
@@ -641,3 +528,116 @@ def get_pagos_stats(
             "cuotas_atrasadas": 0,
             "pagos_hoy": 0,
         }
+
+
+@router.get("/{pago_id}", response_model=dict)
+def obtener_pago(pago_id: int, db: Session = Depends(get_db)):
+    """Obtiene un pago por ID desde la tabla pagos."""
+    row = db.get(Pago, pago_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Pago no encontrado")
+    return _pago_to_response(row)
+
+
+@router.post("", response_model=dict, status_code=201)
+@router.post("/", include_in_schema=False, response_model=dict, status_code=201)
+def crear_pago(payload: PagoCreate, db: Session = Depends(get_db)):
+    """Crea un pago en la tabla pagos."""
+    ref = (payload.numero_documento or "").strip() or "N/A"
+    fecha_pago_ts = datetime.combine(payload.fecha_pago, dt_time.min)
+    row = Pago(
+        cedula_cliente=payload.cedula_cliente.strip(),
+        prestamo_id=payload.prestamo_id,
+        fecha_pago=fecha_pago_ts,
+        monto_pagado=payload.monto_pagado,
+        numero_documento=(payload.numero_documento or "").strip() or None,
+        institucion_bancaria=payload.institucion_bancaria.strip() if payload.institucion_bancaria else None,
+        estado="PENDIENTE",
+        notas=payload.notas.strip() if payload.notas else None,
+        referencia_pago=ref,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return _pago_to_response(row)
+
+
+@router.put("/{pago_id}", response_model=dict)
+def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get_db)):
+    """Actualiza un pago en la tabla pagos."""
+    row = db.get(Pago, pago_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Pago no encontrado")
+    data = payload.model_dump(exclude_unset=True)
+    for k, v in data.items():
+        if k == "notas" and v is not None:
+            setattr(row, k, v.strip() or None)
+        elif k == "institucion_bancaria" and v is not None:
+            setattr(row, k, v.strip() or None)
+        elif k == "numero_documento" and v is not None:
+            setattr(row, k, v.strip())
+        elif k == "cedula_cliente" and v is not None:
+            setattr(row, k, v.strip())
+        elif k == "fecha_pago" and v is not None:
+            setattr(row, k, datetime.combine(v, dt_time.min) if isinstance(v, date) and not isinstance(v, datetime) else v)
+        else:
+            setattr(row, k, v)
+    db.commit()
+    db.refresh(row)
+    return _pago_to_response(row)
+
+
+@router.delete("/{pago_id}", status_code=204)
+def eliminar_pago(pago_id: int, db: Session = Depends(get_db)):
+    """Elimina un pago de la tabla pagos."""
+    row = db.get(Pago, pago_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Pago no encontrado")
+    db.delete(row)
+    db.commit()
+    return None
+
+
+@router.post("/{pago_id}/aplicar-cuotas", response_model=dict)
+def aplicar_pago_a_cuotas(pago_id: int, db: Session = Depends(get_db)):
+    """
+    Aplica el monto del pago a cuotas pendientes del préstamo (por orden de número de cuota).
+    Marca cuotas con fecha_pago y estado PAGADO hasta agotar el monto.
+    """
+    pago = db.get(Pago, pago_id)
+    if not pago:
+        raise HTTPException(status_code=404, detail="Pago no encontrado")
+    prestamo_id = pago.prestamo_id
+    if not prestamo_id:
+        return {
+            "success": False,
+            "cuotas_completadas": 0,
+            "message": "El pago no tiene préstamo asociado.",
+        }
+    monto_restante = float(pago.monto_pagado) if pago.monto_pagado else 0
+    if monto_restante <= 0:
+        return {"success": True, "cuotas_completadas": 0, "message": "Monto del pago es cero."}
+    fecha_pago_date = pago.fecha_pago.date() if hasattr(pago.fecha_pago, "date") and pago.fecha_pago else date.today()
+    cuotas_pendientes = (
+        db.execute(
+            select(Cuota)
+            .where(Cuota.prestamo_id == prestamo_id, Cuota.fecha_pago.is_(None))
+            .order_by(Cuota.numero_cuota)
+        )
+    ).scalars().all()
+    cuotas_completadas = 0
+    for row in cuotas_pendientes:
+        c = row[0]
+        monto_cuota = float(c.monto) if c.monto is not None else 0
+        if monto_restante <= 0 or monto_cuota <= 0:
+            break
+        c.fecha_pago = fecha_pago_date
+        c.estado = "PAGADO"
+        cuotas_completadas += 1
+        monto_restante -= monto_cuota
+    db.commit()
+    return {
+        "success": True,
+        "cuotas_completadas": cuotas_completadas,
+        "message": f"Se aplicó el pago a {cuotas_completadas} cuota(s).",
+    }

@@ -6,7 +6,7 @@ import {
   Mail,
   FileText,
   Clock,
-  ExternalLink,
+  Link as LinkIcon,
   X,
 } from 'lucide-react'
 import { emailConfigService } from '../../services/notificacionService'
@@ -162,7 +162,7 @@ export function ConfiguracionNotificaciones() {
             to="/configuracion?tab=email"
             className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800"
           >
-            <ExternalLink className="h-4 w-4" />
+            <LinkIcon className="h-4 w-4" />
             Ir a Configuración (Email)
           </Link>
         </CardContent>
