@@ -11,7 +11,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Body, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, select
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
@@ -51,25 +51,42 @@ def _conv_to_dict(row: ConversacionAI) -> dict:
 # ============== MÉTRICAS ==============
 
 def _metricas_from_db(db: Session) -> dict[str, Any]:
-    """Métricas desde tabla conversaciones_ai si existe."""
+    """Métricas desde tabla conversaciones_ai en una sola consulta (SQLAlchemy 2, 1 round-trip)."""
     try:
-        total = db.query(func.count(ConversacionAI.id)).scalar() or 0
-        con_cal = db.query(func.count(ConversacionAI.id)).filter(ConversacionAI.calificacion.isnot(None)).scalar() or 0
-        avg = db.query(func.avg(ConversacionAI.calificacion)).filter(ConversacionAI.calificacion.isnot(None)).scalar()
-        listas = db.query(func.count(ConversacionAI.id)).filter(ConversacionAI.calificacion >= 4).scalar() or 0
-        return {
-            "conversaciones": {
-                "total": total,
-                "con_calificacion": con_cal,
-                "promedio_calificacion": round(float(avg or 0), 2),
-                "listas_entrenamiento": listas,
-            },
-            "fine_tuning": {"jobs_totales": 0, "jobs_exitosos": 0, "jobs_fallidos": 0},
-            "rag": {"documentos_con_embeddings": 0, "total_embeddings": 0},
-            "ml_riesgo": {"modelos_disponibles": 0},
-        }
+        stmt = select(
+            select(func.count(ConversacionAI.id)).scalar_subquery().label("total"),
+            select(func.count(ConversacionAI.id))
+            .where(ConversacionAI.calificacion.isnot(None))
+            .scalar_subquery()
+            .label("con_cal"),
+            select(func.avg(ConversacionAI.calificacion))
+            .where(ConversacionAI.calificacion.isnot(None))
+            .scalar_subquery()
+            .label("avg"),
+            select(func.count(ConversacionAI.id))
+            .where(ConversacionAI.calificacion >= 4)
+            .scalar_subquery()
+            .label("listas"),
+        )
+        row = db.execute(stmt).first()
+        if row and row[0] is not None:
+            total = int(row[0] or 0)
+            con_cal = int(row[1] or 0)
+            avg = row[2]
+            listas = int(row[3] or 0)
+            return {
+                "conversaciones": {
+                    "total": total,
+                    "con_calificacion": con_cal,
+                    "promedio_calificacion": round(float(avg or 0), 2),
+                    "listas_entrenamiento": listas,
+                },
+                "fine_tuning": {"jobs_totales": 0, "jobs_exitosos": 0, "jobs_fallidos": 0},
+                "rag": {"documentos_con_embeddings": 0, "total_embeddings": 0},
+                "ml_riesgo": {"modelos_disponibles": 0},
+            }
     except Exception as e:
-        logger.warning("Métricas desde BD: %s", e)
+        logger.warning("Métricas desde BD (conversaciones_ai): %s", e)
     return {
         "conversaciones": {"total": 0, "con_calificacion": 0, "promedio_calificacion": 0.0, "listas_entrenamiento": 0},
         "fine_tuning": {"jobs_totales": 0, "jobs_exitosos": 0, "jobs_fallidos": 0},
@@ -202,22 +219,47 @@ def put_conversaciones(
 
 @router.get("/conversaciones/estadisticas-feedback")
 def get_estadisticas_feedback(db: Session = Depends(get_db)):
-    """Estadísticas de feedback para el dashboard de fine-tuning."""
-    total = db.query(func.count(ConversacionAI.id)).scalar() or 0
-    calificadas = db.query(func.count(ConversacionAI.id)).filter(ConversacionAI.calificacion.isnot(None)).scalar() or 0
-    con_feedback = db.query(func.count(ConversacionAI.id)).filter(ConversacionAI.feedback.isnot(None), ConversacionAI.feedback != "").scalar() or 0
-    listas = db.query(func.count(ConversacionAI.id)).filter(ConversacionAI.calificacion >= 4).scalar() or 0
-    # Distribución calificaciones
-    dist = {}
-    for i in range(1, 6):
-        c = db.query(func.count(ConversacionAI.id)).filter(ConversacionAI.calificacion == i).scalar() or 0
-        dist[str(i)] = c
-    # Feedback negativo: heuristic simple (palabras típicas)
+    """Estadísticas de feedback para el dashboard de fine-tuning. Consultas optimizadas (2 round-trips + 1 por feedback)."""
+    # Una consulta para totales
+    stmt_totales = select(
+        select(func.count(ConversacionAI.id)).scalar_subquery().label("total"),
+        select(func.count(ConversacionAI.id))
+        .where(ConversacionAI.calificacion.isnot(None))
+        .scalar_subquery()
+        .label("calificadas"),
+        select(func.count(ConversacionAI.id))
+        .where(ConversacionAI.feedback.isnot(None), ConversacionAI.feedback != "")
+        .scalar_subquery()
+        .label("con_feedback"),
+        select(func.count(ConversacionAI.id))
+        .where(ConversacionAI.calificacion >= 4)
+        .scalar_subquery()
+        .label("listas"),
+    )
+    row = db.execute(stmt_totales).first()
+    total = int(row[0] or 0) if row else 0
+    calificadas = int(row[1] or 0) if row else 0
+    con_feedback = int(row[2] or 0) if row else 0
+    listas = int(row[3] or 0) if row else 0
+    # Una consulta para distribución de calificaciones 1-5
+    stmt_dist = (
+        select(ConversacionAI.calificacion, func.count(ConversacionAI.id))
+        .where(ConversacionAI.calificacion.isnot(None))
+        .group_by(ConversacionAI.calificacion)
+    )
+    dist = {str(i): 0 for i in range(1, 6)}
+    for r in db.execute(stmt_dist).all():
+        if r[0] is not None and 1 <= int(r[0]) <= 5:
+            dist[str(int(r[0]))] = int(r[1] or 0)
+    # Solo columnas feedback para análisis negativo (evitar cargar filas completas)
     neg_words = ["mal", "incorrecto", "error", "no sirve", "malo", "pésimo", "incorrecta"]
     con_neg = 0
-    for r in db.query(ConversacionAI).filter(ConversacionAI.feedback.isnot(None), ConversacionAI.feedback != "").all():
-        fb = (r.feedback or "").lower()
-        if any(w in fb for w in neg_words):
+    for (fb,) in db.execute(
+        select(ConversacionAI.feedback).where(
+            ConversacionAI.feedback.isnot(None), ConversacionAI.feedback != ""
+        )
+    ).all():
+        if fb and any(w in (fb or "").lower() for w in neg_words):
             con_neg += 1
     sin_neg = max(0, listas - con_neg)
     return {
@@ -292,25 +334,24 @@ class PrepararBody(BaseModel):
 
 @router.post("/fine-tuning/preparar")
 def post_fine_tuning_preparar(payload: PrepararBody = Body(...), db: Session = Depends(get_db)):
-    """Prepara datos para fine-tuning: genera archivo_id y cuenta conversaciones."""
-    ids = payload.conversacion_ids or []
+    """Prepara datos para fine-tuning: genera archivo_id y cuenta conversaciones. Consultas por id/feedback (sin cargar filas completas)."""
+    ids = list(payload.conversacion_ids or [])
     if not ids:
-        # Todas las calificadas 4+
-        rows = db.query(ConversacionAI).filter(ConversacionAI.calificacion >= 4).all()
-        ids = [r.id for r in rows]
-    if payload.filtrar_feedback_negativo:
+        rows = db.execute(select(ConversacionAI.id).where(ConversacionAI.calificacion >= 4)).scalars().all()
+        ids = [r for r in rows]
+    excluidos = []
+    if payload.filtrar_feedback_negativo and ids:
         neg_words = ["mal", "incorrecto", "error", "no sirve", "malo", "pésimo"]
-        excluidos = []
         restantes = []
-        for r in db.query(ConversacionAI).filter(ConversacionAI.id.in_(ids)).all():
-            fb = (r.feedback or "").lower()
+        for row in db.execute(
+            select(ConversacionAI.id, ConversacionAI.feedback).where(ConversacionAI.id.in_(ids))
+        ).all():
+            fid, fb = row[0], (row[1] or "").lower()
             if any(w in fb for w in neg_words):
-                excluidos.append({"id": r.id, "razon": "feedback negativo", "feedback": r.feedback or ""})
+                excluidos.append({"id": fid, "razon": "feedback negativo", "feedback": row[1] or ""})
             else:
-                restantes.append(r.id)
+                restantes.append(fid)
         ids = restantes
-    else:
-        excluidos = []
     archivo_id = f"file-{uuid.uuid4().hex[:12]}"
     return {
         "archivo_id": archivo_id,

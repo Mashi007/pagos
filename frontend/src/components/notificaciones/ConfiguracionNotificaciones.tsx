@@ -6,11 +6,8 @@ import {
   Mail,
   FileText,
   Clock,
-  Calendar,
-  AlertTriangle,
-  Shield,
-  X,
   ExternalLink,
+  X,
 } from 'lucide-react'
 import { emailConfigService } from '../../services/notificacionService'
 import { notificacionService, type NotificacionPlantilla } from '../../services/notificacionService'
@@ -228,11 +225,6 @@ export function ConfiguracionNotificaciones() {
                               {p.nombre || `Plantilla #${p.id}`}
                             </SelectItem>
                           ))}
-                          {listaPlantillas.length === 0 && (
-                            <SelectItem value="__ninguna__" disabled>
-                              Crear en Herramientas → Plantillas
-                            </SelectItem>
-                          )}
                         </SelectContent>
                       </Select>
                     </div>

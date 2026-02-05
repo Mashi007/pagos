@@ -45,7 +45,7 @@ interface ValidationResult {
 }
 
 interface CrearClienteFormProps {
-  cliente?: { id?: number; cedula?: string; nombre?: string; apellido?: string; [key: string]: unknown } // Cliente existente para edición
+  cliente?: { id?: number; cedula?: string; nombre?: string; apellido?: string; telefono?: string; email?: string; [key: string]: unknown } // Cliente existente para edición o datos parciales (ej. solo telefono)
   onClose: () => void
   onSuccess: () => void
   onClienteCreated?: () => void

@@ -42,8 +42,9 @@ Garantizar que el mecanismo de aprendizaje y las consultas de la IA a la base de
 | **No retener conexión en I/O externa** | Sesión corta para config + contexto; se cierra antes de llamar a OpenRouter. |
 | **Sesión por request donde aplica** | Endpoints que solo leen/escriben BD siguen usando `Depends(get_db)`. |
 | **Logging en fallos de BD** | `logger.exception` en `_build_chat_context` cuando falla el acceso a tablas. |
-| **API SQLAlchemy 2** | `select()` + `execute()` en lugar de `query()` en el flujo AI-BD. |
+| **API SQLAlchemy 2** | `select()` + `execute()` en lugar de `query()` en el flujo AI-BD y en ai_training (métricas, estadísticas, preparar). |
 | **Pool de conexiones** | `database.py`: `pool_pre_ping=True`, `pool_size=5`, `max_overflow=10`; no se bloquea durante OpenRouter. |
+| **Timeout de consulta** | `SET LOCAL statement_timeout = 10000` (10 s) en la consulta de contexto del chat para no colgar la conexión. |
 
 ---
 
@@ -64,7 +65,12 @@ Ninguna conexión de BD queda retenida durante el paso 5.
 
 - **Configuración AI (GET/PUT)** y **calificaciones, definiciones, diccionario semántico**: Siguen usando `Depends(get_db)` porque son operaciones cortas de lectura/escritura en la misma request, sin llamadas externas largas.
 - **RAG / documentos / embeddings**: Por ahora el módulo devuelve lista vacía o stubs; cuando se implemente persistencia en BD, conviene aplicar el mismo patrón: sesión corta para leer contexto y cerrar antes de llamadas a modelos externos.
-- **AI training (conversaciones, métricas)**: Usan `get_db` y varias consultas; si en el futuro se integra con llamadas a APIs externas largas, aplicar el mismo criterio de sesión corta y liberar antes de la I/O externa.
+- **AI training (conversaciones, métricas)**: Refactor aplicado: `_metricas_from_db` y `get_estadisticas_feedback` usan una o pocas consultas (select + scalar_subquery / group_by) en lugar de muchas; `post_fine_tuning_preparar` solo lee `id` y `feedback` necesarios. Fine-tuning y RAG siguen siendo stubs; cuando se implementen llamadas externas largas, usar sesión corta para BD y cerrar antes de la I/O externa.
+
+### 5. Timeout en consulta de contexto (aplicado)
+
+- **Problema**: Si la BD tarda mucho, la consulta de contexto podía colgar y retener la conexión.
+- **Solución**: En `_build_chat_context` se ejecuta `SET LOCAL statement_timeout = 10000` (10 s) antes de la consulta agregada. Solo afecta a la transacción actual (PostgreSQL revierte al terminar).
 
 ---
 

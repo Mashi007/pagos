@@ -29,8 +29,11 @@ from app.models.prestamo import Prestamo
 from app.models.cuota import Cuota
 from app.models.definicion_campo import DefinicionCampo
 from app.models.diccionario_semantico import DiccionarioSemantico
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy import inspect as sa_inspect
+
+# Timeout para la consulta de contexto AI (evitar colgar si la BD tarda)
+CONTEXTO_AI_STATEMENT_TIMEOUT_MS = 10_000  # 10 segundos
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -151,6 +154,8 @@ def _build_chat_context(db: Session) -> str:
             .scalar_subquery()
             .label("suma_cuotas_pagadas"),
         )
+        # Timeout explícito: no retener conexión si la consulta tarda (mejores prácticas AI-BD)
+        db.execute(text(f"SET LOCAL statement_timeout = {CONTEXTO_AI_STATEMENT_TIMEOUT_MS}"))
         row = db.execute(stmt).first()
         if not row:
             lines.append("(sin datos)")

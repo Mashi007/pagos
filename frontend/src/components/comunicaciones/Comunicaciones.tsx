@@ -12,7 +12,7 @@ import {
   Search,
   AlertCircle,
   Plus,
-  Pencil,
+  Edit,
   FileText,
   Clock,
   X,
@@ -788,7 +788,7 @@ export function Comunicaciones({
                       }
                     }}
                   >
-                    <Pencil className="h-4 w-4 mr-2" />
+                    <Edit className="h-4 w-4 mr-2" />
                     Editar Cliente
                   </Button>
                 )}
@@ -1347,7 +1347,7 @@ export function Comunicaciones({
       {/* Formulario para Editar Cliente (cuando el cliente está identificado en la tabla clientes) */}
       {mostrarEditarCliente && clienteParaEditar && (
         <CrearClienteForm
-          cliente={clienteParaEditar}
+          cliente={clienteParaEditar as unknown as { id?: number; cedula?: string; nombre?: string; apellido?: string; [key: string]: unknown }}
           onClose={() => {
             setMostrarEditarCliente(false)
             setClienteParaEditar(null)
