@@ -18,8 +18,9 @@ export interface ClienteAtrasado {
   [key: string]: unknown // Firma de índice para compatibilidad con Record<string, unknown>
 }
 
+/** Respuesta de GET /por-analista: backend devuelve "analista", no "nombre". */
 export interface CobranzasPorAnalista {
-  nombre: string
+  analista: string
   cantidad_clientes: number
   monto_total: number
 }

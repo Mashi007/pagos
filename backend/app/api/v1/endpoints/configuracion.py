@@ -297,21 +297,25 @@ CLAVE_NOTIFICACIONES_ENVIOS = "notificaciones_envios"
 
 @router.get("/notificaciones/envios")
 def get_notificaciones_envios(db: Session = Depends(get_db)):
-    """Configuración de envíos por tipo (habilitado, cco). Datos desde BD."""
+    """Configuración de envíos por tipo (habilitado, cco, plantilla_id, programador). Datos desde BD."""
     try:
         row = db.get(Configuracion, CLAVE_NOTIFICACIONES_ENVIOS)
         if row and row.valor:
             data = json.loads(row.valor)
             if isinstance(data, dict):
                 return data
-    except Exception:
-        pass
+    except json.JSONDecodeError as e:
+        logger.warning("notificaciones_envios: valor en BD no es JSON válido: %s", e)
+    except Exception as e:
+        logger.exception("get_notificaciones_envios: %s", e)
     return {}
 
 
 @router.put("/notificaciones/envios")
 def put_notificaciones_envios(payload: dict = Body(...), db: Session = Depends(get_db)):
-    """Actualizar configuración de envíos. Persiste en BD."""
+    """Actualizar configuración de envíos. Persiste en BD. Payload: dict con claves tipo (ej. PAGO_5_DIAS_ANTES) y valor {habilitado, cco[], plantilla_id?, programador?}."""
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=422, detail="El cuerpo debe ser un objeto JSON")
     try:
         valor = json.dumps(payload)
         row = db.get(Configuracion, CLAVE_NOTIFICACIONES_ENVIOS)
@@ -320,9 +324,10 @@ def put_notificaciones_envios(payload: dict = Body(...), db: Session = Depends(g
         else:
             db.add(Configuracion(clave=CLAVE_NOTIFICACIONES_ENVIOS, valor=valor))
         db.commit()
-    except Exception:
+    except Exception as e:
         db.rollback()
-        raise
+        logger.exception("put_notificaciones_envios: %s", e)
+        raise HTTPException(status_code=500, detail="Error al guardar la configuración de envíos")
     return {"message": "Configuración de envíos actualizada", "configuracion": payload}
 
 

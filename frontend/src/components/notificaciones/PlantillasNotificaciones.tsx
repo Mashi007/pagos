@@ -73,11 +73,14 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
     prejudicial: [
       { valor: 'PREJUDICIAL', label: 'Prejudicial' },
     ],
+    mora61: [
+      { valor: 'MORA_61', label: '61+ días de mora' },
+    ],
   }
 
   const tiposSugeridos = [
     'PAGO_5_DIAS_ANTES', 'PAGO_3_DIAS_ANTES', 'PAGO_1_DIA_ANTES', 'PAGO_DIA_0',
-    'PAGO_1_DIA_ATRASADO', 'PAGO_3_DIAS_ATRASADO', 'PAGO_5_DIAS_ATRASADO', 'PREJUDICIAL'
+    'PAGO_1_DIA_ATRASADO', 'PAGO_3_DIAS_ATRASADO', 'PAGO_5_DIAS_ATRASADO', 'PREJUDICIAL', 'MORA_61'
   ]
 
   const todosLosTipos = [
@@ -85,6 +88,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
     ...tiposPorCategoria.diaPago,
     ...tiposPorCategoria.retraso,
     ...tiposPorCategoria.prejudicial,
+    ...tiposPorCategoria.mora61,
   ]
 
   const cargar = async () => {
@@ -841,7 +845,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
 
                   {/* Prejudicial */}
                   <div>
-                    <h4 className="text-sm font-semibold mb-2 text-red-700">ðŸš¨ Prejudicial</h4>
+                    <h4 className="text-sm font-semibold mb-2 text-red-700">Prejudicial</h4>
                     <div className="grid grid-cols-3 gap-2">
                       {tiposPorCategoria.prejudicial.map(t => (
                         <label key={t.valor} className="flex items-center gap-2 p-2 border rounded hover:bg-white cursor-pointer">
@@ -856,6 +860,26 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
                       ))}
                     </div>
                   </div>
+
+                  {/* Mora 61+ */}
+                  {tiposPorCategoria.mora61 && (
+                    <div>
+                      <h4 className="text-sm font-semibold mb-2 text-slate-700">61+ días de mora</h4>
+                      <div className="grid grid-cols-3 gap-2">
+                        {tiposPorCategoria.mora61.map(t => (
+                          <label key={t.valor} className="flex items-center gap-2 p-2 border rounded hover:bg-white cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={tiposSeleccionados.includes(t.valor)}
+                              onChange={() => toggleTipo(t.valor)}
+                              className="rounded"
+                            />
+                            <span className="text-sm">{t.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

@@ -169,7 +169,6 @@ def cambiar_estado_cliente(
     db: Session = Depends(get_db),
 ):
     """Cambiar estado del cliente (PATCH /clientes/{id}/estado)."""
-    from fastapi import HTTPException
     row = db.get(Cliente, cliente_id)
     if not row:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
@@ -187,7 +186,6 @@ def get_cliente(cliente_id: int, db: Session = Depends(get_db)):
     """Obtener un cliente por ID."""
     row = db.get(Cliente, cliente_id)
     if not row:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
     return ClienteResponse.model_validate(row)
 
@@ -218,7 +216,6 @@ def update_cliente(cliente_id: int, payload: ClienteUpdate, db: Session = Depend
     """Actualizar cliente."""
     row = db.get(Cliente, cliente_id)
     if not row:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
     data = payload.model_dump(exclude_unset=True)
     for k, v in data.items():
@@ -233,7 +230,6 @@ def delete_cliente(cliente_id: int, db: Session = Depends(get_db)):
     """Eliminar cliente."""
     row = db.get(Cliente, cliente_id)
     if not row:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
     db.delete(row)
     db.commit()

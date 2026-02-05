@@ -12,7 +12,11 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.email import send_email
 from app.core.whatsapp_send import send_whatsapp_text
-from app.api.v1.endpoints.notificaciones import get_notificaciones_tabs_data, get_notificaciones_envios_config
+from app.api.v1.endpoints.notificaciones import (
+    get_notificaciones_tabs_data,
+    get_notificaciones_envios_config,
+    get_plantilla_asunto_cuerpo,
+)
 
 router_previas = APIRouter(dependencies=[Depends(get_current_user)])
 router_dia_pago = APIRouter(dependencies=[Depends(get_current_user)])
@@ -27,10 +31,12 @@ def _enviar_correos_items(
     cuerpo_base: str,
     config_envios: dict,
     get_tipo_for_item: Callable[[dict], str],
+    db,
 ) -> dict:
     """
     Envía por Email y/o WhatsApp por cada item. Respeta reglas de negocio:
     - config_envios (desde BD): si tipo tiene habilitado=false no se envía; CCO del tipo se añade al correo.
+    - Si tipo tiene plantilla_id en config, se usa asunto/cuerpo de esa plantilla (con variables sustituidas).
     - Email desde Configuración > Email (sync_from_db en send_email).
     - WhatsApp desde Configuración > WhatsApp (send_whatsapp_text) cuando el item tiene teléfono.
     """
@@ -46,18 +52,12 @@ def _enviar_correos_items(
         if tipo_cfg.get("habilitado") is False:
             omitidos_config += 1
             continue
-        nombre = item.get("nombre") or "Cliente"
-        cedula = item.get("cedula") or ""
-        fecha_v = item.get("fecha_vencimiento") or ""
-        numero_cuota = item.get("numero_cuota")
-        monto = item.get("monto_cuota")
-        cuerpo = cuerpo_base.format(
-            nombre=nombre,
-            cedula=cedula,
-            fecha_vencimiento=fecha_v,
-            numero_cuota=numero_cuota or "",
-            monto=monto if monto is not None else "",
-        )
+        raw_id = tipo_cfg.get("plantilla_id")
+        try:
+            plantilla_id = int(raw_id) if raw_id is not None else None
+        except (TypeError, ValueError):
+            plantilla_id = None
+        asunto, cuerpo = get_plantilla_asunto_cuerpo(db, plantilla_id, item, asunto_base, cuerpo_base)
         # Email (config desde Configuración > Email)
         correo = (item.get("correo") or "").strip()
         if correo and "@" in correo:
@@ -125,7 +125,7 @@ def enviar_notificaciones_previas(db: Session = Depends(get_db)):
         "Por favor realice el pago a tiempo.\n\n"
         "Saludos,\nRapicredit"
     )
-    res = _enviar_correos_items(items, asunto, cuerpo, config_envios, _tipo_previas)
+    res = _enviar_correos_items(items, asunto, cuerpo, config_envios, _tipo_previas, db)
     return {"mensaje": "Envío de notificaciones previas finalizado.", **res}
 
 
@@ -159,7 +159,7 @@ def enviar_notificaciones_dia_pago(db: Session = Depends(get_db)):
         "Por favor realice el pago hoy.\n\n"
         "Saludos,\nRapicredit"
     )
-    res = _enviar_correos_items(items, asunto, cuerpo, config_envios, _tipo_dia_pago)
+    res = _enviar_correos_items(items, asunto, cuerpo, config_envios, _tipo_dia_pago, db)
     return {"mensaje": "Envío de notificaciones día de pago finalizado.", **res}
 
 
@@ -200,7 +200,7 @@ def enviar_notificaciones_retrasadas(db: Session = Depends(get_db)):
         "Por favor regularice su pago lo antes posible.\n\n"
         "Saludos,\nRapicredit"
     )
-    res = _enviar_correos_items(items, asunto, cuerpo, config_envios, _tipo_retrasadas)
+    res = _enviar_correos_items(items, asunto, cuerpo, config_envios, _tipo_retrasadas, db)
     return {"mensaje": "Envío de notificaciones retrasadas finalizado.", **res}
 
 
@@ -234,7 +234,7 @@ def enviar_notificaciones_prejudicial(db: Session = Depends(get_db)):
         "Por favor contacte a la entidad para regularizar su situación.\n\n"
         "Saludos,\nRapicredit"
     )
-    res = _enviar_correos_items(items, asunto, cuerpo, config_envios, _tipo_prejudicial)
+    res = _enviar_correos_items(items, asunto, cuerpo, config_envios, _tipo_prejudicial, db)
     return {"mensaje": "Envío de notificaciones prejudiciales finalizado.", **res}
 
 
@@ -268,5 +268,5 @@ def enviar_notificaciones_mora_61(db: Session = Depends(get_db)):
         "Por favor regularice su pago lo antes posible.\n\n"
         "Saludos,\nRapicredit"
     )
-    res = _enviar_correos_items(items, asunto, cuerpo, config_envios, _tipo_mora_61)
+    res = _enviar_correos_items(items, asunto, cuerpo, config_envios, _tipo_mora_61, db)
     return {"mensaje": "Envío de notificaciones mora 61+ finalizado.", **res}

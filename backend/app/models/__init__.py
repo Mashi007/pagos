@@ -17,10 +17,13 @@ from app.models.conversacion_ai import ConversacionAI
 from app.models.diccionario_semantico import DiccionarioSemantico
 from app.models.mensaje_whatsapp import MensajeWhatsapp
 from app.models.pago import Pago
+from app.models.plantilla_notificacion import PlantillaNotificacion
 
 __all__ = [
     "Base", "Cliente", "Prestamo", "Ticket", "Cuota", "Pago", "PagosWhatsapp",
+    "PlantillaNotificacion",
     "ConversacionCobranza", "PagosInforme", "MensajeWhatsapp",
     "Configuracion", "Auditoria", "User", "DefinicionCampo", "ConversacionAI", "DiccionarioSemantico",
+    "PlantillaNotificacion",
 ]
 

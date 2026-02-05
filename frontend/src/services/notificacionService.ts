@@ -90,10 +90,13 @@ export interface NotificacionVariable {
   fecha_actualizacion?: string
 }
 
-class NotificacionService {
-  private baseUrl = '/api/v1/notificaciones'
+/** Prefijo API v1; pestañas de notificaciones usan rutas propias (notificaciones-previas, etc.). */
+const API_V1 = '/api/v1'
 
-  // Plantillas
+class NotificacionService {
+  private baseUrl = `${API_V1}/notificaciones`
+
+  /** Lista plantillas por tipo. Backend puede devolver [] si no hay tabla plantillas. */
   async listarPlantillas(tipo?: string, soloActivas = true): Promise<NotificacionPlantilla[]> {
     const params = new URLSearchParams()
     if (tipo) params.append('tipo', tipo)
@@ -166,8 +169,8 @@ class NotificacionService {
 
     // Usar timeout extendido para este endpoint que puede tardar más
     return await apiClient.get<{ items: any[], total: number, dias_5: number, dias_3: number, dias_1: number }>(
-      `/api/v1/notificaciones-previas/?${params}`,
-      { timeout: 120000 } // 2 minutos de timeout
+      `${API_V1}/notificaciones-previas/?${params}`,
+      { timeout: 120000 }
     )
   }
 
@@ -176,8 +179,8 @@ class NotificacionService {
     if (estado) params.append('estado', estado)
 
     return await apiClient.get<{ items: any[], total: number, dias_1: number, dias_3: number, dias_5: number }>(
-      `/api/v1/notificaciones-retrasadas/?${params}`,
-      { timeout: 120000 } // 2 minutos de timeout
+      `${API_V1}/notificaciones-retrasadas/?${params}`,
+      { timeout: 120000 }
     )
   }
 
@@ -186,8 +189,8 @@ class NotificacionService {
     if (estado) params.append('estado', estado)
 
     return await apiClient.get<{ items: any[], total: number }>(
-      `/api/v1/notificaciones-prejudicial/?${params}`,
-      { timeout: 120000 } // 2 minutos de timeout
+      `${API_V1}/notificaciones-prejudicial/?${params}`,
+      { timeout: 120000 }
     )
   }
 
@@ -196,15 +199,15 @@ class NotificacionService {
     if (estado) params.append('estado', estado)
 
     return await apiClient.get<{ items: any[], total: number }>(
-      `/api/v1/notificaciones-dia-pago/?${params}`,
-      { timeout: 120000 } // 2 minutos de timeout
+      `${API_V1}/notificaciones-dia-pago/?${params}`,
+      { timeout: 120000 }
     )
   }
 
-  /** Envía correo a cada cliente en la clasificación indicada (email desde tabla clientes por cédula). */
+  /** Envía correo a cada cliente en la clasificación indicada (email desde tabla clientes). */
   async enviarNotificacionesPrevias(): Promise<{ mensaje: string; enviados: number; sin_email: number; fallidos: number }> {
     return await apiClient.post<{ mensaje: string; enviados: number; sin_email: number; fallidos: number }>(
-      '/api/v1/notificaciones-previas/enviar',
+      `${API_V1}/notificaciones-previas/enviar`,
       {},
       { timeout: 120000 }
     )
@@ -212,7 +215,7 @@ class NotificacionService {
 
   async enviarNotificacionesDiaPago(): Promise<{ mensaje: string; enviados: number; sin_email: number; fallidos: number }> {
     return await apiClient.post<{ mensaje: string; enviados: number; sin_email: number; fallidos: number }>(
-      '/api/v1/notificaciones-dia-pago/enviar',
+      `${API_V1}/notificaciones-dia-pago/enviar`,
       {},
       { timeout: 120000 }
     )
@@ -220,7 +223,7 @@ class NotificacionService {
 
   async enviarNotificacionesRetrasadas(): Promise<{ mensaje: string; enviados: number; sin_email: number; fallidos: number }> {
     return await apiClient.post<{ mensaje: string; enviados: number; sin_email: number; fallidos: number }>(
-      '/api/v1/notificaciones-retrasadas/enviar',
+      `${API_V1}/notificaciones-retrasadas/enviar`,
       {},
       { timeout: 120000 }
     )
@@ -228,7 +231,7 @@ class NotificacionService {
 
   async enviarNotificacionesPrejudiciales(): Promise<{ mensaje: string; enviados: number; sin_email: number; fallidos: number }> {
     return await apiClient.post<{ mensaje: string; enviados: number; sin_email: number; fallidos: number }>(
-      '/api/v1/notificaciones-prejudicial/enviar',
+      `${API_V1}/notificaciones-prejudicial/enviar`,
       {},
       { timeout: 120000 }
     )
@@ -237,7 +240,7 @@ class NotificacionService {
   /** Envía correos a clientes con 61+ días de mora (email desde tabla clientes). */
   async enviarNotificacionesMora61(): Promise<{ mensaje: string; enviados: number; sin_email: number; fallidos: number }> {
     return await apiClient.post<{ mensaje: string; enviados: number; sin_email: number; fallidos: number }>(
-      '/api/v1/notificaciones-mora-61/enviar',
+      `${API_V1}/notificaciones-mora-61/enviar`,
       {},
       { timeout: 120000 }
     )
@@ -311,11 +314,14 @@ class EmailConfigService {
     return await apiClient.post(`${this.baseUrl}/email/probar`, params)
   }
 
-  async obtenerConfiguracionEnvios(): Promise<Record<string, { habilitado: boolean, cco: string[] }>> {
-    return await apiClient.get<Record<string, { habilitado: boolean, cco: string[] }>>(`${this.baseUrl}/notificaciones/envios`)
+  /** Config por tipo: habilitado, cco, plantilla_id opcional, programador (hora "HH:mm") */
+  async obtenerConfiguracionEnvios(): Promise<Record<string, { habilitado: boolean; cco: string[]; plantilla_id?: number | null; programador?: string }>> {
+    return await apiClient.get<Record<string, { habilitado: boolean; cco: string[]; plantilla_id?: number | null; programador?: string }>>(
+      `${this.baseUrl}/notificaciones/envios`
+    )
   }
 
-  async actualizarConfiguracionEnvios(config: Record<string, { habilitado: boolean, cco: string[] }>): Promise<any> {
+  async actualizarConfiguracionEnvios(config: Record<string, { habilitado: boolean; cco: string[]; plantilla_id?: number | null; programador?: string }>): Promise<any> {
     return await apiClient.put(`${this.baseUrl}/notificaciones/envios`, config)
   }
 

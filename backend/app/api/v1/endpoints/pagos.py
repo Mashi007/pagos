@@ -1,14 +1,16 @@
 """
 Endpoints de pagos. Datos reales desde BD.
 - Tabla pagos: GET/POST/PUT/DELETE /pagos/ (listado y CRUD para /pagos/pagos).
-- GET /pagos/kpis y GET /pagos/stats desde Cuota/Prestamo; zona horaria America/Caracas.
+- GET /pagos/kpis, /stats, /ultimos, /exportar/errores; POST /upload, /conciliacion/upload, /{id}/aplicar-cuotas.
 """
+import io
 import logging
 from datetime import date, datetime, time as dt_time
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, Query, HTTPException, Body
+from fastapi import APIRouter, Depends, Query, HTTPException, UploadFile, File
+from fastapi.responses import Response
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
@@ -124,6 +126,254 @@ def listar_pagos(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
+@router.get("/ultimos", response_model=dict)
+def get_ultimos_pagos(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+    cedula: Optional[str] = Query(None),
+    estado: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """
+    Resumen de últimos pagos por cédula (para PagosListResumen).
+    Items: cedula, pago_id, prestamo_id, estado_pago, monto_ultimo_pago, fecha_ultimo_pago,
+    cuotas_atrasadas, saldo_vencido, total_prestamos.
+    """
+    hoy = _hoy_local()
+    q_base = select(Pago.cedula_cliente).where(
+        Pago.cedula_cliente.isnot(None), Pago.cedula_cliente != ""
+    )
+    if cedula and cedula.strip():
+        q_base = q_base.where(Pago.cedula_cliente.ilike(f"%{cedula.strip()}%"))
+    q_base = q_base.distinct()
+    total_cedulas = db.scalar(select(func.count()).select_from(q_base.subquery())) or 0
+    total_pages = (total_cedulas + per_page - 1) // per_page if total_cedulas else 0
+    cedulas_page = db.execute(
+        q_base.offset((page - 1) * per_page).limit(per_page)
+    ).scalars().all()
+    cedulas_list = [c[0] for c in cedulas_page if c[0]]
+    items = []
+    for ced in cedulas_list:
+        row_ultimo = db.execute(
+            select(Pago)
+            .where(Pago.cedula_cliente == ced)
+            .order_by(Pago.id.desc())
+            .limit(1)
+        ).first()
+        ultimo = row_ultimo[0] if row_ultimo else None
+        if not ultimo:
+            continue
+        if estado and estado.strip() and (ultimo.estado or "").upper() != estado.strip().upper():
+            continue
+        prestamo_id = ultimo.prestamo_id
+        # Cuotas atrasadas y saldo vencido para este cliente (por prestamos con esa cedula)
+        prestamos_cliente = db.execute(
+            select(Prestamo.id).select_from(Prestamo).join(Cliente, Prestamo.cliente_id == Cliente.id).where(Cliente.cedula == ced)
+        ).scalars().all()
+        prestamo_ids = [p[0] for p in prestamos_cliente]
+        cuotas_atrasadas = 0
+        saldo_vencido = 0.0
+        if prestamo_ids:
+            q_mora = (
+                select(func.count(), func.coalesce(func.sum(Cuota.monto), 0))
+                .select_from(Cuota)
+                .where(
+                    Cuota.prestamo_id.in_(prestamo_ids),
+                    Cuota.fecha_pago.is_(None),
+                    Cuota.fecha_vencimiento < hoy,
+                )
+            )
+            row_mora = db.execute(q_mora).first()
+            if row_mora:
+                cuotas_atrasadas = int(row_mora[0] or 0)
+                saldo_vencido = _safe_float(row_mora[1])
+        total_prestamos = len(prestamo_ids)
+        items.append({
+            "cedula": ced,
+            "pago_id": ultimo.id,
+            "prestamo_id": prestamo_id,
+            "estado_pago": ultimo.estado or "PENDIENTE",
+            "monto_ultimo_pago": _safe_float(ultimo.monto_pagado),
+            "fecha_ultimo_pago": ultimo.fecha_pago.date().isoformat() if hasattr(ultimo.fecha_pago, "date") and ultimo.fecha_pago else (ultimo.fecha_pago.isoformat()[:10] if ultimo.fecha_pago else None),
+            "cuotas_atrasadas": cuotas_atrasadas,
+            "saldo_vencido": saldo_vencido,
+            "total_prestamos": total_prestamos,
+        })
+    return {
+        "items": items,
+        "total": total_cedulas,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": total_pages,
+    }
+
+
+@router.post("/upload", response_model=dict)
+async def upload_excel_pagos(
+    file: UploadFile = File(..., alias="file"),
+    db: Session = Depends(get_db),
+):
+    """
+    Carga masiva de pagos desde Excel.
+    Formato esperado: columnas compatibles con Pago (cedula, prestamo_id, fecha_pago, monto_pagado, numero_documento, etc.).
+    """
+    if not file.filename or not file.filename.lower().endswith((".xlsx", ".xls")):
+        raise HTTPException(status_code=400, detail="Debe subir un archivo Excel (.xlsx o .xls)")
+    try:
+        import openpyxl
+        content = await file.read()
+        wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+        ws = wb.active
+        if not ws:
+            return {"message": "Archivo sin hojas", "registros_procesados": 0, "errores": []}
+        rows = list(ws.iter_rows(min_row=2, values_only=True))
+        registros = 0
+        errores = []
+        for i, row in enumerate(rows):
+            if not row or all(cell is None for cell in row):
+                continue
+            try:
+                cedula = str(row[0]).strip() if row[0] is not None else ""
+                prestamo_id = int(row[1]) if row[1] is not None else None
+                fecha_val = row[2]
+                monto = float(row[3]) if row[3] is not None else 0
+                numero_doc = str(row[4]).strip() if len(row) > 4 and row[4] is not None else ""
+                if not cedula or monto <= 0:
+                    continue
+                if isinstance(fecha_val, datetime):
+                    fecha_pago = fecha_val.date()
+                elif isinstance(fecha_val, date):
+                    fecha_pago = fecha_val
+                else:
+                    fecha_pago = date.today()
+                p = Pago(
+                    cedula_cliente=cedula,
+                    prestamo_id=prestamo_id,
+                    fecha_pago=datetime.combine(fecha_pago, dt_time.min),
+                    monto_pagado=monto,
+                    numero_documento=numero_doc or None,
+                    estado="PENDIENTE",
+                    referencia_pago=numero_doc or "Carga",
+                )
+                db.add(p)
+                registros += 1
+            except Exception as e:
+                errores.append(f"Fila {i + 2}: {e}")
+        db.commit()
+        return {
+            "message": "Carga finalizada",
+            "registros_procesados": registros,
+            "errores": errores[:50],
+        }
+    except Exception as e:
+        db.rollback()
+        logger.exception("Error upload Excel pagos: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post("/conciliacion/upload", response_model=dict)
+async def upload_conciliacion(
+    file: UploadFile = File(..., alias="file"),
+    db: Session = Depends(get_db),
+):
+    """
+    Carga archivo de conciliación (Excel: Fecha de Depósito, Número de Documento).
+    Marca pagos encontrados por numero_documento como conciliados.
+    """
+    if not file.filename or not file.filename.lower().endswith((".xlsx", ".xls")):
+        raise HTTPException(status_code=400, detail="Debe subir un archivo Excel (.xlsx o .xls)")
+    try:
+        import openpyxl
+        content = await file.read()
+        wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+        ws = wb.active
+        if not ws:
+            return {
+                "pagos_conciliados": 0,
+                "pagos_no_encontrados": 0,
+                "documentos_no_encontrados": [],
+                "errores": 0,
+                "errores_detalle": ["Archivo sin datos"],
+            }
+        rows = list(ws.iter_rows(min_row=2, values_only=True))
+        ahora = datetime.now(ZoneInfo(TZ_NEGOCIO))
+        pagos_conciliados = 0
+        documentos_no_encontrados = []
+        errores_detalle = []
+        for i, row in enumerate(rows):
+            if not row or (row[0] is None and row[1] is None):
+                continue
+            try:
+                numero_doc = str(row[1]).strip() if len(row) > 1 and row[1] is not None else ""
+                if not numero_doc:
+                    continue
+                pago_row = db.execute(
+                    select(Pago).where(Pago.numero_documento == numero_doc).limit(1)
+                ).first()
+                if not pago_row:
+                    documentos_no_encontrados.append(numero_doc)
+                    continue
+                pago = pago_row[0]
+                pago.conciliado = True
+                pago.fecha_conciliacion = ahora
+                pagos_conciliados += 1
+            except Exception as e:
+                errores_detalle.append(f"Fila {i + 2}: {e}")
+        db.commit()
+        return {
+            "pagos_conciliados": pagos_conciliados,
+            "pagos_no_encontrados": len(documentos_no_encontrados),
+            "documentos_no_encontrados": documentos_no_encontrados[:100],
+            "errores": len(errores_detalle),
+            "errores_detalle": errores_detalle[:50],
+        }
+    except Exception as e:
+        db.rollback()
+        logger.exception("Error upload conciliación: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get("/exportar/errores")
+def exportar_pagos_errores(db: Session = Depends(get_db)):
+    """Exporta Excel de pagos con errores (no conciliados o estado pendiente/revisar)."""
+    try:
+        import openpyxl
+        q = select(Pago).where(
+            (Pago.conciliado.is_(False)) | (Pago.conciliado.is_(None)) | (Pago.estado.in_(["PENDIENTE", "ATRASADO", "REVISAR"]))
+        ).order_by(Pago.id.desc())
+        rows = db.execute(q).scalars().all()
+        pagos_list = [r[0] for r in rows]
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Pagos con errores"
+        ws.append(["ID", "Cédula", "Préstamo ID", "Fecha pago", "Monto", "Nº documento", "Estado", "Conciliado", "Notas"])
+        for p in pagos_list:
+            fp = p.fecha_pago
+            fecha_str = fp.date().isoformat() if hasattr(fp, "date") and fp else (fp.isoformat()[:10] if fp else "")
+            ws.append([
+                p.id,
+                p.cedula_cliente or "",
+                p.prestamo_id or "",
+                fecha_str,
+                float(p.monto_pagado) if p.monto_pagado is not None else 0,
+                p.numero_documento or "",
+                p.estado or "",
+                "Sí" if p.conciliado else "No",
+                (p.notas or "")[:200],
+            ])
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        return Response(
+            content=buf.getvalue(),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": "attachment; filename=pagos_con_errores.xlsx"},
+        )
+    except Exception as e:
+        logger.exception("Error exportar pagos errores: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
 @router.get("/{pago_id}", response_model=dict)
 def obtener_pago(pago_id: int, db: Session = Depends(get_db)):
     """Obtiene un pago por ID desde la tabla pagos."""
@@ -190,6 +440,51 @@ def eliminar_pago(pago_id: int, db: Session = Depends(get_db)):
     db.delete(row)
     db.commit()
     return None
+
+
+@router.post("/{pago_id}/aplicar-cuotas", response_model=dict)
+def aplicar_pago_a_cuotas(pago_id: int, db: Session = Depends(get_db)):
+    """
+    Aplica el monto del pago a cuotas pendientes del préstamo (por orden de número de cuota).
+    Marca cuotas con fecha_pago y estado PAGADO hasta agotar el monto.
+    """
+    pago = db.get(Pago, pago_id)
+    if not pago:
+        raise HTTPException(status_code=404, detail="Pago no encontrado")
+    prestamo_id = pago.prestamo_id
+    if not prestamo_id:
+        return {
+            "success": False,
+            "cuotas_completadas": 0,
+            "message": "El pago no tiene préstamo asociado.",
+        }
+    monto_restante = float(pago.monto_pagado) if pago.monto_pagado else 0
+    if monto_restante <= 0:
+        return {"success": True, "cuotas_completadas": 0, "message": "Monto del pago es cero."}
+    fecha_pago_date = pago.fecha_pago.date() if hasattr(pago.fecha_pago, "date") and pago.fecha_pago else date.today()
+    cuotas_pendientes = (
+        db.execute(
+            select(Cuota)
+            .where(Cuota.prestamo_id == prestamo_id, Cuota.fecha_pago.is_(None))
+            .order_by(Cuota.numero_cuota)
+        )
+    ).scalars().all()
+    cuotas_completadas = 0
+    for row in cuotas_pendientes:
+        c = row[0]
+        monto_cuota = float(c.monto) if c.monto is not None else 0
+        if monto_restante <= 0 or monto_cuota <= 0:
+            break
+        c.fecha_pago = fecha_pago_date
+        c.estado = "PAGADO"
+        cuotas_completadas += 1
+        monto_restante -= monto_cuota
+    db.commit()
+    return {
+        "success": True,
+        "cuotas_completadas": cuotas_completadas,
+        "message": f"Se aplicó el pago a {cuotas_completadas} cuota(s).",
+    }
 
 
 @router.get("/kpis")

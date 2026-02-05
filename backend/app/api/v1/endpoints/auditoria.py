@@ -99,6 +99,7 @@ def listar_auditoria(
     limit: int = Query(50, ge=1, le=100),
     usuario_email: Optional[str] = Query(None),
     modulo: Optional[str] = Query(None),
+    registro_id: Optional[int] = Query(None),
     accion: Optional[str] = Query(None),
     fecha_desde: Optional[str] = Query(None),
     fecha_hasta: Optional[str] = Query(None),
@@ -112,6 +113,8 @@ def listar_auditoria(
         q = q.where(Auditoria.usuario_email.ilike(f"%{usuario_email}%"))
     if modulo:
         q = q.where(Auditoria.modulo == modulo)
+    if registro_id is not None:
+        q = q.where(Auditoria.registro_id == registro_id)
     if accion:
         q = q.where(Auditoria.accion == accion)
     if fecha_desde:

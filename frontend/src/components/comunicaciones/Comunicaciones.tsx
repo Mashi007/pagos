@@ -12,6 +12,7 @@ import {
   Search,
   AlertCircle,
   Plus,
+  Pencil,
   FileText,
   Clock,
   X,
@@ -31,6 +32,8 @@ import {
   MensajeWhatsappItem,
 } from '../../services/comunicacionesService'
 import { CrearClienteForm } from '../../components/clientes/CrearClienteForm'
+import { clienteService } from '../../services/clienteService'
+import type { Cliente } from '../../types'
 import { ticketsService, TicketCreate, Ticket, TicketUpdate } from '../../services/ticketsService'
 import { userService } from '../../services/userService'
 import { toast } from 'sonner'
@@ -90,6 +93,8 @@ export function Comunicaciones({
   
   // Estado para creación de cliente y ticket
   const [mostrarCrearCliente, setMostrarCrearCliente] = useState(false)
+  const [mostrarEditarCliente, setMostrarEditarCliente] = useState(false)
+  const [clienteParaEditar, setClienteParaEditar] = useState<Cliente | null>(null)
   const [, setCreandoClienteAuto] = useState(false)
   const [clienteRecienCreado, setClienteRecienCreado] = useState<{ contacto: string; tipo: string } | null>(null)
   const [ticketForm, setTicketForm] = useState({
@@ -769,6 +774,24 @@ export function Comunicaciones({
                     Crear Cliente
                   </Button>
                 )}
+                {!conversacionActual.esNuevo && conversacionActual.cliente_id && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      try {
+                        const c = await clienteService.getCliente(String(conversacionActual.cliente_id))
+                        setClienteParaEditar(c)
+                        setMostrarEditarCliente(true)
+                      } catch (e) {
+                        toast.error('No se pudo cargar el cliente para editar')
+                      }
+                    }}
+                  >
+                    <Pencil className="h-4 w-4 mr-2" />
+                    Editar Cliente
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -1317,6 +1340,23 @@ export function Comunicaciones({
                 tipo: conversacionActual.tipo,
               })
             }
+          }}
+        />
+      )}
+
+      {/* Formulario para Editar Cliente (cuando el cliente está identificado en la tabla clientes) */}
+      {mostrarEditarCliente && clienteParaEditar && (
+        <CrearClienteForm
+          cliente={clienteParaEditar}
+          onClose={() => {
+            setMostrarEditarCliente(false)
+            setClienteParaEditar(null)
+          }}
+          onSuccess={() => {
+            setMostrarEditarCliente(false)
+            setClienteParaEditar(null)
+            queryClient.invalidateQueries({ queryKey: ['comunicaciones'] })
+            toast.success('Cliente actualizado. Teléfono y email se han guardado en la BD.')
           }}
         />
       )}

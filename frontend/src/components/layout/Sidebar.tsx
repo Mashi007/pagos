@@ -107,6 +107,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         { title: 'Clientes', href: '/clientes', icon: Users },
         { title: 'Tickets Atención', href: '/crm/tickets', icon: FileText },
         { title: 'Comunicaciones', href: '/comunicaciones', icon: MessageSquare },
+        { title: 'Notificaciones', href: '/notificaciones', icon: Bell },
       ],
     },
     // Ventas: oculto y en pausa (no afectar otros procesos)
@@ -127,12 +128,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       icon: AlertTriangle,
     },
     {
-      title: 'Notificaciones',
-      href: '/notificaciones',
-      icon: Bell,
-      badge: counts.notificacionesNoLeidas > 0 ? String(counts.notificacionesNoLeidas) : undefined,
-    },
-    {
       title: 'Reportes',
       href: '/reportes',
       icon: FileText,
@@ -147,7 +142,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       icon: Wrench,
       isSubmenu: true,
       children: [
-        // Solo Admin: Plantillas de notificaciones
         ...((user?.rol || 'operativo') === 'administrador' ? [{ title: 'Plantillas', href: '/herramientas/plantillas', icon: Mail }] : []),
         { title: 'Programador', href: '/scheduler', icon: Calendar },
       ],
@@ -164,9 +158,6 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         { title: 'Configuración AI', href: '/configuracion?tab=ai', icon: Brain },
         { title: 'Informe pagos (Drive, Sheets)', href: '/configuracion?tab=informe-pagos', icon: FileText },
         { title: 'OCR', href: '/configuracion?tab=ocr', icon: FileText },
-        // Herramientas dentro de Configuración
-        ...((user?.rol || 'operativo') === 'administrador' ? [{ title: 'Plantillas', href: '/herramientas/plantillas', icon: FileText }] : []),
-        { title: 'Programador', href: '/scheduler', icon: Calendar },
         { title: 'Analistas', href: '/analistas', icon: Users },
         { title: 'Concesionarios', href: '/concesionarios', icon: Building },
         { title: 'Modelos de Vehículos', href: '/modelos-vehiculos', icon: Car },

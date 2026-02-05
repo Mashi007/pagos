@@ -105,6 +105,130 @@ def get_prestamos_stats(db: Session = Depends(get_db)):
     return {"total": total, "por_estado": por_estado}
 
 
+@router.get("/cedula/{cedula}", response_model=dict)
+def listar_prestamos_por_cedula(cedula: str, db: Session = Depends(get_db)):
+    """Listado de préstamos por cédula del cliente (integrado con frontend)."""
+    cedula_clean = (cedula or "").strip()
+    if not cedula_clean:
+        return {"prestamos": [], "total": 0}
+    q = (
+        select(Prestamo, Cliente.nombres, Cliente.cedula)
+        .select_from(Prestamo)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(Cliente.cedula == cedula_clean)
+        .order_by(Prestamo.id.desc())
+    )
+    rows = db.execute(q).all()
+    prestamo_ids = [row[0].id for row in rows]
+    cuotas_por_prestamo = {}
+    if prestamo_ids:
+        cuenta = (
+            select(Cuota.prestamo_id, func.count())
+            .select_from(Cuota)
+            .where(Cuota.prestamo_id.in_(prestamo_ids))
+            .group_by(Cuota.prestamo_id)
+        )
+        for pid, cnt in db.execute(cuenta).all():
+            cuotas_por_prestamo[pid] = cnt
+    items = []
+    for row in rows:
+        p, nombres_cliente, cedula_cliente = row[0], row[1], row[2]
+        numero_cuotas = cuotas_por_prestamo.get(p.id) if cuotas_por_prestamo.get(p.id) is not None else p.numero_cuotas
+        items.append(
+            PrestamoListResponse(
+                id=p.id,
+                cliente_id=p.cliente_id,
+                total_financiamiento=p.total_financiamiento,
+                estado=p.estado,
+                concesionario=p.concesionario,
+                modelo=p.modelo,
+                analista=p.analista,
+                fecha_creacion=p.fecha_creacion,
+                fecha_actualizacion=p.fecha_actualizacion,
+                fecha_registro=p.fecha_registro,
+                fecha_aprobacion=p.fecha_aprobacion,
+                nombres=nombres_cliente or p.nombres,
+                cedula=cedula_cliente or p.cedula,
+                numero_cuotas=numero_cuotas,
+                modalidad_pago=p.modalidad_pago,
+            )
+        )
+    return {"prestamos": [i.model_dump() for i in items], "total": len(items)}
+
+
+@router.get("/cedula/{cedula}/resumen", response_model=dict)
+def resumen_prestamos_por_cedula(cedula: str, db: Session = Depends(get_db)):
+    """Resumen de préstamos por cédula: total, saldo pendiente, cuotas en mora (integrado con frontend)."""
+    cedula_clean = (cedula or "").strip()
+    if not cedula_clean:
+        return {
+            "tiene_prestamos": False,
+            "total_prestamos": 0,
+            "total_saldo_pendiente": 0,
+            "total_cuotas_mora": 0,
+            "prestamos": [],
+        }
+    q = (
+        select(Prestamo)
+        .select_from(Prestamo)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(Cliente.cedula == cedula_clean)
+        .order_by(Prestamo.id.desc())
+    )
+    prestamos = db.execute(q).scalars().all()
+    prestamos = [p[0] for p in prestamos]
+    if not prestamos:
+        return {
+            "tiene_prestamos": False,
+            "total_prestamos": 0,
+            "total_saldo_pendiente": 0,
+            "total_cuotas_mora": 0,
+            "prestamos": [],
+        }
+    from datetime import date
+    hoy = date.today()
+    prestamo_ids = [p.id for p in prestamos]
+    # Saldo pendiente y cuotas en mora por préstamo (solo cuotas sin fecha_pago)
+    saldo_q = (
+        select(Cuota.prestamo_id, func.coalesce(func.sum(Cuota.monto), 0))
+        .select_from(Cuota)
+        .where(Cuota.prestamo_id.in_(prestamo_ids), Cuota.fecha_pago.is_(None))
+        .group_by(Cuota.prestamo_id)
+    )
+    saldos = {r[0]: float(r[1]) for r in db.execute(saldo_q).all()}
+    mora_q = (
+        select(Cuota.prestamo_id, func.count())
+        .select_from(Cuota)
+        .where(
+            Cuota.prestamo_id.in_(prestamo_ids),
+            Cuota.fecha_pago.is_(None),
+            Cuota.fecha_vencimiento < hoy,
+        )
+        .group_by(Cuota.prestamo_id)
+    )
+    moras = {r[0]: r[1] for r in db.execute(mora_q).all()}
+    total_saldo = sum(saldos.get(pid, 0) for pid in prestamo_ids)
+    total_mora = sum(moras.get(pid, 0) for pid in prestamo_ids)
+    list_prestamos = []
+    for p in prestamos:
+        list_prestamos.append({
+            "id": p.id,
+            "modelo_vehiculo": p.modelo or "",
+            "total_financiamiento": float(p.total_financiamiento) if p.total_financiamiento is not None else 0,
+            "saldo_pendiente": saldos.get(p.id, 0),
+            "cuotas_en_mora": moras.get(p.id, 0),
+            "estado": p.estado or "",
+            "fecha_registro": p.fecha_registro.isoformat() if p.fecha_registro else None,
+        })
+    return {
+        "tiene_prestamos": True,
+        "total_prestamos": len(prestamos),
+        "total_saldo_pendiente": total_saldo,
+        "total_cuotas_mora": total_mora,
+        "prestamos": list_prestamos,
+    }
+
+
 @router.get("/{prestamo_id}", response_model=PrestamoResponse)
 def get_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
     """Obtiene un préstamo por ID desde BD."""

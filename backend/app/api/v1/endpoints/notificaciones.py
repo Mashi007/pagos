@@ -3,12 +3,14 @@ Endpoints de notificaciones a clientes retrasados.
 Datos reales desde BD: cuotas (fecha_vencimiento, pagado) y clientes.
 Reglas: 5 pestañas por días hasta vencimiento y mora 61+.
 Configuración de envíos (habilitado/CCO por tipo) desde tabla configuracion (notificaciones_envios).
+CRUD de plantillas en plantillas_notificacion; envío puede usar plantilla por tipo vía plantilla_id en config.
 """
 import json
+import logging
 from datetime import date
-from typing import List
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Body, Query
 
 from app.core.deps import get_current_user
 from sqlalchemy import select
@@ -19,6 +21,9 @@ from app.models.cuota import Cuota
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.configuracion import Configuracion
+from app.models.plantilla_notificacion import PlantillaNotificacion
+
+logger = logging.getLogger(__name__)
 
 CLAVE_NOTIFICACIONES_ENVIOS = "notificaciones_envios"
 
@@ -26,15 +31,17 @@ router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 def get_notificaciones_envios_config(db: Session) -> dict:
-    """Carga la configuración de envíos por tipo (habilitado, cco) desde BD para reglas de negocio."""
+    """Carga la configuración de envíos por tipo (habilitado, cco, plantilla_id, programador) desde BD."""
     try:
         row = db.get(Configuracion, CLAVE_NOTIFICACIONES_ENVIOS)
         if row and row.valor:
             data = json.loads(row.valor)
             if isinstance(data, dict):
                 return data
-    except Exception:
-        pass
+    except json.JSONDecodeError as e:
+        logger.warning("notificaciones_envios: valor en BD no es JSON válido: %s", e)
+    except Exception as e:
+        logger.exception("get_notificaciones_envios_config: %s", e)
     return {}
 
 
@@ -73,6 +80,224 @@ def _item_tab(cliente: Cliente, cuota: Cuota, dias_atraso: int = None, dias_ante
     if dias_antes is not None:
         d["dias_antes_vencimiento"] = dias_antes
     return d
+
+
+# --- Helpers plantillas ---
+
+def _plantilla_to_dict(p: PlantillaNotificacion) -> dict:
+    """Serializa PlantillaNotificacion al formato esperado por el frontend."""
+    return {
+        "id": p.id,
+        "nombre": p.nombre or "",
+        "descripcion": getattr(p, "descripcion", None),
+        "tipo": p.tipo or "",
+        "asunto": p.asunto or "",
+        "cuerpo": p.cuerpo or "",
+        "variables_disponibles": getattr(p, "variables_disponibles", None),
+        "activa": bool(p.activa),
+        "zona_horaria": p.zona_horaria or "America/Caracas",
+        "fecha_creacion": p.fecha_creacion.isoformat() if p.fecha_creacion else "",
+        "fecha_actualizacion": p.fecha_actualizacion.isoformat() if p.fecha_actualizacion else "",
+    }
+
+
+def _sustituir_variables(texto: str, item: dict) -> str:
+    """Reemplaza {{nombre}}, {{cedula}}, {{fecha_vencimiento}}, {{numero_cuota}}, {{monto}}, {{dias_atraso}} en texto."""
+    if not texto:
+        return ""
+    nombre = item.get("nombre") or "Cliente"
+    cedula = item.get("cedula") or ""
+    fecha_v = item.get("fecha_vencimiento") or ""
+    numero_cuota = item.get("numero_cuota")
+    monto = item.get("monto_cuota")
+    dias_atraso = item.get("dias_atraso")
+    replacements = {
+        "{{nombre}}": str(nombre),
+        "{{cedula}}": str(cedula),
+        "{{fecha_vencimiento}}": str(fecha_v),
+        "{{numero_cuota}}": str(numero_cuota) if numero_cuota is not None else "",
+        "{{monto}}": str(monto) if monto is not None else "",
+        "{{dias_atraso}}": str(dias_atraso) if dias_atraso is not None else "",
+    }
+    result = texto
+    for key, val in replacements.items():
+        result = result.replace(key, val)
+    return result
+
+
+def get_plantilla_asunto_cuerpo(db: Session, plantilla_id: Optional[int], item: dict, asunto_default: str, cuerpo_default: str) -> tuple:
+    """
+    Si plantilla_id es válido y la plantilla existe, devuelve (asunto, cuerpo) con variables sustituidas.
+    Si no, devuelve (asunto_default, cuerpo_default) con .format(nombre=..., cedula=..., etc.).
+    """
+    if plantilla_id:
+        plantilla = db.get(PlantillaNotificacion, plantilla_id)
+        if plantilla and plantilla.activa:
+            asunto = _sustituir_variables(plantilla.asunto, item)
+            cuerpo = _sustituir_variables(plantilla.cuerpo, item)
+            return (asunto, cuerpo)
+    nombre = item.get("nombre") or "Cliente"
+    cedula = item.get("cedula") or ""
+    fecha_v = item.get("fecha_vencimiento") or ""
+    numero_cuota = item.get("numero_cuota")
+    monto = item.get("monto_cuota")
+    asunto = asunto_default.format(nombre=nombre, cedula=cedula, fecha_vencimiento=fecha_v, numero_cuota=numero_cuota or "", monto=monto if monto is not None else "")
+    cuerpo = cuerpo_default.format(nombre=nombre, cedula=cedula, fecha_vencimiento=fecha_v, numero_cuota=numero_cuota or "", monto=monto if monto is not None else "")
+    return (asunto, cuerpo)
+
+
+@router.get("/plantillas")
+def get_plantillas(
+    tipo: str = None,
+    solo_activas: bool = True,
+    db: Session = Depends(get_db),
+):
+    """Lista de plantillas de notificación. Filtro por tipo y solo activas."""
+    try:
+        q = select(PlantillaNotificacion)
+        if solo_activas:
+            q = q.where(PlantillaNotificacion.activa.is_(True))
+        if tipo:
+            q = q.where(PlantillaNotificacion.tipo == tipo)
+        q = q.order_by(PlantillaNotificacion.tipo, PlantillaNotificacion.nombre)
+        rows = db.execute(q).scalars().all()
+        return [_plantilla_to_dict(p) for p in rows]
+    except Exception as e:
+        logger.exception("get_plantillas: %s", e)
+        return []
+
+
+@router.get("/plantillas/{plantilla_id}")
+def get_plantilla(plantilla_id: int, db: Session = Depends(get_db)):
+    """Obtiene una plantilla por id."""
+    p = db.get(PlantillaNotificacion, plantilla_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Plantilla no encontrada")
+    return _plantilla_to_dict(p)
+
+
+@router.post("/plantillas")
+def create_plantilla(payload: dict = Body(...), db: Session = Depends(get_db)):
+    """Crea una plantilla. Campos: nombre, tipo, asunto, cuerpo; opcionales: descripcion, variables_disponibles, activa, zona_horaria."""
+    nombre = (payload.get("nombre") or "").strip()
+    tipo = (payload.get("tipo") or "").strip()
+    asunto = (payload.get("asunto") or "").strip()
+    cuerpo = payload.get("cuerpo") or ""
+    if not nombre or not tipo or not asunto:
+        raise HTTPException(status_code=422, detail="nombre, tipo y asunto son obligatorios")
+    try:
+        p = PlantillaNotificacion(
+            nombre=nombre,
+            descripcion=payload.get("descripcion"),
+            tipo=tipo,
+            asunto=asunto,
+            cuerpo=cuerpo,
+            variables_disponibles=payload.get("variables_disponibles"),
+            activa=payload.get("activa", True),
+            zona_horaria=(payload.get("zona_horaria") or "America/Caracas").strip(),
+        )
+        db.add(p)
+        db.commit()
+        db.refresh(p)
+        return _plantilla_to_dict(p)
+    except Exception as e:
+        db.rollback()
+        logger.exception("create_plantilla: %s", e)
+        raise HTTPException(status_code=500, detail="Error al crear la plantilla")
+
+
+@router.put("/plantillas/{plantilla_id}")
+def update_plantilla(plantilla_id: int, payload: dict = Body(...), db: Session = Depends(get_db)):
+    """Actualiza una plantilla."""
+    p = db.get(PlantillaNotificacion, plantilla_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Plantilla no encontrada")
+    if "nombre" in payload and payload["nombre"] is not None:
+        p.nombre = (payload["nombre"] or "").strip()
+    if "descripcion" in payload:
+        p.descripcion = payload.get("descripcion")
+    if "tipo" in payload and payload["tipo"] is not None:
+        p.tipo = (payload["tipo"] or "").strip()
+    if "asunto" in payload and payload["asunto"] is not None:
+        p.asunto = (payload["asunto"] or "").strip()
+    if "cuerpo" in payload:
+        p.cuerpo = payload.get("cuerpo") or ""
+    if "variables_disponibles" in payload:
+        p.variables_disponibles = payload.get("variables_disponibles")
+    if "activa" in payload:
+        p.activa = bool(payload["activa"])
+    if "zona_horaria" in payload and payload["zona_horaria"] is not None:
+        p.zona_horaria = (payload["zona_horaria"] or "America/Caracas").strip()
+    try:
+        db.commit()
+        db.refresh(p)
+        return _plantilla_to_dict(p)
+    except Exception as e:
+        db.rollback()
+        logger.exception("update_plantilla: %s", e)
+        raise HTTPException(status_code=500, detail="Error al actualizar la plantilla")
+
+
+@router.delete("/plantillas/{plantilla_id}")
+def delete_plantilla(plantilla_id: int, db: Session = Depends(get_db)):
+    """Elimina una plantilla."""
+    p = db.get(PlantillaNotificacion, plantilla_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Plantilla no encontrada")
+    try:
+        db.delete(p)
+        db.commit()
+        return {"message": "Plantilla eliminada"}
+    except Exception as e:
+        db.rollback()
+        logger.exception("delete_plantilla: %s", e)
+        raise HTTPException(status_code=500, detail="Error al eliminar la plantilla")
+
+
+@router.get("/plantillas/{plantilla_id}/export")
+def export_plantilla(plantilla_id: int, db: Session = Depends(get_db)):
+    """Exporta una plantilla (mismo formato que GET por id)."""
+    p = db.get(PlantillaNotificacion, plantilla_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Plantilla no encontrada")
+    return _plantilla_to_dict(p)
+
+
+@router.post("/plantillas/{plantilla_id}/enviar")
+def enviar_con_plantilla(
+    plantilla_id: int,
+    cliente_id: int = Query(..., description="ID del cliente destinatario"),
+    db: Session = Depends(get_db),
+    variables: dict = Body(default=None),
+):
+    """
+    Envía un correo de prueba al cliente usando la plantilla. variables (body) sustituyen en asunto/cuerpo.
+    Query: cliente_id. Body: dict opcional con nombre, cedula, fecha_vencimiento, numero_cuota, monto, dias_atraso.
+    """
+    from app.core.email import send_email
+    p = db.get(PlantillaNotificacion, plantilla_id)
+    if not p or not p.activa:
+        raise HTTPException(status_code=404, detail="Plantilla no encontrada o inactiva")
+    cliente = db.get(Cliente, cliente_id)
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+    item = {
+        "nombre": (variables or {}).get("nombre") or cliente.nombres or "Cliente",
+        "cedula": (variables or {}).get("cedula") or cliente.cedula or "",
+        "fecha_vencimiento": (variables or {}).get("fecha_vencimiento") or "",
+        "numero_cuota": (variables or {}).get("numero_cuota"),
+        "monto_cuota": (variables or {}).get("monto"),
+        "dias_atraso": (variables or {}).get("dias_atraso"),
+    }
+    asunto = _sustituir_variables(p.asunto, item)
+    cuerpo = _sustituir_variables(p.cuerpo, item)
+    correo = (cliente.email or "").strip()
+    if not correo or "@" not in correo:
+        raise HTTPException(status_code=400, detail="El cliente no tiene email válido")
+    ok, msg = send_email([correo], asunto, cuerpo)
+    if not ok:
+        raise HTTPException(status_code=502, detail=msg or "Error al enviar el correo")
+    return {"message": "Correo enviado", "destinatario": correo}
 
 
 @router.get("")
@@ -238,10 +463,15 @@ def get_notificaciones_tabs_data(db: Session):
     mora_61_cuotas.sort(key=lambda x: (-x["dias_atraso"], x["cedula"], x["numero_cuota"]))
 
     # Prejudicial: clientes con 3 o más cuotas atrasadas (fecha_vencimiento < hoy, no pagado)
+    # Solo cuotas con cliente_id no nulo para poder resolver Cliente
     prejudicial: List[dict] = []
     subq = (
         select(Cuota.cliente_id, func.count(Cuota.id).label("total"))
-        .where(Cuota.fecha_pago.is_(None), Cuota.fecha_vencimiento < hoy)
+        .where(
+            Cuota.fecha_pago.is_(None),
+            Cuota.fecha_vencimiento < hoy,
+            Cuota.cliente_id.isnot(None),
+        )
         .group_by(Cuota.cliente_id)
         .having(func.count(Cuota.id) >= 3)
     )

@@ -7,8 +7,9 @@ import io
 from datetime import date, datetime, timedelta
 from typing import Any, List, Optional
 
-from fastapi import APIRouter, Body, Depends, Query
-from fastapi.responses import Response, StreamingResponse
+from fastapi import APIRouter, Depends, Query
+from fastapi.responses import Response
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -19,6 +20,12 @@ from app.models.cuota import Cuota
 from app.models.prestamo import Prestamo
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
+
+
+class MLImpagoUpdateBody(BaseModel):
+    """Body para PUT /prestamos/{id}/ml-impago (marcar ML impago manual)."""
+    nivel_riesgo: str = Field(..., min_length=1, max_length=50)
+    probabilidad_impago: float = Field(..., ge=0, le=1)
 
 
 def _safe_float(val) -> float:
@@ -367,19 +374,18 @@ def _diagnostico_desde_bd(db: Session) -> dict[str, Any]:
 # Clientes atrasados
 # ---------------------------------------------------------------------------
 
-@router.get("/clientes-atrasados")
-def get_clientes_atrasados(
-    dias_retraso: Optional[int] = Query(None),
-    dias_retraso_min: Optional[int] = Query(None),
-    dias_retraso_max: Optional[int] = Query(None),
-    incluir_admin: bool = Query(False),
-    incluir_ml: bool = Query(True),
-    db: Session = Depends(get_db),
-):
+def _listar_clientes_atrasados(
+    db: Session,
+    *,
+    dias_retraso: Optional[int] = None,
+    dias_retraso_min: Optional[int] = None,
+    dias_retraso_max: Optional[int] = None,
+    analista_filtro: Optional[str] = None,
+    incluir_ml: bool = True,
+) -> List[dict]:
     """
-    Lista de préstamos con cuotas atrasadas desde BD.
-    Una fila por préstamo: cedula, nombres, analista, cuotas_vencidas, total_adeudado, fecha_primera_vencida.
-    Compatible con la pestaña 'Clientes con Cuotas Impagas'.
+    Lista de préstamos con cuotas atrasadas (una fila por préstamo).
+    Reutilizado por GET /clientes-atrasados y GET /por-analista/{analista}/clientes.
     """
     hoy = date.today()
     q = (
@@ -413,6 +419,11 @@ def get_clientes_atrasados(
     if dias_retraso_max is not None:
         limite_max = hoy - timedelta(days=dias_retraso_max)
         q = q.where(Cuota.fecha_vencimiento <= limite_max)
+    if analista_filtro is not None:
+        if analista_filtro == "Sin analista":
+            q = q.where(Prestamo.analista.is_(None))
+        else:
+            q = q.where(Prestamo.analista == analista_filtro)
     rows = db.execute(q).all()
     out: List[dict] = []
     for r in rows:
@@ -446,6 +457,31 @@ def get_clientes_atrasados(
                 item["ml_impago"] = None
         out.append(item)
     return out
+
+
+@router.get("/clientes-atrasados")
+def get_clientes_atrasados(
+    dias_retraso: Optional[int] = Query(None),
+    dias_retraso_min: Optional[int] = Query(None),
+    dias_retraso_max: Optional[int] = Query(None),
+    analista: Optional[str] = Query(None),
+    incluir_admin: bool = Query(False),
+    incluir_ml: bool = Query(True),
+    db: Session = Depends(get_db),
+):
+    """
+    Lista de préstamos con cuotas atrasadas desde BD.
+    Una fila por préstamo: cedula, nombres, analista, cuotas_vencidas, total_adeudado, fecha_primera_vencida.
+    Compatible con la pestaña 'Clientes con Cuotas Impagas'. Opcional: filtrar por analista (informes).
+    """
+    return _listar_clientes_atrasados(
+        db,
+        dias_retraso=dias_retraso,
+        dias_retraso_min=dias_retraso_min,
+        dias_retraso_max=dias_retraso_max,
+        analista_filtro=analista,
+        incluir_ml=incluir_ml,
+    )
 
 
 @router.get("/clientes-por-cantidad-pagos")
@@ -485,12 +521,12 @@ def get_cobranzas_por_analista(
     incluir_admin: bool = Query(False),
     db: Session = Depends(get_db),
 ):
-    """Cobranzas agrupadas por analista desde BD."""
+    """Cobranzas agrupadas por analista desde BD. Cuenta clientes por Prestamo.cliente_id (más fiable que Cuota.cliente_id)."""
     hoy = date.today()
     q = (
         select(
             func.coalesce(Prestamo.analista, "Sin analista").label("analista"),
-            func.count(func.distinct(Cuota.cliente_id)).label("cantidad_clientes"),
+            func.count(func.distinct(Prestamo.cliente_id)).label("cantidad_clientes"),
             func.coalesce(func.sum(Cuota.monto), 0).label("monto_total"),
         )
         .select_from(Cuota)
@@ -511,29 +547,12 @@ def get_cobranzas_por_analista(
 
 @router.get("/por-analista/{analista}/clientes")
 def get_clientes_por_analista(analista: str, db: Session = Depends(get_db)):
-    """Clientes atrasados de un analista desde BD."""
-    hoy = date.today()
-    subq = (
-        select(Cuota.cliente_id)
-        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-        .where(
-            Cuota.fecha_pago.is_(None),
-            Cuota.fecha_vencimiento < hoy,
-        )
-        .distinct()
+    """Clientes atrasados de un analista desde BD. Misma estructura que GET /clientes-atrasados (una fila por préstamo)."""
+    return _listar_clientes_atrasados(
+        db,
+        analista_filtro=analista,
+        incluir_ml=False,
     )
-    if analista == "Sin analista":
-        subq = subq.where(Prestamo.analista.is_(None))
-    else:
-        subq = subq.where(Prestamo.analista == analista)
-    ids = [r[0] for r in db.execute(subq).all() if r[0]]
-    if not ids:
-        return []
-    clientes = db.execute(select(Cliente).where(Cliente.id.in_(ids))).scalars().all()
-    return [
-        {"id": c.id, "cedula": c.cedula, "nombres": c.nombres, "telefono": c.telefono, "email": c.email}
-        for c in clientes
-    ]
 
 
 # ---------------------------------------------------------------------------
@@ -588,11 +607,13 @@ def get_informe_clientes_atrasados(
     formato: Optional[str] = Query("json"),
     db: Session = Depends(get_db),
 ):
-    """Informe clientes atrasados desde BD. formato=json|pdf|excel."""
-    clientes = get_clientes_atrasados(
+    """Informe clientes atrasados desde BD. formato=json|pdf|excel. Opcional: filtrar por analista."""
+    clientes = _listar_clientes_atrasados(
+        db,
         dias_retraso_min=dias_retraso_min,
         dias_retraso_max=dias_retraso_max,
-        db=db,
+        analista_filtro=analista,
+        incluir_ml=False,
     )
     resumen = get_resumen(incluir_diagnostico=False, db=db)
     if formato == "excel":
@@ -729,20 +750,28 @@ def procesar_notificaciones_atrasos(db: Session = Depends(get_db)):
 
 
 @router.put("/prestamos/{prestamo_id}/ml-impago")
-def actualizar_ml_impago(prestamo_id: int, body: dict, db: Session = Depends(get_db)):
-    """Marcar ML impago manual. Verifica préstamo en BD."""
+def actualizar_ml_impago(prestamo_id: int, body: MLImpagoUpdateBody, db: Session = Depends(get_db)):
+    """Marcar ML impago manual y persistir en BD."""
+    from fastapi import HTTPException
     p = db.get(Prestamo, prestamo_id)
     if not p:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+    p.ml_impago_nivel_riesgo_manual = body.nivel_riesgo
+    p.ml_impago_probabilidad_manual = body.probabilidad_impago
+    db.commit()
+    db.refresh(p)
     return {"ok": True, "prestamo_id": prestamo_id}
 
 
 @router.delete("/prestamos/{prestamo_id}/ml-impago")
 def eliminar_ml_impago_manual(prestamo_id: int, db: Session = Depends(get_db)):
-    """Quitar ML impago manual. Verifica préstamo en BD."""
+    """Quitar ML impago manual (volver a valores calculados) y persistir en BD."""
+    from fastapi import HTTPException
     p = db.get(Prestamo, prestamo_id)
     if not p:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+    p.ml_impago_nivel_riesgo_manual = None
+    p.ml_impago_probabilidad_manual = None
+    db.commit()
+    db.refresh(p)
     return {"ok": True, "prestamo_id": prestamo_id}

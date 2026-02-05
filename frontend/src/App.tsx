@@ -189,8 +189,11 @@ function App() {
             element={<Cobranzas />}
           />
 
-          {/* Notificaciones */}
+          {/* Notificaciones (dentro de CRM en sidebar; URL /pagos/notificaciones) */}
           <Route path="notificaciones" element={<Notificaciones />} />
+
+          {/* Herramientas: misma página por compatibilidad con enlaces antiguos */}
+          <Route path="herramientas/notificaciones" element={<Notificaciones />} />
 
           {/* Comunicaciones (Unificado WhatsApp y Email) */}
           <Route path="comunicaciones" element={<ComunicacionesPage />} />

@@ -1284,10 +1284,11 @@ export function Cobranzas() {
               ) : (
                 <div className="space-y-4">
                   {porAnalista.map((analista, index) => {
-                    const estaExpandido = analistasExpandidos.has(analista.nombre)
-                    const clientes = clientesPorAnalista[analista.nombre] || []
-                    const cargando = cargandoClientesAnalista[analista.nombre] || false
-                    const busqueda = busquedaPorAnalista[analista.nombre] || ''
+                    const keyAnalista = analista.analista
+                    const estaExpandido = analistasExpandidos.has(keyAnalista)
+                    const clientes = clientesPorAnalista[keyAnalista] || []
+                    const cargando = cargandoClientesAnalista[keyAnalista] || false
+                    const busqueda = busquedaPorAnalista[keyAnalista] || ''
 
                     // Filtrar clientes según búsqueda
                     const clientesFiltrados = busqueda.trim()
@@ -1312,7 +1313,7 @@ export function Cobranzas() {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  onClick={() => toggleAnalista(analista.nombre)}
+                                  onClick={() => toggleAnalista(keyAnalista)}
                                   className="p-1 h-auto"
                                 >
                                   {estaExpandido ? (
@@ -1322,7 +1323,7 @@ export function Cobranzas() {
                                   )}
                                 </Button>
                                 <div>
-                                  <h3 className="font-semibold text-lg">{analista.nombre}</h3>
+                                  <h3 className="font-semibold text-lg">{keyAnalista}</h3>
                                   <p className="text-sm text-gray-600">
                                     {analista.cantidad_clientes} clientes atrasados con al menos 1 cuota vencida
                                   </p>
@@ -1339,7 +1340,7 @@ export function Cobranzas() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => exportarClientesAnalista(analista.nombre)}
+                                onClick={() => exportarClientesAnalista(keyAnalista)}
                               >
                                 <Download className="h-4 w-4 mr-2" />
                                 Exportar
@@ -1370,7 +1371,7 @@ export function Cobranzas() {
                                     type="text"
                                     placeholder="Buscar cliente por nombre o cédula..."
                                     value={busqueda}
-                                    onChange={(e) => setBusquedaPorAnalista(prev => ({ ...prev, [analista.nombre]: e.target.value }))}
+                                    onChange={(e) => setBusquedaPorAnalista(prev => ({ ...prev, [keyAnalista]: e.target.value }))}
                                     className="pl-10"
                                   />
                                 </div>
@@ -1408,7 +1409,7 @@ export function Cobranzas() {
                                           const estaEditando = editandoAnalista === cliente.prestamo_id
                                           const estaGuardando = guardandoAnalista === cliente.prestamo_id
                                           // Obtener el analista del cliente o usar el analista del grupo
-                                          const analistaCliente = cliente.analista || analista.nombre
+                                          const analistaCliente = cliente.analista || keyAnalista
                                           return (
                                             <tr key={`${cliente.prestamo_id}-${idx}`} className="border-b hover:bg-gray-50 transition-colors group">
                                               <td className="p-2 font-mono text-xs">{cliente.cedula}</td>

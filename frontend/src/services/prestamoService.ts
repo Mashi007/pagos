@@ -70,22 +70,19 @@ class PrestamoService {
     return result
   }
 
-  // Obtener préstamo por ID
+  // Obtener préstamo por ID (backend devuelve el objeto directamente, no { data })
   async getPrestamo(id: number): Promise<Prestamo> {
-    const response = await apiClient.get<ApiResponse<Prestamo>>(`${this.baseUrl}/${id}`)
-    return response.data
+    return await apiClient.get<Prestamo>(`${this.baseUrl}/${id}`)
   }
 
-  // Crear nuevo préstamo
+  // Crear nuevo préstamo (backend devuelve el préstamo creado directamente)
   async createPrestamo(data: PrestamoForm): Promise<Prestamo> {
-    const response = await apiClient.post<ApiResponse<Prestamo>>(this.baseUrl, data)
-    return response.data
+    return await apiClient.post<Prestamo>(this.baseUrl, data)
   }
 
-  // Actualizar préstamo
+  // Actualizar préstamo (backend devuelve el préstamo actualizado directamente)
   async updatePrestamo(id: number, data: Partial<PrestamoForm>): Promise<Prestamo> {
-    const response = await apiClient.put<ApiResponse<Prestamo>>(`${this.baseUrl}/${id}`, data)
-    return response.data
+    return await apiClient.put<Prestamo>(`${this.baseUrl}/${id}`, data)
   }
 
   // Buscar préstamos por cédula
