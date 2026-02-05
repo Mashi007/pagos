@@ -90,6 +90,7 @@ def send_email(
 
 def notify_ticket_created(ticket_id: int, titulo: str, descripcion: str, cliente_nombre: Optional[str], prioridad: str) -> bool:
     """Notifica por correo que se creó un ticket. Destino: contactos prestablecidos (Configuración > Email o TICKETS_NOTIFY_EMAIL)."""
+    sync_from_db()
     to_list = get_tickets_notify_emails()
     if not to_list:
         logger.warning("No hay contactos para notificación de tickets. Configura 'Emails para notificación de tickets' en Configuración > Email o TICKETS_NOTIFY_EMAIL.")

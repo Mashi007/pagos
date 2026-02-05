@@ -2,7 +2,9 @@
 Servicio para manejar mensajes entrantes de WhatsApp (Meta API).
 Flujo cobranza: bienvenida → cédula (E, J o V + 6-11 dígitos) → foto papeleta (máx. 3 intentos) → guardar en Drive + OCR + digitalizar.
 Las imágenes se guardan en pagos_whatsapp con link_imagen (Google Drive).
+Si la imagen no es clara tras 3 intentos se acepta igual, se crea un ticket automático con todo el respaldo y se envía copia al correo configurado (ej. itmaster@rapicreditca.com).
 """
+import json
 import re
 import logging
 from typing import Optional, Dict, Any
@@ -17,6 +19,7 @@ from app.models.pagos_whatsapp import PagosWhatsapp
 from app.models.conversacion_cobranza import ConversacionCobranza
 from app.models.pagos_informe import PagosInforme
 from app.models.mensaje_whatsapp import MensajeWhatsapp
+from app.models.ticket import Ticket
 
 logger = logging.getLogger(__name__)
 
@@ -66,8 +69,9 @@ MENSAJE_BIENVENIDA = (
 MENSAJE_CONFIRMACION = "Confirma que el siguiente reporte de pago se realizará a cargo de {nombre}. ¿Sí o No?"
 MENSAJE_CONFIRMACION_SIN_NOMBRE = "Confirma que el siguiente reporte de pago se realizará a cargo del titular de la cédula {cedula}. ¿Sí o No?"
 MENSAJE_GRACIAS_PIDE_FOTO = (
-    "Gracias{nombre_gracias}. Ahora adjunta una foto clara de tu papeleta de depósito o recibo de pago válido, a unos 20 cm. "
-    "Si no es un recibo válido o no se ve bien se te pedirá otra; máximo 3 intentos. Al tercero se almacena."
+    "No se te pedirá otra; te pedimos que vuelvas a tomar una fotografía más clara o que cargues el original. "
+    "Gracias. Ahora adjunta una foto clara de tu papeleta de depósito o recibo de pago válido, a unos 20 cm. "
+    "Si no es un recibo válido o no se ve bien se te pedirá otra."
 )
 MENSAJE_CEDULA_INVALIDA = (
     "La cédula debe empezar por una de las 3 letras E, J o V, seguido de entre 6 y 11 números, sin guiones ni signos. "
@@ -82,9 +86,9 @@ MENSAJE_PRIMERO_CONFIRMA_LUEGO_FOTO = (
 MENSAJE_CONTINUAMOS_SIN_CONFIRMAR = "Continuamos. Envía una foto clara de tu papeleta de depósito (recibo de pago válido) a 20 cm."
 MENSAJE_ENVIA_FOTO = "Por favor adjunta una foto clara de tu papeleta de depósito o recibo de pago válido, a 20 cm."
 MENSAJE_FOTO_POCO_CLARA = (
-    "Necesitamos un recibo de pago válido (papeleta de depósito). La imagen no es válida o no se ve bien. "
-    "Toma otra foto a 20 cm de tu papeleta. Intento {n}/3. Al tercer intento se almacenará la que envíes. "
-    "Si tienes dudas, llama al 0424-4359435."
+    "No se te pedirá otra; te pedimos que vuelvas a tomar una fotografía más clara o que cargues el original. "
+    "Intento {n}/3. Gracias. Ahora adjunta una foto clara de tu papeleta de depósito o recibo de pago válido, a unos 20 cm. "
+    "Si no es un recibo válido o no se ve bien se te pedirá otra."
 )
 MENSAJE_RECIBIDO = "Gracias. Tu reporte de pago (cédula {cedula}) quedó registrado. Si necesitas algo más, llama al 0424-4359435."
 # Al aceptar por 3.er intento (imagen no clara): siempre se acepta y se indica que si no está clara los contactaremos.
@@ -242,6 +246,73 @@ def _mensaje_confirmacion_datos_ocr(cedula: str, cantidad: str, numero_documento
         f"• Cédula: {cedula or '—'}\n• Cantidad: {cantidad or '—'}\n• Nº documento: {numero_documento or '—'}\n\n"
         "Responde *SÍ* para confirmar o escribe las correcciones (ej: Cantidad 100.50, Nº documento 12345)."
     )
+
+
+def _crear_ticket_recibo_no_claro(
+    db: Session,
+    conv: ConversacionCobranza,
+    informe: PagosInforme,
+    row_pw: PagosWhatsapp,
+    link_imagen: Optional[str],
+    phone: str,
+    ocr_data: Dict[str, Any],
+) -> Optional[int]:
+    """
+    Crea un ticket automático cuando el recibo no fue claro tras 3 intentos.
+    Incluye todo el respaldo (cédula, teléfono, link imagen, IDs). Notifica por correo al destinatario
+    configurado (Configuración > Email > Emails para notificación de tickets, ej. itmaster@rapicreditca.com).
+    Devuelve el id del ticket creado o None si falla.
+    """
+    try:
+        cliente_id = None
+        if conv.cedula:
+            c = db.execute(select(Cliente.id).where(Cliente.cedula == conv.cedula.strip()).limit(1)).scalar_one_or_none()
+            if c is not None:
+                cliente_id = int(c) if isinstance(c, (int, float)) else getattr(c, "id", None)
+        titulo = f"Recibo de pago no claro tras 3 intentos - Cédula {conv.cedula or 'N/A'}"
+        desc_parts = [
+            "La imagen del recibo de pago no fue clara después de 3 intentos. Se almacenó igual para revisión.",
+            f"Cédula: {conv.cedula or 'N/A'}",
+            f"Teléfono: {phone or 'N/A'}",
+            f"pagos_whatsapp_id: {row_pw.id}",
+            f"pagos_informe_id: {informe.id}",
+        ]
+        if link_imagen and link_imagen != "NA":
+            desc_parts.append(f"Link imagen: {link_imagen}")
+        if ocr_data:
+            desc_parts.append("Datos OCR (si se extrajeron): " + json.dumps({k: v for k, v in ocr_data.items() if v not in (None, "NA", "")}, ensure_ascii=False))
+        descripcion = "\n".join(desc_parts)
+        archivos_json = json.dumps([link_imagen]) if link_imagen and link_imagen != "NA" else None
+        ticket = Ticket(
+            titulo=titulo,
+            descripcion=descripcion,
+            cliente_id=cliente_id,
+            estado="abierto",
+            prioridad="alta",
+            tipo="recibo_no_claro",
+            asignado_a=None,
+            asignado_a_id=None,
+            fecha_limite=None,
+            conversacion_whatsapp_id=None,
+            comunicacion_email_id=None,
+            creado_por_id=None,
+            archivos=archivos_json,
+        )
+        db.add(ticket)
+        db.commit()
+        db.refresh(ticket)
+        logger.info("%s Ticket automático creado por recibo no claro | ticket_id=%s cedula=%s telefono=%s", LOG_TAG_INFORME, ticket.id, conv.cedula, phone[:6] + "***" if len(phone) >= 6 else "***")
+        from app.core.email import notify_ticket_created
+        cliente_nombre = (conv.nombre_cliente or "").strip() or None
+        notify_ticket_created(ticket.id, titulo, descripcion, cliente_nombre, "alta")
+        return ticket.id
+    except Exception as e:
+        logger.exception("%s %s | Error creando ticket recibo no claro: %s", LOG_TAG_FALLO, "ticket_auto", e)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        return None
 
 
 # Palabras/frases que sugieren que piden otra cosa (no reportar pago): información, hablar con alguien, etc.
@@ -757,6 +828,9 @@ class WhatsAppService:
             conv.updated_at = datetime.utcnow()
             db.commit()
             logger.info("%s FLUJO_OCR OK hasta Sheet | estado=esperando_confirmacion_datos informe_id=%s telefono=%s", LOG_TAG_INFORME, informe.id, phone_mask)
+            # Si se aceptó por 3.er intento pero la imagen no era clara: crear ticket automático y enviar copia al correo configurado (ej. itmaster@rapicreditca.com)
+            if aceptado_por_tercer_intento:
+                _crear_ticket_recibo_no_claro(db, conv, informe, row_pw, link_imagen, phone, ocr_data_early)
             response_text = _mensaje_confirmacion_datos_ocr(conv.cedula, cantidad, numero_doc, db)
             return {"status": "image_saved_confirmar_datos", "pagos_whatsapp_id": row_pw.id, "pagos_informe_id": informe.id, "response_text": response_text}
         except Exception as e:

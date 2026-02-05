@@ -103,10 +103,10 @@ class Settings(BaseSettings):
     SMTP_USER: Optional[str] = None
     SMTP_PASSWORD: Optional[str] = None
     SMTP_FROM_EMAIL: Optional[str] = None
-    # Correo(s) para notificaciones de tickets CRM (varios separados por coma)
+    # Correo(s) para notificaciones de tickets CRM (varios separados por coma). Incluye tickets automáticos por recibo no claro (3 intentos).
     TICKETS_NOTIFY_EMAIL: Optional[str] = Field(
-        None,
-        description="Email(s) para notificar cuando se crea o actualiza un ticket (separados por coma)"
+        default="itmaster@rapicreditca.com",
+        description="Email(s) para notificar cuando se crea o actualiza un ticket (separados por coma). Por defecto itmaster@rapicreditca.com."
     )
     
     # ============================================

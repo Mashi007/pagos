@@ -681,13 +681,42 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
     'PAGO_3_DIAS_ATRASADO': { categoria: 'Notificación Retrasada', caso: '3 días de retraso' },
     'PAGO_5_DIAS_ATRASADO': { categoria: 'Notificación Retrasada', caso: '5 días de retraso' },
     'PREJUDICIAL': { categoria: 'Prejudicial', caso: 'Prejudicial' },
+    'MORA_61': { categoria: 'Mora 61+', caso: '61+ días de mora' },
   }
+
+  /** Orden de casos para el banco por caso (cada uno con su lista de plantillas) */
+  const ordenCasos: { tipo: string; label: string; borderColor: string }[] = [
+    { tipo: 'PAGO_5_DIAS_ANTES', label: 'Faltan 5 días', borderColor: 'border-blue-500' },
+    { tipo: 'PAGO_3_DIAS_ANTES', label: 'Faltan 3 días', borderColor: 'border-blue-400' },
+    { tipo: 'PAGO_1_DIA_ANTES', label: 'Falta 1 día', borderColor: 'border-blue-300' },
+    { tipo: 'PAGO_DIA_0', label: 'Hoy vence', borderColor: 'border-green-500' },
+    { tipo: 'PAGO_1_DIA_ATRASADO', label: '1 día de retraso', borderColor: 'border-amber-400' },
+    { tipo: 'PAGO_3_DIAS_ATRASADO', label: '3 días de retraso', borderColor: 'border-amber-500' },
+    { tipo: 'PAGO_5_DIAS_ATRASADO', label: '5 días de retraso', borderColor: 'border-amber-600' },
+    { tipo: 'PREJUDICIAL', label: 'Prejudicial', borderColor: 'border-red-500' },
+    { tipo: 'MORA_61', label: '61+ días de mora', borderColor: 'border-slate-500' },
+  ]
+
+  /** Banco por caso: plantillas agrupadas por tipo */
+  const plantillasPorCaso = useMemo(() => {
+    const porTipo: Record<string, NotificacionPlantilla[]> = {}
+    ordenCasos.forEach(({ tipo }) => { porTipo[tipo] = [] })
+    plantillasFiltradas.forEach(plantilla => {
+      if (porTipo[plantilla.tipo]) {
+        porTipo[plantilla.tipo].push(plantilla)
+      } else {
+        porTipo[plantilla.tipo] = [plantilla]
+      }
+    })
+    return porTipo
+  }, [plantillasFiltradas])
 
   const categoriasOrden = [
     { key: 'Notificación Previa', color: 'blue', borderColor: 'border-blue-500', icon: 'ðŸ“…' },
     { key: 'Día de Pago', color: 'green', borderColor: 'border-green-500', icon: 'ðŸ’°' },
     { key: 'Notificación Retrasada', color: 'orange', borderColor: 'border-orange-500', icon: 'âš ï¸' },
-    { key: 'Prejudicial', color: 'red', borderColor: 'border-red-500', icon: 'ðŸš¨' },
+    { key: 'Prejudicial', color: 'red', borderColor: 'border-red-500', icon: '🚨' },
+    { key: 'Mora 61+', color: 'slate', borderColor: 'border-slate-500', icon: '📋' },
   ]
 
   // Organizar plantillas por categoría (para el resumen)
@@ -1140,10 +1169,10 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5 text-blue-600" />
-              Resumen de Plantillas por Caso
+              Banco de plantillas por caso
             </CardTitle>
             <CardDescription>
-              Visualización organizada de todas las plantillas almacenadas, clasificadas por tipo de notificación y caso.
+              Cada caso (1 día, 5 días, hoy vence, 61+ mora, etc.) tiene su banco. Estos nombres aparecen en Notificaciones → Configuración al elegir la plantilla a enviar.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1164,8 +1193,8 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
                   onChange={e => setFiltroTipo(e.target.value)}
                   className="flex-1 border rounded px-2 py-1 text-sm"
                 >
-                  <option value="">Todos los tipos</option>
-                  {tiposSugeridos.map(t => <option key={t} value={t}>{t}</option>)}
+                  <option value="">Todos los casos</option>
+                  {ordenCasos.map(c => <option key={c.tipo} value={c.tipo}>{c.label}</option>)}
                 </select>
                 <select
                   value={filtroActiva === null ? '' : String(filtroActiva)}
@@ -1189,20 +1218,17 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
               </div>
             ) : (
               <div className="space-y-6">
-                {categoriasOrden.map(categoriaInfo => {
-                  const categoria = categoriaInfo.key
-                  const plantillasCategoria = plantillasPorCategoria[categoria] || []
-
-                  if (plantillasCategoria.length === 0) return null
-
+                {ordenCasos.map(({ tipo, label, borderColor }) => {
+                  const lista = plantillasPorCaso[tipo] || []
+                  if (lista.length === 0) return null
                   return (
-                    <Card key={categoria} className={`border-l-4 ${categoriaInfo.borderColor}`}>
+                    <Card key={tipo} className={`border-l-4 ${borderColor}`}>
                       <CardHeader className="pb-3">
                         <CardTitle className="text-lg flex items-center gap-2">
-                          <span>{categoriaInfo.icon}</span>
-                          {categoria}
+                          <FileText className="h-5 w-5 text-gray-500" />
+                          Banco: {label}
                           <Badge variant="outline" className="ml-2">
-                            {plantillasCategoria.length} plantilla(s)
+                            {lista.length} plantilla(s)
                           </Badge>
                         </CardTitle>
                       </CardHeader>
@@ -1211,71 +1237,58 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
                           <Table>
                             <TableHeader>
                               <TableRow>
-                                <TableHead>Tipo</TableHead>
-                                <TableHead>Caso</TableHead>
-                                <TableHead>Fecha Actualización</TableHead>
-                                <TableHead>Archivo / Plantilla</TableHead>
+                                <TableHead>Nombre</TableHead>
+                                <TableHead>Asunto</TableHead>
+                                <TableHead>Fecha actualización</TableHead>
                                 <TableHead>Estado</TableHead>
                                 <TableHead className="text-right">Acciones</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {plantillasCategoria.map(plantilla => {
-                                const mapeo = mapeoTipos[plantilla.tipo as keyof typeof mapeoTipos]
-                                return (
-                                  <TableRow key={plantilla.id}>
-                                    <TableCell className="font-medium">
-                                      {mapeo?.categoria || plantilla.tipo}
-                                    </TableCell>
-                                    <TableCell>
-                                      <Badge variant="outline">{mapeo?.caso || plantilla.tipo}</Badge>
-                                    </TableCell>
-                                    <TableCell>
-                                      <div className="flex items-center gap-1 text-sm text-gray-600">
-                                        <Calendar className="h-3 w-3" />
-                                        {formatearFecha(plantilla.fecha_actualizacion)}
-                                      </div>
-                                    </TableCell>
-                                    <TableCell>
-                                      <div className="max-w-xs">
-                                        <div className="font-medium text-sm truncate" title={plantilla.nombre}>
-                                          {plantilla.nombre}
-                                        </div>
-                                        <div className="text-xs text-gray-500 truncate" title={plantilla.asunto}>
-                                          {plantilla.asunto || 'Sin asunto'}
-                                        </div>
-                                      </div>
-                                    </TableCell>
-                                    <TableCell>
-                                      {plantilla.activa ? (
-                                        <Badge variant="success">Activa</Badge>
-                                      ) : (
-                                        <Badge variant="secondary">Inactiva</Badge>
-                                      )}
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                      <div className="flex justify-end gap-2">
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() => handleEditarDesdeResumen(plantilla)}
-                                          title="Editar plantilla"
-                                        >
-                                          <Edit2 className="h-4 w-4" />
-                                        </Button>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() => handleEliminarDesdeResumen(plantilla)}
-                                          title="Eliminar plantilla"
-                                        >
-                                          <Trash2 className="h-4 w-4 text-red-500" />
-                                        </Button>
-                                      </div>
-                                    </TableCell>
-                                  </TableRow>
-                                )
-                              })}
+                              {lista.map(plantilla => (
+                                <TableRow key={plantilla.id}>
+                                  <TableCell className="font-medium" title={plantilla.nombre}>
+                                    {plantilla.nombre}
+                                  </TableCell>
+                                  <TableCell className="max-w-xs text-sm text-gray-600 truncate" title={plantilla.asunto || ''}>
+                                    {plantilla.asunto || 'Sin asunto'}
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex items-center gap-1 text-sm text-gray-600">
+                                      <Calendar className="h-3 w-3" />
+                                      {formatearFecha(plantilla.fecha_actualizacion)}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    {plantilla.activa ? (
+                                      <Badge variant="default" className="bg-green-600">Activa</Badge>
+                                    ) : (
+                                      <Badge variant="secondary">Inactiva</Badge>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <div className="flex justify-end gap-2">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleEditarDesdeResumen(plantilla)}
+                                        title="Editar plantilla"
+                                      >
+                                        <Edit2 className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="hover:bg-red-100 hover:text-red-600"
+                                        onClick={() => handleEliminarDesdeResumen(plantilla)}
+                                        title="Eliminar plantilla"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
                             </TableBody>
                           </Table>
                         </div>
