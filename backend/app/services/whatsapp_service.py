@@ -170,6 +170,8 @@ def _reiniciar_como_nuevo_caso(conv: ConversacionCobranza, db: Session) -> None:
     conv.intento_confirmacion = 0
     conv.observacion = None
     conv.pagos_informe_id_pendiente = None
+    conv.confirmacion_paso = 0
+    conv.confirmacion_esperando_valor = None
     conv.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(conv)
@@ -269,9 +271,9 @@ def _valor_campo_informe(informe: PagosInforme, campo: str) -> str:
 
 
 def _mensaje_pregunta_si_no(campo: str, valor: str) -> str:
-    """Mensaje: ¿El [campo] es X? Responde Sí o No."""
+    """Cada confirmación debe estar precedida por Sí o No; solo entonces se pasa a la siguiente columna."""
     nombre = _nombre_campo_para_usuario(campo)
-    return f"¿La {nombre} es *{valor}*? Responde *Sí* o *No*."
+    return f"Responde *Sí* o *No*: ¿La {nombre} es *{valor}*? (Con Sí pasamos a la siguiente; con No te pido que la escribas.)"
 
 
 def _mensaje_pide_escribir_campo(campo: str) -> str:
@@ -391,6 +393,78 @@ def _crear_ticket_recibo_no_claro(
         return ticket.id
     except Exception as e:
         logger.exception("%s %s | Error creando ticket recibo no claro: %s", LOG_TAG_FALLO, "ticket_auto", e)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        return None
+
+
+EMAIL_TICKET_REVISAR = "itmaster@rapicreditca.com"
+
+
+def _crear_ticket_informe_revisar(
+    db: Session,
+    conv: ConversacionCobranza,
+    informe: PagosInforme,
+    campo_corregido: str,
+    link_imagen: Optional[str],
+    phone: str,
+) -> Optional[int]:
+    """
+    Cuando columna H = REVISAR (cliente corrigió un dato): crea ticket y comunica a itmaster@rapicreditca.com con las novedades.
+    Devuelve el id del ticket o None si falla.
+    """
+    try:
+        cliente_id = None
+        if conv and conv.cedula:
+            c = db.execute(select(Cliente.id).where(Cliente.cedula == conv.cedula.strip()).limit(1)).scalar_one_or_none()
+            if c is not None:
+                cliente_id = int(c) if isinstance(c, (int, float)) else getattr(c, "id", None)
+        nombre_campo = _nombre_campo_para_usuario(campo_corregido)
+        titulo = f"Informe de pago requiere revisión - Cédula {informe.cedula or 'N/A'}"
+        desc_parts = [
+            "El cliente corrigió un dato durante la confirmación. Estado columna H: REVISAR.",
+            f"Campo corregido: {nombre_campo}",
+            f"pagos_informe_id: {informe.id}",
+            f"Cédula: {informe.cedula or 'N/A'}",
+            f"Cantidad: {informe.cantidad or 'N/A'}",
+            f"Nº documento: {informe.numero_documento or 'N/A'}",
+            f"Teléfono: {phone or 'N/A'}",
+        ]
+        if link_imagen and link_imagen != "NA":
+            desc_parts.append(f"Link imagen: {link_imagen}")
+        descripcion = "\n".join(desc_parts)
+        archivos_json = json.dumps([link_imagen]) if link_imagen and link_imagen != "NA" else None
+        ticket = Ticket(
+            titulo=titulo,
+            descripcion=descripcion,
+            cliente_id=cliente_id,
+            estado="abierto",
+            prioridad="alta",
+            tipo="informe_revisar",
+            asignado_a=None,
+            asignado_a_id=None,
+            fecha_limite=None,
+            conversacion_whatsapp_id=None,
+            comunicacion_email_id=None,
+            creado_por_id=None,
+            archivos=archivos_json,
+        )
+        db.add(ticket)
+        db.commit()
+        db.refresh(ticket)
+        logger.info("%s Ticket informe REVISAR creado | ticket_id=%s informe_id=%s campo=%s", LOG_TAG_INFORME, ticket.id, informe.id, campo_corregido)
+        # Comunicar novedades a itmaster@rapicreditca.com
+        asunto = f"[CRM] Informe pago requiere revisión - Ticket #{ticket.id} - Cédula {informe.cedula or 'N/A'}"
+        cuerpo = f"Se ha creado un ticket porque el informe de pago tiene columna H = REVISAR (el cliente corrigió datos).\n\n{descripcion}\n\nRevisa el informe en Google Sheet y el ticket en el CRM."
+        from app.core.email import send_email
+        ok, err = send_email([EMAIL_TICKET_REVISAR], asunto, cuerpo)
+        if not ok:
+            logger.warning("%s No se pudo enviar correo a %s por ticket REVISAR: %s", LOG_TAG_INFORME, EMAIL_TICKET_REVISAR, err)
+        return ticket.id
+    except Exception as e:
+        logger.exception("%s %s | Error creando ticket informe REVISAR: %s", LOG_TAG_FALLO, "ticket_revisar", e)
         try:
             db.rollback()
         except Exception:
@@ -600,7 +674,7 @@ class WhatsAppService:
                 db=db,
             )
             return {"status": "welcome"}
-        # Tras OCR: cliente confirma datos o escribe correcciones; actualizamos columnas si edita
+        # Tras OCR: confirmación punto a punto. Por cada campo: Sí → confirmar; No → pedir que escriba el valor. Ante cualquier reemplazo: guardar y columna H "REVISAR".
         if conv.estado == "esperando_confirmacion_datos":
             informe_id = getattr(conv, "pagos_informe_id_pendiente", None)
             phone_mask = (phone[:6] + "***") if len(phone) >= 6 else "***"
@@ -610,6 +684,8 @@ class WhatsAppService:
                 conv.estado = "esperando_cedula"
                 conv.intento_cedula = 0
                 conv.pagos_informe_id_pendiente = None
+                conv.confirmacion_paso = 0
+                conv.confirmacion_esperando_valor = None
                 conv.updated_at = datetime.utcnow()
                 db.commit()
                 return {"status": "processed", "response_text": MENSAJE_BIENVENIDA}
@@ -619,62 +695,124 @@ class WhatsAppService:
                 conv.estado = "esperando_cedula"
                 conv.intento_cedula = 0
                 conv.pagos_informe_id_pendiente = None
+                conv.confirmacion_paso = 0
+                conv.confirmacion_esperando_valor = None
                 conv.updated_at = datetime.utcnow()
                 db.commit()
                 return {"status": "processed", "response_text": "No encontramos el registro. " + MENSAJE_BIENVENIDA}
-            if _es_respuesta_si(text):
-                logger.info("%s Confirmación datos: cliente confirmó SÍ | informe_id=%s telefono=%s", LOG_TAG_INFORME, informe_id, phone_mask)
-                informe.estado_conciliacion = "CONCILIADO"
-                conv.pagos_informe_id_pendiente = None
-                conv.intento_foto = 0
-                conv.intento_cedula = 0
-                conv.estado = "esperando_cedula"
-                cedula_guardada = conv.cedula
-                conv.cedula = None
-                conv.nombre_cliente = None
-                conv.observacion = None
+            paso = getattr(conv, "confirmacion_paso", 0) or 0
+            esperando_valor = (getattr(conv, "confirmacion_esperando_valor", None) or "").strip() or None
+
+            def _avanzar_y_preguntar_siguiente():
+                conv.confirmacion_paso = paso + 1
+                conv.confirmacion_esperando_valor = None
                 conv.updated_at = datetime.utcnow()
                 db.commit()
-                db.refresh(informe)
-                try:
-                    from app.services.google_sheets_informe_service import update_row_for_informe
-                    update_row_for_informe(informe)
-                except Exception as e:
-                    logger.warning("%s No se pudo actualizar Sheet con estado CONCILIADO: %s", LOG_TAG_INFORME, e)
-                return {"status": "datos_confirmados", "response_text": MENSAJE_DATOS_CONFIRMADOS}
-            edits = _parsear_edicion_confirmacion((text or "").strip())
-            # Solo actualizar cédula, cantidad y numero_documento; no generar otra fila, solo editar la misma
-            edits = {k: v for k, v in edits.items() if k in CAMPOS_CONFIRMACION and v is not None}
-            if edits:
-                logger.info("%s Confirmación datos: cliente editó campos | informe_id=%s campos=%s", LOG_TAG_INFORME, informe_id, list(edits.keys()))
+                if paso + 1 >= len(ORDEN_CAMPOS_CONFIRMACION):
+                    # Todos los campos confirmados sin corrección → CONCILIADO y salir
+                    informe.estado_conciliacion = "CONCILIADO"
+                    conv.pagos_informe_id_pendiente = None
+                    conv.intento_foto = 0
+                    conv.intento_cedula = 0
+                    conv.estado = "esperando_cedula"
+                    conv.cedula = None
+                    conv.nombre_cliente = None
+                    conv.observacion = None
+                    conv.confirmacion_paso = 0
+                    conv.confirmacion_esperando_valor = None
+                    conv.updated_at = datetime.utcnow()
+                    db.commit()
+                    db.refresh(informe)
+                    try:
+                        from app.services.google_sheets_informe_service import update_row_for_informe
+                        update_row_for_informe(informe)
+                    except Exception as e:
+                        logger.warning("%s No se pudo actualizar Sheet con estado CONCILIADO: %s", LOG_TAG_INFORME, e)
+                    return {"status": "datos_confirmados", "response_text": MENSAJE_DATOS_CONFIRMADOS}
+                siguiente_campo = ORDEN_CAMPOS_CONFIRMACION[paso + 1]
+                valor = _valor_campo_informe(informe, siguiente_campo)
+                msg = _mensaje_pregunta_si_no(siguiente_campo, valor)
+                return {"status": "pide_confirmar_campo", "response_text": msg}
+
+            def _guardar_reemplazo_y_siguiente(campo: str, valor_guardado: str):
+                # En caso de respuesta No: el valor que escribe el cliente reemplaza al de las columnas; columna H = REVISAR.
                 informe.estado_conciliacion = "REVISAR"
-                for k, v in edits.items():
-                    if hasattr(informe, k):
-                        if k == "cedula" and isinstance(v, str):
-                            setattr(informe, k, v[:20])
-                        elif k == "cantidad" and isinstance(v, str):
-                            setattr(informe, k, v[:50])
-                        elif k == "numero_documento" and isinstance(v, str):
-                            setattr(informe, k, v[:100])
+                if campo == "cedula":
+                    setattr(informe, "cedula", (valor_guardado or "")[:20])
+                    conv.cedula = (valor_guardado or "").strip()[:20] or None
+                elif campo == "cantidad":
+                    setattr(informe, "cantidad", (valor_guardado or "")[:50])
+                elif campo == "numero_documento":
+                    setattr(informe, "numero_documento", (valor_guardado or "").strip()[:100])
                 db.commit()
                 db.refresh(informe)
                 try:
                     from app.services.google_sheets_informe_service import update_row_for_informe
                     update_row_for_informe(informe)
                 except Exception as e:
-                    logger.warning("%s No se pudo actualizar Sheet con correcciones: %s", LOG_TAG_INFORME, e)
-                conv.pagos_informe_id_pendiente = None
-                conv.intento_foto = 0
-                conv.intento_cedula = 0
-                conv.estado = "esperando_cedula"
-                conv.cedula = None
-                conv.nombre_cliente = None
-                conv.observacion = None
+                    logger.warning("%s No se pudo actualizar Sheet con corrección: %s", LOG_TAG_INFORME, e)
+                # Columna H = REVISAR: crear ticket y comunicar a itmaster@rapicreditca.com con las novedades
+                _crear_ticket_informe_revisar(db, conv, informe, campo, getattr(informe, "link_imagen", None), phone or "")
+                conv.confirmacion_esperando_valor = None
+                conv.confirmacion_paso = paso + 1
                 conv.updated_at = datetime.utcnow()
                 db.commit()
-                return {"status": "datos_actualizados", "response_text": MENSAJE_DATOS_ACTUALIZADOS}
-            logger.info("%s Confirmación datos: respuesta no SÍ ni edición parseable | informe_id=%s telefono=%s", LOG_TAG_INFORME, informe_id, phone_mask)
-            return {"status": "pide_confirmar_o_editar", "response_text": "Responde *SÍ* para confirmar o escribe las correcciones (ej: Cantidad 100.50, Nº documento 12345)."}
+                if paso + 1 >= len(ORDEN_CAMPOS_CONFIRMACION):
+                    conv.pagos_informe_id_pendiente = None
+                    conv.intento_foto = 0
+                    conv.intento_cedula = 0
+                    conv.estado = "esperando_cedula"
+                    conv.cedula = None
+                    conv.nombre_cliente = None
+                    conv.observacion = None
+                    conv.confirmacion_paso = 0
+                    conv.confirmacion_esperando_valor = None
+                    conv.updated_at = datetime.utcnow()
+                    db.commit()
+                    return {"status": "datos_actualizados", "response_text": MENSAJE_DATOS_ACTUALIZADOS}
+                siguiente_campo = ORDEN_CAMPOS_CONFIRMACION[paso + 1]
+                valor = _valor_campo_informe(informe, siguiente_campo)
+                return {"status": "pide_confirmar_campo", "response_text": _mensaje_pregunta_si_no(siguiente_campo, valor)}
+
+            # Estamos esperando que el usuario escriba el valor correcto para un campo
+            if esperando_valor and esperando_valor in CAMPOS_CONFIRMACION:
+                campo = esperando_valor
+                raw = (text or "").strip()
+                if campo == "cedula":
+                    if not _validar_cedula_evj(raw):
+                        return {"status": "pide_valor_campo", "response_text": "Por favor escribe una cédula válida (E, J o V seguido de números). " + _mensaje_pide_escribir_campo(campo)}
+                    valor_guardado = _cedula_normalizada(raw)
+                elif campo == "cantidad":
+                    # Aceptar número con punto o coma decimal
+                    val_clean = re.sub(r"\s", "", raw.replace(",", "."))
+                    if not re.match(r"^\d+\.?\d*$", val_clean) or not val_clean:
+                        return {"status": "pide_valor_campo", "response_text": "Por favor escribe solo la cantidad (ej: 100.50). " + _mensaje_pide_escribir_campo(campo)}
+                    valor_guardado = val_clean
+                else:  # numero_documento
+                    if not raw or len(raw) < 1:
+                        return {"status": "pide_valor_campo", "response_text": _mensaje_pide_escribir_campo(campo)}
+                    valor_guardado = raw[:100]
+                logger.info("%s Confirmación datos: cliente corrigió %s | informe_id=%s", LOG_TAG_INFORME, campo, informe_id)
+                return _guardar_reemplazo_y_siguiente(campo, valor_guardado)
+
+            # Pregunta Sí/No para el campo actual
+            campo_actual = ORDEN_CAMPOS_CONFIRMACION[paso] if paso < len(ORDEN_CAMPOS_CONFIRMACION) else None
+            if not campo_actual:
+                return _avanzar_y_preguntar_siguiente()
+
+            if _es_respuesta_si(text):
+                logger.info("%s Confirmación datos: cliente dijo Sí para %s | informe_id=%s", LOG_TAG_INFORME, campo_actual, informe_id)
+                return _avanzar_y_preguntar_siguiente()
+
+            if _es_respuesta_no(text):
+                conv.confirmacion_esperando_valor = campo_actual
+                conv.updated_at = datetime.utcnow()
+                db.commit()
+                return {"status": "pide_escribir_campo", "response_text": _mensaje_pide_escribir_campo(campo_actual)}
+
+            # Respuesta no reconocida: no se pasa a la siguiente columna hasta que responda Sí o No
+            valor_actual = _valor_campo_informe(informe, campo_actual)
+            return {"status": "pide_confirmar_campo", "response_text": "Para continuar a la siguiente pregunta necesito que respondas solo *Sí* o *No*. " + _mensaje_pregunta_si_no(campo_actual, valor_actual)}
         if conv.estado == "esperando_cedula":
             if not _validar_cedula_evj(text):
                 if _pide_otra_informacion(text):
@@ -778,7 +916,19 @@ class WhatsAppService:
             return {"status": "primero_confirmar", "response_text": MENSAJE_PRIMERO_CONFIRMA_LUEGO_FOTO}
         if conv.estado == "esperando_confirmacion_datos":
             logger.info("%s Imagen ignorada estado=esperando_confirmacion_datos | telefono=%s", LOG_TAG_INFORME, phone_mask)
-            return {"status": "confirma_o_edita_texto", "response_text": "Responde *SÍ* para confirmar (cédula, cantidad y Nº documento) o escribe las correcciones por texto (ej: Cantidad 100.50, Nº documento 12345)."}
+            informe_id = getattr(conv, "pagos_informe_id_pendiente", None)
+            paso = getattr(conv, "confirmacion_paso", 0) or 0
+            esperando = (getattr(conv, "confirmacion_esperando_valor", None) or "").strip() or None
+            if informe_id and db:
+                informe = db.get(PagosInforme, informe_id)
+                if informe:
+                    if esperando:
+                        return {"status": "confirma_o_edita_texto", "response_text": _mensaje_pide_escribir_campo(esperando)}
+                    if paso < len(ORDEN_CAMPOS_CONFIRMACION):
+                        campo = ORDEN_CAMPOS_CONFIRMACION[paso]
+                        valor = _valor_campo_informe(informe, campo)
+                        return {"status": "confirma_o_edita_texto", "response_text": "Responde por texto. " + _mensaje_pregunta_si_no(campo, valor)}
+            return {"status": "confirma_o_edita_texto", "response_text": "Responde *Sí* o *No* por texto para confirmar cada dato, o escribe el valor correcto si te lo pedimos."}
         if conv.estado != "esperando_foto" or not conv.cedula:
             logger.info("%s Imagen rechazada estado=%s sin cedula | telefono=%s (no_digitaliza=need_cedula)", LOG_TAG_INFORME, conv.estado or "?", phone_mask)
             return {"status": "need_cedula", "response_text": MENSAJE_BIENVENIDA}
@@ -896,9 +1046,7 @@ class WhatsAppService:
             cantidad = ocr_data_early.get("cantidad") or "NA"
             humano_col = (ocr_data_early.get("humano") or "").strip() or None
             observacion_informe = conv.observacion or None
-            # Estado conciliación por confianza OCR: >= 90% → CONCILIADO, < 90% → REVISION (columna H)
-            confianza_media = float(ocr_data_early.get("confianza_media") or 0)
-            estado_conciliacion = "CONCILIADO" if confianza_media >= 0.90 else "REVISION"
+            # Columna H: solo tras la confirmación punto a punto. Sin cambio y todo Sí → CONCILIADO; si no → REVISAR.
             informe = PagosInforme(
                 cedula=conv.cedula,
                 fecha_deposito=fecha_dep,
@@ -913,7 +1061,7 @@ class WhatsAppService:
                 periodo_envio=periodo,
                 fecha_informe=datetime.utcnow(),
                 nombre_cliente=(conv.nombre_cliente or "").strip() or None,
-                estado_conciliacion=estado_conciliacion,
+                estado_conciliacion=None,
                 telefono=phone,
             )
             db.add(informe)
@@ -934,7 +1082,7 @@ class WhatsAppService:
                     conv.cedula, fecha_dep, nombre_banco, numero_dep, numero_doc, cantidad, link_imagen, periodo,
                     observacion=observacion_informe,
                     nombre_cliente=(conv.nombre_cliente or "").strip() or "",
-                    estado_conciliacion=estado_conciliacion,
+                    estado_conciliacion="",
                     timestamp_registro=informe.fecha_informe,
                     telefono=phone or "",
                 )

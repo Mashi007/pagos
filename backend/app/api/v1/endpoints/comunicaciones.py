@@ -4,16 +4,19 @@ Listado desde conversacion_cobranza (WhatsApp) y configuración; respuesta desde
 Las comunicaciones de clientes se reciben por WhatsApp (webhook) o email; se puede responder por ambos.
 """
 import re
-from typing import Optional
+import time
+from typing import Optional, Dict, List, Tuple, Any
+
 from fastapi import APIRouter, Query, Depends, HTTPException
 
 from app.core.deps import get_current_user
+from app.schemas.auth import UserResponse
 from pydantic import BaseModel
-from sqlalchemy import or_
+from sqlalchemy import or_, select
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from app.core.database import get_db
-from sqlalchemy.orm import Session
-
 from app.models.conversacion_cobranza import ConversacionCobranza
 from app.models.cliente import Cliente
 from app.models.mensaje_whatsapp import MensajeWhatsapp
@@ -25,15 +28,35 @@ def _digits(s: str) -> str:
     return re.sub(r"\D", "", (s or "").strip())
 
 
-def _cliente_id_por_telefono(db: Session, telefono: str) -> Optional[int]:
-    """Devuelve cliente_id si existe un cliente cuyo teléfono (solo dígitos) coincide."""
-    dig = _digits(telefono)
-    if not dig or len(dig) < 8:
-        return None
+def _build_telefono_to_cliente_index(db: Session) -> Tuple[Dict[str, int], Dict[str, List[Tuple[str, int]]]]:
+    """
+    Una sola query a clientes: construye índices por dígitos completos y por sufijo (10 dígitos)
+    para búsqueda O(1) / O(k) por conversación en lugar de O(N×M).
+    """
+    by_full: Dict[str, int] = {}
+    by_suffix: Dict[str, List[Tuple[str, int]]] = {}
     for c in db.query(Cliente).all():
         cd = _digits(c.telefono or "")
-        if cd == dig or (len(dig) >= 10 and dig.endswith(cd[-10:])) or (len(cd) >= 10 and cd.endswith(dig[-10:])):
-            return c.id
+        if not cd or len(cd) < 8:
+            continue
+        by_full[cd] = c.id
+        if len(cd) >= 10:
+            suf = cd[-10:]
+            by_suffix.setdefault(suf, []).append((cd, c.id))
+    return by_full, by_suffix
+
+
+def _lookup_cliente_id(phone_digits: str, by_full: Dict[str, int], by_suffix: Dict[str, List[Tuple[str, int]]]) -> Optional[int]:
+    """Busca cliente_id por teléfono normalizado (coincidencia exacta o por sufijo 10 dígitos)."""
+    if not phone_digits or len(phone_digits) < 8:
+        return None
+    cid = by_full.get(phone_digits)
+    if cid is not None:
+        return cid
+    if len(phone_digits) >= 10:
+        for cd, id_ in by_suffix.get(phone_digits[-10:], []):
+            if cd == phone_digits or (len(cd) >= 10 and phone_digits.endswith(cd[-10:])) or (len(phone_digits) >= 10 and cd.endswith(phone_digits[-10:])):
+                return id_
     return None
 
 
@@ -79,15 +102,24 @@ def listar_comunicaciones(
     offset = (page - 1) * per_page
     rows = q.offset(offset).limit(per_page).all()
 
+    # Una sola carga de clientes + índice por teléfono (evita N+1)
+    by_full, by_suffix = _build_telefono_to_cliente_index(db)
+    cids_en_pagina = set()
+    for row in rows:
+        cid = _lookup_cliente_id(_digits(row.telefono), by_full, by_suffix)
+        if cid is not None:
+            cids_en_pagina.add(cid)
+    clientes_pagina: Dict[int, Cliente] = {}
+    if cids_en_pagina:
+        for c in db.query(Cliente).filter(Cliente.id.in_(cids_en_pagina)).all():
+            clientes_pagina[c.id] = c
+
     for row in rows:
         telefono_display = row.telefono if (row.telefono or "").startswith("+") else f"+{row.telefono}"
-        cid = _cliente_id_por_telefono(db, row.telefono)
-        # Nombre: primero el guardado al validar cédula (nombre_cliente), luego nombre del cliente por teléfono
+        cid = _lookup_cliente_id(_digits(row.telefono), by_full, by_suffix)
         nombre = (row.nombre_cliente or "").strip()
-        if not nombre and cid:
-            cliente_row = db.get(Cliente, cid)
-            if cliente_row and cliente_row.nombres:
-                nombre = (cliente_row.nombres or "").strip()
+        if not nombre and cid and cid in clientes_pagina:
+            nombre = (clientes_pagina[cid].nombres or "").strip()
         nombre = nombre or telefono_display
         comunicaciones.append({
             "id": row.id,
@@ -162,17 +194,44 @@ def obtener_comunicaciones_por_responder(
     }
 
 
+# Rate limit envío WhatsApp: máximo por usuario por ventana (evitar abuso)
+_RATE_LIMIT_WHATSAPP: Dict[str, Tuple[int, float]] = {}
+RATE_LIMIT_WHATSAPP_WINDOW_SEC = 60
+RATE_LIMIT_WHATSAPP_MAX = 10
+
+
+def _check_rate_limit_whatsapp(user: UserResponse) -> None:
+    """Lanza HTTPException 429 si el usuario supera el límite de envíos por ventana."""
+    key = (user.email or "unknown").strip()
+    now = time.monotonic()
+    if key not in _RATE_LIMIT_WHATSAPP or (now - _RATE_LIMIT_WHATSAPP[key][1]) > RATE_LIMIT_WHATSAPP_WINDOW_SEC:
+        _RATE_LIMIT_WHATSAPP[key] = (0, now)
+    count, start = _RATE_LIMIT_WHATSAPP[key]
+    if count >= RATE_LIMIT_WHATSAPP_MAX:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Máximo {RATE_LIMIT_WHATSAPP_MAX} envíos por minuto. Espera un momento antes de volver a enviar.",
+        )
+    _RATE_LIMIT_WHATSAPP[key] = (count + 1, start)
+
+
 class EnviarWhatsAppRequest(BaseModel):
     to_number: str
     message: str
 
 
 @router.post("/enviar-whatsapp", response_model=dict)
-def enviar_whatsapp(payload: EnviarWhatsAppRequest, db: Session = Depends(get_db)):
+def enviar_whatsapp(
+    payload: EnviarWhatsAppRequest,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
     """
     Envía un mensaje de WhatsApp desde Comunicaciones (modo manual).
-    Usa la configuración de Configuración > WhatsApp. Respeta modo_pruebas (redirige al teléfono de pruebas si está activo).
+    Usa la configuración de Configuración > WhatsApp. Respeta modo_pruebas.
+    Rate limit: máximo 10 envíos por minuto por usuario.
     """
+    _check_rate_limit_whatsapp(current_user)
     from app.core.whatsapp_send import send_whatsapp_text
     from app.core.whatsapp_config_holder import get_whatsapp_config, sync_from_db as whatsapp_sync_from_db
     from app.services.whatsapp_service import guardar_mensaje_whatsapp
@@ -203,33 +262,98 @@ class CrearClienteAutomaticoRequest(BaseModel):
     notas: Optional[str] = None
 
 
+def _normalize_for_duplicate(s: str) -> str:
+    return (s or "").strip()
+
+
+def _validar_cedula_formato_strict(cedula: str) -> bool:
+    """Acepta formato E/J/V + 6-11 dígitos (cedula ya normalizada)."""
+    t = (cedula or "").strip().upper()
+    if len(t) < 7 or t[0] not in ("E", "J", "V"):
+        return False
+    return len(t) <= 12 and t[1:].isdigit() and 6 <= len(t) - 1 <= 11
+
+
+def _validar_email_basico(email: str) -> bool:
+    if not email or "@" not in email:
+        return False
+    local, _, domain = email.strip().partition("@")
+    return bool(local and domain and "." in domain)
+
+
 @router.post("/crear-cliente-automatico", response_model=dict)
 def crear_cliente_automatico(payload: CrearClienteAutomaticoRequest, db: Session = Depends(get_db)):
-    """Crear cliente desde una comunicación. Stub: devuelve éxito con datos mínimos hasta tener lógica real."""
-    from app.models.cliente import Cliente
+    """
+    Crear cliente desde una comunicación.
+    Valida duplicados (cédula+nombres, email) y formatos; devuelve 409 si ya existe, 400 si datos inválidos.
+    """
     from datetime import date
-    cedula = payload.cedula or "SIN-CEDULA"
-    nombres = payload.nombres or "Cliente desde comunicación"
-    telefono = payload.telefono or "+580000000000"
-    email = payload.email or "noreply@ejemplo.com"
-    direccion = payload.direccion or "Actualizar dirección"
-    notas = payload.notas or "Creado desde Comunicaciones"
-    row = Cliente(
-        cedula=cedula,
-        nombres=nombres,
-        telefono=telefono,
-        email=email,
-        direccion=direccion,
-        fecha_nacimiento=date(2000, 1, 1),
-        ocupacion="Actualizar ocupación",
-        estado="ACTIVO",
-        usuario_registro="comunicaciones",
-        notas=notas,
-    )
-    db.add(row)
-    db.commit()
-    db.refresh(row)
-    return {
-        "success": True,
-        "cliente": {"id": row.id, "cedula": row.cedula, "nombres": row.nombres, "telefono": row.telefono, "email": row.email},
-    }
+
+    cedula = _normalize_for_duplicate(payload.cedula)
+    nombres = _normalize_for_duplicate(payload.nombres)
+    email = _normalize_for_duplicate(payload.email)
+    telefono = (payload.telefono or "").strip()
+    telefono_dig = _digits(telefono)
+
+    if not cedula:
+        raise HTTPException(status_code=400, detail="La cédula es obligatoria.")
+    if not nombres:
+        raise HTTPException(status_code=400, detail="Los nombres son obligatorios.")
+    if not _validar_cedula_formato_strict(cedula):
+        raise HTTPException(status_code=400, detail="Cédula inválida. Use formato E, J o V seguido de 6 a 11 dígitos.")
+    if email and not _validar_email_basico(email):
+        raise HTTPException(status_code=400, detail="Formato de email inválido.")
+    if telefono and len(telefono_dig) < 8:
+        raise HTTPException(status_code=400, detail="Teléfono inválido (mínimo 8 dígitos).")
+
+    # Duplicado por cédula + nombres (mismo criterio que clientes.py)
+    existing_cn = db.execute(
+        select(Cliente.id).where(
+            Cliente.cedula == cedula,
+            Cliente.nombres == nombres,
+        )
+    ).first()
+    if existing_cn:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Ya existe un cliente con la misma cédula y nombre. Cliente existente ID: {existing_cn[0]}",
+        )
+    if email:
+        existing_email = db.execute(select(Cliente.id).where(Cliente.email == email)).first()
+        if existing_email:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Ya existe un cliente con el mismo email. Cliente existente ID: {existing_email[0]}",
+            )
+
+    email_final = email or "actualizar@ejemplo.com"
+    telefono_final = telefono if telefono_dig else "+580000000000"
+    direccion = _normalize_for_duplicate(payload.direccion) or "Actualizar dirección"
+    notas = _normalize_for_duplicate(payload.notas) or "Creado desde Comunicaciones"
+
+    try:
+        row = Cliente(
+            cedula=cedula,
+            nombres=nombres,
+            telefono=telefono_final,
+            email=email_final,
+            direccion=direccion,
+            fecha_nacimiento=date(2000, 1, 1),
+            ocupacion="Actualizar ocupación",
+            estado="ACTIVO",
+            usuario_registro="comunicaciones",
+            notas=notas,
+        )
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+        return {
+            "success": True,
+            "cliente": {"id": row.id, "cedula": row.cedula, "nombres": row.nombres, "telefono": row.telefono, "email": row.email},
+        }
+    except IntegrityError as e:
+        db.rollback()
+        msg = str(e.orig) if getattr(e, "orig", None) else str(e)
+        if "unique" in msg.lower() or "duplicate" in msg.lower() or "cedula" in msg.lower() or "email" in msg.lower():
+            raise HTTPException(status_code=409, detail="Ya existe un cliente con esos datos (cédula o email).") from e
+        raise HTTPException(status_code=400, detail="Error de integridad en los datos. Revise cédula y email.") from e
