@@ -78,6 +78,8 @@ export function Comunicaciones({
   const [cargandoMensajes, setCargandoMensajes] = useState<string | null>(null)
   // âœ… Ref para rastrear conversaciones cargadas sin causar re-renders
   const conversacionesCargadasRef = useRef<Set<string>>(new Set())
+  // Ref al final de la lista de mensajes: mantener scroll en el último mensaje al actualizar cada 15 s
+  const chatEndRef = useRef<HTMLDivElement>(null)
   
   // Estado para envío de mensajes
   const [mensajeTexto, setMensajeTexto] = useState('')
@@ -325,6 +327,15 @@ export function Comunicaciones({
   const cargandoMensajesActual = conversacionActual?.tipo === 'whatsapp'
     ? mensajesWhatsAppFetching
     : cargandoMensajes === conversacionActual?.id
+
+  // Mantener scroll en el último mensaje al actualizar (cada 15 s); evita que la vista salte arriba
+  useEffect(() => {
+    if (!conversacionActual || mensajesOrdenados.length === 0) return
+    const t = requestAnimationFrame(() => {
+      chatEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' })
+    })
+    return () => cancelAnimationFrame(t)
+  }, [conversacionActual?.id, mensajesOrdenados.length, mensajesOrdenados])
 
   // Cargar tickets del cliente cuando se selecciona una conversación
   useEffect(() => {
@@ -766,39 +777,42 @@ export function Comunicaciones({
                   <p className="text-gray-500">No hay mensajes en esta conversación</p>
                 </div>
               ) : (
-                mensajesOrdenados.map((mensaje) => (
-                  <div
-                    key={`${mensaje.tipo}-${mensaje.id}`}
-                    className={`flex ${mensaje.direccion === 'INBOUND' ? 'justify-start' : 'justify-end'}`}
-                  >
+                <>
+                  {mensajesOrdenados.map((mensaje) => (
                     <div
-                      className={`max-w-[75%] rounded-lg p-3 shadow-sm ${
-                        mensaje.direccion === 'INBOUND'
-                          ? 'bg-white border border-gray-200 shadow-md'
-                          : 'bg-gradient-to-br from-blue-600 to-blue-700 text-white shadow-lg'
-                      }`}
+                      key={`${mensaje.tipo}-${mensaje.id}`}
+                      className={`flex ${mensaje.direccion === 'INBOUND' ? 'justify-start' : 'justify-end'}`}
                     >
-                      <div className="flex items-center gap-2 mb-1">
-                        {mensaje.tipo === 'whatsapp' ? (
-                          <MessageSquare className={`h-3 w-3 ${mensaje.direccion === 'OUTBOUND' ? 'text-white' : 'text-green-600'}`} />
-                        ) : (
-                          <Mail className={`h-3 w-3 ${mensaje.direccion === 'OUTBOUND' ? 'text-white' : 'text-purple-600'}`} />
-                        )}
-                        <span className={`text-xs ${mensaje.direccion === 'OUTBOUND' ? 'text-blue-100' : 'text-gray-500'}`}>
-                          {formatearFecha(mensaje.timestamp)}
-                        </span>
-                      </div>
-                      {mensaje.subject && (
-                        <div className={`font-semibold mb-1 ${mensaje.direccion === 'OUTBOUND' ? 'text-white' : 'text-gray-900'}`}>
-                          {mensaje.subject}
+                      <div
+                        className={`max-w-[75%] rounded-lg p-3 shadow-sm ${
+                          mensaje.direccion === 'INBOUND'
+                            ? 'bg-white border border-gray-200 shadow-md'
+                            : 'bg-gradient-to-br from-blue-600 to-blue-700 text-white shadow-lg'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          {mensaje.tipo === 'whatsapp' ? (
+                            <MessageSquare className={`h-3 w-3 ${mensaje.direccion === 'OUTBOUND' ? 'text-white' : 'text-green-600'}`} />
+                          ) : (
+                            <Mail className={`h-3 w-3 ${mensaje.direccion === 'OUTBOUND' ? 'text-white' : 'text-purple-600'}`} />
+                          )}
+                          <span className={`text-xs ${mensaje.direccion === 'OUTBOUND' ? 'text-blue-100' : 'text-gray-500'}`}>
+                            {formatearFecha(mensaje.timestamp)}
+                          </span>
                         </div>
-                      )}
-                      <div className={`text-sm whitespace-pre-wrap ${mensaje.direccion === 'OUTBOUND' ? 'text-white' : 'text-gray-700'}`}>
-                        {mensaje.body || '[Sin contenido]'}
+                        {mensaje.subject && (
+                          <div className={`font-semibold mb-1 ${mensaje.direccion === 'OUTBOUND' ? 'text-white' : 'text-gray-900'}`}>
+                            {mensaje.subject}
+                          </div>
+                        )}
+                        <div className={`text-sm whitespace-pre-wrap ${mensaje.direccion === 'OUTBOUND' ? 'text-white' : 'text-gray-700'}`}>
+                          {mensaje.body || '[Sin contenido]'}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  ))}
+                  <div ref={chatEndRef} aria-hidden="true" className="h-0 shrink-0" />
+                </>
               )}
             </div>
 

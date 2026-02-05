@@ -34,8 +34,13 @@ class Settings(BaseSettings):
         description="Clave secreta para JWT"
     )
     ALGORITHM: str = "HS256"
-    # Sesión: el access token expira a los N minutos; sin actividad (y sin refresh) la sesión termina. 30 = 30 min sin actividad.
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    # Access token: duración en minutos. Override con ACCESS_TOKEN_EXPIRE_MINUTES en .env (ej. 240 = 4 horas).
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(
+        default=240,
+        description="Minutos hasta que expire el access token (default 4h). El refresh token sigue 7 días."
+    )
+    # Refresh token: duración en días (solo para renovar access token; no obliga a login hasta que expire).
+    REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=7, description="Días hasta que expire el refresh token")
 
     # Usuario admin único (auth sin tabla users). Opcional.
     ADMIN_EMAIL: Optional[str] = Field(None, description="Email del usuario admin para login")
