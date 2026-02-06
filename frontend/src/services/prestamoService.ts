@@ -212,6 +212,27 @@ class PrestamoService {
     return response
   }
 
+  // Aprobación manual de riesgo (reemplaza evaluación 7 criterios + aplicar condiciones + asignar fecha)
+  async aprobarManual(
+    prestamoId: number,
+    body: {
+      fecha_aprobacion: string
+      acepta_declaracion: boolean
+      documentos_analizados: boolean
+      total_financiamiento?: number
+      numero_cuotas?: number
+      modalidad_pago?: string
+      cuota_periodo?: number
+      tasa_interes?: number
+      observaciones?: string
+    }
+  ): Promise<{ prestamo: Prestamo; cuotas_generadas: number }> {
+    return await apiClient.post<{ prestamo: Prestamo; cuotas_generadas: number }>(
+      `${this.baseUrl}/${prestamoId}/aprobar-manual`,
+      body
+    )
+  }
+
   // Obtener evaluación de riesgo de un préstamo
   async getEvaluacionRiesgo(prestamoId: number): Promise<any> {
     const response = await apiClient.get<any>(`${this.baseUrl}/${prestamoId}/evaluacion-riesgo`)

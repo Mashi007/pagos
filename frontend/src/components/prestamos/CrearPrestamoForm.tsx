@@ -301,7 +301,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
         if (clienteData?.id != null) {
           prestamoData.cliente_id = clienteData.id
         }
-        await createPrestamo.mutateAsync(prestamoData as PrestamoForm)
+        await createPrestamo.mutateAsync(prestamoData as unknown as PrestamoForm)
       }
 
       onSuccess()

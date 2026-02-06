@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.schemas.auth import UserResponse
 from app.models.auditoria import Auditoria
 from app.models.cliente import Cliente
 from app.models.cuota import Cuota
@@ -41,6 +42,19 @@ class EvaluarRiesgoBody(BaseModel):
 
 class AsignarFechaAprobacionBody(BaseModel):
     fecha_aprobacion: date
+
+
+class AprobarManualBody(BaseModel):
+    """Body para aprobación manual de riesgo: una fecha, confirmaciones y datos editables."""
+    fecha_aprobacion: date
+    acepta_declaracion: bool  # Declaración políticas RapiCredit y riesgo
+    documentos_analizados: bool  # Confirmación de que se analizaron documentos
+    total_financiamiento: Optional[float] = None
+    numero_cuotas: Optional[int] = None
+    modalidad_pago: Optional[str] = None
+    cuota_periodo: Optional[float] = None
+    tasa_interes: Optional[float] = None
+    observaciones: Optional[str] = None
 
 
 @router.get("", response_model=dict)
@@ -476,6 +490,77 @@ def asignar_fecha_aprobacion(prestamo_id: int, payload: AsignarFechaAprobacionBo
     db.commit()
     db.refresh(p)
     return {"prestamo": PrestamoResponse.model_validate(p), "cuotas_recalculadas": cuotas_recalculadas}
+
+
+@router.post("/{prestamo_id}/aprobar-manual", response_model=dict)
+def aprobar_manual(
+    prestamo_id: int,
+    payload: AprobarManualBody,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
+    """
+    Aprobación manual de riesgo: una fecha (aprobación y base amortización), confirmación de documentos
+    y declaración de políticas. Actualiza datos editables del préstamo, genera tabla de amortización
+    y registra en auditoría. Solo préstamos en DRAFT o EN_REVISION. Estado resultante: APROBADO.
+    """
+    p = db.get(Prestamo, prestamo_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+    if p.estado not in ("DRAFT", "EN_REVISION"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Solo se puede aprobar manualmente un préstamo en DRAFT o EN_REVISION. Estado actual: {p.estado}",
+        )
+    if not payload.acepta_declaracion:
+        raise HTTPException(status_code=400, detail="Debe aceptar la declaración de políticas y riesgo.")
+    if not payload.documentos_analizados:
+        raise HTTPException(status_code=400, detail="Debe confirmar que se analizaron los documentos del cliente.")
+
+    fecha_ap = payload.fecha_aprobacion
+    if hasattr(fecha_ap, "date"):
+        fecha_ap = fecha_ap.date() if callable(getattr(fecha_ap, "date", None)) else fecha_ap
+
+    if payload.total_financiamiento is not None:
+        p.total_financiamiento = Decimal(str(payload.total_financiamiento))
+    if payload.numero_cuotas is not None:
+        p.numero_cuotas = payload.numero_cuotas
+    if payload.modalidad_pago is not None:
+        p.modalidad_pago = payload.modalidad_pago.strip().upper() or p.modalidad_pago
+    if payload.cuota_periodo is not None:
+        p.cuota_periodo = Decimal(str(payload.cuota_periodo))
+    if payload.tasa_interes is not None:
+        p.tasa_interes = Decimal(str(payload.tasa_interes))
+    if payload.observaciones is not None:
+        p.observaciones = payload.observaciones
+
+    p.fecha_aprobacion = datetime.combine(fecha_ap, datetime.min.time())
+    p.fecha_base_calculo = fecha_ap
+    p.usuario_aprobador = current_user.email
+    p.estado = "APROBADO"
+
+    db.execute(delete(Cuota).where(Cuota.prestamo_id == prestamo_id))
+    numero_cuotas = p.numero_cuotas or 12
+    total = float(p.total_financiamiento or 0)
+    if numero_cuotas <= 0 or total <= 0:
+        raise HTTPException(status_code=400, detail="Número de cuotas o monto de financiamiento inválido.")
+    monto_cuota = total / numero_cuotas
+    creadas = _generar_cuotas_amortizacion(db, p, fecha_ap, numero_cuotas, monto_cuota)
+
+    audit = Auditoria(
+        usuario_id=current_user.id,
+        usuario_email=current_user.email,
+        accion="APROBACION_MANUAL",
+        modulo="prestamos",
+        tabla="prestamos",
+        registro_id=prestamo_id,
+        descripcion=f"Aprobación manual de riesgo. Préstamo {prestamo_id}. Fecha aprobación: {fecha_ap}. Usuario: {current_user.email}.",
+        resultado="EXITOSO",
+    )
+    db.add(audit)
+    db.commit()
+    db.refresh(p)
+    return {"prestamo": PrestamoResponse.model_validate(p), "cuotas_generadas": creadas}
 
 
 @router.get("/{prestamo_id}/evaluacion-riesgo", response_model=dict)
