@@ -73,6 +73,31 @@ def _ticket_to_response(t, cliente_row: Optional[Cliente] = None) -> dict:
     }
 
 
+def _estadisticas_tickets(db: Session, cliente_id: Optional[int] = None) -> dict:
+    """Cuenta total y por estado (abierto, en_proceso, resuelto, cerrado) desde la BD. Sin filtro estado/prioridad/tipo."""
+    from sqlalchemy import case
+
+    st = select(
+        func.count().label("total"),
+        func.sum(case((Ticket.estado == "abierto", 1), else_=0)).label("abiertos"),
+        func.sum(case((Ticket.estado == "en_proceso", 1), else_=0)).label("en_proceso"),
+        func.sum(case((Ticket.estado == "resuelto", 1), else_=0)).label("resueltos"),
+        func.sum(case((Ticket.estado == "cerrado", 1), else_=0)).label("cerrados"),
+    ).select_from(Ticket)
+    if cliente_id is not None:
+        st = st.where(Ticket.cliente_id == cliente_id)
+    row = db.execute(st).first()
+    if row:
+        return {
+            "total": row.total or 0,
+            "abiertos": row.abiertos or 0,
+            "en_proceso": row.en_proceso or 0,
+            "resueltos": row.resueltos or 0,
+            "cerrados": row.cerrados or 0,
+        }
+    return {"total": 0, "abiertos": 0, "en_proceso": 0, "resueltos": 0, "cerrados": 0}
+
+
 @router.get("", summary="Listado paginado de tickets", response_model=dict)
 @router.get("/", include_in_schema=False, response_model=dict)
 def get_tickets(
@@ -84,8 +109,11 @@ def get_tickets(
     tipo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Listado paginado de tickets desde la BD. Filtros: cliente_id, estado, prioridad, tipo."""
+    """Listado paginado de tickets desde la BD. Filtros: cliente_id, estado, prioridad, tipo. Incluye estadísticas globales (KPI) por estado."""
     try:
+        # Estadísticas globales (sin filtro estado/prioridad/tipo) para los KPIs
+        estadisticas = _estadisticas_tickets(db, cliente_id)
+
         q = select(Ticket)
         count_q = select(func.count()).select_from(Ticket)
         if cliente_id is not None:
@@ -134,6 +162,7 @@ def get_tickets(
         return {
             "tickets": tickets_list,
             "paginacion": {"page": page, "per_page": per_page, "total": total, "pages": total_pages},
+            "estadisticas": estadisticas,
         }
     except HTTPException:
         raise
@@ -188,7 +217,16 @@ def create_ticket(payload: TicketCreate, db: Session = Depends(get_db)):
     db.refresh(row)
     cliente_row = db.get(Cliente, row.cliente_id) if row.cliente_id else None
     cliente_nombre = cliente_row.nombres if cliente_row else None
-    notify_ticket_created(row.id, row.titulo, row.descripcion, cliente_nombre, row.prioridad)
+    notify_ticket_created(
+        row.id,
+        row.titulo,
+        row.descripcion,
+        cliente_nombre,
+        row.prioridad or "media",
+        estado=row.estado or "abierto",
+        tipo=row.tipo or "consulta",
+        fecha_creacion=getattr(row, "fecha_creacion", None),
+    )
     return _ticket_to_response(row, cliente_row)
 
 

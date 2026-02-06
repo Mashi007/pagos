@@ -11,6 +11,7 @@ from datetime import date
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Body, Query
+from fastapi.responses import Response
 
 from app.core.deps import get_current_user
 from sqlalchemy import select
@@ -102,7 +103,11 @@ def _plantilla_to_dict(p: PlantillaNotificacion) -> dict:
 
 
 def _sustituir_variables(texto: str, item: dict) -> str:
-    """Reemplaza {{nombre}}, {{cedula}}, {{fecha_vencimiento}}, {{numero_cuota}}, {{monto}}, {{dias_atraso}} en texto."""
+    """
+    Reemplaza variables {{variable}} en texto.
+    Fijas: nombre, cedula, fecha_vencimiento, numero_cuota, monto (desde monto_cuota), dias_atraso.
+    Cualquier otra clave presente en item (ej. telefono, correo) se sustituye también para variables personalizadas.
+    """
     if not texto:
         return ""
     nombre = item.get("nombre") or "Cliente"
@@ -122,6 +127,13 @@ def _sustituir_variables(texto: str, item: dict) -> str:
     result = texto
     for key, val in replacements.items():
         result = result.replace(key, val)
+    # Variables personalizadas: cualquier clave del item (telefono, correo, etc.)
+    for k, v in item.items():
+        if k in ("nombre", "cedula", "fecha_vencimiento", "numero_cuota", "monto_cuota", "dias_atraso"):
+            continue
+        token = "{{" + str(k) + "}}"
+        if token in result:
+            result = result.replace(token, str(v) if v is not None else "")
     return result
 
 
@@ -176,15 +188,28 @@ def get_plantilla(plantilla_id: int, db: Session = Depends(get_db)):
     return _plantilla_to_dict(p)
 
 
+TIPOS_PLANTILLA_PERMITIDOS = frozenset([
+    "PAGO_5_DIAS_ANTES", "PAGO_3_DIAS_ANTES", "PAGO_1_DIA_ANTES",
+    "PAGO_DIA_0",
+    "PAGO_1_DIA_ATRASADO", "PAGO_3_DIAS_ATRASADO", "PAGO_5_DIAS_ATRASADO",
+    "PREJUDICIAL", "MORA_61",
+])
+
+
 @router.post("/plantillas")
 def create_plantilla(payload: dict = Body(...), db: Session = Depends(get_db)):
-    """Crea una plantilla. Campos: nombre, tipo, asunto, cuerpo; opcionales: descripcion, variables_disponibles, activa, zona_horaria."""
+    """Crea una plantilla. Campos: nombre, tipo, asunto, cuerpo; opcionales: descripcion, variables_disponibles, activa, zona_horaria. tipo debe ser uno de los tipos de notificación permitidos."""
     nombre = (payload.get("nombre") or "").strip()
     tipo = (payload.get("tipo") or "").strip()
     asunto = (payload.get("asunto") or "").strip()
     cuerpo = payload.get("cuerpo") or ""
     if not nombre or not tipo or not asunto:
         raise HTTPException(status_code=422, detail="nombre, tipo y asunto son obligatorios")
+    if tipo not in TIPOS_PLANTILLA_PERMITIDOS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"tipo debe ser uno de: {', '.join(sorted(TIPOS_PLANTILLA_PERMITIDOS))}",
+        )
     try:
         p = PlantillaNotificacion(
             nombre=nombre,
@@ -217,7 +242,13 @@ def update_plantilla(plantilla_id: int, payload: dict = Body(...), db: Session =
     if "descripcion" in payload:
         p.descripcion = payload.get("descripcion")
     if "tipo" in payload and payload["tipo"] is not None:
-        p.tipo = (payload["tipo"] or "").strip()
+        nuevo_tipo = (payload["tipo"] or "").strip()
+        if nuevo_tipo and nuevo_tipo not in TIPOS_PLANTILLA_PERMITIDOS:
+            raise HTTPException(
+                status_code=422,
+                detail=f"tipo debe ser uno de: {', '.join(sorted(TIPOS_PLANTILLA_PERMITIDOS))}",
+            )
+        p.tipo = nuevo_tipo
     if "asunto" in payload and payload["asunto"] is not None:
         p.asunto = (payload["asunto"] or "").strip()
     if "cuerpo" in payload:
@@ -328,6 +359,87 @@ def get_notificaciones_lista(
 def get_notificaciones_resumen(db: Session = Depends(get_db)):
     """Resumen para sidebar. El frontend espera: no_leidas, total. get_db inyectado para consistencia."""
     return {"no_leidas": 0, "total": 0}
+
+
+@router.get("/estadisticas-por-tab", response_model=dict)
+def get_estadisticas_por_tab(db: Session = Depends(get_db)):
+    """
+    KPIs por pestaña: correos enviados y rebotados (dias_5, dias_3, dias_1, hoy, mora_61).
+    Cuando exista persistencia de envíos por tipo, aquí se consultará la BD.
+    """
+    return {
+        "dias_5": {"enviados": 0, "rebotados": 0},
+        "dias_3": {"enviados": 0, "rebotados": 0},
+        "dias_1": {"enviados": 0, "rebotados": 0},
+        "hoy": {"enviados": 0, "rebotados": 0},
+        "mora_61": {"enviados": 0, "rebotados": 0},
+    }
+
+
+TIPOS_TAB_NOTIFICACIONES = ("dias_5", "dias_3", "dias_1", "hoy", "mora_61")
+
+
+def _get_rebotados_por_tipo(db: Session, tipo: str) -> List[dict]:
+    """
+    Lista de correos no entregados (rebotados) para el tipo de pestaña.
+    Cuando exista persistencia de envíos/rebotes por tipo, aquí se consultará la BD.
+    Cada item: email, nombre, cedula, fecha_envio (opcional), error_mensaje (opcional).
+    """
+    if tipo not in TIPOS_TAB_NOTIFICACIONES:
+        return []
+    # Sin tabla de historial de rebotes, devolver lista vacía
+    return []
+
+
+@router.get("/rebotados-por-tab", response_model=dict)
+def get_rebotados_por_tab(
+    tipo: str = Query(..., description="Tipo de pestaña: dias_5, dias_3, dias_1, hoy, mora_61"),
+    db: Session = Depends(get_db),
+):
+    """Lista de correos no entregados (rebotados) para la pestaña. Para generar informe Excel en frontend o descargar Excel."""
+    if tipo not in TIPOS_TAB_NOTIFICACIONES:
+        raise HTTPException(status_code=400, detail=f"tipo debe ser uno de: {', '.join(TIPOS_TAB_NOTIFICACIONES)}")
+    items = _get_rebotados_por_tipo(db, tipo)
+    return {"items": items, "total": len(items)}
+
+
+def _generar_excel_rebotados(items: List[dict], tipo: str) -> bytes:
+    """Genera Excel con lista de correos rebotados (no entregados)."""
+    import io
+    import openpyxl
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Correos no entregados"
+    ws.append(["Email", "Nombre", "Cédula", "Fecha envío", "Motivo rebote"])
+    for r in items:
+        ws.append([
+            r.get("email") or "",
+            r.get("nombre") or "",
+            r.get("cedula") or "",
+            r.get("fecha_envio") or "",
+            r.get("error_mensaje") or "",
+        ])
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+@router.get("/rebotados-por-tab/excel")
+def get_rebotados_por_tab_excel(
+    tipo: str = Query(..., description="Tipo de pestaña: dias_5, dias_3, dias_1, hoy, mora_61"),
+    db: Session = Depends(get_db),
+):
+    """Descarga informe Excel de correos no entregados (rebotados) para la pestaña."""
+    if tipo not in TIPOS_TAB_NOTIFICACIONES:
+        raise HTTPException(status_code=400, detail=f"tipo debe ser uno de: {', '.join(TIPOS_TAB_NOTIFICACIONES)}")
+    items = _get_rebotados_por_tipo(db, tipo)
+    content = _generar_excel_rebotados(items, tipo)
+    filename = f"correos_no_entregados_{tipo}.xlsx"
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 @router.get("/clientes-retrasados", response_model=dict)

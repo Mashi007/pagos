@@ -11,6 +11,7 @@ import { Badge } from '../../components/ui/badge'
 import { Textarea } from '../../components/ui/textarea'
 import { clienteService } from '../../services/clienteService'
 import { validadoresService } from '../../services/validadoresService'
+import { useSimpleAuth } from '../../store/simpleAuthStore'
 import { ExcelUploader } from './ExcelUploader'
 import { useEscapeClose } from '../../hooks/useEscapeClose'
 
@@ -56,6 +57,8 @@ interface CrearClienteFormProps {
 export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated, onOpenEditExisting }: CrearClienteFormProps) {
   // Cierre global con ESC
   useEscapeClose(onClose, true)
+  const { user } = useSimpleAuth()
+  const usuarioRegistro = user?.email ?? 'formulario'
   // Normalizador: si el usuario coloca 'nn' (cualquier caso/espacios), convertir a vacío
   const blankIfNN = (value: string | null | undefined): string => {
     if (value == null) return ''
@@ -940,7 +943,8 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         fecha_nacimiento: convertirFechaAISO(blankIfNN(formData.fechaNacimiento)), // âœ… Convertir DD/MM/YYYY â†’ YYYY-MM-DD
         ocupacion: ocupacionFormateada,  // âœ… Ocupación formateada con Title Case
         estado: formData.estado,
-        notas: blankIfNN(formData.notas) || 'No hay observacion'
+        notas: blankIfNN(formData.notas) || 'No hay observacion',
+        usuario_registro: usuarioRegistro
       }
 
       if (cliente && typeof cliente.id === 'number') {
@@ -1075,19 +1079,26 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         const errorDetail = getErrorDetail(error)
         const responseData = error.response?.data as { message?: string } | undefined
         const status = error.response?.status
-        // Backend devuelve 409 para duplicados (cedula+nombres o email); tratamos igual que 400
+        // Backend devuelve 409 para duplicados: misma cédula, mismo nombre, mismo email o mismo teléfono
         if (status === 400 || status === 409) {
-          // Detectar qué tipo de duplicado es
           const detailText = errorDetail || ''
-          if (detailText.includes('cédula') && detailText.includes('nombre')) {
-            tipoDuplicado = 'cedula_nombre'
-            _errorMessageUser = errorDetail || 'No se puede crear un cliente con la misma cédula y el mismo nombre completo. Ya existe un cliente con esos datos.'
-          } else if (detailText.includes('email')) {
+          if (detailText.includes('misma cédula')) {
+            tipoDuplicado = 'cedula'
+            _errorMessageUser = errorDetail || 'No se puede crear un cliente con la misma cédula. Ya existe un cliente con esa cédula.'
+          } else if (detailText.includes('mismo nombre completo')) {
+            tipoDuplicado = 'nombre'
+            _errorMessageUser = errorDetail || 'No se puede crear un cliente con el mismo nombre completo. Ya existe un cliente con ese nombre.'
+          } else if (detailText.includes('mismo email')) {
             tipoDuplicado = 'email'
             _errorMessageUser = errorDetail || 'No se puede crear un cliente con el mismo email. Ya existe un cliente con ese email.'
+          } else if (detailText.includes('mismo teléfono')) {
+            tipoDuplicado = 'telefono'
+            _errorMessageUser = errorDetail || 'No se puede crear un cliente con el mismo teléfono. Ya existe un cliente con ese teléfono.'
+          } else if (detailText.includes('cédula') || detailText.includes('nombre') || detailText.includes('email') || detailText.includes('teléfono')) {
+            tipoDuplicado = 'datos'
+            _errorMessageUser = errorDetail || 'No se puede crear un cliente: cédula, nombre, email o teléfono ya pertenecen a otro cliente.'
           } else {
-            // Error de cliente duplicado genérico
-            _errorMessageUser = errorDetail || 'No se puede crear un cliente con datos duplicados. Ya existe un cliente con estos datos.'
+            _errorMessageUser = errorDetail || 'No se puede crear un cliente con datos duplicados (cédula, nombre, email o teléfono).'
           }
         } else if (errorDetail) {
           _errorMessageUser = errorDetail
@@ -1106,14 +1117,20 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
 
       // Notificar y ofrecer abrir en edición (backend devuelve 409 para duplicados)
       if (isAxiosError(error) && (error.response?.status === 400 || error.response?.status === 409)) {
-        // Mensaje amigable específico según el tipo de duplicado
+        // Mensaje amigable según el tipo de duplicado (cédula, nombre, email o teléfono)
         let mensajeDuplicado = ''
-        if (tipoDuplicado === 'cedula_nombre') {
-          mensajeDuplicado = 'la misma cédula y el mismo nombre completo'
+        if (tipoDuplicado === 'cedula') {
+          mensajeDuplicado = 'la misma cédula'
+        } else if (tipoDuplicado === 'nombre') {
+          mensajeDuplicado = 'el mismo nombre completo'
         } else if (tipoDuplicado === 'email') {
           mensajeDuplicado = 'el mismo email'
+        } else if (tipoDuplicado === 'telefono') {
+          mensajeDuplicado = 'el mismo teléfono'
+        } else if (tipoDuplicado === 'cedula_nombre' || tipoDuplicado === 'datos') {
+          mensajeDuplicado = 'la misma cédula, nombre, email o teléfono'
         } else {
-          mensajeDuplicado = 'los mismos datos (cédula y nombre, o email)'
+          mensajeDuplicado = 'la misma cédula, nombre, email o teléfono'
         }
 
         const friendly = existingId

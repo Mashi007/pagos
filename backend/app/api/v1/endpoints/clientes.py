@@ -6,6 +6,7 @@ Endpoints de clientes: CONECTADOS A LA TABLA REAL `clientes` (public.clientes).
   usan Depends(get_db) y consultas contra la tabla clientes. No hay stubs ni datos demo.
 """
 import logging
+import re
 from typing import Optional, Any
 
 from fastapi import APIRouter, Query, Depends, HTTPException
@@ -195,43 +196,66 @@ def _normalize_for_duplicate(s: str) -> str:
     return (s or "").strip()
 
 
+def _digits_telefono(s: str) -> str:
+    """Solo dígitos del teléfono para comparar duplicados."""
+    return re.sub(r"\D", "", (s or "").strip())
+
+
 @router.post("", response_model=ClienteResponse, status_code=201)
 def create_cliente(payload: ClienteCreate, db: Session = Depends(get_db)):
     """
     Crear cliente en la BD.
-    No se admiten duplicados: misma cédula+nombres o mismo email (si no vacío) → 409 con existing_id.
+    No permitido duplicados: misma cédula, mismo nombre, mismo email o mismo teléfono → 409.
+    Aplica a Nuevo Cliente y Carga masiva.
     """
     cedula_norm = _normalize_for_duplicate(payload.cedula)
     nombres_norm = _normalize_for_duplicate(payload.nombres)
     email_norm = _normalize_for_duplicate(payload.email)
+    telefono_dig = _digits_telefono(payload.telefono)
 
-    # Duplicado por cédula + nombres (mismo par identifica al mismo cliente)
-    existing_cedula_nombres = db.execute(
-        select(Cliente.id).where(
-            Cliente.cedula == cedula_norm,
-            Cliente.nombres == nombres_norm,
-        )
+    # Prohibir duplicado por cédula
+    existing_cedula = db.execute(
+        select(Cliente.id).where(Cliente.cedula == cedula_norm)
     ).first()
-    if existing_cedula_nombres:
-        existing_id = existing_cedula_nombres[0]
-        detail = (
-            f"Ya existe un cliente con la misma cédula y el mismo nombre completo. "
-            f"Cliente existente ID: {existing_id}"
+    if existing_cedula:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Ya existe un cliente con la misma cédula. Cliente existente ID: {existing_cedula[0]}",
         )
-        raise HTTPException(status_code=409, detail=detail)
 
-    # Duplicado por email (solo si el email no está vacío)
+    # Prohibir duplicado por nombre completo
+    if nombres_norm:
+        existing_nombres = db.execute(
+            select(Cliente.id).where(Cliente.nombres == nombres_norm)
+        ).first()
+        if existing_nombres:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Ya existe un cliente con el mismo nombre completo. Cliente existente ID: {existing_nombres[0]}",
+            )
+
+    # Prohibir duplicado por email (si no vacío)
     if email_norm:
         existing_email = db.execute(
             select(Cliente.id).where(Cliente.email == email_norm)
         ).first()
         if existing_email:
-            existing_id = existing_email[0]
-            detail = (
-                f"Ya existe un cliente con el mismo email. "
-                f"Cliente existente ID: {existing_id}"
+            raise HTTPException(
+                status_code=409,
+                detail=f"Ya existe un cliente con el mismo email. Cliente existente ID: {existing_email[0]}",
             )
-            raise HTTPException(status_code=409, detail=detail)
+
+    # Prohibir duplicado por teléfono (comparar solo dígitos; mínimo 8 para considerar)
+    if len(telefono_dig) >= 8:
+        rows_telefono = db.execute(
+            select(Cliente.id, Cliente.telefono).where(Cliente.telefono.isnot(None))
+        ).all()
+        for r in rows_telefono:
+            if r.telefono and _digits_telefono(r.telefono) == telefono_dig:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Ya existe un cliente con el mismo teléfono. Cliente existente ID: {r.id}",
+                )
 
     row = Cliente(
         cedula=payload.cedula,
@@ -262,24 +286,29 @@ def update_cliente(cliente_id: int, payload: ClienteUpdate, db: Session = Depend
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
     data = payload.model_dump(exclude_unset=True)
 
-    # Validar duplicados solo para campos que se están actualizando
-    if "cedula" in data or "nombres" in data:
+    # Validar duplicados: no permitir cédula, nombre, email ni teléfono igual a otro cliente
+    if "cedula" in data:
         cedula_norm = _normalize_for_duplicate(data.get("cedula") or getattr(row, "cedula") or "")
-        nombres_norm = _normalize_for_duplicate(data.get("nombres") or getattr(row, "nombres") or "")
-        if cedula_norm and nombres_norm:
+        if cedula_norm:
             existing = db.execute(
-                select(Cliente.id).where(
-                    Cliente.cedula == cedula_norm,
-                    Cliente.nombres == nombres_norm,
-                    Cliente.id != cliente_id,
-                )
+                select(Cliente.id).where(Cliente.cedula == cedula_norm, Cliente.id != cliente_id)
             ).first()
             if existing:
-                detail = (
-                    f"Ya existe otro cliente con la misma cédula y el mismo nombre completo. "
-                    f"Cliente existente ID: {existing[0]}"
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Ya existe otro cliente con la misma cédula. Cliente existente ID: {existing[0]}",
                 )
-                raise HTTPException(status_code=409, detail=detail)
+    if "nombres" in data:
+        nombres_norm = _normalize_for_duplicate(data.get("nombres") or getattr(row, "nombres") or "")
+        if nombres_norm:
+            existing = db.execute(
+                select(Cliente.id).where(Cliente.nombres == nombres_norm, Cliente.id != cliente_id)
+            ).first()
+            if existing:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Ya existe otro cliente con el mismo nombre completo. Cliente existente ID: {existing[0]}",
+                )
     if "email" in data:
         email_norm = _normalize_for_duplicate(data.get("email") or "")
         if email_norm:
@@ -287,11 +316,25 @@ def update_cliente(cliente_id: int, payload: ClienteUpdate, db: Session = Depend
                 select(Cliente.id).where(Cliente.email == email_norm, Cliente.id != cliente_id)
             ).first()
             if existing:
-                detail = (
-                    f"Ya existe otro cliente con el mismo email. "
-                    f"Cliente existente ID: {existing[0]}"
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Ya existe otro cliente con el mismo email. Cliente existente ID: {existing[0]}",
                 )
-                raise HTTPException(status_code=409, detail=detail)
+    if "telefono" in data:
+        telefono_dig = _digits_telefono(data.get("telefono") or getattr(row, "telefono") or "")
+        if len(telefono_dig) >= 8:
+            rows_telefono = db.execute(
+                select(Cliente.id, Cliente.telefono).where(
+                    Cliente.telefono.isnot(None),
+                    Cliente.id != cliente_id,
+                )
+            ).all()
+            for r in rows_telefono:
+                if r.telefono and _digits_telefono(r.telefono) == telefono_dig:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=f"Ya existe otro cliente con el mismo teléfono. Cliente existente ID: {r.id}",
+                    )
 
     for k, v in data.items():
         setattr(row, k, v)

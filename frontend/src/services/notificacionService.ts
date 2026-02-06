@@ -59,6 +59,27 @@ export interface ClientesRetrasadosResponse {
   }
 }
 
+export interface EstadisticasTabItem {
+  enviados: number
+  rebotados: number
+}
+
+export interface EstadisticasPorTab {
+  dias_5: EstadisticasTabItem
+  dias_3: EstadisticasTabItem
+  dias_1: EstadisticasTabItem
+  hoy: EstadisticasTabItem
+  mora_61: EstadisticasTabItem
+}
+
+export interface RebotadoItem {
+  email?: string
+  nombre?: string
+  cedula?: string
+  fecha_envio?: string
+  error_mensaje?: string
+}
+
 export interface EmailConfig {
   smtp_host: string
   smtp_port: string
@@ -150,6 +171,28 @@ class NotificacionService {
     return await apiClient.get<ClientesRetrasadosResponse>(`${this.baseUrl}/clientes-retrasados`, {
       timeout: 60000,
     })
+  }
+
+  /** KPIs por pestaña: enviados y rebotados (dias_5, dias_3, dias_1, hoy, mora_61). */
+  async getEstadisticasPorTab(): Promise<EstadisticasPorTab> {
+    return await apiClient.get<EstadisticasPorTab>(`${this.baseUrl}/estadisticas-por-tab`)
+  }
+
+  /** Lista de correos no entregados (rebotados) por tipo de pestaña. */
+  async getRebotadosPorTab(tipo: string): Promise<{ items: RebotadoItem[]; total: number }> {
+    return await apiClient.get<{ items: RebotadoItem[]; total: number }>(
+      `${this.baseUrl}/rebotados-por-tab`,
+      { params: { tipo } }
+    )
+  }
+
+  /** Descarga Excel de correos no entregados para un tipo. Devuelve blob para guardar. */
+  async descargarExcelRebotados(tipo: string): Promise<Blob> {
+    const blob = await apiClient.get<Blob>(`${this.baseUrl}/rebotados-por-tab/excel`, {
+      params: { tipo },
+      responseType: 'blob',
+    })
+    return blob as Blob
   }
 
   /** Ejecutar actualización de notificaciones (dias_mora en clientes). Llamar desde cron a las 2am. */

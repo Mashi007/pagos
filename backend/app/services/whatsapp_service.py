@@ -900,7 +900,12 @@ class WhatsAppService:
             return {"status": "image_no_id", "note": "Falta ID de media", "response_text": MENSAJE_ENVIA_FOTO}
         conv = db.execute(select(ConversacionCobranza).where(ConversacionCobranza.telefono == phone)).scalar_one_or_none()
         if not conv:
-            logger.info("%s Inicio imagen sin conversación | telefono=%s (no_digitaliza=need_cedula)", LOG_TAG_INFORME, phone_mask)
+            # Crear conversación para que aparezca en Comunicaciones y se pueda responder manualmente
+            conv = ConversacionCobranza(telefono=phone, estado="esperando_cedula", intento_cedula=0, intento_foto=0, intento_confirmacion=0)
+            db.add(conv)
+            db.commit()
+            db.refresh(conv)
+            logger.info("%s Inicio imagen sin conversación | telefono=%s (no_digitaliza=need_cedula) conversación creada para Comunicaciones", LOG_TAG_INFORME, phone_mask)
             return {"status": "need_cedula", "response_text": MENSAJE_BIENVENIDA}
         if _conversacion_obsoleta(conv):
             _reiniciar_como_nuevo_caso(conv, db)

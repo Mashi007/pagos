@@ -58,6 +58,14 @@ export interface TicketUpdate {
   archivos?: string // JSON array con rutas de archivos
 }
 
+export interface TicketsEstadisticas {
+  total: number
+  abiertos: number
+  en_proceso: number
+  resueltos: number
+  cerrados: number
+}
+
 export interface TicketsResponse {
   tickets: Ticket[]
   paginacion: {
@@ -66,6 +74,8 @@ export interface TicketsResponse {
     total: number
     pages: number
   }
+  /** KPI globales desde la BD (total y por estado). Presente si el backend los envía. */
+  estadisticas?: TicketsEstadisticas
 }
 
 class TicketsService {

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { MessageSquare, Save, TestTube, CheckCircle, AlertCircle, Eye, EyeOff, Clock, XCircle, RefreshCw } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
@@ -340,9 +341,34 @@ export function WhatsAppConfig() {
               <p className="text-xs text-gray-500 mt-1">
                 Token secreto para verificar webhooks de Meta. Debe ser el mismo que configures en Meta Developers.
               </p>
-              <p className="text-xs text-amber-700 mt-2 font-medium">
-                Para que lleguen mensajes a Comunicaciones: en Meta Developers → WhatsApp → Configuración, pon <strong>URL del webhook</strong>: <code className="bg-amber-100 px-1 rounded">https://TU_DOMINIO/api/v1/whatsapp/webhook</code> (ej. <code className="bg-amber-100 px-1 rounded">https://rapicredit.onrender.com/api/v1/whatsapp/webhook</code>). El Verify Token de Meta debe coincidir con el de arriba.
+              <p className="text-xs text-gray-500 mt-1">
+                El Verify Token de Meta debe coincidir con el que configures en Meta Developers.
               </p>
+            </div>
+          </div>
+
+          {/* URL del webhook para copiar en Meta (Comunicaciones por WhatsApp) */}
+          <div className="border border-blue-200 bg-blue-50/50 rounded-lg p-4 mt-4">
+            <label className="text-sm font-medium block mb-2">URL del webhook para Meta (Comunicaciones WhatsApp)</label>
+            <p className="text-xs text-gray-600 mb-2">
+              En Meta Developers → WhatsApp → Configuración, usa esta URL como <strong>URL de devolución de llamada</strong> para que las conversaciones lleguen a <strong>Comunicaciones</strong> (<Link to="/comunicaciones" className="text-blue-600 underline">/pagos/comunicaciones</Link>).
+            </p>
+            <div className="flex gap-2 flex-wrap items-center">
+              <code className="flex-1 min-w-0 bg-white border border-gray-200 rounded px-3 py-2 text-sm break-all">
+                {typeof window !== 'undefined' ? `${window.location.origin}/api/v1/whatsapp/webhook` : 'https://TU_DOMINIO/api/v1/whatsapp/webhook'}
+              </code>
+              {typeof window !== 'undefined' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const url = `${window.location.origin}/api/v1/whatsapp/webhook`
+                    navigator.clipboard.writeText(url).then(() => toast.success('URL copiada al portapapeles')).catch(() => {})
+                  }}
+                  className="shrink-0 px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                >
+                  Copiar URL
+                </button>
+              )}
             </div>
           </div>
 

@@ -325,18 +325,20 @@ def crear_cliente_automatico(payload: CrearClienteAutomaticoRequest, db: Session
     if telefono and len(telefono_dig) < 8:
         raise HTTPException(status_code=400, detail="Teléfono inválido (mínimo 8 dígitos).")
 
-    # Duplicado por cédula + nombres (mismo criterio que clientes.py)
-    existing_cn = db.execute(
-        select(Cliente.id).where(
-            Cliente.cedula == cedula,
-            Cliente.nombres == nombres,
-        )
-    ).first()
-    if existing_cn:
+    # Prohibir duplicado por cédula, nombre, email o teléfono
+    existing_cedula = db.execute(select(Cliente.id).where(Cliente.cedula == cedula)).first()
+    if existing_cedula:
         raise HTTPException(
             status_code=409,
-            detail=f"Ya existe un cliente con la misma cédula y nombre. Cliente existente ID: {existing_cn[0]}",
+            detail=f"Ya existe un cliente con la misma cédula. Cliente existente ID: {existing_cedula[0]}",
         )
+    if nombres:
+        existing_nombres = db.execute(select(Cliente.id).where(Cliente.nombres == nombres)).first()
+        if existing_nombres:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Ya existe un cliente con el mismo nombre completo. Cliente existente ID: {existing_nombres[0]}",
+            )
     if email:
         existing_email = db.execute(select(Cliente.id).where(Cliente.email == email)).first()
         if existing_email:
@@ -344,6 +346,16 @@ def crear_cliente_automatico(payload: CrearClienteAutomaticoRequest, db: Session
                 status_code=409,
                 detail=f"Ya existe un cliente con el mismo email. Cliente existente ID: {existing_email[0]}",
             )
+    if len(telefono_dig) >= 8:
+        rows_telefono = db.execute(
+            select(Cliente.id, Cliente.telefono).where(Cliente.telefono.isnot(None))
+        ).all()
+        for r in rows_telefono:
+            if r.telefono and _digits(r.telefono) == telefono_dig:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Ya existe un cliente con el mismo teléfono. Cliente existente ID: {r.id}",
+                )
 
     email_final = email or "actualizar@ejemplo.com"
     telefono_final = telefono if telefono_dig else "+580000000000"

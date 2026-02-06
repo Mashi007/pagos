@@ -185,13 +185,23 @@ export function TicketsAtencion() {
     return matchSearch && matchEstado && matchPrioridad
   })
 
-  const estadisticas = {
-    total: ticketsData?.paginacion?.total || 0,
-    abiertos: tickets.filter(t => t.estado === 'abierto').length,
-    enProceso: tickets.filter(t => t.estado === 'en_proceso').length,
-    resueltos: tickets.filter(t => t.estado === 'resuelto').length,
-    cerrados: tickets.filter(t => t.estado === 'cerrado').length,
-  }
+  // KPIs desde la API (estadísticas globales en BD). Si el backend no envía estadisticas, fallback a contar solo la página actual.
+  const estadisticasFromApi = ticketsData?.estadisticas
+  const estadisticas = estadisticasFromApi
+    ? {
+        total: estadisticasFromApi.total,
+        abiertos: estadisticasFromApi.abiertos,
+        enProceso: estadisticasFromApi.en_proceso,
+        resueltos: estadisticasFromApi.resueltos,
+        cerrados: estadisticasFromApi.cerrados,
+      }
+    : {
+        total: ticketsData?.paginacion?.total || 0,
+        abiertos: tickets.filter(t => t.estado === 'abierto').length,
+        enProceso: tickets.filter(t => t.estado === 'en_proceso').length,
+        resueltos: tickets.filter(t => t.estado === 'resuelto').length,
+        cerrados: tickets.filter(t => t.estado === 'cerrado').length,
+      }
 
   // âœ… Calcular tickets vencidos y próximos a vencer
   const ahora = new Date()

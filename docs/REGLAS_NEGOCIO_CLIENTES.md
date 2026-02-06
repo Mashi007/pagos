@@ -58,7 +58,7 @@
 
 ---
 
-## 6. Duplicados (cédula / nombre / email)
+## 6. Duplicados (no permitido: misma cédula, nombre, email o teléfono)
 
 - **Regla de negocio deseada:** No se permite crear un cliente con:
   - La misma **cédula** y el mismo **nombre completo** que otro cliente, ni
@@ -129,7 +129,7 @@
 | Datos reales | Todo el módulo usa BD real vía `get_db`; sin stubs. |
 | Estados | Solo `ACTIVO`, `INACTIVO`, `MORA`, `FINALIZADO`. |
 | Alta | Todos los campos obligatorios del schema; validaciones de formato en frontend (nombres 2–7 palabras, teléfono +58, email, dirección estructurada, etc.). |
-| Duplicados | No misma cédula+nombres ni mismo email; validado en backend (409 con existing_id); frontend muestra "Abrir cliente existente". |
+| Duplicados | No permitido: misma cédula, mismo nombre, mismo email ni mismo teléfono. Validado en backend (409 con existing_id). Aplica a Nuevo Cliente y Carga masiva. Frontend muestra "Abrir cliente existente". |
 | Edición | Solo campos enviados; sin cambios no se actualiza. |
 | Eliminación | Borrado físico; confirmación en UI. |
 | Listado | Paginado, búsqueda por cédula/nombres/email/teléfono, filtro por estado. |

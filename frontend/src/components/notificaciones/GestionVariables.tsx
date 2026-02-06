@@ -302,6 +302,9 @@ export function GestionVariables() {
           <p className="text-sm text-gray-500 mt-1">
             Crea y gestiona variables personalizadas para usar en plantillas de notificaciones
           </p>
+          <p className="text-xs text-blue-600 mt-1">
+            Las variables que crees aquí se integran en la pestaña <strong>Plantillas → Armar plantilla</strong> (Banco de Variables). Haz clic en una variable allí para copiarla en asunto o cuerpo.
+          </p>
         </div>
         <Button onClick={abrirDialogoCrear}>
           <Plus className="h-4 w-4 mr-2" />

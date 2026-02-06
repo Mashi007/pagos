@@ -8,11 +8,12 @@ import {
   FileText,
   Clock,
   Mail,
+  Download,
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { useQuery } from '@tanstack/react-query'
-import { notificacionService, type ClientesRetrasadosResponse, type ClienteRetrasadoItem } from '../services/notificacionService'
+import { notificacionService, type ClientesRetrasadosResponse, type ClienteRetrasadoItem, type EstadisticasPorTab } from '../services/notificacionService'
 import { toast } from 'sonner'
 import { ConfiguracionNotificaciones } from '../components/notificaciones/ConfiguracionNotificaciones'
 
@@ -47,34 +48,51 @@ export function Notificaciones() {
     placeholderData: PLACEHOLDER_NOTIFICACIONES,
   })
 
-  const [enviando, setEnviando] = useState(false)
+  const { data: estadisticasPorTab } = useQuery({
+    queryKey: ['notificaciones-estadisticas-por-tab'],
+    queryFn: () => notificacionService.getEstadisticasPorTab(),
+    staleTime: 1 * 60 * 1000,
+    placeholderData: {
+      dias_5: { enviados: 0, rebotados: 0 },
+      dias_3: { enviados: 0, rebotados: 0 },
+      dias_1: { enviados: 0, rebotados: 0 },
+      hoy: { enviados: 0, rebotados: 0 },
+      mora_61: { enviados: 0, rebotados: 0 },
+    } as EstadisticasPorTab,
+  })
+
+  const [descargandoExcel, setDescargandoExcel] = useState(false)
 
   const handleRefresh = () => {
     refetch()
     toast.success('Datos actualizados. Se recomienda ejecutar actualización a las 2am (cron).')
   }
 
-  const handleEnviarCorreos = async () => {
-    setEnviando(true)
+  const handleDescargarInformeRebotados = async () => {
+    if (activeTab === 'configuracion') return
+    setDescargandoExcel(true)
     try {
-      let res: { mensaje: string; enviados: number; sin_email: number; fallidos: number }
-      if (activeTab === 'dias_5' || activeTab === 'dias_3' || activeTab === 'dias_1') {
-        res = await notificacionService.enviarNotificacionesPrevias()
-      } else if (activeTab === 'hoy') {
-        res = await notificacionService.enviarNotificacionesDiaPago()
-      } else if (activeTab === 'mora_61') {
-        res = await notificacionService.enviarNotificacionesMora61()
-      } else {
-        setEnviando(false)
+      const { total } = await notificacionService.getRebotadosPorTab(activeTab)
+      if (total === 0) {
+        toast.success('Todos los correos fueron enviados.')
+        setDescargandoExcel(false)
         return
       }
-      toast.success(`${res.mensaje} Enviados: ${res.enviados}. Sin email: ${res.sin_email}. Fallidos: ${res.fallidos}.`)
-      refetch()
+      const blob = await notificacionService.descargarExcelRebotados(activeTab)
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `correos_no_entregados_${activeTab}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      a.remove()
+      toast.success('Informe descargado.')
     } catch (e) {
-      toast.error('Error al enviar correos')
       console.error(e)
+      toast.error('Error al descargar el informe.')
     } finally {
-      setEnviando(false)
+      setDescargandoExcel(false)
     }
   }
 
@@ -137,14 +155,6 @@ export function Notificaciones() {
             <RefreshCw className={`w-4 h-4 mr-2 ${isFetching ? 'animate-spin' : ''}`} />
             Actualizar
           </Button>
-          <Button
-            variant="default"
-            onClick={handleEnviarCorreos}
-            disabled={enviando || isLoading || getListForTab().length === 0}
-          >
-            <Mail className={`w-4 h-4 mr-2 ${enviando ? 'animate-pulse' : ''}`} />
-            {enviando ? 'Enviando...' : 'Enviar correos'}
-          </Button>
         </div>
       </motion.div>
 
@@ -203,6 +213,46 @@ export function Notificaciones() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {/* KPIs por pestaña: correos enviados y rebotados */}
+            {activeTab !== 'configuracion' && estadisticasPorTab && (
+              <div className="grid grid-cols-2 sm:grid-cols-2 gap-4 mb-6">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
+                  <Mail className="w-8 h-8 text-green-600" />
+                  <div>
+                    <p className="text-2xl font-bold text-green-800">
+                      {estadisticasPorTab[activeTab]?.enviados ?? 0}
+                    </p>
+                    <p className="text-xs text-green-700 font-medium">Correos enviados</p>
+                  </div>
+                </div>
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
+                  <AlertTriangle className="w-8 h-8 text-red-600" />
+                  <div>
+                    <p className="text-2xl font-bold text-red-800">
+                      {estadisticasPorTab[activeTab]?.rebotados ?? 0}
+                    </p>
+                    <p className="text-xs text-red-700 font-medium">Correos rebotados</p>
+                  </div>
+                </div>
+              </div>
+            )}
+            {/* Botón descargar informe Excel de no entregados (rebotados) */}
+            {activeTab !== 'configuracion' && (
+              <div className="mb-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDescargarInformeRebotados}
+                  disabled={descargandoExcel}
+                >
+                  <Download className={`w-4 h-4 mr-2 ${descargandoExcel ? 'animate-pulse' : ''}`} />
+                  {descargandoExcel ? 'Preparando...' : 'Descargar informe de correos no entregados (Excel)'}
+                </Button>
+                <p className="text-xs text-gray-500 mt-1">
+                  Si todos los correos se enviaron correctamente se mostrará una notificación.
+                </p>
+              </div>
+            )}
             {isError && (
               <div className="mb-4 px-4 py-2 bg-amber-50 border border-amber-200 rounded flex items-center justify-between gap-2 text-sm text-amber-800">
                 <span>Error al cargar. Comprueba que exista la tabla <code className="bg-gray-100 px-1">cuotas</code>.</span>

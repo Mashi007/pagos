@@ -5,7 +5,7 @@ La API configuracion/email actualiza este holder al guardar; si no se ha guardad
 Para que Notificaciones/CRM usen la config guardada en BD, sync_from_db() carga desde la tabla configuracion antes de enviar.
 """
 import json
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Tuple
 
 from app.core.config import settings
 
@@ -73,8 +73,21 @@ def get_tickets_notify_emails() -> List[str]:
 
 def update_from_api(data: dict[str, Any]) -> None:
     """Actualiza el holder desde la API de configuración (PUT /configuracion/email/configuracion)."""
-    for k in ("smtp_host", "smtp_port", "smtp_user", "smtp_password", "from_email", "from_name", "tickets_notify_emails"):
+    for k in ("smtp_host", "smtp_port", "smtp_user", "smtp_password", "from_email", "from_name", "tickets_notify_emails", "modo_pruebas", "email_pruebas"):
         if k in data and data[k] is not None:
             _current[k] = data[k]
     if "smtp_port" in data and data["smtp_port"] is not None:
         _current["smtp_port"] = str(data["smtp_port"])
+
+
+def get_modo_pruebas_email() -> Tuple[bool, str]:
+    """
+    Devuelve (modo_pruebas, email_pruebas).
+    modo_pruebas True = redirigir todos los envíos al correo de pruebas.
+    email_pruebas = dirección única a la que enviar en modo pruebas (debe estar configurada).
+    """
+    sync_from_db()
+    raw = _current.get("modo_pruebas") or getattr(settings, "MODO_PRUEBAS_EMAIL", None) or "false"
+    modo = (str(raw).lower() == "true" or raw is True)
+    email = ( _current.get("email_pruebas") or "" ).strip()
+    return (modo, email)

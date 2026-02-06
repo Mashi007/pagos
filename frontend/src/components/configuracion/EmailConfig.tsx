@@ -269,6 +269,14 @@ export function EmailConfig() {
       }
     }
 
+    // âœ… CONDICIÓN 4: En modo Pruebas, el correo de pruebas es obligatorio y debe ser válido
+    if (modoPruebas === 'true') {
+      const email = (emailPruebas ?? '').trim()
+      if (!email || !email.includes('@')) {
+        return false
+      }
+    }
+
     return true
   }, [
     config.smtp_host,
@@ -276,7 +284,9 @@ export function EmailConfig() {
     config.smtp_user,
     config.from_email,
     config.smtp_password,
-    config.smtp_use_tls
+    config.smtp_use_tls,
+    modoPruebas,
+    emailPruebas
   ])
 
   // Obtener campos faltantes para mensaje
@@ -309,6 +319,14 @@ export function EmailConfig() {
       // Puerto 587 requiere TLS
       if (puerto === 587 && config.smtp_use_tls !== 'true') {
         faltantes.push('TLS habilitado (requerido para puerto 587)')
+      }
+    }
+
+    // En modo Pruebas, el correo de pruebas es obligatorio
+    if (modoPruebas === 'true') {
+      const email = (emailPruebas ?? '').trim()
+      if (!email || !email.includes('@')) {
+        faltantes.push('Email de Pruebas (obligatorio en modo Pruebas)')
       }
     }
 
@@ -869,10 +887,10 @@ export function EmailConfig() {
                 Notificación automática de tickets (CRM)
               </h3>
               <p className="text-sm text-blue-800 mb-2">
-                Cuando se crea o actualiza un ticket en <a href={BASE_PATH + '/crm/tickets'} className="underline font-medium">CRM → Tickets</a>, se envía un correo automáticamente <strong>desde el email configurado arriba</strong> hacia los contactos que indiques aquí.
+                Cuando se <strong>crea</strong> un ticket en <a href={BASE_PATH + '/crm/tickets'} className="underline font-medium">CRM → Tickets</a>, se envía automáticamente un correo <strong>con un informe en PDF adjunto</strong> a los contactos que indiques aquí. El envío se hace <strong>desde el email configurado arriba</strong> (remitente por defecto).
               </p>
               <p className="text-xs text-blue-700">
-                Introduce uno o varios emails separados por coma (contactos prestablecidos). Ej: <code className="bg-blue-100 px-1 rounded">soporte@empresa.com, gerencia@empresa.com</code>
+                Introduce uno o varios emails separados por coma (destino del informe de ticket). Ej: <code className="bg-blue-100 px-1 rounded">soporte@empresa.com, gerencia@empresa.com</code>
               </p>
             </div>
             <div>
@@ -885,7 +903,7 @@ export function EmailConfig() {
                 className="font-mono text-sm"
               />
               <p className="text-xs text-gray-500 mt-1">
-                Estos contactos recibirán un correo cada vez que se cree o actualice un ticket en el CRM.
+                Estos contactos recibirán un correo con el informe en PDF adjunto cada vez que se cree un ticket en el CRM.
               </p>
             </div>
           </div>
@@ -904,7 +922,7 @@ export function EmailConfig() {
                     onChange={(e) => setModoPruebas(e.target.value)}
                     className="rounded"
                   />
-                  <span className="text-sm">Producción (Envíos reales a clientes)</span>
+                  <span className="text-sm">1) Producción: cada email a cada cliente</span>
                 </label>
                 <label className="flex items-center space-x-2 cursor-pointer">
                   <input
@@ -915,7 +933,7 @@ export function EmailConfig() {
                     onChange={(e) => setModoPruebas(e.target.value)}
                     className="rounded"
                   />
-                  <span className="text-sm">Pruebas (Todos los emails a dirección de prueba)</span>
+                  <span className="text-sm">2) Pruebas: todos los emails al mismo correo de pruebas</span>
                 </label>
               </div>
             </div>
@@ -923,7 +941,7 @@ export function EmailConfig() {
             {modoPruebas === 'true' && (
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                 <label className="text-sm font-medium block mb-2">
-                  Email de Pruebas <span className="text-gray-500 text-xs">(Opcional)</span>
+                  Email de Pruebas <span className="text-red-500 text-xs">(Requerido en modo Pruebas)</span>
                 </label>
                 <Input
                   type="email"

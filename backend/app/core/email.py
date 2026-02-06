@@ -1,6 +1,7 @@
 """
 Envío de correo para notificaciones (tickets, etc.).
 Usa SMTP desde email_config_holder (configuración del dashboard) o desde settings (.env).
+Soporta adjuntos (ej. informe PDF de ticket).
 """
 import logging
 from typing import List, Optional, Tuple
@@ -8,9 +9,12 @@ from typing import List, Optional, Tuple
 # Timeout para conexión y envío SMTP (evita 502 por proxy cuando Gmail/red tardan)
 SMTP_TIMEOUT_SECONDS = 25
 
-from app.core.email_config_holder import get_smtp_config, get_tickets_notify_emails, sync_from_db
+from app.core.email_config_holder import get_smtp_config, get_tickets_notify_emails, get_modo_pruebas_email, sync_from_db
 
 logger = logging.getLogger(__name__)
+
+# Tipo para adjuntos: (nombre_archivo, contenido_bytes)
+AttachmentType = Tuple[str, bytes]
 
 
 def _sanitize_smtp_error(exc: Exception) -> str:
@@ -36,28 +40,38 @@ def send_email(
     body_text: str,
     body_html: Optional[str] = None,
     cc_emails: Optional[List[str]] = None,
+    attachments: Optional[List[AttachmentType]] = None,
 ) -> Tuple[bool, Optional[str]]:
     """
     Envía un correo vía SMTP (desde el email configurado en Configuración > Email o .env).
     Antes de enviar sincroniza el holder con la BD.
+    attachments: lista de (nombre_archivo, contenido_bytes) para adjuntar (ej. PDF).
     Devuelve (True, None) si se envió; (False, mensaje_error) si no hay SMTP configurado o falló.
     """
     if not to_emails:
         return False, "No hay destinatarios."
     sync_from_db()
-    cfg = get_smtp_config()
-    if not all([cfg.get("smtp_host"), cfg.get("smtp_user"), cfg.get("smtp_password")]):
-        logger.warning("SMTP no configurado (SMTP_HOST/USER/PASSWORD). No se envía correo.")
-        return False, "SMTP no configurado (servidor, usuario o contraseña faltante)."
-
-    cc_list = [e.strip() for e in (cc_emails or []) if e and isinstance(e, str) and "@" in e.strip()]
+    # Modo Pruebas: redirigir todos los envíos al correo de pruebas (Configuración > Email)
+    modo_pruebas, email_pruebas = get_modo_pruebas_email()
+    if modo_pruebas and email_pruebas and "@" in email_pruebas:
+        to_emails = [email_pruebas]
+        cc_list = []
+        logger.info("Modo Pruebas: envío redirigido a %s", email_pruebas)
+    else:
+        if modo_pruebas and not (email_pruebas and "@" in email_pruebas):
+            logger.warning("Modo Pruebas activo pero no hay correo de pruebas configurado. Configure en Configuración > Email.")
+            return False, "En modo Pruebas debe configurar el correo de pruebas en Configuración > Email."
+        cc_list = [e.strip() for e in (cc_emails or []) if e and isinstance(e, str) and "@" in e.strip()]
+    has_attachments = bool(attachments)
 
     try:
         import smtplib
         from email.mime.text import MIMEText
         from email.mime.multipart import MIMEMultipart
+        from email.mime.base import MIMEBase
+        from email import encoders
 
-        msg = MIMEMultipart("alternative")
+        msg = MIMEMultipart("mixed" if has_attachments else "alternative")
         msg["Subject"] = subject
         msg["From"] = cfg.get("from_email") or cfg.get("smtp_user")
         msg["To"] = ", ".join(to_emails)
@@ -67,6 +81,16 @@ def send_email(
         msg.attach(MIMEText(body_text, "plain", "utf-8"))
         if body_html:
             msg.attach(MIMEText(body_html, "html", "utf-8"))
+
+        if has_attachments:
+            for filename, content in attachments:
+                if not filename or content is None:
+                    continue
+                part = MIMEBase("application", "octet-stream")
+                part.set_payload(content)
+                encoders.encode_base64(part)
+                part.add_header("Content-Disposition", "attachment", filename=filename)
+                msg.attach(part)
 
         port = int(cfg.get("smtp_port") or 587)
         all_recipients = to_emails + cc_list
@@ -88,20 +112,56 @@ def send_email(
         return False, _sanitize_smtp_error(e)
 
 
-def notify_ticket_created(ticket_id: int, titulo: str, descripcion: str, cliente_nombre: Optional[str], prioridad: str) -> bool:
-    """Notifica por correo que se creó un ticket. Destino: contactos prestablecidos (Configuración > Email o TICKETS_NOTIFY_EMAIL)."""
+def notify_ticket_created(
+    ticket_id: int,
+    titulo: str,
+    descripcion: str,
+    cliente_nombre: Optional[str],
+    prioridad: str,
+    estado: str = "abierto",
+    tipo: str = "consulta",
+    fecha_creacion=None,
+) -> bool:
+    """
+    Notifica por correo que se creó un ticket y adjunta informe en PDF.
+    Destino: contactos configurados en Configuración > Email (Contactos para notificación de tickets).
+    Remitente: el email configurado por defecto (SMTP/remitente).
+    """
     sync_from_db()
     to_list = get_tickets_notify_emails()
     if not to_list:
-        logger.warning("No hay contactos para notificación de tickets. Configura 'Emails para notificación de tickets' en Configuración > Email o TICKETS_NOTIFY_EMAIL.")
+        logger.warning(
+            "No hay contactos para notificación de tickets. Configura 'Contactos para notificación de tickets' en Configuración > Email."
+        )
         return False
-    subject = f"[CRM] Nuevo ticket #{ticket_id}: {titulo[:50]}"
+    subject = f"[CRM] Nuevo ticket #{ticket_id}: {(titulo or '')[:50]}"
     body = "Se ha creado un nuevo ticket en el CRM.\n\n"
     body += f"ID: {ticket_id}\nTítulo: {titulo}\nPrioridad: {prioridad}\n"
     if cliente_nombre:
         body += f"Cliente: {cliente_nombre}\n"
-    body += f"\nDescripción:\n{descripcion}\n"
-    ok, _ = send_email(to_list, subject, body)
+    body += "\nDescripción:\n" + (descripcion or "") + "\n\n"
+    body += "Se adjunta el informe en PDF de este ticket.\n"
+
+    attachments: List[AttachmentType] = []
+    try:
+        from app.core.ticket_pdf import generar_informe_pdf_ticket
+
+        pdf_bytes = generar_informe_pdf_ticket(
+            ticket_id=ticket_id,
+            titulo=titulo or "",
+            descripcion=descripcion or "",
+            cliente_nombre=cliente_nombre,
+            prioridad=prioridad or "media",
+            estado=estado or "abierto",
+            tipo=tipo or "consulta",
+            fecha_creacion=fecha_creacion,
+        )
+        attachments.append((f"informe_ticket_{ticket_id}.pdf", pdf_bytes))
+    except Exception as e:
+        logger.exception("Error generando PDF del ticket %s: %s", ticket_id, e)
+        body += "\n(No se pudo adjuntar el informe PDF.)\n"
+
+    ok, _ = send_email(to_list, subject, body, attachments=attachments if attachments else None)
     return ok
 
 

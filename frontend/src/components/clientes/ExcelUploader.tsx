@@ -20,6 +20,7 @@ import {} from '../../components/ui/searchable-select'
 // exceljs se importa dinámicamente para reducir el bundle inicial
 import { clienteService } from '../../services/clienteService'
 import { useQueryClient } from '@tanstack/react-query'
+import { useSimpleAuth } from '../../store/simpleAuthStore'
 // âœ… IMPORT DINÁMICO: readExcelToJSON se carga solo cuando se necesita
 // import { readExcelToJSON } from '../../types/exceljs' // âŒ REMOVIDO: Import estático causaba precarga
 import { useIsMounted } from '../../hooks/useIsMounted'
@@ -59,6 +60,8 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const isMounted = useIsMounted()
+  const { user } = useSimpleAuth()
+  const usuarioRegistro = user?.email ?? 'carga-masiva'
 
   const [isDragging, setIsDragging] = useState(false)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
@@ -339,7 +342,8 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         ocupacion: blankIfNN(row.ocupacion),
         estado: blankIfNN(row.estado).toUpperCase(), // âœ… Normalizar estado
         activo: row.activo === 'true' || row.activo === 'TRUE' || row.activo === '1',
-        notas: blankIfNN(row.notas) || 'NA'
+        notas: blankIfNN(row.notas) || 'NA',
+        usuario_registro: usuarioRegistro
       }
 
       try {
@@ -350,7 +354,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         // Manejar diferentes tipos de errores
         if (error.response?.status === 400 || error.response?.status === 409) {
           // Error de cliente duplicado (misma cédula y mismo nombre)
-          const errorMessage = error.response?.data?.detail || error.response?.data?.message || 'No se puede crear un cliente con la misma cédula y el mismo nombre.'
+          const errorMessage = error.response?.data?.detail || error.response?.data?.message || 'No se puede crear un cliente: ya existe uno con la misma cédula, nombre, email o teléfono.'
           addToast('error', `Error en fila ${row._rowIndex}: ${errorMessage}`)
         } else if (error.response?.status === 503) {
           addToast('error', 'ðŸš¨ SERVICIO NO DISPONIBLE: El backend está caído. Contacta al administrador.')
@@ -1074,7 +1078,8 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
             ocupacion: blankIfNN(row.ocupacion),
             estado: blankIfNN(row.estado).toUpperCase(), // âœ… Normalizar estado
             activo: row.activo === 'true' || row.activo === 'TRUE' || row.activo === '1',
-            notas: blankIfNN(row.notas) || 'NA'
+            notas: blankIfNN(row.notas) || 'NA',
+            usuario_registro: usuarioRegistro
           }
 
           console.log(`ðŸ”„ Procesando fila ${row._rowIndex}:`, clienteData)
@@ -1086,19 +1091,21 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
         } catch (error: any) {
           console.error(`âŒ Error creando cliente en fila ${row._rowIndex}:`, error)
 
-          // Manejar error de cliente duplicado (cédula Y nombre, o email)
+          // Manejar error de cliente duplicado (misma cédula O mismo nombre; email/teléfono se permiten)
           let errorMessage = error instanceof Error ? error.message : 'Error desconocido'
 
           if (error.response?.status === 400 || error.response?.status === 409) {
             const detail = error.response?.data?.detail || error.response?.data?.message || ''
-            
-            // Detectar qué tipo de duplicado es
-            if (detail.includes('cédula') && detail.includes('nombre')) {
-              errorMessage = `Cliente duplicado: Ya existe un cliente con la misma cédula (${row.cedula}) y el mismo nombre completo (${row.nombres})`
-            } else if (detail.includes('email')) {
-              errorMessage = `Cliente duplicado: Ya existe un cliente con el mismo email (${row.email})`
+            if (detail.includes('misma cédula')) {
+              errorMessage = detail || `Cliente duplicado: Ya existe un cliente con la misma cédula (${row.cedula}).`
+            } else if (detail.includes('mismo nombre completo')) {
+              errorMessage = detail || `Cliente duplicado: Ya existe un cliente con el mismo nombre completo (${row.nombres}).`
+            } else if (detail.includes('mismo email')) {
+              errorMessage = detail || `Cliente duplicado: Ya existe un cliente con el mismo email (${row.email}).`
+            } else if (detail.includes('mismo teléfono')) {
+              errorMessage = detail || `Cliente duplicado: Ya existe un cliente con el mismo teléfono (${row.telefono}).`
             } else {
-              errorMessage = detail || 'Cliente duplicado: Ya existe un cliente con los mismos datos (cédula y nombre, o email)'
+              errorMessage = detail || 'Cliente duplicado: Cédula, nombre, email o teléfono ya pertenecen a otro cliente.'
             }
           }
 

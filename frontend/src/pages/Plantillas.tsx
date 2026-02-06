@@ -31,6 +31,7 @@ export function Plantillas() {
           <PlantillasNotificaciones
             plantillaInicial={plantillaAEditar}
             onPlantillaCargada={() => setPlantillaAEditar(null)}
+            tabSeccionActiva={activeTab}
           />
         </TabsContent>
 

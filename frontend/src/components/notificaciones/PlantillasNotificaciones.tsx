@@ -15,9 +15,11 @@ type EditorFocus = 'asunto' | 'encabezado' | 'cuerpo' | 'firma'
 interface PlantillasNotificacionesProps {
   plantillaInicial?: NotificacionPlantilla | null
   onPlantillaCargada?: () => void
+  /** Cuando el padre está en la pestaña "plantillas", se recargan las variables para integrar las creadas en Variables Personalizadas. */
+  tabSeccionActiva?: string
 }
 
-export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada }: PlantillasNotificacionesProps = {}) {
+export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada, tabSeccionActiva }: PlantillasNotificacionesProps = {}) {
   const [plantillas, setPlantillas] = useState<NotificacionPlantilla[]>([])
   const [plantillasFiltradas, setPlantillasFiltradas] = useState<NotificacionPlantilla[]>([])
   const [loading, setLoading] = useState(false)
@@ -242,6 +244,13 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
     cargarVariables()
   }, [])
 
+  // Recargar variables cuando el usuario vuelve a la pestaña Plantillas (tras crear/editar en Variables Personalizadas)
+  useEffect(() => {
+    if (tabSeccionActiva === 'plantillas') {
+      cargarVariables()
+    }
+  }, [tabSeccionActiva])
+
   // Cargar plantilla inicial si se proporciona (para edición desde Resumen)
   useEffect(() => {
     if (plantillaInicial && plantillas.length > 0) {
@@ -453,6 +462,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
       'PAGO_3_DIAS_ATRASADO': ['nombre', 'monto', 'fecha_vencimiento', 'dias_atraso'],
       'PAGO_5_DIAS_ATRASADO': ['nombre', 'monto', 'fecha_vencimiento', 'dias_atraso'],
       'PREJUDICIAL': ['nombre', 'monto', 'fecha_vencimiento', 'dias_atraso'],
+      'MORA_61': ['nombre', 'monto', 'fecha_vencimiento', 'dias_atraso'],
     }
     const requeridas = requeridasPorTipo[tipoAValidar] || []
     const faltantes = requeridas.filter(v => !(`${asunto} ${cuerpoFinal}`).includes(`{{${v}}}`))
@@ -932,9 +942,10 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
             </div>
           </div>
 
-          {/* Variables listas para insertar (sin burocracia) */}
+          {/* Variables listas para insertar: rápidas + personalizadas (desde pestaña Variables Personalizadas) */}
           <div className="rounded-lg bg-blue-50 border border-blue-200 p-3">
-            <p className="text-xs font-semibold text-blue-900 mb-2">Insertar variable en asunto o cuerpo (clic):</p>
+            <p className="text-xs font-semibold text-blue-900 mb-1">Insertar variable en asunto o cuerpo (clic en la variable):</p>
+            <p className="text-xs text-blue-700 mb-2">Las variables de la pestaña <strong>Variables Personalizadas</strong> aparecen abajo en el Banco de Variables y se copian aquí al hacer clic.</p>
             <div className="flex flex-wrap gap-2">
               {VARIABLES_NOTIFICACION.map(({ key, label }) => (
                 <Button
@@ -982,7 +993,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
             </div>
           </div>
 
-          {/* Panel de Variables Configuradas - Mejorado e Intuitivo */}
+          {/* Panel de Variables Configuradas: incluye Variables Personalizadas (pestaña homónima) */}
           <div className="border-2 border-blue-200 rounded-lg p-4 bg-gradient-to-br from-blue-50 to-white shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
@@ -991,6 +1002,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada 
                 <Badge variant="outline" className="text-xs bg-blue-100 text-blue-800 border-blue-300">
                   {variablesConfiguradas.length} disponibles
                 </Badge>
+                <span className="text-xs text-gray-600">(incluye Variables Personalizadas)</span>
               </div>
               <Button
                 variant="ghost"
