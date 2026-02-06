@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Plus, Search, Filter, Edit, Eye, Trash2, DollarSign, Calendar, Lock, Calculator, CheckCircle2, X, RefreshCw, Calendar as CalendarIcon } from 'lucide-react'
+import { Plus, Search, Filter, Edit, Eye, Trash2, DollarSign, Calendar, Lock, CheckCircle2, X, RefreshCw } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -15,10 +15,8 @@ import { useAnalistasActivos } from '../../hooks/useAnalistas'
 import { useModelosVehiculosActivos } from '../../hooks/useModelosVehiculos'
 import { CrearPrestamoForm } from './CrearPrestamoForm'
 import { PrestamosKPIs } from './PrestamosKPIs'
-import { EvaluacionRiesgoForm } from './EvaluacionRiesgoForm'
 import { PrestamoDetalleModal } from './PrestamoDetalleModal'
-import { FormularioAprobacionCondiciones } from './FormularioAprobacionCondiciones'
-import { AsignarFechaAprobacionModal } from './AsignarFechaAprobacionModal'
+import { AprobarPrestamoManualModal } from './AprobarPrestamoManualModal'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog'
 import { formatCurrency, formatDate } from '../../utils'
 import { prestamoService } from '../../services/prestamoService'
@@ -55,14 +53,10 @@ export function PrestamosList() {
   }, [searchParams])
   const [showFilters, setShowFilters] = useState(false)
   const [showCrearPrestamo, setShowCrearPrestamo] = useState(false)
-  const [showEvaluacion, setShowEvaluacion] = useState(false)
   const [showDetalle, setShowDetalle] = useState(false)
-  const [showAprobacionCondiciones, setShowAprobacionCondiciones] = useState(false)
-  const [showAsignarFechaAprobacion, setShowAsignarFechaAprobacion] = useState(false)
+  const [showAprobarManual, setShowAprobarManual] = useState(false)
+  const [aprobacionManualPrestamo, setAprobacionManualPrestamo] = useState<any>(null)
   const [editingPrestamo, setEditingPrestamo] = useState<any>(null)
-  const [evaluacionPrestamo, setEvaluacionPrestamo] = useState<any>(null)
-  const [aprobacionPrestamo, setAprobacionPrestamo] = useState<any>(null)
-  const [fechaAprobacionPrestamo, setFechaAprobacionPrestamo] = useState<any>(null)
   const [viewingPrestamo, setViewingPrestamo] = useState<any>(null)
   const [deletePrestamoId, setDeletePrestamoId] = useState<number | null>(null)
 
@@ -147,19 +141,9 @@ export function PrestamosList() {
     setShowCrearPrestamo(true)
   }
 
-  const handleEvaluarRiesgo = (prestamo: any) => {
-    setEvaluacionPrestamo(prestamo)
-    setShowEvaluacion(true)
-  }
-
-  const handleAprobarCredito = (prestamo: any) => {
-    setAprobacionPrestamo(prestamo)
-    setShowAprobacionCondiciones(true)
-  }
-
-  const handleAsignarFechaAprobacion = (prestamo: any) => {
-    setFechaAprobacionPrestamo(prestamo)
-    setShowAsignarFechaAprobacion(true)
+  const handleAprobarPrestamo = (prestamo: any) => {
+    setAprobacionManualPrestamo(prestamo)
+    setShowAprobarManual(true)
   }
 
   const handleView = (prestamo: any) => {
@@ -211,86 +195,6 @@ export function PrestamosList() {
     )
   }
 
-  if (showEvaluacion) {
-    return (
-      <EvaluacionRiesgoForm
-        prestamo={evaluacionPrestamo}
-        onClose={() => {
-          setShowEvaluacion(false)
-          setEvaluacionPrestamo(null)
-        }}
-        onSuccess={async () => {
-          setShowEvaluacion(false)
-          setEvaluacionPrestamo(null)
-          // Remover cache stale para forzar refetch completo
-          queryClient.removeQueries({ queryKey: prestamoKeys.lists() })
-          queryClient.removeQueries({ queryKey: prestamoKeys.all })
-          // Invalidar todas las queries
-          queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
-          queryClient.invalidateQueries({ queryKey: prestamoKeys.lists() })
-          // Forzar refetch inmediato ignorando staleTime
-          await queryClient.refetchQueries({
-            queryKey: prestamoKeys.all,
-            exact: false,
-            type: 'active'
-          })
-        }}
-      />
-    )
-  }
-
-  if (showAsignarFechaAprobacion) {
-    return (
-      <AsignarFechaAprobacionModal
-        prestamo={fechaAprobacionPrestamo}
-        onClose={() => {
-          setShowAsignarFechaAprobacion(false)
-          setFechaAprobacionPrestamo(null)
-        }}
-        onSuccess={async () => {
-          setShowAsignarFechaAprobacion(false)
-          setFechaAprobacionPrestamo(null)
-          // Invalidar queries para refrescar datos
-          queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
-          queryClient.invalidateQueries({ queryKey: prestamoKeys.lists() })
-          await queryClient.refetchQueries({
-            queryKey: prestamoKeys.all,
-            exact: false,
-            type: 'active'
-          })
-        }}
-      />
-    )
-  }
-
-  if (showAprobacionCondiciones) {
-    return (
-      <FormularioAprobacionCondiciones
-        prestamo={aprobacionPrestamo}
-        onClose={() => {
-          setShowAprobacionCondiciones(false)
-          setAprobacionPrestamo(null)
-        }}
-        onSuccess={async () => {
-          setShowAprobacionCondiciones(false)
-          setAprobacionPrestamo(null)
-          // Remover cache stale para forzar refetch completo
-          queryClient.removeQueries({ queryKey: prestamoKeys.lists() })
-          queryClient.removeQueries({ queryKey: prestamoKeys.all })
-          // Invalidar todas las queries
-          queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
-          queryClient.invalidateQueries({ queryKey: prestamoKeys.lists() })
-          // Forzar refetch inmediato ignorando staleTime
-          await queryClient.refetchQueries({
-            queryKey: prestamoKeys.all,
-            exact: false,
-            type: 'active'
-          })
-        }}
-      />
-    )
-  }
-
   if (showDetalle && viewingPrestamo) {
     return (
       <PrestamoDetalleModal
@@ -319,6 +223,28 @@ export function PrestamosList() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {showAprobarManual && aprobacionManualPrestamo && (
+        <AprobarPrestamoManualModal
+          prestamo={aprobacionManualPrestamo}
+          onClose={() => {
+            setShowAprobarManual(false)
+            setAprobacionManualPrestamo(null)
+          }}
+          onSuccess={async () => {
+            setShowAprobarManual(false)
+            setAprobacionManualPrestamo(null)
+            queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
+            queryClient.invalidateQueries({ queryKey: prestamoKeys.lists() })
+            await queryClient.refetchQueries({
+              queryKey: prestamoKeys.all,
+              exact: false,
+              type: 'active'
+            })
+          }}
+        />
+      )}
+
       {/* KPIs */}
       <PrestamosKPIs />
 
@@ -699,42 +625,16 @@ export function PrestamosList() {
                               </Button>
                             )}
 
-                            {/* Botón Evaluar Riesgo - Solo Admin (DRAFT o EN_REVISION) */}
+                            {/* Aprobar préstamo (riesgo manual) - Reemplaza Evaluar riesgo + Aprobar crédito + Asignar fecha */}
                             {canViewEvaluacionRiesgo() && (prestamo.estado === 'DRAFT' || prestamo.estado === 'EN_REVISION') && (
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => handleEvaluarRiesgo(prestamo)}
-                                title="Evaluar riesgo del préstamo"
-                                className="hover:bg-blue-50"
-                              >
-                                <Calculator className="h-4 w-4 text-blue-600" />
-                              </Button>
-                            )}
-
-                            {/* Botón Aprobar Crédito - Solo Admin (EVALUADO) */}
-                            {canViewEvaluacionRiesgo() && prestamo.estado === 'EVALUADO' && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleAprobarCredito(prestamo)}
-                                title="Aprobar crédito con condiciones (genera tabla de amortización)"
+                                onClick={() => handleAprobarPrestamo(prestamo)}
+                                title="Aprobar préstamo (fecha, datos editables y declaración)"
                                 className="hover:bg-green-50"
                               >
                                 <CheckCircle2 className="h-4 w-4 text-green-600" />
-                              </Button>
-                            )}
-
-                            {/* Botón Asignar Fecha de Aprobación - Solo Admin (APROBADO sin fecha_aprobacion) */}
-                            {canViewEvaluacionRiesgo() && prestamo.estado === 'APROBADO' && !prestamo.fecha_aprobacion && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleAsignarFechaAprobacion(prestamo)}
-                                title="Asignar fecha de aprobación y desembolsar (requiere calificación mínima 70)"
-                                className="hover:bg-purple-50"
-                              >
-                                <CalendarIcon className="h-4 w-4 text-purple-600" />
                               </Button>
                             )}
 

@@ -69,25 +69,23 @@ class RegistrarAuditoriaBody(BaseModel):
 
 
 def _row_to_item(r: Auditoria) -> AuditoriaItem:
-    """Convierte fila BD a AuditoriaItem."""
+    """Convierte fila BD a AuditoriaItem (entidad->modulo, entidad_id->registro_id, detalles->descripcion, exito->resultado)."""
     fecha_str = r.fecha.isoformat() + "Z" if r.fecha else ""
-    datos_ant = json.loads(r.datos_anteriores) if r.datos_anteriores else None
-    datos_nue = json.loads(r.datos_nuevos) if r.datos_nuevos else None
     return AuditoriaItem(
         id=r.id,
         usuario_id=r.usuario_id,
-        usuario_email=r.usuario_email,
+        usuario_email=None,
         accion=r.accion,
-        modulo=r.modulo,
-        tabla=r.tabla or "",
-        registro_id=r.registro_id,
-        descripcion=r.descripcion,
-        campo=r.campo,
-        datos_anteriores=datos_ant,
-        datos_nuevos=datos_nue,
+        modulo=r.entidad or "",
+        tabla=r.entidad or "",
+        registro_id=r.entidad_id,
+        descripcion=r.detalles,
+        campo=None,
+        datos_anteriores=None,
+        datos_nuevos=None,
         ip_address=r.ip_address,
         user_agent=r.user_agent,
-        resultado=r.resultado,
+        resultado="EXITOSO" if r.exito else "ERROR",
         mensaje_error=r.mensaje_error,
         fecha=fecha_str,
     )
@@ -109,12 +107,10 @@ def listar_auditoria(
 ):
     """Lista registros de auditoría con filtros y paginación. Datos desde BD."""
     q = select(Auditoria)
-    if usuario_email:
-        q = q.where(Auditoria.usuario_email.ilike(f"%{usuario_email}%"))
     if modulo:
-        q = q.where(Auditoria.modulo == modulo)
+        q = q.where(Auditoria.entidad == modulo)
     if registro_id is not None:
-        q = q.where(Auditoria.registro_id == registro_id)
+        q = q.where(Auditoria.entidad_id == registro_id)
     if accion:
         q = q.where(Auditoria.accion == accion)
     if fecha_desde:
@@ -130,7 +126,8 @@ def listar_auditoria(
         except ValueError:
             pass
     total = db.scalar(select(func.count()).select_from(q.subquery())) or 0
-    order_col = getattr(Auditoria, ordenar_por, Auditoria.fecha)
+    col_name = {"modulo": "entidad", "registro_id": "entidad_id"}.get(ordenar_por, ordenar_por)
+    order_col = getattr(Auditoria, col_name, Auditoria.fecha)
     if orden == "desc":
         q = q.order_by(order_col.desc())
     else:
@@ -163,16 +160,13 @@ def obtener_estadisticas(db: Session = Depends(get_db)):
     acciones_este_mes = db.scalar(
         select(func.count()).select_from(Auditoria).where(Auditoria.fecha >= inicio_mes)) or 0
     rows_mod = db.execute(
-        select(Auditoria.modulo, func.count()).select_from(Auditoria).group_by(Auditoria.modulo)
+        select(Auditoria.entidad, func.count()).select_from(Auditoria).group_by(Auditoria.entidad)
     ).all()
-    acciones_por_modulo = {r[0]: r[1] for r in rows_mod}
+    acciones_por_modulo = {r[0] or "": r[1] for r in rows_mod}
     rows_usr = db.execute(
-        select(Auditoria.usuario_email, func.count())
-        .select_from(Auditoria)
-        .where(Auditoria.usuario_email.isnot(None))
-        .group_by(Auditoria.usuario_email)
+        select(Auditoria.usuario_id, func.count()).select_from(Auditoria).group_by(Auditoria.usuario_id)
     ).all()
-    acciones_por_usuario = {r[0] or "": r[1] for r in rows_usr}
+    acciones_por_usuario = {str(r[0]) if r[0] is not None else "": r[1] for r in rows_usr}
     return AuditoriaStats(
         total_acciones=total_acciones,
         acciones_por_modulo=acciones_por_modulo,
@@ -206,10 +200,8 @@ def exportar_auditoria(
             headers={"Content-Disposition": "attachment; filename=auditoria.xlsx"},
         )
     q = select(Auditoria).order_by(Auditoria.fecha.desc()).limit(10000)
-    if usuario_email:
-        q = q.where(Auditoria.usuario_email.ilike(f"%{usuario_email}%"))
     if modulo:
-        q = q.where(Auditoria.modulo == modulo)
+        q = q.where(Auditoria.entidad == modulo)
     if accion:
         q = q.where(Auditoria.accion == accion)
     if fecha_desde:
@@ -228,18 +220,17 @@ def exportar_auditoria(
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Auditoría"
-    ws.append(["id", "fecha", "usuario_email", "modulo", "accion", "tabla", "registro_id", "descripcion", "resultado"])
+    ws.append(["id", "fecha", "usuario_id", "entidad", "accion", "entidad_id", "detalles", "exito"])
     for r in rows:
         ws.append([
             r.id,
             r.fecha.isoformat() if r.fecha else "",
-            r.usuario_email or "",
-            r.modulo or "",
+            r.usuario_id or "",
+            r.entidad or "",
             r.accion or "",
-            r.tabla or "",
-            r.registro_id or "",
-            (r.descripcion or "")[:500],
-            r.resultado or "",
+            r.entidad_id or "",
+            (r.detalles or "")[:500],
+            "SI" if r.exito else "NO",
         ])
     buf = io.BytesIO()
     wb.save(buf)
@@ -261,18 +252,20 @@ def obtener_auditoria(auditoria_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/registrar", response_model=AuditoriaItem)
-def registrar_evento(body: RegistrarAuditoriaBody, db: Session = Depends(get_db)):
-    """Registra un evento de auditoría en BD."""
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+def registrar_evento(
+    body: RegistrarAuditoriaBody,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Registra un evento de auditoría en BD. usuario_id se toma del usuario autenticado."""
+    now = datetime.now(timezone.utc)
     row = Auditoria(
-        usuario_id=None,
-        usuario_email=None,
+        usuario_id=current_user.id,
         accion=body.accion,
-        modulo=body.modulo,
-        tabla="",
-        registro_id=body.registro_id,
-        descripcion=body.descripcion,
-        resultado="EXITOSO",
+        entidad=body.modulo,
+        entidad_id=body.registro_id,
+        detalles=body.descripcion,
+        exito=True,
         fecha=now,
     )
     db.add(row)

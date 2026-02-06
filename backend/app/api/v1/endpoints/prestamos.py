@@ -338,23 +338,31 @@ def get_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
 
 
 def _generar_cuotas_amortizacion(db: Session, p: Prestamo, fecha_base: date, numero_cuotas: int, monto_cuota: float) -> int:
-    """Genera filas en cuotas para el préstamo. MENSUAL +1 mes, QUINCENAL +15 días, SEMANAL +7 días. Retorna cantidad creada."""
+    """Genera filas en cuotas para el préstamo. MENSUAL +1 mes, QUINCENAL +15 días, SEMANAL +7 días.
+    Incluye saldo_capital_inicial y saldo_capital_final (amortización plana). Retorna cantidad creada."""
     modalidad = (p.modalidad_pago or "MENSUAL").upper()
     delta_dias = 30 if modalidad == "MENSUAL" else (15 if modalidad == "QUINCENAL" else 7)
     cliente_id = p.cliente_id
+    total = monto_cuota * numero_cuotas
+    monto_cuota_dec = Decimal(str(round(monto_cuota, 2)))
     creadas = 0
     for n in range(1, numero_cuotas + 1):
         if modalidad == "MENSUAL":
-            # Aproximación: +n meses
             next_date = fecha_base + timedelta(days=30 * n)
         else:
             next_date = fecha_base + timedelta(days=delta_dias * n)
+        saldo_inicial = Decimal(str(round(total - (n - 1) * monto_cuota, 2)))
+        saldo_final = Decimal(str(round(total - n * monto_cuota, 2)))
+        if saldo_final < 0:
+            saldo_final = Decimal("0")
         c = Cuota(
             prestamo_id=p.id,
             cliente_id=cliente_id,
             numero_cuota=n,
             fecha_vencimiento=next_date,
-            monto=Decimal(str(round(monto_cuota, 2))),
+            monto=monto_cuota_dec,
+            saldo_capital_inicial=saldo_inicial,
+            saldo_capital_final=saldo_final,
             estado="PENDIENTE",
         )
         db.add(c)
@@ -504,6 +512,11 @@ def aprobar_manual(
     y declaración de políticas. Actualiza datos editables del préstamo, genera tabla de amortización
     y registra en auditoría. Solo préstamos en DRAFT o EN_REVISION. Estado resultante: APROBADO.
     """
+    if (getattr(current_user, "rol", None) or "").lower() != "administrador":
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administración puede aprobar préstamos (aprobación manual de riesgo).",
+        )
     p = db.get(Prestamo, prestamo_id)
     if not p:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
@@ -549,13 +562,11 @@ def aprobar_manual(
 
     audit = Auditoria(
         usuario_id=current_user.id,
-        usuario_email=current_user.email,
         accion="APROBACION_MANUAL",
-        modulo="prestamos",
-        tabla="prestamos",
-        registro_id=prestamo_id,
-        descripcion=f"Aprobación manual de riesgo. Préstamo {prestamo_id}. Fecha aprobación: {fecha_ap}. Usuario: {current_user.email}.",
-        resultado="EXITOSO",
+        entidad="prestamos",
+        entidad_id=prestamo_id,
+        detalles=f"Aprobación manual de riesgo. Préstamo {prestamo_id}. Fecha aprobación: {fecha_ap}. Usuario: {current_user.email}.",
+        exito=True,
     )
     db.add(audit)
     db.commit()
@@ -580,22 +591,22 @@ def get_evaluacion_riesgo(prestamo_id: int, db: Session = Depends(get_db)):
 
 @router.get("/{prestamo_id}/auditoria", response_model=list)
 def get_auditoria_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
-    """Lista registros de auditoría asociados al préstamo (tabla=prestamos, registro_id=prestamo_id)."""
+    """Lista registros de auditoría asociados al préstamo (entidad=prestamos, entidad_id=prestamo_id)."""
     p = db.get(Prestamo, prestamo_id)
     if not p:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
-    q = select(Auditoria).where(Auditoria.tabla == "prestamos", Auditoria.registro_id == prestamo_id).order_by(Auditoria.fecha.desc())
-    rows = db.execute(q).scalars().all()
+    q = select(Auditoria).where(Auditoria.entidad == "prestamos", Auditoria.entidad_id == prestamo_id).order_by(Auditoria.fecha.desc())
+    registros = db.execute(q).scalars().all()
     return [
         {
             "id": r.id,
-            "usuario_email": r.usuario_email,
+            "usuario_id": r.usuario_id,
             "accion": r.accion,
-            "modulo": r.modulo,
-            "descripcion": r.descripcion,
+            "modulo": r.entidad,
+            "descripcion": r.detalles,
             "fecha": r.fecha.isoformat() + "Z" if r.fecha else "",
         }
-        for r in [row[0] for row in rows]
+        for r in registros
     ]
 
 
