@@ -28,7 +28,7 @@ import { AdvertenciaFormatoCientifico } from '../../components/common/Advertenci
 import { toast } from 'sonner'
 
 export function PagosList() {
-  const [activeTab, setActiveTab] = useState('todos')
+  const [activeTab, setActiveTab] = useState('resumen')
   const [page, setPage] = useState(1)
   const [perPage] = useState(20)
   const [showFilters, setShowFilters] = useState(false)
@@ -193,16 +193,48 @@ export function PagosList() {
       {/* Advertencia sobre formato científico */}
       <AdvertenciaFormatoCientifico />
 
-      {/* Pestañas */}
+      {/* Pestañas: por defecto Resumen por Cliente (detalles por cliente, más reciente a más antiguo) */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="mb-4">
+          <TabsTrigger value="resumen">Detalle por Cliente</TabsTrigger>
           <TabsTrigger value="todos">Todos los Pagos</TabsTrigger>
-          <TabsTrigger value="resumen">Resumen por Cliente</TabsTrigger>
         </TabsList>
+
+        {/* Tab: Detalle por Cliente (resumen + ver pagos del cliente, más reciente a más antiguo) */}
+        <TabsContent value="resumen">
+          <PagosListResumen />
+        </TabsContent>
 
         {/* Tab: Todos los Pagos */}
         <TabsContent value="todos">
-          {/* Filtros (mismo diseño que Préstamos: Card, expandibles, badge, Limpiar) */}
+          {/* Búsqueda por cédula siempre visible */}
+          <Card className="mb-4">
+            <CardContent className="pt-6">
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="flex-1">
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">Buscar por cédula</label>
+                  <Input
+                    placeholder="Escriba cédula para filtrar..."
+                    value={filters.cedula}
+                    onChange={e => {
+                      handleFilterChange('cedula', e.target.value)
+                    }}
+                    className="max-w-md"
+                  />
+                </div>
+                {filters.cedula && (
+                  <div className="flex items-end">
+                    <Button variant="ghost" size="sm" onClick={() => handleFilterChange('cedula', '')}>
+                      <X className="h-4 w-4 mr-1" />
+                      Limpiar búsqueda
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Filtros adicionales (expandibles) */}
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -454,11 +486,6 @@ export function PagosList() {
               )}
             </CardContent>
           </Card>
-        </TabsContent>
-
-        {/* Tab: Resumen por Cliente */}
-        <TabsContent value="resumen">
-          <PagosListResumen />
         </TabsContent>
       </Tabs>
 

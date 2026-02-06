@@ -19,10 +19,22 @@ from app.models.auditoria import Auditoria
 from app.models.cliente import Cliente
 from app.models.cuota import Cuota
 from app.models.prestamo import Prestamo
+from app.models.user import User
 from app.schemas.prestamo import PrestamoCreate, PrestamoResponse, PrestamoUpdate, PrestamoListResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
+
+
+def _audit_user_id(db: Session, current_user: UserResponse) -> int:
+    """Devuelve un usuario_id válido para insertar en auditoria (evita FK si el usuario es 'fake')."""
+    u = db.get(User, getattr(current_user, "id", None))
+    if u and u.is_active:
+        return u.id
+    admin = db.query(User).filter(User.rol == "administrador", User.is_active.is_(True)).first()
+    if admin:
+        return admin.id
+    return getattr(current_user, "id", 1)
 
 
 # --- Schemas para body de endpoints adicionales ---
@@ -384,8 +396,13 @@ def get_cuotas_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
             "numero_cuota": c.numero_cuota,
             "fecha_vencimiento": c.fecha_vencimiento.isoformat() if c.fecha_vencimiento else None,
             "monto": float(c.monto) if c.monto is not None else 0,
+            "monto_cuota": float(c.monto) if c.monto is not None else 0,
+            "saldo_capital_inicial": float(c.saldo_capital_inicial) if c.saldo_capital_inicial is not None else 0,
+            "saldo_capital_final": float(c.saldo_capital_final) if c.saldo_capital_final is not None else 0,
+            "total_pagado": float(c.total_pagado) if c.total_pagado is not None else 0,
             "fecha_pago": c.fecha_pago.isoformat() if c.fecha_pago else None,
             "estado": c.estado or "PENDIENTE",
+            "dias_mora": c.dias_mora if c.dias_mora is not None else 0,
         }
         for c in [r[0] for r in rows]
     ]
@@ -534,44 +551,55 @@ def aprobar_manual(
     if hasattr(fecha_ap, "date"):
         fecha_ap = fecha_ap.date() if callable(getattr(fecha_ap, "date", None)) else fecha_ap
 
-    if payload.total_financiamiento is not None:
-        p.total_financiamiento = Decimal(str(payload.total_financiamiento))
-    if payload.numero_cuotas is not None:
-        p.numero_cuotas = payload.numero_cuotas
-    if payload.modalidad_pago is not None:
-        p.modalidad_pago = payload.modalidad_pago.strip().upper() or p.modalidad_pago
-    if payload.cuota_periodo is not None:
-        p.cuota_periodo = Decimal(str(payload.cuota_periodo))
-    if payload.tasa_interes is not None:
-        p.tasa_interes = Decimal(str(payload.tasa_interes))
-    if payload.observaciones is not None:
-        p.observaciones = payload.observaciones
+    try:
+        if payload.total_financiamiento is not None:
+            p.total_financiamiento = Decimal(str(payload.total_financiamiento))
+        if payload.numero_cuotas is not None:
+            p.numero_cuotas = payload.numero_cuotas
+        if payload.modalidad_pago is not None:
+            p.modalidad_pago = payload.modalidad_pago.strip().upper() or p.modalidad_pago
+        if payload.cuota_periodo is not None:
+            p.cuota_periodo = Decimal(str(payload.cuota_periodo))
+        if payload.tasa_interes is not None:
+            p.tasa_interes = Decimal(str(payload.tasa_interes))
+        if payload.observaciones is not None:
+            p.observaciones = payload.observaciones
 
-    p.fecha_aprobacion = datetime.combine(fecha_ap, datetime.min.time())
-    p.fecha_base_calculo = fecha_ap
-    p.usuario_aprobador = current_user.email
-    p.estado = "APROBADO"
+        p.fecha_aprobacion = datetime.combine(fecha_ap, datetime.min.time())
+        p.fecha_base_calculo = fecha_ap
+        p.usuario_aprobador = current_user.email
+        p.estado = "APROBADO"
 
-    db.execute(delete(Cuota).where(Cuota.prestamo_id == prestamo_id))
-    numero_cuotas = p.numero_cuotas or 12
-    total = float(p.total_financiamiento or 0)
-    if numero_cuotas <= 0 or total <= 0:
-        raise HTTPException(status_code=400, detail="Número de cuotas o monto de financiamiento inválido.")
-    monto_cuota = total / numero_cuotas
-    creadas = _generar_cuotas_amortizacion(db, p, fecha_ap, numero_cuotas, monto_cuota)
+        db.execute(delete(Cuota).where(Cuota.prestamo_id == prestamo_id))
+        numero_cuotas = p.numero_cuotas or 12
+        total = float(p.total_financiamiento or 0)
+        if numero_cuotas <= 0 or total <= 0:
+            raise HTTPException(status_code=400, detail="Número de cuotas o monto de financiamiento inválido.")
+        monto_cuota = total / numero_cuotas
+        creadas = _generar_cuotas_amortizacion(db, p, fecha_ap, numero_cuotas, monto_cuota)
 
-    audit = Auditoria(
-        usuario_id=current_user.id,
-        accion="APROBACION_MANUAL",
-        entidad="prestamos",
-        entidad_id=prestamo_id,
-        detalles=f"Aprobación manual de riesgo. Préstamo {prestamo_id}. Fecha aprobación: {fecha_ap}. Usuario: {current_user.email}.",
-        exito=True,
-    )
-    db.add(audit)
-    db.commit()
-    db.refresh(p)
-    return {"prestamo": PrestamoResponse.model_validate(p), "cuotas_generadas": creadas}
+        audit = Auditoria(
+            usuario_id=_audit_user_id(db, current_user),
+            accion="APROBACION_MANUAL",
+            entidad="prestamos",
+            entidad_id=prestamo_id,
+            detalles=f"Aprobación manual de riesgo. Préstamo {prestamo_id}. Fecha aprobación: {fecha_ap}. Usuario: {current_user.email}.",
+            exito=True,
+        )
+        db.add(audit)
+        db.commit()
+        db.refresh(p)
+        return {"prestamo": PrestamoResponse.model_validate(p), "cuotas_generadas": creadas}
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception("aprobar_manual prestamo_id=%s: %s", prestamo_id, e)
+        raise HTTPException(
+            status_code=500,
+            detail="Error al aprobar el préstamo. Revisa los logs del servidor.",
+        ) from e
 
 
 @router.get("/{prestamo_id}/evaluacion-riesgo", response_model=dict)

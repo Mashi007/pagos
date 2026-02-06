@@ -142,12 +142,11 @@ class PagoService {
     return await apiClient.get(`${this.baseUrl}/stats${queryString ? '?' + queryString : ''}`, config)
   }
 
-  // Obtener KPIs de pagos (mes y año específicos o actual)
+  // Obtener KPIs de pagos: 1) a cobrar en el mes, 2) cobrado en el mes, 3) morosidad %
   async getKPIs(mes?: number, año?: number, config?: { signal?: AbortSignal }): Promise<{
+    montoACobrarMes: number
     montoCobradoMes: number
-    saldoPorCobrar: number
-    clientesEnMora: number
-    clientesAlDia: number
+    morosidadMensualPorcentaje: number
     mes: number
     año: number
   }> {

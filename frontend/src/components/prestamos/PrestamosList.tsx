@@ -232,10 +232,14 @@ export function PrestamosList() {
             setAprobacionManualPrestamo(null)
           }}
           onSuccess={async () => {
+            const prestamoId = aprobacionManualPrestamo?.id
             setShowAprobarManual(false)
             setAprobacionManualPrestamo(null)
             queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
             queryClient.invalidateQueries({ queryKey: prestamoKeys.lists() })
+            if (prestamoId != null) {
+              queryClient.invalidateQueries({ queryKey: ['cuotas-prestamo', prestamoId] })
+            }
             await queryClient.refetchQueries({
               queryKey: prestamoKeys.all,
               exact: false,

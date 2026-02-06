@@ -1,17 +1,14 @@
-import { DollarSign, AlertTriangle, CheckCircle, Users } from 'lucide-react'
+import { DollarSign, Calendar, TrendingUp, Percent } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import { usePagosKPIs } from '../../hooks/usePagos'
 
 export function PagosKPIsNuevo() {
-  // Obtener KPIs desde el backend (mes/año actual por defecto)
   const { data: kpiData, isLoading, error } = usePagosKPIs()
 
-  // Valores por defecto mientras carga
   const kpiDataFinal = kpiData || {
+    montoACobrarMes: 0,
     montoCobradoMes: 0,
-    saldoPorCobrar: 0,
-    clientesEnMora: 0,
-    clientesAlDia: 0,
+    morosidadMensualPorcentaje: 0,
     mes: new Date().getMonth() + 1,
     año: new Date().getFullYear(),
   }
@@ -22,8 +19,8 @@ export function PagosKPIsNuevo() {
         <div className="flex justify-between items-center">
           <h2 className="text-2xl font-bold text-gray-900">KPIs de Pagos</h2>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[1, 2, 3, 4].map((i) => (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {[1, 2, 3].map((i) => (
             <Card key={i}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
@@ -67,7 +64,6 @@ export function PagosKPIsNuevo() {
 
   return (
     <div className="space-y-6">
-      {/* Encabezado */}
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-gray-900">KPIs de Pagos</h2>
         <span className="text-sm text-gray-500">
@@ -75,11 +71,28 @@ export function PagosKPIsNuevo() {
         </span>
       </div>
 
-      {/* Vista General con KPIs principales */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Monto Cobrado en el Mes</CardTitle>
+            <CardTitle className="text-sm font-medium">A cobrar en el mes (en transcurso)</CardTitle>
+            <Calendar className="h-5 w-5 text-blue-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-600">
+              ${kpiDataFinal.montoACobrarMes.toLocaleString('es-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </div>
+            <p className="text-xs text-gray-600 mt-1">
+              Cuánto dinero debería cobrarse en {nombreMes}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Cobrado = Pagado en el mes</CardTitle>
             <DollarSign className="h-5 w-5 text-green-600" />
           </CardHeader>
           <CardContent>
@@ -90,46 +103,23 @@ export function PagosKPIsNuevo() {
               })}
             </div>
             <p className="text-xs text-gray-600 mt-1">
-              Total cobrado en {nombreMes}
+              Cuánto dinero se ha cobrado en {nombreMes}
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Saldo por Cobrar</CardTitle>
-            <DollarSign className="h-5 w-5 text-blue-600" />
+            <CardTitle className="text-sm font-medium">Morosidad mensual (%)</CardTitle>
+            <Percent className="h-5 w-5 text-red-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
-              ${kpiDataFinal.saldoPorCobrar.toLocaleString('es-US', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}
+            <div className="text-2xl font-bold text-red-600">
+              {kpiDataFinal.morosidadMensualPorcentaje.toFixed(1)}%
             </div>
-            <p className="text-xs text-gray-600 mt-1">Total pendiente de cobro</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Clientes en Mora</CardTitle>
-            <AlertTriangle className="h-5 w-5 text-red-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">{kpiDataFinal.clientesEnMora}</div>
-            <p className="text-xs text-gray-600 mt-1">Con cuotas vencidas</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Clientes al Día</CardTitle>
-            <CheckCircle className="h-5 w-5 text-orange-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-600">{kpiDataFinal.clientesAlDia}</div>
-            <p className="text-xs text-gray-600 mt-1">Sin cuotas vencidas</p>
+            <p className="text-xs text-gray-600 mt-1">
+              Saldo vencido no cobrado / cartera pendiente
+            </p>
           </CardContent>
         </Card>
       </div>

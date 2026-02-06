@@ -3,6 +3,7 @@ Endpoints de pagos. Datos reales desde BD.
 - Tabla pagos: GET/POST/PUT/DELETE /pagos/ (listado y CRUD para /pagos/pagos).
 - GET /pagos/kpis, /stats, /ultimos, /exportar/errores; POST /upload, /conciliacion/upload, /{id}/aplicar-cuotas.
 """
+import calendar
 import io
 import logging
 from datetime import date, datetime, time as dt_time
@@ -109,7 +110,8 @@ def listar_pagos(
             q = q.join(Prestamo, Pago.prestamo_id == Prestamo.id).where(Prestamo.analista == analista.strip())
             count_q = count_q.join(Prestamo, Pago.prestamo_id == Prestamo.id).where(Prestamo.analista == analista.strip())
         total = db.scalar(count_q) or 0
-        q = q.order_by(Pago.id.desc()).offset((page - 1) * per_page).limit(per_page)
+        # Orden: más reciente primero (fecha_pago desc, luego id desc)
+        q = q.order_by(Pago.fecha_pago.desc(), Pago.id.desc()).offset((page - 1) * per_page).limit(per_page)
         rows = db.execute(q).scalars().all()
         items = [_pago_to_response(r) for r in rows]
         total_pages = (total + per_page - 1) // per_page if total else 0
@@ -140,17 +142,31 @@ def get_ultimos_pagos(
     cuotas_atrasadas, saldo_vencido, total_prestamos.
     """
     hoy = _hoy_local()
-    q_base = select(Pago.cedula_cliente).where(
-        Pago.cedula_cliente.isnot(None), Pago.cedula_cliente != ""
+    # Subconsulta: cédulas distintas ordenadas por pago más reciente (más actual a más antiguo)
+    subq = (
+        select(
+            Pago.cedula_cliente,
+            func.max(Pago.fecha_pago).label("max_fecha"),
+            func.max(Pago.id).label("max_id"),
+        )
+        .where(
+            Pago.cedula_cliente.isnot(None),
+            Pago.cedula_cliente != "",
+        )
+        .group_by(Pago.cedula_cliente)
     )
     if cedula and cedula.strip():
-        q_base = q_base.where(Pago.cedula_cliente.ilike(f"%{cedula.strip()}%"))
-    q_base = q_base.distinct()
-    total_cedulas = db.scalar(select(func.count()).select_from(q_base.subquery())) or 0
+        subq = subq.where(Pago.cedula_cliente.ilike(f"%{cedula.strip()}%"))
+    subq = subq.subquery()
+    total_cedulas = db.scalar(select(func.count()).select_from(subq)) or 0
     total_pages = (total_cedulas + per_page - 1) // per_page if total_cedulas else 0
-    cedulas_page = db.execute(
-        q_base.offset((page - 1) * per_page).limit(per_page)
-    ).scalars().all()
+    q_cedulas = (
+        select(subq.c.cedula_cliente)
+        .order_by(subq.c.max_fecha.desc(), subq.c.max_id.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+    )
+    cedulas_page = db.execute(q_cedulas).scalars().all()
     cedulas_list = [c[0] for c in cedulas_page if c[0]]
     items = []
     for ced in cedulas_list:
@@ -381,21 +397,26 @@ def get_pagos_kpis(
     db: Session = Depends(get_db),
 ):
     """
-    KPIs de pagos desde BD: cuotas_pendientes, clientes_en_mora,
-    montoCobradoMes, saldoPorCobrar, clientesAlDia.
+    KPIs de pagos para el mes en curso:
+    1. montoACobrarMes: cuánto dinero debería cobrarse en el mes en transcurso (cuotas con vencimiento en el mes).
+    2. montoCobradoMes: cuánto dinero se ha cobrado = pagado en el mes.
+    3. morosidadMensualPorcentaje: morosidad mensual en % (saldo vencido no cobrado / cartera pendiente * 100).
     """
     try:
         hoy = _hoy_local()
-        cuotas_pendientes = db.scalar(
-            select(func.count()).select_from(Cuota).where(Cuota.fecha_pago.is_(None))
-        ) or 0
-        subq = (
-            select(Cuota.cliente_id)
-            .where(Cuota.fecha_pago.is_(None), Cuota.fecha_vencimiento < hoy)
-            .distinct()
-        )
-        clientes_en_mora = db.scalar(select(func.count()).select_from(subq.subquery())) or 0
         inicio_mes = hoy.replace(day=1)
+        _, ultimo_dia = calendar.monthrange(hoy.year, hoy.month)
+        fin_mes = inicio_mes.replace(day=ultimo_dia)
+
+        # 1) Monto a cobrar en el mes en transcurso: suma de cuotas con fecha_vencimiento en este mes
+        monto_a_cobrar_mes = db.scalar(
+            select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
+                Cuota.fecha_vencimiento >= inicio_mes,
+                Cuota.fecha_vencimiento <= fin_mes,
+            )
+        ) or 0
+
+        # 2) Monto cobrado = pagado en el mes: suma de cuotas pagadas con fecha_pago en el mes
         monto_cobrado_mes = db.scalar(
             select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
                 Cuota.fecha_pago.isnot(None),
@@ -403,18 +424,42 @@ def get_pagos_kpis(
                 func.date(Cuota.fecha_pago) <= hoy,
             )
         ) or 0
-        saldo_por_cobrar = db.scalar(
+
+        # 3) Morosidad mensual %: saldo vencido (no cobrado) / cartera pendiente * 100
+        saldo_vencido = db.scalar(
+            select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
+                Cuota.fecha_pago.is_(None),
+                Cuota.fecha_vencimiento < hoy,
+            )
+        ) or 0
+        cartera_pendiente = db.scalar(
             select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
                 Cuota.fecha_pago.is_(None)
             )
         ) or 0
+        morosidad_porcentaje = (
+            (_safe_float(saldo_vencido) / _safe_float(cartera_pendiente) * 100.0)
+            if cartera_pendiente and _safe_float(cartera_pendiente) > 0
+            else 0.0
+        )
+        # Compatibilidad: clientes en mora / al día y saldo por cobrar (otros módulos)
+        subq = (
+            select(Cuota.cliente_id)
+            .where(Cuota.fecha_pago.is_(None), Cuota.fecha_vencimiento < hoy)
+            .distinct()
+        )
+        clientes_en_mora = db.scalar(select(func.count()).select_from(subq.subquery())) or 0
         clientes_con_prestamo = db.scalar(select(func.count(func.distinct(Prestamo.cliente_id))).select_from(Prestamo)) or 0
         clientes_al_dia = max(0, clientes_con_prestamo - clientes_en_mora)
+
         return {
-            "cuotas_pendientes": cuotas_pendientes,
-            "clientes_en_mora": clientes_en_mora,
+            "montoACobrarMes": _safe_float(monto_a_cobrar_mes),
             "montoCobradoMes": _safe_float(monto_cobrado_mes),
-            "saldoPorCobrar": _safe_float(saldo_por_cobrar),
+            "morosidadMensualPorcentaje": round(morosidad_porcentaje, 2),
+            "mes": hoy.month,
+            "año": hoy.year,
+            "saldoPorCobrar": _safe_float(cartera_pendiente),
+            "clientesEnMora": clientes_en_mora,
             "clientesAlDia": clientes_al_dia,
         }
     except Exception as e:
@@ -423,11 +468,15 @@ def get_pagos_kpis(
             db.rollback()
         except Exception:
             pass
+        hoy = _hoy_local()
         return {
-            "cuotas_pendientes": 0,
-            "clientes_en_mora": 0,
+            "montoACobrarMes": 0.0,
             "montoCobradoMes": 0.0,
+            "morosidadMensualPorcentaje": 0.0,
+            "mes": hoy.month,
+            "año": hoy.year,
             "saldoPorCobrar": 0.0,
+            "clientesEnMora": 0,
             "clientesAlDia": 0,
         }
 

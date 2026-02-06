@@ -1,12 +1,19 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { FileText, Download, Filter } from 'lucide-react'
+import { FileText, Filter, Eye, X } from 'lucide-react'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import { Badge } from '../../components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
-import { pagoService } from '../../services/pagoService'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '../../components/ui/dialog'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
+import { pagoService, type Pago } from '../../services/pagoService'
 import { toast } from 'sonner'
 
 interface UltimoPago {
@@ -28,6 +35,9 @@ export function PagosListResumen() {
     cedula: '',
     estado: '',
   })
+  const [cedulaDetalle, setCedulaDetalle] = useState<string | null>(null)
+  const [pageDetalle, setPageDetalle] = useState(1)
+  const perPageDetalle = 10
 
   // Query para obtener últimos pagos por cédula
   const { data, isLoading } = useQuery({
@@ -36,6 +46,17 @@ export function PagosListResumen() {
     staleTime: 0,
     refetchOnMount: true,
     refetchOnWindowFocus: false,
+  })
+
+  // Query para detalle de pagos de un cliente (más reciente a más antiguo, paginado)
+  const { data: detalleData, isLoading: loadingDetalle } = useQuery({
+    queryKey: ['pagos-por-cedula', cedulaDetalle, pageDetalle, perPageDetalle],
+    queryFn: () =>
+      pagoService.getAllPagos(pageDetalle, perPageDetalle, {
+        cedula: cedulaDetalle || '',
+      }),
+    enabled: !!cedulaDetalle,
+    staleTime: 0,
   })
 
   const handleFilterChange = (key: string, value: string) => {
@@ -101,11 +122,14 @@ export function PagosListResumen() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input
-              placeholder="Cédula de identidad"
-              value={filters.cedula}
-              onChange={e => handleFilterChange('cedula', e.target.value)}
-            />
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">Buscar por cédula</label>
+              <Input
+                placeholder="Escriba cédula para filtrar..."
+                value={filters.cedula}
+                onChange={e => handleFilterChange('cedula', e.target.value)}
+              />
+            </div>
             <Select
               value={filters.estado || 'all'}
               onValueChange={value => handleFilterChange('estado', value)}
@@ -126,10 +150,10 @@ export function PagosListResumen() {
         </CardContent>
       </Card>
 
-      {/* Tabla de Resumen */}
+      {/* Tabla de Resumen: clientes con último pago; búsqueda por cédula y paginación */}
       <Card>
         <CardHeader>
-          <CardTitle>Resumen por Cliente (Ãšltimo Pago)</CardTitle>
+          <CardTitle>Detalle por Cliente (último pago y ver historial)</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -141,10 +165,10 @@ export function PagosListResumen() {
                   <thead>
                     <tr className="border-b">
                       <th className="px-4 py-3 text-left">Cédula</th>
-                      <th className="px-4 py-3 text-left">ID Ãšltimo Pago</th>
+                      <th className="px-4 py-3 text-left">ID Último Pago</th>
                       <th className="px-4 py-3 text-left">Estado</th>
-                      <th className="px-4 py-3 text-right">Monto Ãšltimo Pago</th>
-                      <th className="px-4 py-3 text-left">Fecha Ãšltimo Pago</th>
+                      <th className="px-4 py-3 text-right">Monto Último Pago</th>
+                      <th className="px-4 py-3 text-left">Fecha Último Pago</th>
                       <th className="px-4 py-3 text-right">Cuotas Atrasadas</th>
                       <th className="px-4 py-3 text-right">Saldo Vencido</th>
                       <th className="px-4 py-3 text-left">Total Préstamos</th>
@@ -155,8 +179,7 @@ export function PagosListResumen() {
                     {data?.items?.map((item: UltimoPago) => (
                       <tr
                         key={`${item.cedula}-${item.pago_id}`}
-                        className="border-b hover:bg-gray-50 cursor-pointer"
-                        onClick={() => handleDescargarPDF(item.cedula)}
+                        className="border-b hover:bg-gray-50"
                       >
                         <td className="px-4 py-3 font-medium">{item.cedula}</td>
                         <td className="px-4 py-3">{item.pago_id}</td>
@@ -179,18 +202,29 @@ export function PagosListResumen() {
                         </td>
                         <td className="px-4 py-3">{item.total_prestamos}</td>
                         <td className="px-4 py-3">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleDescargarPDF(item.cedula)
-                            }}
-                            title="Descargar PDF de pendientes"
-                          >
-                            <FileText className="w-4 h-4 mr-1" />
-                            PDF
-                          </Button>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="default"
+                              onClick={() => {
+                                setCedulaDetalle(item.cedula)
+                                setPageDetalle(1)
+                              }}
+                              title="Ver todos los pagos del cliente (más reciente a más antiguo)"
+                            >
+                              <Eye className="w-4 h-4 mr-1" />
+                              Ver detalle
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleDescargarPDF(item.cedula)}
+                              title="Descargar PDF de pendientes"
+                            >
+                              <FileText className="w-4 h-4 mr-1" />
+                              PDF
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -227,6 +261,99 @@ export function PagosListResumen() {
           )}
         </CardContent>
       </Card>
+
+      {/* Modal: detalle de pagos del cliente (más reciente a más antiguo, con paginación) */}
+      <Dialog open={!!cedulaDetalle} onOpenChange={(open) => !open && setCedulaDetalle(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between">
+              <span>Pagos del cliente: {cedulaDetalle}</span>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setCedulaDetalle(null)}
+                aria-label="Cerrar"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-600 mb-4">
+            Orden: del más reciente al más antiguo. Use la paginación para ver más registros.
+          </p>
+          {loadingDetalle ? (
+            <div className="py-8 text-center text-gray-500">Cargando pagos...</div>
+          ) : !detalleData?.pagos?.length ? (
+            <div className="py-8 text-center text-gray-500">No hay pagos para esta cédula.</div>
+          ) : (
+            <>
+              <div className="border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>ID</TableHead>
+                      <TableHead>Fecha Pago</TableHead>
+                      <TableHead>Monto</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead>Nº Documento</TableHead>
+                      <TableHead>Conciliado</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {detalleData.pagos.map((pago: Pago) => (
+                      <TableRow key={pago.id}>
+                        <TableCell>{pago.id}</TableCell>
+                        <TableCell>
+                          {new Date(pago.fecha_pago).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell>
+                          ${typeof pago.monto_pagado === 'number'
+                            ? pago.monto_pagado.toFixed(2)
+                            : parseFloat(String(pago.monto_pagado || 0)).toFixed(2)}
+                        </TableCell>
+                        <TableCell>{getEstadoBadge(pago.estado)}</TableCell>
+                        <TableCell>{pago.numero_documento ?? '—'}</TableCell>
+                        <TableCell>
+                          {(pago.verificado_concordancia === 'SI' || pago.conciliado) ? (
+                            <Badge className="bg-green-500 text-white">Sí</Badge>
+                          ) : (
+                            <Badge variant="secondary">No</Badge>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              {detalleData.total_pages > 1 && (
+                <div className="flex justify-between items-center mt-4">
+                  <div className="text-sm text-gray-600">
+                    Página {detalleData.page} de {detalleData.total_pages} ({detalleData.total} pagos)
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={pageDetalle === 1}
+                      onClick={() => setPageDetalle(p => Math.max(1, p - 1))}
+                    >
+                      Anterior
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={pageDetalle >= detalleData.total_pages}
+                      onClick={() => setPageDetalle(p => Math.min(detalleData.total_pages, p + 1))}
+                    >
+                      Siguiente
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

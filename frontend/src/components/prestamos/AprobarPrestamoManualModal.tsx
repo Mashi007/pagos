@@ -12,6 +12,14 @@ import { prestamoService } from '../../services/prestamoService'
 const DECLARACION_FIJA =
   'Al aprobar, usted asegura que el cliente cumple las políticas de RapiCredit y que su riesgo está dentro de parámetros normales.'
 
+/** Parsea número desde input (acepta coma o punto como decimal). */
+function parseNumInput(value: string): number {
+  if (value == null || value === '') return 0
+  const normalized = String(value).trim().replace(',', '.')
+  const n = Number(normalized)
+  return Number.isFinite(n) ? n : 0
+}
+
 interface AprobarPrestamoManualModalProps {
   prestamo: any
   onClose: () => void
@@ -24,21 +32,29 @@ export function AprobarPrestamoManualModal({ prestamo, onClose, onSuccess }: Apr
   )
   const [documentosAnalizados, setDocumentosAnalizados] = useState(false)
   const [aceptaDeclaracion, setAceptaDeclaracion] = useState(false)
-  const [totalFinanciamiento, setTotalFinanciamiento] = useState<number>(
-    Number(prestamo.total_financiamiento) || 0
-  )
-  const [numeroCuotas, setNumeroCuotas] = useState<number>(
-    Number(prestamo.numero_cuotas) || 12
-  )
+  const [totalFinanciamiento, setTotalFinanciamiento] = useState<number>(() => {
+    const v = prestamo.total_financiamiento
+    if (typeof v === 'number' && Number.isFinite(v)) return v
+    return parseNumInput(String(v ?? '')) || 0
+  })
+  const [numeroCuotas, setNumeroCuotas] = useState<number>(() => {
+    const v = prestamo.numero_cuotas
+    if (typeof v === 'number' && Number.isFinite(v) && v >= 1) return v
+    return Math.max(1, parseNumInput(String(v ?? '')) || 12)
+  })
   const [modalidadPago, setModalidadPago] = useState<string>(
     prestamo.modalidad_pago || 'MENSUAL'
   )
-  const [cuotaPeriodo, setCuotaPeriodo] = useState<number>(
-    Number(prestamo.cuota_periodo) || 0
-  )
-  const [tasaInteres, setTasaInteres] = useState<number>(
-    prestamo.tasa_interes != null ? Number(prestamo.tasa_interes) : 0
-  )
+  const [cuotaPeriodo, setCuotaPeriodo] = useState<number>(() => {
+    const v = prestamo.cuota_periodo
+    if (typeof v === 'number' && Number.isFinite(v)) return v
+    return parseNumInput(String(v ?? '')) || 0
+  })
+  const [tasaInteres, setTasaInteres] = useState<number>(() => {
+    const v = prestamo.tasa_interes
+    if (typeof v === 'number' && Number.isFinite(v)) return v
+    return prestamo.tasa_interes != null ? parseNumInput(String(prestamo.tasa_interes)) : 0
+  })
   const [observaciones, setObservaciones] = useState<string>(
     prestamo.observaciones || ''
   )
@@ -134,7 +150,7 @@ export function AprobarPrestamoManualModal({ prestamo, onClose, onSuccess }: Apr
                     min={0}
                     step={0.01}
                     value={totalFinanciamiento || ''}
-                    onChange={(e) => setTotalFinanciamiento(Number(e.target.value) || 0)}
+                    onChange={(e) => setTotalFinanciamiento(parseNumInput(e.target.value))}
                     className="pl-10"
                   />
                 </div>
@@ -145,7 +161,7 @@ export function AprobarPrestamoManualModal({ prestamo, onClose, onSuccess }: Apr
                   type="number"
                   min={1}
                   value={numeroCuotas || ''}
-                  onChange={(e) => setNumeroCuotas(Number(e.target.value) || 0)}
+                  onChange={(e) => setNumeroCuotas(Math.max(1, parseNumInput(e.target.value) || 0))}
                 />
               </div>
               <div>
@@ -179,7 +195,7 @@ export function AprobarPrestamoManualModal({ prestamo, onClose, onSuccess }: Apr
                   max={100}
                   step={0.1}
                   value={tasaInteres ?? ''}
-                  onChange={(e) => setTasaInteres(Number(e.target.value) ?? 0)}
+                  onChange={(e) => setTasaInteres(parseNumInput(e.target.value))}
                 />
                 <p className="text-xs text-gray-500 mt-1">Por defecto 0. Al cambiar, la cuota por periodo se actualiza automáticamente.</p>
               </div>
