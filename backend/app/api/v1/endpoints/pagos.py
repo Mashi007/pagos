@@ -6,8 +6,9 @@ Endpoints de pagos. Datos reales desde BD.
 import calendar
 import io
 import logging
+import re
 from datetime import date, datetime, time as dt_time
-from typing import Optional
+from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query, HTTPException, UploadFile, File
@@ -243,39 +244,79 @@ async def upload_excel_pagos(
         if not ws:
             return {"message": "Archivo sin hojas", "registros_procesados": 0, "errores": []}
         rows = list(ws.iter_rows(min_row=2, values_only=True))
+
+        def _looks_like_cedula(v: Any) -> bool:
+            if v is None:
+                return False
+            s = str(v).strip()
+            return bool(re.match(r"^[VJ]\d{7,9}$", s, re.IGNORECASE))
+
+        def _looks_like_date(v: Any) -> bool:
+            if v is None:
+                return False
+            if isinstance(v, (datetime, date)):
+                return True
+            s = str(v).strip()
+            return bool(re.search(r"\d{1,4}[-\/]\d{1,2}[-\/]\d{1,4}", s))
+
+        def _parse_fecha(v: Any) -> date:
+            if isinstance(v, datetime):
+                return v.date()
+            if isinstance(v, date):
+                return v
+            if v is None:
+                return date.today()
+            s = str(v).strip()
+            for fmt in ("%d-%m-%Y", "%Y-%m-%d", "%d/%m/%Y"):
+                try:
+                    return datetime.strptime(s[:10], fmt).date()
+                except ValueError:
+                    continue
+            return date.today()
+
         registros = 0
+        filas_omitidas = 0  # cédula vacía o monto <= 0
         errores = []
         errores_detalle = []
         for i, row in enumerate(rows):
             if not row or all(cell is None for cell in row):
                 continue
             try:
-                cedula = str(row[0]).strip() if row[0] is not None else ""
-                # ID Préstamo: solo convertir a int si el valor es numérico; si viene cédula (ej. V15875577) se usa None
-                _val_prestamo = row[1] if len(row) > 1 else None
-                if _val_prestamo is None:
-                    prestamo_id = None
+                cedula = ""
+                prestamo_id: Optional[int] = None
+                fecha_val: Any = None
+                monto = 0.0
+                numero_doc = ""
+                # Formato alternativo: Fecha, Cédula, Cantidad, Documento (ej. Excel con columnas A=Fecha, B=Cédula, C=Cantidad, D=Documento)
+                if len(row) >= 4 and _looks_like_date(row[0]) and _looks_like_cedula(row[1]):
+                    cedula = str(row[1]).strip()
+                    try:
+                        monto = float(row[2]) if row[2] is not None else 0.0
+                    except (TypeError, ValueError):
+                        monto = 0.0
+                    fecha_val = row[0]
+                    numero_doc = str(row[3]).strip() if row[3] is not None else ""
                 else:
-                    _s = str(_val_prestamo).strip()
-                    if _s and _s.isdigit():
-                        prestamo_id = int(_s)
+                    # Formato estándar: Cédula, ID Préstamo, Fecha, Monto, Número documento
+                    cedula = str(row[0]).strip() if row[0] is not None else ""
+                    _val_prestamo = row[1] if len(row) > 1 else None
+                    if _val_prestamo is None:
+                        prestamo_id = None
                     else:
-                        prestamo_id = None  # cédula o texto en columna ID Préstamo → ignorar
-                fecha_val = row[2] if len(row) > 2 else None
-                _monto_raw = row[3] if len(row) > 3 else None
-                try:
-                    monto = float(_monto_raw) if _monto_raw is not None else 0.0
-                except (TypeError, ValueError):
-                    monto = 0.0
-                numero_doc = str(row[4]).strip() if len(row) > 4 and row[4] is not None else ""
+                        _s = str(_val_prestamo).strip()
+                        prestamo_id = int(_s) if (_s and _s.isdigit()) else None
+                    fecha_val = row[2] if len(row) > 2 else None
+                    _monto_raw = row[3] if len(row) > 3 else None
+                    try:
+                        monto = float(_monto_raw) if _monto_raw is not None else 0.0
+                    except (TypeError, ValueError):
+                        monto = 0.0
+                    numero_doc = str(row[4]).strip() if len(row) > 4 and row[4] is not None else ""
+
                 if not cedula or monto <= 0:
+                    filas_omitidas += 1
                     continue
-                if isinstance(fecha_val, datetime):
-                    fecha_pago = fecha_val.date()
-                elif isinstance(fecha_val, date):
-                    fecha_pago = fecha_val
-                else:
-                    fecha_pago = date.today()
+                fecha_pago = _parse_fecha(fecha_val)
                 p = Pago(
                     cedula_cliente=cedula,
                     prestamo_id=prestamo_id,
@@ -311,6 +352,7 @@ async def upload_excel_pagos(
         return {
             "message": "Carga finalizada",
             "registros_procesados": registros,
+            "filas_omitidas": filas_omitidas,
             "errores": errores[:50],
             "errores_detalle": errores_detalle[:100],
         }

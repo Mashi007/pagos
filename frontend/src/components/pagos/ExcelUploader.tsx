@@ -24,6 +24,7 @@ export function ExcelUploader({ onClose, onSuccess }: ExcelUploaderProps) {
   const [isUploading, setIsUploading] = useState(false)
   const [results, setResults] = useState<{
     registros_procesados?: number
+    filas_omitidas?: number
     errores?: string[]
     errores_detalle?: ErrorDetalleBackend[]
   } | null>(null)
@@ -99,6 +100,7 @@ export function ExcelUploader({ onClose, onSuccess }: ExcelUploaderProps) {
       const result = await pagoService.uploadExcel(file)
       setResults(result)
       const registrados = result.registros_procesados ?? 0
+      const filasOmitidas = result.filas_omitidas ?? 0
       const listaErrores = result.errores ?? []
       const numErrores = listaErrores.length
 
@@ -108,6 +110,9 @@ export function ExcelUploader({ onClose, onSuccess }: ExcelUploaderProps) {
       }
       if (numErrores > 0) {
         toast.warning(`${numErrores} fila(s) con error`)
+      }
+      if (registrados === 0 && filasOmitidas > 0 && numErrores === 0) {
+        toast.info(`${filasOmitidas} fila(s) omitida(s): cédula vacía o monto ≤ 0. Revisa el orden de columnas del Excel.`)
       }
     } catch (error: any) {
       toast.error(error?.response?.data?.detail || error?.message || 'Error al cargar archivo')
@@ -190,6 +195,11 @@ export function ExcelUploader({ onClose, onSuccess }: ExcelUploaderProps) {
                       <CheckCircle className="w-5 h-5" />
                       <span className="font-semibold">{results.registros_procesados ?? 0} pago(s) registrado(s)</span>
                     </div>
+                    {(results.filas_omitidas ?? 0) > 0 && (
+                      <p className="text-sm text-amber-600 mt-1">
+                        {results.filas_omitidas} fila(s) omitida(s) (cédula vacía o monto ≤ 0). Comprueba que la columna 1 sea Cédula y la 4 sea Monto &gt; 0.
+                      </p>
+                    )}
                     {(results.errores?.length ?? 0) > 0 && (
                       <p className="text-sm text-red-600 mt-1">
                         {results.errores?.length ?? 0} fila(s) con error. Revisa la tabla inferior para ver fila, cédula y descripción.
