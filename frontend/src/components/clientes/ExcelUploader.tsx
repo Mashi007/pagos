@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -98,6 +98,10 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   const [savingProgress, setSavingProgress] = useState<{[key: number]: boolean}>({})
   const [serviceStatus, setServiceStatus] = useState<'unknown' | 'online' | 'offline'>('unknown')
   const [showOnlyPending, setShowOnlyPending] = useState(false)
+  // Advertencia antes de guardar: cédulas que ya existen en la BD
+  const [showModalCedulasExistentes, setShowModalCedulasExistentes] = useState(false)
+  const [cedulasExistentesEnBD, setCedulasExistentesEnBD] = useState<string[]>([])
+  const [pendingSaveFilteredByCedulas, setPendingSaveFilteredByCedulas] = useState<ExcelRow[] | null>(null)
 
 
   // Normalizador: si el valor es 'nn' (cualquier caso/espacios), convertir a vacío
@@ -274,13 +278,70 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
   // ðŸ”„ FUNCIONES PARA SISTEMA DE GUARDADO HÍBRIDO
   const isClientValid = (row: ExcelRow): boolean => {
-    // Usar el mismo sistema de validación que los campos visuales
-    return !row._hasErrors
+    if (row._hasErrors) return false
+    // Regla estricta: NO DUPLICADOS (cédula, nombres, email, teléfono) — no se puede guardar hasta corregir
+    const ced = (row.cedula || '').trim()
+    if (ced && cedulasDuplicadasEnArchivo.has(ced)) return false
+    const nom = (row.nombres || '').trim()
+    if (nom && nombresDuplicadosEnArchivo.has(nom)) return false
+    const em = (row.email || '').trim().toLowerCase()
+    if (em && emailDuplicadosEnArchivo.has(em)) return false
+    const telDig = (row.telefono || '').replace(/\D/g, '')
+    if (telDig.length >= 8 && telefonoDuplicadosEnArchivo.has(telDig)) return false
+    return true
+  }
+
+  const getDuplicadoMotivo = (row: ExcelRow): string[] => {
+    const motivos: string[] = []
+    if ((row.cedula || '').trim() && cedulasDuplicadasEnArchivo.has((row.cedula || '').trim())) motivos.push('cédula')
+    if ((row.nombres || '').trim() && nombresDuplicadosEnArchivo.has((row.nombres || '').trim())) motivos.push('nombres')
+    if ((row.email || '').trim() && emailDuplicadosEnArchivo.has((row.email || '').trim().toLowerCase())) motivos.push('email')
+    const telDig = (row.telefono || '').replace(/\D/g, '')
+    if (telDig.length >= 8 && telefonoDuplicadosEnArchivo.has(telDig)) motivos.push('teléfono')
+    return motivos
   }
 
   const getValidClients = (): ExcelRow[] => {
     return excelData.filter(row => isClientValid(row) && !savedClients.has(row._rowIndex))
   }
+  // Regla estricta NO DUPLICADOS: valores que aparecen más de una vez en el archivo (cédula, nombres, email, teléfono)
+  const cedulasDuplicadasEnArchivo = useMemo(() => {
+    const counts: Record<string, number> = {}
+    excelData.forEach(row => {
+      const c = (row.cedula || '').trim()
+      if (c) counts[c] = (counts[c] || 0) + 1
+    })
+    return new Set(Object.keys(counts).filter(ced => (counts[ced] || 0) > 1))
+  }, [excelData])
+
+  const nombresDuplicadosEnArchivo = useMemo(() => {
+    const counts: Record<string, number> = {}
+    excelData.forEach(row => {
+      const n = (row.nombres || '').trim()
+      if (n) counts[n] = (counts[n] || 0) + 1
+    })
+    return new Set(Object.keys(counts).filter(n => (counts[n] || 0) > 1))
+  }, [excelData])
+
+  const emailDuplicadosEnArchivo = useMemo(() => {
+    const counts: Record<string, number> = {}
+    excelData.forEach(row => {
+      const e = (row.email || '').trim().toLowerCase()
+      if (e) counts[e] = (counts[e] || 0) + 1
+    })
+    return new Set(Object.keys(counts).filter(em => (counts[em] || 0) > 1))
+  }, [excelData])
+
+  const telefonoDuplicadosEnArchivo = useMemo(() => {
+    const counts: Record<string, number> = {}
+    const digits = (s: string) => (s || '').replace(/\D/g, '')
+    excelData.forEach(row => {
+      const t = digits(row.telefono || '')
+      if (t.length >= 8) counts[t] = (counts[t] || 0) + 1
+    })
+    return new Set(Object.keys(counts).filter(t => (counts[t] || 0) > 1))
+  }, [excelData])
+
 
   // ðŸ“Š FUNCIONES PARA FILTRAR DATOS MOSTRADOS
   const getDisplayData = (): ExcelRow[] => {
@@ -435,6 +496,45 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     }
   }
 
+  const doSaveClientesList = async (clientsToSave: ExcelRow[]): Promise<void> => {
+    let successful = 0
+    let failed = 0
+    const successfulRowIndexes: number[] = []
+    for (let i = 0; i < clientsToSave.length; i++) {
+      const client = clientsToSave[i]
+      try {
+        const result = await saveIndividualClient(client)
+        if (result === true) {
+          successful++
+          successfulRowIndexes.push(client._rowIndex)
+        } else failed++
+      } catch (error: any) {
+        failed++
+        if (error.response?.status === 409) {
+          addToast('warning', `Cliente ${client.cedula} (${client.nombres}) duplicado - se omitió`)
+        } else {
+          addToast('error', `Error guardando ${client.cedula}: ${error.message || 'Error desconocido'}`)
+        }
+      }
+    }
+    if (successful > 0) {
+      addToast('success', `${successful} clientes guardados exitosamente`)
+      refreshDashboardClients()
+      notifyDashboardUpdate(successful)
+      setExcelData(prev => {
+        const remaining = prev.filter(r => !successfulRowIndexes.includes(r._rowIndex))
+        if (remaining.length === 0) {
+          addToast('success', '¡Todos los clientes guardados! Cerrando en 2 segundos...')
+          setTimeout(() => { onClose(); navigate('/clientes') }, 2000)
+        } else {
+          addToast('warning', `Quedan ${remaining.length} clientes por verificar`)
+        }
+        return remaining
+      })
+    }
+    if (failed > 0) addToast('error', `${failed} clientes fallaron al guardar`)
+  }
+
   const saveAllValidClients = async (): Promise<void> => {
     const validClients = getValidClients()
 
@@ -443,112 +543,61 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       return
     }
 
+    if (serviceStatus === 'offline') {
+      addToast('error', 'Sin conexión. No se puede comprobar cédulas ni guardar.')
+      return
+    }
+
     setIsSavingIndividual(true)
 
     try {
-      // Guardar todos los clientes válidos uno por uno
-      let successful = 0
-      let failed = 0
-      const successfulRowIndexes: number[] = []
+      const cedulasToCheck = validClients.map(c => blankIfNN(c.cedula)).filter(Boolean)
+      const { existing_cedulas } = await clienteService.checkCedulas(cedulasToCheck)
 
-      console.log(`ðŸ”„ Iniciando guardado masivo de ${validClients.length} clientes válidos`)
-
-      for (let i = 0; i < validClients.length; i++) {
-        const client = validClients[i]
-        console.log(`ðŸ“‹ Procesando cliente ${i + 1}/${validClients.length}: ${client.cedula} - ${client.nombres}`)
-
-        try {
-          // âœ… await esperará automáticamente si hay un duplicado y el usuario debe confirmar
-          const result = await saveIndividualClient(client)
-
-          if (result === true) {
-            successful++
-            successfulRowIndexes.push(client._rowIndex)
-            console.log(`âœ… Cliente ${i + 1}/${validClients.length} guardado exitosamente: ${client.cedula}`)
-          } else {
-            failed++
-            console.log(`âš ï¸ Cliente ${i + 1}/${validClients.length} no se guardó (result: ${result}): ${client.cedula}`)
-          }
-        } catch (error: any) {
-          failed++
-          console.error(`âŒ Error guardando cliente ${i + 1}/${validClients.length} (${client.cedula}):`, error)
-          // Mostrar error específico al usuario
-          if (error.response?.status === 409) {
-            addToast('warning', `Cliente ${client.cedula} (${client.nombres}) duplicado - se canceló`)
-          } else {
-            addToast('error', `Error guardando ${client.cedula}: ${error.message || 'Error desconocido'}`)
-          }
-        }
-
-        console.log(`ðŸ“Š Progreso: ${successful} exitosos, ${failed} fallidos, ${validClients.length - (i + 1)} pendientes`)
+      if (existing_cedulas.length > 0) {
+        setCedulasExistentesEnBD(existing_cedulas)
+        setPendingSaveFilteredByCedulas(
+          validClients.filter(c => !existing_cedulas.includes(blankIfNN(c.cedula)))
+        )
+        setShowModalCedulasExistentes(true)
+        setIsSavingIndividual(false)
+        return
       }
 
-      console.log(`âœ… Guardado masivo completado: ${successful} exitosos, ${failed} fallidos`)
-
-      if (successful > 0) {
-        // Solo mostrar notificación de éxito si realmente se guardaron
-        addToast('success', `${successful} clientes guardados exitosamente`)
-
-        // Refrescar Dashboard de Clientes
-        refreshDashboardClients()
-        notifyDashboardUpdate(successful)
-
-        // Eliminar las filas guardadas de la lista
-        setExcelData(prev => {
-          const remaining = prev.filter(r => !successfulRowIndexes.includes(r._rowIndex))
-
-          // âœ… Solo cerrar automáticamente si YA NO HAY filas pendientes
-          if (remaining.length === 0) {
-            // Mostrar mensaje informativo sobre navegación automática
-            addToast('success', 'ðŸŽ‰ ¡Todos los clientes guardados! Cerrando en 2 segundos...')
-
-            // Navegar automáticamente al Dashboard de Clientes después de 2 segundos
-            setTimeout(() => {
-              // Cerrar el modal de Carga Masiva
-              onClose()
-              // Navegar directamente al Dashboard de Clientes
-              navigate('/clientes')
-            }, 2000)
-          } else {
-            // âœ… HAY clientes pendientes, mostrar advertencia
-            addToast('warning', `âš ï¸ Quedan ${remaining.length} clientes por verificar`)
-          }
-
-          return remaining
-        })
-      }
-
-      if (failed > 0) {
-        addToast('error', `${failed} clientes fallaron al guardar`)
-      }
-
+      await doSaveClientesList(validClients)
     } catch (error: any) {
       console.error('Error en guardado masivo:', error)
-
-      // Limpiar notificaciones anteriores para evitar contradicciones
       clearContradictoryToasts()
-
-      // Manejar diferentes tipos de errores
       if (error.response?.status === 503) {
-        addToast('error', 'ðŸš¨ SERVICIO NO DISPONIBLE: El backend está caído. Contacta al administrador.')
+        addToast('error', 'SERVICIO NO DISPONIBLE: El backend está caído. Contacta al administrador.')
       } else if (error.code === 'ERR_NETWORK' || error.message?.includes('Network Error')) {
-        addToast('error', 'ðŸš¨ ERROR DE RED: No se puede conectar al servidor. Verifica tu conexión.')
-      } else if (error.response?.status === 400) {
-        addToast('error', `Error de validación: ${error.response?.data?.detail || error.message}`)
+        addToast('error', 'ERROR DE RED: No se puede conectar al servidor.')
       } else if (error.response?.status >= 500) {
         addToast('error', 'Error del servidor. Contacta al administrador.')
       } else {
-        addToast('error', 'Error en el guardado masivo')
+        addToast('error', 'Error al comprobar cédulas o guardar.')
       }
-
-      // NO navegar si hay errores
-      console.log('No se navegará al Dashboard debido a errores en el guardado')
     } finally {
       setIsSavingIndividual(false)
     }
   }
 
-  // ðŸ’¡ FUNCIÓN PARA OBTENER SUGERENCIAS ESPECÍFICAS
+  const confirmSaveOmittingExistingCedulas = async (): Promise<void> => {
+    if (!pendingSaveFilteredByCedulas) return
+    setShowModalCedulasExistentes(false)
+    setCedulasExistentesEnBD([])
+    const toSave = pendingSaveFilteredByCedulas
+    setPendingSaveFilteredByCedulas(null)
+    setIsSavingIndividual(true)
+    try {
+      await doSaveClientesList(toSave)
+    } finally {
+      setIsSavingIndividual(false)
+    }
+  }
+
+  // (código legacy de guardado masivo eliminado; se usa doSaveClientesList + check-cedulas)
+
   const _getSuggestion = (field: string, value: string): string => {
     switch (field) {
       case 'nombres':
@@ -1278,6 +1327,11 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                       <Badge variant="outline" className="text-red-700">
                         Con errores: {totalRows - getValidClients().length - getSavedClientsCount()}
                       </Badge>
+                      {(cedulasDuplicadasEnArchivo.size > 0 || nombresDuplicadosEnArchivo.size > 0 || emailDuplicadosEnArchivo.size > 0 || telefonoDuplicadosEnArchivo.size > 0) && (
+                        <Badge variant="outline" className="text-red-800 bg-red-100 border-red-400">
+                          Regla estricta: NO DUPLICADOS (cédula, nombres, email, tel). Corrija las filas marcadas para poder guardarlas.
+                        </Badge>
+                      )}
                       {getSavedClientsCount() > 0 && (
                         <Badge variant="outline" className="text-green-700 bg-green-50">
                           âœ… {getSavedClientsCount()} en Dashboard
@@ -1447,6 +1501,58 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                 )}
               </AnimatePresence>
 
+              {/* Modal: Cédulas que ya existen en la BD (advertir antes de guardar) */}
+              <AnimatePresence>
+                {showModalCedulasExistentes && cedulasExistentesEnBD.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+                  >
+                    <motion.div
+                      initial={{ scale: 0.9, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0.9, opacity: 0 }}
+                      className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6"
+                    >
+                      <div className="flex items-center gap-2 mb-4">
+                        <AlertTriangle className="h-6 w-6 text-amber-600 flex-shrink-0" />
+                        <h2 className="text-xl font-bold text-gray-800">
+                          Cédulas ya registradas
+                        </h2>
+                      </div>
+                      <p className="text-sm text-gray-600 mb-3">
+                        Las siguientes cédulas ya existen en el sistema. Si continúa, esas filas se omitirán y solo se guardarán el resto.
+                      </p>
+                      <ul className="mb-4 max-h-40 overflow-y-auto rounded border border-gray-200 bg-gray-50 p-2 text-sm font-mono">
+                        {cedulasExistentesEnBD.map((ced, idx) => (
+                          <li key={idx} className="py-0.5">{ced}</li>
+                        ))}
+                      </ul>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setShowModalCedulasExistentes(false)
+                            setCedulasExistentesEnBD([])
+                            setPendingSaveFilteredByCedulas(null)
+                          }}
+                        >
+                          Cancelar
+                        </Button>
+                        <Button
+                          className="bg-green-600 hover:bg-green-700"
+                          onClick={confirmSaveOmittingExistingCedulas}
+                        >
+                          Sí, guardar el resto
+                        </Button>
+                      </div>
+                    </motion.div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               {/* Tabla de previsualización */}
               <Card>
                 <CardHeader>
@@ -1472,23 +1578,37 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-20">Activo</th>
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-48">Notas</th>
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-24">Acciones</th>
+                          <th className="border p-2 text-left text-xs font-medium text-gray-500 w-28">Advertencia</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {getDisplayData().map((row, index) => (
-                          <tr key={index} className={row._hasErrors ? 'bg-red-50' : 'bg-green-50'}>
+                        {getDisplayData().map((row, index) => {
+                          const motivosDuplicado = getDuplicadoMotivo(row)
+                          const esDuplicado = motivosDuplicado.length > 0
+                          return (
+                          <tr
+                            key={index}
+                            className={esDuplicado ? 'bg-red-200 border-l-4 border-l-red-600' : row._hasErrors ? 'bg-red-50' : 'bg-green-50'}
+                          >
                             <td className="border p-2 text-xs">{row._rowIndex}</td>
 
                             {/* Cédula */}
                             <td className="border p-2">
-                              <input
-                                type="text"
-                                value={row.cedula}
-                                onChange={(e) => updateCellValue(index, 'cedula', e.target.value)}
-                                className={`w-full text-sm p-2 border rounded min-w-[80px] ${
-                                  row._validation.cedula?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
-                                }`}
-                              />
+                              <div className="space-y-1">
+                                <input
+                                  type="text"
+                                  value={row.cedula}
+                                  onChange={(e) => updateCellValue(index, 'cedula', e.target.value)}
+                                  className={`w-full text-sm p-2 border rounded min-w-[80px] ${
+                                    row._validation.cedula?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
+                                  }`}
+                                />
+                                {row.cedula && cedulasDuplicadasEnArchivo.has((row.cedula || '').trim()) && (
+                                  <span className="text-xs text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded block">
+                                    Duplicada en archivo
+                                  </span>
+                                )}
+                              </div>
                             </td>
 
                             {/* Nombres y Apellidos (unificados) */}
@@ -1685,6 +1805,11 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                     <CheckCircle className="h-4 w-4 mr-1" />
                                     <span className="text-xs">Guardado</span>
                                   </div>
+                                ) : esDuplicado ? (
+                                  <div className="flex flex-col items-center text-red-700 text-xs">
+                                    <span>No se puede guardar</span>
+                                    <span className="text-[10px]">(duplicado en archivo)</span>
+                                  </div>
                                 ) : isClientValid(row) ? (
                                   <Button
                                     size="sm"
@@ -1712,8 +1837,23 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                 )}
                               </div>
                             </td>
+
+                            {/* Advertencia: Duplicado (cédula, nombres, email, teléfono) al final de la fila */}
+                            <td className={`border p-2 ${esDuplicado ? 'bg-red-300 font-semibold' : 'bg-gray-50'}`}>
+                              {esDuplicado ? (
+                                <div className="flex flex-col items-center justify-center gap-1 text-red-800">
+                                  <div className="flex items-center gap-2">
+                                    <AlertTriangle className="h-5 w-5 flex-shrink-0" />
+                                    <span className="text-sm uppercase tracking-wide">Duplicado</span>
+                                  </div>
+                                  <span className="text-xs">({motivosDuplicado.join(', ')})</span>
+                                </div>
+                              ) : (
+                                <span className="text-gray-400 text-xs">—</span>
+                              )}
+                            </td>
                           </tr>
-                        ))}
+                        )} )}
                       </tbody>
                     </table>
 

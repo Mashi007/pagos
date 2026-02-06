@@ -66,6 +66,16 @@ class ClienteService {
     return response
   }
 
+  // Comprobar qué cédulas ya existen (para carga masiva: advertir antes de guardar)
+  async checkCedulas(cedulas: string[]): Promise<{ existing_cedulas: string[] }> {
+    if (!cedulas.length) return { existing_cedulas: [] }
+    const response = await apiClient.post<{ existing_cedulas: string[] }>(
+      `${this.baseUrl}/check-cedulas`,
+      { cedulas }
+    )
+    return response
+  }
+
   // Crear nuevo cliente
   async createCliente(data: ClienteForm): Promise<Cliente> {
     // El endpoint devuelve ClienteResponse directamente
