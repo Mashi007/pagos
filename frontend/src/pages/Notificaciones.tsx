@@ -214,7 +214,7 @@ export function Notificaciones() {
           </CardHeader>
           <CardContent>
             {/* KPIs por pestaña: correos enviados y rebotados */}
-            {activeTab !== 'configuracion' && estadisticasPorTab && (
+            {(activeTab as TabId) !== 'configuracion' && estadisticasPorTab && (
               <div className="grid grid-cols-2 sm:grid-cols-2 gap-4 mb-6">
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
                   <Mail className="w-8 h-8 text-green-600" />
@@ -237,7 +237,7 @@ export function Notificaciones() {
               </div>
             )}
             {/* Botón descargar informe Excel de no entregados (rebotados) */}
-            {activeTab !== 'configuracion' && (
+            {(activeTab as TabId) !== 'configuracion' && (
               <div className="mb-4">
                 <Button
                   variant="outline"
