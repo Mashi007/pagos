@@ -191,7 +191,7 @@ def get_prestamos_stats(
     total_fin = db.scalar(select(func.coalesce(func.sum(Prestamo.total_financiamiento), 0)).select_from(q_base.subquery())) or 0
     total_fin = float(total_fin)
     promedio_monto = (total_fin / total) if total else 0
-    ids_vigentes = [r[0] for r in db.execute(select(Prestamo.id).where(Prestamo.estado.in_(["APROBADO", "DESEMBOLSADO"]))).scalars().all()]
+    ids_vigentes = db.execute(select(Prestamo.id).where(Prestamo.estado.in_(["APROBADO", "DESEMBOLSADO"]))).scalars().all()
     cartera_vigente = 0.0
     if ids_vigentes:
         cartera_vigente = float(db.scalar(select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(Cuota.prestamo_id.in_(ids_vigentes), Cuota.fecha_pago.is_(None))) or 0)
