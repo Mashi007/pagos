@@ -3,17 +3,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   CreditCard,
   Filter,
-  Search,
   Plus,
   Calendar,
   AlertCircle,
-  Download,
-  Upload,
   Edit,
   Trash2,
-  FileText,
   AlertTriangle,
   RefreshCw,
+  X,
 } from 'lucide-react'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -34,6 +31,7 @@ export function PagosList() {
   const [activeTab, setActiveTab] = useState('todos')
   const [page, setPage] = useState(1)
   const [perPage] = useState(20)
+  const [showFilters, setShowFilters] = useState(false)
   const [filters, setFilters] = useState({
     cedula: '',
     estado: '',
@@ -44,6 +42,26 @@ export function PagosList() {
   const [showRegistrarPago, setShowRegistrarPago] = useState(false)
   const [pagoEditando, setPagoEditando] = useState<Pago | null>(null)
   const queryClient = useQueryClient()
+
+  // Contar filtros activos (mismo criterio que Préstamos)
+  const activeFiltersCount = [
+    filters.cedula,
+    filters.estado,
+    filters.fechaDesde,
+    filters.fechaHasta,
+    filters.analista,
+  ].filter(Boolean).length
+
+  const handleClearFilters = () => {
+    setFilters({
+      cedula: '',
+      estado: '',
+      fechaDesde: '',
+      fechaHasta: '',
+      analista: '',
+    })
+    setPage(1)
+  }
 
   // Query para obtener pagos
   const { data, isLoading, error, isError } = useQuery({
@@ -184,64 +202,98 @@ export function PagosList() {
 
         {/* Tab: Todos los Pagos */}
         <TabsContent value="todos">
-          {/* Filtros (mismo formato que Préstamos: Card + etiquetas por campo) */}
+          {/* Filtros (mismo diseño que Préstamos: Card, expandibles, badge, Limpiar) */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Filter className="h-5 w-5 text-gray-600" />
-                Filtros de Búsqueda
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Filter className="h-5 w-5 text-gray-600" />
+                  <CardTitle>Filtros de Búsqueda</CardTitle>
+                  {activeFiltersCount > 0 && (
+                    <Badge variant="secondary" className="ml-2">
+                      {activeFiltersCount} {activeFiltersCount === 1 ? 'filtro activo' : 'filtros activos'}
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  {activeFiltersCount > 0 && (
+                    <Button variant="ghost" size="sm" onClick={handleClearFilters}>
+                      <X className="h-4 w-4 mr-1" />
+                      Limpiar
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowFilters(!showFilters)}
+                  >
+                    {showFilters ? 'Ocultar' : 'Mostrar'} filtros
+                  </Button>
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="pt-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-gray-700 mb-1 block">Cédula de identidad</label>
-                  <Input
-                    placeholder="Cédula"
-                    value={filters.cedula}
-                    onChange={e => handleFilterChange('cedula', e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-700 mb-1 block">Estado</label>
-                  <Select value={filters.estado || 'all'} onValueChange={value => handleFilterChange('estado', value)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Estado" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos</SelectItem>
-                      <SelectItem value="PAGADO">Pagado</SelectItem>
-                      <SelectItem value="PENDIENTE">Pendiente</SelectItem>
-                      <SelectItem value="ATRASADO">Atrasado</SelectItem>
-                      <SelectItem value="PARCIAL">Parcial</SelectItem>
-                      <SelectItem value="ADELANTADO">Adelantado</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-700 mb-1 block">Fecha desde</label>
-                  <Input
-                    type="date"
-                    value={filters.fechaDesde}
-                    onChange={e => handleFilterChange('fechaDesde', e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-700 mb-1 block">Fecha hasta</label>
-                  <Input
-                    type="date"
-                    value={filters.fechaHasta}
-                    onChange={e => handleFilterChange('fechaHasta', e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-700 mb-1 block">Analista</label>
-                  <Input
-                    placeholder="Analista"
-                    value={filters.analista}
-                    onChange={e => handleFilterChange('analista', e.target.value)}
-                  />
-                </div>
+              <div className="space-y-4">
+                {showFilters && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 pt-4 border-t">
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 mb-1 block">Cédula de identidad</label>
+                      <Input
+                        placeholder="Cédula"
+                        value={filters.cedula}
+                        onChange={e => handleFilterChange('cedula', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 mb-1 block">Estado</label>
+                      <Select value={filters.estado || 'all'} onValueChange={value => handleFilterChange('estado', value)}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Estado" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Todos</SelectItem>
+                          <SelectItem value="PAGADO">Pagado</SelectItem>
+                          <SelectItem value="PENDIENTE">Pendiente</SelectItem>
+                          <SelectItem value="ATRASADO">Atrasado</SelectItem>
+                          <SelectItem value="PARCIAL">Parcial</SelectItem>
+                          <SelectItem value="ADELANTADO">Adelantado</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 mb-1 block">Fecha desde</label>
+                      <div className="relative">
+                        <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                        <Input
+                          type="date"
+                          value={filters.fechaDesde}
+                          onChange={e => handleFilterChange('fechaDesde', e.target.value)}
+                          className="pl-10"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 mb-1 block">Fecha hasta</label>
+                      <div className="relative">
+                        <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                        <Input
+                          type="date"
+                          value={filters.fechaHasta}
+                          onChange={e => handleFilterChange('fechaHasta', e.target.value)}
+                          className="pl-10"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 mb-1 block">Analista</label>
+                      <Input
+                        placeholder="Analista"
+                        value={filters.analista}
+                        onChange={e => handleFilterChange('analista', e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -281,17 +333,7 @@ export function PagosList() {
                       : 'No hay pagos que coincidan con los filtros aplicados.'}
                   </p>
                   {(filters.cedula || filters.estado || filters.fechaDesde || filters.fechaHasta || filters.analista) && (
-                    <Button
-                      className="mt-4"
-                      variant="outline"
-                      onClick={() => setFilters({
-                        cedula: '',
-                        estado: '',
-                        fechaDesde: '',
-                        fechaHasta: '',
-                        analista: '',
-                      })}
-                    >
+                    <Button className="mt-4" variant="outline" onClick={handleClearFilters}>
                       Limpiar Filtros
                     </Button>
                   )}
