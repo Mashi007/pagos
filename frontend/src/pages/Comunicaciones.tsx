@@ -25,6 +25,7 @@ export function ComunicacionesPage() {
           <MessageSquare className="h-4 w-4 text-blue-600 shrink-0" />
           <span className="text-sm text-gray-700">
             Comunicaciones de clientes por <strong>WhatsApp</strong> o <strong>Email</strong>. Puedes responder por ambos.
+            Las conversaciones se guardan automáticamente y se mantienen hasta que se borren.
             {configurada ? ' Configuración WhatsApp cargada.' : ' Configura WhatsApp y Email en Configuración para enviar y recibir.'}
           </span>
         </CardContent>

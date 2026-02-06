@@ -78,11 +78,11 @@ export function LoginForm() {
     try {
       clearError()
 
-      // Asegurar que remember sea boolean y email en minúsculas
+      // Asegurar que remember sea boolean (por defecto true = Recordarme activo) y email en minúsculas
       const loginData = {
         ...data,
         email: data.email.toLowerCase().trim(), // Convertir a minúsculas
-        remember: Boolean(data.remember)
+        remember: data.remember !== false // true por defecto: persistir sesión en localStorage
       }
 
       await login(loginData)
@@ -228,12 +228,12 @@ export function LoginForm() {
                     <label className="flex items-center space-x-2 cursor-pointer">
                       <input
                         type="checkbox"
-                        checked={field.value === true}
+                        checked={field.value !== false}
                         onChange={(e) => field.onChange(e.target.checked)}
                         onBlur={field.onBlur}
                         ref={field.ref}
                         className="rounded border-gray-300 text-primary focus:ring-primary"
-                        aria-checked={field.value === true}
+                        aria-checked={field.value !== false}
                       />
                       <span className="text-sm text-muted-foreground">
                         Recordarme

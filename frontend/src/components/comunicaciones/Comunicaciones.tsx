@@ -119,7 +119,8 @@ export function Comunicaciones({
   })
   const usuarios = useMemo(() => usuariosData?.items ?? [], [usuariosData?.items])
 
-  // Query: datos reales desde API (conversacion_cobranza para WhatsApp). Se actualiza cada 15 s para ver mensajes nuevos.
+  // Query: listar TODAS las comunicaciones (sin filtrar por cliente) para no reemplazar la lista al abrir desde Clientes.
+  // Si viene clienteId por URL, se añade/resalta esa conversación y se auto-selecciona; el resto se mantiene.
   const {
     data: comunicacionesData,
     isLoading,
@@ -127,9 +128,17 @@ export function Comunicaciones({
     refetch,
   } = useQuery({
     queryKey: ['comunicaciones', clienteId],
-    queryFn: () => comunicacionesService.listarComunicaciones(1, 100, undefined, clienteId),
+    queryFn: () => comunicacionesService.listarComunicaciones(1, 100, undefined, undefined),
     retry: 1,
     refetchInterval: 15000, // Actualizar lista cada 15 segundos (mensajes entrantes por webhook)
+  })
+
+  // Datos del cliente cuando se abre desde Clientes (para mostrar su conversación y auto-seleccionarla).
+  const { data: clienteDesdeUrl } = useQuery({
+    queryKey: ['cliente-comunicaciones', clienteId],
+    queryFn: () => clienteService.getCliente(String(clienteId!)),
+    enabled: !!clienteId,
+    staleTime: 60_000,
   })
 
   // Usar datos de la API (puede ser [] si no hay conversaciones aún). Si no hay respuesta aún, lista vacía.
@@ -148,8 +157,22 @@ export function Comunicaciones({
     setConversacionSeleccionada(groupId)
   }, [conversacionIdFromUrl, todasComunicaciones])
 
-  // Agrupar comunicaciones por cliente/contacto Y TIPO (separadas)
-  // PRIMERO por leído/no leído, LUEGO por fecha/hora
+  // Al abrir desde Clientes (Ver comunicaciones): abrir Comunicaciones con los datos del cliente y auto-seleccionar su conversación.
+  useEffect(() => {
+    if (clienteId == null) return
+    if (!clienteDesdeUrl) return
+    const idWhatsApp = `cliente_${clienteId}_whatsapp`
+    const idEmail = `cliente_${clienteId}_email`
+    const tieneWhatsApp = (clienteDesdeUrl.telefono || '').trim().length > 0
+    const tieneEmail = (clienteDesdeUrl.email || '').trim().length > 0
+    const idSeleccionar = tieneWhatsApp ? idWhatsApp : tieneEmail ? idEmail : null
+    if (idSeleccionar) {
+      setConversacionSeleccionada(idSeleccionar)
+    }
+  }, [clienteId, clienteDesdeUrl])
+
+  // Agrupar comunicaciones por cliente/contacto Y TIPO (separadas).
+  // Si se abrió desde Clientes (clienteId + clienteDesdeUrl), añadir la conversación del cliente al inicio si no existe (no borrar las demás).
   const conversacionesAgrupadas = useMemo(() => {
     const grupos = new Map<string, ConversacionAgrupada>()
 
@@ -197,29 +220,109 @@ export function Comunicaciones({
       }
     })
 
+    // Si se abrió desde Clientes: añadir conversación del cliente al inicio si no existe (placeholder para WhatsApp/Email).
+    if (clienteId && clienteDesdeUrl) {
+      const nombreCliente = (clienteDesdeUrl.nombres || '').trim() || `Cliente #${clienteId}`
+      const telefono = (clienteDesdeUrl.telefono || '').trim()
+      const email = (clienteDesdeUrl.email || '').trim()
+      const contactoWhatsApp = telefono.startsWith('+') ? telefono : `+${telefono}`
+      const idWhatsApp = `cliente_${clienteId}_whatsapp`
+      const idEmail = `cliente_${clienteId}_email`
+      if (!grupos.has(idWhatsApp) && telefono) {
+        const ultimaPlaceholderWhatsApp: ComunicacionUnificada = {
+          id: 0,
+          tipo: 'whatsapp',
+          from_contact: contactoWhatsApp,
+          to_contact: '',
+          subject: null,
+          body: null,
+          timestamp: new Date().toISOString(),
+          direccion: 'INBOUND',
+          cliente_id: clienteId,
+          ticket_id: null,
+          requiere_respuesta: false,
+          procesado: true,
+          respuesta_enviada: false,
+          creado_en: new Date().toISOString(),
+          nombre_contacto: nombreCliente,
+        }
+        grupos.set(idWhatsApp, {
+          id: idWhatsApp,
+          nombre: nombreCliente,
+          contacto: contactoWhatsApp,
+          tipo: 'whatsapp',
+          cliente_id: clienteId,
+          esNuevo: true,
+          leido: true,
+          noLeidos: 0,
+          ultimaComunicacion: ultimaPlaceholderWhatsApp,
+          comunicaciones: [],
+        })
+      }
+      if (!grupos.has(idEmail) && email) {
+        const ultimaPlaceholderEmail: ComunicacionUnificada = {
+          id: 0,
+          tipo: 'email',
+          from_contact: email,
+          to_contact: '',
+          subject: null,
+          body: null,
+          timestamp: new Date().toISOString(),
+          direccion: 'INBOUND',
+          cliente_id: clienteId,
+          ticket_id: null,
+          requiere_respuesta: false,
+          procesado: true,
+          respuesta_enviada: false,
+          creado_en: new Date().toISOString(),
+          nombre_contacto: nombreCliente,
+        }
+        grupos.set(idEmail, {
+          id: idEmail,
+          nombre: nombreCliente,
+          contacto: email,
+          tipo: 'email',
+          cliente_id: clienteId,
+          esNuevo: true,
+          leido: true,
+          noLeidos: 0,
+          ultimaComunicacion: ultimaPlaceholderEmail,
+          comunicaciones: [],
+        })
+      }
+    }
+
     // Convertir a array y ordenar: PRIMERO por leído/no leído, LUEGO por fecha/hora
     const conversacionesArray = Array.from(grupos.values())
     
-    // Separar en dos grupos: no leídos y leídos
-    const noLeidos = conversacionesArray.filter(c => !c.leido || c.noLeidos > 0)
-    const leidos = conversacionesArray.filter(c => c.leido && c.noLeidos === 0)
+    // Si hay clienteId + clienteDesdeUrl, poner la conversación de ese cliente al inicio (para que se vea primero).
+    const idClienteWhatsApp = clienteId ? `cliente_${clienteId}_whatsapp` : null
+    const idClienteEmail = clienteId ? `cliente_${clienteId}_email` : null
+    const resto = conversacionesArray.filter(
+      c => c.id !== idClienteWhatsApp && c.id !== idClienteEmail
+    )
+    const delCliente = conversacionesArray.filter(
+      c => c.id === idClienteWhatsApp || c.id === idClienteEmail
+    )
     
-    // Ordenar cada grupo por fecha/hora (más reciente primero)
+    // Separar resto en no leídos y leídos
+    const noLeidos = resto.filter(c => !c.leido || c.noLeidos > 0)
+    const leidos = resto.filter(c => c.leido && c.noLeidos === 0)
+    
     noLeidos.sort((a, b) => {
       const fechaA = new Date(a.ultimaComunicacion.timestamp).getTime()
       const fechaB = new Date(b.ultimaComunicacion.timestamp).getTime()
       return fechaB - fechaA
     })
-    
     leidos.sort((a, b) => {
       const fechaA = new Date(a.ultimaComunicacion.timestamp).getTime()
       const fechaB = new Date(b.ultimaComunicacion.timestamp).getTime()
       return fechaB - fechaA
     })
     
-    // Combinar: primero no leídos, luego leídos
-    return [...noLeidos, ...leidos]
-  }, [todasComunicaciones])
+    // Orden: primero conversación del cliente (si se abrió desde Clientes), luego no leídos, luego leídos
+    return [...delCliente, ...noLeidos, ...leidos]
+  }, [todasComunicaciones, clienteId, clienteDesdeUrl])
 
   // Filtrar conversaciones por búsqueda
   const conversacionesFiltradas = useMemo(() => {

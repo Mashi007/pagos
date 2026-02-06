@@ -61,7 +61,8 @@ export class AuthService {
       // Limpiar sesión anterior para no mezclar localStorage y sessionStorage
       clearAuthStorage()
 
-      const remember = Boolean(credentials.remember)
+      // Recordarme: true por defecto (checkbox marcado). Solo sessionStorage si el usuario desmarca.
+      const remember = credentials.remember !== false
       if (remember) {
         safeSetItem('access_token', accessToken)
         safeSetItem('refresh_token', refreshToken ?? '')

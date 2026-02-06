@@ -104,8 +104,8 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       isSubmenu: true,
       children: [
         { title: 'Clientes', href: '/clientes', icon: Users },
-        { title: 'Tickets Atención', href: '/crm/tickets', icon: FileText },
         { title: 'Comunicaciones', href: '/comunicaciones', icon: MessageSquare },
+        { title: 'Tickets Atención', href: '/crm/tickets', icon: FileText },
         { title: 'Notificaciones', href: '/notificaciones', icon: Bell },
       ],
     },

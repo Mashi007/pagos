@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -131,22 +131,18 @@ export function DashboardMenu() {
 
   // Batch 2: IMPORTANTE - Dashboard admin (gráfico principal). Siempre con período que incluya 2025 si hay datos.
   const periodoEvolucion = getPeriodoGrafico('evolucion') || periodo || 'ultimos_12_meses'
-  const { data: datosDashboard, isLoading: loadingDashboard } = useQuery({
+  const { data: datosDashboard, isLoading: loadingDashboard, isError: errorDashboardAdmin } = useQuery({
     queryKey: ['dashboard-menu', periodoEvolucion, JSON.stringify(filtros)],
     queryFn: async (): Promise<DashboardAdminResponse> => {
-      try {
-        const obj = construirFiltrosObject(periodoEvolucion)
-        const params = new URLSearchParams()
-        Object.entries(obj).forEach(([key, value]) => {
-          if (value != null && value !== '') params.append(key, String(value))
-        })
-        if (!params.has('periodo') && periodoEvolucion) params.append('periodo', periodoEvolucion)
-        const queryString = params.toString()
-        const response = await apiClient.get(`/api/v1/dashboard/admin${queryString ? `?${queryString}` : ''}`, { timeout: 60000 })
-        return response as DashboardAdminResponse
-      } catch (error) {
-        return {} as DashboardAdminResponse
-      }
+      const obj = construirFiltrosObject(periodoEvolucion)
+      const params = new URLSearchParams()
+      Object.entries(obj).forEach(([key, value]) => {
+        if (value != null && value !== '') params.append(key, String(value))
+      })
+      if (!params.has('periodo') && periodoEvolucion) params.append('periodo', periodoEvolucion)
+      const queryString = params.toString()
+      const response = await apiClient.get(`/api/v1/dashboard/admin${queryString ? `?${queryString}` : ''}`, { timeout: 60000 })
+      return response as DashboardAdminResponse
     },
     staleTime: 4 * 60 * 60 * 1000, // 4 h: backend actualiza caché a las 6:00, 13:00, 16:00
     retry: 1,
@@ -307,6 +303,13 @@ export function DashboardMenu() {
 
   const [isRefreshing, setIsRefreshing] = useState(false)
 
+  // Mostrar toast cuando falla la carga del gráfico principal (auditoría: no fallar en silencio)
+  useEffect(() => {
+    if (errorDashboardAdmin) {
+      toast.error('No se pudo cargar el gráfico de evolución mensual. Intenta de nuevo o recarga la página.')
+    }
+  }, [errorDashboardAdmin])
+
   // NOTA: No necesitamos invalidar queries manualmente aquí
   // React Query detecta automáticamente los cambios en queryKey (que incluye JSON.stringify(filtros))
   // y refetch automáticamente cuando cambian los filtros o el período
@@ -314,27 +317,26 @@ export function DashboardMenu() {
   const handleRefresh = async () => {
     setIsRefreshing(true)
     try {
-      // Invalidar y refrescar todas las queries relacionadas con el dashboard
+      // Invalidar y refrescar solo las queries usadas por esta página (auditoría: alinear con queryKeys reales)
       await queryClient.invalidateQueries({ queryKey: ['kpis-principales-menu'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['dashboard-menu'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['morosidad-por-dia'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['financiamiento-rangos'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['composicion-morosidad'], exact: false })
-      await queryClient.invalidateQueries({ queryKey: ['cobranzas-mensuales'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['cobranzas-semanales'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['morosidad-analista'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['monto-programado-proxima-semana'], exact: false })
 
-      // Refrescar todas las queries activas
+      // Refrescar todas las queries activas del dashboard
       await queryClient.refetchQueries({ queryKey: ['kpis-principales-menu'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['dashboard-menu'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['morosidad-por-dia'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['financiamiento-rangos'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['composicion-morosidad'], exact: false })
+      await queryClient.refetchQueries({ queryKey: ['cobranzas-semanales'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['morosidad-analista'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['monto-programado-proxima-semana'], exact: false })
 
-      // También refrescar la query de kpisPrincipales usando su refetch
       await refetch()
       toast.success('Datos actualizados correctamente')
     } catch (error) {
@@ -423,9 +425,9 @@ export function DashboardMenu() {
     }
   }, [datosFinanciamientoRangos])
 
-  // âœ… Asegurar que el componente siempre renderice, incluso si hay errores
+  // Asegurar que el componente siempre renderice, incluso si hay errores
   // Si hay un error crítico en las queries principales, mostrar mensaje pero no bloquear
-  const hasCriticalError = errorOpcionesFiltros || errorKPIs
+  const hasCriticalError = errorOpcionesFiltros || errorKPIs || errorDashboardAdmin
   
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
@@ -608,6 +610,18 @@ export function DashboardMenu() {
             <div className="h-[400px] bg-gray-100 rounded-xl animate-pulse" />
             <div className="h-[400px] bg-gray-100 rounded-xl animate-pulse" />
           </div>
+        ) : errorDashboardAdmin ? (
+          <Card className="border-red-200 bg-red-50">
+            <CardContent className="p-6">
+              <div className="flex items-center gap-3 text-red-700">
+                <AlertTriangle className="h-5 w-5 shrink-0" />
+                <div>
+                  <p className="font-medium">Error al cargar el gráfico de evolución mensual</p>
+                  <p className="text-sm mt-1">Usa el botón «Actualizar» en la barra de filtros o recarga la página.</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         ) : datosDashboard ? (
           <div className="space-y-6">
             {/* Aviso cuando no hay datos en los gráficos */}

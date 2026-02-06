@@ -1,0 +1,8 @@
+# Datos de referencia - tabla clientes (para siguientes preguntas)
+# Resultado de: SELECT COUNT(*), MIN(fecha_registro)::date, MAX(fecha_registro)::date FROM public.clientes;
+
+total_clientes  = 4167
+primer_registro = 2025-10-31
+ultimo_registro = 2026-01-15
+
+# Usar este contexto en preguntas sobre clientes, incremento, rangos de fechas, etc.

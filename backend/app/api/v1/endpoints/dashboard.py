@@ -34,6 +34,19 @@ _CACHE_MOROSIDAD_ANALISTA: dict[str, Any] = {"data": None, "refreshed_at": None}
 _CACHE_REFRESH_HOURS = (6, 13, 16)  # 6 AM, 1 PM, 4 PM (hora local del servidor)
 _lock = threading.Lock()
 
+# Límite de longitud para filtros de texto (auditoría: evitar abuso/consultas inesperadas)
+MAX_FILTER_STRING_LEN = 200
+
+
+def _sanitize_filter_string(value: Optional[str]) -> Optional[str]:
+    """Normaliza y trunca analista/concesionario/modelo para evitar strings excesivamente largos."""
+    if value is None or not isinstance(value, str):
+        return None
+    s = value.strip()
+    if not s:
+        return None
+    return s[:MAX_FILTER_STRING_LEN] if len(s) > MAX_FILTER_STRING_LEN else s
+
 
 def _kpi(valor: float = 0, variacion: float = 0) -> dict:
     return {"valor_actual": valor, "variacion_porcentual": variacion}
@@ -284,6 +297,9 @@ def get_kpis_principales(
     db: Session = Depends(get_db),
 ):
     """KPIs principales. Con caché 3 veces/día (6:00, 13:00, 16:00) cuando no se envían fechas ni filtros."""
+    analista = _sanitize_filter_string(analista)
+    concesionario = _sanitize_filter_string(concesionario)
+    modelo = _sanitize_filter_string(modelo)
     use_cache = not (fecha_inicio or fecha_fin or analista or concesionario or modelo)
     if use_cache:
         with _lock:
@@ -557,13 +573,16 @@ def get_dashboard_admin(
 @router.get("/financiamiento-tendencia-mensual")
 def get_financiamiento_tendencia_mensual(
     fecha_inicio: Optional[str] = Query(None),
-    meses: Optional[int] = Query(12),
+    meses: Optional[int] = Query(12, ge=1, le=24),
     analista: Optional[str] = Query(None),
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
     """Tendencia mensual de financiamiento. Datos reales: cartera por mes desde Prestamo (no Cliente)."""
+    analista = _sanitize_filter_string(analista)
+    concesionario = _sanitize_filter_string(concesionario)
+    modelo = _sanitize_filter_string(modelo)
     try:
         meses_list = _etiquetas_12_meses()
         hoy = datetime.now(timezone.utc)
@@ -755,6 +774,9 @@ def get_prestamos_por_concesionario(
     db: Session = Depends(get_db),
 ):
     """Préstamos aprobados por concesionario: por_mes (en el período) y acumulado desde el inicio. Origen: tabla prestamos, campo concesionario."""
+    analista = _sanitize_filter_string(analista)
+    concesionario = _sanitize_filter_string(concesionario)
+    modelo = _sanitize_filter_string(modelo)
     try:
         inicio, fin = _parse_fechas_concesionario(fecha_inicio, fecha_fin)
         # Mes como YYYY-MM para agrupar
@@ -819,6 +841,9 @@ def get_prestamos_por_modelo(
     db: Session = Depends(get_db),
 ):
     """Préstamos aprobados por modelo: por_mes (en el período) y acumulado desde el inicio. Origen: tabla prestamos, campo modelo."""
+    analista = _sanitize_filter_string(analista)
+    concesionario = _sanitize_filter_string(concesionario)
+    modelo = _sanitize_filter_string(modelo)
     try:
         inicio, fin = _parse_fechas_concesionario(fecha_inicio, fecha_fin)
         mes_expr = func.to_char(
@@ -976,6 +1001,9 @@ def get_financiamiento_por_rangos(
     db: Session = Depends(get_db),
 ):
     """Bandas por total_financiamiento. Con caché 3 veces/día (6:00, 13:00, 16:00) cuando no se envían filtros."""
+    analista = _sanitize_filter_string(analista)
+    concesionario = _sanitize_filter_string(concesionario)
+    modelo = _sanitize_filter_string(modelo)
     use_cache = not (fecha_inicio or fecha_fin or analista or concesionario or modelo)
     if use_cache:
         with _lock:
@@ -1060,6 +1088,9 @@ def get_composicion_morosidad(
     db: Session = Depends(get_db),
 ):
     """Composición de morosidad. Con caché 3 veces/día (6:00, 13:00, 16:00) cuando no se envían filtros."""
+    analista = _sanitize_filter_string(analista)
+    concesionario = _sanitize_filter_string(concesionario)
+    modelo = _sanitize_filter_string(modelo)
     use_cache = not (fecha_inicio or fecha_fin or analista or concesionario or modelo)
     if use_cache:
         with _lock:
@@ -1135,13 +1166,16 @@ def _compute_cobranzas_semanales(
 def get_cobranzas_semanales(
     fecha_inicio: Optional[str] = Query(None),
     fecha_fin: Optional[str] = Query(None),
-    semanas: Optional[int] = Query(12),
+    semanas: Optional[int] = Query(12, ge=1, le=52),
     analista: Optional[str] = Query(None),
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
     """Cobranzas semanales. Con caché 3 veces/día (6:00, 13:00, 16:00) cuando no se envían filtros."""
+    analista = _sanitize_filter_string(analista)
+    concesionario = _sanitize_filter_string(concesionario)
+    modelo = _sanitize_filter_string(modelo)
     use_cache = not (fecha_inicio or fecha_fin or analista or concesionario or modelo)
     if use_cache:
         with _lock:
@@ -1227,6 +1261,9 @@ def get_morosidad_por_analista(
     db: Session = Depends(get_db),
 ):
     """Morosidad por analista. Con caché 3 veces/día (6:00, 13:00, 16:00) cuando no se envían filtros."""
+    analista = _sanitize_filter_string(analista)
+    concesionario = _sanitize_filter_string(concesionario)
+    modelo = _sanitize_filter_string(modelo)
     use_cache = not (fecha_inicio or fecha_fin or analista or concesionario or modelo)
     if use_cache:
         with _lock:
@@ -1245,13 +1282,16 @@ def get_morosidad_por_analista(
 @router.get("/evolucion-morosidad")
 def get_evolucion_morosidad(
     fecha_inicio: Optional[str] = Query(None),
-    meses: Optional[int] = Query(12),
+    meses: Optional[int] = Query(12, ge=1, le=24),
     analista: Optional[str] = Query(None),
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
     """Evolución de morosidad por mes. Datos reales: suma monto de cuotas vencidas no pagadas a fin de cada mes (Cuota). Si la tabla cuotas no tiene columna monto, devuelve 0."""
+    analista = _sanitize_filter_string(analista)
+    concesionario = _sanitize_filter_string(concesionario)
+    modelo = _sanitize_filter_string(modelo)
     try:
         meses_list = _etiquetas_12_meses()
         hoy = datetime.now(timezone.utc)
@@ -1277,13 +1317,16 @@ def get_evolucion_morosidad(
 @router.get("/evolucion-pagos", summary="[Stub] Devuelve datos demo hasta tener tabla pagos.")
 def get_evolucion_pagos(
     fecha_inicio: Optional[str] = Query(None),
-    meses: Optional[int] = Query(12),
+    meses: Optional[int] = Query(12, ge=1, le=24),
     analista: Optional[str] = Query(None),
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
     """Evolución de pagos por mes. Datos reales desde Cuota (fecha_pago por mes)."""
+    analista = _sanitize_filter_string(analista)
+    concesionario = _sanitize_filter_string(concesionario)
+    modelo = _sanitize_filter_string(modelo)
     try:
         meses_list = _etiquetas_12_meses()
         hoy = datetime.now(timezone.utc)

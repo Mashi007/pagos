@@ -2,6 +2,13 @@
 Endpoints de comunicaciones (WhatsApp y Email).
 Listado desde conversacion_cobranza (WhatsApp) y configuración; respuesta desde configuracion?tab=whatsapp.
 Las comunicaciones de clientes se reciben por WhatsApp (webhook) o email; se puede responder por ambos.
+
+Persistencia: las conversaciones y mensajes se guardan en BD (conversacion_cobranza, mensaje_whatsapp).
+Se mantienen indefinidamente a menos que se borren explícitamente; en este módulo no hay endpoint de borrado.
+
+Conexión con Clientes: el listado acepta cliente_id (desde /pagos/clientes → Ver comunicaciones).
+- WhatsApp: se filtra por clientes.telefono ↔ conversacion_cobranza.telefono (mismo número = misma conversación).
+- Email: stub (lista vacía hasta integración IMAP); clientes.email se usa en notificaciones y crear-cliente-automatico.
 """
 import re
 import time
@@ -12,7 +19,7 @@ from fastapi import APIRouter, Query, Depends, HTTPException
 from app.core.deps import get_current_user
 from app.schemas.auth import UserResponse
 from pydantic import BaseModel
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, func
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
@@ -35,7 +42,8 @@ def _build_telefono_to_cliente_index(db: Session) -> Tuple[Dict[str, int], Dict[
     """
     by_full: Dict[str, int] = {}
     by_suffix: Dict[str, List[Tuple[str, int]]] = {}
-    for c in db.query(Cliente).all():
+    result = db.execute(select(Cliente))
+    for c in result.scalars().all():
         cd = _digits(c.telefono or "")
         if not cd or len(cd) < 8:
             continue
@@ -85,22 +93,32 @@ def listar_comunicaciones(
             "paginacion": {"page": page, "per_page": per_page, "total": 0, "pages": 0},
         }
 
-    q = db.query(ConversacionCobranza).order_by(ConversacionCobranza.updated_at.desc())
+    # Filtro opcional por cliente (mismo teléfono)
+    where_clause = None
     if cliente_id is not None:
         cliente_row = db.get(Cliente, cliente_id)
         if not cliente_row or not cliente_row.telefono:
             return {"comunicaciones": [], "paginacion": {"page": page, "per_page": per_page, "total": 0, "pages": 0}}
         dig_cliente = _digits(cliente_row.telefono)
         suf = dig_cliente[-10:] if len(dig_cliente) >= 10 else dig_cliente
-        q = q.filter(
-            or_(
-                ConversacionCobranza.telefono == dig_cliente,
-                ConversacionCobranza.telefono.like(f"%{suf}"),
-            )
+        where_clause = or_(
+            ConversacionCobranza.telefono == dig_cliente,
+            ConversacionCobranza.telefono.like(f"%{suf}"),
         )
-    total = q.count()
+
+    # Contar total (sin subquery para evitar 500 en algunos entornos SQLAlchemy 2.0)
+    count_q = select(func.count()).select_from(ConversacionCobranza)
+    if where_clause is not None:
+        count_q = count_q.where(where_clause)
+    total = db.scalar(count_q) or 0
+
+    # Listado paginado
+    base_q = select(ConversacionCobranza).order_by(ConversacionCobranza.updated_at.desc())
+    if where_clause is not None:
+        base_q = base_q.where(where_clause)
     offset = (page - 1) * per_page
-    rows = q.offset(offset).limit(per_page).all()
+    q_pag = base_q.offset(offset).limit(per_page)
+    rows = db.execute(q_pag).scalars().all()
 
     # Una sola carga de clientes + índice por teléfono (evita N+1)
     by_full, by_suffix = _build_telefono_to_cliente_index(db)
@@ -111,7 +129,8 @@ def listar_comunicaciones(
             cids_en_pagina.add(cid)
     clientes_pagina: Dict[int, Cliente] = {}
     if cids_en_pagina:
-        for c in db.query(Cliente).filter(Cliente.id.in_(cids_en_pagina)).all():
+        st = select(Cliente).where(Cliente.id.in_(cids_en_pagina))
+        for c in db.execute(st).scalars().all():
             clientes_pagina[c.id] = c
 
     for row in rows:
@@ -161,13 +180,13 @@ def listar_mensajes_whatsapp(
     phone = _digits(telefono)
     if len(phone) < 8:
         return {"mensajes": []}
-    rows = (
-        db.query(MensajeWhatsapp)
+    stmt = (
+        select(MensajeWhatsapp)
         .where(MensajeWhatsapp.telefono == phone)
         .order_by(MensajeWhatsapp.timestamp.asc())
         .limit(limit)
-        .all()
     )
+    rows = db.execute(stmt).scalars().all()
     mensajes = [
         {
             "id": r.id,
