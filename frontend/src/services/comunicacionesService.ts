@@ -22,6 +22,8 @@ export interface ComunicacionUnificada {
   cedula?: string | null
   /** Estado del flujo: esperando_cedula, esperando_confirmacion, esperando_foto, etc. */
   estado_cobranza?: string | null
+  /** True si ya se ha enviado al menos un mensaje (OUTBOUND) en esta conversación; si no, se muestra etiqueta NUEVO. */
+  operado?: boolean
 }
 
 export interface PaginacionComunicaciones {

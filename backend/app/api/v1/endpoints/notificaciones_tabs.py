@@ -35,11 +35,18 @@ def _enviar_correos_items(
 ) -> dict:
     """
     Envía por Email y/o WhatsApp por cada item. Respeta reglas de negocio:
-    - config_envios (desde BD): si tipo tiene habilitado=false no se envía; CCO del tipo se añade al correo.
+    - modo_pruebas (desde config): si True y email_pruebas válido, TODOS los emails van SOLO a ese correo (no a clientes).
+    - config_envios (desde BD): si tipo tiene habilitado=false no se envía; CCO del tipo se envía como BCC (copia oculta).
     - Si tipo tiene plantilla_id en config, se usa asunto/cuerpo de esa plantilla (con variables sustituidas).
     - Email desde Configuración > Email (sync_from_db en send_email).
     - WhatsApp desde Configuración > WhatsApp (send_whatsapp_text) cuando el item tiene teléfono.
     """
+    modo_pruebas = config_envios.get("modo_pruebas") is True
+    email_pruebas = (config_envios.get("email_pruebas") or "").strip()
+    usar_solo_pruebas = modo_pruebas and email_pruebas and "@" in email_pruebas
+    # Si modo prueba activo pero sin correo válido: no enviar a clientes (evitar envío por error)
+    bloqueo_pruebas_sin_email = modo_pruebas and not (email_pruebas and "@" in email_pruebas)
+
     enviados = 0
     sin_email = 0
     fallidos = 0
@@ -58,19 +65,32 @@ def _enviar_correos_items(
         except (TypeError, ValueError):
             plantilla_id = None
         asunto, cuerpo = get_plantilla_asunto_cuerpo(db, plantilla_id, item, asunto_base, cuerpo_base)
-        # Email (config desde Configuración > Email)
-        correo = (item.get("correo") or "").strip()
-        if correo and "@" in correo:
+        # Email: en modo prueba todos van solo a email_pruebas; en producción al correo del cliente (+ CCO si hay)
+        if usar_solo_pruebas:
+            to_email = [email_pruebas]
+            bcc_list = None
+        elif bloqueo_pruebas_sin_email:
+            to_email = []  # Modo prueba activo pero sin correo de pruebas: no enviar a nadie
+            bcc_list = None
+        else:
+            correo = (item.get("correo") or "").strip()
+            if not correo or "@" not in correo:
+                to_email = []
+            else:
+                to_email = [correo]
             cco = tipo_cfg.get("cco") or []
-            cc_list = [e.strip() for e in cco if e and isinstance(e, str) and "@" in e.strip()] if isinstance(cco, list) else []
-            ok, _ = send_email([correo], asunto, cuerpo, cc_emails=cc_list or None)
+            bcc_list = [e.strip() for e in cco if e and isinstance(e, str) and "@" in e.strip()] if isinstance(cco, list) else []
+
+        if to_email:
+            ok, _ = send_email(to_email, asunto, cuerpo, bcc_emails=bcc_list or None)
             if ok:
                 enviados += 1
             else:
                 fallidos += 1
         else:
-            sin_email += 1
-        # WhatsApp (config desde Configuración > WhatsApp; mismo cuerpo que email)
+            if not usar_solo_pruebas:
+                sin_email += 1
+        # WhatsApp (config desde Configuración > WhatsApp; mismo cuerpo que email). En modo prueba no se redirige WhatsApp.
         telefono = (item.get("telefono") or "").strip()
         if telefono:
             ok, _ = send_whatsapp_text(telefono, cuerpo)

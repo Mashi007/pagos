@@ -40,11 +40,13 @@ def send_email(
     body_text: str,
     body_html: Optional[str] = None,
     cc_emails: Optional[List[str]] = None,
+    bcc_emails: Optional[List[str]] = None,
     attachments: Optional[List[AttachmentType]] = None,
 ) -> Tuple[bool, Optional[str]]:
     """
     Envía un correo vía SMTP (desde el email configurado en Configuración > Email o .env).
     Antes de enviar sincroniza el holder con la BD.
+    cc_emails: copia visible (CC). bcc_emails: copia oculta (CCO/BCC).
     attachments: lista de (nombre_archivo, contenido_bytes) para adjuntar (ej. PDF).
     Devuelve (True, None) si se envió; (False, mensaje_error) si no hay SMTP configurado o falló.
     """
@@ -56,12 +58,14 @@ def send_email(
     if modo_pruebas and email_pruebas and "@" in email_pruebas:
         to_emails = [email_pruebas]
         cc_list = []
+        bcc_list = []
         logger.info("Modo Pruebas: envío redirigido a %s", email_pruebas)
     else:
         if modo_pruebas and not (email_pruebas and "@" in email_pruebas):
             logger.warning("Modo Pruebas activo pero no hay correo de pruebas configurado. Configure en Configuración > Email.")
             return False, "En modo Pruebas debe configurar el correo de pruebas en Configuración > Email."
         cc_list = [e.strip() for e in (cc_emails or []) if e and isinstance(e, str) and "@" in e.strip()]
+        bcc_list = [e.strip() for e in (bcc_emails or []) if e and isinstance(e, str) and "@" in e.strip()]
     has_attachments = bool(attachments)
     cfg = get_smtp_config()
 
@@ -78,6 +82,8 @@ def send_email(
         msg["To"] = ", ".join(to_emails)
         if cc_list:
             msg["Cc"] = ", ".join(cc_list)
+        if bcc_list:
+            msg["Bcc"] = ", ".join(bcc_list)
 
         msg.attach(MIMEText(body_text, "plain", "utf-8"))
         if body_html:
@@ -94,7 +100,7 @@ def send_email(
                 msg.attach(part)
 
         port = int(cfg.get("smtp_port") or 587)
-        all_recipients = to_emails + cc_list
+        all_recipients = to_emails + cc_list + bcc_list
         use_tls = (cfg.get("smtp_use_tls") or "true").lower() == "true"
         if port == 465:
             with smtplib.SMTP_SSL(cfg["smtp_host"], port, timeout=SMTP_TIMEOUT_SECONDS) as server:

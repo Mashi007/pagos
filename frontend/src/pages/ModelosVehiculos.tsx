@@ -26,10 +26,11 @@ export function ModelosVehiculos() {
   const [searchTerm, setSearchTerm] = useState('')
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [editingModelo, setEditingModelo] = useState<ModeloVehiculo | null>(null)
-  const [formData, setFormData] = useState<ModeloVehiculoCreate>({
+  const [formData, setFormData] = useState<ModeloVehiculoCreate & { precioInput?: number | '' }>({
     modelo: '',
     activo: true,
-    precio: 0
+    precio: undefined,
+    precioInput: ''
   })
   const [moneda, setMoneda] = useState<string>('VES')
   const [archivoExcel, setArchivoExcel] = useState<File | null>(null)
@@ -99,10 +100,12 @@ export function ModelosVehiculos() {
 
   const handleEdit = (modelo: ModeloVehiculo) => {
     setEditingModelo(modelo)
+    const p = modelo.precio != null ? Number(modelo.precio) : ''
     setFormData({
       modelo: modelo.modelo,
       activo: modelo.activo,
-      precio: Number(modelo.precio || 0)
+      precio: modelo.precio != null ? Number(modelo.precio) : undefined,
+      precioInput: p
     })
     setValidationError('')
     setShowCreateForm(true)
@@ -121,26 +124,26 @@ export function ModelosVehiculos() {
     setValidationError('')
 
     try {
-      // Formatear modelo (capitalizar primera letra de cada palabra)
       const modeloFormateado = formatModelo(formData.modelo)
+      const precioVal = formData.precioInput === '' || formData.precioInput == null
+        ? null
+        : Number(formData.precioInput)
+      const payload = {
+        modelo: modeloFormateado,
+        activo: formData.activo ?? true,
+        precio: precioVal
+      }
 
       if (editingModelo) {
-        // Al editar, mantener el estado actual
-        await updateModeloMutation.mutateAsync({
-          id: editingModelo.id,
-          data: { ...formData, modelo: modeloFormateado }
-        })
-        toast.success('âœ… Modelo actualizado exitosamente')
+        await updateModeloMutation.mutateAsync({ id: editingModelo.id, data: payload })
       } else {
-        // Al crear, ya tiene activo: true por defecto
-        await createModeloMutation.mutateAsync({ ...formData, modelo: modeloFormateado })
-        toast.success('âœ… Modelo creado exitosamente')
+        await createModeloMutation.mutateAsync(payload)
       }
       resetForm()
       refetch()
     } catch (err) {
       console.error('Error:', err)
-      toast.error('âŒ Error al guardar modelo')
+      toast.error('Error al guardar modelo')
     }
   }
 
@@ -148,7 +151,8 @@ export function ModelosVehiculos() {
     setFormData({
       modelo: '',
       activo: true,
-      precio: 0
+      precio: undefined,
+      precioInput: ''
     })
     setValidationError('')
     setEditingModelo(null)
@@ -207,13 +211,13 @@ export function ModelosVehiculos() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Modelos de Vehículos</h1>
           <p className="text-muted-foreground">
-            Gestiona los modelos de vehículos del sistema
+            Gestiona los modelos de vehículos. El precio (USD) se usa como Valor Activo al crear un préstamo.
           </p>
         </div>
         <div className="flex items-center space-x-2">
           <Button onClick={() => {
             setEditingModelo(null)
-            setFormData({ modelo: '', activo: true, precio: 0 })
+            setFormData({ modelo: '', activo: true, precio: undefined, precioInput: '' })
             setValidationError('')
             setShowCreateForm(true)
           }}>
@@ -293,7 +297,7 @@ export function ModelosVehiculos() {
               <TableRow>
                 <TableHead>ID</TableHead>
                 <TableHead>Modelo</TableHead>
-                <TableHead>Precio ({moneda})</TableHead>
+                <TableHead>Precio (USD)</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead>Fecha Creación</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
@@ -445,16 +449,19 @@ export function ModelosVehiculos() {
 
                   <div>
                     <label className="block text-sm font-medium mb-2">
-                      Precio ({moneda}) *
+                      Precio (USD)
                     </label>
                     <Input
                       type="number"
                       step="0.01"
                       min={0}
-                      value={formData.precio}
-                      onChange={(e) => setFormData({ ...formData, precio: Number(e.target.value) })}
-                      placeholder={`0.00`}
-                      required
+                      value={formData.precioInput === '' ? '' : formData.precioInput}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        const num = v === '' ? '' : Number(v)
+                        setFormData(prev => ({ ...prev, precioInput: num, precio: num === '' ? undefined : (num as number) }))
+                      }}
+                      placeholder="Opcional; se usa como Valor Activo en Nuevo Préstamo"
                     />
                   </div>
 
@@ -538,24 +545,26 @@ export function ModelosVehiculos() {
                   const res = await modeloVehiculoService.importarDesdeExcel(archivoExcel)
                   toast.success(`Importado: ${res.creados} creados, ${res.actualizados} actualizados`)
                   setArchivoExcel(null)
-                  // Resetear el input file
                   const fileInput = document.getElementById('excel-file-modelos') as HTMLInputElement
                   if (fileInput) fileInput.value = ''
                   await refetch()
                 } catch (err: unknown) {
+                  const ax = err as { response?: { status?: number } }
+                  if (ax?.response?.status === 501) {
+                    toast.error('Importación desde Excel no disponible por el momento.')
+                    return
+                  }
                   const { getErrorMessage, getErrorDetail } = await import('../types/errors')
                   let errorMessage = getErrorMessage(err)
                   const detail = getErrorDetail(err)
-                  if (detail) {
-                    errorMessage = detail
-                  }
+                  if (detail) errorMessage = detail
                   toast.error(errorMessage || 'Error al importar')
                 }
               }}
             >
               Cargar Excel
             </Button>
-            <div className="text-xs text-gray-500">Moneda del sistema: {moneda}</div>
+            <div className="text-xs text-gray-500">Precios en USD (Valor Activo en préstamos)</div>
           </div>
         </CardContent>
       </Card>

@@ -8,6 +8,8 @@ import {
   Clock,
   Link as LinkIcon,
   X,
+  FlaskConical,
+  Send,
 } from 'lucide-react'
 import { emailConfigService } from '../../services/notificacionService'
 import { notificacionService, type NotificacionPlantilla } from '../../services/notificacionService'
@@ -16,6 +18,9 @@ import { Input } from '../../components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
 import { toast } from 'sonner'
 
+/** Claves reservadas en la config (no son tipos de caso) */
+const CLAVES_GLOBALES = ['modo_pruebas', 'email_pruebas'] as const
+
 /** Tipo de configuración por criterio (habilitado, cco, plantilla opcional, programador) */
 export type ConfigEnvioItem = {
   habilitado: boolean
@@ -23,6 +28,9 @@ export type ConfigEnvioItem = {
   plantilla_id?: number | null
   programador?: string
 }
+
+/** Respuesta de la API: config por tipo + modo_pruebas y email_pruebas (un solo objeto, sin duplicar) */
+export type ConfigEnvioCompleta = Record<string, ConfigEnvioItem | boolean | string>
 
 const CRITERIOS: { tipo: string; label: string; categoria: string; color: 'blue' | 'green' | 'orange' | 'red' | 'slate' }[] = [
   { tipo: 'PAGO_5_DIAS_ANTES', label: 'Faltan 5 días', categoria: 'Notificación previa', color: 'blue' },
@@ -52,6 +60,8 @@ function defaultEnvio(): ConfigEnvioItem {
 
 export function ConfiguracionNotificaciones() {
   const [configEnvios, setConfigEnvios] = useState<Record<string, ConfigEnvioItem>>({})
+  const [modoPruebas, setModoPruebas] = useState(false)
+  const [emailPruebas, setEmailPruebas] = useState('')
   const [guardandoEnvios, setGuardandoEnvios] = useState(false)
   const [cargando, setCargando] = useState(true)
   const [plantillas, setPlantillas] = useState<NotificacionPlantilla[]>([])
@@ -64,10 +74,15 @@ export function ConfiguracionNotificaciones() {
     setCargando(true)
     try {
       const [data, plantillasList] = await Promise.all([
-        emailConfigService.obtenerConfiguracionEnvios() as Promise<Record<string, ConfigEnvioItem>>,
+        emailConfigService.obtenerConfiguracionEnvios() as Promise<ConfigEnvioCompleta>,
         notificacionService.listarPlantillas(undefined, false).catch(() => [] as NotificacionPlantilla[]),
       ])
-      setConfigEnvios(data || {})
+      const raw = data || {}
+      setModoPruebas(raw.modo_pruebas === true)
+      setEmailPruebas(typeof raw.email_pruebas === 'string' ? raw.email_pruebas : '')
+      const sinGlobales = { ...raw }
+      CLAVES_GLOBALES.forEach((k) => delete sinGlobales[k])
+      setConfigEnvios(sinGlobales as Record<string, ConfigEnvioItem>)
       setPlantillas(plantillasList || [])
     } catch (error) {
       toast.error('Error al cargar la configuración de envíos')
@@ -115,7 +130,12 @@ export function ConfiguracionNotificaciones() {
   const guardarConfiguracionEnvios = async () => {
     try {
       setGuardandoEnvios(true)
-      await emailConfigService.actualizarConfiguracionEnvios(configEnvios)
+      const payload: ConfigEnvioCompleta = {
+        ...configEnvios,
+        modo_pruebas: modoPruebas,
+        email_pruebas: emailPruebas,
+      }
+      await emailConfigService.actualizarConfiguracionEnvios(payload)
       toast.success('Configuración de envíos guardada')
     } catch (error) {
       toast.error('Error al guardar la configuración de envíos')
@@ -123,6 +143,9 @@ export function ConfiguracionNotificaciones() {
       setGuardandoEnvios(false)
     }
   }
+
+  const enModoPrueba = modoPruebas
+  const enModoProduccion = !modoPruebas
 
   const plantillasPorTipo = (tipo: string): NotificacionPlantilla[] =>
     plantillas.filter((p) => p.tipo === tipo)
@@ -152,6 +175,59 @@ export function ConfiguracionNotificaciones() {
         </CardHeader>
       </Card>
 
+      {/* Modo Prueba / Producción: un solo bloque, sin duplicar config */}
+      <Card className={enModoPrueba ? 'border-amber-300 bg-amber-50/50' : 'border-emerald-200 bg-emerald-50/30'}>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            {enModoPrueba ? (
+              <>
+                <FlaskConical className="h-4 w-4 text-amber-600" />
+                Modo prueba
+              </>
+            ) : (
+              <>
+                <Send className="h-4 w-4 text-emerald-600" />
+                Modo producción
+              </>
+            )}
+          </CardTitle>
+          <CardDescription>
+            {enModoPrueba
+              ? 'Todos los emails de notificaciones se envían únicamente al correo de pruebas. Los clientes no reciben correo. El envío por caso queda desactivado en la tabla mientras esté activo modo prueba.'
+              : 'Los emails se envían al correo de cada cliente según la opción Envío de cada caso.'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-gray-700">Prueba</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={modoPruebas}
+                onClick={() => setModoPruebas(!modoPruebas)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ${
+                  modoPruebas ? 'bg-amber-500' : 'bg-emerald-600'
+                }`}
+              >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ${modoPruebas ? 'translate-x-5' : 'translate-x-1'}`} />
+              </button>
+              <span className="text-sm text-gray-600">{modoPruebas ? 'Activado (solo correo de pruebas)' : 'Desactivado (envío a clientes)'}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Correo para pruebas</label>
+              <Input
+                type="email"
+                placeholder="ejemplo@correo.com"
+                value={emailPruebas}
+                onChange={(e) => setEmailPruebas(e.target.value)}
+                className="max-w-xs h-9 bg-white"
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
         <table className="w-full text-sm">
           <thead>
@@ -177,7 +253,7 @@ export function ConfiguracionNotificaciones() {
                     <Select
                       value={config.plantilla_id ? String(config.plantilla_id) : '__ninguna__'}
                       onValueChange={(v) => setConfig(tipo, { plantilla_id: v === '__ninguna__' ? null : parseInt(v, 10) })}
-                      disabled={!config.habilitado}
+                      disabled={enModoPrueba || !config.habilitado}
                     >
                       <SelectTrigger className="w-full max-w-xs bg-white border-gray-200">
                         <SelectValue placeholder="Seleccionar" />
@@ -193,13 +269,16 @@ export function ConfiguracionNotificaciones() {
                   <td className="py-3 px-4 text-center">
                     <button
                       type="button"
-                      onClick={() => toggleEnvio(tipo)}
+                      onClick={() => !enModoPrueba && toggleEnvio(tipo)}
+                      disabled={enModoPrueba}
+                      title={enModoPrueba ? 'Envío desactivado en modo prueba' : (config.habilitado ? 'Desactivar envío' : 'Activar envío')}
                       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ${
-                        config.habilitado ? 'bg-blue-600' : 'bg-gray-300'
+                        enModoPrueba ? 'bg-gray-300 cursor-not-allowed' : config.habilitado ? 'bg-blue-600' : 'bg-gray-300'
                       }`}
                     >
-                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ${config.habilitado ? 'translate-x-5' : 'translate-x-1'}`} />
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ${config.habilitado && !enModoPrueba ? 'translate-x-5' : 'translate-x-1'}`} />
                     </button>
+                    {enModoPrueba && <span className="block text-xs text-gray-500 mt-0.5">Desactivado</span>}
                   </td>
                   <td className="py-3 px-4">
                     <details className="group">
@@ -211,7 +290,7 @@ export function ConfiguracionNotificaciones() {
                           type="time"
                           value={config.programador || HORA_DEFAULT}
                           onChange={(e) => setConfig(tipo, { programador: e.target.value })}
-                          disabled={!config.habilitado}
+                          disabled={enModoPrueba || !config.habilitado}
                           className="h-8 text-xs bg-white w-28"
                         />
                         {[0, 1, 2].map((i) => (
@@ -222,7 +301,7 @@ export function ConfiguracionNotificaciones() {
                               value={config.cco[i] || ''}
                               onChange={(e) => actualizarCCO(tipo, i, e.target.value)}
                               className="h-8 text-xs flex-1 bg-white"
-                              disabled={!config.habilitado}
+                              disabled={enModoPrueba || !config.habilitado}
                             />
                             {config.cco[i] && (
                               <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => eliminarCCO(tipo, i)}>

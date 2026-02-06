@@ -357,14 +357,12 @@ class EmailConfigService {
     return await apiClient.post(`${this.baseUrl}/email/probar`, params)
   }
 
-  /** Config por tipo: habilitado, cco, plantilla_id opcional, programador (hora "HH:mm") */
-  async obtenerConfiguracionEnvios(): Promise<Record<string, { habilitado: boolean; cco: string[]; plantilla_id?: number | null; programador?: string }>> {
-    return await apiClient.get<Record<string, { habilitado: boolean; cco: string[]; plantilla_id?: number | null; programador?: string }>>(
-      `${this.baseUrl}/notificaciones/envios`
-    )
+  /** Config por tipo (habilitado, cco, plantilla_id, programador) + global: modo_pruebas, email_pruebas. Un solo objeto, sin duplicar. */
+  async obtenerConfiguracionEnvios(): Promise<Record<string, unknown>> {
+    return await apiClient.get<Record<string, unknown>>(`${this.baseUrl}/notificaciones/envios`)
   }
 
-  async actualizarConfiguracionEnvios(config: Record<string, { habilitado: boolean; cco: string[]; plantilla_id?: number | null; programador?: string }>): Promise<any> {
+  async actualizarConfiguracionEnvios(config: Record<string, unknown>): Promise<any> {
     return await apiClient.put(`${this.baseUrl}/notificaciones/envios`, config)
   }
 

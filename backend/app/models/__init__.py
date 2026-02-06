@@ -18,6 +18,7 @@ from app.models.diccionario_semantico import DiccionarioSemantico
 from app.models.mensaje_whatsapp import MensajeWhatsapp
 from app.models.pago import Pago
 from app.models.plantilla_notificacion import PlantillaNotificacion
+from app.models.modelo_vehiculo import ModeloVehiculo
 
 __all__ = [
     "Base", "Cliente", "Prestamo", "Ticket", "Cuota", "Pago", "PagosWhatsapp",
@@ -25,5 +26,6 @@ __all__ = [
     "ConversacionCobranza", "PagosInforme", "MensajeWhatsapp",
     "Configuracion", "Auditoria", "User", "DefinicionCampo", "ConversacionAI", "DiccionarioSemantico",
     "PlantillaNotificacion",
+    "ModeloVehiculo",
 ]
 

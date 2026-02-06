@@ -12,9 +12,9 @@ export interface ModeloVehiculo {
 }
 
 export interface ModeloVehiculoCreate {
-  modelo: string  // ✅ CORREGIDO: campo 'modelo', no 'nombre'
+  modelo: string
   activo?: boolean
-  precio: number
+  precio?: number | null  // Opcional; si no se envía o es null, no se usa para Valor Activo hasta editarlo
 }
 
 export interface ModeloVehiculoUpdate {

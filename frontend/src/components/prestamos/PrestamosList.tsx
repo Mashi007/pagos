@@ -477,8 +477,8 @@ export function PrestamosList() {
                     <SelectContent>
                       <SelectItem value="ALL">Todos los modelos</SelectItem>
                       {modelosVehiculos.map((modelo) => (
-                        <SelectItem key={modelo.id} value={modelo.nombre}>
-                          {modelo.nombre}
+                        <SelectItem key={modelo.id} value={modelo.modelo}>
+                          {modelo.modelo}
                         </SelectItem>
                       ))}
                     </SelectContent>

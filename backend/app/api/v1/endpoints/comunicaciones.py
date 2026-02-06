@@ -136,6 +136,16 @@ def listar_comunicaciones(
             for c in db.execute(st).scalars().all():
                 clientes_pagina[c.id] = c
 
+        # Teléfonos con al menos un mensaje saliente (OUTBOUND) = comunicación ya operada
+        telefonos_operados: set = set()
+        try:
+            outbound = select(MensajeWhatsapp.telefono).where(MensajeWhatsapp.direccion == "OUTBOUND").distinct()
+            for (tel,) in db.execute(outbound).all():
+                if tel:
+                    telefonos_operados.add(_digits(tel))
+        except Exception:
+            pass
+
         for row in rows:
             telefono_display = row.telefono if (row.telefono or "").startswith("+") else f"+{row.telefono}"
             cid = _lookup_cliente_id(_digits(row.telefono), by_full, by_suffix)
@@ -143,6 +153,8 @@ def listar_comunicaciones(
             if not nombre and cid and cid in clientes_pagina:
                 nombre = (clientes_pagina[cid].nombres or "").strip()
             nombre = nombre or telefono_display
+            dig_telefono = _digits(row.telefono)
+            operado = dig_telefono in telefonos_operados
             comunicaciones.append({
                 "id": row.id,
                 "tipo": "whatsapp",
@@ -161,6 +173,7 @@ def listar_comunicaciones(
                 "nombre_contacto": nombre,
                 "cedula": (row.cedula or "").strip() or None,
                 "estado_cobranza": row.estado or None,
+                "operado": operado,
             })
     except Exception as e:
         logger.exception("listar_comunicaciones error: %s", e)

@@ -55,7 +55,8 @@ interface ConversacionAgrupada {
   contacto: string
   tipo: 'whatsapp' | 'email' // NO mixto - separadas
   cliente_id: number | null
-  esNuevo: boolean // No está en base de datos
+  esNuevo: boolean // No está en base de datos (sin cliente vinculado)
+  operado: boolean // Si ya se operó la comunicación (envió mensaje); si false, se muestra etiqueta NUEVO
   leido: boolean // Si está leído (procesado = true)
   noLeidos: number
   ultimaComunicacion: ComunicacionUnificada
@@ -188,6 +189,7 @@ export function Comunicaciones({
           nombre = mockNombresClientes[comm.cliente_id] || `Cliente #${comm.cliente_id}`
         }
         const esNuevo = !comm.cliente_id
+        const operado = comm.operado ?? false
 
         // Determinar si está leído (procesado = true)
         const leido = comm.procesado
@@ -199,6 +201,7 @@ export function Comunicaciones({
           tipo: comm.tipo,
           cliente_id: comm.cliente_id,
           esNuevo,
+          operado,
           leido,
           noLeidos: 0,
           ultimaComunicacion: comm,
@@ -212,6 +215,7 @@ export function Comunicaciones({
       if (new Date(comm.timestamp) > new Date(grupo.ultimaComunicacion.timestamp)) {
         grupo.ultimaComunicacion = comm
         grupo.leido = comm.procesado // Actualizar estado de leído
+        if (comm.operado !== undefined) grupo.operado = comm.operado
       }
       
       // Contar no leídos (requiere_respuesta y no procesado)
@@ -253,6 +257,7 @@ export function Comunicaciones({
           tipo: 'whatsapp',
           cliente_id: clienteId,
           esNuevo: true,
+          operado: true,
           leido: true,
           noLeidos: 0,
           ultimaComunicacion: ultimaPlaceholderWhatsApp,
@@ -284,6 +289,7 @@ export function Comunicaciones({
           tipo: 'email',
           cliente_id: clienteId,
           esNuevo: true,
+          operado: true,
           leido: true,
           noLeidos: 0,
           ultimaComunicacion: ultimaPlaceholderEmail,
@@ -793,7 +799,7 @@ export function Comunicaciones({
                               <span className={`text-sm truncate ${conversacion.noLeidos > 0 ? 'text-gray-900' : 'text-gray-700'}`}>
                                 {conversacion.nombre}
                               </span>
-                              {conversacion.esNuevo && (
+                              {!conversacion.operado && (
                                 <Badge variant="destructive" className="text-xs px-2 py-0.5 font-bold animate-pulse">
                                   NUEVO
                                 </Badge>
@@ -861,7 +867,7 @@ export function Comunicaciones({
                   <div>
                     <div className="flex items-center gap-2">
                       <h3 className="font-bold text-gray-900">{conversacionActual.nombre}</h3>
-                      {conversacionActual.esNuevo && (
+                      {!conversacionActual.operado && (
                         <Badge variant="destructive" className="text-xs font-bold animate-pulse">
                           NUEVO
                         </Badge>
