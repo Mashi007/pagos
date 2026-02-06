@@ -457,7 +457,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     return { field: 'direccion', isValid: true, message: 'Dirección válida' }
   }
 
-  // âœ… Validación personalizada para teléfono (10 dígitos, sin empezar por 0)
+  // âœ… Validación personalizada para teléfono (9 o 10 dígitos, sin empezar por 0)
   const validateTelefono = (telefono: string): ValidationResult => {
     if (isNN(telefono)) {
       return { field: 'telefono', isValid: true, message: 'Valor omitido por NN' }
@@ -469,9 +469,9 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     // Remover espacios y caracteres no numéricos
     const numeroLimpio = telefono.replace(/\D/g, '')
 
-    // Validar que tenga exactamente 10 dígitos
-    if (numeroLimpio.length !== 10) {
-      return { field: 'telefono', isValid: false, message: 'El teléfono debe tener exactamente 10 dígitos' }
+    // Validar que tenga 9 o 10 dígitos
+    if (numeroLimpio.length < 9 || numeroLimpio.length > 10) {
+      return { field: 'telefono', isValid: false, message: 'El teléfono debe tener 9 o 10 dígitos' }
     }
 
     // Validar que no empiece por 0
@@ -480,7 +480,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     }
 
     // Validar que todos los caracteres sean dígitos (0-9)
-    if (!/^\d{10}$/.test(numeroLimpio)) {
+    if (!/^[1-9]\d{8,9}$/.test(numeroLimpio)) {
       return { field: 'telefono', isValid: false, message: 'El teléfono solo puede contener números (0-9)' }
     }
 
@@ -1300,7 +1300,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                     <Phone className="w-4 h-4 mr-2 text-gray-600" />
                     +58
                   </div>
-                  {/* Input para el número (10 dígitos) */}
+                  {/* Input para el número (9 o 10 dígitos) */}
                   <div className="flex-1 relative">
                     <Input
                       type="text"

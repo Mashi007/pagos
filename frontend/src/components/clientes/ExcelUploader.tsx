@@ -560,7 +560,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       case 'cedula':
         return `Ejemplo: "V12345678" o "E87654321"`
       case 'telefono':
-        return `Ejemplo: "8741236589" (10 dígitos sin 0 inicial)`
+        return `Ejemplo: "8741236589" (9 o 10 dígitos sin 0 inicial)`
       case 'email':
         return `Ejemplo: "usuario@dominio.com"`
       case 'estado':
@@ -674,19 +674,19 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       case 'telefono':
         if (!value || !value.trim()) return { isValid: false, message: 'Teléfono requerido' }
 
-        // El valor ya viene con +58, solo validar los 10 dígitos
+        // El valor ya viene con +58, validar 9 o 10 dígitos
         if (!value.startsWith('+58')) {
-          return { isValid: false, message: 'Formato: +58 + 10 dígitos' }
+          return { isValid: false, message: 'Formato: +58 + 9 o 10 dígitos' }
         }
 
-        const phoneDigits = value.replace('+58', '')
+        const phoneDigits = value.replace('+58', '').replace(/\s/g, '')
 
-        // Validar que sean exactamente 10 dígitos y no empiece por 0
-        const phonePattern = /^[1-9]\d{9}$/
+        // Validar que sean 9 o 10 dígitos y no empiece por 0
+        const phonePattern = /^[1-9]\d{8,9}$/
         if (!phonePattern.test(phoneDigits)) {
           return {
             isValid: false,
-            message: 'Formato: 10 dígitos (sin 0 inicial)'
+            message: 'Formato: 9 o 10 dígitos (sin 0 inicial)'
           }
         }
 
