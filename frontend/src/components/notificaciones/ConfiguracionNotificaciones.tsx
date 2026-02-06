@@ -8,8 +8,7 @@ import {
   Clock,
   Link as LinkIcon,
   X,
-  FlaskConical,
-  Send,
+  TestTube,
 } from 'lucide-react'
 import { emailConfigService } from '../../services/notificacionService'
 import { notificacionService, type NotificacionPlantilla } from '../../services/notificacionService'
@@ -181,12 +180,12 @@ export function ConfiguracionNotificaciones() {
           <CardTitle className="text-base flex items-center gap-2">
             {enModoPrueba ? (
               <>
-                <FlaskConical className="h-4 w-4 text-amber-600" />
+                <TestTube className="h-4 w-4 text-amber-600" />
                 Modo prueba
               </>
             ) : (
               <>
-                <Send className="h-4 w-4 text-emerald-600" />
+                <Mail className="h-4 w-4 text-emerald-600" />
                 Modo producción
               </>
             )}
