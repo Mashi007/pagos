@@ -28,11 +28,10 @@ import { ExcelUploader } from './ExcelUploader'
 import { CargaMasivaMenu } from './CargaMasivaMenu'
 import { PagosListResumen } from './PagosListResumen'
 import { PagosKPIsNuevo } from './PagosKPIsNuevo'
-import { PagosBuscadorAmortizacion } from './PagosBuscadorAmortizacion'
 import { toast } from 'sonner'
 
 export function PagosList() {
-  const [activeTab, setActiveTab] = useState('resumen')
+  const [activeTab, setActiveTab] = useState('todos')
   const [page, setPage] = useState(1)
   const [perPage] = useState(20)
   const [showFilters, setShowFilters] = useState(false)
@@ -136,9 +135,6 @@ export function PagosList() {
 
   return (
     <div className="space-y-6">
-      {/* Buscador por cédula: al operar se despliega tabla de amortización y se puede descargar en PDF */}
-      <PagosBuscadorAmortizacion />
-
       {/* KPIs */}
       <PagosKPIsNuevo />
 
@@ -234,8 +230,8 @@ export function PagosList() {
       {/* Pestañas: por defecto Resumen por Cliente (detalles por cliente, más reciente a más antiguo) */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="mb-4">
-          <TabsTrigger value="resumen">Detalle por Cliente</TabsTrigger>
           <TabsTrigger value="todos">Todos los Pagos</TabsTrigger>
+          <TabsTrigger value="resumen">Detalle por Cliente</TabsTrigger>
         </TabsList>
 
         {/* Tab: Detalle por Cliente (resumen + ver pagos del cliente, más reciente a más antiguo) */}

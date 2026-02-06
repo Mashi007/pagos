@@ -393,10 +393,13 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
       setSavingProgress(prev => ({ ...prev, [row._rowIndex]: true }))
 
+      const rawTel = blankIfNN(row.telefono)
+      const telefonoNormalizado = rawTel.startsWith('+') ? rawTel : '+58' + (rawTel.replace(/\D/g, '').slice(-10) || rawTel)
+
       const clienteData = {
         cedula: blankIfNN(row.cedula),
         nombres: formatNombres(blankIfNN(row.nombres)),  // âœ… Aplicar formato Title Case y ya unificados (nombres + apellidos)
-        telefono: blankIfNN(row.telefono),
+        telefono: telefonoNormalizado,
         email: blankIfNN(row.email).toLowerCase(),
         direccion: blankIfNN(row.direccion),
         fecha_nacimiento: convertirFechaParaBackend(blankIfNN(row.fecha_nacimiento)),  // âœ… Convertir DD/MM/YYYY a YYYY-MM-DD
@@ -636,45 +639,65 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       .join(' ')  // Unir con espacios
   }
 
-  // ðŸ“… FUNCIÓN PARA CONVERTIR FECHA DE EXCEL A DD/MM/YYYY
+  // Convierte fecha de Excel a DD/MM/YYYY (acepta 1-1-2000, serial, Date, ISO, DD/MM/YYYY)
   const convertirFechaExcel = (value: any): string => {
-    if (!value) return ''
+    if (value == null || value === '') return ''
+
+    // Si es objeto Date (Excel a veces devuelve fecha como Date)
+    if (value instanceof Date) {
+      if (Number.isNaN(value.getTime())) return ''
+      const dia = String(value.getDate()).padStart(2, '0')
+      const mes = String(value.getMonth() + 1).padStart(2, '0')
+      const ano = value.getFullYear()
+      return `${dia}/${mes}/${ano}`
+    }
 
     const strValue = value.toString().trim()
+    if (!strValue) return ''
 
-    // Si es un número serial de Excel (ej: 45940, 45941)
+    // Si es un número serial de Excel (ej: 365, 45940)
     if (/^\d{4,}$/.test(strValue)) {
       try {
         const numeroSerie = parseInt(strValue, 10)
-        // Excel cuenta desde 1900-01-01, pero tiene un bug del año bisiesto
-        // Fórmula: fecha = new Date(1900, 0, 1) + (numeroSerie - 2) días
         const fechaBase = new Date(1900, 0, 1)
         fechaBase.setDate(fechaBase.getDate() + numeroSerie - 2)
-
-        // Convertir a DD/MM/YYYY
+        if (Number.isNaN(fechaBase.getTime())) return strValue
         const dia = String(fechaBase.getDate()).padStart(2, '0')
         const mes = String(fechaBase.getMonth() + 1).padStart(2, '0')
         const ano = String(fechaBase.getFullYear())
-
         return `${dia}/${mes}/${ano}`
       } catch (err) {
-        console.warn('Error convirtiendo fecha Excel:', strValue, err)
         return strValue
       }
     }
 
-    // Si ya está en formato DD/MM/YYYY, devolverlo tal cual
-    if (/^\d{2}\/\d{2}\/\d{4}$/.test(strValue)) {
-      return strValue
-    }
+    // Ya en DD/MM/YYYY (con 2 dígitos)
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(strValue)) return strValue
 
-    // Si está en formato ISO (YYYY-MM-DD), convertir
+    // ISO YYYY-MM-DD
     if (/^\d{4}-\d{2}-\d{2}$/.test(strValue)) {
       const [ano, mes, dia] = strValue.split('-')
       return `${dia}/${mes}/${ano}`
     }
 
-    // Formato desconocido, devolver tal cual (se validará después)
+    // D-M-YYYY o D/M/YYYY (ej: 1-1-2000, 01-01-2000) — como en Excel imagen 1
+    const matchDMY = strValue.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/)
+    if (matchDMY) {
+      const [, d, m, y] = matchDMY
+      const dia = d.padStart(2, '0')
+      const mes = m.padStart(2, '0')
+      return `${dia}/${mes}/${y}`
+    }
+
+    // Intentar parseo con Date (p. ej. "Fri Dec 31 1999" por zona horaria)
+    const parsed = new Date(strValue)
+    if (!Number.isNaN(parsed.getTime())) {
+      const dia = String(parsed.getDate()).padStart(2, '0')
+      const mes = String(parsed.getMonth() + 1).padStart(2, '0')
+      const ano = parsed.getFullYear()
+      return `${dia}/${mes}/${ano}`
+    }
+
     return strValue
   }
 
@@ -682,16 +705,16 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   const convertirFechaParaBackend = (fechaDDMMYYYY: string): string => {
     if (!fechaDDMMYYYY || !fechaDDMMYYYY.trim()) return ''
 
-    const fechaRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/
-    const match = fechaDDMMYYYY.trim().match(fechaRegex)
-
+    const trimmed = fechaDDMMYYYY.trim()
+    const match = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
     if (!match) {
       console.warn('Formato de fecha inválido para convertir:', fechaDDMMYYYY)
-      return fechaDDMMYYYY // Devolver tal cual si no es válido
+      return trimmed
     }
-
-    const [, dia, mes, ano] = match
-    return `${ano}-${mes}-${dia}`
+    const [, d, m, y] = match
+    const dia = d.padStart(2, '0')
+    const mes = m.padStart(2, '0')
+    return `${y}-${mes}-${dia}`
   }
 
   // ðŸ” VALIDAR CAMPO INDIVIDUAL
@@ -723,16 +746,12 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       case 'telefono':
         if (!value || !value.trim()) return { isValid: false, message: 'Teléfono requerido' }
 
-        // El valor ya viene con +58, validar 9 o 10 dígitos
-        if (!value.startsWith('+58')) {
-          return { isValid: false, message: 'Formato: +58 + 9 o 10 dígitos' }
-        }
+        // Aceptar con o sin prefijo +58 (Excel suele traer solo dígitos, ej. 4146050303)
+        let digitsOnly = (value || '').replace(/\D/g, '')
+        if (digitsOnly.startsWith('58') && digitsOnly.length >= 11) digitsOnly = digitsOnly.slice(2)
 
-        const phoneDigits = value.replace('+58', '').replace(/\s/g, '')
-
-        // Validar que sean 9 o 10 dígitos y no empiece por 0
         const phonePattern = /^[1-9]\d{8,9}$/
-        if (!phonePattern.test(phoneDigits)) {
+        if (!phonePattern.test(digitsOnly)) {
           return {
             isValid: false,
             message: 'Formato: 9 o 10 dígitos (sin 0 inicial)'
@@ -793,14 +812,18 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       case 'fecha_nacimiento':
         if (!value.trim()) return { isValid: false, message: 'Fecha requerida' }
 
-        // Validar formato DD/MM/YYYY
-        const fechaFormatRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/
-        if (!fechaFormatRegex.test(value.trim())) {
-          return { isValid: false, message: 'Formato: DD/MM/YYYY (ej: 01/01/2025)' }
+        // Aceptar DD/MM/YYYY o D/M/YYYY (ej: 01/01/2000 o 1/1/2000)
+        const fechaFormatRegex = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/
+        const fechaMatch = value.trim().match(fechaFormatRegex)
+        if (!fechaMatch) {
+          return { isValid: false, message: 'Formato: DD/MM/YYYY (ej: 01/01/2000 o 1/1/2000)' }
         }
 
-        // Extraer día, mes y año
-        const [, dia, mes, ano] = value.trim().match(fechaFormatRegex)!
+        // Normalizar a 2 dígitos para validar
+        const [, diaStr, mesStr, anoStr] = fechaMatch
+        const dia = diaStr.padStart(2, '0')
+        const mes = mesStr.padStart(2, '0')
+        const ano = anoStr
         const diaNum = parseInt(dia, 10)
         const mesNum = parseInt(mes, 10)
         const anoNum = parseInt(ano, 10)
