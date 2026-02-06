@@ -138,13 +138,8 @@ export function PagosList() {
       {/* KPIs */}
       <PagosKPIsNuevo />
 
-      {/* Encabezado (mismo formato que Préstamos) */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Pagos</h1>
-          <p className="text-gray-600 mt-1">Gestión de pagos y conciliación</p>
-        </div>
-        <div className="flex gap-3 flex-wrap">
+      {/* Acciones: título ya está en PagosPage */}
+      <div className="flex justify-end items-center gap-3 flex-wrap">
           <Button
             variant="outline"
             size="lg"
@@ -224,7 +219,6 @@ export function PagosList() {
             <AlertTriangle className="w-5 h-5 mr-2" />
             Pagos con Errores
           </Button>
-        </div>
       </div>
 
       {/* Pestañas: por defecto Resumen por Cliente (detalles por cliente, más reciente a más antiguo) */}
