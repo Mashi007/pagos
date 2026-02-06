@@ -192,7 +192,7 @@ export function ExcelUploader({ onClose, onSuccess }: ExcelUploaderProps) {
                     </div>
                     {(results.errores?.length ?? 0) > 0 && (
                       <p className="text-sm text-red-600 mt-1">
-                        {results.errores.length} fila(s) con error. Revisa la tabla inferior para ver fila, cédula y descripción.
+                        {results.errores?.length ?? 0} fila(s) con error. Revisa la tabla inferior para ver fila, cédula y descripción.
                       </p>
                     )}
                   </CardContent>
