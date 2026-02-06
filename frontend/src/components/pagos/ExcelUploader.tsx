@@ -22,7 +22,50 @@ interface ExcelUploaderProps {
 export function ExcelUploader({ onClose, onSuccess }: ExcelUploaderProps) {
   const [file, setFile] = useState<File | null>(null)
   const [isUploading, setIsUploading] = useState(false)
-  const [results, setResults] = useState<any>(null)
+  const [results, setResults] = useState<{
+    registros_procesados?: number
+    errores?: string[]
+    errores_detalle?: ErrorDetalleBackend[]
+  } | null>(null)
+
+  const erroresParaTabla = useMemo(() => {
+    if (!results?.errores_detalle?.length) return []
+    return results.errores_detalle.map((e: ErrorDetalleBackend) => {
+      const d = e.datos ?? {}
+      return {
+        row: e.fila,
+        cedula: String(e.cedula ?? ''),
+        error: e.error,
+        data: {
+          ...d,
+          fecha: d.fecha_pago,
+          documento_pago: d.numero_documento,
+        },
+        tipo: 'pago' as const,
+      }
+    })
+  }, [results?.errores_detalle])
+
+  const handleDescargarErrores = () => {
+    if (!results?.errores_detalle?.length) return
+    const headers = ['fila', 'cedula', 'fecha_pago', 'monto_pagado', 'numero_documento', 'error']
+    const rows = results.errores_detalle.map((e: ErrorDetalleBackend) => [
+      e.fila,
+      e.cedula,
+      (e.datos?.fecha_pago ?? ''),
+      (e.datos?.monto_pagado ?? ''),
+      (e.datos?.numero_documento ?? ''),
+      `"${(e.error ?? '').replace(/"/g, '""')}"`,
+    ])
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = 'errores_pagos_carga_masiva.csv'
+    a.click()
+    URL.revokeObjectURL(a.href)
+    toast.success('Archivo de errores descargado')
+  }
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
@@ -85,7 +128,7 @@ export function ExcelUploader({ onClose, onSuccess }: ExcelUploaderProps) {
           initial={{ scale: 0.95, y: 20 }}
           animate={{ scale: 1, y: 0 }}
           exit={{ scale: 0.95 }}
-          className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+          className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto"
         >
           {/* Header */}
           <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center z-10">
@@ -138,33 +181,30 @@ export function ExcelUploader({ onClose, onSuccess }: ExcelUploaderProps) {
               )}
             </div>
 
-            {/* Results */}
+            {/* Resumen y errores detallados (misma interfaz que préstamos/clientes) */}
             {results && (
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="space-y-2">
+              <div className="space-y-4">
+                <Card>
+                  <CardContent className="pt-6">
                     <div className="flex items-center gap-2 text-green-600">
                       <CheckCircle className="w-5 h-5" />
                       <span className="font-semibold">{results.registros_procesados ?? 0} pago(s) registrado(s)</span>
                     </div>
                     {(results.errores?.length ?? 0) > 0 && (
-                      <div className="text-red-600">
-                        <span className="font-semibold">{results.errores.length} fila(s) con error</span>
-                      </div>
+                      <p className="text-sm text-red-600 mt-1">
+                        {results.errores.length} fila(s) con error. Revisa la tabla inferior para ver fila, cédula y descripción.
+                      </p>
                     )}
-                    {results.errores && results.errores.length > 0 && (
-                      <div className="mt-3 max-h-40 overflow-y-auto">
-                        {results.errores.slice(0, 50).map((error: string, index: number) => (
-                          <p key={index} className="text-xs text-red-600">{error}</p>
-                        ))}
-                        {results.errores.length > 50 && (
-                          <p className="text-xs text-gray-500 mt-1">… y {results.errores.length - 50} más</p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+                {erroresParaTabla.length > 0 && (
+                  <ErroresDetallados
+                    errores={erroresParaTabla}
+                    tipo="pagos"
+                    onDescargarErrores={handleDescargarErrores}
+                  />
+                )}
+              </div>
             )}
 
             {/* Actions */}
