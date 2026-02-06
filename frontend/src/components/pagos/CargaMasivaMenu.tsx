@@ -18,26 +18,27 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
     <>
       <Popover open={isOpen} onOpenChange={setIsOpen}>
         <PopoverTrigger asChild>
-          <Button variant="outline">
+          <Button variant="outline" size="lg" className="px-6 py-6 text-base font-semibold">
             <Upload className="w-5 h-5 mr-2" />
-            Carga Masiva
+            Cargar datos
             <ChevronDown className="w-4 h-4 ml-2" />
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-56 p-2" align="end">
+          <p className="text-xs text-gray-500 px-2 py-1 mb-1">Cargar desde archivo</p>
           <div className="space-y-1">
             <button
-              className="w-full flex items-center px-3 py-2 text-sm rounded-md hover:bg-gray-100 transition-colors"
+              className="w-full flex items-center px-3 py-2.5 text-sm rounded-md hover:bg-gray-100 transition-colors"
               onClick={() => {
                 setShowPagos(true)
                 setIsOpen(false)
               }}
             >
               <FileSpreadsheet className="w-4 h-4 mr-2" />
-              Pagos
+              Pagos (Excel)
             </button>
             <button
-              className="w-full flex items-center px-3 py-2 text-sm rounded-md hover:bg-gray-100 transition-colors"
+              className="w-full flex items-center px-3 py-2.5 text-sm rounded-md hover:bg-gray-100 transition-colors"
               onClick={() => {
                 setShowConciliacion(true)
                 setIsOpen(false)

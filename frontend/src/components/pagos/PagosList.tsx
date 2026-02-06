@@ -29,7 +29,6 @@ import { CargaMasivaMenu } from './CargaMasivaMenu'
 import { PagosListResumen } from './PagosListResumen'
 import { PagosKPIsNuevo } from './PagosKPIsNuevo'
 import { PagosBuscadorAmortizacion } from './PagosBuscadorAmortizacion'
-import { AdvertenciaFormatoCientifico } from '../../components/common/AdvertenciaFormatoCientifico'
 import { toast } from 'sonner'
 
 export function PagosList() {
@@ -231,9 +230,6 @@ export function PagosList() {
           </Button>
         </div>
       </div>
-
-      {/* Advertencia sobre formato científico */}
-      <AdvertenciaFormatoCientifico />
 
       {/* Pestañas: por defecto Resumen por Cliente (detalles por cliente, más reciente a más antiguo) */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
