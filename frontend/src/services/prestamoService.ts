@@ -90,28 +90,11 @@ class PrestamoService {
     // El endpoint devuelve directamente una lista, no envuelta en ApiResponse
     const response = await apiClient.get<Prestamo[]>(`${this.baseUrl}/cedula/${cedula}`)
     
-    // ✅ DEBUG: Log para diagnosticar problemas
-    console.log('🔍 [PrestamoService] Respuesta de préstamos por cédula:', {
-      cedula,
-      responseType: Array.isArray(response) ? 'array' : typeof response,
-      responseLength: Array.isArray(response) ? response.length : 'N/A',
-      response: response,
-      responseKeys: response && typeof response === 'object' ? Object.keys(response) : []
-    })
-    
-    // Asegurar que siempre devolvemos un array
-    if (Array.isArray(response)) {
-      return response
-    }
-    
-    // Si la respuesta es un objeto con una propiedad 'prestamos' o 'data', extraer el array
+    if (Array.isArray(response)) return response
     if (response && typeof response === 'object') {
-      const prestamosArray = (response as any).prestamos || (response as any).data
-      if (Array.isArray(prestamosArray)) {
-        return prestamosArray
-      }
+      const arr = (response as any).prestamos || (response as any).data
+      if (Array.isArray(arr)) return arr
     }
-    
     return []
   }
 
@@ -123,7 +106,7 @@ class PrestamoService {
 
   // Obtener historial de auditoría de un préstamo
   async getAuditoria(prestamoId: number): Promise<any[]> {
-    const response = await apiClient.get<any[]>(`${this.baseUrl}/auditoria/${prestamoId}`)
+    const response = await apiClient.get<any[]>(`${this.baseUrl}/${prestamoId}/auditoria`)
     return response
   }
 
@@ -172,7 +155,7 @@ class PrestamoService {
     return response
   }
 
-  // Obtener KPIs de préstamos (usa /prestamos/stats; /kpis/prestamos no existe en backend)
+  // Obtener KPIs de préstamos desde /prestamos/stats
   async getKPIs(filters?: {
     analista?: string
     concesionario?: string
@@ -186,15 +169,21 @@ class PrestamoService {
     totalCarteraVigente: number
   }> {
     try {
-      const params = filters ? { analista: filters.analista, concesionario: filters.concesionario, modelo: filters.modelo } : {}
+      const params = filters ? { analista: filters.analista, concesionario: filters.concesionario } : {}
       const url = buildUrl(`${this.baseUrl}/stats`, params)
-      const body = await apiClient.get<{ total?: number; por_estado?: Record<string, number> }>(url)
+      const body = await apiClient.get<{
+        total?: number
+        por_estado?: Record<string, number>
+        total_financiamiento?: number
+        promedio_monto?: number
+        cartera_vigente?: number
+      }>(url)
       const total = body?.total ?? 0
       return {
-        totalFinanciamiento: 0,
+        totalFinanciamiento: body?.total_financiamiento ?? 0,
         totalPrestamos: total,
-        promedioMonto: 0,
-        totalCarteraVigente: 0,
+        promedioMonto: body?.promedio_monto ?? 0,
+        totalCarteraVigente: body?.cartera_vigente ?? 0,
       }
     } catch {
       return {

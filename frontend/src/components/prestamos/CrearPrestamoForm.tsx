@@ -30,6 +30,7 @@ import { useAnalistasActivos } from '../../hooks/useAnalistas'
 import { useModelosVehiculosActivos } from '../../hooks/useModelosVehiculos'
 import { useSimpleAuth } from '../../store/simpleAuthStore'
 import { prestamoService } from '../../services/prestamoService'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog'
 import { Prestamo, PrestamoForm } from '../../types'
 import { ModalValidacionPrestamoExistente } from './ModalValidacionPrestamoExistente'
 
@@ -74,15 +75,9 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
   const { data: modelosVehiculos = [], error: errorModelos } = useModelosVehiculosActivos()
   const { user } = useSimpleAuth()
 
-  // Log errores sin bloquear el renderizado
-  if (errorConcesionarios) {
-    console.warn('Error cargando concesionarios:', errorConcesionarios)
-  }
-  if (errorAnalistas) {
-    console.warn('Error cargando analistas:', errorAnalistas)
-  }
-  if (errorModelos) {
-    console.warn('Error cargando modelos de vehículos:', errorModelos)
+  // Errores de carga de configuración (sin bloquear renderizado; solo en desarrollo se puede loguear)
+  if (errorConcesionarios || errorAnalistas || errorModelos) {
+    // Opcional: logger condicionado por NODE_ENV
   }
 
   const [valorActivo, setValorActivo] = useState<number>(prestamo?.valor_activo || 0)
@@ -96,6 +91,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
   const [clienteData, setClienteData] = useState<any>(null)
   const [numeroCuotas, setNumeroCuotas] = useState<number>(12) // Valor por defecto: 12 cuotas
   const [cuotaPeriodo, setCuotaPeriodo] = useState<number>(0)
+  const [showConfirmCreate, setShowConfirmCreate] = useState(false)
 
   // Errores de UI para marcar campos obligatorios visualmente
   const [uiErrors, setUiErrors] = useState<{ concesionario?: boolean; analista?: boolean }>({})
@@ -257,40 +253,32 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
           setShowModalValidacion(true)
           return
         }
-      } catch (error) {
-        console.error('Error verificando préstamos existentes:', error)
-        // Continuar con el proceso si hay error (no bloquear)
+      } catch {
+        // Continuar con el proceso si hay error (no bloquear al usuario)
       }
     }
 
-    // Confirmación: creación definitiva (no editable posteriormente)
+    // Para nuevo préstamo: mostrar modal de confirmación accesible
     if (!prestamo) {
-      const ok = window.confirm(
-        'Confirmación importante\n\n' +
-        'Al crear el préstamo no podrá editarlo después.\n' +
-        '¿Desea continuar?'
-      )
-      if (!ok) {
-        toast('Creación cancelada')
-        return
-      }
+      setShowConfirmCreate(true)
+      return
     }
 
-    // Proceder con la creación/actualización
+    // Edición: proceder directamente
     await crearOActualizarPrestamo()
   }
 
   const crearOActualizarPrestamo = async () => {
     try {
+      setShowConfirmCreate(false)
       // Preparar datos con numero_cuotas y cuota_periodo
-      const prestamoData = {
+      const prestamoData: Record<string, unknown> = {
         ...formData,
+        modelo: formData.modelo_vehiculo ?? undefined,
         valor_activo: valorActivo > 0 ? valorActivo : undefined,
-        // Asegurar producto desde selecciones si está vacío
         producto: formData.producto && String(formData.producto).trim() !== ''
           ? formData.producto
           : (formData.modelo_vehiculo || ''),
-        // Asegurar analista (obligatorio)
         analista: formData.analista && String(formData.analista).trim() !== ''
           ? formData.analista
           : '',
@@ -299,18 +287,20 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
         fecha_base_calculo: formData.fecha_base_calculo,
         usuario_autoriza: !prestamo && justificacionAutorizacion ? user?.email : undefined,
         observaciones: justificacionAutorizacion
-          ? `${formData.observaciones || ''}\n\n--- JUSTIFICACIÓN PARA NUEVO PRÃ‰STAMO ---\n${justificacionAutorizacion}`.trim()
+          ? `${formData.observaciones || ''}\n\n--- JUSTIFICACIÓN PARA NUEVO PRÉSTAMO ---\n${justificacionAutorizacion}`.trim()
           : formData.observaciones,
       }
 
       if (prestamo) {
-        // Editar préstamo existente
         await updatePrestamo.mutateAsync({
           id: prestamo.id,
-          data: prestamoData
+          data: prestamoData as Partial<PrestamoForm>
         })
       } else {
-        // Crear nuevo préstamo
+        // Backend exige cliente_id para crear; se toma del cliente buscado por cédula
+        if (clienteData?.id != null) {
+          prestamoData.cliente_id = clienteData.id
+        }
         await createPrestamo.mutateAsync(prestamoData as PrestamoForm)
       }
 
@@ -318,7 +308,9 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
       onClose()
     } catch (error) {
       toast.error('Error al guardar el préstamo')
-      console.error('Error saving loan:', error)
+      if (import.meta.env.DEV) {
+        console.error('Error saving loan:', error)
+      }
     }
   }
 
@@ -402,7 +394,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-gray-500 mt-1">Seleccione el modelo para cargar automáticamente el precio del activo.</p>
+                  <p className="text-xs text-gray-500 mt-1">Seleccione el modelo. Si tiene precio configurado, se cargará en Valor Activo; si no, ingréselo manualmente.</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">
@@ -535,18 +527,23 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium mb-1">
-                      Valor Activo (USD) <span className="text-blue-600">(Manual)</span>
+                      Valor Activo (USD) <span className="text-red-500">*</span> <span className="text-blue-600">(Manual)</span>
                     </label>
                     <Input
                       type="number"
                       step="0.01"
                       min="0"
                       value={Number.isFinite(valorActivo) ? valorActivo : ''}
-                      readOnly
-                      className="bg-gray-100"
-                      placeholder="Se carga según el modelo seleccionado"
-                      disabled={isReadOnly || !formData.modelo_vehiculo}
+                      onChange={(e) => {
+                        const v = e.target.value === '' ? 0 : parseFloat(e.target.value)
+                        if (!Number.isNaN(v) && v >= 0) setValorActivo(v)
+                      }}
+                      disabled={isReadOnly}
+                      placeholder="Ingrese el valor del activo en USD"
                     />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Ingrese el valor manualmente. Si el modelo tiene precio configurado, se puede cargar al seleccionarlo.
+                    </p>
                   </div>
 
                   <div>
@@ -873,6 +870,27 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
               )}
             </div>
           </form>
+
+          {/* Modal de confirmación antes de crear préstamo */}
+          <Dialog open={showConfirmCreate} onOpenChange={setShowConfirmCreate}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Confirmar creación de préstamo</DialogTitle>
+              </DialogHeader>
+              <p className="text-sm text-gray-600">
+                El préstamo se registrará con los datos ingresados. Podrá editarlo mientras esté en estado Borrador o En Revisión.
+                ¿Desea continuar?
+              </p>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowConfirmCreate(false)}>
+                  Cancelar
+                </Button>
+                <Button onClick={() => crearOActualizarPrestamo()} disabled={createPrestamo.isPending}>
+                  {createPrestamo.isPending ? 'Guardando...' : 'Continuar'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           {/* Modal de Validación de Préstamos Existentes */}
           {showModalValidacion && resumenPrestamos && resumenPrestamos.tiene_prestamos && (

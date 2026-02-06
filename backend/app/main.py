@@ -62,7 +62,11 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 def _startup_db_with_retry(engine, max_attempts: int = 5, delay_sec: float = 2.0):
     """Intenta crear tablas y verificar BD con reintentos (evita fallo por BD no lista en Render)."""
     from sqlalchemy import text
-    from app.models import Base, Cliente, Prestamo, Ticket, Cuota, PagosWhatsapp, Configuracion, Auditoria, User, DefinicionCampo, ConversacionAI, DiccionarioSemantico  # noqa: F401
+    from app.models import (  # noqa: F401
+        Base, Cliente, Prestamo, Ticket, Cuota, PagosWhatsapp, Configuracion, Auditoria,
+        User, DefinicionCampo, ConversacionAI, DiccionarioSemantico,
+        ConversacionCobranza, MensajeWhatsapp, PagosInforme,
+    )
     last_error = None
     for attempt in range(1, max_attempts + 1):
         try:

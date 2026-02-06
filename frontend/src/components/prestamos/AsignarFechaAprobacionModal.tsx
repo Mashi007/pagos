@@ -44,7 +44,7 @@ export function AsignarFechaAprobacionModal({ prestamo, onClose, onSuccess }: As
     try {
       const resultado = await prestamoService.asignarFechaAprobacion(prestamo.id, fechaAprobacion)
       toast.success(
-        `âœ… Préstamo desembolsado exitosamente. Estado: DESEMBOLSADO. ` +
+        `Préstamo desembolsado exitosamente. Estado: DESEMBOLSADO. ` +
         `Tabla de amortización generada con ${resultado.cuotas_recalculadas || 0} cuotas.`
       )
       onSuccess()

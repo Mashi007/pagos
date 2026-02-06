@@ -3,14 +3,18 @@ Endpoints de préstamos. Datos reales desde BD (tabla prestamos).
 Todos los endpoints usan Depends(get_db). No hay stubs ni datos demo.
 """
 import logging
+from datetime import date, datetime, timedelta
+from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+from pydantic import BaseModel
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.models.auditoria import Auditoria
 from app.models.cliente import Cliente
 from app.models.cuota import Cuota
 from app.models.prestamo import Prestamo
@@ -18,6 +22,25 @@ from app.schemas.prestamo import PrestamoCreate, PrestamoResponse, PrestamoUpdat
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
+
+
+# --- Schemas para body de endpoints adicionales ---
+class AplicarCondicionesBody(BaseModel):
+    tasa_interes: Optional[float] = None
+    plazo_maximo: Optional[int] = None
+    fecha_base_calculo: Optional[date] = None
+    observaciones: Optional[str] = None
+
+
+class EvaluarRiesgoBody(BaseModel):
+    ml_impago_nivel_riesgo_manual: Optional[str] = None
+    ml_impago_probabilidad_manual: Optional[float] = None
+    requiere_revision: Optional[bool] = None
+    estado: Optional[str] = None
+
+
+class AsignarFechaAprobacionBody(BaseModel):
+    fecha_aprobacion: date
 
 
 @router.get("", response_model=dict)
@@ -29,13 +52,20 @@ def listar_prestamos(
     estado: Optional[str] = Query(None),
     analista: Optional[str] = Query(None),
     concesionario: Optional[str] = Query(None),
+    cedula: Optional[str] = Query(None),
+    fecha_inicio: Optional[str] = Query(None),
+    fecha_fin: Optional[str] = Query(None),
+    requiere_revision: Optional[bool] = Query(None),
+    modelo: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
     """Listado paginado de préstamos desde BD con nombres y cédula del cliente (join)."""
-    count_q = select(func.count()).select_from(Prestamo)
     q = select(Prestamo, Cliente.nombres, Cliente.cedula).select_from(Prestamo).join(
         Cliente, Prestamo.cliente_id == Cliente.id
     )
+    count_q = select(func.count()).select_from(Prestamo).join(Cliente, Prestamo.cliente_id == Cliente.id)
+
     if cliente_id is not None:
         q = q.where(Prestamo.cliente_id == cliente_id)
         count_q = count_q.where(Prestamo.cliente_id == cliente_id)
@@ -49,6 +79,35 @@ def listar_prestamos(
     if concesionario and concesionario.strip():
         q = q.where(Prestamo.concesionario == concesionario.strip())
         count_q = count_q.where(Prestamo.concesionario == concesionario.strip())
+    if cedula and cedula.strip():
+        ced_clean = cedula.strip()
+        q = q.where(Cliente.cedula == ced_clean)
+        count_q = count_q.where(Cliente.cedula == ced_clean)
+    if search and search.strip():
+        search_clean = search.strip()
+        q = q.where(Cliente.cedula.ilike(f"%{search_clean}%") | Cliente.nombres.ilike(f"%{search_clean}%"))
+        count_q = count_q.where(Cliente.cedula.ilike(f"%{search_clean}%") | Cliente.nombres.ilike(f"%{search_clean}%"))
+    if modelo and modelo.strip():
+        q = q.where(Prestamo.modelo_vehiculo == modelo.strip())
+        count_q = count_q.where(Prestamo.modelo_vehiculo == modelo.strip())
+    if requiere_revision is not None:
+        q = q.where(Prestamo.requiere_revision == requiere_revision)
+        count_q = count_q.where(Prestamo.requiere_revision == requiere_revision)
+    if fecha_inicio:
+        try:
+            fd = datetime.fromisoformat(fecha_inicio.replace("Z", "+00:00")).date()
+            q = q.where(func.date(Prestamo.fecha_registro) >= fd)
+            count_q = count_q.where(func.date(Prestamo.fecha_registro) >= fd)
+        except ValueError:
+            pass
+    if fecha_fin:
+        try:
+            fh = datetime.fromisoformat(fecha_fin.replace("Z", "+00:00")).date()
+            q = q.where(func.date(Prestamo.fecha_registro) <= fh)
+            count_q = count_q.where(func.date(Prestamo.fecha_registro) <= fh)
+        except ValueError:
+            pass
+
     total = db.scalar(count_q) or 0
     q = q.order_by(Prestamo.id.desc()).offset((page - 1) * per_page).limit(per_page)
     rows = db.execute(q).all()
@@ -95,14 +154,40 @@ def listar_prestamos(
 
 
 @router.get("/stats", response_model=dict)
-def get_prestamos_stats(db: Session = Depends(get_db)):
-    """Estadísticas de préstamos desde BD (total, por estado)."""
-    total = db.scalar(select(func.count()).select_from(Prestamo)) or 0
-    rows = db.execute(
-        select(Prestamo.estado, func.count()).select_from(Prestamo).group_by(Prestamo.estado)
-    ).all()
+def get_prestamos_stats(
+    analista: Optional[str] = Query(None),
+    concesionario: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Estadísticas de préstamos desde BD: total, por estado, total_financiamiento, promedio_monto, cartera_vigente."""
+    q_base = select(Prestamo)
+    if analista and analista.strip():
+        q_base = q_base.where(Prestamo.analista == analista.strip())
+    if concesionario and concesionario.strip():
+        q_base = q_base.where(Prestamo.concesionario == concesionario.strip())
+    total = db.scalar(select(func.count()).select_from(q_base.subquery())) or 0
+    q_estado = select(Prestamo.estado, func.count()).select_from(Prestamo)
+    if analista and analista.strip():
+        q_estado = q_estado.where(Prestamo.analista == analista.strip())
+    if concesionario and concesionario.strip():
+        q_estado = q_estado.where(Prestamo.concesionario == concesionario.strip())
+    q_estado = q_estado.group_by(Prestamo.estado)
+    rows = db.execute(q_estado).all()
     por_estado = {r[0]: r[1] for r in rows}
-    return {"total": total, "por_estado": por_estado}
+    total_fin = db.scalar(select(func.coalesce(func.sum(Prestamo.total_financiamiento), 0)).select_from(q_base.subquery())) or 0
+    total_fin = float(total_fin)
+    promedio_monto = (total_fin / total) if total else 0
+    ids_vigentes = [r[0] for r in db.execute(select(Prestamo.id).where(Prestamo.estado.in_(["APROBADO", "DESEMBOLSADO"]))).scalars().all()]
+    cartera_vigente = 0.0
+    if ids_vigentes:
+        cartera_vigente = float(db.scalar(select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(Cuota.prestamo_id.in_(ids_vigentes), Cuota.fecha_pago.is_(None))) or 0)
+    return {
+        "total": total,
+        "por_estado": por_estado,
+        "total_financiamiento": total_fin,
+        "promedio_monto": promedio_monto,
+        "cartera_vigente": cartera_vigente,
+    }
 
 
 @router.get("/cedula/{cedula}", response_model=dict)
@@ -238,6 +323,197 @@ def get_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
     return PrestamoResponse.model_validate(row)
 
 
+def _generar_cuotas_amortizacion(db: Session, p: Prestamo, fecha_base: date, numero_cuotas: int, monto_cuota: float) -> int:
+    """Genera filas en cuotas para el préstamo. MENSUAL +1 mes, QUINCENAL +15 días, SEMANAL +7 días. Retorna cantidad creada."""
+    modalidad = (p.modalidad_pago or "MENSUAL").upper()
+    delta_dias = 30 if modalidad == "MENSUAL" else (15 if modalidad == "QUINCENAL" else 7)
+    cliente_id = p.cliente_id
+    creadas = 0
+    for n in range(1, numero_cuotas + 1):
+        if modalidad == "MENSUAL":
+            # Aproximación: +n meses
+            next_date = fecha_base + timedelta(days=30 * n)
+        else:
+            next_date = fecha_base + timedelta(days=delta_dias * n)
+        c = Cuota(
+            prestamo_id=p.id,
+            cliente_id=cliente_id,
+            numero_cuota=n,
+            fecha_vencimiento=next_date,
+            monto=Decimal(str(round(monto_cuota, 2))),
+            estado="PENDIENTE",
+        )
+        db.add(c)
+        creadas += 1
+    return creadas
+
+
+@router.get("/{prestamo_id}/cuotas", response_model=list)
+def get_cuotas_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
+    """Lista las cuotas (tabla de amortización) de un préstamo."""
+    row = db.get(Prestamo, prestamo_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+    rows = db.execute(select(Cuota).where(Cuota.prestamo_id == prestamo_id).order_by(Cuota.numero_cuota)).scalars().all()
+    return [
+        {
+            "id": c.id,
+            "prestamo_id": c.prestamo_id,
+            "numero_cuota": c.numero_cuota,
+            "fecha_vencimiento": c.fecha_vencimiento.isoformat() if c.fecha_vencimiento else None,
+            "monto": float(c.monto) if c.monto is not None else 0,
+            "fecha_pago": c.fecha_pago.isoformat() if c.fecha_pago else None,
+            "estado": c.estado or "PENDIENTE",
+        }
+        for c in [r[0] for r in rows]
+    ]
+
+
+@router.post("/{prestamo_id}/generar-amortizacion", response_model=dict)
+def generar_amortizacion(prestamo_id: int, db: Session = Depends(get_db)):
+    """Genera la tabla de amortización (cuotas) para el préstamo. No crea si ya existen cuotas."""
+    p = db.get(Prestamo, prestamo_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+    existentes = db.scalar(select(func.count()).select_from(Cuota).where(Cuota.prestamo_id == prestamo_id)) or 0
+    if existentes > 0:
+        return {"message": "Ya existe tabla de amortización.", "cuotas": existentes, "creadas": 0}
+    numero_cuotas = p.numero_cuotas or 12
+    total = float(p.total_financiamiento or 0)
+    if numero_cuotas <= 0 or total <= 0:
+        raise HTTPException(status_code=400, detail="Préstamo sin número de cuotas o monto válido.")
+    monto_cuota = total / numero_cuotas
+    fecha_base = p.fecha_base_calculo if getattr(p, "fecha_base_calculo", None) else date.today()
+    if hasattr(fecha_base, "date"):
+        fecha_base = fecha_base.date() if callable(getattr(fecha_base, "date", None)) else fecha_base
+    creadas = _generar_cuotas_amortizacion(db, p, fecha_base, numero_cuotas, monto_cuota)
+    db.commit()
+    return {"message": "Tabla de amortización generada.", "cuotas": creadas, "creadas": creadas}
+
+
+@router.post("/{prestamo_id}/aplicar-condiciones-aprobacion", response_model=PrestamoResponse)
+def aplicar_condiciones_aprobacion(prestamo_id: int, payload: AplicarCondicionesBody, db: Session = Depends(get_db)):
+    """Aplica condiciones de aprobación: actualiza préstamo y opcionalmente genera cuotas."""
+    p = db.get(Prestamo, prestamo_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+    if payload.tasa_interes is not None:
+        p.tasa_interes = Decimal(str(payload.tasa_interes))
+    if payload.plazo_maximo is not None:
+        p.numero_cuotas = payload.plazo_maximo
+    if payload.fecha_base_calculo is not None:
+        p.fecha_base_calculo = payload.fecha_base_calculo
+    if payload.observaciones is not None:
+        p.observaciones = payload.observaciones
+    p.estado = "APROBADO"
+    db.commit()
+    # Generar cuotas si no existen
+    existentes = db.scalar(select(func.count()).select_from(Cuota).where(Cuota.prestamo_id == prestamo_id)) or 0
+    if existentes == 0:
+        numero_cuotas = p.numero_cuotas or 12
+        total = float(p.total_financiamiento or 0)
+        monto_cuota = total / numero_cuotas if numero_cuotas else 0
+        fecha_base = p.fecha_base_calculo or date.today()
+        if hasattr(fecha_base, "date"):
+            fecha_base = fecha_base.date() if callable(getattr(fecha_base, "date", None)) else fecha_base
+        _generar_cuotas_amortizacion(db, p, fecha_base, numero_cuotas, monto_cuota)
+        db.commit()
+    db.refresh(p)
+    return PrestamoResponse.model_validate(p)
+
+
+@router.post("/{prestamo_id}/evaluar-riesgo", response_model=PrestamoResponse)
+def evaluar_riesgo(prestamo_id: int, payload: EvaluarRiesgoBody, db: Session = Depends(get_db)):
+    """Registra evaluación de riesgo manual (ML) y opcionalmente estado/requiere_revision."""
+    p = db.get(Prestamo, prestamo_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+    if payload.ml_impago_nivel_riesgo_manual is not None:
+        p.ml_impago_nivel_riesgo_manual = payload.ml_impago_nivel_riesgo_manual
+    if payload.ml_impago_probabilidad_manual is not None:
+        p.ml_impago_probabilidad_manual = Decimal(str(payload.ml_impago_probabilidad_manual))
+    if payload.requiere_revision is not None:
+        p.requiere_revision = payload.requiere_revision
+    if payload.estado is not None:
+        p.estado = payload.estado.strip().upper()
+    db.commit()
+    db.refresh(p)
+    return PrestamoResponse.model_validate(p)
+
+
+@router.patch("/{prestamo_id}/marcar-revision", response_model=PrestamoResponse)
+def marcar_revision(
+    prestamo_id: int,
+    requiere_revision: bool = Query(..., alias="requiere_revision"),
+    db: Session = Depends(get_db),
+):
+    """Marca o desmarca el préstamo como requiere_revision."""
+    p = db.get(Prestamo, prestamo_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+    p.requiere_revision = requiere_revision
+    db.commit()
+    db.refresh(p)
+    return PrestamoResponse.model_validate(p)
+
+
+@router.post("/{prestamo_id}/asignar-fecha-aprobacion", response_model=dict)
+def asignar_fecha_aprobacion(prestamo_id: int, payload: AsignarFechaAprobacionBody, db: Session = Depends(get_db)):
+    """Asigna fecha de aprobación, cambia estado a DESEMBOLSADO y genera cuotas si no existen."""
+    p = db.get(Prestamo, prestamo_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+    p.fecha_aprobacion = datetime.combine(payload.fecha_aprobacion, datetime.min.time()) if isinstance(payload.fecha_aprobacion, date) else payload.fecha_aprobacion
+    p.estado = "DESEMBOLSADO"
+    existentes = db.scalar(select(func.count()).select_from(Cuota).where(Cuota.prestamo_id == prestamo_id)) or 0
+    cuotas_recalculadas = 0
+    if existentes == 0:
+        numero_cuotas = p.numero_cuotas or 12
+        total = float(p.total_financiamiento or 0)
+        monto_cuota = total / numero_cuotas if numero_cuotas else 0
+        fecha_base = payload.fecha_aprobacion
+        cuotas_recalculadas = _generar_cuotas_amortizacion(db, p, fecha_base, numero_cuotas, monto_cuota)
+    db.commit()
+    db.refresh(p)
+    return {"prestamo": PrestamoResponse.model_validate(p), "cuotas_recalculadas": cuotas_recalculadas}
+
+
+@router.get("/{prestamo_id}/evaluacion-riesgo", response_model=dict)
+def get_evaluacion_riesgo(prestamo_id: int, db: Session = Depends(get_db)):
+    """Devuelve datos de evaluación de riesgo (ML manual/calculado) del préstamo."""
+    p = db.get(Prestamo, prestamo_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+    return {
+        "ml_impago_nivel_riesgo_manual": getattr(p, "ml_impago_nivel_riesgo_manual", None),
+        "ml_impago_probabilidad_manual": float(p.ml_impago_probabilidad_manual) if getattr(p, "ml_impago_probabilidad_manual", None) is not None else None,
+        "ml_impago_nivel_riesgo_calculado": getattr(p, "ml_impago_nivel_riesgo_calculado", None),
+        "ml_impago_probabilidad_calculada": float(p.ml_impago_probabilidad_calculada) if getattr(p, "ml_impago_probabilidad_calculada", None) is not None else None,
+        "requiere_revision": getattr(p, "requiere_revision", False),
+    }
+
+
+@router.get("/{prestamo_id}/auditoria", response_model=list)
+def get_auditoria_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
+    """Lista registros de auditoría asociados al préstamo (tabla=prestamos, registro_id=prestamo_id)."""
+    p = db.get(Prestamo, prestamo_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+    q = select(Auditoria).where(Auditoria.tabla == "prestamos", Auditoria.registro_id == prestamo_id).order_by(Auditoria.fecha.desc())
+    rows = db.execute(q).scalars().all()
+    return [
+        {
+            "id": r.id,
+            "usuario_email": r.usuario_email,
+            "accion": r.accion,
+            "modulo": r.modulo,
+            "descripcion": r.descripcion,
+            "fecha": r.fecha.isoformat() + "Z" if r.fecha else "",
+        }
+        for r in [row[0] for row in rows]
+    ]
+
+
 @router.post("", response_model=PrestamoResponse, status_code=201)
 def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db)):
     """Crea un préstamo en BD. Valida que cliente_id exista. cedula/nombres se toman del Cliente."""
@@ -299,10 +575,11 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
 
 @router.delete("/{prestamo_id}", status_code=204)
 def delete_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
-    """Elimina un préstamo en BD."""
+    """Elimina un préstamo en BD. Borra antes las cuotas asociadas para evitar huérfanos o fallo de FK."""
     row = db.get(Prestamo, prestamo_id)
     if not row:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+    db.execute(delete(Cuota).where(Cuota.prestamo_id == prestamo_id))
     db.delete(row)
     db.commit()
     return None

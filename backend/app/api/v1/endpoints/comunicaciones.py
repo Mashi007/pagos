@@ -10,6 +10,7 @@ Conexión con Clientes: el listado acepta cliente_id (desde /pagos/clientes → 
 - WhatsApp: se filtra por clientes.telefono ↔ conversacion_cobranza.telefono (mismo número = misma conversación).
 - Email: stub (lista vacía hasta integración IMAP); clientes.email se usa en notificaciones y crear-cliente-automatico.
 """
+import logging
 import re
 import time
 from typing import Optional, Dict, List, Tuple, Any
@@ -28,6 +29,7 @@ from app.models.conversacion_cobranza import ConversacionCobranza
 from app.models.cliente import Cliente
 from app.models.mensaje_whatsapp import MensajeWhatsapp
 
+logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
@@ -93,72 +95,80 @@ def listar_comunicaciones(
             "paginacion": {"page": page, "per_page": per_page, "total": 0, "pages": 0},
         }
 
-    # Filtro opcional por cliente (mismo teléfono)
-    where_clause = None
-    if cliente_id is not None:
-        cliente_row = db.get(Cliente, cliente_id)
-        if not cliente_row or not cliente_row.telefono:
-            return {"comunicaciones": [], "paginacion": {"page": page, "per_page": per_page, "total": 0, "pages": 0}}
-        dig_cliente = _digits(cliente_row.telefono)
-        suf = dig_cliente[-10:] if len(dig_cliente) >= 10 else dig_cliente
-        where_clause = or_(
-            ConversacionCobranza.telefono == dig_cliente,
-            ConversacionCobranza.telefono.like(f"%{suf}"),
-        )
+    try:
+        # Filtro opcional por cliente (mismo teléfono)
+        where_clause = None
+        if cliente_id is not None:
+            cliente_row = db.get(Cliente, cliente_id)
+            if not cliente_row or not cliente_row.telefono:
+                return {"comunicaciones": [], "paginacion": {"page": page, "per_page": per_page, "total": 0, "pages": 0}}
+            dig_cliente = _digits(cliente_row.telefono)
+            suf = dig_cliente[-10:] if len(dig_cliente) >= 10 else dig_cliente
+            where_clause = or_(
+                ConversacionCobranza.telefono == dig_cliente,
+                ConversacionCobranza.telefono.like(f"%{suf}"),
+            )
 
-    # Contar total (sin subquery para evitar 500 en algunos entornos SQLAlchemy 2.0)
-    count_q = select(func.count()).select_from(ConversacionCobranza)
-    if where_clause is not None:
-        count_q = count_q.where(where_clause)
-    total = db.scalar(count_q) or 0
+        # Contar total (sin subquery para evitar 500 en algunos entornos SQLAlchemy 2.0)
+        count_q = select(func.count()).select_from(ConversacionCobranza)
+        if where_clause is not None:
+            count_q = count_q.where(where_clause)
+        total = db.scalar(count_q) or 0
 
-    # Listado paginado
-    base_q = select(ConversacionCobranza).order_by(ConversacionCobranza.updated_at.desc())
-    if where_clause is not None:
-        base_q = base_q.where(where_clause)
-    offset = (page - 1) * per_page
-    q_pag = base_q.offset(offset).limit(per_page)
-    rows = db.execute(q_pag).scalars().all()
+        # Listado paginado
+        base_q = select(ConversacionCobranza).order_by(ConversacionCobranza.updated_at.desc())
+        if where_clause is not None:
+            base_q = base_q.where(where_clause)
+        offset = (page - 1) * per_page
+        q_pag = base_q.offset(offset).limit(per_page)
+        rows = db.execute(q_pag).scalars().all()
 
-    # Una sola carga de clientes + índice por teléfono (evita N+1)
-    by_full, by_suffix = _build_telefono_to_cliente_index(db)
-    cids_en_pagina = set()
-    for row in rows:
-        cid = _lookup_cliente_id(_digits(row.telefono), by_full, by_suffix)
-        if cid is not None:
-            cids_en_pagina.add(cid)
-    clientes_pagina: Dict[int, Cliente] = {}
-    if cids_en_pagina:
-        st = select(Cliente).where(Cliente.id.in_(cids_en_pagina))
-        for c in db.execute(st).scalars().all():
-            clientes_pagina[c.id] = c
+        # Una sola carga de clientes + índice por teléfono (evita N+1)
+        by_full, by_suffix = _build_telefono_to_cliente_index(db)
+        cids_en_pagina = set()
+        for row in rows:
+            cid = _lookup_cliente_id(_digits(row.telefono), by_full, by_suffix)
+            if cid is not None:
+                cids_en_pagina.add(cid)
+        clientes_pagina: Dict[int, Cliente] = {}
+        if cids_en_pagina:
+            st = select(Cliente).where(Cliente.id.in_(cids_en_pagina))
+            for c in db.execute(st).scalars().all():
+                clientes_pagina[c.id] = c
 
-    for row in rows:
-        telefono_display = row.telefono if (row.telefono or "").startswith("+") else f"+{row.telefono}"
-        cid = _lookup_cliente_id(_digits(row.telefono), by_full, by_suffix)
-        nombre = (row.nombre_cliente or "").strip()
-        if not nombre and cid and cid in clientes_pagina:
-            nombre = (clientes_pagina[cid].nombres or "").strip()
-        nombre = nombre or telefono_display
-        comunicaciones.append({
-            "id": row.id,
-            "tipo": "whatsapp",
-            "from_contact": telefono_display,
-            "to_contact": "",
-            "subject": None,
-            "body": row.estado or "Mensaje recibido",
-            "timestamp": row.updated_at.isoformat() if row.updated_at else "",
-            "direccion": "INBOUND",
-            "cliente_id": cid,
-            "ticket_id": None,
-            "requiere_respuesta": False,
-            "procesado": True,
-            "respuesta_enviada": True,
-            "creado_en": row.updated_at.isoformat() if row.updated_at else "",
-            "nombre_contacto": nombre,
-            "cedula": (row.cedula or "").strip() or None,
-            "estado_cobranza": row.estado or None,
-        })
+        for row in rows:
+            telefono_display = row.telefono if (row.telefono or "").startswith("+") else f"+{row.telefono}"
+            cid = _lookup_cliente_id(_digits(row.telefono), by_full, by_suffix)
+            nombre = (row.nombre_cliente or "").strip()
+            if not nombre and cid and cid in clientes_pagina:
+                nombre = (clientes_pagina[cid].nombres or "").strip()
+            nombre = nombre or telefono_display
+            comunicaciones.append({
+                "id": row.id,
+                "tipo": "whatsapp",
+                "from_contact": telefono_display,
+                "to_contact": "",
+                "subject": None,
+                "body": row.estado or "Mensaje recibido",
+                "timestamp": row.updated_at.isoformat() if row.updated_at else "",
+                "direccion": "INBOUND",
+                "cliente_id": cid,
+                "ticket_id": None,
+                "requiere_respuesta": False,
+                "procesado": True,
+                "respuesta_enviada": True,
+                "creado_en": row.updated_at.isoformat() if row.updated_at else "",
+                "nombre_contacto": nombre,
+                "cedula": (row.cedula or "").strip() or None,
+                "estado_cobranza": row.estado or None,
+            })
+    except Exception as e:
+        logger.exception("listar_comunicaciones error: %s", e)
+        # Si la tabla no existe o hay error de BD, devolver lista vacía para no romper la UI
+        return {
+            "comunicaciones": [],
+            "paginacion": {"page": page, "per_page": per_page, "total": 0, "pages": 0},
+        }
 
     pages = (total + per_page - 1) // per_page if per_page else 0
     return {

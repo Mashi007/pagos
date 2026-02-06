@@ -19,6 +19,7 @@ import { EvaluacionRiesgoForm } from './EvaluacionRiesgoForm'
 import { PrestamoDetalleModal } from './PrestamoDetalleModal'
 import { FormularioAprobacionCondiciones } from './FormularioAprobacionCondiciones'
 import { AsignarFechaAprobacionModal } from './AsignarFechaAprobacionModal'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog'
 import { formatCurrency, formatDate } from '../../utils'
 import { prestamoService } from '../../services/prestamoService'
 import { toast } from 'sonner'
@@ -70,24 +71,6 @@ export function PrestamosList() {
   const deletePrestamo = useDeletePrestamo()
   const { canEditPrestamo, canDeletePrestamo, canApprovePrestamo, canViewEvaluacionRiesgo } = usePermissions()
 
-  // Debug: Log del estado de los datos
-  useEffect(() => {
-    if (data) {
-      console.log('ðŸ” [PrestamosList] Estado de datos:', {
-        hasData: !!data,
-        hasDataData: !!data?.data,
-        dataIsArray: Array.isArray(data?.data),
-        dataLength: Array.isArray(data?.data) ? data.data.length : 'N/A',
-        total: data?.total,
-        page: data?.page,
-        total_pages: data?.total_pages,
-        isLoading,
-        error: error ? error.message : null
-      })
-    }
-  }, [data, isLoading, error])
-
-  // Obtener opciones para los selects
   const { data: concesionarios = [] } = useConcesionariosActivos()
   const { data: analistas = [] } = useAnalistasActivos()
   const { data: modelosVehiculos = [] } = useModelosVehiculosActivos()
@@ -184,10 +167,11 @@ export function PrestamosList() {
     setShowDetalle(true)
   }
 
-  const handleDelete = async (id: number) => {
-    if (window.confirm('¿Está seguro de eliminar este préstamo?')) {
-      await deletePrestamo.mutateAsync(id)
-    }
+  const handleDeleteClick = (id: number) => setDeletePrestamoId(id)
+  const handleDeleteConfirm = async () => {
+    if (deletePrestamoId == null) return
+    await deletePrestamo.mutateAsync(deletePrestamoId)
+    setDeletePrestamoId(null)
   }
 
 
@@ -321,6 +305,20 @@ export function PrestamosList() {
 
   return (
     <div className="space-y-6">
+      <Dialog open={deletePrestamoId !== null} onOpenChange={(open) => !open && setDeletePrestamoId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Eliminar préstamo</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-600">¿Está seguro de eliminar este préstamo? Esta acción no se puede deshacer.</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletePrestamoId(null)}>Cancelar</Button>
+            <Button variant="destructive" onClick={handleDeleteConfirm} disabled={deletePrestamo.isPending}>
+              {deletePrestamo.isPending ? 'Eliminando...' : 'Eliminar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {/* KPIs */}
       <PrestamosKPIs />
 
@@ -436,9 +434,9 @@ export function PrestamosList() {
                     <SelectContent>
                       <SelectItem value="ALL">Todos los estados</SelectItem>
                       <SelectItem value="DRAFT">ðŸ”µ Borrador</SelectItem>
-                      <SelectItem value="EN_REVISION">ðŸŸ¡ En Revisión</SelectItem>
+                      <SelectItem value="EN_REVISION">En Revisión</SelectItem>
                       <SelectItem value="EVALUADO">ðŸ”· Evaluado</SelectItem>
-                      <SelectItem value="APROBADO">ðŸŸ¢ Aprobado</SelectItem>
+                      <SelectItem value="APROBADO">Aprobado</SelectItem>
                       <SelectItem value="DESEMBOLSADO">ðŸ”µ Desembolsado</SelectItem>
                       <SelectItem value="RECHAZADO">ðŸ”´ Rechazado</SelectItem>
                     </SelectContent>
@@ -599,7 +597,7 @@ export function PrestamosList() {
                     {data.total > 0 ? (
                       <>
                         <p className="text-lg font-semibold text-red-600 mb-2">
-                          âš ï¸ Problema detectado: El sistema reporta {data.total} préstamos, pero no se pudieron mostrar.
+                          Problema detectado: El sistema reporta {data.total} préstamos, pero no se pudieron mostrar.
                         </p>
                         <p className="text-sm mb-4">
                           Esto puede deberse a un problema en la respuesta del servidor o en el formato de los datos.
@@ -745,7 +743,7 @@ export function PrestamosList() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => handleDelete(prestamo.id)}
+                                onClick={() => handleDeleteClick(prestamo.id)}
                                 title="Eliminar préstamo"
                               >
                                 <Trash2 className="h-4 w-4 text-red-600" />

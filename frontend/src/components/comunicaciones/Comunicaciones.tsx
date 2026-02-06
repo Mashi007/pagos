@@ -1003,7 +1003,7 @@ export function Comunicaciones({
                 </div>
               ) : conversacionActual.tipo === 'whatsapp' && !modoAutomatico ? (
                 <div className="space-y-2">
-                  <p className="text-xs text-gray-600 font-medium">Modo Manual — Responde desde aquí</p>
+                  <p className="text-xs text-gray-600 font-medium">Modo Manual — Responde desde aquí (Enter para enviar, Shift+Enter nueva línea)</p>
                   <div className="flex gap-2">
                     <Textarea
                       placeholder="Escribe tu mensaje..."
@@ -1011,8 +1011,13 @@ export function Comunicaciones({
                       onChange={(e) => setMensajeTexto(e.target.value)}
                       className="flex-1 min-h-[80px]"
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                          handleEnviarMensaje()
+                        if (e.key === 'Enter') {
+                          if (e.shiftKey) {
+                            // Shift+Enter: permitir nueva línea (comportamiento por defecto)
+                            return
+                          }
+                          e.preventDefault()
+                          if (mensajeTexto.trim()) handleEnviarMensaje()
                         }
                       }}
                     />
@@ -1031,13 +1036,14 @@ export function Comunicaciones({
               ) : (
                 <div className="flex gap-2">
                   <Textarea
-                    placeholder={conversacionActual.tipo === 'whatsapp' ? 'Escribe un mensaje...' : 'Escribe tu respuesta...'}
+                    placeholder={conversacionActual.tipo === 'whatsapp' ? 'Escribe un mensaje... (Enter enviar)' : 'Escribe tu respuesta...'}
                     value={mensajeTexto}
                     onChange={(e) => setMensajeTexto(e.target.value)}
                     className="flex-1 min-h-[80px]"
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                        handleEnviarMensaje()
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault()
+                        if (mensajeTexto.trim()) handleEnviarMensaje()
                       }
                     }}
                   />

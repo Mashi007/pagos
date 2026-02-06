@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { prestamoService } from '../services/prestamoService'
 import { Prestamo, PrestamoForm } from '../types'
-import toast from 'react-hot-toast'
 
 // Constantes de configuración
 const DEFAULT_PER_PAGE = 20
@@ -42,17 +42,7 @@ export function usePrestamos(
 ) {
   return useQuery({
     queryKey: prestamoKeys.list(filters, page),
-    queryFn: async () => {
-      console.log('ðŸ” [usePrestamos] Obteniendo préstamos:', { filters, page, perPage })
-      const result = await prestamoService.getPrestamos(filters, page, perPage)
-      console.log('ðŸ” [usePrestamos] Resultado recibido:', {
-        hasData: !!result,
-        dataLength: Array.isArray(result?.data) ? result.data.length : 'N/A',
-        total: result?.total,
-        page: result?.page
-      })
-      return result
-    },
+    queryFn: () => prestamoService.getPrestamos(filters, page, perPage),
     staleTime: 0, // Siempre refetch cuando se invalida (mejor para actualización inmediata de estado)
     refetchOnMount: true, // Refetch cuando el componente se monta
     refetchOnWindowFocus: true, // Refetch cuando se enfoca la ventana (mantiene datos actualizados)
