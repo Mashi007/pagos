@@ -9,7 +9,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -28,26 +28,37 @@ router = APIRouter(dependencies=[Depends(get_current_user)])
 
 def _audit_user_id(db: Session, current_user: UserResponse) -> int:
     """
-    Devuelve un usuario_id que exista en la tabla usuarios, para no violar FK de auditoria.
-    Prueba: por id, por email, primer administrador, primer usuario activo.
+    Devuelve un usuario_id que exista en la tabla usuarios (la que referencia la FK de auditoria).
+    Usa consultas explícitas a public.usuarios para no depender del mapeo del modelo User.
     """
-    uid = getattr(current_user, "id", None)
-    if uid is not None:
-        u = db.get(User, uid)
-        if u and getattr(u, "is_active", True):
-            return u.id
-    email = getattr(current_user, "email", None)
+    email = (getattr(current_user, "email", None) or "").strip().lower()
     if email:
-        u = db.query(User).filter(User.email == email).first()
-        if u and getattr(u, "is_active", True):
-            return u.id
-    admin = db.query(User).filter(User.rol == "administrador", User.is_active.is_(True)).first()
-    if admin:
-        return admin.id
-    any_user = db.query(User).filter(User.is_active.is_(True)).first()
-    if any_user:
-        return any_user.id
-    return 1
+        r = db.execute(
+            text("SELECT id FROM public.usuarios WHERE email = :e AND is_active = true LIMIT 1"),
+            {"e": email},
+        ).first()
+        if r:
+            return r[0]
+    r = db.execute(
+        text("SELECT id FROM public.usuarios WHERE rol = 'administrador' AND is_active = true LIMIT 1"),
+    ).first()
+    if r:
+        return r[0]
+    r = db.execute(
+        text("SELECT id FROM public.usuarios WHERE is_active = true ORDER BY id LIMIT 1"),
+    ).first()
+    if r:
+        return r[0]
+    r = db.execute(text("SELECT id FROM public.usuarios ORDER BY id LIMIT 1")).first()
+    if r:
+        return r[0]
+    raise HTTPException(
+        status_code=503,
+        detail=(
+            "No hay usuarios en la tabla usuarios; no se puede registrar la aprobación. "
+            "Cree al menos un usuario activo en la aplicación."
+        ),
+    )
 
 
 # --- Schemas para body de endpoints adicionales ---
