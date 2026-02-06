@@ -13,7 +13,7 @@ import {
   X,
   ChevronDown,
   FileSpreadsheet,
-  FileEdit,
+  Pencil,
 } from 'lucide-react'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -202,7 +202,7 @@ export function PagosList() {
                     setAgregarPagoOpen(false)
                   }}
                 >
-                  <FileEdit className="w-5 h-5 text-gray-600" />
+                  <Pencil className="w-5 h-5 text-gray-600" />
                   <span>Registrar un pago</span>
                   <span className="text-xs text-gray-500 ml-auto">Formulario</span>
                 </button>

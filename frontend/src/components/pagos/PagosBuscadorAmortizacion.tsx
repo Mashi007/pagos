@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Search, FileDown, User, Loader2 } from 'lucide-react'
+import { Search, Download, User, Loader2 } from 'lucide-react'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
@@ -113,7 +113,7 @@ export function PagosBuscadorAmortizacion() {
                     Cliente: cédula <strong>{cedulaBuscar}</strong> · {listaCuotas.length} cuota(s)
                   </p>
                   <Button variant="outline" onClick={handleDescargarPDF}>
-                    <FileDown className="h-4 w-4 mr-2" />
+                    <Download className="h-4 w-4 mr-2" />
                     Descargar PDF
                   </Button>
                 </div>
