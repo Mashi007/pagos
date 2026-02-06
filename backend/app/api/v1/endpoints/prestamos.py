@@ -27,14 +27,27 @@ router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 def _audit_user_id(db: Session, current_user: UserResponse) -> int:
-    """Devuelve un usuario_id válido para insertar en auditoria (evita FK si el usuario es 'fake')."""
-    u = db.get(User, getattr(current_user, "id", None))
-    if u and u.is_active:
-        return u.id
+    """
+    Devuelve un usuario_id que exista en la tabla usuarios, para no violar FK de auditoria.
+    Prueba: por id, por email, primer administrador, primer usuario activo.
+    """
+    uid = getattr(current_user, "id", None)
+    if uid is not None:
+        u = db.get(User, uid)
+        if u and getattr(u, "is_active", True):
+            return u.id
+    email = getattr(current_user, "email", None)
+    if email:
+        u = db.query(User).filter(User.email == email).first()
+        if u and getattr(u, "is_active", True):
+            return u.id
     admin = db.query(User).filter(User.rol == "administrador", User.is_active.is_(True)).first()
     if admin:
         return admin.id
-    return getattr(current_user, "id", 1)
+    any_user = db.query(User).filter(User.is_active.is_(True)).first()
+    if any_user:
+        return any_user.id
+    return 1
 
 
 # --- Schemas para body de endpoints adicionales ---
