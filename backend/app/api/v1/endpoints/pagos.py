@@ -251,9 +251,22 @@ async def upload_excel_pagos(
                 continue
             try:
                 cedula = str(row[0]).strip() if row[0] is not None else ""
-                prestamo_id = int(row[1]) if len(row) > 1 and row[1] is not None else None
+                # ID Préstamo: solo convertir a int si el valor es numérico; si viene cédula (ej. V15875577) se usa None
+                _val_prestamo = row[1] if len(row) > 1 else None
+                if _val_prestamo is None:
+                    prestamo_id = None
+                else:
+                    _s = str(_val_prestamo).strip()
+                    if _s and _s.isdigit():
+                        prestamo_id = int(_s)
+                    else:
+                        prestamo_id = None  # cédula o texto en columna ID Préstamo → ignorar
                 fecha_val = row[2] if len(row) > 2 else None
-                monto = float(row[3]) if len(row) > 3 and row[3] is not None else 0
+                _monto_raw = row[3] if len(row) > 3 else None
+                try:
+                    monto = float(_monto_raw) if _monto_raw is not None else 0.0
+                except (TypeError, ValueError):
+                    monto = 0.0
                 numero_doc = str(row[4]).strip() if len(row) > 4 and row[4] is not None else ""
                 if not cedula or monto <= 0:
                     continue
