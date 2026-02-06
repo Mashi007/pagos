@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.email import send_email
+from app.core.email_config_holder import get_tickets_notify_emails
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -111,7 +112,12 @@ def forgot_password(body: ForgotPasswordRequest, request: Request, db: Session =
     client_ip = _get_client_ip(request)
     _check_forgot_rate_limit(client_ip)
     email = body.email.lower().strip()
-    destino = (getattr(settings, "FORGOT_PASSWORD_NOTIFY_EMAIL", None) or "itmaster@rapicreditca.com").strip()
+    # Destino: primero contactos de Configuración > Email (tickets_notify_emails); si no hay, .env FORGOT_PASSWORD_NOTIFY_EMAIL; luego fallback
+    destinos_config = get_tickets_notify_emails()
+    if destinos_config:
+        destino = destinos_config[0].strip()
+    else:
+        destino = (getattr(settings, "FORGOT_PASSWORD_NOTIFY_EMAIL", None) or "itmaster@rapicreditca.com").strip()
     if not destino or "@" not in destino:
         logger.warning("FORGOT_PASSWORD_NOTIFY_EMAIL no configurado. No se envía correo de olvido de contraseña.")
         return {"message": "Solicitud registrada. Si el correo está registrado, recibirá instrucciones."}

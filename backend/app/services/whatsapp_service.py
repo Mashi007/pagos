@@ -455,13 +455,17 @@ def _crear_ticket_informe_revisar(
         db.commit()
         db.refresh(ticket)
         logger.info("%s Ticket informe REVISAR creado | ticket_id=%s informe_id=%s campo=%s", LOG_TAG_INFORME, ticket.id, informe.id, campo_corregido)
-        # Comunicar novedades a itmaster@rapicreditca.com
+        # Destino: contactos de Configuración > Email (tickets_notify_emails); si no hay, fallback a email por defecto
+        from app.core.email import send_email
+        from app.core.email_config_holder import get_tickets_notify_emails
+        destinos = get_tickets_notify_emails()
+        if not destinos:
+            destinos = [EMAIL_TICKET_REVISAR]
         asunto = f"[CRM] Informe pago requiere revisión - Ticket #{ticket.id} - Cédula {informe.cedula or 'N/A'}"
         cuerpo = f"Se ha creado un ticket porque el informe de pago tiene columna H = REVISAR (el cliente corrigió datos).\n\n{descripcion}\n\nRevisa el informe en Google Sheet y el ticket en el CRM."
-        from app.core.email import send_email
-        ok, err = send_email([EMAIL_TICKET_REVISAR], asunto, cuerpo)
+        ok, err = send_email(destinos, asunto, cuerpo)
         if not ok:
-            logger.warning("%s No se pudo enviar correo a %s por ticket REVISAR: %s", LOG_TAG_INFORME, EMAIL_TICKET_REVISAR, err)
+            logger.warning("%s No se pudo enviar correo por ticket REVISAR: %s", LOG_TAG_INFORME, err)
         return ticket.id
     except Exception as e:
         logger.exception("%s %s | Error creando ticket informe REVISAR: %s", LOG_TAG_FALLO, "ticket_revisar", e)

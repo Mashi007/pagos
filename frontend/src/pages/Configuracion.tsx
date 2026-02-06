@@ -135,16 +135,17 @@ export function Configuracion() {
   const [configuracionGeneral, setConfiguracionGeneral] = useState<ConfiguracionGeneral | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // Inicializar sección desde URL para que Email, WhatsApp y AI se vean al entrar por enlace
-  const [seccionActiva, setSeccionActiva] = useState(() => {
-    const tab = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('tab') : null
+  // Inicializar sección desde URL para que Email, WhatsApp, Plantillas y AI se vean al entrar por enlace
+  const tabFromUrl = searchParams.get('tab')
+  const tabToSeccion = (tab: string | null): string => {
     if (tab === 'email') return 'emailConfig'
     if (tab === 'whatsapp') return 'whatsappConfig'
     if (tab === 'ai') return 'aiConfig'
     if (tab === 'informe-pagos' || tab === 'ocr') return 'informePagosConfig'
     if (tab === 'plantillas') return 'plantillas'
     return 'general'
-  })
+  }
+  const [seccionActiva, setSeccionActiva] = useState(() => tabToSeccion(tabFromUrl))
   const [estadoCarga, setEstadoCarga] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
 
   // Sincronizar sección con el parámetro tab de la URL (tab=ocr abre la misma sección que informe-pagos)
@@ -1598,13 +1599,13 @@ export function Configuracion() {
             </div>
           </CardHeader>
           <CardContent>
-            {loading && estadoCarga === 'loading' && (
+            {loading && estadoCarga === 'loading' && !['plantillas', 'emailConfig', 'whatsappConfig', 'aiConfig', 'informePagosConfig'].includes(seccionActiva) && (
               <div className="flex items-center justify-center py-8">
                 <RefreshCw className="h-6 w-6 animate-spin text-blue-600 mr-2" />
                 <span className="text-gray-600">Cargando configuración...</span>
               </div>
             )}
-            {!loading && renderContenidoSeccion()}
+            {(!loading || ['plantillas', 'emailConfig', 'whatsappConfig', 'aiConfig', 'informePagosConfig'].includes(seccionActiva)) && renderContenidoSeccion()}
           </CardContent>
         </Card>
       </div>

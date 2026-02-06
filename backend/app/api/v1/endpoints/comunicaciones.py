@@ -272,13 +272,15 @@ def enviar_whatsapp(
         raise HTTPException(status_code=400, detail="El mensaje no puede estar vacío.")
     whatsapp_sync_from_db()
     cfg = get_whatsapp_config()
-    modo_pruebas = (cfg.get("modo_pruebas") or "true").lower() == "true"
+    modo_pruebas = (str(cfg.get("modo_pruebas") or "false").lower() == "true")
     telefono_pruebas = (cfg.get("telefono_pruebas") or "").strip()
-    destino = telefono_pruebas if modo_pruebas and telefono_pruebas else to_number
+    destino = telefono_pruebas if (modo_pruebas and telefono_pruebas and len(telefono_pruebas) >= 10) else to_number
+    logger.info("Comunicaciones enviar-whatsapp: to_number=%s modo_pruebas=%s destino=%s", to_number[:8] + "***", modo_pruebas, destino[:8] + "***" if len(destino) > 8 else destino)
     ok, error_meta = send_whatsapp_text(destino, message)
     if ok:
         guardar_mensaje_whatsapp(db, destino, "OUTBOUND", message, "text")
         return {"success": True, "mensaje": "Mensaje enviado.", "telefono_destino": destino}
+    logger.warning("Comunicaciones enviar-whatsapp fallido: %s", error_meta)
     return {"success": False, "mensaje": error_meta or "No se pudo enviar.", "telefono_destino": destino}
 
 

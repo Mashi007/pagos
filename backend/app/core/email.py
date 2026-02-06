@@ -63,6 +63,7 @@ def send_email(
             return False, "En modo Pruebas debe configurar el correo de pruebas en Configuración > Email."
         cc_list = [e.strip() for e in (cc_emails or []) if e and isinstance(e, str) and "@" in e.strip()]
     has_attachments = bool(attachments)
+    cfg = get_smtp_config()
 
     try:
         import smtplib

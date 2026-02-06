@@ -118,7 +118,8 @@ export function GestionVariables() {
   const [variables, setVariables] = useState<NotificacionVariable[]>([])
   const [cargando, setCargando] = useState(false)
   const [busqueda, setBusqueda] = useState('')
-  const [filtroTabla, setFiltroTabla] = useState<string>('')
+  const FILTRO_TODAS_TABLAS = '__todas__'
+  const [filtroTabla, setFiltroTabla] = useState<string>(FILTRO_TODAS_TABLAS)
   const [filtroActiva, setFiltroActiva] = useState<boolean | null>(null)
 
   // Estado para el diálogo de crear/editar
@@ -284,7 +285,7 @@ export function GestionVariables() {
       v.campo_bd.toLowerCase().includes(busqueda.toLowerCase()) ||
       (v.descripcion && v.descripcion.toLowerCase().includes(busqueda.toLowerCase()))
 
-    const coincideTabla = !filtroTabla || v.tabla === filtroTabla
+    const coincideTabla = filtroTabla === FILTRO_TODAS_TABLAS || !filtroTabla || v.tabla === filtroTabla
     const coincideActiva = filtroActiva === null || v.activa === filtroActiva
 
     return coincideBusqueda && coincideTabla && coincideActiva
@@ -331,12 +332,12 @@ export function GestionVariables() {
             </div>
             <div>
               <Label htmlFor="filtro-tabla">Filtrar por Tabla</Label>
-              <Select value={filtroTabla} onValueChange={setFiltroTabla}>
+              <Select value={filtroTabla || FILTRO_TODAS_TABLAS} onValueChange={setFiltroTabla}>
                 <SelectTrigger id="filtro-tabla" className="mt-1">
                   <SelectValue placeholder="Todas las tablas" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todas las tablas</SelectItem>
+                  <SelectItem value={FILTRO_TODAS_TABLAS}>Todas las tablas</SelectItem>
                   {TABLAS_DISPONIBLES.map((t) => (
                     <SelectItem key={t.value} value={t.value}>
                       {t.label}

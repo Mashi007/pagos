@@ -492,7 +492,8 @@ export function Comunicaciones({
       
       if (resultado.success && resultado.cliente) {
         toast.success('Cliente creado exitosamente')
-        // âœ… invalidateQueries ya dispara refetch automáticamente, no necesitamos setTimeout
+        // Marcar para que el efecto actualice la conversación seleccionada al refetch (contacto_xxx -> cliente_yyy)
+        setClienteRecienCreado({ contacto: conversacion.contacto, tipo: conversacion.tipo })
         queryClient.invalidateQueries({ queryKey: ['comunicaciones'] })
       }
     } catch (error: any) {
@@ -614,32 +615,46 @@ export function Comunicaciones({
   const handleEnviarMensaje = async () => {
     if (!conversacionActual || !mensajeTexto.trim()) return
 
+    if (conversacionActual.tipo === 'whatsapp') {
+      const ultimaComunicacion = conversacionActual.ultimaComunicacion
+      const numeroDestino = (ultimaComunicacion.direccion === 'INBOUND'
+        ? ultimaComunicacion.from_contact
+        : ultimaComunicacion.to_contact || ultimaComunicacion.from_contact) || ''
+      const soloDigitos = numeroDestino.replace(/\D/g, '')
+      if (soloDigitos.length < 10) {
+        toast.error('Número de WhatsApp inválido o incompleto (incluye código de país). No se puede enviar.')
+        return
+      }
+    }
+
     setEnviando(true)
     try {
-      if (conversacionActual.tipo === 'whatsapp') {
-        const ultimaComunicacion = conversacionActual.ultimaComunicacion
+      if (conversacionActual!.tipo === 'whatsapp') {
+        const ultimaComunicacion = conversacionActual!.ultimaComunicacion
         const numeroDestino = ultimaComunicacion.direccion === 'INBOUND'
           ? ultimaComunicacion.from_contact
-          : ultimaComunicacion.to_contact
+          : (ultimaComunicacion.to_contact || ultimaComunicacion.from_contact)
 
-        const resultado = await comunicacionesService.enviarWhatsApp(numeroDestino, mensajeTexto)
+        const resultado = await comunicacionesService.enviarWhatsApp(numeroDestino, mensajeTexto.trim())
 
-        if (resultado.success) {
+        if (resultado?.success) {
           toast.success('Mensaje enviado')
           setMensajeTexto('')
           setAsuntoEmail('')
           queryClient.invalidateQueries({ queryKey: ['comunicaciones'] })
-          queryClient.invalidateQueries({ queryKey: ['comunicaciones-mensajes', conversacionActual.contacto] })
+          queryClient.invalidateQueries({ queryKey: ['comunicaciones-mensajes', conversacionActual!.contacto] })
         } else {
-          toast.error(resultado.mensaje || 'Error enviando mensaje')
+          toast.error(resultado?.mensaje || 'No se pudo enviar por WhatsApp. Revisa Configuración > WhatsApp.')
         }
-      } else if (conversacionActual.tipo === 'email') {
+      } else if (conversacionActual!.tipo === 'email') {
         // TODO: Implementar envío de email
         toast.info('Envío de email en desarrollo')
       }
     } catch (error: any) {
       console.error('Error enviando mensaje:', error)
-      toast.error(error?.response?.data?.detail || 'Error enviando mensaje')
+      const detail = error?.response?.data?.detail
+      const mensaje = typeof detail === 'string' ? detail : error?.response?.data?.mensaje || error?.message || 'Error enviando mensaje'
+      toast.error(mensaje)
     } finally {
       setEnviando(false)
     }
