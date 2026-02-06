@@ -70,6 +70,17 @@ def _lookup_cliente_id(phone_digits: str, by_full: Dict[str, int], by_suffix: Di
     return None
 
 
+def _build_cedula_to_cliente_index(db: Session, cedulas: List[str]) -> Dict[str, int]:
+    """Dado un listado de cédulas (normalizadas con strip), devuelve dict cedula -> cliente.id."""
+    if not cedulas:
+        return {}
+    cedulas_clean = [c.strip() for c in cedulas if (c or "").strip()]
+    if not cedulas_clean:
+        return {}
+    result = db.execute(select(Cliente.id, Cliente.cedula).where(Cliente.cedula.in_(cedulas_clean)))
+    return {(row[1] or "").strip(): row[0] for row in result.all() if (row[1] or "").strip()}
+
+
 @router.get("", response_model=dict)
 @router.get("/", include_in_schema=False, response_model=dict)
 def listar_comunicaciones(
@@ -126,10 +137,17 @@ def listar_comunicaciones(
         # Una sola carga de clientes + índice por teléfono (evita N+1)
         by_full, by_suffix = _build_telefono_to_cliente_index(db)
         cids_en_pagina = set()
+        cedulas_sin_cliente: List[str] = []
         for row in rows:
             cid = _lookup_cliente_id(_digits(row.telefono), by_full, by_suffix)
             if cid is not None:
                 cids_en_pagina.add(cid)
+            elif (row.cedula or "").strip():
+                cedulas_sin_cliente.append((row.cedula or "").strip())
+        # Resolver cliente_id por cédula cuando no hubo match por teléfono (así no se exige "crear cliente" si ya existe)
+        cedula_to_cid = _build_cedula_to_cliente_index(db, cedulas_sin_cliente)
+        for cid in cedula_to_cid.values():
+            cids_en_pagina.add(cid)
         clientes_pagina: Dict[int, Cliente] = {}
         if cids_en_pagina:
             st = select(Cliente).where(Cliente.id.in_(cids_en_pagina))
@@ -149,6 +167,8 @@ def listar_comunicaciones(
         for row in rows:
             telefono_display = row.telefono if (row.telefono or "").startswith("+") else f"+{row.telefono}"
             cid = _lookup_cliente_id(_digits(row.telefono), by_full, by_suffix)
+            if cid is None and (row.cedula or "").strip():
+                cid = cedula_to_cid.get((row.cedula or "").strip())
             nombre = (row.nombre_cliente or "").strip()
             if not nombre and cid and cid in clientes_pagina:
                 nombre = (clientes_pagina[cid].nombres or "").strip()

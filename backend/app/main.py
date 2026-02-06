@@ -66,6 +66,7 @@ def _startup_db_with_retry(engine, max_attempts: int = 5, delay_sec: float = 2.0
         Base, Cliente, Prestamo, Ticket, Cuota, PagosWhatsapp, Configuracion, Auditoria,
         User, DefinicionCampo, ConversacionAI, DiccionarioSemantico,
         ConversacionCobranza, MensajeWhatsapp, PagosInforme,
+        PlantillaNotificacion, VariableNotificacion,
     )
     last_error = None
     for attempt in range(1, max_attempts + 1):

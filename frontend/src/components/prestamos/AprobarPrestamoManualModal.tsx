@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
 import { X, Calendar, DollarSign, CheckCircle2 } from 'lucide-react'
@@ -43,6 +43,24 @@ export function AprobarPrestamoManualModal({ prestamo, onClose, onSuccess }: Apr
     prestamo.observaciones || ''
   )
   const [isLoading, setIsLoading] = useState(false)
+
+  // Calcular cuota por periodo automáticamente: monto, número de cuotas, modalidad y tasa
+  const cuotaCalculada = useMemo(() => {
+    if (!totalFinanciamiento || totalFinanciamiento <= 0 || !numeroCuotas || numeroCuotas <= 0) return 0
+    const P = totalFinanciamiento
+    const n = numeroCuotas
+    const periodosPorAnio = modalidadPago === 'MENSUAL' ? 12 : modalidadPago === 'QUINCENAL' ? 24 : 52
+    const tasaAnual = tasaInteres ?? 0
+    const r = tasaAnual / 100 / periodosPorAnio
+    if (r <= 0) return Math.round((P / n) * 100) / 100
+    const factor = Math.pow(1 + r, n)
+    const cuota = P * (r * factor) / (factor - 1)
+    return Math.round(cuota * 100) / 100
+  }, [totalFinanciamiento, numeroCuotas, modalidadPago, tasaInteres])
+
+  useEffect(() => {
+    setCuotaPeriodo(cuotaCalculada)
+  }, [cuotaCalculada])
 
   const canSubmit =
     fechaAprobacion &&
@@ -148,8 +166,10 @@ export function AprobarPrestamoManualModal({ prestamo, onClose, onSuccess }: Apr
                   min={0}
                   step={0.01}
                   value={cuotaPeriodo || ''}
-                  onChange={(e) => setCuotaPeriodo(Number(e.target.value) || 0)}
+                  readOnly
+                  className="bg-gray-50"
                 />
+                <p className="text-xs text-gray-500 mt-1">Calculada según monto, número de cuotas, modalidad y tasa de interés.</p>
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700">Tasa de interés (%)</label>
@@ -161,6 +181,7 @@ export function AprobarPrestamoManualModal({ prestamo, onClose, onSuccess }: Apr
                   value={tasaInteres ?? ''}
                   onChange={(e) => setTasaInteres(Number(e.target.value) ?? 0)}
                 />
+                <p className="text-xs text-gray-500 mt-1">Por defecto 0. Al cambiar, la cuota por periodo se actualiza automáticamente.</p>
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700">Fecha de aprobación *</label>

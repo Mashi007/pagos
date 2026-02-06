@@ -23,6 +23,7 @@ from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.configuracion import Configuracion
 from app.models.plantilla_notificacion import PlantillaNotificacion
+from app.models.variable_notificacion import VariableNotificacion
 
 logger = logging.getLogger(__name__)
 
@@ -329,6 +330,165 @@ def enviar_con_plantilla(
     if not ok:
         raise HTTPException(status_code=502, detail=msg or "Error al enviar el correo")
     return {"message": "Correo enviado", "destinatario": correo}
+
+
+# --- Variables personalizadas (CRUD + inicializar precargadas) ---
+
+def _variable_to_dict(v: VariableNotificacion) -> dict:
+    """Serializa VariableNotificacion al formato esperado por el frontend."""
+    return {
+        "id": v.id,
+        "nombre_variable": v.nombre_variable or "",
+        "tabla": v.tabla or "",
+        "campo_bd": v.campo_bd or "",
+        "descripcion": getattr(v, "descripcion", None),
+        "activa": bool(v.activa),
+        "fecha_creacion": v.fecha_creacion.isoformat() if v.fecha_creacion else None,
+        "fecha_actualizacion": v.fecha_actualizacion.isoformat() if v.fecha_actualizacion else None,
+    }
+
+
+@router.get("/variables")
+def get_variables(
+    activa: Optional[bool] = Query(None, description="Filtrar por activa (true/false)"),
+    db: Session = Depends(get_db),
+):
+    """Lista variables personalizadas de notificaciones. Opcional: ?activa=true|false."""
+    q = select(VariableNotificacion).order_by(VariableNotificacion.nombre_variable)
+    if activa is not None:
+        q = q.where(VariableNotificacion.activa == activa)
+    try:
+        rows = db.execute(q).scalars().all()
+        return [_variable_to_dict(r) for r in rows]
+    except Exception as e:
+        logger.exception("get_variables: %s", e)
+        return []
+
+
+@router.get("/variables/{variable_id}")
+def get_variable(variable_id: int, db: Session = Depends(get_db)):
+    """Obtiene una variable personalizada por id."""
+    v = db.get(VariableNotificacion, variable_id)
+    if not v:
+        raise HTTPException(status_code=404, detail="Variable no encontrada")
+    return _variable_to_dict(v)
+
+
+@router.post("/variables")
+def create_variable(payload: dict = Body(...), db: Session = Depends(get_db)):
+    """Crea una variable personalizada. Campos: nombre_variable, tabla, campo_bd; opcionales: descripcion, activa."""
+    nombre = (payload.get("nombre_variable") or "").strip().lower()
+    if not nombre:
+        raise HTTPException(status_code=400, detail="nombre_variable es obligatorio")
+    tabla = (payload.get("tabla") or "").strip()
+    campo_bd = (payload.get("campo_bd") or "").strip()
+    if not tabla or not campo_bd:
+        raise HTTPException(status_code=400, detail="tabla y campo_bd son obligatorios")
+    existing = db.execute(select(VariableNotificacion).where(VariableNotificacion.nombre_variable == nombre)).scalar_one_or_none()
+    if existing:
+        raise HTTPException(status_code=409, detail="Ya existe una variable con ese nombre_variable")
+    try:
+        v = VariableNotificacion(
+            nombre_variable=nombre,
+            tabla=tabla,
+            campo_bd=campo_bd,
+            descripcion=(payload.get("descripcion") or "").strip() or None,
+            activa=payload.get("activa", True),
+        )
+        db.add(v)
+        db.commit()
+        db.refresh(v)
+        return _variable_to_dict(v)
+    except Exception as e:
+        db.rollback()
+        logger.exception("create_variable: %s", e)
+        raise HTTPException(status_code=500, detail="Error al crear la variable")
+
+
+@router.put("/variables/{variable_id}")
+def update_variable(variable_id: int, payload: dict = Body(...), db: Session = Depends(get_db)):
+    """Actualiza una variable personalizada (descripcion, activa, tabla, campo_bd). nombre_variable no se modifica."""
+    v = db.get(VariableNotificacion, variable_id)
+    if not v:
+        raise HTTPException(status_code=404, detail="Variable no encontrada")
+    if "descripcion" in payload:
+        v.descripcion = (payload.get("descripcion") or "").strip() or None
+    if "activa" in payload:
+        v.activa = bool(payload.get("activa"))
+    if "tabla" in payload and payload.get("tabla"):
+        v.tabla = (payload["tabla"] or "").strip()
+    if "campo_bd" in payload and payload.get("campo_bd"):
+        v.campo_bd = (payload["campo_bd"] or "").strip()
+    try:
+        db.commit()
+        db.refresh(v)
+        return _variable_to_dict(v)
+    except Exception as e:
+        db.rollback()
+        logger.exception("update_variable: %s", e)
+        raise HTTPException(status_code=500, detail="Error al actualizar la variable")
+
+
+@router.delete("/variables/{variable_id}")
+def delete_variable(variable_id: int, db: Session = Depends(get_db)):
+    """Elimina una variable personalizada."""
+    v = db.get(VariableNotificacion, variable_id)
+    if not v:
+        raise HTTPException(status_code=404, detail="Variable no encontrada")
+    try:
+        db.delete(v)
+        db.commit()
+        return {"message": "Variable eliminada"}
+    except Exception as e:
+        db.rollback()
+        logger.exception("delete_variable: %s", e)
+        raise HTTPException(status_code=500, detail="Error al eliminar la variable")
+
+
+VARIABLES_PRECARGADAS = [
+    {"nombre_variable": "nombre_cliente", "tabla": "clientes", "campo_bd": "nombres", "descripcion": "Nombres del cliente"},
+    {"nombre_variable": "cedula", "tabla": "clientes", "campo_bd": "cedula", "descripcion": "Cédula de identidad"},
+    {"nombre_variable": "telefono", "tabla": "clientes", "campo_bd": "telefono", "descripcion": "Teléfono de contacto"},
+    {"nombre_variable": "email", "tabla": "clientes", "campo_bd": "email", "descripcion": "Correo electrónico"},
+    {"nombre_variable": "numero_cuota", "tabla": "cuotas", "campo_bd": "numero_cuota", "descripcion": "Número de cuota"},
+    {"nombre_variable": "fecha_vencimiento", "tabla": "cuotas", "campo_bd": "fecha_vencimiento", "descripcion": "Fecha de vencimiento"},
+    {"nombre_variable": "monto_cuota", "tabla": "cuotas", "campo_bd": "monto", "descripcion": "Monto de la cuota"},
+    {"nombre_variable": "dias_atraso", "tabla": "cuotas", "campo_bd": "dias_mora", "descripcion": "Días de atraso"},
+]
+
+
+@router.post("/variables/inicializar-precargadas")
+def inicializar_variables_precargadas(db: Session = Depends(get_db)):
+    """Inserta variables precargadas si no existen (por nombre_variable). Idempotente."""
+    creadas = 0
+    existentes = 0
+    for item in VARIABLES_PRECARGADAS:
+        nombre = item["nombre_variable"]
+        existing = db.execute(select(VariableNotificacion).where(VariableNotificacion.nombre_variable == nombre)).scalar_one_or_none()
+        if existing:
+            existentes += 1
+            continue
+        try:
+            v = VariableNotificacion(
+                nombre_variable=nombre,
+                tabla=item["tabla"],
+                campo_bd=item["campo_bd"],
+                descripcion=item.get("descripcion"),
+                activa=True,
+            )
+            db.add(v)
+            db.commit()
+            creadas += 1
+        except Exception as e:
+            db.rollback()
+            logger.warning("inicializar_variables_precargadas: %s para %s", e, nombre)
+    total = creadas + existentes
+    return {
+        "mensaje": f"Variables precargadas: {creadas} creadas, {existentes} ya existían.",
+        "variables_creadas": creadas,
+        "variables_existentes": existentes,
+        "total": total,
+    }
 
 
 @router.get("")
