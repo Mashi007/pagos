@@ -245,14 +245,15 @@ async def upload_excel_pagos(
         rows = list(ws.iter_rows(min_row=2, values_only=True))
         registros = 0
         errores = []
+        errores_detalle = []
         for i, row in enumerate(rows):
             if not row or all(cell is None for cell in row):
                 continue
             try:
                 cedula = str(row[0]).strip() if row[0] is not None else ""
-                prestamo_id = int(row[1]) if row[1] is not None else None
-                fecha_val = row[2]
-                monto = float(row[3]) if row[3] is not None else 0
+                prestamo_id = int(row[1]) if len(row) > 1 and row[1] is not None else None
+                fecha_val = row[2] if len(row) > 2 else None
+                monto = float(row[3]) if len(row) > 3 and row[3] is not None else 0
                 numero_doc = str(row[4]).strip() if len(row) > 4 and row[4] is not None else ""
                 if not cedula or monto <= 0:
                     continue
@@ -274,12 +275,31 @@ async def upload_excel_pagos(
                 db.add(p)
                 registros += 1
             except Exception as e:
-                errores.append(f"Fila {i + 2}: {e}")
+                msg = str(e)
+                errores.append(f"Fila {i + 2}: {msg}")
+                datos_fila = {}
+                if len(row) > 0:
+                    datos_fila["cedula"] = row[0]
+                if len(row) > 1:
+                    datos_fila["prestamo_id"] = row[1]
+                if len(row) > 2:
+                    datos_fila["fecha_pago"] = row[2]
+                if len(row) > 3:
+                    datos_fila["monto_pagado"] = row[3]
+                if len(row) > 4:
+                    datos_fila["numero_documento"] = row[4]
+                errores_detalle.append({
+                    "fila": i + 2,
+                    "cedula": str(datos_fila.get("cedula", "")),
+                    "error": msg,
+                    "datos": datos_fila,
+                })
         db.commit()
         return {
             "message": "Carga finalizada",
             "registros_procesados": registros,
             "errores": errores[:50],
+            "errores_detalle": errores_detalle[:100],
         }
     except Exception as e:
         db.rollback()

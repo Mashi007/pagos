@@ -1,10 +1,18 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Upload, X, FileSpreadsheet, Loader2, CheckCircle } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '../../components/ui/button'
 import { Card, CardContent } from '../../components/ui/card'
+import { ErroresDetallados } from '../carga-masiva/ErroresDetallados'
 import { pagoService } from '../../services/pagoService'
 import { toast } from 'sonner'
+
+interface ErrorDetalleBackend {
+  fila: number
+  cedula: string
+  error: string
+  datos: Record<string, unknown>
+}
 
 interface ExcelUploaderProps {
   onClose: () => void
