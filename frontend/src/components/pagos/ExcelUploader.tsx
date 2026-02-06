@@ -43,23 +43,23 @@ export function ExcelUploader({ onClose, onSuccess }: ExcelUploaderProps) {
     }
 
     setIsUploading(true)
+    setResults(null)
     try {
       const result = await pagoService.uploadExcel(file)
       setResults(result)
+      const registrados = result.registros_procesados ?? 0
+      const listaErrores = result.errores ?? []
+      const numErrores = listaErrores.length
 
-      if (result.success > 0) {
-        toast.success(`${result.success} pagos registrados exitosamente`)
-      }
-
-      if (result.errores > 0) {
-        toast.warning(`${result.errores} errores encontrados`)
-      }
-
-      if (result.success > 0) {
+      if (registrados > 0) {
+        toast.success(`${registrados} pago(s) registrado(s) exitosamente`)
         onSuccess()
       }
+      if (numErrores > 0) {
+        toast.warning(`${numErrores} fila(s) con error`)
+      }
     } catch (error: any) {
-      toast.error(error.message || 'Error al cargar archivo')
+      toast.error(error?.response?.data?.detail || error?.message || 'Error al cargar archivo')
     } finally {
       setIsUploading(false)
     }
@@ -89,19 +89,21 @@ export function ExcelUploader({ onClose, onSuccess }: ExcelUploaderProps) {
 
           {/* Content */}
           <div className="p-6 space-y-6">
-            {/* Instrucciones */}
+            {/* Instrucciones alineadas con tabla pagos (cedula, prestamo_id, fecha_pago, monto_pagado, numero_documento) */}
             <Card>
               <CardContent className="pt-6">
                 <div className="space-y-3">
-                  <h3 className="font-semibold text-lg">Formato del archivo Excel:</h3>
-                  <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
-                    <li>Cédula de Identidad</li>
-                    <li>Fecha de Pago</li>
-                    <li>Monto Pagado</li>
-                    <li>Número de Documento</li>
-                  </ul>
+                  <h3 className="font-semibold text-lg">Formato del archivo Excel</h3>
+                  <p className="text-sm text-gray-600">Primera fila: encabezados. Desde la segunda fila, una columna por campo (en este orden):</p>
+                  <ol className="list-decimal list-inside space-y-1 text-sm text-gray-600">
+                    <li><strong>Cédula</strong> (obligatorio)</li>
+                    <li><strong>ID Préstamo</strong> (opcional, número)</li>
+                    <li><strong>Fecha de pago</strong> (fecha)</li>
+                    <li><strong>Monto pagado</strong> (número, mayor a 0)</li>
+                    <li><strong>Número de documento</strong> (referencia del pago)</li>
+                  </ol>
                   <p className="text-xs text-gray-500 mt-2">
-                    El archivo debe contener estas columnas exactamente como se muestra.
+                    Formatos aceptados: .xlsx o .xls. Las filas con cédula vacía o monto ≤ 0 se omiten.
                   </p>
                 </div>
               </CardContent>
@@ -135,18 +137,21 @@ export function ExcelUploader({ onClose, onSuccess }: ExcelUploaderProps) {
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 text-green-600">
                       <CheckCircle className="w-5 h-5" />
-                      <span className="font-semibold">{results.success} pagos registrados</span>
+                      <span className="font-semibold">{results.registros_procesados ?? 0} pago(s) registrado(s)</span>
                     </div>
-                    {results.errores > 0 && (
+                    {(results.errores?.length ?? 0) > 0 && (
                       <div className="text-red-600">
-                        <span className="font-semibold">{results.errores} errores</span>
+                        <span className="font-semibold">{results.errores.length} fila(s) con error</span>
                       </div>
                     )}
-                    {results.errores_detalle && results.errores_detalle.length > 0 && (
+                    {results.errores && results.errores.length > 0 && (
                       <div className="mt-3 max-h-40 overflow-y-auto">
-                        {results.errores_detalle.map((error: string, index: number) => (
+                        {results.errores.slice(0, 50).map((error: string, index: number) => (
                           <p key={index} className="text-xs text-red-600">{error}</p>
                         ))}
+                        {results.errores.length > 50 && (
+                          <p className="text-xs text-gray-500 mt-1">… y {results.errores.length - 50} más</p>
+                        )}
                       </div>
                     )}
                   </div>

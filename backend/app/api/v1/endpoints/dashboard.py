@@ -152,10 +152,12 @@ def _compute_kpis_principales(
             inicio_dt, fin_dt = inicio_mes_actual, fin_mes_actual
             inicio_ant_dt, fin_ant_dt = inicio_mes_anterior, fin_mes_anterior
 
-        # Total préstamos: con rango = count en el rango; sin rango = count total (todos aprobados) para que la tarjeta no quede en 0
-        conds = [Prestamo.estado == "APROBADO"]
-        if usar_rango:
-            conds.extend([Prestamo.fecha_registro >= inicio_dt, Prestamo.fecha_registro <= fin_dt])
+        # Total préstamos: siempre por período (mensual cuando no hay rango = mes actual)
+        conds = [
+            Prestamo.estado == "APROBADO",
+            Prestamo.fecha_registro >= inicio_dt,
+            Prestamo.fecha_registro <= fin_dt,
+        ]
         if analista:
             conds.append(Prestamo.analista == analista)
         if concesionario:
@@ -193,13 +195,15 @@ def _compute_kpis_principales(
         else:
             variacion_creditos = 0.0
 
-        # Morosidad total: suma monto_cuota de cuotas vencidas y no pagadas (fecha_pago IS NULL, fecha_vencimiento < hoy)
-        hoy = date.today()
+        # Morosidad mensual: cuotas que vencieron en el período actual y no se han cobrado
+        inicio_d = inicio_dt.date() if hasattr(inicio_dt, "date") else (inicio if usar_rango else inicio_dt.date())
+        fin_d = fin_dt.date() if hasattr(fin_dt, "date") else (fin if usar_rango else fin_dt.date())
         conds_moro = [
             Cuota.prestamo_id == Prestamo.id,
             Prestamo.estado == "APROBADO",
             Cuota.fecha_pago.is_(None),
-            Cuota.fecha_vencimiento < hoy,
+            Cuota.fecha_vencimiento >= inicio_d,
+            Cuota.fecha_vencimiento <= fin_d,
         ]
         if analista:
             conds_moro.append(Prestamo.analista == analista)
@@ -212,13 +216,15 @@ def _compute_kpis_principales(
                 select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).join(Prestamo, Cuota.prestamo_id == Prestamo.id).where(and_(*conds_moro))
             )
         )
-        # Variación vs mes anterior: morosidad a fin del período anterior (cuotas vencidas y no pagadas a esa fecha)
-        fin_anterior_d = fin_ant_dt.date()
+        # Variación vs período anterior: morosidad del período anterior (vencido en ese período y no cobrado)
+        inicio_ant_d = inicio_ant_dt.date() if hasattr(inicio_ant_dt, "date") else inicio_ant_dt
+        fin_ant_d = fin_ant_dt.date() if hasattr(fin_ant_dt, "date") else fin_ant_dt
         conds_moro_ant = [
             Cuota.prestamo_id == Prestamo.id,
             Prestamo.estado == "APROBADO",
-            Cuota.fecha_vencimiento <= fin_anterior_d,
-            or_(Cuota.fecha_pago.is_(None), Cuota.fecha_pago > fin_anterior_d),
+            Cuota.fecha_pago.is_(None),
+            Cuota.fecha_vencimiento >= inicio_ant_d,
+            Cuota.fecha_vencimiento <= fin_ant_d,
         ]
         if analista:
             conds_moro_ant.append(Prestamo.analista == analista)

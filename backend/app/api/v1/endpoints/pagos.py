@@ -425,23 +425,30 @@ def get_pagos_kpis(
             )
         ) or 0
 
-        # 3) Morosidad mensual %: saldo vencido (no cobrado) / cartera pendiente * 100
-        saldo_vencido = db.scalar(
+        # 3) Morosidad mensual %: del mes en curso, (lo que venció en el mes y no se ha cobrado) / (lo que venció en el mes) * 100
+        total_vencido_mes = db.scalar(
             select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
-                Cuota.fecha_pago.is_(None),
-                Cuota.fecha_vencimiento < hoy,
+                Cuota.fecha_vencimiento >= inicio_mes,
+                Cuota.fecha_vencimiento <= fin_mes,
             )
         ) or 0
+        no_cobrado_mes = db.scalar(
+            select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
+                Cuota.fecha_vencimiento >= inicio_mes,
+                Cuota.fecha_vencimiento <= fin_mes,
+                Cuota.fecha_pago.is_(None),
+            )
+        ) or 0
+        morosidad_porcentaje = (
+            (_safe_float(no_cobrado_mes) / _safe_float(total_vencido_mes) * 100.0)
+            if total_vencido_mes and _safe_float(total_vencido_mes) > 0
+            else 0.0
+        )
         cartera_pendiente = db.scalar(
             select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
                 Cuota.fecha_pago.is_(None)
             )
         ) or 0
-        morosidad_porcentaje = (
-            (_safe_float(saldo_vencido) / _safe_float(cartera_pendiente) * 100.0)
-            if cartera_pendiente and _safe_float(cartera_pendiente) > 0
-            else 0.0
-        )
         # Compatibilidad: clientes en mora / al día y saldo por cobrar (otros módulos)
         subq = (
             select(Cuota.cliente_id)

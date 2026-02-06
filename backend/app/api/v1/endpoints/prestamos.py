@@ -2,6 +2,7 @@
 Endpoints de préstamos. Datos reales desde BD (tabla prestamos).
 Todos los endpoints usan Depends(get_db). No hay stubs ni datos demo.
 """
+import calendar
 import logging
 from datetime import date, datetime, timedelta
 from decimal import Decimal
@@ -207,36 +208,73 @@ def listar_prestamos(
 def get_prestamos_stats(
     analista: Optional[str] = Query(None),
     concesionario: Optional[str] = Query(None),
+    modelo: Optional[str] = Query(None),
+    mes: Optional[int] = Query(None),
+    año: Optional[int] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Estadísticas de préstamos desde BD: total, por estado, total_financiamiento, promedio_monto, cartera_vigente."""
-    q_base = select(Prestamo)
+    """Estadísticas de préstamos mensuales desde BD: total, por estado, total_financiamiento, promedio_monto, cartera_vigente (todo del mes)."""
+    hoy = date.today()
+    mes_u = mes if mes is not None and 1 <= mes <= 12 else hoy.month
+    año_u = año if año is not None and año >= 2000 else hoy.year
+    import calendar
+    _, ultimo_dia = calendar.monthrange(año_u, mes_u)
+    inicio_mes = date(año_u, mes_u, 1)
+    fin_mes = date(año_u, mes_u, ultimo_dia)
+
+    q_base = (
+        select(Prestamo)
+        .where(
+            Prestamo.estado == "APROBADO",
+            Prestamo.fecha_registro >= inicio_mes,
+            Prestamo.fecha_registro <= fin_mes,
+        )
+    )
     if analista and analista.strip():
         q_base = q_base.where(Prestamo.analista == analista.strip())
     if concesionario and concesionario.strip():
         q_base = q_base.where(Prestamo.concesionario == concesionario.strip())
+    if modelo and modelo.strip():
+        q_base = q_base.where(Prestamo.modelo_vehiculo == modelo.strip())
     total = db.scalar(select(func.count()).select_from(q_base.subquery())) or 0
-    q_estado = select(Prestamo.estado, func.count()).select_from(Prestamo)
+    q_estado = (
+        select(Prestamo.estado, func.count())
+        .select_from(Prestamo)
+        .where(
+            Prestamo.fecha_registro >= inicio_mes,
+            Prestamo.fecha_registro <= fin_mes,
+        )
+    )
     if analista and analista.strip():
         q_estado = q_estado.where(Prestamo.analista == analista.strip())
     if concesionario and concesionario.strip():
         q_estado = q_estado.where(Prestamo.concesionario == concesionario.strip())
+    if modelo and modelo.strip():
+        q_estado = q_estado.where(Prestamo.modelo_vehiculo == modelo.strip())
     q_estado = q_estado.group_by(Prestamo.estado)
     rows = db.execute(q_estado).all()
     por_estado = {r[0]: r[1] for r in rows}
     total_fin = db.scalar(select(func.coalesce(func.sum(Prestamo.total_financiamiento), 0)).select_from(q_base.subquery())) or 0
     total_fin = float(total_fin)
     promedio_monto = (total_fin / total) if total else 0
-    ids_vigentes = db.execute(select(Prestamo.id).where(Prestamo.estado.in_(["APROBADO", "DESEMBOLSADO"]))).scalars().all()
-    cartera_vigente = 0.0
-    if ids_vigentes:
-        cartera_vigente = float(db.scalar(select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(Cuota.prestamo_id.in_(ids_vigentes), Cuota.fecha_pago.is_(None))) or 0)
+    # Cartera por cobrar en el mes: cuotas con vencimiento en el mes y no pagadas
+    cartera_vigente = float(
+        db.scalar(
+            select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
+                Cuota.fecha_vencimiento >= inicio_mes,
+                Cuota.fecha_vencimiento <= fin_mes,
+                Cuota.fecha_pago.is_(None),
+            )
+        ) or 0
+    )
     return {
         "total": total,
         "por_estado": por_estado,
         "total_financiamiento": total_fin,
         "promedio_monto": promedio_monto,
         "cartera_vigente": cartera_vigente,
+        "mes": mes_u,
+        "año": año_u,
     }
 
 

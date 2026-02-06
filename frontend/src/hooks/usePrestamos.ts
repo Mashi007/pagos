@@ -240,6 +240,8 @@ export interface PrestamosKPIsData {
   totalPrestamos: number
   promedioMonto: number
   totalCarteraVigente: number
+  mes?: number
+  año?: number
 }
 
 // Hook para obtener KPIs de préstamos

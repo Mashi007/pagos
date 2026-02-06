@@ -204,6 +204,16 @@ class PagoService {
     return response.data as Blob
   }
 
+  // Descargar PDF tabla de amortización completa por cédula
+  async descargarPDFAmortizacion(cedula: string): Promise<Blob> {
+    const axiosInstance = apiClient.getAxiosInstance()
+    const response = await axiosInstance.get(
+      `/api/v1/reportes/cliente/${encodeURIComponent(cedula)}/amortizacion.pdf`,
+      { responseType: 'blob' }
+    )
+    return response.data as Blob
+  }
+
   // Descargar informe Excel de pagos con errores
   async descargarPagosConErrores(): Promise<{ blob: Blob; filename: string }> {
     const axiosInstance = apiClient.getAxiosInstance()

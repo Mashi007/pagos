@@ -549,7 +549,7 @@ export function DashboardMenu() {
                 className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
               >
                 <KpiCardLarge
-                  title="Total Préstamos"
+                  title="Préstamos (mensual)"
                   value={kpisPrincipales.total_prestamos.valor_actual}
                   variation={kpisPrincipales.total_prestamos.variacion_porcentual !== undefined ? {
                     percent: kpisPrincipales.total_prestamos.variacion_porcentual,
@@ -562,7 +562,7 @@ export function DashboardMenu() {
                   format="number"
                 />
                 <KpiCardLarge
-                  title="Créditos Nuevos"
+                  title="Créditos nuevos (mensual)"
                   value={kpisPrincipales.creditos_nuevos_mes.valor_actual}
                   variation={kpisPrincipales.creditos_nuevos_mes.variacion_porcentual !== undefined ? {
                     percent: kpisPrincipales.creditos_nuevos_mes.variacion_porcentual,
@@ -575,10 +575,10 @@ export function DashboardMenu() {
                   format="currency"
                 />
                 <KpiCardLarge
-                  title="Cuotas Programadas"
+                  title="Cuotas programadas (mensual)"
                   value={kpisPrincipales.cuotas_programadas?.valor_actual || 0}
                   subtitle={kpisPrincipales.porcentaje_cuotas_pagadas !== undefined
-                    ? `% Cuotas pagadas: ${kpisPrincipales.porcentaje_cuotas_pagadas.toFixed(1)}%`
+                    ? `% Cuotas pagadas en el mes: ${kpisPrincipales.porcentaje_cuotas_pagadas.toFixed(1)}%`
                     : undefined}
                   icon={FileText}
                   color="text-blue-600"
@@ -587,7 +587,7 @@ export function DashboardMenu() {
                   format="currency"
                 />
                 <KpiCardLarge
-                  title="Morosidad Total"
+                  title="Morosidad (mensual)"
                   value={kpisPrincipales.total_morosidad_usd.valor_actual}
                   variation={kpisPrincipales.total_morosidad_usd.variacion_porcentual !== undefined ? {
                     percent: kpisPrincipales.total_morosidad_usd.variacion_porcentual,

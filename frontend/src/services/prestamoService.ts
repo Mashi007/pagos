@@ -155,21 +155,34 @@ class PrestamoService {
     return response
   }
 
-  // Obtener KPIs de préstamos desde /prestamos/stats
+  // Obtener KPIs de préstamos mensuales desde /prestamos/stats (mes/año por defecto = actual)
   async getKPIs(filters?: {
     analista?: string
     concesionario?: string
     modelo?: string
     fecha_inicio?: string
     fecha_fin?: string
+    mes?: number
+    año?: number
   }): Promise<{
     totalFinanciamiento: number
     totalPrestamos: number
     promedioMonto: number
     totalCarteraVigente: number
+    mes?: number
+    año?: number
   }> {
     try {
-      const params = filters ? { analista: filters.analista, concesionario: filters.concesionario } : {}
+      const now = new Date()
+      const params: Record<string, string | number> = filters
+        ? {
+            ...(filters.analista && { analista: filters.analista }),
+            ...(filters.concesionario && { concesionario: filters.concesionario }),
+            ...(filters.modelo && { modelo: filters.modelo }),
+            mes: filters.mes ?? now.getMonth() + 1,
+            año: filters.año ?? now.getFullYear(),
+          }
+        : { mes: now.getMonth() + 1, año: now.getFullYear() }
       const url = buildUrl(`${this.baseUrl}/stats`, params)
       const body = await apiClient.get<{
         total?: number
@@ -177,6 +190,8 @@ class PrestamoService {
         total_financiamiento?: number
         promedio_monto?: number
         cartera_vigente?: number
+        mes?: number
+        año?: number
       }>(url)
       const total = body?.total ?? 0
       return {
@@ -184,13 +199,18 @@ class PrestamoService {
         totalPrestamos: total,
         promedioMonto: body?.promedio_monto ?? 0,
         totalCarteraVigente: body?.cartera_vigente ?? 0,
+        mes: body?.mes,
+        año: body?.año,
       }
     } catch {
+      const now = new Date()
       return {
         totalFinanciamiento: 0,
         totalPrestamos: 0,
         promedioMonto: 0,
         totalCarteraVigente: 0,
+        mes: now.getMonth() + 1,
+        año: now.getFullYear(),
       }
     }
   }

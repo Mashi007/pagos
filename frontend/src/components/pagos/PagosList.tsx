@@ -11,19 +11,25 @@ import {
   AlertTriangle,
   RefreshCw,
   X,
+  ChevronDown,
+  FileSpreadsheet,
+  FileEdit,
 } from 'lucide-react'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import { Badge } from '../../components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
+import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import { pagoService, type Pago } from '../../services/pagoService'
 import { RegistrarPagoForm } from './RegistrarPagoForm'
+import { ExcelUploader } from './ExcelUploader'
 import { CargaMasivaMenu } from './CargaMasivaMenu'
 import { PagosListResumen } from './PagosListResumen'
 import { PagosKPIsNuevo } from './PagosKPIsNuevo'
+import { PagosBuscadorAmortizacion } from './PagosBuscadorAmortizacion'
 import { AdvertenciaFormatoCientifico } from '../../components/common/AdvertenciaFormatoCientifico'
 import { toast } from 'sonner'
 
@@ -40,6 +46,8 @@ export function PagosList() {
     analista: '',
   })
   const [showRegistrarPago, setShowRegistrarPago] = useState(false)
+  const [showCargaMasivaPagos, setShowCargaMasivaPagos] = useState(false)
+  const [agregarPagoOpen, setAgregarPagoOpen] = useState(false)
   const [pagoEditando, setPagoEditando] = useState<Pago | null>(null)
   const queryClient = useQueryClient()
 
@@ -130,7 +138,10 @@ export function PagosList() {
 
   return (
     <div className="space-y-6">
-      {/* KPIs primero (mismo orden que Préstamos) */}
+      {/* Buscador por cédula: al operar se despliega tabla de amortización y se puede descargar en PDF */}
+      <PagosBuscadorAmortizacion />
+
+      {/* KPIs */}
       <PagosKPIsNuevo />
 
       {/* Encabezado (mismo formato que Préstamos) */}
@@ -139,7 +150,7 @@ export function PagosList() {
           <h1 className="text-3xl font-bold text-gray-900">Pagos</h1>
           <p className="text-gray-600 mt-1">Gestión de pagos y conciliación</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-3 flex-wrap">
           <Button
             variant="outline"
             size="lg"
@@ -170,14 +181,46 @@ export function PagosList() {
               }
             }}
           />
-          <Button
-            size="lg"
-            onClick={() => setShowRegistrarPago(true)}
-            className="px-8 py-6 text-base font-semibold min-w-[200px]"
-          >
-            <Plus className="w-5 h-5 mr-2" />
-            Registrar Pago
-          </Button>
+          <Popover open={agregarPagoOpen} onOpenChange={setAgregarPagoOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                size="lg"
+                className="px-8 py-6 text-base font-semibold min-w-[200px] bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                <Plus className="w-5 h-5 mr-2" />
+                Agregar pago
+                <ChevronDown className="w-4 h-4 ml-2" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-2" align="end">
+              <div className="space-y-1">
+                <button
+                  type="button"
+                  className="w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-md hover:bg-gray-100 transition-colors text-left"
+                  onClick={() => {
+                    setShowRegistrarPago(true)
+                    setAgregarPagoOpen(false)
+                  }}
+                >
+                  <FileEdit className="w-5 h-5 text-gray-600" />
+                  <span>Registrar un pago</span>
+                  <span className="text-xs text-gray-500 ml-auto">Formulario</span>
+                </button>
+                <button
+                  type="button"
+                  className="w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-md hover:bg-gray-100 transition-colors text-left"
+                  onClick={() => {
+                    setShowCargaMasivaPagos(true)
+                    setAgregarPagoOpen(false)
+                  }}
+                >
+                  <FileSpreadsheet className="w-5 h-5 text-gray-600" />
+                  <span>Carga masiva</span>
+                  <span className="text-xs text-gray-500 ml-auto">Excel</span>
+                </button>
+              </div>
+            </PopoverContent>
+          </Popover>
           <Button
             variant="outline"
             size="lg"
@@ -554,6 +597,22 @@ export function PagosList() {
               console.error('âŒ Error actualizando dashboard:', error)
               toast.error('Pago registrado, pero hubo un error al actualizar el dashboard')
             }
+          }}
+        />
+      )}
+
+      {/* Carga masiva de pagos (Excel) desde Agregar pago */}
+      {showCargaMasivaPagos && (
+        <ExcelUploader
+          onClose={() => setShowCargaMasivaPagos(false)}
+          onSuccess={async () => {
+            setShowCargaMasivaPagos(false)
+            await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
+            await queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false })
+            await queryClient.invalidateQueries({ queryKey: ['pagos-ultimos'], exact: false })
+            await queryClient.refetchQueries({ queryKey: ['pagos'], exact: false })
+            await queryClient.refetchQueries({ queryKey: ['pagos-kpis'], exact: false })
+            toast.success('Datos actualizados correctamente')
           }}
         />
       )}

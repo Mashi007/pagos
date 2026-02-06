@@ -65,7 +65,7 @@ export function PagosKPIsNuevo() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">KPIs de Pagos</h2>
+        <h2 className="text-2xl font-bold text-gray-900">KPIs de Pagos (mensuales)</h2>
         <span className="text-sm text-gray-500">
           {nombreMes} {kpiDataFinal.año}
         </span>
@@ -74,7 +74,7 @@ export function PagosKPIsNuevo() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">A cobrar en el mes (en transcurso)</CardTitle>
+            <CardTitle className="text-sm font-medium">Mensual: A cobrar en el mes</CardTitle>
             <Calendar className="h-5 w-5 text-blue-600" />
           </CardHeader>
           <CardContent>
@@ -85,14 +85,14 @@ export function PagosKPIsNuevo() {
               })}
             </div>
             <p className="text-xs text-gray-600 mt-1">
-              Cuánto dinero debería cobrarse en {nombreMes}
+              Cuánto debería cobrarse en {nombreMes} (vencimientos del mes)
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Cobrado = Pagado en el mes</CardTitle>
+            <CardTitle className="text-sm font-medium">Mensual: Cobrado / Pagado</CardTitle>
             <DollarSign className="h-5 w-5 text-green-600" />
           </CardHeader>
           <CardContent>
@@ -103,14 +103,14 @@ export function PagosKPIsNuevo() {
               })}
             </div>
             <p className="text-xs text-gray-600 mt-1">
-              Cuánto dinero se ha cobrado en {nombreMes}
+              Cobrado en {nombreMes} (pagos registrados en el mes)
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Morosidad mensual (%)</CardTitle>
+            <CardTitle className="text-sm font-medium">Mensual: Morosidad (%)</CardTitle>
             <TrendingDown className="h-5 w-5 text-red-600" />
           </CardHeader>
           <CardContent>
@@ -118,7 +118,7 @@ export function PagosKPIsNuevo() {
               {kpiDataFinal.morosidadMensualPorcentaje.toFixed(1)}%
             </div>
             <p className="text-xs text-gray-600 mt-1">
-              Saldo vencido no cobrado / cartera pendiente
+              Del mes: lo no cobrado sobre lo que venció en {nombreMes}
             </p>
           </CardContent>
         </Card>

@@ -4,7 +4,6 @@ import './PagosPage.css';
 
 function PagosPage() {
   const [kpis, setKpis] = useState(null);
-  const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -15,23 +14,12 @@ function PagosPage() {
   const loadData = async () => {
     setLoading(true);
     setError(null);
-    const [kpisSettled, statsSettled] = await Promise.allSettled([
-      pagoService.getKPIs(),
-      pagoService.getStats(),
-    ]);
-    setKpis(kpisSettled.status === 'fulfilled' ? kpisSettled.value : null);
-    setStats(statsSettled.status === 'fulfilled' ? statsSettled.value : null);
-    const errors = [];
-    if (kpisSettled.status === 'rejected') {
-      console.error('Error cargando KPIs de pagos:', kpisSettled.reason);
-      errors.push('Indicadores (KPIs)');
-    }
-    if (statsSettled.status === 'rejected') {
-      console.error('Error cargando estadísticas de pagos:', statsSettled.reason);
-      errors.push('Estadísticas');
-    }
-    if (errors.length) {
-      setError(`No se pudieron cargar: ${errors.join(', ')}. El resto se muestra si está disponible.`);
+    try {
+      const data = await pagoService.getKPIs();
+      setKpis(data);
+    } catch (err) {
+      console.error('Error cargando KPIs de pagos:', err);
+      setError('No se pudieron cargar los indicadores (KPIs).');
     }
     setLoading(false);
   };
@@ -87,53 +75,7 @@ function PagosPage() {
           </section>
         )}
 
-        {/* Stats */}
-        {stats && (
-          <section className="pagos-section">
-            <h2 className="pagos-section-title">Estadísticas</h2>
-            <div className="pagos-cards">
-              <div className="pagos-card">
-                <span className="pagos-card-label">Total cuotas</span>
-                <span className="pagos-card-value">{stats.total_pagos ?? 0}</span>
-              </div>
-              <div className="pagos-card">
-                <span className="pagos-card-label">Cuotas pagadas</span>
-                <span className="pagos-card-value">{stats.cuotas_pagadas ?? 0}</span>
-              </div>
-              <div className="pagos-card">
-                <span className="pagos-card-label">Cuotas pendientes</span>
-                <span className="pagos-card-value">{stats.cuotas_pendientes ?? 0}</span>
-              </div>
-              <div className="pagos-card">
-                <span className="pagos-card-label">Cuotas atrasadas</span>
-                <span className="pagos-card-value">{stats.cuotas_atrasadas ?? 0}</span>
-              </div>
-              <div className="pagos-card pagos-card--highlight">
-                <span className="pagos-card-label">Total pagado</span>
-                <span className="pagos-card-value">{formatMoneda(stats.total_pagado)}</span>
-              </div>
-              <div className="pagos-card">
-                <span className="pagos-card-label">Pagos hoy</span>
-                <span className="pagos-card-value">{stats.pagos_hoy ?? 0}</span>
-              </div>
-            </div>
-            {stats.pagos_por_estado && stats.pagos_por_estado.length > 0 && (
-              <div className="pagos-estados">
-                <h3 className="pagos-estados-title">Por estado</h3>
-                <ul className="pagos-estados-list">
-                  {stats.pagos_por_estado.map((item, i) => (
-                    <li key={i}>
-                      <span>{item.estado || 'Sin estado'}</span>
-                      <span>{item.count ?? 0}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </section>
-        )}
-
-        {!kpis && !stats && !error && (
+        {!kpis && !error && (
           <p className="pagos-empty">No hay datos de pagos disponibles.</p>
         )}
       </div>
