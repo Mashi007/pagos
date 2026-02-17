@@ -281,22 +281,21 @@ def create_cliente(payload: ClienteCreate, db: Session = Depends(get_db)):
                 detail=f"Ya existe un cliente con el mismo email. Cliente existente ID: {existing_email[0]}",
             )
 
-    # Prohibir duplicado por teléfono (comparar solo dígitos; mínimo 8 para considerar)
+    # Si teléfono duplicado (2 números exactamente iguales) → reemplazar por +589999999999
+    telefono_final = payload.telefono
     if len(telefono_dig) >= 8:
         rows_telefono = db.execute(
             select(Cliente.id, Cliente.telefono).where(Cliente.telefono.isnot(None))
         ).all()
         for r in rows_telefono:
             if r.telefono and _digits_telefono(r.telefono) == telefono_dig:
-                raise HTTPException(
-                    status_code=409,
-                    detail=f"Ya existe un cliente con el mismo teléfono. Cliente existente ID: {r.id}",
-                )
+                telefono_final = "+589999999999"
+                break
 
     row = Cliente(
         cedula=cedula_norm,
         nombres=payload.nombres,
-        telefono=payload.telefono,
+        telefono=telefono_final,
         email=payload.email,
         direccion=payload.direccion,
         fecha_nacimiento=payload.fecha_nacimiento,
@@ -369,10 +368,8 @@ def update_cliente(cliente_id: int, payload: ClienteUpdate, db: Session = Depend
             ).all()
             for r in rows_telefono:
                 if r.telefono and _digits_telefono(r.telefono) == telefono_dig:
-                    raise HTTPException(
-                        status_code=409,
-                        detail=f"Ya existe otro cliente con el mismo teléfono. Cliente existente ID: {r.id}",
-                    )
+                    data["telefono"] = "+589999999999"
+                    break
 
     for k, v in data.items():
         setattr(row, k, v)

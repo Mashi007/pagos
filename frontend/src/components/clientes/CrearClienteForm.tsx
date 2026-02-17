@@ -457,7 +457,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     return { field: 'direccion', isValid: true, message: 'Dirección válida' }
   }
 
-  // âœ… Validación personalizada para teléfono (9 o 10 dígitos, sin empezar por 0)
+  // âœ… Validación personalizada para teléfono: exactamente 10 dígitos; >10 → 9999999999 por defecto
   const validateTelefono = (telefono: string): ValidationResult => {
     if (isNN(telefono)) {
       return { field: 'telefono', isValid: true, message: 'Valor omitido por NN' }
@@ -466,25 +466,27 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       return { field: 'telefono', isValid: false, message: 'Teléfono requerido' }
     }
 
-    // Remover espacios y caracteres no numéricos
     const numeroLimpio = telefono.replace(/\D/g, '')
-
-    // Validar que tenga 9 o 10 dígitos
-    if (numeroLimpio.length < 9 || numeroLimpio.length > 10) {
-      return { field: 'telefono', isValid: false, message: 'El teléfono debe tener 9 o 10 dígitos' }
+    if (numeroLimpio.length > 10) {
+      return { field: 'telefono', isValid: true, message: 'Se usará 9999999999 por defecto (>10 dígitos)' }
     }
-
-    // Validar que no empiece por 0
+    if (numeroLimpio.length !== 10) {
+      return { field: 'telefono', isValid: false, message: 'El teléfono debe tener exactamente 10 dígitos' }
+    }
     if (numeroLimpio.startsWith('0')) {
       return { field: 'telefono', isValid: false, message: 'El teléfono no puede empezar por 0' }
     }
-
-    // Validar que todos los caracteres sean dígitos (0-9)
-    if (!/^[1-9]\d{8,9}$/.test(numeroLimpio)) {
+    if (!/^[1-9]\d{9}$/.test(numeroLimpio)) {
       return { field: 'telefono', isValid: false, message: 'El teléfono solo puede contener números (0-9)' }
     }
-
     return { field: 'telefono', isValid: true, message: 'Teléfono válido' }
+  }
+
+  // Normalizar teléfono: 10 dígitos; si >10 → 9999999999
+  const normalizarTelefono = (telefono: string): string => {
+    const digits = (telefono || '').replace(/\D/g, '')
+    if (digits.length > 10) return '9999999999'
+    return digits.slice(0, 10)
   }
 
   const validateFechaNacimiento = (fecha: string): ValidationResult => {
@@ -925,8 +927,8 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     setIsSubmitting(true)
 
     try {
-      // âœ… Normalizar 'nn'â†’'' y concatenar +58 con el número de teléfono
-      const telefonoLimpio = blankIfNN(formData.telefono).replace(/\D/g, '').slice(0, 10)
+      // âœ… Normalizar teléfono: 10 dígitos; si >10 → 9999999999
+      const telefonoLimpio = normalizarTelefono(blankIfNN(formData.telefono))
       const telefonoCompleto = `+58${telefonoLimpio}`
 
       // âœ… Normalizar 'nn'â†’'' y formatear campos a Title Case antes de guardar
@@ -1311,15 +1313,15 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                     <Phone className="w-4 h-4 mr-2 text-gray-600" />
                     +58
                   </div>
-                  {/* Input para el número (9 o 10 dígitos) */}
+                  {/* Input para el número (exactamente 10 dígitos; >10 → 9999999999) */}
                   <div className="flex-1 relative">
                     <Input
                       type="text"
                       inputMode="numeric"
                       value={formData.telefono}
                       onChange={(e) => {
-                        // Solo permitir números
-                        const value = e.target.value.replace(/\D/g, '').slice(0, 10)
+                        const digits = e.target.value.replace(/\D/g, '')
+                        const value = digits.length > 10 ? '9999999999' : digits.slice(0, 10)
                         handleInputChange('telefono', value)
                       }}
                       className={`${getFieldValidation('telefono')?.isValid === false ? 'border-red-500 border-2 bg-red-50' : ''}`}

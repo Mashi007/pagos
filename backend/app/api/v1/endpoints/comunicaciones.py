@@ -358,6 +358,9 @@ def crear_cliente_automatico(payload: CrearClienteAutomaticoRequest, db: Session
     email = _normalize_for_duplicate(payload.email)
     telefono = (payload.telefono or "").strip()
     telefono_dig = _digits(telefono)
+    if len(telefono_dig) > 10:
+        telefono_dig = "9999999999"
+        telefono = "+589999999999"
 
     if not nombres:
         raise HTTPException(status_code=400, detail="Los nombres son obligatorios.")
@@ -365,8 +368,8 @@ def crear_cliente_automatico(payload: CrearClienteAutomaticoRequest, db: Session
         raise HTTPException(status_code=400, detail="Cédula inválida. Use formato E, V, J o Z seguido de 6 a 11 dígitos.")
     if email and not _validar_email_basico(email):
         raise HTTPException(status_code=400, detail="Formato de email inválido.")
-    if telefono and len(telefono_dig) < 8:
-        raise HTTPException(status_code=400, detail="Teléfono inválido (mínimo 8 dígitos).")
+    if telefono and len(telefono_dig) < 10:
+        raise HTTPException(status_code=400, detail="Teléfono inválido (debe tener 10 dígitos).")
 
     # Prohibir duplicado por cédula (Z999999999 puede repetirse: clientes sin cédula)
     if cedula != "Z999999999":
@@ -390,19 +393,18 @@ def crear_cliente_automatico(payload: CrearClienteAutomaticoRequest, db: Session
                 status_code=409,
                 detail=f"Ya existe un cliente con el mismo email. Cliente existente ID: {existing_email[0]}",
             )
+    # Si teléfono duplicado (2 números exactamente iguales) → reemplazar por +589999999999
+    telefono_final = telefono if telefono_dig else "+589999999999"
     if len(telefono_dig) >= 8:
         rows_telefono = db.execute(
             select(Cliente.id, Cliente.telefono).where(Cliente.telefono.isnot(None))
         ).all()
         for r in rows_telefono:
             if r.telefono and _digits(r.telefono) == telefono_dig:
-                raise HTTPException(
-                    status_code=409,
-                    detail=f"Ya existe un cliente con el mismo teléfono. Cliente existente ID: {r.id}",
-                )
+                telefono_final = "+589999999999"
+                break
 
     email_final = email or "actualizar@ejemplo.com"
-    telefono_final = telefono if telefono_dig else "+580000000000"
     direccion = _normalize_for_duplicate(payload.direccion) or "Actualizar dirección"
     notas = _normalize_for_duplicate(payload.notas) or "Creado desde Comunicaciones"
 

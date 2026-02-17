@@ -286,8 +286,10 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     if (nom && nombresDuplicadosEnArchivo.has(nom)) return false
     const em = (row.email || '').trim().toLowerCase()
     if (em && emailDuplicadosEnArchivo.has(em)) return false
-    const telDig = (row.telefono || '').replace(/\D/g, '')
-    if (telDig.length >= 8 && telefonoDuplicadosEnArchivo.has(telDig)) return false
+    let telDig = (row.telefono || '').replace(/\D/g, '')
+    if (telDig.startsWith('58') && telDig.length > 10) telDig = telDig.slice(2)
+    if (telDig.length > 10) telDig = '9999999999'
+    if (telDig.length >= 10 && telefonoDuplicadosEnArchivo.has(telDig)) return false
     return true
   }
 
@@ -297,8 +299,10 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     if (ced !== 'Z999999999' && cedulasDuplicadasEnArchivo.has(ced)) motivos.push('cédula')
     if ((row.nombres || '').trim() && nombresDuplicadosEnArchivo.has((row.nombres || '').trim())) motivos.push('nombres')
     if ((row.email || '').trim() && emailDuplicadosEnArchivo.has((row.email || '').trim().toLowerCase())) motivos.push('email')
-    const telDig = (row.telefono || '').replace(/\D/g, '')
-    if (telDig.length >= 8 && telefonoDuplicadosEnArchivo.has(telDig)) motivos.push('teléfono')
+    let telDig = (row.telefono || '').replace(/\D/g, '')
+    if (telDig.startsWith('58') && telDig.length > 10) telDig = telDig.slice(2)
+    if (telDig.length > 10) telDig = '9999999999'
+    if (telDig.length >= 10 && telefonoDuplicadosEnArchivo.has(telDig)) motivos.push('teléfono')
     return motivos
   }
 
@@ -337,8 +341,10 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     const counts: Record<string, number> = {}
     const digits = (s: string) => (s || '').replace(/\D/g, '')
     excelData.forEach(row => {
-      const t = digits(row.telefono || '')
-      if (t.length >= 8) counts[t] = (counts[t] || 0) + 1
+      let t = digits(row.telefono || '')
+      if (t.startsWith('58') && t.length > 10) t = t.slice(2)
+      if (t.length > 10) t = '9999999999'
+      if (t.length >= 10) counts[t] = (counts[t] || 0) + 1
     })
     return new Set(Object.keys(counts).filter(t => (counts[t] || 0) > 1))
   }, [excelData])
@@ -395,7 +401,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       setSavingProgress(prev => ({ ...prev, [row._rowIndex]: true }))
 
       const rawTel = blankIfNN(row.telefono)
-      const telefonoNormalizado = rawTel.startsWith('+') ? rawTel : '+58' + (rawTel.replace(/\D/g, '').slice(-10) || rawTel)
+      const digits = rawTel.replace(/\D/g, '')
+      const tel10 = digits.length > 10 ? '9999999999' : digits.slice(0, 10)
+      const telefonoNormalizado = '+58' + (tel10 || rawTel)
 
       const clienteData = {
         cedula: blankIfNN(row.cedula) || 'Z999999999',
@@ -613,7 +621,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       case 'cedula':
         return `Ejemplo: "V12345678" o "E87654321"`
       case 'telefono':
-        return `Ejemplo: "8741236589" (9 o 10 dígitos sin 0 inicial)`
+        return `Ejemplo: "4141234567" (exactamente 10 dígitos; >10 → 9999999999)`
       case 'email':
         return `Ejemplo: "usuario@dominio.com"`
       case 'estado':
@@ -748,18 +756,16 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       case 'telefono':
         if (!value || !value.trim()) return { isValid: false, message: 'Teléfono requerido' }
 
-        // Aceptar con o sin prefijo +58 (Excel suele traer solo dígitos, ej. 4146050303)
         let digitsOnly = (value || '').replace(/\D/g, '')
         if (digitsOnly.startsWith('58') && digitsOnly.length >= 11) digitsOnly = digitsOnly.slice(2)
-
-        const phonePattern = /^[1-9]\d{8,9}$/
-        if (!phonePattern.test(digitsOnly)) {
-          return {
-            isValid: false,
-            message: 'Formato: 9 o 10 dígitos (sin 0 inicial)'
-          }
+        if (digitsOnly.length > 10) return { isValid: true, message: 'Se usará 9999999999 por defecto (>10 dígitos)' }
+        if (digitsOnly.length !== 10) {
+          return { isValid: false, message: 'Formato: exactamente 10 dígitos (sin 0 inicial)' }
         }
-
+        const phonePattern = /^[1-9]\d{9}$/
+        if (!phonePattern.test(digitsOnly)) {
+          return { isValid: false, message: 'Formato: 10 dígitos (sin 0 inicial)' }
+        }
         return { isValid: true }
 
       case 'email':
@@ -1146,10 +1152,15 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       }> = []
       for (const row of validData) {
         try {
+          const rawTel = blankIfNN(row.telefono)
+          const digits = rawTel.replace(/\D/g, '')
+          const tel10 = digits.length > 10 ? '9999999999' : digits.slice(0, 10)
+          const telefonoNorm = '+58' + (tel10 || rawTel)
+
           const clienteData = {
             cedula: blankIfNN(row.cedula) || 'Z999999999',
             nombres: formatNombres(blankIfNN(row.nombres)),  // âœ… Aplicar formato Title Case al guardar
-            telefono: blankIfNN(row.telefono),
+            telefono: telefonoNorm,
             email: blankIfNN(row.email).toLowerCase(),
             direccion: blankIfNN(row.direccion),
             fecha_nacimiento: convertirFechaParaBackend(blankIfNN(row.fecha_nacimiento)),  // âœ… Convertir DD/MM/YYYY a YYYY-MM-DD
@@ -1662,10 +1673,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                   type="tel"
                                   value={row.telefono.replace('+58', '')}
                                   onChange={(e) => {
-                                    const value = e.target.value
-                                    // Solo permitir números y máximo 10 dígitos
-                                    const cleanValue = value.replace(/\D/g, '').slice(0, 10)
-                                    updateCellValue(index, 'telefono', '+58' + cleanValue)
+                                    const digits = e.target.value.replace(/\D/g, '')
+                                    const value = digits.length > 10 ? '9999999999' : digits.slice(0, 10)
+                                    updateCellValue(index, 'telefono', '+58' + value)
                                   }}
                                   placeholder="XXXXXXXXXX"
                                   className={`flex-1 text-sm p-2 border border-l-0 rounded-r min-w-[80px] ${

@@ -47,7 +47,7 @@
 - **Frontend – validaciones de formato:**
   - **Nombres:** 2–7 palabras (nombre y apellidos); se normalizan a Title Case.
   - **Cédula:** Formato válido (incluye letra si aplica); se normaliza con `formatCedula`.
-  - **Teléfono:** Venezuela por defecto: 10 dígitos; se guarda como `+58XXXXXXXXXX`.
+  - **Teléfono:** Venezuela por defecto: exactamente 10 dígitos; se guarda como `+58XXXXXXXXXX`. Si >10 dígitos → `+589999999999`.
   - **Email:** Formato válido, sin comas/espacios; se guarda en minúsculas.
   - **Ocupación:** Máximo 2 palabras; Title Case.
   - **Dirección:** Estructurada (calle principal, transversal, descripción, parroquia, municipio, ciudad, estado); se persiste como JSON en el campo `direccion`.
