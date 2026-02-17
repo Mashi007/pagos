@@ -278,6 +278,7 @@ async def upload_excel_pagos(
         filas_omitidas = 0  # cédula vacía o monto <= 0
         errores = []
         errores_detalle = []
+        numeros_doc_en_lote: set[str] = set()  # Nº documento no puede repetirse ni en archivo ni en BD
         for i, row in enumerate(rows):
             if not row or all(cell is None for cell in row):
                 continue
@@ -316,18 +317,32 @@ async def upload_excel_pagos(
                 if not cedula or monto <= 0:
                     filas_omitidas += 1
                     continue
+                numero_doc_norm = (numero_doc or "").strip() or None
+                if numero_doc_norm:
+                    if numero_doc_norm in numeros_doc_en_lote:
+                        datos_fila = {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}
+                        errores.append(f"Fila {i + 2}: Nº documento duplicado en este archivo")
+                        errores_detalle.append({"fila": i + 2, "cedula": cedula, "error": "Nº documento duplicado en este archivo. El Nº documento no puede repetirse.", "datos": datos_fila})
+                        continue
+                    if _numero_documento_ya_existe(db, numero_doc_norm):
+                        datos_fila = {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}
+                        errores.append(f"Fila {i + 2}: Ya existe un pago con ese Nº de documento")
+                        errores_detalle.append({"fila": i + 2, "cedula": cedula, "error": "Ya existe un pago con ese Nº de documento. El Nº documento no puede repetirse.", "datos": datos_fila})
+                        continue
                 fecha_pago = _parse_fecha(fecha_val)
                 p = Pago(
                     cedula_cliente=cedula,
                     prestamo_id=prestamo_id,
                     fecha_pago=datetime.combine(fecha_pago, dt_time.min),
                     monto_pagado=monto,
-                    numero_documento=numero_doc or None,
+                    numero_documento=numero_doc_norm,
                     estado="PENDIENTE",
-                    referencia_pago=numero_doc or "Carga",
+                    referencia_pago=(numero_doc_norm or numero_doc or "").strip() or "Carga",
                 )
                 db.add(p)
                 registros += 1
+                if numero_doc_norm:
+                    numeros_doc_en_lote.add(numero_doc_norm)
             except Exception as e:
                 msg = str(e)
                 errores.append(f"Fila {i + 2}: {msg}")
@@ -670,18 +685,37 @@ def obtener_pago(pago_id: int, db: Session = Depends(get_db)):
     return _pago_to_response(row)
 
 
+def _numero_documento_ya_existe(
+    db: Session, numero_documento: Optional[str], exclude_pago_id: Optional[int] = None
+) -> bool:
+    """Comprueba si ya existe un pago con ese Nº documento (no se permite repetir)."""
+    num = (numero_documento or "").strip() or None
+    if not num:
+        return False
+    q = select(Pago.id).where(Pago.numero_documento == num)
+    if exclude_pago_id is not None:
+        q = q.where(Pago.id != exclude_pago_id)
+    return db.scalar(q) is not None
+
+
 @router.post("", response_model=dict, status_code=201)
 @router.post("/", include_in_schema=False, response_model=dict, status_code=201)
 def crear_pago(payload: PagoCreate, db: Session = Depends(get_db)):
-    """Crea un pago en la tabla pagos."""
-    ref = (payload.numero_documento or "").strip() or "N/A"
+    """Crea un pago en la tabla pagos. Nº documento no puede repetirse."""
+    num_doc = (payload.numero_documento or "").strip() or None
+    if num_doc and _numero_documento_ya_existe(db, num_doc):
+        raise HTTPException(
+            status_code=409,
+            detail="Ya existe un pago con ese Nº de documento. El Nº documento no puede repetirse.",
+        )
+    ref = num_doc or "N/A"
     fecha_pago_ts = datetime.combine(payload.fecha_pago, dt_time.min)
     row = Pago(
         cedula_cliente=payload.cedula_cliente.strip(),
         prestamo_id=payload.prestamo_id,
         fecha_pago=fecha_pago_ts,
         monto_pagado=payload.monto_pagado,
-        numero_documento=(payload.numero_documento or "").strip() or None,
+        numero_documento=num_doc,
         institucion_bancaria=payload.institucion_bancaria.strip() if payload.institucion_bancaria else None,
         estado="PENDIENTE",
         notas=payload.notas.strip() if payload.notas else None,
@@ -695,18 +729,25 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db)):
 
 @router.put("/{pago_id}", response_model=dict)
 def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get_db)):
-    """Actualiza un pago en la tabla pagos."""
+    """Actualiza un pago en la tabla pagos. Nº documento no puede repetirse."""
     row = db.get(Pago, pago_id)
     if not row:
         raise HTTPException(status_code=404, detail="Pago no encontrado")
     data = payload.model_dump(exclude_unset=True)
+    if "numero_documento" in data and data["numero_documento"] is not None:
+        num_doc = (data["numero_documento"] or "").strip() or None
+        if num_doc and _numero_documento_ya_existe(db, num_doc, exclude_pago_id=pago_id):
+            raise HTTPException(
+                status_code=409,
+                detail="Ya existe otro pago con ese Nº de documento. El Nº documento no puede repetirse.",
+            )
     for k, v in data.items():
         if k == "notas" and v is not None:
             setattr(row, k, v.strip() or None)
         elif k == "institucion_bancaria" and v is not None:
             setattr(row, k, v.strip() or None)
         elif k == "numero_documento" and v is not None:
-            setattr(row, k, v.strip())
+            setattr(row, k, (v or "").strip() or None)
         elif k == "cedula_cliente" and v is not None:
             setattr(row, k, v.strip())
         elif k == "fecha_pago" and v is not None:

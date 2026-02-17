@@ -53,8 +53,8 @@ def _config_validadores_default() -> dict:
                 ["123", "abc"],
             ),
             "cedula": _stub_validador(
-                "Cédula Venezuela",
-                ["V12345678", "E12345678"],
+                "Cédula Venezuela (E, V, J, Z + 6-11 dígitos)",
+                ["V12345678", "E12345678", "J1234567", "Z999999999"],
                 ["123", "12345678901"],
             ),
             "fecha": _stub_validador(

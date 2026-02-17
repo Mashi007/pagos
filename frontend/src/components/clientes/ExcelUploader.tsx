@@ -279,9 +279,9 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   // ðŸ”„ FUNCIONES PARA SISTEMA DE GUARDADO HÍBRIDO
   const isClientValid = (row: ExcelRow): boolean => {
     if (row._hasErrors) return false
-    // Regla estricta: NO DUPLICADOS (cédula, nombres, email, teléfono) — no se puede guardar hasta corregir
-    const ced = (row.cedula || '').trim()
-    if (ced && cedulasDuplicadasEnArchivo.has(ced)) return false
+    // Regla estricta: NO DUPLICADOS (cédula, nombres, email, teléfono) — Z999999999 puede repetirse
+    const ced = (row.cedula || '').trim() || 'Z999999999'
+    if (ced !== 'Z999999999' && cedulasDuplicadasEnArchivo.has(ced)) return false
     const nom = (row.nombres || '').trim()
     if (nom && nombresDuplicadosEnArchivo.has(nom)) return false
     const em = (row.email || '').trim().toLowerCase()
@@ -293,7 +293,8 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
   const getDuplicadoMotivo = (row: ExcelRow): string[] => {
     const motivos: string[] = []
-    if ((row.cedula || '').trim() && cedulasDuplicadasEnArchivo.has((row.cedula || '').trim())) motivos.push('cédula')
+    const ced = (row.cedula || '').trim() || 'Z999999999'
+    if (ced !== 'Z999999999' && cedulasDuplicadasEnArchivo.has(ced)) motivos.push('cédula')
     if ((row.nombres || '').trim() && nombresDuplicadosEnArchivo.has((row.nombres || '').trim())) motivos.push('nombres')
     if ((row.email || '').trim() && emailDuplicadosEnArchivo.has((row.email || '').trim().toLowerCase())) motivos.push('email')
     const telDig = (row.telefono || '').replace(/\D/g, '')
@@ -308,8 +309,8 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   const cedulasDuplicadasEnArchivo = useMemo(() => {
     const counts: Record<string, number> = {}
     excelData.forEach(row => {
-      const c = (row.cedula || '').trim()
-      if (c) counts[c] = (counts[c] || 0) + 1
+      const c = (row.cedula || '').trim() || 'Z999999999'
+      if (c !== 'Z999999999') counts[c] = (counts[c] || 0) + 1  // Z999999999 puede repetirse
     })
     return new Set(Object.keys(counts).filter(ced => (counts[ced] || 0) > 1))
   }, [excelData])
@@ -397,7 +398,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       const telefonoNormalizado = rawTel.startsWith('+') ? rawTel : '+58' + (rawTel.replace(/\D/g, '').slice(-10) || rawTel)
 
       const clienteData = {
-        cedula: blankIfNN(row.cedula),
+        cedula: blankIfNN(row.cedula) || 'Z999999999',
         nombres: formatNombres(blankIfNN(row.nombres)),  // âœ… Aplicar formato Title Case y ya unificados (nombres + apellidos)
         telefono: telefonoNormalizado,
         email: blankIfNN(row.email).toLowerCase(),
@@ -554,13 +555,13 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     setIsSavingIndividual(true)
 
     try {
-      const cedulasToCheck = validClients.map(c => blankIfNN(c.cedula)).filter(Boolean)
+      const cedulasToCheck = validClients.map(c => blankIfNN(c.cedula) || 'Z999999999').filter(Boolean)
       const { existing_cedulas } = await clienteService.checkCedulas(cedulasToCheck)
 
       if (existing_cedulas.length > 0) {
         setCedulasExistentesEnBD(existing_cedulas)
         setPendingSaveFilteredByCedulas(
-          validClients.filter(c => !existing_cedulas.includes(blankIfNN(c.cedula)))
+          validClients.filter(c => !existing_cedulas.includes(blankIfNN(c.cedula) || 'Z999999999'))
         )
         setShowModalCedulasExistentes(true)
         setIsSavingIndividual(false)
@@ -725,12 +726,13 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     }
     switch (field) {
       case 'cedula':
-        if (!value.trim()) return { isValid: false, message: 'Cédula requerida' }
+        // Vacío → válido (se usará Z999999999 por defecto al guardar)
+        if (!value.trim()) return { isValid: true }
         // Limpiar caracteres no permitidos (como : al final)
         const cedulaLimpia = value.trim().replace(/:$/, '').replace(/:/g, '')
-        const cedulaPattern = /^[VEJZ]\d{7,10}$/
+        const cedulaPattern = /^[VEJZ]\d{6,11}$/
         if (!cedulaPattern.test(cedulaLimpia.toUpperCase())) {
-          return { isValid: false, message: 'Formato: V/E/J/Z + 7-10 dígitos (sin :)' }
+          return { isValid: false, message: 'Formato: E/V/J/Z + 6-11 dígitos (sin :)' }
         }
         return { isValid: true }
 
@@ -953,7 +955,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
           _rowIndex: i + 1,
           _validation: {},
           _hasErrors: false,
-          cedula: row[0]?.toString() || '',                    // Columna A
+          cedula: (row[0]?.toString() || '').trim() || 'Z999999999',  // Columna A; celda vacía → Z999999999
           nombres: row[1]?.toString() || '',                  // Columna B (nombres completos en un solo campo)
           telefono: row[2]?.toString() || '',                 // Columna C
           email: row[3]?.toString() || '',                    // Columna D
@@ -1048,7 +1050,11 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
     if (row) {
       // ðŸŽ¨ NO APLICAR FORMATO MIENTRAS ESCRIBE (permitir espacios libres)
       // El formato se aplicará al guardar
-      const formattedValue = value || ''
+      let formattedValue = value || ''
+      // Cédula: celda vacía → Z999999999 por defecto
+      if (field === 'cedula' && !formattedValue.trim()) {
+        formattedValue = 'Z999999999'
+      }
 
       row[field as keyof ExcelData] = formattedValue
 
@@ -1141,7 +1147,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       for (const row of validData) {
         try {
           const clienteData = {
-            cedula: blankIfNN(row.cedula),
+            cedula: blankIfNN(row.cedula) || 'Z999999999',
             nombres: formatNombres(blankIfNN(row.nombres)),  // âœ… Aplicar formato Title Case al guardar
             telefono: blankIfNN(row.telefono),
             email: blankIfNN(row.email).toLowerCase(),

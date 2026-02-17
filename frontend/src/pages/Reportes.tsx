@@ -96,8 +96,8 @@ const tiposReporte = [
 // Validación de cédula venezolana
 const validarCedula = (cedula: string): boolean => {
   if (!cedula || cedula.trim().length === 0) return false
-  // Formato: V/E/J/P/G seguido de 6-12 dígitos
-  return /^[VEJPG]\d{6,12}$/i.test(cedula.trim())
+  // Formato: E/V/J/Z seguido de 6-12 dígitos
+  return /^[VEJZ]\d{6,12}$/i.test(cedula.trim())
 }
 
 export function Reportes() {

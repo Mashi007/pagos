@@ -15,8 +15,8 @@ FROM pg_constraint
 WHERE conrelid = 'public.clientes'::regclass
   AND contype = 'u';
 
--- Debe aparecer al menos: uq_clientes_cedula UNIQUE (cedula)
--- Si no aparece, ejecutar: backend/sql/migracion_clientes_cedula_unique.sql
+-- Debe aparecer: uq_clientes_cedula_sin_z (índice único parcial, excluye Z999999999)
+-- Si aparece uq_clientes_cedula (antiguo), ejecutar: backend/sql/migracion_cedula_z999999999_repetible.sql
 
 
 -- -----------------------------------------------------------------------------

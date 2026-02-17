@@ -5,11 +5,20 @@ Alineados con la tabla public.clientes en la BD.
 from datetime import date, datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class ClienteBase(BaseModel):
     cedula: str
+
+    @field_validator("cedula", mode="before")
+    @classmethod
+    def cedula_empty_default(cls, v: str) -> str:
+        """Celda vacía → Z999999999 por defecto."""
+        if v is None:
+            return "Z999999999"
+        s = str(v).strip()
+        return s if s else "Z999999999"
     nombres: str
     telefono: str
     email: str

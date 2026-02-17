@@ -4,7 +4,7 @@
 -- 1) Columna link_imagen en pagos_whatsapp (ruta/URL de imagen guardada, ej. Google Drive)
 ALTER TABLE pagos_whatsapp ADD COLUMN IF NOT EXISTS link_imagen TEXT;
 
--- 2) Estado de conversación por teléfono (flujo cobranza: cédula EVJ → foto papeleta hasta 3 intentos)
+-- 2) Estado de conversación por teléfono (flujo cobranza: cédula E/V/J/Z → foto papeleta hasta 3 intentos)
 CREATE TABLE IF NOT EXISTS conversacion_cobranza (
     id SERIAL PRIMARY KEY,
     telefono VARCHAR(30) NOT NULL UNIQUE,

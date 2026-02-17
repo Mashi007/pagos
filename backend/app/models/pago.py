@@ -18,7 +18,7 @@ class Pago(Base):
     cedula_cliente = Column("cedula", String(20), nullable=True, index=True)
     fecha_pago = Column(DateTime(timezone=False), nullable=False)
     monto_pagado = Column(Numeric(14, 2), nullable=False)
-    numero_documento = Column(String(100), nullable=True)
+    numero_documento = Column(String(100), nullable=True, unique=True)  # Nº documento no puede repetirse
     institucion_bancaria = Column(String(255), nullable=True)
     estado = Column(String(30), nullable=True)
     fecha_registro = Column(DateTime(timezone=False), nullable=False, server_default=func.now())

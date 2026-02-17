@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from '../../components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
+import { formatDate } from '../../utils'
 import { pagoService, type Pago } from '../../services/pagoService'
 import { toast } from 'sonner'
 
@@ -189,7 +190,7 @@ export function PagosListResumen() {
                         </td>
                         <td className="px-4 py-3">
                           {item.fecha_ultimo_pago
-                            ? new Date(item.fecha_ultimo_pago).toLocaleDateString()
+                            ? formatDate(item.fecha_ultimo_pago)
                             : 'N/A'}
                         </td>
                         <td className="px-4 py-3 text-right">
@@ -304,7 +305,7 @@ export function PagosListResumen() {
                       <TableRow key={pago.id}>
                         <TableCell>{pago.id}</TableCell>
                         <TableCell>
-                          {new Date(pago.fecha_pago).toLocaleDateString()}
+                          {formatDate(pago.fecha_pago)}
                         </TableCell>
                         <TableCell>
                           ${typeof pago.monto_pagado === 'number'

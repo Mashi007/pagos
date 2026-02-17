@@ -185,10 +185,11 @@ def check_cedulas(payload: CheckCedulasRequest, db: Session = Depends(get_db)):
     if not cedulas_norm:
         return CheckCedulasResponse(existing_cedulas=[])
     # Consultar solo las que existen (sin duplicar en respuesta)
+    # Z999999999 no se considera "existente" para bloquear: puede repetirse (clientes sin cédula)
     seen: set[str] = set()
     existing: list[str] = []
     for ced in cedulas_norm:
-        if ced in seen:
+        if ced in seen or ced == "Z999999999":
             continue
         seen.add(ced)
         row = db.execute(select(Cliente.cedula).where(Cliente.cedula == ced)).first()
@@ -242,20 +243,21 @@ def create_cliente(payload: ClienteCreate, db: Session = Depends(get_db)):
     No permitido duplicados: misma cédula, mismo nombre, mismo email o mismo teléfono → 409.
     Aplica a Nuevo Cliente y Carga masiva.
     """
-    cedula_norm = _normalize_for_duplicate(payload.cedula)
+    cedula_norm = _normalize_for_duplicate(payload.cedula) or "Z999999999"
     nombres_norm = _normalize_for_duplicate(payload.nombres)
     email_norm = _normalize_for_duplicate(payload.email)
     telefono_dig = _digits_telefono(payload.telefono)
 
-    # Prohibir duplicado por cédula
-    existing_cedula = db.execute(
-        select(Cliente.id).where(Cliente.cedula == cedula_norm)
-    ).first()
-    if existing_cedula:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Ya existe un cliente con la misma cédula. Cliente existente ID: {existing_cedula[0]}",
-        )
+    # Prohibir duplicado por cédula (Z999999999 puede repetirse: clientes sin cédula)
+    if cedula_norm != "Z999999999":
+        existing_cedula = db.execute(
+            select(Cliente.id).where(Cliente.cedula == cedula_norm)
+        ).first()
+        if existing_cedula:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Ya existe un cliente con la misma cédula. Cliente existente ID: {existing_cedula[0]}",
+            )
 
     # Prohibir duplicado por nombre completo
     if nombres_norm:
@@ -292,7 +294,7 @@ def create_cliente(payload: ClienteCreate, db: Session = Depends(get_db)):
                 )
 
     row = Cliente(
-        cedula=payload.cedula,
+        cedula=cedula_norm,
         nombres=payload.nombres,
         telefono=payload.telefono,
         email=payload.email,
@@ -321,9 +323,11 @@ def update_cliente(cliente_id: int, payload: ClienteUpdate, db: Session = Depend
     data = payload.model_dump(exclude_unset=True)
 
     # Validar duplicados: no permitir cédula, nombre, email ni teléfono igual a otro cliente
+    # Z999999999 puede repetirse (clientes sin cédula)
     if "cedula" in data:
-        cedula_norm = _normalize_for_duplicate(data.get("cedula") or getattr(row, "cedula") or "")
-        if cedula_norm:
+        cedula_norm = _normalize_for_duplicate(data.get("cedula") or getattr(row, "cedula") or "") or "Z999999999"
+        data["cedula"] = cedula_norm
+        if cedula_norm and cedula_norm != "Z999999999":
             existing = db.execute(
                 select(Cliente.id).where(Cliente.cedula == cedula_norm, Cliente.id != cliente_id)
             ).first()

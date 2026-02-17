@@ -641,6 +641,10 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
 
   // Validaciones usando el servicio de validadores del backend
   const validateField = async (field: string, value: string): Promise<ValidationResult> => {
+    // Cédula vacía → válida (se usará Z999999999 por defecto)
+    if (field === 'cedula' && !(value || '').trim()) {
+      return { field: 'cedula', isValid: true, message: 'Se usará Z999999999 por defecto' }
+    }
     // Mapeo de campos del formulario a tipos de validadores del backend
     const campoMapper: Record<string, string> = {
       'cedula': 'cedula_venezuela',
@@ -855,6 +859,13 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
       if (field === 'email') {
         return emailValidation.isValid && formData[field]
       }
+      // Cédula: vacío válido (se usará Z999999999 por defecto); si tiene valor, validar formato
+      if (field === 'cedula') {
+        const cedulaVal = (formData.cedula || '').trim()
+        if (!cedulaVal) return true
+        const validation = validations.find(v => v.field === 'cedula')
+        return validation?.isValid ?? false
+      }
       // Validar campos de dirección
       if (['callePrincipal', 'parroquia', 'municipio', 'ciudad', 'estadoDireccion'].includes(field)) {
         return direccionValida && formData[field]
@@ -935,7 +946,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
 
       // âœ… Preparar todos los datos formateados
       const todosLosDatos = {
-        cedula: formatCedula(blankIfNN(formData.cedula)),  // âœ… Cédula con letra inicial en mayúscula
+        cedula: formatCedula(blankIfNN(formData.cedula)) || 'Z999999999',  // âœ… Cédula con letra inicial en mayúscula; vacío → Z999999999
         nombres: nombresFormateado,  // âœ… nombres formateados con Title Case
         telefono: telefonoCompleto,  // âœ… Formato: +581234567890
         email: blankIfNN(formData.email),  // âœ… Email ya está en minúsculas por autoformato

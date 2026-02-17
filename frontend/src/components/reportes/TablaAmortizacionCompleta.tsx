@@ -391,8 +391,8 @@ export function TablaAmortizacionCompleta() {
   // Validación de cédula venezolana
   const validarCedula = (cedula: string): boolean => {
     if (!cedula || cedula.trim().length === 0) return false
-    // Formato: V/E/J/P/G seguido de 6-12 dígitos
-    return /^[VEJPG]\d{6,12}$/i.test(cedula.trim())
+    // Formato: E/V/J/Z seguido de 6-12 dígitos
+    return /^[VEJZ]\d{6,12}$/i.test(cedula.trim())
   }
 
   const handleBuscar = () => {
@@ -402,7 +402,7 @@ export function TablaAmortizacionCompleta() {
       return
     }
     if (!validarCedula(cedulaLimpia)) {
-      toast.error('Cédula inválida. Debe tener el formato V/E/J/P/G seguido de 6-12 dígitos')
+      toast.error('Cédula inválida. Debe tener el formato E/V/J/Z seguido de 6-12 dígitos')
       return
     }
     setCedulaSeleccionada(cedulaLimpia)

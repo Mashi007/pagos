@@ -12,7 +12,7 @@ Implementación: `backend/app/services/whatsapp_service.py`, `ocr_service.py`, `
 | Requisito | Estado | Notas |
 |-----------|--------|--------|
 | 1. Bot WhatsApp que recibe comprobantes | ✅ | Webhook POST, `process_incoming_message`, texto + imagen (y documento tipo imagen). |
-| 2. Valida identidad por cédula (V/E/J + 6-11 dígitos) | ✅ | `_validar_cedula_evj`; spec `^[VEJvej]-?\d{6,11}$` cubierta (normalización quita guión). Patrón `CEDULA_PATTERN_SPEC` documentado. |
+| 2. Valida identidad por cédula (E/V/J/Z + 6-11 dígitos) | ✅ | `_validar_cedula_evj`; solo E, V, J o Z (una letra) + 6-11 dígitos. Patrón `CEDULA_PATTERN_SPEC` documentado. |
 | 3. Procesa imagen con OCR (Google Cloud Vision) | ✅ | `ocr_service.extract_from_image`, `document_text_detection`. |
 | 4. Extrae: fecha, banco, número documento, monto | ✅ | Devuelve `fecha_deposito`, `nombre_banco`, `numero_documento`/`numero_deposito`, `cantidad`. Moneda (USD/BS/EUR) no se parsea; cantidad es texto. |
 | 5. Confirma cada dato con el usuario antes de guardar | ⚠️ Parcial | Confirmación **en bloque** (cédula, cantidad, Nº documento) en `esperando_confirmacion_datos`. No hay estados CONFIRMANDO_BANCO / DOCUMENTO / MONTO por separado. |
@@ -42,7 +42,7 @@ Implementación: `backend/app/services/whatsapp_service.py`, `ocr_service.py`, `
 
 | Regla | Spec | Actual | Estado |
 |-------|------|--------|--------|
-| Cédula regex | `^[VEJvej]-?\d{6,11}$` | Normalización quita guión; patrones E/J/V/EVJ + 6-11 dígitos. `CEDULA_PATTERN_SPEC` documentado. | ✅ Validado |
+| Cédula regex | `^[VEJZvejz]-?\d{6,11}$` | Solo E, V, J o Z (una letra) + 6-11 dígitos. `CEDULA_PATTERN_SPEC` documentado. | ✅ Validado |
 | Máx 3 intentos por campo | Sí | Foto: 3 intentos. Confirmación identidad (Sí/No): 3 intentos. Datos (banco/doc/monto): un paso con ediciones. | ✅ Validado (parcial: no por campo banco/doc/monto) |
 | Timeout sesión | 15 min | `MINUTOS_INACTIVIDAD_NUEVO_CASO = 15` | ✅ Ajustado |
 | OCR mín 70% confianza | Sí | `UMBRAL_CONFIANZA_MINIMA_OCR = 0.70`; si confianza media &lt; 70% → HUMANO. Además >80% palabras baja confianza → HUMANO. | ✅ Ajustado |

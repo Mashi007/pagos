@@ -22,6 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
+import { formatDate } from '../../utils'
 import { pagoService, type Pago } from '../../services/pagoService'
 import { RegistrarPagoForm } from './RegistrarPagoForm'
 import { ExcelUploader } from './ExcelUploader'
@@ -431,7 +432,7 @@ export function PagosList() {
                             <TableCell>
                               ${typeof pago.monto_pagado === 'number' ? pago.monto_pagado.toFixed(2) : parseFloat(String(pago.monto_pagado || 0)).toFixed(2)}
                             </TableCell>
-                            <TableCell>{new Date(pago.fecha_pago).toLocaleDateString()}</TableCell>
+                            <TableCell>{formatDate(pago.fecha_pago)}</TableCell>
                             <TableCell>{pago.numero_documento ?? '—'}</TableCell>
                             <TableCell>{pago.institucion_bancaria ?? '—'}</TableCell>
                             <TableCell>

@@ -331,9 +331,9 @@ def _normalize_for_duplicate(s: str) -> str:
 
 
 def _validar_cedula_formato_strict(cedula: str) -> bool:
-    """Acepta formato E/J/V + 6-11 dígitos (cedula ya normalizada)."""
+    """Acepta formato E/V/J/Z + 6-11 dígitos (cedula ya normalizada)."""
     t = (cedula or "").strip().upper()
-    if len(t) < 7 or t[0] not in ("E", "J", "V"):
+    if len(t) < 7 or t[0] not in ("E", "V", "J", "Z"):
         return False
     return len(t) <= 12 and t[1:].isdigit() and 6 <= len(t) - 1 <= 11
 
@@ -353,30 +353,29 @@ def crear_cliente_automatico(payload: CrearClienteAutomaticoRequest, db: Session
     """
     from datetime import date
 
-    cedula = _normalize_for_duplicate(payload.cedula)
+    cedula = _normalize_for_duplicate(payload.cedula) or "Z999999999"
     nombres = _normalize_for_duplicate(payload.nombres)
     email = _normalize_for_duplicate(payload.email)
     telefono = (payload.telefono or "").strip()
     telefono_dig = _digits(telefono)
 
-    if not cedula:
-        raise HTTPException(status_code=400, detail="La cédula es obligatoria.")
     if not nombres:
         raise HTTPException(status_code=400, detail="Los nombres son obligatorios.")
     if not _validar_cedula_formato_strict(cedula):
-        raise HTTPException(status_code=400, detail="Cédula inválida. Use formato E, J o V seguido de 6 a 11 dígitos.")
+        raise HTTPException(status_code=400, detail="Cédula inválida. Use formato E, V, J o Z seguido de 6 a 11 dígitos.")
     if email and not _validar_email_basico(email):
         raise HTTPException(status_code=400, detail="Formato de email inválido.")
     if telefono and len(telefono_dig) < 8:
         raise HTTPException(status_code=400, detail="Teléfono inválido (mínimo 8 dígitos).")
 
-    # Prohibir duplicado por cédula, nombre, email o teléfono
-    existing_cedula = db.execute(select(Cliente.id).where(Cliente.cedula == cedula)).first()
-    if existing_cedula:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Ya existe un cliente con la misma cédula. Cliente existente ID: {existing_cedula[0]}",
-        )
+    # Prohibir duplicado por cédula (Z999999999 puede repetirse: clientes sin cédula)
+    if cedula != "Z999999999":
+        existing_cedula = db.execute(select(Cliente.id).where(Cliente.cedula == cedula)).first()
+        if existing_cedula:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Ya existe un cliente con la misma cédula. Cliente existente ID: {existing_cedula[0]}",
+            )
     if nombres:
         existing_nombres = db.execute(select(Cliente.id).where(Cliente.nombres == nombres)).first()
         if existing_nombres:

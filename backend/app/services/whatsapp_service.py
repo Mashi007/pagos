@@ -90,12 +90,12 @@ MENSAJE_GRACIAS_PIDE_FOTO = (
     "Si no es un recibo válido o no se ve bien se te pedirá otra."
 )
 MENSAJE_CEDULA_INVALIDA = (
-    "La cédula debe empezar por una de las 3 letras E, J o V, seguido de entre 6 y 11 números, sin guiones ni signos. "
-    "Ejemplos: E1234567, V12345678, J1234567 o EVJ1234567. Vuelve a ingresarla."
+    "La cédula debe empezar por una sola letra: E, V, J o Z, seguido de entre 6 y 11 números, sin guiones ni signos. "
+    "Ejemplos: E1234567, V12345678, J1234567, Z999999999. Vuelve a ingresarla."
 )
 # Amable, con ejemplo (humanización). {ejemplo} = V-12345678.
 MENSAJE_CEDULA_INVALIDA_AMABLE = (
-    "El formato no es correcto. 😅 Por favor usa una de las letras V, E o J seguido de 6 a 11 números. "
+    "El formato no es correcto. 😅 Por favor usa una de las letras V, E, J o Z seguido de 6 a 11 números. "
     "Ejemplo: V-12345678"
 )
 # Tras 3 intentos fallidos de cédula. {telefono} = SUPPORT_PHONE.
@@ -103,7 +103,7 @@ MENSAJE_ERROR_MAX_INTENTOS = (
     "Has superado el número máximo de intentos para este paso. "
     "Por favor contacta a soporte al {telefono} y un asistente te ayudará. 📞"
 )
-MENSAJE_VUELVE_CEDULA = "Por favor escribe de nuevo tu número de cédula (E, J o V seguido de 6 a 11 números)."
+MENSAJE_VUELVE_CEDULA = "Por favor escribe de nuevo tu número de cédula (E, V, J o Z seguido de 6 a 11 números)."
 MENSAJE_RESPONDE_SI_NO = "Por favor responde Sí o No: ¿El reporte de pago es a cargo de {nombre}?"
 # Si envían foto pero aún no han confirmado (Sí/No), no se pide cédula de nuevo; se recuerda el paso actual.
 MENSAJE_PRIMERO_CONFIRMA_LUEGO_FOTO = (
@@ -202,22 +202,22 @@ async def _enviar_mensajes_con_delay(
             await asyncio.sleep(delay)
 
 
-# Validación cédula venezolana: spec ^[VEJvej]-?\d{6,11}$. Una letra E, J o V (o EVJ) + 6 a 11 dígitos. Guión opcional (se normaliza).
+# Validación cédula venezolana: solo E, V, J o Z (una letra) + 6 a 11 dígitos. Guión opcional (se normaliza).
 CEDULA_PATTERN_E = re.compile(r"^[Ee]\d{6,11}$")
 CEDULA_PATTERN_J = re.compile(r"^[Jj]\d{6,11}$")
 CEDULA_PATTERN_V = re.compile(r"^[Vv]\d{6,11}$")
-CEDULA_PATTERN_EVJ = re.compile(r"^[Ee][Vv][Jj]\d{6,11}$")
-# Patrón unificado spec (guión opcional): ^[VEJvej]-?\d{6,11}$
-CEDULA_PATTERN_SPEC = re.compile(r"^[VEJvej]-?\d{6,11}$", re.IGNORECASE)
+CEDULA_PATTERN_Z = re.compile(r"^[Zz]\d{6,11}$")
+# Patrón unificado (guión opcional): ^[VEJZvejz]-?\d{6,11}$
+CEDULA_PATTERN_SPEC = re.compile(r"^[VEJZvejz]-?\d{6,11}$", re.IGNORECASE)
 
 
 def _normalize_cedula_input(text: str) -> str:
-    """Quita espacios y guiones del texto para validar cédula (spec: V/E/J + 6-11 dígitos, guión opcional)."""
+    """Quita espacios y guiones del texto para validar cédula (spec: E/V/J/Z + 6-11 dígitos, guión opcional)."""
     return (text or "").strip().replace(" ", "").replace("-", "").replace("_", "")
 
 
 def _validar_cedula_evj(text: str) -> bool:
-    """True si el texto empieza por E, J o V seguido de 6 a 11 números (p. ej. E1234567, V12345678, EVJ1234567)."""
+    """True si el texto empieza por E, V, J o Z (solo una letra) seguido de 6 a 11 números (p. ej. E1234567, V12345678, Z999999999)."""
     s = _normalize_cedula_input(text)
     if not s:
         return False
@@ -225,12 +225,12 @@ def _validar_cedula_evj(text: str) -> bool:
         CEDULA_PATTERN_E.match(s)
         or CEDULA_PATTERN_J.match(s)
         or CEDULA_PATTERN_V.match(s)
-        or CEDULA_PATTERN_EVJ.match(s)
+        or CEDULA_PATTERN_Z.match(s)
     )
 
 
 def _cedula_normalizada(text: str) -> str:
-    """Devuelve la cédula con letras en mayúsculas (E, J, V o EVJ + números)."""
+    """Devuelve la cédula con letras en mayúsculas (E, V, J o Z + números)."""
     s = _normalize_cedula_input(text)
     if not _validar_cedula_evj(s):
         return s
@@ -301,8 +301,8 @@ def _parsear_edicion_confirmacion(text: str) -> Dict[str, Any]:
     m = re.search(r"(?:n(?:umero|º|úmero)?\s*(?:documento|doc|recibo)\s*[:\-]?)\s*([^\n,]+?)(?=\s*(?:,|$))", t, re.I)
     if m:
         out["numero_documento"] = m.group(1).strip()[:100]
-    # Cédula: E/J/V + dígitos
-    m = re.search(r"(?:cedula|cédula|cedula)\s*[:\-]?\s*([EeVvJj]\d{6,11})", t, re.I)
+    # Cédula: E/V/J/Z + dígitos
+    m = re.search(r"(?:cedula|cédula|cedula)\s*[:\-]?\s*([EeVvJjZz]\d{6,11})", t, re.I)
     if m:
         out["cedula"] = m.group(1).strip().upper()[:20]
     return out
