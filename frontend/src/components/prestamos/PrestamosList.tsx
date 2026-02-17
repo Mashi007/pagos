@@ -604,8 +604,8 @@ export function PrestamosList() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
-                            {/* Botón Ver Detalles - Visible cuando está DESEMBOLSADO o tiene fecha_aprobacion */}
-                            {(prestamo.estado === 'DESEMBOLSADO' || prestamo.fecha_aprobacion) && (
+                            {/* Botón Ver Detalles - Visible cuando APROBADO, DESEMBOLSADO o tiene fecha_aprobacion */}
+                            {(prestamo.estado === 'APROBADO' || prestamo.estado === 'DESEMBOLSADO' || prestamo.fecha_aprobacion) && (
                               <Button
                                 variant="ghost"
                                 size="sm"

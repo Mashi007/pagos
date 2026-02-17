@@ -412,8 +412,8 @@ def get_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
 
 
 def _generar_cuotas_amortizacion(db: Session, p: Prestamo, fecha_base: date, numero_cuotas: int, monto_cuota: float) -> int:
-    """Genera filas en cuotas para el préstamo. MENSUAL +1 mes, QUINCENAL +15 días, SEMANAL +7 días.
-    Incluye saldo_capital_inicial y saldo_capital_final (amortización plana). Retorna cantidad creada."""
+    """Genera filas en cuotas. fecha_vencimiento = último día del período (fecha_base + delta*n - 1).
+    MENSUAL 30d, QUINCENAL 15d, SEMANAL 7d. Ej: base 1 ene QUINCENAL → cuota 1 vence 15 ene, cuota 2 vence 31 ene."""
     modalidad = (p.modalidad_pago or "MENSUAL").upper()
     delta_dias = 30 if modalidad == "MENSUAL" else (15 if modalidad == "QUINCENAL" else 7)
     cliente_id = p.cliente_id
@@ -421,10 +421,7 @@ def _generar_cuotas_amortizacion(db: Session, p: Prestamo, fecha_base: date, num
     monto_cuota_dec = Decimal(str(round(monto_cuota, 2)))
     creadas = 0
     for n in range(1, numero_cuotas + 1):
-        if modalidad == "MENSUAL":
-            next_date = fecha_base + timedelta(days=30 * n)
-        else:
-            next_date = fecha_base + timedelta(days=delta_dias * n)
+        next_date = fecha_base + timedelta(days=delta_dias * n - 1)
         saldo_inicial = Decimal(str(round(total - (n - 1) * monto_cuota, 2)))
         saldo_final = Decimal(str(round(total - n * monto_cuota, 2)))
         if saldo_final < 0:
