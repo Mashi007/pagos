@@ -10,7 +10,8 @@ import {
   Mail,
   Calendar,
   MessageSquare,
-  RefreshCw
+  RefreshCw,
+  AlertCircle
 } from 'lucide-react'
 
 import { Button } from '../../components/ui/button'
@@ -22,6 +23,7 @@ import { LoadingSpinner } from '../../components/ui/loading-spinner'
 import { AlertWithIcon } from '../../components/ui/alert'
 import { CrearClienteForm } from './CrearClienteForm'
 import { ClientesKPIs } from './ClientesKPIs'
+import { CasosRevisarDialog } from './CasosRevisarDialog'
 
 import { useDebounce } from '../../hooks/useDebounce'
 import { useClientesStats } from '../../hooks/useClientesStats'
@@ -45,6 +47,7 @@ export function ClientesList() {
   const [clienteSeleccionado, setClienteSeleccionado] = useState<any>(null)
   const [showEditarCliente, setShowEditarCliente] = useState(false)
   const [showEliminarCliente, setShowEliminarCliente] = useState(false)
+  const [showCasosRevisar, setShowCasosRevisar] = useState(false)
   const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null)
 
   const showNotification = (type: 'success' | 'error', message: string) => {
@@ -275,17 +278,15 @@ export function ClientesList() {
           </p>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button
             variant="outline"
             size="lg"
             onClick={async () => {
-              // âœ… Actualizar tanto la lista como las estadísticas
               await Promise.all([
                 refetchClientes(),
                 refetchStats()
               ])
-              // Invalidar queries para asegurar actualización completa
               queryClient.invalidateQueries({ queryKey: ['clientes'] })
               queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
             }}
@@ -295,6 +296,16 @@ export function ClientesList() {
           >
             <RefreshCw className={`w-5 h-5 mr-2 ${(isRefetching || statsLoading) ? 'animate-spin' : ''}`} />
             {(isRefetching || statsLoading) ? 'Actualizando...' : 'Actualizar'}
+          </Button>
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={() => setShowCasosRevisar(true)}
+            className="px-6 py-6 text-base font-semibold border-amber-400 text-amber-700 hover:bg-amber-50"
+            title="Cargar clientes con valores placeholder (cédula, nombres, teléfono o email a revisar)"
+          >
+            <AlertCircle className="w-5 h-5 mr-2" />
+            Cargar casos a revisar
           </Button>
           <Button
             size="lg"
@@ -742,6 +753,17 @@ export function ClientesList() {
           />
         )}
       </AnimatePresence>
+
+      {/* Modal Casos a Revisar */}
+      <CasosRevisarDialog
+        open={showCasosRevisar}
+        onClose={() => setShowCasosRevisar(false)}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['clientes'] })
+          queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
+          showNotification('success', 'Cliente(s) actualizado(s) correctamente')
+        }}
+      />
 
       {/* Modal Confirmar Eliminación */}
       <AnimatePresence>

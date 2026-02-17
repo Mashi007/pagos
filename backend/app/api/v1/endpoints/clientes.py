@@ -173,6 +173,120 @@ class CheckCedulasResponse(BaseModel):
     existing_cedulas: list[str] = []
 
 
+@router.get("/casos-a-revisar", response_model=dict)
+def get_casos_a_revisar(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+):
+    """
+    Clientes que no cumplen validadores: tienen valores placeholder
+    (cedula=Z999999999, nombres=Revisar Nombres, telefono=+589999999999, email=revisar@email.com).
+    """
+    _cols = (
+        Cliente.id,
+        Cliente.cedula,
+        Cliente.nombres,
+        Cliente.telefono,
+        Cliente.email,
+        Cliente.direccion,
+        Cliente.fecha_nacimiento,
+        Cliente.ocupacion,
+        Cliente.estado,
+        Cliente.fecha_registro,
+        Cliente.fecha_actualizacion,
+        Cliente.usuario_registro,
+        Cliente.notas,
+    )
+    filtro = or_(
+        Cliente.cedula == "Z999999999",
+        Cliente.nombres == "Revisar Nombres",
+        Cliente.telefono == "+589999999999",
+        Cliente.email == "revisar@email.com",
+    )
+    count_q = select(func.count()).select_from(Cliente).where(filtro)
+    total = db.scalar(count_q) or 0
+    q = (
+        select(*_cols)
+        .select_from(Cliente)
+        .where(filtro)
+        .order_by(Cliente.id.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+    )
+    rows = db.execute(q).all()
+    clientes_list = []
+    for r in rows:
+        try:
+            clientes_list.append(_row_to_cliente_response(r))
+        except (ValidationError, TypeError, AttributeError) as ve:
+            logger.warning("Fila cliente id=%s omitida: %s", getattr(r, "id", "?"), ve)
+    total_pages = (total + per_page - 1) // per_page if total else 0
+    return {
+        "clientes": clientes_list,
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": total_pages,
+    }
+
+
+class ActualizarLoteItem(BaseModel):
+    """Item para actualización en lote."""
+    id: int
+    cedula: Optional[str] = None
+    nombres: Optional[str] = None
+    telefono: Optional[str] = None
+    email: Optional[str] = None
+    direccion: Optional[str] = None
+    ocupacion: Optional[str] = None
+    notas: Optional[str] = None
+
+
+class ActualizarLoteResponse(BaseModel):
+    """Respuesta de actualización en lote."""
+    actualizados: int = 0
+    errores: list[dict] = []
+    total_procesados: int = 0
+
+
+@router.post("/actualizar-lote", response_model=ActualizarLoteResponse)
+def actualizar_clientes_lote(
+    items: list[ActualizarLoteItem],
+    db: Session = Depends(get_db),
+):
+    """
+    Actualizar múltiples clientes. Cada item debe tener id y los campos a actualizar.
+    Usa las mismas validaciones que update_cliente (duplicados → 409).
+    """
+    actualizados = 0
+    errores: list[dict] = []
+    for item in items:
+        data = item.model_dump(exclude_unset=True)
+        if "id" not in data:
+            errores.append({"id": item.id, "error": "Falta id"})
+            continue
+        cid = data.pop("id")
+        if not data:
+            continue
+        try:
+            payload = ClienteUpdate(**{k: v for k, v in data.items() if v is not None})
+            update_cliente(cliente_id=cid, payload=payload, db=db)
+            actualizados += 1
+        except HTTPException as e:
+            detail = e.detail
+            if isinstance(detail, (list, dict)):
+                detail = str(detail)
+            errores.append({"id": cid, "error": str(detail)})
+        except (ValidationError, TypeError) as e:
+            errores.append({"id": cid, "error": str(e)})
+    return ActualizarLoteResponse(
+        actualizados=actualizados,
+        errores=errores,
+        total_procesados=len(items),
+    )
+
+
 @router.post("/check-cedulas", response_model=CheckCedulasResponse)
 def check_cedulas(payload: CheckCedulasRequest, db: Session = Depends(get_db)):
     """

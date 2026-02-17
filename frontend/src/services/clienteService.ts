@@ -231,15 +231,23 @@ class ClienteService {
     }
   }
 
-  // Obtener clientes con valores por defecto
+  // Obtener clientes con valores por defecto (legacy - usar getCasosARevisar)
   async getClientesValoresPorDefecto(
     page: number = 1,
     perPage: number = 20
   ): Promise<PaginatedResponse<Cliente>> {
-    const url = buildUrl(`${this.baseUrl}/valores-por-defecto`, { page, per_page: perPage })
+    return this.getCasosARevisar(page, perPage)
+  }
+
+  // Obtener casos a revisar (clientes con placeholders: Z999999999, Revisar Nombres, +589999999999, revisar@email.com)
+  async getCasosARevisar(
+    page: number = 1,
+    perPage: number = 50
+  ): Promise<PaginatedResponse<Cliente>> {
+    const url = buildUrl(`${this.baseUrl}/casos-a-revisar`, { page, per_page: perPage })
     const response = await apiClient.get<any>(url)
     return {
-      data: response.items || [],
+      data: response.clientes || [],
       total: response.total || 0,
       page: response.page || page,
       per_page: response.per_page || perPage,
