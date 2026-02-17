@@ -463,7 +463,7 @@ def get_cuotas_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
             "estado": c.estado or "PENDIENTE",
             "dias_mora": c.dias_mora if c.dias_mora is not None else 0,
         }
-        for c in [r[0] for r in rows]
+        for c in rows
     ]
 
 

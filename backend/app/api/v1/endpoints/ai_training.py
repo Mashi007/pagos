@@ -442,3 +442,25 @@ def post_rag_buscar(payload: dict = Body(...)):
 def post_rag_documentos_embeddings(documento_id: int):
     """Actualiza embeddings de un documento (stub)."""
     return {"embeddings_generados": 0}
+
+
+# ============== ML IMPAGO (stubs) ==============
+
+class PredecirImpagoBody(BaseModel):
+    prestamo_id: int
+
+
+@router.post("/ml-impago/predecir")
+def post_ml_impago_predecir(payload: PredecirImpagoBody = Body(...)):
+    """Predicción de impago para un préstamo. Sin modelo activo devuelve respuesta indicando que no hay predicción disponible."""
+    return {
+        "prestamo_id": payload.prestamo_id,
+        "probabilidad_impago": 0,
+        "probabilidad_pago": 0,
+        "prediccion": "No hay modelo activo",
+        "nivel_riesgo": "N/A",
+        "confidence": 0,
+        "recomendacion": "Entrena un modelo en Configuración → AI → ML Impago para obtener predicciones.",
+        "features_usadas": {},
+        "modelo_usado": None,
+    }
