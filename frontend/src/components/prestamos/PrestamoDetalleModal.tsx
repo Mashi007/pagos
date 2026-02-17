@@ -202,11 +202,11 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                   <CardContent className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="text-sm text-gray-600">Cédula</label>
-                      <p className="font-medium">{prestamoData.cedula}</p>
+                      <p className="font-medium">{prestamoData.cedula ?? '—'}</p>
                     </div>
                     <div>
                       <label className="text-sm text-gray-600">Nombres</label>
-                      <p className="font-medium">{prestamoData.nombres}</p>
+                      <p className="font-medium">{prestamoData.nombres ?? '—'}</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -223,9 +223,9 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                     <div>
                       <label className="text-sm text-gray-600">Total de Financiamiento</label>
                       <p className="text-2xl font-bold text-green-600">
-                        ${typeof prestamoData.total_financiamiento === 'number'
-                          ? prestamoData.total_financiamiento.toFixed(2)
-                          : '0.00'}
+                        ${(typeof prestamoData.total_financiamiento === 'number'
+                          ? prestamoData.total_financiamiento
+                          : Number(prestamoData.total_financiamiento) || 0).toFixed(2)}
                       </p>
                     </div>
                     <div>
@@ -244,23 +244,27 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                     <div>
                       <label className="text-sm text-gray-600">Cuota por Período</label>
                       <p className="text-xl font-semibold">
-                        ${typeof prestamoData.cuota_periodo === 'number'
-                          ? prestamoData.cuota_periodo.toFixed(2)
-                          : '0.00'}
+                        ${(typeof prestamoData.cuota_periodo === 'number'
+                          ? prestamoData.cuota_periodo
+                          : Number(prestamoData.cuota_periodo) || (prestamoData.total_financiamiento && prestamoData.numero_cuotas
+                            ? Number(prestamoData.total_financiamiento) / prestamoData.numero_cuotas
+                            : 0)).toFixed(2)}
                       </p>
                     </div>
                     <div>
                       <label className="text-sm text-gray-600">Tasa de Interés</label>
                       <p className="font-medium">
-                        {typeof prestamoData.tasa_interes === 'number'
-                          ? (prestamoData.tasa_interes * 100).toFixed(2) + '%'
-                          : '0.00%'}
+                        {((typeof prestamoData.tasa_interes === 'number'
+                          ? prestamoData.tasa_interes
+                          : Number(prestamoData.tasa_interes) || 0) * 100).toFixed(2)}%
                       </p>
                     </div>
-                    <div>
-                      <label className="text-sm text-gray-600">Fecha de Requerimiento</label>
-                      <p className="font-medium">{formatDate(prestamoData.fecha_requerimiento)}</p>
-                    </div>
+                    {prestamoData.fecha_requerimiento && (
+                      <div>
+                        <label className="text-sm text-gray-600">Fecha de Requerimiento</label>
+                        <p className="font-medium">{formatDate(prestamoData.fecha_requerimiento)}</p>
+                      </div>
+                    )}
                     {prestamoData.fecha_aprobacion && (
                       <div>
                         <label className="text-sm text-gray-600">Fecha de Aprobación</label>

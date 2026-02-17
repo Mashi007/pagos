@@ -213,7 +213,11 @@ def get_prestamos_stats(
     año: Optional[int] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Estadísticas de préstamos mensuales desde BD: total, por estado, total_financiamiento, promedio_monto, cartera_vigente (todo del mes)."""
+    """Estadísticas de préstamos mensuales desde BD.
+    a) total_financiamiento: suma de total_financiamiento de préstamos APROBADOS en el mes.
+    b) total: cantidad de préstamos APROBADOS en el mes.
+    c) cartera_vigente: suma de monto_cuota (cuota_periodo) de cuotas con vencimiento en el mes no cobradas.
+    d) Usa COALESCE(fecha_aprobacion, fecha_registro) para determinar 'aprobados en el mes'."""
     hoy = date.today()
     mes_u = mes if mes is not None and 1 <= mes <= 12 else hoy.month
     año_u = año if año is not None and año >= 2000 else hoy.year
@@ -222,12 +226,14 @@ def get_prestamos_stats(
     inicio_mes = date(año_u, mes_u, 1)
     fin_mes = date(año_u, mes_u, ultimo_dia)
 
+    # Fecha de referencia: aprobación o registro (para "aprobados en el mes")
+    fecha_ref = func.coalesce(func.date(Prestamo.fecha_aprobacion), func.date(Prestamo.fecha_registro))
     q_base = (
         select(Prestamo)
         .where(
             Prestamo.estado == "APROBADO",
-            Prestamo.fecha_registro >= inicio_mes,
-            Prestamo.fecha_registro <= fin_mes,
+            fecha_ref >= inicio_mes,
+            fecha_ref <= fin_mes,
         )
     )
     if analista and analista.strip():
@@ -241,8 +247,8 @@ def get_prestamos_stats(
         select(Prestamo.estado, func.count())
         .select_from(Prestamo)
         .where(
-            Prestamo.fecha_registro >= inicio_mes,
-            Prestamo.fecha_registro <= fin_mes,
+            fecha_ref >= inicio_mes,
+            fecha_ref <= fin_mes,
         )
     )
     if analista and analista.strip():
@@ -257,14 +263,25 @@ def get_prestamos_stats(
     total_fin = db.scalar(select(func.coalesce(func.sum(Prestamo.total_financiamiento), 0)).select_from(q_base.subquery())) or 0
     total_fin = float(total_fin)
     promedio_monto = (total_fin / total) if total else 0
-    # Cartera por cobrar en el mes: cuotas con vencimiento en el mes y no pagadas
+    # Cartera por cobrar: suma monto_cuota de cuotas con vencimiento en el mes, no cobradas, de préstamos APROBADOS
+    conds_cartera = [
+        Prestamo.estado == "APROBADO",
+        Cuota.fecha_vencimiento >= inicio_mes,
+        Cuota.fecha_vencimiento <= fin_mes,
+        Cuota.fecha_pago.is_(None),
+    ]
+    if analista and analista.strip():
+        conds_cartera.append(Prestamo.analista == analista.strip())
+    if concesionario and concesionario.strip():
+        conds_cartera.append(Prestamo.concesionario == concesionario.strip())
+    if modelo and modelo.strip():
+        conds_cartera.append(Prestamo.modelo_vehiculo == modelo.strip())
     cartera_vigente = float(
         db.scalar(
-            select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
-                Cuota.fecha_vencimiento >= inicio_mes,
-                Cuota.fecha_vencimiento <= fin_mes,
-                Cuota.fecha_pago.is_(None),
-            )
+            select(func.coalesce(func.sum(Cuota.monto), 0))
+            .select_from(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .where(*conds_cartera)
         ) or 0
     )
     return {
@@ -404,11 +421,21 @@ def resumen_prestamos_por_cedula(cedula: str, db: Session = Depends(get_db)):
 
 @router.get("/{prestamo_id}", response_model=PrestamoResponse)
 def get_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
-    """Obtiene un préstamo por ID desde BD."""
-    row = db.get(Prestamo, prestamo_id)
+    """Obtiene un préstamo por ID desde BD. Incluye cedula/nombres del cliente (join si faltan en prestamo)."""
+    row = db.execute(
+        select(Prestamo, Cliente.nombres, Cliente.cedula)
+        .select_from(Prestamo)
+        .outerjoin(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(Prestamo.id == prestamo_id)
+    ).first()
     if not row:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
-    return PrestamoResponse.model_validate(row)
+    p, nombres_cliente, cedula_cliente = row[0], row[1], row[2]
+    resp = PrestamoResponse.model_validate(p)
+    # Preferir cedula/nombres del cliente (join) si faltan o vacíos en prestamo
+    resp.nombres = nombres_cliente or p.nombres or ""
+    resp.cedula = cedula_cliente or p.cedula or ""
+    return resp
 
 
 def _generar_cuotas_amortizacion(db: Session, p: Prestamo, fecha_base: date, numero_cuotas: int, monto_cuota: float) -> int:

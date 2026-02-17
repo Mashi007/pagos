@@ -59,6 +59,13 @@ class PrestamoResponse(BaseModel):
     fecha_actualizacion: Optional[datetime] = None
     fecha_registro: Optional[datetime] = None
     fecha_aprobacion: Optional[datetime] = None
+    # Campos para detalle (cedula/nombres en prestamos; cuota_periodo, etc.)
+    cedula: Optional[str] = None
+    nombres: Optional[str] = None
+    cuota_periodo: Optional[Decimal] = None
+    fecha_requerimiento: Optional[date] = None
+    tasa_interes: Optional[Decimal] = None
+    producto: Optional[str] = None
 
 
 class PrestamoListResponse(PrestamoResponse):
