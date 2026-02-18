@@ -1,4 +1,4 @@
-import { apiClient } from '../services/api'
+﻿import { apiClient } from '../services/api'
 
 export interface NotificacionPlantilla {
   id: number
@@ -96,7 +96,7 @@ export interface EmailConfig {
   imap_user?: string
   imap_password?: string
   imap_use_ssl?: string
-  /** Contactos prestablecidos: emails separados por coma para notificación automática de tickets CRM */
+  /** Contactos prestablecidos: emails separados por coma para notificaciÃ³n automÃ¡tica de tickets CRM */
   tickets_notify_emails?: string
 }
 
@@ -111,7 +111,7 @@ export interface NotificacionVariable {
   fecha_actualizacion?: string
 }
 
-/** Prefijo API v1; pestañas de notificaciones usan rutas propias (notificaciones-previas, etc.). */
+/** Prefijo API v1; pestaÃ±as de notificaciones usan rutas propias (notificaciones-previas, etc.). */
 const API_V1 = '/api/v1'
 
 class NotificacionService {
@@ -166,19 +166,19 @@ class NotificacionService {
     return await apiClient.get<NotificacionStats>(`${this.baseUrl}/estadisticas/resumen`)
   }
 
-  /** Clientes retrasados por reglas: 5 días, 3 días, 1 día, hoy, mora 61+. Datos reales desde BD. */
+  /** Clientes retrasados por reglas: 5 dÃ­as, 3 dÃ­as, 1 dÃ­a, hoy, mora 61+. Datos reales desde BD. */
   async getClientesRetrasados(): Promise<ClientesRetrasadosResponse> {
     return await apiClient.get<ClientesRetrasadosResponse>(`${this.baseUrl}/clientes-retrasados`, {
       timeout: 60000,
     })
   }
 
-  /** KPIs por pestaña: enviados y rebotados (dias_5, dias_3, dias_1, hoy, mora_61). */
+  /** KPIs por pestaÃ±a: enviados y rebotados (dias_5, dias_3, dias_1, hoy, mora_61). */
   async getEstadisticasPorTab(): Promise<EstadisticasPorTab> {
     return await apiClient.get<EstadisticasPorTab>(`${this.baseUrl}/estadisticas-por-tab`)
   }
 
-  /** Lista de correos no entregados (rebotados) por tipo de pestaña. */
+  /** Lista de correos no entregados (rebotados) por tipo de pestaÃ±a. */
   async getRebotadosPorTab(tipo: string): Promise<{ items: RebotadoItem[]; total: number }> {
     return await apiClient.get<{ items: RebotadoItem[]; total: number }>(
       `${this.baseUrl}/rebotados-por-tab`,
@@ -195,12 +195,12 @@ class NotificacionService {
     return blob as Blob
   }
 
-  /** Ejecutar actualización de notificaciones (dias_mora en clientes). Llamar desde cron a las 2am. */
+  /** Ejecutar actualizaciÃ³n de notificaciones (dias_mora en clientes). Llamar desde cron a las 2am. */
   async actualizarNotificaciones(): Promise<{ mensaje: string; clientes_actualizados: number }> {
     return await apiClient.post<{ mensaje: string; clientes_actualizados: number }>(`${this.baseUrl}/actualizar`)
   }
 
-  // Notificaciones automáticas
+  // Notificaciones automÃ¡ticas
   async procesarAutomaticas(): Promise<{ mensaje: string, estadisticas: any }> {
     return await apiClient.post(`${this.baseUrl}/automaticas/procesar`)
   }
@@ -210,7 +210,7 @@ class NotificacionService {
     const params = new URLSearchParams()
     if (estado) params.append('estado', estado)
 
-    // Usar timeout extendido para este endpoint que puede tardar más
+    // Usar timeout extendido para este endpoint que puede tardar mÃ¡s
     return await apiClient.get<{ items: any[], total: number, dias_5: number, dias_3: number, dias_1: number }>(
       `${API_V1}/notificaciones-previas/?${params}`,
       { timeout: 120000 }
@@ -247,7 +247,7 @@ class NotificacionService {
     )
   }
 
-  /** Envía correo a cada cliente en la clasificación indicada (email desde tabla clientes). */
+  /** EnvÃ­a correo a cada cliente en la clasificaciÃ³n indicada (email desde tabla clientes). */
   async enviarNotificacionesPrevias(): Promise<{ mensaje: string; enviados: number; sin_email: number; fallidos: number }> {
     return await apiClient.post<{ mensaje: string; enviados: number; sin_email: number; fallidos: number }>(
       `${API_V1}/notificaciones-previas/enviar`,
@@ -280,7 +280,7 @@ class NotificacionService {
     )
   }
 
-  /** Envía correos a clientes con 61+ días de mora (email desde tabla clientes). */
+  /** EnvÃ­a correos a clientes con 61+ dÃ­as de mora (email desde tabla clientes). */
   async enviarNotificacionesMora61(): Promise<{ mensaje: string; enviados: number; sin_email: number; fallidos: number }> {
     return await apiClient.post<{ mensaje: string; enviados: number; sin_email: number; fallidos: number }>(
       `${API_V1}/notificaciones-mora-61/enviar`,
@@ -328,32 +328,33 @@ class EmailConfigService {
   }
 
   async actualizarConfiguracionEmail(config: Partial<EmailConfig>): Promise<any> {
-    console.log('📤 [EmailConfigService] Enviando PUT a:', `${this.baseUrl}/email/configuracion`)
-    console.log('📤 [EmailConfigService] Datos a enviar:', {
+    console.log('ðŸ“¤ [EmailConfigService] Enviando PUT a:', `${this.baseUrl}/email/configuracion`)
+    console.log('ðŸ“¤ [EmailConfigService] Datos a enviar:', {
       ...config,
-      smtp_password: config.smtp_password ? '***' : '(vacío)'
+      smtp_password: config.smtp_password ? '***' : '(vacÃ­o)'
     })
 
     try {
-      // Usar timeout extendido para validación SMTP (puede tardar hasta 10-15 segundos)
+      // Usar timeout extendido para validaciÃ³n SMTP (puede tardar hasta 10-15 segundos)
       const resultado = await apiClient.put(
         `${this.baseUrl}/email/configuracion`,
         config,
-        { timeout: 60000 } // 60 segundos para permitir validación SMTP
+        { timeout: 60000 } // 60 segundos para permitir validaciÃ³n SMTP
       )
-      console.log('✅ [EmailConfigService] Respuesta exitosa:', resultado)
+      console.log('âœ… [EmailConfigService] Respuesta exitosa:', resultado)
       return resultado
     } catch (error) {
-      console.error('❌ [EmailConfigService] Error en PUT:', error)
+      console.error('âŒ [EmailConfigService] Error en PUT:', error)
       throw error
     }
   }
 
-  async probarConfiguracionEmail(emailDestino?: string, subject?: string, mensaje?: string): Promise<any> {
+  async probarConfiguracionEmail(emailDestino?: string, subject?: string, mensaje?: string, emailCC?: string): Promise<any> {
     const params: any = {}
     if (emailDestino) params.email_destino = emailDestino
     if (subject) params.subject = subject
     if (mensaje) params.mensaje = mensaje
+    if (emailCC) params.email_cc = emailCC
     return await apiClient.post(`${this.baseUrl}/email/probar`, params)
   }
 
@@ -410,18 +411,18 @@ class WhatsAppConfigService {
   }
 
   async actualizarConfiguracionWhatsApp(config: Partial<WhatsAppConfig>): Promise<any> {
-    console.log('📤 [WhatsAppConfigService] Enviando PUT a:', `${this.baseUrl}/whatsapp/configuracion`)
-    console.log('📤 [WhatsAppConfigService] Datos a enviar:', {
+    console.log('ðŸ“¤ [WhatsAppConfigService] Enviando PUT a:', `${this.baseUrl}/whatsapp/configuracion`)
+    console.log('ðŸ“¤ [WhatsAppConfigService] Datos a enviar:', {
       ...config,
-      access_token: config.access_token ? '***' : '(vacío)'
+      access_token: config.access_token ? '***' : '(vacÃ­o)'
     })
 
     try {
       const resultado = await apiClient.put(`${this.baseUrl}/whatsapp/configuracion`, config)
-      console.log('✅ [WhatsAppConfigService] Respuesta exitosa:', resultado)
+      console.log('âœ… [WhatsAppConfigService] Respuesta exitosa:', resultado)
       return resultado
     } catch (error) {
-      console.error('❌ [WhatsAppConfigService] Error en PUT:', error)
+      console.error('âŒ [WhatsAppConfigService] Error en PUT:', error)
       throw error
     }
   }
@@ -441,4 +442,5 @@ class WhatsAppConfigService {
 export const notificacionService = new NotificacionService()
 export const emailConfigService = new EmailConfigService()
 export const whatsappConfigService = new WhatsAppConfigService()
+
 

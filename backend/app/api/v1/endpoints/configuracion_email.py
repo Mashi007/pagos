@@ -1,11 +1,11 @@
-"""
-Endpoints de configuración de email (SMTP + IMAP).
+﻿"""
+Endpoints de configuraciÃ³n de email (SMTP + IMAP).
 GET/PUT /configuracion/email/configuracion, GET /configuracion/email/estado,
 POST /configuracion/email/probar, POST /configuracion/email/probar-imap.
-Políticas Gmail: SMTP (enviar) 587/465, IMAP (recibir) 993 SSL o 143 STARTTLS, App Password.
-tickets_notify_emails: contactos prestablecidos para notificación automática de tickets CRM.
-La configuración se persiste en la tabla configuracion (clave=email_config) para que se actualice
-y sobreviva reinicios y múltiples workers (p. ej. Render).
+PolÃ­ticas Gmail: SMTP (enviar) 587/465, IMAP (recibir) 993 SSL o 143 STARTTLS, App Password.
+tickets_notify_emails: contactos prestablecidos para notificaciÃ³n automÃ¡tica de tickets CRM.
+La configuraciÃ³n se persiste en la tabla configuracion (clave=email_config) para que se actualice
+y sobreviva reinicios y mÃºltiples workers (p. ej. Render).
 Ref: https://support.google.com/mail/answer/7126229
 """
 import json
@@ -26,7 +26,7 @@ router = APIRouter()
 
 CLAVE_EMAIL_CONFIG = "email_config"
 
-# Stub en memoria (SMTP + IMAP + tickets). Con BD persistir en tabla de configuración.
+# Stub en memoria (SMTP + IMAP + tickets). Con BD persistir en tabla de configuraciÃ³n.
 _email_config_stub: dict[str, Any] = {
     "smtp_host": "smtp.gmail.com",
     "smtp_port": "587",
@@ -43,12 +43,12 @@ _email_config_stub: dict[str, Any] = {
     "imap_user": "",
     "imap_password": "",
     "imap_use_ssl": "true",
-    "tickets_notify_emails": "",  # Contactos prestablecidos: emails separados por coma para notificación de tickets
+    "tickets_notify_emails": "",  # Contactos prestablecidos: emails separados por coma para notificaciÃ³n de tickets
 }
 
 
 def _sync_stub_from_settings() -> None:
-    """Rellena el stub con valores de .env cuando el usuario no ha guardado desde la UI (smtp_user vacío)."""
+    """Rellena el stub con valores de .env cuando el usuario no ha guardado desde la UI (smtp_user vacÃ­o)."""
     if not _email_config_stub.get("smtp_user") and getattr(settings, "SMTP_USER", None):
         _email_config_stub["smtp_host"] = getattr(settings, "SMTP_HOST", None) or "smtp.gmail.com"
         _email_config_stub["smtp_port"] = str(getattr(settings, "SMTP_PORT", None) or 587)
@@ -58,7 +58,7 @@ def _sync_stub_from_settings() -> None:
 
 
 def _load_email_config_from_db(db: Session) -> None:
-    """Carga la configuración de email desde la tabla configuracion y la fusiona en el stub."""
+    """Carga la configuraciÃ³n de email desde la tabla configuracion y la fusiona en el stub."""
     try:
         row = db.get(Configuracion, CLAVE_EMAIL_CONFIG)
         if row and row.valor:
@@ -89,7 +89,7 @@ def _persist_email_config(db: Session) -> None:
 
 @router.get("/configuracion")
 def get_email_configuracion(db: Session = Depends(get_db)):
-    """Devuelve la configuración de email (SMTP + IMAP + contactos tickets). No expone contraseñas en texto plano."""
+    """Devuelve la configuraciÃ³n de email (SMTP + IMAP + contactos tickets). No expone contraseÃ±as en texto plano."""
     _load_email_config_from_db(db)
     _sync_stub_from_settings()
     out = _email_config_stub.copy()
@@ -120,7 +120,7 @@ class EmailConfigUpdate(BaseModel):
 
 
 def _is_password_masked(v: str) -> bool:
-    """No sobrescribir la contraseña real con el valor enmascarado que envía el frontend."""
+    """No sobrescribir la contraseÃ±a real con el valor enmascarado que envÃ­a el frontend."""
     if v is None or not isinstance(v, str):
         return True
     s = (v or "").strip()
@@ -129,7 +129,7 @@ def _is_password_masked(v: str) -> bool:
 
 @router.put("/configuracion")
 def put_email_configuracion(payload: EmailConfigUpdate = Body(...), db: Session = Depends(get_db)):
-    """Actualiza configuración SMTP, IMAP y contactos para notificación de tickets. Persiste en BD."""
+    """Actualiza configuraciÃ³n SMTP, IMAP y contactos para notificaciÃ³n de tickets. Persiste en BD."""
     _load_email_config_from_db(db)
     data = payload.model_dump(exclude_none=True)
     for k, v in data.items():
@@ -140,18 +140,18 @@ def put_email_configuracion(payload: EmailConfigUpdate = Body(...), db: Session 
         _email_config_stub[k] = v
     update_from_api(_email_config_stub)
     _persist_email_config(db)
-    logger.info("Configuración email actualizada y persistida en BD (campos: %s)", list(data.keys()))
+    logger.info("ConfiguraciÃ³n email actualizada y persistida en BD (campos: %s)", list(data.keys()))
     return {
-        "message": "Configuración guardada",
+        "message": "ConfiguraciÃ³n guardada",
         "vinculacion_confirmada": False,
-        "mensaje_vinculacion": "Guarda la configuración y verifica la conexión.",
+        "mensaje_vinculacion": "Guarda la configuraciÃ³n y verifica la conexiÃ³n.",
         "requiere_app_password": False,
     }
 
 
 @router.get("/estado")
 def get_email_estado(db: Session = Depends(get_db)):
-    """Estado de la configuración de email (para el frontend)."""
+    """Estado de la configuraciÃ³n de email (para el frontend)."""
     _load_email_config_from_db(db)
     _sync_stub_from_settings()
     cfg = _email_config_stub
@@ -164,13 +164,13 @@ def get_email_estado(db: Session = Depends(get_db)):
     if not cfg.get("smtp_user"):
         problemas.append("Falta email de usuario")
     if not cfg.get("smtp_password") or cfg.get("smtp_password") == "***":
-        problemas.append("Falta contraseña de aplicación (Gmail requiere App Password)")
-    # No marcar conexion_smtp.success = True solo por tener campos; eso confunde si la contraseña es incorrecta.
-    # La conexión real se verifica con POST /probar (Enviar Email de Prueba).
+        problemas.append("Falta contraseÃ±a de aplicaciÃ³n (Gmail requiere App Password)")
+    # No marcar conexion_smtp.success = True solo por tener campos; eso confunde si la contraseÃ±a es incorrecta.
+    # La conexiÃ³n real se verifica con POST /probar (Enviar Email de Prueba).
     mensaje_estado = (
-        "Datos completos. Usa 'Enviar Email de Prueba' para verificar la conexión con Gmail."
+        "Datos completos. Usa 'Enviar Email de Prueba' para verificar la conexiÃ³n con Gmail."
         if configurada
-        else "Completa SMTP y, si usas Gmail, contraseña de aplicación."
+        else "Completa SMTP y, si usas Gmail, contraseÃ±a de aplicaciÃ³n."
     )
     return {
         "configurada": configurada,
@@ -178,7 +178,7 @@ def get_email_estado(db: Session = Depends(get_db)):
         "problemas": problemas,
         "conexion_smtp": {
             "success": False,
-            "message": "Usa 'Enviar Email de Prueba' para verificar la conexión." if configurada else None,
+            "message": "Usa 'Enviar Email de Prueba' para verificar la conexiÃ³n." if configurada else None,
         },
         "modo_pruebas": (cfg.get("modo_pruebas") or "true").lower() == "true",
         "email_pruebas": cfg.get("email_pruebas") or None,
@@ -187,9 +187,9 @@ def get_email_estado(db: Session = Depends(get_db)):
 
 class ProbarEmailRequest(BaseModel):
     email_destino: Optional[str] = None
+    email_cc: Optional[str] = None
     subject: Optional[str] = None
     mensaje: Optional[str] = None
-
 
 def _destino_prueba(cfg: dict[str, Any], payload: ProbarEmailRequest) -> str:
     """Destino del email de prueba: en modo pruebas usa email_pruebas; si no, el del payload."""
@@ -203,10 +203,10 @@ def _destino_prueba(cfg: dict[str, Any], payload: ProbarEmailRequest) -> str:
 
 @router.post(
     "/probar",
-    summary="Envía un email de prueba por SMTP con la configuración guardada.",
+    summary="EnvÃ­a un email de prueba por SMTP con la configuraciÃ³n guardada.",
 )
 def post_email_probar(payload: ProbarEmailRequest = Body(...), db: Session = Depends(get_db)):
-    """Envía un correo de prueba por SMTP (usa config persistida en BD). En modo pruebas redirige a email_pruebas."""
+    """EnvÃ­a un correo de prueba por SMTP (usa config persistida en BD). En modo pruebas redirige a email_pruebas."""
     _load_email_config_from_db(db)
     _sync_stub_from_settings()
     from app.core.email_config_holder import sync_from_db
@@ -222,7 +222,7 @@ def post_email_probar(payload: ProbarEmailRequest = Body(...), db: Session = Dep
     if not cfg.get("smtp_password") or (cfg.get("smtp_password") or "").strip() in ("", "***"):
         raise HTTPException(
             status_code=400,
-            detail="Falta contraseña SMTP (Gmail requiere Contraseña de aplicación). Guárdala en Configuración y vuelve a probar.",
+            detail="Falta contraseÃ±a SMTP (Gmail requiere ContraseÃ±a de aplicaciÃ³n). GuÃ¡rdala en ConfiguraciÃ³n y vuelve a probar.",
         )
 
     destino = _destino_prueba(cfg, payload)
@@ -233,14 +233,17 @@ def post_email_probar(payload: ProbarEmailRequest = Body(...), db: Session = Dep
         )
 
     subject = (payload.subject or "").strip() or "Prueba de email - RapiCredit"
-    body = (payload.mensaje or "").strip() or "Este es un correo de prueba enviado desde la configuración de email."
-    ok, error_msg = send_email(to_emails=[destino], subject=subject, body_text=body)
+    body = (payload.mensaje or "").strip() or "Este es un correo de prueba enviado desde la configuraciÃ³n de email."
+    recipients = [destino]
+    if payload.email_cc and (payload.email_cc or "").strip():
+        recipients.append(payload.email_cc.strip())
+    ok, error_msg = send_email(to_emails=recipients, subject=subject, body_text=body)
     if not ok:
         # Devolver 200 con success=false para que el frontend muestre el mensaje sin tratar como error de red (502)
-        logger.warning("Email de prueba falló: %s", error_msg)
+        logger.warning("Email de prueba fallÃ³: %s", error_msg)
         return {
             "success": False,
-            "mensaje": error_msg or "No se pudo enviar el correo. Revisa servidor SMTP, puerto (587 o 465), TLS y contraseña de aplicación.",
+            "mensaje": error_msg or "No se pudo enviar el correo. Revisa servidor SMTP, puerto (587 o 465), TLS y contraseÃ±a de aplicaciÃ³n.",
             "email_destino": destino,
         }
     logger.info("Email de prueba enviado a %s", destino)
@@ -252,7 +255,7 @@ def post_email_probar(payload: ProbarEmailRequest = Body(...), db: Session = Dep
 
 
 class ProbarImapRequest(BaseModel):
-    """Opcional: envía la config IMAP del formulario para probar sin guardar antes."""
+    """Opcional: envÃ­a la config IMAP del formulario para probar sin guardar antes."""
     imap_host: Optional[str] = None
     imap_port: Optional[str] = None
     imap_user: Optional[str] = None
@@ -262,10 +265,10 @@ class ProbarImapRequest(BaseModel):
 
 @router.post(
     "/probar-imap",
-    summary="[Stub] Prueba configuración IMAP; acepta config en body o usa la persistida en BD.",
+    summary="[Stub] Prueba configuraciÃ³n IMAP; acepta config en body o usa la persistida en BD.",
 )
 def post_email_probar_imap(payload: ProbarImapRequest = Body(...), db: Session = Depends(get_db)):
-    """Prueba de conexión IMAP. Si el body trae imap_host, imap_user e imap_password, usa esos; si no, usa la config de BD. Stub: no abre conexión real."""
+    """Prueba de conexiÃ³n IMAP. Si el body trae imap_host, imap_user e imap_password, usa esos; si no, usa la config de BD. Stub: no abre conexiÃ³n real."""
     cfg: dict[str, Any]
     if (
         (payload.imap_host or "").strip()
@@ -291,9 +294,10 @@ def post_email_probar_imap(payload: ProbarImapRequest = Body(...), db: Session =
     if not imap_ok:
         raise HTTPException(
             status_code=400,
-            detail="Configura imap_host, imap_user e imap_password (Contraseña de Aplicación para Gmail) antes de probar IMAP.",
+            detail="Configura imap_host, imap_user e imap_password (ContraseÃ±a de AplicaciÃ³n para Gmail) antes de probar IMAP.",
         )
     return {
         "success": True,
-        "mensaje": "Configuración IMAP válida. Implementa conexión IMAP real en el backend para verificar conexión.",
+        "mensaje": "ConfiguraciÃ³n IMAP vÃ¡lida. Implementa conexiÃ³n IMAP real en el backend para verificar conexiÃ³n.",
     }
+
