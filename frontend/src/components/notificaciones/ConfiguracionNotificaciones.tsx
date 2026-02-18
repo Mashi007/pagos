@@ -158,8 +158,35 @@ export function ConfiguracionNotificaciones() {
   const plantillasPorTipo = (tipo: string): NotificacionPlantilla[] =>
     plantillas.filter((p) => p.tipo === tipo)
 
+
+  const handleEnviarPrueba = async () => {
+    if (modoPruebas && emailsPruebas[0]?.trim()) {
+      try {
+        setEnviandoPrueba(true)
+        const resultado = await emailConfigService.probarConfiguracionEmail(
+          emailsPruebas[0],
+          'Prueba de Notificaciones - RapiCredit',
+          'Este es un correo de prueba para verificar que las plantillas de notificaciÃ³n se envÃ­an correctamente.',
+          emailsPruebas[1]?.trim() || undefined
+        )
+        
+        if (resultado.success || resultado.mensaje?.includes('enviado')) {
+          toast.success('Correo de prueba enviado exitosamente')
+        } else {
+          toast.error(resultado.mensaje || 'Error al enviar el correo de prueba')
+        }
+      } catch (error: any) {
+        toast.error(error?.message || 'Error al enviar el correo de prueba')
+      } finally {
+        setEnviandoPrueba(false)
+      }
+    } else {
+      toast.error('Activa modo pruebas y configura un email para enviar pruebas')
+    }
+  }
+
   if (cargando) {
-  $funcionEnvio
+  
 
   return (
       <div className="flex items-center justify-center py-16">
@@ -170,8 +197,6 @@ export function ConfiguracionNotificaciones() {
       </div>
     )
   }
-
-$funcionEnvio
 
   return (
     <div className="space-y-6">
@@ -265,7 +290,7 @@ $funcionEnvio
               const config = getConfig(tipo)
               const col = COLORES[color]
               const listaPlantillas = plantillasPorTipo(tipo)
-            $funcionEnvio
+            
 
   return (
                 <tr key={tipo} className={`border-b border-gray-100 ${col.bg}`}>
@@ -371,6 +396,8 @@ $funcionEnvio
     </div>
   )
 }
+
+
 
 
 
