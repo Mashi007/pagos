@@ -97,7 +97,7 @@ export function KpiCard({
           <VariationIcon className={`h-4 w-4 ${variationColor}`} />
           <span className={`text-sm font-bold ${variationColor}`}>
             {isPositive ? '+' : ''}
-            {variationPercent.toFixed(1)}%
+            {Number(variationPercent).toFixed(1)}%
           </span>
         </div>
       )}

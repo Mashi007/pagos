@@ -115,7 +115,7 @@ export function PagosKPIsNuevo() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600">
-              {kpiDataFinal.morosidadMensualPorcentaje.toFixed(1)}%
+              {Number(kpiDataFinal.morosidadMensualPorcentaje ?? 0).toFixed(1)}%
             </div>
             <p className="text-xs text-gray-600 mt-1">
               Del mes: lo no cobrado sobre lo que venció en {nombreMes}

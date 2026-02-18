@@ -8,7 +8,6 @@ import {
   AlertCircle,
   Edit,
   Trash2,
-  AlertTriangle,
   RefreshCw,
   X,
   ChevronDown,
@@ -111,29 +110,6 @@ export function PagosList() {
     }
   }
 
-  const handleDescargarPagosConErrores = async () => {
-    try {
-      toast.loading('Generando informe de pagos con errores...', { id: 'descargar-errores' })
-      const { blob, filename } = await pagoService.descargarPagosConErrores()
-
-      // Crear URL temporal y descargar
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = filename
-
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(url)
-
-      toast.success('Informe descargado correctamente', { id: 'descargar-errores' })
-    } catch (error) {
-      console.error('Error descargando informe de errores:', error)
-      toast.error('Error al descargar el informe de pagos con errores', { id: 'descargar-errores' })
-    }
-  }
-
   return (
     <div className="space-y-6">
       {/* KPIs */}
@@ -211,15 +187,6 @@ export function PagosList() {
               </div>
             </PopoverContent>
           </Popover>
-          <Button
-            variant="outline"
-            size="lg"
-            onClick={handleDescargarPagosConErrores}
-            className="px-6 py-6 text-base font-semibold border-red-500 text-red-600 hover:bg-red-50"
-          >
-            <AlertTriangle className="w-5 h-5 mr-2" />
-            Pagos con Errores
-          </Button>
       </div>
 
       {/* Pestañas: por defecto Resumen por Cliente (detalles por cliente, más reciente a más antiguo) */}

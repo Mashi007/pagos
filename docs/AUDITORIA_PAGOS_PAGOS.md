@@ -73,7 +73,6 @@ SessionLocal = sessionmaker(
 | GET | `/kpis` | ✅ | KPIs mes: montoACobrarMes, montoCobradoMes, morosidadMensualPorcentaje, clientesEnMora, clientesAlDia |
 | GET | `/stats` | ✅ | total_pagos, total_pagado, pagos_por_estado, cuotas_pagadas/pendientes/atrasadas, pagos_hoy |
 | GET | `/{pago_id}` | ✅ | Detalle de pago por ID |
-| GET | `/exportar/errores` | ✅ | Excel de pagos con errores (no conciliados, pendientes) |
 | POST | `/` | ✅ | Crear pago (validación Nº documento único) |
 | POST | `/upload` | ✅ | Carga masiva Excel (.xlsx, .xls) |
 | POST | `/conciliacion/upload` | ✅ | Conciliación Excel (Fecha Depósito, Nº Documento) |
@@ -149,13 +148,12 @@ SessionLocal = sessionmaker(
 | `getStats` | GET /pagos/stats | ✅ |
 | `getKPIs` | GET /pagos/kpis | ✅ |
 | `getUltimosPagos` | GET /pagos/ultimos | ✅ |
-| `descargarPagosConErrores` | GET /pagos/exportar/errores | ✅ |
 | `descargarPDFPendientes` | GET /reportes/cliente/{cedula}/pendientes.pdf | ✅ |
 | `descargarPDFAmortizacion` | GET /reportes/cliente/{cedula}/amortizacion.pdf | ✅ |
 
 ### 5.2 Componentes que usan pagoService
 
-- `PagosList.tsx` – Listado principal, paginación, filtros, KPIs, descarga Excel errores.
+- `PagosList.tsx` – Listado principal, paginación, filtros, KPIs.
 - `PagosListResumen.tsx` – Últimos pagos por cédula, PDF pendientes.
 - `PagosKPIsNuevo.tsx` – KPIs (usePagosKPIs).
 - `DashboardPagos.tsx` – Stats (getStats).
@@ -235,7 +233,6 @@ SessionLocal = sessionmaker(
 - [ ] KPIs y stats se actualizan correctamente.
 - [ ] Carga masiva Excel y conciliación funcionan.
 - [ ] Aplicar pago a cuotas actualiza correctamente las cuotas.
-- [ ] Descarga Excel de pagos con errores funciona.
 - [ ] PDF pendientes y amortización por cédula funcionan.
 
 ---

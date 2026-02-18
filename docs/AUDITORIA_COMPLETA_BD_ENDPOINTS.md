@@ -111,7 +111,6 @@ Todos usan `Depends(get_db)` y consultas reales a BD.
 | GET | `/kpis` | ✅ | KPIs del mes (clientes ACTIVOS) |
 | GET | `/stats` | ✅ | Estadísticas |
 | GET | `/{pago_id}` | ✅ | Detalle de pago |
-| GET | `/exportar/errores` | ✅ | Excel de pagos con errores |
 | POST | `/` | ✅ | Crear pago |
 | POST | `/upload` | ✅ | Carga masiva Excel |
 | POST | `/conciliacion/upload` | ✅ | Conciliación Excel |

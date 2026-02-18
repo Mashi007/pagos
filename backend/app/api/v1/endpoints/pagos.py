@@ -1,7 +1,7 @@
 """
 Endpoints de pagos. Datos reales desde BD.
 - Tabla pagos: GET/POST/PUT/DELETE /pagos/ (listado y CRUD para /pagos/pagos).
-- GET /pagos/kpis, /stats, /ultimos, /exportar/errores; POST /upload, /conciliacion/upload, /{id}/aplicar-cuotas.
+- GET /pagos/kpis, /stats, /ultimos; POST /upload, /conciliacion/upload, /{id}/aplicar-cuotas.
 """
 import calendar
 import io
@@ -12,7 +12,6 @@ from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query, HTTPException, UploadFile, File
-from fastapi.responses import Response
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
@@ -443,47 +442,6 @@ async def upload_conciliacion(
     except Exception as e:
         db.rollback()
         logger.exception("Error upload conciliación: %s", e)
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-@router.get("/exportar/errores")
-def exportar_pagos_errores(db: Session = Depends(get_db)):
-    """Exporta Excel de pagos con errores (no conciliados o estado pendiente/revisar)."""
-    try:
-        import openpyxl
-        q = select(Pago).where(
-            (Pago.conciliado.is_(False)) | (Pago.conciliado.is_(None)) | (Pago.estado.in_(["PENDIENTE", "ATRASADO", "REVISAR"]))
-        ).order_by(Pago.id.desc())
-        rows = db.execute(q).scalars().all()
-        pagos_list = [r[0] for r in rows]
-        wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = "Pagos con errores"
-        ws.append(["ID", "Cédula", "Préstamo ID", "Fecha pago", "Monto", "Nº documento", "Estado", "Conciliado", "Notas"])
-        for p in pagos_list:
-            fp = p.fecha_pago
-            fecha_str = fp.date().isoformat() if hasattr(fp, "date") and fp else (fp.isoformat()[:10] if fp else "")
-            ws.append([
-                p.id,
-                p.cedula_cliente or "",
-                p.prestamo_id or "",
-                fecha_str,
-                float(p.monto_pagado) if p.monto_pagado is not None else 0,
-                p.numero_documento or "",
-                p.estado or "",
-                "Sí" if p.conciliado else "No",
-                (p.notas or "")[:200],
-            ])
-        buf = io.BytesIO()
-        wb.save(buf)
-        buf.seek(0)
-        return Response(
-            content=buf.getvalue(),
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": "attachment; filename=pagos_con_errores.xlsx"},
-        )
-    except Exception as e:
-        logger.exception("Error exportar pagos errores: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 

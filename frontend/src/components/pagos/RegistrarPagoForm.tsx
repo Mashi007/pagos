@@ -250,7 +250,7 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId }: R
                     <SelectContent>
                       {prestamos.map((prestamo) => (
                         <SelectItem key={prestamo.id} value={prestamo.id.toString()}>
-                          ID {prestamo.id} - ${prestamo.total_financiamiento?.toFixed(2)} - {prestamo.estado}
+                          ID {prestamo.id} - ${Number(prestamo.total_financiamiento ?? 0).toFixed(2)} - {prestamo.estado}
                         </SelectItem>
                       ))}
                     </SelectContent>

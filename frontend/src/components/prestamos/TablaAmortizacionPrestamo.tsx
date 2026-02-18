@@ -41,13 +41,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
   // Cargar cuotas del préstamo
   const { data: cuotas, isLoading, error } = useQuery({
     queryKey: ['cuotas-prestamo', prestamo.id],
-    queryFn: async () => {
-      const data = await prestamoService.getCuotasPrestamo(prestamo.id)
-      // ðŸ” DEBUG: Verificar qué estados están llegando
-      console.log('ðŸ“Š Cuotas recibidas del backend:', data)
-      console.log('ðŸ“Š Estados encontrados:', data?.map((c: Cuota) => c.estado))
-      return data
-    },
+    queryFn: () => prestamoService.getCuotasPrestamo(prestamo.id),
     enabled: prestamo.estado === 'APROBADO' || prestamo.estado === 'DESEMBOLSADO',
     staleTime: 0, // Siempre refetch para obtener datos actualizados
     refetchOnMount: true, // Refetch al montar el componente

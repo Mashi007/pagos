@@ -577,7 +577,7 @@ export function DashboardMenu() {
                   title="Cuotas programadas (mensual)"
                   value={kpisPrincipales.cuotas_programadas?.valor_actual || 0}
                   subtitle={kpisPrincipales.porcentaje_cuotas_pagadas !== undefined
-                    ? `% Cuotas pagadas en el mes: ${kpisPrincipales.porcentaje_cuotas_pagadas.toFixed(1)}%`
+                    ? `% Cuotas pagadas en el mes: ${Number(kpisPrincipales.porcentaje_cuotas_pagadas).toFixed(1)}%`
                     : undefined}
                   icon={FileText}
                   color="text-blue-600"
@@ -916,7 +916,7 @@ export function DashboardMenu() {
                             contentStyle={chartTooltipStyle.contentStyle}
                             labelStyle={chartTooltipStyle.labelStyle}
                             formatter={(value: number, _name: string, props: { payload?: { cantidad: number; porcentaje: number } }) => [
-                              `${props.payload?.cantidad?.toLocaleString('es-EC') ?? value} préstamos (${(value ?? props.payload?.porcentaje ?? 0).toFixed(1)}%)`,
+                              `${props.payload?.cantidad?.toLocaleString('es-EC') ?? value} préstamos (${Number(value ?? props.payload?.porcentaje ?? 0).toFixed(1)}%)`,
                               '% del total',
                             ]}
                             labelFormatter={(label) => `Modelo: ${label}`}

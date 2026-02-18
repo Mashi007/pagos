@@ -200,29 +200,6 @@ class PagoService {
     )
     return response.data as Blob
   }
-
-  // Descargar informe Excel de pagos con errores
-  async descargarPagosConErrores(): Promise<{ blob: Blob; filename: string }> {
-    const axiosInstance = apiClient.getAxiosInstance()
-    const response = await axiosInstance.get(
-      `${this.baseUrl}/exportar/errores`,
-      {
-        responseType: 'blob',
-      }
-    )
-
-    // Extraer nombre del archivo del header Content-Disposition
-    let filename = 'pagos_con_errores.xlsx'
-    const contentDisposition = response.headers['content-disposition']
-    if (contentDisposition) {
-      const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
-      if (filenameMatch && filenameMatch[1]) {
-        filename = filenameMatch[1].replace(/['"]/g, '')
-      }
-    }
-
-    return { blob: response.data as Blob, filename }
-  }
 }
 
 export const pagoService = new PagoService()
