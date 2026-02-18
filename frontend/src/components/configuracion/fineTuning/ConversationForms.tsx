@@ -12,7 +12,7 @@ import { Textarea } from '../../ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import { toast } from 'sonner'
 
-interface ConversationFormsProps {
+export interface ConversationFormsProps {
   tablasYCampos: Record<string, string[]>
   cargandoTablasCampos: boolean
   ultimaActualizacion: string

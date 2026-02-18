@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { toast } from 'sonner'
-import { apiClient } from '../../services/api'
+import { apiClient } from '../services/api'
 
 export interface AIConfigState {
   configured?: boolean

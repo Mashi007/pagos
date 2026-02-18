@@ -29,6 +29,9 @@ export interface FineTuningJob {
   error?: string
   creado_en: string
   completado_en?: string
+  finalizado_en?: string
+  modelo_id?: string
+  mensaje_error?: string
 }
 
 export interface DocumentoEmbedding {
@@ -177,9 +180,17 @@ class AITrainingService {
   }
 
   /**
+   * Eliminar conversaciÃ³n
+   */
+  async eliminarConversacion(conversacionId: number): Promise<void> {
+    await apiClient.delete(`${this.baseUrl}/conversaciones/${conversacionId}`)
+  }
+
+  /**
    * Mejorar pregunta y/o respuesta usando IA
    */
   async mejorarConversacion(params: {
+    tipo?: 'pregunta' | 'respuesta' | 'conversacion'
     pregunta?: string
     respuesta?: string
   }): Promise<{
@@ -274,6 +285,13 @@ class AITrainingService {
    */
   async activarModeloFineTuned(modeloId: string): Promise<{ mensaje: string; modelo_activo: string }> {
     return await apiClient.post(`${this.baseUrl}/fine-tuning/activar`, { modelo_id: modeloId })
+  }
+
+  /**
+   * Alias para activarModeloFineTuned (compatibilidad con useFineTuning)
+   */
+  async activarModelo(modeloId: string): Promise<{ mensaje: string; modelo_activo: string }> {
+    return this.activarModeloFineTuned(modeloId)
   }
 
   /**

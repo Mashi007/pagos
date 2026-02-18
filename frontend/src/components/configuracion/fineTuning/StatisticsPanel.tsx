@@ -9,7 +9,7 @@ import { Card, CardContent } from '../../ui/card'
 import { Button } from '../../ui/button'
 import { Badge } from '../../ui/badge'
 
-interface StatisticsPanelProps {
+export interface StatisticsPanelProps {
   estadisticasFeedback: any | null
   mostrar: boolean
   onClose: () => void

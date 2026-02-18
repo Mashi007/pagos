@@ -77,7 +77,7 @@ export function useFineTuning(): UseFineTuningReturn {
       setCargando(true)
       try {
         const data = await aiTrainingService.getConversaciones(params)
-        setConversaciones(data)
+        setConversaciones(data.conversaciones)
       } catch (error: any) {
         console.error('Error cargando conversaciones:', error)
         toast.error('Error al cargar conversaciones')
@@ -274,9 +274,9 @@ export function useFineTuning(): UseFineTuningReturn {
           soloCalificadas
         )
 
-        if (result.archivo_id && result.num_conversaciones) {
+        if (result.archivo_id && result.total_conversaciones) {
           toast.success(
-            `Datos preparados exitosamente: ${result.num_conversaciones} conversaciones en archivo ${result.archivo_id}`
+            `Datos preparados exitosamente: ${result.total_conversaciones} conversaciones en archivo ${result.archivo_id}`
           )
           cargarConversaciones()
         }

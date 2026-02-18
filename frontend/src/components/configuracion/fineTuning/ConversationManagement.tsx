@@ -16,7 +16,7 @@ import { Badge } from '../../ui/badge'
 import { ConversacionAI } from '../../../services/aiTrainingService'
 import { toast } from 'sonner'
 
-interface ConversationManagementProps {
+export interface ConversationManagementProps {
   conversaciones: ConversacionAI[]
   cargando: boolean
   onRate: (conversacionId: number, calificacion: number, feedback: string) => Promise<void>

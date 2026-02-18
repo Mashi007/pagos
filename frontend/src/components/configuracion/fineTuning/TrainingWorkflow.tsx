@@ -19,7 +19,7 @@ import { FineTuningJob } from '../../../services/aiTrainingService'
 import { MINIMO_CONVERSACIONES_ENTRENAMIENTO, detectarFeedbackNegativo } from '../../../constants/fineTuning'
 import { toast } from 'sonner'
 
-interface TrainingWorkflowProps {
+export interface TrainingWorkflowProps {
   jobs: FineTuningJob[]
   cargandoJobs: boolean
   tiempoActual: Date
