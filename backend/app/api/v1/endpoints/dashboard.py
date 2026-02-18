@@ -423,15 +423,8 @@ def _compute_dashboard_admin(
             ) or 0
             cartera_f = _safe_float(cartera)
             cobrado_f = _safe_float(cobrado)
-            # Morosidad: cuotas del mes que aún no se han cobrado (fecha_pago nula)
-            morosidad_mes = db.scalar(
-                select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
-                    Cuota.fecha_vencimiento >= inicio_d,
-                    Cuota.fecha_vencimiento <= fin_d,
-                    Cuota.fecha_pago.is_(None),
-                )
-            ) or 0
-            morosidad_f = _safe_float(morosidad_mes)
+            # Morosidad = Cartera - Cobrado (mes)
+            morosidad_f = max(0.0, cartera_f - cobrado_f)
             evolucion.append({
                 "mes": m["mes"],
                 "cartera": cartera_f,
@@ -649,17 +642,19 @@ def _compute_morosidad_por_dia(
         nombres_mes = ("Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic")
         d = inicio
         while d <= fin:
+            # Cartera: cuotas programadas para ese día (fecha_vencimiento = d)
             cartera_dia = db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
                     Cuota.fecha_vencimiento == d,
                 )
             ) or 0
+            # Cobrado: pagos recibidos ese día (tabla pagos, fecha_pago = d)
             cobrado_dia = db.scalar(
-                select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
-                    Cuota.fecha_pago.isnot(None),
-                    func.date(Cuota.fecha_pago) == d,
+                select(func.coalesce(func.sum(Pago.monto_pagado), 0)).select_from(Pago).where(
+                    func.date(Pago.fecha_pago) == d,
                 )
             ) or 0
+            # Morosidad = Cartera - Cobrado (día)
             morosidad_dia = max(0.0, _safe_float(cartera_dia) - _safe_float(cobrado_dia))
             resultado.append({
                 "fecha": d.isoformat(),
