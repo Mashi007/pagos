@@ -2,6 +2,12 @@
 Endpoints del dashboard. Usa datos reales de la BD cuando existen (clientes);
 el resto permanece stub hasta tener modelos de préstamos/pagos/cuotas.
 Caché de dashboard/admin: se actualiza 3 veces al día (6:00, 13:00, 16:00) para cargas rápidas.
+
+CONCEPTO PAGO VENCIDO Y MOROSO (terminología unificada):
+- Pago vencido = cuotas vencidas y no pagadas (fecha_vencimiento < hoy).
+- Vencido: si debo pagar hasta el 23 feb, NO estoy vencido hasta el 24 feb. Desde el 24 = vencido (1-60 días de atraso).
+- Moroso: 61+ días de atraso (se declara como moroso desde el día 61).
+- Condición: fecha_vencimiento < fecha_referencia AND fecha_pago IS NULL.
 """
 import logging
 import threading
@@ -224,7 +230,8 @@ def _compute_kpis_principales(
         else:
             variacion_creditos = 0.0
 
-        # Morosidad mensual: cuotas que vencieron en el período actual y no se han cobrado
+        # Morosidad: cuotas vencidas (fecha_vencimiento < hoy) y no pagadas. No se cuenta si vence hoy o en el futuro.
+        hoy = date.today()
         inicio_d = inicio_dt.date() if hasattr(inicio_dt, "date") else (inicio if usar_rango else inicio_dt.date())
         fin_d = fin_dt.date() if hasattr(fin_dt, "date") else (fin if usar_rango else fin_dt.date())
         conds_moro = [
@@ -233,6 +240,7 @@ def _compute_kpis_principales(
             Cliente.estado == "ACTIVO",
             Prestamo.estado == "APROBADO",
             Cuota.fecha_pago.is_(None),
+            Cuota.fecha_vencimiento < hoy,
             Cuota.fecha_vencimiento >= inicio_d,
             Cuota.fecha_vencimiento <= fin_d,
         ]
@@ -260,6 +268,7 @@ def _compute_kpis_principales(
             Cliente.estado == "ACTIVO",
             Prestamo.estado == "APROBADO",
             Cuota.fecha_pago.is_(None),
+            Cuota.fecha_vencimiento < hoy,
             Cuota.fecha_vencimiento >= inicio_ant_d,
             Cuota.fecha_vencimiento <= fin_ant_d,
         ]
@@ -445,6 +454,7 @@ def _compute_dashboard_admin(
         meses = _etiquetas_12_meses()
 
     evolucion = []
+    hoy_date = date.today()
     try:
         for i, m in enumerate(meses):
             if "year" in m and "month" in m:
@@ -487,8 +497,21 @@ def _compute_dashboard_admin(
             ) or 0
             cartera_f = _safe_float(cartera)
             cobrado_f = _safe_float(cobrado)
-            # Morosidad = Cartera - Cobrado (mes)
-            morosidad_f = max(0.0, cartera_f - cobrado_f)
+            # Morosidad a fin de mes: cuotas vencidas y no pagadas. Si fin_d > hoy, usar hoy (no proyectar futuro).
+            ref_moro = min(fin_d, hoy_date)
+            morosidad_f = db.scalar(
+                select(func.coalesce(func.sum(Cuota.monto), 0))
+                .select_from(Cuota)
+                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+                .join(Cliente, Prestamo.cliente_id == Cliente.id)
+                .where(
+                    Cliente.estado == "ACTIVO",
+                    Prestamo.estado == "APROBADO",
+                    Cuota.fecha_vencimiento < ref_moro,
+                    or_(Cuota.fecha_pago.is_(None), func.date(Cuota.fecha_pago) > ref_moro),
+                )
+            ) or 0
+            morosidad_f = _safe_float(morosidad_f)
             evolucion.append({
                 "mes": m["mes"],
                 "cartera": cartera_f,
@@ -690,28 +713,22 @@ def _compute_morosidad_por_dia(
     fecha_fin: Optional[str],
     dias: Optional[int],
 ) -> dict:
-    """Calcula morosidad por día (usado por endpoint y por refresh de caché)."""
+    """Calcula morosidad por día (usado por endpoint y por refresh de caché).
+    Siempre muestra el día de hoy como extremo derecho y hacia atrás según dias (7-90).
+    Morosidad = cuotas vencidas (fecha_vencimiento < d) y no pagadas al cierre del día d."""
     try:
         hoy_utc = datetime.now(timezone.utc)
         hoy_date = date(hoy_utc.year, hoy_utc.month, hoy_utc.day)
-        if fecha_inicio and fecha_fin:
-            try:
-                inicio = date.fromisoformat(fecha_inicio)
-                fin = date.fromisoformat(fecha_fin)
-            except ValueError:
-                fin = hoy_date
-                inicio = fin - timedelta(days=dias or 30)
-        else:
-            fin = hoy_date
-            inicio = fin - timedelta(days=dias or 30)
-        if (fin - inicio).days > 90:
-            fin = inicio + timedelta(days=90)
+        # Siempre: fin = hoy, inicio = hoy - dias (ignorar fecha_inicio/fecha_fin)
+        fin = hoy_date
+        dias_efectivos = min(90, max(7, dias or 30))
+        inicio = fin - timedelta(days=dias_efectivos)
         resultado = []
         nombres_mes = ("Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic")
         d = inicio
         while d <= fin:
-            # Cartera: cuotas programadas para ese día (solo clientes ACTIVOS)
-            cartera_dia = db.scalar(
+            # Morosidad al cierre del día d: cuotas con fecha_vencimiento < d y sin pagar (o pagadas después de d)
+            morosidad_dia = db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0))
                 .select_from(Cuota)
                 .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
@@ -719,22 +736,11 @@ def _compute_morosidad_por_dia(
                 .where(
                     Cliente.estado == "ACTIVO",
                     Prestamo.estado == "APROBADO",
-                    Cuota.fecha_vencimiento == d,
+                    Cuota.fecha_vencimiento < d,
+                    or_(Cuota.fecha_pago.is_(None), func.date(Cuota.fecha_pago) > d),
                 )
             ) or 0
-            # Cobrado: pagos recibidos ese día (solo clientes ACTIVOS)
-            cobrado_dia = db.scalar(
-                select(func.coalesce(func.sum(Pago.monto_pagado), 0))
-                .select_from(Pago)
-                .join(Prestamo, Pago.prestamo_id == Prestamo.id)
-                .join(Cliente, Prestamo.cliente_id == Cliente.id)
-                .where(
-                    Cliente.estado == "ACTIVO",
-                    func.date(Pago.fecha_pago) == d,
-                )
-            ) or 0
-            # Morosidad = Cartera - Cobrado (día)
-            morosidad_dia = max(0.0, _safe_float(cartera_dia) - _safe_float(cobrado_dia))
+            morosidad_dia = _safe_float(morosidad_dia)
             resultado.append({
                 "fecha": d.isoformat(),
                 "dia": f"{d.day} {nombres_mes[d.month - 1]}",
@@ -892,6 +898,19 @@ def get_prestamos_por_concesionario(
         )
         concesionario_label = func.coalesce(Prestamo.concesionario, "Sin concesionario").label("concesionario")
 
+        conds_base = [
+            Cliente.estado == "ACTIVO",
+            Prestamo.estado == "APROBADO",
+            func.date(Prestamo.fecha_registro) >= inicio,
+            func.date(Prestamo.fecha_registro) <= fin,
+        ]
+        if analista:
+            conds_base.append(Prestamo.analista == analista)
+        if concesionario:
+            conds_base.append(Prestamo.concesionario == concesionario)
+        if modelo:
+            conds_base.append(Prestamo.modelo_vehiculo == modelo)
+
         # Por mes: préstamos APROBADO en [inicio, fin] (solo clientes ACTIVOS)
         q_por_mes = (
             select(
@@ -901,12 +920,7 @@ def get_prestamos_por_concesionario(
             )
             .select_from(Prestamo)
             .join(Cliente, Prestamo.cliente_id == Cliente.id)
-            .where(
-                Cliente.estado == "ACTIVO",
-                Prestamo.estado == "APROBADO",
-                func.date(Prestamo.fecha_registro) >= inicio,
-                func.date(Prestamo.fecha_registro) <= fin,
-            )
+            .where(and_(*conds_base))
             .group_by(mes_expr, Prestamo.concesionario)
             .order_by(mes_expr, func.count().desc())
         )
@@ -917,6 +931,14 @@ def get_prestamos_por_concesionario(
         ]
 
         # Acumulado: todos los préstamos APROBADO desde el inicio (solo clientes ACTIVOS)
+        conds_acum = [Cliente.estado == "ACTIVO", Prestamo.estado == "APROBADO"]
+        if analista:
+            conds_acum.append(Prestamo.analista == analista)
+        if concesionario:
+            conds_acum.append(Prestamo.concesionario == concesionario)
+        if modelo:
+            conds_acum.append(Prestamo.modelo_vehiculo == modelo)
+
         q_acum = (
             select(
                 func.coalesce(Prestamo.concesionario, "Sin concesionario").label("concesionario"),
@@ -924,7 +946,7 @@ def get_prestamos_por_concesionario(
             )
             .select_from(Prestamo)
             .join(Cliente, Prestamo.cliente_id == Cliente.id)
-            .where(Cliente.estado == "ACTIVO", Prestamo.estado == "APROBADO")
+            .where(and_(*conds_acum))
             .group_by(Prestamo.concesionario)
             .order_by(func.count().desc())
         )
@@ -949,57 +971,70 @@ def get_prestamos_por_modelo(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Préstamos aprobados por modelo: por_mes (en el período) y acumulado desde el inicio. Origen: tabla prestamos, campo modelo."""
+    """Préstamos aprobados por modelo: por_mes (en el período) y acumulado en el período.
+    Respeta filtros analista, concesionario, modelo. Normaliza NULL/vacío como 'Sin modelo'."""
     analista = _sanitize_filter_string(analista)
     concesionario = _sanitize_filter_string(concesionario)
-    modelo = _sanitize_filter_string(modelo)
+    modelo_filtro = _sanitize_filter_string(modelo)
     try:
         inicio, fin = _parse_fechas_concesionario(fecha_inicio, fecha_fin)
         mes_expr = func.to_char(
             func.date_trunc("month", Prestamo.fecha_registro),
             "YYYY-MM",
         )
-        modelo_label = func.coalesce(Prestamo.modelo_vehiculo, "Sin modelo").label("modelo")
+        # Normalizar NULL y string vacío como "Sin modelo" para evitar duplicados
+        modelo_expr = func.coalesce(
+            func.nullif(func.trim(Prestamo.modelo_vehiculo), ""),
+            "Sin modelo",
+        )
+
+        conds_base = [
+            Cliente.estado == "ACTIVO",
+            Prestamo.estado == "APROBADO",
+            func.date(Prestamo.fecha_registro) >= inicio,
+            func.date(Prestamo.fecha_registro) <= fin,
+        ]
+        if analista:
+            conds_base.append(Prestamo.analista == analista)
+        if concesionario:
+            conds_base.append(Prestamo.concesionario == concesionario)
+        if modelo_filtro:
+            conds_base.append(Prestamo.modelo_vehiculo == modelo_filtro)
 
         # Por mes: préstamos APROBADO en [inicio, fin] (solo clientes ACTIVOS)
         q_por_mes = (
             select(
                 mes_expr.label("mes"),
-                modelo_label,
+                modelo_expr.label("modelo"),
                 func.count().label("cantidad"),
             )
             .select_from(Prestamo)
             .join(Cliente, Prestamo.cliente_id == Cliente.id)
-            .where(
-                Cliente.estado == "ACTIVO",
-                Prestamo.estado == "APROBADO",
-                func.date(Prestamo.fecha_registro) >= inicio,
-                func.date(Prestamo.fecha_registro) <= fin,
-            )
-            .group_by(mes_expr, Prestamo.modelo_vehiculo)
+            .where(and_(*conds_base))
+            .group_by(mes_expr, modelo_expr)
             .order_by(mes_expr, func.count().desc())
         )
         rows_por_mes = db.execute(q_por_mes).all()
         por_mes = [
-            {"mes": r.mes, "modelo": r.modelo, "cantidad": r.cantidad}
+            {"mes": r.mes, "modelo": r.modelo or "Sin modelo", "cantidad": r.cantidad}
             for r in rows_por_mes
         ]
 
-        # Acumulado: todos los préstamos APROBADO desde el inicio (solo clientes ACTIVOS)
+        # Acumulado: mismo período [inicio, fin] y filtros (no "desde el inicio")
         q_acum = (
             select(
-                func.coalesce(Prestamo.modelo_vehiculo, "Sin modelo").label("modelo"),
+                modelo_expr.label("modelo"),
                 func.count().label("cantidad_acumulada"),
             )
             .select_from(Prestamo)
             .join(Cliente, Prestamo.cliente_id == Cliente.id)
-            .where(Cliente.estado == "ACTIVO", Prestamo.estado == "APROBADO")
-            .group_by(Prestamo.modelo_vehiculo)
+            .where(and_(*conds_base))
+            .group_by(modelo_expr)
             .order_by(func.count().desc())
         )
         rows_acum = db.execute(q_acum).all()
         acumulado = [
-            {"modelo": r.modelo, "cantidad_acumulada": r.cantidad_acumulada}
+            {"modelo": r.modelo or "Sin modelo", "cantidad_acumulada": r.cantidad_acumulada}
             for r in rows_acum
         ]
 
@@ -1031,10 +1066,9 @@ def _compute_financiamiento_por_rangos(
     concesionario: Optional[str],
     modelo: Optional[str],
 ) -> dict:
-    """Calcula financiamiento por rangos: cuenta préstamos APROBADOS desde el inicio por banda de total_financiamiento.
-    No se filtra por fecha: se tabulan todos los préstamos aprobados (tabla prestamos) en cada segmento definido."""
+    """Calcula financiamiento por rangos: cuenta préstamos APROBADOS por banda de total_financiamiento.
+    Filtra por fecha_registro cuando se envían fecha_inicio/fecha_fin."""
     try:
-        # Siempre todos los préstamos desde el inicio (solo clientes ACTIVOS)
         conds_base = [
             Prestamo.cliente_id == Cliente.id,
             Cliente.estado == "ACTIVO",
@@ -1047,6 +1081,14 @@ def _compute_financiamiento_por_rangos(
             conds_base.append(Prestamo.concesionario == concesionario)
         if modelo:
             conds_base.append(Prestamo.modelo_vehiculo == modelo)
+        if fecha_inicio and fecha_fin:
+            try:
+                inicio = date.fromisoformat(fecha_inicio)
+                fin = date.fromisoformat(fecha_fin)
+                conds_base.append(func.date(Prestamo.fecha_registro) >= inicio)
+                conds_base.append(func.date(Prestamo.fecha_registro) <= fin)
+            except ValueError:
+                pass
 
         rangos_def = _rangos_financiamiento()
         resultado = []
@@ -1151,23 +1193,31 @@ def _compute_composicion_morosidad(
     concesionario: Optional[str],
     modelo: Optional[str],
 ) -> dict:
-    """Calcula composición de morosidad (usado por endpoint y por refresh de caché)."""
+    """Calcula composición de morosidad: cuotas vencidas sin pagar al día de hoy, agrupadas por días de atraso.
+    Snapshot actual (usa current_date). Respeta filtros analista, concesionario, modelo."""
     try:
+        # Bandas: 1-30 y 31-60 = VENCIDO; 61-90 y 90+ = MOROSO (61+ días de atraso)
         bandas = [(1, 30, "1-30 días"), (31, 60, "31-60 días"), (61, 90, "61-90 días"), (91, 999999, "90+ días")]
         puntos = []
         total_monto = 0.0
         total_cuotas = 0
         total_prestamos = 0
         dias_atraso = func.current_date() - Cuota.fecha_vencimiento
+        conds_base = [
+            Cuota.prestamo_id == Prestamo.id,
+            Prestamo.cliente_id == Cliente.id,
+            Cliente.estado == "ACTIVO",
+            Prestamo.estado == "APROBADO",
+            Cuota.fecha_pago.is_(None),
+        ]
+        if analista:
+            conds_base.append(Prestamo.analista == analista)
+        if concesionario:
+            conds_base.append(Prestamo.concesionario == concesionario)
+        if modelo:
+            conds_base.append(Prestamo.modelo_vehiculo == modelo)
         for min_d, max_d, cat in bandas:
-            conds_comp = [
-                Cuota.prestamo_id == Prestamo.id,
-                Prestamo.cliente_id == Cliente.id,
-                Cliente.estado == "ACTIVO",
-                Prestamo.estado == "APROBADO",
-                Cuota.fecha_pago.is_(None),
-                dias_atraso >= min_d,
-            ]
+            conds_comp = list(conds_base) + [dias_atraso >= min_d]
             if max_d < 999999:
                 conds_comp.append(dias_atraso <= max_d)
             q = (
@@ -1437,10 +1487,13 @@ def get_evolucion_morosidad(
         meses_list = _etiquetas_12_meses()
         hoy = datetime.now(timezone.utc)
         resultado = []
+        hoy_date = hoy.date() if hasattr(hoy, "date") else date(hoy.year, hoy.month, hoy.day)
         for i, m in enumerate(meses_list):
             fin_mes = hoy - timedelta(days=30 * (11 - i))
             ultimo_dia = _ultimo_dia_del_mes(fin_mes.replace(tzinfo=timezone.utc) if fin_mes.tzinfo is None else fin_mes)
             ultimo_dia_date = ultimo_dia.date() if hasattr(ultimo_dia, "date") else ultimo_dia
+            # Morosidad = cuotas vencidas (fecha_vencimiento < ref) y no pagadas. Si el mes es futuro, usar hoy.
+            ref = min(ultimo_dia_date, hoy_date)
             moro = db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0))
                 .select_from(Cuota)
@@ -1450,7 +1503,7 @@ def get_evolucion_morosidad(
                     Cliente.estado == "ACTIVO",
                     Prestamo.estado == "APROBADO",
                     Cuota.fecha_pago.is_(None),
-                    Cuota.fecha_vencimiento <= ultimo_dia_date,
+                    Cuota.fecha_vencimiento < ref,
                 )
             ) or 0
             resultado.append({"mes": m["mes"], "morosidad": _safe_float(moro)})

@@ -84,7 +84,7 @@ export function KpiCard({
 
       {/* Valor Principal */}
       <div className={`text-3xl font-black ${colors.text} mb-2`}>
-        {typeof value === 'number' && title.includes('Morosidad')
+        {typeof value === 'number' && (title.includes('Morosidad') || title.includes('Pago vencido'))
           ? formatCurrency(value)
           : typeof value === 'number' && title.includes('Préstamos')
           ? value.toLocaleString()

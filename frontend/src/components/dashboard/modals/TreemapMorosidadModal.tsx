@@ -155,7 +155,7 @@ export function TreemapMorosidadModal({ isOpen, onClose }: TreemapMorosidadModal
     <BaseModal
       isOpen={isOpen}
       onClose={onClose}
-      title="Morosidad por Analista"
+      title="Pago vencido por Analista"
       size="xlarge"
     >
       <div className="space-y-6">
@@ -173,7 +173,7 @@ export function TreemapMorosidadModal({ isOpen, onClose }: TreemapMorosidadModal
         {/* Gráfico Treemap */}
         <Card>
           <CardHeader>
-            <CardTitle>Morosidad por Analista (cuotas vencidas y dólares vencidos)</CardTitle>
+            <CardTitle>Pago vencido por Analista (cuotas vencidas y dólares vencidos)</CardTitle>
           </CardHeader>
           <CardContent>
             {loadingMorosidad ? (
@@ -182,7 +182,7 @@ export function TreemapMorosidadModal({ isOpen, onClose }: TreemapMorosidadModal
               </div>
             ) : datosTreemap.length === 0 ? (
               <div className="h-[500px] flex items-center justify-center text-gray-500">
-                No hay datos de morosidad disponibles para el período seleccionado
+                No hay datos de pago vencido disponibles para el período seleccionado
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={500}>

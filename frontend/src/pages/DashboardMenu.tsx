@@ -157,11 +157,9 @@ export function DashboardMenu() {
   const { data: datosMorosidadPorDia, isLoading: loadingMorosidadPorDia } = useQuery({
     queryKey: ['morosidad-por-dia', periodoTendencia, diasMorosidad, JSON.stringify(filtros)],
     queryFn: async () => {
-      const obj = construirFiltrosObject(periodoTendencia)
       const queryParams = new URLSearchParams()
       queryParams.append('dias', String(diasMorosidad))
-      if (obj.fecha_inicio) queryParams.append('fecha_inicio', obj.fecha_inicio)
-      if (obj.fecha_fin) queryParams.append('fecha_fin', obj.fecha_fin)
+      // No enviar fecha_inicio/fecha_fin: el backend siempre usa hoy y hacia atrás
       const response = await apiClient.get<{ dias: Array<{ fecha: string; dia: string; morosidad: number }> }>(
         `/api/v1/dashboard/morosidad-por-dia?${queryParams.toString()}`
       )
@@ -588,7 +586,8 @@ export function DashboardMenu() {
                   format="currency"
                 />
                 <KpiCardLarge
-                  title="Morosidad (mensual)"
+                  title="Pago vencido (mensual)"
+                  subtitle="Cuotas vencidas sin pagar (solo si ya pasó la fecha de vencimiento)"
                   value={kpisPrincipales.total_morosidad_usd.valor_actual}
                   variation={kpisPrincipales.total_morosidad_usd.variacion_porcentual !== undefined ? {
                     percent: kpisPrincipales.total_morosidad_usd.variacion_porcentual,
@@ -691,7 +690,7 @@ export function DashboardMenu() {
                               <Legend {...chartLegendStyle} />
                               <Bar dataKey="cartera" fill="#3b82f6" name="Pagos programados" radius={[4, 4, 0, 0]} />
                               <Bar dataKey="cobrado" fill="#10b981" name="Pagos conciliados" radius={[4, 4, 0, 0]} />
-                              <Line type="monotone" dataKey="morosidad" stroke="#ef4444" strokeWidth={2} name="Morosidad" dot={{ r: 4 }} />
+                              <Line type="monotone" dataKey="morosidad" stroke="#ef4444" strokeWidth={2} name="Pago vencido" dot={{ r: 4 }} />
                             </ComposedChart>
                           </ResponsiveContainer>
                         )}
@@ -703,7 +702,7 @@ export function DashboardMenu() {
                 </Card>
               </motion.div>
 
-            {/* Morosidad por día - desde tabla cuotas (cartera - cobrado por día) */}
+            {/* Pago vencido por día - desde tabla cuotas */}
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -714,7 +713,7 @@ export function DashboardMenu() {
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
                         <AlertTriangle className="h-5 w-5 text-red-600" />
-                        <span>Morosidad por día</span>
+                        <span>Pago vencido por día</span>
                       </CardTitle>
                       <div className="flex items-center gap-2">
                         <SelectorPeriodoGrafico chartId="tendencia" />
@@ -726,7 +725,7 @@ export function DashboardMenu() {
                   </CardHeader>
                   <CardContent className="p-6 pt-4">
                     {loadingMorosidadPorDia ? (
-                      <div className="flex items-center justify-center py-16 text-gray-500">Cargando morosidad por día...</div>
+                      <div className="flex items-center justify-center py-16 text-gray-500">Cargando pago vencido por día...</div>
                     ) : datosMorosidadPorDia && datosMorosidadPorDia.length > 0 ? (
                       <ChartWithDateRangeSlider data={datosMorosidadPorDia} dataKey="fecha" chartHeight={400}>
                         {(filteredData) => (
@@ -734,16 +733,16 @@ export function DashboardMenu() {
                             <ComposedChart data={filteredData} margin={{ top: 14, right: 24, left: 12, bottom: 14 }}>
                               <CartesianGrid {...chartCartesianGrid} />
                               <XAxis dataKey="dia" angle={-45} textAnchor="end" tick={chartAxisTick} height={80} />
-                              <YAxis tick={chartAxisTick} tickFormatter={(value) => `$${value >= 1000 ? (value / 1000).toFixed(1) + 'K' : value}`} label={{ value: 'Morosidad (USD)', angle: -90, position: 'insideLeft', style: { fill: '#374151', fontSize: 13 } }} />
-                              <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [formatCurrency(value), 'Morosidad']} labelFormatter={(label, payload) => payload?.[0]?.payload?.fecha ? `Fecha: ${payload[0].payload.fecha}` : label} />
+                              <YAxis tick={chartAxisTick} tickFormatter={(value) => `$${value >= 1000 ? (value / 1000).toFixed(1) + 'K' : value}`} label={{ value: 'Pago vencido (USD)', angle: -90, position: 'insideLeft', style: { fill: '#374151', fontSize: 13 } }} />
+                              <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [formatCurrency(value), 'Pago vencido']} labelFormatter={(label, payload) => payload?.[0]?.payload?.fecha ? `Fecha: ${payload[0].payload.fecha}` : label} />
                               <Legend {...chartLegendStyle} />
-                              <Bar dataKey="morosidad" fill="#ef4444" name="Morosidad" radius={[4, 4, 0, 0]} maxBarSize={48} />
+                              <Bar dataKey="morosidad" fill="#ef4444" name="Pago vencido" radius={[4, 4, 0, 0]} maxBarSize={48} />
                             </ComposedChart>
                           </ResponsiveContainer>
                         )}
                       </ChartWithDateRangeSlider>
                     ) : (
-                      <div className="flex items-center justify-center py-16 text-gray-500">No hay datos de morosidad por día para el período seleccionado</div>
+                      <div className="flex items-center justify-center py-16 text-gray-500">No hay datos de pago vencido por día para el período seleccionado</div>
                     )}
                   </CardContent>
                 </Card>
@@ -866,9 +865,16 @@ export function DashboardMenu() {
                     <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
                       {getRangoFechasLabelGrafico('rangos')}
                     </Badge>
+                    {filtros.modelo && filtros.modelo !== '__ALL__' && (
+                      <Badge variant="outline" className="text-xs font-medium text-violet-600 border-violet-300 bg-violet-50">
+                        Modelo: {filtros.modelo}
+                      </Badge>
+                    )}
                   </div>
                 </div>
-                <p className="text-xs text-gray-600 mt-1">Distribución en porcentaje (acumulado)</p>
+                <p className="text-xs text-gray-600 mt-1">
+                  Distribución en porcentaje (acumulado). Usa el filtro Modelo en la barra superior para filtrar por vehículo.
+                </p>
               </CardHeader>
               <CardContent className="p-6 flex-1">
                 {loadingPrestamosPorModelo ? (
@@ -932,7 +938,7 @@ export function DashboardMenu() {
 
         {/* GRÁFICOS DE MOROSIDAD */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Composición de Morosidad (monto en USD) */}
+          {/* Composición de Pago vencido (monto en USD) */}
           <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -944,15 +950,18 @@ export function DashboardMenu() {
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
                       <BarChart3 className="h-5 w-5 text-red-600" />
-                      <span>Composición de Morosidad (USD)</span>
+                      <span>Composición de Pago vencido (USD)</span>
                     </CardTitle>
                     <div className="flex items-center gap-2">
                       <SelectorPeriodoGrafico chartId="composicion-morosidad" />
                       <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
-                        {getRangoFechasLabelGrafico('composicion-morosidad')}
+                        Al día de hoy
                       </Badge>
                     </div>
                   </div>
+                  <p className="text-xs text-gray-600 mt-1">
+                  Cuotas vencidas sin pagar. 1-30 y 31-60 días = Vencido; 61-90 y 90+ días = Moroso (snapshot al día de hoy).
+                </p>
                 </CardHeader>
                 <CardContent className="p-6 flex-1">
                   {datosComposicionMorosidad?.puntos?.length ? (
@@ -965,7 +974,7 @@ export function DashboardMenu() {
                           <YAxis tick={chartAxisTick} tickFormatter={(v) => (v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`)} label={{ value: 'Monto (USD)', angle: -90, position: 'insideLeft', style: { fill: '#374151', fontSize: 12 } }} />
                           <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [typeof value === 'number' ? `$${value.toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : value, 'Monto (USD)']} />
                           <Legend {...chartLegendStyle} />
-                          <Bar dataKey="monto" fill="#ef4444" name="Monto en Morosidad (USD)" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="monto" fill="#ef4444" name="Monto en Pago vencido (USD)" radius={[4, 4, 0, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
                     )}
@@ -989,16 +998,18 @@ export function DashboardMenu() {
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
                       <BarChart3 className="h-5 w-5 text-rose-600" />
-                      <span>Cantidad de préstamos en mora</span>
+                      <span>Cantidad de préstamos con pago vencido</span>
                     </CardTitle>
                     <div className="flex items-center gap-2">
                       <SelectorPeriodoGrafico chartId="composicion-morosidad" />
                       <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
-                        {getRangoFechasLabelGrafico('composicion-morosidad')}
+                        Al día de hoy
                       </Badge>
                     </div>
                   </div>
-                  <p className="text-xs text-gray-600 mt-1">Por rango de días de atraso (1-30, 31-60, 61-90, 90+ días)</p>
+                  <p className="text-xs text-gray-600 mt-1">
+                    Préstamos con cuotas vencidas sin pagar. 1-30 y 31-60 días = Vencido; 61-90 y 90+ días = Moroso (snapshot al día de hoy).
+                  </p>
                 </CardHeader>
                 <CardContent className="p-6 flex-1">
                   {datosComposicionMorosidad?.puntos?.length ? (
@@ -1024,7 +1035,7 @@ export function DashboardMenu() {
             </motion.div>
         </div>
 
-        {/* Morosidad por Analista: 1 gráfico por fila, bloques independientes */}
+        {/* Pago vencido por Analista: 1 gráfico por fila, bloques independientes */}
         <div className="flex flex-col gap-6 mt-6">
           {/* Fila 1: solo Cuotas vencidas por analista (radar) */}
           <motion.div
@@ -1038,15 +1049,16 @@ export function DashboardMenu() {
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
                       <Users className="h-5 w-5 text-orange-600" />
-                      <span>Morosidad por Analista — Cuotas vencidas</span>
+                      <span>Pago vencido por Analista — Cuotas vencidas</span>
                     </CardTitle>
                     <div className="flex items-center gap-2">
                       <SelectorPeriodoGrafico chartId="morosidad-analista" />
                       <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
-                        {getRangoFechasLabelGrafico('morosidad-analista')}
+                        Al día de hoy
                       </Badge>
                     </div>
                   </div>
+                  <p className="text-xs text-gray-600 mt-1 px-6">Cuotas vencidas sin pagar (fecha_vencimiento &lt; hoy), snapshot actual por analista</p>
                 </CardHeader>
                 <CardContent className="p-6">
                   {loadingMorosidadAnalista ? (
@@ -1088,15 +1100,16 @@ export function DashboardMenu() {
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
                       <DollarSign className="h-5 w-5 text-amber-600" />
-                      <span>Morosidad por Analista — Dólares vencidos</span>
+                      <span>Pago vencido por Analista — Dólares vencidos</span>
                     </CardTitle>
                     <div className="flex items-center gap-2">
                       <SelectorPeriodoGrafico chartId="morosidad-analista" />
                       <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
-                        {getRangoFechasLabelGrafico('morosidad-analista')}
+                        Al día de hoy
                       </Badge>
                     </div>
                   </div>
+                  <p className="text-xs text-gray-600 mt-1 px-6">Suma de monto_cuota de cuotas vencidas (fecha_vencimiento &lt; hoy, sin pagar), snapshot actual por analista</p>
                 </CardHeader>
                 <CardContent className="p-6">
                   {loadingMorosidadAnalista ? (
@@ -1104,7 +1117,6 @@ export function DashboardMenu() {
                   ) : datosMorosidadAnalista && datosMorosidadAnalista.length > 0 ? (
                     <>
                       <h4 className="text-sm font-semibold text-gray-700 mb-1 text-center">Dólares vencidos por analista</h4>
-                      <p className="text-xs text-gray-500 mb-3 text-center max-w-2xl mx-auto">Suma de monto_cuota de cuotas vencidas (hoy &gt; fecha_vencimiento, sin pagar) por analista</p>
                       <ResponsiveContainer width="100%" height={Math.max(380, Math.min(620, datosMorosidadAnalista.length * 28))}>
                         <BarChart data={datosMorosidadAnalista} layout="vertical" margin={{ top: 12, right: 32, left: 16, bottom: 12 }} barCategoryGap="12%">
                           <CartesianGrid {...chartCartesianGrid} horizontal={false} />

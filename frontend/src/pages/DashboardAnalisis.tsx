@@ -407,7 +407,7 @@ export function DashboardAnalisis() {
                         dataKey="morosidad"
                         stroke="#ef4444"
                         strokeWidth={2}
-                        name="Morosidad"
+                        name="Pago vencido"
                       />
                     </RechartsLineChart>
                   </ResponsiveContainer>
@@ -440,7 +440,7 @@ export function DashboardAnalisis() {
                 onClick={() => setIsTreemapMorosidadOpen(true)}
               >
                 <PieChart className="h-6 w-6" />
-                <span className="font-semibold">Morosidad por Analista</span>
+                <span className="font-semibold">Pago vencido por Analista</span>
                 <ChevronRight className="h-4 w-4" />
               </Button>
               <Button

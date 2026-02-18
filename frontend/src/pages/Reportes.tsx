@@ -45,7 +45,7 @@ const mockReportes = [
   },
   {
     id: 'REP002',
-    nombre: 'Análisis de Morosidad',
+    nombre: 'Análisis de Pago vencido',
     tipo: 'MOROSIDAD',
     descripcion: 'Reporte de clientes en mora por período y analista',
     fechaGeneracion: '2024-07-19',
@@ -86,7 +86,7 @@ const mockReportes = [
 
 const tiposReporte = [
   { value: 'CARTERA', label: 'Cartera', icon: DollarSign },
-  { value: 'MOROSIDAD', label: 'Morosidad', icon: TrendingUp },
+  { value: 'MOROSIDAD', label: 'Pago vencido', icon: TrendingUp },
   { value: 'PAGOS', label: 'Pagos', icon: Users },
   { value: 'FINANCIERO', label: 'Financiero', icon: BarChart3 },
   { value: 'ASESORES', label: 'Asesores', icon: Users },

@@ -213,10 +213,10 @@ def get_prestamos_stats(
     año: Optional[int] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Estadísticas de préstamos mensuales desde BD.
+    """Estadísticas de préstamos mensuales desde BD (solo clientes ACTIVOS).
     a) total_financiamiento: suma de total_financiamiento de préstamos APROBADOS en el mes.
     b) total: cantidad de préstamos APROBADOS en el mes.
-    c) cartera_vigente: suma de monto_cuota (cuota_periodo) de cuotas con vencimiento en el mes no cobradas.
+    c) cartera_vigente: suma de monto de cuotas con vencimiento en el mes no cobradas.
     d) Usa COALESCE(fecha_aprobacion, fecha_registro) para determinar 'aprobados en el mes'."""
     hoy = date.today()
     mes_u = mes if mes is not None and 1 <= mes <= 12 else hoy.month
@@ -227,10 +227,13 @@ def get_prestamos_stats(
     fin_mes = date(año_u, mes_u, ultimo_dia)
 
     # Fecha de referencia: aprobación o registro (para "aprobados en el mes")
+    # Solo clientes ACTIVOS (consistente con dashboard, pagos, reportes)
     fecha_ref = func.coalesce(func.date(Prestamo.fecha_aprobacion), func.date(Prestamo.fecha_registro))
     q_base = (
         select(Prestamo)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
         .where(
+            Cliente.estado == "ACTIVO",
             Prestamo.estado == "APROBADO",
             fecha_ref >= inicio_mes,
             fecha_ref <= fin_mes,
@@ -246,7 +249,9 @@ def get_prestamos_stats(
     q_estado = (
         select(Prestamo.estado, func.count())
         .select_from(Prestamo)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
         .where(
+            Cliente.estado == "ACTIVO",
             fecha_ref >= inicio_mes,
             fecha_ref <= fin_mes,
         )
@@ -263,8 +268,9 @@ def get_prestamos_stats(
     total_fin = db.scalar(select(func.coalesce(func.sum(Prestamo.total_financiamiento), 0)).select_from(q_base.subquery())) or 0
     total_fin = float(total_fin)
     promedio_monto = (total_fin / total) if total else 0
-    # Cartera por cobrar: suma monto_cuota de cuotas con vencimiento en el mes, no cobradas, de préstamos APROBADOS
+    # Cartera por cobrar: suma monto de cuotas con vencimiento en el mes, no cobradas (solo clientes ACTIVOS)
     conds_cartera = [
+        Cliente.estado == "ACTIVO",
         Prestamo.estado == "APROBADO",
         Cuota.fecha_vencimiento >= inicio_mes,
         Cuota.fecha_vencimiento <= fin_mes,
@@ -281,6 +287,7 @@ def get_prestamos_stats(
             select(func.coalesce(func.sum(Cuota.monto), 0))
             .select_from(Cuota)
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
             .where(*conds_cartera)
         ) or 0
     )

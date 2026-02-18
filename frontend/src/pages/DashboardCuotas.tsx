@@ -352,7 +352,7 @@ export function DashboardCuotas() {
                   }}
                 >
                   <AlertTriangle className="h-5 w-5 mr-3 text-purple-600" />
-                  <span className="font-semibold flex-1 text-left">Análisis de Morosidad</span>
+                  <span className="font-semibold flex-1 text-left">Análisis de Pago vencido</span>
                   <ChevronRight className="h-4 w-4 text-gray-400" />
                 </Button>
                 <Button
@@ -506,7 +506,7 @@ export function DashboardCuotas() {
                 <CardHeader className="bg-gradient-to-r from-red-50 to-orange-50 border-b-2 border-red-200">
                   <CardTitle className="flex items-center space-x-2 text-xl font-bold text-gray-800">
                     <TrendingUp className="h-6 w-6 text-red-600" />
-                    <span>Evolución de Morosidad (Ãšltimos 6 Meses)</span>
+                    <span>Evolución de Pago vencido (Últimos 6 Meses)</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-6">
@@ -527,7 +527,7 @@ export function DashboardCuotas() {
                           dataKey="morosidad"
                           stroke="#ef4444"
                           strokeWidth={3}
-                          name="Morosidad"
+                          name="Pago vencido"
                         />
                       </LineChart>
                     </ResponsiveContainer>

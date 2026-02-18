@@ -143,7 +143,7 @@ export function CobranzaPorDiaModal({ isOpen, onClose }: CobranzaPorDiaModalProp
     <BaseModal
       isOpen={isOpen}
       onClose={onClose}
-      title="Total a Cobrar, Pagos y Morosidad por Día"
+      title="Total a Cobrar, Pagos y Pago vencido por Día"
       size="xlarge"
     >
       <div className="space-y-6">
@@ -169,7 +169,7 @@ export function CobranzaPorDiaModal({ isOpen, onClose }: CobranzaPorDiaModalProp
           <div className="lg:col-span-7">
             <Card>
               <CardHeader>
-                <CardTitle>Total a Cobrar, Pagos y Morosidad por Día</CardTitle>
+                <CardTitle>Total a Cobrar, Pagos y Pago vencido por Día</CardTitle>
               </CardHeader>
               <CardContent>
                 {loadingPorDia ? (
@@ -198,7 +198,7 @@ export function CobranzaPorDiaModal({ isOpen, onClose }: CobranzaPorDiaModalProp
                       <Legend />
                       <Bar dataKey="total_a_cobrar" name="Total a Cobrar" fill="#3b82f6" />
                       <Bar dataKey="pagos" name="Pagos" fill="#10b981" />
-                      <Bar dataKey="morosidad" name="Morosidad" fill="#ef4444" />
+                      <Bar dataKey="morosidad" name="Pago vencido" fill="#ef4444" />
                     </BarChart>
                   </ResponsiveContainer>
                 )}

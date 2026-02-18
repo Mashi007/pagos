@@ -490,7 +490,8 @@ def get_pagos_kpis(
     KPIs de pagos para el mes en curso:
     1. montoACobrarMes: cuánto dinero debería cobrarse en el mes en transcurso (cuotas con vencimiento en el mes).
     2. montoCobradoMes: cuánto dinero se ha cobrado = pagado en el mes.
-    3. morosidadMensualPorcentaje: morosidad mensual en % (saldo vencido no cobrado / cartera pendiente * 100).
+    3. morosidadMensualPorcentaje: pago vencido mensual en % (cuotas vencidas no cobradas / cartera * 100).
+       Concepto: vencido = fecha_vencimiento < hoy; moroso = 61+ días de atraso.
     """
     try:
         hoy = _hoy_local()
@@ -533,7 +534,7 @@ def get_pagos_kpis(
             )
         ) or 0
 
-        # 3) Morosidad mensual % (solo clientes ACTIVOS)
+        # 3) Morosidad mensual % (solo clientes ACTIVOS). Solo cuotas ya vencidas (fecha_vencimiento < hoy).
         total_vencido_mes = db.scalar(
             select(func.coalesce(func.sum(Cuota.monto), 0))
             .select_from(Cuota)
@@ -543,6 +544,7 @@ def get_pagos_kpis(
                 and_(*conds_activo),
                 Cuota.fecha_vencimiento >= inicio_mes,
                 Cuota.fecha_vencimiento <= fin_mes,
+                Cuota.fecha_vencimiento < hoy,
             )
         ) or 0
         no_cobrado_mes = db.scalar(
@@ -554,6 +556,7 @@ def get_pagos_kpis(
                 and_(*conds_activo),
                 Cuota.fecha_vencimiento >= inicio_mes,
                 Cuota.fecha_vencimiento <= fin_mes,
+                Cuota.fecha_vencimiento < hoy,
                 Cuota.fecha_pago.is_(None),
             )
         ) or 0

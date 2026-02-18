@@ -649,7 +649,8 @@ def get_reporte_morosidad(
     db: Session = Depends(get_db),
     fecha_corte: Optional[str] = Query(None),
 ):
-    """Reporte de morosidad. Datos reales desde BD (solo clientes ACTIVOS)."""
+    """Reporte de pago vencido. Datos reales desde BD (solo clientes ACTIVOS).
+    Concepto: Pago vencido = fecha_vencimiento < fc y fecha_pago IS NULL. Moroso = 61+ días de atraso."""
     fc = _parse_fecha(fecha_corte)
     subq_mora = (
         select(Cuota.prestamo_id)

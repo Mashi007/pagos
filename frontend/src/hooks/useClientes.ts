@@ -168,8 +168,9 @@ export function useCambiarEstadoCliente() {
         updatedCliente
       )
 
-      // Invalidar listas
+      // Invalidar listas y KPIs de clientes (Total, Activos, Inactivos, Finalizados)
       queryClient.invalidateQueries({ queryKey: clienteKeys.lists() })
+      queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
 
       toast.success(`Estado del cliente cambiado a ${updatedCliente.estado}`)
     },

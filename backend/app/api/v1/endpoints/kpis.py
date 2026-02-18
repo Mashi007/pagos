@@ -36,7 +36,8 @@ def get_kpis_dashboard(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """KPIs del dashboard desde BD: total_prestamos, total_morosidad (solo clientes ACTIVOS)."""
+    """KPIs del dashboard desde BD: total_prestamos, total_morosidad (solo clientes ACTIVOS).
+    Concepto: Pago vencido = fecha_vencimiento < hoy. Moroso = 61+ días de atraso."""
     hoy = date.today()
     q_prestamos = (
         select(Prestamo)
@@ -65,7 +66,7 @@ def get_kpis_dashboard(
     ) or 0
     kpis = [
         {"nombre": "Total préstamos", "valor": total_prestamos, "variacion": 0},
-        {"nombre": "Morosidad", "valor": _safe_float(total_morosidad), "variacion": 0},
+        {"nombre": "Pago vencido", "valor": _safe_float(total_morosidad), "variacion": 0},
     ]
     return {
         "kpis": kpis,

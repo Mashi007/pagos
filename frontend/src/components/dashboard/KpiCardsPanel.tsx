@@ -104,7 +104,7 @@ export function KpiCardsPanel({ filtros }: KpiCardsPanelProps) {
         icon={Users}
       />
       <KpiCard
-        title="Total Morosidad en Dólares"
+        title="Total Pago vencido en Dólares"
         value={kpisData.total_morosidad_usd?.valor_actual ?? 0}
         variationPercent={kpisData.total_morosidad_usd?.variacion_porcentual ?? 0}
         variationAbs={kpisData.total_morosidad_usd?.variacion_absoluta ?? 0}

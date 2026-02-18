@@ -110,7 +110,7 @@ export function PagosKPIsNuevo() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Mensual: Morosidad (%)</CardTitle>
+            <CardTitle className="text-sm font-medium">Mensual: Pago vencido (%)</CardTitle>
             <TrendingDown className="h-5 w-5 text-red-600" />
           </CardHeader>
           <CardContent>
