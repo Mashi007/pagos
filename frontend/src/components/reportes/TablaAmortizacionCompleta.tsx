@@ -479,6 +479,7 @@ export function TablaAmortizacionCompleta() {
       PENDIENTE: 'bg-yellow-100 text-yellow-800',
       PAGADO: 'bg-green-100 text-green-800',
       PAGADA: 'bg-green-100 text-green-800',
+      PAGO_ADELANTADO: 'bg-blue-100 text-blue-800',
       ATRASADO: 'bg-red-100 text-red-800',
       VENCIDA: 'bg-red-100 text-red-800',
       PARCIAL: 'bg-blue-100 text-blue-800',
@@ -494,6 +495,7 @@ export function TablaAmortizacionCompleta() {
       PENDIENTE: 'Pendiente',
       PAGADO: 'Pagado',
       PAGADA: 'Pagada',
+      PAGO_ADELANTADO: 'Pago adelantado',
       ATRASADO: 'Atrasado',
       VENCIDA: 'Vencida',
       PARCIAL: 'Parcial',
@@ -991,6 +993,7 @@ export function TablaAmortizacionCompleta() {
                     defaultValue={cuotaEditando.estado}
                   >
                     <option value="PENDIENTE">Pendiente</option>
+                    <option value="PAGO_ADELANTADO">Pago adelantado</option>
                     <option value="PARCIAL">Parcial</option>
                     <option value="PAGADO">Pagado</option>
                     <option value="ATRASADO">Atrasado</option>

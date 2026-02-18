@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.models.cliente import Cliente
 from app.models.cuota import Cuota
 from app.models.prestamo import Prestamo
 
@@ -35,19 +36,29 @@ def get_kpis_dashboard(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """KPIs del dashboard desde BD: total_prestamos, total_morosidad, kpis (lista)."""
+    """KPIs del dashboard desde BD: total_prestamos, total_morosidad (solo clientes ACTIVOS)."""
     hoy = date.today()
-    q_prestamos = select(Prestamo).where(Prestamo.estado == "APROBADO")
+    q_prestamos = (
+        select(Prestamo)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(Cliente.estado == "ACTIVO", Prestamo.estado == "APROBADO")
+    )
     if analista:
         q_prestamos = q_prestamos.where(Prestamo.analista == analista)
     if concesionario:
         q_prestamos = q_prestamos.where(Prestamo.concesionario == concesionario)
     if modelo:
-        q_prestamos = q_prestamos.where(Prestamo.modelo == modelo)
+        q_prestamos = q_prestamos.where(Prestamo.modelo_vehiculo == modelo)
     total_prestamos = db.scalar(select(func.count()).select_from(q_prestamos.subquery())) or 0
-    # Morosidad: suma monto de cuotas vencidas no pagadas
+    # Morosidad: suma monto de cuotas vencidas no pagadas (solo clientes ACTIVOS)
     total_morosidad = db.scalar(
-        select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
+        select(func.coalesce(func.sum(Cuota.monto), 0))
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(
+            Cliente.estado == "ACTIVO",
+            Prestamo.estado == "APROBADO",
             Cuota.fecha_pago.is_(None),
             Cuota.fecha_vencimiento < hoy,
         )

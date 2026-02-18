@@ -83,10 +83,11 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
 
     const badges = {
       PENDIENTE: 'bg-yellow-100 text-yellow-800',
-      PAGADO: 'bg-green-100 text-green-800',  // âœ… Corregido: BD usa "PAGADO" no "PAGADA"
-      PAGADA: 'bg-green-100 text-green-800',   // Mantener compatibilidad
-      ATRASADO: 'bg-red-100 text-red-800',     // âœ… Agregado: BD también usa "ATRASADO"
-      VENCIDA: 'bg-red-100 text-red-800',      // Mantener compatibilidad
+      PAGADO: 'bg-green-100 text-green-800',
+      PAGADA: 'bg-green-100 text-green-800',
+      PAGO_ADELANTADO: 'bg-blue-100 text-blue-800',
+      ATRASADO: 'bg-red-100 text-red-800',
+      VENCIDA: 'bg-red-100 text-red-800',
       PARCIAL: 'bg-blue-100 text-blue-800',
     }
     return badges[estadoNormalizado as keyof typeof badges] || badges.PENDIENTE
@@ -98,10 +99,11 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
 
     const labels: Record<string, string> = {
       PENDIENTE: 'Pendiente',
-      PAGADO: 'Pagado',      // âœ… Corregido: BD usa "PAGADO"
-      PAGADA: 'Pagada',      // Mantener compatibilidad
-      ATRASADO: 'Atrasado',  // âœ… Agregado: BD también usa "ATRASADO"
-      VENCIDA: 'Vencida',    // Mantener compatibilidad
+      PAGADO: 'Pagado',
+      PAGADA: 'Pagada',
+      PAGO_ADELANTADO: 'Pago adelantado',
+      ATRASADO: 'Atrasado',
+      VENCIDA: 'Vencida',
       PARCIAL: 'Parcial',
     }
     return labels[estadoNormalizado] || estado

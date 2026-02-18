@@ -50,21 +50,46 @@ def get_resumen_dashboard(db: Session = Depends(get_db)):
     now_utc = datetime.now(timezone.utc)
     inicio_mes = hoy.replace(day=1)
 
-    total_clientes = db.scalar(select(func.count()).select_from(Cliente)) or 0
+    # KPIs solo incluyen clientes ACTIVOS
+    total_clientes = db.scalar(
+        select(func.count()).select_from(Cliente).where(Cliente.estado == "ACTIVO")
+    ) or 0
     total_prestamos = db.scalar(
-        select(func.count()).select_from(Prestamo).where(Prestamo.estado == "APROBADO")
+        select(func.count())
+        .select_from(Prestamo)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(Cliente.estado == "ACTIVO", Prestamo.estado == "APROBADO")
     ) or 0
     total_pagos = db.scalar(
-        select(func.count()).select_from(Cuota).where(Cuota.fecha_pago.isnot(None))
+        select(func.count())
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(
+            Cliente.estado == "ACTIVO",
+            Prestamo.estado == "APROBADO",
+            Cuota.fecha_pago.isnot(None),
+        )
     ) or 0
     cartera_activa = db.scalar(
-        select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
-            Cuota.fecha_pago.is_(None)
+        select(func.coalesce(func.sum(Cuota.monto), 0))
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(
+            Cliente.estado == "ACTIVO",
+            Prestamo.estado == "APROBADO",
+            Cuota.fecha_pago.is_(None),
         )
     ) or 0
     subq_mora = (
         select(Cuota.prestamo_id)
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
         .where(
+            Cliente.estado == "ACTIVO",
+            Prestamo.estado == "APROBADO",
             Cuota.fecha_pago.is_(None),
             Cuota.fecha_vencimiento < hoy,
         )
@@ -72,7 +97,13 @@ def get_resumen_dashboard(db: Session = Depends(get_db)):
     )
     prestamos_mora = db.scalar(select(func.count()).select_from(subq_mora.subquery())) or 0
     pagos_mes = db.scalar(
-        select(func.count()).select_from(Cuota).where(
+        select(func.count())
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(
+            Cliente.estado == "ACTIVO",
+            Prestamo.estado == "APROBADO",
             Cuota.fecha_pago.isnot(None),
             func.date(Cuota.fecha_pago) >= inicio_mes,
             func.date(Cuota.fecha_pago) <= hoy,
@@ -237,21 +268,38 @@ def get_amortizacion_cliente_pdf(cedula: str, db: Session = Depends(get_db)):
 
 # ---------- Reporte Cartera ----------
 def _datos_cartera(db: Session, fecha_corte: date) -> dict:
-    """Obtiene datos para reporte de cartera a una fecha de corte."""
+    """Obtiene datos para reporte de cartera a una fecha de corte (solo clientes ACTIVOS)."""
     cuotas_pendientes = (
         select(func.coalesce(func.sum(Cuota.monto), 0))
         .select_from(Cuota)
-        .where(Cuota.fecha_pago.is_(None))
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(
+            Cliente.estado == "ACTIVO",
+            Prestamo.estado == "APROBADO",
+            Cuota.fecha_pago.is_(None),
+        )
     )
     cartera_total = _safe_float(db.scalar(cuotas_pendientes) or 0)
 
     prestamos_activos = db.scalar(
-        select(func.count()).select_from(Prestamo).where(Prestamo.estado == "APROBADO")
+        select(func.count())
+        .select_from(Prestamo)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(Cliente.estado == "ACTIVO", Prestamo.estado == "APROBADO")
     ) or 0
 
     subq_mora = (
         select(Cuota.prestamo_id)
-        .where(Cuota.fecha_pago.is_(None), Cuota.fecha_vencimiento < fecha_corte)
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(
+            Cliente.estado == "ACTIVO",
+            Prestamo.estado == "APROBADO",
+            Cuota.fecha_pago.is_(None),
+            Cuota.fecha_vencimiento < fecha_corte,
+        )
         .distinct()
     )
     prestamos_mora = db.scalar(select(func.count()).select_from(subq_mora.subquery())) or 0
@@ -260,7 +308,14 @@ def _datos_cartera(db: Session, fecha_corte: date) -> dict:
         db.scalar(
             select(func.coalesce(func.sum(Cuota.monto), 0))
             .select_from(Cuota)
-            .where(Cuota.fecha_pago.is_(None), Cuota.fecha_vencimiento < fecha_corte)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(
+                Cliente.estado == "ACTIVO",
+                Prestamo.estado == "APROBADO",
+                Cuota.fecha_pago.is_(None),
+                Cuota.fecha_vencimiento < fecha_corte,
+            )
         )
         or 0
     )
@@ -291,7 +346,14 @@ def _datos_cartera(db: Session, fecha_corte: date) -> dict:
     ]
     saldos = db.execute(
         select(Cuota.prestamo_id, func.sum(Cuota.monto).label("saldo"))
-        .where(Cuota.fecha_pago.is_(None))
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(
+            Cliente.estado == "ACTIVO",
+            Prestamo.estado == "APROBADO",
+            Cuota.fecha_pago.is_(None),
+        )
         .group_by(Cuota.prestamo_id)
     ).all()
     for pid, saldo in saldos:
@@ -319,12 +381,18 @@ def _datos_cartera(db: Session, fecha_corte: date) -> dict:
     ]:
         delta_min = fecha_corte - timedelta(days=dias_max)
         delta_max = fecha_corte - timedelta(days=dias_min)
-        q = select(func.count(Cuota.id), func.coalesce(func.sum(Cuota.monto), 0)).select_from(
-            Cuota
-        ).where(
-            Cuota.fecha_pago.is_(None),
-            Cuota.fecha_vencimiento <= delta_max,
-            Cuota.fecha_vencimiento >= delta_min,
+        q = (
+            select(func.count(Cuota.id), func.coalesce(func.sum(Cuota.monto), 0))
+            .select_from(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(
+                Cliente.estado == "ACTIVO",
+                Prestamo.estado == "APROBADO",
+                Cuota.fecha_pago.is_(None),
+                Cuota.fecha_vencimiento <= delta_max,
+                Cuota.fecha_vencimiento >= delta_min,
+            )
         )
         row = db.execute(q).one_or_none()
         cnt = (row[0] or 0) if row else 0
@@ -451,9 +519,16 @@ def get_reporte_pagos(
     ff = _parse_fecha(fecha_fin)
     if fi > ff:
         fi, ff = ff, fi
+    # Solo clientes ACTIVOS
     total_pagos = _safe_float(
         db.scalar(
-            select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
+            select(func.coalesce(func.sum(Cuota.monto), 0))
+            .select_from(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(
+                Cliente.estado == "ACTIVO",
+                Prestamo.estado == "APROBADO",
                 Cuota.fecha_pago.isnot(None),
                 func.date(Cuota.fecha_pago) >= fi,
                 func.date(Cuota.fecha_pago) <= ff,
@@ -462,7 +537,13 @@ def get_reporte_pagos(
         or 0
     )
     cantidad_pagos = db.scalar(
-        select(func.count()).select_from(Cuota).where(
+        select(func.count())
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(
+            Cliente.estado == "ACTIVO",
+            Prestamo.estado == "APROBADO",
             Cuota.fecha_pago.isnot(None),
             func.date(Cuota.fecha_pago) >= fi,
             func.date(Cuota.fecha_pago) <= ff,
@@ -472,7 +553,11 @@ def get_reporte_pagos(
         db.execute(
             select(func.date(Cuota.fecha_pago).label("fecha"), func.count().label("cantidad"), func.sum(Cuota.monto).label("monto"))
             .select_from(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
             .where(
+                Cliente.estado == "ACTIVO",
+                Prestamo.estado == "APROBADO",
                 Cuota.fecha_pago.isnot(None),
                 func.date(Cuota.fecha_pago) >= fi,
                 func.date(Cuota.fecha_pago) <= ff,
@@ -564,15 +649,23 @@ def get_reporte_morosidad(
     db: Session = Depends(get_db),
     fecha_corte: Optional[str] = Query(None),
 ):
-    """Reporte de morosidad. Datos reales desde BD."""
+    """Reporte de morosidad. Datos reales desde BD (solo clientes ACTIVOS)."""
     fc = _parse_fecha(fecha_corte)
     subq_mora = (
         select(Cuota.prestamo_id)
-        .where(Cuota.fecha_pago.is_(None), Cuota.fecha_vencimiento < fc)
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(
+            Cliente.estado == "ACTIVO",
+            Prestamo.estado == "APROBADO",
+            Cuota.fecha_pago.is_(None),
+            Cuota.fecha_vencimiento < fc,
+        )
         .distinct()
     )
     total_prestamos_mora = db.scalar(select(func.count()).select_from(subq_mora.subquery())) or 0
-    prestamos_ids = [r[0] for r in db.execute(select(Cuota.prestamo_id).where(Cuota.fecha_pago.is_(None), Cuota.fecha_vencimiento < fc).distinct()).fetchall()]
+    prestamos_ids = [r[0] for r in db.execute(subq_mora).fetchall()]
     total_clientes_mora = 0
     if prestamos_ids:
         total_clientes_mora = db.scalar(
@@ -582,13 +675,27 @@ def get_reporte_morosidad(
         db.scalar(
             select(func.coalesce(func.sum(Cuota.monto), 0))
             .select_from(Cuota)
-            .where(Cuota.fecha_pago.is_(None), Cuota.fecha_vencimiento < fc)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(
+                Cliente.estado == "ACTIVO",
+                Prestamo.estado == "APROBADO",
+                Cuota.fecha_pago.is_(None),
+                Cuota.fecha_vencimiento < fc,
+            )
         )
         or 0
     )
     cuotas_mora = db.execute(
-        select(Cuota.prestamo_id, Cuota.fecha_vencimiento).where(
-            Cuota.fecha_pago.is_(None), Cuota.fecha_vencimiento < fc
+        select(Cuota.prestamo_id, Cuota.fecha_vencimiento)
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(
+            Cliente.estado == "ACTIVO",
+            Prestamo.estado == "APROBADO",
+            Cuota.fecha_pago.is_(None),
+            Cuota.fecha_vencimiento < fc,
         )
     ).fetchall()
     dias_list = [(fc - r.fecha_vencimiento).days for r in cuotas_mora]
@@ -697,14 +804,61 @@ def get_reporte_financiero(
     db: Session = Depends(get_db),
     fecha_corte: Optional[str] = Query(None),
 ):
-    """Reporte financiero. Datos reales desde BD."""
+    """Reporte financiero. Datos reales desde BD (solo clientes ACTIVOS)."""
     fc = _parse_fecha(fecha_corte)
-    total_ingresos = _safe_float(db.scalar(select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(Cuota.fecha_pago.isnot(None)))) or 0
-    cantidad_pagos = db.scalar(select(func.count()).select_from(Cuota).where(Cuota.fecha_pago.isnot(None))) or 0
-    cartera_total = _safe_float(db.scalar(select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(Cuota.fecha_pago.is_(None)))) or 0
-    morosidad_total = _safe_float(db.scalar(select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(Cuota.fecha_pago.is_(None), Cuota.fecha_vencimiento < fc))) or 0
+    conds_activo = [
+        Cuota.prestamo_id == Prestamo.id,
+        Prestamo.cliente_id == Cliente.id,
+        Cliente.estado == "ACTIVO",
+        Prestamo.estado == "APROBADO",
+    ]
+    total_ingresos = _safe_float(
+        db.scalar(
+            select(func.coalesce(func.sum(Cuota.monto), 0))
+            .select_from(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(and_(*conds_activo, Cuota.fecha_pago.isnot(None)))
+        )
+        or 0
+    )
+    cantidad_pagos = db.scalar(
+        select(func.count())
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(and_(*conds_activo, Cuota.fecha_pago.isnot(None)))
+    ) or 0
+    cartera_total = _safe_float(
+        db.scalar(
+            select(func.coalesce(func.sum(Cuota.monto), 0))
+            .select_from(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(and_(*conds_activo, Cuota.fecha_pago.is_(None)))
+        )
+        or 0
+    )
+    morosidad_total = _safe_float(
+        db.scalar(
+            select(func.coalesce(func.sum(Cuota.monto), 0))
+            .select_from(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(and_(*conds_activo, Cuota.fecha_pago.is_(None), Cuota.fecha_vencimiento < fc))
+        )
+        or 0
+    )
     saldo_pendiente = cartera_total
-    total_desembolsado = _safe_float(db.scalar(select(func.coalesce(func.sum(Prestamo.total_financiamiento), 0)).select_from(Prestamo).where(Prestamo.estado == "APROBADO"))) or 0
+    total_desembolsado = _safe_float(
+        db.scalar(
+            select(func.coalesce(func.sum(Prestamo.total_financiamiento), 0))
+            .select_from(Prestamo)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(Cliente.estado == "ACTIVO", Prestamo.estado == "APROBADO")
+        )
+        or 0
+    )
     porcentaje_cobrado = (total_ingresos / total_desembolsado * 100) if total_desembolsado else 0
     ingresos_por_mes = []
     egresos_programados = []
@@ -757,14 +911,29 @@ def get_reporte_asesores(
     db: Session = Depends(get_db),
     fecha_corte: Optional[str] = Query(None),
 ):
-    """Reporte por asesor/analista. Datos reales desde BD."""
+    """Reporte por asesor/analista. Datos reales desde BD (solo clientes ACTIVOS)."""
     fc = _parse_fecha(fecha_corte)
-    analistas = db.execute(select(Prestamo.analista).where(Prestamo.estado == "APROBADO").distinct()).fetchall()
+    analistas = db.execute(
+        select(Prestamo.analista)
+        .select_from(Prestamo)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(Cliente.estado == "ACTIVO", Prestamo.estado == "APROBADO")
+        .distinct()
+    ).fetchall()
     resumen_por_analista: List[dict] = []
     for (analista,) in analistas:
         if not analista:
             continue
-        prestamos = db.execute(select(Prestamo.id).where(Prestamo.analista == analista, Prestamo.estado == "APROBADO")).fetchall()
+        prestamos = db.execute(
+            select(Prestamo.id)
+            .select_from(Prestamo)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(
+                Cliente.estado == "ACTIVO",
+                Prestamo.analista == analista,
+                Prestamo.estado == "APROBADO",
+            )
+        ).fetchall()
         ids = [x[0] for x in prestamos]
         total_prestamos = len(ids)
         total_clientes = db.scalar(select(func.count(func.distinct(Prestamo.cliente_id))).select_from(Prestamo).where(Prestamo.id.in_(ids))) or 0
@@ -823,12 +992,27 @@ def get_reporte_productos(
 ):
     """Reporte por producto. Datos reales desde BD."""
     fc = _parse_fecha(fecha_corte)
-    productos = db.execute(select(Prestamo.producto).where(Prestamo.estado == "APROBADO").distinct()).fetchall()
+    productos = db.execute(
+        select(Prestamo.producto)
+        .select_from(Prestamo)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(Cliente.estado == "ACTIVO", Prestamo.estado == "APROBADO")
+        .distinct()
+    ).fetchall()
     resumen_por_producto: List[dict] = []
     for (producto,) in productos:
         if not producto:
             continue
-        prestamos = db.execute(select(Prestamo.id).where(Prestamo.producto == producto, Prestamo.estado == "APROBADO")).fetchall()
+        prestamos = db.execute(
+            select(Prestamo.id)
+            .select_from(Prestamo)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(
+                Cliente.estado == "ACTIVO",
+                Prestamo.producto == producto,
+                Prestamo.estado == "APROBADO",
+            )
+        ).fetchall()
         ids = [x[0] for x in prestamos]
         total_prestamos = len(ids)
         total_clientes = db.scalar(select(func.count(func.distinct(Prestamo.cliente_id))).select_from(Prestamo).where(Prestamo.id.in_(ids))) or 0
@@ -848,16 +1032,45 @@ def get_reporte_productos(
             "porcentaje_cobrado": round(porcentaje_cobrado, 2),
         })
     productos_por_concesionario: List[dict] = []
-    concesionarios = db.execute(select(Prestamo.concesionario).where(Prestamo.estado == "APROBADO").distinct()).fetchall()
+    concesionarios = db.execute(
+        select(Prestamo.concesionario)
+        .select_from(Prestamo)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(Cliente.estado == "ACTIVO", Prestamo.estado == "APROBADO")
+        .distinct()
+    ).fetchall()
     for (conc,) in concesionarios:
         if not conc:
             continue
         for (producto,) in productos:
             if not producto:
                 continue
-            cnt = db.scalar(select(func.count()).select_from(Prestamo).where(Prestamo.concesionario == conc, Prestamo.producto == producto, Prestamo.estado == "APROBADO")) or 0
+            cnt = db.scalar(
+                select(func.count())
+                .select_from(Prestamo)
+                .join(Cliente, Prestamo.cliente_id == Cliente.id)
+                .where(
+                    Cliente.estado == "ACTIVO",
+                    Prestamo.concesionario == conc,
+                    Prestamo.producto == producto,
+                    Prestamo.estado == "APROBADO",
+                )
+            ) or 0
             if cnt:
-                monto = _safe_float(db.scalar(select(func.sum(Prestamo.total_financiamiento)).select_from(Prestamo).where(Prestamo.concesionario == conc, Prestamo.producto == producto, Prestamo.estado == "APROBADO")) or 0)
+                monto = _safe_float(
+                    db.scalar(
+                        select(func.sum(Prestamo.total_financiamiento))
+                        .select_from(Prestamo)
+                        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+                        .where(
+                            Cliente.estado == "ACTIVO",
+                            Prestamo.concesionario == conc,
+                            Prestamo.producto == producto,
+                            Prestamo.estado == "APROBADO",
+                        )
+                    )
+                    or 0
+                )
                 productos_por_concesionario.append({"concesionario": conc, "producto": producto, "cantidad_prestamos": cnt, "monto_total": monto})
     return {
         "fecha_corte": fc.isoformat(),
