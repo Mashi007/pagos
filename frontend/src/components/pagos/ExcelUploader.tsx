@@ -104,8 +104,7 @@ export function ExcelUploader({ onClose, onSuccess }: ExcelUploaderProps) {
       setResults(result)
       const registrados = result.registros_procesados ?? 0
       const filasOmitidas = result.filas_omitidas ?? 0
-      const listaErrores = result.errores ?? []
-      const numErrores = listaErrores.length
+      const numErrores = result.errores_total ?? result.errores?.length ?? 0
 
       if (registrados > 0) {
         toast.success(`${registrados} pago(s) registrado(s) exitosamente`)

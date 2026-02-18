@@ -243,6 +243,11 @@ async def upload_excel_pagos(
         if not ws:
             return {"message": "Archivo sin hojas", "registros_procesados": 0, "errores": []}
         rows = list(ws.iter_rows(min_row=2, values_only=True))
+        if len(rows) > MAX_ROWS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"El archivo tiene demasiadas filas ({len(rows)}). Máximo permitido: {MAX_ROWS}.",
+            )
 
         def _looks_like_cedula(v: Any) -> bool:
             if v is None:
