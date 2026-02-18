@@ -103,10 +103,12 @@ def get_opciones_filtros(db: Session = Depends(get_db)):
             .where(Cliente.estado == "ACTIVO", Prestamo.estado == "APROBADO", Prestamo.concesionario.isnot(None))
             .distinct()
         ).all() if r[0]]
-        # Modelos: Prestamo.modelo_vehiculo o, si vacío, desde catálogo modelos_vehiculos
+        # Modelos: modelo_vehiculo > ModeloVehiculo.modelo > producto (excl. "Financiamiento")
+        producto_valido = func.nullif(func.nullif(func.trim(Prestamo.producto), ""), "Financiamiento")
         modelo_nombre = func.coalesce(
             func.nullif(func.trim(Prestamo.modelo_vehiculo), ""),
             ModeloVehiculo.modelo,
+            producto_valido,
         )
         modelos = [r[0] for r in db.execute(
             select(modelo_nombre)
@@ -984,7 +986,8 @@ def get_prestamos_por_modelo(
 ):
     """Préstamos aprobados por modelo: por_mes (en el período) y acumulado en el período.
     Respeta filtros analista, concesionario, modelo.
-    Usa Prestamo.modelo_vehiculo; si está vacío, toma el nombre desde modelos_vehiculos vía modelo_vehiculo_id."""
+    Usa Prestamo.modelo_vehiculo; si vacío, ModeloVehiculo.modelo vía modelo_vehiculo_id;
+    si sigue vacío, producto (excepto 'Financiamiento' genérico); si no, 'Sin modelo'."""
     analista = _sanitize_filter_string(analista)
     concesionario = _sanitize_filter_string(concesionario)
     modelo_filtro = _sanitize_filter_string(modelo)
@@ -994,10 +997,13 @@ def get_prestamos_por_modelo(
             func.date_trunc("month", Prestamo.fecha_registro),
             "YYYY-MM",
         )
-        # Nombre del modelo: Prestamo.modelo_vehiculo o, si vacío, ModeloVehiculo.modelo desde catálogo
+        # producto como fallback cuando modelo_vehiculo vacío (excluir "Financiamiento" genérico)
+        producto_valido = func.nullif(func.nullif(func.trim(Prestamo.producto), ""), "Financiamiento")
+        # Nombre del modelo: modelo_vehiculo > ModeloVehiculo.modelo > producto > "Sin modelo"
         modelo_expr = func.coalesce(
             func.nullif(func.trim(Prestamo.modelo_vehiculo), ""),
             ModeloVehiculo.modelo,
+            producto_valido,
             "Sin modelo",
         )
 
@@ -1012,11 +1018,12 @@ def get_prestamos_por_modelo(
         if concesionario:
             conds_base.append(Prestamo.concesionario == concesionario)
         if modelo_filtro:
-            # Coincidir por Prestamo.modelo_vehiculo o por ModeloVehiculo.modelo (catálogo)
+            # Coincidir por modelo_vehiculo, ModeloVehiculo.modelo o producto
             conds_base.append(
                 or_(
                     Prestamo.modelo_vehiculo == modelo_filtro,
                     ModeloVehiculo.modelo == modelo_filtro,
+                    Prestamo.producto == modelo_filtro,
                 )
             )
 
