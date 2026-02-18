@@ -1,22 +1,24 @@
-import { useState, useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
+﻿import { useState, useEffect } from 'react'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { PlantillasNotificaciones } from '../components/notificaciones/PlantillasNotificaciones'
 import { GestionVariables } from '../components/notificaciones/GestionVariables'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
-import { FileText, Database } from 'lucide-react'
+import { Button } from '../components/ui/button'
+import { FileText, Database, ArrowLeft } from 'lucide-react'
 
 const SUBTAB_PLANTILLAS = 'plantillas'
 const SUBTAB_VARIABLES = 'variables'
 
 export function Plantillas() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
   const subtabFromUrl = searchParams.get('subtab')
   const [plantillaAEditar, setPlantillaAEditar] = useState<any>(null)
   const [activeTab, setActiveTab] = useState(() =>
     subtabFromUrl === SUBTAB_VARIABLES ? SUBTAB_VARIABLES : SUBTAB_PLANTILLAS
   )
 
-  // Sincronizar pestaña activa con URL (subtab=variables abre Variables Personalizadas)
+  // Sincronizar pestaÃ±a activa con URL (subtab=variables abre Variables Personalizadas)
   useEffect(() => {
     const sub = searchParams.get('subtab')
     if (sub === SUBTAB_VARIABLES) setActiveTab(SUBTAB_VARIABLES)
@@ -31,11 +33,26 @@ export function Plantillas() {
     setSearchParams(next, { replace: true })
   }
 
+  const handleVolver = () => {
+    navigate('/configuracion?tab=plantillas')
+  }
+
   return (
     <div className="p-4 space-y-4">
-      <div>
-        <h1 className="text-xl font-bold">Plantillas de notificaciones</h1>
-        <p className="text-sm text-gray-500">Herramienta de construcción de plantillas y gestión de variables (solo Administrador)</p>
+      <div className="flex items-center justify-between">
+        <div className="flex-1">
+          <h1 className="text-xl font-bold">Plantillas de notificaciones</h1>
+          <p className="text-sm text-gray-500">Herramienta de construcciÃ³n de plantillas y gestiÃ³n de variables (solo Administrador)</p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleVolver}
+          className="flex items-center gap-2"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Volver a ConfiguraciÃ³n
+        </Button>
       </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
@@ -67,4 +84,3 @@ export function Plantillas() {
 }
 
 export default Plantillas
-
