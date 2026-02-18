@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   CreditCard,
@@ -29,7 +29,6 @@ import { CargaMasivaMenu } from './CargaMasivaMenu'
 import { PagosListResumen } from './PagosListResumen'
 import { PagosKPIsNuevo } from './PagosKPIsNuevo'
 import { toast } from 'sonner'
-
 export function PagosList() {
   const [activeTab, setActiveTab] = useState('todos')
   const [page, setPage] = useState(1)
@@ -47,7 +46,6 @@ export function PagosList() {
   const [agregarPagoOpen, setAgregarPagoOpen] = useState(false)
   const [pagoEditando, setPagoEditando] = useState<Pago | null>(null)
   const queryClient = useQueryClient()
-
   // Contar filtros activos (mismo criterio que Préstamos)
   const activeFiltersCount = [
     filters.cedula,
@@ -56,7 +54,6 @@ export function PagosList() {
     filters.fechaHasta,
     filters.analista,
   ].filter(Boolean).length
-
   const handleClearFilters = () => {
     setFilters({
       cedula: '',
@@ -67,7 +64,6 @@ export function PagosList() {
     })
     setPage(1)
   }
-
   // Query para obtener pagos
   const { data, isLoading, error, isError } = useQuery({
     queryKey: ['pagos', page, perPage, filters],
@@ -76,14 +72,12 @@ export function PagosList() {
     refetchOnMount: true, // Refetch cuando el componente se monta
     refetchOnWindowFocus: false, // No refetch en focus (evita requests innecesarios)
   })
-
   const handleFilterChange = (key: string, value: string) => {
     // Convertir "all" a cadena vacía para que el servicio no incluya el filtro
     const filterValue = value === 'all' ? '' : value
     setFilters(prev => ({ ...prev, [key]: filterValue }))
     setPage(1)
   }
-
   const getEstadoBadge = (estado: string) => {
     const estados: Record<string, { color: string; label: string }> = {
       PAGADO: { color: 'bg-green-500', label: 'Pagado' },
@@ -97,7 +91,6 @@ export function PagosList() {
       <Badge className={`${config.color} text-white`}>{config.label}</Badge>
     )
   }
-
   const handleRefresh = async () => {
     try {
       await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
@@ -109,12 +102,10 @@ export function PagosList() {
       toast.error('Error al actualizar los datos')
     }
   }
-
   return (
     <div className="space-y-6">
       {/* KPIs */}
       <PagosKPIsNuevo />
-
       {/* Acciones: título ya está en PagosPage */}
       <div className="flex justify-end items-center gap-3 flex-wrap">
           <Button
@@ -188,19 +179,16 @@ export function PagosList() {
             </PopoverContent>
           </Popover>
       </div>
-
       {/* Pestañas: por defecto Resumen por Cliente (detalles por cliente, más reciente a más antiguo) */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="mb-4">
           <TabsTrigger value="todos">Todos los Pagos</TabsTrigger>
           <TabsTrigger value="resumen">Detalle por Cliente</TabsTrigger>
         </TabsList>
-
         {/* Tab: Detalle por Cliente (resumen + ver pagos del cliente, más reciente a más antiguo) */}
         <TabsContent value="resumen">
           <PagosListResumen />
         </TabsContent>
-
         {/* Tab: Todos los Pagos */}
         <TabsContent value="todos">
           {/* Búsqueda por cédula siempre visible */}
@@ -229,7 +217,6 @@ export function PagosList() {
               </div>
             </CardContent>
           </Card>
-
           {/* Filtros adicionales (expandibles) */}
           <Card>
             <CardHeader>
@@ -325,7 +312,6 @@ export function PagosList() {
               </div>
             </CardContent>
           </Card>
-
           {/* Tabla de Pagos */}
           <Card>
             <CardHeader>
@@ -379,9 +365,7 @@ export function PagosList() {
                           <TableHead>Monto</TableHead>
                           <TableHead>Fecha Pago</TableHead>
                           <TableHead>Nº Documento</TableHead>
-                          <TableHead>Institución</TableHead>
                           <TableHead>Conciliado</TableHead>
-                          <TableHead>Notas</TableHead>
                           <TableHead className="text-right">Acciones</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -401,16 +385,12 @@ export function PagosList() {
                             </TableCell>
                             <TableCell>{formatDate(pago.fecha_pago)}</TableCell>
                             <TableCell>{pago.numero_documento ?? '—'}</TableCell>
-                            <TableCell>{pago.institucion_bancaria ?? '—'}</TableCell>
                             <TableCell>
                               {(pago.verificado_concordancia === 'SI' || pago.conciliado) ? (
                                 <Badge className="bg-green-500 text-white">SI</Badge>
                               ) : (
                                 <Badge className="bg-gray-500 text-white">NO</Badge>
                               )}
-                            </TableCell>
-                            <TableCell className="max-w-[180px] truncate" title={pago.notas ?? ''}>
-                              {pago.notas ?? '—'}
                             </TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end gap-2">
@@ -484,7 +464,6 @@ export function PagosList() {
           </Card>
         </TabsContent>
       </Tabs>
-
       {/* Registrar/Editar Pago Modal */}
       {showRegistrarPago && (
         <RegistrarPagoForm
@@ -508,12 +487,10 @@ export function PagosList() {
             console.log('ðŸ”„ onSuccess llamado - Iniciando actualización de dashboard...')
             setShowRegistrarPago(false)
             setPagoEditando(null)
-
             try {
               // Invalidar todas las queries relacionadas con pagos primero
               console.log('ðŸ”€ Invalidando queries de pagos...')
               await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
-
               // Invalidar queries de KPIs y dashboard que puedan depender de pagos
               console.log('ðŸ”€ Invalidando queries de KPIs y dashboard...')
               await queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false }) // âœ… Invalidar específicamente pagos-kpis
@@ -521,13 +498,10 @@ export function PagosList() {
               await queryClient.invalidateQueries({ queryKey: ['dashboard'], exact: false })
               await queryClient.invalidateQueries({ queryKey: ['kpis-principales-menu'], exact: false })
               await queryClient.invalidateQueries({ queryKey: ['dashboard-menu'], exact: false })
-
               // Invalidar también la query de últimos pagos (resumen)
               await queryClient.invalidateQueries({ queryKey: ['pagos-ultimos'], exact: false })
-
               // Refetch inmediato de KPIs para actualización en tiempo real
               await queryClient.refetchQueries({ queryKey: ['pagos-kpis'], exact: false })
-
               // Refetch de todas las queries relacionadas con pagos (no solo activas)
               // Esto asegura que las queries se actualicen incluso si no están montadas
               console.log('ðŸ” Ejecutando refetch de queries de pagos...')
@@ -535,16 +509,13 @@ export function PagosList() {
                 queryKey: ['pagos'],
                 exact: false
               })
-
               // Refetch también de queries activas para actualización inmediata
               const activeRefetchResult = await queryClient.refetchQueries({
                 queryKey: ['pagos'],
                 exact: false,
                 type: 'active'
               })
-
               console.log('âœ… Refetch completado:', { refetchResult, activeRefetchResult })
-
               toast.success('Pago registrado exitosamente. El dashboard se ha actualizado.')
             } catch (error) {
               console.error('âŒ Error actualizando dashboard:', error)
@@ -553,7 +524,6 @@ export function PagosList() {
           }}
         />
       )}
-
       {/* Carga masiva de pagos (Excel) desde Agregar pago */}
       {showCargaMasivaPagos && (
         <ExcelUploader
@@ -569,8 +539,6 @@ export function PagosList() {
           }}
         />
       )}
-
     </div>
   )
 }
-
