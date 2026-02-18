@@ -21,6 +21,13 @@ console.log(`🔍 API_BASE_URL (runtime): ${process.env.API_BASE_URL || 'NO SET'
 console.log(`🔍 VITE_API_BASE_URL (build-time): ${process.env.VITE_API_BASE_URL || 'NO SET'}`);
 console.log(`🔍 VITE_API_URL (build-time): ${process.env.VITE_API_URL || 'NO SET'}`);
 
+// Validación: en producción (PORT definido), API_BASE_URL debe apuntar al backend
+// localhost:8000 es válido para pruebas locales del build
+if (process.env.PORT && !API_URL) {
+  console.warn('⚠️  ADVERTENCIA: API_BASE_URL no configurado. Las peticiones /api/* fallarán.');
+  console.warn('   Configure API_BASE_URL en Render Dashboard con la URL del backend.');
+}
+
 // ============================================
 // SECURITY HEADERS - OWASP Best Practices
 // ============================================
@@ -105,12 +112,13 @@ app.use((req, res, next) => {
 });
 
 // ============================================
-// PROXY /api -> Backend (Render)
+// PROXY /api -> Backend (Render o local)
 // ============================================
 // IMPORTANTE: Proxy debe ir ANTES de servir archivos estáticos
 // Usar app.use('/api', ...) para que Express maneje el routing
 // Esto asegura que SOLO rutas /api pasen por el proxy
-if (API_URL && API_URL !== 'http://localhost:8000') {
+// Incluye localhost:8000 para pruebas locales del build con backend local
+if (API_URL) {
   console.log(`➡️  Proxy de /api hacia: ${API_URL}`);
   const proxyMiddleware = createProxyMiddleware({
     target: API_URL,
@@ -182,7 +190,8 @@ if (API_URL && API_URL !== 'http://localhost:8000') {
       // ✅ OPTIMIZACIÓN: Agregar cache headers para respuestas exitosas de GET
       // Esto reduce la carga en el backend para datos que no cambian frecuentemente
       if (status >= 200 && status < 300 && req.method === 'GET') {
-        // Identificar endpoints que pueden ser cacheados
+        // Identificar endpoints que pueden ser cacheados (req.originalUrl = ruta completa)
+        const fullPath = req.originalUrl?.split('?')[0] || req.path || '';
         const cacheableEndpoints = [
           '/api/v1/modelos-vehiculos',
           '/api/v1/concesionarios',
@@ -190,12 +199,12 @@ if (API_URL && API_URL !== 'http://localhost:8000') {
           '/api/v1/configuracion'
         ];
 
-        const isCacheable = cacheableEndpoints.some(endpoint => req.path.includes(endpoint));
+        const isCacheable = cacheableEndpoints.some(endpoint => fullPath.includes(endpoint));
 
         if (isCacheable) {
           // Cache por 5 minutos para datos que cambian poco
           res.setHeader('Cache-Control', 'private, max-age=300, stale-while-revalidate=60');
-        } else if (req.path.includes('/api/v1/dashboard') || req.path.includes('/api/v1/kpis')) {
+        } else if (fullPath.includes('/api/v1/dashboard') || fullPath.includes('/api/v1/kpis')) {
           // Cache corto (30 segundos) para datos del dashboard que cambian más frecuentemente
           res.setHeader('Cache-Control', 'private, max-age=30, stale-while-revalidate=10');
         } else {

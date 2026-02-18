@@ -27,6 +27,9 @@ export function ExcelUploader({ onClose, onSuccess }: ExcelUploaderProps) {
     filas_omitidas?: number
     errores?: string[]
     errores_detalle?: ErrorDetalleBackend[]
+    errores_total?: number
+    errores_detalle_total?: number
+    errores_truncados?: boolean
   } | null>(null)
 
   const erroresParaTabla = useMemo(() => {
@@ -202,7 +205,12 @@ export function ExcelUploader({ onClose, onSuccess }: ExcelUploaderProps) {
                     )}
                     {(results.errores?.length ?? 0) > 0 && (
                       <p className="text-sm text-red-600 mt-1">
-                        {results.errores?.length ?? 0} fila(s) con error. Revisa la tabla inferior para ver fila, cédula y descripción.
+                        {(results.errores_total ?? results.errores?.length ?? 0)} fila(s) con error. Revisa la tabla inferior para ver fila, cédula y descripción.
+                        {results.errores_truncados && (
+                          <span className="block text-amber-600 mt-0.5">
+                            Se muestran los primeros 50 errores y 100 detalles. Descarga el archivo para exportar los detalles mostrados.
+                          </span>
+                        )}
                       </p>
                     )}
                   </CardContent>

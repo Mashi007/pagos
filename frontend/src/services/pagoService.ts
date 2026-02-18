@@ -60,20 +60,7 @@ class PagoService {
       ...(filters?.analista && { analista: filters.analista }),
     })
     const url = `${this.baseUrl}/?${params.toString()}`
-    console.log('📡 [pagoService.getAllPagos] Llamando a:', url)
-    try {
-      const response = await apiClient.get<{ pagos: Pago[]; total: number; page: number; per_page: number; total_pages: number }>(url)
-      console.log('✅ [pagoService.getAllPagos] Respuesta recibida:', {
-        total: response.total,
-        pagosCount: response.pagos?.length || 0,
-        page: response.page,
-        total_pages: response.total_pages
-      })
-      return response
-    } catch (error) {
-      console.error('❌ [pagoService.getAllPagos] Error:', error)
-      throw error
-    }
+    return await apiClient.get<{ pagos: Pago[]; total: number; page: number; per_page: number; total_pages: number }>(url)
   }
 
   async createPago(data: PagoCreate): Promise<Pago> {

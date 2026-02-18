@@ -15,6 +15,7 @@ services:
         value: 20.19.0
       - key: VITE_API_URL
         value: https://rapicredit.onrender.com
+      # API_BASE_URL: URL del backend. Si backend es servicio separado, configurar en Render Dashboard.
       - key: API_BASE_URL
         value: https://rapicredit.onrender.com
       - key: NODE_ENV

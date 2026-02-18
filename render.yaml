@@ -9,6 +9,12 @@ services:
     envVars:
       - key: NODE_VERSION
         value: 20.11.0
+      # API_BASE_URL: URL del backend para proxy /api/*. Render la inyecta desde pagos-backend.
+      - key: API_BASE_URL
+        fromService:
+          name: pagos-backend
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
 
   # Backend
   - type: web
@@ -19,6 +25,7 @@ services:
     # (reduce "Error while closing socket [Errno 9] Bad file descriptor" en shutdown)
     startCommand: gunicorn app.main:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --graceful-timeout 30 --worker-class uvicorn.workers.UvicornWorker
     rootDir: backend
+    healthCheckPath: /health/db
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0

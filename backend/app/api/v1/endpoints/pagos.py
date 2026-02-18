@@ -364,12 +364,19 @@ async def upload_excel_pagos(
                     "datos": datos_fila,
                 })
         db.commit()
+        errores_limit = 50
+        errores_detalle_limit = 100
+        total_errores = len(errores)
+        total_errores_detalle = len(errores_detalle)
         return {
             "message": "Carga finalizada",
             "registros_procesados": registros,
             "filas_omitidas": filas_omitidas,
-            "errores": errores[:50],
-            "errores_detalle": errores_detalle[:100],
+            "errores": errores[:errores_limit],
+            "errores_detalle": errores_detalle[:errores_detalle_limit],
+            "errores_total": total_errores,
+            "errores_detalle_total": total_errores_detalle,
+            "errores_truncados": total_errores > errores_limit or total_errores_detalle > errores_detalle_limit,
         }
     except Exception as e:
         db.rollback()
