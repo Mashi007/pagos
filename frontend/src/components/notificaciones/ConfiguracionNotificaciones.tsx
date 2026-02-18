@@ -73,11 +73,11 @@ export function ConfiguracionNotificaciones() {
   const cargarDatos = async () => {
     setCargando(true)
     try {
-      const [data, plantillasList] = await Promise.all([
+      const [dtÃ¡, plantillasList] = await Promise.all([
         emailConfigService.obtenerConfiguracionEnvios() as Promise<ConfigEnvioCompleta>,
         notificacionService.listarPlantillas(undefined, false).catch(() => [] as NotificacionPlantilla[]),
       ])
-      const raw = data || {}
+      const raw = dtÃ¡ || {}
       setModoPruebas(raw.modo_pruebas === true)
       if (Array.isArray(raw.emails_pruebas)) {
         const arr = raw.emails_pruebas
@@ -403,6 +403,7 @@ export function ConfiguracionNotificaciones() {
     </div>
   )
 }
+
 
 
 
