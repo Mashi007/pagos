@@ -260,6 +260,22 @@ export function ConfiguracionNotificaciones() {
                 onChange={(e) => setEmailsPruebas((prev) => [e.target.value, prev[1]])}
                 className="max-w-xs h-9 bg-white"
               />
+              {/* BotÃ³n Enviar Prueba - dentro de la tarjeta de Modo Prueba */}
+              {modoPruebas && emailsPruebas[0]?.trim() && (
+                <div className="mt-4 pt-4 border-t border-amber-200">
+                  <Button
+                    onClick={handleEnviarPrueba}
+                    disabled={enviandoPrueba}
+                    className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:opacity-50 text-white font-semibold py-2 h-auto flex items-center justify-center gap-2 rounded-lg transition-all"
+                  >
+                    <Mail className="h-5 w-5" />
+                    {enviandoPrueba ? 'Enviando correo de prueba...' : 'Enviar Correo de Prueba'}
+                  </Button>
+                  <p className="text-xs text-amber-700 mt-2 text-center">
+                    Se enviarÃ¡ a: {emailsPruebas[0]} {emailsPruebas[1] && `y ${emailsPruebas[1]}`}
+                  </p>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <label className="text-sm font-medium text-gray-700 whitespace-nowrap w-40">Correo para pruebas 2</label>
@@ -382,20 +398,13 @@ export function ConfiguracionNotificaciones() {
           {guardandoEnvios ? 'Guardando...' : 'Guardar'}
         </Button>              
               {/* BotÃ³n EnvÃ­o Manual de Prueba */}
-              {modoPruebas && emailsPruebas[0] && (
-                <Button
-                  onClick={handleEnviarPrueba}
-                  disabled={enviandoPrueba}
-                  className="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white"
-                >
-                  <Mail className="h-4 w-4 mr-2" inline />
-                  {enviandoPrueba ? 'Enviando prueba...' : 'Enviar Prueba'}
-                </Button>
-              )}
+              
       </div>
     </div>
   )
 }
+
+
 
 
 
