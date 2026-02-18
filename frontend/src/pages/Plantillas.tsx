@@ -4,7 +4,7 @@ import { PlantillasNotificaciones } from '../components/notificaciones/Plantilla
 import { GestionVariables } from '../components/notificaciones/GestionVariables'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Button } from '../components/ui/button'
-import { FileText, Database, ArrowLeft } from 'lucide-react'
+import { FileText, Database, ChevronLeft } from 'lucide-react'
 
 const SUBTAB_PLANTILLAS = 'plantillas'
 const SUBTAB_VARIABLES = 'variables'
@@ -50,7 +50,7 @@ export function Plantillas() {
           onClick={handleVolver}
           className="flex items-center gap-2"
         >
-          <ArrowLeft className="h-4 w-4" />
+          <ChevronLeft className="h-4 w-4" />
           Volver a ConfiguraciÃ³n
         </Button>
       </div>
@@ -84,3 +84,4 @@ export function Plantillas() {
 }
 
 export default Plantillas
+

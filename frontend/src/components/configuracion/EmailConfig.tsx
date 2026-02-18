@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect, useMemo } from 'react'
-import { Mail, Save, TestTube, CheckCircle, AlertCircle, Eye, EyeOff, Clock, XCircle, RefreshCw, Send } from 'lucide-react'
+import { Mail, Save, TestTube, CheckCircle, AlertCircle, Eye, EyeOff, Clock, XCircle, RefreshCw, MailPlus } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -46,7 +46,6 @@ export function EmailConfig() {
   const [guardando, setGuardando] = useState(false)
 const [probando, setProbando] = useState(false)
   const [envioManualEnCurso, setEnvioManualEnCurso] = useState(false)
-const [probando, setProbando] = useState(false)
   const [modoPruebas, setModoPruebas] = useState<string>('true')
   const [emailPruebas, setEmailPruebas] = useState('')
   const [emailActivo, setEmailActivo] = useState<boolean>(true) // Ã¢Å“â€¦ Estado activo/inactivo
@@ -1094,7 +1093,7 @@ const [probando, setProbando] = useState(false)
               <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-400 rounded-lg p-5 mt-6">
                 <div className="mb-3">
                   <h4 className="font-semibold text-green-900 flex items-center gap-2">
-                    <Send className="h-5 w-5" />
+                    <MailPlus className="h-5 w-5" />
                     EnvÃ­o Manual de Prueba
                   </h4>
                   <p className="text-sm text-green-700 mt-1">
@@ -1107,7 +1106,7 @@ const [probando, setProbando] = useState(false)
                   disabled={envioManualEnCurso}
                   className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
                 >
-                  <Send className="h-5 w-5" />
+                  <MailPlus className="h-5 w-5" />
                   {envioManualEnCurso ? 'Enviando correo de prueba...' : 'Enviar Correo de Prueba Ahora'}
                 </Button>
               </div>
@@ -1310,6 +1309,7 @@ const [probando, setProbando] = useState(false)
     </div>
   )
 }
+
 
 
 
