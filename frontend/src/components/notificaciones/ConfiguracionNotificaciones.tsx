@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Card, CardContent, CardDescription, CardHeader, Cardata } from '../../components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
 import {
   Settings,
   Mail,
@@ -174,7 +174,7 @@ export function ConfiguracionNotificaciones() {
           const plantilla = plantillas.find(p => p.id === plantillaSeleccionada)
           if (plantilla) {
             asunto = plantilla.nombre || asunto
-            mensaje = plantilla.contenido || mensaje
+            mensaje = plantilla.cuerpo || plantilla.texto || plantilla.contenido || '' || mensaje
           }
         }
         
@@ -217,10 +217,10 @@ export function ConfiguracionNotificaciones() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <Cardata className="flex items-center gap-2 text-xl">
+          <CardTitle className="flex items-center gap-2 text-xl">
             <Settings className="h-5 w-5 text-blue-600" />
             ConfiguraciÃƒÂ³n por caso
-          </Cardata>
+          </CardTitle>
           <CardDescription>
             Asigna una plantilla a cada caso, activa el envÃƒÂ­o y guarda. Las plantillas se crean en ConfiguraciÃƒÂ³n ? Plantillas (texto + variables).
           </CardDescription>
@@ -230,7 +230,7 @@ export function ConfiguracionNotificaciones() {
       {/* Modo Prueba / ProducciÃƒÂ³n: un solo bloque, sin duplicar config */}
       <Card className={enModoPrueba ? 'border-amber-300 bg-amber-50/50' : 'border-emerald-200 bg-emerald-50/30'}>
         <CardHeader className="pb-3">
-          <Cardata className="text-base flex items-center gap-2">
+          <CardTitle className="text-base flex items-center gap-2">
             {enModoPrueba ? (
               <>
                 <TestTube className="h-4 w-4 text-amber-600" />
@@ -242,7 +242,7 @@ export function ConfiguracionNotificaciones() {
                 Modo producciÃƒÂ³n
               </>
             )}
-          </Cardata>
+          </CardTitle>
           <CardDescription>
             {enModoPrueba
               ? 'Todos los emails de notificaciones se envÃƒÂ­an ÃƒÂºnicamente al correo de pruebas. Los clientes no reciben correo. El envÃƒÂ­o por caso queda desactivado en la tabla mientras estÃƒÂ© activo modo prueba.'
@@ -452,6 +452,7 @@ export function ConfiguracionNotificaciones() {
     </div>
   )
 }
+
 
 
 
