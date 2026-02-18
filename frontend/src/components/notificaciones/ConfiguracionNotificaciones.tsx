@@ -65,6 +65,7 @@ export function ConfiguracionNotificaciones() {
   const [cargando, setCargando] = useState(true)
   const [plantillas, setPlantillas] = useState<NotificacionPlantilla[]>([])
   const [enviandoPrueba, setEnviandoPrueba] = useState(false)
+  const [plantillaSeleccionada, setPlantillaSeleccionada] = useState<number | null>(null)
 
   useEffect(() => {
     cargarDatos()
@@ -164,10 +165,23 @@ export function ConfiguracionNotificaciones() {
     if (modoPruebas && email) {
       try {
         setEnviandoPrueba(true)
+        
+        // Si hay plantilla seleccionada, usarla; si no, usar mensaje genÃ©rico
+        let asunto = 'Prueba de Notificaciones - RapiCredit'
+        let mensaje = 'Este es un correo de prueba para verificar que las plantillas de notificaciÃ³n se envÃ­an correctamente.'
+        
+        if (plantillaSeleccionada) {
+          const plantilla = plantillas.find(p => p.id === plantillaSeleccionada)
+          if (plantilla) {
+            asunto = plantilla.nombre || asunto
+            mensaje = plantilla.contenido || mensaje
+          }
+        }
+        
         const resultado = await emailConfigService.probarConfiguracionEmail(
           email,
-          'Prueba de Notificaciones - RapiCredit',
-          'Este es un correo de prueba para verificar que las plantillas de notificaciÃ³n se envÃ­an correctamente.',
+          asunto,
+          mensaje,
           undefined
         )
         
@@ -261,7 +275,32 @@ export function ConfiguracionNotificaciones() {
                 onChange={(e) => setEmailsPruebas((prev) => [e.target.value, prev[1]])}
                 className="max-w-xs h-9 bg-white"
               />
-              {/* Botones Enviar Prueba - uno para cada correo */}
+              
+              {/* Selector de Plantilla para Prueba */}
+              {modoPruebas && (emailsPruebas[0]?.trim() || emailsPruebas[1]?.trim()) && (
+                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <label className="text-sm font-medium text-gray-700 block mb-2">
+                    Selecciona una plantilla (opcional)
+                  </label>
+                  <Select
+                    value={plantillaSeleccionada?.toString() || ''}
+                    onValueChange={(val) => setPlantillaSeleccionada(val ? parseInt(val) : null)}
+                  >
+                    <SelectTrigger className="w-full bg-white">
+                      <SelectValue placeholder="Plantilla predeterminada" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Plantilla predeterminada</SelectItem>
+                      {plantillas.map((p) => (
+                        <SelectItem key={p.id} value={String(p.id)}>
+                          {p.nombre || `Plantilla #${p.id}`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+{/* Botones Enviar Prueba - uno para cada correo */}
               {modoPruebas && (emailsPruebas[0]?.trim() || emailsPruebas[1]?.trim()) && (
                 <div className="mt-4 pt-4 border-t border-amber-200 space-y-2">
                   {emailsPruebas[0]?.trim() && (
@@ -413,6 +452,8 @@ export function ConfiguracionNotificaciones() {
     </div>
   )
 }
+
+
 
 
 
