@@ -803,10 +803,14 @@ def aplicar_pago_a_cuotas(pago_id: int, db: Session = Depends(get_db)):
         monto_cuota = float(c.monto) if c.monto is not None else 0
         if monto_restante <= 0 or monto_cuota <= 0:
             break
-        c.fecha_pago = fecha_pago_date
-        c.estado = "PAGADO"
-        cuotas_completadas += 1
-        monto_restante -= monto_cuota
+        # Solo marcar si el monto cubre la cuota completa (conciliación estricta)
+        if monto_restante >= monto_cuota:
+            c.fecha_pago = fecha_pago_date
+            c.estado = "PAGADO"
+            cuotas_completadas += 1
+            monto_restante -= monto_cuota
+        else:
+            break
     db.commit()
     return {
         "success": True,

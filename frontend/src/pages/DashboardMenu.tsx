@@ -107,11 +107,12 @@ export function DashboardMenu() {
   })
 
   // Batch 1: CRÍTICO - KPIs principales (visible primero para el usuario)
-  // âœ… ACTUALIZADO: Incluye período en queryKey y aplica filtro de período
+  // Los KPIs siempre reflejan solo el mes actual (ej. febrero) - independiente del período de los gráficos
+  const mesActualKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
   const { data: kpisPrincipales, isLoading: loadingKPIs, isError: errorKPIs, refetch } = useQuery({
-    queryKey: ['kpis-principales-menu', periodo, JSON.stringify(filtros)],
+    queryKey: ['kpis-principales-menu', 'mes', mesActualKey, JSON.stringify(filtros)],
     queryFn: async (): Promise<KpisPrincipalesResponse> => {
-      const params = construirFiltrosObject(periodo)
+      const params = construirFiltrosObject('mes')
       const queryParams = new URLSearchParams()
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
