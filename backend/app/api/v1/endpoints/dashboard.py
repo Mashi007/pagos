@@ -84,11 +84,23 @@ def _etiquetas_12_meses() -> list[dict]:
 
 @router.get("/opciones-filtros")
 def get_opciones_filtros(db: Session = Depends(get_db)):
-    """Opciones para filtros desde BD: analistas, concesionarios, modelos (Prestamo)."""
+    """Opciones para filtros desde BD: analistas, concesionarios, modelos (solo clientes ACTIVOS)."""
     try:
-        analistas = [r[0] for r in db.execute(select(Prestamo.analista).where(Prestamo.analista.isnot(None)).distinct()).all() if r[0]]
-        concesionarios = [r[0] for r in db.execute(select(Prestamo.concesionario).where(Prestamo.concesionario.isnot(None)).distinct()).all() if r[0]]
-        modelos = [r[0] for r in db.execute(select(Prestamo.modelo_vehiculo).where(Prestamo.modelo_vehiculo.isnot(None)).distinct()).all() if r[0]]
+        analistas = [r[0] for r in db.execute(
+            select(Prestamo.analista).select_from(Prestamo).join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(Cliente.estado == "ACTIVO", Prestamo.estado == "APROBADO", Prestamo.analista.isnot(None))
+            .distinct()
+        ).all() if r[0]]
+        concesionarios = [r[0] for r in db.execute(
+            select(Prestamo.concesionario).select_from(Prestamo).join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(Cliente.estado == "ACTIVO", Prestamo.estado == "APROBADO", Prestamo.concesionario.isnot(None))
+            .distinct()
+        ).all() if r[0]]
+        modelos = [r[0] for r in db.execute(
+            select(Prestamo.modelo_vehiculo).select_from(Prestamo).join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(Cliente.estado == "ACTIVO", Prestamo.estado == "APROBADO", Prestamo.modelo_vehiculo.isnot(None))
+            .distinct()
+        ).all() if r[0]]
         return {"analistas": analistas, "concesionarios": concesionarios, "modelos": modelos}
     except Exception:
         return {"analistas": [], "concesionarios": [], "modelos": []}

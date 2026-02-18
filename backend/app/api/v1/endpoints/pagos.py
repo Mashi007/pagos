@@ -498,32 +498,60 @@ def get_pagos_kpis(
         _, ultimo_dia = calendar.monthrange(hoy.year, hoy.month)
         fin_mes = inicio_mes.replace(day=ultimo_dia)
 
-        # 1) Monto a cobrar en el mes en transcurso: suma de cuotas con fecha_vencimiento en este mes
+        # Condiciones base: solo clientes ACTIVOS
+        conds_activo = [
+            Cuota.prestamo_id == Prestamo.id,
+            Prestamo.cliente_id == Cliente.id,
+            Cliente.estado == "ACTIVO",
+            Prestamo.estado == "APROBADO",
+        ]
+
+        # 1) Monto a cobrar en el mes en transcurso (solo clientes ACTIVOS)
         monto_a_cobrar_mes = db.scalar(
-            select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
+            select(func.coalesce(func.sum(Cuota.monto), 0))
+            .select_from(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(
+                and_(*conds_activo),
                 Cuota.fecha_vencimiento >= inicio_mes,
                 Cuota.fecha_vencimiento <= fin_mes,
             )
         ) or 0
 
-        # 2) Monto cobrado = pagado en el mes: suma de cuotas pagadas con fecha_pago en el mes
+        # 2) Monto cobrado = pagado en el mes (solo clientes ACTIVOS)
         monto_cobrado_mes = db.scalar(
-            select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
+            select(func.coalesce(func.sum(Cuota.monto), 0))
+            .select_from(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(
+                and_(*conds_activo),
                 Cuota.fecha_pago.isnot(None),
                 func.date(Cuota.fecha_pago) >= inicio_mes,
                 func.date(Cuota.fecha_pago) <= hoy,
             )
         ) or 0
 
-        # 3) Morosidad mensual %: del mes en curso, (lo que venció en el mes y no se ha cobrado) / (lo que venció en el mes) * 100
+        # 3) Morosidad mensual % (solo clientes ACTIVOS)
         total_vencido_mes = db.scalar(
-            select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
+            select(func.coalesce(func.sum(Cuota.monto), 0))
+            .select_from(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(
+                and_(*conds_activo),
                 Cuota.fecha_vencimiento >= inicio_mes,
                 Cuota.fecha_vencimiento <= fin_mes,
             )
         ) or 0
         no_cobrado_mes = db.scalar(
-            select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
+            select(func.coalesce(func.sum(Cuota.monto), 0))
+            .select_from(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(
+                and_(*conds_activo),
                 Cuota.fecha_vencimiento >= inicio_mes,
                 Cuota.fecha_vencimiento <= fin_mes,
                 Cuota.fecha_pago.is_(None),
@@ -535,18 +563,32 @@ def get_pagos_kpis(
             else 0.0
         )
         cartera_pendiente = db.scalar(
-            select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
-                Cuota.fecha_pago.is_(None)
-            )
+            select(func.coalesce(func.sum(Cuota.monto), 0))
+            .select_from(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(and_(*conds_activo), Cuota.fecha_pago.is_(None))
         ) or 0
-        # Compatibilidad: clientes en mora / al día y saldo por cobrar (otros módulos)
+        # Compatibilidad: clientes en mora / al día (solo clientes ACTIVOS)
         subq = (
-            select(Cuota.cliente_id)
-            .where(Cuota.fecha_pago.is_(None), Cuota.fecha_vencimiento < hoy)
+            select(Prestamo.cliente_id)
+            .select_from(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(
+                and_(*conds_activo),
+                Cuota.fecha_pago.is_(None),
+                Cuota.fecha_vencimiento < hoy,
+            )
             .distinct()
         )
         clientes_en_mora = db.scalar(select(func.count()).select_from(subq.subquery())) or 0
-        clientes_con_prestamo = db.scalar(select(func.count(func.distinct(Prestamo.cliente_id))).select_from(Prestamo)) or 0
+        clientes_con_prestamo = db.scalar(
+            select(func.count(func.distinct(Prestamo.cliente_id)))
+            .select_from(Prestamo)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(Cliente.estado == "ACTIVO", Prestamo.estado == "APROBADO")
+        ) or 0
         clientes_al_dia = max(0, clientes_con_prestamo - clientes_en_mora)
 
         return {
@@ -579,14 +621,19 @@ def get_pagos_kpis(
 
 
 def _stats_conds_cuota(analista: Optional[str], concesionario: Optional[str], modelo: Optional[str]):
-    """Condiciones base para filtrar cuotas por préstamo (analista/concesionario/modelo)."""
-    conds = []
+    """Condiciones base para filtrar cuotas por préstamo (solo clientes ACTIVOS + analista/concesionario/modelo)."""
+    conds = [
+        Cuota.prestamo_id == Prestamo.id,
+        Prestamo.cliente_id == Cliente.id,
+        Cliente.estado == "ACTIVO",
+        Prestamo.estado == "APROBADO",
+    ]
     if analista:
         conds.append(Prestamo.analista == analista)
     if concesionario:
         conds.append(Prestamo.concesionario == concesionario)
     if modelo:
-        conds.append(Prestamo.modelo == modelo)
+        conds.append(Prestamo.modelo_vehiculo == modelo)
     return conds
 
 
@@ -600,38 +647,40 @@ def get_pagos_stats(
     db: Session = Depends(get_db),
 ):
     """
-    Estadísticas de pagos desde BD: total_pagos, total_pagado, pagos_por_estado,
+    Estadísticas de pagos desde BD (solo clientes ACTIVOS): total_pagos, total_pagado, pagos_por_estado,
     cuotas_pagadas, cuotas_pendientes, cuotas_atrasadas, pagos_hoy.
     """
     hoy = _hoy_local()
     use_filters = bool(analista or concesionario or modelo)
 
     def _q_cuotas():
-        if use_filters:
-            return select(Cuota).join(Prestamo, Cuota.prestamo_id == Prestamo.id).where(
-                and_(*_stats_conds_cuota(analista, concesionario, modelo))
-            )
-        return select(Cuota)
+        return (
+            select(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(and_(*_stats_conds_cuota(analista, concesionario, modelo)))
+        )
 
     def _count(q):
         subq = q.subquery()
         return int(db.scalar(select(func.count()).select_from(subq)) or 0)
 
     try:
-        # Cuotas pagadas / pendientes / atrasadas
+        # Cuotas pagadas / pendientes / atrasadas (solo clientes ACTIVOS)
         cuotas_pagadas = _count(_q_cuotas().where(Cuota.fecha_pago.isnot(None)))
         cuotas_pendientes = _count(_q_cuotas().where(Cuota.fecha_pago.is_(None)))
         cuotas_atrasadas = _count(
             _q_cuotas().where(Cuota.fecha_pago.is_(None), Cuota.fecha_vencimiento < hoy)
         )
-        # Total pagado: suma directa sobre Cuota (evita errores con subquery.c.monto)
-        q_sum = select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
-            Cuota.fecha_pago.isnot(None)
-        )
-        if use_filters:
-            q_sum = q_sum.join(Prestamo, Cuota.prestamo_id == Prestamo.id).where(
-                and_(*_stats_conds_cuota(analista, concesionario, modelo))
+        # Total pagado (solo clientes ACTIVOS)
+        q_sum = (
+            select(func.coalesce(func.sum(Cuota.monto), 0))
+            .select_from(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(and_(*_stats_conds_cuota(analista, concesionario, modelo), Cuota.fecha_pago.isnot(None))
             )
+        )
         total_pagado = db.scalar(q_sum) or 0
         # Pagos hoy
         pagos_hoy = _count(
@@ -641,12 +690,14 @@ def get_pagos_stats(
             )
         )
         # Pagos por estado
-        q_estado = select(Cuota.estado, func.count()).select_from(Cuota)
-        if use_filters:
-            q_estado = q_estado.join(Prestamo, Cuota.prestamo_id == Prestamo.id).where(
-                and_(*_stats_conds_cuota(analista, concesionario, modelo))
-            )
-        q_estado = q_estado.group_by(Cuota.estado)
+        q_estado = (
+            select(Cuota.estado, func.count())
+            .select_from(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(and_(*_stats_conds_cuota(analista, concesionario, modelo)))
+            .group_by(Cuota.estado)
+        )
         rows_estado = db.execute(q_estado).all()
         pagos_por_estado = [{"estado": str(r[0]) if r[0] is not None else "N/A", "count": int(r[1])} for r in rows_estado]
         total_pagos = cuotas_pagadas + cuotas_pendientes
