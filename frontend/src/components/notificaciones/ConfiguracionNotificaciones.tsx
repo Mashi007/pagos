@@ -1,6 +1,6 @@
-﻿import { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, Cardata } from '../../components/ui/card'
 import {
   Settings,
   Mail,
@@ -217,10 +217,10 @@ export function ConfiguracionNotificaciones() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-xl">
+          <Cardata className="flex items-center gap-2 text-xl">
             <Settings className="h-5 w-5 text-blue-600" />
             ConfiguraciÃ³n por caso
-          </CardTitle>
+          </Cardata>
           <CardDescription>
             Asigna una plantilla a cada caso, activa el envÃ­o y guarda. Las plantillas se crean en ConfiguraciÃ³n ? Plantillas (texto + variables).
           </CardDescription>
@@ -230,7 +230,7 @@ export function ConfiguracionNotificaciones() {
       {/* Modo Prueba / ProducciÃ³n: un solo bloque, sin duplicar config */}
       <Card className={enModoPrueba ? 'border-amber-300 bg-amber-50/50' : 'border-emerald-200 bg-emerald-50/30'}>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
+          <Cardata className="text-base flex items-center gap-2">
             {enModoPrueba ? (
               <>
                 <TestTube className="h-4 w-4 text-amber-600" />
@@ -242,7 +242,7 @@ export function ConfiguracionNotificaciones() {
                 Modo producciÃ³n
               </>
             )}
-          </CardTitle>
+          </Cardata>
           <CardDescription>
             {enModoPrueba
               ? 'Todos los emails de notificaciones se envÃ­an Ãºnicamente al correo de pruebas. Los clientes no reciben correo. El envÃ­o por caso queda desactivado en la tabla mientras estÃ© activo modo prueba.'
@@ -452,6 +452,7 @@ export function ConfiguracionNotificaciones() {
     </div>
   )
 }
+
 
 
 
