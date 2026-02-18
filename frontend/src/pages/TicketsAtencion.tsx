@@ -37,6 +37,7 @@ import { LoadingSpinner } from '../components/ui/loading-spinner'
 import { useSimpleAuth } from '../store/simpleAuthStore'
 import { ticketsService, Ticket, TicketCreate } from '../services/ticketsService'
 import { toast } from 'sonner'
+import { BASE_PATH } from '../config/env'
 
 // Estados de tickets
 const ESTADOS_TICKET = [
@@ -954,7 +955,7 @@ export function TicketsAtencion() {
                                           variant="link"
                                           size="sm"
                                           className="h-auto p-0 text-xs mt-1 text-blue-600 hover:text-blue-700"
-                                          onClick={() => window.open(`/clientes/${ticket.clienteId}`, '_blank')}
+                                          onClick={() => window.open(`${BASE_PATH || ''}/clientes/${ticket.clienteId}`, '_blank')}
                                         >
                                           Ver cliente completo → â†’
                                         </Button>
@@ -1057,25 +1058,25 @@ export function TicketsAtencion() {
             <DialogTitle>Editar Ticket #{ticketSeleccionado?.id}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 mt-4">
-            {/* Mismo formulario que crear, pero con datos precargados */}
+            {/* Título y descripción no se pueden editar después de guardar (solo estado, prioridad, fecha límite) */}
             <div className="space-y-2">
-              <Label htmlFor="titulo-edit">Título *</Label>
+              <Label htmlFor="titulo-edit">Título (no editable)</Label>
               <Input
                 id="titulo-edit"
-                placeholder="Ej: Consulta sobre estado de préstamo"
                 value={nuevoTicket.titulo || ''}
-                onChange={(e) => setNuevoTicket(prev => ({ ...prev, titulo: e.target.value }))}
+                disabled
+                className="bg-gray-50"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="descripcion-edit">Descripción *</Label>
+              <Label htmlFor="descripcion-edit">Descripción (no editable)</Label>
               <Textarea
                 id="descripcion-edit"
-                placeholder="Describe el problema o consulta..."
                 value={nuevoTicket.descripcion || ''}
-                onChange={(e) => setNuevoTicket(prev => ({ ...prev, descripcion: e.target.value }))}
+                disabled
                 rows={4}
+                className="bg-gray-50"
               />
             </div>
 

@@ -11,7 +11,8 @@ import {
   Calendar,
   MessageSquare,
   RefreshCw,
-  AlertCircle
+  AlertCircle,
+  Eye
 } from 'lucide-react'
 
 import { Button } from '../../components/ui/button'
@@ -87,7 +88,7 @@ export function ClientesList() {
       console.log('ðŸ—‘ï¸ Eliminando cliente:', clienteSeleccionado.id)
 
       // âœ… ACTIVAR: Llamada real a la API para eliminar
-      await clienteService.deleteCliente(clienteSeleccionado.id)
+      await clienteService.deleteCliente(String(clienteSeleccionado.id))
 
       console.log('âœ… Cliente eliminado exitosamente')
 
@@ -120,7 +121,6 @@ export function ClientesList() {
   useSimpleAuth()
   const queryClient = useQueryClient()
 
-  // Queries
   const {
     data: clientesData,
     isLoading,
@@ -136,28 +136,6 @@ export function ClientesList() {
 
   const clientesResponse = clientesData as PaginatedResponse<Cliente> | undefined
 
-  // âœ… DEBUG: Log para diagnosticar problemas
-  console.log('ðŸ” [ClientesList] Estado de la query:', {
-    isLoading,
-    isError,
-    error: error ? (() => {
-      const err = error as { response?: { data?: Record<string, unknown> } }
-      const extra = err?.response && typeof err.response === 'object' ? err.response.data ?? {} : {}
-      return {
-        message: error instanceof Error ? error.message : String(error),
-        ...extra
-      }
-    })() : null,
-    clientesData: clientesResponse,
-    hasData: !!clientesResponse,
-    dataLength: clientesResponse?.data?.length || 0,
-    total: clientesResponse?.total,
-    page: clientesResponse?.page,
-    per_page: clientesResponse?.per_page,
-    total_pages: clientesResponse?.total_pages
-  })
-
-  // Estadísticas de clientes
   const {
     data: statsData,
     isLoading: statsLoading,
@@ -194,18 +172,6 @@ export function ClientesList() {
 
   const totalPages = clientesResponse?.total_pages || 1
   const total = clientesResponse?.total || 0
-
-  // âœ… DEBUG: Log de datos finales
-  console.log('âœ… [ClientesList] Datos finales para renderizar:', {
-    clientesLength: clientes.length,
-    usingMock: clientes === mockClientes,
-    totalPages,
-    total,
-    hasClientesData: !!clientesResponse,
-    clientesDataType: typeof clientesResponse?.data,
-    isArray: Array.isArray(clientesResponse?.data),
-    clientesDataKeys: clientesResponse ? Object.keys(clientesResponse) : []
-  })
 
   const handleSearch = (value: string) => {
     setSearchTerm(value)
@@ -545,9 +511,13 @@ export function ClientesList() {
                   <TableRow key={cliente?.id != null ? String(cliente.id) : `row-${index}`}>
                     <TableCell>
                       <div>
-                        <div className="font-medium text-gray-900">
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/clientes/${cliente.id}`)}
+                          className="font-medium text-gray-900 hover:text-blue-600 hover:underline text-left"
+                        >
                           {typeof cliente.nombres === 'string' || typeof cliente.nombres === 'number' ? cliente.nombres : (cliente as any).nombre ?? ''}
-                        </div>
+                        </button>
                         <div className="text-sm text-gray-500">
                           Cédula: {String(cliente.cedula ?? '')} | ID: {String(cliente.id ?? '')}
                         </div>
@@ -601,7 +571,16 @@ export function ClientesList() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
-                        {/* âœ… BOTÓN VER COMUNICACIONES */}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          title="Ver detalle"
+                          className="text-slate-600 border-slate-400 hover:bg-slate-100 font-medium cursor-pointer transition-colors"
+                          onClick={() => navigate(`/clientes/${cliente.id}`)}
+                        >
+                          <Eye className="w-4 h-4 mr-1" />
+                          Ver
+                        </Button>
                         <Button
                           variant="outline"
                           size="sm"
@@ -621,10 +600,7 @@ export function ClientesList() {
                           size="sm"
                           title="Editar cliente"
                           className="text-green-600 border-green-400 bg-green-50 hover:text-white hover:bg-green-600 hover:border-green-600 font-medium cursor-pointer transition-colors"
-                          onClick={() => {
-                            console.log('ðŸŸ¢ Botón Editar clickeado para cliente ID:', cliente.id)
-                            handleEditarCliente(cliente)
-                          }}
+                          onClick={() => handleEditarCliente(cliente)}
                         >
                           <Edit className="w-4 h-4 mr-1" />
                           Editar

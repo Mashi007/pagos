@@ -120,8 +120,7 @@ export function Comunicaciones({
   })
   const usuarios = useMemo(() => usuariosData?.items ?? [], [usuariosData?.items])
 
-  // Query: listar TODAS las comunicaciones (sin filtrar por cliente) para no reemplazar la lista al abrir desde Clientes.
-  // Si viene clienteId por URL, se añade/resalta esa conversación y se auto-selecciona; el resto se mantiene.
+  // Query: listar comunicaciones. Si viene clienteId por URL, filtrar por cliente en backend.
   const {
     data: comunicacionesData,
     isLoading,
@@ -129,7 +128,7 @@ export function Comunicaciones({
     refetch,
   } = useQuery({
     queryKey: ['comunicaciones', clienteId],
-    queryFn: () => comunicacionesService.listarComunicaciones(1, 100, undefined, undefined),
+    queryFn: () => comunicacionesService.listarComunicaciones(1, 100, undefined, clienteId),
     retry: 1,
     refetchInterval: 15000, // Actualizar lista cada 15 segundos (mensajes entrantes por webhook)
   })

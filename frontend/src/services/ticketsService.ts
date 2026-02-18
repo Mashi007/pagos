@@ -104,10 +104,6 @@ class TicketsService {
   async updateTicket(id: number, ticket: TicketUpdate): Promise<Ticket> {
     return apiClient.put<Ticket>(`${this.baseUrl}/${id}`, ticket)
   }
-
-  async getTicketsByConversacion(conversacion_id: number): Promise<Ticket[]> {
-    return apiClient.get<Ticket[]>(`${this.baseUrl}/conversacion/${conversacion_id}`)
-  }
 }
 
 export const ticketsService = new TicketsService()

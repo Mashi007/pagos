@@ -19,18 +19,6 @@ class ClienteService {
 
     const response = await apiClient.get<any>(url)
 
-    // ✅ DEBUG: Log para diagnosticar problemas
-    console.log('🔍 [ClienteService] Respuesta del backend:', {
-      url,
-      hasClientes: !!response.clientes,
-      clientesLength: response.clientes?.length || 0,
-      total: response.total,
-      page: response.page,
-      per_page: response.per_page,
-      total_pages: response.total_pages,
-      responseKeys: Object.keys(response || {})
-    })
-
     // Adaptar respuesta del backend al formato esperado
     // ✅ CORRECCIÓN: Asegurar que data siempre sea un array
     const clientesArray = Array.isArray(response.clientes) 
@@ -44,17 +32,6 @@ class ClienteService {
       per_page: response.per_page || response.limit || perPage,
       total_pages: response.total_pages || Math.ceil((response.total || 0) / perPage)
     }
-
-    // ✅ DEBUG: Log de respuesta adaptada
-    console.log('✅ [ClienteService] Respuesta adaptada:', {
-      dataLength: adaptedResponse.data.length,
-      total: adaptedResponse.total,
-      page: adaptedResponse.page,
-      per_page: adaptedResponse.per_page,
-      total_pages: adaptedResponse.total_pages,
-      firstCliente: adaptedResponse.data[0] || null,
-      isArray: Array.isArray(adaptedResponse.data)
-    })
 
     return adaptedResponse
   }
@@ -117,9 +94,9 @@ class ClienteService {
     return response.data
   }
 
-  // Obtener clientes en mora (usando filtros en endpoint principal)
+  // Obtener clientes en mora (usando filtro estado en endpoint principal)
   async getClientesEnMora(): Promise<Cliente[]> {
-    const filters: ClienteFilters = { estado_financiero: 'MORA' }
+    const filters: ClienteFilters = { estado: 'MORA' }
     const response = await this.getClientes(filters, 1, 100)
     return response.data
   }
@@ -160,11 +137,20 @@ class ClienteService {
   }
 
   // Obtener estadísticas del embudo de clientes
+  // NOTA: El backend no tiene /embudo/estadisticas; se calculan desde stats de clientes
   async getEstadisticasEmbudo(): Promise<{ total: number; prospectos: number; evaluacion: number; aprobados: number; rechazados: number }> {
-    const response = await apiClient.get<{ total: number; prospectos: number; evaluacion: number; aprobados: number; rechazados: number }>(
-      `${this.baseUrl}/embudo/estadisticas`
-    )
-    return response
+    try {
+      const stats = await this.getStats()
+      return {
+        total: stats.total,
+        prospectos: stats.activos,
+        evaluacion: stats.inactivos,
+        aprobados: stats.finalizados,
+        rechazados: 0,
+      }
+    } catch {
+      return { total: 0, prospectos: 0, evaluacion: 0, aprobados: 0, rechazados: 0 }
+    }
   }
 
   // Cambiar estado de cliente (el backend devuelve Cliente directamente, no envuelto en ApiResponse)
@@ -214,20 +200,12 @@ class ClienteService {
     }
   }
 
-  // Obtener clientes con problemas de validación
+  // Obtener clientes con problemas de validación (usa /casos-a-revisar del backend)
   async getClientesConProblemasValidacion(
     page: number = 1,
     perPage: number = 20
   ): Promise<PaginatedResponse<any>> {
-    const url = buildUrl(`${this.baseUrl}/con-problemas-validacion`, { page, per_page: perPage })
-    const response = await apiClient.get<any>(url)
-    return {
-      data: response.clientes || [],
-      total: response.total || 0,
-      page: response.page || page,
-      per_page: response.per_page || perPage,
-      total_pages: response.total_pages || Math.ceil((response.total || 0) / perPage)
-    }
+    return this.getCasosARevisar(page, perPage)
   }
 
   // Obtener clientes con valores por defecto (legacy - usar getCasosARevisar)
@@ -254,13 +232,20 @@ class ClienteService {
     }
   }
 
-  // Exportar clientes con valores por defecto
+  // Exportar clientes con valores por defecto (genera CSV desde casos-a-revisar)
   async exportarValoresPorDefecto(formato: 'csv' | 'excel' = 'csv'): Promise<Blob> {
-    const response = await apiClient.get<Blob>(
-      `${this.baseUrl}/valores-por-defecto/exportar?formato=${formato}`,
-      { responseType: 'blob' }
+    const res = await this.getCasosARevisar(1, 2000)
+    const clientes = res.data || []
+    const headers = ['id', 'cedula', 'nombres', 'telefono', 'email', 'direccion', 'ocupacion', 'estado', 'fecha_registro']
+    const rows = clientes.map((c: any) =>
+      headers.map((h) => {
+        const v = c[h]
+        const s = v == null ? '' : String(v)
+        return s.includes(',') || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s
+      }).join(',')
     )
-    return response
+    const csv = [headers.join(','), ...rows].join('\n')
+    return new Blob([csv], { type: 'text/csv;charset=utf-8' })
   }
 
   // Actualizar múltiples clientes en lote

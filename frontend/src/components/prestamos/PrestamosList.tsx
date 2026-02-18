@@ -26,14 +26,18 @@ export function PrestamosList() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [page, setPage] = useState(1)
   
-  // Leer requiere_revision de los parámetros de URL
+  // Leer requiere_revision y cliente_id de los parámetros de URL
   const requiereRevisionParam = searchParams.get('requiere_revision')
   const requiereRevision = requiereRevisionParam === 'true' ? true : undefined
-  
+  const clienteIdParam = searchParams.get('cliente_id')
+  const clienteIdFromUrl = clienteIdParam ? parseInt(clienteIdParam, 10) : undefined
+  const clienteIdValid = clienteIdFromUrl && !Number.isNaN(clienteIdFromUrl) ? clienteIdFromUrl : undefined
+
   const [filters, setFilters] = useState<PrestamoFilters>({
     search: '',
     estado: undefined,
     cedula: '',
+    cliente_id: clienteIdValid,
     analista: undefined,
     concesionario: undefined,
     modelo: undefined,
@@ -41,14 +45,17 @@ export function PrestamosList() {
     fecha_fin: undefined,
     requiere_revision: requiereRevision,
   })
-  
+
   // Efecto para actualizar filtros cuando cambien los parámetros de URL
   useEffect(() => {
-    const requiereRevisionParam = searchParams.get('requiere_revision')
-    const requiereRevision = requiereRevisionParam === 'true' ? true : undefined
+    const reqRev = searchParams.get('requiere_revision') === 'true' ? true : undefined
+    const cid = searchParams.get('cliente_id')
+    const cidNum = cid ? parseInt(cid, 10) : undefined
+    const cidValid = cidNum && !Number.isNaN(cidNum) ? cidNum : undefined
     setFilters(prev => ({
       ...prev,
-      requiere_revision: requiereRevision,
+      requiere_revision: reqRev,
+      cliente_id: cidValid,
     }))
   }, [searchParams])
   const [showFilters, setShowFilters] = useState(false)
@@ -75,6 +82,7 @@ export function PrestamosList() {
       search: '',
       estado: undefined,
       cedula: '',
+      cliente_id: undefined,
       analista: undefined,
       concesionario: undefined,
       modelo: undefined,
@@ -92,6 +100,7 @@ export function PrestamosList() {
     filters.search,
     filters.estado,
     filters.cedula,
+    filters.cliente_id,
     filters.analista,
     filters.concesionario,
     filters.modelo,
@@ -106,6 +115,7 @@ export function PrestamosList() {
     filters.search,
     filters.estado,
     filters.cedula,
+    filters.cliente_id,
     filters.analista,
     filters.concesionario,
     filters.modelo,
@@ -311,6 +321,25 @@ export function PrestamosList() {
           </div>
         </CardHeader>
         <CardContent className="pt-6">
+          {filters.cliente_id != null && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
+              <span className="text-sm text-blue-800">
+                Mostrando préstamos del cliente #{filters.cliente_id}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setFilters(prev => ({ ...prev, cliente_id: undefined }))
+                  const params = new URLSearchParams(searchParams)
+                  params.delete('cliente_id')
+                  setSearchParams(params)
+                }}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
           <div className="space-y-4">
             {/* Fila 1: Búsqueda general */}
             <div className="flex gap-4">

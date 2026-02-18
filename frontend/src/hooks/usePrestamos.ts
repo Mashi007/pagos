@@ -26,6 +26,7 @@ export interface PrestamoFilters {
   search?: string
   estado?: string
   cedula?: string
+  cliente_id?: number
   analista?: string
   concesionario?: string
   modelo?: string
