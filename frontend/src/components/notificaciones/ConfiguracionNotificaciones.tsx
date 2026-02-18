@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
 import {
@@ -177,7 +177,7 @@ export function ConfiguracionNotificaciones() {
             Configuración por caso
           </CardTitle>
           <CardDescription>
-            Asigna una plantilla a cada caso, activa el envío y guarda. Las plantillas se crean en Configuración → Plantillas (texto + variables).
+            Asigna una plantilla a cada caso, activa el envío y guarda. Las plantillas se crean en Configuración ? Plantillas (texto + variables).
           </CardDescription>
         </CardHeader>
       </Card>
@@ -228,6 +228,16 @@ export function ConfiguracionNotificaciones() {
                 placeholder="ejemplo@correo.com"
                 value={emailsPruebas[0]}
                 onChange={(e) => setEmailsPruebas((prev) => [e.target.value, prev[1]])}
+                className="max-w-xs h-9 bg-white"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-700 whitespace-nowrap w-40">Correo para pruebas 2</label>
+              <Input
+                type="email"
+                placeholder="ejemplo2@correo.com"
+                value={emailsPruebas[1]}
+                onChange={(e) => setEmailsPruebas((prev) => [prev[0], e.target.value])}
                 className="max-w-xs h-9 bg-white"
               />
             </div>

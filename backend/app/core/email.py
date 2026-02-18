@@ -53,17 +53,17 @@ def send_email(
     if not to_emails:
         return False, "No hay destinatarios."
     sync_from_db()
-    # Modo Pruebas: redirigir todos los envíos al correo de pruebas (Configuración > Email)
-    modo_pruebas, email_pruebas = get_modo_pruebas_email()
-    if modo_pruebas and email_pruebas and "@" in email_pruebas:
-        to_emails = [email_pruebas]
+    # Modo Pruebas: redirigir todos los envíos al correo(s) de pruebas (desde notificaciones_envios o email_config)
+    modo_pruebas, emails_pruebas_list = get_modo_pruebas_email()
+    if modo_pruebas and emails_pruebas_list:
+        to_emails = emails_pruebas_list
         cc_list = []
         bcc_list = []
-        logger.info("Modo Pruebas: envío redirigido a %s", email_pruebas)
+        logger.info("Modo Pruebas: envío redirigido a %s", emails_pruebas_list)
     else:
-        if modo_pruebas and not (email_pruebas and "@" in email_pruebas):
-            logger.warning("Modo Pruebas activo pero no hay correo de pruebas configurado. Configure en Configuración > Email.")
-            return False, "En modo Pruebas debe configurar el correo de pruebas en Configuración > Email."
+        if modo_pruebas and not emails_pruebas_list:
+            logger.warning("Modo Pruebas activo pero no hay correo de pruebas configurado. Configure en Notificaciones > Configuración o Configuración > Email.")
+            return False, "En modo Pruebas debe configurar el correo de pruebas en Notificaciones > Configuración o Configuración > Email."
         cc_list = [e.strip() for e in (cc_emails or []) if e and isinstance(e, str) and "@" in e.strip()]
         bcc_list = [e.strip() for e in (bcc_emails or []) if e and isinstance(e, str) and "@" in e.strip()]
     has_attachments = bool(attachments)

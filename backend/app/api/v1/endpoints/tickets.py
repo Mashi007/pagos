@@ -9,7 +9,7 @@ from typing import Optional
 from fastapi import APIRouter, Query, Depends, HTTPException
 
 from app.core.deps import get_current_user
-from sqlalchemy import select, func
+from sqlalchemy import select, func, text
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError, ProgrammingError
 
@@ -96,6 +96,68 @@ def _estadisticas_tickets(db: Session, cliente_id: Optional[int] = None) -> dict
             "cerrados": row.cerrados or 0,
         }
     return {"total": 0, "abiertos": 0, "en_proceso": 0, "resueltos": 0, "cerrados": 0}
+
+
+def _sanitize_ticket_fks(db: Session, payload) -> dict:
+    """
+    Valida referencias FK y devuelve valores sanitizados.
+    Si el ID no existe en la tabla referenciada, usa None.
+    """
+    result = {
+        "asignado_a_id": None,
+        "conversacion_whatsapp_id": None,
+        "comunicacion_email_id": None,
+        "creado_por_id": None,
+        "escalado_a_id": None,
+    }
+
+    _TABLE_SQL = {
+        "users": text("SELECT 1 FROM users WHERE id = :id"),
+        "conversaciones_whatsapp": text("SELECT 1 FROM conversaciones_whatsapp WHERE id = :id"),
+        "comunicaciones_email": text("SELECT 1 FROM comunicaciones_email WHERE id = :id"),
+    }
+
+    def _exists_in_table(table: str, id_val: int) -> bool:
+        if id_val is None:
+            return False
+        try:
+            stmt = _TABLE_SQL.get(table)
+            if stmt is None:
+                return False
+            row = db.execute(stmt, {"id": id_val}).first()
+            return row is not None
+        except Exception:
+            return False
+
+    asignado_a_id = getattr(payload, "asignado_a_id", None)
+    if asignado_a_id is not None:
+        result["asignado_a_id"] = asignado_a_id if _exists_in_table("users", asignado_a_id) else None
+
+    conversacion_whatsapp_id = getattr(payload, "conversacion_whatsapp_id", None)
+    if conversacion_whatsapp_id is not None:
+        result["conversacion_whatsapp_id"] = (
+            conversacion_whatsapp_id
+            if _exists_in_table("conversaciones_whatsapp", conversacion_whatsapp_id)
+            else None
+        )
+
+    comunicacion_email_id = getattr(payload, "comunicacion_email_id", None)
+    if comunicacion_email_id is not None:
+        result["comunicacion_email_id"] = (
+            comunicacion_email_id
+            if _exists_in_table("comunicaciones_email", comunicacion_email_id)
+            else None
+        )
+
+    creado_por_id = getattr(payload, "creado_por_id", None)
+    if creado_por_id is not None:
+        result["creado_por_id"] = creado_por_id if _exists_in_table("users", creado_por_id) else None
+
+    escalado_a_id = getattr(payload, "escalado_a_id", None)
+    if escalado_a_id is not None:
+        result["escalado_a_id"] = escalado_a_id if _exists_in_table("users", escalado_a_id) else None
+
+    return result
 
 
 @router.get("", summary="Listado paginado de tickets", response_model=dict)
@@ -199,6 +261,7 @@ def get_ticket(ticket_id: int, db: Session = Depends(get_db)):
 def create_ticket(payload: TicketCreate, db: Session = Depends(get_db)):
     """Crear ticket en la BD y notificar por correo a TICKETS_NOTIFY_EMAIL."""
     try:
+        fks = _sanitize_ticket_fks(db, payload)
         row = Ticket(
             titulo=payload.titulo,
             descripcion=payload.descripcion,
@@ -207,10 +270,12 @@ def create_ticket(payload: TicketCreate, db: Session = Depends(get_db)):
             prioridad=payload.prioridad or "media",
             tipo=payload.tipo or "consulta",
             asignado_a=payload.asignado_a,
-            asignado_a_id=payload.asignado_a_id,
+            asignado_a_id=fks["asignado_a_id"],
             fecha_limite=payload.fecha_limite,
-            conversacion_whatsapp_id=payload.conversacion_whatsapp_id,
-            comunicacion_email_id=payload.comunicacion_email_id,
+            conversacion_whatsapp_id=fks["conversacion_whatsapp_id"],
+            comunicacion_email_id=fks["comunicacion_email_id"],
+            creado_por_id=fks["creado_por_id"],
+            escalado_a_id=fks["escalado_a_id"],
             archivos=payload.archivos,
         )
         db.add(row)
@@ -266,3 +331,4 @@ def update_ticket(ticket_id: int, payload: TicketUpdate, db: Session = Depends(g
     notify_ticket_updated(row.id, row.titulo, row.estado, row.prioridad)
     cliente_row = db.get(Cliente, row.cliente_id) if row.cliente_id else None
     return _ticket_to_response(row, cliente_row)
+
