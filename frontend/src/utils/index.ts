@@ -1,4 +1,4 @@
-import { type ClassValue, clsx } from "clsx"
+﻿import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
 import { format, parseISO, isValid } from "date-fns"
 import { es } from "date-fns/locale"
@@ -37,15 +37,18 @@ export function formatPercentage(value: number): string {
 export function formatDate(date: string | Date, formatStr: string = DEFAULT_DATE_FORMAT): string {
   try {
     const dateObj = typeof date === 'string' ? parseISO(date) : date
-    if (!isValid(dateObj)) return 'Fecha inválida'
+    if (!isValid(dateObj)) return 'Fecha invÃ¡lida'
     return format(dateObj, formatStr, { locale: es })
   } catch {
-    return 'Fecha inválida'
+    return 'Fecha invÃ¡lida'
   }
 }
+
+export { formatAddress } from './formatAddress'
 
 // Capitalizar primera letra
 export function capitalize(text: string): string {
   if (!text) return ''
   return text.charAt(0).toUpperCase() + text.slice(1).toLowerCase()
 }
+

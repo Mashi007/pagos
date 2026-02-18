@@ -84,3 +84,9 @@ ALTER TABLE conversacion_cobranza ADD COLUMN IF NOT EXISTS nombre_cliente VARCHA
 ALTER TABLE conversacion_cobranza ADD COLUMN IF NOT EXISTS intento_confirmacion INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE conversacion_cobranza ADD COLUMN IF NOT EXISTS observacion TEXT;
 ALTER TABLE conversacion_cobranza ADD COLUMN IF NOT EXISTS pagos_informe_id_pendiente INTEGER REFERENCES pagos_informes(id) ON DELETE SET NULL;
+
+-- -----------------------------------------------------------------------------
+-- 4) tickets: columnas fecha_creacion y fecha_actualizacion (requeridas por el modelo)
+-- -----------------------------------------------------------------------------
+ALTER TABLE tickets ADD COLUMN IF NOT EXISTS fecha_creacion TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE tickets ADD COLUMN IF NOT EXISTS fecha_actualizacion TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;

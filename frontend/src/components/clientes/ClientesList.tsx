@@ -481,11 +481,11 @@ export function ClientesList() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Cliente</TableHead>
-                  <TableHead>Contacto</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead>Fecha Actualización</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
+                  <TableHead className="font-semibold">Cliente</TableHead>
+                  <TableHead className="font-semibold">Contacto</TableHead>
+                  <TableHead className="font-semibold">Estado</TableHead>
+                  <TableHead className="font-semibold">Fecha Actualización</TableHead>
+                  <TableHead className="text-right font-semibold">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -573,52 +573,48 @@ export function ClientesList() {
                       <div className="flex items-center justify-end gap-2">
                         <Button
                           variant="outline"
-                          size="sm"
+                          size="icon"
                           title="Ver detalle"
-                          className="text-slate-600 border-slate-400 hover:bg-slate-100 font-medium cursor-pointer transition-colors"
+                          className="text-slate-600 border-slate-400 hover:bg-slate-100 font-medium cursor-pointer transition-colors h-8 w-8"
                           onClick={() => navigate(`/clientes/${cliente.id}`)}
                         >
-                          <Eye className="w-4 h-4 mr-1" />
-                          Ver
+                          <Eye className="w-4 h-4" />
                         </Button>
                         <Button
                           variant="outline"
-                          size="sm"
+                          size="icon"
                           title="Ver comunicaciones"
-                          className="text-blue-600 border-blue-400 bg-blue-50 hover:text-white hover:bg-blue-600 hover:border-blue-600 font-medium cursor-pointer transition-colors"
+                          className="text-blue-600 border-blue-400 bg-blue-50 hover:text-white hover:bg-blue-600 hover:border-blue-600 font-medium cursor-pointer transition-colors h-8 w-8"
                           onClick={() => {
                             navigate(`/comunicaciones?cliente_id=${cliente.id}`)
                           }}
                         >
-                          <MessageSquare className="w-4 h-4 mr-1" />
-                          Comunicaciones
+                          <MessageSquare className="w-4 h-4" />
                         </Button>
 
                         {/* âœ… BOTÓN EDITAR - ACTIVO Y FUNCIONAL */}
                         <Button
                           variant="outline"
-                          size="sm"
+                          size="icon"
                           title="Editar cliente"
-                          className="text-green-600 border-green-400 bg-green-50 hover:text-white hover:bg-green-600 hover:border-green-600 font-medium cursor-pointer transition-colors"
+                          className="text-green-600 border-green-400 bg-green-50 hover:text-white hover:bg-green-600 hover:border-green-600 font-medium cursor-pointer transition-colors h-8 w-8"
                           onClick={() => handleEditarCliente(cliente)}
                         >
-                          <Edit className="w-4 h-4 mr-1" />
-                          Editar
+                          <Edit className="w-4 h-4" />
                         </Button>
 
                         {/* âœ… BOTÓN ELIMINAR - ACTIVO Y FUNCIONAL */}
                         <Button
                           variant="outline"
-                          size="sm"
+                          size="icon"
                           title="Eliminar cliente"
-                          className="text-red-600 border-red-400 bg-red-50 hover:text-white hover:bg-red-600 hover:border-red-600 font-medium cursor-pointer transition-colors"
+                          className="text-red-600 border-red-400 bg-red-50 hover:text-white hover:bg-red-600 hover:border-red-600 font-medium cursor-pointer transition-colors h-8 w-8"
                           onClick={() => {
                             console.log('ðŸ”´ Botón Eliminar clickeado para cliente ID:', cliente.id)
                             handleEliminarCliente(cliente)
                           }}
                         >
-                          <Trash2 className="w-4 h-4 mr-1" />
-                          Eliminar
+                          <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
                     </TableCell>

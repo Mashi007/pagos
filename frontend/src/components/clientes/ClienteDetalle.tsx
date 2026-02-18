@@ -20,10 +20,19 @@ import { LoadingSpinner } from '../../components/ui/loading-spinner'
 import { clienteService } from '../../services/clienteService'
 import { prestamoService } from '../../services/prestamoService'
 import { ticketsService } from '../../services/ticketsService'
-import { formatDate, formatCurrency } from '../../utils'
+import { formatDate, formatCurrency, formatAddress } from '../../utils'
 import { BASE_PATH } from '../../config/env'
 import { CrearClienteForm } from './CrearClienteForm'
 import { useState } from 'react'
+
+function InfoItem({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="space-y-1">
+      <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">{label}</span>
+      <p className="text-sm text-slate-900">{value ?? '—'}</p>
+    </div>
+  )
+}
 
 export function ClienteDetalle() {
   const { id } = useParams<{ id: string }>()
@@ -62,7 +71,7 @@ export function ClienteDetalle() {
           <ChevronLeft className="w-4 h-4 mr-2" />
           Volver a clientes
         </Button>
-        <p className="text-gray-500">ID de cliente no válido.</p>
+        <p className="text-slate-500">ID de cliente no válido.</p>
       </div>
     )
   }
@@ -106,7 +115,6 @@ export function ClienteDetalle() {
 
   return (
     <div className="space-y-6">
-      {/* Encabezado */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-4">
           <Button
@@ -118,8 +126,8 @@ export function ClienteDetalle() {
             Volver
           </Button>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{cliente.nombres}</h1>
-            <p className="text-gray-500">Cédula: {cliente.cedula} · ID: {cliente.id}</p>
+            <h1 className="text-2xl font-bold text-slate-900">{cliente.nombres}</h1>
+            <p className="text-slate-500">Cédula: {cliente.cedula} · ID: {cliente.id}</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -131,7 +139,7 @@ export function ClienteDetalle() {
             Editar
           </Button>
           <Button
-            variant="outline"
+            variant="default"
             onClick={() => window.open(`${comunicacionesPath}?cliente_id=${cliente.id}`, '_blank')}
           >
             <MessageSquare className="w-4 h-4 mr-2" />
@@ -140,45 +148,41 @@ export function ClienteDetalle() {
         </div>
       </div>
 
-      {/* Datos del cliente */}
       <Card>
         <CardHeader>
-          <CardTitle>Información del cliente</CardTitle>
+          <CardTitle className="text-slate-900">Información del cliente</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="flex items-center gap-3 text-sm">
-            <Phone className="w-4 h-4 text-gray-400" />
-            <span>{cliente.telefono || '—'}</span>
-          </div>
-          <div className="flex items-center gap-3 text-sm">
-            <Mail className="w-4 h-4 text-gray-400" />
-            <span>{cliente.email || '—'}</span>
-          </div>
-          <div className="flex items-center gap-3 text-sm md:col-span-2">
-            <MapPin className="w-4 h-4 text-gray-400" />
-            <span>{cliente.direccion || '—'}</span>
-          </div>
-          <div className="flex items-center gap-3 text-sm">
-            <Briefcase className="w-4 h-4 text-gray-400" />
-            <span>{cliente.ocupacion || '—'}</span>
-          </div>
-          <div className="flex items-center gap-3 text-sm">
-            <Calendar className="w-4 h-4 text-gray-400" />
-            <span>{cliente.fecha_nacimiento ? formatDate(cliente.fecha_nacimiento) : '—'}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge variant={cliente.estado === 'ACTIVO' ? 'default' : 'secondary'}>
-              {cliente.estado}
-            </Badge>
-          </div>
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <InfoItem label="Teléfono" value={cliente.telefono?.trim() || '—'} />
+          <InfoItem label="Correo electrónico" value={cliente.email?.trim() || '—'} />
+          <InfoItem label="Dirección" value={formatAddress(cliente.direccion)} />
+          <InfoItem label="Ocupación/Empleador" value={cliente.ocupacion?.trim() || '—'} />
+          <InfoItem
+            label="Fecha de nacimiento"
+            value={cliente.fecha_nacimiento ? formatDate(cliente.fecha_nacimiento) : '—'}
+          />
+          <InfoItem
+            label="Estado"
+            value={
+              <Badge
+                variant={cliente.estado === 'ACTIVO' ? 'default' : 'secondary'}
+                className={
+                  cliente.estado === 'APROBADO'
+                    ? 'bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                    : ''
+                }
+              >
+                {cliente.estado}
+              </Badge>
+            }
+          />
         </CardContent>
       </Card>
 
-      {/* Préstamos */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-slate-900">
               <CreditCard className="w-5 h-5" />
               Préstamos ({prestamos.length})
             </CardTitle>
@@ -194,32 +198,42 @@ export function ClienteDetalle() {
         </CardHeader>
         <CardContent>
           {prestamos.length === 0 ? (
-            <p className="text-gray-500 text-sm">No hay préstamos registrados.</p>
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <CreditCard className="w-12 h-12 text-slate-300 mb-3" strokeWidth={1.5} />
+              <p className="text-slate-500 text-sm">No hay préstamos registrados.</p>
+            </div>
           ) : (
             <div className="space-y-2">
               {prestamos.slice(0, 5).map((p: any) => (
                 <div
                   key={p.id}
-                  className="flex items-center justify-between py-2 border-b last:border-0"
+                  className="flex items-center justify-between py-2 px-2 -mx-2 rounded-md border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors"
                 >
                   <div>
-                    <span className="font-medium">#{p.id}</span>
-                    <span className="text-gray-500 ml-2 text-sm">
+                    <span className="font-medium text-slate-900">#{p.id}</span>
+                    <span className="text-slate-500 ml-2 text-sm">
                       {p.modelo_vehiculo || p.producto || 'Préstamo'}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-600">
+                    <span className="text-sm text-slate-600">
                       {formatCurrency(p.total_financiamiento ?? 0)}
                     </span>
-                    <Badge variant="outline" className="text-xs">
+                    <Badge
+                      variant="outline"
+                      className={`text-xs ${
+                        p.estado === 'APROBADO'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : ''
+                      }`}
+                    >
                       {p.estado}
                     </Badge>
                   </div>
                 </div>
               ))}
               {prestamos.length > 5 && (
-                <p className="text-sm text-gray-500 pt-2">
+                <p className="text-sm text-slate-500 pt-2">
                   +{prestamos.length - 5} más. Ver todos en el listado de préstamos.
                 </p>
               )}
@@ -228,11 +242,10 @@ export function ClienteDetalle() {
         </CardContent>
       </Card>
 
-      {/* Tickets */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-slate-900">
               <FileText className="w-5 h-5" />
               Tickets ({tickets.length})
             </CardTitle>
@@ -248,16 +261,19 @@ export function ClienteDetalle() {
         </CardHeader>
         <CardContent>
           {tickets.length === 0 ? (
-            <p className="text-gray-500 text-sm">No hay tickets asociados.</p>
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <FileText className="w-12 h-12 text-slate-300 mb-3" strokeWidth={1.5} />
+              <p className="text-slate-500 text-sm">No hay tickets asociados.</p>
+            </div>
           ) : (
             <div className="space-y-2">
               {tickets.slice(0, 5).map((t: any) => (
                 <div
                   key={t.id}
-                  className="flex items-center justify-between py-2 border-b last:border-0"
+                  className="flex items-center justify-between py-2 px-2 -mx-2 rounded-md border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors"
                 >
                   <div>
-                    <span className="font-medium text-sm">{t.titulo}</span>
+                    <span className="font-medium text-sm text-slate-900">{t.titulo}</span>
                   </div>
                   <Badge variant="outline" className="text-xs">
                     {t.estado}
@@ -265,7 +281,7 @@ export function ClienteDetalle() {
                 </div>
               ))}
               {tickets.length > 5 && (
-                <p className="text-sm text-gray-500 pt-2">
+                <p className="text-sm text-slate-500 pt-2">
                   +{tickets.length - 5} más. Ver en CRM.
                 </p>
               )}

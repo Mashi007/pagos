@@ -11,7 +11,7 @@ from fastapi import APIRouter, Query, Depends, HTTPException
 from app.core.deps import get_current_user
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import ProgrammingError
+from sqlalchemy.exc import IntegrityError, ProgrammingError
 
 from app.core.database import get_db
 from app.models.ticket import Ticket
@@ -198,36 +198,57 @@ def get_ticket(ticket_id: int, db: Session = Depends(get_db)):
 @router.post("", response_model=dict, status_code=201)
 def create_ticket(payload: TicketCreate, db: Session = Depends(get_db)):
     """Crear ticket en la BD y notificar por correo a TICKETS_NOTIFY_EMAIL."""
-    row = Ticket(
-        titulo=payload.titulo,
-        descripcion=payload.descripcion,
-        cliente_id=payload.cliente_id,
-        estado=payload.estado or "abierto",
-        prioridad=payload.prioridad or "media",
-        tipo=payload.tipo or "consulta",
-        asignado_a=payload.asignado_a,
-        asignado_a_id=payload.asignado_a_id,
-        fecha_limite=payload.fecha_limite,
-        conversacion_whatsapp_id=payload.conversacion_whatsapp_id,
-        comunicacion_email_id=payload.comunicacion_email_id,
-        archivos=payload.archivos,
-    )
-    db.add(row)
-    db.commit()
-    db.refresh(row)
-    cliente_row = db.get(Cliente, row.cliente_id) if row.cliente_id else None
-    cliente_nombre = cliente_row.nombres if cliente_row else None
-    notify_ticket_created(
-        row.id,
-        row.titulo,
-        row.descripcion,
-        cliente_nombre,
-        row.prioridad or "media",
-        estado=row.estado or "abierto",
-        tipo=row.tipo or "consulta",
-        fecha_creacion=getattr(row, "fecha_creacion", None),
-    )
-    return _ticket_to_response(row, cliente_row)
+    try:
+        row = Ticket(
+            titulo=payload.titulo,
+            descripcion=payload.descripcion,
+            cliente_id=payload.cliente_id,
+            estado=payload.estado or "abierto",
+            prioridad=payload.prioridad or "media",
+            tipo=payload.tipo or "consulta",
+            asignado_a=payload.asignado_a,
+            asignado_a_id=payload.asignado_a_id,
+            fecha_limite=payload.fecha_limite,
+            conversacion_whatsapp_id=payload.conversacion_whatsapp_id,
+            comunicacion_email_id=payload.comunicacion_email_id,
+            archivos=payload.archivos,
+        )
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+        cliente_row = db.get(Cliente, row.cliente_id) if row.cliente_id else None
+        cliente_nombre = cliente_row.nombres if cliente_row else None
+        notify_ticket_created(
+            row.id,
+            row.titulo,
+            row.descripcion,
+            cliente_nombre,
+            row.prioridad or "media",
+            estado=row.estado or "abierto",
+            tipo=row.tipo or "consulta",
+            fecha_creacion=getattr(row, "fecha_creacion", None),
+        )
+        return _ticket_to_response(row, cliente_row)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail="Cliente no encontrado o referencia inválida",
+        )
+    except ProgrammingError:
+        db.rollback()
+        logger.exception("Error de base de datos al crear ticket")
+        raise HTTPException(
+            status_code=500,
+            detail="Error de base de datos al crear ticket",
+        )
+    except Exception as e:
+        db.rollback()
+        logger.exception("Error inesperado al crear ticket: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al crear ticket: {e!s}",
+        ) from e
 
 
 @router.put("/{ticket_id}", response_model=dict)
