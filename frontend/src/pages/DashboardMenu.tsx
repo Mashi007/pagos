@@ -689,8 +689,8 @@ export function DashboardMenu() {
                                 formatter={(value: number, name: string) => [formatCurrency(value), name]}
                               />
                               <Legend {...chartLegendStyle} />
-                              <Bar dataKey="cartera" fill="#3b82f6" name="Cartera" radius={[4, 4, 0, 0]} />
-                              <Bar dataKey="cobrado" fill="#10b981" name="Cobrado" radius={[4, 4, 0, 0]} />
+                              <Bar dataKey="cartera" fill="#3b82f6" name="Pagos programados" radius={[4, 4, 0, 0]} />
+                              <Bar dataKey="cobrado" fill="#10b981" name="Pagos conciliados" radius={[4, 4, 0, 0]} />
                               <Line type="monotone" dataKey="morosidad" stroke="#ef4444" strokeWidth={2} name="Morosidad" dot={{ r: 4 }} />
                             </ComposedChart>
                           </ResponsiveContainer>

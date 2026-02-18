@@ -807,6 +807,7 @@ def aplicar_pago_a_cuotas(pago_id: int, db: Session = Depends(get_db)):
         if monto_restante >= monto_cuota:
             c.fecha_pago = fecha_pago_date
             c.estado = "PAGADO"
+            c.pago_id = pago_id
             cuotas_completadas += 1
             monto_restante -= monto_cuota
         else:

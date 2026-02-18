@@ -15,6 +15,7 @@ class Cuota(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     prestamo_id = Column(Integer, ForeignKey("prestamos.id"), nullable=False, index=True)
+    pago_id = Column(Integer, ForeignKey("pagos.id", ondelete="SET NULL"), nullable=True, index=True)
     cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=True, index=True)
     numero_cuota = Column(Integer, nullable=False)
     fecha_vencimiento = Column(Date, nullable=False)

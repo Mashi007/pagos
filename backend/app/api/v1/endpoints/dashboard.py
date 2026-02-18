@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db, SessionLocal
 from app.models.cliente import Cliente
 from app.models.cuota import Cuota
+from app.models.pago import Pago
 from app.models.prestamo import Prestamo
 
 logger = logging.getLogger(__name__)
@@ -405,25 +406,32 @@ def _compute_dashboard_admin(
                 if fin_mes.tzinfo is None:
                     fin_mes = fin_mes.replace(tzinfo=timezone.utc)
                 inicio_d, fin_d = _primer_ultimo_dia_mes(fin_mes)
-            # Cartera: suma monto_cuota de cuotas con vencimiento en el mes
+            # Pagos programados: cuotas del mes que deben cobrarse (tabla amortización, fecha_vencimiento en el mes)
             cartera = db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
                     Cuota.fecha_vencimiento >= inicio_d,
                     Cuota.fecha_vencimiento <= fin_d,
                 )
             ) or 0
-            # Cobrado: suma monto_cuota de cuotas que vencían en este mes y ya están pagadas (por fecha_vencimiento, no por fecha_pago)
-            # Así el cobrado se reparte por mes de vencimiento y no se concentra solo en el mes en que se registró el pago
+            # Pagos conciliados: todo lo cobrado en el mes (tabla pagos, fecha_pago en el mes)
+            # Incluye todos los pagos: parciales, totales, cualquier estado. Solo importa lo efectivamente cobrado.
             cobrado = db.scalar(
-                select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
-                    Cuota.fecha_vencimiento >= inicio_d,
-                    Cuota.fecha_vencimiento <= fin_d,
-                    Cuota.fecha_pago.isnot(None),
+                select(func.coalesce(func.sum(Pago.monto_pagado), 0)).select_from(Pago).where(
+                    func.date(Pago.fecha_pago) >= inicio_d,
+                    func.date(Pago.fecha_pago) <= fin_d,
                 )
             ) or 0
             cartera_f = _safe_float(cartera)
             cobrado_f = _safe_float(cobrado)
-            morosidad_f = max(0.0, cartera_f - cobrado_f)
+            # Morosidad: cuotas del mes que aún no se han cobrado (fecha_pago nula)
+            morosidad_mes = db.scalar(
+                select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(
+                    Cuota.fecha_vencimiento >= inicio_d,
+                    Cuota.fecha_vencimiento <= fin_d,
+                    Cuota.fecha_pago.is_(None),
+                )
+            ) or 0
+            morosidad_f = _safe_float(morosidad_mes)
             evolucion.append({
                 "mes": m["mes"],
                 "cartera": cartera_f,
