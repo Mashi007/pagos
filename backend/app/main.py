@@ -152,6 +152,40 @@ async def health_check():
     return {"status": "healthy"}
 
 
+@app.post("/api/admin/run-migration-auditoria-fk")
+async def run_migration_auditoria_fk(request: Request):
+    """
+    Ejecuta la migración auditoria.usuario_id FK -> usuarios(id).
+    Requiere header: X-Migration-Secret = MIGRATION_AUDITORIA_SECRET (env).
+    Ejecutar una sola vez para corregir el error 500 en aprobación manual.
+    """
+    from fastapi import HTTPException
+    from sqlalchemy import text
+    from app.core.database import engine
+
+    secret = settings.MIGRATION_AUDITORIA_SECRET
+    if not secret:
+        raise HTTPException(status_code=404, detail="Endpoint no configurado")
+    header_secret = request.headers.get("X-Migration-Secret")
+    if header_secret != secret:
+        raise HTTPException(status_code=403, detail="Secreto inválido")
+
+    try:
+        with engine.connect() as conn:
+            with conn.begin():
+                conn.execute(text("""
+                    ALTER TABLE auditoria DROP CONSTRAINT IF EXISTS auditoria_usuario_id_fkey
+                """))
+                conn.execute(text("""
+                    ALTER TABLE auditoria ADD CONSTRAINT auditoria_usuario_id_fkey
+                    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) NOT VALID
+                """))
+        return {"success": True, "message": "Migración auditoria FK completada. La aprobación manual debería funcionar."}
+    except Exception as e:
+        logger.exception("Migración auditoria FK falló: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/health/db")
 async def health_check_db():
     """Verifica que la conexión a la BD responde (SELECT 1)."""

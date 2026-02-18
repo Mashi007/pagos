@@ -47,6 +47,8 @@ class Settings(BaseSettings):
     ADMIN_PASSWORD: Optional[str] = Field(None, description="Contraseña del usuario admin para login")
     # Secreto para endpoint interno de restablecer contraseña (sincronizar usuario BD con ADMIN_PASSWORD).
     RESET_PASSWORD_SECRET: Optional[str] = Field(None, description="Secreto para POST /api/v1/auth/admin/reset-password (header X-Admin-Secret)")
+    # Secreto para ejecutar migración auditoria FK (POST /admin/run-migration-auditoria-fk con header X-Migration-Secret)
+    MIGRATION_AUDITORIA_SECRET: Optional[str] = Field(None, description="Secreto para ejecutar migración auditoria FK (una sola vez)")
     # Email al que se envía la notificación cuando un usuario solicita "Olvidé mi contraseña" (para envío de nueva).
     FORGOT_PASSWORD_NOTIFY_EMAIL: str = Field(
         default="itmaster@rapicreditca.com",

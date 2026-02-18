@@ -823,7 +823,7 @@ export function DashboardMenu() {
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={filteredData} layout="vertical" margin={{ top: 14, right: 24, left: 120, bottom: 24 }}>
                           <CartesianGrid {...chartCartesianGrid} />
-                          <XAxis type="number" domain={[600, 'auto']} tick={chartAxisTick} tickFormatter={(value) => value.toLocaleString('es-EC')} label={{ value: 'Cantidad de Préstamos', position: 'insideBottom', offset: -10, style: { textAnchor: 'middle', fill: '#374151', fontSize: 13, fontWeight: 600 } }} allowDecimals={false} />
+                          <XAxis type="number" domain={[600, 2000]} tick={chartAxisTick} tickFormatter={(value) => value.toLocaleString('es-EC')} label={{ value: 'Cantidad de Préstamos', position: 'insideBottom', offset: -10, style: { textAnchor: 'middle', fill: '#374151', fontSize: 13, fontWeight: 600 } }} allowDecimals={false} />
                           <YAxis type="category" dataKey="categoriaFormateada" width={115} tick={{ fontSize: 11, fill: '#4b5563', fontWeight: 500 }} interval={0} tickLine={false} />
                           <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [`${value.toLocaleString('es-EC')} préstamos`, 'Cantidad']} labelFormatter={(label) => `Banda: ${label}`} cursor={{ fill: 'rgba(99, 102, 241, 0.08)' }} />
                           <Legend {...chartLegendStyle} />
