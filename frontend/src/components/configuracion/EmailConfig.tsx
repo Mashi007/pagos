@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect, useMemo } from 'react'
-import { Mail, Save, TestTube, CheckCircle, AlertCircle, Eye, EyeOff, Clock, XCircle, RefreshCw } from 'lucide-react'
+import { Mail, Save, TestTube, CheckCircle, AlertCircle, Eye, EyeOff, Clock, XCircle, RefreshCw, Send } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -44,7 +44,9 @@ export function EmailConfig() {
   // Estado de UI
   const [mostrarPassword, setMostrarPassword] = useState(false)
   const [guardando, setGuardando] = useState(false)
-  const [probando, setProbando] = useState(false)
+const [probando, setProbando] = useState(false)
+  const [envioManualEnCurso, setEnvioManualEnCurso] = useState(false)
+const [probando, setProbando] = useState(false)
   const [modoPruebas, setModoPruebas] = useState<string>('true')
   const [emailPruebas, setEmailPruebas] = useState('')
   const [emailActivo, setEmailActivo] = useState<boolean>(true) // Ã¢Å“â€¦ Estado activo/inactivo
@@ -526,6 +528,61 @@ export function EmailConfig() {
   }
 
   const esGmail = config.smtp_host?.toLowerCase().includes('gmail.com')
+
+
+  // FunciÃ³n para envÃ­o manual automÃ¡tico a correos de prueba
+  const handleEnvioManual = async () => {
+    // Validar que estamos en modo pruebas
+    if (modoPruebas !== 'true') {
+      toast.error('El envÃ­o manual solo estÃ¡ disponible en modo Pruebas')
+      return
+    }
+
+    // Validar correos de prueba
+    if (!emailPruebas?.trim()) {
+      toast.error('Debes configurar al menos el email de pruebas principal')
+      return
+    }
+
+    if (!validarEmail(emailPruebas)) {
+      toast.error('El email de pruebas debe ser vÃ¡lido')
+      return
+    }
+
+    try {
+      setEnvioManualEnCurso(true)
+      setResultadoPrueba(null)
+
+      const resultado = await emailConfigService.probarConfiguracionEmail(
+        emailPruebas.trim(),
+        'Prueba de estructura de plantilla - RapiCredit',
+        'Este es un correo de prueba automÃ¡tico para verificar que la estructura de la plantilla es correcta.',
+        undefined
+      )
+
+      setResultadoPrueba(resultado)
+
+      if (resultado.success === false) {
+        const mensaje = resultado.mensaje || 'No se pudo enviar el correo.'
+        toast.error(mensaje)
+        setResultadoPrueba({ ...resultado, error: mensaje })
+      } else if (resultado.mensaje?.includes('enviado')) {
+        toast.success('Correo de prueba enviado exitosamente a ' + emailPruebas)
+        setTimeout(() => {
+          setEmailEnviadoExitoso(false)
+        }, 3000)
+      } else {
+        toast.error('Error enviando correo de prueba')
+      }
+    } catch (error: any) {
+      console.error('Error en envÃ­o manual:', error)
+      const mensajeError = error?.response?.data?.detail || error?.message || 'Error desconocido'
+      toast.error('Error: ' + mensajeError)
+      setResultadoPrueba({ error: mensajeError })
+    } finally {
+      setEnvioManualEnCurso(false)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -1031,6 +1088,30 @@ export function EmailConfig() {
             )}
           </div>
 
+            
+            {/* BotÃ³n de EnvÃ­o Manual - DESTACADO */}
+            {modoPruebas === 'true' && emailPruebas?.trim() && (
+              <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-400 rounded-lg p-5 mt-6">
+                <div className="mb-3">
+                  <h4 className="font-semibold text-green-900 flex items-center gap-2">
+                    <Send className="h-5 w-5" />
+                    EnvÃ­o Manual de Prueba
+                  </h4>
+                  <p className="text-sm text-green-700 mt-1">
+                    EnvÃ­a un correo de prueba automÃ¡ticamente para verificar la estructura de la plantilla
+                  </p>
+                </div>
+                
+                <Button
+                  onClick={handleEnvioManual}
+                  disabled={envioManualEnCurso}
+                  className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
+                >
+                  <Send className="h-5 w-5" />
+                  {envioManualEnCurso ? 'Enviando correo de prueba...' : 'Enviar Correo de Prueba Ahora'}
+                </Button>
+              </div>
+            )}
           {/* Prueba de envÃ­o */}
           <div className="border-t pt-4 mt-4">
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -1229,5 +1310,15 @@ export function EmailConfig() {
     </div>
   )
 }
+
+
+
+
+
+
+
+
+
+
 
 
