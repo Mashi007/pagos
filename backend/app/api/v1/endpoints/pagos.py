@@ -235,9 +235,16 @@ async def upload_excel_pagos(
     """
     if not file.filename or not file.filename.lower().endswith((".xlsx", ".xls")):
         raise HTTPException(status_code=400, detail="Debe subir un archivo Excel (.xlsx o .xls)")
+    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB (alineado con frontend)
+    MAX_ROWS = 10000  # Maximo filas de datos (alineado con frontend)
     try:
         import openpyxl
         content = await file.read()
+        if len(content) > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=400,
+                detail=f"El archivo es demasiado grande. Tamano maximo: {MAX_FILE_SIZE // (1024 * 1024)} MB.",
+            )
         wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)
         ws = wb.active
         if not ws:

@@ -140,13 +140,9 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId }: R
       }
       
       if (isEditing && pagoId) {
-        console.log('ðŸ”„ Iniciando actualización de pago...', { pagoId, datosEnvio })
-        const result = await pagoService.updatePago(pagoId, datosEnvio)
-        console.log('âœ… Pago actualizado exitosamente:', result)
+        await pagoService.updatePago(pagoId, datosEnvio)
       } else {
-        console.log('ðŸ”„ Iniciando registro de pago...', datosEnvio)
-        const result = await pagoService.createPago(datosEnvio)
-        console.log('âœ… Pago registrado exitosamente:', result)
+        await pagoService.createPago(datosEnvio)
       }
       onSuccess()
     } catch (error: unknown) {
