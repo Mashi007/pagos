@@ -255,7 +255,7 @@ export function Comunicaciones({
           contacto: contactoWhatsApp,
           tipo: 'whatsapp',
           cliente_id: clienteId,
-          esNuevo: true,
+          esNuevo: false,
           operado: true,
           leido: true,
           noLeidos: 0,
@@ -287,7 +287,7 @@ export function Comunicaciones({
           contacto: email,
           tipo: 'email',
           cliente_id: clienteId,
-          esNuevo: true,
+          esNuevo: false,
           operado: true,
           leido: true,
           noLeidos: 0,
@@ -459,7 +459,7 @@ export function Comunicaciones({
   useEffect(() => {
     if (conversacionActual?.cliente_id) {
       ticketsService
-        .getTickets({ cliente_id: conversacionActual.cliente_id })
+        .getTickets({ cliente_id: conversacionActual?.cliente_id ?? clienteId })
         .then((response) => {
           setTicketsCliente(response.tickets || [])
         })
@@ -519,7 +519,7 @@ export function Comunicaciones({
     }
 
     // Si es nuevo, primero crear cliente
-    if (conversacionActual.esNuevo) {
+    if (!(conversacionActual?.cliente_id ?? clienteId)) {
       await handleCrearCliente(conversacionActual)
       // âœ… invalidateQueries ya dispara refetch automáticamente, no necesitamos setTimeout
       queryClient.invalidateQueries({ queryKey: ['comunicaciones'] })
@@ -543,7 +543,7 @@ export function Comunicaciones({
         tipo: ticketForm.tipo,
         prioridad: ticketForm.prioridad,
         estado: ticketForm.estado,
-        cliente_id: conversacionActual.cliente_id || undefined,
+        cliente_id: (conversacionActual?.cliente_id ?? clienteId) || undefined,
         conversacion_whatsapp_id: comunicacionSeleccionada.tipo === 'whatsapp' ? comunicacionSeleccionada.id : undefined,
         comunicacion_email_id: comunicacionSeleccionada.tipo === 'email' ? comunicacionSeleccionada.id : undefined,
         asignado_a: ticketForm.responsable_id ? usuarios.find(u => u.id === ticketForm.responsable_id)?.email : undefined,
@@ -568,8 +568,8 @@ export function Comunicaciones({
       })
       
       // Refrescar tickets
-      if (conversacionActual.cliente_id) {
-        const response = await ticketsService.getTickets({ cliente_id: conversacionActual.cliente_id })
+      if (conversacionActual?.cliente_id ?? clienteId) {
+        const response = await ticketsService.getTickets({ cliente_id: conversacionActual?.cliente_id ?? clienteId })
         setTicketsCliente(response.tickets || [])
       }
       
@@ -605,7 +605,7 @@ export function Comunicaciones({
       
       // Refrescar tickets
       if (conversacionActual?.cliente_id) {
-        const response = await ticketsService.getTickets({ cliente_id: conversacionActual.cliente_id })
+        const response = await ticketsService.getTickets({ cliente_id: conversacionActual?.cliente_id ?? clienteId })
         setTicketsCliente(response.tickets || [])
       }
     } catch (error: any) {
@@ -887,7 +887,7 @@ export function Comunicaciones({
                     )}
                   </div>
                 </div>
-                {conversacionActual.esNuevo && (
+                {!(conversacionActual?.cliente_id ?? clienteId) && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -897,7 +897,7 @@ export function Comunicaciones({
                     Crear Cliente
                   </Button>
                 )}
-                {!conversacionActual.esNuevo && conversacionActual.cliente_id && (
+                {conversacionActual.cliente_id && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -1120,7 +1120,7 @@ export function Comunicaciones({
                   Ver en CRM
                 </Link>
               </div>
-              {conversacionActual.esNuevo && (
+              {!(conversacionActual?.cliente_id ?? clienteId) && (
                 <p className="text-xs text-orange-600 mt-2 font-medium bg-orange-50 px-2 py-1 rounded">
                   âš ï¸ Crea un cliente para gestionar tickets
                 </p>
@@ -1249,7 +1249,7 @@ export function Comunicaciones({
                     
                     <Button
                       onClick={handleCrearTicket}
-                      disabled={!ticketForm.titulo.trim() || !ticketForm.descripcion.trim() || creandoTicket || conversacionActual.esNuevo}
+                      disabled={!ticketForm.titulo.trim() || !ticketForm.descripcion.trim() || creandoTicket || !(conversacionActual?.cliente_id ?? clienteId)}
                       className="w-full text-sm"
                       size="sm"
                     >
@@ -1265,7 +1265,7 @@ export function Comunicaciones({
                         </>
                       )}
                     </Button>
-                    {conversacionActual.esNuevo && (
+                    {!(conversacionActual?.cliente_id ?? clienteId) && (
                       <p className="text-xs text-orange-600 text-center">
                         Crea el cliente primero para generar tickets
                       </p>
@@ -1492,3 +1492,6 @@ export function Comunicaciones({
     </div>
   )
 }
+
+
+

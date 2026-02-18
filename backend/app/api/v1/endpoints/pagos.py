@@ -1,4 +1,4 @@
-"""
+﻿"""
 Endpoints de pagos. Datos reales desde BD.
 - Tabla pagos: GET/POST/PUT/DELETE /pagos/ (listado y CRUD para /pagos/pagos).
 - GET /pagos/kpis, /stats, /ultimos; POST /upload, /conciliacion/upload, /{id}/aplicar-cuotas.
@@ -31,7 +31,7 @@ TZ_NEGOCIO = "America/Caracas"
 
 
 def _hoy_local() -> date:
-    """Fecha de hoy en la zona horaria del negocio (evita que servidor UTC desfase el día)."""
+    """Fecha de hoy en la zona horaria del negocio (evita que servidor UTC desfase el dÃ­a)."""
     return datetime.now(ZoneInfo(TZ_NEGOCIO)).date()
 
 
@@ -82,7 +82,7 @@ def listar_pagos(
     analista: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Listado paginado desde la tabla pagos. Filtros: cedula, estado, fecha_desde, fecha_hasta, analista (vía prestamo)."""
+    """Listado paginado desde la tabla pagos. Filtros: cedula, estado, fecha_desde, fecha_hasta, analista (vÃ­a prestamo)."""
     try:
         q = select(Pago)
         count_q = select(func.count()).select_from(Pago)
@@ -110,8 +110,8 @@ def listar_pagos(
             q = q.join(Prestamo, Pago.prestamo_id == Prestamo.id).where(Prestamo.analista == analista.strip())
             count_q = count_q.join(Prestamo, Pago.prestamo_id == Prestamo.id).where(Prestamo.analista == analista.strip())
         total = db.scalar(count_q) or 0
-        # Orden: más reciente primero (fecha_pago desc, luego id desc)
-        q = q.order_by(Pago.fecha_pago.desc(), Pago.id.desc()).offset((page - 1) * per_page).limit(per_page)
+        # Orden: mÃ¡s reciente primero (fecha_pago desc, luego id desc)
+        q = q.order_by(Pago.fecha_registro.desc().nullslast(), Pago.id.desc()).offset((page - 1) * per_page).limit(per_page)
         rows = db.execute(q).scalars().all()
         items = [_pago_to_response(r) for r in rows]
         total_pages = (total + per_page - 1) // per_page if total else 0
@@ -137,12 +137,12 @@ def get_ultimos_pagos(
     db: Session = Depends(get_db),
 ):
     """
-    Resumen de últimos pagos por cédula (para PagosListResumen).
+    Resumen de Ãºltimos pagos por cÃ©dula (para PagosListResumen).
     Items: cedula, pago_id, prestamo_id, estado_pago, monto_ultimo_pago, fecha_ultimo_pago,
     cuotas_atrasadas, saldo_vencido, total_prestamos.
     """
     hoy = _hoy_local()
-    # Subconsulta: cédulas distintas ordenadas por pago más reciente (más actual a más antiguo)
+    # Subconsulta: cÃ©dulas distintas ordenadas por pago mÃ¡s reciente (mÃ¡s actual a mÃ¡s antiguo)
     subq = (
         select(
             Pago.cedula_cliente,
@@ -253,7 +253,7 @@ async def upload_excel_pagos(
         if len(rows) > MAX_ROWS:
             raise HTTPException(
                 status_code=400,
-                detail=f"El archivo tiene demasiadas filas ({len(rows)}). Máximo permitido: {MAX_ROWS}.",
+                detail=f"El archivo tiene demasiadas filas ({len(rows)}). MÃ¡ximo permitido: {MAX_ROWS}.",
             )
 
         def _looks_like_cedula(v: Any) -> bool:
@@ -286,10 +286,10 @@ async def upload_excel_pagos(
             return date.today()
 
         registros = 0
-        filas_omitidas = 0  # cédula vacía o monto <= 0
+        filas_omitidas = 0  # cÃ©dula vacÃ­a o monto <= 0
         errores = []
         errores_detalle = []
-        numeros_doc_en_lote: set[str] = set()  # Nº documento no puede repetirse ni en archivo ni en BD
+        numeros_doc_en_lote: set[str] = set()  # NÂº documento no puede repetirse ni en archivo ni en BD
         for i, row in enumerate(rows):
             if not row or all(cell is None for cell in row):
                 continue
@@ -299,7 +299,7 @@ async def upload_excel_pagos(
                 fecha_val: Any = None
                 monto = 0.0
                 numero_doc = ""
-                # Formato alternativo: Fecha, Cédula, Cantidad, Documento (ej. Excel con columnas A=Fecha, B=Cédula, C=Cantidad, D=Documento)
+                # Formato alternativo: Fecha, CÃ©dula, Cantidad, Documento (ej. Excel con columnas A=Fecha, B=CÃ©dula, C=Cantidad, D=Documento)
                 if len(row) >= 4 and _looks_like_date(row[0]) and _looks_like_cedula(row[1]):
                     cedula = str(row[1]).strip()
                     try:
@@ -309,7 +309,7 @@ async def upload_excel_pagos(
                     fecha_val = row[0]
                     numero_doc = str(row[3]).strip() if row[3] is not None else ""
                 else:
-                    # Formato estándar: Cédula, ID Préstamo, Fecha, Monto, Número documento
+                    # Formato estÃ¡ndar: CÃ©dula, ID PrÃ©stamo, Fecha, Monto, NÃºmero documento
                     cedula = str(row[0]).strip() if row[0] is not None else ""
                     _val_prestamo = row[1] if len(row) > 1 else None
                     if _val_prestamo is None:
@@ -332,13 +332,13 @@ async def upload_excel_pagos(
                 if numero_doc_norm:
                     if numero_doc_norm in numeros_doc_en_lote:
                         datos_fila = {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}
-                        errores.append(f"Fila {i + 2}: Nº documento duplicado en este archivo")
-                        errores_detalle.append({"fila": i + 2, "cedula": cedula, "error": "Nº documento duplicado en este archivo. El Nº documento no puede repetirse.", "datos": datos_fila})
+                        errores.append(f"Fila {i + 2}: NÂº documento duplicado en este archivo")
+                        errores_detalle.append({"fila": i + 2, "cedula": cedula, "error": "NÂº documento duplicado en este archivo. El NÂº documento no puede repetirse.", "datos": datos_fila})
                         continue
                     if _numero_documento_ya_existe(db, numero_doc_norm):
                         datos_fila = {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}
-                        errores.append(f"Fila {i + 2}: Ya existe un pago con ese Nº de documento")
-                        errores_detalle.append({"fila": i + 2, "cedula": cedula, "error": "Ya existe un pago con ese Nº de documento. El Nº documento no puede repetirse.", "datos": datos_fila})
+                        errores.append(f"Fila {i + 2}: Ya existe un pago con ese NÂº de documento")
+                        errores_detalle.append({"fila": i + 2, "cedula": cedula, "error": "Ya existe un pago con ese NÂº de documento. El NÂº documento no puede repetirse.", "datos": datos_fila})
                         continue
                 fecha_pago = _parse_fecha(fecha_val)
                 p = Pago(
@@ -401,7 +401,7 @@ async def upload_conciliacion(
     db: Session = Depends(get_db),
 ):
     """
-    Carga archivo de conciliación (Excel: Fecha de Depósito, Número de Documento).
+    Carga archivo de conciliaciÃ³n (Excel: Fecha de DepÃ³sito, NÃºmero de Documento).
     Marca pagos encontrados por numero_documento como conciliados.
     """
     if not file.filename or not file.filename.lower().endswith((".xlsx", ".xls")):
@@ -453,7 +453,7 @@ async def upload_conciliacion(
         }
     except Exception as e:
         db.rollback()
-        logger.exception("Error upload conciliación: %s", e)
+        logger.exception("Error upload conciliaciÃ³n: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -465,10 +465,10 @@ def get_pagos_kpis(
 ):
     """
     KPIs de pagos para el mes en curso:
-    1. montoACobrarMes: cuánto dinero debería cobrarse en el mes en transcurso (cuotas con vencimiento en el mes).
-    2. montoCobradoMes: cuánto dinero se ha cobrado = pagado en el mes.
+    1. montoACobrarMes: cuÃ¡nto dinero deberÃ­a cobrarse en el mes en transcurso (cuotas con vencimiento en el mes).
+    2. montoCobradoMes: cuÃ¡nto dinero se ha cobrado = pagado en el mes.
     3. morosidadMensualPorcentaje: pago vencido mensual en % (cuotas vencidas no cobradas / cartera * 100).
-       Concepto: vencido = fecha_vencimiento < hoy; moroso = 61+ días de atraso.
+       Concepto: vencido = fecha_vencimiento < hoy; moroso = 61+ dÃ­as de atraso.
     """
     try:
         hoy = _hoy_local()
@@ -549,7 +549,7 @@ def get_pagos_kpis(
             .join(Cliente, Prestamo.cliente_id == Cliente.id)
             .where(and_(*conds_activo), Cuota.fecha_pago.is_(None))
         ) or 0
-        # Compatibilidad: clientes en mora / al día (solo clientes ACTIVOS)
+        # Compatibilidad: clientes en mora / al dÃ­a (solo clientes ACTIVOS)
         subq = (
             select(Prestamo.cliente_id)
             .select_from(Cuota)
@@ -576,7 +576,7 @@ def get_pagos_kpis(
             "montoCobradoMes": _safe_float(monto_cobrado_mes),
             "morosidadMensualPorcentaje": round(morosidad_porcentaje, 2),
             "mes": hoy.month,
-            "año": hoy.year,
+            "aÃ±o": hoy.year,
             "saldoPorCobrar": _safe_float(cartera_pendiente),
             "clientesEnMora": clientes_en_mora,
             "clientesAlDia": clientes_al_dia,
@@ -593,7 +593,7 @@ def get_pagos_kpis(
             "montoCobradoMes": 0.0,
             "morosidadMensualPorcentaje": 0.0,
             "mes": hoy.month,
-            "año": hoy.year,
+            "aÃ±o": hoy.year,
             "saldoPorCobrar": 0.0,
             "clientesEnMora": 0,
             "clientesAlDia": 0,
@@ -601,7 +601,7 @@ def get_pagos_kpis(
 
 
 def _stats_conds_cuota(analista: Optional[str], concesionario: Optional[str], modelo: Optional[str]):
-    """Condiciones base para filtrar cuotas por préstamo (solo clientes ACTIVOS + analista/concesionario/modelo)."""
+    """Condiciones base para filtrar cuotas por prÃ©stamo (solo clientes ACTIVOS + analista/concesionario/modelo)."""
     conds = [
         Cuota.prestamo_id == Prestamo.id,
         Prestamo.cliente_id == Cliente.id,
@@ -627,7 +627,7 @@ def get_pagos_stats(
     db: Session = Depends(get_db),
 ):
     """
-    Estadísticas de pagos desde BD (solo clientes ACTIVOS): total_pagos, total_pagado, pagos_por_estado,
+    EstadÃ­sticas de pagos desde BD (solo clientes ACTIVOS): total_pagos, total_pagado, pagos_por_estado,
     cuotas_pagadas, cuotas_pendientes, cuotas_atrasadas, pagos_hoy.
     """
     hoy = _hoy_local()
@@ -719,7 +719,7 @@ def obtener_pago(pago_id: int, db: Session = Depends(get_db)):
 def _numero_documento_ya_existe(
     db: Session, numero_documento: Optional[str], exclude_pago_id: Optional[int] = None
 ) -> bool:
-    """Comprueba si ya existe un pago con ese Nº documento (no se permite repetir)."""
+    """Comprueba si ya existe un pago con ese NÂº documento (no se permite repetir)."""
     num = (numero_documento or "").strip() or None
     if not num:
         return False
@@ -732,12 +732,12 @@ def _numero_documento_ya_existe(
 @router.post("", response_model=dict, status_code=201)
 @router.post("/", include_in_schema=False, response_model=dict, status_code=201)
 def crear_pago(payload: PagoCreate, db: Session = Depends(get_db)):
-    """Crea un pago en la tabla pagos. Nº documento no puede repetirse."""
+    """Crea un pago en la tabla pagos. NÂº documento no puede repetirse."""
     num_doc = (payload.numero_documento or "").strip() or None
     if num_doc and _numero_documento_ya_existe(db, num_doc):
         raise HTTPException(
             status_code=409,
-            detail="Ya existe un pago con ese Nº de documento. El Nº documento no puede repetirse.",
+            detail="Ya existe un pago con ese NÂº de documento. El NÂº documento no puede repetirse.",
         )
     ref = num_doc or "N/A"
     fecha_pago_ts = datetime.combine(payload.fecha_pago, dt_time.min)
@@ -760,7 +760,7 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db)):
 
 @router.put("/{pago_id}", response_model=dict)
 def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get_db)):
-    """Actualiza un pago en la tabla pagos. Nº documento no puede repetirse."""
+    """Actualiza un pago en la tabla pagos. NÂº documento no puede repetirse."""
     row = db.get(Pago, pago_id)
     if not row:
         raise HTTPException(status_code=404, detail="Pago no encontrado")
@@ -770,7 +770,7 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
         if num_doc and _numero_documento_ya_existe(db, num_doc, exclude_pago_id=pago_id):
             raise HTTPException(
                 status_code=409,
-                detail="Ya existe otro pago con ese Nº de documento. El Nº documento no puede repetirse.",
+                detail="Ya existe otro pago con ese NÂº de documento. El NÂº documento no puede repetirse.",
             )
     for k, v in data.items():
         if k == "notas" and v is not None:
@@ -802,7 +802,7 @@ def eliminar_pago(pago_id: int, db: Session = Depends(get_db)):
 
 
 def _estado_cuota_por_cobertura(total_pagado: float, monto_cuota: float, fecha_vencimiento: date) -> str:
-    """Determina estado según cobertura y fecha de vencimiento. Reglas de negocio."""
+    """Determina estado segÃºn cobertura y fecha de vencimiento. Reglas de negocio."""
     hoy = _hoy_local()
     if total_pagado >= monto_cuota - 0.01:
         return "PAGADO"
@@ -814,11 +814,11 @@ def _estado_cuota_por_cobertura(total_pagado: float, monto_cuota: float, fecha_v
 @router.post("/{pago_id}/aplicar-cuotas", response_model=dict)
 def aplicar_pago_a_cuotas(pago_id: int, db: Session = Depends(get_db)):
     """
-    Aplica el monto del pago a cuotas del préstamo (por orden de numero_cuota).
-    Va a la última cuota anterior no cubierta 100%; solo cuando se cubre 100% pasa a la siguiente.
-    - 100% cubierta → estado PAGADO, fecha_pago asignada.
-    - Parcial + vencimiento futuro → estado PAGO_ADELANTADO.
-    - Parcial + vencimiento pasado → estado PENDIENTE.
+    Aplica el monto del pago a cuotas del prÃ©stamo (por orden de numero_cuota).
+    Va a la Ãºltima cuota anterior no cubierta 100%; solo cuando se cubre 100% pasa a la siguiente.
+    - 100% cubierta â†’ estado PAGADO, fecha_pago asignada.
+    - Parcial + vencimiento futuro â†’ estado PAGO_ADELANTADO.
+    - Parcial + vencimiento pasado â†’ estado PENDIENTE.
     """
     pago = db.get(Pago, pago_id)
     if not pago:
@@ -829,7 +829,7 @@ def aplicar_pago_a_cuotas(pago_id: int, db: Session = Depends(get_db)):
             "success": False,
             "cuotas_completadas": 0,
             "cuotas_parciales": 0,
-            "message": "El pago no tiene préstamo asociado.",
+            "message": "El pago no tiene prÃ©stamo asociado.",
         }
     monto_restante = float(pago.monto_pagado) if pago.monto_pagado else 0
     if monto_restante <= 0:
@@ -883,5 +883,6 @@ def aplicar_pago_a_cuotas(pago_id: int, db: Session = Depends(get_db)):
         "success": True,
         "cuotas_completadas": cuotas_completadas,
         "cuotas_parciales": cuotas_parciales,
-        "message": f"Se aplicó el pago: {cuotas_completadas} cuota(s) completadas, {cuotas_parciales} parcial(es).",
+        "message": f"Se aplicÃ³ el pago: {cuotas_completadas} cuota(s) completadas, {cuotas_parciales} parcial(es).",
     }
+
