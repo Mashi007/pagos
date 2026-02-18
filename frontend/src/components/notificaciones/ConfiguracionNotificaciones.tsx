@@ -159,19 +159,20 @@ export function ConfiguracionNotificaciones() {
     plantillas.filter((p) => p.tipo === tipo)
 
 
-  const handleEnviarPrueba = async () => {
-    if (modoPruebas && emailsPruebas[0]?.trim()) {
+  const handleEnviarPrueba = async (indice: 0 | 1) => {
+    const email = emailsPruebas[indice]?.trim()
+    if (modoPruebas && email) {
       try {
         setEnviandoPrueba(true)
         const resultado = await emailConfigService.probarConfiguracionEmail(
-          emailsPruebas[0],
+          email,
           'Prueba de Notificaciones - RapiCredit',
           'Este es un correo de prueba para verificar que las plantillas de notificaciÃ³n se envÃ­an correctamente.',
-          emailsPruebas[1]?.trim() || undefined
+          undefined
         )
         
         if (resultado.success || resultado.mensaje?.includes('enviado')) {
-          toast.success('Correo de prueba enviado exitosamente')
+          toast.success(`Correo de prueba enviado exitosamente a ${email}`)
         } else {
           toast.error(resultado.mensaje || 'Error al enviar el correo de prueba')
         }
@@ -181,7 +182,7 @@ export function ConfiguracionNotificaciones() {
         setEnviandoPrueba(false)
       }
     } else {
-      toast.error('Activa modo pruebas y configura un email para enviar pruebas')
+      toast.error('Configura el correo para enviar pruebas')
     }
   }
 
@@ -260,20 +261,29 @@ export function ConfiguracionNotificaciones() {
                 onChange={(e) => setEmailsPruebas((prev) => [e.target.value, prev[1]])}
                 className="max-w-xs h-9 bg-white"
               />
-              {/* BotÃ³n Enviar Prueba - dentro de la tarjeta de Modo Prueba */}
-              {modoPruebas && emailsPruebas[0]?.trim() && (
-                <div className="mt-4 pt-4 border-t border-amber-200">
-                  <Button
-                    onClick={handleEnviarPrueba}
-                    disabled={enviandoPrueba}
-                    className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:opacity-50 text-white font-semibold py-2 h-auto flex items-center justify-center gap-2 rounded-lg transition-all"
-                  >
-                    <Mail className="h-5 w-5" />
-                    {enviandoPrueba ? 'Enviando correo de prueba...' : 'Enviar Correo de Prueba'}
-                  </Button>
-                  <p className="text-xs text-amber-700 mt-2 text-center">
-                    Se enviarÃ¡ a: {emailsPruebas[0]} {emailsPruebas[1] && `y ${emailsPruebas[1]}`}
-                  </p>
+              {/* Botones Enviar Prueba - uno para cada correo */}
+              {modoPruebas && (emailsPruebas[0]?.trim() || emailsPruebas[1]?.trim()) && (
+                <div className="mt-4 pt-4 border-t border-amber-200 space-y-2">
+                  {emailsPruebas[0]?.trim() && (
+                    <Button
+                      onClick={() => handleEnviarPrueba(0)}
+                      disabled={enviandoPrueba}
+                      className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:opacity-50 text-white font-semibold py-2 h-auto flex items-center justify-center gap-2 rounded-lg transition-all"
+                    >
+                      <Mail className="h-5 w-5" />
+                      {enviandoPrueba ? 'Enviando...' : `Enviar a ${emailsPruebas[0]}`}
+                    </Button>
+                  )}
+                  {emailsPruebas[1]?.trim() && (
+                    <Button
+                      onClick={() => handleEnviarPrueba(1)}
+                      disabled={enviandoPrueba}
+                      className="w-full bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 disabled:opacity-50 text-white font-semibold py-2 h-auto flex items-center justify-center gap-2 rounded-lg transition-all"
+                    >
+                      <Mail className="h-5 w-5" />
+                      {enviandoPrueba ? 'Enviando...' : `Enviar a ${emailsPruebas[1]}`}
+                    </Button>
+                  )}
                 </div>
               )}
             </div>
@@ -403,6 +413,8 @@ export function ConfiguracionNotificaciones() {
     </div>
   )
 }
+
+
 
 
 
