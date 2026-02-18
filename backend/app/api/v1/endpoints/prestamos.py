@@ -11,6 +11,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import delete, func, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -31,28 +32,47 @@ def _audit_user_id(db: Session, current_user: UserResponse) -> int:
     """
     Devuelve un usuario_id que exista en la tabla usuarios (la que referencia la FK de auditoria).
     Usa consultas explícitas a public.usuarios para no depender del mapeo del modelo User.
+    Verifica que el id exista antes de devolverlo (evita FK violation si hay desincronización).
     """
+    def _verify_exists(uid: int) -> bool:
+        """Comprueba que el id exista en usuarios (misma tabla que la FK de auditoria)."""
+        r = db.execute(text("SELECT 1 FROM public.usuarios WHERE id = :id"), {"id": uid}).first()
+        return r is not None
+
+    # 1) Probar current_user.id si viene de BD (evita usar id de tabla users u otra fuente)
+    uid = getattr(current_user, "id", None)
+    if uid is not None and _verify_exists(uid):
+        return uid
+
+    # 2) Buscar por email (case-insensitive)
     email = (getattr(current_user, "email", None) or "").strip().lower()
     if email:
         r = db.execute(
-            text("SELECT id FROM public.usuarios WHERE email = :e AND is_active = true LIMIT 1"),
+            text("SELECT id FROM public.usuarios WHERE LOWER(email) = :e AND is_active = true LIMIT 1"),
             {"e": email},
         ).first()
-        if r:
+        if r and _verify_exists(r[0]):
             return r[0]
+
+    # 3) Cualquier administrador activo
     r = db.execute(
         text("SELECT id FROM public.usuarios WHERE rol = 'administrador' AND is_active = true LIMIT 1"),
     ).first()
-    if r:
+    if r and _verify_exists(r[0]):
         return r[0]
+
+    # 4) Cualquier usuario activo
     r = db.execute(
         text("SELECT id FROM public.usuarios WHERE is_active = true ORDER BY id LIMIT 1"),
     ).first()
-    if r:
+    if r and _verify_exists(r[0]):
         return r[0]
+
+    # 5) Cualquier usuario
     r = db.execute(text("SELECT id FROM public.usuarios ORDER BY id LIMIT 1")).first()
-    if r:
+    if r and _verify_exists(r[0]):
         return r[0]
+
     raise HTTPException(
         status_code=503,
         detail=(
@@ -686,6 +706,22 @@ def aprobar_manual(
     except HTTPException:
         db.rollback()
         raise
+    except IntegrityError as e:
+        db.rollback()
+        logger.exception("aprobar_manual prestamo_id=%s IntegrityError: %s", prestamo_id, e)
+        err_msg = str(e.orig) if getattr(e, "orig", None) else str(e)
+        if "auditoria" in err_msg.lower() and ("usuario_id" in err_msg.lower() or "users" in err_msg.lower()):
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "Error de integridad en auditoría (usuario_id). "
+                    "Ejecuta la migración backend/sql/migracion_auditoria_fk_usuarios.sql en la BD."
+                ),
+            ) from e
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error de integridad en BD al aprobar: {err_msg[:200]}",
+        ) from e
     except Exception as e:
         db.rollback()
         logger.exception("aprobar_manual prestamo_id=%s: %s", prestamo_id, e)

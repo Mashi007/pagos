@@ -10,6 +10,12 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>RAPICREDIT - Sistema de Préstamos y Cobranza</title>
+    <!-- Suprimir warnings CSS "mal selector" (Tailwind/PostCSS) - debe ejecutarse antes de cargar estilos -->
+    <script>
+      (function(){var w=console.warn,e=console.error;function s(m){if(!m||typeof m!=='string')return false;var l=m.toLowerCase();return l.indexOf('reglas ignoradas')!==-1||l.indexOf('mal selector')!==-1||l.indexOf('bad selector')!==-1||/index-[a-zA-Z0-9]+\.css:\d+:\d+/.test(m);}
+      console.warn=function(){var a=Array.prototype.slice.call(arguments);var m=a.map(function(x){return x&&typeof x==='object'&&x.message?x.message:String(x);}).join(' ');if(s(m))return;w.apply(console,arguments);};
+      console.error=function(){var a=Array.prototype.slice.call(arguments);var m=a.map(function(x){return x&&typeof x==='object'&&x.message?x.message:String(x);}).join(' ');if(s(m))return;e.apply(console,arguments);};})();
+    </script>
     <!-- Estilos críticos inline para prevenir FOUC (Flash of Unstyled Content) -->
     <style>
       /* Mostrar #root en cuanto haya contenido; solo ocultar brevemente para evitar FOUC */
@@ -66,7 +72,7 @@
             m.indexOf('mal selector') !== -1 || m.indexOf('bad selector') !== -1 ||
             m.indexOf('debido a un mal selector') !== -1 ||
             (m.indexOf('index-') !== -1 && m.indexOf('.css') !== -1 && (m.indexOf('ignoradas') !== -1 || m.indexOf('selector') !== -1)) ||
-            /index-[a-z0-9]+\.css:\d+:\d+/.test(msg);
+            /index-[a-zA-Z0-9]+\.css:\d+:\d+/.test(msg);
         }
         console.warn = function() {
           if (shouldSuppressCSS(toMessage(arguments))) return;

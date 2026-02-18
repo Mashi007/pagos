@@ -861,9 +861,62 @@ def get_reporte_financiero(
         or 0
     )
     porcentaje_cobrado = (total_ingresos / total_desembolsado * 100) if total_desembolsado else 0
-    ingresos_por_mes = []
-    egresos_programados = []
+
+    # Ingresos por mes: cuotas pagadas agrupadas por mes de fecha_pago
+    q_ingresos = (
+        select(
+            func.to_char(func.date_trunc("month", Cuota.fecha_pago), "YYYY-MM").label("mes"),
+            func.count().label("cantidad_pagos"),
+            func.coalesce(func.sum(Cuota.monto), 0).label("monto_total"),
+        )
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(and_(*conds_activo, Cuota.fecha_pago.isnot(None)))
+        .group_by(func.date_trunc("month", Cuota.fecha_pago))
+        .order_by(func.date_trunc("month", Cuota.fecha_pago))
+    )
+    rows_ing = db.execute(q_ingresos).all()
+    ingresos_por_mes = [
+        {"mes": r.mes, "cantidad_pagos": r.cantidad_pagos, "monto_total": round(_safe_float(r.monto_total), 2)}
+        for r in rows_ing
+    ]
+
+    # Egresos programados: cuotas pendientes de pago agrupadas por mes de vencimiento
+    q_egresos = (
+        select(
+            func.to_char(func.date_trunc("month", Cuota.fecha_vencimiento), "YYYY-MM").label("mes"),
+            func.count().label("cantidad_cuotas"),
+            func.coalesce(func.sum(Cuota.monto), 0).label("monto_programado"),
+        )
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(and_(*conds_activo, Cuota.fecha_pago.is_(None), Cuota.fecha_vencimiento.isnot(None)))
+        .group_by(func.date_trunc("month", Cuota.fecha_vencimiento))
+        .order_by(func.date_trunc("month", Cuota.fecha_vencimiento))
+    )
+    rows_egr = db.execute(q_egresos).all()
+    egresos_programados = [
+        {"mes": r.mes, "cantidad_cuotas": r.cantidad_cuotas, "monto_programado": round(_safe_float(r.monto_programado), 2)}
+        for r in rows_egr
+    ]
+
+    # Flujo de caja: ingresos - egresos por mes (meses que aparecen en ingresos o egresos)
+    meses_set = {x["mes"] for x in ingresos_por_mes} | {x["mes"] for x in egresos_programados}
+    ing_map = {x["mes"]: x["monto_total"] for x in ingresos_por_mes}
+    egr_map = {x["mes"]: x["monto_programado"] for x in egresos_programados}
     flujo_caja = []
+    for m in sorted(meses_set):
+        ing = ing_map.get(m, 0)
+        egr = egr_map.get(m, 0)
+        flujo_caja.append({
+            "mes": m,
+            "ingresos": ing,
+            "egresos_programados": egr,
+            "flujo_neto": round(ing - egr, 2),
+        })
+
     return {
         "fecha_corte": fc.isoformat(),
         "total_ingresos": total_ingresos,
