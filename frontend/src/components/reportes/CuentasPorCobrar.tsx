@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import { reporteService, type CarteraPorMes, type CarteraPorDiaItem } from '../../services/reporteService'
-import { formatCurrency, formatDate } from '../../utils'
+import { formatCurrency } from '../../utils'
 
 const MESES_OPCIONES = [3, 6, 12, 24]
 
@@ -28,21 +28,21 @@ function TablaPorDia({ label, items }: { label: string; items: CarteraPorDiaItem
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Fecha (cuándo debe cobrar)</TableHead>
-                  <TableHead className="text-right">Monto a cobrar</TableHead>
-                  <TableHead className="text-right">Cuotas</TableHead>
+                  <TableHead>Día</TableHead>
+                  <TableHead className="text-right">Cuotas por cobrar</TableHead>
+                  <TableHead className="text-right">Monto ($)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {items.map((item) => (
-                  <TableRow key={item.fecha}>
-                    <TableCell className="font-medium">{formatDate(item.fecha)}</TableCell>
-                    <TableCell className="text-right font-medium text-green-700">
-                      {formatCurrency(item.monto_cobrar)}
-                    </TableCell>
-                    <TableCell className="text-right">{item.cantidad_cuotas}</TableCell>
-                  </TableRow>
-                ))}
+                    <TableRow key={item.dia}>
+                      <TableCell className="font-medium">{item.dia}</TableCell>
+                      <TableCell className="text-right">{item.cantidad_cuotas}</TableCell>
+                      <TableCell className="text-right font-medium text-green-700">
+                        {formatCurrency(item.monto_cobrar)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
               </TableBody>
             </Table>
           </div>
@@ -103,7 +103,7 @@ export function CuentasPorCobrar() {
             Cuentas por cobrar
           </CardTitle>
           <CardDescription>
-            Una pestaña por mes. Por día: cuándo debe cobrar (fecha vencimiento, monto pendiente).
+            Una pestaña por mes. Por día del mes: cuotas por cobrar ese día. Se actualiza al aprobar o eliminar préstamos.
           </CardDescription>
         </div>
         <div className="flex items-center gap-2">

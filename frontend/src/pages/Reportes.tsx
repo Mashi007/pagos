@@ -4,7 +4,6 @@ import { motion } from 'framer-motion'
 import {
   FileText,
   Download,
-  BarChart3,
   PieChart,
   TrendingUp,
   Users,
@@ -12,31 +11,31 @@ import {
   RefreshCw,
   Loader2,
   UserCheck,
+  CreditCard,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { getErrorMessage, getErrorDetail } from '../types/errors'
 import { Button } from '../components/ui/button'
 import { formatCurrency } from '../utils'
 import { reporteService } from '../services/reporteService'
-import { useReportesRefreshSchedule } from '../hooks/useReportesRefreshSchedule'
 import { toast } from 'sonner'
+import { DialogReporteFiltros, type FiltrosReporte } from '../components/reportes/DialogReporteFiltros'
 
-/** Cada icono = un reporte. Click = descarga Excel con distribución según backend. */
+/** Cada icono = un reporte. Click = abre diálogo años/meses, luego descarga Excel. */
 const tiposReporte = [
   { value: 'CARTERA', label: 'Cuentas por cobrar', icon: DollarSign },
   { value: 'MOROSIDAD', label: 'Pago vencido', icon: TrendingUp },
   { value: 'PAGOS', label: 'Pagos', icon: Users },
-  { value: 'FINANCIERO', label: 'Financiero', icon: BarChart3 },
   { value: 'ASESORES', label: 'Asesores', icon: UserCheck },
   { value: 'PRODUCTOS', label: 'Productos', icon: PieChart },
+  { value: 'CEDULA', label: 'Por cédula', icon: CreditCard },
 ]
 
 export function Reportes() {
   const [generandoReporte, setGenerandoReporte] = useState<string | null>(null)
+  const [dialogAbierto, setDialogAbierto] = useState(false)
+  const [reporteSeleccionado, setReporteSeleccionado] = useState<string | null>(null)
   const queryClient = useQueryClient()
-
-  // Invalidar reportes a la 1 AM y 1 PM (hora local) para actualización automática desde BD
-  useReportesRefreshSchedule()
 
   // Obtener resumen del dashboard para KPIs
   const {
@@ -50,7 +49,7 @@ export function Reportes() {
     staleTime: 2 * 60 * 1000, // 2 minutos - datos más frescos
     retry: 2, // Dos reintentos para asegurar conexión
     refetchOnWindowFocus: true, // Recargar cuando la ventana recupera el foco
-    refetchInterval: 30 * 60 * 1000, // Refrescar cada 30 min; además se invalida a la 1 AM y 1 PM
+    refetchInterval: 30 * 60 * 1000, // Refrescar cada 30 min
   })
 
   // Descargar blob como archivo
@@ -65,8 +64,14 @@ export function Reportes() {
     window.URL.revokeObjectURL(url)
   }
 
-  // Generar reporte: siempre descarga Excel al hacer clic en el icono
-  const generarReporte = async (tipo: string) => {
+  // Abrir diálogo al hacer clic en icono
+  const abrirDialogoReporte = (tipo: string) => {
+    setReporteSeleccionado(tipo)
+    setDialogAbierto(true)
+  }
+
+  // Generar reporte tras confirmar filtros en el diálogo
+  const generarReporte = async (tipo: string, filtros: FiltrosReporte) => {
     try {
       setGenerandoReporte(tipo)
       toast.loading(`Generando reporte de ${tipo}...`)
@@ -75,42 +80,37 @@ export function Reportes() {
       const ext = 'xlsx'
 
       if (tipo === 'CARTERA') {
-        const blob = await reporteService.exportarReporteCartera('excel', fechaCorte)
+        const blob = await reporteService.exportarReporteCartera('excel', fechaCorte, filtros)
         descargarBlob(blob, `reporte_cartera_${fechaCorte}.${ext}`)
         toast.dismiss()
         toast.success(`Reporte de ${tipo} descargado`)
         queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
         queryClient.invalidateQueries({ queryKey: ['kpis'] })
       } else if (tipo === 'PAGOS') {
-        const fechaFin = new Date()
-        const fechaInicio = new Date()
-        fechaInicio.setMonth(fechaInicio.getMonth() - 1)
-        const fi = fechaInicio.toISOString().split('T')[0]
-        const ff = fechaFin.toISOString().split('T')[0]
-        const blob = await reporteService.exportarReportePagos(fi, ff, 'excel')
-        descargarBlob(blob, `reporte_pagos_${fi}_${ff}.${ext}`)
+        const blob = await reporteService.exportarReportePagos('excel', undefined, undefined, 12, filtros)
+        descargarBlob(blob, `reporte_pagos_${fechaCorte}.${ext}`)
         toast.dismiss()
         toast.success(`Reporte de ${tipo} descargado`)
         queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
         queryClient.invalidateQueries({ queryKey: ['kpis'] })
       } else if (tipo === 'MOROSIDAD') {
-        const blob = await reporteService.exportarReporteMorosidad('excel', fechaCorte)
+        const blob = await reporteService.exportarReporteMorosidad('excel', fechaCorte, filtros)
         descargarBlob(blob, `informe_vencimiento_pagos_${fechaCorte}.${ext}`)
         toast.dismiss()
         toast.success(`Reporte de ${tipo} descargado`)
-      } else if (tipo === 'FINANCIERO') {
-        const blob = await reporteService.exportarReporteFinanciero('excel', fechaCorte)
-        descargarBlob(blob, `reporte_financiero_${fechaCorte}.${ext}`)
-        toast.dismiss()
-        toast.success(`Reporte de ${tipo} descargado`)
       } else if (tipo === 'ASESORES') {
-        const blob = await reporteService.exportarReporteAsesores('excel', fechaCorte)
+        const blob = await reporteService.exportarReporteAsesores('excel', fechaCorte, filtros)
         descargarBlob(blob, `reporte_asesores_${fechaCorte}.${ext}`)
         toast.dismiss()
         toast.success(`Reporte de ${tipo} descargado`)
       } else if (tipo === 'PRODUCTOS') {
-        const blob = await reporteService.exportarReporteProductos('excel', fechaCorte)
+        const blob = await reporteService.exportarReporteProductos('excel', fechaCorte, filtros)
         descargarBlob(blob, `reporte_productos_${fechaCorte}.${ext}`)
+        toast.dismiss()
+        toast.success(`Reporte de ${tipo} descargado`)
+      } else if (tipo === 'CEDULA') {
+        const blob = await reporteService.exportarReporteCedula()
+        descargarBlob(blob, `reporte_por_cedula_${fechaCorte}.${ext}`)
         toast.dismiss()
         toast.success(`Reporte de ${tipo} descargado`)
       } else {
@@ -160,9 +160,6 @@ export function Reportes() {
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Centro de Reportes</h1>
           <p className="text-sm sm:text-base text-gray-600 max-w-xl">
             Genera y descarga reportes detallados del sistema. Datos en tiempo real desde la base de datos.
-          </p>
-          <p className="text-xs sm:text-sm text-gray-500">
-            Actualización automática: 1:00 AM y 1:00 PM (hora local).
           </p>
         </div>
         <Button
@@ -281,7 +278,7 @@ export function Reportes() {
             Descargar reportes
           </CardTitle>
           <p className="text-sm text-muted-foreground">
-            Haz clic en un icono para descargar el reporte en Excel.
+            Haz clic en un icono para elegir años y meses, luego descarga el reporte en Excel.
           </p>
         </CardHeader>
         <CardContent>
@@ -289,14 +286,14 @@ export function Reportes() {
             {tiposReporte.map((tipo) => {
               const IconComponent = tipo.icon
               const isGenerando = generandoReporte === tipo.value
-              const isDisponible = ['CARTERA', 'PAGOS', 'MOROSIDAD', 'FINANCIERO', 'ASESORES', 'PRODUCTOS'].includes(tipo.value)
+              const isDisponible = ['CARTERA', 'PAGOS', 'MOROSIDAD', 'ASESORES', 'PRODUCTOS', 'CEDULA'].includes(tipo.value)
 
               return (
                 <button
                   key={tipo.value}
                   type="button"
                   disabled={!isDisponible || isGenerando}
-                  onClick={() => generarReporte(tipo.value)}
+                  onClick={() => abrirDialogoReporte(tipo.value)}
                   title={`Descargar ${tipo.label} en Excel`}
                   className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border-2 transition-all min-h-[100px] ${
                     isDisponible
@@ -317,6 +314,15 @@ export function Reportes() {
           </div>
         </CardContent>
       </Card>
+
+      <DialogReporteFiltros
+        open={dialogAbierto}
+        onOpenChange={setDialogAbierto}
+        tituloReporte={reporteSeleccionado ? tiposReporte.find((t) => t.value === reporteSeleccionado)?.label ?? reporteSeleccionado : ''}
+        onConfirm={(filtros) => {
+          if (reporteSeleccionado) generarReporte(reporteSeleccionado, filtros)
+        }}
+      />
     </motion.div>
   )
 }

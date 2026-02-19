@@ -22,14 +22,15 @@ function TablaProductosMes({ label, items }: { label: string; items: ProductoPor
       </CardHeader>
       <CardContent>
         {items.length === 0 ? (
-          <p className="text-gray-500 text-sm py-4">No hay ventas en este período.</p>
+          <p className="text-gray-500 text-sm py-4">No hay productos en este período.</p>
         ) : (
           <div className="rounded-md border overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Modelo</TableHead>
-                  <TableHead className="text-right">Suma total ventas (70% valor prestado)</TableHead>
+                  <TableHead>Modelo de vehículo</TableHead>
+                  <TableHead className="text-right">Total financiamiento ($)</TableHead>
+                  <TableHead className="text-right">Valor del activo ($)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -37,7 +38,10 @@ function TablaProductosMes({ label, items }: { label: string; items: ProductoPor
                   <TableRow key={item.modelo}>
                     <TableCell className="font-medium">{item.modelo}</TableCell>
                     <TableCell className="text-right">
-                      {formatCurrency(item.suma_ventas)}
+                      {formatCurrency(item.total_financiamiento)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {formatCurrency(item.valor_activo)}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -101,7 +105,7 @@ export function ReporteProductos() {
             Reporte Productos
           </CardTitle>
           <CardDescription>
-            Una pestaña por mes. Columnas: Modelo, Suma total de ventas (70% valor prestado) por modelo.
+            Una pestaña por mes. Columnas: Modelo vehículo, Total financiamiento, Valor del activo (70%).
           </CardDescription>
         </div>
         <div className="flex items-center gap-2">

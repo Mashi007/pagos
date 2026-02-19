@@ -41,6 +41,37 @@ def _parse_fecha(s: Optional[str]) -> date:
         return date.today()
 
 
+def _periodos_desde_filtros(
+    años_str: Optional[str],
+    meses_str: Optional[str],
+    meses_default: int = 12,
+) -> List[tuple]:
+    """
+    Retorna lista de (año, mes) ordenada descendente.
+    Si años_str y meses_str están presentes, usa esos. Si no, usa últimos meses_default meses.
+    """
+    if años_str and meses_str:
+        try:
+            años = sorted([int(x.strip()) for x in años_str.split(",") if x.strip()], reverse=True)
+            meses = sorted([int(x.strip()) for x in meses_str.split(",") if x.strip() and 1 <= int(x.strip()) <= 12])
+            if años and meses:
+                periodos = [(a, m) for a in años for m in meses]
+                periodos.sort(key=lambda p: (-p[0], -p[1]))
+                return periodos
+        except (ValueError, TypeError):
+            pass
+    hoy = date.today()
+    result = []
+    for i in range(meses_default):
+        año = hoy.year
+        mes = hoy.month - i
+        while mes <= 0:
+            mes += 12
+            año -= 1
+        result.append((año, mes))
+    return result
+
+
 # ---------- Dashboard resumen ----------
 @router.get("/dashboard/resumen")
 def get_resumen_dashboard(db: Session = Depends(get_db)):
@@ -418,28 +449,18 @@ def _datos_cartera(db: Session, fecha_corte: date) -> dict:
     }
 
 
-@router.get("/cartera/por-mes")
-def get_cartera_por_mes(
-    db: Session = Depends(get_db),
-    meses: int = Query(12, ge=1, le=24, description="Cantidad de meses hacia atrás"),
-):
-    """Cuentas por cobrar: una pestaña por mes. Por día: cuándo debe cobrar (fecha vencimiento, monto pendiente)."""
-    hoy = date.today()
+def _cartera_por_periodos(db: Session, periodos: List[tuple]) -> dict:
+    """Genera datos cartera para lista de (año, mes)."""
     resultado: dict = {"meses": []}
-
-    for i in range(meses):
-        año = hoy.year
-        mes = hoy.month - i
-        while mes <= 0:
-            mes += 12
-            año -= 1
+    for (año, mes) in periodos:
         inicio = date(año, mes, 1)
         _, ultimo = calendar.monthrange(año, mes)
         fin = date(año, mes, ultimo)
 
+        # Agrupar por día del mes (1-31): cuotas con fecha_vencimiento en ese día
         rows = db.execute(
             select(
-                Cuota.fecha_vencimiento,
+                func.extract("day", Cuota.fecha_vencimiento).label("dia"),
                 func.coalesce(func.sum(Cuota.monto), 0).label("monto_cobrar"),
                 func.count(Cuota.id).label("cantidad_cuotas"),
             )
@@ -453,18 +474,28 @@ def get_cartera_por_mes(
                 Cuota.fecha_vencimiento >= inicio,
                 Cuota.fecha_vencimiento <= fin,
             )
-            .group_by(Cuota.fecha_vencimiento)
-            .order_by(Cuota.fecha_vencimiento)
+            .group_by(func.extract("day", Cuota.fecha_vencimiento))
+            .order_by(func.extract("day", Cuota.fecha_vencimiento))
         ).fetchall()
 
-        items = [
-            {
-                "fecha": r.fecha_vencimiento.isoformat() if r.fecha_vencimiento else None,
-                "monto_cobrar": round(_safe_float(r.monto_cobrar), 2),
+        # Mapa día -> {cantidad_cuotas, monto_cobrar}
+        por_dia: dict = {}
+        for r in rows:
+            d = int(r.dia) if r.dia is not None else 0
+            por_dia[d] = {
                 "cantidad_cuotas": r.cantidad_cuotas or 0,
+                "monto_cobrar": round(_safe_float(r.monto_cobrar), 2),
             }
-            for r in rows
-        ]
+
+        # Una fila por cada día del mes (1 a ultimo)
+        items: List[dict] = []
+        for d in range(1, ultimo + 1):
+            data = por_dia.get(d, {"cantidad_cuotas": 0, "monto_cobrar": 0})
+            items.append({
+                "dia": d,
+                "cantidad_cuotas": data["cantidad_cuotas"],
+                "monto_cobrar": data["monto_cobrar"],
+            })
 
         resultado["meses"].append({
             "mes": mes,
@@ -474,6 +505,18 @@ def get_cartera_por_mes(
         })
 
     return resultado
+
+
+@router.get("/cartera/por-mes")
+def get_cartera_por_mes(
+    db: Session = Depends(get_db),
+    meses: int = Query(12, ge=1, le=24, description="Cantidad de meses hacia atrás"),
+    años: Optional[str] = Query(None, description="Años separados por coma, ej: 2023,2024"),
+    meses_list: Optional[str] = Query(None, description="Meses 1-12 separados por coma, ej: 1,2,3"),
+):
+    """Cuentas por cobrar: una pestaña por mes (MM/YYYY). Por día del mes: cuotas por cobrar ese día."""
+    periodos = _periodos_desde_filtros(años, meses_list, meses)
+    return _cartera_por_periodos(db, periodos)
 
 
 @router.get("/cartera")
@@ -486,7 +529,35 @@ def get_reporte_cartera(
     return _datos_cartera(db, fc)
 
 
+def _generar_excel_cartera_por_mes(data_por_mes: dict) -> bytes:
+    """Genera Excel con una pestaña por mes (MM/YYYY). Columnas: Día, Cuotas por cobrar, Monto ($)."""
+    import openpyxl
+    wb = openpyxl.Workbook()
+    meses_data = data_por_mes.get("meses", [])
+
+    for idx, mes_data in enumerate(meses_data):
+        label = mes_data.get("label", f"Mes{idx+1}")
+        sheet_name = label.replace("/", "-")[:31]
+        if idx == 0:
+            ws = wb.active
+            ws.title = sheet_name
+        else:
+            ws = wb.create_sheet(title=sheet_name)
+
+        ws.append(["Reporte de Cartera", mes_data.get("label", "")])
+        ws.append(["Cuotas por cobrar por día del mes (dato actualizado al aprobar/eliminar préstamos)"])
+        ws.append([])
+        ws.append(["Día", "Cuotas por cobrar", "Monto ($)"])
+        for item in mes_data.get("items", []):
+            ws.append([item.get("dia", 0), item.get("cantidad_cuotas", 0), item.get("monto_cobrar", 0)])
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
 def _generar_excel_cartera(data: dict) -> bytes:
+    """Excel clásico de cartera (resumen + distribuciones)."""
     import openpyxl
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -552,17 +623,23 @@ def exportar_cartera(
     db: Session = Depends(get_db),
     formato: str = Query("excel", pattern="^(excel|pdf)$"),
     fecha_corte: Optional[str] = Query(None),
+    meses: int = Query(12, ge=1, le=24, description="Para Excel: cantidad de meses (una pestaña por mes)"),
+    años: Optional[str] = Query(None, description="Años separados por coma, ej: 2023,2024"),
+    meses_list: Optional[str] = Query(None, description="Meses 1-12 separados por coma, ej: 1,2,3"),
 ):
-    """Exporta reporte de cartera en Excel o PDF. Datos reales desde BD."""
+    """Exporta reporte de cartera. Excel: una pestaña por mes (MM/YYYY), columnas Día | Cuotas por cobrar | Monto.
+    PDF: resumen clásico. Datos desde cuotas (actualizados al aprobar/eliminar préstamos)."""
     fc = _parse_fecha(fecha_corte)
-    data = _datos_cartera(db, fc)
     if formato == "excel":
-        content = _generar_excel_cartera(data)
+        data_por_mes = get_cartera_por_mes(db=db, meses=meses, años=años, meses_list=meses_list)
+        content = _generar_excel_cartera_por_mes(data_por_mes)
+        hoy_str = date.today().isoformat()
         return Response(
             content=content,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": f"attachment; filename=reporte_cartera_{fc.isoformat()}.xlsx"},
+            headers={"Content-Disposition": f"attachment; filename=reporte_cartera_{hoy_str}.xlsx"},
         )
+    data = _datos_cartera(db, fc)
     content = _generar_pdf_cartera(data)
     return Response(
         content=content,
@@ -643,6 +720,71 @@ def get_reporte_pagos(
     }
 
 
+def _pagos_por_dia_periodos(db: Session, periodos: List[tuple]) -> dict:
+    """Genera datos pagos por día para lista de (año, mes)."""
+    resultado: dict = {"meses": []}
+    for (año, mes) in periodos:
+        inicio = date(año, mes, 1)
+        _, ultimo = calendar.monthrange(año, mes)
+        fin = date(año, mes, ultimo)
+
+        rows = db.execute(
+            select(
+                func.extract("day", Pago.fecha_pago).label("dia"),
+                func.count(Pago.id).label("cantidad_pagos"),
+                func.count(func.distinct(Pago.cedula_cliente)).label("cantidad_cedulas"),
+                func.coalesce(func.sum(Pago.monto_pagado), 0).label("monto_total"),
+            )
+            .select_from(Pago)
+            .where(
+                func.date(Pago.fecha_pago) >= inicio,
+                func.date(Pago.fecha_pago) <= fin,
+            )
+            .group_by(func.extract("day", Pago.fecha_pago))
+            .order_by(func.extract("day", Pago.fecha_pago))
+        ).fetchall()
+
+        por_dia: dict = {}
+        for r in rows:
+            d = int(r.dia) if r.dia is not None else 0
+            por_dia[d] = {
+                "cantidad_pagos": r.cantidad_pagos or 0,
+                "cantidad_cedulas": r.cantidad_cedulas or 0,
+                "monto_total": round(_safe_float(r.monto_total), 2),
+            }
+
+        items: List[dict] = []
+        for d in range(1, ultimo + 1):
+            data = por_dia.get(d, {"cantidad_pagos": 0, "cantidad_cedulas": 0, "monto_total": 0})
+            items.append({
+                "dia": d,
+                "cantidad_pagos": data["cantidad_pagos"],
+                "cantidad_cedulas": data["cantidad_cedulas"],
+                "monto_total": data["monto_total"],
+            })
+
+        resultado["meses"].append({
+            "mes": mes,
+            "año": año,
+            "label": f"{mes:02d}/{año}",
+            "items": items,
+        })
+
+    return resultado
+
+
+@router.get("/pagos/por-dia-mes")
+def get_pagos_por_dia_mes(
+    db: Session = Depends(get_db),
+    meses: int = Query(12, ge=1, le=24, description="Cantidad de meses hacia atrás"),
+    años: Optional[str] = Query(None, description="Años separados por coma"),
+    meses_list: Optional[str] = Query(None, description="Meses 1-12 separados por coma"),
+):
+    """Pagos por día del mes: una pestaña por mes (MM/YYYY). Por día: cantidad pagos, cantidad cédulas, monto ($)."""
+    periodos = _periodos_desde_filtros(años, meses_list, meses)
+    return _pagos_por_dia_periodos(db, periodos)
+
+
 @router.get("/pagos/por-mes")
 def get_pagos_por_mes(
     db: Session = Depends(get_db),
@@ -707,7 +849,39 @@ def get_pagos_por_mes(
     return resultado
 
 
+def _generar_excel_pagos_por_mes(data_por_mes: dict) -> bytes:
+    """Genera Excel con una pestaña por mes (MM/YYYY). Columnas: Día | Cantidad pagos | Cantidad cédulas | Monto ($)."""
+    import openpyxl
+    wb = openpyxl.Workbook()
+    meses_data = data_por_mes.get("meses", [])
+
+    for idx, mes_data in enumerate(meses_data):
+        label = mes_data.get("label", f"Mes{idx+1}")
+        sheet_name = label.replace("/", "-")[:31]
+        if idx == 0:
+            ws = wb.active
+            ws.title = sheet_name
+        else:
+            ws = wb.create_sheet(title=sheet_name)
+
+        ws.append(["Reporte de Pagos", mes_data.get("label", "")])
+        ws.append([])
+        ws.append(["Día", "Cantidad de pagos", "Cantidad de cédulas", "Monto ($)"])
+        for item in mes_data.get("items", []):
+            ws.append([
+                item.get("dia", 0),
+                item.get("cantidad_pagos", 0),
+                item.get("cantidad_cedulas", 0),
+                item.get("monto_total", 0),
+            ])
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
 def _generar_excel_pagos(data: dict) -> bytes:
+    """Excel clásico de pagos por rango de fechas."""
     import openpyxl
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -761,24 +935,30 @@ def _generar_pdf_pagos(data: dict) -> bytes:
 def exportar_pagos(
     db: Session = Depends(get_db),
     formato: str = Query("excel", pattern="^(excel|pdf)$"),
-    fecha_inicio: str = Query(...),
-    fecha_fin: str = Query(...),
+    fecha_inicio: Optional[str] = Query(None),
+    fecha_fin: Optional[str] = Query(None),
+    meses: int = Query(12, ge=1, le=24, description="Para Excel: cantidad de meses (una pestaña por mes)"),
+    años: Optional[str] = Query(None, description="Años separados por coma"),
+    meses_list: Optional[str] = Query(None, description="Meses 1-12 separados por coma"),
 ):
-    """Exporta reporte de pagos en Excel o PDF."""
-    fi = _parse_fecha(fecha_inicio)
-    ff = _parse_fecha(fecha_fin)
+    """Exporta reporte de pagos. Excel: una pestaña por mes (MM/YYYY), columnas Día | Cantidad pagos | Cantidad cédulas | Monto ($).
+    PDF: requiere fecha_inicio y fecha_fin."""
+    if formato == "excel":
+        data_por_mes = get_pagos_por_dia_mes(db=db, meses=meses, años=años, meses_list=meses_list)
+        content = _generar_excel_pagos_por_mes(data_por_mes)
+        hoy_str = date.today().isoformat()
+        return Response(
+            content=content,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename=reporte_pagos_{hoy_str}.xlsx"},
+        )
+    fi = _parse_fecha(fecha_inicio or date.today().isoformat())
+    ff = _parse_fecha(fecha_fin or date.today().isoformat())
     if fi > ff:
         fi, ff = ff, fi
     data = get_reporte_pagos(db=db, fecha_inicio=fi.isoformat(), fecha_fin=ff.isoformat())
-    if formato == "pdf":
-        content = _generar_pdf_pagos(data)
-        return Response(content=content, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=reporte_pagos_{fi.isoformat()}_{ff.isoformat()}.pdf"})
-    content = _generar_excel_pagos(data)
-    return Response(
-        content=content,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename=reporte_pagos_{fi.isoformat()}_{ff.isoformat()}.xlsx"},
-    )
+    content = _generar_pdf_pagos(data)
+    return Response(content=content, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=reporte_pagos_{fi.isoformat()}_{ff.isoformat()}.pdf"})
 
 
 # ---------- Reporte Morosidad ----------
@@ -899,17 +1079,14 @@ def get_reporte_morosidad(
 def get_morosidad_por_mes(
     db: Session = Depends(get_db),
     meses: int = Query(12, ge=1, le=24, description="Cantidad de meses hacia atrás"),
+    años: Optional[str] = Query(None),
+    meses_list: Optional[str] = Query(None),
 ):
     """Morosidad por mes: una pestaña por mes (mes/año). Cuotas vencidas sin pagar a fin de cada mes, agrupadas por analista."""
-    hoy = date.today()
     resultado: dict = {"meses": []}
+    periodos = _periodos_desde_filtros(años, meses_list, meses)
 
-    for i in range(meses):
-        año = hoy.year
-        mes = hoy.month - i
-        while mes <= 0:
-            mes += 12
-            año -= 1
+    for (año, mes) in periodos:
         _, ultimo = calendar.monthrange(año, mes)
         fc = date(año, mes, ultimo)
 
@@ -1195,13 +1372,15 @@ def exportar_morosidad(
     formato: str = Query("excel", pattern="^(excel|pdf)$"),
     fecha_corte: Optional[str] = Query(None),
     meses: int = Query(12, ge=1, le=24, description="Para Excel: cantidad de meses (una pestaña por mes)"),
+    años: Optional[str] = Query(None),
+    meses_list: Optional[str] = Query(None),
 ):
     """Exporta reporte de morosidad. Excel: una pestaña por mes (mes/año). PDF: fecha de corte única."""
     if formato == "pdf":
         data = get_reporte_morosidad(db=db, fecha_corte=fecha_corte)
         content = _generar_pdf_morosidad(data)
         return Response(content=content, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=informe_vencimiento_pagos_{data['fecha_corte']}.pdf"})
-    data_por_mes = get_morosidad_por_mes(db=db, meses=meses)
+    data_por_mes = get_morosidad_por_mes(db=db, meses=meses, años=años, meses_list=meses_list)
     content = _generar_excel_morosidad_por_mes(data_por_mes)
     hoy_str = date.today().isoformat()
     return Response(
@@ -1411,26 +1590,23 @@ def _generar_pdf_financiero(data: dict) -> bytes:
 def get_asesores_por_mes(
     db: Session = Depends(get_db),
     meses: int = Query(12, ge=1, le=24, description="Cantidad de meses hacia atrás"),
+    años: Optional[str] = Query(None),
+    meses_list: Optional[str] = Query(None),
 ):
-    """Asesores por mes: una pestaña por mes. Columnas: Nombre analista, Total morosidad, Total préstamos. Orden descendente por morosidad."""
-    hoy = date.today()
+    """Asesores por mes: una pestaña por mes. Solo lo que sucede en ese mes: cuotas con fecha_vencimiento en el mes y sin pagar."""
     resultado: dict = {"meses": []}
+    periodos = _periodos_desde_filtros(años, meses_list, meses)
 
-    for i in range(meses):
-        año = hoy.year
-        mes = hoy.month - i
-        while mes <= 0:
-            mes += 12
-            año -= 1
+    for (año, mes) in periodos:
         inicio = date(año, mes, 1)
         _, ultimo = calendar.monthrange(año, mes)
         fin = date(año, mes, ultimo)
-        fc = fin
 
+        # Solo cuotas que vencieron en este mes (fecha_vencimiento en el mes) y no están pagadas
         rows = db.execute(
             select(
                 Prestamo.analista,
-                func.coalesce(func.sum(Cuota.monto), 0).label("morosidad_total"),
+                func.coalesce(func.sum(Cuota.monto), 0).label("vencimiento_total"),
                 func.count(func.distinct(Cuota.prestamo_id)).label("total_prestamos"),
             )
             .select_from(Cuota)
@@ -1440,7 +1616,8 @@ def get_asesores_por_mes(
                 Cliente.estado == "ACTIVO",
                 Prestamo.estado == "APROBADO",
                 Cuota.fecha_pago.is_(None),
-                Cuota.fecha_vencimiento < fc,
+                Cuota.fecha_vencimiento >= inicio,
+                Cuota.fecha_vencimiento <= fin,
             )
             .group_by(Prestamo.analista)
             .order_by(func.sum(Cuota.monto).desc())
@@ -1449,7 +1626,7 @@ def get_asesores_por_mes(
         items = [
             {
                 "analista": r.analista or "Sin asignar",
-                "morosidad_total": round(_safe_float(r.morosidad_total), 2),
+                "vencimiento_total": round(_safe_float(r.vencimiento_total), 2),
                 "total_prestamos": r.total_prestamos or 0,
             }
             for r in rows
@@ -1519,19 +1696,58 @@ def get_reporte_asesores(
     }
 
 
+def _generar_excel_asesores_por_mes(data_por_mes: dict) -> bytes:
+    """Genera Excel con una pestaña por mes (MM/YYYY). Solo datos del mes reportado. Columnas: Analista, Vencimiento, Préstamos."""
+    import openpyxl
+    wb = openpyxl.Workbook()
+    meses_data = data_por_mes.get("meses", [])
+
+    for idx, mes_data in enumerate(meses_data):
+        label = mes_data.get("label", f"Mes{idx+1}")
+        sheet_name = label.replace("/", "-")[:31]
+        if idx == 0:
+            ws = wb.active
+            ws.title = sheet_name
+        else:
+            ws = wb.create_sheet(title=sheet_name)
+
+        ws.append(["Reporte de Analistas", mes_data.get("label", "")])
+        ws.append(["Solo cuotas que vencieron en este mes y no están pagadas"])
+        ws.append([])
+        ws.append(["Analista", "Total vencimiento ($)", "Total préstamos"])
+        for r in mes_data.get("items", []):
+            ws.append([r.get("analista", ""), r.get("vencimiento_total", 0), r.get("total_prestamos", 0)])
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
 @router.get("/exportar/asesores")
 def exportar_asesores(
     db: Session = Depends(get_db),
     formato: str = Query("excel", pattern="^(excel|pdf)$"),
     fecha_corte: Optional[str] = Query(None),
+    meses: int = Query(12, ge=1, le=24, description="Para Excel: cantidad de meses (una pestaña por mes)"),
+    años: Optional[str] = Query(None),
+    meses_list: Optional[str] = Query(None),
 ):
-    """Exporta reporte asesores en Excel o PDF."""
+    """Exporta reporte asesores. Excel: una pestaña por mes (MM/YYYY), solo datos del mes. PDF: fecha de corte única."""
+    if formato == "excel":
+        data_por_mes = get_asesores_por_mes(db=db, meses=meses, años=años, meses_list=meses_list)
+        content = _generar_excel_asesores_por_mes(data_por_mes)
+        hoy_str = date.today().isoformat()
+        return Response(
+            content=content,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename=reporte_asesores_{hoy_str}.xlsx"},
+        )
     data = get_reporte_asesores(db=db, fecha_corte=fecha_corte)
     import openpyxl
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Asesores"
-    ws.append(["Analista", "Préstamos", "Clientes", "Cartera", "Morosidad", "Cobrado", "% Cobrado", "% Mora"])
+    ws.append(["Analista", "Préstamos", "Clientes", "Cartera", "Vencimiento", "Cobrado", "% Cobrado", "% Vencimiento"])
     for r in data.get("resumen_por_analista", []):
         ws.append([r.get("analista", ""), r.get("total_prestamos", 0), r.get("total_clientes", 0), r.get("cartera_total", 0), r.get("morosidad_total", 0), r.get("total_cobrado", 0), r.get("porcentaje_cobrado", 0), r.get("porcentaje_morosidad", 0)])
     buf = io.BytesIO()
@@ -1554,7 +1770,7 @@ def _generar_pdf_asesores(data: dict) -> bytes:
     story.append(Paragraph("Reporte de Asesores", styles["Title"]))
     story.append(Paragraph(f"Fecha de corte: {data.get('fecha_corte', '')}", styles["Normal"]))
     story.append(Spacer(1, 12))
-    rows = [["Analista", "Préstamos", "Clientes", "Cartera", "Morosidad", "Cobrado", "% Cobrado", "% Mora"]]
+    rows = [["Analista", "Préstamos", "Clientes", "Cartera", "Vencimiento", "Cobrado", "% Cobrado", "% Vencimiento"]]
     for r in data.get("resumen_por_analista", []):
         rows.append([r.get("analista", ""), str(r.get("total_prestamos", 0)), str(r.get("total_clientes", 0)), str(r.get("cartera_total", 0)), str(r.get("morosidad_total", 0)), str(r.get("total_cobrado", 0)), str(r.get("porcentaje_cobrado", 0)), str(r.get("porcentaje_morosidad", 0))])
     t = Table(rows)
@@ -1569,18 +1785,15 @@ def _generar_pdf_asesores(data: dict) -> bytes:
 def get_productos_por_mes(
     db: Session = Depends(get_db),
     meses: int = Query(12, ge=1, le=24, description="Cantidad de meses hacia atrás"),
+    años: Optional[str] = Query(None),
+    meses_list: Optional[str] = Query(None),
 ):
-    """Productos por mes: una pestaña por mes. Columnas: Modelo, Suma total ventas (70% valor prestado) por modelo."""
-    hoy = date.today()
+    """Productos por mes: una pestaña por mes. Columnas: Modelo vehículo, Total financiamiento, Valor activo (70%)."""
     resultado: dict = {"meses": []}
+    periodos = _periodos_desde_filtros(años, meses_list, meses)
     fecha_ref = func.coalesce(func.date(Prestamo.fecha_aprobacion), func.date(Prestamo.fecha_registro))
 
-    for i in range(meses):
-        año = hoy.year
-        mes = hoy.month - i
-        while mes <= 0:
-            mes += 12
-            año -= 1
+    for (año, mes) in periodos:
         inicio = date(año, mes, 1)
         _, ultimo = calendar.monthrange(año, mes)
         fin = date(año, mes, ultimo)
@@ -1588,7 +1801,7 @@ def get_productos_por_mes(
         rows = db.execute(
             select(
                 Prestamo.modelo_vehiculo,
-                func.coalesce(func.sum(Prestamo.total_financiamiento * 0.70), 0).label("suma_ventas"),
+                func.coalesce(func.sum(Prestamo.total_financiamiento), 0).label("total_financiamiento"),
             )
             .select_from(Prestamo)
             .join(Cliente, Prestamo.cliente_id == Cliente.id)
@@ -1602,10 +1815,15 @@ def get_productos_por_mes(
             .order_by(func.sum(Prestamo.total_financiamiento).desc())
         ).fetchall()
 
-        items = [
-            {"modelo": r.modelo_vehiculo or "Sin modelo", "suma_ventas": round(_safe_float(r.suma_ventas), 2)}
-            for r in rows
-        ]
+        items = []
+        for r in rows:
+            total_fin = round(_safe_float(r.total_financiamiento), 2)
+            valor_activo = round(total_fin * 0.70, 2)
+            items.append({
+                "modelo": r.modelo_vehiculo or "Sin modelo",
+                "total_financiamiento": total_fin,
+                "valor_activo": valor_activo,
+            })
 
         resultado["meses"].append({
             "mes": mes,
@@ -1712,13 +1930,55 @@ def get_reporte_productos(
     }
 
 
+def _generar_excel_productos_por_mes(data_por_mes: dict) -> bytes:
+    """Genera Excel con una pestaña por mes (MM/YYYY). Columnas: Modelo vehículo | Total financiamiento | Valor activo (70%)."""
+    import openpyxl
+    wb = openpyxl.Workbook()
+    meses_data = data_por_mes.get("meses", [])
+
+    for idx, mes_data in enumerate(meses_data):
+        label = mes_data.get("label", f"Mes{idx+1}")
+        sheet_name = label.replace("/", "-")[:31]
+        if idx == 0:
+            ws = wb.active
+            ws.title = sheet_name
+        else:
+            ws = wb.create_sheet(title=sheet_name)
+
+        ws.append(["Reporte de Productos", mes_data.get("label", "")])
+        ws.append([])
+        ws.append(["Modelo de vehículo", "Total financiamiento ($)", "Valor del activo ($)"])
+        for r in mes_data.get("items", []):
+            ws.append([
+                r.get("modelo", ""),
+                r.get("total_financiamiento", 0),
+                r.get("valor_activo", 0),
+            ])
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
 @router.get("/exportar/productos")
 def exportar_productos(
     db: Session = Depends(get_db),
     formato: str = Query("excel", pattern="^(excel|pdf)$"),
     fecha_corte: Optional[str] = Query(None),
+    meses: int = Query(12, ge=1, le=24, description="Para Excel: cantidad de meses (una pestaña por mes)"),
+    años: Optional[str] = Query(None),
+    meses_list: Optional[str] = Query(None),
 ):
-    """Exporta reporte productos en Excel o PDF."""
+    """Exporta reporte productos. Excel: una pestaña por mes (MM/YYYY), columnas Modelo | Total financiamiento | Valor activo (70%). PDF: clásico."""
+    if formato == "excel":
+        data_por_mes = get_productos_por_mes(db=db, meses=meses, años=años, meses_list=meses_list)
+        content = _generar_excel_productos_por_mes(data_por_mes)
+        hoy_str = date.today().isoformat()
+        return Response(
+            content=content,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename=reporte_productos_{hoy_str}.xlsx"},
+        )
     data = get_reporte_productos(db=db, fecha_corte=fecha_corte)
     import openpyxl
     wb = openpyxl.Workbook()
@@ -1734,6 +1994,117 @@ def exportar_productos(
         pdf_content = _generar_pdf_productos(data)
         return Response(content=pdf_content, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=reporte_productos_{data['fecha_corte']}.pdf"})
     return Response(content=content, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename=reporte_productos_{data['fecha_corte']}.xlsx"})
+
+
+@router.get("/por-cedula")
+def get_reportes_por_cedula(db: Session = Depends(get_db)):
+    """
+    Reporte por cédula: id préstamo, cédula, nombre, total financiamiento, total abono,
+    cuotas totales, cuotas pagadas, cuotas atrasadas (estado != PAGADO).
+    """
+    prestamos = (
+        db.execute(
+            select(Prestamo)
+            .where(Prestamo.estado == "APROBADO")
+            .order_by(Prestamo.id)
+        )
+    ).scalars().all()
+
+    ids = [p.id for p in prestamos]
+    abono_map: dict = {}
+    pagadas_map: dict = {}
+    atrasadas_map: dict = {}
+
+    if ids:
+        rows_abono = db.execute(
+            select(Pago.prestamo_id, func.coalesce(func.sum(Pago.monto_pagado), 0))
+            .where(Pago.prestamo_id.in_(ids))
+            .group_by(Pago.prestamo_id)
+        ).fetchall()
+        abono_map = {r[0]: _safe_float(r[1]) for r in rows_abono}
+
+        rows_pagadas = db.execute(
+            select(Cuota.prestamo_id, func.count())
+            .where(Cuota.prestamo_id.in_(ids), Cuota.estado == "PAGADO")
+            .group_by(Cuota.prestamo_id)
+        ).fetchall()
+        pagadas_map = {r[0]: int(r[1]) for r in rows_pagadas}
+
+        rows_atrasadas = db.execute(
+            select(Cuota.prestamo_id, func.count())
+            .where(Cuota.prestamo_id.in_(ids), Cuota.estado != "PAGADO")
+            .group_by(Cuota.prestamo_id)
+        ).fetchall()
+        atrasadas_map = {r[0]: int(r[1]) for r in rows_atrasadas}
+
+    items: List[dict] = []
+    for p in prestamos:
+        cedula = p.cedula or ""
+        nombre = p.nombres or ""
+        if not cedula or not nombre:
+            row_cli = db.execute(select(Cliente.cedula, Cliente.nombres).where(Cliente.id == p.cliente_id)).first()
+            if row_cli:
+                cedula = cedula or (row_cli.cedula or "")
+                nombre = nombre or (row_cli.nombres or "")
+        items.append({
+            "id_prestamo": p.id,
+            "cedula": cedula,
+            "nombre": nombre,
+            "total_financiamiento": round(_safe_float(p.total_financiamiento), 2),
+            "total_abono": round(abono_map.get(p.id, 0), 2),
+            "cuotas_totales": p.numero_cuotas or 0,
+            "cuotas_pagadas": pagadas_map.get(p.id, 0),
+            "cuotas_atrasadas": atrasadas_map.get(p.id, 0),
+        })
+    return {"items": items}
+
+
+def _generar_excel_por_cedula(items: List[dict]) -> bytes:
+    """Genera Excel reporte por cédula. Columnas A-H."""
+    import openpyxl
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Por cédula"
+    ws.append(["Reporte por cédula"])
+    ws.append([])
+    ws.append([
+        "ID Préstamo",
+        "Cédula",
+        "Nombre",
+        "Total financiamiento ($)",
+        "Total abono ($)",
+        "Cuotas totales",
+        "Cuotas pagadas",
+        "Cuotas atrasadas",
+    ])
+    for r in items:
+        ws.append([
+            r.get("id_prestamo", ""),
+            r.get("cedula", ""),
+            r.get("nombre", ""),
+            r.get("total_financiamiento", 0),
+            r.get("total_abono", 0),
+            r.get("cuotas_totales", 0),
+            r.get("cuotas_pagadas", 0),
+            r.get("cuotas_atrasadas", 0),
+        ])
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+@router.get("/exportar/cedula")
+def exportar_cedula(db: Session = Depends(get_db)):
+    """Exporta reporte por cédula en Excel. Columnas: ID préstamo | Cédula | Nombre | Total financiamiento | Total abono | Cuotas totales | Cuotas pagadas | Cuotas atrasadas."""
+    data = get_reportes_por_cedula(db=db)
+    items = data.get("items", [])
+    content = _generar_excel_por_cedula(items)
+    hoy_str = date.today().isoformat()
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=reporte_por_cedula_{hoy_str}.xlsx"},
+    )
 
 
 def _generar_pdf_productos(data: dict) -> bytes:

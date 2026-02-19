@@ -21,9 +21,9 @@ export interface ReporteCartera {
 }
 
 export interface CarteraPorDiaItem {
-  fecha: string
-  monto_cobrar: number
+  dia: number
   cantidad_cuotas: number
+  monto_cobrar: number
 }
 
 export interface CarteraPorMes {
@@ -191,7 +191,7 @@ export interface ReporteAsesores {
 
 export interface AsesorPorMesItem {
   analista: string
-  morosidad_total: number
+  vencimiento_total: number
   total_prestamos: number
 }
 
@@ -232,7 +232,8 @@ export interface ReporteProductos {
 
 export interface ProductoPorMesItem {
   modelo: string
-  suma_ventas: number
+  total_financiamiento: number
+  valor_activo: number
 }
 
 export interface ProductosPorMes {
@@ -289,18 +290,17 @@ class ReporteService {
 
   /**
    * Exporta reporte de cartera en Excel o PDF
-   * @param formato 'excel' o 'pdf'
-   * @param fechaCorte Opcional. Si no se proporciona, usa la fecha actual
+   * @param filtros años y meses seleccionados (para Excel)
    */
   async exportarReporteCartera(
     formato: 'excel' | 'pdf',
-    fechaCorte?: string
+    fechaCorte?: string,
+    filtros?: { años: number[]; meses: number[] }
   ): Promise<Blob> {
     const params = new URLSearchParams({ formato })
-    if (fechaCorte) {
-      params.append('fecha_corte', fechaCorte)
-    }
-    // Usar directamente el cliente de axios para obtener el blob
+    if (fechaCorte) params.set('fecha_corte', fechaCorte)
+    if (filtros?.años?.length) params.set('años', filtros.años.join(','))
+    if (filtros?.meses?.length) params.set('meses_list', filtros.meses.join(','))
     const axiosInstance = apiClient.getAxiosInstance()
     const response = await axiosInstance.get(
       `${this.baseUrl}/exportar/cartera?${params.toString()}`,
@@ -387,14 +387,24 @@ class ReporteService {
   }
 
   /**
-   * Exporta reporte de pagos en Excel o PDF
+   * Exporta reporte de pagos. Excel: una pestaña por mes (Día | Cantidad pagos | Cantidad cédulas | Monto).
    */
   async exportarReportePagos(
-    fechaInicio: string,
-    fechaFin: string,
-    formato: 'excel' | 'pdf'
+    formato: 'excel' | 'pdf',
+    fechaInicio?: string,
+    fechaFin?: string,
+    meses: number = 12,
+    filtros?: { años: number[]; meses: number[] }
   ): Promise<Blob> {
-    const params = new URLSearchParams({ formato, fecha_inicio: fechaInicio, fecha_fin: fechaFin })
+    const params = new URLSearchParams({ formato })
+    if (formato === 'excel') {
+      params.set('meses', meses.toString())
+      if (filtros?.años?.length) params.set('años', filtros.años.join(','))
+      if (filtros?.meses?.length) params.set('meses_list', filtros.meses.join(','))
+    } else if (fechaInicio && fechaFin) {
+      params.set('fecha_inicio', fechaInicio)
+      params.set('fecha_fin', fechaFin)
+    }
     const axiosInstance = apiClient.getAxiosInstance()
     const response = await axiosInstance.get(
       `${this.baseUrl}/exportar/pagos?${params.toString()}`,
@@ -408,10 +418,13 @@ class ReporteService {
    */
   async exportarReporteMorosidad(
     formato: 'excel' | 'pdf',
-    fechaCorte?: string
+    fechaCorte?: string,
+    filtros?: { años: number[]; meses: number[] }
   ): Promise<Blob> {
     const params = new URLSearchParams({ formato })
     if (fechaCorte) params.set('fecha_corte', fechaCorte)
+    if (filtros?.años?.length) params.set('años', filtros.años.join(','))
+    if (filtros?.meses?.length) params.set('meses_list', filtros.meses.join(','))
     const axiosInstance = apiClient.getAxiosInstance()
     const response = await axiosInstance.get(
       `${this.baseUrl}/exportar/morosidad?${params.toString()}`,
@@ -442,10 +455,13 @@ class ReporteService {
    */
   async exportarReporteAsesores(
     formato: 'excel' | 'pdf',
-    fechaCorte?: string
+    fechaCorte?: string,
+    filtros?: { años: number[]; meses: number[] }
   ): Promise<Blob> {
     const params = new URLSearchParams({ formato })
     if (fechaCorte) params.set('fecha_corte', fechaCorte)
+    if (filtros?.años?.length) params.set('años', filtros.años.join(','))
+    if (filtros?.meses?.length) params.set('meses_list', filtros.meses.join(','))
     const axiosInstance = apiClient.getAxiosInstance()
     const response = await axiosInstance.get(
       `${this.baseUrl}/exportar/asesores?${params.toString()}`,
@@ -459,13 +475,29 @@ class ReporteService {
    */
   async exportarReporteProductos(
     formato: 'excel' | 'pdf',
-    fechaCorte?: string
+    fechaCorte?: string,
+    filtros?: { años: number[]; meses: number[] }
   ): Promise<Blob> {
     const params = new URLSearchParams({ formato })
     if (fechaCorte) params.set('fecha_corte', fechaCorte)
+    if (filtros?.años?.length) params.set('años', filtros.años.join(','))
+    if (filtros?.meses?.length) params.set('meses_list', filtros.meses.join(','))
     const axiosInstance = apiClient.getAxiosInstance()
     const response = await axiosInstance.get(
       `${this.baseUrl}/exportar/productos?${params.toString()}`,
+      { responseType: 'blob', timeout: 60000 }
+    )
+    return response.data as Blob
+  }
+
+  /**
+   * Exporta reporte por cédula en Excel.
+   * Columnas: ID préstamo | Cédula | Nombre | Total financiamiento | Total abono | Cuotas totales | Cuotas pagadas | Cuotas atrasadas.
+   */
+  async exportarReporteCedula(): Promise<Blob> {
+    const axiosInstance = apiClient.getAxiosInstance()
+    const response = await axiosInstance.get(
+      `${this.baseUrl}/exportar/cedula`,
       { responseType: 'blob', timeout: 60000 }
     )
     return response.data as Blob

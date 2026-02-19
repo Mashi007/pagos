@@ -22,14 +22,14 @@ function TablaAsesoresMes({ label, items }: { label: string; items: AsesorPorMes
       </CardHeader>
       <CardContent>
         {items.length === 0 ? (
-          <p className="text-gray-500 text-sm py-4">No hay morosidad en este período.</p>
+          <p className="text-gray-500 text-sm py-4">No hay vencimiento en este período.</p>
         ) : (
           <div className="rounded-md border overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Nombre analista</TableHead>
-                  <TableHead className="text-right">Total morosidad</TableHead>
+                  <TableHead className="text-right">Total vencimiento</TableHead>
                   <TableHead className="text-right">Total préstamos</TableHead>
                 </TableRow>
               </TableHeader>
@@ -38,7 +38,7 @@ function TablaAsesoresMes({ label, items }: { label: string; items: AsesorPorMes
                   <TableRow key={item.analista}>
                     <TableCell className="font-medium">{item.analista}</TableCell>
                     <TableCell className="text-right text-red-600 font-medium">
-                      {formatCurrency(item.morosidad_total)}
+                      {formatCurrency(item.vencimiento_total)}
                     </TableCell>
                     <TableCell className="text-right">{item.total_prestamos}</TableCell>
                   </TableRow>
@@ -103,7 +103,7 @@ export function ReporteAsesores() {
             Reporte Asesores
           </CardTitle>
           <CardDescription>
-            Una pestaña por mes. Columnas: Nombre analista, Total morosidad, Total préstamos. Orden descendente por morosidad.
+            Una pestaña por mes. Solo datos del mes reportado: cuotas que vencieron en ese mes sin pagar. Columnas: Analista, Total vencimiento, Total préstamos.
           </CardDescription>
         </div>
         <div className="flex items-center gap-2">
