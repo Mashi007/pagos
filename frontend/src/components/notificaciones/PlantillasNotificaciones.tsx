@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/ta
 import { Badge } from '../../components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import toast from 'react-hot-toast'
-import { FileCode, Upload, Search, FileText, Database, ChevronDown, ChevronUp, Edit2, Trash2, Calendar, AlertCircle } from 'lucide-react'
+import { Code2, Upload, Search, FileText, Database, ChevronDown, ChevronUp, Edit2, Trash2, Calendar, AlertCircle } from 'lucide-react'
 import { EditorPlantillaHTML } from './EditorPlantillaHTML'
 
 type EditorFocus = 'asunto' | 'encabezado' | 'cuerpo' | 'firma'
