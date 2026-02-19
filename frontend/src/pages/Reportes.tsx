@@ -298,7 +298,7 @@ export function Reportes() {
                   disabled={!isDisponible || isGenerando}
                   onClick={() => generarReporte(tipo.value)}
                   title={`Descargar ${tipo.label} en Excel`}
-                  className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all min-h-[100px] ${
+                  className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border-2 transition-all min-h-[100px] ${
                     isDisponible
                       ? 'hover:bg-blue-50 hover:border-blue-200 cursor-pointer hover:scale-105'
                       : 'opacity-50 cursor-not-allowed'
@@ -310,6 +310,7 @@ export function Reportes() {
                   ) : (
                     <IconComponent className="h-12 w-12 text-blue-600" aria-hidden />
                   )}
+                  <span className="text-xs font-medium text-center text-gray-600">{tipo.label}</span>
                 </button>
               )
             })}
