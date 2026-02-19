@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { PieChart, Loader2, RefreshCw, Package } from 'lucide-react'
+import { PieChart, Loader2, RefreshCw } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
@@ -16,7 +16,7 @@ function TablaProductosMes({ label, items }: { label: string; items: ProductoPor
     <Card className="border-l-4 border-l-purple-500">
       <CardHeader className="pb-2">
         <CardTitle className="text-lg flex items-center gap-2">
-          <Package className="h-5 w-5 text-purple-600" />
+          <PieChart className="h-5 w-5 text-purple-600" />
           {label}
         </CardTitle>
       </CardHeader>
@@ -52,6 +52,7 @@ function TablaProductosMes({ label, items }: { label: string; items: ProductoPor
 
 export function ReporteProductos() {
   const [mesesAtras, setMesesAtras] = useState(12)
+  const [tabActivo, setTabActivo] = useState('')
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['productos-por-mes', mesesAtras],
     queryFn: () => reporteService.getProductosPorMes(mesesAtras),
@@ -89,6 +90,9 @@ export function ReporteProductos() {
   }
 
   const meses = data?.meses ?? []
+  useEffect(() => {
+    if (meses[0]) setTabActivo(meses[0].label)
+  }, [meses.length, meses[0]?.label])
 
   return (
     <Card>
@@ -125,7 +129,7 @@ export function ReporteProductos() {
         {meses.length === 0 ? (
           <p className="text-gray-500 text-center py-8">No hay datos para mostrar.</p>
         ) : (
-          <Tabs defaultValue={meses[0].label} className="w-full">
+          <Tabs value={tabActivo || meses[0]?.label} onValueChange={setTabActivo} className="w-full">
             <TabsList className="flex flex-wrap gap-1 mb-4 h-auto">
               {meses.map((m) => (
                 <TabsTrigger key={`${m.año}-${m.mes}`} value={m.label}>

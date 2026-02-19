@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Users, Loader2, RefreshCw, User } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card'
@@ -54,6 +54,7 @@ function TablaAsesoresMes({ label, items }: { label: string; items: AsesorPorMes
 
 export function ReporteAsesores() {
   const [mesesAtras, setMesesAtras] = useState(12)
+  const [tabActivo, setTabActivo] = useState('')
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['asesores-por-mes', mesesAtras],
     queryFn: () => reporteService.getAsesoresPorMes(mesesAtras),
@@ -91,6 +92,9 @@ export function ReporteAsesores() {
   }
 
   const meses = data?.meses ?? []
+  useEffect(() => {
+    if (meses[0]) setTabActivo(meses[0].label)
+  }, [meses.length, meses[0]?.label])
 
   return (
     <Card>
@@ -127,7 +131,7 @@ export function ReporteAsesores() {
         {meses.length === 0 ? (
           <p className="text-gray-500 text-center py-8">No hay datos para mostrar.</p>
         ) : (
-          <Tabs defaultValue={meses[0].label} className="w-full">
+          <Tabs value={tabActivo || meses[0]?.label} onValueChange={setTabActivo} className="w-full">
             <TabsList className="flex flex-wrap gap-1 mb-4 h-auto">
               {meses.map((m) => (
                 <TabsTrigger key={`${m.año}-${m.mes}`} value={m.label}>

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { TrendingUp, User, DollarSign, Calendar, CreditCard, Loader2, RefreshCw } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card'
@@ -53,6 +54,7 @@ function ViñetaPagoVencido({ item }: { item: MorosidadPorRangosItem }) {
 }
 
 export function InformePagoVencido() {
+  const [tabActivo, setTabActivo] = useState(RANGOS_ORDER[0])
   const fechaCorte = new Date().toISOString().split('T')[0]
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['morosidad-por-rangos', fechaCorte],
@@ -110,7 +112,7 @@ export function InformePagoVencido() {
         </Button>
       </CardHeader>
       <CardContent>
-        <Tabs defaultValue={RANGOS_ORDER[0]} className="w-full">
+        <Tabs value={tabActivo} onValueChange={setTabActivo} className="w-full">
           <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 mb-4">
             {RANGOS_ORDER.map((key) => {
               const r = rangos[key]
