@@ -96,19 +96,23 @@ def get_resumen_dashboard(db: Session = Depends(get_db)):
         .distinct()
     )
     prestamos_mora = db.scalar(select(func.count()).select_from(subq_mora.subquery())) or 0
-    pagos_mes = db.scalar(
-        select(func.count())
-        .select_from(Cuota)
-        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-        .join(Cliente, Prestamo.cliente_id == Cliente.id)
-        .where(
-            Cliente.estado == "ACTIVO",
-            Prestamo.estado == "APROBADO",
-            Cuota.fecha_pago.isnot(None),
-            func.date(Cuota.fecha_pago) >= inicio_mes,
-            func.date(Cuota.fecha_pago) <= hoy,
+    # Monto total cobrado este mes (cuotas con fecha_pago en el mes actual)
+    pagos_mes = _safe_float(
+        db.scalar(
+            select(func.coalesce(func.sum(Cuota.monto), 0))
+            .select_from(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(
+                Cliente.estado == "ACTIVO",
+                Prestamo.estado == "APROBADO",
+                Cuota.fecha_pago.isnot(None),
+                func.date(Cuota.fecha_pago) >= inicio_mes,
+                func.date(Cuota.fecha_pago) <= hoy,
+            )
         )
-    ) or 0
+        or 0
+    )
 
     return {
         "total_clientes": total_clientes,
@@ -615,6 +619,16 @@ def _generar_pdf_pagos(data: dict) -> bytes:
     t = Table(resumen)
     t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), "#e0e0e0"), ("GRID", (0, 0), (-1, -1), 0.5, "#ccc")]))
     story.append(t)
+    pagos_por_dia = data.get("pagos_por_dia", [])
+    if pagos_por_dia:
+        story.append(Spacer(1, 12))
+        story.append(Paragraph("Pagos por día", styles["Heading2"]))
+        rows = [["Fecha", "Cantidad", "Monto"]]
+        for r in pagos_por_dia:
+            rows.append([r.get("fecha", ""), str(r.get("cantidad", 0)), str(r.get("monto", 0))])
+        t2 = Table(rows)
+        t2.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), "#e0e0e0"), ("GRID", (0, 0), (-1, -1), 0.5, "#ccc")]))
+        story.append(t2)
     doc.build(story)
     return buf.getvalue()
 
@@ -771,6 +785,40 @@ def _generar_excel_morosidad(data: dict) -> bytes:
     return buf.getvalue()
 
 
+def _generar_pdf_morosidad(data: dict) -> bytes:
+    from reportlab.lib.pagesizes import letter
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=letter)
+    styles = getSampleStyleSheet()
+    story = []
+    story.append(Paragraph("Reporte de Morosidad (Pago vencido)", styles["Title"]))
+    story.append(Paragraph(f"Fecha de corte: {data.get('fecha_corte', '')}", styles["Normal"]))
+    story.append(Spacer(1, 12))
+    resumen = [
+        ["Total préstamos en mora", str(data.get("total_prestamos_mora", 0))],
+        ["Total clientes en mora", str(data.get("total_clientes_mora", 0))],
+        ["Monto total mora", str(data.get("monto_total_mora", 0))],
+        ["Promedio días mora", str(data.get("promedio_dias_mora", 0))],
+    ]
+    t = Table(resumen)
+    t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), "#e0e0e0"), ("GRID", (0, 0), (-1, -1), 0.5, "#ccc")]))
+    story.append(t)
+    mora_analista = data.get("morosidad_por_analista", [])
+    if mora_analista:
+        story.append(Spacer(1, 12))
+        story.append(Paragraph("Morosidad por analista", styles["Heading2"]))
+        rows = [["Analista", "Préstamos", "Clientes", "Monto mora", "Prom. días"]]
+        for r in mora_analista:
+            rows.append([r.get("analista", ""), str(r.get("cantidad_prestamos", 0)), str(r.get("cantidad_clientes", 0)), str(r.get("monto_total_mora", 0)), str(r.get("promedio_dias_mora", 0))])
+        t2 = Table(rows)
+        t2.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), "#e0e0e0"), ("GRID", (0, 0), (-1, -1), 0.5, "#ccc")]))
+        story.append(t2)
+    doc.build(story)
+    return buf.getvalue()
+
+
 @router.get("/exportar/morosidad")
 def exportar_morosidad(
     db: Session = Depends(get_db),
@@ -780,16 +828,7 @@ def exportar_morosidad(
     """Exporta reporte de morosidad en Excel o PDF."""
     data = get_reporte_morosidad(db=db, fecha_corte=fecha_corte)
     if formato == "pdf":
-        content = _generar_pdf_cartera({
-            "fecha_corte": data["fecha_corte"],
-            "cartera_total": data["monto_total_mora"],
-            "capital_pendiente": data["monto_total_mora"],
-            "mora_total": data["monto_total_mora"],
-            "cantidad_prestamos_activos": data["total_prestamos_mora"],
-            "cantidad_prestamos_mora": data["total_prestamos_mora"],
-            "distribucion_por_monto": [],
-            "distribucion_por_mora": [],
-        })
+        content = _generar_pdf_morosidad(data)
         return Response(content=content, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=reporte_morosidad_{data['fecha_corte']}.pdf"})
     content = _generar_excel_morosidad(data)
     return Response(
@@ -954,9 +993,44 @@ def exportar_financiero(
     wb.save(buf)
     content = buf.getvalue()
     if formato == "pdf":
-        pdf_content = _generar_pdf_cartera({"fecha_corte": data["fecha_corte"], "cartera_total": data["cartera_total"], "capital_pendiente": data["cartera_pendiente"], "mora_total": data["morosidad_total"], "cantidad_prestamos_activos": 0, "cantidad_prestamos_mora": 0, "distribucion_por_monto": [], "distribucion_por_mora": []})
+        pdf_content = _generar_pdf_financiero(data)
         return Response(content=pdf_content, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=reporte_financiero_{data['fecha_corte']}.pdf"})
     return Response(content=content, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename=reporte_financiero_{data['fecha_corte']}.xlsx"})
+
+
+def _generar_pdf_financiero(data: dict) -> bytes:
+    from reportlab.lib.pagesizes import letter
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=letter)
+    styles = getSampleStyleSheet()
+    story = []
+    story.append(Paragraph("Reporte Financiero", styles["Title"]))
+    story.append(Paragraph(f"Fecha de corte: {data.get('fecha_corte', '')}", styles["Normal"]))
+    story.append(Spacer(1, 12))
+    resumen = [
+        ["Total ingresos", str(data.get("total_ingresos", 0))],
+        ["Cantidad pagos", str(data.get("cantidad_pagos", 0))],
+        ["Cartera total", str(data.get("cartera_total", 0))],
+        ["Morosidad total", str(data.get("morosidad_total", 0))],
+        ["Porcentaje cobrado (%)", str(data.get("porcentaje_cobrado", 0))],
+    ]
+    t = Table(resumen)
+    t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), "#e0e0e0"), ("GRID", (0, 0), (-1, -1), 0.5, "#ccc")]))
+    story.append(t)
+    flujo = data.get("flujo_caja", [])
+    if flujo:
+        story.append(Spacer(1, 12))
+        story.append(Paragraph("Flujo de caja", styles["Heading2"]))
+        rows = [["Mes", "Ingresos", "Egresos programados", "Flujo neto"]]
+        for r in flujo:
+            rows.append([r.get("mes", ""), str(r.get("ingresos", 0)), str(r.get("egresos_programados", 0)), str(r.get("flujo_neto", 0))])
+        t2 = Table(rows)
+        t2.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), "#e0e0e0"), ("GRID", (0, 0), (-1, -1), 0.5, "#ccc")]))
+        story.append(t2)
+    doc.build(story)
+    return buf.getvalue()
 
 
 # ---------- Reporte Asesores ----------
@@ -1033,9 +1107,30 @@ def exportar_asesores(
     wb.save(buf)
     content = buf.getvalue()
     if formato == "pdf":
-        pdf_content = _generar_pdf_cartera({"fecha_corte": data["fecha_corte"], "cartera_total": 0, "capital_pendiente": 0, "mora_total": 0, "cantidad_prestamos_activos": 0, "cantidad_prestamos_mora": 0, "distribucion_por_monto": [], "distribucion_por_mora": []})
+        pdf_content = _generar_pdf_asesores(data)
         return Response(content=pdf_content, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=reporte_asesores_{data['fecha_corte']}.pdf"})
     return Response(content=content, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename=reporte_asesores_{data['fecha_corte']}.xlsx"})
+
+
+def _generar_pdf_asesores(data: dict) -> bytes:
+    from reportlab.lib.pagesizes import letter
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=letter)
+    styles = getSampleStyleSheet()
+    story = []
+    story.append(Paragraph("Reporte de Asesores", styles["Title"]))
+    story.append(Paragraph(f"Fecha de corte: {data.get('fecha_corte', '')}", styles["Normal"]))
+    story.append(Spacer(1, 12))
+    rows = [["Analista", "Préstamos", "Clientes", "Cartera", "Morosidad", "Cobrado", "% Cobrado", "% Mora"]]
+    for r in data.get("resumen_por_analista", []):
+        rows.append([r.get("analista", ""), str(r.get("total_prestamos", 0)), str(r.get("total_clientes", 0)), str(r.get("cartera_total", 0)), str(r.get("morosidad_total", 0)), str(r.get("total_cobrado", 0)), str(r.get("porcentaje_cobrado", 0)), str(r.get("porcentaje_morosidad", 0))])
+    t = Table(rows)
+    t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), "#e0e0e0"), ("GRID", (0, 0), (-1, -1), 0.5, "#ccc")]))
+    story.append(t)
+    doc.build(story)
+    return buf.getvalue()
 
 
 # ---------- Reporte Productos ----------
@@ -1153,6 +1248,37 @@ def exportar_productos(
     wb.save(buf)
     content = buf.getvalue()
     if formato == "pdf":
-        pdf_content = _generar_pdf_cartera({"fecha_corte": data["fecha_corte"], "cartera_total": 0, "capital_pendiente": 0, "mora_total": 0, "cantidad_prestamos_activos": 0, "cantidad_prestamos_mora": 0, "distribucion_por_monto": [], "distribucion_por_mora": []})
+        pdf_content = _generar_pdf_productos(data)
         return Response(content=pdf_content, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=reporte_productos_{data['fecha_corte']}.pdf"})
     return Response(content=content, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename=reporte_productos_{data['fecha_corte']}.xlsx"})
+
+
+def _generar_pdf_productos(data: dict) -> bytes:
+    from reportlab.lib.pagesizes import letter
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=letter)
+    styles = getSampleStyleSheet()
+    story = []
+    story.append(Paragraph("Reporte de Productos", styles["Title"]))
+    story.append(Paragraph(f"Fecha de corte: {data.get('fecha_corte', '')}", styles["Normal"]))
+    story.append(Spacer(1, 12))
+    rows = [["Producto", "Préstamos", "Clientes", "Cartera", "Promedio", "Cobrado", "Mora", "% Cobrado"]]
+    for r in data.get("resumen_por_producto", []):
+        rows.append([r.get("producto", ""), str(r.get("total_prestamos", 0)), str(r.get("total_clientes", 0)), str(r.get("cartera_total", 0)), str(r.get("promedio_prestamo", 0)), str(r.get("total_cobrado", 0)), str(r.get("morosidad_total", 0)), str(r.get("porcentaje_cobrado", 0))])
+    t = Table(rows)
+    t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), "#e0e0e0"), ("GRID", (0, 0), (-1, -1), 0.5, "#ccc")]))
+    story.append(t)
+    prod_conc = data.get("productos_por_concesionario", [])
+    if prod_conc:
+        story.append(Spacer(1, 12))
+        story.append(Paragraph("Productos por concesionario", styles["Heading2"]))
+        rows2 = [["Concesionario", "Producto", "Cant. préstamos", "Monto total"]]
+        for r in prod_conc:
+            rows2.append([r.get("concesionario", ""), r.get("producto", ""), str(r.get("cantidad_prestamos", 0)), str(r.get("monto_total", 0))])
+        t2 = Table(rows2)
+        t2.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), "#e0e0e0"), ("GRID", (0, 0), (-1, -1), 0.5, "#ccc")]))
+        story.append(t2)
+    doc.build(story)
+    return buf.getvalue()
