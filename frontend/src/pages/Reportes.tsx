@@ -24,9 +24,9 @@ import { DialogReporteFiltros, type FiltrosReporte } from '../components/reporte
 /** Cada icono = un reporte. Click = abre diálogo años/meses, luego descarga Excel. */
 const tiposReporte = [
   { value: 'CARTERA', label: 'Cuentas por cobrar', icon: DollarSign },
-  { value: 'MOROSIDAD', label: 'Pago vencido', icon: TrendingUp },
+  { value: 'MOROSIDAD', label: 'Morosidad', icon: TrendingUp },
   { value: 'PAGOS', label: 'Pagos', icon: Users },
-  { value: 'ASESORES', label: 'Asesores', icon: UserCheck },
+  { value: 'ASESORES', label: 'Pago vencido', icon: UserCheck },
   { value: 'PRODUCTOS', label: 'Productos', icon: PieChart },
   { value: 'CEDULA', label: 'Por cédula', icon: CreditCard },
 ]
@@ -99,8 +99,9 @@ export function Reportes() {
         toast.dismiss()
         toast.success(`Reporte de ${tipo} descargado`)
       } else if (tipo === 'ASESORES') {
-        const blob = await reporteService.exportarReporteAsesores('excel', fechaCorte, filtros)
-        descargarBlob(blob, `reporte_asesores_${fechaCorte}.${ext}`)
+        // ASESORES ahora es Pago vencido (antes MOROSIDAD)
+        const blob = await reporteService.exportarReporteMorosidad('excel', fechaCorte, filtros)
+        descargarBlob(blob, `reporte_pago_vencido_${fechaCorte}.${ext}`)
         toast.dismiss()
         toast.success(`Reporte de ${tipo} descargado`)
       } else if (tipo === 'PRODUCTOS') {

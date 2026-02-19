@@ -61,7 +61,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
     if (totalPagado >= montoCuota - 0.01 && pagoConciliado) {
       return 'CONCILIADO'
     }
-    // Si total_pagado >= monto_cuota (pagado pero no conciliado)
+    // Si total_pagado >= monto_cuota (pagado pero no necesariamente conciliado en BD, pero se muestra como pagado)
     if (totalPagado >= montoCuota - 0.01) {
       return 'PAGADO'
     }
@@ -74,7 +74,13 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
       }
       return 'PARCIAL'
     }
-    // Si no hay pago, devolver el estado original o PENDIENTE
+    // Si no hay pago, verificar vencimiento
+    const hoy = new Date()
+    const fechaVencimiento = cuota.fecha_vencimiento ? new Date(cuota.fecha_vencimiento) : null
+    if (fechaVencimiento && fechaVencimiento < hoy) {
+      return 'ATRASADO'
+    }
+    // Si no hay pago y no está vencido, devolver el estado original o PENDIENTE
     return cuota.estado || 'PENDIENTE'
   }
 
@@ -320,9 +326,9 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
                       ${saldoFinal.toFixed(2)}
                     </TableCell>
                     <TableCell className="text-right">
-                      {cuota.pago_conciliado && (cuota.pago_monto_conciliado ?? cuota.total_pagado ?? 0) > 0 ? (
-                        <span className="text-emerald-600 font-medium">
-                          ${((cuota.pago_monto_conciliado ?? cuota.total_pagado ?? 0) as number).toFixed(2)}
+                      {cuota.total_pagado && cuota.total_pagado > 0 ? (
+                        <span className={cuota.pago_conciliado ? 'text-emerald-600 font-medium' : 'text-blue-600 font-medium'}>
+                          ${(cuota.total_pagado as number).toFixed(2)}
                         </span>
                       ) : (
                         <span className="text-gray-400">—</span>

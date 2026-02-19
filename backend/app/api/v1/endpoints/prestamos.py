@@ -519,15 +519,20 @@ def get_cuotas_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
             "fecha_vencimiento": c.fecha_vencimiento.isoformat() if c.fecha_vencimiento else None,
             "monto": float(c.monto) if c.monto is not None else 0,
             "monto_cuota": float(c.monto) if c.monto is not None else 0,
+            "monto_capital": None,  # Se calcula en frontend si es necesario
+            "monto_interes": None,  # Se calcula en frontend si es necesario
             "saldo_capital_inicial": float(c.saldo_capital_inicial) if c.saldo_capital_inicial is not None else 0,
             "saldo_capital_final": float(c.saldo_capital_final) if c.saldo_capital_final is not None else 0,
+            "capital_pagado": None,  # Se calcula en frontend si es necesario
+            "interes_pagado": None,  # Se calcula en frontend si es necesario
             "total_pagado": float(c.total_pagado) if c.total_pagado is not None else 0,
             "fecha_pago": c.fecha_pago.isoformat() if c.fecha_pago else None,
             "estado": c.estado or "PENDIENTE",
             "dias_mora": c.dias_mora if c.dias_mora is not None else 0,
+            "dias_morosidad": c.dias_morosidad if c.dias_morosidad is not None else 0,
             "pago_conciliado": bool(pago_conciliado) if pago_conciliado is not None else False,
-            # Monto por cuota: usar total_pagado (porción aplicada a esta cuota), no Pago.monto_pagado (total del pago)
-            "pago_monto_conciliado": float(c.total_pagado) if pago_conciliado and c.total_pagado is not None else 0,
+            # Monto conciliado: usar total_pagado si la cuota tiene pago, independientemente de conciliado
+            "pago_monto_conciliado": float(c.total_pagado) if c.total_pagado is not None and c.total_pagado > 0 else 0,
         }
         for c, pago_conciliado, pago_monto in rows
     ]

@@ -492,7 +492,7 @@ class ReporteService {
 
   /**
    * Exporta reporte por cédula en Excel.
-   * Columnas: ID préstamo | Cédula | Nombre | Total financiamiento | Total abono | Cuotas totales | Cuotas pagadas | Cuotas atrasadas.
+   * Columnas: ID préstamo | Cédula | Nombre | Total financiamiento | Total abono | Cuotas totales | Cuotas pagadas | Cuotas atrasadas | Cuotas atrasadas ($).
    */
   async exportarReporteCedula(): Promise<Blob> {
     const axiosInstance = apiClient.getAxiosInstance()

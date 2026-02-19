@@ -532,24 +532,45 @@ def get_reporte_cartera(
 def _generar_excel_cartera_por_mes(data_por_mes: dict) -> bytes:
     """Genera Excel con una pestaña por mes (MM/YYYY). Columnas: Día, Cuotas por cobrar, Monto ($)."""
     import openpyxl
+    from datetime import datetime
+    
     wb = openpyxl.Workbook()
     meses_data = data_por_mes.get("meses", [])
 
+    # Diccionario de meses en español
+    meses_es = {
+        1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril", 5: "Mayo", 6: "Junio",
+        7: "Julio", 8: "Agosto", 9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
+    }
+
     for idx, mes_data in enumerate(meses_data):
-        label = mes_data.get("label", f"Mes{idx+1}")
-        sheet_name = label.replace("/", "-")[:31]
+        mes = mes_data.get("mes", 1)
+        año = mes_data.get("año", datetime.now().year)
+        mes_nombre = meses_es.get(mes, "")
+        label = mes_data.get("label", f"{mes:02d}/{año}")
+        sheet_name = f"{mes_nombre} {año}"[:31]
+        
         if idx == 0:
             ws = wb.active
             ws.title = sheet_name
         else:
             ws = wb.create_sheet(title=sheet_name)
 
-        ws.append(["Reporte de Cartera", mes_data.get("label", "")])
+        ws.append(["Reporte de Cartera", label])
         ws.append(["Cuotas por cobrar por día del mes (dato actualizado al aprobar/eliminar préstamos)"])
         ws.append([])
         ws.append(["Día", "Cuotas por cobrar", "Monto ($)"])
+        
         for item in mes_data.get("items", []):
-            ws.append([item.get("dia", 0), item.get("cantidad_cuotas", 0), item.get("monto_cobrar", 0)])
+            row_num = ws.max_row + 1
+            ws.append([
+                item.get("dia", 0),
+                item.get("cantidad_cuotas", 0),
+                item.get("monto_cobrar", 0)
+            ])
+            # Aplicar formato dólares con 2 decimales a la columna C (Monto)
+            cell = ws.cell(row=row_num, column=3)
+            cell.number_format = '$#,##0.00'
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -852,22 +873,47 @@ def get_pagos_por_mes(
 def _generar_excel_pagos_por_mes(data_por_mes: dict) -> bytes:
     """Genera Excel con una pestaña por mes (MM/YYYY). Columnas: Día | Cantidad pagos | Cantidad cédulas | Monto ($)."""
     import openpyxl
+    from datetime import datetime
+    
     wb = openpyxl.Workbook()
     meses_data = data_por_mes.get("meses", [])
 
+    # Diccionario de meses en español
+    meses_es = {
+        1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril", 5: "Mayo", 6: "Junio",
+        7: "Julio", 8: "Agosto", 9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
+    }
+
     for idx, mes_data in enumerate(meses_data):
-        label = mes_data.get("label", f"Mes{idx+1}")
-        sheet_name = label.replace("/", "-")[:31]
+        mes = mes_data.get("mes", 1)
+        año = mes_data.get("año", datetime.now().year)
+        mes_nombre = meses_es.get(mes, "")
+        label = mes_data.get("label", f"{mes:02d}/{año}")
+        sheet_name = f"{mes_nombre} {año}"[:31]
+        
         if idx == 0:
             ws = wb.active
             ws.title = sheet_name
         else:
             ws = wb.create_sheet(title=sheet_name)
 
-        ws.append(["Reporte de Pagos", mes_data.get("label", "")])
+        ws.append(["Reporte de Pagos", label])
         ws.append([])
+        
+        # Calcular totales
+        items = mes_data.get("items", [])
+        total_pagos = sum(item.get("cantidad_pagos", 0) for item in items)
+        total_cedulas = sum(item.get("cantidad_cedulas", 0) for item in items)
+        total_monto = sum(item.get("monto_total", 0) for item in items)
+        
+        # Agregar fila de totales
+        ws.append([
+            f"Total pagos: {total_pagos} | Total cédulas: {total_cedulas} | Total monto: ${total_monto:.2f}"
+        ])
+        ws.append([])
+        
         ws.append(["Día", "Cantidad de pagos", "Cantidad de cédulas", "Monto ($)"])
-        for item in mes_data.get("items", []):
+        for item in items:
             ws.append([
                 item.get("dia", 0),
                 item.get("cantidad_pagos", 0),
@@ -1082,7 +1128,7 @@ def get_morosidad_por_mes(
     años: Optional[str] = Query(None),
     meses_list: Optional[str] = Query(None),
 ):
-    """Morosidad por mes: una pestaña por mes (mes/año). Cuotas vencidas sin pagar a fin de cada mes, agrupadas por analista."""
+    """Morosidad por mes: una pestaña por mes (mes/año). Cuotas vencidas sin pagar a fin de cada mes, agrupadas por cédula."""
     resultado: dict = {"meses": []}
     periodos = _periodos_desde_filtros(años, meses_list, meses)
 
@@ -1141,27 +1187,56 @@ def get_morosidad_por_mes(
         dias_list = [(fc - r.fecha_vencimiento).days for r in cuotas_mora]
         promedio_dias_mora = sum(dias_list) / len(dias_list) if dias_list else 0
 
-        morosidad_por_analista: List[dict] = []
-        analistas = db.execute(select(Prestamo.analista).where(Prestamo.id.in_(prestamos_ids)).distinct()).fetchall()
-        for (analista,) in analistas:
-            if not analista:
+        morosidad_por_cedula: List[dict] = []
+        # Agrupar por cédula en lugar de analista
+        cedulas = db.execute(
+            select(Prestamo.cedula, Prestamo.nombres)
+            .select_from(Prestamo)
+            .where(Prestamo.id.in_(prestamos_ids))
+            .distinct()
+        ).fetchall()
+        
+        for cedula, nombres in cedulas:
+            if not cedula:
                 continue
-            ids_ana = db.execute(select(Prestamo.id).where(Prestamo.analista == analista, Prestamo.id.in_(prestamos_ids))).fetchall()
-            ids_ana = [x[0] for x in ids_ana]
-            monto_ana = _safe_float(db.scalar(select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(Cuota.fecha_pago.is_(None), Cuota.fecha_vencimiento < fc, Cuota.prestamo_id.in_(ids_ana)))) or 0
-            cuotas_ana = db.execute(
-                select(Cuota.fecha_vencimiento).select_from(Cuota).where(
-                    Cuota.fecha_pago.is_(None), Cuota.fecha_vencimiento < fc, Cuota.prestamo_id.in_(ids_ana)
+            ids_ced = db.execute(
+                select(Prestamo.id)
+                .where(Prestamo.cedula == cedula, Prestamo.id.in_(prestamos_ids))
+            ).fetchall()
+            ids_ced = [x[0] for x in ids_ced]
+            
+            monto_ced = _safe_float(
+                db.scalar(
+                    select(func.coalesce(func.sum(Cuota.monto), 0))
+                    .select_from(Cuota)
+                    .where(
+                        Cuota.fecha_pago.is_(None),
+                        Cuota.fecha_vencimiento < fc,
+                        Cuota.prestamo_id.in_(ids_ced)
+                    )
+                )
+            ) or 0
+            
+            cuotas_ced = db.execute(
+                select(Cuota.fecha_vencimiento)
+                .select_from(Cuota)
+                .where(
+                    Cuota.fecha_pago.is_(None),
+                    Cuota.fecha_vencimiento < fc,
+                    Cuota.prestamo_id.in_(ids_ced)
                 )
             ).fetchall()
-            dias_ana = [(fc - r.fecha_vencimiento).days for r in cuotas_ana]
-            prom_dias_ana = sum(dias_ana) / len(dias_ana) if dias_ana else 0
-            morosidad_por_analista.append({
-                "analista": analista,
-                "cantidad_prestamos": len(ids_ana),
-                "cantidad_clientes": db.scalar(select(func.count(func.distinct(Prestamo.cliente_id))).select_from(Prestamo).where(Prestamo.id.in_(ids_ana))) or 0,
-                "monto_total_mora": monto_ana,
-                "promedio_dias_mora": prom_dias_ana,
+            
+            dias_ced = [(fc - r.fecha_vencimiento).days for r in cuotas_ced]
+            prom_dias_ced = sum(dias_ced) / len(dias_ced) if dias_ced else 0
+            
+            morosidad_por_cedula.append({
+                "cedula": cedula,
+                "nombres": nombres,
+                "cantidad_prestamos": len(ids_ced),
+                "cantidad_clientes": 1,  # Una cédula = una persona
+                "monto_total_mora": monto_ced,
+                "promedio_dias_mora": prom_dias_ced,
             })
 
         resultado["meses"].append({
@@ -1173,7 +1248,7 @@ def get_morosidad_por_mes(
             "total_clientes_mora": total_clientes_mora,
             "monto_total_mora": monto_total_mora,
             "promedio_dias_mora": round(promedio_dias_mora, 1),
-            "morosidad_por_analista": morosidad_por_analista,
+            "morosidad_por_cedula": morosidad_por_cedula,
         })
 
     return resultado
@@ -1298,33 +1373,52 @@ def get_morosidad_por_rangos(
 
 
 def _generar_excel_morosidad_por_mes(data_por_mes: dict) -> bytes:
-    """Genera Excel con una pestaña por mes (mes/año)."""
+    """Genera Excel con una pestaña por mes (mes/año). Agrupado por cédula."""
     import openpyxl
+    from datetime import datetime
+    
     wb = openpyxl.Workbook()
     meses_data = data_por_mes.get("meses", [])
 
+    # Diccionario de meses en español
+    meses_es = {
+        1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril", 5: "Mayo", 6: "Junio",
+        7: "Julio", 8: "Agosto", 9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
+    }
+
     for idx, mes_data in enumerate(meses_data):
-        label = mes_data.get("label", f"Mes{idx+1}")
-        # Excel limita nombres de hoja a 31 chars; usar formato corto MM/YYYY
-        sheet_name = label.replace("/", "-")[:31]
+        mes = mes_data.get("mes", 1)
+        año = mes_data.get("año", datetime.now().year)
+        mes_nombre = meses_es.get(mes, "")
+        label = mes_data.get("label", f"{mes:02d}/{año}")
+        sheet_name = f"{mes_nombre} {año}"[:31]
+        
         if idx == 0:
             ws = wb.active
             ws.title = sheet_name
         else:
             ws = wb.create_sheet(title=sheet_name)
 
-        ws.append(["Informe de Vencimiento de Pagos", mes_data.get("label", "")])
+        ws.append(["Informe de Vencimiento de Pagos", label])
         ws.append([])
         ws.append(["Total préstamos con pago vencido", mes_data.get("total_prestamos_mora", 0)])
         ws.append(["Total clientes con pago vencido", mes_data.get("total_clientes_mora", 0)])
         ws.append(["Monto total en dólares", mes_data.get("monto_total_mora", 0)])
         ws.append(["Promedio días de atraso", round(_safe_float(mes_data.get("promedio_dias_mora", 0)), 1)])
         ws.append([])
-        ws.append(["Pago vencido por analista"])
-        ws.append(["Analista", "Cant. préstamos", "Cant. clientes", "Monto en dólares", "Prom. días"])
-        for r in mes_data.get("morosidad_por_analista", []):
+        ws.append(["Pago vencido por cédula"])
+        ws.append(["Cédula", "Nombre", "Cant. préstamos", "Cant. clientes", "Monto en dólares", "Prom. días"])
+        
+        for r in mes_data.get("morosidad_por_cedula", []):
             prom_dias = round(_safe_float(r.get("promedio_dias_mora", 0)), 1)
-            ws.append([r.get("analista", ""), r.get("cantidad_prestamos", 0), r.get("cantidad_clientes", 0), r.get("monto_total_mora", 0), prom_dias])
+            ws.append([
+                r.get("cedula", ""),
+                r.get("nombres", ""),
+                r.get("cantidad_prestamos", 0),
+                r.get("cantidad_clientes", 0),
+                r.get("monto_total_mora", 0),
+                prom_dias
+            ])
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -1697,26 +1791,48 @@ def get_reporte_asesores(
 
 
 def _generar_excel_asesores_por_mes(data_por_mes: dict) -> bytes:
-    """Genera Excel con una pestaña por mes (MM/YYYY). Solo datos del mes reportado. Columnas: Analista, Vencimiento, Préstamos."""
+    """Genera Excel con una pestaña por mes (MM/YYYY). Solo datos del mes reportado. Columnas: Analista, Total préstamos, Total vencimiento."""
     import openpyxl
+    from openpyxl.styles import numbers
+    from datetime import datetime
+    
     wb = openpyxl.Workbook()
     meses_data = data_por_mes.get("meses", [])
 
+    # Diccionario de meses en español
+    meses_es = {
+        1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril", 5: "Mayo", 6: "Junio",
+        7: "Julio", 8: "Agosto", 9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
+    }
+
     for idx, mes_data in enumerate(meses_data):
-        label = mes_data.get("label", f"Mes{idx+1}")
-        sheet_name = label.replace("/", "-")[:31]
+        mes = mes_data.get("mes", 1)
+        año = mes_data.get("año", datetime.now().year)
+        mes_nombre = meses_es.get(mes, "")
+        label = mes_data.get("label", f"{mes:02d}/{año}")
+        sheet_name = f"{mes_nombre} {año}"[:31]
+        
         if idx == 0:
             ws = wb.active
             ws.title = sheet_name
         else:
             ws = wb.create_sheet(title=sheet_name)
 
-        ws.append(["Reporte de Analistas", mes_data.get("label", "")])
+        ws.append(["Reporte de Analistas", label])
         ws.append(["Solo cuotas que vencieron en este mes y no están pagadas"])
         ws.append([])
-        ws.append(["Analista", "Total vencimiento ($)", "Total préstamos"])
+        ws.append(["Analista", "Total préstamos", "Total vencimiento ($)"])
+        
         for r in mes_data.get("items", []):
-            ws.append([r.get("analista", ""), r.get("vencimiento_total", 0), r.get("total_prestamos", 0)])
+            row_num = ws.max_row + 1
+            ws.append([
+                r.get("analista", ""), 
+                r.get("total_prestamos", 0), 
+                r.get("vencimiento_total", 0)
+            ])
+            # Aplicar formato contable con 2 decimales a la columna C (Total vencimiento)
+            cell = ws.cell(row=row_num, column=3)
+            cell.number_format = '#,##0.00'
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -1933,27 +2049,47 @@ def get_reporte_productos(
 def _generar_excel_productos_por_mes(data_por_mes: dict) -> bytes:
     """Genera Excel con una pestaña por mes (MM/YYYY). Columnas: Modelo vehículo | Total financiamiento | Valor activo (70%)."""
     import openpyxl
+    from datetime import datetime
+    
     wb = openpyxl.Workbook()
     meses_data = data_por_mes.get("meses", [])
 
+    # Diccionario de meses en español
+    meses_es = {
+        1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril", 5: "Mayo", 6: "Junio",
+        7: "Julio", 8: "Agosto", 9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
+    }
+
     for idx, mes_data in enumerate(meses_data):
-        label = mes_data.get("label", f"Mes{idx+1}")
-        sheet_name = label.replace("/", "-")[:31]
+        mes = mes_data.get("mes", 1)
+        año = mes_data.get("año", datetime.now().year)
+        mes_nombre = meses_es.get(mes, "")
+        label = mes_data.get("label", f"{mes:02d}/{año}")
+        sheet_name = f"{mes_nombre} {año}"[:31]  # Título en español con límite de 31 caracteres
+        
         if idx == 0:
             ws = wb.active
             ws.title = sheet_name
         else:
             ws = wb.create_sheet(title=sheet_name)
 
-        ws.append(["Reporte de Productos", mes_data.get("label", "")])
+        # Encabezado
+        ws.append(["Reporte de Productos", label])
         ws.append([])
         ws.append(["Modelo de vehículo", "Total financiamiento ($)", "Valor del activo ($)"])
-        for r in mes_data.get("items", []):
-            ws.append([
-                r.get("modelo", ""),
-                r.get("total_financiamiento", 0),
-                r.get("valor_activo", 0),
-            ])
+        
+        # Datos
+        items = mes_data.get("items", [])
+        if items:
+            for r in items:
+                ws.append([
+                    r.get("modelo", ""),
+                    r.get("total_financiamiento", 0),
+                    r.get("valor_activo", 0),
+                ])
+        else:
+            # Si no hay datos, agregar fila informativa
+            ws.append(["Sin datos", 0, 0])
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -2000,7 +2136,7 @@ def exportar_productos(
 def get_reportes_por_cedula(db: Session = Depends(get_db)):
     """
     Reporte por cédula: id préstamo, cédula, nombre, total financiamiento, total abono,
-    cuotas totales, cuotas pagadas, cuotas atrasadas (estado != PAGADO).
+    cuotas totales, cuotas pagadas, cuotas atrasadas (estado != PAGADO), monto cuotas atrasadas.
     """
     prestamos = (
         db.execute(
@@ -2014,6 +2150,7 @@ def get_reportes_por_cedula(db: Session = Depends(get_db)):
     abono_map: dict = {}
     pagadas_map: dict = {}
     atrasadas_map: dict = {}
+    monto_atrasadas_map: dict = {}
 
     if ids:
         rows_abono = db.execute(
@@ -2037,6 +2174,14 @@ def get_reportes_por_cedula(db: Session = Depends(get_db)):
         ).fetchall()
         atrasadas_map = {r[0]: int(r[1]) for r in rows_atrasadas}
 
+        # Monto total de cuotas atrasadas (pendientes, no pagadas)
+        rows_monto_atrasadas = db.execute(
+            select(Cuota.prestamo_id, func.coalesce(func.sum(Cuota.monto), 0))
+            .where(Cuota.prestamo_id.in_(ids), Cuota.estado != "PAGADO")
+            .group_by(Cuota.prestamo_id)
+        ).fetchall()
+        monto_atrasadas_map = {r[0]: _safe_float(r[1]) for r in rows_monto_atrasadas}
+
     items: List[dict] = []
     for p in prestamos:
         cedula = p.cedula or ""
@@ -2055,18 +2200,46 @@ def get_reportes_por_cedula(db: Session = Depends(get_db)):
             "cuotas_totales": p.numero_cuotas or 0,
             "cuotas_pagadas": pagadas_map.get(p.id, 0),
             "cuotas_atrasadas": atrasadas_map.get(p.id, 0),
+            "monto_cuotas_atrasadas": round(monto_atrasadas_map.get(p.id, 0), 2),
         })
     return {"items": items}
 
 
 def _generar_excel_por_cedula(items: List[dict]) -> bytes:
-    """Genera Excel reporte por cédula. Columnas A-H."""
+    """Genera Excel reporte por cédula. Columnas A-I con totales en cabecera."""
     import openpyxl
+    from datetime import datetime
+    
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "Por cédula"
+    
+    # Obtener mes y año actual
+    hoy = datetime.now()
+    mes_nombre = hoy.strftime("%B %Y")  # Ej: "February 2026"
+    # Para español: usar meses en español
+    meses_es = {
+        1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril", 5: "Mayo", 6: "Junio",
+        7: "Julio", 8: "Agosto", 9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
+    }
+    mes_es = meses_es.get(hoy.month, "")
+    año = hoy.year
+    titulo_pestana = f"Por cédula - {mes_es} {año}"
+    
+    ws.title = titulo_pestana
     ws.append(["Reporte por cédula"])
     ws.append([])
+    
+    # Calcular totales
+    total_financiamiento = sum(r.get("total_financiamiento", 0) for r in items)
+    total_abono = sum(r.get("total_abono", 0) for r in items)
+    total_atrasos = sum(r.get("monto_cuotas_atrasadas", 0) for r in items)
+    
+    # Agregar fila de totales
+    ws.append([
+        f"Total financiamiento: ${total_financiamiento:.2f} | Total abono: ${total_abono:.2f} | Total atrasos: ${total_atrasos:.2f}"
+    ])
+    ws.append([])
+    
     ws.append([
         "ID Préstamo",
         "Cédula",
@@ -2076,10 +2249,11 @@ def _generar_excel_por_cedula(items: List[dict]) -> bytes:
         "Cuotas totales",
         "Cuotas pagadas",
         "Cuotas atrasadas",
+        "Cuotas atrasadas ($)",
     ])
     for r in items:
         ws.append([
-            r.get("id_prestamo", ""),
+            str(r.get("id_prestamo", "")),
             r.get("cedula", ""),
             r.get("nombre", ""),
             r.get("total_financiamiento", 0),
@@ -2087,6 +2261,7 @@ def _generar_excel_por_cedula(items: List[dict]) -> bytes:
             r.get("cuotas_totales", 0),
             r.get("cuotas_pagadas", 0),
             r.get("cuotas_atrasadas", 0),
+            r.get("monto_cuotas_atrasadas", 0),
         ])
     buf = io.BytesIO()
     wb.save(buf)
@@ -2095,7 +2270,7 @@ def _generar_excel_por_cedula(items: List[dict]) -> bytes:
 
 @router.get("/exportar/cedula")
 def exportar_cedula(db: Session = Depends(get_db)):
-    """Exporta reporte por cédula en Excel. Columnas: ID préstamo | Cédula | Nombre | Total financiamiento | Total abono | Cuotas totales | Cuotas pagadas | Cuotas atrasadas."""
+    """Exporta reporte por cédula en Excel. Columnas: ID préstamo | Cédula | Nombre | Total financiamiento | Total abono | Cuotas totales | Cuotas pagadas | Cuotas atrasadas | Cuotas atrasadas ($)."""
     data = get_reportes_por_cedula(db=db)
     items = data.get("items", [])
     content = _generar_excel_por_cedula(items)

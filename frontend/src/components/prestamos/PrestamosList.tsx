@@ -693,28 +693,62 @@ export function PrestamosList() {
 
               {/* Paginación - siempre visible cuando hay datos */}
               {data && data.total > 0 && (
-                <div className="flex items-center justify-between mt-4">
+                <div className="flex flex-col gap-4 mt-6 pt-4 border-t">
                   <div className="text-sm text-gray-600">
-                    Página {data.page} de {data.total_pages} ({data.total} total)
+                    Mostrando <span className="font-semibold">{(page - 1) * 10 + 1}</span> - <span className="font-semibold">{Math.min(page * 10, data.total)}</span> de <span className="font-semibold">{data.total}</span> préstamos
                   </div>
-                  <div className="flex gap-2">
+                  
+                  <div className="flex items-center justify-center gap-1 flex-wrap">
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => setPage(Math.max(1, page - 1))}
                       disabled={page === 1}
+                      className="px-3"
                     >
-                      Anterior
+                      ← Anterior
                     </Button>
+                    
+                    <div className="flex gap-1">
+                      {Array.from({ length: Math.min(5, data.total_pages) }, (_, i) => {
+                        const pageNum = data.total_pages <= 5 
+                          ? i + 1 
+                          : page <= 3 
+                            ? i + 1 
+                            : page >= data.total_pages - 2 
+                              ? data.total_pages - 4 + i 
+                              : page - 2 + i
+                        
+                        return pageNum <= 0 || pageNum > data.total_pages ? null : (
+                          <Button
+                            key={pageNum}
+                            variant={pageNum === page ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setPage(pageNum)}
+                            className={`min-w-[40px] px-3 ${pageNum === page ? 'bg-blue-600 text-white' : ''}`}
+                          >
+                            {pageNum}
+                          </Button>
+                        )
+                      })}
+                    </div>
+                    
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => setPage(Math.min(data.total_pages, page + 1))}
                       disabled={page === data.total_pages}
+                      className="px-3"
                     >
-                      Siguiente
+                      Siguiente →
                     </Button>
                   </div>
+
+                  {data.total_pages > 5 && (
+                    <div className="text-center text-xs text-gray-500">
+                      Página {page} de {data.total_pages}
+                    </div>
+                  )}
                 </div>
               )}
             </>
