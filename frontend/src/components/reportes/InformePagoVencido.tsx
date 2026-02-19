@@ -65,7 +65,7 @@ export function InformePagoVencido() {
 
   if (isLoading) {
     return (
-      <Card>
+      <Card className="shadow-sm">
         <CardContent className="py-12">
           <div className="flex flex-col items-center justify-center gap-3">
             <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
@@ -78,12 +78,12 @@ export function InformePagoVencido() {
 
   if (error) {
     return (
-      <Card className="border-red-200">
+      <Card className="border-red-200 shadow-sm">
         <CardContent className="py-8">
           <p className="text-red-600 text-center">Error al cargar el informe. Intente nuevamente.</p>
           <div className="flex justify-center mt-4">
-            <Button variant="outline" onClick={() => refetch()}>
-              <RefreshCw className="h-4 w-4 mr-2" />
+            <Button variant="outline" onClick={() => refetch()} aria-label="Reintentar cargar informe de pago vencido">
+              <RefreshCw className="h-4 w-4 mr-2" aria-hidden />
               Reintentar
             </Button>
           </div>
@@ -95,19 +95,19 @@ export function InformePagoVencido() {
   const rangos = data?.rangos ?? {}
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
+    <Card className="shadow-sm">
+      <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pb-4">
         <div>
           <CardTitle className="flex items-center gap-2">
-            <TrendingUp className="h-6 w-6 text-amber-600" />
+            <TrendingUp className="h-6 w-6 text-amber-600" aria-hidden />
             Informe Pago Vencido
           </CardTitle>
           <CardDescription>
             Clientes con cuotas vencidas por rango de días. Fecha de corte: {data?.fecha_corte ? formatDate(data.fecha_corte) : '—'}
           </CardDescription>
         </div>
-        <Button variant="outline" size="sm" onClick={() => refetch()}>
-          <RefreshCw className="h-4 w-4 mr-2" />
+        <Button variant="outline" size="sm" onClick={() => refetch()} aria-label="Actualizar informe de pago vencido">
+          <RefreshCw className="h-4 w-4 mr-2" aria-hidden />
           Actualizar
         </Button>
       </CardHeader>

@@ -510,7 +510,7 @@ export function TablaAmortizacionCompleta() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <FileText className="w-5 h-5" />
+            <FileText className="w-5 h-5" aria-hidden />
             Tabla de Amortización por Cédula
           </CardTitle>
           <CardDescription>
@@ -526,8 +526,8 @@ export function TablaAmortizacionCompleta() {
               onKeyPress={(e) => e.key === 'Enter' && handleBuscar()}
               className="max-w-md"
             />
-            <Button onClick={handleBuscar} disabled={loadingCliente || loadingPrestamos}>
-              <Search className="w-4 h-4 mr-2" />
+            <Button onClick={handleBuscar} disabled={loadingCliente || loadingPrestamos} aria-label="Buscar cliente por cédula">
+              <Search className="w-4 h-4 mr-2" aria-hidden />
               Buscar
             </Button>
           </div>

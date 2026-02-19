@@ -23,6 +23,7 @@ import { ReportePagos } from '../components/reportes/ReportePagos'
 import { ReporteProductos } from '../components/reportes/ReporteProductos'
 import { ReporteAsesores } from '../components/reportes/ReporteAsesores'
 import { CuentasPorCobrar } from '../components/reportes/CuentasPorCobrar'
+import { LazyReporteSection } from '../components/reportes/LazyReporteSection'
 import { useReportesRefreshSchedule } from '../hooks/useReportesRefreshSchedule'
 import { toast } from 'sonner'
 
@@ -156,28 +157,31 @@ export function Reportes() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className="space-y-6"
+      className="space-y-8"
     >
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Centro de Reportes</h1>
-          <p className="text-gray-600">
+      {/* Header balanceado: columna en móvil, fila en desktop */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-1">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Centro de Reportes</h1>
+          <p className="text-sm sm:text-base text-gray-600 max-w-xl">
             Genera y descarga reportes detallados del sistema. Datos en tiempo real desde la base de datos.
           </p>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-xs sm:text-sm text-gray-500">
             Actualización automática: 1:00 AM y 1:00 PM (hora local).
           </p>
         </div>
         <Button
           variant="outline"
           size="sm"
+          className="shrink-0 w-fit"
           onClick={() => {
             refetchResumen()
             toast.info('Actualizando datos...')
           }}
           disabled={loadingResumen}
+          aria-label="Actualizar indicadores clave de rendimiento"
         >
-          <RefreshCw className={`mr-2 h-4 w-4 ${loadingResumen ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`mr-2 h-4 w-4 ${loadingResumen ? 'animate-spin' : ''}`} aria-hidden />
           Actualizar KPIs
         </Button>
       </div>
@@ -192,17 +196,17 @@ export function Reportes() {
         </div>
       )}
 
-      {/* KPI Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
+      {/* KPI Cards: altura uniforme para diseño balanceado */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Card className="min-h-[120px] flex flex-col">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Cartera Activa</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <DollarSign className="h-4 w-4 text-muted-foreground" aria-hidden />
           </CardHeader>
           <CardContent>
             {loadingResumen ? (
               <div className="flex items-center space-x-2">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" aria-hidden />
                 <span className="text-sm text-muted-foreground">Cargando...</span>
               </div>
             ) : errorResumen ? (
@@ -213,15 +217,15 @@ export function Reportes() {
             <p className="text-xs text-muted-foreground mt-1">Total en cartera</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="min-h-[120px] flex flex-col">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Préstamos en Mora</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <TrendingUp className="h-4 w-4 text-muted-foreground" aria-hidden />
           </CardHeader>
           <CardContent>
             {loadingResumen ? (
               <div className="flex items-center space-x-2">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" aria-hidden />
                 <span className="text-sm text-muted-foreground">Cargando...</span>
               </div>
             ) : errorResumen ? (
@@ -232,15 +236,15 @@ export function Reportes() {
             <p className="text-xs text-muted-foreground">Requieren atención</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="min-h-[120px] flex flex-col">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Préstamos</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
+            <FileText className="h-4 w-4 text-muted-foreground" aria-hidden />
           </CardHeader>
           <CardContent>
             {loadingResumen ? (
               <div className="flex items-center space-x-2">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" aria-hidden />
                 <span className="text-sm text-muted-foreground">Cargando...</span>
               </div>
             ) : errorResumen ? (
@@ -251,15 +255,15 @@ export function Reportes() {
             <p className="text-xs text-muted-foreground">Préstamos activos</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="min-h-[120px] flex flex-col">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Pagos del Mes</CardTitle>
-            <Download className="h-4 w-4 text-muted-foreground" />
+            <Download className="h-4 w-4 text-muted-foreground" aria-hidden />
           </CardHeader>
           <CardContent>
             {loadingResumen ? (
               <div className="flex items-center space-x-2">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" aria-hidden />
                 <span className="text-sm text-muted-foreground">Cargando...</span>
               </div>
             ) : errorResumen ? (
@@ -274,29 +278,31 @@ export function Reportes() {
         </Card>
       </div>
 
-      {/* Informe Pago Vencido por rangos de días */}
-      <InformePagoVencido />
+      {/* Reportes: Informe Pago Vencido carga al inicio; el resto con lazy loading al hacer scroll */}
+      <section className="space-y-8">
+        <InformePagoVencido />
+        <LazyReporteSection label="Pagos">
+          <ReportePagos />
+        </LazyReporteSection>
+        <LazyReporteSection label="Productos">
+          <ReporteProductos />
+        </LazyReporteSection>
+        <LazyReporteSection label="Asesores">
+          <ReporteAsesores />
+        </LazyReporteSection>
+        <LazyReporteSection label="Cuentas por cobrar">
+          <CuentasPorCobrar />
+        </LazyReporteSection>
+        <LazyReporteSection label="Tabla de amortización">
+          <TablaAmortizacionCompleta />
+        </LazyReporteSection>
+      </section>
 
-      {/* Reporte Pagos por mes/año */}
-      <ReportePagos />
-
-      {/* Reporte Productos por mes */}
-      <ReporteProductos />
-
-      {/* Reporte Asesores por mes */}
-      <ReporteAsesores />
-
-      {/* Cuentas por cobrar: pestañas por mes, por día cuándo debe cobrar */}
-      <CuentasPorCobrar />
-
-      {/* Tabla de Amortización Completa */}
-      <TablaAmortizacionCompleta />
-
-      {/* Descargar reportes: icono → siempre Excel */}
-      <Card>
+      {/* Descargar reportes: grid balanceado 2x3 o 3x2 */}
+      <Card className="shadow-sm">
         <CardHeader>
           <CardTitle className="flex items-center">
-            <FileText className="mr-2 h-5 w-5" />
+            <FileText className="mr-2 h-5 w-5" aria-hidden />
             Descargar reportes
           </CardTitle>
           <CardDescription>
@@ -304,7 +310,7 @@ export function Reportes() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {tiposReporte.map((tipo) => {
               const IconComponent = tipo.icon
               const isGenerando = generandoReporte === tipo.value
@@ -313,12 +319,12 @@ export function Reportes() {
               return (
                 <div
                   key={tipo.value}
-                  className={`flex items-center justify-between rounded-lg border p-4 ${
+                  className={`flex items-center justify-between rounded-lg border p-4 min-h-[72px] transition-colors ${
                     isDisponible ? 'hover:bg-gray-50 cursor-pointer' : 'opacity-60'
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <IconComponent className="h-6 w-6 text-blue-600" />
+                    <IconComponent className="h-6 w-6 text-blue-600" aria-hidden />
                     <span className="font-medium">{tipo.label}</span>
                   </div>
                   {isDisponible ? (
@@ -331,11 +337,12 @@ export function Reportes() {
                         generarReporte(tipo.value)
                       }}
                       title="Descargar Excel"
+                      aria-label={`Descargar reporte ${tipo.label} en Excel`}
                     >
                       {isGenerando ? (
-                        <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+                        <Loader2 className="h-5 w-5 animate-spin text-blue-600" aria-hidden />
                       ) : (
-                        <Download className="h-5 w-5 text-green-600" />
+                        <Download className="h-5 w-5 text-green-600" aria-hidden />
                       )}
                     </Button>
                   ) : null}
