@@ -266,7 +266,8 @@ def get_prestamos_stats(
         q_base = q_base.where(Prestamo.concesionario == concesionario.strip())
     if modelo and modelo.strip():
         q_base = q_base.where(Prestamo.modelo_vehiculo == modelo.strip())
-    total = db.scalar(select(func.count()).select_from(q_base.subquery())) or 0
+    subq = q_base.subquery()
+    total = db.scalar(select(func.count()).select_from(subq)) or 0
     q_estado = (
         select(Prestamo.estado, func.count())
         .select_from(Prestamo)
@@ -286,7 +287,7 @@ def get_prestamos_stats(
     q_estado = q_estado.group_by(Prestamo.estado)
     rows = db.execute(q_estado).all()
     por_estado = {r[0]: r[1] for r in rows}
-    total_fin = db.scalar(select(func.coalesce(func.sum(Prestamo.total_financiamiento), 0)).select_from(q_base.subquery())) or 0
+    total_fin = db.scalar(select(func.coalesce(func.sum(subq.c.total_financiamiento), 0)).select_from(subq)) or 0
     total_fin = float(total_fin)
     promedio_monto = (total_fin / total) if total else 0
     # Cartera por cobrar: suma monto de cuotas con vencimiento en el mes, no cobradas (solo clientes ACTIVOS)
@@ -525,7 +526,8 @@ def get_cuotas_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
             "estado": c.estado or "PENDIENTE",
             "dias_mora": c.dias_mora if c.dias_mora is not None else 0,
             "pago_conciliado": bool(pago_conciliado) if pago_conciliado is not None else False,
-            "pago_monto_conciliado": float(pago_monto) if pago_conciliado and pago_monto is not None else 0,
+            # Monto por cuota: usar total_pagado (porción aplicada a esta cuota), no Pago.monto_pagado (total del pago)
+            "pago_monto_conciliado": float(c.total_pagado) if pago_conciliado and c.total_pagado is not None else 0,
         }
         for c, pago_conciliado, pago_monto in rows
     ]

@@ -31,6 +31,7 @@ import { useClientesStats } from '../../hooks/useClientesStats'
 import { useSimpleAuth } from '../../store/simpleAuthStore'
 import { formatDate } from '../../utils'
 import { ClienteFilters, PaginatedResponse, Cliente } from '../../types'
+import { getErrorDetail } from '../../types/errors'
 import { useClientes } from '../../hooks/useClientes'
 import { useQueryClient } from '@tanstack/react-query'
 import { clienteService } from '../../services/clienteService'
@@ -105,9 +106,11 @@ export function ClientesList() {
       // Mostrar mensaje de éxito - UNA SOLA NOTIFICACIÓN
       showNotification('success', 'âœ… Cliente eliminado permanentemente de la base de datos')
 
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('âŒ Error eliminando cliente:', error)
-      showNotification('error', 'âŒ Error al eliminar el cliente. Intenta nuevamente.')
+      const detail = getErrorDetail(error)
+      const mensaje = detail || 'Error al eliminar el cliente. Intenta nuevamente.'
+      showNotification('error', mensaje)
     }
   }
 

@@ -15,10 +15,11 @@ from app.core.deps import get_current_user
 from pydantic import BaseModel, ValidationError
 from sqlalchemy import select, func, or_
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import ProgrammingError, OperationalError
+from sqlalchemy.exc import ProgrammingError, OperationalError, IntegrityError
 
 from app.core.database import get_db
 from app.models.cliente import Cliente
+from app.models.prestamo import Prestamo
 from app.schemas.cliente import ClienteResponse, ClienteCreate, ClienteUpdate
 
 logger = logging.getLogger(__name__)
@@ -494,10 +495,30 @@ def update_cliente(cliente_id: int, payload: ClienteUpdate, db: Session = Depend
 
 @router.delete("/{cliente_id}", status_code=204)
 def delete_cliente(cliente_id: int, db: Session = Depends(get_db)):
-    """Eliminar cliente."""
+    """Eliminar cliente. No se puede si tiene préstamos asociados."""
     row = db.get(Cliente, cliente_id)
     if not row:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
-    db.delete(row)
-    db.commit()
-    return None
+
+    # Verificar si tiene préstamos (FK bloquea el delete)
+    count_prestamos = db.scalar(
+        select(func.count()).select_from(Prestamo).where(Prestamo.cliente_id == cliente_id)
+    ) or 0
+    if count_prestamos > 0:
+        raise HTTPException(
+            status_code=409,
+            detail=f"No se puede eliminar: el cliente tiene {count_prestamos} préstamo(s) asociado(s). "
+            "Elimine o reasigne los préstamos antes de eliminar al cliente.",
+        )
+
+    try:
+        db.delete(row)
+        db.commit()
+        return None
+    except IntegrityError as e:
+        db.rollback()
+        logger.warning("IntegrityError al eliminar cliente %s: %s", cliente_id, e)
+        raise HTTPException(
+            status_code=409,
+            detail="No se puede eliminar: el cliente tiene registros asociados (préstamos, cuotas, tickets, etc.).",
+        ) from e
