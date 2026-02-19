@@ -166,6 +166,18 @@ class Settings(BaseSettings):
     )
 
     # ============================================
+    # Tasa USD/Bs Venezuela (reporte contable)
+    # ============================================
+    TASA_USD_BS_DEFAULT: Optional[float] = Field(
+        None,
+        description="Tasa USD a Bolívares (Venezuela) por defecto cuando la API externa no responde. Si no se configura, se usa la tasa actual de exchangerate-api.com."
+    )
+    EXCHANGERATE_API_URL: str = Field(
+        default="https://api.exchangerate-api.com/v4/latest/USD",
+        description="URL para obtener tasa USD actual (gratuita, sin API key). Para tasas históricas por fecha, configurar BCV_API_KEY."
+    )
+
+    # ============================================
     # CORS
     # ============================================
     CORS_ORIGINS: Optional[str] = Field(

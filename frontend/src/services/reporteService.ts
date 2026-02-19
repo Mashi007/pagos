@@ -491,6 +491,38 @@ class ReporteService {
   }
 
   /**
+   * Busca cédulas para filtrar reporte contable.
+   */
+  async buscarCedulasContable(q?: string): Promise<{ cedulas: Array<{ cedula: string; nombre: string }> }> {
+    const params = new URLSearchParams()
+    if (q) params.set('q', q)
+    return await apiClient.get(`${this.baseUrl}/contable/cedulas?${params.toString()}`)
+  }
+
+  /**
+   * Exporta reporte contable en Excel desde cache.
+   * Filtros: años, meses, cedulas (opcional). Política: últimos 7 días se actualizan.
+   */
+  async exportarReporteContable(
+    años: number[],
+    meses: number[],
+    cedulas?: string[] | 'todas'
+  ): Promise<Blob> {
+    const params = new URLSearchParams()
+    if (años.length) params.set('años', años.join(','))
+    if (meses.length) params.set('meses', meses.join(','))
+    if (cedulas && cedulas !== 'todas' && cedulas.length > 0) {
+      params.set('cedulas', cedulas.join(','))
+    }
+    const axiosInstance = apiClient.getAxiosInstance()
+    const response = await axiosInstance.get(
+      `${this.baseUrl}/exportar/contable?${params.toString()}`,
+      { responseType: 'blob', timeout: 180000 }
+    )
+    return response.data as Blob
+  }
+
+  /**
    * Exporta reporte por cédula en Excel.
    * Columnas: ID préstamo | Cédula | Nombre | Total financiamiento | Total abono | Cuotas totales | Cuotas pagadas | Cuotas atrasadas | Cuotas atrasadas ($).
    */

@@ -113,7 +113,7 @@ export function usePermissions() {
       return true // Admin tiene acceso a todos
     }
 
-    // Operativos pueden ver: Pagos, Morosidad
+    // Operativos pueden ver: Pagos, Morosidad, Por cédula. Contable solo admin.
     const allowedForOperativos = ['PAGOS', 'MOROSIDAD', 'CEDULA']
     return allowedForOperativos.includes(reportType)
   }

@@ -12,6 +12,7 @@ import {
   UserCheck,
   CreditCard,
   Lock,
+  Calculator,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { getErrorMessage, getErrorDetail } from '../types/errors'
@@ -20,6 +21,7 @@ import { formatCurrency } from '../utils'
 import { reporteService } from '../services/reporteService'
 import { toast } from 'sonner'
 import { DialogReporteFiltros, type FiltrosReporte } from '../components/reportes/DialogReporteFiltros'
+import { DialogReporteContableFiltros, type FiltrosReporteContable } from '../components/reportes/DialogReporteContableFiltros'
 import { usePermissions } from '../hooks/usePermissions'
 
 /** Cada icono = un reporte. Click = abre diálogo años/meses, luego descarga Excel. */
@@ -28,6 +30,7 @@ const tiposReporte = [
   { value: 'MOROSIDAD', label: 'Morosidad', icon: TrendingUp },
   { value: 'PAGOS', label: 'Pagos', icon: Users },
   { value: 'ASESORES', label: 'Pago vencido', icon: UserCheck },
+  { value: 'CONTABLE', label: 'Contable', icon: Calculator },
   { value: 'CEDULA', label: 'Por cédula', icon: CreditCard },
 ]
 
@@ -95,6 +98,32 @@ export function Reportes() {
   const abrirDialogoReporte = (tipo: string) => {
     setReporteSeleccionado(tipo)
     setDialogAbierto(true)
+  }
+
+  const generarReporteContable = async (filtros: FiltrosReporteContable) => {
+    try {
+      setGenerandoReporte('CONTABLE')
+      const toastId = toast.loading(
+        <div className="flex items-center gap-2">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span>Preparando descarga de Contable...</span>
+        </div>
+      )
+      const fechaCorte = new Date().toISOString().split('T')[0]
+      const cedulas = filtros.cedulas === 'todas' ? undefined : filtros.cedulas
+      const blob = await reporteService.exportarReporteContable(filtros.años, filtros.meses, cedulas)
+      descargarBlob(blob, `reporte_contable_${fechaCorte}.xlsx`)
+      toast.dismiss(toastId)
+      toast.success('✓ Reporte Contable descargado exitosamente')
+    } catch (error: unknown) {
+      console.error('Error generando reporte:', error)
+      toast.dismiss()
+      const errorMessage = getErrorMessage(error)
+      const detail = getErrorDetail(error)
+      toast.error(detail || errorMessage || 'No se pudo generar el reporte')
+    } finally {
+      setGenerandoReporte(null)
+    }
   }
 
   // Generar reporte tras confirmar filtros en el diálogo
@@ -313,7 +342,7 @@ export function Reportes() {
             {tiposReporte.map((tipo) => {
               const IconComponent = tipo.icon
               const isGenerando = generandoReporte === tipo.value
-              const isDisponible = ['CARTERA', 'PAGOS', 'MOROSIDAD', 'ASESORES', 'CEDULA'].includes(tipo.value)
+              const isDisponible = ['CARTERA', 'PAGOS', 'MOROSIDAD', 'ASESORES', 'CONTABLE', 'CEDULA'].includes(tipo.value)
               const tieneAcceso = canAccessReport(tipo.value)
 
               return (
@@ -353,12 +382,17 @@ export function Reportes() {
       </Card>
 
       <DialogReporteFiltros
-        open={dialogAbierto}
+        open={dialogAbierto && reporteSeleccionado !== 'CONTABLE'}
         onOpenChange={setDialogAbierto}
-        tituloReporte={reporteSeleccionado ? tiposReporte.find((t) => t.value === reporteSeleccionado)?.label ?? reporteSeleccionado : ''}
+        tituloReporte={reporteSeleccionado && reporteSeleccionado !== 'CONTABLE' ? tiposReporte.find((t) => t.value === reporteSeleccionado)?.label ?? reporteSeleccionado : ''}
         onConfirm={(filtros) => {
-          if (reporteSeleccionado) generarReporte(reporteSeleccionado, filtros)
+          if (reporteSeleccionado && reporteSeleccionado !== 'CONTABLE') generarReporte(reporteSeleccionado, filtros)
         }}
+      />
+      <DialogReporteContableFiltros
+        open={dialogAbierto && reporteSeleccionado === 'CONTABLE'}
+        onOpenChange={setDialogAbierto}
+        onConfirm={(filtros) => generarReporteContable(filtros)}
       />
     </motion.div>
   )
