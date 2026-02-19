@@ -59,16 +59,13 @@ import {
   findSeccionById as findSeccionByIdHelper,
 } from '../constants/configuracionSecciones'
 
-  const [configuracion, setConfiguracion] = useState<{
-    general: {
-      nombreEmpresa: string
-      version: string
-      idioma: string
-      zonaHoraria: string
-      moneda: string
-      ultimaActualizacion?: string
-    }
-  }>({ general: { nombreEmpresa: '', version: '', idioma: '', zonaHoraria: '', moneda: '' } })
+const Configuracion = () => {
+  const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+
+  const [configuracion, setConfiguracion] = useState<Record<string, any>>({
+    general: { nombreEmpresa: '', version: '', idioma: '', zonaHoraria: '', moneda: '' }
+  })
   const [configuracionGeneral, setConfiguracionGeneral] = useState<ConfiguracionGeneral | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
