@@ -42,20 +42,24 @@ def send_email(
     cc_emails: Optional[List[str]] = None,
     bcc_emails: Optional[List[str]] = None,
     attachments: Optional[List[AttachmentType]] = None,
+    *,
+    respetar_destinos_manuales: bool = False,
 ) -> Tuple[bool, Optional[str]]:
     """
     Envía un correo vía SMTP (desde el email configurado en Configuración > Email o .env).
     Antes de enviar sincroniza el holder con la BD.
     cc_emails: copia visible (CC). bcc_emails: copia oculta (CCO/BCC).
     attachments: lista de (nombre_archivo, contenido_bytes) para adjuntar (ej. PDF).
+    respetar_destinos_manuales: si True, NO redirige a email_pruebas; envía a los correos indicados (para "Enviar Email de Prueba").
     Devuelve (True, None) si se envió; (False, mensaje_error) si no hay SMTP configurado o falló.
     """
     if not to_emails:
         return False, "No hay destinatarios."
     sync_from_db()
     # Modo Pruebas: redirigir todos los envíos al correo(s) de pruebas (desde notificaciones_envios o email_config)
+    # EXCEPCIÓN: si respetar_destinos_manuales=True (ej. usuario hizo clic en "Enviar Email de Prueba"), se envían a los correos indicados en la interfaz.
     modo_pruebas, emails_pruebas_list = get_modo_pruebas_email()
-    if modo_pruebas and emails_pruebas_list:
+    if modo_pruebas and emails_pruebas_list and not respetar_destinos_manuales:
         to_emails = emails_pruebas_list
         cc_list = []
         bcc_list = []

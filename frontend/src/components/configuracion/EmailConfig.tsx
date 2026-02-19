@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Mail, Save, TestTube, CheckCircle, AlertCircle, Eye, EyeOff, Clock, XCircle, RefreshCw } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
@@ -1133,9 +1133,9 @@ const [probando, setProbando] = useState(false)
 
               {modoPruebas === 'true' && (
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
-                  <p className="text-sm text-yellow-800 font-semibold mb-1">Ã¢Å¡ Ã¯Â¸Â Modo Pruebas activo</p>
+                  <p className="text-sm text-yellow-800 font-semibold mb-1">Modo Pruebas activo</p>
                   <p className="text-xs text-yellow-700">
-                    El email se redirigirÃ¡ a {emailPruebas || 'la direcciÃ³n de pruebas configurada'}.
+                    El email de prueba se enviarÃ¡ al Correo Principal y CC que indiques arriba (no se redirige).
                   </p>
                 </div>
               )}

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Endpoints de configuraciÃ³n de email (SMTP + IMAP).
 GET/PUT /configuracion/email/configuracion, GET /configuracion/email/estado,
 POST /configuracion/email/probar, POST /configuracion/email/probar-imap.
@@ -192,12 +192,12 @@ class ProbarEmailRequest(BaseModel):
     mensaje: Optional[str] = None
 
 def _destino_prueba(cfg: dict[str, Any], payload: ProbarEmailRequest) -> str:
-    """Destino del email de prueba: en modo pruebas usa email_pruebas; si no, el del payload."""
+    """Destino del email de prueba: prioridad a los correos que el usuario pone manualmente en la interfaz."""
+    if (payload.email_destino or "").strip():
+        return payload.email_destino.strip()
     modo_pruebas = (cfg.get("modo_pruebas") or "true").lower() == "true"
     if modo_pruebas and (cfg.get("email_pruebas") or "").strip():
         return (cfg["email_pruebas"] or "").strip()
-    if (payload.email_destino or "").strip():
-        return payload.email_destino.strip()
     return ""
 
 
@@ -237,7 +237,8 @@ def post_email_probar(payload: ProbarEmailRequest = Body(...), db: Session = Dep
     recipients = [destino]
     if payload.email_cc and (payload.email_cc or "").strip():
         recipients.append(payload.email_cc.strip())
-    ok, error_msg = send_email(to_emails=recipients, subject=subject, body_text=body)
+    # respetar_destinos_manuales=True: enviar a los correos que el usuario puso en la interfaz, NO redirigir a email_pruebas
+    ok, error_msg = send_email(to_emails=recipients, subject=subject, body_text=body, respetar_destinos_manuales=True)
     if not ok:
         # Devolver 200 con success=false para que el frontend muestre el mensaje sin tratar como error de red (502)
         logger.warning("Email de prueba fallÃ³: %s", error_msg)
