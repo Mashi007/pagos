@@ -1,4 +1,4 @@
-﻿import { useState } from 'react'
+import { useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   RefreshCw,
@@ -20,12 +20,12 @@ import { ConfiguracionNotificaciones } from '../components/notificaciones/Config
 type TabId = 'dias_5' | 'dias_3' | 'dias_1' | 'hoy' | 'mora_61' | 'configuracion'
 
 const TABS: { id: TabId; label: string; icon: typeof Calendar }[] = [
-  { id: 'dias_5', label: 'Faltan 5 dÃ­as', icon: Calendar },
-  { id: 'dias_3', label: 'Faltan 3 dÃ­as', icon: Calendar },
-  { id: 'dias_1', label: 'Falta 1 dÃ­a', icon: Clock },
+  { id: 'dias_5', label: 'Faltan 5 días', icon: Calendar },
+  { id: 'dias_3', label: 'Faltan 3 días', icon: Calendar },
+  { id: 'dias_1', label: 'Falta 1 día', icon: Clock },
   { id: 'hoy', label: 'Hoy vence', icon: AlertTriangle },
-  { id: 'mora_61', label: '61+ dÃ­as de mora', icon: FileText },
-  { id: 'configuracion', label: 'ConfiguraciÃ³n', icon: Settings },
+  { id: 'mora_61', label: '61+ días de mora', icon: FileText },
+  { id: 'configuracion', label: 'Configuración', icon: Settings },
 ]
 
 const PLACEHOLDER_NOTIFICACIONES: ClientesRetrasadosResponse = {
@@ -65,7 +65,7 @@ export function Notificaciones() {
 
   const handleRefresh = () => {
     refetch()
-    toast.success('Datos actualizados. Se recomienda ejecutar actualizaciÃ³n a las 2am (cron).')
+    toast.success('Datos actualizados. Se recomienda ejecutar actualización a las 2am (cron).')
   }
 
   const handleDescargarInformeRebotados = async () => {
@@ -150,10 +150,10 @@ export function Notificaciones() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Notificaciones a clientes retrasados</h1>
           <p className="text-gray-600 mt-1">
-            Cuotas no pagadas por dÃ­as hasta vencimiento y mora 61+. Datos desde BD. ActualizaciÃ³n recomendada a las 2am.
+            Cuotas no pagadas por días hasta vencimiento y mora 61+. Datos desde BD. Actualización recomendada a las 2am.
           </p>
           {data?.actualizado_en && (
-            <p className="text-xs text-gray-500 mt-1">Ãšltima consulta: {new Date(data.actualizado_en).toLocaleString('es-ES')}</p>
+            <p className="text-xs text-gray-500 mt-1">Última consulta: {new Date(data.actualizado_en).toLocaleString('es-ES')}</p>
           )}
         </div>
         <div className="flex gap-2">
@@ -195,7 +195,7 @@ export function Notificaciones() {
             className="flex items-center gap-2 py-3 px-4 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700"
           >
             <Settings className="w-4 h-4" />
-            ConfiguraciÃ³n
+            Configuración
           </button>
         </nav>
       </div>
@@ -209,17 +209,17 @@ export function Notificaciones() {
                 return TabIcon ? <TabIcon className="w-5 h-5" /> : null
               })()}
               {activeTab === 'mora_61'
-                ? 'Informe: cuotas con 61 o mÃ¡s dÃ­as de mora (una a una)'
-                : `Clientes con cuota no pagada ${activeTab === 'dias_5' ? 'y faltan 5 dÃ­as' : activeTab === 'dias_3' ? 'y faltan 3 dÃ­as' : activeTab === 'dias_1' ? 'y falta 1 dÃ­a' : 'y vence hoy'}`}
+                ? 'Informe: cuotas con 61 o más días de mora (una a una)'
+                : `Clientes con cuota no pagada ${activeTab === 'dias_5' ? 'y faltan 5 días' : activeTab === 'dias_3' ? 'y faltan 3 días' : activeTab === 'dias_1' ? 'y falta 1 día' : 'y vence hoy'}`}
             </CardTitle>
             <CardDescription>
               {activeTab === 'mora_61'
-                ? 'Listado de cada cuota atrasada 61+ dÃ­as con nombre, cÃ©dula, nÃºmero de cuota, fecha de vencimiento, dÃ­as de atraso y monto.'
-                : 'Nombre y cÃ©dula de clientes a notificar.'}
+                ? 'Listado de cada cuota atrasada 61+ días con nombre, cédula, número de cuota, fecha de vencimiento, días de atraso y monto.'
+                : 'Nombre y cédula de clientes a notificar.'}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {/* KPIs por pestaÃ±a: correos enviados y rebotados */}
+            {/* KPIs por pestaña: correos enviados y rebotados */}
             {(activeTab as TabId) !== 'configuracion' && estadisticasPorTab && (
               <div className="grid grid-cols-2 sm:grid-cols-2 gap-4 mb-6">
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
@@ -242,7 +242,7 @@ export function Notificaciones() {
                 </div>
               </div>
             )}
-            {/* BotÃ³n descargar informe Excel de no entregados (rebotados) */}
+            {/* Botón descargar informe Excel de no entregados (rebotados) */}
             {(activeTab as TabId) !== 'configuracion' && (
               <div className="mb-4">
                 <Button
@@ -255,7 +255,7 @@ export function Notificaciones() {
                   {descargandoExcel ? 'Preparando...' : 'Descargar informe de correos no entregados (Excel)'}
                 </Button>
                 <p className="text-xs text-gray-500 mt-1">
-                  Si todos los correos se enviaron correctamente se mostrarÃ¡ una notificaciÃ³n.
+                  Si todos los correos se enviaron correctamente se mostrará una notificación.
                 </p>
               </div>
             )}
@@ -278,16 +278,16 @@ export function Notificaciones() {
                     <tr className="border-b bg-gray-50">
                       <th className="text-left py-2 px-3 font-semibold whitespace-nowrap">#</th>
                       <th className="text-left py-2 px-3 font-semibold whitespace-nowrap">Nombre</th>
-                      <th className="text-left py-2 px-3 font-semibold whitespace-nowrap">CÃ©dula</th>
-                      <th className="text-left py-2 px-3 font-semibold whitespace-nowrap">NÂº cuota</th>
+                      <th className="text-left py-2 px-3 font-semibold whitespace-nowrap">Cédula</th>
+                      <th className="text-left py-2 px-3 font-semibold whitespace-nowrap">Nº cuota</th>
                       <th className="text-left py-2 px-3 font-semibold whitespace-nowrap">Fecha venc.</th>
-                      <th className="text-right py-2 px-3 font-semibold whitespace-nowrap">DÃ­as atraso</th>
+                      <th className="text-right py-2 px-3 font-semibold whitespace-nowrap">Días atraso</th>
                       <th className="text-right py-2 px-3 font-semibold whitespace-nowrap">Monto</th>
                     </tr>
                   </thead>
                   <tbody>
                     {list.length === 0 ? (
-                      <tr><td colSpan={7} className="py-8 text-center text-gray-500">No hay cuotas con 61+ dÃ­as de mora.</td></tr>
+                      <tr><td colSpan={7} className="py-8 text-center text-gray-500">No hay cuotas con 61+ días de mora.</td></tr>
                     ) : (
                       list.map((row, idx) => (
                         <tr key={`${row.cliente_id}-${row.numero_cuota ?? idx}`} className="border-b hover:bg-gray-50">
@@ -311,12 +311,12 @@ export function Notificaciones() {
                     <tr className="border-b bg-gray-50">
                       <th className="text-left py-2 px-3 font-semibold">#</th>
                       <th className="text-left py-2 px-3 font-semibold">Nombre</th>
-                      <th className="text-left py-2 px-3 font-semibold">CÃ©dula</th>
+                      <th className="text-left py-2 px-3 font-semibold">Cédula</th>
                     </tr>
                   </thead>
                   <tbody>
                     {list.length === 0 ? (
-                      <tr><td colSpan={3} className="py-8 text-center text-gray-500">NingÃºn cliente en este criterio.</td></tr>
+                      <tr><td colSpan={3} className="py-8 text-center text-gray-500">Ningún cliente en este criterio.</td></tr>
                     ) : (
                       list.map((row, idx) => (
                         <tr key={`${row.cliente_id}-${row.numero_cuota ?? idx}`} className="border-b hover:bg-gray-50">

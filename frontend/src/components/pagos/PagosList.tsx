@@ -1,4 +1,4 @@
-﻿import { useState } from 'react'
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   CreditCard,
@@ -12,6 +12,9 @@ import {
   X,
   ChevronDown,
   FileSpreadsheet,
+  MoreHorizontal,
+  CheckCircle,
+  XCircle,
 } from 'lucide-react'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -45,6 +48,8 @@ export function PagosList() {
   const [showCargaMasivaPagos, setShowCargaMasivaPagos] = useState(false)
   const [agregarPagoOpen, setAgregarPagoOpen] = useState(false)
   const [pagoEditando, setPagoEditando] = useState<Pago | null>(null)
+  const [accionesOpenId, setAccionesOpenId] = useState<number | null>(null)
+  const [conciliandoId, setConciliandoId] = useState<number | null>(null)
   const queryClient = useQueryClient()
   // Contar filtros activos (mismo criterio que Préstamos)
   const activeFiltersCount = [
@@ -393,39 +398,118 @@ export function PagosList() {
                               )}
                             </TableCell>
                             <TableCell className="text-right">
-                              <div className="flex justify-end gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  title="Editar Pago"
-                                  onClick={() => {
-                                    setPagoEditando(pago)
-                                    setShowRegistrarPago(true)
-                                  }}
-                                >
-                                  <Edit className="w-4 h-4" />
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  title="Eliminar Pago"
-                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                  onClick={async () => {
-                                    if (window.confirm(`¿Estás seguro de eliminar el pago ID ${pago.id}?`)) {
-                                      try {
-                                        await pagoService.deletePago(pago.id)
-                                        toast.success('Pago eliminado exitosamente')
-                                        queryClient.invalidateQueries({ queryKey: ['pagos'] })
-                                      } catch (error) {
-                                        toast.error('Error al eliminar el pago')
-                                        console.error(error)
-                                      }
-                                    }
-                                  }}
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              </div>
+                              <Popover open={accionesOpenId === pago.id} onOpenChange={(open) => setAccionesOpenId(open ? pago.id : null)}>
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    title="Acciones"
+                                    className="h-8 w-8 p-0"
+                                  >
+                                    <MoreHorizontal className="w-4 h-4" />
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-56 p-2" align="end">
+                                  <div className="space-y-0.5">
+                                    <button
+                                      type="button"
+                                      className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-gray-100 transition-colors text-left"
+                                      onClick={() => {
+                                        setPagoEditando(pago)
+                                        setShowRegistrarPago(true)
+                                        setAccionesOpenId(null)
+                                      }}
+                                    >
+                                      <Edit className="w-4 h-4 text-gray-600" />
+                                      Editar
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-red-50 transition-colors text-left text-red-600"
+                                      onClick={async () => {
+                                        setAccionesOpenId(null)
+                                        if (window.confirm(`¿Estás seguro de eliminar el pago ID ${pago.id}?`)) {
+                                          try {
+                                            await pagoService.deletePago(pago.id)
+                                            toast.success('Pago eliminado exitosamente')
+                                            await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
+                                            await queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false })
+                                          } catch (error) {
+                                            toast.error('Error al eliminar el pago')
+                                            console.error(error)
+                                          }
+                                        }
+                                      }}
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                      Eliminar
+                                    </button>
+                                    {(pago.verificado_concordancia === 'SI' || pago.conciliado) ? (
+                                      <button
+                                        type="button"
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-amber-50 transition-colors text-left text-amber-700"
+                                        disabled={conciliandoId === pago.id}
+                                        onClick={async () => {
+                                          setAccionesOpenId(null)
+                                          setConciliandoId(pago.id)
+                                          try {
+                                            await pagoService.updateConciliado(pago.id, false)
+                                            toast.success('Pago marcado como NO conciliado')
+                                            await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
+                                            await queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false })
+                                          } catch (error) {
+                                            toast.error('Error al actualizar conciliación')
+                                            console.error(error)
+                                          } finally {
+                                            setConciliandoId(null)
+                                          }
+                                        }}
+                                      >
+                                        <XCircle className="w-4 h-4" />
+                                        {conciliandoId === pago.id ? 'Actualizando...' : 'Conciliar: No'}
+                                      </button>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-green-50 transition-colors text-left text-green-700"
+                                        disabled={conciliandoId === pago.id}
+                                        onClick={async () => {
+                                          setAccionesOpenId(null)
+                                          setConciliandoId(pago.id)
+                                          try {
+                                            await pagoService.updateConciliado(pago.id, true)
+                                            if (pago.prestamo_id) {
+                                              try {
+                                                const res = await pagoService.aplicarPagoACuotas(pago.id)
+                                                if (res.cuotas_completadas > 0 || res.cuotas_parciales > 0) {
+                                                  toast.success(`Conciliado. ${res.message}`)
+                                                } else {
+                                                  toast.success('Pago marcado como conciliado')
+                                                }
+                                              } catch {
+                                                toast.success('Pago marcado como conciliado')
+                                              }
+                                            } else {
+                                              toast.success('Pago marcado como conciliado')
+                                            }
+                                            await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
+                                            await queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false })
+                                            await queryClient.invalidateQueries({ queryKey: ['dashboard'], exact: false })
+                                          } catch (error) {
+                                            toast.error('Error al actualizar conciliación')
+                                            console.error(error)
+                                          } finally {
+                                            setConciliandoId(null)
+                                          }
+                                        }}
+                                      >
+                                        <CheckCircle className="w-4 h-4" />
+                                        {conciliandoId === pago.id ? 'Actualizando...' : 'Conciliar: Sí'}
+                                      </button>
+                                    )}
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
                             </TableCell>
                           </TableRow>
                         ))}

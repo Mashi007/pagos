@@ -26,6 +26,8 @@ class PagoUpdate(BaseModel):
     numero_documento: Optional[str] = None
     institucion_bancaria: Optional[str] = None
     notas: Optional[str] = None
+    conciliado: Optional[bool] = None
+    verificado_concordancia: Optional[str] = None  # SI / NO
 
 
 class PagoResponse(BaseModel):

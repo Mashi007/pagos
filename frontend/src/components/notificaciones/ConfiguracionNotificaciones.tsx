@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
 import {
@@ -20,7 +20,7 @@ import { toast } from 'sonner'
 /** Claves reservadas en la config (no son tipos de caso) */
 const CLAVES_GLOBALES = ['modo_pruebas', 'email_pruebas', 'emails_pruebas'] as const
 
-/** Tipo de configuraciÃƒÂ³n por criterio (habilitado, cco, plantilla opcional, programador) */
+/** Tipo de configuración por criterio (habilitado, cco, plantilla opcional, programador) */
 export type ConfigEnvioItem = {
   habilitado: boolean
   cco: string[]
@@ -32,15 +32,15 @@ export type ConfigEnvioItem = {
 export type ConfigEnvioCompleta = Record<string, ConfigEnvioItem | boolean | string | string[]>
 
 const CRITERIOS: { tipo: string; label: string; categoria: string; color: 'blue' | 'green' | 'orange' | 'red' | 'slate' }[] = [
-  { tipo: 'PAGO_5_DIAS_ANTES', label: 'Faltan 5 dÃƒÂ­as', categoria: 'NotificaciÃƒÂ³n previa', color: 'blue' },
-  { tipo: 'PAGO_3_DIAS_ANTES', label: 'Faltan 3 dÃƒÂ­as', categoria: 'NotificaciÃƒÂ³n previa', color: 'blue' },
-  { tipo: 'PAGO_1_DIA_ANTES', label: 'Falta 1 dÃƒÂ­a', categoria: 'NotificaciÃƒÂ³n previa', color: 'blue' },
-  { tipo: 'PAGO_DIA_0', label: 'Hoy vence', categoria: 'DÃƒÂ­a de pago', color: 'green' },
-  { tipo: 'PAGO_1_DIA_ATRASADO', label: '1 dÃƒÂ­a de retraso', categoria: 'Retrasada', color: 'orange' },
-  { tipo: 'PAGO_3_DIAS_ATRASADO', label: '3 dÃƒÂ­as de retraso', categoria: 'Retrasada', color: 'orange' },
-  { tipo: 'PAGO_5_DIAS_ATRASADO', label: '5 dÃƒÂ­as de retraso', categoria: 'Retrasada', color: 'orange' },
+  { tipo: 'PAGO_5_DIAS_ANTES', label: 'Faltan 5 días', categoria: 'Notificación previa', color: 'blue' },
+  { tipo: 'PAGO_3_DIAS_ANTES', label: 'Faltan 3 días', categoria: 'Notificación previa', color: 'blue' },
+  { tipo: 'PAGO_1_DIA_ANTES', label: 'Falta 1 día', categoria: 'Notificación previa', color: 'blue' },
+  { tipo: 'PAGO_DIA_0', label: 'Hoy vence', categoria: 'Día de pago', color: 'green' },
+  { tipo: 'PAGO_1_DIA_ATRASADO', label: '1 día de retraso', categoria: 'Retrasada', color: 'orange' },
+  { tipo: 'PAGO_3_DIAS_ATRASADO', label: '3 días de retraso', categoria: 'Retrasada', color: 'orange' },
+  { tipo: 'PAGO_5_DIAS_ATRASADO', label: '5 días de retraso', categoria: 'Retrasada', color: 'orange' },
   { tipo: 'PREJUDICIAL', label: 'Prejudicial', categoria: 'Prejudicial', color: 'red' },
-  { tipo: 'MORA_61', label: '61+ dÃƒÂ­as de mora', categoria: 'Mora 61+', color: 'slate' },
+  { tipo: 'MORA_61', label: '61+ días de mora', categoria: 'Mora 61+', color: 'slate' },
 ]
 
 const COLORES = {
@@ -64,7 +64,7 @@ export function ConfiguracionNotificaciones() {
   const [guardandoEnvios, setGuardandoEnvios] = useState(false)
   const [cargando, setCargando] = useState(true)
   const [plantillas, setPlantillas] = useState<NotificacionPlantilla[]>([])
-  const [enviandoPrueba, setEnviandoPrueba] = useState(false)
+  const [enviandoPruebaIndice, setEnviandoPruebaIndice] = useState<number | null>(null)
   const [plantillaSeleccionada, setPlantillaSeleccionada] = useState<number | null>(null)
 
   useEffect(() => {
@@ -93,7 +93,7 @@ export function ConfiguracionNotificaciones() {
       setConfigEnvios(sinGlobales as Record<string, ConfigEnvioItem>)
       setPlantillas(plantillasList || [])
     } catch (error) {
-      toast.error('Error al cargar la configuraciÃƒÂ³n de envÃƒÂ­os')
+      toast.error('Error al cargar la configuración de envíos')
     } finally {
       setCargando(false)
     }
@@ -145,9 +145,9 @@ export function ConfiguracionNotificaciones() {
         email_pruebas: emailsPruebas[0]?.trim() || '',
       }
       await emailConfigService.actualizarConfiguracionEnvios(payload)
-      toast.success('ConfiguraciÃƒÂ³n de envÃƒÂ­os guardada')
+      toast.success('Configuración de envíos guardada')
     } catch (error) {
-      toast.error('Error al guardar la configuraciÃƒÂ³n de envÃƒÂ­os')
+      toast.error('Error al guardar la configuración de envíos')
     } finally {
       setGuardandoEnvios(false)
     }
@@ -164,11 +164,11 @@ export function ConfiguracionNotificaciones() {
     const email = emailsPruebas[indice]?.trim()
     if (modoPruebas && email) {
       try {
-        setEnviandoPrueba(true)
+        setEnviandoPruebaIndice(indice)
         
-        // Si hay plantilla seleccionada, usarla; si no, usar mensaje genÃƒÂ©rico
+        // Si hay plantilla seleccionada, usarla; si no, usar mensaje genérico
         let asunto = 'Prueba de Notificaciones - RapiCredit'
-        let mensaje = 'Este es un correo de prueba para verificar que las plantillas de notificaciÃƒÂ³n se envÃƒÂ­an correctamente.'
+        let mensaje = 'Este es un correo de prueba para verificar que las plantillas de notificación se envían correctamente.'
         
         if (plantillaSeleccionada) {
           const plantilla = plantillas.find(p => p.id === plantillaSeleccionada)
@@ -193,7 +193,7 @@ export function ConfiguracionNotificaciones() {
       } catch (error: any) {
         toast.error(error?.message || 'Error al enviar el correo de prueba')
       } finally {
-        setEnviandoPrueba(false)
+        setEnviandoPruebaIndice(null)
       }
     } else {
       toast.error('Configura el correo para enviar pruebas')
@@ -207,7 +207,7 @@ export function ConfiguracionNotificaciones() {
       <div className="flex items-center justify-center py-16">
         <div className="text-center text-gray-500">
           <Clock className="h-8 w-8 mx-auto animate-pulse mb-2 text-blue-500" />
-          <p>Cargando configuraciÃƒÂ³n...</p>
+          <p>Cargando configuración...</p>
         </div>
       </div>
     )
@@ -219,15 +219,15 @@ export function ConfiguracionNotificaciones() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-xl">
             <Settings className="h-5 w-5 text-blue-600" />
-            ConfiguraciÃƒÂ³n por caso
+            Configuración por caso
           </CardTitle>
           <CardDescription>
-            Asigna una plantilla a cada caso, activa el envÃƒÂ­o y guarda. Las plantillas se crean en ConfiguraciÃƒÂ³n ? Plantillas (texto + variables).
+            Asigna una plantilla a cada caso, activa el envío y guarda. Las plantillas se crean en Configuración → Plantillas (texto + variables).
           </CardDescription>
         </CardHeader>
       </Card>
 
-      {/* Modo Prueba / ProducciÃƒÂ³n: un solo bloque, sin duplicar config */}
+      {/* Modo Prueba / Producción: un solo bloque, sin duplicar config */}
       <Card className={enModoPrueba ? 'border-amber-300 bg-amber-50/50' : 'border-emerald-200 bg-emerald-50/30'}>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
@@ -239,14 +239,14 @@ export function ConfiguracionNotificaciones() {
             ) : (
               <>
                 <Mail className="h-4 w-4 text-emerald-600" />
-                Modo producciÃƒÂ³n
+                Modo producción
               </>
             )}
           </CardTitle>
           <CardDescription>
             {enModoPrueba
-              ? 'Todos los emails de notificaciones se envÃƒÂ­an ÃƒÂºnicamente al correo de pruebas. Los clientes no reciben correo. El envÃƒÂ­o por caso queda desactivado en la tabla mientras estÃƒÂ© activo modo prueba.'
-              : 'Los emails se envÃƒÂ­an al correo de cada cliente segÃƒÂºn la opciÃƒÂ³n EnvÃƒÂ­o de cada caso.'}
+              ? 'Todos los emails de notificaciones se envían únicamente al correo de pruebas. Los clientes no reciben correo. El envío por caso queda desactivado en la tabla mientras esté activo modo prueba.'
+              : 'Los emails se envían al correo de cada cliente según la opción Envío de cada caso.'}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -264,7 +264,7 @@ export function ConfiguracionNotificaciones() {
             >
               <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ${modoPruebas ? 'translate-x-5' : 'translate-x-1'}`} />
             </button>
-            <span className="text-sm text-gray-600">{modoPruebas ? 'Activado (solo correo de pruebas)' : 'Desactivado (envÃ­o a clientes)'}</span>
+            <span className="text-sm text-gray-600">{modoPruebas ? 'Activado (solo correo de pruebas)' : 'Desactivado (envío a clientes)'}</span>
           </div>
 
           {/* Correos de Prueba */}
@@ -316,27 +316,27 @@ export function ConfiguracionNotificaciones() {
             </div>
           )}
 
-          {/* Botones Enviar Prueba - uno para cada correo */}
+          {/* Botones Enviar Prueba - uno para cada correo (operación independiente) */}
           {modoPruebas && (emailsPruebas[0]?.trim() || emailsPruebas[1]?.trim()) && (
             <div className="pt-4 border-t border-amber-200 space-y-2">
               {emailsPruebas[0]?.trim() && (
                 <Button
                   onClick={() => handleEnviarPrueba(0)}
-                  disabled={enviandoPrueba}
+                  disabled={enviandoPruebaIndice === 0}
                   className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:opacity-50 text-white font-semibold py-2 h-auto flex items-center justify-center gap-2 rounded-lg transition-all"
                 >
                   <Mail className="h-5 w-5" />
-                  {enviandoPrueba ? 'Enviando...' : `Enviar a ${emailsPruebas[0]}`}
+                  {enviandoPruebaIndice === 0 ? 'Enviando...' : `Enviar a ${emailsPruebas[0]}`}
                 </Button>
               )}
               {emailsPruebas[1]?.trim() && (
                 <Button
                   onClick={() => handleEnviarPrueba(1)}
-                  disabled={enviandoPrueba}
+                  disabled={enviandoPruebaIndice === 1}
                   className="w-full bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 disabled:opacity-50 text-white font-semibold py-2 h-auto flex items-center justify-center gap-2 rounded-lg transition-all"
                 >
                   <Mail className="h-5 w-5" />
-                  {enviandoPrueba ? 'Enviando...' : `Enviar a ${emailsPruebas[1]}`}
+                  {enviandoPruebaIndice === 1 ? 'Enviando...' : `Enviar a ${emailsPruebas[1]}`}
                 </Button>
               )}
             </div>
@@ -350,7 +350,7 @@ export function ConfiguracionNotificaciones() {
             <tr className="bg-gray-50 border-b border-gray-200">
               <th className="text-left py-3 px-4 font-semibold text-gray-700">Caso</th>
               <th className="text-left py-3 px-4 font-semibold text-gray-700">Plantilla</th>
-              <th className="text-center py-3 px-4 font-semibold text-gray-700 w-24">EnvÃƒÂ­o</th>
+              <th className="text-center py-3 px-4 font-semibold text-gray-700 w-24">Envío</th>
               <th className="text-left py-3 px-4 font-semibold text-gray-700 w-32">Opciones</th>
             </tr>
           </thead>
@@ -389,7 +389,7 @@ export function ConfiguracionNotificaciones() {
                       type="button"
                       onClick={() => !enModoPrueba && toggleEnvio(tipo)}
                       disabled={enModoPrueba}
-                      title={enModoPrueba ? 'EnvÃƒÂ­o desactivado en modo prueba' : (config.habilitado ? 'Desactivar envÃƒÂ­o' : 'Activar envÃƒÂ­o')}
+                      title={enModoPrueba ? 'Envío desactivado en modo prueba' : (config.habilitado ? 'Desactivar envío' : 'Activar envío')}
                       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ${
                         enModoPrueba ? 'bg-gray-300 cursor-not-allowed' : config.habilitado ? 'bg-blue-600' : 'bg-gray-300'
                       }`}
@@ -450,7 +450,7 @@ export function ConfiguracionNotificaciones() {
         <Button onClick={guardarConfiguracionEnvios} disabled={guardandoEnvios} className="bg-blue-600 hover:bg-blue-700">
           {guardandoEnvios ? 'Guardando...' : 'Guardar'}
         </Button>              
-              {/* BotÃƒÂ³n EnvÃƒÂ­o Manual de Prueba */}
+              {/* Botón Envío Manual de Prueba */}
               
       </div>
     </div>

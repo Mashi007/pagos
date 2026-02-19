@@ -1,4 +1,4 @@
-﻿"""
+"""
 Endpoints de pagos. Datos reales desde BD.
 - Tabla pagos: GET/POST/PUT/DELETE /pagos/ (listado y CRUD para /pagos/pagos).
 - GET /pagos/kpis, /stats, /ultimos; POST /upload, /conciliacion/upload, /{id}/aplicar-cuotas.
@@ -783,6 +783,13 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
             setattr(row, k, v.strip())
         elif k == "fecha_pago" and v is not None:
             setattr(row, k, datetime.combine(v, dt_time.min) if isinstance(v, date) and not isinstance(v, datetime) else v)
+        elif k == "conciliado" and v is not None:
+            row.conciliado = bool(v)
+            row.fecha_conciliacion = datetime.now(ZoneInfo(TZ_NEGOCIO)) if v else None
+            row.verificado_concordancia = "SI" if v else "NO"
+        elif k == "verificado_concordancia" and v is not None:
+            val = (v or "").strip().upper()
+            row.verificado_concordancia = val if val in ("SI", "NO") else ("" if v == "" else str(v)[:10])
         else:
             setattr(row, k, v)
     db.commit()

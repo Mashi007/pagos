@@ -68,8 +68,13 @@ class PagoService {
     return await apiClient.post(`${this.baseUrl}/`, data)
   }
 
-  async updatePago(id: number, data: Partial<PagoCreate>): Promise<Pago> {
+  async updatePago(id: number, data: Partial<PagoCreate> & { conciliado?: boolean }): Promise<Pago> {
     return await apiClient.put(`${this.baseUrl}/${id}`, data)
+  }
+
+  /** Actualiza solo el estado de conciliación (Sí/No) en BD */
+  async updateConciliado(id: number, conciliado: boolean): Promise<Pago> {
+    return await apiClient.put(`${this.baseUrl}/${id}`, { conciliado })
   }
 
   async deletePago(id: number): Promise<void> {
