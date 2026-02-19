@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../..
 import { Badge } from '../../components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
 import { toast } from 'sonner'
-import { Save, Mail, Eye, Braces } from 'lucide-react'
+import { Save, Mail, Eye } from 'lucide-react'
 
 interface EditorPlantillaHTMLProps {
   plantilla?: NotificacionPlantilla | null
@@ -188,7 +188,7 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Braces className="h-5 w-5" />
+            <"h-5 w-5" />
             Contenido HTML
           </CardTitle>
           <CardDescription>
@@ -212,7 +212,7 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
               onClick={() => setMostrarPreview(false)}
               className="flex items-center gap-2"
             >
-              <Braces className="h-4 w-4" />
+              <"h-4 w-4" />
               HTML
             </Button>
           </div>
