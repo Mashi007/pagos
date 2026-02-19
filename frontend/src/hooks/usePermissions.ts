@@ -87,6 +87,37 @@ export function usePermissions() {
     return allowedStates.includes(newState)
   }
 
+  /**
+   * Verifica si el usuario puede ver reportes
+   * - Solo ADMIN puede ver reportes
+   */
+  const canViewReports = (): boolean => {
+    return isAdmin()
+  }
+
+  /**
+   * Verifica si el usuario puede descargar reportes
+   * - Solo ADMIN puede descargar
+   */
+  const canDownloadReports = (): boolean => {
+    return isAdmin()
+  }
+
+  /**
+   * Verifica si el usuario puede acceder a reportes específicos por tipo
+   * - ADMIN: Acceso a todos
+   * - OPERATIVO: Solo acceso a reportes no financieros (Pagos, Morosidad)
+   */
+  const canAccessReport = (reportType: string): boolean => {
+    if (isAdmin()) {
+      return true // Admin tiene acceso a todos
+    }
+
+    // Operativos pueden ver: Pagos, Morosidad
+    const allowedForOperativos = ['PAGOS', 'MOROSIDAD', 'CEDULA']
+    return allowedForOperativos.includes(reportType)
+  }
+
   return {
     user,
     isAdmin: isAdmin(),
@@ -97,6 +128,9 @@ export function usePermissions() {
     canGenerateAmortizacion,
     canChangeState,
     getAllowedStates,
+    canViewReports,
+    canDownloadReports,
+    canAccessReport,
   }
 }
 

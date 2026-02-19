@@ -124,7 +124,7 @@ def get_resumen_dashboard(db: Session = Depends(get_db)):
             Cliente.estado == "ACTIVO",
             Prestamo.estado == "APROBADO",
             Cuota.fecha_pago.is_(None),
-            Cuota.fecha_vencimiento < hoy,
+            Cuota.fecha_vencimiento < (hoy - timedelta(days=60)),  # MORA: vencido hace 61+ días
         )
         .distinct()
     )
@@ -152,7 +152,7 @@ def get_resumen_dashboard(db: Session = Depends(get_db)):
         "total_prestamos": total_prestamos,
         "total_pagos": total_pagos,
         "cartera_activa": _safe_float(cartera_activa),
-        "prestamos_mora": prestamos_mora,
+        "pagos_vencidos": prestamos_mora,
         "pagos_mes": pagos_mes,
         "fecha_actualizacion": now_utc.isoformat(),
     }
@@ -1839,40 +1839,43 @@ def _generar_excel_asesores_por_mes(data_por_mes: dict) -> bytes:
     return buf.getvalue()
 
 
-@router.get("/exportar/asesores")
-def exportar_asesores(
-    db: Session = Depends(get_db),
-    formato: str = Query("excel", pattern="^(excel|pdf)$"),
-    fecha_corte: Optional[str] = Query(None),
-    meses: int = Query(12, ge=1, le=24, description="Para Excel: cantidad de meses (una pestaña por mes)"),
-    años: Optional[str] = Query(None),
-    meses_list: Optional[str] = Query(None),
-):
-    """Exporta reporte asesores. Excel: una pestaña por mes (MM/YYYY), solo datos del mes. PDF: fecha de corte única."""
-    if formato == "excel":
-        data_por_mes = get_asesores_por_mes(db=db, meses=meses, años=años, meses_list=meses_list)
-        content = _generar_excel_asesores_por_mes(data_por_mes)
-        hoy_str = date.today().isoformat()
-        return Response(
-            content=content,
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": f"attachment; filename=reporte_asesores_{hoy_str}.xlsx"},
-        )
-    data = get_reporte_asesores(db=db, fecha_corte=fecha_corte)
-    import openpyxl
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Asesores"
-    ws.append(["Analista", "Préstamos", "Clientes", "Cartera", "Vencimiento", "Cobrado", "% Cobrado", "% Vencimiento"])
-    for r in data.get("resumen_por_analista", []):
-        ws.append([r.get("analista", ""), r.get("total_prestamos", 0), r.get("total_clientes", 0), r.get("cartera_total", 0), r.get("morosidad_total", 0), r.get("total_cobrado", 0), r.get("porcentaje_cobrado", 0), r.get("porcentaje_morosidad", 0)])
-    buf = io.BytesIO()
-    wb.save(buf)
-    content = buf.getvalue()
-    if formato == "pdf":
-        pdf_content = _generar_pdf_asesores(data)
-        return Response(content=pdf_content, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=reporte_asesores_{data['fecha_corte']}.pdf"})
-    return Response(content=content, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename=reporte_asesores_{data['fecha_corte']}.xlsx"})
+# DEPRECATED: Este endpoint fue reemplazado por /exportar/morosidad
+# El reporte de asesores ahora se genera desde el endpoint de morosidad (agrupado por cédula)
+# Se mantiene comentado para referencia histórica
+# @router.get("/exportar/asesores")
+# def exportar_asesores(
+#     db: Session = Depends(get_db),
+#     formato: str = Query("excel", pattern="^(excel|pdf)$"),
+#     fecha_corte: Optional[str] = Query(None),
+#     meses: int = Query(12, ge=1, le=24, description="Para Excel: cantidad de meses (una pestaña por mes)"),
+#     años: Optional[str] = Query(None),
+#     meses_list: Optional[str] = Query(None),
+# ):
+#     """DEPRECATED: Exporta reporte asesores. Excel: una pestaña por mes (MM/YYYY), solo datos del mes. PDF: fecha de corte única."""
+#     if formato == "excel":
+#         data_por_mes = get_asesores_por_mes(db=db, meses=meses, años=años, meses_list=meses_list)
+#         content = _generar_excel_asesores_por_mes(data_por_mes)
+#         hoy_str = date.today().isoformat()
+#         return Response(
+#             content=content,
+#             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+#             headers={"Content-Disposition": f"attachment; filename=reporte_asesores_{hoy_str}.xlsx"},
+#         )
+#     data = get_reporte_asesores(db=db, fecha_corte=fecha_corte)
+#     import openpyxl
+#     wb = openpyxl.Workbook()
+#     ws = wb.active
+#     ws.title = "Asesores"
+#     ws.append(["Analista", "Préstamos", "Clientes", "Cartera", "Vencimiento", "Cobrado", "% Cobrado", "% Vencimiento"])
+#     for r in data.get("resumen_por_analista", []):
+#         ws.append([r.get("analista", ""), r.get("total_prestamos", 0), r.get("total_clientes", 0), r.get("cartera_total", 0), r.get("morosidad_total", 0), r.get("total_cobrado", 0), r.get("porcentaje_cobrado", 0), r.get("porcentaje_morosidad", 0)])
+#     buf = io.BytesIO()
+#     wb.save(buf)
+#     content = buf.getvalue()
+#     if formato == "pdf":
+#         pdf_content = _generar_pdf_asesores(data)
+#         return Response(content=pdf_content, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=reporte_asesores_{data['fecha_corte']}.pdf"})
+#     return Response(content=content, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename=reporte_asesores_{data['fecha_corte']}.xlsx"})
 
 
 def _generar_pdf_asesores(data: dict) -> bytes:

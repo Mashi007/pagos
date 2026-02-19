@@ -12,6 +12,7 @@ import {
   Loader2,
   UserCheck,
   CreditCard,
+  Lock,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { getErrorMessage, getErrorDetail } from '../types/errors'
@@ -20,6 +21,7 @@ import { formatCurrency } from '../utils'
 import { reporteService } from '../services/reporteService'
 import { toast } from 'sonner'
 import { DialogReporteFiltros, type FiltrosReporte } from '../components/reportes/DialogReporteFiltros'
+import { usePermissions } from '../hooks/usePermissions'
 
 /** Cada icono = un reporte. Click = abre diálogo años/meses, luego descarga Excel. */
 const tiposReporte = [
@@ -36,6 +38,33 @@ export function Reportes() {
   const [dialogAbierto, setDialogAbierto] = useState(false)
   const [reporteSeleccionado, setReporteSeleccionado] = useState<string | null>(null)
   const queryClient = useQueryClient()
+  const { canViewReports, canDownloadReports, canAccessReport } = usePermissions()
+
+  // Si el usuario no es admin, no puede ver reportes
+  if (!canViewReports()) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="space-y-8"
+      >
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <Lock className="h-5 w-5 text-red-600" />
+              <div>
+                <p className="font-semibold text-red-800">Acceso Restringido</p>
+                <p className="text-sm text-red-700 mt-1">
+                  No tienes permisos para acceder al Centro de Reportes. Contacta al administrador.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+    )
+  }
 
   // Obtener resumen del dashboard para KPIs
   const {
@@ -74,7 +103,12 @@ export function Reportes() {
   const generarReporte = async (tipo: string, filtros: FiltrosReporte) => {
     try {
       setGenerandoReporte(tipo)
-      toast.loading(`Generando reporte de ${tipo}...`)
+      const toastId = toast.loading(
+        <div className="flex items-center gap-2">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span>Preparando descarga de {tipo}...</span>
+        </div>
+      )
 
       const fechaCorte = new Date().toISOString().split('T')[0]
       const ext = 'xlsx'
@@ -82,40 +116,40 @@ export function Reportes() {
       if (tipo === 'CARTERA') {
         const blob = await reporteService.exportarReporteCartera('excel', fechaCorte, filtros)
         descargarBlob(blob, `reporte_cartera_${fechaCorte}.${ext}`)
-        toast.dismiss()
-        toast.success(`Reporte de ${tipo} descargado`)
+        toast.dismiss(toastId)
+        toast.success('✓ Reporte de Cartera descargado exitosamente')
         queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
         queryClient.invalidateQueries({ queryKey: ['kpis'] })
       } else if (tipo === 'PAGOS') {
         const blob = await reporteService.exportarReportePagos('excel', undefined, undefined, 12, filtros)
         descargarBlob(blob, `reporte_pagos_${fechaCorte}.${ext}`)
-        toast.dismiss()
-        toast.success(`Reporte de ${tipo} descargado`)
+        toast.dismiss(toastId)
+        toast.success('✓ Informe de Pagos descargado exitosamente')
         queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
         queryClient.invalidateQueries({ queryKey: ['kpis'] })
       } else if (tipo === 'MOROSIDAD') {
         const blob = await reporteService.exportarReporteMorosidad('excel', fechaCorte, filtros)
         descargarBlob(blob, `informe_vencimiento_pagos_${fechaCorte}.${ext}`)
-        toast.dismiss()
-        toast.success(`Reporte de ${tipo} descargado`)
+        toast.dismiss(toastId)
+        toast.success('✓ Reporte de Morosidad descargado exitosamente')
       } else if (tipo === 'ASESORES') {
         // ASESORES ahora es Pago vencido (antes MOROSIDAD)
         const blob = await reporteService.exportarReporteMorosidad('excel', fechaCorte, filtros)
         descargarBlob(blob, `reporte_pago_vencido_${fechaCorte}.${ext}`)
-        toast.dismiss()
-        toast.success(`Reporte de ${tipo} descargado`)
+        toast.dismiss(toastId)
+        toast.success('✓ Reporte de Pago Vencido descargado exitosamente')
       } else if (tipo === 'PRODUCTOS') {
         const blob = await reporteService.exportarReporteProductos('excel', fechaCorte, filtros)
         descargarBlob(blob, `reporte_productos_${fechaCorte}.${ext}`)
-        toast.dismiss()
-        toast.success(`Reporte de ${tipo} descargado`)
+        toast.dismiss(toastId)
+        toast.success('✓ Reporte de Productos descargado exitosamente')
       } else if (tipo === 'CEDULA') {
         const blob = await reporteService.exportarReporteCedula()
         descargarBlob(blob, `reporte_por_cedula_${fechaCorte}.${ext}`)
-        toast.dismiss()
-        toast.success(`Reporte de ${tipo} descargado`)
+        toast.dismiss(toastId)
+        toast.success('✓ Reporte por Cédula descargado exitosamente')
       } else {
-        toast.dismiss()
+        toast.dismiss(toastId)
         toast.info(`Generación de reporte ${tipo} próximamente disponible`)
       }
     } catch (error: unknown) {
@@ -124,7 +158,6 @@ export function Reportes() {
       const errorMessage = getErrorMessage(error)
       const detail = getErrorDetail(error)
       
-      // Mensajes de error más amigables
       let mensajeError = detail || errorMessage
       if (errorMessage?.includes('500') || errorMessage?.includes('Error del servidor')) {
         mensajeError = 'Error del servidor. Por favor, intente nuevamente en unos momentos.'
@@ -133,9 +166,9 @@ export function Reportes() {
       } else if (errorMessage?.includes('timeout') || errorMessage?.includes('Timeout')) {
         mensajeError = 'La operación está tomando demasiado tiempo. Por favor, intente con un rango de fechas más corto.'
       } else if (!mensajeError) {
-        mensajeError = `Error al generar reporte de ${tipo}. Por favor, contacte al soporte si el problema persiste.`
+        mensajeError = 'No se pudo generar el reporte'
       }
-      
+
       toast.error(mensajeError)
     } finally {
       setGenerandoReporte(null)
@@ -144,7 +177,7 @@ export function Reportes() {
 
   // KPIs desde el backend (datos reales desde BD) - asegurar que sean números (validación robusta)
   const kpiCartera = Number(resumenData?.cartera_activa ?? 0) || 0
-  const kpiPrestamosMora = Number(resumenData?.prestamos_mora ?? 0) || 0
+  const kpiPagosVencidos = Number(resumenData?.pagos_vencidos ?? 0) || 0
   const kpiTotalPrestamos = Number(resumenData?.total_prestamos ?? 0) || 0
   const kpiPagosMes = Number(resumenData?.pagos_mes ?? 0) || 0
 
@@ -212,7 +245,7 @@ export function Reportes() {
         </Card>
         <Card className="min-h-[120px] flex flex-col">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Préstamos en Mora</CardTitle>
+            <CardTitle className="text-sm font-medium">Pagos Vencidos</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" aria-hidden />
           </CardHeader>
           <CardContent>
@@ -224,7 +257,7 @@ export function Reportes() {
             ) : errorResumen ? (
               <div className="text-2xl font-bold text-gray-400">--</div>
             ) : (
-              <div className="text-2xl font-bold text-red-600">{kpiPrestamosMora.toLocaleString()}</div>
+              <div className="text-2xl font-bold text-red-600">{kpiPagosVencidos.toLocaleString()}</div>
             )}
             <p className="text-xs text-muted-foreground">Requieren atención</p>
           </CardContent>
@@ -288,16 +321,23 @@ export function Reportes() {
               const IconComponent = tipo.icon
               const isGenerando = generandoReporte === tipo.value
               const isDisponible = ['CARTERA', 'PAGOS', 'MOROSIDAD', 'ASESORES', 'PRODUCTOS', 'CEDULA'].includes(tipo.value)
+              const tieneAcceso = canAccessReport(tipo.value)
 
               return (
                 <button
                   key={tipo.value}
                   type="button"
-                  disabled={!isDisponible || isGenerando}
-                  onClick={() => abrirDialogoReporte(tipo.value)}
-                  title={`Descargar ${tipo.label} en Excel`}
+                  disabled={!isDisponible || !tieneAcceso || isGenerando || !canDownloadReports()}
+                  onClick={() => {
+                    if (!tieneAcceso) {
+                      toast.error('No tienes permisos para acceder a este reporte')
+                      return
+                    }
+                    abrirDialogoReporte(tipo.value)
+                  }}
+                  title={!tieneAcceso ? 'No tienes permisos para este reporte' : `Descargar ${tipo.label} en Excel`}
                   className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border-2 transition-all min-h-[100px] ${
-                    isDisponible
+                    isDisponible && tieneAcceso && canDownloadReports()
                       ? 'hover:bg-blue-50 hover:border-blue-200 cursor-pointer hover:scale-105'
                       : 'opacity-50 cursor-not-allowed'
                   }`}
@@ -305,10 +345,13 @@ export function Reportes() {
                 >
                   {isGenerando ? (
                     <Loader2 className="h-12 w-12 animate-spin text-blue-600" aria-hidden />
+                  ) : !tieneAcceso ? (
+                    <Lock className="h-12 w-12 text-gray-400" aria-hidden />
                   ) : (
                     <IconComponent className="h-12 w-12 text-blue-600" aria-hidden />
                   )}
                   <span className="text-xs font-medium text-center text-gray-600">{tipo.label}</span>
+                  {!tieneAcceso && <span className="text-xs text-red-600">Restringido</span>}
                 </button>
               )
             })}
