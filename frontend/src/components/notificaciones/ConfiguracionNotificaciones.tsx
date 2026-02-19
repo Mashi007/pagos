@@ -299,13 +299,13 @@ export function ConfiguracionNotificaciones() {
               </label>
               <Select
                 value={plantillaSeleccionada?.toString() || ''}
-                onValueChange={(val) => setPlantillaSeleccionada(val ? parseInt(val) : null)}
+                onValueChange={(val) => setPlantillaSeleccionada(val === "__default__" ? null : parseInt(val))}
               >
                 <SelectTrigger className="w-full bg-white">
                   <SelectValue placeholder="Plantilla predeterminada" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Plantilla predeterminada</SelectItem>
+                  <SelectItem value="__default__">Plantilla predeterminada</SelectItem>
                   {plantillas.map((p) => (
                     <SelectItem key={p.id} value={String(p.id)}>
                       {p.nombre || `Plantilla #${p.id}`}
