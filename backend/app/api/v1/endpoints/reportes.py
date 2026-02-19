@@ -848,12 +848,19 @@ def get_reporte_morosidad(
         ids_ana = db.execute(select(Prestamo.id).where(Prestamo.analista == analista, Prestamo.id.in_(prestamos_ids))).fetchall()
         ids_ana = [x[0] for x in ids_ana]
         monto_ana = _safe_float(db.scalar(select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(Cuota.fecha_pago.is_(None), Cuota.fecha_vencimiento < fc, Cuota.prestamo_id.in_(ids_ana)))) or 0
+        cuotas_ana = db.execute(
+            select(Cuota.fecha_vencimiento).select_from(Cuota).where(
+                Cuota.fecha_pago.is_(None), Cuota.fecha_vencimiento < fc, Cuota.prestamo_id.in_(ids_ana)
+            )
+        ).fetchall()
+        dias_ana = [(fc - r.fecha_vencimiento).days for r in cuotas_ana]
+        prom_dias_ana = sum(dias_ana) / len(dias_ana) if dias_ana else 0
         morosidad_por_analista.append({
             "analista": analista,
             "cantidad_prestamos": len(ids_ana),
             "cantidad_clientes": db.scalar(select(func.count(func.distinct(Prestamo.cliente_id))).select_from(Prestamo).where(Prestamo.id.in_(ids_ana))) or 0,
             "monto_total_mora": monto_ana,
-            "promedio_dias_mora": promedio_dias_mora,
+            "promedio_dias_mora": prom_dias_ana,
         })
     detalle: List[dict] = []
     for pid in prestamos_ids[:200]:
@@ -886,6 +893,113 @@ def get_reporte_morosidad(
         "morosidad_por_analista": morosidad_por_analista,
         "detalle_prestamos": detalle,
     }
+
+
+@router.get("/morosidad/por-mes")
+def get_morosidad_por_mes(
+    db: Session = Depends(get_db),
+    meses: int = Query(12, ge=1, le=24, description="Cantidad de meses hacia atrás"),
+):
+    """Morosidad por mes: una pestaña por mes (mes/año). Cuotas vencidas sin pagar a fin de cada mes, agrupadas por analista."""
+    hoy = date.today()
+    resultado: dict = {"meses": []}
+
+    for i in range(meses):
+        año = hoy.year
+        mes = hoy.month - i
+        while mes <= 0:
+            mes += 12
+            año -= 1
+        _, ultimo = calendar.monthrange(año, mes)
+        fc = date(año, mes, ultimo)
+
+        subq_mora = (
+            select(Cuota.prestamo_id)
+            .select_from(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(
+                Cliente.estado == "ACTIVO",
+                Prestamo.estado == "APROBADO",
+                Cuota.fecha_pago.is_(None),
+                Cuota.fecha_vencimiento < fc,
+            )
+            .distinct()
+        )
+        prestamos_ids = [r[0] for r in db.execute(subq_mora).fetchall()]
+        total_prestamos_mora = len(prestamos_ids)
+        total_clientes_mora = 0
+        monto_total_mora = 0.0
+        if prestamos_ids:
+            total_clientes_mora = db.scalar(
+                select(func.count(func.distinct(Prestamo.cliente_id))).select_from(Prestamo).where(Prestamo.id.in_(prestamos_ids))
+            ) or 0
+            monto_total_mora = _safe_float(
+                db.scalar(
+                    select(func.coalesce(func.sum(Cuota.monto), 0))
+                    .select_from(Cuota)
+                    .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+                    .join(Cliente, Prestamo.cliente_id == Cliente.id)
+                    .where(
+                        Cliente.estado == "ACTIVO",
+                        Prestamo.estado == "APROBADO",
+                        Cuota.fecha_pago.is_(None),
+                        Cuota.fecha_vencimiento < fc,
+                    )
+                )
+            ) or 0
+
+        cuotas_mora = db.execute(
+            select(Cuota.prestamo_id, Cuota.fecha_vencimiento)
+            .select_from(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(
+                Cliente.estado == "ACTIVO",
+                Prestamo.estado == "APROBADO",
+                Cuota.fecha_pago.is_(None),
+                Cuota.fecha_vencimiento < fc,
+            )
+        ).fetchall()
+        dias_list = [(fc - r.fecha_vencimiento).days for r in cuotas_mora]
+        promedio_dias_mora = sum(dias_list) / len(dias_list) if dias_list else 0
+
+        morosidad_por_analista: List[dict] = []
+        analistas = db.execute(select(Prestamo.analista).where(Prestamo.id.in_(prestamos_ids)).distinct()).fetchall()
+        for (analista,) in analistas:
+            if not analista:
+                continue
+            ids_ana = db.execute(select(Prestamo.id).where(Prestamo.analista == analista, Prestamo.id.in_(prestamos_ids))).fetchall()
+            ids_ana = [x[0] for x in ids_ana]
+            monto_ana = _safe_float(db.scalar(select(func.coalesce(func.sum(Cuota.monto), 0)).select_from(Cuota).where(Cuota.fecha_pago.is_(None), Cuota.fecha_vencimiento < fc, Cuota.prestamo_id.in_(ids_ana)))) or 0
+            cuotas_ana = db.execute(
+                select(Cuota.fecha_vencimiento).select_from(Cuota).where(
+                    Cuota.fecha_pago.is_(None), Cuota.fecha_vencimiento < fc, Cuota.prestamo_id.in_(ids_ana)
+                )
+            ).fetchall()
+            dias_ana = [(fc - r.fecha_vencimiento).days for r in cuotas_ana]
+            prom_dias_ana = sum(dias_ana) / len(dias_ana) if dias_ana else 0
+            morosidad_por_analista.append({
+                "analista": analista,
+                "cantidad_prestamos": len(ids_ana),
+                "cantidad_clientes": db.scalar(select(func.count(func.distinct(Prestamo.cliente_id))).select_from(Prestamo).where(Prestamo.id.in_(ids_ana))) or 0,
+                "monto_total_mora": monto_ana,
+                "promedio_dias_mora": prom_dias_ana,
+            })
+
+        resultado["meses"].append({
+            "mes": mes,
+            "año": año,
+            "label": f"{mes:02d}/{año}",
+            "fecha_corte": fc.isoformat(),
+            "total_prestamos_mora": total_prestamos_mora,
+            "total_clientes_mora": total_clientes_mora,
+            "monto_total_mora": monto_total_mora,
+            "promedio_dias_mora": round(promedio_dias_mora, 1),
+            "morosidad_por_analista": morosidad_por_analista,
+        })
+
+    return resultado
 
 
 # Rangos de días atrasados para informe pago vencido en pestañas
@@ -1006,22 +1120,35 @@ def get_morosidad_por_rangos(
     return resultado
 
 
-def _generar_excel_morosidad(data: dict) -> bytes:
+def _generar_excel_morosidad_por_mes(data_por_mes: dict) -> bytes:
+    """Genera Excel con una pestaña por mes (mes/año)."""
     import openpyxl
     wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Morosidad"
-    ws.append(["Reporte de Morosidad", data.get("fecha_corte", "")])
-    ws.append([])
-    ws.append(["Total préstamos en mora", data.get("total_prestamos_mora", 0)])
-    ws.append(["Total clientes en mora", data.get("total_clientes_mora", 0)])
-    ws.append(["Monto total mora", data.get("monto_total_mora", 0)])
-    ws.append(["Promedio días mora", data.get("promedio_dias_mora", 0)])
-    ws.append([])
-    ws.append(["Morosidad por analista"])
-    ws.append(["Analista", "Cant. préstamos", "Cant. clientes", "Monto mora", "Prom. días"])
-    for r in data.get("morosidad_por_analista", []):
-        ws.append([r.get("analista", ""), r.get("cantidad_prestamos", 0), r.get("cantidad_clientes", 0), r.get("monto_total_mora", 0), r.get("promedio_dias_mora", 0)])
+    meses_data = data_por_mes.get("meses", [])
+
+    for idx, mes_data in enumerate(meses_data):
+        label = mes_data.get("label", f"Mes{idx+1}")
+        # Excel limita nombres de hoja a 31 chars; usar formato corto MM/YYYY
+        sheet_name = label.replace("/", "-")[:31]
+        if idx == 0:
+            ws = wb.active
+            ws.title = sheet_name
+        else:
+            ws = wb.create_sheet(title=sheet_name)
+
+        ws.append(["Reporte de Morosidad", mes_data.get("label", "")])
+        ws.append([])
+        ws.append(["Total préstamos en mora", mes_data.get("total_prestamos_mora", 0)])
+        ws.append(["Total clientes en mora", mes_data.get("total_clientes_mora", 0)])
+        ws.append(["Monto total en dólares", mes_data.get("monto_total_mora", 0)])
+        ws.append(["Promedio días mora", round(_safe_float(mes_data.get("promedio_dias_mora", 0)), 1)])
+        ws.append([])
+        ws.append(["Morosidad por analista"])
+        ws.append(["Analista", "Cant. préstamos", "Cant. clientes", "Monto en dólares", "Prom. días"])
+        for r in mes_data.get("morosidad_por_analista", []):
+            prom_dias = round(_safe_float(r.get("promedio_dias_mora", 0)), 1)
+            ws.append([r.get("analista", ""), r.get("cantidad_prestamos", 0), r.get("cantidad_clientes", 0), r.get("monto_total_mora", 0), prom_dias])
+
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
@@ -1041,8 +1168,8 @@ def _generar_pdf_morosidad(data: dict) -> bytes:
     resumen = [
         ["Total préstamos en mora", str(data.get("total_prestamos_mora", 0))],
         ["Total clientes en mora", str(data.get("total_clientes_mora", 0))],
-        ["Monto total mora", str(data.get("monto_total_mora", 0))],
-        ["Promedio días mora", str(data.get("promedio_dias_mora", 0))],
+        ["Monto total en dólares", str(data.get("monto_total_mora", 0))],
+        ["Promedio días mora", str(round(_safe_float(data.get("promedio_dias_mora", 0)), 1))],
     ]
     t = Table(resumen)
     t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), "#e0e0e0"), ("GRID", (0, 0), (-1, -1), 0.5, "#ccc")]))
@@ -1051,9 +1178,10 @@ def _generar_pdf_morosidad(data: dict) -> bytes:
     if mora_analista:
         story.append(Spacer(1, 12))
         story.append(Paragraph("Morosidad por analista", styles["Heading2"]))
-        rows = [["Analista", "Préstamos", "Clientes", "Monto mora", "Prom. días"]]
+        rows = [["Analista", "Préstamos", "Clientes", "Monto en dólares", "Prom. días"]]
         for r in mora_analista:
-            rows.append([r.get("analista", ""), str(r.get("cantidad_prestamos", 0)), str(r.get("cantidad_clientes", 0)), str(r.get("monto_total_mora", 0)), str(r.get("promedio_dias_mora", 0))])
+            prom_dias = round(_safe_float(r.get("promedio_dias_mora", 0)), 1)
+            rows.append([r.get("analista", ""), str(r.get("cantidad_prestamos", 0)), str(r.get("cantidad_clientes", 0)), str(r.get("monto_total_mora", 0)), str(prom_dias)])
         t2 = Table(rows)
         t2.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), "#e0e0e0"), ("GRID", (0, 0), (-1, -1), 0.5, "#ccc")]))
         story.append(t2)
@@ -1066,17 +1194,20 @@ def exportar_morosidad(
     db: Session = Depends(get_db),
     formato: str = Query("excel", pattern="^(excel|pdf)$"),
     fecha_corte: Optional[str] = Query(None),
+    meses: int = Query(12, ge=1, le=24, description="Para Excel: cantidad de meses (una pestaña por mes)"),
 ):
-    """Exporta reporte de morosidad en Excel o PDF."""
-    data = get_reporte_morosidad(db=db, fecha_corte=fecha_corte)
+    """Exporta reporte de morosidad. Excel: una pestaña por mes (mes/año). PDF: fecha de corte única."""
     if formato == "pdf":
+        data = get_reporte_morosidad(db=db, fecha_corte=fecha_corte)
         content = _generar_pdf_morosidad(data)
         return Response(content=content, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=reporte_morosidad_{data['fecha_corte']}.pdf"})
-    content = _generar_excel_morosidad(data)
+    data_por_mes = get_morosidad_por_mes(db=db, meses=meses)
+    content = _generar_excel_morosidad_por_mes(data_por_mes)
+    hoy_str = date.today().isoformat()
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename=reporte_morosidad_{data['fecha_corte']}.xlsx"},
+        headers={"Content-Disposition": f"attachment; filename=reporte_morosidad_{hoy_str}.xlsx"},
     )
 
 
