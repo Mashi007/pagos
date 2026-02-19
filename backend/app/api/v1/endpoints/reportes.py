@@ -1136,14 +1136,14 @@ def _generar_excel_morosidad_por_mes(data_por_mes: dict) -> bytes:
         else:
             ws = wb.create_sheet(title=sheet_name)
 
-        ws.append(["Reporte de Morosidad", mes_data.get("label", "")])
+        ws.append(["Informe de Vencimiento de Pagos", mes_data.get("label", "")])
         ws.append([])
-        ws.append(["Total préstamos en mora", mes_data.get("total_prestamos_mora", 0)])
-        ws.append(["Total clientes en mora", mes_data.get("total_clientes_mora", 0)])
+        ws.append(["Total préstamos con pago vencido", mes_data.get("total_prestamos_mora", 0)])
+        ws.append(["Total clientes con pago vencido", mes_data.get("total_clientes_mora", 0)])
         ws.append(["Monto total en dólares", mes_data.get("monto_total_mora", 0)])
-        ws.append(["Promedio días mora", round(_safe_float(mes_data.get("promedio_dias_mora", 0)), 1)])
+        ws.append(["Promedio días de atraso", round(_safe_float(mes_data.get("promedio_dias_mora", 0)), 1)])
         ws.append([])
-        ws.append(["Morosidad por analista"])
+        ws.append(["Pago vencido por analista"])
         ws.append(["Analista", "Cant. préstamos", "Cant. clientes", "Monto en dólares", "Prom. días"])
         for r in mes_data.get("morosidad_por_analista", []):
             prom_dias = round(_safe_float(r.get("promedio_dias_mora", 0)), 1)
@@ -1162,14 +1162,14 @@ def _generar_pdf_morosidad(data: dict) -> bytes:
     doc = SimpleDocTemplate(buf, pagesize=letter)
     styles = getSampleStyleSheet()
     story = []
-    story.append(Paragraph("Reporte de Morosidad (Pago vencido)", styles["Title"]))
+    story.append(Paragraph("Informe de Vencimiento de Pagos", styles["Title"]))
     story.append(Paragraph(f"Fecha de corte: {data.get('fecha_corte', '')}", styles["Normal"]))
     story.append(Spacer(1, 12))
     resumen = [
-        ["Total préstamos en mora", str(data.get("total_prestamos_mora", 0))],
-        ["Total clientes en mora", str(data.get("total_clientes_mora", 0))],
+        ["Total préstamos con pago vencido", str(data.get("total_prestamos_mora", 0))],
+        ["Total clientes con pago vencido", str(data.get("total_clientes_mora", 0))],
         ["Monto total en dólares", str(data.get("monto_total_mora", 0))],
-        ["Promedio días mora", str(round(_safe_float(data.get("promedio_dias_mora", 0)), 1))],
+        ["Promedio días de atraso", str(round(_safe_float(data.get("promedio_dias_mora", 0)), 1))],
     ]
     t = Table(resumen)
     t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), "#e0e0e0"), ("GRID", (0, 0), (-1, -1), 0.5, "#ccc")]))
@@ -1177,7 +1177,7 @@ def _generar_pdf_morosidad(data: dict) -> bytes:
     mora_analista = data.get("morosidad_por_analista", [])
     if mora_analista:
         story.append(Spacer(1, 12))
-        story.append(Paragraph("Morosidad por analista", styles["Heading2"]))
+        story.append(Paragraph("Pago vencido por analista", styles["Heading2"]))
         rows = [["Analista", "Préstamos", "Clientes", "Monto en dólares", "Prom. días"]]
         for r in mora_analista:
             prom_dias = round(_safe_float(r.get("promedio_dias_mora", 0)), 1)
@@ -1200,14 +1200,14 @@ def exportar_morosidad(
     if formato == "pdf":
         data = get_reporte_morosidad(db=db, fecha_corte=fecha_corte)
         content = _generar_pdf_morosidad(data)
-        return Response(content=content, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=reporte_morosidad_{data['fecha_corte']}.pdf"})
+        return Response(content=content, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=informe_vencimiento_pagos_{data['fecha_corte']}.pdf"})
     data_por_mes = get_morosidad_por_mes(db=db, meses=meses)
     content = _generar_excel_morosidad_por_mes(data_por_mes)
     hoy_str = date.today().isoformat()
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename=reporte_morosidad_{hoy_str}.xlsx"},
+        headers={"Content-Disposition": f"attachment; filename=informe_vencimiento_pagos_{hoy_str}.xlsx"},
     )
 
 

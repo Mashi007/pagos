@@ -95,7 +95,7 @@ export function Reportes() {
         queryClient.invalidateQueries({ queryKey: ['kpis'] })
       } else if (tipo === 'MOROSIDAD') {
         const blob = await reporteService.exportarReporteMorosidad('excel', fechaCorte)
-        descargarBlob(blob, `reporte_morosidad_${fechaCorte}.${ext}`)
+        descargarBlob(blob, `informe_vencimiento_pagos_${fechaCorte}.${ext}`)
         toast.dismiss()
         toast.success(`Reporte de ${tipo} descargado`)
       } else if (tipo === 'FINANCIERO') {
