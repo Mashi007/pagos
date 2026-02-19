@@ -722,7 +722,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
     let validation: ValidationResult
 
     if (field === 'nombres') {
-      // âœ… Validar nombres DESPUÃ‰S del formateo para verificar 2-7 palabras
+      // âœ… Validar nombres DESPUÉS del formateo para verificar 2-7 palabras
       validation = validateNombres(formattedValue)
     } else if (field === 'ocupacion') {
       validation = validateOcupacion(formattedValue)

@@ -453,7 +453,7 @@ export function DefinicionesCamposTab() {
                             {campo.tipo}
                             {campo.es_obligatorio && ' • NOT NULL'}
                             {campo.tiene_indice && ' • Indexado'}
-                            {campo.es_clave_foranea && ` • FK â†’ ${campo.tabla_referenciada}`}
+                            {campo.es_clave_foranea && ` • FK → ${campo.tabla_referenciada}`}
                           </div>
                         </button>
                       )
@@ -720,7 +720,7 @@ export function DefinicionesCamposTab() {
                             {def.es_clave_foranea && (
                               <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
                                 <Key className="h-3 w-3 mr-1" />
-                                FK â†’ {def.tabla_referenciada}.{def.campo_referenciado}
+                                FK → {def.tabla_referenciada}.{def.campo_referenciado}
                               </Badge>
                             )}
                           </div>

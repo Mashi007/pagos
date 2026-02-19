@@ -59,79 +59,16 @@ import {
   findSeccionById as findSeccionByIdHelper,
 } from '../constants/configuracionSecciones'
 
-// Mock data para configuración
-const mockConfiguracion = {
-  general: {
-    nombreEmpresa: 'RAPICREDIT',
-    version: '1.0.0',
-    idioma: 'ES',
-    zonaHoraria: 'America/Caracas',
-    moneda: 'VES',
-    ultimaActualizacion: '2024-07-20T10:00:00Z',
-  },
-  notificaciones: {
-    emailActivo: true,
-    smsActivo: true,
-    pushActivo: true,
-    emailServidor: 'smtp.gmail.com',
-    emailPuerto: 587,
-    emailUsuario: 'noreply@rapicredit.com',
-    smsProveedor: 'Twilio',
-    horarioNotificaciones: '08:00-18:00',
-    diasNotificacion: ['LUN', 'MAR', 'MIE', 'JUE', 'VI'],
-  },
-  seguridad: {
-    sessionTimeout: 30,
-    intentosLogin: 3,
-    bloqueoTemporal: 15,
-    requiere2FA: false,
-    politicaContraseñas: 'ALTA',
-    auditoriaActiva: true,
-    ipWhitelist: false,
-    sslActivo: true,
-  },
-  baseDatos: {
-    tipo: 'PostgreSQL',
-    version: '13.7',
-    backupAutomatico: true,
-    frecuenciaBackup: 'DIARIO',
-    horaBackup: '02:00',
-    retencionBackup: 30,
-    compresionBackup: true,
-    ultimoBackup: '2024-07-20T02:00:00Z',
-  },
-  integraciones: {
-    apiActiva: true,
-    versionAPI: 'v1',
-    rateLimit: 1000,
-    webhooksActivos: true,
-    loggingActivo: true,
-    metricaActiva: true,
-    alertasActivas: true,
-  },
-  facturacion: {
-    tasaInteres: 12.5,
-    tasaMora: 24.0,
-    diasGracia: 5,
-    montoMinimo: 5000,
-    montoMaximo: 50000,
-    plazoMinimo: 12,
-    plazoMaximo: 60,
-    cuotaInicialMinima: 10,
-  },
-  inteligenciaArtificial: {
-    openaiApiKey: '',
-    openaiModel: 'gpt-3.5-turbo',
-    aiScoringEnabled: true,
-    aiPredictionEnabled: true,
-    aiChatbotEnabled: true
-  },
-}
-
-export function Configuracion() {
-  const [searchParams, setSearchParams] = useSearchParams()
-  const navigate = useNavigate()
-  const [configuracion, setConfiguracion] = useState(mockConfiguracion)
+  const [configuracion, setConfiguracion] = useState<{
+    general: {
+      nombreEmpresa: string
+      version: string
+      idioma: string
+      zonaHoraria: string
+      moneda: string
+      ultimaActualizacion?: string
+    }
+  }>({ general: { nombreEmpresa: '', version: '', idioma: '', zonaHoraria: '', moneda: '' } })
   const [configuracionGeneral, setConfiguracionGeneral] = useState<ConfiguracionGeneral | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)

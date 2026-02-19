@@ -48,7 +48,7 @@ const [probando, setProbando] = useState(false)
   const [envioManualEnCurso, setEnvioManualEnCurso] = useState(false)
   const [modoPruebas, setModoPruebas] = useState<string>('true')
   const [emailPruebas, setEmailPruebas] = useState('')
-  const [emailActivo, setEmailActivo] = useState<boolean>(true) // Ã¢Å“â€¦ Estado activo/inactivo
+  const [emailActivo, setEmailActivo] = useState<boolean>(true) // ✓ Estado activo/inactivo
   const [emailPrincipalPrueba, setEmailPrincipalPrueba] = useState('')
   const [emailCCPrueba, setEmailCCPrueba] = useState('')
   const [emailPruebaDestino, setEmailPruebaDestino] = useState('')
@@ -56,7 +56,7 @@ const [probando, setProbando] = useState(false)
   const [mensajePrueba, setMensajePrueba] = useState('')
   const [errorValidacion, setErrorValidacion] = useState<string | null>(null)
 
-  // Estado de vinculaciÃ³n y monitoreo
+  // Estado de vinculación y monitoreo
   const [vinculacionConfirmada, setVinculacionConfirmada] = useState<boolean>(false)
   const [mensajeVinculacion, setMensajeVinculacion] = useState<string | null>(null)
   const [requiereAppPassword, setRequiereAppPassword] = useState<boolean>(false)
@@ -68,7 +68,7 @@ const [probando, setProbando] = useState(false)
   } | null>(null)
   const [, setVerificandoEstado] = useState<boolean>(false)
 
-  // Estado de envÃ­os
+  // Estado de envíos
   const [enviosRecientes, setEnviosRecientes] = useState<Notificacion[]>([])
   const [cargandoEnvios, setCargandoEnvios] = useState(false)
   const [resultadoPrueba, setResultadoPrueba] = useState<any>(null)
@@ -77,47 +77,47 @@ const [probando, setProbando] = useState(false)
   const [probandoImap, setProbandoImap] = useState(false)
   const [resultadoImap, setResultadoImap] = useState<{ success?: boolean; mensaje?: string } | null>(null)
 
-  // Cargar configuraciÃ³n al montar
+  // Cargar configuración al montar
   useEffect(() => {
     cargarConfiguracion()
     cargarEnviosRecientes()
-    verificarEstadoGoogle() // Ã¢Å“â€¦ Verificar estado de Google/Gmail al cargar
+    verificarEstadoGoogle() // ✓ Verificar estado de Google/Gmail al cargar
   }, [])
 
-  // Ã¢Å“â€¦ Verificar estado de configuraciÃ³n con Google/Gmail
+  // ✓ Verificar estado de configuración con Google/Gmail
   const verificarEstadoGoogle = async () => {
     try {
       setVerificandoEstado(true)
       const estado = await emailConfigService.verificarEstadoConfiguracionEmail()
       setEstadoConfiguracion(estado)
 
-      // Ã¢Å“â€¦ Actualizar estado de vinculaciÃ³n basado en la verificaciÃ³n REAL de Gmail
-      // La conexiÃ³n SMTP exitosa significa que Gmail ACEPTÃ“ las credenciales
+      // ✓ Actualizar estado de vinculación basado en la verificación REAL de Gmail
+      // La conexión SMTP exitosa significa que Gmail ACEPTÓ las credenciales
       if (estado.configurada && estado.conexion_smtp?.success === true) {
         setVinculacionConfirmada(true)
-        setMensajeVinculacion('Ã¢Å“â€¦ Sistema vinculado correctamente con Google/Google Workspace')
+        setMensajeVinculacion('✓ Sistema vinculado correctamente con Google/Google Workspace')
         setRequiereAppPassword(false)
         if (process.env.NODE_ENV === 'development') {
-          console.log('Ã¢Å“â€¦ Gmail confirmÃ³: ConfiguraciÃ³n correcta y conexiÃ³n aceptada')
+          console.log('✓ Gmail confirmó: Configuración correcta y conexión aceptada')
         }
       } else {
-        // Si hay problemas o la conexiÃ³n SMTP fallÃ³, Gmail RECHAZÃ“ la conexiÃ³n
+        // Si hay problemas o la conexión SMTP falló, Gmail RECHAZÓ la conexión
         setVinculacionConfirmada(false)
 
-        // Verificar si el problema es especÃ­fico de App Password
+        // Verificar si el problema es específico de App Password
         const requiereAppPass = estado.problemas.some(p =>
           p.toLowerCase().includes('app password') ||
-          p.toLowerCase().includes('contraseÃ±a de aplicaciÃ³n') ||
+          p.toLowerCase().includes('contraseña de aplicación') ||
           p.toLowerCase().includes('application-specific password') ||
-          p.toLowerCase().includes('requiere una contraseÃ±a de aplicaciÃ³n')
+          p.toLowerCase().includes('requiere una contraseña de aplicación')
         ) || (estado.conexion_smtp?.message?.toLowerCase().includes('app password') ?? false) ||
-           (estado.conexion_smtp?.message?.toLowerCase().includes('contraseÃ±a de aplicaciÃ³n') ?? false)
+           (estado.conexion_smtp?.message?.toLowerCase().includes('contraseña de aplicación') ?? false)
 
         setRequiereAppPassword(Boolean(requiereAppPass))
-        setMensajeVinculacion(estado.mensaje || 'Ã¢Å¡ Ã¯Â¸Â Gmail rechazÃ³ la conexiÃ³n. Verifica tus credenciales.')
+        setMensajeVinculacion(estado.mensaje || '✗ Gmail rechazó la conexión. Verifica tus credenciales.')
 
         if (process.env.NODE_ENV === 'development') {
-          console.log('Ã¢ÂÅ’ Gmail rechazÃ³:', {
+          console.log('✗ Gmail rechazó:', {
             problemas: estado.problemas,
             conexion_smtp: estado.conexion_smtp,
             requiereAppPassword: requiereAppPass
@@ -128,7 +128,7 @@ const [probando, setProbando] = useState(false)
       console.error('Error verificando estado de Google:', error)
       setEstadoConfiguracion({
         configurada: false,
-        mensaje: 'Error al verificar estado de configuraciÃ³n',
+        mensaje: 'Error al verificar estado de configuración',
         problemas: ['No se pudo verificar el estado con Google'],
         conexion_smtp: { success: false, message: 'Error al conectar con Gmail' }
       })
@@ -137,18 +137,18 @@ const [probando, setProbando] = useState(false)
     }
   }
 
-  // Cargar configuraciÃ³n desde backend
+  // Cargar configuración desde backend
   const cargarConfiguracion = async () => {
     try {
       const data = await emailConfigService.obtenerConfiguracionEmail()
 
-      // Ã¢Å“â€¦ CRÃTICO: Sincronizar from_email con smtp_user si estÃ¡ vacÃ­o
-      // Esto asegura que el botÃ³n se habilite correctamente
+      // ✓ CRÍTICO: Sincronizar from_email con smtp_user si está vacío
+      // Esto asegura que el botón se habilite correctamente
       if ((!data.from_email || data.from_email.trim() === '') && data.smtp_user?.trim()) {
         data.from_email = data.smtp_user
       }
 
-      // Ã¢Å“â€¦ Asegurar que from_email tenga un valor por defecto si smtp_user existe
+      // ✓ Asegurar que from_email tenga un valor por defecto si smtp_user existe
       if (!data.from_email && data.smtp_user) {
         data.from_email = data.smtp_user
       }
@@ -162,7 +162,7 @@ const [probando, setProbando] = useState(false)
         data.smtp_use_tls = (data.smtp_use_tls.toLowerCase() === 'true' || data.smtp_use_tls === '1') ? 'true' : 'false'
       }
 
-      // Ã¢Å“â€¦ Asegurar valores por defecto para campos requeridos
+      // ✓ Asegurar valores por defecto para campos requeridos
       if (!data.smtp_host) data.smtp_host = 'smtp.gmail.com'
       if (!data.smtp_port) data.smtp_port = '587'
       if (!data.from_name) data.from_name = 'RapiCredit'
@@ -187,25 +187,25 @@ const [probando, setProbando] = useState(false)
       setConfig(data as EmailConfigData)
       setModoPruebas(data.modo_pruebas || 'true')
       setEmailPruebas(data.email_pruebas || '')
-      // Ã¢Å“â€¦ Cargar estado activo/inactivo
+      // ✓ Cargar estado activo/inactivo
       const emailActivoValue = data.email_activo === undefined || data.email_activo === null
         ? true
         : (data.email_activo === 'true' || data.email_activo === '1')
       setEmailActivo(emailActivoValue)
     } catch (error) {
-      console.error('Error cargando configuraciÃ³n:', error)
-      toast.error('Error cargando configuraciÃ³n')
+      console.error('Error cargando configuración:', error)
+      toast.error('Error cargando configuración')
     }
   }
 
-  // Cargar envÃ­os recientes
+  // Cargar envíos recientes
   const cargarEnviosRecientes = async () => {
     setCargandoEnvios(true)
     try {
       const resultado = await notificacionService.listarNotificaciones(1, 10)
       setEnviosRecientes(resultado.items || [])
     } catch (error) {
-      console.error('Error cargando envÃ­os:', error)
+      console.error('Error cargando envíos:', error)
     } finally {
       setCargandoEnvios(false)
     }
@@ -216,10 +216,10 @@ const [probando, setProbando] = useState(false)
     setConfig(prev => {
       const nuevo = { ...prev, [campo]: valor }
 
-      // Ã¢Å“â€¦ Sincronizar from_email con smtp_user automÃ¡ticamente
-      // Esto asegura que siempre tengan el mismo valor si from_email estÃ¡ vacÃ­o o igual al anterior
+      // ✓ Sincronizar from_email con smtp_user automáticamente
+      // Esto asegura que siempre tengan el mismo valor si from_email está vacío o igual al anterior
       if (campo === 'smtp_user') {
-        // Si from_email estÃ¡ vacÃ­o o es igual al smtp_user anterior, sincronizar
+        // Si from_email está vacío o es igual al smtp_user anterior, sincronizar
         if (!prev.from_email?.trim() || prev.from_email === prev.smtp_user) {
           nuevo.from_email = valor
         }
@@ -228,7 +228,7 @@ const [probando, setProbando] = useState(false)
       return nuevo
     })
 
-    // Limpiar error de validaciÃ³n cuando el usuario edita
+    // Limpiar error de validación cuando el usuario edita
     if (errorValidacion) {
       setErrorValidacion(null)
     }
@@ -236,7 +236,7 @@ const [probando, setProbando] = useState(false)
 
   // Validar si se puede guardar
   const puedeGuardar = useMemo((): boolean => {
-    // Ã¢Å“â€¦ CONDICIÃ“N 1: Campos obligatorios bÃ¡sicos (siempre requeridos)
+    // ✓ CONDICIóN 1: Campos obligatorios básicos (siempre requeridos)
     const tieneHost = config.smtp_host?.trim() || ''
     const tienePort = config.smtp_port?.trim() || ''
     const tieneUser = config.smtp_user?.trim() || ''
@@ -246,33 +246,33 @@ const [probando, setProbando] = useState(false)
       return false
     }
 
-    // Ã¢Å“â€¦ CONDICIÃ“N 2: Puerto vÃ¡lido (nÃºmero entre 1 y 65535)
+    // ✓ CONDICIóN 2: Puerto válido (número entre 1 y 65535)
     const puerto = parseInt(config.smtp_port || '0')
     if (isNaN(puerto) || puerto < 1 || puerto > 65535) {
       return false
     }
 
-    // Ã¢Å“â€¦ CONDICIÃ“N 3: Validaciones especÃ­ficas para Gmail/Google Workspace
+    // ✓ CONDICIóN 3: Validaciones específicas para Gmail/Google Workspace
     const esGmail = config.smtp_host?.toLowerCase().includes('gmail.com') || false
     if (esGmail) {
-      // Ã¢Å“â€¦ 3.1: Gmail requiere contraseÃ±a siempre
+      // ✓ 3.1: Gmail requiere contraseña siempre
       const tienePassword = config.smtp_password?.trim() || ''
       if (!tienePassword) {
         return false
       }
 
-      // Ã¢Å“â€¦ 3.2: Gmail solo acepta puertos 587 (TLS) o 465 (SSL)
+      // ✓ 3.2: Gmail solo acepta puertos 587 (TLS) o 465 (SSL)
       if (puerto !== 587 && puerto !== 465) {
         return false
       }
 
-      // Ã¢Å“â€¦ 3.3: Puerto 587 requiere TLS habilitado
+      // ✓ 3.3: Puerto 587 requiere TLS habilitado
       if (puerto === 587 && config.smtp_use_tls !== 'true') {
         return false
       }
     }
 
-    // Ã¢Å“â€¦ CONDICIÃ“N 4: En modo Pruebas, el correo de pruebas es obligatorio y debe ser vÃ¡lido
+    // ✓ CONDICIóN 4: En modo Pruebas, el correo de pruebas es obligatorio y debe ser válido
     if (modoPruebas === 'true') {
       const email = (emailPruebas ?? '').trim()
       if (!email || !email.includes('@')) {
@@ -296,22 +296,22 @@ const [probando, setProbando] = useState(false)
   const obtenerCamposFaltantes = (): string[] => {
     const faltantes: string[] = []
 
-    // Campos obligatorios bÃ¡sicos
+    // Campos obligatorios básicos
     if (!config.smtp_host?.trim()) faltantes.push('Servidor SMTP')
     if (!config.smtp_port?.trim()) faltantes.push('Puerto SMTP')
     if (!config.smtp_user?.trim()) faltantes.push('Email de Usuario')
     if (!config.from_email?.trim()) faltantes.push('Email del Remitente')
 
-    // Validar puerto numÃ©rico
+    // Validar puerto numérico
     const puerto = parseInt(config.smtp_port || '0')
     if (isNaN(puerto) || puerto < 1 || puerto > 65535) {
-      faltantes.push('Puerto SMTP vÃ¡lido (1-65535)')
+      faltantes.push('Puerto SMTP válido (1-65535)')
     }
 
-    // Validaciones especÃ­ficas para Gmail
+    // Validaciones específicas para Gmail
     if (config.smtp_host?.toLowerCase().includes('gmail.com')) {
       if (!config.smtp_password?.trim()) {
-        faltantes.push('ContraseÃ±a de AplicaciÃ³n')
+        faltantes.push('Contraseña de Aplicación')
       }
 
       // Gmail solo acepta puertos 587 o 465
@@ -360,7 +360,7 @@ const [probando, setProbando] = useState(false)
     return null
   }
 
-  // Guardar configuraciÃ³n
+  // Guardar configuración
   const handleGuardar = async () => {
     const error = validarConfiguracion()
     if (error) {
@@ -374,7 +374,7 @@ const [probando, setProbando] = useState(false)
     try {
       setGuardando(true)
 
-      // Limpiar espacios de la contraseÃ±a
+      // Limpiar espacios de la contraseña
       const passwordLimpia = config.smtp_password?.replace(/\s/g, '') || ''
 
           const configCompleta = {
@@ -393,7 +393,7 @@ const [probando, setProbando] = useState(false)
 
       const resultado = await emailConfigService.actualizarConfiguracionEmail(configCompleta)
 
-      // Ã¢Å“â€¦ Actualizar estado de vinculaciÃ³n INMEDIATAMENTE con la respuesta del guardado
+      // ✓ Actualizar estado de vinculación INMEDIATAMENTE con la respuesta del guardado
       // Esto asegura que las banderas se actualicen de inmediato
       const nuevaVinculacion = resultado?.vinculacion_confirmada === true
       const nuevoMensaje = resultado?.mensaje_vinculacion || null
@@ -403,44 +403,44 @@ const [probando, setProbando] = useState(false)
       setMensajeVinculacion(nuevoMensaje)
       setRequiereAppPassword(nuevoRequiereAppPassword)
 
-      // Mostrar mensaje de Ã©xito
+      // Mostrar mensaje de éxito
       if (nuevaVinculacion) {
-        toast.success(nuevoMensaje || 'Ã¢Å“â€¦ Sistema vinculado correctamente con Google', { duration: 10000 })
+        toast.success(nuevoMensaje || '✓ Sistema vinculado correctamente con Google', { duration: 10000 })
       } else if (nuevoRequiereAppPassword) {
-        toast.warning(nuevoMensaje || 'Ã¢Å¡ Ã¯Â¸Â ConfiguraciÃ³n guardada pero requiere App Password', { duration: 15000 })
+        toast.warning(nuevoMensaje || 'Configuración guardada pero requiere App Password', { duration: 15000 })
       } else {
-        toast.success('ConfiguraciÃ³n guardada exitosamente')
+        toast.success('Configuración guardada exitosamente')
       }
 
       await cargarConfiguracion()
 
-      // Ã¢Å“â€¦ Verificar estado de Google despuÃ©s de guardar (prueba conexiÃ³n SMTP real con Gmail)
+      // ✓ Verificar estado de Google después de guardar (prueba conexión SMTP real con Gmail)
       // IMPORTANTE: Preservar los estados de requiereAppPassword y vinculacionConfirmada
-      // que vienen de la respuesta del guardado, ya que son mÃ¡s precisos
+      // que vienen de la respuesta del guardado, ya que son más precisos
       const requiereAppPasswordAntes = nuevoRequiereAppPassword
       const vinculacionAntes = nuevaVinculacion
 
       await verificarEstadoGoogle()
 
-      // Ã¢Å“â€¦ Si el guardado indicÃ³ que requiere App Password, mantener ese estado
-      // incluso si la verificaciÃ³n posterior muestra otro resultado
+      // ✓ Si el guardado indicó que requiere App Password, mantener ese estado
+      // incluso si la verificación posterior muestra otro resultado
       if (requiereAppPasswordAntes) {
         setRequiereAppPassword(true)
         setMensajeVinculacion(nuevoMensaje)
         setVinculacionConfirmada(false)
       } else if (vinculacionAntes) {
-        // Si el guardado fue exitoso, mantener el estado de Ã©xito
+        // Si el guardado fue exitoso, mantener el estado de éxito
         setVinculacionConfirmada(true)
         setRequiereAppPassword(false)
       }
     } catch (error: any) {
-      console.error('Error guardando configuraciÃ³n:', error)
+      console.error('Error guardando configuración:', error)
 
       setVinculacionConfirmada(false)
       setMensajeVinculacion(null)
       setRequiereAppPassword(false)
 
-      const mensajeError = error?.response?.data?.detail || error?.message || 'Error guardando configuraciÃ³n'
+      const mensajeError = error?.response?.data?.detail || error?.message || 'Error guardando configuración'
       setErrorValidacion(mensajeError)
       toast.error(mensajeError, { duration: 10000 })
     } finally {
@@ -448,7 +448,7 @@ const [probando, setProbando] = useState(false)
     }
   }
 
-  // Probar envÃ­o de email
+  // Probar envío de email
   const handleProbar = async () => {
     // Validate email addresses based on mode
     if (modoPruebas === 'true') {
@@ -457,23 +457,23 @@ const [probando, setProbando] = useState(false)
         return
       }
       if (!validarEmail(emailPrincipalPrueba)) {
-        toast.error('El Correo Principal debe ser un email vÃ¡lido')
+        toast.error('El Correo Principal debe ser un email válido')
         return
       }
       if (emailCCPrueba && !validarEmail(emailCCPrueba)) {
-        toast.error('El Correo CC debe ser un email vÃ¡lido')
+        toast.error('El Correo CC debe ser un email válido')
         return
       }
     } else {
       if (emailPruebaDestino && !validarEmail(emailPruebaDestino)) {
-        toast.error('Por favor ingresa un email vÃ¡lido')
+        toast.error('Por favor ingresa un email válido')
         return
       }
     }
     try {
       setProbando(true)
       setResultadoPrueba(null)
-      setEmailEnviadoExitoso(false) // Ã¢Å“â€¦ Resetear estado de Ã©xito
+      setEmailEnviadoExitoso(false) // ✓ Resetear estado de éxito
 
       const resultado = await emailConfigService.probarConfiguracionEmail(
         modoPruebas === 'true' ? emailPrincipalPrueba.trim() : emailPruebaDestino.trim() || undefined,
@@ -489,8 +489,8 @@ const [probando, setProbando] = useState(false)
         toast.error(mensaje)
         setResultadoPrueba({ ...resultado, error: mensaje })
         setEmailEnviadoExitoso(false)
-        // Si falla por usuario/contraseÃ±a, mostrar aviso de App Password
-        const esErrorCredenciales = /usuario|contraseÃ±a|app password|contraseÃ±a de aplicaciÃ³n/i.test(mensaje)
+        // Si falla por usuario/contraseña, mostrar aviso de App Password
+        const esErrorCredenciales = /usuario|contraseña|app password|contraseña de aplicación/i.test(mensaje)
         if (esErrorCredenciales) {
           setRequiereAppPassword(true)
           setVinculacionConfirmada(false)
@@ -510,12 +510,12 @@ const [probando, setProbando] = useState(false)
         setEmailEnviadoExitoso(false)
       }
     } catch (error: any) {
-      console.error('Error probando configuraciÃ³n:', error)
+      console.error('Error probando configuración:', error)
       const mensajeError = error?.response?.data?.detail || error?.message || 'Error desconocido'
-      toast.error(`Error probando configuraciÃ³n: ${mensajeError}`)
+      toast.error(`Error probando configuración: ${mensajeError}`)
       setResultadoPrueba({ error: mensajeError })
       setEmailEnviadoExitoso(false)
-      const esErrorCredenciales = /usuario|contraseÃ±a|app password|contraseÃ±a de aplicaciÃ³n/i.test(String(mensajeError))
+      const esErrorCredenciales = /usuario|contraseña|app password|contraseña de aplicación/i.test(String(mensajeError))
       if (esErrorCredenciales) {
         setRequiereAppPassword(true)
         setVinculacionConfirmada(false)
@@ -529,11 +529,11 @@ const [probando, setProbando] = useState(false)
   const esGmail = config.smtp_host?.toLowerCase().includes('gmail.com')
 
 
-  // FunciÃ³n para envÃ­o manual automÃ¡tico a correos de prueba
+  // Función para envío manual automático a correos de prueba
   const handleEnvioManual = async () => {
     // Validar que estamos en modo pruebas
     if (modoPruebas !== 'true') {
-      toast.error('El envÃ­o manual solo estÃ¡ disponible en modo Pruebas')
+      toast.error('El envío manual solo está disponible en modo Pruebas')
       return
     }
 
@@ -544,7 +544,7 @@ const [probando, setProbando] = useState(false)
     }
 
     if (!validarEmail(emailPruebas)) {
-      toast.error('El email de pruebas debe ser vÃ¡lido')
+      toast.error('El email de pruebas debe ser válido')
       return
     }
 
@@ -555,7 +555,7 @@ const [probando, setProbando] = useState(false)
       const resultado = await emailConfigService.probarConfiguracionEmail(
         emailPruebas.trim(),
         'Prueba de estructura de plantilla - RapiCredit',
-        'Este es un correo de prueba automÃ¡tico para verificar que la estructura de la plantilla es correcta.',
+        'Este es un correo de prueba automático para verificar que la estructura de la plantilla es correcta.',
         undefined
       )
 
@@ -574,7 +574,7 @@ const [probando, setProbando] = useState(false)
         toast.error('Error enviando correo de prueba')
       }
     } catch (error: any) {
-      console.error('Error en envÃ­o manual:', error)
+      console.error('Error en envío manual:', error)
       const mensajeError = error?.response?.data?.detail || error?.message || 'Error desconocido'
       toast.error('Error: ' + mensajeError)
       setResultadoPrueba({ error: mensajeError })
@@ -585,19 +585,19 @@ const [probando, setProbando] = useState(false)
 
   return (
     <div className="space-y-6">
-      {/* ConfiguraciÃ³n SMTP */}
+      {/* Configuración SMTP */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Mail className="h-5 w-5 text-blue-600" />
-            ConfiguraciÃ³n SMTP (Gmail / Google Workspace)
+            Configuración SMTP (Gmail / Google Workspace)
           </CardTitle>
           <CardDescription>
             Ingresa tus credenciales de Gmail o Google Workspace para enviar notificaciones
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Ã¢Å“â€¦ Toggle Activar/Desactivar Email */}
+          {/* ✓ Toggle Activar/Desactivar Email */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <div className="flex items-center justify-between">
               <div className="flex-1">
@@ -606,8 +606,8 @@ const [probando, setProbando] = useState(false)
                 </label>
                 <p className="text-xs text-gray-600">
                   {emailActivo
-                    ? 'Ã¢Å“â€¦ El sistema estÃ¡ enviando emails automÃ¡ticamente'
-                    : 'Ã¢Å¡ Ã¯Â¸Â El sistema NO enviarÃ¡ emails. Activa el servicio para habilitar envÃ­os.'}
+                    ? '✓ El sistema está enviando emails automáticamente'
+                    : ' El sistema NO enviará emails. Activa el servicio para habilitar envíos.'}
                 </p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
@@ -616,7 +616,7 @@ const [probando, setProbando] = useState(false)
                   checked={emailActivo}
                   onChange={(e) => {
                     setEmailActivo(e.target.checked)
-                    toast.info(e.target.checked ? 'Email activado - Los envÃ­os se habilitarÃ¡n al guardar' : 'Email desactivado - Los envÃ­os se deshabilitarÃ¡n al guardar')
+                    toast.info(e.target.checked ? 'Email activado - Los envíos se habilitarán al guardar' : 'Email desactivado - Los envíos se deshabilitarán al guardar')
                   }}
                   className="sr-only peer toggle-input-peer"
                 />
@@ -631,11 +631,11 @@ const [probando, setProbando] = useState(false)
           {/* Banners de estado y monitoreo de Google */}
           {esGmail && (
             <>
-              {/* Ã¢Å“â€¦ Estado: Configurado y vinculado correctamente */}
+              {/* ✓ Estado: Configurado y vinculado correctamente */}
               {vinculacionConfirmada && estadoConfiguracion?.configurada && (
                 <div className="bg-white border-2 border-green-500 rounded-lg p-4">
                   <div className="flex items-center gap-3">
-                    {/* SemÃ¡foro Verde */}
+                    {/* Semáforo Verde */}
                     <div className="flex flex-col items-center gap-1 flex-shrink-0">
                       <div className="w-4 h-4 bg-green-500 rounded-full shadow-lg"></div>
                       <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
@@ -643,21 +643,21 @@ const [probando, setProbando] = useState(false)
                     </div>
                     <div className="flex-1">
                       <p className="font-semibold text-gray-900">
-                        ConfiguraciÃ³n correcta
+                        Configuración correcta
                       </p>
                       <p className="text-sm text-gray-600">
-                        Gmail aceptÃ³ la conexiÃ³n. Puedes enviar emails.
+                        Gmail aceptó la conexión. Puedes enviar emails.
                       </p>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Ã¢Å¡ Ã¯Â¸Â Estado: Requiere App Password (prioridad sobre otros estados) */}
+              {/*  Estado: Requiere App Password (prioridad sobre otros estados) */}
               {requiereAppPassword && !vinculacionConfirmada && (
                 <div className="bg-white border-2 border-amber-400 rounded-lg p-4">
                   <div className="flex items-center gap-3">
-                    {/* SemÃ¡foro Amarillo */}
+                    {/* Semáforo Amarillo */}
                     <div className="flex flex-col items-center gap-1 flex-shrink-0">
                       <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
                       <div className="w-4 h-4 bg-amber-500 rounded-full shadow-lg"></div>
@@ -670,7 +670,7 @@ const [probando, setProbando] = useState(false)
                       <div className="text-sm text-gray-600 space-y-1">
                         <p>1. Activa 2FA: <a href="https://myaccount.google.com/security" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">myaccount.google.com/security</a></p>
                         <p>2. Genera App Password: <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">myaccount.google.com/apppasswords</a></p>
-                        <p>3. Pega la contraseÃ±a de 16 caracteres y guarda</p>
+                        <p>3. Pega la contraseña de 16 caracteres y guarda</p>
                       </div>
                       {mensajeVinculacion && (
                         <p className="text-xs text-gray-500 mt-2 italic">
@@ -682,7 +682,7 @@ const [probando, setProbando] = useState(false)
                 </div>
               )}
 
-              {/* Ã¢ÂÅ’ Estado: No configurado o con problemas (solo si no requiere App Password) */}
+              {/* ✗ Estado: No configurado o con problemas (solo si no requiere App Password) */}
               {/* Datos completos, pendiente de verificar con Enviar Email de Prueba */}
               {estadoConfiguracion?.configurada && !vinculacionConfirmada && !requiereAppPassword && (
                 <div className="bg-white border-2 border-amber-400 rounded-lg p-4">
@@ -695,7 +695,7 @@ const [probando, setProbando] = useState(false)
                     <div className="flex-1">
                       <p className="font-semibold text-gray-900">Datos completos</p>
                       <p className="text-sm text-gray-600">
-                        Usa &quot;Enviar Email de Prueba&quot; para verificar la conexiÃ³n con Gmail. Si falla con &quot;usuario o contraseÃ±a no aceptados&quot;, usa una <strong>ContraseÃ±a de aplicaciÃ³n</strong> (no la contraseÃ±a normal).
+                        Usa &quot;Enviar Email de Prueba&quot; para verificar la conexión con Gmail. Si falla con &quot;usuario o contraseña no aceptados&quot;, usa una <strong>Contraseña de aplicación</strong> (no la contraseña normal).
                       </p>
                     </div>
                   </div>
@@ -705,7 +705,7 @@ const [probando, setProbando] = useState(false)
               {!vinculacionConfirmada && !requiereAppPassword && estadoConfiguracion && !estadoConfiguracion.configurada && (
                 <div className="bg-white border-2 border-red-500 rounded-lg p-4">
                   <div className="flex items-center gap-3">
-                    {/* SemÃ¡foro Rojo */}
+                    {/* Semáforo Rojo */}
                     <div className="flex flex-col items-center gap-1 flex-shrink-0">
                       <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
                       <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
@@ -713,7 +713,7 @@ const [probando, setProbando] = useState(false)
                     </div>
                     <div className="flex-1">
                       <p className="font-semibold text-gray-900">
-                        Error de conexiÃ³n
+                        Error de conexión
                       </p>
                       <p className="text-sm text-gray-600">
                         {estadoConfiguracion.mensaje || mensajeVinculacion || 'No se pudo conectar. Verifica tus credenciales.'}
@@ -730,18 +730,18 @@ const [probando, setProbando] = useState(false)
                 </div>
               )}
 
-              {/* Ã¢ÂÂ³ Estado: Pendiente de verificaciÃ³n (solo si no hay estado verificado) */}
+              {/* ⏳ Estado: Pendiente de verificación (solo si no hay estado verificado) */}
               {!estadoConfiguracion && config.smtp_user && config.smtp_password && !vinculacionConfirmada && !requiereAppPassword && (
                 <div className="bg-white border border-gray-300 rounded-lg p-4">
                   <div className="flex items-center gap-3">
-                    {/* SemÃ¡foro Amarillo (pendiente) */}
+                    {/* Semáforo Amarillo (pendiente) */}
                     <div className="flex flex-col items-center gap-1 flex-shrink-0">
                       <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
                       <div className="w-4 h-4 bg-amber-500 rounded-full shadow-lg"></div>
                       <div className="w-4 h-4 bg-gray-200 rounded-full"></div>
                     </div>
                     <div className="flex-1">
-                      <p className="font-semibold text-gray-900">Guarda la configuraciÃ³n para verificar la conexiÃ³n con Gmail</p>
+                      <p className="font-semibold text-gray-900">Guarda la configuración para verificar la conexión con Gmail</p>
                     </div>
                   </div>
                 </div>
@@ -750,7 +750,7 @@ const [probando, setProbando] = useState(false)
           )}
 
 
-          {/* Campos de configuraciÃ³n */}
+          {/* Campos de configuración */}
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <label className="text-sm font-medium block mb-2">Servidor SMTP</label>
@@ -781,7 +781,7 @@ const [probando, setProbando] = useState(false)
               />
             </div>
             <div>
-              <label className="text-sm font-medium block mb-2">ContraseÃ±a de AplicaciÃ³n</label>
+              <label className="text-sm font-medium block mb-2">Contraseña de Aplicación</label>
               <div className="relative">
                 <Input
                   type={mostrarPassword ? 'text' : 'password'}
@@ -800,7 +800,7 @@ const [probando, setProbando] = useState(false)
               </div>
               <p className="text-xs text-gray-500 mt-1">
                 <strong>IMPORTANTE:</strong> Requiere 2FA activado. Genera una App Password (16 caracteres) en tu cuenta de Google.
-                <strong className="text-red-600"> NO uses tu contraseÃ±a normal.</strong> Funciona para Gmail y Google Workspace.
+                <strong className="text-red-600"> NO uses tu contraseña normal.</strong> Funciona para Gmail y Google Workspace.
               </p>
             </div>
           </div>
@@ -835,18 +835,18 @@ const [probando, setProbando] = useState(false)
             <label className="text-sm font-medium">Usar TLS (Recomendado para Gmail / Google Workspace)</label>
           </div>
 
-          {/* PolÃ­ticas Gmail IMAP (recibir correo) */}
+          {/* Políticas Gmail IMAP (recibir correo) */}
           <div className="border-t pt-6 mt-6">
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-4">
               <h3 className="font-semibold text-slate-900 mb-2 flex items-center gap-2">
                 <Mail className="h-5 w-5 text-slate-600" />
-                PolÃ­ticas Gmail IMAP (recibir correo)
+                Políticas Gmail IMAP (recibir correo)
               </h3>
               <p className="text-sm text-slate-700 mb-2">
-                Configura IMAP para recibir correo (lectura de bandeja). Gmail: <strong>imap.gmail.com</strong>, puerto <strong>993</strong> (SSL) o <strong>143</strong> (STARTTLS). Requiere la misma <strong>ContraseÃ±a de AplicaciÃ³n</strong> que SMTP.
+                Configura IMAP para recibir correo (lectura de bandeja). Gmail: <strong>imap.gmail.com</strong>, puerto <strong>993</strong> (SSL) o <strong>143</strong> (STARTTLS). Requiere la misma <strong>Contraseña de Aplicación</strong> que SMTP.
               </p>
               <p className="text-xs text-slate-600">
-                Habilita IMAP en Gmail: Ajustes â†’ ReenvÃ­o y POP/IMAP â†’ Activar IMAP. Ref:{' '}
+                Habilita IMAP en Gmail: Ajustes → Reenvío y POP/IMAP → Activar IMAP. Ref:{' '}
                 <a href="https://support.google.com/mail/answer/7126229" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">support.google.com/mail/answer/7126229</a>
               </p>
             </div>
@@ -880,7 +880,7 @@ const [probando, setProbando] = useState(false)
                 />
               </div>
               <div>
-                <label className="text-sm font-medium block mb-2">ContraseÃ±a de AplicaciÃ³n (IMAP)</label>
+                <label className="text-sm font-medium block mb-2">Contraseña de Aplicación (IMAP)</label>
                 <div className="relative">
                   <Input
                     type={mostrarPasswordImap ? 'text' : 'password'}
@@ -925,7 +925,7 @@ const [probando, setProbando] = useState(false)
                       imap_use_ssl: config.imap_use_ssl ?? undefined,
                     })
                     setResultadoImap(r)
-                    if (r.success) toast.success(r.mensaje || 'ConexiÃ³n IMAP correcta')
+                    if (r.success) toast.success(r.mensaje || 'Conexión IMAP correcta')
                     else toast.error(r.mensaje || 'Error probando IMAP')
                   } catch (err: any) {
                     const msg = err?.response?.data?.detail || err?.message || 'Error probando IMAP'
@@ -938,7 +938,7 @@ const [probando, setProbando] = useState(false)
                 disabled={probandoImap || !config.imap_host?.trim() || !config.imap_user?.trim() || !config.imap_password?.trim()}
               >
                 {probandoImap ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : <TestTube className="h-4 w-4 mr-2" />}
-                Probar conexiÃ³n IMAP
+                Probar conexión IMAP
               </Button>
               {resultadoImap && (
                 <span className={`text-sm ${resultadoImap.success ? 'text-green-600' : 'text-red-600'}`}>
@@ -948,22 +948,22 @@ const [probando, setProbando] = useState(false)
             </div>
           </div>
 
-          {/* NotificaciÃ³n automÃ¡tica de tickets CRM */}
+          {/* Notificación automática de tickets CRM */}
           <div className="border-t pt-6 mt-6">
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
               <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
                 <Mail className="h-5 w-5 text-blue-600" />
-                NotificaciÃ³n automÃ¡tica de tickets (CRM)
+                Notificación automática de tickets (CRM)
               </h3>
               <p className="text-sm text-blue-800 mb-2">
-                Cuando se <strong>crea</strong> un ticket en <a href={BASE_PATH + '/crm/tickets'} className="underline font-medium">CRM â†’ Tickets</a>, se envÃ­a automÃ¡ticamente un correo <strong>con un informe en PDF adjunto</strong> a los contactos que indiques aquÃ­. El envÃ­o se hace <strong>desde el email configurado arriba</strong> (remitente por defecto).
+                Cuando se <strong>crea</strong> un ticket en <a href={BASE_PATH + '/crm/tickets'} className="underline font-medium">CRM → Tickets</a>, se envía automáticamente un correo <strong>con un informe en PDF adjunto</strong> a los contactos que indiques aquí. El envío se hace <strong>desde el email configurado arriba</strong> (remitente por defecto).
               </p>
               <p className="text-xs text-blue-700">
                 Introduce uno o varios emails separados por coma (destino del informe de ticket). Ej: <code className="bg-blue-100 px-1 rounded">soporte@empresa.com, gerencia@empresa.com</code>
               </p>
             </div>
             <div>
-              <label className="text-sm font-medium block mb-2">Contactos para notificaciÃ³n de tickets</label>
+              <label className="text-sm font-medium block mb-2">Contactos para notificación de tickets</label>
               <Textarea
                 value={config.tickets_notify_emails || ''}
                 onChange={(e) => handleChange('tickets_notify_emails', e.target.value)}
@@ -972,7 +972,7 @@ const [probando, setProbando] = useState(false)
                 className="font-mono text-sm"
               />
               <p className="text-xs text-gray-500 mt-1">
-                Estos contactos recibirÃ¡n un correo con el informe en PDF adjunto cada vez que se cree un ticket en el CRM.
+                Estos contactos recibirán un correo con el informe en PDF adjunto cada vez que se cree un ticket en el CRM.
               </p>
             </div>
           </div>
@@ -980,7 +980,7 @@ const [probando, setProbando] = useState(false)
           {/* Selector de ambiente */}
           <div className="border-t pt-4 mt-4">
             <div className="mb-4">
-              <label className="text-sm font-medium block mb-2">Ambiente de EnvÃ­o</label>
+              <label className="text-sm font-medium block mb-2">Ambiente de Envío</label>
               <div className="flex gap-4">
                 <label className="flex items-center space-x-2 cursor-pointer">
                   <input
@@ -991,7 +991,7 @@ const [probando, setProbando] = useState(false)
                     onChange={(e) => setModoPruebas(e.target.value)}
                     className="rounded"
                   />
-                  <span className="text-sm">1) ProducciÃ³n: cada email a cada cliente</span>
+                  <span className="text-sm">1) Producción: cada email a cada cliente</span>
                 </label>
                 <label className="flex items-center space-x-2 cursor-pointer">
                   <input
@@ -1020,7 +1020,7 @@ const [probando, setProbando] = useState(false)
                   className="max-w-md"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  En modo pruebas, todos los emails se enviarÃ¡n a esta direcciÃ³n en lugar de a los clientes reales.
+                  En modo pruebas, todos los emails se enviarán a esta dirección en lugar de a los clientes reales.
                 </p>
               </div>
             )}
@@ -1029,7 +1029,7 @@ const [probando, setProbando] = useState(false)
             {modoPruebas === 'true' && (
               <div className='bg-blue-50 border border-blue-200 rounded-lg p-4'>
                 <label className='text-sm font-medium block mb-2'>
-                  Correo Principal <span className='text-gray-500'>(para envÃ­o de prueba)</span>
+                  Correo Principal <span className='text-gray-500'>(para envío de prueba)</span>
                 </label>
                 <Input
                   type='email'
@@ -1056,13 +1056,13 @@ const [probando, setProbando] = useState(false)
               </div>
             )}
 
-          {/* Error de validaciÃ³n */}
+          {/* Error de validación */}
           {errorValidacion && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
               <div className="flex items-start gap-2">
                 <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
                 <div className="flex-1">
-                  <p className="font-semibold text-red-900 mb-1">Error de validaciÃ³n:</p>
+                  <p className="font-semibold text-red-900 mb-1">Error de validación:</p>
                   <p className="text-sm text-red-800 whitespace-pre-line">{errorValidacion}</p>
                 </div>
               </div>
@@ -1078,7 +1078,7 @@ const [probando, setProbando] = useState(false)
               className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Save className="h-4 w-4" />
-              {guardando ? 'Guardando...' : 'Guardar ConfiguraciÃ³n'}
+              {guardando ? 'Guardando...' : 'Guardar Configuración'}
             </Button>
             {!puedeGuardar && !guardando && (
               <p className="text-xs text-amber-600 self-center font-medium">
@@ -1088,16 +1088,16 @@ const [probando, setProbando] = useState(false)
           </div>
 
             
-            {/* BotÃ³n de EnvÃ­o Manual - DESTACADO */}
+            {/* Botón de Envío Manual - DESTACADO */}
             {modoPruebas === 'true' && emailPruebas?.trim() && (
               <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-400 rounded-lg p-5 mt-6">
                 <div className="mb-3">
                   <h4 className="font-semibold text-green-900 flex items-center gap-2">
                     <Mail className="h-5 w-5" />
-                    EnvÃ­o Manual de Prueba
+                    Envío Manual de Prueba
                   </h4>
                   <p className="text-sm text-green-700 mt-1">
-                    EnvÃ­a un correo de prueba automÃ¡ticamente para verificar la estructura de la plantilla
+                    Envía un correo de prueba automáticamente para verificar la estructura de la plantilla
                   </p>
                 </div>
                 
@@ -1111,22 +1111,22 @@ const [probando, setProbando] = useState(false)
                 </Button>
               </div>
             )}
-          {/* Prueba de envÃ­o */}
+          {/* Prueba de envío */}
           <div className="border-t pt-4 mt-4">
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
                 <TestTube className="h-5 w-5" />
-                EnvÃ­o de Email de Prueba
+                Envío de Email de Prueba
               </h3>
               <p className="text-sm text-blue-700 mb-4">
-                EnvÃ­a un correo de prueba personalizado para verificar que la configuraciÃ³n SMTP funciona correctamente.
+                Envía un correo de prueba personalizado para verificar que la configuración SMTP funciona correctamente.
               </p>
 
               {modoPruebas === 'false' && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
-                  <p className="text-sm text-green-800 font-semibold mb-1">Ã¢Å“â€¦ Modo ProducciÃ³n activo</p>
+                  <p className="text-sm text-green-800 font-semibold mb-1">✓ Modo Producción activo</p>
                   <p className="text-xs text-green-700">
-                    El email de prueba se enviarÃ¡ <strong>REALMENTE</strong> al destinatario especificado.
+                    El email de prueba se enviará <strong>REALMENTE</strong> al destinatario especificado.
                   </p>
                 </div>
               )}
@@ -1135,7 +1135,7 @@ const [probando, setProbando] = useState(false)
                 <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
                   <p className="text-sm text-yellow-800 font-semibold mb-1">Modo Pruebas activo</p>
                   <p className="text-xs text-yellow-700">
-                    El email de prueba se enviarÃ¡ al Correo Principal y CC que indiques arriba (no se redirige).
+                    El email de prueba se enviará al Correo Principal y CC que indiques arriba (no se redirige).
                   </p>
                 </div>
               )}
@@ -1162,7 +1162,7 @@ const [probando, setProbando] = useState(false)
                     type="text"
                     value={subjectPrueba}
                     onChange={(e) => setSubjectPrueba(e.target.value)}
-                    placeholder="Prueba de configuraciÃ³n - RapiCredit"
+                    placeholder="Prueba de configuración - RapiCredit"
                     className="max-w-md"
                   />
                 </div>
@@ -1174,7 +1174,7 @@ const [probando, setProbando] = useState(false)
                   <Textarea
                     value={mensajePrueba}
                     onChange={(e) => setMensajePrueba(e.target.value)}
-                    placeholder="Escribe aquÃ­ tu mensaje de prueba..."
+                    placeholder="Escribe aquí tu mensaje de prueba..."
                     rows={6}
                     className="max-w-md resize-y"
                   />
@@ -1186,7 +1186,7 @@ const [probando, setProbando] = useState(false)
                   disabled={probando || !config.smtp_user}
                   className={`flex items-center gap-2 transition-colors duration-300 ${
                     emailEnviadoExitoso
-                      ? 'bg-green-600 hover:bg-green-700' // Ã¢Å“â€¦ Verde cuando fue enviado exitosamente
+                      ? 'bg-green-600 hover:bg-green-700' // ✓ Verde cuando fue enviado exitosamente
                       : 'bg-blue-600 hover:bg-blue-700' // Azul normal
                   }`}
                 >
@@ -1194,7 +1194,7 @@ const [probando, setProbando] = useState(false)
                   {probando
                     ? 'Enviando Email de Prueba...'
                     : emailEnviadoExitoso
-                      ? 'Ã¢Å“â€¦ Email Enviado'
+                      ? '✓ Email Enviado'
                       : 'Enviar Email de Prueba'}
                 </Button>
               </div>
@@ -1230,20 +1230,20 @@ const [probando, setProbando] = useState(false)
         </CardContent>
       </Card>
 
-      {/* EnvÃ­os recientes */}
+      {/* Envíos recientes */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Mail className="h-5 w-5 text-blue-600" />
-            VerificaciÃ³n de EnvÃ­os Reales
+            Verificación de Envíos Reales
           </CardTitle>
           <CardDescription>
-            Historial reciente de correos enviados para verificar que el sistema estÃ¡ funcionando correctamente
+            Historial reciente de correos enviados para verificar que el sistema está funcionando correctamente
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex justify-between items-center mb-4">
-            <div className="text-sm text-gray-600">ÃƒÅ¡ltimos 10 envÃ­os de notificaciones</div>
+            <div className="text-sm text-gray-600">Últimos 10 envíos de notificaciones</div>
             <Button
               variant="outline"
               size="sm"
@@ -1256,11 +1256,11 @@ const [probando, setProbando] = useState(false)
           </div>
 
           {cargandoEnvios ? (
-            <div className="text-center py-8 text-gray-500">Cargando envÃ­os...</div>
+            <div className="text-center py-8 text-gray-500">Cargando envíos...</div>
           ) : enviosRecientes.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               <AlertCircle className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-              <p>No hay envÃ­os recientes</p>
+              <p>No hay envíos recientes</p>
             </div>
           ) : (
             <div className="space-y-3">

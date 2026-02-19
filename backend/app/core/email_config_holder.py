@@ -3,6 +3,11 @@ Holder de configuración de email en tiempo de ejecución.
 Usado por core/email.py para enviar (SMTP) y por tickets para destinos de notificación.
 La API configuracion/email actualiza este holder al guardar; si no se ha guardado, se usan settings (.env).
 Para que Notificaciones/CRM usen la config guardada en BD, sync_from_db() carga desde la tabla configuracion antes de enviar.
+
+Integración con encriptación:
+- Campos sensibles (smtp_password, etc.) se encriptan al guardar en BD
+- Se desencriptan automáticamente al cargar desde BD
+- Al devolver al API, se enmascaran (no se expone la contraseña)
 """
 import json
 from typing import Any, List, Optional, Tuple
@@ -14,6 +19,50 @@ _current: dict[str, Any] = {}
 
 CLAVE_EMAIL_CONFIG = "email_config"
 CLAVE_NOTIFICACIONES_ENVIOS = "notificaciones_envios"
+
+# Campos sensibles que deben encriptarse en BD
+SENSITIVE_FIELDS = {"smtp_password"}
+
+
+def _mask_sensitive_value(value: Any) -> str:
+    """Enmascara un valor sensible para devolver a la API (no exponer contraseña)."""
+    if not value:
+        return ""
+    return "***"
+
+
+def _should_encrypt_field(field_name: str) -> bool:
+    """Devuelve True si el campo debe encriptarse."""
+    return field_name in SENSITIVE_FIELDS
+
+
+def _decrypt_value_safe(encrypted: Any) -> Optional[str]:
+    """Intenta desencriptar un valor; devuelve None si falla."""
+    if not encrypted:
+        return None
+    try:
+        from app.core.crypto import decrypt_value
+        if isinstance(encrypted, bytes):
+            return decrypt_value(encrypted)
+        elif isinstance(encrypted, str):
+            return decrypt_value(encrypted.encode('utf-8'))
+    except Exception:
+        # Si desencriptación falla, devolver None (posiblemente no estaba encriptado)
+        return None
+    return None
+
+
+def _encrypt_value_safe(value: str) -> Optional[bytes]:
+    """Intenta encriptar un valor; devuelve None si falla."""
+    if not value or not _should_encrypt_field("smtp_password"):  # Solo si encryption está configurado
+        return None
+    try:
+        from app.core.crypto import encrypt_value
+        return encrypt_value(value)
+    except Exception:
+        # Si encryption no está configurado, retornar None (guardar sin encriptar)
+        return None
+    return None
 
 
 def sync_from_db() -> None:
@@ -27,7 +76,15 @@ def sync_from_db() -> None:
             if row and row.valor:
                 data = json.loads(row.valor)
                 if isinstance(data, dict):
-                    update_from_api(data)
+                    # Desencriptar campos sensibles si es necesario
+                    decrypted_data = data.copy()
+                    for field in SENSITIVE_FIELDS:
+                        if field in decrypted_data and decrypted_data[field]:
+                            # Si está encriptado, desencriptar; si no, dejar como está
+                            decrypted = _decrypt_value_safe(decrypted_data[field])
+                            if decrypted:
+                                decrypted_data[field] = decrypted
+                    update_from_api(decrypted_data)
         finally:
             db.close()
     except Exception:
@@ -98,6 +155,51 @@ def update_from_api(data: dict[str, Any]) -> None:
             _current[k] = data[k]
     if "smtp_port" in data and data["smtp_port"] is not None:
         _current["smtp_port"] = str(data["smtp_port"])
+
+
+def prepare_for_db_storage(data: dict[str, Any]) -> dict[str, Any]:
+    """
+    Prepara datos para guardar en BD: encripta campos sensibles.
+    
+    Args:
+        data: Configuración a guardar
+        
+    Returns:
+        Diccionario con campos sensibles encriptados (valores en valor_encriptado)
+    """
+    result = data.copy()
+    
+    # Para cada campo sensible, intentar encriptar
+    for field in SENSITIVE_FIELDS:
+        if field in result and result[field]:
+            encrypted = _encrypt_value_safe(result[field])
+            if encrypted:
+                # Guardar el valor encriptado en el dict con sufijo _encriptado
+                result[f"{field}_encriptado"] = encrypted.hex()  # Convertir bytes a hex string para JSON
+                # Limpiar el valor original para no guardarlo en texto plano
+                result[field] = None
+    
+    return result
+
+
+def prepare_for_api_response(data: dict[str, Any]) -> dict[str, Any]:
+    """
+    Prepara datos para devolver a la API: enmascara campos sensibles.
+    
+    Args:
+        data: Configuración almacenada en BD o caché
+        
+    Returns:
+        Diccionario con campos sensibles enmascarados
+    """
+    result = data.copy()
+    
+    # Enmascarar campos sensibles
+    for field in SENSITIVE_FIELDS:
+        if field in result and result[field]:
+            result[field] = _mask_sensitive_value(result[field])
+    
+    return result
 
 
 def get_modo_pruebas_email() -> Tuple[bool, List[str]]:

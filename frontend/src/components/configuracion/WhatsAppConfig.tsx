@@ -677,7 +677,7 @@ export function WhatsAppConfig() {
         <CardContent>
           <div className="flex justify-between items-center mb-4">
             <div className="text-sm text-gray-600">
-              Ãšltimos 10 envíos de notificaciones WhatsApp
+              Últimos 10 envíos de notificaciones WhatsApp
             </div>
             <Button
               variant="outline"

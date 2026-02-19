@@ -67,6 +67,14 @@ class Settings(BaseSettings):
         return v
     
     # ============================================
+    # Encriptación (API keys, contraseñas en BD)
+    # ============================================
+    ENCRYPTION_KEY: Optional[str] = Field(
+        None,
+        description="Clave de encriptación Fernet para valores sensibles en BD (API keys, contraseñas). Generar con: from cryptography.fernet import Fernet; Fernet.generate_key().decode()"
+    )
+    
+    # ============================================
     # WhatsApp / Meta API
     # ============================================
     WHATSAPP_VERIFY_TOKEN: Optional[str] = Field(

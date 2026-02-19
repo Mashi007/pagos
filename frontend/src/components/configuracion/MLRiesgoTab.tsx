@@ -638,7 +638,7 @@ export function MLRiesgoTab() {
                 />
               </div>
               <div>
-                <label className="text-sm font-medium mb-2 block">Días desde Ãšltimo Préstamo</label>
+                <label className="text-sm font-medium mb-2 block">Días desde Último Préstamo</label>
                 <Input
                   type="number"
                   value={datosCliente.dias_ultimo_prestamo}

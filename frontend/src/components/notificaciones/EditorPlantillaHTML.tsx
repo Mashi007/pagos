@@ -30,17 +30,17 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
   // Tipos disponibles
   const tiposPorCategoria = {
     antes: [
-      { valor: 'PAGO_5_DIAS_ANTES', label: '5 dÃ­as antes' },
-      { valor: 'PAGO_3_DIAS_ANTES', label: '3 dÃ­as antes' },
-      { valor: 'PAGO_1_DIA_ANTES', label: '1 dÃ­a antes' },
+      { valor: 'PAGO_5_DIAS_ANTES', label: '5 días antes' },
+      { valor: 'PAGO_3_DIAS_ANTES', label: '3 días antes' },
+      { valor: 'PAGO_1_DIA_ANTES', label: '1 día antes' },
     ],
     diaPago: [
-      { valor: 'PAGO_DIA_0', label: 'DÃ­a de pago' },
+      { valor: 'PAGO_DIA_0', label: 'Día de pago' },
     ],
     retraso: [
-      { valor: 'PAGO_1_DIA_ATRASADO', label: '1 dÃ­a de retraso' },
-      { valor: 'PAGO_3_DIAS_ATRASADO', label: '3 dÃ­as de retraso' },
-      { valor: 'PAGO_5_DIAS_ATRASADO', label: '5 dÃ­as de retraso' },
+      { valor: 'PAGO_1_DIA_ATRASADO', label: '1 día de retraso' },
+      { valor: 'PAGO_3_DIAS_ATRASADO', label: '3 días de retraso' },
+      { valor: 'PAGO_5_DIAS_ATRASADO', label: '5 días de retraso' },
     ],
   }
 
@@ -98,7 +98,7 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
 
   const handleEnviarPrueba = async () => {
     if (!emailPrueba.trim() || !emailPrueba.includes('@')) {
-      toast.error('Ingresa un email vÃ¡lido')
+      toast.error('Ingresa un email válido')
       return
     }
 
@@ -121,12 +121,12 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
 
   return (
     <div className="space-y-4">
-      {/* InformaciÃ³n General */}
+      {/* Información General */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             {/* <FileText className="h-5 w-5" /> */}
-            InformaciÃ³n de la Plantilla
+            Información de la Plantilla
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -163,9 +163,9 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
           </div>
 
           <div>
-            <label className="text-sm font-medium text-gray-700">DescripciÃ³n (opcional)</label>
+            <label className="text-sm font-medium text-gray-700">Descripción (opcional)</label>
             <Textarea
-              placeholder="Describe el propÃ³sito de esta plantilla"
+              placeholder="Describe el propósito de esta plantilla"
               value={descripcion}
               onChange={(e) => setDescripcion(e.target.value)}
               className="mt-1 h-20"
@@ -175,7 +175,7 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
           <div>
             <label className="text-sm font-medium text-gray-700">Asunto del Email</label>
             <Input
-              placeholder="Ej: Tu pago vence en 5 dÃ­as"
+              placeholder="Ej: Tu pago vence en 5 días"
               value={asunto}
               onChange={(e) => setAsunto(e.target.value)}
               className="mt-1"
@@ -191,7 +191,7 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
             Contenido HTML
           </CardTitle>
           <CardDescription>
-            Ingresa el cÃ³digo HTML del email. Puedes usar variables como {'{'} nombre {'}'}, {'{'} monto {'}'}, {'{'} dias_atraso {'}'}, etc.
+            Ingresa el código HTML del email. Puedes usar variables como {'{'} nombre {'}'}, {'{'} monto {'}'}, {'{'} dias_atraso {'}'}, etc.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -219,7 +219,7 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
           {!mostrarPreview && (
             <div className="space-y-2">
               <Textarea
-                placeholder="<html>&#10;  <body>&#10;    <p>Hola {'{'}nombre{'}'},</p>&#10;    <p>Tu pago de ${'{'}monto{'}'} vence en {'{'}dias_atraso{'}'} dÃ­as.</p>&#10;  </body>&#10;</html>"
+                placeholder="<html>&#10;  <body>&#10;    <p>Hola {'{'}nombre{'}'},</p>&#10;    <p>Tu pago de ${'{'}monto{'}'} vence en {'{'}dias_atraso{'}'} días.</p>&#10;  </body>&#10;</html>"
                 value={cuerpoHTML}
                 onChange={(e) => setCuerpoHTML(e.target.value)}
                 className="font-mono text-sm h-96 bg-slate-50"
@@ -236,7 +236,7 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
               <div
                 className="prose prose-sm max-w-none"
                 dangerouslySetInnerHTML={{
-                  __html: cuerpoHTML || '<p style="color: #999; text-align: center;">El preview aparecerÃ¡ aquÃ­...</p>',
+                  __html: cuerpoHTML || '<p style="color: #999; text-align: center;">El preview aparecerá aquí...</p>',
                 }}
               />
             </div>
@@ -270,12 +270,12 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
             </Button>
           </div>
           <p className="text-xs text-gray-500">
-            Se enviarÃ¡ un email con el asunto y contenido HTML que ingresaste. Las variables se mostrarÃ¡n de forma literal.
+            Se enviará un email con el asunto y contenido HTML que ingresaste. Las variables se mostrarán de forma literal.
           </p>
         </CardContent>
       </Card>
 
-      {/* Botones de AcciÃ³n */}
+      {/* Botones de Acción */}
       <div className="flex gap-2 justify-end">
         <Button
           onClick={handleGuardar}

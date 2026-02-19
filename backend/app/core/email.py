@@ -2,12 +2,14 @@
 Envío de correo para notificaciones (tickets, etc.).
 Usa SMTP desde email_config_holder (configuración del dashboard) o desde settings (.env).
 Soporta adjuntos (ej. informe PDF de ticket).
+También soporta prueba de conexión IMAP para recibir correos.
 """
 import logging
 from typing import List, Optional, Tuple
 
-# Timeout para conexión y envío SMTP (evita 502 por proxy cuando Gmail/red tardan)
+# Timeout para conexión y envío SMTP/IMAP (evita 502 por proxy cuando Gmail/red tardan)
 SMTP_TIMEOUT_SECONDS = 25
+IMAP_TIMEOUT_SECONDS = 15
 
 from app.core.email_config_holder import get_smtp_config, get_tickets_notify_emails, get_modo_pruebas_email, sync_from_db
 
@@ -17,21 +19,73 @@ logger = logging.getLogger(__name__)
 AttachmentType = Tuple[str, bytes]
 
 
-def _sanitize_smtp_error(exc: Exception) -> str:
-    """Mensaje seguro para mostrar al usuario (sin contraseñas ni rutas)."""
+def _sanitize_imap_error(exc: Exception) -> str:
+    """Mensaje seguro para mostrar al usuario al fallar conexión IMAP (sin contraseñas ni rutas)."""
     msg = str(exc).strip()
     if not msg:
-        return "Error de conexión SMTP."
-    # Mensajes típicos de Gmail/Google que ayudan al usuario
+        return "Error de conexión IMAP."
     lower = msg.lower()
-    if "username and password not accepted" in lower or "authentication failed" in lower:
+    if "username and password not accepted" in lower or "authentication failed" in lower or "login failed" in lower:
         return "Usuario o contraseña no aceptados. Usa una Contraseña de aplicación (App Password) de Gmail."
     if "connection refused" in lower or "timed out" in lower or "timeout" in lower:
-        return "La conexión al servidor SMTP tardó demasiado o fue rechazada. Revisa host, puerto (587) y que el servidor no esté en suspensión (Render). Vuelve a intentar."
+        return "La conexión al servidor IMAP tardó demasiado o fue rechazada. Revisa host, puerto (993 o 143) y que el servidor no esté en suspensión."
     if "ssl" in lower or "certificate" in lower:
-        return "Error SSL/TLS. Prueba puerto 587 con STARTTLS o 465 con SSL."
-    # Limitar longitud y quitar posibles rutas internas
+        return "Error SSL/TLS. Prueba puerto 993 con SSL o 143 con STARTTLS."
     return msg[:300] if len(msg) <= 300 else msg[:297] + "..."
+
+
+def test_imap_connection(
+    imap_host: str,
+    imap_port: int,
+    imap_user: str,
+    imap_password: str,
+    imap_use_ssl: bool = True,
+) -> Tuple[bool, Optional[str], Optional[List[str]]]:
+    """
+    Prueba la conexión IMAP y devuelve información sobre carpetas disponibles.
+    Retorna: (éxito, mensaje_error, lista_de_carpetas)
+    - éxito: True si la conexión fue exitosa
+    - mensaje_error: Descripción legible del error (None si no hay error)
+    - lista_de_carpetas: Lista de nombres de carpetas (None si falló)
+    """
+    try:
+        import imaplib
+
+        if imap_use_ssl:
+            server = imaplib.IMAP4_SSL(imap_host, imap_port, timeout=IMAP_TIMEOUT_SECONDS)
+        else:
+            server = imaplib.IMAP4(imap_host, imap_port, timeout=IMAP_TIMEOUT_SECONDS)
+            server.starttls()
+
+        server.login(imap_user, imap_password)
+        
+        # Listar carpetas disponibles
+        _, mailboxes = server.list()
+        folder_list = []
+        for mailbox in mailboxes:
+            try:
+                # Parsear respuesta de IMAP: (\HasNoChildren) "/" "INBOX"
+                parts = mailbox.decode("utf-8").split('" "')
+                if len(parts) >= 2:
+                    folder_name = parts[-1].strip('"')
+                    folder_list.append(folder_name)
+            except Exception:
+                pass
+
+        server.close()
+        server.logout()
+
+        msg = f"Conexión IMAP exitosa. Se encontraron {len(folder_list)} carpeta(s): {', '.join(folder_list[:5])}"
+        if len(folder_list) > 5:
+            msg += f" y {len(folder_list) - 5} más."
+        
+        logger.info("Prueba IMAP exitosa para %s: %d carpetas", imap_user, len(folder_list))
+        return True, None, folder_list
+
+    except Exception as e:
+        logger.exception("Error probando IMAP %s:%s para usuario %s", imap_host, imap_port, imap_user)
+        error_msg = _sanitize_imap_error(e)
+        return False, error_msg, None
 
 
 def send_email(

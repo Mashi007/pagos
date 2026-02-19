@@ -19,7 +19,7 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Body
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 import logging
@@ -434,11 +434,53 @@ def get_ai_configuracion(db: Session = Depends(get_db)):
 
 class AIConfigUpdate(BaseModel):
     modelo: Optional[str] = None
-    temperatura: Optional[str] = None
-    max_tokens: Optional[str] = None
+    temperatura: Optional[str] = Field(
+        None,
+        description="Temperature value between 0.0 and 2.0 for controlling model creativity"
+    )
+    max_tokens: Optional[str] = Field(
+        None,
+        description="Maximum number of tokens in response (1 to 128000)"
+    )
     activo: Optional[str] = None
     openai_api_key: Optional[str] = None  # Token OpenRouter; si es *** o vacío no se sobrescribe
     openrouter_api_key: Optional[str] = None  # Alias para el mismo token
+
+    def validate_temperatura(self) -> bool:
+        """Validates temperatura is between 0.0 and 2.0"""
+        if self.temperatura is None:
+            return True
+        try:
+            temp = float(self.temperatura)
+            if not (0.0 <= temp <= 2.0):
+                return False
+            return True
+        except (ValueError, TypeError):
+            return False
+
+    def validate_max_tokens(self) -> bool:
+        """Validates max_tokens is between 1 and 128000"""
+        if self.max_tokens is None:
+            return True
+        try:
+            tokens = int(self.max_tokens)
+            if not (1 <= tokens <= 128000):
+                return False
+            return True
+        except (ValueError, TypeError):
+            return False
+
+    def validate_top_p(self, top_p: Optional[str]) -> bool:
+        """Validates top_p is between 0.0 and 1.0 if provided"""
+        if top_p is None:
+            return True
+        try:
+            p = float(top_p)
+            if not (0.0 <= p <= 1.0):
+                return False
+            return True
+        except (ValueError, TypeError):
+            return False
 
 
 @router.put("/configuracion")
@@ -448,8 +490,28 @@ def put_ai_configuracion(payload: AIConfigUpdate = Body(...), db: Session = Depe
     Si openai_api_key u openrouter_api_key viene con *** o vacío, no se sobrescribe el token guardado.
     El token se persiste en BD (tabla configuracion, clave configuracion_ai); nunca se envía al
     frontend ni se registra en logs, para evitar fugas y baneos de la API key.
+    
+    Validaciones:
+    - temperatura: 0.0 a 2.0
+    - max_tokens: 1 a 128000
+    - top_p (si se proporciona): 0.0 a 1.0
     """
     _load_ai_config_from_db(db)
+    
+    # Validar temperatura
+    if not payload.validate_temperatura():
+        raise HTTPException(
+            status_code=400,
+            detail="Temperatura debe estar entre 0.0 y 2.0"
+        )
+    
+    # Validar max_tokens
+    if not payload.validate_max_tokens():
+        raise HTTPException(
+            status_code=400,
+            detail="Max tokens debe estar entre 1 y 128000"
+        )
+    
     data = payload.model_dump(exclude_none=True)
     for k in ("modelo", "temperatura", "max_tokens", "activo"):
         if k in data and data[k] is not None:

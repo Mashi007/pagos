@@ -80,7 +80,7 @@ export default function UsuariosConfig() {
     email: '',
     nombre: '',
     apellido: '',
-    rol: 'operativo',  // Cambio clave: rol â†’ is_admin
+    rol: 'operativo',  // Cambio clave: rol → is_admin
     password: '',
     cargo: 'Usuario',
     is_active: true
@@ -158,7 +158,7 @@ export default function UsuariosConfig() {
           nombre: formData.nombre,
           apellido: formData.apellido,
           cargo: formData.cargo, // Incluir cargo para preservarlo
-          rol: formData.rol,  // Cambio clave: rol â†’ is_admin
+          rol: formData.rol,  // Cambio clave: rol → is_admin
           is_active: formData.is_active
         }
 
@@ -200,7 +200,7 @@ export default function UsuariosConfig() {
       nombre: usuario.nombre,
       apellido: usuario.apellido,
       cargo: usuario.cargo || 'Usuario', // Preservar cargo existente
-      rol: usuario.rol || 'operativo',  // Cambio clave: rol â†’ is_admin
+      rol: usuario.rol || 'operativo',  // Cambio clave: rol → is_admin
       password: '', // No pre-llenar password
       is_active: usuario.is_active
     })
@@ -232,7 +232,7 @@ export default function UsuariosConfig() {
       email: '',
       nombre: '',
       apellido: '',
-      rol: 'operativo',  // Cambio clave: rol â†’ is_admin
+      rol: 'operativo',  // Cambio clave: rol → is_admin
       password: '',
       is_active: true
     })
@@ -367,7 +367,7 @@ export default function UsuariosConfig() {
                     Estado
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Ãšltimo acceso
+                    Último acceso
                   </th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Acciones
@@ -719,7 +719,7 @@ export default function UsuariosConfig() {
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-500">Ãšltimo acceso</p>
+                    <p className="text-sm font-medium text-gray-500">Último acceso</p>
                     <p className="text-sm text-gray-900 mt-1">
                       {viewingUser.last_login
                         ? new Date(viewingUser.last_login).toLocaleDateString('es-ES', {

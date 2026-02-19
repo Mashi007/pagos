@@ -1,4 +1,4 @@
-import { DollarSign, Calendar, TrendingDown } from 'lucide-react'
+import { DollarSign, Calendar, Percent } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import { usePagosKPIs } from '../../hooks/usePagos'
 
@@ -56,6 +56,11 @@ export function PagosKPIsNuevo() {
     )
   }
 
+  const porcentajeCobrado =
+    kpiDataFinal.montoACobrarMes > 0
+      ? (kpiDataFinal.montoCobradoMes / kpiDataFinal.montoACobrarMes) * 100
+      : 0
+
   const meses = [
     'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
@@ -110,15 +115,15 @@ export function PagosKPIsNuevo() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Mensual: Pago vencido (%)</CardTitle>
-            <TrendingDown className="h-5 w-5 text-red-600" />
+            <CardTitle className="text-sm font-medium">Mensual: % cobrado</CardTitle>
+            <Percent className="h-5 w-5 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">
-              {Number(kpiDataFinal.morosidadMensualPorcentaje ?? 0).toFixed(1)}%
+            <div className="text-2xl font-bold text-green-600">
+              {porcentajeCobrado.toFixed(1)}%
             </div>
             <p className="text-xs text-gray-600 mt-1">
-              Del mes: lo no cobrado sobre lo que venció en {nombreMes}
+              Del mes: cobrado en el mes / a cobrar en el mes
             </p>
           </CardContent>
         </Card>

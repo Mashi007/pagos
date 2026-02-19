@@ -333,14 +333,73 @@ def put_notificaciones_envios(payload: dict = Body(...), db: Session = Depends(g
 
 @router.post("/validadores/probar")
 def post_validadores_probar(payload: dict = Body(...), db: Session = Depends(get_db)):
-    """Probar validadores con datos de ejemplo. Devuelve resultados; sin datos mock."""
+    """
+    Probar validadores con datos. Ejecuta validadores reales contra los datos.
+    Devuelve resultados de validación con detalles de cada campo probado.
+    """
     from datetime import datetime
+    from app.api.v1.endpoints.validadores import validate_cedula, validate_phone, validate_email, validate_fecha
+    
+    resultados = {}
+    entrada = payload.copy()
+    
+    # Ejecutar validadores para cada campo proporcionado
+    if "cedula" in entrada:
+        cedula_val = entrada.get("cedula", "").strip()
+        val_result = validate_cedula(cedula_val)
+        resultados["cedula"] = {
+            "valor": cedula_val,
+            "valido": val_result["valido"],
+            "valor_formateado": val_result.get("valor_formateado", cedula_val),
+            "error": val_result.get("error"),
+        }
+    
+    if "telefono" in entrada:
+        telefono_val = entrada.get("telefono", "").strip()
+        val_result = validate_phone(telefono_val)
+        resultados["telefono"] = {
+            "valor": telefono_val,
+            "valido": val_result["valido"],
+            "valor_formateado": val_result.get("valor_formateado", telefono_val),
+            "error": val_result.get("error"),
+        }
+    
+    if "email" in entrada:
+        email_val = entrada.get("email", "").strip()
+        val_result = validate_email(email_val)
+        resultados["email"] = {
+            "valor": email_val,
+            "valido": val_result["valido"],
+            "valor_formateado": val_result.get("valor_formateado", email_val),
+            "error": val_result.get("error"),
+        }
+    
+    if "fecha" in entrada:
+        fecha_val = entrada.get("fecha", "").strip()
+        val_result = validate_fecha(fecha_val)
+        resultados["fecha"] = {
+            "valor": fecha_val,
+            "valido": val_result["valido"],
+            "valor_formateado": val_result.get("valor_formateado", fecha_val),
+            "error": val_result.get("error"),
+        }
+    
+    # Contar resultados
+    total_validados = len(resultados)
+    validos = sum(1 for r in resultados.values() if r.get("valido"))
+    invalidos = total_validados - validos
+    
     return {
         "titulo": "Prueba de validadores",
         "fecha_prueba": datetime.utcnow().isoformat() + "Z",
-        "datos_entrada": payload,
-        "resultados": {},
-        "resumen": {"total_validados": 0, "validos": 0, "invalidos": 0},
+        "datos_entrada": entrada,
+        "resultados": resultados,
+        "resumen": {
+            "total_validados": total_validados,
+            "validos": validos,
+            "invalidos": invalidos,
+            "tasa_exito": f"{(validos/total_validados*100):.1f}%" if total_validados > 0 else "0%",
+        },
     }
 
 
