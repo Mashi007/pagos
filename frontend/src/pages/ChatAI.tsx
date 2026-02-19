@@ -6,7 +6,8 @@ import { Textarea } from '../components/ui/textarea'
 import { Badge } from '../components/ui/badge'
 import { toast } from 'sonner'
 import { apiClient } from '../services/api'
-import { BASE_PATH } from '../config/env'
+import { BASE_PATH, env } from '../config/env'
+import { safeGetItem, safeGetSessionItem } from '../utils/storage'
 
 interface Mensaje {
   id: string
@@ -24,6 +25,7 @@ export function ChatAI() {
   const [enviando, setEnviando] = useState(false)
   const [aiConfigurado, setAiConfigurado] = useState(false)
   const [verificando, setVerificando] = useState(true)
+  const [streaming, setStreaming] = useState(true) // Streaming por defecto para mejor UX
   const mensajesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -73,6 +75,102 @@ export function ChatAI() {
     }
   }
 
+  const getAuthToken = (): string => {
+    const rememberMe = safeGetItem('remember_me', false)
+    let token = rememberMe ? safeGetItem('access_token', '') : safeGetSessionItem('access_token', '')
+    if (token && typeof token === 'string') token = token.trim()
+    if (token?.startsWith('Bearer ')) token = token.slice(7)
+    return token || ''
+  }
+
+  const enviarConStreaming = async (preguntaTexto: string) => {
+    const baseUrl = env.API_URL || ''
+    const url = `${baseUrl}/api/v1/configuracion/ai/chat/stream`
+    const token = getAuthToken()
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ pregunta: preguntaTexto }),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.detail || err.message || `Error ${res.status}`)
+    }
+    const reader = res.body?.getReader()
+    if (!reader) throw new Error('Stream no disponible')
+    const decoder = new TextDecoder()
+    let buffer = ''
+    const mensajeId = (Date.now() + 1).toString()
+    const mensajeAI: Mensaje = {
+      id: mensajeId,
+      tipo: 'ai',
+      contenido: '',
+      timestamp: new Date(),
+      pregunta: preguntaTexto,
+      calificacion: null,
+    }
+    setMensajes(prev => [...prev, mensajeAI])
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6))
+              if (data.content) {
+                setMensajes(prev =>
+                  prev.map(m => (m.id === mensajeId ? { ...m, contenido: m.contenido + data.content } : m))
+                )
+              }
+              if (data.error) throw new Error(data.error)
+            } catch (e) {
+              if (e instanceof Error && e.message !== 'Unexpected end of JSON input') throw e
+            }
+          }
+        }
+      }
+    } catch (e) {
+      setMensajes(prev =>
+        prev.map(m =>
+          m.id === mensajeId ? { ...m, contenido: `Error: ${(e as Error).message}`, error: true } : m
+        )
+      )
+      throw e
+    }
+  }
+
+  const enviarSinStreaming = async (preguntaTexto: string) => {
+    const respuesta = await apiClient.post<{
+      success: boolean
+      respuesta: string
+      pregunta: string
+      tokens_usados?: number
+      modelo_usado?: string
+      tiempo_respuesta?: number
+      error?: string
+    }>('/api/v1/configuracion/ai/chat', { pregunta: preguntaTexto })
+    if (respuesta.success) {
+      const mensajeAI: Mensaje = {
+        id: (Date.now() + 1).toString(),
+        tipo: 'ai',
+        contenido: respuesta.respuesta,
+        timestamp: new Date(),
+        pregunta: preguntaTexto,
+        calificacion: null,
+      }
+      setMensajes(prev => [...prev, mensajeAI])
+    } else {
+      throw new Error(respuesta.error || 'Error generando respuesta')
+    }
+  }
+
   const enviarPregunta = async () => {
     if (!pregunta.trim()) return
     if (!aiConfigurado) {
@@ -94,30 +192,10 @@ export function ChatAI() {
     setEnviando(true)
 
     try {
-      const respuesta = await apiClient.post<{
-        success: boolean
-        respuesta: string
-        pregunta: string
-        tokens_usados?: number
-        modelo_usado?: string
-        tiempo_respuesta?: number
-        error?: string
-      }>('/api/v1/configuracion/ai/chat', {
-        pregunta: preguntaTexto
-      })
-
-      if (respuesta.success) {
-        const mensajeAI: Mensaje = {
-          id: (Date.now() + 1).toString(),
-          tipo: 'ai',
-          contenido: respuesta.respuesta,
-          timestamp: new Date(),
-          pregunta: preguntaTexto,  // Guardar pregunta para calificación
-          calificacion: null
-        }
-        setMensajes(prev => [...prev, mensajeAI])
+      if (streaming) {
+        await enviarConStreaming(preguntaTexto)
       } else {
-        throw new Error(respuesta.error || 'Error generando respuesta')
+        await enviarSinStreaming(preguntaTexto)
       }
     } catch (error: any) {
       console.error('Error enviando pregunta:', error)
@@ -136,6 +214,20 @@ export function ChatAI() {
         }
         setMensajes(prev => [...prev, mensajeError])
         toast.warning('La consulta está tardando más de lo esperado. Intenta nuevamente.')
+        return
+      }
+
+      // Rate limit (429)
+      if (statusCode === 429) {
+        toast.warning(errorDetail)
+        const mensajeError: Mensaje = {
+          id: (Date.now() + 1).toString(),
+          tipo: 'ai',
+          contenido: `⏳ ${errorDetail}`,
+          timestamp: new Date(),
+          error: true,
+        }
+        setMensajes(prev => [...prev, mensajeError])
         return
       }
 
@@ -244,10 +336,19 @@ export function ChatAI() {
           <p className="text-gray-600">
             Consulta información de la base de datos usando inteligencia artificial
           </p>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
               Solo consultas de base de datos
             </Badge>
+            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={streaming}
+                onChange={(e) => setStreaming(e.target.checked)}
+                className="rounded border-gray-300"
+              />
+              Respuesta en tiempo real (streaming)
+            </label>
             <span className="text-xs text-gray-500">
               Para preguntas generales, usa el Chat de Prueba en Configuración &gt; AI
             </span>

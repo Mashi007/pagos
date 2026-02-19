@@ -11,10 +11,14 @@ Estructura para respuestas rápidas y datos de get_db:
 Ref: https://openrouter.ai/docs/api-reference/chat/completion
 """
 import json
+import re
+import time
 import urllib.error
+from datetime import date
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Body
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -22,14 +26,19 @@ import logging
 
 from app.core.config import settings
 from app.core.database import get_db, engine, SessionLocal
+from app.core.deps import get_current_user
 from app.core.openrouter_client import call_openrouter as _openrouter_call
+from app.core.openrouter_client import call_openrouter_stream
+from app.core.chat_context_cache import get_cached_context, set_cached_context, invalidate_cache
+from app.core.chat_rate_limiter import check_rate_limit
+from app.schemas.auth import UserResponse
 from app.models.configuracion import Configuracion
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.cuota import Cuota
 from app.models.definicion_campo import DefinicionCampo
 from app.models.diccionario_semantico import DiccionarioSemantico
-from sqlalchemy import func, select, text
+from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy import inspect as sa_inspect
 
 # Timeout para la consulta de contexto AI (evitar colgar si la BD tarda)
@@ -44,15 +53,17 @@ CLAVE_AI = "configuracion_ai"
 CLAVE_PREGUNTAS_HABITUALES_AI = "preguntas_habituales_ai"
 
 # Preguntas habituales por defecto (se usa si no hay lista en BD).
-# Se inyecta en el system prompt para familiarizar al modelo con cómo responder cada tipo de pregunta.
 PREGUNTAS_HABITUALES_CAMPOS = (
     "Preguntas habituales y dato a usar: "
-    "'cuántos créditos aprobados' / 'créditos aprobados' -> prestamos_aprobados; "
-    "'total de financiamiento' / 'financiamiento total' -> total_financiamiento_aprobado (o total_financiamiento_todos si preguntan por todos); "
+    "'cuántos créditos aprobados' -> prestamos_aprobados; "
+    "'total de financiamiento' -> total_financiamiento_aprobado o total_financiamiento_todos; "
     "'cuántos clientes' -> clientes_total; "
-    "'cuántos préstamos' -> prestamos_total; "
-    "'cuotas pagadas' / 'cuotas pendientes' -> cuotas_pagadas, cuotas_pendientes, cuotas_total; "
-    "'recaudado' / 'cuánto se ha cobrado en cuotas' -> suma_montos_cuotas_pagadas."
+    "'cuántos préstamos' -> prestamos_total; prestamos_draft; "
+    "'cuotas pagadas/pendientes' -> cuotas_pagadas, cuotas_pendientes, cuotas_total; "
+    "'recaudado' / 'cobrado' -> suma_montos_cuotas_pagadas; "
+    "'mora' / 'cuotas en mora' / 'morosidad' -> cuotas_en_mora, monto_cuotas_en_mora, prestamos_con_mora; "
+    "'quién está en mora' -> clientes_en_mora_muestra; "
+    "'cliente con cédula X' / 'cedula V123' -> cliente_buscado (se busca dinámicamente si la pregunta incluye una cédula)."
 )
 
 # Prompt del sistema para respuestas rápidas usando solo datos de get_db (BD).
@@ -126,12 +137,17 @@ def _safe_decimal(value: Any) -> str:
 def _build_chat_context(db: Session) -> str:
     """
     Construye un resumen compacto de la BD para el system prompt.
-    Una sola consulta agregada (1 round-trip) para minimizar tiempo de conexión y
-    evitar múltiples accesos que puedan demorar o fallar. SQLAlchemy 2 (select + scalar_subquery).
+    Una sola consulta agregada (1 round-trip) para minimizar tiempo de conexión.
+    Incluye: agregados, mora, estados, fecha y muestra de clientes en mora para preguntas frecuentes.
     """
     lines: list[str] = []
     try:
-        # Una única ejecución: todos los escalares en una sola consulta (mejor práctica AI-BD).
+        hoy = date.today().isoformat()
+        # Condición cuotas en mora: vencidas y no pagadas
+        cond_mora = and_(
+            Cuota.fecha_pago.is_(None),
+            Cuota.fecha_vencimiento < func.current_date(),
+        )
         stmt = select(
             select(func.count(Cliente.id)).scalar_subquery().label("total_clientes"),
             select(func.count(Prestamo.id)).scalar_subquery().label("total_prestamos"),
@@ -139,6 +155,10 @@ def _build_chat_context(db: Session) -> str:
             .where(Prestamo.estado == "APROBADO")
             .scalar_subquery()
             .label("prestamos_aprobados"),
+            select(func.count(Prestamo.id))
+            .where(Prestamo.estado == "DRAFT")
+            .scalar_subquery()
+            .label("prestamos_draft"),
             select(func.coalesce(func.sum(Prestamo.total_financiamiento), 0))
             .where(Prestamo.estado == "APROBADO")
             .scalar_subquery()
@@ -155,8 +175,16 @@ def _build_chat_context(db: Session) -> str:
             .where(Cuota.fecha_pago.isnot(None))
             .scalar_subquery()
             .label("suma_cuotas_pagadas"),
+            select(func.count(Cuota.id)).where(cond_mora).scalar_subquery().label("cuotas_en_mora_count"),
+            select(func.coalesce(func.sum(Cuota.monto), 0))
+            .where(cond_mora)
+            .scalar_subquery()
+            .label("monto_cuotas_en_mora"),
+            select(func.count())
+            .select_from(select(Cuota.prestamo_id).where(cond_mora).distinct().subquery())
+            .scalar_subquery()
+            .label("prestamos_con_mora_count"),
         )
-        # Timeout explícito: no retener conexión si la consulta tarda (mejores prácticas AI-BD)
         db.execute(text(f"SET LOCAL statement_timeout = {CONTEXTO_AI_STATEMENT_TIMEOUT_MS}"))
         row = db.execute(stmt).first()
         if not row:
@@ -165,14 +193,22 @@ def _build_chat_context(db: Session) -> str:
         total_clientes = int(row[0] or 0)
         total_prestamos = int(row[1] or 0)
         prestamos_aprobados = int(row[2] or 0)
-        total_financiamiento_aprobado = row[3] or 0
-        total_financiamiento_todos = row[4] or 0
-        total_cuotas = int(row[5] or 0)
-        cuotas_pagadas_count = int(row[6] or 0)
+        prestamos_draft = int(row[3] or 0)
+        total_financiamiento_aprobado = row[4] or 0
+        total_financiamiento_todos = row[5] or 0
+        total_cuotas = int(row[6] or 0)
+        cuotas_pagadas_count = int(row[7] or 0)
         cuotas_pendientes = total_cuotas - cuotas_pagadas_count
-        suma_cuotas_pagadas = row[7] or 0
+        suma_cuotas_pagadas = row[8] or 0
+        cuotas_en_mora_count = int(row[9] or 0)
+        monto_cuotas_en_mora = row[10] or 0
+        prestamos_con_mora_count = int(row[11] or 0)
+
+        lines.append(f"fecha_actual={hoy}")
         lines.append(f"clientes_total={total_clientes}")
-        lines.append(f"prestamos_total={total_prestamos}; prestamos_aprobados={prestamos_aprobados}")
+        lines.append(
+            f"prestamos_total={total_prestamos}; prestamos_aprobados={prestamos_aprobados}; prestamos_draft={prestamos_draft}"
+        )
         lines.append(
             f"total_financiamiento_aprobado={_safe_decimal(total_financiamiento_aprobado)}; "
             f"total_financiamiento_todos={_safe_decimal(total_financiamiento_todos)}"
@@ -181,10 +217,82 @@ def _build_chat_context(db: Session) -> str:
             f"cuotas_total={total_cuotas}; cuotas_pagadas={cuotas_pagadas_count}; cuotas_pendientes={cuotas_pendientes}; "
             f"suma_montos_cuotas_pagadas={_safe_decimal(suma_cuotas_pagadas)}"
         )
+        lines.append(
+            f"cuotas_en_mora={cuotas_en_mora_count}; monto_cuotas_en_mora={_safe_decimal(monto_cuotas_en_mora)}; "
+            f"prestamos_con_mora={prestamos_con_mora_count}"
+        )
+
+        # Muestra de clientes en mora (hasta 5) para preguntas "quién está en mora"
+        if prestamos_con_mora_count > 0:
+            subq = select(Cuota.prestamo_id).where(cond_mora).distinct().limit(5)
+            prestamos_mora_ids = [r[0] for r in db.execute(subq).fetchall()]
+            if prestamos_mora_ids:
+                clientes_mora = (
+                    db.execute(
+                        select(Cliente.cedula, Cliente.nombres, Cliente.telefono)
+                        .select_from(Cliente)
+                        .join(Prestamo, Prestamo.cliente_id == Cliente.id)
+                        .where(Prestamo.id.in_(prestamos_mora_ids))
+                        .distinct()
+                        .limit(5)
+                    )
+                    .fetchall()
+                )
+                if clientes_mora:
+                    muestra = "; ".join(
+                        f"cedula={c[0]}, nombres={c[1]}, telefono={c[2]}" for c in clientes_mora
+                    )
+                    lines.append(f"clientes_en_mora_muestra={muestra}")
     except Exception as e:
         logger.exception("AI chat: error al cargar contexto desde BD (tablas clientes/prestamos/cuotas): %s", e)
         lines.append("(error al cargar datos)")
     return "\n".join(lines)
+
+
+def _extract_cedula_from_pregunta(pregunta: str) -> Optional[str]:
+    """Extrae posible cédula de la pregunta (formato V/E/G/J + dígitos o 8-9 dígitos)."""
+    if not pregunta or not pregunta.strip():
+        return None
+    # Patrones: V12345678, V-12345678, E12345678, 12345678 (8-9 dígitos), cedula/cédula: X
+    p = pregunta.strip()
+    # Buscar secuencia tipo cédula venezolana
+    m = re.search(r"(?:cedula|cédula|documento|ci|dni)[:\s]*([VEGJv]\s*-?\s*\d{6,9}|\d{8,9})", p, re.I)
+    if m:
+        val = re.sub(r"[\s\-]", "", m.group(1))
+        return val.upper() if val else None
+    m = re.search(r"\b([VEGJ]\d{6,9}|[VEGJ]-\d{6,9}|\d{8,9})\b", p)
+    if m:
+        return re.sub(r"[\s\-]", "", m.group(1)).upper()
+    return None
+
+
+def _fetch_client_by_cedula(db: Session, cedula: str) -> Optional[str]:
+    """Busca cliente por cédula o parte de ella. Devuelve línea para el contexto."""
+    if not cedula:
+        return None
+    try:
+        # Buscar exacto primero, luego por coincidencia parcial
+        row = (
+            db.execute(
+                select(Cliente.cedula, Cliente.nombres, Cliente.telefono, Cliente.email, Cliente.estado)
+                .where(
+                    or_(
+                        Cliente.cedula.ilike(cedula),
+                        Cliente.cedula.ilike(f"%{cedula}%"),
+                    )
+                )
+                .order_by(func.length(Cliente.cedula).asc())  # Preferir coincidencia exacta
+                .limit(1)
+            )
+        ).first()
+        if row:
+            return (
+                f"cliente_buscado: cedula={row[0]}, nombres={row[1]}, telefono={row[2]}, "
+                f"email={row[3]}, estado={row[4]}"
+            )
+    except Exception as e:
+        logger.warning("AI chat: error buscando cliente por cedula %s: %s", cedula, e)
+    return None
 
 
 def _get_preguntas_habituales_block(db: Session) -> str:
@@ -210,13 +318,12 @@ def _get_preguntas_habituales_block(db: Session) -> str:
     return PREGUNTAS_HABITUALES_CAMPOS
 
 
-def _build_chat_system_prompt(db: Session) -> str:
+def _build_chat_system_prompt(db: Session, datos_bd: str) -> str:
     """
-    Arma el system prompt completo. Si hay prompt_personalizado en config, se usa como base
-    y se añade el bloque 'Datos disponibles (get_db)'. Si no, instrucciones + preguntas habituales + datos.
+    Arma el system prompt completo con el bloque de datos dado.
+    Si hay prompt_personalizado en config, se usa como base.
     """
     _load_ai_config_from_db(db)
-    datos_bd = _build_chat_context(db)
     prompt_custom = (_ai_config_stub.get("prompt_personalizado") or "").strip()
     if prompt_custom:
         return f"{prompt_custom}\n\nDatos disponibles (get_db):\n{datos_bd}"
@@ -228,16 +335,34 @@ def _build_chat_system_prompt(db: Session) -> str:
     )
 
 
-def _build_chat_system_prompt_with_short_session() -> str:
+def _build_prompt_for_question(pregunta: str) -> tuple[str, bool]:
     """
-    Construye el system prompt usando una sesión de corta duración, que se cierra
-    antes de llamar a OpenRouter. Así no se retiene una conexión de BD durante
-    la llamada externa (hasta 45s), cumpliendo buenas prácticas AI-BD.
+    Construye el system prompt para una pregunta concreta.
+    Usa caché para el contexto base (TTL 90s). Si la pregunta incluye una cédula,
+    hace lookup dinámico del cliente para incluir sus datos.
+    Devuelve (prompt, base_from_cache).
     """
+    base_cached = get_cached_context()
     session = SessionLocal()
     try:
         _load_ai_config_from_db(session)
-        return _build_chat_system_prompt(session)
+        if base_cached is not None:
+            datos_bd = base_cached
+            base_from_cache = True
+        else:
+            datos_bd = _build_chat_context(session)
+            set_cached_context(datos_bd)
+            base_from_cache = False
+
+        # Lookup dinámico por cédula si la pregunta lo sugiere
+        cedula = _extract_cedula_from_pregunta(pregunta)
+        if cedula:
+            client_line = _fetch_client_by_cedula(session, cedula)
+            if client_line:
+                datos_bd = datos_bd + "\n" + client_line
+
+        prompt = _build_chat_system_prompt(session, datos_bd)
+        return prompt, base_from_cache
     finally:
         session.close()
 
@@ -354,6 +479,7 @@ def put_ai_configuracion(payload: AIConfigUpdate = Body(...), db: Session = Depe
         db.commit()
     except Exception:
         db.rollback()
+    invalidate_cache()  # Nuevo contexto en próximas consultas
     return get_ai_configuracion(db)
 
 
@@ -451,6 +577,7 @@ def put_ai_prompt(payload: PromptPutBody = Body(...), db: Session = Depends(get_
     """Guarda el prompt personalizado. Si prompt está vacío, se restaura el por defecto."""
     texto = (payload.prompt or "").strip()
     _set_prompt_personalizado(db, texto)
+    invalidate_cache()
     return get_ai_prompt(db)
 
 
@@ -561,27 +688,38 @@ class ChatRequest(BaseModel):
 
 
 @router.post("/chat")
-def post_ai_chat(payload: ChatRequest = Body(...)):
+def post_ai_chat(
+    payload: ChatRequest = Body(...),
+    current_user: UserResponse = Depends(get_current_user),
+):
     """
-    Chat completions vía OpenRouter. Carga config y contexto desde BD en una
-    sesión de corta duración que se cierra antes de llamar a OpenRouter, para
-    no retener conexión durante la llamada externa (mejores prácticas AI-BD).
+    Chat completions vía OpenRouter. Carga config y contexto desde BD (con caché 90s).
+    Rate limit: 10 peticiones/minuto por usuario. Métricas de latencia en logs.
     """
+    check_rate_limit(current_user.email)
     pregunta = (payload.pregunta or "").strip()
     if not pregunta:
         raise HTTPException(status_code=400, detail="La pregunta no puede estar vacía")
-    # Construir prompt con sesión corta; conexión liberada antes de OpenRouter
-    system_prompt = _build_chat_system_prompt_with_short_session()
     if _ai_config_stub.get("activo", "true").lower() != "true":
         raise HTTPException(status_code=400, detail="El servicio AI está desactivado en configuración")
+
+    t0 = time.perf_counter()
+    system_prompt, cache_hit = _build_prompt_for_question(pregunta)
+    t_bd = (time.perf_counter() - t0) * 1000
+    logger.info("chat_ai context_ms=%.0f cache_hit=%s", t_bd, cache_hit)
+
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": pregunta},
     ]
+    t1 = time.perf_counter()
     try:
         out = _call_openrouter(messages)
     except HTTPException:
         raise
+    t_openrouter = (time.perf_counter() - t1) * 1000
+    logger.info("chat_ai openrouter_ms=%.0f total_ms=%.0f", t_openrouter, (time.perf_counter() - t0) * 1000)
+
     choices = out.get("choices") or []
     if not choices:
         raise HTTPException(status_code=502, detail="OpenRouter no devolvió respuesta")
@@ -593,7 +731,58 @@ def post_ai_chat(payload: ChatRequest = Body(...)):
         "pregunta": pregunta,
         "tokens_usados": usage.get("total_tokens"),
         "modelo_usado": out.get("model"),
+        "tiempo_respuesta": round((time.perf_counter() - t0) * 1000),
     }
+
+
+def _chat_stream_generator(pregunta: str):
+    """Generador para streaming: envía chunks como SSE (data: {...})."""
+    system_prompt, _ = _build_prompt_for_question(pregunta)
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": pregunta},
+    ]
+    key = _get_openrouter_key()
+    if not key:
+        yield f"data: {json.dumps({'error': 'AI no configurada'})}\n\n"
+        return
+    try:
+        full_content = []
+        for chunk in call_openrouter_stream(
+            messages=messages,
+            api_key=key,
+            model=_get_model(),
+            temperature=float(_ai_config_stub.get("temperatura") or 0.7),
+            max_tokens=int(_ai_config_stub.get("max_tokens") or 1000),
+        ):
+            full_content.append(chunk)
+            yield f"data: {json.dumps({'content': chunk})}\n\n"
+        yield f"data: {json.dumps({'done': True, 'full': ''.join(full_content)})}\n\n"
+    except Exception as e:
+        logger.exception("chat_ai stream error: %s", e)
+        yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+
+@router.post("/chat/stream")
+def post_ai_chat_stream(
+    payload: ChatRequest = Body(...),
+    current_user: UserResponse = Depends(get_current_user),
+):
+    """
+    Chat con streaming: responde token a token vía Server-Sent Events.
+    Mismo rate limit y caché que POST /chat.
+    """
+    check_rate_limit(current_user.email)
+    pregunta = (payload.pregunta or "").strip()
+    if not pregunta:
+        raise HTTPException(status_code=400, detail="La pregunta no puede estar vacía")
+    if _ai_config_stub.get("activo", "true").lower() != "true":
+        raise HTTPException(status_code=400, detail="El servicio AI está desactivado en configuración")
+    return StreamingResponse(
+        _chat_stream_generator(pregunta),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 class ProbarRequest(BaseModel):
