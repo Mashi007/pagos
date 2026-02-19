@@ -250,22 +250,25 @@ export function ConfiguracionNotificaciones() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-gray-700">Prueba</span>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={modoPruebas}
-                onClick={() => setModoPruebas(!modoPruebas)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ${
-                  modoPruebas ? 'bg-amber-500' : 'bg-emerald-600'
-                }`}
-              >
-                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ${modoPruebas ? 'translate-x-5' : 'translate-x-1'}`} />
-              </button>
-              <span className="text-sm text-gray-600">{modoPruebas ? 'Activado (solo correo de pruebas)' : 'Desactivado (envÃƒÂ­o a clientes)'}</span>
-            </div>
+          {/* Toggle Modo Prueba */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-gray-700">Prueba</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={modoPruebas}
+              onClick={() => setModoPruebas(!modoPruebas)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ${
+                modoPruebas ? 'bg-amber-500' : 'bg-emerald-600'
+              }`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ${modoPruebas ? 'translate-x-5' : 'translate-x-1'}`} />
+            </button>
+            <span className="text-sm text-gray-600">{modoPruebas ? 'Activado (solo correo de pruebas)' : 'Desactivado (envÃ­o a clientes)'}</span>
+          </div>
+
+          {/* Correos de Prueba */}
+          <div className="space-y-3">
             <div className="flex items-center gap-2">
               <label className="text-sm font-medium text-gray-700 whitespace-nowrap w-40">Correo para pruebas 1</label>
               <Input
@@ -275,56 +278,6 @@ export function ConfiguracionNotificaciones() {
                 onChange={(e) => setEmailsPruebas((prev) => [e.target.value, prev[1]])}
                 className="max-w-xs h-9 bg-white"
               />
-              
-              {/* Selector de Plantilla para Prueba */}
-              {modoPruebas && (emailsPruebas[0]?.trim() || emailsPruebas[1]?.trim()) && (
-                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <label className="text-sm font-medium text-gray-700 block mb-2">
-                    Selecciona una plantilla (opcional)
-                  </label>
-                  <Select
-                    value={plantillaSeleccionada?.toString() || ''}
-                    onValueChange={(val) => setPlantillaSeleccionada(val ? parseInt(val) : null)}
-                  >
-                    <SelectTrigger className="w-full bg-white">
-                      <SelectValue placeholder="Plantilla predeterminada" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">Plantilla predeterminada</SelectItem>
-                      {plantillas.map((p) => (
-                        <SelectItem key={p.id} value={String(p.id)}>
-                          {p.nombre || `Plantilla #${p.id}`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-{/* Botones Enviar Prueba - uno para cada correo */}
-              {modoPruebas && (emailsPruebas[0]?.trim() || emailsPruebas[1]?.trim()) && (
-                <div className="mt-4 pt-4 border-t border-amber-200 space-y-2">
-                  {emailsPruebas[0]?.trim() && (
-                    <Button
-                      onClick={() => handleEnviarPrueba(0)}
-                      disabled={enviandoPrueba}
-                      className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:opacity-50 text-white font-semibold py-2 h-auto flex items-center justify-center gap-2 rounded-lg transition-all"
-                    >
-                      <Mail className="h-5 w-5" />
-                      {enviandoPrueba ? 'Enviando...' : `Enviar a ${emailsPruebas[0]}`}
-                    </Button>
-                  )}
-                  {emailsPruebas[1]?.trim() && (
-                    <Button
-                      onClick={() => handleEnviarPrueba(1)}
-                      disabled={enviandoPrueba}
-                      className="w-full bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 disabled:opacity-50 text-white font-semibold py-2 h-auto flex items-center justify-center gap-2 rounded-lg transition-all"
-                    >
-                      <Mail className="h-5 w-5" />
-                      {enviandoPrueba ? 'Enviando...' : `Enviar a ${emailsPruebas[1]}`}
-                    </Button>
-                  )}
-                </div>
-              )}
             </div>
             <div className="flex items-center gap-2">
               <label className="text-sm font-medium text-gray-700 whitespace-nowrap w-40">Correo para pruebas 2</label>
@@ -337,6 +290,57 @@ export function ConfiguracionNotificaciones() {
               />
             </div>
           </div>
+
+          {/* Selector de Plantilla para Prueba */}
+          {modoPruebas && (emailsPruebas[0]?.trim() || emailsPruebas[1]?.trim()) && (
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <label className="text-sm font-medium text-gray-700 block mb-2">
+                Selecciona una plantilla (opcional)
+              </label>
+              <Select
+                value={plantillaSeleccionada?.toString() || ''}
+                onValueChange={(val) => setPlantillaSeleccionada(val ? parseInt(val) : null)}
+              >
+                <SelectTrigger className="w-full bg-white">
+                  <SelectValue placeholder="Plantilla predeterminada" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Plantilla predeterminada</SelectItem>
+                  {plantillas.map((p) => (
+                    <SelectItem key={p.id} value={String(p.id)}>
+                      {p.nombre || `Plantilla #${p.id}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Botones Enviar Prueba - uno para cada correo */}
+          {modoPruebas && (emailsPruebas[0]?.trim() || emailsPruebas[1]?.trim()) && (
+            <div className="pt-4 border-t border-amber-200 space-y-2">
+              {emailsPruebas[0]?.trim() && (
+                <Button
+                  onClick={() => handleEnviarPrueba(0)}
+                  disabled={enviandoPrueba}
+                  className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:opacity-50 text-white font-semibold py-2 h-auto flex items-center justify-center gap-2 rounded-lg transition-all"
+                >
+                  <Mail className="h-5 w-5" />
+                  {enviandoPrueba ? 'Enviando...' : `Enviar a ${emailsPruebas[0]}`}
+                </Button>
+              )}
+              {emailsPruebas[1]?.trim() && (
+                <Button
+                  onClick={() => handleEnviarPrueba(1)}
+                  disabled={enviandoPrueba}
+                  className="w-full bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 disabled:opacity-50 text-white font-semibold py-2 h-auto flex items-center justify-center gap-2 rounded-lg transition-all"
+                >
+                  <Mail className="h-5 w-5" />
+                  {enviandoPrueba ? 'Enviando...' : `Enviar a ${emailsPruebas[1]}`}
+                </Button>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -452,7 +456,6 @@ export function ConfiguracionNotificaciones() {
     </div>
   )
 }
-
 
 
 
