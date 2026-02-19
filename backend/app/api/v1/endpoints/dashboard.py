@@ -91,16 +91,18 @@ def _etiquetas_12_meses() -> list[dict]:
 
 @router.get("/opciones-filtros")
 def get_opciones_filtros(db: Session = Depends(get_db)):
-    """Opciones para filtros desde BD: analistas, concesionarios, modelos (solo clientes ACTIVOS)."""
+    """Opciones para filtros desde BD: analistas, concesionarios, modelos."""
     try:
         analistas = [r[0] for r in db.execute(
             select(Prestamo.analista).select_from(Prestamo).join(Cliente, Prestamo.cliente_id == Cliente.id)
-            .where(Cliente.estado == "ACTIVO", Prestamo.estado == "APROBADO", Prestamo.analista.isnot(None))
+            .where(Prestamo.estado == "APROBADO", Prestamo.analista.isnot(None))
+            # .where(Prestamo.estado == "APROBADO", Cliente.estado == "ACTIVO", Prestamo.analista.isnot(None))  # REMOVIDO Cliente.estado == "ACTIVO"
             .distinct()
         ).all() if r[0]]
         concesionarios = [r[0] for r in db.execute(
             select(Prestamo.concesionario).select_from(Prestamo).join(Cliente, Prestamo.cliente_id == Cliente.id)
-            .where(Cliente.estado == "ACTIVO", Prestamo.estado == "APROBADO", Prestamo.concesionario.isnot(None))
+            .where(Prestamo.estado == "APROBADO", Prestamo.concesionario.isnot(None))
+            # .where(Prestamo.estado == "APROBADO", Cliente.estado == "ACTIVO", Prestamo.concesionario.isnot(None))  # REMOVIDO Cliente.estado == "ACTIVO"
             .distinct()
         ).all() if r[0]]
         # Modelos: modelo_vehiculo > ModeloVehiculo.modelo > producto (excl. "Financiamiento")
@@ -115,7 +117,8 @@ def get_opciones_filtros(db: Session = Depends(get_db)):
             .select_from(Prestamo)
             .join(Cliente, Prestamo.cliente_id == Cliente.id)
             .outerjoin(ModeloVehiculo, Prestamo.modelo_vehiculo_id == ModeloVehiculo.id)
-            .where(Cliente.estado == "ACTIVO", Prestamo.estado == "APROBADO", modelo_nombre.isnot(None))
+            .where(Prestamo.estado == "APROBADO", modelo_nombre.isnot(None))
+            # .where(Prestamo.estado == "APROBADO", Cliente.estado == "ACTIVO", modelo_nombre.isnot(None))  # REMOVIDO Cliente.estado == "ACTIVO"
             .distinct()
         ).all() if r[0]]
         return {"analistas": analistas, "concesionarios": concesionarios, "modelos": modelos}
@@ -158,7 +161,6 @@ def _compute_kpis_principales(
 ) -> dict:
     """Calcula KPIs principales (usado por endpoint y por refresh de caché)."""
     try:
-        # KPIs solo incluyen clientes ACTIVOS
         activos = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "ACTIVO")) or 0
         total_clientes = activos  # Para KPIs: total = solo activos
         inactivos = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "INACTIVO")) or 0
@@ -186,7 +188,6 @@ def _compute_kpis_principales(
         # Total préstamos: solo clientes ACTIVOS
         conds = [
             Prestamo.cliente_id == Cliente.id,
-            Cliente.estado == "ACTIVO",
             Prestamo.estado == "APROBADO",
             Prestamo.fecha_registro >= inicio_dt,
             Prestamo.fecha_registro <= fin_dt,
@@ -206,7 +207,6 @@ def _compute_kpis_principales(
             .select_from(Prestamo)
             .join(Cliente, Prestamo.cliente_id == Cliente.id)
             .where(and_(
-                Cliente.estado == "ACTIVO",
                 Prestamo.estado == "APROBADO",
                 Prestamo.fecha_registro >= inicio_dt,
                 Prestamo.fecha_registro <= fin_dt,
@@ -217,7 +217,6 @@ def _compute_kpis_principales(
         ) or 0
         conds_ant = [
             Prestamo.cliente_id == Cliente.id,
-            Cliente.estado == "ACTIVO",
             Prestamo.estado == "APROBADO",
             Prestamo.fecha_registro >= inicio_ant_dt,
             Prestamo.fecha_registro <= fin_ant_dt,
@@ -248,12 +247,12 @@ def _compute_kpis_principales(
         conds_moro = [
             Cuota.prestamo_id == Prestamo.id,
             Prestamo.cliente_id == Cliente.id,
-            Cliente.estado == "ACTIVO",
             Prestamo.estado == "APROBADO",
             Cuota.fecha_pago.is_(None),
             Cuota.fecha_vencimiento < hoy,
             Cuota.fecha_vencimiento >= inicio_d,
             Cuota.fecha_vencimiento <= fin_d,
+            # Cliente.estado == "ACTIVO",  # REMOVIDO para incluir clientes inactivos
         ]
         if analista:
             conds_moro.append(Prestamo.analista == analista)
@@ -276,12 +275,12 @@ def _compute_kpis_principales(
         conds_moro_ant = [
             Cuota.prestamo_id == Prestamo.id,
             Prestamo.cliente_id == Cliente.id,
-            Cliente.estado == "ACTIVO",
             Prestamo.estado == "APROBADO",
             Cuota.fecha_pago.is_(None),
             Cuota.fecha_vencimiento < hoy,
             Cuota.fecha_vencimiento >= inicio_ant_d,
             Cuota.fecha_vencimiento <= fin_ant_d,
+            # Cliente.estado == "ACTIVO",  # REMOVIDO para incluir clientes inactivos
         ]
         if analista:
             conds_moro_ant.append(Prestamo.analista == analista)
@@ -309,7 +308,6 @@ def _compute_kpis_principales(
         conds_cuota = [
             Cuota.prestamo_id == Prestamo.id,
             Prestamo.cliente_id == Cliente.id,
-            Cliente.estado == "ACTIVO",
             Prestamo.estado == "APROBADO",
             Cuota.fecha_vencimiento >= inicio_d,
             Cuota.fecha_vencimiento <= fin_d,
@@ -481,27 +479,25 @@ def _compute_dashboard_admin(
                 if fin_mes.tzinfo is None:
                     fin_mes = fin_mes.replace(tzinfo=timezone.utc)
                 inicio_d, fin_d = _primer_ultimo_dia_mes(fin_mes)
-            # Pagos programados: cuotas del mes (solo clientes ACTIVOS)
+            # Pagos programados: cuotas del mes (clientes ACTIVOS e INACTIVOS)
             cartera = db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0))
                 .select_from(Cuota)
                 .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
                 .join(Cliente, Prestamo.cliente_id == Cliente.id)
                 .where(
-                    Cliente.estado == "ACTIVO",
                     Prestamo.estado == "APROBADO",
                     Cuota.fecha_vencimiento >= inicio_d,
                     Cuota.fecha_vencimiento <= fin_d,
                 )
             ) or 0
-            # Pagos conciliados: todo lo cobrado en el mes (solo clientes ACTIVOS)
+            # Pagos conciliados: todo lo cobrado en el mes (clientes ACTIVOS e INACTIVOS)
             cobrado = db.scalar(
                 select(func.coalesce(func.sum(Pago.monto_pagado), 0))
                 .select_from(Pago)
                 .join(Prestamo, Pago.prestamo_id == Prestamo.id)
                 .join(Cliente, Prestamo.cliente_id == Cliente.id)
                 .where(
-                    Cliente.estado == "ACTIVO",
                     func.date(Pago.fecha_pago) >= inicio_d,
                     func.date(Pago.fecha_pago) <= fin_d,
                 )
@@ -516,7 +512,6 @@ def _compute_dashboard_admin(
                 .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
                 .join(Cliente, Prestamo.cliente_id == Cliente.id)
                 .where(
-                    Cliente.estado == "ACTIVO",
                     Prestamo.estado == "APROBADO",
                     Cuota.fecha_vencimiento >= inicio_d,
                     Cuota.fecha_vencimiento <= fin_d,
@@ -702,9 +697,9 @@ def get_financiamiento_tendencia_mensual(
                 .select_from(Prestamo)
                 .join(Cliente, Prestamo.cliente_id == Cliente.id)
                 .where(
-                    Cliente.estado == "ACTIVO",
                     Prestamo.fecha_registro <= ultimo_dia,
                     Prestamo.estado == "APROBADO",
+                    # Cliente.estado == "ACTIVO",  # REMOVIDO para incluir clientes inactivos
                 )
             ) or 0
             resultado.append({
@@ -747,10 +742,10 @@ def _compute_morosidad_por_dia(
                 .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
                 .join(Cliente, Prestamo.cliente_id == Cliente.id)
                 .where(
-                    Cliente.estado == "ACTIVO",
                     Prestamo.estado == "APROBADO",
                     Cuota.fecha_vencimiento == d,
                     Cuota.fecha_pago.is_(None),
+                    # Cliente.estado == "ACTIVO",  # REMOVIDO para incluir clientes inactivos
                 )
             ) if d < hoy_date else 0
             morosidad_dia = _safe_float(morosidad_dia or 0)
@@ -800,29 +795,29 @@ def get_proyeccion_cobro_30_dias(db: Session = Depends(get_db)):
         nombres_mes = ("Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic")
         d = hoy_date
         while d <= fin_date:
-            # Monto programado del día (solo clientes ACTIVOS)
+            # Monto programado del día (clientes ACTIVOS e INACTIVOS)
             programado = db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0))
                 .select_from(Cuota)
                 .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
                 .join(Cliente, Prestamo.cliente_id == Cliente.id)
                 .where(
-                    Cliente.estado == "ACTIVO",
                     Prestamo.estado == "APROBADO",
                     Cuota.fecha_vencimiento == d,
+                    # Cliente.estado == "ACTIVO",  # REMOVIDO para incluir clientes inactivos
                 )
             ) or 0
-            # Monto pendiente (solo clientes ACTIVOS)
+            # Monto pendiente (clientes ACTIVOS e INACTIVOS)
             pendiente = db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0))
                 .select_from(Cuota)
                 .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
                 .join(Cliente, Prestamo.cliente_id == Cliente.id)
                 .where(
-                    Cliente.estado == "ACTIVO",
                     Prestamo.estado == "APROBADO",
                     Cuota.fecha_vencimiento == d,
                     Cuota.fecha_pago.is_(None),
+                    # Cliente.estado == "ACTIVO",  # REMOVIDO para incluir clientes inactivos
                 )
             ) or 0
             resultado.append({
@@ -856,9 +851,9 @@ def get_monto_programado_proxima_semana(db: Session = Depends(get_db)):
                 .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
                 .join(Cliente, Prestamo.cliente_id == Cliente.id)
                 .where(
-                    Cliente.estado == "ACTIVO",
                     Prestamo.estado == "APROBADO",
                     Cuota.fecha_vencimiento == d,
+                    # Cliente.estado == "ACTIVO",  # REMOVIDO para incluir clientes inactivos
                 )
             ) or 0
             resultado.append({
@@ -912,7 +907,6 @@ def get_prestamos_por_concesionario(
         concesionario_label = func.coalesce(Prestamo.concesionario, "Sin concesionario").label("concesionario")
 
         conds_base = [
-            Cliente.estado == "ACTIVO",
             Prestamo.estado == "APROBADO",
             func.date(Prestamo.fecha_registro) >= inicio,
             func.date(Prestamo.fecha_registro) <= fin,
@@ -924,7 +918,7 @@ def get_prestamos_por_concesionario(
         if modelo:
             conds_base.append(Prestamo.modelo_vehiculo == modelo)
 
-        # Por mes: préstamos APROBADO en [inicio, fin] (solo clientes ACTIVOS)
+        # Por mes: préstamos APROBADO en [inicio, fin] (clientes ACTIVOS e INACTIVOS)
         q_por_mes = (
             select(
                 mes_expr.label("mes"),
@@ -943,8 +937,8 @@ def get_prestamos_por_concesionario(
             for r in rows_por_mes
         ]
 
-        # Acumulado: todos los préstamos APROBADO desde el inicio (solo clientes ACTIVOS)
-        conds_acum = [Cliente.estado == "ACTIVO", Prestamo.estado == "APROBADO"]
+        # Acumulado: todos los préstamos APROBADO desde el inicio (clientes ACTIVOS e INACTIVOS)
+        conds_acum = [Prestamo.estado == "APROBADO"]
         if analista:
             conds_acum.append(Prestamo.analista == analista)
         if concesionario:
@@ -1008,7 +1002,6 @@ def get_prestamos_por_modelo(
         )
 
         conds_base = [
-            Cliente.estado == "ACTIVO",
             Prestamo.estado == "APROBADO",
             func.date(Prestamo.fecha_registro) >= inicio,
             func.date(Prestamo.fecha_registro) <= fin,
@@ -1027,7 +1020,7 @@ def get_prestamos_por_modelo(
                 )
             )
 
-        # Por mes: préstamos APROBADO en [inicio, fin] (solo clientes ACTIVOS)
+        # Por mes: préstamos APROBADO en [inicio, fin] (clientes ACTIVOS e INACTIVOS)
         q_por_mes = (
             select(
                 mes_expr.label("mes"),
@@ -1095,11 +1088,10 @@ def _compute_financiamiento_por_rangos(
     modelo: Optional[str],
 ) -> dict:
     """Calcula financiamiento por rangos: cuenta préstamos APROBADOS por banda de total_financiamiento.
-    Filtra por fecha_registro cuando se envían fecha_inicio/fecha_fin."""
+    Filtra por fecha_registro cuando se envían fecha_inicio/fecha_fin. Incluye clientes ACTIVOS e INACTIVOS."""
     try:
         conds_base = [
             Prestamo.cliente_id == Cliente.id,
-            Cliente.estado == "ACTIVO",
             Prestamo.estado == "APROBADO",
             Prestamo.total_financiamiento.isnot(None),
         ]
@@ -1234,7 +1226,7 @@ def _compute_composicion_morosidad(
         conds_base = [
             Cuota.prestamo_id == Prestamo.id,
             Prestamo.cliente_id == Cliente.id,
-            Cliente.estado == "ACTIVO",
+            # Cliente.estado == "ACTIVO",  # REMOVIDO para incluir clientes inactivos
             Prestamo.estado == "APROBADO",
             Cuota.fecha_pago.is_(None),
         ]
@@ -1345,7 +1337,7 @@ def _compute_cobranzas_semanales(
                 .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
                 .join(Cliente, Prestamo.cliente_id == Cliente.id)
                 .where(
-                    Cliente.estado == "ACTIVO",
+                    # Cliente.estado == "ACTIVO",  # REMOVIDO para incluir clientes inactivos
                     Prestamo.estado == "APROBADO",
                     Cuota.fecha_pago.isnot(None),
                     func.date(Cuota.fecha_pago) >= inicio_semana,
@@ -1358,7 +1350,7 @@ def _compute_cobranzas_semanales(
                 .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
                 .join(Cliente, Prestamo.cliente_id == Cliente.id)
                 .where(
-                    Cliente.estado == "ACTIVO",
+                    # Cliente.estado == "ACTIVO",  # REMOVIDO para incluir clientes inactivos
                     Prestamo.estado == "APROBADO",
                     Cuota.fecha_pago.isnot(None),
                     func.date(Cuota.fecha_pago) >= inicio_semana,
@@ -1425,7 +1417,7 @@ def _compute_morosidad_por_analista(
         conds = [
             Cuota.prestamo_id == Prestamo.id,
             Prestamo.cliente_id == Cliente.id,
-            Cliente.estado == "ACTIVO",
+            # Cliente.estado == "ACTIVO",  # REMOVIDO para incluir clientes inactivos
             Prestamo.estado == "APROBADO",
             Cuota.fecha_pago.is_(None),
             Cuota.fecha_vencimiento < hoy,
@@ -1528,7 +1520,7 @@ def get_evolucion_morosidad(
                 .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
                 .join(Cliente, Prestamo.cliente_id == Cliente.id)
                 .where(
-                    Cliente.estado == "ACTIVO",
+                    # Cliente.estado == "ACTIVO",  # REMOVIDO para incluir clientes inactivos
                     Prestamo.estado == "APROBADO",
                     Cuota.fecha_pago.is_(None),
                     Cuota.fecha_vencimiento < ref,
@@ -1570,7 +1562,7 @@ def get_evolucion_pagos(
                 .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
                 .join(Cliente, Prestamo.cliente_id == Cliente.id)
                 .where(
-                    Cliente.estado == "ACTIVO",
+                    # Cliente.estado == "ACTIVO",  # REMOVIDO para incluir clientes inactivos
                     Prestamo.estado == "APROBADO",
                     Cuota.fecha_pago.isnot(None),
                     func.date(Cuota.fecha_pago) >= inicio_mes,
@@ -1583,7 +1575,7 @@ def get_evolucion_pagos(
                 .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
                 .join(Cliente, Prestamo.cliente_id == Cliente.id)
                 .where(
-                    Cliente.estado == "ACTIVO",
+                    # Cliente.estado == "ACTIVO",  # REMOVIDO para incluir clientes inactivos
                     Prestamo.estado == "APROBADO",
                     Cuota.fecha_pago.isnot(None),
                     func.date(Cuota.fecha_pago) >= inicio_mes,
