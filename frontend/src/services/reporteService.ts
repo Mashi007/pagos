@@ -304,7 +304,7 @@ class ReporteService {
     const axiosInstance = apiClient.getAxiosInstance()
     const response = await axiosInstance.get(
       `${this.baseUrl}/exportar/cartera?${params.toString()}`,
-      { responseType: 'blob', timeout: 60000 }
+      { responseType: 'blob', timeout: 180000 }
     )
     return response.data as Blob
   }
@@ -408,7 +408,7 @@ class ReporteService {
     const axiosInstance = apiClient.getAxiosInstance()
     const response = await axiosInstance.get(
       `${this.baseUrl}/exportar/pagos?${params.toString()}`,
-      { responseType: 'blob', timeout: 60000 }
+      { responseType: 'blob', timeout: 180000 }
     )
     return response.data as Blob
   }
@@ -428,7 +428,7 @@ class ReporteService {
     const axiosInstance = apiClient.getAxiosInstance()
     const response = await axiosInstance.get(
       `${this.baseUrl}/exportar/morosidad?${params.toString()}`,
-      { responseType: 'blob', timeout: 60000 }
+      { responseType: 'blob', timeout: 180000 }
     )
     return response.data as Blob
   }
@@ -445,7 +445,7 @@ class ReporteService {
     const axiosInstance = apiClient.getAxiosInstance()
     const response = await axiosInstance.get(
       `${this.baseUrl}/exportar/financiero?${params.toString()}`,
-      { responseType: 'blob', timeout: 60000 }
+      { responseType: 'blob', timeout: 180000 }
     )
     return response.data as Blob
   }
@@ -465,7 +465,7 @@ class ReporteService {
     const axiosInstance = apiClient.getAxiosInstance()
     const response = await axiosInstance.get(
       `${this.baseUrl}/exportar/asesores?${params.toString()}`,
-      { responseType: 'blob', timeout: 60000 }
+      { responseType: 'blob', timeout: 180000 }
     )
     return response.data as Blob
   }
@@ -485,7 +485,7 @@ class ReporteService {
     const axiosInstance = apiClient.getAxiosInstance()
     const response = await axiosInstance.get(
       `${this.baseUrl}/exportar/productos?${params.toString()}`,
-      { responseType: 'blob', timeout: 60000 }
+      { responseType: 'blob', timeout: 180000 }
     )
     return response.data as Blob
   }
@@ -498,7 +498,7 @@ class ReporteService {
     const axiosInstance = apiClient.getAxiosInstance()
     const response = await axiosInstance.get(
       `${this.baseUrl}/exportar/cedula`,
-      { responseType: 'blob', timeout: 60000 }
+      { responseType: 'blob', timeout: 180000 }
     )
     return response.data as Blob
   }
@@ -514,7 +514,7 @@ class ReporteService {
       const axiosInstance = apiClient.getAxiosInstance()
       const response = await axiosInstance.get(url, {
         responseType: 'blob',
-        timeout: 60000,
+        timeout: 180000,
       })
 
       // Crear un enlace temporal para descargar

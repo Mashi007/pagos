@@ -4,7 +4,6 @@ import { motion } from 'framer-motion'
 import {
   FileText,
   Download,
-  PieChart,
   TrendingUp,
   Users,
   DollarSign,
@@ -29,7 +28,6 @@ const tiposReporte = [
   { value: 'MOROSIDAD', label: 'Morosidad', icon: TrendingUp },
   { value: 'PAGOS', label: 'Pagos', icon: Users },
   { value: 'ASESORES', label: 'Pago vencido', icon: UserCheck },
-  { value: 'PRODUCTOS', label: 'Productos', icon: PieChart },
   { value: 'CEDULA', label: 'Por cédula', icon: CreditCard },
 ]
 
@@ -138,11 +136,6 @@ export function Reportes() {
         descargarBlob(blob, `reporte_pago_vencido_${fechaCorte}.${ext}`)
         toast.dismiss(toastId)
         toast.success('✓ Reporte de Pago Vencido descargado exitosamente')
-      } else if (tipo === 'PRODUCTOS') {
-        const blob = await reporteService.exportarReporteProductos('excel', fechaCorte, filtros)
-        descargarBlob(blob, `reporte_productos_${fechaCorte}.${ext}`)
-        toast.dismiss(toastId)
-        toast.success('✓ Reporte de Productos descargado exitosamente')
       } else if (tipo === 'CEDULA') {
         const blob = await reporteService.exportarReporteCedula()
         descargarBlob(blob, `reporte_por_cedula_${fechaCorte}.${ext}`)
@@ -320,7 +313,7 @@ export function Reportes() {
             {tiposReporte.map((tipo) => {
               const IconComponent = tipo.icon
               const isGenerando = generandoReporte === tipo.value
-              const isDisponible = ['CARTERA', 'PAGOS', 'MOROSIDAD', 'ASESORES', 'PRODUCTOS', 'CEDULA'].includes(tipo.value)
+              const isDisponible = ['CARTERA', 'PAGOS', 'MOROSIDAD', 'ASESORES', 'CEDULA'].includes(tipo.value)
               const tieneAcceso = canAccessReport(tipo.value)
 
               return (

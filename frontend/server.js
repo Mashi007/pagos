@@ -181,8 +181,9 @@ if (API_URL) {
         proxyReq.setHeader('Cookie', req.headers.cookie);
       }
 
-      // Configurar timeout para evitar peticiones colgadas
-      proxyReq.setTimeout(60000); // 60 segundos
+      // Configurar timeout: 3 min para exportar reportes (morosidad, cartera, etc. con mucho dato), 60s resto
+      const isExportReport = (proxyReq.path || '').includes('/exportar/');
+      proxyReq.setTimeout(isExportReport ? 180000 : 60000);
     },
     onProxyRes: (proxyRes, req, res) => {
       const status = proxyRes.statusCode;

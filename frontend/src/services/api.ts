@@ -146,6 +146,11 @@ class ApiClient {
           this.requestCancellers.set(requestId, controller)
         }
 
+        // ✅ Exportar reportes (morosidad, cartera, pagos) puede tardar >60s con mucho dato
+        if (config.url?.includes('/exportar/') && (config.timeout == null || config.timeout < 180000)) {
+          config.timeout = 180000 // 3 minutos
+        }
+
         return config
       },
       (error) => {

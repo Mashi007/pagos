@@ -1188,56 +1188,42 @@ def get_morosidad_por_mes(
         promedio_dias_mora = sum(dias_list) / len(dias_list) if dias_list else 0
 
         morosidad_por_cedula: List[dict] = []
-        # Agrupar por cédula en lugar de analista
-        cedulas = db.execute(
-            select(Prestamo.cedula, Prestamo.nombres)
-            .select_from(Prestamo)
-            .where(Prestamo.id.in_(prestamos_ids))
-            .distinct()
-        ).fetchall()
-        
-        for cedula, nombres in cedulas:
-            if not cedula:
-                continue
-            ids_ced = db.execute(
-                select(Prestamo.id)
-                .where(Prestamo.cedula == cedula, Prestamo.id.in_(prestamos_ids))
-            ).fetchall()
-            ids_ced = [x[0] for x in ids_ced]
-            
-            monto_ced = _safe_float(
-                db.scalar(
-                    select(func.coalesce(func.sum(Cuota.monto), 0))
-                    .select_from(Cuota)
-                    .where(
-                        Cuota.fecha_pago.is_(None),
-                        Cuota.fecha_vencimiento < fc,
-                        Cuota.prestamo_id.in_(ids_ced)
-                    )
+        # Una sola consulta agrupada por cédula (evita N+1 con miles de cédulas)
+        if prestamos_ids:
+            from sqlalchemy import cast, Date
+            from sqlalchemy.sql import literal_column
+            # PostgreSQL: date - date da días como entero
+            fc_date = literal_column(f"'{fc}'::date")
+            dias_expr = fc_date - cast(Cuota.fecha_vencimiento, Date)
+            rows_cedula = db.execute(
+                select(
+                    Prestamo.cedula,
+                    Prestamo.nombres,
+                    func.count(func.distinct(Cuota.prestamo_id)).label("cantidad_prestamos"),
+                    func.coalesce(func.sum(Cuota.monto), 0).label("monto_total_mora"),
+                    func.avg(dias_expr).label("promedio_dias_mora"),
                 )
-            ) or 0
-            
-            cuotas_ced = db.execute(
-                select(Cuota.fecha_vencimiento)
                 .select_from(Cuota)
+                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
                 .where(
+                    Prestamo.id.in_(prestamos_ids),
+                    Prestamo.cedula.isnot(None),
+                    Prestamo.cedula != "",
                     Cuota.fecha_pago.is_(None),
                     Cuota.fecha_vencimiento < fc,
-                    Cuota.prestamo_id.in_(ids_ced)
                 )
+                .group_by(Prestamo.cedula, Prestamo.nombres)
+                .order_by(func.sum(Cuota.monto).desc())
             ).fetchall()
-            
-            dias_ced = [(fc - r.fecha_vencimiento).days for r in cuotas_ced]
-            prom_dias_ced = sum(dias_ced) / len(dias_ced) if dias_ced else 0
-            
-            morosidad_por_cedula.append({
-                "cedula": cedula,
-                "nombres": nombres,
-                "cantidad_prestamos": len(ids_ced),
-                "cantidad_clientes": 1,  # Una cédula = una persona
-                "monto_total_mora": monto_ced,
-                "promedio_dias_mora": prom_dias_ced,
-            })
+            for r in rows_cedula:
+                morosidad_por_cedula.append({
+                    "cedula": r.cedula or "",
+                    "nombres": r.nombres or "",
+                    "cantidad_prestamos": r.cantidad_prestamos or 0,
+                    "cantidad_clientes": 1,
+                    "monto_total_mora": round(_safe_float(r.monto_total_mora), 2),
+                    "promedio_dias_mora": round(_safe_float(r.promedio_dias_mora), 1),
+                })
 
         resultado["meses"].append({
             "mes": mes,
