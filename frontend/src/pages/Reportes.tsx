@@ -11,28 +11,23 @@ import {
   DollarSign,
   RefreshCw,
   Loader2,
+  UserCheck,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { getErrorMessage, getErrorDetail } from '../types/errors'
 import { Button } from '../components/ui/button'
 import { formatCurrency } from '../utils'
 import { reporteService } from '../services/reporteService'
-import { TablaAmortizacionCompleta } from '../components/reportes/TablaAmortizacionCompleta'
-import { InformePagoVencido } from '../components/reportes/InformePagoVencido'
-import { ReportePagos } from '../components/reportes/ReportePagos'
-import { ReporteProductos } from '../components/reportes/ReporteProductos'
-import { ReporteAsesores } from '../components/reportes/ReporteAsesores'
-import { CuentasPorCobrar } from '../components/reportes/CuentasPorCobrar'
-import { LazyReporteSection } from '../components/reportes/LazyReporteSection'
 import { useReportesRefreshSchedule } from '../hooks/useReportesRefreshSchedule'
 import { toast } from 'sonner'
 
+/** Cada icono = un reporte. Click = descarga Excel con distribución según backend. */
 const tiposReporte = [
   { value: 'CARTERA', label: 'Cuentas por cobrar', icon: DollarSign },
   { value: 'MOROSIDAD', label: 'Pago vencido', icon: TrendingUp },
   { value: 'PAGOS', label: 'Pagos', icon: Users },
   { value: 'FINANCIERO', label: 'Financiero', icon: BarChart3 },
-  { value: 'ASESORES', label: 'Asesores', icon: Users },
+  { value: 'ASESORES', label: 'Asesores', icon: UserCheck },
   { value: 'PRODUCTOS', label: 'Productos', icon: PieChart },
 ]
 
@@ -278,75 +273,44 @@ export function Reportes() {
         </Card>
       </div>
 
-      {/* Reportes: Informe Pago Vencido carga al inicio; el resto con lazy loading al hacer scroll */}
-      <section className="space-y-8">
-        <InformePagoVencido />
-        <LazyReporteSection label="Pagos">
-          <ReportePagos />
-        </LazyReporteSection>
-        <LazyReporteSection label="Productos">
-          <ReporteProductos />
-        </LazyReporteSection>
-        <LazyReporteSection label="Asesores">
-          <ReporteAsesores />
-        </LazyReporteSection>
-        <LazyReporteSection label="Cuentas por cobrar">
-          <CuentasPorCobrar />
-        </LazyReporteSection>
-        <LazyReporteSection label="Tabla de amortización">
-          <TablaAmortizacionCompleta />
-        </LazyReporteSection>
-      </section>
-
-      {/* Descargar reportes: grid balanceado 2x3 o 3x2 */}
+      {/* Reportes: solo iconos. Click = descarga Excel con distribución según backend. */}
       <Card className="shadow-sm">
         <CardHeader>
           <CardTitle className="flex items-center">
             <FileText className="mr-2 h-5 w-5" aria-hidden />
             Descargar reportes
           </CardTitle>
-          <CardDescription>
-            Haz clic en el icono de descarga para generar y descargar el reporte en Excel.
-          </CardDescription>
+          <p className="text-sm text-muted-foreground">
+            Haz clic en un icono para descargar el reporte en Excel.
+          </p>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-6">
             {tiposReporte.map((tipo) => {
               const IconComponent = tipo.icon
               const isGenerando = generandoReporte === tipo.value
               const isDisponible = ['CARTERA', 'PAGOS', 'MOROSIDAD', 'FINANCIERO', 'ASESORES', 'PRODUCTOS'].includes(tipo.value)
 
               return (
-                <div
+                <button
                   key={tipo.value}
-                  className={`flex items-center justify-between rounded-lg border p-4 min-h-[72px] transition-colors ${
-                    isDisponible ? 'hover:bg-gray-50 cursor-pointer' : 'opacity-60'
+                  type="button"
+                  disabled={!isDisponible || isGenerando}
+                  onClick={() => generarReporte(tipo.value)}
+                  title={`Descargar ${tipo.label} en Excel`}
+                  className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all min-h-[100px] ${
+                    isDisponible
+                      ? 'hover:bg-blue-50 hover:border-blue-200 cursor-pointer hover:scale-105'
+                      : 'opacity-50 cursor-not-allowed'
                   }`}
+                  aria-label={`Descargar reporte ${tipo.label} en Excel`}
                 >
-                  <div className="flex items-center gap-3">
-                    <IconComponent className="h-6 w-6 text-blue-600" aria-hidden />
-                    <span className="font-medium">{tipo.label}</span>
-                  </div>
-                  {isDisponible ? (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      disabled={isGenerando}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        generarReporte(tipo.value)
-                      }}
-                      title="Descargar Excel"
-                      aria-label={`Descargar reporte ${tipo.label} en Excel`}
-                    >
-                      {isGenerando ? (
-                        <Loader2 className="h-5 w-5 animate-spin text-blue-600" aria-hidden />
-                      ) : (
-                        <Download className="h-5 w-5 text-green-600" aria-hidden />
-                      )}
-                    </Button>
-                  ) : null}
-                </div>
+                  {isGenerando ? (
+                    <Loader2 className="h-12 w-12 animate-spin text-blue-600" aria-hidden />
+                  ) : (
+                    <IconComponent className="h-12 w-12 text-blue-600" aria-hidden />
+                  )}
+                </button>
               )
             })}
           </div>
