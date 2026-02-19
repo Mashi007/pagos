@@ -1,7 +1,7 @@
 """
 Endpoints del dashboard. Usa datos reales de la BD cuando existen (clientes);
 el resto permanece stub hasta tener modelos de préstamos/pagos/cuotas.
-Caché de dashboard/admin: se actualiza 3 veces al día (6:00, 13:00, 16:00) para cargas rápidas.
+Caché de dashboard/admin: se actualiza 2 veces al día (1:00, 13:00) para cargas rápidas.
 
 CONCEPTO PAGO VENCIDO Y MOROSO (terminología unificada):
 - Pago vencido = cuotas vencidas y no pagadas (fecha_vencimiento < hoy).
@@ -31,7 +31,7 @@ from app.models.prestamo import Prestamo
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
-# Caché para todos los gráficos del dashboard. Se actualiza a las 6:00, 13:00, 16:00 (hora local).
+# Caché para todos los gráficos del dashboard. Se actualiza a las 1:00, 13:00 (hora local).
 _DASHBOARD_ADMIN_CACHE: dict[str, Any] = {"data": None, "refreshed_at": None}
 _CACHE_KPIS: dict[str, Any] = {"data": None, "refreshed_at": None}
 _CACHE_MOROSIDAD_DIA: dict[str, Any] = {"data": None, "refreshed_at": None}
@@ -39,7 +39,7 @@ _CACHE_FINANCIAMIENTO_RANGOS: dict[str, Any] = {"data": None, "refreshed_at": No
 _CACHE_COMPOSICION_MOROSIDAD: dict[str, Any] = {"data": None, "refreshed_at": None}
 _CACHE_COBRANZAS_SEMANALES: dict[str, Any] = {"data": None, "refreshed_at": None}
 _CACHE_MOROSIDAD_ANALISTA: dict[str, Any] = {"data": None, "refreshed_at": None}
-_CACHE_REFRESH_HOURS = (6, 13, 16)  # 6 AM, 1 PM, 4 PM (hora local del servidor)
+_CACHE_REFRESH_HOURS = (1, 13)  # 1 AM, 1 PM (hora local del servidor) - actualización automática de informes
 _lock = threading.Lock()
 
 # Límite de longitud para filtros de texto (auditoría: evitar abuso/consultas inesperadas)
@@ -375,7 +375,7 @@ def get_kpis_principales(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """KPIs principales. Con caché 3 veces/día (6:00, 13:00, 16:00) cuando no se envían fechas ni filtros."""
+    """KPIs principales. Con caché 2 veces/día (1:00, 13:00) cuando no se envían fechas ni filtros."""
     analista = _sanitize_filter_string(analista)
     concesionario = _sanitize_filter_string(concesionario)
     modelo = _sanitize_filter_string(modelo)
@@ -432,7 +432,7 @@ def _meses_desde_rango(fecha_inicio: date, fecha_fin: date) -> list[dict]:
 
 
 def _next_refresh_local() -> datetime:
-    """Próxima hora de refresco: 6:00, 13:00 o 16:00 (hora local del servidor)."""
+    """Próxima hora de refresco: 1:00 o 13:00 (hora local del servidor)."""
     now = datetime.now()
     candidates = []
     for h in _CACHE_REFRESH_HOURS:
@@ -557,7 +557,7 @@ def _refresh_dashboard_admin_cache() -> None:
         with _lock:
             _DASHBOARD_ADMIN_CACHE["data"] = data
             _DASHBOARD_ADMIN_CACHE["refreshed_at"] = datetime.now()
-        logger.info("Caché dashboard/admin actualizada (6:00 / 13:00 / 16:00).")
+        logger.info("Caché dashboard/admin actualizada (1:00 / 13:00).")
     except Exception as e:
         logger.exception("Error al actualizar caché dashboard/admin: %s", e)
     finally:
@@ -565,7 +565,7 @@ def _refresh_dashboard_admin_cache() -> None:
 
 
 def _refresh_all_dashboard_caches() -> None:
-    """Actualiza todas las cachés de gráficos del dashboard (6:00, 13:00, 16:00)."""
+    """Actualiza todas las cachés de gráficos del dashboard (1:00, 13:00)."""
     _refresh_dashboard_admin_cache()
     db = SessionLocal()
     try:
@@ -617,13 +617,13 @@ def _refresh_all_dashboard_caches() -> None:
                 _CACHE_MOROSIDAD_ANALISTA["refreshed_at"] = datetime.now()
         except Exception as e:
             logger.exception("Error al actualizar caché morosidad-por-analista: %s", e)
-        logger.info("Cachés de gráficos del dashboard actualizadas (6:00 / 13:00 / 16:00).")
+        logger.info("Cachés de gráficos del dashboard actualizadas (1:00 / 13:00).")
     finally:
         db.close()
 
 
 def _dashboard_cache_worker() -> None:
-    """Worker que refresca todas las cachés del dashboard a las 6:00, 13:00 y 16:00 (hora local)."""
+    """Worker que refresca todas las cachés del dashboard a las 1:00 y 13:00 (hora local)."""
     while True:
         try:
             next_refresh = _next_refresh_local()
@@ -639,10 +639,10 @@ def _dashboard_cache_worker() -> None:
 
 
 def start_dashboard_cache_refresh() -> None:
-    """Inicia el hilo que actualiza la caché del dashboard a las 6:00, 13:00 y 16:00."""
+    """Inicia el hilo que actualiza la caché del dashboard a las 1:00 y 13:00."""
     t = threading.Thread(target=_dashboard_cache_worker, daemon=True)
     t.start()
-    logger.info("Worker de caché dashboard iniciado (refresh 6:00, 13:00, 16:00).")
+    logger.info("Worker de caché dashboard iniciado (refresh 1:00, 13:00).")
 
 
 @router.get("/admin")
@@ -652,7 +652,7 @@ def get_dashboard_admin(
     fecha_fin: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Dashboard admin: evolucion_mensual desde tabla cuotas. Con caché 3 veces/día (6:00, 13:00, 16:00) cuando no se envían fechas."""
+    """Dashboard admin: evolucion_mensual desde tabla cuotas. Con caché 2 veces/día (1:00, 13:00) cuando no se envían fechas."""
     use_cache = not (fecha_inicio and fecha_fin)
     if use_cache:
         with _lock:
@@ -768,7 +768,7 @@ def get_morosidad_por_dia(
     dias: Optional[int] = Query(30, ge=7, le=90),
     db: Session = Depends(get_db),
 ):
-    """Morosidad por día. Con caché 3 veces/día (6:00, 13:00, 16:00) cuando no se envían fechas."""
+    """Morosidad por día. Con caché 2 veces/día (1:00, 13:00) cuando no se envían fechas."""
     use_cache = not (fecha_inicio and fecha_fin)
     if use_cache:
         with _lock:
@@ -1186,7 +1186,7 @@ def get_financiamiento_por_rangos(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Bandas por total_financiamiento. Con caché 3 veces/día (6:00, 13:00, 16:00) cuando no se envían filtros."""
+    """Bandas por total_financiamiento. Con caché 2 veces/día (1:00, 13:00) cuando no se envían filtros."""
     analista = _sanitize_filter_string(analista)
     concesionario = _sanitize_filter_string(concesionario)
     modelo = _sanitize_filter_string(modelo)
@@ -1283,7 +1283,7 @@ def get_composicion_morosidad(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Composición de morosidad. Con caché 3 veces/día (6:00, 13:00, 16:00) cuando no se envían filtros."""
+    """Composición de morosidad. Con caché 2 veces/día (1:00, 13:00) cuando no se envían filtros."""
     analista = _sanitize_filter_string(analista)
     concesionario = _sanitize_filter_string(concesionario)
     modelo = _sanitize_filter_string(modelo)
@@ -1380,7 +1380,7 @@ def get_cobranzas_semanales(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Cobranzas semanales. Con caché 3 veces/día (6:00, 13:00, 16:00) cuando no se envían filtros."""
+    """Cobranzas semanales. Con caché 2 veces/día (1:00, 13:00) cuando no se envían filtros."""
     analista = _sanitize_filter_string(analista)
     concesionario = _sanitize_filter_string(concesionario)
     modelo = _sanitize_filter_string(modelo)
@@ -1471,7 +1471,7 @@ def get_morosidad_por_analista(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Morosidad por analista. Con caché 3 veces/día (6:00, 13:00, 16:00) cuando no se envían filtros."""
+    """Morosidad por analista. Con caché 2 veces/día (1:00, 13:00) cuando no se envían filtros."""
     analista = _sanitize_filter_string(analista)
     concesionario = _sanitize_filter_string(concesionario)
     modelo = _sanitize_filter_string(modelo)

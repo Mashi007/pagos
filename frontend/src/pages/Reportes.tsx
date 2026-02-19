@@ -13,18 +13,21 @@ import {
   Loader2,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card'
-import { Badge } from '../components/ui/badge'
 import { getErrorMessage, getErrorDetail } from '../types/errors'
 import { Button } from '../components/ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
 import { formatCurrency } from '../utils'
 import { reporteService } from '../services/reporteService'
 import { TablaAmortizacionCompleta } from '../components/reportes/TablaAmortizacionCompleta'
+import { InformePagoVencido } from '../components/reportes/InformePagoVencido'
+import { ReportePagos } from '../components/reportes/ReportePagos'
+import { ReporteProductos } from '../components/reportes/ReporteProductos'
+import { ReporteAsesores } from '../components/reportes/ReporteAsesores'
+import { CuentasPorCobrar } from '../components/reportes/CuentasPorCobrar'
+import { useReportesRefreshSchedule } from '../hooks/useReportesRefreshSchedule'
 import { toast } from 'sonner'
 
 const tiposReporte = [
-  { value: 'CARTERA', label: 'Cartera', icon: DollarSign },
+  { value: 'CARTERA', label: 'Cuentas por cobrar', icon: DollarSign },
   { value: 'MOROSIDAD', label: 'Pago vencido', icon: TrendingUp },
   { value: 'PAGOS', label: 'Pagos', icon: Users },
   { value: 'FINANCIERO', label: 'Financiero', icon: BarChart3 },
@@ -32,17 +35,12 @@ const tiposReporte = [
   { value: 'PRODUCTOS', label: 'Productos', icon: PieChart },
 ]
 
-// Validación de cédula venezolana
-const validarCedula = (cedula: string): boolean => {
-  if (!cedula || cedula.trim().length === 0) return false
-  // Formato: E/V/J/Z seguido de 6-12 dígitos
-  return /^[VEJZ]\d{6,12}$/i.test(cedula.trim())
-}
-
 export function Reportes() {
-  const [formatoExportacion, setFormatoExportacion] = useState<'excel' | 'pdf'>('excel')
   const [generandoReporte, setGenerandoReporte] = useState<string | null>(null)
   const queryClient = useQueryClient()
+
+  // Invalidar reportes a la 1 AM y 1 PM (hora local) para actualización automática desde BD
+  useReportesRefreshSchedule()
 
   // Obtener resumen del dashboard para KPIs
   const {
@@ -56,7 +54,7 @@ export function Reportes() {
     staleTime: 2 * 60 * 1000, // 2 minutos - datos más frescos
     retry: 2, // Dos reintentos para asegurar conexión
     refetchOnWindowFocus: true, // Recargar cuando la ventana recupera el foco
-    refetchInterval: 5 * 60 * 1000, // Refrescar cada 5 minutos automáticamente
+    refetchInterval: 30 * 60 * 1000, // Refrescar cada 30 min; además se invalida a la 1 AM y 1 PM
   })
 
   // Descargar blob como archivo
@@ -71,17 +69,17 @@ export function Reportes() {
     window.URL.revokeObjectURL(url)
   }
 
-  // Funciones para generar reportes (datos reales desde BD; descarga Excel o PDF según corresponda)
-  const generarReporte = async (tipo: string, formato: 'excel' | 'pdf' = 'excel') => {
+  // Generar reporte: siempre descarga Excel al hacer clic en el icono
+  const generarReporte = async (tipo: string) => {
     try {
       setGenerandoReporte(tipo)
       toast.loading(`Generando reporte de ${tipo}...`)
 
       const fechaCorte = new Date().toISOString().split('T')[0]
-      const ext = formato === 'excel' ? 'xlsx' : 'pdf'
+      const ext = 'xlsx'
 
       if (tipo === 'CARTERA') {
-        const blob = await reporteService.exportarReporteCartera(formato, fechaCorte)
+        const blob = await reporteService.exportarReporteCartera('excel', fechaCorte)
         descargarBlob(blob, `reporte_cartera_${fechaCorte}.${ext}`)
         toast.dismiss()
         toast.success(`Reporte de ${tipo} descargado`)
@@ -93,29 +91,29 @@ export function Reportes() {
         fechaInicio.setMonth(fechaInicio.getMonth() - 1)
         const fi = fechaInicio.toISOString().split('T')[0]
         const ff = fechaFin.toISOString().split('T')[0]
-        const blob = await reporteService.exportarReportePagos(fi, ff, formato)
+        const blob = await reporteService.exportarReportePagos(fi, ff, 'excel')
         descargarBlob(blob, `reporte_pagos_${fi}_${ff}.${ext}`)
         toast.dismiss()
         toast.success(`Reporte de ${tipo} descargado`)
         queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
         queryClient.invalidateQueries({ queryKey: ['kpis'] })
       } else if (tipo === 'MOROSIDAD') {
-        const blob = await reporteService.exportarReporteMorosidad(formato, fechaCorte)
+        const blob = await reporteService.exportarReporteMorosidad('excel', fechaCorte)
         descargarBlob(blob, `reporte_morosidad_${fechaCorte}.${ext}`)
         toast.dismiss()
         toast.success(`Reporte de ${tipo} descargado`)
       } else if (tipo === 'FINANCIERO') {
-        const blob = await reporteService.exportarReporteFinanciero(formato, fechaCorte)
+        const blob = await reporteService.exportarReporteFinanciero('excel', fechaCorte)
         descargarBlob(blob, `reporte_financiero_${fechaCorte}.${ext}`)
         toast.dismiss()
         toast.success(`Reporte de ${tipo} descargado`)
       } else if (tipo === 'ASESORES') {
-        const blob = await reporteService.exportarReporteAsesores(formato, fechaCorte)
+        const blob = await reporteService.exportarReporteAsesores('excel', fechaCorte)
         descargarBlob(blob, `reporte_asesores_${fechaCorte}.${ext}`)
         toast.dismiss()
         toast.success(`Reporte de ${tipo} descargado`)
       } else if (tipo === 'PRODUCTOS') {
-        const blob = await reporteService.exportarReporteProductos(formato, fechaCorte)
+        const blob = await reporteService.exportarReporteProductos('excel', fechaCorte)
         descargarBlob(blob, `reporte_productos_${fechaCorte}.${ext}`)
         toast.dismiss()
         toast.success(`Reporte de ${tipo} descargado`)
@@ -163,7 +161,12 @@ export function Reportes() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Centro de Reportes</h1>
-          <p className="text-gray-600">Genera y descarga reportes detallados del sistema.</p>
+          <p className="text-gray-600">
+            Genera y descarga reportes detallados del sistema. Datos en tiempo real desde la base de datos.
+          </p>
+          <p className="text-sm text-gray-500 mt-1">
+            Actualización automática: 1:00 AM y 1:00 PM (hora local).
+          </p>
         </div>
         <Button
           variant="outline"
@@ -271,151 +274,75 @@ export function Reportes() {
         </Card>
       </div>
 
+      {/* Informe Pago Vencido por rangos de días */}
+      <InformePagoVencido />
+
+      {/* Reporte Pagos por mes/año */}
+      <ReportePagos />
+
+      {/* Reporte Productos por mes */}
+      <ReporteProductos />
+
+      {/* Reporte Asesores por mes */}
+      <ReporteAsesores />
+
+      {/* Cuentas por cobrar: pestañas por mes, por día cuándo debe cobrar */}
+      <CuentasPorCobrar />
+
       {/* Tabla de Amortización Completa */}
       <TablaAmortizacionCompleta />
 
-      {/* Generate Report Section */}
+      {/* Descargar reportes: icono → siempre Excel */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">
-            <RefreshCw className="mr-2 h-5 w-5" /> Generar Nuevo Reporte
+            <FileText className="mr-2 h-5 w-5" />
+            Descargar reportes
           </CardTitle>
           <CardDescription>
-            Selecciona el formato de descarga (Excel o PDF) y el tipo de reporte. Los datos se generan en tiempo real desde la base de datos.
+            Haz clic en el icono de descarga para generar y descargar el reporte en Excel.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-4 mb-4">
-            <span className="text-sm font-medium text-gray-700">Formato de descarga:</span>
-            <Select value={formatoExportacion} onValueChange={(v: 'excel' | 'pdf') => setFormatoExportacion(v)}>
-              <SelectTrigger className="w-[140px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="excel">Excel (.xlsx)</SelectItem>
-                <SelectItem value="pdf">PDF</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {tiposReporte.map((tipo) => {
               const IconComponent = tipo.icon
               const isGenerando = generandoReporte === tipo.value
               const isDisponible = ['CARTERA', 'PAGOS', 'MOROSIDAD', 'FINANCIERO', 'ASESORES', 'PRODUCTOS'].includes(tipo.value)
 
               return (
-                <Card
+                <div
                   key={tipo.value}
-                  className={`cursor-pointer hover:shadow-md transition-shadow ${
-                    !isDisponible ? 'opacity-60' : ''
+                  className={`flex items-center justify-between rounded-lg border p-4 ${
+                    isDisponible ? 'hover:bg-gray-50 cursor-pointer' : 'opacity-60'
                   }`}
-                  onClick={() => {
-                    if (isDisponible && !isGenerando) {
-                      generarReporte(tipo.value, formatoExportacion)
-                    } else if (!isDisponible) {
-                      toast.info(`El reporte de ${tipo.label} estará disponible próximamente`)
-                    }
-                  }}
                 >
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
-                        <IconComponent className="h-8 w-8 text-blue-600" />
-                        <div>
-                          <h3 className="font-semibold">{tipo.label}</h3>
-                          <p className="text-sm text-gray-600">
-                            {isGenerando ? 'Generando...' : 'Generar reporte'}
-                          </p>
-                        </div>
-                      </div>
-                      {isGenerando && (
+                  <div className="flex items-center gap-3">
+                    <IconComponent className="h-6 w-6 text-blue-600" />
+                    <span className="font-medium">{tipo.label}</span>
+                  </div>
+                  {isDisponible ? (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      disabled={isGenerando}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        generarReporte(tipo.value)
+                      }}
+                      title="Descargar Excel"
+                    >
+                      {isGenerando ? (
                         <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+                      ) : (
+                        <Download className="h-5 w-5 text-green-600" />
                       )}
-                    </div>
-                  </CardContent>
-                </Card>
+                    </Button>
+                  ) : null}
+                </div>
               )
             })}
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Reportes disponibles - datos reales desde BD */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <FileText className="mr-2 h-5 w-5" />
-            Reportes disponibles
-          </CardTitle>
-          <CardDescription>
-            Todos los reportes se generan en tiempo real desde la base de datos. Seleccione el tipo, formato (Excel o PDF) y descargue.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Tipo</TableHead>
-                <TableHead>Descripción</TableHead>
-                <TableHead className="text-right">Excel</TableHead>
-                <TableHead className="text-right">PDF</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {tiposReporte.map((tipo) => {
-                const IconComponent = tipo.icon
-                const isGenerando = generandoReporte === tipo.value
-                const isDisponible = ['CARTERA', 'PAGOS', 'MOROSIDAD', 'FINANCIERO', 'ASESORES', 'PRODUCTOS'].includes(tipo.value)
-                const descripciones: Record<string, string> = {
-                  CARTERA: 'Cartera total, capital pendiente, mora, distribución por monto y mora',
-                  PAGOS: 'Total pagos, cantidad y detalle por día en el período',
-                  MOROSIDAD: 'Préstamos en mora, clientes, monto, por analista',
-                  FINANCIERO: 'Ingresos, cartera, morosidad, flujo de caja',
-                  ASESORES: 'Resumen por analista: préstamos, cartera, morosidad, cobrado',
-                  PRODUCTOS: 'Resumen por producto y por concesionario',
-                }
-                return (
-                  <TableRow key={tipo.value}>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <IconComponent className="h-4 w-4 text-blue-600" />
-                        <span className="font-medium">{tipo.label}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-gray-600 text-sm">{descripciones[tipo.value] || '—'}</TableCell>
-                    <TableCell className="text-right">
-                      {isDisponible ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={isGenerando}
-                          onClick={() => generarReporte(tipo.value, 'excel')}
-                        >
-                          {isGenerando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                        </Button>
-                      ) : (
-                        <span className="text-gray-400 text-sm">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {isDisponible ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={isGenerando}
-                          onClick={() => generarReporte(tipo.value, 'pdf')}
-                        >
-                          {isGenerando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                        </Button>
-                      ) : (
-                        <span className="text-gray-400 text-sm">—</span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
         </CardContent>
       </Card>
     </motion.div>

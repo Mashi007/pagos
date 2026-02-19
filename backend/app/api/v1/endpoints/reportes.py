@@ -3,6 +3,7 @@ Endpoints de reportes. Datos reales desde BD.
 Dashboard resumen, cartera, pagos, morosidad, financiero, asesores, productos.
 Exportación Excel y PDF para cada tipo según corresponda.
 """
+import calendar
 import io
 from datetime import date, datetime, timezone, timedelta
 from typing import Any, List, Optional
@@ -16,6 +17,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.cliente import Cliente
 from app.models.cuota import Cuota
+from app.models.pago import Pago
 from app.models.prestamo import Prestamo
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -416,6 +418,64 @@ def _datos_cartera(db: Session, fecha_corte: date) -> dict:
     }
 
 
+@router.get("/cartera/por-mes")
+def get_cartera_por_mes(
+    db: Session = Depends(get_db),
+    meses: int = Query(12, ge=1, le=24, description="Cantidad de meses hacia atrás"),
+):
+    """Cuentas por cobrar: una pestaña por mes. Por día: cuándo debe cobrar (fecha vencimiento, monto pendiente)."""
+    hoy = date.today()
+    resultado: dict = {"meses": []}
+
+    for i in range(meses):
+        año = hoy.year
+        mes = hoy.month - i
+        while mes <= 0:
+            mes += 12
+            año -= 1
+        inicio = date(año, mes, 1)
+        _, ultimo = calendar.monthrange(año, mes)
+        fin = date(año, mes, ultimo)
+
+        rows = db.execute(
+            select(
+                Cuota.fecha_vencimiento,
+                func.coalesce(func.sum(Cuota.monto), 0).label("monto_cobrar"),
+                func.count(Cuota.id).label("cantidad_cuotas"),
+            )
+            .select_from(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(
+                Cliente.estado == "ACTIVO",
+                Prestamo.estado == "APROBADO",
+                Cuota.fecha_pago.is_(None),
+                Cuota.fecha_vencimiento >= inicio,
+                Cuota.fecha_vencimiento <= fin,
+            )
+            .group_by(Cuota.fecha_vencimiento)
+            .order_by(Cuota.fecha_vencimiento)
+        ).fetchall()
+
+        items = [
+            {
+                "fecha": r.fecha_vencimiento.isoformat() if r.fecha_vencimiento else None,
+                "monto_cobrar": round(_safe_float(r.monto_cobrar), 2),
+                "cantidad_cuotas": r.cantidad_cuotas or 0,
+            }
+            for r in rows
+        ]
+
+        resultado["meses"].append({
+            "mes": mes,
+            "año": año,
+            "label": f"{mes:02d}/{año}",
+            "items": items,
+        })
+
+    return resultado
+
+
 @router.get("/cartera")
 def get_reporte_cartera(
     db: Session = Depends(get_db),
@@ -581,6 +641,70 @@ def get_reporte_pagos(
             for r in pagos_por_dia
         ],
     }
+
+
+@router.get("/pagos/por-mes")
+def get_pagos_por_mes(
+    db: Session = Depends(get_db),
+    meses: int = Query(12, ge=1, le=24, description="Cantidad de meses hacia atrás"),
+):
+    """Pagos agrupados por mes/año. Cada mes tiene lista de pagos: Fecha, id préstamo, cédula, nombre, monto, documento. Orden descendente por fecha."""
+    hoy = date.today()
+    resultado: dict = {"meses": []}
+
+    for i in range(meses):
+        año = hoy.year
+        mes = hoy.month - i
+        while mes <= 0:
+            mes += 12
+            año -= 1
+        inicio = date(año, mes, 1)
+        _, ultimo = calendar.monthrange(año, mes)
+        fin = date(año, mes, ultimo)
+
+        q = (
+            select(
+                Pago.id,
+                Pago.fecha_pago,
+                Pago.prestamo_id,
+                Pago.cedula_cliente,
+                Pago.monto_pagado,
+                Pago.numero_documento,
+                func.coalesce(Prestamo.nombres, Cliente.nombres).label("nombres"),
+            )
+            .select_from(Pago)
+            .outerjoin(Prestamo, Pago.prestamo_id == Prestamo.id)
+            .outerjoin(Cliente, Pago.cedula_cliente == Cliente.cedula)
+            .where(
+                func.date(Pago.fecha_pago) >= inicio,
+                func.date(Pago.fecha_pago) <= fin,
+            )
+            .order_by(Pago.fecha_pago.desc())
+        )
+        rows = db.execute(q).fetchall()
+
+        items = []
+        for r in rows:
+            fp = r.fecha_pago
+            fecha_str = fp.date().isoformat() if hasattr(fp, "date") else (fp.isoformat()[:10] if fp else None)
+            items.append({
+                "pago_id": r.id,
+                "fecha": fecha_str,
+                "prestamo_id": r.prestamo_id,
+                "cedula": r.cedula_cliente or "",
+                "nombre": (r.nombres or "").strip(),
+                "monto_pago": _safe_float(r.monto_pagado),
+                "documento": r.numero_documento or "",
+            })
+
+        resultado["meses"].append({
+            "mes": mes,
+            "año": año,
+            "label": f"{mes:02d}/{año}",
+            "items": items,
+        })
+
+    return resultado
 
 
 def _generar_excel_pagos(data: dict) -> bytes:
@@ -762,6 +886,124 @@ def get_reporte_morosidad(
         "morosidad_por_analista": morosidad_por_analista,
         "detalle_prestamos": detalle,
     }
+
+
+# Rangos de días atrasados para informe pago vencido en pestañas
+RANGOS_ATRASO = [
+    {"key": "1_dia", "label": "1 día atrasado", "min_dias": 1, "max_dias": 14},
+    {"key": "15_dias", "label": "15 días atrasado", "min_dias": 15, "max_dias": 29},
+    {"key": "30_dias", "label": "30 días atrasado", "min_dias": 30, "max_dias": 59},
+    {"key": "2_meses", "label": "2 meses atrasado", "min_dias": 60, "max_dias": 60},
+    {"key": "61_dias", "label": "Más de 61 días", "min_dias": 61, "max_dias": 99999},
+]
+
+
+@router.get("/morosidad/por-rangos")
+def get_morosidad_por_rangos(
+    db: Session = Depends(get_db),
+    fecha_corte: Optional[str] = Query(None),
+):
+    """Informe pago vencido por rangos de días. Datos para viñetas: cédula, nombres, total financiamiento,
+    pagos totales, saldo, último pago (fecha), próximo pago (fecha). Una pestaña por rango."""
+    fc = _parse_fecha(fecha_corte)
+    subq_mora = (
+        select(Cuota.prestamo_id)
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(
+            Cliente.estado == "ACTIVO",
+            Prestamo.estado == "APROBADO",
+            Cuota.fecha_pago.is_(None),
+            Cuota.fecha_vencimiento < fc,
+        )
+        .distinct()
+    )
+    prestamos_ids = [r[0] for r in db.execute(subq_mora).fetchall()]
+
+    resultado: dict = {"fecha_corte": fc.isoformat(), "rangos": {}}
+
+
+    for rango in RANGOS_ATRASO:
+        min_d, max_d = rango["min_dias"], rango["max_dias"]
+        items: List[dict] = []
+
+        for pid in prestamos_ids:
+            p = db.get(Prestamo, pid)
+            if not p:
+                continue
+
+            primera = db.execute(
+                select(func.min(Cuota.fecha_vencimiento))
+                .select_from(Cuota)
+                .where(
+                    Cuota.prestamo_id == pid,
+                    Cuota.fecha_pago.is_(None),
+                    Cuota.fecha_vencimiento < fc,
+                )
+            ).scalar()
+            if not primera:
+                continue
+            dias_atraso = (fc - primera).days
+            if dias_atraso < min_d or dias_atraso > max_d:
+                continue
+
+            saldo = _safe_float(
+                db.scalar(
+                    select(func.coalesce(func.sum(Cuota.monto), 0))
+                    .select_from(Cuota)
+                    .where(
+                        Cuota.prestamo_id == pid,
+                        Cuota.fecha_pago.is_(None),
+                    )
+                )
+            ) or 0
+
+            pagos_totales = _safe_float(
+                db.scalar(
+                    select(func.coalesce(func.sum(Cuota.total_pagado), 0))
+                    .select_from(Cuota)
+                    .where(Cuota.prestamo_id == pid)
+                )
+            ) or 0
+
+            ultimo_pago = db.execute(
+                select(func.max(Cuota.fecha_pago))
+                .select_from(Cuota)
+                .where(Cuota.prestamo_id == pid, Cuota.fecha_pago.isnot(None))
+            ).scalar()
+
+            proximo_pago = db.execute(
+                select(func.min(Cuota.fecha_vencimiento))
+                .select_from(Cuota)
+                .where(Cuota.prestamo_id == pid, Cuota.fecha_pago.is_(None))
+            ).scalar()
+
+            def _fecha_iso(d):
+                if d is None:
+                    return None
+                if hasattr(d, "date"):
+                    d = d.date() if callable(getattr(d, "date", None)) else d
+                return d.isoformat()[:10] if hasattr(d, "isoformat") else str(d)[:10]
+
+            items.append({
+                "prestamo_id": pid,
+                "cedula": p.cedula or "",
+                "nombres": p.nombres or "",
+                "total_financiamiento": _safe_float(p.total_financiamiento),
+                "pagos_totales": pagos_totales,
+                "saldo": saldo,
+                "ultimo_pago_fecha": _fecha_iso(ultimo_pago),
+                "proximo_pago_fecha": _fecha_iso(proximo_pago),
+                "dias_atraso": dias_atraso,
+            })
+
+        resultado["rangos"][rango["key"]] = {
+            "label": rango["label"],
+            "items": items,
+        }
+
+    return resultado
 
 
 def _generar_excel_morosidad(data: dict) -> bytes:
@@ -1034,6 +1276,64 @@ def _generar_pdf_financiero(data: dict) -> bytes:
 
 
 # ---------- Reporte Asesores ----------
+@router.get("/asesores/por-mes")
+def get_asesores_por_mes(
+    db: Session = Depends(get_db),
+    meses: int = Query(12, ge=1, le=24, description="Cantidad de meses hacia atrás"),
+):
+    """Asesores por mes: una pestaña por mes. Columnas: Nombre analista, Total morosidad, Total préstamos. Orden descendente por morosidad."""
+    hoy = date.today()
+    resultado: dict = {"meses": []}
+
+    for i in range(meses):
+        año = hoy.year
+        mes = hoy.month - i
+        while mes <= 0:
+            mes += 12
+            año -= 1
+        inicio = date(año, mes, 1)
+        _, ultimo = calendar.monthrange(año, mes)
+        fin = date(año, mes, ultimo)
+        fc = fin
+
+        rows = db.execute(
+            select(
+                Prestamo.analista,
+                func.coalesce(func.sum(Cuota.monto), 0).label("morosidad_total"),
+                func.count(func.distinct(Cuota.prestamo_id)).label("total_prestamos"),
+            )
+            .select_from(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(
+                Cliente.estado == "ACTIVO",
+                Prestamo.estado == "APROBADO",
+                Cuota.fecha_pago.is_(None),
+                Cuota.fecha_vencimiento < fc,
+            )
+            .group_by(Prestamo.analista)
+            .order_by(func.sum(Cuota.monto).desc())
+        ).fetchall()
+
+        items = [
+            {
+                "analista": r.analista or "Sin asignar",
+                "morosidad_total": round(_safe_float(r.morosidad_total), 2),
+                "total_prestamos": r.total_prestamos or 0,
+            }
+            for r in rows
+        ]
+
+        resultado["meses"].append({
+            "mes": mes,
+            "año": año,
+            "label": f"{mes:02d}/{año}",
+            "items": items,
+        })
+
+    return resultado
+
+
 @router.get("/asesores")
 def get_reporte_asesores(
     db: Session = Depends(get_db),
@@ -1134,6 +1434,58 @@ def _generar_pdf_asesores(data: dict) -> bytes:
 
 
 # ---------- Reporte Productos ----------
+@router.get("/productos/por-mes")
+def get_productos_por_mes(
+    db: Session = Depends(get_db),
+    meses: int = Query(12, ge=1, le=24, description="Cantidad de meses hacia atrás"),
+):
+    """Productos por mes: una pestaña por mes. Columnas: Modelo, Suma total ventas (70% valor prestado) por modelo."""
+    hoy = date.today()
+    resultado: dict = {"meses": []}
+    fecha_ref = func.coalesce(func.date(Prestamo.fecha_aprobacion), func.date(Prestamo.fecha_registro))
+
+    for i in range(meses):
+        año = hoy.year
+        mes = hoy.month - i
+        while mes <= 0:
+            mes += 12
+            año -= 1
+        inicio = date(año, mes, 1)
+        _, ultimo = calendar.monthrange(año, mes)
+        fin = date(año, mes, ultimo)
+
+        rows = db.execute(
+            select(
+                Prestamo.modelo_vehiculo,
+                func.coalesce(func.sum(Prestamo.total_financiamiento * 0.70), 0).label("suma_ventas"),
+            )
+            .select_from(Prestamo)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(
+                Cliente.estado == "ACTIVO",
+                Prestamo.estado == "APROBADO",
+                fecha_ref >= inicio,
+                fecha_ref <= fin,
+            )
+            .group_by(Prestamo.modelo_vehiculo)
+            .order_by(func.sum(Prestamo.total_financiamiento).desc())
+        ).fetchall()
+
+        items = [
+            {"modelo": r.modelo_vehiculo or "Sin modelo", "suma_ventas": round(_safe_float(r.suma_ventas), 2)}
+            for r in rows
+        ]
+
+        resultado["meses"].append({
+            "mes": mes,
+            "año": año,
+            "label": f"{mes:02d}/{año}",
+            "items": items,
+        })
+
+    return resultado
+
+
 @router.get("/productos")
 def get_reporte_productos(
     db: Session = Depends(get_db),

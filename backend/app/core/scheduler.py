@@ -2,12 +2,12 @@
 Scheduler para tareas programadas (zona America/Caracas).
 
 Actualización periódica de informes y reportes:
+- 01:00  Reportes cobranzas (resumen + diagnóstico).
 - 02:00  Notificaciones (actualizar mora / datos para seguimiento).
-- 06:00  Reportes cobranzas (resumen + diagnóstico).
 - 06:00  Informe de pagos por email (link Google Sheet).
 - 13:00  Reportes cobranzas.
 - 13:00  Informe de pagos por email.
-- 16:00  Caché dashboard (hilo aparte en main: 6:00, 13:00, 16:00).
+- 16:00  Caché dashboard (hilo aparte en main: 1:00, 13:00).
 - 16:30  Informe de pagos por email.
 
 Los informes de Cobranzas (clientes atrasados, rendimiento analista, montos por mes, etc.)
@@ -47,7 +47,7 @@ def _job_actualizar_notificaciones() -> None:
 
 def _job_actualizar_reportes_cobranzas() -> None:
     """
-    Job que se ejecuta a las 6:00 y 13:00. Actualiza reportes de cobranzas
+    Job que se ejecuta a las 1:00 y 13:00. Actualiza reportes de cobranzas
     (resumen + diagnóstico) usando sesión de BD.
     """
     db = SessionLocal()
@@ -75,7 +75,7 @@ def _job_informe_pagos_email() -> None:
 
 
 def start_scheduler() -> None:
-    """Inicia el scheduler: notificaciones 2:00; cobranzas 6:00 y 13:00; informe pagos 6:00, 13:00 y 16:30."""
+    """Inicia el scheduler: notificaciones 2:00; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30."""
     global _scheduler
     if _scheduler is not None:
         logger.warning("Scheduler ya está iniciado.")
@@ -88,12 +88,12 @@ def start_scheduler() -> None:
         id="notificaciones_2am",
         name="Actualizar notificaciones 2:00",
     )
-    # 6:00 y 13:00 - Reportes cobranzas
+    # 1:00 y 13:00 - Reportes cobranzas (actualización automática de informes)
     _scheduler.add_job(
         _job_actualizar_reportes_cobranzas,
-        CronTrigger(hour=6, minute=0, timezone=SCHEDULER_TZ),
-        id="reportes_cobranzas_6am",
-        name="Actualizar reportes cobranzas 6:00",
+        CronTrigger(hour=1, minute=0, timezone=SCHEDULER_TZ),
+        id="reportes_cobranzas_1am",
+        name="Actualizar reportes cobranzas 1:00",
     )
     _scheduler.add_job(
         _job_actualizar_reportes_cobranzas,
@@ -122,7 +122,7 @@ def start_scheduler() -> None:
     )
     _scheduler.start()
     logger.info(
-        "Scheduler iniciado: notificaciones 2:00; cobranzas 6:00 y 13:00; informe pagos 6:00, 13:00 y 16:30 (%s).",
+        "Scheduler iniciado: notificaciones 2:00; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30 (%s).",
         SCHEDULER_TZ,
     )
 

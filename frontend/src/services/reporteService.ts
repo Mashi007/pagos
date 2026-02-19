@@ -20,6 +20,21 @@ export interface ReporteCartera {
   }>
 }
 
+export interface CarteraPorDiaItem {
+  fecha: string
+  monto_cobrar: number
+  cantidad_cuotas: number
+}
+
+export interface CarteraPorMes {
+  meses: Array<{
+    mes: number
+    año: number
+    label: string
+    items: CarteraPorDiaItem[]
+  }>
+}
+
 export interface ReportePagos {
   fecha_inicio: string
   fecha_fin: string
@@ -34,6 +49,25 @@ export interface ReportePagos {
     fecha: string
     cantidad: number
     monto: number
+  }>
+}
+
+export interface PagoPorMesItem {
+  pago_id?: number
+  fecha: string
+  prestamo_id: number | null
+  cedula: string
+  nombre: string
+  monto_pago: number
+  documento: string
+}
+
+export interface PagosPorMes {
+  meses: Array<{
+    mes: number
+    año: number
+    label: string
+    items: PagoPorMesItem[]
   }>
 }
 
@@ -79,6 +113,23 @@ export interface ReporteMorosidad {
     max_dias_mora: number
     primera_cuota_vencida: string | null
   }>
+}
+
+export interface MorosidadPorRangosItem {
+  prestamo_id: number
+  cedula: string
+  nombres: string
+  total_financiamiento: number
+  pagos_totales: number
+  saldo: number
+  ultimo_pago_fecha: string | null
+  proximo_pago_fecha: string | null
+  dias_atraso: number
+}
+
+export interface MorosidadPorRangos {
+  fecha_corte: string
+  rangos: Record<string, { label: string; items: MorosidadPorRangosItem[] }>
 }
 
 export interface ReporteFinanciero {
@@ -138,6 +189,21 @@ export interface ReporteAsesores {
   }>
 }
 
+export interface AsesorPorMesItem {
+  analista: string
+  morosidad_total: number
+  total_prestamos: number
+}
+
+export interface AsesoresPorMes {
+  meses: Array<{
+    mes: number
+    año: number
+    label: string
+    items: AsesorPorMesItem[]
+  }>
+}
+
 export interface ReporteProductos {
   fecha_corte: string
   resumen_por_producto: Array<{
@@ -164,8 +230,30 @@ export interface ReporteProductos {
   }>
 }
 
+export interface ProductoPorMesItem {
+  modelo: string
+  suma_ventas: number
+}
+
+export interface ProductosPorMes {
+  meses: Array<{
+    mes: number
+    año: number
+    label: string
+    items: ProductoPorMesItem[]
+  }>
+}
+
 class ReporteService {
   private baseUrl = '/api/v1/reportes'
+
+  /**
+   * Obtiene cuentas por cobrar por mes: por día cuándo debe cobrar
+   */
+  async getCarteraPorMes(meses: number = 12): Promise<CarteraPorMes> {
+    const params = new URLSearchParams({ meses: meses.toString() })
+    return await apiClient.get(`${this.baseUrl}/cartera/por-mes?${params.toString()}`)
+  }
 
   /**
    * Obtiene reporte de cartera
@@ -189,6 +277,14 @@ class ReporteService {
   ): Promise<ReportePagos> {
     const params = new URLSearchParams({ fecha_inicio: fechaInicio, fecha_fin: fechaFin })
     return await apiClient.get(`${this.baseUrl}/pagos?${params.toString()}`)
+  }
+
+  /**
+   * Obtiene pagos agrupados por mes/año. Cada mes tiene lista ordenada descendente por fecha.
+   */
+  async getPagosPorMes(meses: number = 12): Promise<PagosPorMes> {
+    const params = new URLSearchParams({ meses: meses.toString() })
+    return await apiClient.get(`${this.baseUrl}/pagos/por-mes?${params.toString()}`)
   }
 
   /**
@@ -234,6 +330,16 @@ class ReporteService {
   }
 
   /**
+   * Obtiene informe pago vencido por rangos de días (1 día, 15 días, 30 días, 2 meses, 61+)
+   */
+  async getMorosidadPorRangos(fechaCorte?: string): Promise<MorosidadPorRangos> {
+    const params = new URLSearchParams()
+    if (fechaCorte) params.set('fecha_corte', fechaCorte)
+    const query = params.toString()
+    return await apiClient.get(`${this.baseUrl}/morosidad/por-rangos${query ? `?${query}` : ''}`)
+  }
+
+  /**
    * Obtiene reporte financiero
    * @param fechaCorte Opcional. Si no se proporciona, usa la fecha actual
    */
@@ -245,6 +351,14 @@ class ReporteService {
   }
 
   /**
+   * Obtiene asesores por mes: una pestaña por mes, orden descendente por morosidad
+   */
+  async getAsesoresPorMes(meses: number = 12): Promise<AsesoresPorMes> {
+    const params = new URLSearchParams({ meses: meses.toString() })
+    return await apiClient.get(`${this.baseUrl}/asesores/por-mes?${params.toString()}`)
+  }
+
+  /**
    * Obtiene reporte de asesores
    * @param fechaCorte Opcional. Si no se proporciona, usa la fecha actual
    */
@@ -253,6 +367,14 @@ class ReporteService {
     if (fechaCorte) params.set('fecha_corte', fechaCorte)
     const query = params.toString()
     return await apiClient.get(`${this.baseUrl}/asesores${query ? `?${query}` : ''}`)
+  }
+
+  /**
+   * Obtiene productos por mes: modelo y suma ventas (70% valor prestado) por modelo
+   */
+  async getProductosPorMes(meses: number = 12): Promise<ProductosPorMes> {
+    const params = new URLSearchParams({ meses: meses.toString() })
+    return await apiClient.get(`${this.baseUrl}/productos/por-mes?${params.toString()}`)
   }
 
   /**

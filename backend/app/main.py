@@ -112,7 +112,7 @@ def on_startup():
     except Exception as e:
         logger.exception("No se pudo iniciar el scheduler de reportes cobranzas: %s", e)
 
-    # Caché dashboard: actualización a las 6:00, 13:00 y 16:00 (hora local) para cargas rápidas
+    # Caché dashboard: actualización a las 1:00 y 13:00 (hora local) para cargas rápidas
     try:
         from app.api.v1.endpoints.dashboard import start_dashboard_cache_refresh
         start_dashboard_cache_refresh()
