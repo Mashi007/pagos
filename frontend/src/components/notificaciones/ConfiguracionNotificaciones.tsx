@@ -174,7 +174,7 @@ export function ConfiguracionNotificaciones() {
           const plantilla = plantillas.find(p => p.id === plantillaSeleccionada)
           if (plantilla) {
             asunto = plantilla.nombre || asunto
-            mensaje = plantilla.cuerpo || plantilla.texto || plantilla.contenido || '' || mensaje
+            mensaje = plantilla.cuerpo || mensaje
           }
         }
         
