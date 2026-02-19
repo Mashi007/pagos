@@ -1095,7 +1095,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
                                 <div className="flex-1 min-w-0">
                                   {/* Nombre de variable destacado */}
                                   <div className="mb-2">
-                                    <FileCode className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm font-mono font-semibold block w-fit">
+                                    <code className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm font-mono font-semibold block w-fit">
                                       {'{{'}{v.nombre_variable}{'}}'}
                                     </code>
                                   </div>
