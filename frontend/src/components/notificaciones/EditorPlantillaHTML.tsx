@@ -188,7 +188,6 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <"h-5 w-5" />
             Contenido HTML
           </CardTitle>
           <CardDescription>
@@ -212,7 +211,6 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
               onClick={() => setMostrarPreview(false)}
               className="flex items-center gap-2"
             >
-              <"h-4 w-4" />
               HTML
             </Button>
           </div>
