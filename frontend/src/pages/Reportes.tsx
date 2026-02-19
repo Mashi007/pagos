@@ -40,9 +40,26 @@ export function Reportes() {
   const [reporteSeleccionado, setReporteSeleccionado] = useState<string | null>(null)
   const queryClient = useQueryClient()
   const { canViewReports, canDownloadReports, canAccessReport } = usePermissions()
+  const puedeVerReportes = canViewReports()
+
+  // Obtener resumen del dashboard para KPIs - hooks SIEMPRE antes de cualquier return
+  const {
+    data: resumenData,
+    isLoading: loadingResumen,
+    isError: errorResumen,
+    refetch: refetchResumen
+  } = useQuery({
+    queryKey: ['reportes-resumen'],
+    queryFn: () => reporteService.getResumenDashboard(),
+    enabled: puedeVerReportes, // Solo ejecutar si tiene permisos
+    staleTime: 2 * 60 * 1000, // 2 minutos
+    retry: 2,
+    refetchOnWindowFocus: true,
+    refetchInterval: puedeVerReportes ? 5 * 60 * 1000 : false, // 5 min (antes 30) para reducir carga
+  })
 
   // Si el usuario no es admin, no puede ver reportes
-  if (!canViewReports()) {
+  if (!puedeVerReportes) {
     return (
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -66,21 +83,6 @@ export function Reportes() {
       </motion.div>
     )
   }
-
-  // Obtener resumen del dashboard para KPIs
-  const {
-    data: resumenData,
-    isLoading: loadingResumen,
-    isError: errorResumen,
-    refetch: refetchResumen
-  } = useQuery({
-    queryKey: ['reportes-resumen'],
-    queryFn: () => reporteService.getResumenDashboard(),
-    staleTime: 2 * 60 * 1000, // 2 minutos - datos más frescos
-    retry: 2, // Dos reintentos para asegurar conexión
-    refetchOnWindowFocus: true, // Recargar cuando la ventana recupera el foco
-    refetchInterval: 30 * 60 * 1000, // Refrescar cada 30 min
-  })
 
   // Descargar blob como archivo
   const descargarBlob = (blob: Blob, nombre: string) => {
