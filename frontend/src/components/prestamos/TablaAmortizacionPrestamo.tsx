@@ -29,6 +29,9 @@ interface Cuota {
   dias_mora: number
   dias_morosidad?: number
   monto_morosidad?: number
+  pago_id?: number | null
+  pago_conciliado?: boolean
+  pago_monto_conciliado?: number
 }
 
 interface TablaAmortizacionPrestamoProps {
@@ -52,14 +55,18 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
   const determinarEstadoReal = (cuota: Cuota): string => {
     const totalPagado = cuota.total_pagado || 0
     const montoCuota = cuota.monto_cuota || 0
-    
-    // Si total_pagado >= monto_cuota, debería ser PAGADO
-    if (totalPagado >= montoCuota) {
+    const pagoConciliado = cuota.pago_conciliado === true
+
+    // Si total_pagado >= monto_cuota y el pago está conciliado → CONCILIADO
+    if (totalPagado >= montoCuota - 0.01 && pagoConciliado) {
+      return 'CONCILIADO'
+    }
+    // Si total_pagado >= monto_cuota (pagado pero no conciliado)
+    if (totalPagado >= montoCuota - 0.01) {
       return 'PAGADO'
     }
     // Si tiene algún pago pero no completo
     if (totalPagado > 0) {
-      // Verificar si está vencida
       const hoy = new Date()
       const fechaVencimiento = cuota.fecha_vencimiento ? new Date(cuota.fecha_vencimiento) : null
       if (fechaVencimiento && fechaVencimiento < hoy) {
@@ -72,13 +79,13 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
   }
 
   const getEstadoBadge = (estado: string) => {
-    // Normalizar estado a mayúsculas para comparación
     const estadoNormalizado = estado?.toUpperCase() || 'PENDIENTE'
 
     const badges = {
       PENDIENTE: 'bg-yellow-100 text-yellow-800',
       PAGADO: 'bg-green-100 text-green-800',
       PAGADA: 'bg-green-100 text-green-800',
+      CONCILIADO: 'bg-emerald-100 text-emerald-800 border border-emerald-300',
       PAGO_ADELANTADO: 'bg-blue-100 text-blue-800',
       ATRASADO: 'bg-red-100 text-red-800',
       VENCIDA: 'bg-red-100 text-red-800',
@@ -88,13 +95,13 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
   }
 
   const getEstadoLabel = (estado: string) => {
-    // Normalizar estado a mayúsculas para comparación
     const estadoNormalizado = estado?.toUpperCase() || 'PENDIENTE'
 
     const labels: Record<string, string> = {
       PENDIENTE: 'Pendiente',
       PAGADO: 'Pagado',
       PAGADA: 'Pagada',
+      CONCILIADO: 'Conciliado',
       PAGO_ADELANTADO: 'Pago adelantado',
       ATRASADO: 'Atrasado',
       VENCIDA: 'Vencida',
@@ -102,6 +109,16 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
     }
     return labels[estadoNormalizado] || estado
   }
+
+  // Total pendiente por pagar (cuotas no cubiertas al 100%)
+  const totalPendientePagar = cuotas
+    ? cuotas.reduce((acc: number, c: Cuota) => {
+        const montoCuota = typeof c.monto_cuota === 'number' ? c.monto_cuota : 0
+        const totalPagado = typeof c.total_pagado === 'number' ? c.total_pagado : 0
+        const pendiente = Math.max(0, montoCuota - totalPagado)
+        return acc + pendiente
+      }, 0)
+    : 0
 
   const exportarExcel = async () => {
     if (!cuotas) {
@@ -263,6 +280,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
                 <TableHead className="text-right">Interés</TableHead>
                 <TableHead className="text-right">Total</TableHead>
                 <TableHead className="text-right">Saldo Pendiente</TableHead>
+                <TableHead className="text-right">Pago conciliado</TableHead>
                 <TableHead>Estado</TableHead>
               </TableRow>
             </TableHeader>
@@ -301,6 +319,15 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
                     <TableCell className="text-right text-gray-600">
                       ${saldoFinal.toFixed(2)}
                     </TableCell>
+                    <TableCell className="text-right">
+                      {cuota.pago_conciliado && (cuota.pago_monto_conciliado ?? cuota.total_pagado ?? 0) > 0 ? (
+                        <span className="text-emerald-600 font-medium">
+                          ${((cuota.pago_monto_conciliado ?? cuota.total_pagado ?? 0) as number).toFixed(2)}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Badge className={getEstadoBadge(estadoReal)}>
                         {getEstadoLabel(estadoReal)}
@@ -319,7 +346,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
               })}
               {!showFullTable && cuotas.length > 5 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-4">
+                  <TableCell colSpan={8} className="text-center py-4">
                     <Button variant="ghost" onClick={() => setShowFullTable(true)}>
                       Ver {cuotas.length - 5} cuotas más...
                     </Button>
@@ -332,7 +359,15 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
 
         {/* Resumen */}
         {cuotas.length > 0 && (
-          <div className="mt-4 grid grid-cols-4 gap-4">
+          <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-4">
+            <Card className="border-amber-200 bg-amber-50">
+              <CardContent className="pt-4">
+                <p className="text-sm text-amber-700 font-medium">Total pendiente pagar</p>
+                <p className="text-2xl font-bold text-amber-800">
+                  ${totalPendientePagar.toFixed(2)}
+                </p>
+              </CardContent>
+            </Card>
             <Card className="border-green-200 bg-green-50">
               <CardContent className="pt-4">
                 <p className="text-sm text-green-600">Total Capital</p>
@@ -382,7 +417,11 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
               <CardContent className="pt-4">
                 <p className="text-sm text-gray-600">Pagadas</p>
                 <p className="text-2xl font-bold text-gray-700">
-                  {cuotas.filter((c: Cuota) => c.estado === 'PAGADO' || c.estado === 'PAGADA').length} / {cuotas.length}
+                  {cuotas.filter((c: Cuota) => {
+                    const totalPagado = c.total_pagado || 0
+                    const montoCuota = c.monto_cuota || 0
+                    return totalPagado >= montoCuota - 0.01
+                  }).length} / {cuotas.length}
                 </p>
               </CardContent>
             </Card>

@@ -8,11 +8,12 @@ import io
 import logging
 import re
 from datetime import date, datetime, time as dt_time
+from decimal import Decimal
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query, HTTPException, UploadFile, File
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -340,6 +341,26 @@ async def upload_excel_pagos(
                         errores.append(f"Fila {i + 2}: Ya existe un pago con ese NÂº de documento")
                         errores_detalle.append({"fila": i + 2, "cedula": cedula, "error": "Ya existe un pago con ese NÂº de documento. El NÂº documento no puede repetirse.", "datos": datos_fila})
                         continue
+
+                # Si la persona tiene más de un préstamo, prestamo_id es obligatorio
+                if prestamo_id is None and cedula.strip():
+                    count_prestamos = db.scalar(
+                        select(func.count())
+                        .select_from(Prestamo)
+                        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+                        .where(Cliente.cedula == cedula.strip())
+                    ) or 0
+                    if count_prestamos > 1:
+                        datos_fila = {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}
+                        errores.append(f"Fila {i + 2}: La cédula {cedula} tiene {count_prestamos} préstamos. Debe indicar el ID del préstamo.")
+                        errores_detalle.append({
+                            "fila": i + 2,
+                            "cedula": cedula,
+                            "error": f"Esta persona tiene {count_prestamos} préstamos. Debe indicar el ID del préstamo (columna 2) al que aplica este pago.",
+                            "datos": datos_fila,
+                        })
+                        continue
+
                 fecha_pago = _parse_fecha(fecha_val)
                 p = Pago(
                     cedula_cliente=cedula,
@@ -821,7 +842,7 @@ def _estado_cuota_por_cobertura(total_pagado: float, monto_cuota: float, fecha_v
 @router.post("/{pago_id}/aplicar-cuotas", response_model=dict)
 def aplicar_pago_a_cuotas(pago_id: int, db: Session = Depends(get_db)):
     """
-    Aplica el monto del pago a cuotas del prÃ©stamo (por orden de numero_cuota).
+    Aplica el monto del pago a cuotas del préstamo (por orden de numero_cuota).
     Va a la Ãºltima cuota anterior no cubierta 100%; solo cuando se cubre 100% pasa a la siguiente.
     - 100% cubierta â†’ estado PAGADO, fecha_pago asignada.
     - Parcial + vencimiento futuro â†’ estado PAGO_ADELANTADO.
@@ -841,54 +862,63 @@ def aplicar_pago_a_cuotas(pago_id: int, db: Session = Depends(get_db)):
     monto_restante = float(pago.monto_pagado) if pago.monto_pagado else 0
     if monto_restante <= 0:
         return {"success": True, "cuotas_completadas": 0, "cuotas_parciales": 0, "message": "Monto del pago es cero."}
-    fecha_pago_date = pago.fecha_pago.date() if hasattr(pago.fecha_pago, "date") and pago.fecha_pago else date.today()
-    hoy = _hoy_local()
+    try:
+        fecha_pago_date = pago.fecha_pago.date() if hasattr(pago.fecha_pago, "date") and pago.fecha_pago else date.today()
+        hoy = _hoy_local()
 
-    # Cuotas no cubiertas 100%: sin fecha_pago (no pagada) o con total_pagado < monto (parcial)
-    # Excluir cuotas con fecha_pago (ya pagadas en legacy)
-    cuotas_pendientes = (
-        db.execute(
-            select(Cuota)
-            .where(
-                Cuota.prestamo_id == prestamo_id,
-                Cuota.fecha_pago.is_(None),
-                (Cuota.total_pagado.is_(None)) | (Cuota.total_pagado < Cuota.monto),
+        # Cuotas no cubiertas 100%: sin fecha_pago (no pagada) o con total_pagado < monto (parcial)
+        cuotas_pendientes = (
+            db.execute(
+                select(Cuota)
+                .where(
+                    Cuota.prestamo_id == prestamo_id,
+                    Cuota.fecha_pago.is_(None),
+                    or_(Cuota.total_pagado.is_(None), Cuota.total_pagado < Cuota.monto),
+                )
+                .order_by(Cuota.numero_cuota)
             )
-            .order_by(Cuota.numero_cuota)
-        )
-    ).scalars().all()
+        ).scalars().all()
 
-    cuotas_completadas = 0
-    cuotas_parciales = 0
-    for c in cuotas_pendientes:
-        monto_cuota = float(c.monto) if c.monto is not None else 0
-        total_pagado_actual = float(c.total_pagado or 0)
-        monto_necesario = monto_cuota - total_pagado_actual
-        if monto_restante <= 0 or monto_cuota <= 0:
-            break
-        a_aplicar = min(monto_restante, monto_necesario)
-        if a_aplicar <= 0:
-            continue
-        nuevo_total = total_pagado_actual + a_aplicar
-        c.total_pagado = nuevo_total
-        c.pago_id = pago_id
-        fecha_venc = c.fecha_vencimiento
-        if fecha_venc is not None and hasattr(fecha_venc, "date"):
-            fecha_venc = fecha_venc.date()
-        fecha_venc = fecha_venc or hoy
-        if nuevo_total >= monto_cuota - 0.01:
-            c.fecha_pago = fecha_pago_date
-            c.estado = "PAGADO"
-            cuotas_completadas += 1
-        else:
-            c.estado = _estado_cuota_por_cobertura(nuevo_total, monto_cuota, fecha_venc)
-            cuotas_parciales += 1
-        monto_restante -= a_aplicar
-    db.commit()
-    return {
-        "success": True,
-        "cuotas_completadas": cuotas_completadas,
-        "cuotas_parciales": cuotas_parciales,
-        "message": f"Se aplicÃ³ el pago: {cuotas_completadas} cuota(s) completadas, {cuotas_parciales} parcial(es).",
-    }
+        cuotas_completadas = 0
+        cuotas_parciales = 0
+        for c in cuotas_pendientes:
+            monto_cuota = float(c.monto) if c.monto is not None else 0
+            total_pagado_actual = float(c.total_pagado or 0)
+            monto_necesario = monto_cuota - total_pagado_actual
+            if monto_restante <= 0 or monto_cuota <= 0:
+                break
+            a_aplicar = min(monto_restante, monto_necesario)
+            if a_aplicar <= 0:
+                continue
+            nuevo_total = total_pagado_actual + a_aplicar
+            c.total_pagado = Decimal(str(round(nuevo_total, 2)))
+            c.pago_id = pago_id
+            fecha_venc = c.fecha_vencimiento
+            if fecha_venc is not None and hasattr(fecha_venc, "date"):
+                fecha_venc = fecha_venc.date()
+            fecha_venc = fecha_venc or hoy
+            if nuevo_total >= monto_cuota - 0.01:
+                c.fecha_pago = fecha_pago_date
+                c.estado = "PAGADO"
+                cuotas_completadas += 1
+            else:
+                c.estado = _estado_cuota_por_cobertura(nuevo_total, monto_cuota, fecha_venc)
+                cuotas_parciales += 1
+            monto_restante -= a_aplicar
+        db.commit()
+        return {
+            "success": True,
+            "cuotas_completadas": cuotas_completadas,
+            "cuotas_parciales": cuotas_parciales,
+            "message": f"Se aplicó el pago: {cuotas_completadas} cuota(s) completadas, {cuotas_parciales} parcial(es).",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception("Error aplicar-cuotas pago_id=%s: %s", pago_id, e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al aplicar el pago a cuotas: {str(e)}",
+        ) from e
 

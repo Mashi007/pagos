@@ -691,8 +691,8 @@ export function PrestamosList() {
                 </div>
               )}
 
-              {/* Paginación */}
-              {data && data.total_pages > 1 && (
+              {/* Paginación - siempre visible cuando hay datos */}
+              {data && data.total > 0 && (
                 <div className="flex items-center justify-between mt-4">
                   <div className="text-sm text-gray-600">
                     Página {data.page} de {data.total_pages} ({data.total} total)

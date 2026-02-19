@@ -233,22 +233,32 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId }: R
 
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">
-                  ID Crédito {formData.cedula_cliente && prestamos && prestamos.length > 0 && <span className="text-red-500">*</span>}
+                  Crédito al que aplica el pago {formData.cedula_cliente && prestamos && prestamos.length > 0 && <span className="text-red-500">*</span>}
                 </label>
+                {prestamos && prestamos.length > 1 && (
+                  <p className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded border border-amber-200">
+                    Esta persona tiene {prestamos.length} préstamos. Seleccione a cuál se carga este pago.
+                  </p>
+                )}
                 {prestamos && prestamos.length > 0 ? (
                   <Select
                     value={formData.prestamo_id?.toString() || undefined}
                     onValueChange={(value) => setFormData({ ...formData, prestamo_id: parseInt(value) })}
                   >
                     <SelectTrigger className={errors.prestamo_id ? 'border-red-500' : ''}>
-                      <SelectValue placeholder="Seleccione un crédito" />
+                      <SelectValue placeholder={prestamos.length > 1 ? 'Seleccione el crédito' : 'Seleccione un crédito'} />
                     </SelectTrigger>
                     <SelectContent>
-                      {prestamos.map((prestamo) => (
-                        <SelectItem key={prestamo.id} value={prestamo.id.toString()}>
-                          ID {prestamo.id} - ${Number(prestamo.total_financiamiento ?? 0).toFixed(2)} - {prestamo.estado}
-                        </SelectItem>
-                      ))}
+                      {prestamos.map((prestamo) => {
+                        const modelo = (prestamo as any).modelo_vehiculo || (prestamo as any).modelo || prestamo.producto || ''
+                        const concesionario = (prestamo as any).concesionario || ''
+                        const desc = [modelo, concesionario].filter(Boolean).join(' · ') || prestamo.estado
+                        return (
+                          <SelectItem key={prestamo.id} value={prestamo.id.toString()}>
+                            ID {prestamo.id} — {desc} — ${Number(prestamo.total_financiamiento ?? 0).toFixed(2)}
+                          </SelectItem>
+                        )
+                      })}
                     </SelectContent>
                   </Select>
                 ) : (

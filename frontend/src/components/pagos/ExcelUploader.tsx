@@ -155,12 +155,15 @@ export function ExcelUploader({ onClose, onSuccess }: ExcelUploaderProps) {
                   <p className="text-sm text-gray-600">Primera fila: encabezados. Desde la segunda fila, una columna por campo (en este orden):</p>
                   <ol className="list-decimal list-inside space-y-1 text-sm text-gray-600">
                     <li><strong>Cédula</strong> (obligatorio)</li>
-                    <li><strong>ID Préstamo</strong> (opcional, número)</li>
+                    <li><strong>ID Préstamo</strong> (obligatorio si la persona tiene más de un préstamo; número)</li>
                     <li><strong>Fecha de pago</strong> (fecha)</li>
                     <li><strong>Monto pagado</strong> (número, mayor a 0)</li>
                     <li><strong>Número de documento</strong> (referencia del pago)</li>
                   </ol>
-                  <p className="text-xs text-gray-500 mt-2">
+                  <p className="text-xs text-amber-600 mt-2 font-medium">
+                    Si una persona tiene varios préstamos, debe indicar el ID del préstamo al que aplica cada pago.
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
                     Formatos aceptados: .xlsx o .xls. Las filas con cédula vacía o monto ≤ 0 se omiten.
                   </p>
                 </div>

@@ -20,6 +20,7 @@ from app.schemas.auth import UserResponse
 from app.models.auditoria import Auditoria
 from app.models.cliente import Cliente
 from app.models.cuota import Cuota
+from app.models.pago import Pago
 from app.models.prestamo import Prestamo
 from app.models.user import User
 from app.schemas.prestamo import PrestamoCreate, PrestamoResponse, PrestamoUpdate, PrestamoListResponse
@@ -496,15 +497,23 @@ def _generar_cuotas_amortizacion(db: Session, p: Prestamo, fecha_base: date, num
 
 @router.get("/{prestamo_id}/cuotas", response_model=list)
 def get_cuotas_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
-    """Lista las cuotas (tabla de amortización) de un préstamo."""
+    """Lista las cuotas (tabla de amortización) de un préstamo, con info de pago conciliado."""
     row = db.get(Prestamo, prestamo_id)
     if not row:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
-    rows = db.execute(select(Cuota).where(Cuota.prestamo_id == prestamo_id).order_by(Cuota.numero_cuota)).scalars().all()
+    q = (
+        select(Cuota, Pago.conciliado, Pago.monto_pagado)
+        .select_from(Cuota)
+        .outerjoin(Pago, Cuota.pago_id == Pago.id)
+        .where(Cuota.prestamo_id == prestamo_id)
+        .order_by(Cuota.numero_cuota)
+    )
+    rows = db.execute(q).all()
     return [
         {
             "id": c.id,
             "prestamo_id": c.prestamo_id,
+            "pago_id": c.pago_id,
             "numero_cuota": c.numero_cuota,
             "fecha_vencimiento": c.fecha_vencimiento.isoformat() if c.fecha_vencimiento else None,
             "monto": float(c.monto) if c.monto is not None else 0,
@@ -515,8 +524,10 @@ def get_cuotas_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
             "fecha_pago": c.fecha_pago.isoformat() if c.fecha_pago else None,
             "estado": c.estado or "PENDIENTE",
             "dias_mora": c.dias_mora if c.dias_mora is not None else 0,
+            "pago_conciliado": bool(pago_conciliado) if pago_conciliado is not None else False,
+            "pago_monto_conciliado": float(pago_monto) if pago_conciliado and pago_monto is not None else 0,
         }
-        for c in rows
+        for c, pago_conciliado, pago_monto in rows
     ]
 
 
