@@ -1,5 +1,6 @@
 ﻿import { useState, useEffect } from 'react'
 import { notificacionService, type NotificacionPlantilla } from '../../services/notificacionService'
+import { emailConfigService } from '../../services/notificacionService'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { Textarea } from '../../components/ui/textarea'
@@ -7,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../..
 import { Badge } from '../../components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
 import { toast } from 'sonner'
-import { Save, Mail, Eye, Code } from 'lucide-react'
+import { Save, Mail, Eye, FileCode } from 'lucide-react'
 
 interface EditorPlantillaHTMLProps {
   plantilla?: NotificacionPlantilla | null
@@ -103,7 +104,7 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
 
     setEnviandoPrueba(true)
     try {
-      await notificacionService.probarConfiguracionEmail(
+      await emailConfigService.probarConfiguracionEmail(
         emailPrueba.trim(),
         asunto.trim() || 'Prueba de plantilla',
         cuerpoHTML.trim(),
@@ -187,7 +188,7 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Code className="h-5 w-5" />
+            <FileCode className="h-5 w-5" />
             Contenido HTML
           </CardTitle>
           <CardDescription>
@@ -211,7 +212,7 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
               onClick={() => setMostrarPreview(false)}
               className="flex items-center gap-2"
             >
-              <Code className="h-4 w-4" />
+              <FileCode className="h-4 w-4" />
               HTML
             </Button>
           </div>
