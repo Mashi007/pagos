@@ -860,8 +860,7 @@ def aplicar_pago_a_cuotas(pago_id: int, db: Session = Depends(get_db)):
 
     cuotas_completadas = 0
     cuotas_parciales = 0
-    for row in cuotas_pendientes:
-        c = row[0]
+    for c in cuotas_pendientes:
         monto_cuota = float(c.monto) if c.monto is not None else 0
         total_pagado_actual = float(c.total_pagado or 0)
         monto_necesario = monto_cuota - total_pagado_actual

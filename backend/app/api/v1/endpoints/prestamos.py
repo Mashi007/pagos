@@ -393,7 +393,6 @@ def resumen_prestamos_por_cedula(cedula: str, db: Session = Depends(get_db)):
         .order_by(Prestamo.id.desc())
     )
     prestamos = db.execute(q).scalars().all()
-    prestamos = [p[0] for p in prestamos]
     if not prestamos:
         return {
             "tiene_prestamos": False,

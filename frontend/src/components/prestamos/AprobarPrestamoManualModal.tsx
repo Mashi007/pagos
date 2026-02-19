@@ -42,9 +42,10 @@ export function AprobarPrestamoManualModal({ prestamo, onClose, onSuccess }: Apr
     if (typeof v === 'number' && Number.isFinite(v) && v >= 1) return v
     return Math.max(1, parseNumInput(String(v ?? '')) || 12)
   })
-  const [modalidadPago, setModalidadPago] = useState<string>(
-    prestamo.modalidad_pago || 'MENSUAL'
-  )
+  const [modalidadPago, setModalidadPago] = useState<string>(() => {
+    const v = (prestamo.modalidad_pago || 'MENSUAL').toString().toUpperCase()
+    return ['MENSUAL', 'QUINCENAL', 'SEMANAL'].includes(v) ? v : 'MENSUAL'
+  })
   const [cuotaPeriodo, setCuotaPeriodo] = useState<number>(() => {
     const v = prestamo.cuota_periodo
     if (typeof v === 'number' && Number.isFinite(v)) return v
@@ -65,7 +66,8 @@ export function AprobarPrestamoManualModal({ prestamo, onClose, onSuccess }: Apr
     if (!totalFinanciamiento || totalFinanciamiento <= 0 || !numeroCuotas || numeroCuotas <= 0) return 0
     const P = totalFinanciamiento
     const n = numeroCuotas
-    const periodosPorAnio = modalidadPago === 'MENSUAL' ? 12 : modalidadPago === 'QUINCENAL' ? 24 : 52
+    const mod = (modalidadPago || 'MENSUAL').toUpperCase()
+    const periodosPorAnio = mod === 'MENSUAL' ? 12 : mod === 'QUINCENAL' ? 24 : 52
     const tasaAnual = tasaInteres ?? 0
     const r = tasaAnual / 100 / periodosPorAnio
     if (r <= 0) return Math.round((P / n) * 100) / 100
@@ -166,8 +168,16 @@ export function AprobarPrestamoManualModal({ prestamo, onClose, onSuccess }: Apr
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700">Modalidad de pago</label>
-                <Select value={modalidadPago} onValueChange={setModalidadPago}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                <Select
+                  value={modalidadPago}
+                  onValueChange={(v) => {
+                    const val = (v || 'MENSUAL').toUpperCase()
+                    if (['MENSUAL', 'QUINCENAL', 'SEMANAL'].includes(val)) {
+                      setModalidadPago(val)
+                    }
+                  }}
+                >
+                  <SelectTrigger><SelectValue placeholder="Seleccione modalidad" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="MENSUAL">Mensual</SelectItem>
                     <SelectItem value="QUINCENAL">Quincenal</SelectItem>
