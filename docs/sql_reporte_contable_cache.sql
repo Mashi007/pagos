@@ -52,16 +52,16 @@ SELECT
     COALESCE(p.cedula, '') AS cedula,
     COALESCE(TRIM(p.nombres), '') AS nombre,
     CASE
-        WHEN COALESCE(c.total_pagado, 0) >= COALESCE(c.monto_cuota, 0) - 0.01
+        WHEN COALESCE(NULLIF(c.total_pagado, 0), c.monto_cuota) >= COALESCE(c.monto_cuota, 0) - 0.01
         THEN 'Cuota ' || c.numero_cuota
         ELSE 'Abono'
     END AS tipo_documento,
     c.fecha_vencimiento,
     COALESCE(c.fecha_pago, (pago.fecha_pago)::DATE) AS fecha_pago,
-    ROUND(COALESCE(c.total_pagado, 0)::NUMERIC, 2) AS importe_md,
+    ROUND(COALESCE(NULLIF(c.total_pagado, 0), c.monto_cuota)::NUMERIC, 2) AS importe_md,
     'USD' AS moneda_documento,
     36.0 AS tasa,  -- Ajustar según TASA_USD_BS_DEFAULT o tabla de tasas
-    ROUND((COALESCE(c.total_pagado, 0) * 36.0)::NUMERIC, 2) AS importe_ml,
+    ROUND((COALESCE(NULLIF(c.total_pagado, 0), c.monto_cuota) * 36.0)::NUMERIC, 2) AS importe_ml,
     'Bs.' AS moneda_local
 FROM cuotas c
 JOIN prestamos p ON c.prestamo_id = p.id
@@ -70,8 +70,6 @@ LEFT JOIN pagos pago ON c.pago_id = pago.id
 WHERE cl.estado = 'ACTIVO'
   AND p.estado = 'APROBADO'
   AND c.fecha_pago IS NOT NULL
-  AND c.total_pagado IS NOT NULL
-  AND c.total_pagado > 0
   AND NOT EXISTS (
       SELECT 1 FROM reporte_contable_cache rcc WHERE rcc.cuota_id = c.id
   );

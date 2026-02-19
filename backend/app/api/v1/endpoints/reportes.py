@@ -2336,7 +2336,8 @@ def _obtener_tasa_usd_bs(fecha: date) -> float:
 
 
 def _cuotas_a_filas_contable(rows, tasas_cache: dict) -> List[dict]:
-    """Convierte filas de cuotas a formato contable con tasa guardada."""
+    """Convierte filas de cuotas a formato contable con tasa guardada.
+    Si total_pagado es NULL o 0 (datos legacy), usa monto_cuota como importe."""
     items: List[dict] = []
     for r in rows:
         fp = r.fecha_pago or r.fecha_pago_real
@@ -2345,8 +2346,9 @@ def _cuotas_a_filas_contable(rows, tasas_cache: dict) -> List[dict]:
             tasas_cache[fp_date] = _obtener_tasa_usd_bs(fp_date)
         tasa = tasas_cache[fp_date]
 
-        total_pagado = _safe_float(r.total_pagado)
         monto_cuota = _safe_float(r.monto)
+        total_pagado_raw = _safe_float(r.total_pagado)
+        total_pagado = total_pagado_raw if total_pagado_raw > 0 else monto_cuota
         pago_completo = total_pagado >= monto_cuota - 0.01
         tipo_doc = f"Cuota {r.numero_cuota}" if pago_completo else "Abono"
         importe_ml = round(total_pagado * tasa, 2)
@@ -2389,8 +2391,6 @@ def _query_cuotas_contable(db: Session, fecha_inicio: date, fecha_fin: date):
             Cliente.estado == "ACTIVO",
             Prestamo.estado == "APROBADO",
             Cuota.fecha_pago.isnot(None),
-            Cuota.total_pagado.isnot(None),
-            Cuota.total_pagado > 0,
             Cuota.fecha_pago >= fecha_inicio,
             Cuota.fecha_pago <= fecha_fin,
         )
