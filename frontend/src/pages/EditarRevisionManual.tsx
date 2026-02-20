@@ -16,15 +16,33 @@ interface ClienteData {
   email: string
   direccion: string
   ocupacion: string
+  estado: string
+  fecha_nacimiento: string | null
+  notas: string
 }
 
 interface PrestamoData {
   prestamo_id: number
+  cliente_id?: number
+  cedula: string
+  nombres: string
   total_financiamiento: number
   numero_cuotas: number
   tasa_interes: number
   producto: string
   observaciones: string
+  fecha_requerimiento: string | null
+  modalidad_pago: string
+  cuota_periodo: number
+  fecha_base_calculo: string | null
+  fecha_aprobacion: string | null
+  estado: string
+  concesionario: string
+  analista: string
+  modelo_vehiculo: string
+  valor_activo: number | null
+  usuario_proponente: string
+  usuario_aprobador: string
 }
 
 interface CuotaData {
@@ -35,6 +53,7 @@ interface CuotaData {
   fecha_pago: string | null
   total_pagado: number
   estado: string
+  observaciones: string
 }
 
 export function EditarRevisionManual() {
@@ -61,6 +80,17 @@ export function EditarRevisionManual() {
     enabled: !!prestamoId,
   })
 
+  const { data: estadosData } = useQuery({
+    queryKey: ['revision-manual-estados-cliente'],
+    queryFn: () => revisionManualService.getEstadosCliente(),
+    staleTime: 5 * 60 * 1000,
+  })
+  const estadosCliente = estadosData?.estados ?? []
+  // Incluir estado actual del cliente si no está en la lista (p. ej. valor legacy en BD)
+  const opcionesEstado = [
+    ...new Set([...(clienteData.estado ? [clienteData.estado] : []), ...estadosCliente]),
+  ].sort()
+
   const handleGuardarParciales = async () => {
     if (!prestamoId) return
     
@@ -83,7 +113,10 @@ export function EditarRevisionManual() {
         if (clienteData.email) clienteUpdate.email = clienteData.email
         if (clienteData.direccion) clienteUpdate.direccion = clienteData.direccion
         if (clienteData.ocupacion) clienteUpdate.ocupacion = clienteData.ocupacion
-        
+        if (clienteData.estado) clienteUpdate.estado = clienteData.estado
+        if (clienteData.fecha_nacimiento !== undefined) clienteUpdate.fecha_nacimiento = clienteData.fecha_nacimiento || null
+        if (clienteData.notas !== undefined) clienteUpdate.notas = clienteData.notas
+
         if (Object.keys(clienteUpdate).length > 0) {
           try {
             await revisionManualService.editarCliente(clienteData.cliente_id, clienteUpdate)
@@ -100,18 +133,26 @@ export function EditarRevisionManual() {
       // Solo guardar préstamo si hay cambios
       if (cambios.prestamo && prestamoData.prestamo_id) {
         const prestamoUpdate: Record<string, any> = {}
-        if (prestamoData.total_financiamiento !== undefined && prestamoData.total_financiamiento > 0) {
-          prestamoUpdate.total_financiamiento = prestamoData.total_financiamiento
-        }
-        if (prestamoData.numero_cuotas !== undefined && prestamoData.numero_cuotas > 0) {
-          prestamoUpdate.numero_cuotas = prestamoData.numero_cuotas
-        }
-        if (prestamoData.tasa_interes !== undefined && prestamoData.tasa_interes >= 0) {
-          prestamoUpdate.tasa_interes = prestamoData.tasa_interes
-        }
-        if (prestamoData.producto) prestamoUpdate.producto = prestamoData.producto
-        if (prestamoData.observaciones) prestamoUpdate.observaciones = prestamoData.observaciones
-        
+        if (prestamoData.total_financiamiento !== undefined && prestamoData.total_financiamiento >= 0) prestamoUpdate.total_financiamiento = prestamoData.total_financiamiento
+        if (prestamoData.numero_cuotas !== undefined && prestamoData.numero_cuotas >= 1) prestamoUpdate.numero_cuotas = prestamoData.numero_cuotas
+        if (prestamoData.tasa_interes !== undefined && prestamoData.tasa_interes >= 0) prestamoUpdate.tasa_interes = prestamoData.tasa_interes
+        if (prestamoData.producto !== undefined) prestamoUpdate.producto = prestamoData.producto
+        if (prestamoData.observaciones !== undefined) prestamoUpdate.observaciones = prestamoData.observaciones
+        if (prestamoData.cedula !== undefined) prestamoUpdate.cedula = prestamoData.cedula
+        if (prestamoData.nombres !== undefined) prestamoUpdate.nombres = prestamoData.nombres
+        if (prestamoData.fecha_requerimiento !== undefined) prestamoUpdate.fecha_requerimiento = prestamoData.fecha_requerimiento || null
+        if (prestamoData.modalidad_pago !== undefined) prestamoUpdate.modalidad_pago = prestamoData.modalidad_pago
+        if (prestamoData.cuota_periodo !== undefined && prestamoData.cuota_periodo >= 0) prestamoUpdate.cuota_periodo = prestamoData.cuota_periodo
+        if (prestamoData.fecha_base_calculo !== undefined) prestamoUpdate.fecha_base_calculo = prestamoData.fecha_base_calculo || null
+        if (prestamoData.fecha_aprobacion !== undefined) prestamoUpdate.fecha_aprobacion = prestamoData.fecha_aprobacion || null
+        if (prestamoData.estado !== undefined) prestamoUpdate.estado = prestamoData.estado
+        if (prestamoData.concesionario !== undefined) prestamoUpdate.concesionario = prestamoData.concesionario
+        if (prestamoData.analista !== undefined) prestamoUpdate.analista = prestamoData.analista
+        if (prestamoData.modelo_vehiculo !== undefined) prestamoUpdate.modelo_vehiculo = prestamoData.modelo_vehiculo
+        if (prestamoData.valor_activo !== undefined && prestamoData.valor_activo !== null) prestamoUpdate.valor_activo = prestamoData.valor_activo
+        if (prestamoData.usuario_proponente !== undefined) prestamoUpdate.usuario_proponente = prestamoData.usuario_proponente
+        if (prestamoData.usuario_aprobador !== undefined) prestamoUpdate.usuario_aprobador = prestamoData.usuario_aprobador
+
         if (Object.keys(prestamoUpdate).length > 0) {
           try {
             await revisionManualService.editarPrestamo(prestamoData.prestamo_id, prestamoUpdate)
@@ -131,11 +172,12 @@ export function EditarRevisionManual() {
           if (cuota.cuota_id) {
             const cuotaUpdate: Record<string, any> = {}
             if (cuota.fecha_pago) cuotaUpdate.fecha_pago = cuota.fecha_pago.split('T')[0]
-            if (cuota.total_pagado !== undefined && cuota.total_pagado >= 0) {
-              cuotaUpdate.total_pagado = cuota.total_pagado
-            }
+            if (cuota.fecha_vencimiento) cuotaUpdate.fecha_vencimiento = cuota.fecha_vencimiento.split('T')[0]
+            if (cuota.monto !== undefined && cuota.monto >= 0) cuotaUpdate.monto = cuota.monto
+            if (cuota.total_pagado !== undefined && cuota.total_pagado >= 0) cuotaUpdate.total_pagado = cuota.total_pagado
             if (cuota.estado) cuotaUpdate.estado = cuota.estado
-            
+            if (cuota.observaciones !== undefined) cuotaUpdate.observaciones = cuota.observaciones
+
             if (Object.keys(cuotaUpdate).length > 0) {
               try {
                 await revisionManualService.editarCuota(cuota.cuota_id, cuotaUpdate)
@@ -154,6 +196,7 @@ export function EditarRevisionManual() {
       if (!errorOccurred && savedSomething) {
         toast.success('✅ Cambios parciales guardados en BD')
         setCambios({ cliente: false, prestamo: false, cuotas: false })
+        queryClient.invalidateQueries({ queryKey: ['revision-manual-prestamos'] })
       } else if (errorOccurred) {
         toast.warning('⚠️ Algunos cambios no se guardaron. Revisa los errores arriba')
       }
@@ -191,7 +234,10 @@ export function EditarRevisionManual() {
         if (clienteData.email) clienteUpdate.email = clienteData.email
         if (clienteData.direccion) clienteUpdate.direccion = clienteData.direccion
         if (clienteData.ocupacion) clienteUpdate.ocupacion = clienteData.ocupacion
-        
+        if (clienteData.estado) clienteUpdate.estado = clienteData.estado
+        if (clienteData.fecha_nacimiento !== undefined) clienteUpdate.fecha_nacimiento = clienteData.fecha_nacimiento || null
+        if (clienteData.notas !== undefined) clienteUpdate.notas = clienteData.notas
+
         if (Object.keys(clienteUpdate).length > 0) {
           try {
             await revisionManualService.editarCliente(clienteData.cliente_id, clienteUpdate)
@@ -203,18 +249,26 @@ export function EditarRevisionManual() {
 
       if (cambios.prestamo && prestamoData.prestamo_id) {
         const prestamoUpdate: Record<string, any> = {}
-        if (prestamoData.total_financiamiento !== undefined && prestamoData.total_financiamiento > 0) {
-          prestamoUpdate.total_financiamiento = prestamoData.total_financiamiento
-        }
-        if (prestamoData.numero_cuotas !== undefined && prestamoData.numero_cuotas > 0) {
-          prestamoUpdate.numero_cuotas = prestamoData.numero_cuotas
-        }
-        if (prestamoData.tasa_interes !== undefined && prestamoData.tasa_interes >= 0) {
-          prestamoUpdate.tasa_interes = prestamoData.tasa_interes
-        }
-        if (prestamoData.producto) prestamoUpdate.producto = prestamoData.producto
-        if (prestamoData.observaciones) prestamoUpdate.observaciones = prestamoData.observaciones
-        
+        if (prestamoData.total_financiamiento !== undefined && prestamoData.total_financiamiento >= 0) prestamoUpdate.total_financiamiento = prestamoData.total_financiamiento
+        if (prestamoData.numero_cuotas !== undefined && prestamoData.numero_cuotas >= 1) prestamoUpdate.numero_cuotas = prestamoData.numero_cuotas
+        if (prestamoData.tasa_interes !== undefined && prestamoData.tasa_interes >= 0) prestamoUpdate.tasa_interes = prestamoData.tasa_interes
+        if (prestamoData.producto !== undefined) prestamoUpdate.producto = prestamoData.producto
+        if (prestamoData.observaciones !== undefined) prestamoUpdate.observaciones = prestamoData.observaciones
+        if (prestamoData.cedula !== undefined) prestamoUpdate.cedula = prestamoData.cedula
+        if (prestamoData.nombres !== undefined) prestamoUpdate.nombres = prestamoData.nombres
+        if (prestamoData.fecha_requerimiento !== undefined) prestamoUpdate.fecha_requerimiento = prestamoData.fecha_requerimiento || null
+        if (prestamoData.modalidad_pago !== undefined) prestamoUpdate.modalidad_pago = prestamoData.modalidad_pago
+        if (prestamoData.cuota_periodo !== undefined && prestamoData.cuota_periodo >= 0) prestamoUpdate.cuota_periodo = prestamoData.cuota_periodo
+        if (prestamoData.fecha_base_calculo !== undefined) prestamoUpdate.fecha_base_calculo = prestamoData.fecha_base_calculo || null
+        if (prestamoData.fecha_aprobacion !== undefined) prestamoUpdate.fecha_aprobacion = prestamoData.fecha_aprobacion || null
+        if (prestamoData.estado !== undefined) prestamoUpdate.estado = prestamoData.estado
+        if (prestamoData.concesionario !== undefined) prestamoUpdate.concesionario = prestamoData.concesionario
+        if (prestamoData.analista !== undefined) prestamoUpdate.analista = prestamoData.analista
+        if (prestamoData.modelo_vehiculo !== undefined) prestamoUpdate.modelo_vehiculo = prestamoData.modelo_vehiculo
+        if (prestamoData.valor_activo !== undefined && prestamoData.valor_activo !== null) prestamoUpdate.valor_activo = prestamoData.valor_activo
+        if (prestamoData.usuario_proponente !== undefined) prestamoUpdate.usuario_proponente = prestamoData.usuario_proponente
+        if (prestamoData.usuario_aprobador !== undefined) prestamoUpdate.usuario_aprobador = prestamoData.usuario_aprobador
+
         if (Object.keys(prestamoUpdate).length > 0) {
           try {
             await revisionManualService.editarPrestamo(prestamoData.prestamo_id, prestamoUpdate)
@@ -229,11 +283,12 @@ export function EditarRevisionManual() {
           if (cuota.cuota_id) {
             const cuotaUpdate: Record<string, any> = {}
             if (cuota.fecha_pago) cuotaUpdate.fecha_pago = cuota.fecha_pago.split('T')[0]
-            if (cuota.total_pagado !== undefined && cuota.total_pagado >= 0) {
-              cuotaUpdate.total_pagado = cuota.total_pagado
-            }
+            if (cuota.fecha_vencimiento) cuotaUpdate.fecha_vencimiento = cuota.fecha_vencimiento.split('T')[0]
+            if (cuota.monto !== undefined && cuota.monto >= 0) cuotaUpdate.monto = cuota.monto
+            if (cuota.total_pagado !== undefined && cuota.total_pagado >= 0) cuotaUpdate.total_pagado = cuota.total_pagado
             if (cuota.estado) cuotaUpdate.estado = cuota.estado
-            
+            if (cuota.observaciones !== undefined) cuotaUpdate.observaciones = cuota.observaciones
+
             if (Object.keys(cuotaUpdate).length > 0) {
               try {
                 await revisionManualService.editarCuota(cuota.cuota_id, cuotaUpdate)
@@ -253,7 +308,7 @@ export function EditarRevisionManual() {
 
         // Pequeño delay antes de navegar para que el usuario vea el mensaje
         setTimeout(() => {
-          navigate('/prestamos')
+          navigate('/revision-manual')
         }, 1500)
       } catch (err: any) {
         throw new Error(`Error al finalizar: ${err?.response?.data?.detail || 'Error desconocido'}`)
@@ -277,7 +332,8 @@ export function EditarRevisionManual() {
       )
       if (!confirmar) return
     }
-    navigate('/prestamos')
+    queryClient.invalidateQueries({ queryKey: ['revision-manual-prestamos'] })
+    navigate('/revision-manual')
   }
 
   if (isLoading) {
@@ -294,7 +350,7 @@ export function EditarRevisionManual() {
         <div className="text-center">
           <h2 className="text-2xl font-bold text-red-600 mb-2">Error</h2>
           <p className="text-gray-600 mb-4">No se pudieron cargar los datos del préstamo</p>
-          <Button onClick={() => navigate('/prestamos')}>Volver a Préstamos</Button>
+          <Button onClick={() => navigate('/revision-manual')}>Volver a Revisión Manual</Button>
         </div>
       </div>
     )
@@ -433,6 +489,49 @@ export function EditarRevisionManual() {
                   placeholder="Ingresa ocupación"
                 />
               </div>
+              <div>
+                <label className="text-sm font-medium">Estado</label>
+                <select
+                  value={clienteData.estado || ''}
+                  onChange={(e) => {
+                    setClienteData({ ...clienteData, estado: e.target.value })
+                    setCambios({ ...cambios, cliente: true })
+                  }}
+                  className="w-full border rounded px-3 py-2 mt-1 bg-white"
+                >
+                  <option value="">Seleccionar estado</option>
+                  {opcionesEstado.map((est) => (
+                    <option key={est} value={est}>
+                      {est}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Fecha Nacimiento</label>
+                <input
+                  type="date"
+                  value={clienteData.fecha_nacimiento || ''}
+                  onChange={(e) => {
+                    setClienteData({ ...clienteData, fecha_nacimiento: e.target.value || null })
+                    setCambios({ ...cambios, cliente: true })
+                  }}
+                  className="w-full border rounded px-3 py-2 mt-1"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="text-sm font-medium">Notas</label>
+                <textarea
+                  value={clienteData.notas || ''}
+                  onChange={(e) => {
+                    setClienteData({ ...clienteData, notas: e.target.value })
+                    setCambios({ ...cambios, cliente: true })
+                  }}
+                  className="w-full border rounded px-3 py-2 mt-1"
+                  placeholder="Notas del cliente"
+                  rows={2}
+                />
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -500,6 +599,183 @@ export function EditarRevisionManual() {
                   placeholder="Ingresa producto"
                 />
               </div>
+              <div>
+                <label className="text-sm font-medium">Cédula (préstamo)</label>
+                <input
+                  type="text"
+                  value={prestamoData.cedula || ''}
+                  onChange={(e) => {
+                    setPrestamoData({ ...prestamoData, cedula: e.target.value })
+                    setCambios({ ...cambios, prestamo: true })
+                  }}
+                  className="w-full border rounded px-3 py-2 mt-1"
+                  placeholder="Cédula"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Nombres (préstamo)</label>
+                <input
+                  type="text"
+                  value={prestamoData.nombres || ''}
+                  onChange={(e) => {
+                    setPrestamoData({ ...prestamoData, nombres: e.target.value })
+                    setCambios({ ...cambios, prestamo: true })
+                  }}
+                  className="w-full border rounded px-3 py-2 mt-1"
+                  placeholder="Nombres"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Fecha Requerimiento</label>
+                <input
+                  type="date"
+                  value={prestamoData.fecha_requerimiento || ''}
+                  onChange={(e) => {
+                    setPrestamoData({ ...prestamoData, fecha_requerimiento: e.target.value || null })
+                    setCambios({ ...cambios, prestamo: true })
+                  }}
+                  className="w-full border rounded px-3 py-2 mt-1"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Modalidad Pago</label>
+                <input
+                  type="text"
+                  value={prestamoData.modalidad_pago || ''}
+                  onChange={(e) => {
+                    setPrestamoData({ ...prestamoData, modalidad_pago: e.target.value })
+                    setCambios({ ...cambios, prestamo: true })
+                  }}
+                  className="w-full border rounded px-3 py-2 mt-1"
+                  placeholder="MENSUAL, QUINCENAL, etc."
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Cuota Período</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={prestamoData.cuota_periodo ?? ''}
+                  onChange={(e) => {
+                    setPrestamoData({ ...prestamoData, cuota_periodo: parseFloat(e.target.value) || 0 })
+                    setCambios({ ...cambios, prestamo: true })
+                  }}
+                  className="w-full border rounded px-3 py-2 mt-1"
+                  placeholder="0.00"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Fecha Base Cálculo</label>
+                <input
+                  type="date"
+                  value={prestamoData.fecha_base_calculo || ''}
+                  onChange={(e) => {
+                    setPrestamoData({ ...prestamoData, fecha_base_calculo: e.target.value || null })
+                    setCambios({ ...cambios, prestamo: true })
+                  }}
+                  className="w-full border rounded px-3 py-2 mt-1"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Fecha Aprobación</label>
+                <input
+                  type="date"
+                  value={prestamoData.fecha_aprobacion || ''}
+                  onChange={(e) => {
+                    setPrestamoData({ ...prestamoData, fecha_aprobacion: e.target.value || null })
+                    setCambios({ ...cambios, prestamo: true })
+                  }}
+                  className="w-full border rounded px-3 py-2 mt-1"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Estado Préstamo</label>
+                <input
+                  type="text"
+                  value={prestamoData.estado || ''}
+                  onChange={(e) => {
+                    setPrestamoData({ ...prestamoData, estado: e.target.value })
+                    setCambios({ ...cambios, prestamo: true })
+                  }}
+                  className="w-full border rounded px-3 py-2 mt-1"
+                  placeholder="DRAFT, APROBADO, DESEMBOLSADO, etc."
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Concesionario</label>
+                <input
+                  type="text"
+                  value={prestamoData.concesionario || ''}
+                  onChange={(e) => {
+                    setPrestamoData({ ...prestamoData, concesionario: e.target.value })
+                    setCambios({ ...cambios, prestamo: true })
+                  }}
+                  className="w-full border rounded px-3 py-2 mt-1"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Analista</label>
+                <input
+                  type="text"
+                  value={prestamoData.analista || ''}
+                  onChange={(e) => {
+                    setPrestamoData({ ...prestamoData, analista: e.target.value })
+                    setCambios({ ...cambios, prestamo: true })
+                  }}
+                  className="w-full border rounded px-3 py-2 mt-1"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Modelo Vehículo</label>
+                <input
+                  type="text"
+                  value={prestamoData.modelo_vehiculo || ''}
+                  onChange={(e) => {
+                    setPrestamoData({ ...prestamoData, modelo_vehiculo: e.target.value })
+                    setCambios({ ...cambios, prestamo: true })
+                  }}
+                  className="w-full border rounded px-3 py-2 mt-1"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Valor Activo</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={prestamoData.valor_activo ?? ''}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    setPrestamoData({ ...prestamoData, valor_activo: v === '' ? null : parseFloat(v) || 0 })
+                    setCambios({ ...cambios, prestamo: true })
+                  }}
+                  className="w-full border rounded px-3 py-2 mt-1"
+                  placeholder="0.00"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Usuario Proponente</label>
+                <input
+                  type="text"
+                  value={prestamoData.usuario_proponente || ''}
+                  onChange={(e) => {
+                    setPrestamoData({ ...prestamoData, usuario_proponente: e.target.value })
+                    setCambios({ ...cambios, prestamo: true })
+                  }}
+                  className="w-full border rounded px-3 py-2 mt-1"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Usuario Aprobador</label>
+                <input
+                  type="text"
+                  value={prestamoData.usuario_aprobador || ''}
+                  onChange={(e) => {
+                    setPrestamoData({ ...prestamoData, usuario_aprobador: e.target.value })
+                    setCambios({ ...cambios, prestamo: true })
+                  }}
+                  className="w-full border rounded px-3 py-2 mt-1"
+                />
+              </div>
               <div className="sm:col-span-2">
                 <label className="text-sm font-medium">Observaciones</label>
                 <textarea
@@ -535,15 +811,39 @@ export function EditarRevisionManual() {
                     <th className="px-4 py-2 text-left">Fecha Pago</th>
                     <th className="px-4 py-2 text-right">Pagado</th>
                     <th className="px-4 py-2 text-left">Estado</th>
+                    <th className="px-4 py-2 text-left">Observaciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
                   {cuotasData.map((cuota, idx) => (
                     <tr key={idx} className="hover:bg-gray-50">
                       <td className="px-4 py-2 font-medium">{cuota.numero_cuota}</td>
-                      <td className="px-4 py-2 text-right font-mono">${cuota.monto?.toFixed(2)}</td>
-                      <td className="px-4 py-2 text-sm">
-                        {cuota.fecha_vencimiento ? new Date(cuota.fecha_vencimiento).toLocaleDateString('es-ES') : 'N/A'}
+                      <td className="px-4 py-2">
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={cuota.monto ?? ''}
+                          onChange={(e) => {
+                            const newCuotas = [...cuotasData]
+                            newCuotas[idx] = { ...cuota, monto: parseFloat(e.target.value) || 0 }
+                            setCuotasData(newCuotas)
+                            setCambios({ ...cambios, cuotas: true })
+                          }}
+                          className="border rounded px-2 py-1 text-sm w-20 text-right"
+                        />
+                      </td>
+                      <td className="px-4 py-2">
+                        <input
+                          type="date"
+                          value={cuota.fecha_vencimiento ? cuota.fecha_vencimiento.split('T')[0] : ''}
+                          onChange={(e) => {
+                            const newCuotas = [...cuotasData]
+                            newCuotas[idx] = { ...cuota, fecha_vencimiento: e.target.value ? `${e.target.value}T00:00:00` : null }
+                            setCuotasData(newCuotas)
+                            setCambios({ ...cambios, cuotas: true })
+                          }}
+                          className="border rounded px-2 py-1 text-sm w-full"
+                        />
                       </td>
                       <td className="px-4 py-2">
                         <input
@@ -588,6 +888,20 @@ export function EditarRevisionManual() {
                           <option value="pagado">Pagado</option>
                           <option value="conciliado">Conciliado</option>
                         </select>
+                      </td>
+                      <td className="px-4 py-2">
+                        <input
+                          type="text"
+                          value={cuota.observaciones || ''}
+                          onChange={(e) => {
+                            const newCuotas = [...cuotasData]
+                            newCuotas[idx] = { ...cuota, observaciones: e.target.value }
+                            setCuotasData(newCuotas)
+                            setCambios({ ...cambios, cuotas: true })
+                          }}
+                          className="border rounded px-2 py-1 text-sm w-32"
+                          placeholder="Obs."
+                        />
                       </td>
                     </tr>
                   ))}

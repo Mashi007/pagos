@@ -111,6 +111,13 @@ class RevisionManualService {
   }
 
   /**
+   * Obtiene lista de estados de clientes desde la BD (para dropdown)
+   */
+  async getEstadosCliente(): Promise<{ estados: string[] }> {
+    return await apiClient.get(`${this.baseUrl}/estados-cliente`)
+  }
+
+  /**
    * Obtiene resumen rápido de revisión
    */
   async getResumenRapidoRevision(): Promise<any> {

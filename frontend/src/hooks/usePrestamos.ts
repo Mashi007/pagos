@@ -98,6 +98,7 @@ export function useCreatePrestamo() {
     mutationFn: (data: PrestamoForm) => prestamoService.createPrestamo(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
+      queryClient.invalidateQueries({ queryKey: ['revision-manual-prestamos'] })
       queryClient.invalidateQueries({ queryKey: ['kpis-principales-menu'], exact: false })
       queryClient.invalidateQueries({ queryKey: ['dashboard-menu'], exact: false })
       toast.success('Préstamo creado exitosamente')
@@ -130,6 +131,7 @@ export function useUpdatePrestamo() {
       // Invalidar todas las queries
       queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
       queryClient.invalidateQueries({ queryKey: prestamoKeys.lists() })
+      queryClient.invalidateQueries({ queryKey: ['revision-manual-prestamos'] })
       queryClient.invalidateQueries({ queryKey: ['kpis-principales-menu'], exact: false })
       queryClient.invalidateQueries({ queryKey: ['dashboard-menu'], exact: false })
 
@@ -157,6 +159,7 @@ export function useDeletePrestamo() {
     mutationFn: (id: number) => prestamoService.deletePrestamo(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
+      queryClient.invalidateQueries({ queryKey: ['revision-manual-prestamos'] })
       queryClient.invalidateQueries({ queryKey: ['kpis-principales-menu'], exact: false })
       queryClient.invalidateQueries({ queryKey: ['dashboard-menu'], exact: false })
       toast.success('Préstamo eliminado exitosamente')
@@ -187,6 +190,7 @@ export function useGenerarAmortizacion() {
     onSuccess: (data, prestamoId) => {
       queryClient.invalidateQueries({ queryKey: [...prestamoKeys.detail(prestamoId), 'cuotas'] })
       queryClient.invalidateQueries({ queryKey: prestamoKeys.detail(prestamoId) })
+      queryClient.invalidateQueries({ queryKey: ['revision-manual-prestamos'] })
       queryClient.invalidateQueries({ queryKey: ['kpis-principales-menu'], exact: false })
       queryClient.invalidateQueries({ queryKey: ['dashboard-menu'], exact: false })
       toast.success('Tabla de amortización generada exitosamente')
@@ -216,6 +220,7 @@ export function useAplicarCondicionesAprobacion() {
       // Invalidar todas las queries
       queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
       queryClient.invalidateQueries({ queryKey: prestamoKeys.lists() })
+      queryClient.invalidateQueries({ queryKey: ['revision-manual-prestamos'] })
       queryClient.invalidateQueries({ queryKey: ['kpis-principales-menu'], exact: false })
       queryClient.invalidateQueries({ queryKey: ['dashboard-menu'], exact: false })
 

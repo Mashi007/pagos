@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
 import { X, Calendar, CheckCircle2 } from 'lucide-react'
@@ -14,6 +15,7 @@ interface AsignarFechaAprobacionModalProps {
 }
 
 export function AsignarFechaAprobacionModal({ prestamo, onClose, onSuccess }: AsignarFechaAprobacionModalProps) {
+  const queryClient = useQueryClient()
   const [fechaAprobacion, setFechaAprobacion] = useState<string>(
     prestamo.fecha_aprobacion 
       ? new Date(prestamo.fecha_aprobacion).toISOString().split('T')[0]
@@ -47,6 +49,7 @@ export function AsignarFechaAprobacionModal({ prestamo, onClose, onSuccess }: As
         `Préstamo desembolsado exitosamente. Estado: DESEMBOLSADO. ` +
         `Tabla de amortización generada con ${resultado.cuotas_recalculadas || 0} cuotas.`
       )
+      queryClient.invalidateQueries({ queryKey: ['revision-manual-prestamos'] })
       onSuccess()
       onClose()
     } catch (error: any) {

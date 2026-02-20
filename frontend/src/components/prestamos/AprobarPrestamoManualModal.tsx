@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
 import { X, Calendar, DollarSign, CheckCircle2 } from 'lucide-react'
@@ -27,6 +28,7 @@ interface AprobarPrestamoManualModalProps {
 }
 
 export function AprobarPrestamoManualModal({ prestamo, onClose, onSuccess }: AprobarPrestamoManualModalProps) {
+  const queryClient = useQueryClient()
   const [fechaAprobacion, setFechaAprobacion] = useState<string>(
     new Date().toISOString().split('T')[0]
   )
@@ -103,6 +105,7 @@ export function AprobarPrestamoManualModal({ prestamo, onClose, onSuccess }: Apr
         observaciones: observaciones || undefined,
       })
       toast.success('Préstamo aprobado correctamente. Tabla de amortización generada.')
+      queryClient.invalidateQueries({ queryKey: ['revision-manual-prestamos'] })
       onSuccess()
       onClose()
     } catch (error: any) {

@@ -28,6 +28,9 @@ class ClienteUpdateData(BaseModel):
     email: Optional[str] = None
     direccion: Optional[str] = None
     ocupacion: Optional[str] = None
+    estado: Optional[str] = None
+    fecha_nacimiento: Optional[str] = None
+    notas: Optional[str] = None
 
 class PrestamoUpdateData(BaseModel):
     total_financiamiento: Optional[float] = Field(None, ge=0)
@@ -35,11 +38,28 @@ class PrestamoUpdateData(BaseModel):
     tasa_interes: Optional[float] = Field(None, ge=0)
     producto: Optional[str] = None
     observaciones: Optional[str] = None
+    cedula: Optional[str] = None
+    nombres: Optional[str] = None
+    fecha_requerimiento: Optional[str] = None
+    modalidad_pago: Optional[str] = None
+    cuota_periodo: Optional[float] = Field(None, ge=0)
+    fecha_base_calculo: Optional[str] = None
+    fecha_aprobacion: Optional[str] = None
+    estado: Optional[str] = None
+    concesionario: Optional[str] = None
+    analista: Optional[str] = None
+    modelo_vehiculo: Optional[str] = None
+    valor_activo: Optional[float] = Field(None, ge=0)
+    usuario_proponente: Optional[str] = None
+    usuario_aprobador: Optional[str] = None
 
 class CuotaUpdateData(BaseModel):
     fecha_pago: Optional[str] = None
+    fecha_vencimiento: Optional[str] = None
+    monto: Optional[float] = Field(None, ge=0)
     total_pagado: Optional[float] = Field(None, ge=0)
     estado: Optional[str] = Field(None, pattern="^(pendiente|pagado|conciliado)$")
+    observaciones: Optional[str] = None
 
 # ===== SCHEMAS RESPUESTA =====
 
@@ -287,6 +307,23 @@ def editar_cliente_revision(
         cambios_dict['ocupacion'] = (cliente.ocupacion, update_data.ocupacion)
         cliente.ocupacion = update_data.ocupacion
     
+    if update_data.estado is not None and update_data.estado.strip():
+        estado_val = update_data.estado.strip().upper()
+        cambios_dict['estado'] = (cliente.estado, estado_val)
+        cliente.estado = estado_val
+
+    if update_data.fecha_nacimiento is not None:
+        try:
+            fecha_nac = datetime.strptime(update_data.fecha_nacimiento, "%Y-%m-%d").date()
+            cambios_dict['fecha_nacimiento'] = (str(cliente.fecha_nacimiento), str(fecha_nac))
+            cliente.fecha_nacimiento = fecha_nac
+        except ValueError:
+            pass
+
+    if update_data.notas is not None:
+        cambios_dict['notas'] = (cliente.notas, update_data.notas)
+        cliente.notas = update_data.notas
+    
     if not cambios_dict:
         return {"mensaje": "No hay cambios que guardar", "cliente_id": cliente_id}
     
@@ -344,9 +381,77 @@ def editar_prestamo_revision(
         cambios_dict['producto'] = (prestamo.producto, update_data.producto)
         prestamo.producto = update_data.producto
     
-    if update_data.observaciones is not None and update_data.observaciones.strip():
+    if update_data.observaciones is not None:
         cambios_dict['observaciones'] = (prestamo.observaciones, update_data.observaciones)
         prestamo.observaciones = update_data.observaciones
+
+    if update_data.cedula is not None and update_data.cedula.strip():
+        cambios_dict['cedula'] = (prestamo.cedula, update_data.cedula.strip())
+        prestamo.cedula = update_data.cedula.strip()
+
+    if update_data.nombres is not None and update_data.nombres.strip():
+        cambios_dict['nombres'] = (prestamo.nombres, update_data.nombres.strip())
+        prestamo.nombres = update_data.nombres.strip()
+
+    if update_data.fecha_requerimiento is not None:
+        try:
+            fecha_req = datetime.strptime(update_data.fecha_requerimiento, "%Y-%m-%d").date()
+            cambios_dict['fecha_requerimiento'] = (str(prestamo.fecha_requerimiento), str(fecha_req))
+            prestamo.fecha_requerimiento = fecha_req
+        except ValueError:
+            pass
+
+    if update_data.modalidad_pago is not None and update_data.modalidad_pago.strip():
+        cambios_dict['modalidad_pago'] = (prestamo.modalidad_pago, update_data.modalidad_pago.strip().upper())
+        prestamo.modalidad_pago = update_data.modalidad_pago.strip().upper()
+
+    if update_data.cuota_periodo is not None and update_data.cuota_periodo >= 0:
+        cambios_dict['cuota_periodo'] = (float(prestamo.cuota_periodo or 0), update_data.cuota_periodo)
+        prestamo.cuota_periodo = update_data.cuota_periodo
+
+    if update_data.fecha_base_calculo is not None:
+        try:
+            fecha_base = datetime.strptime(update_data.fecha_base_calculo, "%Y-%m-%d").date()
+            cambios_dict['fecha_base_calculo'] = (str(prestamo.fecha_base_calculo), str(fecha_base))
+            prestamo.fecha_base_calculo = fecha_base
+        except ValueError:
+            pass
+
+    if update_data.fecha_aprobacion is not None:
+        try:
+            fecha_ap = datetime.strptime(update_data.fecha_aprobacion, "%Y-%m-%d")
+            cambios_dict['fecha_aprobacion'] = (str(prestamo.fecha_aprobacion), str(fecha_ap))
+            prestamo.fecha_aprobacion = fecha_ap
+        except ValueError:
+            pass
+
+    if update_data.estado is not None and update_data.estado.strip():
+        cambios_dict['estado'] = (prestamo.estado, update_data.estado.strip().upper())
+        prestamo.estado = update_data.estado.strip().upper()
+
+    if update_data.concesionario is not None:
+        cambios_dict['concesionario'] = (prestamo.concesionario, update_data.concesionario or "")
+        prestamo.concesionario = update_data.concesionario or ""
+
+    if update_data.analista is not None and update_data.analista.strip():
+        cambios_dict['analista'] = (prestamo.analista, update_data.analista.strip())
+        prestamo.analista = update_data.analista.strip()
+
+    if update_data.modelo_vehiculo is not None:
+        cambios_dict['modelo_vehiculo'] = (prestamo.modelo_vehiculo, update_data.modelo_vehiculo or "")
+        prestamo.modelo_vehiculo = update_data.modelo_vehiculo or ""
+
+    if update_data.valor_activo is not None and update_data.valor_activo >= 0:
+        cambios_dict['valor_activo'] = (float(prestamo.valor_activo or 0), update_data.valor_activo)
+        prestamo.valor_activo = update_data.valor_activo
+
+    if update_data.usuario_proponente is not None and update_data.usuario_proponente.strip():
+        cambios_dict['usuario_proponente'] = (prestamo.usuario_proponente, update_data.usuario_proponente.strip())
+        prestamo.usuario_proponente = update_data.usuario_proponente.strip()
+
+    if update_data.usuario_aprobador is not None:
+        cambios_dict['usuario_aprobador'] = (prestamo.usuario_aprobador, update_data.usuario_aprobador or "")
+        prestamo.usuario_aprobador = update_data.usuario_aprobador or ""
     
     if not cambios_dict:
         return {"mensaje": "No hay cambios que guardar", "prestamo_id": prestamo_id}
@@ -478,6 +583,25 @@ def editar_cuota_revision(
             cuota.fecha_pago = fecha_pago
         except ValueError:
             raise HTTPException(status_code=400, detail="Formato de fecha_pago inválido (YYYY-MM-DD)")
+
+    # Validar y actualizar fecha_vencimiento
+    if update_data.fecha_vencimiento is not None:
+        try:
+            fecha_venc = datetime.strptime(update_data.fecha_vencimiento, "%Y-%m-%d").date()
+            cambios_dict['fecha_vencimiento'] = (str(cuota.fecha_vencimiento), str(fecha_venc))
+            cuota.fecha_vencimiento = fecha_venc
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Formato de fecha_vencimiento inválido (YYYY-MM-DD)")
+
+    # Validar y actualizar monto
+    if update_data.monto is not None and update_data.monto >= 0:
+        cambios_dict['monto'] = (float(cuota.monto or 0), update_data.monto)
+        cuota.monto = update_data.monto
+
+    # Validar y actualizar observaciones
+    if update_data.observaciones is not None:
+        cambios_dict['observaciones'] = (cuota.observaciones, update_data.observaciones)
+        cuota.observaciones = update_data.observaciones
     
     # Validar y actualizar total_pagado
     if update_data.total_pagado is not None and update_data.total_pagado >= 0:
@@ -548,6 +672,15 @@ def get_resumen_rapido_revision(db: Session = Depends(get_db)):
     }
 
 
+@router.get("/estados-cliente")
+def get_estados_cliente(db: Session = Depends(get_db)):
+    """Obtiene lista de estados distintos de clientes desde la BD (para dropdown)."""
+    rows = db.execute(
+        select(Cliente.estado).distinct().where(Cliente.estado.isnot(None)).order_by(Cliente.estado)
+    ).scalars().all()
+    return {"estados": [r[0] for r in rows if r[0]]}
+
+
 @router.get("/prestamos/{prestamo_id}/detalle")
 def get_detalle_prestamo_revision(
     prestamo_id: int,
@@ -576,10 +709,22 @@ def get_detalle_prestamo_revision(
             "fecha_pago": c.fecha_pago.isoformat() if c.fecha_pago else None,
             "total_pagado": float(c.total_pagado) if c.total_pagado else 0.0,
             "estado": c.estado or "pendiente",
+            "observaciones": c.observaciones or "",
+            "saldo_capital_inicial": float(c.saldo_capital_inicial) if c.saldo_capital_inicial else 0.0,
+            "saldo_capital_final": float(c.saldo_capital_final) if c.saldo_capital_final else 0.0,
         }
         for c in cuotas
     ]
-    
+
+    def _dt_iso(dt):
+        if dt is None:
+            return None
+        if hasattr(dt, "date"):
+            d = dt.date() if callable(getattr(dt, "date", None)) else dt
+        else:
+            d = dt
+        return d.isoformat() if hasattr(d, "isoformat") else str(d)
+
     return {
         "cliente": {
             "cliente_id": cliente.id,
@@ -589,14 +734,32 @@ def get_detalle_prestamo_revision(
             "email": cliente.email or "",
             "direccion": cliente.direccion or "",
             "ocupacion": cliente.ocupacion or "",
+            "estado": cliente.estado or "",
+            "fecha_nacimiento": _dt_iso(cliente.fecha_nacimiento),
+            "notas": cliente.notas or "",
         },
         "prestamo": {
             "prestamo_id": prestamo.id,
+            "cliente_id": prestamo.cliente_id,
+            "cedula": prestamo.cedula or "",
+            "nombres": prestamo.nombres or "",
             "total_financiamiento": float(prestamo.total_financiamiento) if prestamo.total_financiamiento else 0.0,
             "numero_cuotas": prestamo.numero_cuotas or 0,
             "tasa_interes": float(prestamo.tasa_interes) if prestamo.tasa_interes else 0.0,
             "producto": prestamo.producto or "",
             "observaciones": prestamo.observaciones or "",
+            "fecha_requerimiento": _dt_iso(prestamo.fecha_requerimiento),
+            "modalidad_pago": prestamo.modalidad_pago or "",
+            "cuota_periodo": float(prestamo.cuota_periodo) if prestamo.cuota_periodo else 0.0,
+            "fecha_base_calculo": _dt_iso(prestamo.fecha_base_calculo),
+            "fecha_aprobacion": _dt_iso(prestamo.fecha_aprobacion),
+            "estado": prestamo.estado or "",
+            "concesionario": prestamo.concesionario or "",
+            "analista": prestamo.analista or "",
+            "modelo_vehiculo": prestamo.modelo_vehiculo or "",
+            "valor_activo": float(prestamo.valor_activo) if prestamo.valor_activo else None,
+            "usuario_proponente": prestamo.usuario_proponente or "",
+            "usuario_aprobador": prestamo.usuario_aprobador or "",
         },
         "cuotas": cuotas_data,
     }

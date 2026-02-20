@@ -86,6 +86,19 @@ def _audit_user_id(db: Session, current_user: UserResponse) -> int:
     )
 
 
+def _registrar_en_revision_manual(db: Session, prestamo_id: int) -> None:
+    """
+    Registra el préstamo en Revisión Manual (estado pendiente) si no existe.
+    Se llama al aprobar un crédito para que aparezca automáticamente en la lista.
+    """
+    existente = db.execute(
+        select(RevisionManualPrestamo).where(RevisionManualPrestamo.prestamo_id == prestamo_id)
+    ).scalars().first()
+    if not existente:
+        rev = RevisionManualPrestamo(prestamo_id=prestamo_id, estado_revision="pendiente")
+        db.add(rev)
+
+
 # --- Schemas para body de endpoints adicionales ---
 class AplicarCondicionesBody(BaseModel):
     tasa_interes: Optional[float] = None
@@ -817,6 +830,7 @@ def aplicar_condiciones_aprobacion(prestamo_id: int, payload: AplicarCondiciones
     if payload.observaciones is not None:
         p.observaciones = payload.observaciones
     p.estado = "APROBADO"
+    _registrar_en_revision_manual(db, prestamo_id)
     db.commit()
     # Generar cuotas si no existen
     existentes = db.scalar(select(func.count()).select_from(Cuota).where(Cuota.prestamo_id == prestamo_id)) or 0
@@ -876,6 +890,7 @@ def asignar_fecha_aprobacion(prestamo_id: int, payload: AsignarFechaAprobacionBo
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
     p.fecha_aprobacion = datetime.combine(payload.fecha_aprobacion, datetime.min.time()) if isinstance(payload.fecha_aprobacion, date) else payload.fecha_aprobacion
     p.estado = "DESEMBOLSADO"
+    _registrar_en_revision_manual(db, prestamo_id)
     existentes = db.scalar(select(func.count()).select_from(Cuota).where(Cuota.prestamo_id == prestamo_id)) or 0
     cuotas_recalculadas = 0
     if existentes == 0:
@@ -959,6 +974,7 @@ def aprobar_manual(
             exito=True,
         )
         db.add(audit)
+        _registrar_en_revision_manual(db, prestamo_id)
         db.commit()
         db.refresh(p)
         return {"prestamo": PrestamoResponse.model_validate(p), "cuotas_generadas": creadas}

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
@@ -52,13 +52,34 @@ export function RevisionManual() {
   const [page, setPage] = useState(1)
   const [cedulaBuscar, setCedulaBuscar] = useState('')
   const [cedulaInput, setCedulaInput] = useState('') // valor del input (para debounce o submit)
+  const [prestamosOcultos, setPrestamosOcultos] = useState<Set<number>>(new Set())
+  const timeoutsRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map())
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+
+  // Limpiar timeouts al desmontar
+  useEffect(() => {
+    return () => {
+      timeoutsRef.current.forEach((t) => clearTimeout(t))
+      timeoutsRef.current.clear()
+    }
+  }, [])
+
+  const programarOcultarEn30s = (prestamoId: number) => {
+    const existing = timeoutsRef.current.get(prestamoId)
+    if (existing) clearTimeout(existing)
+    const t = setTimeout(() => {
+      setPrestamosOcultos((prev) => new Set([...prev, prestamoId]))
+      timeoutsRef.current.delete(prestamoId)
+    }, 30000)
+    timeoutsRef.current.set(prestamoId, t)
+  }
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['revision-manual-prestamos', filtro, page, cedulaBuscar],
     queryFn: () => revisionManualService.getPreslamosRevision(filtro, page, PER_PAGE, cedulaBuscar || undefined),
-    staleTime: 60 * 1000,
+    staleTime: 15 * 1000,
+    refetchOnWindowFocus: true,
   })
 
   const handleConfirmarSi = async (prestamoId: number, nombres: string) => {
@@ -81,6 +102,7 @@ export function RevisionManual() {
       const res = await revisionManualService.confirmarPrestamoRevisado(prestamoId)
       toast.success(`✅ ${res.mensaje}`)
       queryClient.invalidateQueries({ queryKey: ['revision-manual-prestamos'] })
+      programarOcultarEn30s(prestamoId)
     } catch (err: any) {
       const errorMsg = err?.response?.data?.detail || 'Error al confirmar'
       toast.error(`❌ ${errorMsg}`)
@@ -108,6 +130,7 @@ export function RevisionManual() {
     // Inicia revisión (cambia estado a 'revisando')
     revisionManualService.iniciarRevision(prestamoId).then(() => {
       toast.info('ℹ️ Edición iniciada. Abriendo editor...')
+      queryClient.invalidateQueries({ queryKey: ['revision-manual-prestamos'] })
       // Navega a página de edición
       navigate(`/revision-manual/editar/${prestamoId}`)
     }).catch((err: any) => {
@@ -142,7 +165,9 @@ export function RevisionManual() {
     }
   }
 
-  const datosVisibles = data?.prestamos ?? []
+  const datosVisibles = (data?.prestamos ?? []).filter(
+    (p) => !prestamosOcultos.has(p.prestamo_id)
+  )
   const totalPrestamos = data?.total_prestamos ?? 0
   const totalPages = Math.ceil(totalPrestamos / PER_PAGE) || 1
 
