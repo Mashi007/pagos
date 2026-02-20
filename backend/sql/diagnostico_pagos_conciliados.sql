@@ -157,7 +157,7 @@ WHERE prestamo_id = 4601 AND pago_id IS NULL;
 -- ====================================================================
 SELECT 
     'Total Financiamiento' as concepto,
-    SUM(p.monto_cuota)::numeric(14,2) as valor
+    SUM(c.monto_cuota)::numeric(14,2) as valor
 FROM public.cuotas c
 JOIN public.prestamos p ON c.prestamo_id = p.id
 WHERE p.id = 4601
