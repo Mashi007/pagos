@@ -107,6 +107,15 @@ class RevisionManualService {
   async getResumenRapidoRevision(): Promise<any> {
     return await apiClient.get(`${this.baseUrl}/resumen-rapido`)
   }
+
+  /**
+   * Edita datos de una cuota (fecha_pago, total_pagado, estado)
+   */
+  async editarCuota(cuotaId: number, datos: any): Promise<any> {
+    return await apiClient.put(`${this.baseUrl}/cuotas/${cuotaId}`, datos, {
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }
 }
 
 export const revisionManualService = new RevisionManualService()

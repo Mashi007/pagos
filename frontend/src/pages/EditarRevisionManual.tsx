@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
-import { Loader2, Save, X, ArrowLeft, Check } from 'lucide-react'
+import { Loader2, Save, X, ChevronLeft, Check } from 'lucide-react'
 import { toast } from 'sonner'
 import { revisionManualService } from '../services/revisionManualService'
 
@@ -316,7 +316,7 @@ export function EditarRevisionManual() {
             className="h-8 w-8 p-0"
             title="Volver sin guardar"
           >
-            <ArrowLeft className="h-4 w-4" />
+            <ChevronLeft className="h-4 w-4" />
           </Button>
           <div>
             <h1 className="text-2xl font-bold text-gray-900">

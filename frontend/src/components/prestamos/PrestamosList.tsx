@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Plus, Search, Filter, Edit, Eye, Trash2, DollarSign, Calendar, Lock, CheckCircle2, X, RefreshCw, AlertTriangle, HelpCircle } from 'lucide-react'
+import { Plus, Search, Filter, Edit, Eye, Trash2, DollarSign, Calendar, Lock, CheckCircle2, X, RefreshCw, AlertTriangle, Info } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -674,7 +674,7 @@ export function PrestamosList() {
                                 title="En revisión - Click para continuar"
                                 className="hover:bg-yellow-50 text-yellow-600"
                               >
-                                <HelpCircle className="h-4 w-4" />
+                                <Info className="h-4 w-4" />
                               </Button>
                             )}
                             
