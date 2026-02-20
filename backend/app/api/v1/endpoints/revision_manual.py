@@ -672,13 +672,7 @@ def get_resumen_rapido_revision(db: Session = Depends(get_db)):
     }
 
 
-@router.get("/estados-cliente")
-def get_estados_cliente(db: Session = Depends(get_db)):
-    """Obtiene lista de estados distintos de clientes desde la BD (para dropdown)."""
-    rows = db.execute(
-        select(Cliente.estado).distinct().where(Cliente.estado.isnot(None)).order_by(Cliente.estado)
-    ).scalars().all()
-    return {"estados": [r[0] for r in rows if r[0]]}
+# Estados de cliente: ver GET /api/v1/clientes/estados (tabla estados_cliente)
 
 
 @router.get("/prestamos/{prestamo_id}/detalle")

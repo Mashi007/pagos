@@ -4,9 +4,14 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Loader2, Save, X, ChevronLeft, Check } from 'lucide-react'
 import { toast } from 'sonner'
 import { revisionManualService } from '../services/revisionManualService'
+import { useEstadosCliente } from '../hooks/useEstadosCliente'
+import { useConcesionariosActivos } from '../hooks/useConcesionarios'
+import { useAnalistasActivos } from '../hooks/useAnalistas'
+import { useModelosVehiculosActivos } from '../hooks/useModelosVehiculos'
 
 interface ClienteData {
   cliente_id: number
@@ -80,16 +85,22 @@ export function EditarRevisionManual() {
     enabled: !!prestamoId,
   })
 
-  const { data: estadosData } = useQuery({
-    queryKey: ['revision-manual-estados-cliente'],
-    queryFn: () => revisionManualService.getEstadosCliente(),
-    staleTime: 5 * 60 * 1000,
-  })
-  const estadosCliente = estadosData?.estados ?? []
-  // Incluir estado actual del cliente si no está en la lista (p. ej. valor legacy en BD)
-  const opcionesEstado = [
-    ...new Set([...(clienteData.estado ? [clienteData.estado] : []), ...estadosCliente]),
-  ].sort()
+  // Estados de cliente desde BD (tabla estados_cliente)
+  const { opciones: opcionesBD } = useEstadosCliente()
+  const { data: concesionarios = [] } = useConcesionariosActivos()
+  const { data: analistas = [] } = useAnalistasActivos()
+  const { data: modelosVehiculos = [] } = useModelosVehiculosActivos()
+  const opcionesBase = (opcionesBD.length > 0 ? opcionesBD : [
+    { valor: 'ACTIVO', etiqueta: 'Activo', orden: 1 },
+    { valor: 'INACTIVO', etiqueta: 'Inactivo', orden: 2 },
+    { valor: 'FINALIZADO', etiqueta: 'Finalizado', orden: 3 },
+    { valor: 'LEGACY', etiqueta: 'Legacy', orden: 4 },
+  ]).map(e => ({ value: e.valor, label: e.etiqueta }))
+  // Incluir estado actual del cliente si no está en la lista (valor legacy en BD)
+  const estadoActual = clienteData.estado
+  const opcionesEstado = estadoActual && !opcionesBase.some(e => e.value === estadoActual)
+    ? [{ value: estadoActual, label: `${estadoActual} (legacy)` }, ...opcionesBase]
+    : opcionesBase
 
   const handleGuardarParciales = async () => {
     if (!prestamoId) return
@@ -196,7 +207,13 @@ export function EditarRevisionManual() {
       if (!errorOccurred && savedSomething) {
         toast.success('✅ Cambios parciales guardados en BD')
         setCambios({ cliente: false, prestamo: false, cuotas: false })
+        // Invalidar todas las vistas que muestran datos de préstamos, clientes y cuotas
         queryClient.invalidateQueries({ queryKey: ['revision-manual-prestamos'] })
+        queryClient.invalidateQueries({ queryKey: ['prestamos'] })
+        queryClient.invalidateQueries({ queryKey: ['clientes'] })
+        queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
+        queryClient.invalidateQueries({ queryKey: ['kpis-principales-menu'], exact: false })
+        queryClient.invalidateQueries({ queryKey: ['dashboard-menu'], exact: false })
       } else if (errorOccurred) {
         toast.warning('⚠️ Algunos cambios no se guardaron. Revisa los errores arriba')
       }
@@ -304,7 +321,13 @@ export function EditarRevisionManual() {
       try {
         const res = await revisionManualService.finalizarRevision(parseInt(prestamoId))
         toast.success(res.mensaje)
+        // Invalidar todas las vistas para reflejar cambios en tablas originales
         queryClient.invalidateQueries({ queryKey: ['revision-manual-prestamos'] })
+        queryClient.invalidateQueries({ queryKey: ['prestamos'] })
+        queryClient.invalidateQueries({ queryKey: ['clientes'] })
+        queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
+        queryClient.invalidateQueries({ queryKey: ['kpis-principales-menu'], exact: false })
+        queryClient.invalidateQueries({ queryKey: ['dashboard-menu'], exact: false })
 
         // Pequeño delay antes de navegar para que el usuario vea el mensaje
         setTimeout(() => {
@@ -332,7 +355,11 @@ export function EditarRevisionManual() {
       )
       if (!confirmar) return
     }
+    // Invalidar para que al volver se muestren datos actualizados
     queryClient.invalidateQueries({ queryKey: ['revision-manual-prestamos'] })
+    queryClient.invalidateQueries({ queryKey: ['prestamos'] })
+    queryClient.invalidateQueries({ queryKey: ['clientes'] })
+    queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
     navigate('/revision-manual')
   }
 
@@ -501,8 +528,8 @@ export function EditarRevisionManual() {
                 >
                   <option value="">Seleccionar estado</option>
                   {opcionesEstado.map((est) => (
-                    <option key={est} value={est}>
-                      {est}
+                    <option key={est.value} value={est.value}>
+                      {est.label}
                     </option>
                   ))}
                 </select>
@@ -588,16 +615,26 @@ export function EditarRevisionManual() {
               </div>
               <div>
                 <label className="text-sm font-medium">Producto</label>
-                <input
-                  type="text"
-                  value={prestamoData.producto || ''}
-                  onChange={(e) => {
-                    setPrestamoData({ ...prestamoData, producto: e.target.value })
+                <Select
+                  value={prestamoData.producto || '-'}
+                  onValueChange={(v) => {
+                    setPrestamoData({ ...prestamoData, producto: v === '-' ? '' : v })
                     setCambios({ ...cambios, prestamo: true })
                   }}
-                  className="w-full border rounded px-3 py-2 mt-1"
-                  placeholder="Ingresa producto"
-                />
+                >
+                  <SelectTrigger className="w-full mt-1">
+                    <SelectValue placeholder="—" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="-">—</SelectItem>
+                    {prestamoData.producto && !modelosVehiculos.some((m: any) => m.modelo === prestamoData.producto) && (
+                      <SelectItem value={prestamoData.producto}>{prestamoData.producto}</SelectItem>
+                    )}
+                    {modelosVehiculos.map((m: any) => (
+                      <SelectItem key={m.id} value={m.modelo}>{m.modelo}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <label className="text-sm font-medium">Cédula (préstamo)</label>
@@ -703,39 +740,72 @@ export function EditarRevisionManual() {
               </div>
               <div>
                 <label className="text-sm font-medium">Concesionario</label>
-                <input
-                  type="text"
-                  value={prestamoData.concesionario || ''}
-                  onChange={(e) => {
-                    setPrestamoData({ ...prestamoData, concesionario: e.target.value })
+                <Select
+                  value={prestamoData.concesionario || '-'}
+                  onValueChange={(v) => {
+                    setPrestamoData({ ...prestamoData, concesionario: v === '-' ? '' : v })
                     setCambios({ ...cambios, prestamo: true })
                   }}
-                  className="w-full border rounded px-3 py-2 mt-1"
-                />
+                >
+                  <SelectTrigger className="w-full mt-1">
+                    <SelectValue placeholder="—" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="-">—</SelectItem>
+                    {prestamoData.concesionario && !concesionarios.some((c: any) => c.nombre === prestamoData.concesionario) && (
+                      <SelectItem value={prestamoData.concesionario}>{prestamoData.concesionario}</SelectItem>
+                    )}
+                    {concesionarios.map((c: any) => (
+                      <SelectItem key={c.id} value={c.nombre}>{c.nombre}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <label className="text-sm font-medium">Analista</label>
-                <input
-                  type="text"
-                  value={prestamoData.analista || ''}
-                  onChange={(e) => {
-                    setPrestamoData({ ...prestamoData, analista: e.target.value })
+                <Select
+                  value={prestamoData.analista || '-'}
+                  onValueChange={(v) => {
+                    setPrestamoData({ ...prestamoData, analista: v === '-' ? '' : v })
                     setCambios({ ...cambios, prestamo: true })
                   }}
-                  className="w-full border rounded px-3 py-2 mt-1"
-                />
+                >
+                  <SelectTrigger className="w-full mt-1">
+                    <SelectValue placeholder="—" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="-">—</SelectItem>
+                    {prestamoData.analista && !analistas.some((a: any) => a.nombre === prestamoData.analista) && (
+                      <SelectItem value={prestamoData.analista}>{prestamoData.analista}</SelectItem>
+                    )}
+                    {analistas.map((a: any) => (
+                      <SelectItem key={a.id} value={a.nombre}>{a.nombre}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <label className="text-sm font-medium">Modelo Vehículo</label>
-                <input
-                  type="text"
-                  value={prestamoData.modelo_vehiculo || ''}
-                  onChange={(e) => {
-                    setPrestamoData({ ...prestamoData, modelo_vehiculo: e.target.value })
+                <Select
+                  value={prestamoData.modelo_vehiculo || '-'}
+                  onValueChange={(v) => {
+                    setPrestamoData({ ...prestamoData, modelo_vehiculo: v === '-' ? '' : v })
                     setCambios({ ...cambios, prestamo: true })
                   }}
-                  className="w-full border rounded px-3 py-2 mt-1"
-                />
+                >
+                  <SelectTrigger className="w-full mt-1">
+                    <SelectValue placeholder="—" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="-">—</SelectItem>
+                    {prestamoData.modelo_vehiculo && !modelosVehiculos.some((m: any) => m.modelo === prestamoData.modelo_vehiculo) && (
+                      <SelectItem value={prestamoData.modelo_vehiculo}>{prestamoData.modelo_vehiculo}</SelectItem>
+                    )}
+                    {modelosVehiculos.map((m: any) => (
+                      <SelectItem key={m.id} value={m.modelo}>{m.modelo}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <label className="text-sm font-medium">Valor Activo</label>

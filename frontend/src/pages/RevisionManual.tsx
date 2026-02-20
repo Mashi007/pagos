@@ -158,6 +158,11 @@ export function RevisionManual() {
       await revisionManualService.eliminarPrestamo(prestamoId)
       toast.success('✅ Préstamo eliminado')
       queryClient.invalidateQueries({ queryKey: ['revision-manual-prestamos'] })
+      queryClient.invalidateQueries({ queryKey: ['prestamos'] })
+      queryClient.invalidateQueries({ queryKey: ['clientes'] })
+      queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
+      queryClient.invalidateQueries({ queryKey: ['kpis-principales-menu'], exact: false })
+      queryClient.invalidateQueries({ queryKey: ['dashboard-menu'], exact: false })
     } catch (err: any) {
       const errorMsg = err?.response?.data?.detail || 'Error al eliminar'
       toast.error(`❌ ${errorMsg}`)

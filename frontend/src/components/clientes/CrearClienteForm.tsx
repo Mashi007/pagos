@@ -14,6 +14,7 @@ import { validadoresService } from '../../services/validadoresService'
 import { useSimpleAuth } from '../../store/simpleAuthStore'
 import { ExcelUploader } from './ExcelUploader'
 import { useEscapeClose } from '../../hooks/useEscapeClose'
+import { useEstadosCliente } from '../../hooks/useEstadosCliente'
 
 interface FormData {
   // Datos personales - OBLIGATORIOS
@@ -32,8 +33,8 @@ interface FormData {
   fechaNacimiento: string
   ocupacion: string  // âœ… MÁXIMO 2 palabras
 
-  // Estado - OBLIGATORIO
-  estado: 'ACTIVO' | 'INACTIVO' | 'FINALIZADO'
+  // Estado - OBLIGATORIO (valores desde BD: estados_cliente)
+  estado: string
 
   // Notas - OBLIGATORIO (default 'NA')
   notas: string
@@ -58,6 +59,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
   // Cierre global con ESC
   useEscapeClose(onClose, true)
   const { user } = useSimpleAuth()
+  const { opciones: opcionesEstado } = useEstadosCliente()
   const usuarioRegistro = user?.email ?? 'formulario'
   // Normalizador: si el usuario coloca 'nn' (cualquier caso/espacios), convertir a vacío
   const blankIfNN = (value: string | null | undefined): string => {
@@ -302,7 +304,7 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
         ...direccionData,
         fechaNacimiento: convertirFechaLocal(typeof cliente.fecha_nacimiento === 'string' ? cliente.fecha_nacimiento : ''), // âœ… Convertir ISO a DD/MM/YYYY
         ocupacion: typeof cliente.ocupacion === 'string' ? cliente.ocupacion : '',
-        estado: (typeof cliente.estado === 'string' && ['ACTIVO', 'INACTIVO', 'FINALIZADO'].includes(cliente.estado)) ? cliente.estado as 'ACTIVO' | 'INACTIVO' | 'FINALIZADO' : 'ACTIVO',  // âœ… Mantener estado del cliente existente en edición
+        estado: (typeof cliente.estado === 'string' && cliente.estado) ? cliente.estado : 'ACTIVO',  // Mantener estado del cliente existente en edición
         notas: typeof cliente.notas === 'string' ? cliente.notas : 'No hay observacion'
       }
 
@@ -1572,15 +1574,20 @@ export function CrearClienteForm({ cliente, onClose, onSuccess, onClienteCreated
                   </label>
                 <Select
                   value={formData.estado}
-                  onValueChange={(value: 'ACTIVO' | 'INACTIVO' | 'FINALIZADO') => handleInputChange('estado', value)}
+                  onValueChange={(value: string) => handleInputChange('estado', value)}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar estado" />
                     </SelectTrigger>
                     <SelectContent>
-                    <SelectItem value="ACTIVO">Activo</SelectItem>
-                    <SelectItem value="INACTIVO">Inactivo</SelectItem>
-                    <SelectItem value="FINALIZADO">Finalizado</SelectItem>
+                    {(opcionesEstado.length > 0 ? opcionesEstado : [
+                      { valor: 'ACTIVO', etiqueta: 'Activo' },
+                      { valor: 'INACTIVO', etiqueta: 'Inactivo' },
+                      { valor: 'FINALIZADO', etiqueta: 'Finalizado' },
+                      { valor: 'LEGACY', etiqueta: 'Legacy' },
+                    ]).map((opt) => (
+                      <SelectItem key={opt.valor} value={opt.valor}>{opt.etiqueta}</SelectItem>
+                    ))}
                     </SelectContent>
                   </Select>
                 </div>

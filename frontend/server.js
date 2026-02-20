@@ -415,12 +415,6 @@ app.get('/prestamos/*', (req, res) => {
 app.get('/chat-ai', (req, res) => {
   res.redirect(302, FRONTEND_BASE + '/chat-ai' + qs(req));
 });
-app.get('/cobranzas', (req, res) => {
-  res.redirect(302, FRONTEND_BASE + '/cobranzas' + qs(req));
-});
-app.get('/cobranzas/*', (req, res) => {
-  const subpath = req.path.slice('/cobranzas'.length);
-  res.redirect(302, FRONTEND_BASE + '/cobranzas' + subpath + qs(req));
 });
 
 // SPA fallback solo para /pagos y /pagos/* (el proxy ya atendió /api/*)
@@ -473,13 +467,6 @@ app.get(FRONTEND_BASE + '/chat-ai', (req, res) => {
 app.get(FRONTEND_BASE + '/notificaciones', (req, res) => {
   res.status(200);
   sendSpaIndex(req, res);
-});
-app.get(FRONTEND_BASE + '/cobranzas', (req, res) => {
-  res.status(200);
-  sendSpaIndex(req, res);
-});
-app.get(FRONTEND_BASE + '/cobranzas/', (req, res) => {
-  res.redirect(302, FRONTEND_BASE + '/cobranzas' + qs(req));
 });
 // Con barra final: redirigir a sin barra para consistencia con React Router
 app.get(FRONTEND_BASE + '/chat-ai/', (req, res) => {

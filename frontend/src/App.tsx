@@ -36,7 +36,6 @@ import Programador from './pages/Programador'
 import Clientes from './pages/Clientes'
 import Prestamos from './pages/Prestamos'
 import Reportes from './pages/Reportes'
-import Cobranzas from './pages/Cobranzas'
 import ChatAI from './pages/ChatAI'
 import Notificaciones from './pages/Notificaciones'
 import Analistas from './pages/Analistas'
@@ -188,13 +187,7 @@ function App() {
           <Route path="revision-manual" element={<RevisionManual />} />
           <Route path="revision-manual/editar/:prestamoId" element={<EditarRevisionManual />} />
 
-          {/* Cobranzas */}
-          <Route
-            path="cobranzas"
-            element={<Cobranzas />}
-          />
-
-          {/* Notificaciones (dentro de CRM en sidebar) */}
+{/* Notificaciones (dentro de CRM en sidebar) */}
           <Route path="notificaciones" element={<Notificaciones />} />
 
           {/* Redirecciones: plantillas viven en Configuración */}

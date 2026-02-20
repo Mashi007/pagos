@@ -111,10 +111,11 @@ class RevisionManualService {
   }
 
   /**
-   * Obtiene lista de estados de clientes desde la BD (para dropdown)
+   * Obtiene lista de estados de clientes desde la BD (para dropdown).
+   * Usa endpoint de clientes para centralizar.
    */
-  async getEstadosCliente(): Promise<{ estados: string[] }> {
-    return await apiClient.get(`${this.baseUrl}/estados-cliente`)
+  async getEstadosCliente(): Promise<{ estados: Array<{ valor: string; etiqueta: string; orden: number }> }> {
+    return await apiClient.get('/api/v1/clientes/estados')
   }
 
   /**

@@ -1,0 +1,321 @@
+﻿
+@router.get("/por-cedula")
+def get_reportes_por_cedula(db: Session = Depends(get_db)):
+    """
+    Reporte por cÃ©dula: id prÃ©stamo, cÃ©dula, nombre, total financiamiento, total abono,
+    cuotas totales, cuotas pagadas, cuotas atrasadas (estado != PAGADO), monto cuotas atrasadas.
+    """
+    prestamos = (
+        db.execute(
+            select(Prestamo)
+            .where(Prestamo.estado == "APROBADO")
+            .order_by(Prestamo.id)
+        )
+    ).scalars().all()
+
+    ids = [p.id for p in prestamos]
+    abono_map: dict = {}
+    pagadas_map: dict = {}
+    atrasadas_map: dict = {}
+    monto_atrasadas_map: dict = {}
+
+    if ids:
+        rows_abono = db.execute(
+            select(Pago.prestamo_id, func.coalesce(func.sum(Pago.monto_pagado), 0))
+            .where(Pago.prestamo_id.in_(ids))
+            .group_by(Pago.prestamo_id)
+        ).fetchall()
+        abono_map = {r[0]: _safe_float(r[1]) for r in rows_abono}
+
+        rows_pagadas = db.execute(
+            select(Cuota.prestamo_id, func.count())
+            .where(Cuota.prestamo_id.in_(ids), Cuota.estado == "PAGADO")
+            .group_by(Cuota.prestamo_id)
+        ).fetchall()
+        pagadas_map = {r[0]: int(r[1]) for r in rows_pagadas}
+
+        rows_atrasadas = db.execute(
+            select(Cuota.prestamo_id, func.count())
+            .where(Cuota.prestamo_id.in_(ids), Cuota.estado != "PAGADO")
+            .group_by(Cuota.prestamo_id)
+        ).fetchall()
+        atrasadas_map = {r[0]: int(r[1]) for r in rows_atrasadas}
+
+        # Monto total de cuotas atrasadas (pendientes, no pagadas)
+        rows_monto_atrasadas = db.execute(
+            select(Cuota.prestamo_id, func.coalesce(func.sum(Cuota.monto), 0))
+            .where(Cuota.prestamo_id.in_(ids), Cuota.estado != "PAGADO")
+            .group_by(Cuota.prestamo_id)
+        ).fetchall()
+        monto_atrasadas_map = {r[0]: _safe_float(r[1]) for r in rows_monto_atrasadas}
+
+    items: List[dict] = []
+    for p in prestamos:
+        cedula = p.cedula or ""
+        nombre = p.nombres or ""
+        if not cedula or not nombre:
+            row_cli = db.execute(select(Cliente.cedula, Cliente.nombres).where(Cliente.id == p.cliente_id)).first()
+            if row_cli:
+                cedula = cedula or (row_cli.cedula or "")
+                nombre = nombre or (row_cli.nombres or "")
+        items.append({
+            "id_prestamo": p.id,
+            "cedula": cedula,
+            "nombre": nombre,
+            "total_financiamiento": round(_safe_float(p.total_financiamiento), 2),
+            "total_abono": round(abono_map.get(p.id, 0), 2),
+            "cuotas_totales": p.numero_cuotas or 0,
+            "cuotas_pagadas": pagadas_map.get(p.id, 0),
+            "cuotas_atrasadas": atrasadas_map.get(p.id, 0),
+            "monto_cuotas_atrasadas": round(monto_atrasadas_map.get(p.id, 0), 2),
+        })
+    return {"items": items}
+
+
+def _generar_excel_por_cedula(items: List[dict]) -> bytes:
+    """Genera Excel reporte por cÃ©dula. Columnas A-I con totales en cabecera."""
+    import openpyxl
+    from datetime import datetime
+    
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    
+    # Obtener mes y aÃ±o actual
+    hoy = datetime.now()
+    mes_nombre = hoy.strftime("%B %Y")  # Ej: "February 2026"
+    # Para espaÃ±ol: usar meses en espaÃ±ol
+    meses_es = {
+        1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril", 5: "Mayo", 6: "Junio",
+        7: "Julio", 8: "Agosto", 9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
+    }
+    mes_es = meses_es.get(hoy.month, "")
+    aÃ±o = hoy.year
+    titulo_pestana = f"Por cÃ©dula - {mes_es} {aÃ±o}"
+    
+    ws.title = titulo_pestana
+    ws.append(["Reporte por cÃ©dula"])
+    ws.append([])
+    
+    # Calcular totales
+    total_financiamiento = sum(r.get("total_financiamiento", 0) for r in items)
+    total_abono = sum(r.get("total_abono", 0) for r in items)
+    total_atrasos = sum(r.get("monto_cuotas_atrasadas", 0) for r in items)
+    
+    # Agregar fila de totales
+    ws.append([
+        f"Total financiamiento: ${total_financiamiento:.2f} | Total abono: ${total_abono:.2f} | Total atrasos: ${total_atrasos:.2f}"
+    ])
+    ws.append([])
+    
+    ws.append([
+        "ID PrÃ©stamo",
+        "CÃ©dula",
+        "Nombre",
+        "Total financiamiento ($)",
+        "Total abono ($)",
+        "Cuotas totales",
+        "Cuotas pagadas",
+        "Cuotas atrasadas",
+        "Cuotas atrasadas ($)",
+    ])
+    for r in items:
+        ws.append([
+            str(r.get("id_prestamo", "")),
+            r.get("cedula", ""),
+            r.get("nombre", ""),
+            r.get("total_financiamiento", 0),
+            r.get("total_abono", 0),
+            r.get("cuotas_totales", 0),
+            r.get("cuotas_pagadas", 0),
+            r.get("cuotas_atrasadas", 0),
+            r.get("monto_cuotas_atrasadas", 0),
+        ])
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+@router.get("/exportar/cedula")
+def exportar_cedula(db: Session = Depends(get_db)):
+    """Exporta reporte por cÃ©dula en Excel. Columnas: ID prÃ©stamo | CÃ©dula | Nombre | Total financiamiento | Total abono | Cuotas totales | Cuotas pagadas | Cuotas atrasadas | Cuotas atrasadas ($)."""
+    data = get_reportes_por_cedula(db=db)
+    items = data.get("items", [])
+    content = _generar_excel_por_cedula(items)
+    hoy_str = date.today().isoformat()
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=reporte_por_cedula_{hoy_str}.xlsx"},
+    )
+
+
+def _generar_pdf_productos(data: dict) -> bytes:
+    from reportlab.lib.pagesizes import letter
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=letter)
+    styles = getSampleStyleSheet()
+    story = []
+    story.append(Paragraph("Reporte de Productos", styles["Title"]))
+    story.append(Paragraph(f"Fecha de corte: {data.get('fecha_corte', '')}", styles["Normal"]))
+    story.append(Spacer(1, 12))
+    rows = [["Producto", "PrÃ©stamos", "Clientes", "Cartera", "Promedio", "Cobrado", "Mora", "% Cobrado"]]
+    for r in data.get("resumen_por_producto", []):
+        rows.append([r.get("producto", ""), str(r.get("total_prestamos", 0)), str(r.get("total_clientes", 0)), str(r.get("cartera_total", 0)), str(r.get("promedio_prestamo", 0)), str(r.get("total_cobrado", 0)), str(r.get("morosidad_total", 0)), str(r.get("porcentaje_cobrado", 0))])
+    t = Table(rows)
+    t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), "#e0e0e0"), ("GRID", (0, 0), (-1, -1), 0.5, "#ccc")]))
+    story.append(t)
+    prod_conc = data.get("productos_por_concesionario", [])
+    if prod_conc:
+        story.append(Spacer(1, 12))
+        story.append(Paragraph("Productos por concesionario", styles["Heading2"]))
+        rows2 = [["Concesionario", "Producto", "Cant. prÃ©stamos", "Monto total"]]
+        for r in prod_conc:
+            rows2.append([r.get("concesionario", ""), r.get("producto", ""), str(r.get("cantidad_prestamos", 0)), str(r.get("monto_total", 0))])
+        t2 = Table(rows2)
+        t2.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), "#e0e0e0"), ("GRID", (0, 0), (-1, -1), 0.5, "#ccc")]))
+        story.append(t2)
+    doc.build(story)
+    return buf.getvalue()
+
+
+# ---------- Reporte Contable (con cache) ----------
+CONTABLE_CACHE_DIAS_ACTUALIZABLES = 7
+
+
+def _obtener_tasa_usd_bs(fecha: date) -> float:
+    """Obtiene tasa USD a BolÃ­vares (Venezuela) para la fecha. Usa API externa o TASA_USD_BS_DEFAULT."""
+    from app.core.config import settings
+    import urllib.request
+    import json
+
+    if settings.TASA_USD_BS_DEFAULT is not None and fecha < date.today():
+        return float(settings.TASA_USD_BS_DEFAULT)
+
+    try:
+        req = urllib.request.Request(
+            settings.EXCHANGERATE_API_URL,
+            headers={"User-Agent": "RapiCredit/1.0"}
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+        rates = data.get("rates", {})
+        tasa = rates.get("VES")
+        if tasa is not None:
+            return float(tasa)
+    except Exception:
+        pass
+
+    if settings.TASA_USD_BS_DEFAULT is not None:
+        return float(settings.TASA_USD_BS_DEFAULT)
+    return 36.0
+
+
+def _cuotas_a_filas_contable(rows, tasas_cache: dict) -> List[dict]:
+    """Convierte filas de cuotas a formato contable con tasa guardada.
+    Si total_pagado es NULL o 0 (datos legacy), usa monto_cuota como importe."""
+    items: List[dict] = []
+    for r in rows:
+        fp = r.fecha_pago or r.fecha_pago_real
+        fp_date = fp.date() if hasattr(fp, "date") else (date.fromisoformat(str(fp)[:10]) if fp else date.today())
+        if fp_date not in tasas_cache:
+            tasas_cache[fp_date] = _obtener_tasa_usd_bs(fp_date)
+        tasa = tasas_cache[fp_date]
+
+        monto_cuota = _safe_float(r.monto)
+        total_pagado_raw = _safe_float(r.total_pagado)
+        total_pagado = total_pagado_raw if total_pagado_raw > 0 else monto_cuota
+        pago_completo = total_pagado >= monto_cuota - 0.01
+        tipo_doc = f"Cuota {r.numero_cuota}" if pago_completo else "Abono"
+        importe_ml = round(total_pagado * tasa, 2)
+
+        items.append({
+            "cuota_id": r.id,
+            "cedula": r.cedula or "",
+            "nombre": (r.nombres or "").strip(),
+            "tipo_documento": tipo_doc,
+            "fecha_vencimiento": r.fecha_vencimiento,
+            "fecha_pago": fp_date,
+            "importe_md": round(total_pagado, 2),
+            "moneda_documento": "USD",
+            "tasa": tasa,
+            "importe_ml": importe_ml,
+            "moneda_local": "Bs.",
+        })
+    return items
+
+
+def _query_cuotas_contable(db: Session, fecha_inicio: date, fecha_fin: date):
+    """Consulta cuotas con pago en el rango dado."""
+    q = (
+        select(
+            Cuota.id,
+            Cuota.numero_cuota,
+            Cuota.fecha_vencimiento,
+            Cuota.fecha_pago,
+            Cuota.monto,
+            Cuota.total_pagado,
+            Prestamo.cedula,
+            Prestamo.nombres,
+            Pago.fecha_pago.label("fecha_pago_real"),
+        )
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .outerjoin(Pago, Cuota.pago_id == Pago.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(
+            Cliente.estado == "ACTIVO",
+            Prestamo.estado == "APROBADO",
+            Cuota.fecha_pago.isnot(None),
+            Cuota.fecha_pago >= fecha_inicio,
+            Cuota.fecha_pago <= fecha_fin,
+        )
+    )
+    return db.execute(q).fetchall()
+
+
+def sync_reporte_contable_completo(db: Session) -> int:
+    """Sincroniza todo el histÃ³rico al cache. Retorna cantidad de filas insertadas."""
+    fi = date(2000, 1, 1)
+    ff = date.today()
+    rows = _query_cuotas_contable(db, fi, ff)
+    tasas: dict = {}
+    filas = _cuotas_a_filas_contable(rows, tasas)
+
+    existentes = set(
+        r[0] for r in db.execute(select(ReporteContableCache.cuota_id)).fetchall()
+    )
+    insertadas = 0
+    for f in filas:
+        if f["cuota_id"] not in existentes:
+            db.add(ReporteContableCache(
+                cuota_id=f["cuota_id"],
+                cedula=f["cedula"],
+                nombre=f["nombre"],
+                tipo_documento=f["tipo_documento"],
+                fecha_vencimiento=f["fecha_vencimiento"],
+                fecha_pago=f["fecha_pago"],
+                importe_md=f["importe_md"],
+                moneda_documento=f["moneda_documento"],
+                tasa=f["tasa"],
+                importe_ml=f["importe_ml"],
+                moneda_local=f["moneda_local"],
+            ))
+            insertadas += 1
+    if insertadas:
+        db.commit()
+    return insertadas
+
+
+def refresh_cache_ultimos_7_dias(db: Session) -> int:
+    """Elimina y reinserta en cache solo los Ãºltimos 7 dÃ­as. Retorna filas actualizadas."""
+    hoy = date.today()
+    limite = hoy - timedelta(days=CONTABLE_CACHE_DIAS_ACTUALIZABLES)
+
+    # Eliminar filas con fecha_pago en ventana actualizable
+    db.execute(delete(ReporteContableCache).where(ReporteContableCache.fecha_pago >= limite))
+    db.commit()
+
+    rows = _query_cuotas_contable(db, limite, hoy)
+    tasas: dict = {}

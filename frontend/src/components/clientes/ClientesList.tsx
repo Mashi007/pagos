@@ -33,13 +33,14 @@ import { formatDate } from '../../utils'
 import { ClienteFilters, PaginatedResponse, Cliente } from '../../types'
 import { getErrorDetail } from '../../types/errors'
 import { useClientes } from '../../hooks/useClientes'
+import { useEstadosCliente } from '../../hooks/useEstadosCliente'
 import { useQueryClient } from '@tanstack/react-query'
 import { clienteService } from '../../services/clienteService'
 import { useNavigate, Link } from 'react-router-dom'
 
 export function ClientesList() {
-  // Forzar nuevo build - versión actualizada
   const navigate = useNavigate()
+  const { opciones: opcionesEstado } = useEstadosCliente()
   const [searchTerm, setSearchTerm] = useState('')
   const [filters, setFilters] = useState<ClienteFilters>({})
   const [currentPage, setCurrentPage] = useState(1)
@@ -361,9 +362,14 @@ export function ClientesList() {
                       onChange={(e) => handleFilterChange('estado', e.target.value || undefined)}
                     >
                       <option value="">Todos</option>
-                      <option value="ACTIVO">Activo</option>
-                      <option value="INACTIVO">Inactivo</option>
-                      <option value="FINALIZADO">Finalizado</option>
+                      {(opcionesEstado.length > 0 ? opcionesEstado : [
+                        { valor: 'ACTIVO', etiqueta: 'Activo', orden: 1 },
+                        { valor: 'INACTIVO', etiqueta: 'Inactivo', orden: 2 },
+                        { valor: 'FINALIZADO', etiqueta: 'Finalizado', orden: 3 },
+                        { valor: 'LEGACY', etiqueta: 'Legacy', orden: 4 },
+                      ]).map((opt) => (
+                        <option key={opt.valor} value={opt.valor}>{opt.etiqueta}</option>
+                      ))}
                     </select>
                   </div>
 

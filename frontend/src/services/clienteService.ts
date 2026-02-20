@@ -43,6 +43,11 @@ class ClienteService {
     return response
   }
 
+  // Obtener estados de cliente desde BD (para dropdowns en formularios)
+  async getEstadosCliente(): Promise<{ estados: Array<{ valor: string; etiqueta: string; orden: number }> }> {
+    return await apiClient.get(`${this.baseUrl}/estados`)
+  }
+
   // Comprobar qué cédulas ya existen (para carga masiva: advertir antes de guardar)
   async checkCedulas(cedulas: string[]): Promise<{ existing_cedulas: string[] }> {
     if (!cedulas.length) return { existing_cedulas: [] }

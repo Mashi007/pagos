@@ -24,6 +24,7 @@ import { useSimpleAuth } from '../../store/simpleAuthStore'
 // âœ… IMPORT DINÁMICO: readExcelToJSON se carga solo cuando se necesita
 // import { readExcelToJSON } from '../../types/exceljs' // âŒ REMOVIDO: Import estático causaba precarga
 import { useIsMounted } from '../../hooks/useIsMounted'
+import { useEstadosCliente } from '../../hooks/useEstadosCliente'
 
 interface ExcelData {
   cedula: string
@@ -61,6 +62,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
   const navigate = useNavigate()
   const isMounted = useIsMounted()
   const { user } = useSimpleAuth()
+  const { opciones: opcionesEstado } = useEstadosCliente()
   const usuarioRegistro = user?.email ?? 'carga-masiva'
 
   const [isDragging, setIsDragging] = useState(false)
@@ -625,7 +627,7 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
       case 'email':
         return `Ejemplo: "usuario@dominio.com"`
       case 'estado':
-        return `Ejemplo: "ACTIVO", "INACTIVO" o "FINALIZADO"`
+        return `Ejemplo: ${opcionesEstado.map(o => `"${o.valor}"`).join(', ')}`
       case 'activo':
         return `Ejemplo: "true" o "false"`
       default:
@@ -802,10 +804,10 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
 
       case 'estado':
         if (!value.trim()) return { isValid: false, message: 'Estado requerido' }
-        const estados = ['ACTIVO', 'INACTIVO', 'FINALIZADO']
+        const estadosValidos = opcionesEstado.length > 0 ? opcionesEstado.map(o => o.valor) : ['ACTIVO', 'INACTIVO', 'FINALIZADO', 'LEGACY']
         const estadoNormalizado = value.toUpperCase().trim()
-        if (!estados.includes(estadoNormalizado)) {
-          return { isValid: false, message: 'Debe ser ACTIVO, INACTIVO o FINALIZADO' }
+        if (!estadosValidos.includes(estadoNormalizado)) {
+          return { isValid: false, message: `Debe ser uno de: ${estadosValidos.join(', ')}` }
         }
         return { isValid: true }
 
@@ -1808,9 +1810,14 @@ export function ExcelUploader({ onClose, onDataProcessed, onSuccess }: ExcelUplo
                                   row._validation.estado?.isValid ? 'border-gray-300 bg-white text-black' : 'border-red-800 bg-red-800 text-white'
                                 }`}
                               >
-                                <option value="ACTIVO">ACTIVO</option>
-                                <option value="INACTIVO">INACTIVO</option>
-                                <option value="FINALIZADO">FINALIZADO</option>
+                                {(opcionesEstado.length > 0 ? opcionesEstado : [
+                                  { valor: 'ACTIVO', etiqueta: 'Activo' },
+                                  { valor: 'INACTIVO', etiqueta: 'Inactivo' },
+                                  { valor: 'FINALIZADO', etiqueta: 'Finalizado' },
+                                  { valor: 'LEGACY', etiqueta: 'Legacy' },
+                                ]).map((opt) => (
+                                  <option key={opt.valor} value={opt.valor}>{opt.etiqueta}</option>
+                                ))}
                               </select>
                             </td>
 

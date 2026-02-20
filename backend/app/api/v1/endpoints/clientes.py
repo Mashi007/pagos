@@ -19,6 +19,7 @@ from sqlalchemy.exc import ProgrammingError, OperationalError, IntegrityError
 
 from app.core.database import get_db
 from app.models.cliente import Cliente
+from app.models.estado_cliente import EstadoCliente
 from app.models.prestamo import Prestamo
 from app.schemas.cliente import ClienteResponse, ClienteCreate, ClienteUpdate
 
@@ -45,6 +46,33 @@ def _row_to_cliente_response(row: Any) -> ClienteResponse:
         except Exception:
             d[key] = None if key in date_keys else ("" if key != "id" else 0)
     return ClienteResponse.model_validate(d)
+
+
+# Estados de cliente desde BD (tabla estados_cliente) - usado en formularios
+ESTADOS_CLIENTE_FALLBACK = [
+    {"valor": "ACTIVO", "etiqueta": "Activo", "orden": 1},
+    {"valor": "INACTIVO", "etiqueta": "Inactivo", "orden": 2},
+    {"valor": "FINALIZADO", "etiqueta": "Finalizado", "orden": 3},
+    {"valor": "LEGACY", "etiqueta": "Legacy", "orden": 4},
+]
+
+
+@router.get("/estados", summary="Lista de estados de cliente para dropdowns")
+def get_estados_cliente(db: Session = Depends(get_db)):
+    """
+    Obtiene lista de estados de cliente desde la tabla estados_cliente.
+    Si la tabla no existe, retorna lista por defecto.
+    """
+    try:
+        rows = db.execute(
+            select(EstadoCliente.valor, EstadoCliente.etiqueta, EstadoCliente.orden)
+            .order_by(EstadoCliente.orden)
+        ).all()
+        if rows:
+            return {"estados": [{"valor": r[0], "etiqueta": r[1], "orden": r[2]} for r in rows]}
+    except Exception:
+        pass
+    return {"estados": ESTADOS_CLIENTE_FALLBACK}
 
 
 @router.get("", summary="Listado paginado", response_model=dict)
@@ -324,8 +352,8 @@ def cambiar_estado_cliente(
     if not row:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
     estado = payload.estado
-    if estado not in ("ACTIVO", "INACTIVO", "MORA", "FINALIZADO"):
-        raise HTTPException(status_code=400, detail="estado debe ser ACTIVO, INACTIVO, MORA o FINALIZADO")
+    if estado not in ("ACTIVO", "INACTIVO", "MORA", "FINALIZADO", "LEGACY"):
+        raise HTTPException(status_code=400, detail="estado debe ser ACTIVO, INACTIVO, MORA, FINALIZADO o LEGACY")
     row.estado = estado
     db.commit()
     db.refresh(row)

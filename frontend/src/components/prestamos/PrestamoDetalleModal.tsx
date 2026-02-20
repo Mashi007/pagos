@@ -7,7 +7,6 @@ import { Badge } from '../../components/ui/badge'
 import { Prestamo } from '../../types'
 import { formatDate } from '../../utils'
 import { TablaAmortizacionPrestamo } from './TablaAmortizacionPrestamo'
-import { AuditoriaPrestamo } from './AuditoriaPrestamo'
 import { usePrestamo } from '../../hooks/usePrestamos'
 import { aiTrainingService } from '../../services/aiTrainingService'
 import { prestamoService } from '../../services/prestamoService'
@@ -20,7 +19,7 @@ interface PrestamoDetalleModalProps {
 }
 
 export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: PrestamoDetalleModalProps) {
-  const [activeTab, setActiveTab] = useState<'detalles' | 'amortizacion' | 'auditoria'>('detalles')
+  const [activeTab, setActiveTab] = useState<'detalles' | 'amortizacion'>('detalles')
   const [prediccionImpago, setPrediccionImpago] = useState<any>(null)
   const [cargandoPrediccion, setCargandoPrediccion] = useState(false)
 
@@ -162,16 +161,6 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                 }`}
               >
                 Tabla de Amortización
-              </button>
-              <button
-                onClick={() => setActiveTab('auditoria')}
-                className={`py-3 px-4 border-b-2 transition-colors ${
-                  activeTab === 'auditoria'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                Auditoría
               </button>
             </div>
           </div>
@@ -469,10 +458,6 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
 
             {activeTab === 'amortizacion' && (
               <TablaAmortizacionPrestamo prestamo={prestamoData} />
-            )}
-
-            {activeTab === 'auditoria' && (
-              <AuditoriaPrestamo prestamoId={prestamoData.id} />
             )}
           </div>
 

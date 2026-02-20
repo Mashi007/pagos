@@ -1,0 +1,367 @@
+﻿# ---------- Reporte Cartera ----------
+def _datos_cartera(db: Session, fecha_corte: date) -> dict:
+    """Obtiene datos para reporte de cartera a una fecha de corte (solo clientes ACTIVOS)."""
+    cuotas_pendientes = (
+        select(func.coalesce(func.sum(Cuota.monto), 0))
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(
+            Cliente.estado == "ACTIVO",
+            Prestamo.estado == "APROBADO",
+            Cuota.fecha_pago.is_(None),
+        )
+    )
+    cartera_total = _safe_float(db.scalar(cuotas_pendientes) or 0)
+
+    prestamos_activos = db.scalar(
+        select(func.count())
+        .select_from(Prestamo)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(Cliente.estado == "ACTIVO", Prestamo.estado == "APROBADO")
+    ) or 0
+
+    subq_mora = (
+        select(Cuota.prestamo_id)
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(
+            Cliente.estado == "ACTIVO",
+            Prestamo.estado == "APROBADO",
+            Cuota.fecha_pago.is_(None),
+            Cuota.fecha_vencimiento < fecha_corte,
+        )
+        .distinct()
+    )
+    prestamos_mora = db.scalar(select(func.count()).select_from(subq_mora.subquery())) or 0
+
+    mora_total = _safe_float(
+        db.scalar(
+            select(func.coalesce(func.sum(Cuota.monto), 0))
+            .select_from(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(
+                Cliente.estado == "ACTIVO",
+                Prestamo.estado == "APROBADO",
+                Cuota.fecha_pago.is_(None),
+                Cuota.fecha_vencimiento < fecha_corte,
+            )
+        )
+        or 0
+    )
+
+    # DistribuciÃ³n por monto (rangos simples)
+    rangos = [(0, 5000), (5001, 15000), (15001, 50000), (50001, 999999999)]
+    distribucion_por_monto: List[dict] = []
+    for low, high in rangos:
+        subq = (
+            select(Cuota.prestamo_id)
+            .where(Cuota.fecha_pago.is_(None))
+            .group_by(Cuota.prestamo_id)
+            .having(and_(func.sum(Cuota.monto) >= low, func.sum(Cuota.monto) <= high))
+        )
+        # Contar prÃ©stamos con saldo en ese rango (aproximado por suma de cuotas)
+        q = (
+            select(func.count(func.distinct(Cuota.prestamo_id)), func.coalesce(func.sum(Cuota.monto), 0))
+            .select_from(Cuota)
+            .where(Cuota.fecha_pago.is_(None))
+        )
+        # Simplificado: un solo rango "Total" para no complicar la query
+        pass
+    distribucion_por_monto = [
+        {"rango": "0 - 5.000", "cantidad": 0, "monto": 0},
+        {"rango": "5.001 - 15.000", "cantidad": 0, "monto": 0},
+        {"rango": "15.001 - 50.000", "cantidad": 0, "monto": 0},
+        {"rango": "> 50.000", "cantidad": 0, "monto": 0},
+    ]
+    saldos = db.execute(
+        select(Cuota.prestamo_id, func.sum(Cuota.monto).label("saldo"))
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(
+            Cliente.estado == "ACTIVO",
+            Prestamo.estado == "APROBADO",
+            Cuota.fecha_pago.is_(None),
+        )
+        .group_by(Cuota.prestamo_id)
+    ).all()
+    for pid, saldo in saldos:
+        s = _safe_float(saldo)
+        if s <= 5000:
+            distribucion_por_monto[0]["cantidad"] += 1
+            distribucion_por_monto[0]["monto"] += s
+        elif s <= 15000:
+            distribucion_por_monto[1]["cantidad"] += 1
+            distribucion_por_monto[1]["monto"] += s
+        elif s <= 50000:
+            distribucion_por_monto[2]["cantidad"] += 1
+            distribucion_por_monto[2]["monto"] += s
+        else:
+            distribucion_por_monto[3]["cantidad"] += 1
+            distribucion_por_monto[3]["monto"] += s
+
+    # DistribuciÃ³n por mora (dÃ­as). Vencido: 1-89 | Moroso: 90+
+    distribucion_por_mora: List[dict] = []
+    for label, dias_min, dias_max in [
+        ("1-30 dÃ­as", 1, 30),
+        ("31-60 dÃ­as", 31, 60),
+        ("61-89 dÃ­as", 61, 89),
+        ("90+ dÃ­as (moroso)", 90, 9999),
+    ]:
+        delta_min = fecha_corte - timedelta(days=dias_max)
+        delta_max = fecha_corte - timedelta(days=dias_min)
+        q = (
+            select(func.count(Cuota.id), func.coalesce(func.sum(Cuota.monto), 0))
+            .select_from(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(
+                Cliente.estado == "ACTIVO",
+                Prestamo.estado == "APROBADO",
+                Cuota.fecha_pago.is_(None),
+                Cuota.fecha_vencimiento <= delta_max,
+                Cuota.fecha_vencimiento >= delta_min,
+            )
+        )
+        row = db.execute(q).one_or_none()
+        cnt = (row[0] or 0) if row else 0
+        monto = _safe_float(row[1] or 0) if row else 0
+        distribucion_por_mora.append({"rango": label, "cantidad": cnt, "monto_total": monto})
+
+    return {
+        "fecha_corte": fecha_corte.isoformat(),
+        "cartera_total": cartera_total,
+        "capital_pendiente": cartera_total,
+        "intereses_pendientes": 0,
+        "mora_total": mora_total,
+        "cantidad_prestamos_activos": prestamos_activos,
+        "cantidad_prestamos_mora": prestamos_mora,
+        "distribucion_por_monto": distribucion_por_monto,
+        "distribucion_por_mora": distribucion_por_mora,
+    }
+
+
+def _cartera_por_periodos(db: Session, periodos: List[tuple]) -> dict:
+    """Genera datos cartera para lista de (aÃ±o, mes)."""
+    resultado: dict = {"meses": []}
+    for (aÃ±o, mes) in periodos:
+        inicio = date(aÃ±o, mes, 1)
+        _, ultimo = calendar.monthrange(aÃ±o, mes)
+        fin = date(aÃ±o, mes, ultimo)
+
+        # Agrupar por dÃ­a del mes (1-31): cuotas con fecha_vencimiento en ese dÃ­a
+        rows = db.execute(
+            select(
+                func.extract("day", Cuota.fecha_vencimiento).label("dia"),
+                func.coalesce(func.sum(Cuota.monto), 0).label("monto_cobrar"),
+                func.count(Cuota.id).label("cantidad_cuotas"),
+            )
+            .select_from(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(
+                Cliente.estado == "ACTIVO",
+                Prestamo.estado == "APROBADO",
+                Cuota.fecha_pago.is_(None),
+                Cuota.fecha_vencimiento >= inicio,
+                Cuota.fecha_vencimiento <= fin,
+            )
+            .group_by(func.extract("day", Cuota.fecha_vencimiento))
+            .order_by(func.extract("day", Cuota.fecha_vencimiento))
+        ).fetchall()
+
+        # Mapa dÃ­a -> {cantidad_cuotas, monto_cobrar}
+        por_dia: dict = {}
+        for r in rows:
+            d = int(r.dia) if r.dia is not None else 0
+            por_dia[d] = {
+                "cantidad_cuotas": r.cantidad_cuotas or 0,
+                "monto_cobrar": round(_safe_float(r.monto_cobrar), 2),
+            }
+
+        # Una fila por cada dÃ­a del mes (1 a ultimo)
+        items: List[dict] = []
+        for d in range(1, ultimo + 1):
+            data = por_dia.get(d, {"cantidad_cuotas": 0, "monto_cobrar": 0})
+            items.append({
+                "dia": d,
+                "cantidad_cuotas": data["cantidad_cuotas"],
+                "monto_cobrar": data["monto_cobrar"],
+            })
+
+        resultado["meses"].append({
+            "mes": mes,
+            "aÃ±o": aÃ±o,
+            "label": f"{mes:02d}/{aÃ±o}",
+            "items": items,
+        })
+
+    return resultado
+
+
+@router.get("/cartera/por-mes")
+def get_cartera_por_mes(
+    db: Session = Depends(get_db),
+    meses: int = Query(12, ge=1, le=24, description="Cantidad de meses hacia atrÃ¡s"),
+    aÃ±os: Optional[str] = Query(None, description="AÃ±os separados por coma, ej: 2023,2024"),
+    meses_list: Optional[str] = Query(None, description="Meses 1-12 separados por coma, ej: 1,2,3"),
+):
+    """Cuentas por cobrar: una pestaÃ±a por mes (MM/YYYY). Por dÃ­a del mes: cuotas por cobrar ese dÃ­a."""
+    periodos = _periodos_desde_filtros(aÃ±os, meses_list, meses)
+    return _cartera_por_periodos(db, periodos)
+
+
+@router.get("/cartera")
+def get_reporte_cartera(
+    db: Session = Depends(get_db),
+    fecha_corte: Optional[str] = Query(None, description="Fecha de corte YYYY-MM-DD"),
+):
+    """Reporte de cartera en JSON. Datos reales desde BD."""
+    fc = _parse_fecha(fecha_corte)
+    return _datos_cartera(db, fc)
+
+
+def _generar_excel_cartera_por_mes(data_por_mes: dict) -> bytes:
+    """Genera Excel con una pestaÃ±a por mes (MM/YYYY). Columnas: DÃ­a, Cuotas por cobrar, Monto ($)."""
+    import openpyxl
+    from datetime import datetime
+    
+    wb = openpyxl.Workbook()
+    meses_data = data_por_mes.get("meses", [])
+
+    # Diccionario de meses en espaÃ±ol
+    meses_es = {
+        1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril", 5: "Mayo", 6: "Junio",
+        7: "Julio", 8: "Agosto", 9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
+    }
+
+    for idx, mes_data in enumerate(meses_data):
+        mes = mes_data.get("mes", 1)
+        aÃ±o = mes_data.get("aÃ±o", datetime.now().year)
+        mes_nombre = meses_es.get(mes, "")
+        label = mes_data.get("label", f"{mes:02d}/{aÃ±o}")
+        sheet_name = f"{mes_nombre} {aÃ±o}"[:31]
+        
+        if idx == 0:
+            ws = wb.active
+            ws.title = sheet_name
+        else:
+            ws = wb.create_sheet(title=sheet_name)
+
+        ws.append(["Reporte de Cartera", label])
+        ws.append(["Cuotas por cobrar por dÃ­a del mes (dato actualizado al aprobar/eliminar prÃ©stamos)"])
+        ws.append([])
+        ws.append(["DÃ­a", "Cuotas por cobrar", "Monto ($)"])
+        
+        for item in mes_data.get("items", []):
+            row_num = ws.max_row + 1
+            ws.append([
+                item.get("dia", 0),
+                item.get("cantidad_cuotas", 0),
+                item.get("monto_cobrar", 0)
+            ])
+            # Aplicar formato dÃ³lares con 2 decimales a la columna C (Monto)
+            cell = ws.cell(row=row_num, column=3)
+            cell.number_format = '$#,##0.00'
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def _generar_excel_cartera(data: dict) -> bytes:
+    """Excel clÃ¡sico de cartera (resumen + distribuciones)."""
+    import openpyxl
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Cartera"
+    ws.append(["Reporte de Cartera", data.get("fecha_corte", "")])
+    ws.append([])
+    ws.append(["Indicador", "Valor"])
+    ws.append(["Cartera total", data.get("cartera_total", 0)])
+    ws.append(["Capital pendiente", data.get("capital_pendiente", 0)])
+    ws.append(["Mora total", data.get("mora_total", 0)])
+    ws.append(["PrÃ©stamos activos", data.get("cantidad_prestamos_activos", 0)])
+    ws.append(["PrÃ©stamos en mora", data.get("cantidad_prestamos_mora", 0)])
+    ws.append([])
+    ws.append(["DistribuciÃ³n por monto"])
+    ws.append(["Rango", "Cantidad", "Monto"])
+    for r in data.get("distribucion_por_monto", []):
+        ws.append([r.get("rango", ""), r.get("cantidad", 0), r.get("monto", 0)])
+    ws2 = wb.create_sheet("Mora")
+    ws2.append(["Rango", "Cantidad", "Monto total"])
+    for r in data.get("distribucion_por_mora", []):
+        ws2.append([r.get("rango", ""), r.get("cantidad", 0), r.get("monto_total", 0)])
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def _generar_pdf_cartera(data: dict) -> bytes:
+    from reportlab.lib.pagesizes import letter
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=letter)
+    styles = getSampleStyleSheet()
+    story = []
+    story.append(Paragraph("Reporte de Cartera", styles["Title"]))
+    story.append(Paragraph(f"Fecha de corte: {data.get('fecha_corte', '')}", styles["Normal"]))
+    story.append(Spacer(1, 12))
+    story.append(Paragraph("Resumen", styles["Heading2"]))
+    resumen = [
+        ["Cartera total", str(data.get("cartera_total", 0))],
+        ["Capital pendiente", str(data.get("capital_pendiente", 0))],
+        ["Mora total", str(data.get("mora_total", 0))],
+        ["PrÃ©stamos activos", str(data.get("cantidad_prestamos_activos", 0))],
+        ["PrÃ©stamos en mora", str(data.get("cantidad_prestamos_mora", 0))],
+    ]
+    t = Table(resumen)
+    t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), "#e0e0e0"), ("GRID", (0, 0), (-1, -1), 0.5, "#ccc")]))
+    story.append(t)
+    story.append(Spacer(1, 12))
+    story.append(Paragraph("DistribuciÃ³n por monto", styles["Heading2"]))
+    rows = [["Rango", "Cantidad", "Monto"]]
+    for r in data.get("distribucion_por_monto", []):
+        rows.append([r.get("rango", ""), str(r.get("cantidad", 0)), str(r.get("monto", 0))])
+    t2 = Table(rows)
+    t2.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), "#e0e0e0"), ("GRID", (0, 0), (-1, -1), 0.5, "#ccc")]))
+    story.append(t2)
+    doc.build(story)
+    return buf.getvalue()
+
+
+@router.get("/exportar/cartera")
+def exportar_cartera(
+    db: Session = Depends(get_db),
+    formato: str = Query("excel", pattern="^(excel|pdf)$"),
+    fecha_corte: Optional[str] = Query(None),
+    meses: int = Query(12, ge=1, le=24, description="Para Excel: cantidad de meses (una pestaÃ±a por mes)"),
+    aÃ±os: Optional[str] = Query(None, description="AÃ±os separados por coma, ej: 2023,2024"),
+    meses_list: Optional[str] = Query(None, description="Meses 1-12 separados por coma, ej: 1,2,3"),
+):
+    """Exporta reporte de cartera. Excel: una pestaÃ±a por mes (MM/YYYY), columnas DÃ­a | Cuotas por cobrar | Monto.
+    PDF: resumen clÃ¡sico. Datos desde cuotas (actualizados al aprobar/eliminar prÃ©stamos)."""
+    fc = _parse_fecha(fecha_corte)
+    if formato == "excel":
+        data_por_mes = get_cartera_por_mes(db=db, meses=meses, aÃ±os=aÃ±os, meses_list=meses_list)
+        content = _generar_excel_cartera_por_mes(data_por_mes)
+        hoy_str = date.today().isoformat()
+        return Response(
+            content=content,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename=reporte_cartera_{hoy_str}.xlsx"},
+        )
+    data = _datos_cartera(db, fc)
+    content = _generar_pdf_cartera(data)
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=reporte_cartera_{fc.isoformat()}.pdf"},
+    )
+
+
+# ---------- Reporte Pagos ----------

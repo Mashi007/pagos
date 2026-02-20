@@ -1,0 +1,211 @@
+"""
+Reportes financieros.
+"""
+import io
+from typing import Optional
+
+from fastapi import APIRouter, Depends, Query
+from fastapi.responses import Response
+from sqlalchemy import func, select, and_
+from sqlalchemy.orm import Session
+
+from app.core.database import get_db
+from app.core.deps import get_current_user
+from app.models.cliente import Cliente
+from app.models.cuota import Cuota
+from app.models.prestamo import Prestamo
+
+from app.api.v1.endpoints.reportes_utils import _safe_float, _parse_fecha
+
+router = APIRouter(dependencies=[Depends(get_current_user)])
+
+
+@router.get("/financiero")
+def get_reporte_financiero(
+    db: Session = Depends(get_db),
+    fecha_corte: Optional[str] = Query(None),
+):
+    """Reporte financiero. Datos reales desde BD (solo clientes ACTIVOS)."""
+    fc = _parse_fecha(fecha_corte)
+    conds_activo = [
+        Cuota.prestamo_id == Prestamo.id,
+        Prestamo.cliente_id == Cliente.id,
+        Cliente.estado == "ACTIVO",
+        Prestamo.estado == "APROBADO",
+    ]
+    total_ingresos = _safe_float(
+        db.scalar(
+            select(func.coalesce(func.sum(Cuota.monto), 0))
+            .select_from(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(and_(*conds_activo, Cuota.fecha_pago.isnot(None)))
+        )
+        or 0
+    )
+    cantidad_pagos = db.scalar(
+        select(func.count())
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(and_(*conds_activo, Cuota.fecha_pago.isnot(None)))
+    ) or 0
+    cartera_total = _safe_float(
+        db.scalar(
+            select(func.coalesce(func.sum(Cuota.monto), 0))
+            .select_from(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(and_(*conds_activo, Cuota.fecha_pago.is_(None)))
+        )
+        or 0
+    )
+    morosidad_total = _safe_float(
+        db.scalar(
+            select(func.coalesce(func.sum(Cuota.monto), 0))
+            .select_from(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(and_(*conds_activo, Cuota.fecha_pago.is_(None), Cuota.fecha_vencimiento < fc))
+        )
+        or 0
+    )
+    saldo_pendiente = cartera_total
+    total_desembolsado = _safe_float(
+        db.scalar(
+            select(func.coalesce(func.sum(Prestamo.total_financiamiento), 0))
+            .select_from(Prestamo)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(Cliente.estado == "ACTIVO", Prestamo.estado == "APROBADO")
+        )
+        or 0
+    )
+    porcentaje_cobrado = (total_ingresos / total_desembolsado * 100) if total_desembolsado else 0
+
+    q_ingresos = (
+        select(
+            func.to_char(func.date_trunc("month", Cuota.fecha_pago), "YYYY-MM").label("mes"),
+            func.count().label("cantidad_pagos"),
+            func.coalesce(func.sum(Cuota.monto), 0).label("monto_total"),
+        )
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(and_(*conds_activo, Cuota.fecha_pago.isnot(None)))
+        .group_by(func.date_trunc("month", Cuota.fecha_pago))
+        .order_by(func.date_trunc("month", Cuota.fecha_pago))
+    )
+    rows_ing = db.execute(q_ingresos).all()
+    ingresos_por_mes = [
+        {"mes": r.mes, "cantidad_pagos": r.cantidad_pagos, "monto_total": round(_safe_float(r.monto_total), 2)}
+        for r in rows_ing
+    ]
+
+    q_egresos = (
+        select(
+            func.to_char(func.date_trunc("month", Cuota.fecha_vencimiento), "YYYY-MM").label("mes"),
+            func.count().label("cantidad_cuotas"),
+            func.coalesce(func.sum(Cuota.monto), 0).label("monto_programado"),
+        )
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(and_(*conds_activo, Cuota.fecha_pago.is_(None), Cuota.fecha_vencimiento.isnot(None)))
+        .group_by(func.date_trunc("month", Cuota.fecha_vencimiento))
+        .order_by(func.date_trunc("month", Cuota.fecha_vencimiento))
+    )
+    rows_egr = db.execute(q_egresos).all()
+    egresos_programados = [
+        {"mes": r.mes, "cantidad_cuotas": r.cantidad_cuotas, "monto_programado": round(_safe_float(r.monto_programado), 2)}
+        for r in rows_egr
+    ]
+
+    meses_set = {x["mes"] for x in ingresos_por_mes} | {x["mes"] for x in egresos_programados}
+    ing_map = {x["mes"]: x["monto_total"] for x in ingresos_por_mes}
+    egr_map = {x["mes"]: x["monto_programado"] for x in egresos_programados}
+    flujo_caja = []
+    for m in sorted(meses_set):
+        ing = ing_map.get(m, 0)
+        egr = egr_map.get(m, 0)
+        flujo_caja.append({
+            "mes": m,
+            "ingresos": ing,
+            "egresos_programados": egr,
+            "flujo_neto": round(ing - egr, 2),
+        })
+
+    return {
+        "fecha_corte": fc.isoformat(),
+        "total_ingresos": total_ingresos,
+        "cantidad_pagos": cantidad_pagos,
+        "cartera_total": cartera_total,
+        "cartera_pendiente": cartera_total,
+        "morosidad_total": morosidad_total,
+        "saldo_pendiente": saldo_pendiente,
+        "porcentaje_cobrado": round(porcentaje_cobrado, 2),
+        "ingresos_por_mes": ingresos_por_mes,
+        "egresos_programados": egresos_programados,
+        "flujo_caja": flujo_caja,
+    }
+
+
+def _generar_pdf_financiero(data: dict) -> bytes:
+    from reportlab.lib.pagesizes import letter
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=letter)
+    styles = getSampleStyleSheet()
+    story = []
+    story.append(Paragraph("Reporte Financiero", styles["Title"]))
+    story.append(Paragraph(f"Fecha de corte: {data.get('fecha_corte', '')}", styles["Normal"]))
+    story.append(Spacer(1, 12))
+    resumen = [
+        ["Total ingresos", str(data.get("total_ingresos", 0))],
+        ["Cantidad pagos", str(data.get("cantidad_pagos", 0))],
+        ["Cartera total", str(data.get("cartera_total", 0))],
+        ["Morosidad total", str(data.get("morosidad_total", 0))],
+        ["Porcentaje cobrado (%)", str(data.get("porcentaje_cobrado", 0))],
+    ]
+    t = Table(resumen)
+    t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), "#e0e0e0"), ("GRID", (0, 0), (-1, -1), 0.5, "#ccc")]))
+    story.append(t)
+    flujo = data.get("flujo_caja", [])
+    if flujo:
+        story.append(Spacer(1, 12))
+        story.append(Paragraph("Flujo de caja", styles["Heading2"]))
+        rows = [["Mes", "Ingresos", "Egresos programados", "Flujo neto"]]
+        for r in flujo:
+            rows.append([r.get("mes", ""), str(r.get("ingresos", 0)), str(r.get("egresos_programados", 0)), str(r.get("flujo_neto", 0))])
+        t2 = Table(rows)
+        t2.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), "#e0e0e0"), ("GRID", (0, 0), (-1, -1), 0.5, "#ccc")]))
+        story.append(t2)
+    doc.build(story)
+    return buf.getvalue()
+
+
+@router.get("/exportar/financiero")
+def exportar_financiero(
+    db: Session = Depends(get_db),
+    formato: str = Query("excel", pattern="^(excel|pdf)$"),
+    fecha_corte: Optional[str] = Query(None),
+):
+    """Exporta reporte financiero en Excel o PDF."""
+    data = get_reporte_financiero(db=db, fecha_corte=fecha_corte)
+    import openpyxl
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Financiero"
+    ws.append(["Reporte Financiero", data.get("fecha_corte", "")])
+    ws.append(["Total ingresos", data.get("total_ingresos", 0)])
+    ws.append(["Cantidad pagos", data.get("cantidad_pagos", 0)])
+    ws.append(["Cartera total", data.get("cartera_total", 0)])
+    ws.append(["Morosidad total", data.get("morosidad_total", 0)])
+    ws.append(["Porcentaje cobrado", data.get("porcentaje_cobrado", 0)])
+    buf = io.BytesIO()
+    wb.save(buf)
+    content = buf.getvalue()
+    if formato == "pdf":
+        pdf_content = _generar_pdf_financiero(data)
+        return Response(content=pdf_content, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=reporte_financiero_{data['fecha_corte']}.pdf"})
+    return Response(content=content, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename=reporte_financiero_{data['fecha_corte']}.xlsx"})
