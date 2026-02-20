@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { AlertCircle, Save, X, Loader2, CheckCircle2 } from 'lucide-react'
+import { AlertCircle, Save, X, Loader2, CheckCircle2, TrendingUp } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table'
+import { Progress } from '../ui/progress'
 import { LoadingSpinner } from '../ui/loading-spinner'
 import { clienteService } from '../../services/clienteService'
 import { clienteKeys } from '../../hooks/useClientes'
@@ -51,6 +52,7 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
   const [error, setError] = useState<string | null>(null)
   const [edited, setEdited] = useState<Record<number, Partial<Cliente>>>({})
   const [rowErrors, setRowErrors] = useState<Record<number, string>>({})
+  const [progress, setProgress] = useState({ current: 0, total: 0 })
   const queryClient = useQueryClient()
 
   const loadCasos = useCallback(async () => {
@@ -164,11 +166,13 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
     if (!toSave.length) return
     setSaving('all')
     setRowErrors({})
+    setProgress({ current: 0, total: toSave.length })
     let ok = 0
     const errs: Record<number, string> = {}
     const updatedClientes: Map<number, Cliente> = new Map()
     
-    for (const c of toSave) {
+    for (let i = 0; i < toSave.length; i++) {
+      const c = toSave[i]
       try {
         const payload = edited[c.id] || {}
         const updateData = {
@@ -189,6 +193,9 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
       } catch (e) {
         errs[c.id] = getErrorMessage(e)
       }
+      
+      // ✅ Actualizar progreso
+      setProgress({ current: i + 1, total: toSave.length })
     }
     
     // ✅ Invalidar cache de React Query después de guardar todos
@@ -219,7 +226,12 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
       )
       onSuccess?.()
     }
-    setSaving(null)
+    
+    // ✅ Resetear progreso después de completar
+    setTimeout(() => {
+      setProgress({ current: 0, total: 0 })
+      setSaving(null)
+    }, 800)
   }
 
   const anyChanged = clientes.some(c => hasChanges(c))
@@ -353,6 +365,25 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
               </>
             )}
           </div>
+
+          {/* ✅ BARRA DE PROGRESO */}
+          {saving === 'all' && progress.total > 0 && (
+            <div className="px-4 py-3 border-t bg-blue-50">
+              <div className="flex items-center gap-3 mb-2">
+                <TrendingUp className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                <span className="text-sm font-medium text-blue-900">
+                  Guardando: {progress.current} de {progress.total} clientes
+                </span>
+              </div>
+              <Progress 
+                value={(progress.current / progress.total) * 100} 
+                className="h-2"
+              />
+              <p className="text-xs text-blue-700 mt-2">
+                {Math.round((progress.current / progress.total) * 100)}% completado
+              </p>
+            </div>
+          )}
 
           {!loading && clientes.length > 0 && (
             <div className="flex items-center justify-between p-4 border-t bg-gray-50">
