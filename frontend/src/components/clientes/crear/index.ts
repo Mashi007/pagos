@@ -1,0 +1,5 @@
+export { useCrearCliente, type FormData, type ValidationResult, type CrearClienteFormProps } from './useCrearCliente'
+export { DatosPersonalesSection } from './DatosPersonalesSection'
+export { ContactoSection } from './ContactoSection'
+export { NotasSection } from './NotasSection'
+export { CrearClienteFormActions } from './CrearClienteFormActions'
