@@ -292,6 +292,15 @@ export function PrestamosList() {
           <Button
             variant="outline"
             size="lg"
+            onClick={() => navigate('/revision-manual')}
+            className="px-6 py-6 text-base font-semibold bg-green-50 border-green-200 text-green-700 hover:bg-green-100 hover:border-green-300"
+          >
+            <CheckCircle2 className="w-5 h-5 mr-2" />
+            Revisión Manual
+          </Button>
+          <Button
+            variant="outline"
+            size="lg"
             onClick={handleRefresh}
             className="px-6 py-6 text-base font-semibold"
             disabled={isLoading}
@@ -653,35 +662,30 @@ export function PrestamosList() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
-                            {/* ICONO REVISIÓN MANUAL */}
-                            {prestamo.revision_manual_estado === 'pendiente' && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => navigate(`/revision-manual`)}
-                                title="No revisado - Click para revisar"
-                                className="hover:bg-orange-50 text-orange-600"
-                              >
-                                <AlertTriangle className="h-4 w-4" />
-                              </Button>
-                            )}
-                            
-                            {prestamo.revision_manual_estado === 'revisando' && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => navigate(`/revision-manual/editar/${prestamo.id}`)}
-                                title="En revisión - Click para continuar"
-                                className="hover:bg-yellow-50 text-yellow-600"
-                              >
-                                <Info className="h-4 w-4" />
-                              </Button>
-                            )}
-                            
-                            {prestamo.revision_manual_estado === 'revisado' && (
-                              <span title="Revisión completada" className="text-green-600">
-                                <CheckCircle2 className="h-4 w-4" />
-                              </span>
+                            {/* ICONO REVISIÓN MANUAL: ⚠ no revisado | ? en revisión | ausencia = ya revisado */}
+                            {(prestamo.estado === 'APROBADO' || prestamo.estado === 'DESEMBOLSADO' || prestamo.fecha_aprobacion) &&
+                             prestamo.revision_manual_estado !== 'revisado' && (
+                              prestamo.revision_manual_estado === 'revisando' ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => navigate(`/revision-manual/editar/${prestamo.id}`)}
+                                  title="Está siendo revisado - Click para continuar"
+                                  className="hover:bg-yellow-50 text-yellow-600"
+                                >
+                                  <Info className="h-4 w-4" />
+                                </Button>
+                              ) : (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => navigate(prestamo.revision_manual_estado === 'pendiente' ? '/revision-manual' : `/revision-manual/editar/${prestamo.id}`)}
+                                  title="No ha sido revisado - Click para revisar"
+                                  className="hover:bg-orange-50 text-orange-600"
+                                >
+                                  <AlertTriangle className="h-4 w-4" />
+                                </Button>
+                              )
                             )}
 
                             {/* Botón Ver Detalles - Visible cuando APROBADO, DESEMBOLSADO o tiene fecha_aprobacion */}

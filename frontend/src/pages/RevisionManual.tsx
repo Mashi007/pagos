@@ -101,7 +101,7 @@ export function RevisionManual() {
     revisionManualService.iniciarRevision(prestamoId).then(() => {
       toast.info('ℹ️ Edición iniciada. Abriendo editor...')
       // Navega a página de edición
-      navigate(`/pagos/revision-manual/editar/${prestamoId}`)
+      navigate(`/revision-manual/editar/${prestamoId}`)
     }).catch((err: any) => {
       const errorMsg = err?.response?.data?.detail || 'Error al iniciar revisión'
       toast.error(`❌ ${errorMsg}`)
@@ -309,7 +309,7 @@ export function RevisionManual() {
                             size="sm"
                             variant="outline"
                             className="text-blue-600 text-xs h-8"
-                            onClick={() => navigate(`/pagos/revision-manual/editar/${prestamo.prestamo_id}`)}
+                            onClick={() => navigate(`/revision-manual/editar/${prestamo.prestamo_id}`)}
                           >
                             <Edit className="h-3 w-3 mr-1" />
                             Continuar

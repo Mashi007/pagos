@@ -75,7 +75,7 @@ def _safe_float(val) -> float:
         return 0.0
 
 
-@router.get("/revision-manual/prestamos", response_model=ResumenRevisionManual)
+@router.get("/prestamos", response_model=ResumenRevisionManual)
 def get_prestamos_revision_manual(
     db: Session = Depends(get_db),
     filtro_estado: Optional[str] = Query(None, description="pendiente, revisando o revisado"),
@@ -177,7 +177,7 @@ def get_prestamos_revision_manual(
     )
 
 
-@router.put("/revision-manual/prestamos/{prestamo_id}/confirmar")
+@router.put("/prestamos/{prestamo_id}/confirmar")
 def confirmar_prestamo_revisado(
     prestamo_id: int,
     db: Session = Depends(get_db),
@@ -213,7 +213,7 @@ def confirmar_prestamo_revisado(
     }
 
 
-@router.put("/revision-manual/prestamos/{prestamo_id}/iniciar-revision")
+@router.put("/prestamos/{prestamo_id}/iniciar-revision")
 def iniciar_revision_prestamo(
     prestamo_id: int,
     db: Session = Depends(get_db),
@@ -240,7 +240,7 @@ def iniciar_revision_prestamo(
     return {"mensaje": "Iniciada revisión manual", "prestamo_id": prestamo_id, "estado": "revisando"}
 
 
-@router.put("/revision-manual/clientes/{cliente_id}")
+@router.put("/clientes/{cliente_id}")
 def editar_cliente_revision(
     cliente_id: int,
     update_data: ClienteUpdateData = Body(...),
@@ -303,7 +303,7 @@ def editar_cliente_revision(
     }
 
 
-@router.put("/revision-manual/prestamos/{prestamo_id}")
+@router.put("/prestamos/{prestamo_id}")
 def editar_prestamo_revision(
     prestamo_id: int,
     update_data: PrestamoUpdateData = Body(...),
@@ -366,7 +366,7 @@ def editar_prestamo_revision(
     }
 
 
-@router.delete("/revision-manual/prestamos/{prestamo_id}")
+@router.delete("/prestamos/{prestamo_id}")
 def eliminar_prestamo_revision(
     prestamo_id: int,
     db: Session = Depends(get_db),
@@ -398,7 +398,7 @@ def eliminar_prestamo_revision(
     return {"mensaje": "Préstamo eliminado de la BD", "prestamo_id": prestamo_id}
 
 
-@router.get("/revision-manual/pagos/{cedula}")
+@router.get("/pagos/{cedula}")
 def get_pagos_por_cedula(
     cedula: str,
     db: Session = Depends(get_db),
@@ -433,7 +433,7 @@ def get_pagos_por_cedula(
     return resultado
 
 
-@router.put("/revision-manual/cuotas/{cuota_id}")
+@router.put("/cuotas/{cuota_id}")
 def editar_cuota_revision(
     cuota_id: int,
     update_data: CuotaUpdateData = Body(...),
@@ -498,7 +498,7 @@ def editar_cuota_revision(
     }
 
 
-@router.get("/revision-manual/resumen-rapido")
+@router.get("/resumen-rapido")
 def get_resumen_rapido_revision(db: Session = Depends(get_db)):
     """Resumen rápido: préstamos pendientes y revisando."""
     q_pendiente = select(func.count()).select_from(RevisionManualPrestamo).where(
@@ -525,7 +525,7 @@ def get_resumen_rapido_revision(db: Session = Depends(get_db)):
     }
 
 
-@router.get("/revision-manual/prestamos/{prestamo_id}/detalle")
+@router.get("/prestamos/{prestamo_id}/detalle")
 def get_detalle_prestamo_revision(
     prestamo_id: int,
     db: Session = Depends(get_db),
@@ -577,6 +577,9 @@ def get_detalle_prestamo_revision(
         },
         "cuotas": cuotas_data,
     }
+
+
+@router.put("/prestamos/{prestamo_id}/finalizar-revision")
 def finalizar_revision_prestamo(
     prestamo_id: int,
     db: Session = Depends(get_db),
