@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { AlertCircle, Save, X, Loader2, CheckCircle2, TrendingUp } from 'lucide-react'
+import { AlertCircle, Save, X, Loader2, CheckCircle2, TrendingUp, Trash2 } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table'
@@ -141,21 +142,32 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
       })
       
       // ✅ Verificar si el cliente cumple con los validadores
-      // Remover SOLO si no tiene más valores placeholder
       const clienteActualizado = result
       
       if (cumpleConValidadores(clienteActualizado)) {
         // Cliente cumple validadores: remover de la lista
         setClientes(prev => prev.filter(x => x.id !== c.id))
+        // ✅ Toast de éxito con información
+        toast.success(`✓ Cliente #${c.id} completado y removido`, {
+          description: `${clienteActualizado.nombres} - Todos los validadores cumplidos`,
+        })
       } else {
         // Cliente aún tiene placeholders: mantener en lista pero actualizar datos
         setClientes(prev => prev.map(x => x.id === c.id ? clienteActualizado : x))
+        // ✅ Toast de actualización
+        toast.info(`✓ Cliente #${c.id} actualizado`, {
+          description: 'Aún hay campos por completar',
+        })
       }
       
       onSuccess?.()
     } catch (e) {
       const msg = getErrorMessage(e)
       setRowErrors(prev => ({ ...prev, [c.id]: msg }))
+      // ✅ Toast de error
+      toast.error(`✗ Error al guardar cliente #${c.id}`, {
+        description: msg,
+      })
     } finally {
       setSaving(null)
     }
@@ -168,6 +180,7 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
     setRowErrors({})
     setProgress({ current: 0, total: toSave.length })
     let ok = 0
+    let completed = 0  // Clientes que cumplieron validadores
     const errs: Record<number, string> = {}
     const updatedClientes: Map<number, Cliente> = new Map()
     
@@ -219,12 +232,37 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
           const clienteActualizado = updatedClientes.get(c.id)!
           
           // Mantener si NO cumple, remover si cumple
-          return !cumpleConValidadores(clienteActualizado)
+          if (!cumpleConValidadores(clienteActualizado)) {
+            return true
+          }
+          
+          // Contar clientes que se removieron (cumplieron validadores)
+          completed++
+          return false
         })
         // Actualizar clientes que aún tienen placeholders
         .map(c => updatedClientes.get(c.id) || c)
       )
+      
+      // ✅ Toast de resumen
+      const removed = ok - Object.keys(errs).length - completed
+      const errors = Object.keys(errs).length
+      
+      if (errors === 0) {
+        toast.success(`✓ ${completed} cliente(s) completado(s) y removido(s)`, {
+          description: `${ok - completed} cliente(s) actualizado(s) (aún con campos por completar)`,
+        })
+      } else {
+        toast.warning(`✓ ${completed} removido(s), ${ok - completed} actualizado(s), ${errors} error(es)`, {
+          description: 'Ver tabla para detalles',
+        })
+      }
+      
       onSuccess?.()
+    } else if (Object.keys(errs).length > 0) {
+      toast.error(`✗ Error: Falló guardar ${Object.keys(errs).length} cliente(s)`, {
+        description: 'Ver tabla para detalles del error',
+      })
     }
     
     // ✅ Resetear progreso después de completar
@@ -300,65 +338,74 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {clientes.map(c => (
-                        <TableRow key={c.id}>
-                          <TableCell className="font-mono text-sm">{c.id}</TableCell>
-                          <TableCell>
-                            <Input
-                              value={getValue(c, 'cedula')}
-                              onChange={e => updateField(c.id, 'cedula', e.target.value)}
-                              placeholder={PLACEHOLDERS.cedula}
-                              className={isPlaceholder(getValue(c, 'cedula'), 'cedula') ? 'border-amber-300 bg-amber-50/50' : ''}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              value={getValue(c, 'nombres')}
-                              onChange={e => updateField(c.id, 'nombres', e.target.value)}
-                              placeholder={PLACEHOLDERS.nombres}
-                              className={isPlaceholder(getValue(c, 'nombres'), 'nombres') ? 'border-amber-300 bg-amber-50/50' : ''}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              value={getValue(c, 'telefono')}
-                              onChange={e => updateField(c.id, 'telefono', e.target.value)}
-                              placeholder={PLACEHOLDERS.telefono}
-                              className={isPlaceholder(getValue(c, 'telefono'), 'telefono') ? 'border-amber-300 bg-amber-50/50' : ''}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              value={getValue(c, 'email')}
-                              onChange={e => updateField(c.id, 'email', e.target.value)}
-                              placeholder={PLACEHOLDERS.email}
-                              className={isPlaceholder(getValue(c, 'email'), 'email') ? 'border-amber-300 bg-amber-50/50' : ''}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            {rowErrors[c.id] && (
-                              <div className="text-xs text-red-600 mb-1 truncate max-w-[200px]" title={rowErrors[c.id]}>
-                                {rowErrors[c.id]}
-                              </div>
-                            )}
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => saveOne(c)}
-                              disabled={!hasChanges(c) || saving !== null}
-                            >
-                              {saving === c.id ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <>
-                                  <Save className="w-4 h-4 mr-1" />
-                                  Guardar
-                                </>
+                      <AnimatePresence mode="popLayout">
+                        {clientes.map(c => (
+                          <motion.tr
+                            key={c.id}
+                            layout
+                            initial={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -100 }}
+                            transition={{ duration: 0.3 }}
+                            className="hover:bg-gray-50"
+                          >
+                            <TableCell className="font-mono text-sm">{c.id}</TableCell>
+                            <TableCell>
+                              <Input
+                                value={getValue(c, 'cedula')}
+                                onChange={e => updateField(c.id, 'cedula', e.target.value)}
+                                placeholder={PLACEHOLDERS.cedula}
+                                className={isPlaceholder(getValue(c, 'cedula'), 'cedula') ? 'border-amber-300 bg-amber-50/50' : ''}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                value={getValue(c, 'nombres')}
+                                onChange={e => updateField(c.id, 'nombres', e.target.value)}
+                                placeholder={PLACEHOLDERS.nombres}
+                                className={isPlaceholder(getValue(c, 'nombres'), 'nombres') ? 'border-amber-300 bg-amber-50/50' : ''}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                value={getValue(c, 'telefono')}
+                                onChange={e => updateField(c.id, 'telefono', e.target.value)}
+                                placeholder={PLACEHOLDERS.telefono}
+                                className={isPlaceholder(getValue(c, 'telefono'), 'telefono') ? 'border-amber-300 bg-amber-50/50' : ''}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                value={getValue(c, 'email')}
+                                onChange={e => updateField(c.id, 'email', e.target.value)}
+                                placeholder={PLACEHOLDERS.email}
+                                className={isPlaceholder(getValue(c, 'email'), 'email') ? 'border-amber-300 bg-amber-50/50' : ''}
+                              />
+                            </TableCell>
+                            <TableCell>
+                              {rowErrors[c.id] && (
+                                <div className="text-xs text-red-600 mb-1 truncate max-w-[200px]" title={rowErrors[c.id]}>
+                                  {rowErrors[c.id]}
+                                </div>
                               )}
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => saveOne(c)}
+                                disabled={!hasChanges(c) || saving !== null}
+                              >
+                                {saving === c.id ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <>
+                                    <Save className="w-4 h-4 mr-1" />
+                                    Guardar
+                                  </>
+                                )}
+                              </Button>
+                            </TableCell>
+                          </motion.tr>
+                        ))}
+                      </AnimatePresence>
                     </TableBody>
                   </Table>
                 </div>
