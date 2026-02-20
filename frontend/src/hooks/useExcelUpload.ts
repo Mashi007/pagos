@@ -11,16 +11,18 @@ import { useSimpleAuth } from '../store/simpleAuthStore'
 import { useIsMounted } from './useIsMounted'
 import { useEstadosCliente } from './useEstadosCliente'
 import {
+  validateExcelFile,
+  validateExcelData,
+  sanitizeFileName,
+} from '../utils/excelValidation'
+import {
   type ExcelRow,
   blankIfNN,
   formatNombres,
   convertirFechaExcel,
   convertirFechaParaBackend,
   validateField,
-  validateExcelFile,
-  validateExcelData,
-  sanitizeFileName,
-} from '../utils/excelValidation'
+} from '../utils/excelValidationClient'
 
 export interface ExcelUploaderProps {
   onClose: () => void
@@ -281,7 +283,7 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
       }
       const hasErrors = row._hasErrors
       const errorFields = Object.entries(row._validation)
-        .filter(([, v]) => !v.isValid)
+        .filter(([, v]) => !(v as { isValid?: boolean }).isValid)
         .map(([f]) => f)
 
       if (!hasErrors) {
@@ -554,6 +556,12 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
     }
   }, [pendingSaveFilteredByCedulas, doSaveClientesList])
 
+  const cancelCedulasModal = useCallback(() => {
+    setShowModalCedulasExistentes(false)
+    setCedulasExistentesEnBD([])
+    setPendingSaveFilteredByCedulas(null)
+  }, [])
+
   const processExcelFile = useCallback(
     async (file: File) => {
       if (!isMounted()) return
@@ -630,10 +638,9 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
           let hasErrors = false
           for (const field of requiredFields) {
             if (!isMounted()) return
-            const validation = validateFieldWithOptions(
-              field,
-              rowData[field as keyof typeof rowData] || ''
-            )
+            const rawVal = rowData[field as keyof ExcelData]
+            const strVal = typeof rawVal === 'string' ? rawVal : String(rawVal ?? '')
+            const validation = validateFieldWithOptions(field, strVal)
             rowData._validation[field] = validation
             if (!validation.isValid) hasErrors = true
           }
@@ -697,7 +704,13 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
   )
 
   const updateCellValue = useCallback(
-    async (rowIndex: number, field: string, value: string | null) => {
+    async (rowOrIndex: ExcelRow | number, field: string, value: string | null) => {
+      const rowIndex =
+        typeof rowOrIndex === 'number'
+          ? rowOrIndex
+          : excelData.findIndex((r) => r._rowIndex === rowOrIndex._rowIndex)
+      if (rowIndex < 0) return
+
       const newData = [...excelData]
       const row = newData[rowIndex]
       if (!row) return
@@ -706,7 +719,9 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
       if (field === 'cedula' && !formattedValue.trim()) {
         formattedValue = 'Z999999999'
       }
-      row[field as keyof typeof row] = formattedValue
+      if (field in row && !['_rowIndex', '_validation', '_hasErrors'].includes(field)) {
+        (row as Record<string, string>)[field] = formattedValue
+      }
 
       if (field === 'notas') {
         row._validation[field] = { isValid: true }
@@ -774,6 +789,7 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
     saveIndividualClient,
     saveAllValidClients,
     confirmSaveOmittingExistingCedulas,
+    cancelCedulasModal,
     onClose,
     navigate,
   }

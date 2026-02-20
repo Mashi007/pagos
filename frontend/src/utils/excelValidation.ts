@@ -219,3 +219,38 @@ export function sanitizeCellValue(value: any): string {
   return str.trim()
 }
 
+
+export interface ExcelData { cedula: string; nombres: string; telefono: string; email: string; direccion: string; fecha_nacimiento: string; ocupacion: string; estado: string; activo: string; notas: string }
+export interface ValidationResult { isValid: boolean; message?: string; normalizedValue?: string }
+export interface ExcelRow extends ExcelData { _rowIndex: number; _validation: Record<string, ValidationResult>; _hasErrors: boolean }
+export interface ValidateFieldOptions { estadoOpciones?: string[] }
+export function blankIfNN(v: string | null | undefined): string { if (v == null) return ''; const t = v.toString().trim(); return t.toLowerCase() === 'nn' ? '' : t }
+export function formatNombres(n: string): string { if (!n?.trim()) return n; return n.split(/\s+/).filter(w=>w.length).map(w=>w[0].toUpperCase()+w.slice(1).toLowerCase()).join(' ') }
+export function convertirFechaExcel(val: unknown): string {
+  if (val == null || val === '') return ''
+  if (val instanceof Date) { if (Number.isNaN(val.getTime())) return ''; return `${String(val.getDate()).padStart(2,'0')}/${String(val.getMonth()+1).padStart(2,'0')}/${val.getFullYear()}` }
+  const s = val.toString().trim(); if (!s) return ''
+  if (/^\d{4,}$/.test(s)) { try { const d=new Date(1900,0,1); d.setDate(d.getDate()+parseInt(s,10)-2); return Number.isNaN(d.getTime())?s:`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}` } catch { return s } }
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return s
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) { const [y,m,d]=s.split('-'); return `${d}/${m}/${y}` }
+  const m = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/); if (m) return `//`
+  const p = new Date(s); return !Number.isNaN(p.getTime()) ? `${String(p.getDate()).padStart(2,'0')}/${String(p.getMonth()+1).padStart(2,'0')}/${p.getFullYear()}` : s
+}
+export function convertirFechaParaBackend(f: string): string { if (!f?.trim()) return ''; const m = f.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); return m ? `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}` : f.trim() }
+export function validateField(field: string, value: string, options?: ValidateFieldOptions): ValidationResult {
+  if (typeof value==='string'&&value.trim().toLowerCase()==='nn') return { isValid: true, message: 'Valor omitido por NN' }
+  const opts = options?.estadoOpciones ?? []
+  switch (field) {
+    case 'cedula': if (!value.trim()) return { isValid: true }; const c = value.trim().replace(/:$/, '').replace(/:/g, ''); return /^[VEJZ]\d{6,11}$/.test(c.toUpperCase()) ? { isValid: true } : { isValid: false, message: 'Formato E/V/J/Z + 6-11 dígitos' }
+    case 'nombres': if (!value.trim()) return { isValid: false, message: 'Nombres requeridos' }; const w = value.trim().split(/\s+/).filter(x=>x.length); return w.length>=2&&w.length<=7 ? { isValid: true } : { isValid: false, message: 'Entre 2 y 7 palabras' }
+    case 'telefono': if (!value?.trim()) return { isValid: false, message: 'Teléfono requerido' }; let d=(value||'').replace(/\D/g,''); if (d.startsWith('58')&&d.length>=11) d=d.slice(2); if (d.length>10) return { isValid: true }; if (d.length!==10) return { isValid: false, message: '10 dígitos' }; return /^[1-9]\d{9}$/.test(d) ? { isValid: true } : { isValid: false, message: '10 dígitos sin 0 inicial' }
+    case 'email': if (!value.trim()) return { isValid: false, message: 'Email requerido' }; const t=value.trim(); if (t.includes(' ')) return { isValid: false, message: 'Sin espacios' }; if (t.includes(',')) return { isValid: false, message: 'Sin comas' }; if (!t.includes('@')) return { isValid: false, message: 'Debe tener @' }; return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(t.toLowerCase()) ? { isValid: true } : { isValid: false, message: 'Extensión válida' }
+    case 'direccion': if (!value.trim()) return { isValid: false, message: 'Dirección requerida' }; return value.trim().length>=5 ? { isValid: true } : { isValid: false, message: 'Mínimo 5 caracteres' }
+    case 'estado': if (!value.trim()) return { isValid: false, message: 'Estado requerido' }; const valid = opts.length ? opts : ['ACTIVO','INACTIVO','FINALIZADO','LEGACY']; return valid.includes(value.toUpperCase().trim()) ? { isValid: true } : { isValid: false, message: `Uno de: ${valid.join(', ')}` }
+    case 'activo': if (!value.trim()) return { isValid: false, message: 'Valor requerido' }; return ['true','false'].includes(value.toLowerCase()) ? { isValid: true } : { isValid: false, message: 'true o false' }
+    case 'fecha_nacimiento': if (!value.trim()) return { isValid: false, message: 'Fecha requerida' }; const fm = value.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); if (!fm) return { isValid: false, message: 'Formato DD/MM/YYYY' }; const dn=parseInt(fm[1],10), mnn=parseInt(fm[2],10), yn=parseInt(fm[3],10); if (dn<1||dn>31) return { isValid: false, message: 'Día 1-31' }; if (mnn<1||mnn>12) return { isValid: false, message: 'Mes 1-12' }; if (yn<1900||yn>2100) return { isValid: false, message: 'Año 1900-2100' }; const fd = new Date(yn, mnn-1, dn); if (fd.getDate()!==dn||fd.getMonth()!==mnn-1||fd.getFullYear()!==yn) return { isValid: false, message: 'Fecha inválida' }; const hoy = new Date(); hoy.setHours(0,0,0,0); if (fd>=hoy) return { isValid: false, message: 'No futura' }; if (new Date(yn+18, mnn-1, dn) > hoy) return { isValid: false, message: 'Mínimo 18 años' }; return { isValid: true }
+    case 'ocupacion': if (!value.trim()) return { isValid: false, message: 'Ocupación requerida' }; return value.trim().length>=2 ? { isValid: true } : { isValid: false, message: 'Mínimo 2 caracteres' }
+    case 'notas': return { isValid: true }
+    default: return { isValid: true }
+  }
+}
