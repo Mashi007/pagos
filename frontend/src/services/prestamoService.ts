@@ -139,6 +139,48 @@ class PrestamoService {
     return response
   }
 
+  /**
+   * Descarga la tabla de amortización en Excel (vía API, sin depender de exceljs en el frontend).
+   */
+  async descargarAmortizacionExcel(prestamoId: number, cedula: string): Promise<void> {
+    const axiosInstance = apiClient.getAxiosInstance()
+    const response = await axiosInstance.get(
+      `${this.baseUrl}/${prestamoId}/amortizacion/excel`,
+      { responseType: 'blob' }
+    )
+    const blob = new Blob([response.data], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    })
+    const urlBlob = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = urlBlob
+    link.download = `Tabla_Amortizacion_${cedula}_${prestamoId}.xlsx`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(urlBlob)
+  }
+
+  /**
+   * Descarga la tabla de amortización en PDF (vía API, sin depender de jspdf en el frontend).
+   */
+  async descargarAmortizacionPDF(prestamoId: number, cedula: string): Promise<void> {
+    const axiosInstance = apiClient.getAxiosInstance()
+    const response = await axiosInstance.get(
+      `${this.baseUrl}/${prestamoId}/amortizacion/pdf`,
+      { responseType: 'blob' }
+    )
+    const blob = new Blob([response.data], { type: 'application/pdf' })
+    const urlBlob = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = urlBlob
+    link.download = `Tabla_Amortizacion_${cedula}_${prestamoId}.pdf`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(urlBlob)
+  }
+
   // Generar tabla de amortización
   async generarAmortizacion(prestamoId: number): Promise<any> {
     const response = await apiClient.post<any>(

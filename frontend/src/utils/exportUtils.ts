@@ -2,6 +2,11 @@
  * Utilidades para exportar tablas de amortización
  */
 
+import { toast } from 'sonner'
+
+/** Mensaje cuando falla la carga dinámica del módulo (chunk 404 tras deploy) */
+const MSJ_RECARGA = 'Recarga la página (F5) e intenta de nuevo. Si el problema persiste, contacta al administrador.'
+
 export interface Cuota {
   numero_cuota: number
   fecha_vencimiento: string
@@ -77,7 +82,12 @@ export const exportarAExcel = async (cuotas: Cuota[], prestamo: PrestamoInfo) =>
     await createAndDownloadExcel(todosLosDatos, 'Tabla de Amortización', nombreArchivo)
   } catch (error) {
     console.error('Error al exportar a Excel:', error)
-    alert('Error al exportar a Excel')
+    const isChunkError = error instanceof Error && (
+      error.message.includes('dynamically imported') ||
+      error.message.includes('Failed to fetch') ||
+      error.message.includes('Loading chunk')
+    )
+    toast.error(isChunkError ? MSJ_RECARGA : 'Error al exportar a Excel')
   }
 }
 
@@ -263,7 +273,12 @@ export const exportarAPDF = async (cuotas: Cuota[], prestamo: PrestamoInfo) => {
     doc.save(nombreArchivo)
   } catch (error) {
     console.error('Error al exportar a PDF:', error)
-    alert('Error al exportar a PDF. Asegúrate de que las librerías estén instaladas.')
+    const isChunkError = error instanceof Error && (
+      error.message.includes('dynamically imported') ||
+      error.message.includes('Failed to fetch') ||
+      error.message.includes('Loading chunk')
+    )
+    toast.error(isChunkError ? MSJ_RECARGA : 'Error al exportar a PDF')
   }
 }
 

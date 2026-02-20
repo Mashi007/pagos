@@ -302,6 +302,13 @@ const staticOptions = {
       res.setHeader('Expires', '0');
       return;
     }
+    // No cachear chunks de exportación (exceljs, jspdf) - evita 404 tras deploy cuando el hash cambia
+    if (basename.includes('exceljs') || basename.includes('jspdf') || basename.includes('pdf-export')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      return;
+    }
     // Asegurar MIME types correctos para archivos JavaScript
     if (filePath.endsWith('.js')) {
       res.setHeader('Content-Type', 'application/javascript; charset=utf-8');

@@ -66,6 +66,11 @@ export function Cobranzas() {
   // ✅ QueryClient para invalidación inteligente de caché
   const queryClient = useQueryClient()
 
+  // Precargar exceljs en segundo plano al montar (evita fallo de import dinámico al exportar)
+  useEffect(() => {
+    import('../types/exceljs').catch(() => { /* ignorar fallo silencioso */ })
+  }, [])
+
   // Query para resumen
   const {
     data: resumen,
@@ -391,7 +396,12 @@ export function Cobranzas() {
       await createAndDownloadExcel(datosExcel, 'Datos', nombreArchivo)
     } catch (error) {
       console.error('Error exportando a Excel:', error)
-      alert('Error al exportar a Excel')
+      const isChunkError = error instanceof Error && (
+        error.message.includes('dynamically imported') ||
+        error.message.includes('Failed to fetch') ||
+        error.message.includes('Loading chunk')
+      )
+      toast.error(isChunkError ? 'Recarga la página (F5) e intenta de nuevo.' : 'Error al exportar a Excel')
     }
   }
 

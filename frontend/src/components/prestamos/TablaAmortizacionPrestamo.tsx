@@ -9,7 +9,6 @@ import { prestamoService } from '../../services/prestamoService'
 import { useQuery } from '@tanstack/react-query'
 import { formatDate } from '../../utils'
 import { toast } from 'sonner'
-import { exportarAExcel, exportarAPDF } from '../../utils/exportUtils'
 
 interface Cuota {
   id: number
@@ -132,48 +131,19 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
     : 0
 
   const exportarExcel = async () => {
-    if (!cuotas) {
-      toast.error('No hay datos para exportar')
-      return
-    }
-
-    const prestamoInfo = {
-      id: prestamo.id,
-      cedula: prestamo.cedula,
-      nombres: prestamo.nombres,
-      total_financiamiento: prestamo.total_financiamiento,
-      numero_cuotas: prestamo.numero_cuotas,
-      modalidad_pago: prestamo.modalidad_pago,
-      fecha_requerimiento: prestamo.fecha_requerimiento
-    }
-
     try {
-      await exportarAExcel(cuotas, prestamoInfo)
-      toast.success('Exportando a Excel...')
+      await prestamoService.descargarAmortizacionExcel(prestamo.id, prestamo.cedula)
+      toast.success('Excel descargado exitosamente')
     } catch (error) {
+      console.error('Error al exportar a Excel:', error)
       toast.error('Error al exportar a Excel')
     }
   }
 
   const exportarPDF = async () => {
-    if (!cuotas) {
-      toast.error('No hay datos para exportar')
-      return
-    }
-
-    const prestamoInfo = {
-      id: prestamo.id,
-      cedula: prestamo.cedula,
-      nombres: prestamo.nombres,
-      total_financiamiento: prestamo.total_financiamiento,
-      numero_cuotas: prestamo.numero_cuotas,
-      modalidad_pago: prestamo.modalidad_pago,
-      fecha_requerimiento: prestamo.fecha_requerimiento
-    }
-
     try {
-      await exportarAPDF(cuotas, prestamoInfo)
-      toast.success('PDF exportado exitosamente')
+      await prestamoService.descargarAmortizacionPDF(prestamo.id, prestamo.cedula)
+      toast.success('PDF descargado exitosamente')
     } catch (error) {
       console.error('Error al exportar a PDF:', error)
       toast.error('Error al exportar a PDF')

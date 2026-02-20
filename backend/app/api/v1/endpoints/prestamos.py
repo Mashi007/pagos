@@ -3,12 +3,14 @@ Endpoints de préstamos. Datos reales desde BD (tabla prestamos).
 Todos los endpoints usan Depends(get_db). No hay stubs ni datos demo.
 """
 import calendar
+import io
 import logging
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from pydantic import BaseModel, field_validator
 from sqlalchemy import delete, func, select, text
 from sqlalchemy.exc import IntegrityError
@@ -607,6 +609,175 @@ def get_cuotas_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
         })
     
     return resultado
+
+
+def _obtener_cuotas_para_export(db: Session, prestamo_id: int, prestamo: Prestamo) -> list:
+    """Obtiene cuotas del préstamo con datos formateados para exportación Excel/PDF."""
+    cuotas = db.execute(
+        select(Cuota).where(Cuota.prestamo_id == prestamo_id).order_by(Cuota.numero_cuota)
+    ).scalars().all()
+    
+    resultado = []
+    for c in cuotas:
+        saldo_inicial = float(c.saldo_capital_inicial) if c.saldo_capital_inicial is not None else 0
+        saldo_final = float(c.saldo_capital_final) if c.saldo_capital_final is not None else 0
+        monto_cuota = float(c.monto) if c.monto is not None else 0
+        monto_capital = max(0, saldo_inicial - saldo_final)
+        monto_interes = max(0, monto_cuota - monto_capital)
+        
+        resultado.append({
+            "numero_cuota": c.numero_cuota,
+            "fecha_vencimiento": c.fecha_vencimiento.isoformat() if c.fecha_vencimiento else "",
+            "monto_capital": monto_capital,
+            "monto_interes": monto_interes,
+            "monto_cuota": monto_cuota,
+            "saldo_capital_final": saldo_final,
+            "estado": c.estado or "PENDIENTE",
+        })
+    return resultado
+
+
+def _generar_excel_amortizacion(cuotas: list, prestamo: Prestamo) -> bytes:
+    """Genera archivo Excel con tabla de amortización del préstamo."""
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Tabla de Amortización"
+    
+    # Encabezados
+    headers = ["Cuota", "Fecha Vencimiento", "Capital", "Interés", "Total", "Saldo Pendiente", "Estado"]
+    ws.append(headers)
+    header_row = ws[1]
+    for cell in header_row:
+        cell.font = Font(bold=True)
+        cell.fill = PatternFill(start_color="E0E0E0", end_color="E0E0E0", fill_type="solid")
+    
+    total_capital = 0
+    total_interes = 0
+    total_general = 0
+    
+    for c in cuotas:
+        ws.append([
+            c["numero_cuota"],
+            c["fecha_vencimiento"],
+            c["monto_capital"],
+            c["monto_interes"],
+            c["monto_cuota"],
+            c["saldo_capital_final"],
+            c["estado"],
+        ])
+        total_capital += c["monto_capital"]
+        total_interes += c["monto_interes"]
+        total_general += c["monto_cuota"]
+    
+    # Fila de resumen
+    ws.append([])
+    ws.append(["RESUMEN", "", total_capital, total_interes, total_general, "", ""])
+    
+    # Formato moneda para columnas numéricas
+    for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=3, max_col=6):
+        for cell in row:
+            cell.number_format = '$#,##0.00'
+    
+    # Ajustar anchos de columna
+    ws.column_dimensions["A"].width = 8
+    ws.column_dimensions["B"].width = 18
+    ws.column_dimensions["C"].width = 12
+    ws.column_dimensions["D"].width = 12
+    ws.column_dimensions["E"].width = 12
+    ws.column_dimensions["F"].width = 15
+    ws.column_dimensions["G"].width = 15
+    
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def _generar_pdf_amortizacion(cuotas: list, prestamo: Prestamo) -> bytes:
+    """Genera archivo PDF con tabla de amortización del préstamo."""
+    from reportlab.lib.pagesizes import letter
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet
+    
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=letter)
+    styles = getSampleStyleSheet()
+    story = []
+    
+    story.append(Paragraph("Tabla de Amortización", styles["Title"]))
+    story.append(Paragraph(f"Cliente: {prestamo.nombres}", styles["Normal"]))
+    story.append(Paragraph(f"Cédula: {prestamo.cedula}", styles["Normal"]))
+    story.append(Paragraph(f"Préstamo #{prestamo.id}", styles["Normal"]))
+    story.append(Paragraph(f"Total: ${float(prestamo.total_financiamiento or 0):,.2f}", styles["Normal"]))
+    story.append(Spacer(1, 12))
+    
+    if not cuotas:
+        story.append(Paragraph("No hay cuotas para este préstamo.", styles["Normal"]))
+    else:
+        rows = [["Cuota", "Fecha Venc.", "Capital", "Interés", "Total", "Saldo Pend.", "Estado"]]
+        for c in cuotas:
+            rows.append([
+                str(c["numero_cuota"]),
+                c["fecha_vencimiento"],
+                f"${c['monto_capital']:,.2f}",
+                f"${c['monto_interes']:,.2f}",
+                f"${c['monto_cuota']:,.2f}",
+                f"${c['saldo_capital_final']:,.2f}",
+                c["estado"],
+            ])
+        t = Table(rows)
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), "#3B82F6"),
+            ("TEXTCOLOR", (0, 0), (-1, 0), "white"),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, 0), 10),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("ALIGN", (2, 0), (5, -1), "RIGHT"),
+            ("GRID", (0, 0), (-1, -1), 0.5, "#ccc"),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [0xffffff, 0xf5f7fa]),
+        ]))
+        story.append(t)
+    
+    doc.build(story)
+    return buf.getvalue()
+
+
+@router.get("/{prestamo_id}/amortizacion/excel")
+def exportar_amortizacion_excel(prestamo_id: int, db: Session = Depends(get_db)):
+    """Exporta la tabla de amortización del préstamo en formato Excel."""
+    prestamo = db.get(Prestamo, prestamo_id)
+    if not prestamo:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+    
+    cuotas = _obtener_cuotas_para_export(db, prestamo_id, prestamo)
+    content = _generar_excel_amortizacion(cuotas, prestamo)
+    filename = f"Tabla_Amortizacion_{prestamo.cedula}_{prestamo.id}.xlsx"
+    
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@router.get("/{prestamo_id}/amortizacion/pdf")
+def exportar_amortizacion_pdf(prestamo_id: int, db: Session = Depends(get_db)):
+    """Exporta la tabla de amortización del préstamo en formato PDF."""
+    prestamo = db.get(Prestamo, prestamo_id)
+    if not prestamo:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+    
+    cuotas = _obtener_cuotas_para_export(db, prestamo_id, prestamo)
+    content = _generar_pdf_amortizacion(cuotas, prestamo)
+    filename = f"Tabla_Amortizacion_{prestamo.cedula}_{prestamo.id}.pdf"
+    
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 @router.post("/{prestamo_id}/generar-amortizacion", response_model=dict)
