@@ -5,8 +5,8 @@
 ## Terminología
 
 - **Pago vencido** = Cuotas vencidas y no pagadas (fecha_vencimiento < hoy). En UI se usa en lugar de "Morosidad".
-- **Vencido** = Si debo pagar hasta el 23 feb, NO estoy vencido hasta el 24 feb. Desde el 24 = vencido (1-60 días de atraso).
-- **Moroso** = 61 o más días de atraso (se declara como moroso desde el día 61).
+- **Vencido** = Si debo pagar hasta el 23 feb, NO estoy vencido hasta el 24 feb. Desde el 24 = vencido (1-89 días de atraso).
+- **Moroso** = 90 o más días de atraso (se declara como moroso desde el día 90).
 
 ## Definición de Pago vencido
 
@@ -19,7 +19,7 @@ Una cuota está **vencida** solo cuando:
 - Cuota con vencimiento **23 de febrero**
 - Hoy es **18 de febrero** → **NO** está vencida (aún no vence)
 - Hoy es **24 de febrero** y no he pagado → **SÍ** está vencida (venció ayer)
-- Hoy es **25 de mayo** (día 61+) y no he pagado → **Moroso** (61+ días de atraso)
+- Hoy es **25 de mayo** (día 90+) y no he pagado → **Moroso** (90+ días de atraso)
 
 ## Aplicación en el sistema (Pago vencido)
 

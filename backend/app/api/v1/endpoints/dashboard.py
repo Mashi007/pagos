@@ -5,8 +5,8 @@ Caché de dashboard/admin: se actualiza 2 veces al día (1:00, 13:00) para carga
 
 CONCEPTO PAGO VENCIDO Y MOROSO (terminología unificada):
 - Pago vencido = cuotas vencidas y no pagadas (fecha_vencimiento < hoy).
-- Vencido: si debo pagar hasta el 23 feb, NO estoy vencido hasta el 24 feb. Desde el 24 = vencido (1-60 días de atraso).
-- Moroso: 61+ días de atraso (se declara como moroso desde el día 61).
+- Vencido: si debo pagar hasta el 23 feb, NO estoy vencido hasta el 24 feb. Desde el 24 = vencido (1-89 días de atraso).
+- Moroso: 90+ días de atraso (se declara como moroso desde el día 90).
 - Condición: fecha_vencimiento < fecha_referencia AND fecha_pago IS NULL.
 """
 import logging
@@ -1216,8 +1216,8 @@ def _compute_composicion_morosidad(
     """Calcula composición de morosidad: cuotas vencidas sin pagar al día de hoy, agrupadas por días de atraso.
     Snapshot actual (usa current_date). Respeta filtros analista, concesionario, modelo."""
     try:
-        # Bandas: 1-30 y 31-60 = VENCIDO; 61-90 y 90+ = MOROSO (61+ días de atraso)
-        bandas = [(1, 30, "1-30 días"), (31, 60, "31-60 días"), (61, 90, "61-90 días"), (91, 999999, "90+ días")]
+        # Bandas: 1-30, 31-60, 61-89 = VENCIDO; 90+ = MOROSO (90+ días de atraso)
+        bandas = [(1, 30, "1-30 días"), (31, 60, "31-60 días"), (61, 89, "61-89 días"), (90, 999999, "90+ días (moroso)")]
         puntos = []
         total_monto = 0.0
         total_cuotas = 0
@@ -1263,8 +1263,8 @@ def _compute_composicion_morosidad(
         puntos = [
             ("1-30 días", 12000, 45, 12),
             ("31-60 días", 8500, 28, 9),
-            ("61-90 días", 6200, 18, 6),
-            ("90+ días", 15800, 32, 10),
+            ("61-89 días", 6200, 18, 6),
+            ("90+ días (moroso)", 15800, 32, 10),
         ]
         return {
             "puntos": [{"categoria": c, "monto": m, "cantidad_cuotas": n, "cantidad_prestamos": np} for c, m, n, np in puntos],

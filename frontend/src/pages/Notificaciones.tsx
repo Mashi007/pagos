@@ -17,14 +17,14 @@ import { notificacionService, type ClientesRetrasadosResponse, type ClienteRetra
 import { toast } from 'sonner'
 import { ConfiguracionNotificaciones } from '../components/notificaciones/ConfiguracionNotificaciones'
 
-type TabId = 'dias_5' | 'dias_3' | 'dias_1' | 'hoy' | 'mora_61' | 'configuracion'
+type TabId = 'dias_5' | 'dias_3' | 'dias_1' | 'hoy' | 'mora_90' | 'configuracion'
 
 const TABS: { id: TabId; label: string; icon: typeof Calendar }[] = [
   { id: 'dias_5', label: 'Faltan 5 días', icon: Calendar },
   { id: 'dias_3', label: 'Faltan 3 días', icon: Calendar },
   { id: 'dias_1', label: 'Falta 1 día', icon: Clock },
   { id: 'hoy', label: 'Hoy vence', icon: AlertTriangle },
-  { id: 'mora_61', label: '61+ días de mora', icon: FileText },
+  { id: 'mora_90', label: '90+ días de mora (moroso)', icon: FileText },
   { id: 'configuracion', label: 'Configuración', icon: Settings },
 ]
 
@@ -34,7 +34,7 @@ const PLACEHOLDER_NOTIFICACIONES: ClientesRetrasadosResponse = {
   dias_3: [],
   dias_1: [],
   hoy: [],
-  mora_61: { cuotas: [], total_cuotas: 0 },
+  mora_90: { cuotas: [], total_cuotas: 0 },
 }
 
 export function Notificaciones() {
@@ -57,7 +57,7 @@ export function Notificaciones() {
       dias_3: { enviados: 0, rebotados: 0 },
       dias_1: { enviados: 0, rebotados: 0 },
       hoy: { enviados: 0, rebotados: 0 },
-      mora_61: { enviados: 0, rebotados: 0 },
+      mora_90: { enviados: 0, rebotados: 0 },
     } as EstadisticasPorTab,
   })
 
@@ -103,7 +103,7 @@ export function Notificaciones() {
       case 'dias_3': return data.dias_3
       case 'dias_1': return data.dias_1
       case 'hoy': return data.hoy
-      case 'mora_61': return data.mora_61?.cuotas ?? []
+      case 'mora_90': return data.mora_90?.cuotas ?? []
       default: return []
     }
   }
@@ -112,7 +112,7 @@ export function Notificaciones() {
   const hasColumnasCuota = list.some(
     (row) => row.numero_cuota != null || row.fecha_vencimiento != null || row.dias_atraso != null || row.monto != null
   )
-  const mostrarTablaCuotas = activeTab === 'mora_61' || hasColumnasCuota
+  const mostrarTablaCuotas = activeTab === 'mora_90' || hasColumnasCuota
 
   if (activeTab === 'configuracion') {
     return (
@@ -150,7 +150,7 @@ export function Notificaciones() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Notificaciones a clientes retrasados</h1>
           <p className="text-gray-600 mt-1">
-            Cuotas no pagadas por días hasta vencimiento y mora 61+. Datos desde BD. Actualización recomendada a las 2am.
+            Cuotas no pagadas por días hasta vencimiento y mora 90+ (moroso). Datos desde BD. Actualización recomendada a las 2am.
           </p>
           {data?.actualizado_en && (
             <p className="text-xs text-gray-500 mt-1">Última consulta: {new Date(data.actualizado_en).toLocaleString('es-ES')}</p>
@@ -172,7 +172,7 @@ export function Notificaciones() {
               : tab.id === 'dias_3' ? data?.dias_3?.length ?? 0
               : tab.id === 'dias_1' ? data?.dias_1?.length ?? 0
               : tab.id === 'hoy' ? data?.hoy?.length ?? 0
-              : tab.id === 'mora_61' ? data?.mora_61?.total_cuotas ?? 0
+              : tab.id === 'mora_90' ? data?.mora_90?.total_cuotas ?? 0
               : 0
             return (
               <button
@@ -208,13 +208,13 @@ export function Notificaciones() {
                 const TabIcon = TABS.find((t) => t.id === activeTab)?.icon
                 return TabIcon ? <TabIcon className="w-5 h-5" /> : null
               })()}
-              {activeTab === 'mora_61'
-                ? 'Informe: cuotas con 61 o más días de mora (una a una)'
+              {activeTab === 'mora_90'
+                ? 'Informe: cuotas con 90 o más días de mora - moroso (una a una)'
                 : `Clientes con cuota no pagada ${activeTab === 'dias_5' ? 'y faltan 5 días' : activeTab === 'dias_3' ? 'y faltan 3 días' : activeTab === 'dias_1' ? 'y falta 1 día' : 'y vence hoy'}`}
             </CardTitle>
             <CardDescription>
-              {activeTab === 'mora_61'
-                ? 'Listado de cada cuota atrasada 61+ días con nombre, cédula, número de cuota, fecha de vencimiento, días de atraso y monto.'
+              {activeTab === 'mora_90'
+                ? 'Listado de cada cuota atrasada 90+ días (moroso) con nombre, cédula, número de cuota, fecha de vencimiento, días de atraso y monto.'
                 : 'Nombre y cédula de clientes a notificar.'}
             </CardDescription>
           </CardHeader>
@@ -287,7 +287,7 @@ export function Notificaciones() {
                   </thead>
                   <tbody>
                     {list.length === 0 ? (
-                      <tr><td colSpan={7} className="py-8 text-center text-gray-500">No hay cuotas con 61+ días de mora.</td></tr>
+                      <tr><td colSpan={7} className="py-8 text-center text-gray-500">No hay cuotas con 90+ días de mora (moroso).</td></tr>
                     ) : (
                       list.map((row, idx) => (
                         <tr key={`${row.cliente_id}-${row.numero_cuota ?? idx}`} className="border-b hover:bg-gray-50">

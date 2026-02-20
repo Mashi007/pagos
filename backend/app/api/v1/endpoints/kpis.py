@@ -37,7 +37,7 @@ def get_kpis_dashboard(
     db: Session = Depends(get_db),
 ):
     """KPIs del dashboard desde BD: total_prestamos, total_morosidad (solo clientes ACTIVOS).
-    Concepto: Pago vencido = fecha_vencimiento < hoy. Moroso = 61+ días de atraso."""
+    Concepto: Pago vencido = fecha_vencimiento < hoy. Moroso = 90+ días de atraso."""
     hoy = date.today()
     q_prestamos = (
         select(Prestamo)

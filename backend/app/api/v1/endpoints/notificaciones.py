@@ -193,7 +193,7 @@ TIPOS_PLANTILLA_PERMITIDOS = frozenset([
     "PAGO_5_DIAS_ANTES", "PAGO_3_DIAS_ANTES", "PAGO_1_DIA_ANTES",
     "PAGO_DIA_0",
     "PAGO_1_DIA_ATRASADO", "PAGO_3_DIAS_ATRASADO", "PAGO_5_DIAS_ATRASADO",
-    "PREJUDICIAL", "MORA_61",
+    "PREJUDICIAL", "MORA_61", "MORA_90",  # MORA_61 legacy; MORA_90 = moroso 90+ días
 ])
 
 
@@ -524,7 +524,7 @@ def get_notificaciones_resumen(db: Session = Depends(get_db)):
 @router.get("/estadisticas-por-tab", response_model=dict)
 def get_estadisticas_por_tab(db: Session = Depends(get_db)):
     """
-    KPIs por pestaña: correos enviados y rebotados (dias_5, dias_3, dias_1, hoy, mora_61).
+    KPIs por pestaña: correos enviados y rebotados (dias_5, dias_3, dias_1, hoy, mora_90).
     Cuando exista persistencia de envíos por tipo, aquí se consultará la BD.
     """
     return {
@@ -532,11 +532,11 @@ def get_estadisticas_por_tab(db: Session = Depends(get_db)):
         "dias_3": {"enviados": 0, "rebotados": 0},
         "dias_1": {"enviados": 0, "rebotados": 0},
         "hoy": {"enviados": 0, "rebotados": 0},
-        "mora_61": {"enviados": 0, "rebotados": 0},
+        "mora_90": {"enviados": 0, "rebotados": 0},
     }
 
 
-TIPOS_TAB_NOTIFICACIONES = ("dias_5", "dias_3", "dias_1", "hoy", "mora_61")
+TIPOS_TAB_NOTIFICACIONES = ("dias_5", "dias_3", "dias_1", "hoy", "mora_90")
 
 
 def _get_rebotados_por_tipo(db: Session, tipo: str) -> List[dict]:
@@ -553,7 +553,7 @@ def _get_rebotados_por_tipo(db: Session, tipo: str) -> List[dict]:
 
 @router.get("/rebotados-por-tab", response_model=dict)
 def get_rebotados_por_tab(
-    tipo: str = Query(..., description="Tipo de pestaña: dias_5, dias_3, dias_1, hoy, mora_61"),
+    tipo: str = Query(..., description="Tipo de pestaña: dias_5, dias_3, dias_1, hoy, mora_90"),
     db: Session = Depends(get_db),
 ):
     """Lista de correos no entregados (rebotados) para la pestaña. Para generar informe Excel en frontend o descargar Excel."""
@@ -586,7 +586,7 @@ def _generar_excel_rebotados(items: List[dict], tipo: str) -> bytes:
 
 @router.get("/rebotados-por-tab/excel")
 def get_rebotados_por_tab_excel(
-    tipo: str = Query(..., description="Tipo de pestaña: dias_5, dias_3, dias_1, hoy, mora_61"),
+    tipo: str = Query(..., description="Tipo de pestaña: dias_5, dias_3, dias_1, hoy, mora_90"),
     db: Session = Depends(get_db),
 ):
     """Descarga informe Excel de correos no entregados (rebotados) para la pestaña."""
@@ -610,7 +610,7 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
     2. Faltan 3 días para fecha_vencimiento (no pagado)
     3. Falta 1 día para fecha_vencimiento (no pagado)
     4. Hoy = fecha_vencimiento (no pagado)
-    5. 61+ días de mora: informe de cada cuota atrasada una a una.
+    5. 90+ días de mora (moroso): informe de cada cuota atrasada una a una.
     Se usa la fecha del servidor; actualizar a las 2am con cron si se desea.
     """
     hoy = date.today()
@@ -627,7 +627,7 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
     dias_3: List[dict] = []
     dias_1: List[dict] = []
     hoy_list: List[dict] = []
-    mora_61_cuotas: List[dict] = []  # cada cuota 61+ atrasada, una a una
+    mora_90_cuotas: List[dict] = []  # cada cuota 90+ días atrasada (moroso)
 
     for (cuota, cliente) in rows:
         fv = cuota.fecha_vencimiento
@@ -645,11 +645,11 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
             hoy_list.append(_item(cliente, cuota))
         elif delta < 0:
             dias_atraso = -delta
-            if dias_atraso >= 61:
-                mora_61_cuotas.append(_item(cliente, cuota, dias_atraso=dias_atraso))
+            if dias_atraso >= 90:
+                mora_90_cuotas.append(_item(cliente, cuota, dias_atraso=dias_atraso))
 
-    # Ordenar mora_61 por dias_atraso desc, luego por cliente
-    mora_61_cuotas.sort(key=lambda x: (-x["dias_atraso"], x["cedula"], x["numero_cuota"]))
+    # Ordenar mora_90 por dias_atraso desc, luego por cliente
+    mora_90_cuotas.sort(key=lambda x: (-x["dias_atraso"], x["cedula"], x["numero_cuota"]))
 
     return {
         "actualizado_en": hoy.isoformat(),
@@ -657,9 +657,9 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
         "dias_3": dias_3,
         "dias_1": dias_1,
         "hoy": hoy_list,
-        "mora_61": {
-            "cuotas": mora_61_cuotas,
-            "total_cuotas": len(mora_61_cuotas),
+        "mora_90": {
+            "cuotas": mora_90_cuotas,
+            "total_cuotas": len(mora_90_cuotas),
         },
     }
 
@@ -705,7 +705,7 @@ def get_notificaciones_tabs_data(db: Session):
     dias_1_retraso: List[dict] = []
     dias_3_retraso: List[dict] = []
     dias_5_retraso: List[dict] = []
-    mora_61_cuotas: List[dict] = []
+    mora_90_cuotas: List[dict] = []
 
     for (cuota, cliente) in rows:
         fv = cuota.fecha_vencimiento
@@ -729,10 +729,10 @@ def get_notificaciones_tabs_data(db: Session):
                 dias_3_retraso.append(_item_tab(cliente, cuota, dias_atraso=3))
             elif dias_atraso == 5:
                 dias_5_retraso.append(_item_tab(cliente, cuota, dias_atraso=5))
-            elif dias_atraso >= 61:
-                mora_61_cuotas.append(_item_tab(cliente, cuota, dias_atraso=dias_atraso))
+            elif dias_atraso >= 90:
+                mora_90_cuotas.append(_item_tab(cliente, cuota, dias_atraso=dias_atraso))
 
-    mora_61_cuotas.sort(key=lambda x: (-x["dias_atraso"], x["cedula"], x["numero_cuota"]))
+    mora_90_cuotas.sort(key=lambda x: (-x["dias_atraso"], x["cedula"], x["numero_cuota"]))
 
     # Prejudicial: clientes con 3 o más cuotas atrasadas (fecha_vencimiento < hoy, no pagado)
     # Solo cuotas con cliente_id no nulo para poder resolver Cliente
@@ -774,6 +774,6 @@ def get_notificaciones_tabs_data(db: Session):
         "dias_1_retraso": dias_1_retraso,
         "dias_3_retraso": dias_3_retraso,
         "dias_5_retraso": dias_5_retraso,
-        "mora_61": mora_61_cuotas,
+        "mora_90": mora_90_cuotas,
         "prejudicial": prejudicial,
     }

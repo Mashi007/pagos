@@ -960,7 +960,7 @@ export function DashboardMenu() {
                     </div>
                   </div>
                   <p className="text-xs text-gray-600 mt-1">
-                  Cuotas vencidas sin pagar. 1-30 y 31-60 días = Vencido; 61-90 y 90+ días = Moroso (snapshot al día de hoy).
+                  Cuotas vencidas sin pagar. 1-30, 31-60 y 61-89 días = Vencido; 90+ días = Moroso (snapshot al día de hoy).
                 </p>
                 </CardHeader>
                 <CardContent className="p-6 flex-1">
@@ -1008,7 +1008,7 @@ export function DashboardMenu() {
                     </div>
                   </div>
                   <p className="text-xs text-gray-600 mt-1">
-                    Préstamos con cuotas vencidas sin pagar. 1-30 y 31-60 días = Vencido; 61-90 y 90+ días = Moroso (snapshot al día de hoy).
+                    Préstamos con cuotas vencidas sin pagar. 1-30, 31-60 y 61-89 días = Vencido; 90+ días = Moroso (snapshot al día de hoy).
                   </p>
                 </CardHeader>
                 <CardContent className="p-6 flex-1">

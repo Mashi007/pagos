@@ -125,7 +125,7 @@ def get_resumen_dashboard(db: Session = Depends(get_db)):
             Cliente.estado == "ACTIVO",
             Prestamo.estado == "APROBADO",
             Cuota.fecha_pago.is_(None),
-            Cuota.fecha_vencimiento < (hoy - timedelta(days=60)),  # MORA: vencido hace 61+ días
+            Cuota.fecha_vencimiento < (hoy - timedelta(days=89)),  # MOROSO: vencido hace 90+ días
         )
         .distinct()
     )
@@ -409,13 +409,13 @@ def _datos_cartera(db: Session, fecha_corte: date) -> dict:
             distribucion_por_monto[3]["cantidad"] += 1
             distribucion_por_monto[3]["monto"] += s
 
-    # Distribución por mora (días)
+    # Distribución por mora (días). Vencido: 1-89 | Moroso: 90+
     distribucion_por_mora: List[dict] = []
     for label, dias_min, dias_max in [
-        ("0-30 días", 0, 30),
+        ("1-30 días", 1, 30),
         ("31-60 días", 31, 60),
-        ("61-90 días", 61, 90),
-        ("> 90 días", 91, 9999),
+        ("61-89 días", 61, 89),
+        ("90+ días (moroso)", 90, 9999),
     ]:
         delta_min = fecha_corte - timedelta(days=dias_max)
         delta_max = fecha_corte - timedelta(days=dias_min)
@@ -1008,14 +1008,90 @@ def exportar_pagos(
     return Response(content=content, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=reporte_pagos_{fi.isoformat()}_{ff.isoformat()}.pdf"})
 
 
-# ---------- Reporte Morosidad ----------
+# ---------- Reporte Morosidad (clientes con cuotas 90+ días) ----------
+@router.get("/morosidad/clientes")
+def get_morosidad_clientes(
+    db: Session = Depends(get_db),
+    fecha_corte: Optional[str] = Query(None),
+):
+    """Lista de clientes con cuotas en morosidad (90+ días impagas).
+    Columnas: Nombre, Cédula, Cantidad cuotas en morosidad, Total USD en morosidad."""
+    fc = _parse_fecha(fecha_corte)
+    umbral = fc - timedelta(days=89)  # vencidas hace 90+ días
+    # Agrupar por cliente: cuotas con fecha_pago IS NULL y fecha_vencimiento < umbral
+    q = (
+        select(
+            Cliente.id.label("cliente_id"),
+            Cliente.nombres.label("nombre"),
+            Cliente.cedula.label("cedula"),
+            func.count(Cuota.id).label("cantidad_cuotas"),
+            func.coalesce(func.sum(Cuota.monto), 0).label("total_usd"),
+        )
+        .select_from(Cuota)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(
+            Cliente.estado == "ACTIVO",
+            Prestamo.estado == "APROBADO",
+            Cuota.fecha_pago.is_(None),
+            Cuota.fecha_vencimiento < umbral,
+        )
+        .group_by(Cliente.id, Cliente.nombres, Cliente.cedula)
+        .order_by(func.coalesce(func.sum(Cuota.monto), 0).desc())
+    )
+    rows = db.execute(q).fetchall()
+    return {
+        "fecha_corte": fc.isoformat(),
+        "items": [
+            {
+                "nombre": r.nombre or "",
+                "cedula": r.cedula or "",
+                "cantidad_cuotas_morosidad": int(r.cantidad_cuotas or 0),
+                "total_usd_morosidad": round(_safe_float(r.total_usd), 2),
+            }
+            for r in rows
+        ],
+    }
+
+
+@router.get("/exportar/morosidad-clientes")
+def exportar_morosidad_clientes(
+    db: Session = Depends(get_db),
+    fecha_corte: Optional[str] = Query(None),
+):
+    """Exporta Excel: Nombre, Cédula, Cantidad cuotas en morosidad (90+ días), Total USD en morosidad."""
+    import openpyxl
+    data = get_morosidad_clientes(db=db, fecha_corte=fecha_corte)
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Morosidad"
+    ws.append(["Nombre", "Cédula", "Cantidad de cuotas en morosidad", "Total en dólares en morosidad"])
+    for r in data["items"]:
+        ws.append([
+            r.get("nombre", ""),
+            r.get("cedula", ""),
+            r.get("cantidad_cuotas_morosidad", 0),
+            r.get("total_usd_morosidad", 0),
+        ])
+    buf = io.BytesIO()
+    wb.save(buf)
+    content = buf.getvalue()
+    hoy_str = data["fecha_corte"]
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=reporte_morosidad_{hoy_str}.xlsx"},
+    )
+
+
+# ---------- Reporte Morosidad (completo) ----------
 @router.get("/morosidad")
 def get_reporte_morosidad(
     db: Session = Depends(get_db),
     fecha_corte: Optional[str] = Query(None),
 ):
     """Reporte de pago vencido. Datos reales desde BD (solo clientes ACTIVOS).
-    Concepto: Pago vencido = fecha_vencimiento < fc y fecha_pago IS NULL. Moroso = 61+ días de atraso."""
+    Concepto: Pago vencido = fecha_vencimiento < fc y fecha_pago IS NULL. Moroso = 90+ días de atraso."""
     fc = _parse_fecha(fecha_corte)
     subq_mora = (
         select(Cuota.prestamo_id)
@@ -1242,12 +1318,13 @@ def get_morosidad_por_mes(
 
 
 # Rangos de días atrasados para informe pago vencido en pestañas
+# Vencido: 1-89 días | Moroso: 90+ días
 RANGOS_ATRASO = [
     {"key": "1_dia", "label": "1 día atrasado", "min_dias": 1, "max_dias": 14},
     {"key": "15_dias", "label": "15 días atrasado", "min_dias": 15, "max_dias": 29},
     {"key": "30_dias", "label": "30 días atrasado", "min_dias": 30, "max_dias": 59},
-    {"key": "2_meses", "label": "2 meses atrasado", "min_dias": 60, "max_dias": 60},
-    {"key": "61_dias", "label": "Más de 61 días", "min_dias": 61, "max_dias": 99999},
+    {"key": "2_meses", "label": "2 meses atrasado", "min_dias": 60, "max_dias": 89},
+    {"key": "90_dias", "label": "90 días o más (moroso)", "min_dias": 90, "max_dias": 99999},
 ]
 
 

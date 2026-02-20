@@ -28,6 +28,7 @@ import { usePermissions } from '../hooks/usePermissions'
 const tiposReporte = [
   { value: 'CARTERA', label: 'Cuentas por cobrar', icon: DollarSign },
   { value: 'MOROSIDAD', label: 'Morosidad', icon: TrendingUp },
+  { value: 'VENCIMIENTO', label: 'Vencimiento', icon: FileText },
   { value: 'PAGOS', label: 'Pagos', icon: Users },
   { value: 'ASESORES', label: 'Pago vencido', icon: UserCheck },
   { value: 'CONTABLE', label: 'Contable', icon: Calculator },
@@ -96,8 +97,12 @@ export function Reportes() {
     window.URL.revokeObjectURL(url)
   }
 
-  // Abrir diálogo al hacer clic en icono
+  // Abrir diálogo al hacer clic en icono (o descargar directo si no requiere filtros)
   const abrirDialogoReporte = (tipo: string) => {
+    if (tipo === 'MOROSIDAD') {
+      generarReporte(tipo, { años: [], meses: [] })
+      return
+    }
     setReporteSeleccionado(tipo)
     setDialogAbierto(true)
   }
@@ -132,10 +137,11 @@ export function Reportes() {
   const generarReporte = async (tipo: string, filtros: FiltrosReporte) => {
     try {
       setGenerandoReporte(tipo)
+      const labelReporte = tiposReporte.find((t) => t.value === tipo)?.label ?? tipo
       const toastId = toast.loading(
         <div className="flex items-center gap-2">
           <Loader2 className="h-4 w-4 animate-spin" />
-          <span>Preparando descarga de {tipo}...</span>
+          <span>Preparando descarga de {labelReporte}...</span>
         </div>
       )
 
@@ -157,10 +163,15 @@ export function Reportes() {
         queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
         queryClient.invalidateQueries({ queryKey: ['kpis'] })
       } else if (tipo === 'MOROSIDAD') {
+        const blob = await reporteService.exportarReporteMorosidadClientes(fechaCorte)
+        descargarBlob(blob, `reporte_morosidad_${fechaCorte}.${ext}`)
+        toast.dismiss(toastId)
+        toast.success('✓ Reporte de Morosidad descargado exitosamente')
+      } else if (tipo === 'VENCIMIENTO') {
         const blob = await reporteService.exportarReporteMorosidad('excel', fechaCorte, filtros)
         descargarBlob(blob, `informe_vencimiento_pagos_${fechaCorte}.${ext}`)
         toast.dismiss(toastId)
-        toast.success('✓ Reporte de Morosidad descargado exitosamente')
+        toast.success('✓ Reporte de Vencimiento descargado exitosamente')
       } else if (tipo === 'ASESORES') {
         // ASESORES ahora es Pago vencido (antes MOROSIDAD)
         const blob = await reporteService.exportarReporteMorosidad('excel', fechaCorte, filtros)
@@ -340,11 +351,11 @@ export function Reportes() {
           </p>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 sm:gap-6">
             {tiposReporte.map((tipo) => {
               const IconComponent = tipo.icon
               const isGenerando = generandoReporte === tipo.value
-              const isDisponible = ['CARTERA', 'PAGOS', 'MOROSIDAD', 'ASESORES', 'CONTABLE', 'CEDULA'].includes(tipo.value)
+              const isDisponible = ['CARTERA', 'PAGOS', 'MOROSIDAD', 'VENCIMIENTO', 'ASESORES', 'CONTABLE', 'CEDULA'].includes(tipo.value)
               const tieneAcceso = canAccessReport(tipo.value)
 
               return (
@@ -384,11 +395,11 @@ export function Reportes() {
       </Card>
 
       <DialogReporteFiltros
-        open={dialogAbierto && reporteSeleccionado !== 'CONTABLE'}
+        open={dialogAbierto && reporteSeleccionado !== 'CONTABLE' && reporteSeleccionado !== 'MOROSIDAD'}
         onOpenChange={setDialogAbierto}
-        tituloReporte={reporteSeleccionado && reporteSeleccionado !== 'CONTABLE' ? tiposReporte.find((t) => t.value === reporteSeleccionado)?.label ?? reporteSeleccionado : ''}
+        tituloReporte={reporteSeleccionado && reporteSeleccionado !== 'CONTABLE' && reporteSeleccionado !== 'MOROSIDAD' ? tiposReporte.find((t) => t.value === reporteSeleccionado)?.label ?? reporteSeleccionado : ''}
         onConfirm={(filtros) => {
-          if (reporteSeleccionado && reporteSeleccionado !== 'CONTABLE') generarReporte(reporteSeleccionado, filtros)
+          if (reporteSeleccionado && reporteSeleccionado !== 'CONTABLE' && reporteSeleccionado !== 'MOROSIDAD') generarReporte(reporteSeleccionado, filtros)
         }}
       />
       <DialogReporteContableFiltros

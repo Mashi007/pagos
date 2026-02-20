@@ -489,7 +489,7 @@ def get_pagos_kpis(
     1. montoACobrarMes: cuÃ¡nto dinero deberÃ­a cobrarse en el mes en transcurso (cuotas con vencimiento en el mes).
     2. montoCobradoMes: cuÃ¡nto dinero se ha cobrado = pagado en el mes.
     3. morosidadMensualPorcentaje: pago vencido mensual en % (cuotas vencidas no cobradas / cartera * 100).
-       Concepto: vencido = fecha_vencimiento < hoy; moroso = 61+ dÃ­as de atraso.
+       Concepto: vencido = fecha_vencimiento < hoy; moroso = 90+ días de atraso.
     """
     try:
         hoy = _hoy_local()

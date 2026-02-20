@@ -1,4 +1,4 @@
-﻿import { apiClient } from '../services/api'
+import { apiClient } from '../services/api'
 
 export interface NotificacionPlantilla {
   id: number
@@ -53,7 +53,7 @@ export interface ClientesRetrasadosResponse {
   dias_3: ClienteRetrasadoItem[]
   dias_1: ClienteRetrasadoItem[]
   hoy: ClienteRetrasadoItem[]
-  mora_61: {
+  mora_90: {
     cuotas: ClienteRetrasadoItem[]
     total_cuotas: number
   }
@@ -69,7 +69,7 @@ export interface EstadisticasPorTab {
   dias_3: EstadisticasTabItem
   dias_1: EstadisticasTabItem
   hoy: EstadisticasTabItem
-  mora_61: EstadisticasTabItem
+  mora_90: EstadisticasTabItem
 }
 
 export interface RebotadoItem {
@@ -166,14 +166,14 @@ class NotificacionService {
     return await apiClient.get<NotificacionStats>(`${this.baseUrl}/estadisticas/resumen`)
   }
 
-  /** Clientes retrasados por reglas: 5 dÃ­as, 3 dÃ­as, 1 dÃ­a, hoy, mora 61+. Datos reales desde BD. */
+  /** Clientes retrasados por reglas: 5 días, 3 días, 1 día, hoy, mora 90+. Datos reales desde BD. */
   async getClientesRetrasados(): Promise<ClientesRetrasadosResponse> {
     return await apiClient.get<ClientesRetrasadosResponse>(`${this.baseUrl}/clientes-retrasados`, {
       timeout: 60000,
     })
   }
 
-  /** KPIs por pestaÃ±a: enviados y rebotados (dias_5, dias_3, dias_1, hoy, mora_61). */
+  /** KPIs por pestaña: enviados y rebotados (dias_5, dias_3, dias_1, hoy, mora_90). */
   async getEstadisticasPorTab(): Promise<EstadisticasPorTab> {
     return await apiClient.get<EstadisticasPorTab>(`${this.baseUrl}/estadisticas-por-tab`)
   }
@@ -280,10 +280,10 @@ class NotificacionService {
     )
   }
 
-  /** EnvÃ­a correos a clientes con 61+ dÃ­as de mora (email desde tabla clientes). */
+  /** Envía correos a clientes con 90+ días de mora (moroso, email desde tabla clientes). */
   async enviarNotificacionesMora61(): Promise<{ mensaje: string; enviados: number; sin_email: number; fallidos: number }> {
     return await apiClient.post<{ mensaje: string; enviados: number; sin_email: number; fallidos: number }>(
-      `${API_V1}/notificaciones-mora-61/enviar`,
+      `${API_V1}/notificaciones-mora-90/enviar`,
       {},
       { timeout: 120000 }
     )

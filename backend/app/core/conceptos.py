@@ -4,11 +4,11 @@ Conceptos de negocio unificados (Backend).
 PAGO VENCIDO Y MOROSO:
 - Pago vencido = cuotas vencidas y no pagadas (fecha_vencimiento < hoy).
 - Vencido: si debo pagar hasta el 23 feb, NO estoy vencido hasta el 24 feb.
-  Desde el 24 = vencido (1-60 días de atraso).
-- Moroso: 61+ días de atraso (se declara como moroso desde el día 61).
+  Desde el 24 = vencido (1-89 días de atraso).
+- Moroso: 90+ días de atraso (se declara como moroso desde el día 90).
 
 Condición técnica: fecha_vencimiento < fecha_referencia AND fecha_pago IS NULL
 """
 
-# Días a partir de los cuales se declara MOROSO (61+ días de atraso)
-DIAS_MOROSO_DESDE = 61
+# Días a partir de los cuales se declara MOROSO (90+ días de atraso)
+DIAS_MOROSO_DESDE = 90

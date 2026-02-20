@@ -102,7 +102,7 @@
 
 - **Préstamos:** Un préstamo se asocia a un `cliente_id`; la cédula y nombres del préstamo pueden tomarse del cliente.
 - **Comunicaciones / WhatsApp:** Se puede buscar cliente por teléfono (solo dígitos) para asociar conversaciones.
-- **Notificaciones (previas, vencimiento, retraso, prejudicial, 61+ días):** Usan email y datos del cliente desde la tabla `clientes`.
+- **Notificaciones (previas, vencimiento, retraso, prejudicial, 90+ días moroso):** Usan email y datos del cliente desde la tabla `clientes`.
 - **Reportes:** PDF de cuotas pendientes por cliente por cédula: `GET /api/v1/reportes/cliente/{cedula}/pendientes.pdf`; el cliente debe existir (404 si no).
 - **AI / dashboard:** Conteos y estadísticas usan la tabla `clientes` (p. ej. total clientes).
 

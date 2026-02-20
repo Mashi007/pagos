@@ -41,7 +41,7 @@ const CRITERIOS: { tipo: string; label: string; categoria: string; color: 'blue'
   { tipo: 'PAGO_3_DIAS_ATRASADO', label: '3 días de retraso', categoria: 'Retrasada', color: 'orange' },
   { tipo: 'PAGO_5_DIAS_ATRASADO', label: '5 días de retraso', categoria: 'Retrasada', color: 'orange' },
   { tipo: 'PREJUDICIAL', label: 'Prejudicial', categoria: 'Prejudicial', color: 'red' },
-  { tipo: 'MORA_61', label: '61+ días de mora', categoria: 'Mora 61+', color: 'slate' },
+  { tipo: 'MORA_90', label: '90+ días de mora (moroso)', categoria: 'Mora 90+', color: 'slate' },
 ]
 
 const COLORES = {

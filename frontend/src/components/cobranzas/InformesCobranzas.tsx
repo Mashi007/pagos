@@ -115,7 +115,7 @@ export function InformesCobranzas() {
     {
       id: 'antiguedad-saldos',
       titulo: 'Antigüedad de Saldos',
-      descripcion: 'Distribución de mora por rangos de antigüedad (0-30 días, 31-60 días, etc.)',
+      descripcion: 'Distribución de mora por rangos de antigüedad (1-30, 31-60, 61-89 días vencido; 90+ días moroso)',
       icono: Clock,
       color: 'bg-orange-500',
       tieneFiltros: false,

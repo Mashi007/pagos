@@ -328,7 +328,7 @@ class ReporteService {
   }
 
   /**
-   * Obtiene informe pago vencido por rangos de días (1 día, 15 días, 30 días, 2 meses, 61+)
+   * Obtiene informe pago vencido por rangos de días (1 día, 15 días, 30 días, 2 meses, 90+ moroso)
    */
   async getMorosidadPorRangos(fechaCorte?: string): Promise<MorosidadPorRangos> {
     const params = new URLSearchParams()
@@ -414,7 +414,21 @@ class ReporteService {
   }
 
   /**
-   * Exporta reporte de morosidad en Excel o PDF
+   * Exporta reporte Morosidad (clientes con cuotas 90+ días): Nombre, Cédula, Cant cuotas, Total USD
+   */
+  async exportarReporteMorosidadClientes(fechaCorte?: string): Promise<Blob> {
+    const params = new URLSearchParams()
+    if (fechaCorte) params.set('fecha_corte', fechaCorte)
+    const axiosInstance = apiClient.getAxiosInstance()
+    const response = await axiosInstance.get(
+      `${this.baseUrl}/exportar/morosidad-clientes?${params.toString()}`,
+      { responseType: 'blob', timeout: 60000 }
+    )
+    return response.data as Blob
+  }
+
+  /**
+   * Exporta reporte de morosidad (Vencimiento) en Excel o PDF
    */
   async exportarReporteMorosidad(
     formato: 'excel' | 'pdf',

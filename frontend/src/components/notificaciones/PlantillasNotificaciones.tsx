@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { notificacionService, NotificacionPlantilla, NotificacionVariable } from '../../services/notificacionService'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -83,13 +83,13 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
       { valor: 'PREJUDICIAL', label: 'Prejudicial' },
     ],
     mora61: [
-      { valor: 'MORA_61', label: '61+ días de mora' },
+      { valor: 'MORA_90', label: '90+ días de mora (moroso)' },
     ],
   }
 
   const tiposSugeridos = [
     'PAGO_5_DIAS_ANTES', 'PAGO_3_DIAS_ANTES', 'PAGO_1_DIA_ANTES', 'PAGO_DIA_0',
-    'PAGO_1_DIA_ATRASADO', 'PAGO_3_DIAS_ATRASADO', 'PAGO_5_DIAS_ATRASADO', 'PREJUDICIAL', 'MORA_61'
+    'PAGO_1_DIA_ATRASADO', 'PAGO_3_DIAS_ATRASADO', 'PAGO_5_DIAS_ATRASADO', 'PREJUDICIAL', 'MORA_90'
   ]
 
   const todosLosTipos = [
@@ -463,7 +463,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
       'PAGO_3_DIAS_ATRASADO': ['nombre', 'monto', 'fecha_vencimiento', 'dias_atraso'],
       'PAGO_5_DIAS_ATRASADO': ['nombre', 'monto', 'fecha_vencimiento', 'dias_atraso'],
       'PREJUDICIAL': ['nombre', 'monto', 'fecha_vencimiento', 'dias_atraso'],
-      'MORA_61': ['nombre', 'monto', 'fecha_vencimiento', 'dias_atraso'],
+      'MORA_90': ['nombre', 'monto', 'fecha_vencimiento', 'dias_atraso'],
     }
     const requeridas = requeridasPorTipo[tipoAValidar] || []
     const faltantes = requeridas.filter(v => !(`${asunto} ${cuerpoFinal}`).includes(`{{${v}}}`))
@@ -692,7 +692,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
     'PAGO_3_DIAS_ATRASADO': { categoria: 'Notificación Retrasada', caso: '3 días de retraso' },
     'PAGO_5_DIAS_ATRASADO': { categoria: 'Notificación Retrasada', caso: '5 días de retraso' },
     'PREJUDICIAL': { categoria: 'Prejudicial', caso: 'Prejudicial' },
-    'MORA_61': { categoria: 'Mora 61+', caso: '61+ días de mora' },
+    'MORA_90': { categoria: 'Mora 90+', caso: '90+ días de mora (moroso)' },
   }
 
   /** Orden de casos para el banco por caso (cada uno con su lista de plantillas) */
@@ -705,7 +705,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
     { tipo: 'PAGO_3_DIAS_ATRASADO', label: '3 días de retraso', borderColor: 'border-amber-500' },
     { tipo: 'PAGO_5_DIAS_ATRASADO', label: '5 días de retraso', borderColor: 'border-amber-600' },
     { tipo: 'PREJUDICIAL', label: 'Prejudicial', borderColor: 'border-red-500' },
-    { tipo: 'MORA_61', label: '61+ días de mora', borderColor: 'border-slate-500' },
+    { tipo: 'MORA_90', label: '90+ días de mora (moroso)', borderColor: 'border-slate-500' },
   ]
 
   /** Banco por caso: plantillas agrupadas por tipo */
@@ -727,7 +727,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
     { key: 'Día de Pago', color: 'green', borderColor: 'border-green-500', icon: '💰' },
     { key: 'Notificación Retrasada', color: 'orange', borderColor: 'border-orange-500', icon: '⚠' },
     { key: 'Prejudicial', color: 'red', borderColor: 'border-red-500', icon: 'ðŸš¨' },
-    { key: 'Mora 61+', color: 'slate', borderColor: 'border-slate-500', icon: 'ðŸ“‹' },
+    { key: 'Mora 90+', color: 'slate', borderColor: 'border-slate-500', icon: 'ðŸ“‹' },
   ]
 
   // Organizar plantillas por categoría (para el resumen)
@@ -916,10 +916,10 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
                     </div>
                   </div>
 
-                  {/* Mora 61+ */}
+                  {/* Mora 90+ */}
                   {tiposPorCategoria.mora61 && (
                     <div>
-                      <h4 className="text-sm font-semibold mb-2 text-slate-700">61+ días de mora</h4>
+                      <h4 className="text-sm font-semibold mb-2 text-slate-700">90+ días de mora (moroso)</h4>
                       <div className="grid grid-cols-3 gap-2">
                         {tiposPorCategoria.mora61.map(t => (
                           <label key={t.valor} className="flex items-center gap-2 p-2 border rounded hover:bg-white cursor-pointer">

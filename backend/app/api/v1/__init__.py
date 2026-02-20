@@ -82,9 +82,9 @@ api_router.include_router(
     tags=["notificaciones-prejudicial"],
 )
 api_router.include_router(
-    notificaciones_tabs.router_mora_61,
-    prefix="/notificaciones-mora-61",
-    tags=["notificaciones-mora-61"],
+    notificaciones_tabs.router_mora_90,
+    prefix="/notificaciones-mora-90",
+    tags=["notificaciones-mora-90"],
 )
 
 # Dashboard (stub: opciones-filtros, kpis-principales, admin, etc.)

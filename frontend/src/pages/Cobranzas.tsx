@@ -1185,13 +1185,27 @@ export function Cobranzas() {
                     className="flex flex-col items-center p-4 h-auto"
                     onClick={() => {
                       setRangoDiasMin(61)
+                      setRangoDiasMax(89)
+                      setFiltroDiasRetraso(undefined)
+                      setTabActiva('cuotas')
+                    }}
+                  >
+                    <Badge className="bg-amber-100 text-amber-800 mb-2">61-89 Días</Badge>
+                    <span className="text-xs text-gray-600">Vencido</span>
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    className="flex flex-col items-center p-4 h-auto"
+                    onClick={() => {
+                      setRangoDiasMin(90)
                       setRangoDiasMax(undefined)
                       setFiltroDiasRetraso(undefined)
                       setTabActiva('cuotas')
                     }}
                   >
-                    <Badge className="bg-red-100 text-red-800 mb-2">61+ Días</Badge>
-                    <span className="text-xs text-gray-600">Retraso Crítico</span>
+                    <Badge className="bg-red-100 text-red-800 mb-2">90+ Días</Badge>
+                    <span className="text-xs text-gray-600">Moroso</span>
                   </Button>
                 </div>
               </div>

@@ -1,5 +1,5 @@
 """
-Endpoints para las pestañas de Notificaciones (previas, día pago, retrasadas, prejudicial, mora 61).
+Endpoints para las pestañas de Notificaciones (previas, día pago, retrasadas, prejudicial, mora 90+).
 Datos reales desde BD (cuotas + clientes). Envío por Email (Configuración > Email) y respeto de
 configuración de envíos (habilitado/CCO por tipo) desde BD (notificaciones_envios). get_db en todos los procesos.
 """
@@ -22,7 +22,7 @@ router_previas = APIRouter(dependencies=[Depends(get_current_user)])
 router_dia_pago = APIRouter(dependencies=[Depends(get_current_user)])
 router_retrasadas = APIRouter(dependencies=[Depends(get_current_user)])
 router_prejudicial = APIRouter(dependencies=[Depends(get_current_user)])
-router_mora_61 = APIRouter(dependencies=[Depends(get_current_user)])
+router_mora_90 = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 def _enviar_correos_items(
@@ -258,35 +258,35 @@ def enviar_notificaciones_prejudicial(db: Session = Depends(get_db)):
     return {"mensaje": "Envío de notificaciones prejudiciales finalizado.", **res}
 
 
-# --- Mora 61+ días (cuotas con 61 o más días de atraso) ---
+# --- Mora 90+ días (moroso: cuotas con 90 o más días de atraso) ---
 
-@router_mora_61.get("")
-def get_notificaciones_mora_61(estado: str = None, db: Session = Depends(get_db)):
-    """Lista de cuotas con 61 o más días de atraso. Email desde tabla clientes."""
+@router_mora_90.get("")
+def get_notificaciones_mora_90(estado: str = None, db: Session = Depends(get_db)):
+    """Lista de cuotas con 90 o más días de atraso (moroso). Email desde tabla clientes."""
     data = get_notificaciones_tabs_data(db)
-    items = data["mora_61"]
+    items = data["mora_90"]
     return {"items": items, "total": len(items)}
 
 
-def _tipo_mora_61(_item: dict) -> str:
-    return "MORA_61"
+def _tipo_mora_90(_item: dict) -> str:
+    return "MORA_90"
 
 
-@router_mora_61.post("/enviar")
-def enviar_notificaciones_mora_61(db: Session = Depends(get_db)):
-    """Envía correo a cada cliente con cuota 61+ días en mora. Respeta config envíos (habilitado/CCO) desde BD."""
+@router_mora_90.post("/enviar")
+def enviar_notificaciones_mora_90(db: Session = Depends(get_db)):
+    """Envía correo a cada cliente con cuota 90+ días en mora (moroso). Respeta config envíos (habilitado/CCO) desde BD."""
     config_envios = get_notificaciones_envios_config(db)
     data = get_notificaciones_tabs_data(db)
-    items = data["mora_61"]
-    asunto = "Aviso: cuota en mora 61+ días - Rapicredit"
+    items = data["mora_90"]
+    asunto = "Aviso: cuota en mora 90+ días - Rapicredit"
     cuerpo = (
         "Estimado/a {nombre} (cédula {cedula}),\n\n"
-        "Le informamos que tiene una cuota con más de 61 días de atraso.\n"
+        "Le informamos que tiene una cuota con más de 90 días de atraso (estado moroso).\n"
         "Fecha de vencimiento: {fecha_vencimiento}\n"
         "Número de cuota: {numero_cuota}\n"
         "Monto: {monto}\n\n"
         "Por favor regularice su pago lo antes posible.\n\n"
         "Saludos,\nRapicredit"
     )
-    res = _enviar_correos_items(items, asunto, cuerpo, config_envios, _tipo_mora_61, db)
-    return {"mensaje": "Envío de notificaciones mora 61+ finalizado.", **res}
+    res = _enviar_correos_items(items, asunto, cuerpo, config_envios, _tipo_mora_90, db)
+    return {"mensaje": "Envío de notificaciones mora 90+ finalizado.", **res}
