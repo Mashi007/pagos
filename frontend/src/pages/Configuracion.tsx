@@ -6,10 +6,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import {
-  SECCIONES_ConfiguraciÃ³n,
+  SECCIONES_CONFIGURACION,
   NOMBRES_SECCION_ESPECIAL,
   findSeccionById as findSeccionByIdHelper,
-} from '../constants/ConfiguraciÃ³nSecciones'
+} from '../constants/configuracionSecciones'
 import {
   ConfigGeneralTab,
   ConfigPlantillasTab,
@@ -28,7 +28,7 @@ import {
   ConfigAuditoriaTab,
   ConfigBaseDatosTab,
   ConfigFacturacionTab,
-} from '../components/ConfiguraciÃ³n/tabs'
+} from '../components/configuracion/tabs'
 
 function tabToSeccion(tab: string | null): string {
   const map: Record<string, string> = {
@@ -71,7 +71,7 @@ const Configuracion = () => {
     if (seccionActiva === 'scheduler') navigate('/scheduler')
   }, [seccionActiva, navigate])
 
-  const findSeccionById = (id: string) => findSeccionByIdHelper(SECCIONES_ConfiguraciÃ³n, id)
+  const findSeccionById = (id: string) => findSeccionByIdHelper(SECCIONES_CONFIGURACION, id)
   const nombresSeccionEspecial = NOMBRES_SECCION_ESPECIAL
 
   const renderContenidoSeccion = () => {
@@ -98,11 +98,14 @@ const Configuracion = () => {
     }
   }
 
-  const seccion = findSeccionById(seccionActiva) ||
-    (nombresSeccionEspecial[seccionActiva]
-      ? { nombre: nombresSeccionEspecial[seccionActiva].nombre, icono: nombresSeccionEspecial[seccionActiva].icono }
-      : SECCIONES_ConfiguraciÃ³n.find((s: { id: string }) => s.id === seccionActiva))
-  const IconComponent = seccion?.icono || Settings
+  const seccionEncontrada = findSeccionById(seccionActiva)
+  const seccionEspecial = nombresSeccionEspecial[seccionActiva]
+  const seccion =
+    seccionEncontrada ||
+    (seccionEspecial
+      ? { nombre: seccionEspecial.nombre, icono: seccionEspecial.icono }
+      : SECCIONES_CONFIGURACION.find((s: { id: string }) => s.id === seccionActiva))
+  const IconComponent = (seccion && seccion.icono) || Settings
   const showGuardar = cambiosPendientes && !SECTIONS_WITH_OWN_SAVE.includes(seccionActiva)
   const showLoading = loading && !SECTIONS_SELF_LOADING.includes(seccionActiva)
 
@@ -115,7 +118,7 @@ const Configuracion = () => {
               <div>
                 <CardTitle className="flex items-center">
                   <IconComponent className="mr-2 h-5 w-5" />
-                  {seccion?.nombre ?? 'ConfiguraciÃ³n'}
+                  {seccion?.nombre ?? 'Configuracion'}
                 </CardTitle>
               </div>
               <div className="flex space-x-2">
@@ -134,7 +137,7 @@ const Configuracion = () => {
             {showLoading && (
               <div className="flex items-center justify-center py-8">
                 <RefreshCw className="h-6 w-6 animate-spin text-blue-600 mr-2" />
-                <span className="text-gray-600">Cargando ConfiguraciÃ³n...</span>
+                <span className="text-gray-600">Cargando configuracion...</span>
               </div>
             )}
             {(!loading || SECTIONS_SELF_LOADING.includes(seccionActiva)) && renderContenidoSeccion()}
@@ -146,5 +149,3 @@ const Configuracion = () => {
 }
 
 export default Configuracion
-
-
