@@ -1,6 +1,5 @@
 import * as React from 'react'
-import { X } from 'lucide-react'
-import { Button } from './button'
+import ReactDOM from 'react-dom'
 import { cn } from '../../utils'
 
 interface DialogProps {
@@ -62,15 +61,15 @@ export function DialogContent({ children, className }: { children: React.ReactNo
 
   if (!context.open) return null
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+  const content = (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center">
       <div
         className="fixed inset-0 bg-black/50"
         onClick={() => context.onOpenChange(false)}
       />
       <div
         className={cn(
-          'relative z-50 bg-white rounded-lg shadow-lg p-6 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto',
+          'relative z-[9999] bg-white rounded-lg shadow-lg p-6 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto',
           className
         )}
       >
@@ -78,6 +77,9 @@ export function DialogContent({ children, className }: { children: React.ReactNo
       </div>
     </div>
   )
+
+  if (typeof document === 'undefined' || !document.body) return null
+  return ReactDOM.createPortal(content, document.body)
 }
 
 export function DialogHeader({ children, className }: { children: React.ReactNode; className?: string }) {

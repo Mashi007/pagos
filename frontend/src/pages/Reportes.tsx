@@ -103,6 +103,10 @@ export function Reportes() {
       generarReporte(tipo, { años: [], meses: [] })
       return
     }
+    if (tipo === 'CEDULA') {
+      generarReporte(tipo, { años: [], meses: [] })
+      return
+    }
     setReporteSeleccionado(tipo)
     setDialogAbierto(true)
   }
