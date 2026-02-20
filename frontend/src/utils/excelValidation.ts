@@ -254,3 +254,12 @@ export function validateField(field: string, value: string, options?: ValidateFi
     default: return { isValid: true }
   }
 }
+
+// --- Types and validators for client bulk upload ---
+
+export interface ValidationResult {
+  isValid: boolean
+  message?: string
+  normalizedValue?: string
+}
+

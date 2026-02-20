@@ -11,18 +11,17 @@ import { useSimpleAuth } from '../store/simpleAuthStore'
 import { useIsMounted } from './useIsMounted'
 import { useEstadosCliente } from './useEstadosCliente'
 import {
-  validateExcelFile,
-  validateExcelData,
-  sanitizeFileName,
-} from '../utils/excelValidation'
-import {
+  type ExcelData,
   type ExcelRow,
   blankIfNN,
   formatNombres,
   convertirFechaExcel,
   convertirFechaParaBackend,
   validateField,
-} from '../utils/excelValidationClient'
+  validateExcelFile,
+  validateExcelData,
+  sanitizeFileName,
+} from '../utils/excelValidation'
 
 export interface ExcelUploaderProps {
   onClose: () => void
@@ -720,7 +719,7 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
         formattedValue = 'Z999999999'
       }
       if (field in row && !['_rowIndex', '_validation', '_hasErrors'].includes(field)) {
-        (row as Record<string, string>)[field] = formattedValue
+        ;(row as unknown as Record<string, string>)[field] = formattedValue
       }
 
       if (field === 'notas') {
