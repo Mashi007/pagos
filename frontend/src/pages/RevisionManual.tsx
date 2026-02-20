@@ -12,11 +12,13 @@ import { Button } from '../components/ui/button'
 import {
   Loader2,
   Edit,
-  Check,
-  X,
   AlertCircle,
   RefreshCw,
+  Search,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
+import { Input } from '../components/ui/input'
 import { toast } from 'sonner'
 import { revisionManualService } from '../services/revisionManualService'
 
@@ -42,14 +44,19 @@ interface ResumenRevision {
   prestamos: PrestamoRevision[]
 }
 
+const PER_PAGE = 20
+
 export function RevisionManual() {
   const [filtro, setFiltro] = useState<'todos' | 'pendientes' | 'revisados' | 'revisando'>('todos')
+  const [page, setPage] = useState(1)
+  const [cedulaBuscar, setCedulaBuscar] = useState('')
+  const [cedulaInput, setCedulaInput] = useState('') // valor del input (para debounce o submit)
   const queryClient = useQueryClient()
   const navigate = useNavigate()
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['revision-manual-prestamos', filtro],
-    queryFn: () => revisionManualService.getPreslamosRevision(filtro),
+    queryKey: ['revision-manual-prestamos', filtro, page, cedulaBuscar],
+    queryFn: () => revisionManualService.getPreslamosRevision(filtro, page, PER_PAGE, cedulaBuscar || undefined),
     staleTime: 60 * 1000,
   })
 
@@ -109,12 +116,20 @@ export function RevisionManual() {
     })
   }
 
-  const datosVisibles = data?.prestamos.filter((p) => {
-    if (filtro === 'pendientes') return p.estado_revision === 'pendiente'
-    if (filtro === 'revisados') return p.estado_revision === 'revisado'
-    if (filtro === 'revisando') return p.estado_revision === 'revisando'
-    return true
-  }) || []
+  const datosVisibles = data?.prestamos ?? []
+  const totalPrestamos = data?.total_prestamos ?? 0
+  const totalPages = Math.ceil(totalPrestamos / PER_PAGE) || 1
+
+  const handleBuscarCedula = () => {
+    setCedulaBuscar(cedulaInput.trim())
+    setPage(1)
+  }
+
+  const handleLimpiarBusqueda = () => {
+    setCedulaInput('')
+    setCedulaBuscar('')
+    setPage(1)
+  }
 
   return (
     <motion.div
@@ -181,32 +196,63 @@ export function RevisionManual() {
         <Button
           variant={filtro === 'todos' ? 'default' : 'outline'}
           size="sm"
-          onClick={() => setFiltro('todos')}
+          onClick={() => { setFiltro('todos'); setPage(1) }}
         >
           Todos
         </Button>
         <Button
           variant={filtro === 'pendientes' ? 'default' : 'outline'}
           size="sm"
-          onClick={() => setFiltro('pendientes')}
+          onClick={() => { setFiltro('pendientes'); setPage(1) }}
         >
           Pendientes ({data?.prestamos_pendientes || 0})
         </Button>
         <Button
           variant={filtro === 'revisando' ? 'default' : 'outline'}
           size="sm"
-          onClick={() => setFiltro('revisando')}
+          onClick={() => { setFiltro('revisando'); setPage(1) }}
         >
           🔄 Revisando
         </Button>
         <Button
           variant={filtro === 'revisados' ? 'default' : 'outline'}
           size="sm"
-          onClick={() => setFiltro('revisados')}
+          onClick={() => { setFiltro('revisados'); setPage(1) }}
         >
           ✓ Revisados ({data?.prestamos_revisados || 0})
         </Button>
       </div>
+
+      {/* Búsqueda por cédula */}
+      <Card className="border-blue-100 bg-blue-50/30">
+        <CardContent className="pt-4">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex-1 flex gap-2">
+              <Search className="h-4 w-4 text-gray-500 self-center shrink-0" />
+              <Input
+                placeholder="Buscar por cédula para acceder a un caso específico..."
+                value={cedulaInput}
+                onChange={(e) => setCedulaInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleBuscarCedula()}
+                className="max-w-md"
+              />
+              <Button size="sm" onClick={handleBuscarCedula} disabled={isLoading}>
+                Buscar
+              </Button>
+              {cedulaBuscar && (
+                <Button size="sm" variant="ghost" onClick={handleLimpiarBusqueda}>
+                  Limpiar
+                </Button>
+              )}
+            </div>
+            {cedulaBuscar && (
+              <span className="text-sm text-gray-600 self-center">
+                Mostrando resultados para cédula: <strong>{cedulaBuscar}</strong>
+              </span>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Tabla de Préstamos */}
       <Card>
@@ -323,6 +369,40 @@ export function RevisionManual() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {/* Paginación */}
+          {!isLoading && !error && totalPrestamos > 0 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 pt-4 border-t">
+              <p className="text-sm text-gray-600">
+                Mostrando <strong>{(page - 1) * PER_PAGE + 1}</strong> -{' '}
+                <strong>{Math.min(page * PER_PAGE, totalPrestamos)}</strong> de{' '}
+                <strong>{totalPrestamos}</strong> préstamos
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Anterior
+                </Button>
+                <span className="px-3 py-1.5 text-sm font-medium text-gray-700">
+                  Página {page} de {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                >
+                  Siguiente
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>

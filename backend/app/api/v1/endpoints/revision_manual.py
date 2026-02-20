@@ -3,10 +3,10 @@ Endpoints para Revisión Manual de Préstamos (post-migración).
 Lista de préstamos con detalles completos, edición de cliente/préstamo/pagos, y marcado como revisado.
 Incluye validaciones y logging para garantizar integridad de datos.
 """
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, HTTPException, Body
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, case
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 
@@ -79,95 +79,106 @@ def _safe_float(val) -> float:
 def get_prestamos_revision_manual(
     db: Session = Depends(get_db),
     filtro_estado: Optional[str] = Query(None, description="pendiente, revisando o revisado"),
+    cedula: Optional[str] = Query(None, description="Buscar por cédula (parcial)"),
+    limit: int = Query(20, ge=1, le=100, description="Préstamos por página"),
+    offset: int = Query(0, ge=0, description="Desplazamiento para paginación"),
 ):
     """
-    Lista de préstamos con detalles para revisión manual post-migración.
-    Incluye: nombre, cédula, total préstamo, abonos, saldo, cuotas vencidas, morosas.
-    Calcula porcentaje de avance.
-    Filtro: pendiente | revisando | revisado
+    Lista de préstamos para revisión manual. LIMIT en SQL para carga rápida.
     """
     hoy = date.today()
-    
-    # Obtener todos los préstamos
-    q_prestamos = select(Prestamo).order_by(Prestamo.id.desc())
-    prestamos = db.execute(q_prestamos).scalars().all()
-    
-    prestamos_detalles: List[PrestamoDetalleRevision] = []
-    
-    for prestamo in prestamos:
-        # Cliente
-        cliente = db.get(Cliente, prestamo.cliente_id)
-        if not cliente:
-            continue
-        
-        # Obtener revisión manual
-        rev_manual = db.execute(
-            select(RevisionManualPrestamo).where(RevisionManualPrestamo.prestamo_id == prestamo.id)
-        ).scalars().first()
-        
-        estado_revision = rev_manual.estado_revision if rev_manual else "pendiente"
-        
-        # Filtrar por estado si se proporciona
-        if filtro_estado and estado_revision != filtro_estado:
-            continue
-        
-        fecha_revision = rev_manual.fecha_revision.isoformat() if rev_manual and rev_manual.fecha_revision else None
-        
-        # Calcular total abonos (cuotas pagadas)
-        total_abonos = _safe_float(
-            db.scalar(
-                select(func.coalesce(func.sum(Cuota.total_pagado), 0))
-                .select_from(Cuota)
-                .where(Cuota.prestamo_id == prestamo.id, Cuota.fecha_pago.isnot(None))
+    umbral_moroso = hoy - timedelta(days=89)
+    cedula_trim = cedula.strip() if cedula and cedula.strip() else None
+
+    # 1. Query base: Prestamo LEFT JOIN RevisionManualPrestamo
+    q_base = (
+        select(Prestamo, RevisionManualPrestamo.estado_revision, RevisionManualPrestamo.fecha_revision)
+        .outerjoin(RevisionManualPrestamo, RevisionManualPrestamo.prestamo_id == Prestamo.id)
+        .order_by(Prestamo.id.desc())
+    )
+    if cedula_trim:
+        q_base = q_base.where(Prestamo.cedula.ilike(f"%{cedula_trim}%"))
+
+    # 2. Filtrar por estado si aplica (pendiente = sin registro o estado 'pendiente')
+    if filtro_estado:
+        if filtro_estado == "pendiente":
+            q_base = q_base.where(
+                (RevisionManualPrestamo.id.is_(None)) | (RevisionManualPrestamo.estado_revision == "pendiente")
             )
+        else:
+            q_base = q_base.where(RevisionManualPrestamo.estado_revision == filtro_estado)
+
+    # 3. Count total (ligero, sin cargar filas)
+    q_count = select(func.count()).select_from(q_base.subquery())
+    total = db.scalar(q_count) or 0
+
+    if total == 0:
+        return ResumenRevisionManual(
+            total_prestamos=0, prestamos_revisados=0, prestamos_pendientes=0,
+            porcentaje_completado=0.0, prestamos=[]
         )
-        
-        # Saldo = total préstamo - total abonos
-        saldo = _safe_float(prestamo.total_financiamiento) - total_abonos
-        
-        # Cuotas vencidas (fecha_vencimiento < hoy, fecha_pago IS NULL)
-        cuotas_vencidas = db.scalar(
-            select(func.count())
-            .select_from(Cuota)
-            .where(
-                Cuota.prestamo_id == prestamo.id,
-                Cuota.fecha_vencimiento < hoy,
-                Cuota.fecha_pago.is_(None)
-            )
-        ) or 0
-        
-        # Cuotas morosas (90+ días de atraso)
-        umbral_moroso = hoy - __import__('datetime').timedelta(days=89)
-        cuotas_morosas = db.scalar(
-            select(func.count())
-            .select_from(Cuota)
-            .where(
-                Cuota.prestamo_id == prestamo.id,
-                Cuota.fecha_vencimiento < umbral_moroso,
-                Cuota.fecha_pago.is_(None)
-            )
-        ) or 0
-        
+
+    # 4. Solo los prestamos de esta página (LIMIT/OFFSET en SQL)
+    q_page = q_base.offset(offset).limit(limit)
+    rows = db.execute(q_page).all()
+
+    prestamo_ids = [r[0].id for r in rows]
+
+    # 5. Agregados de cuotas solo para estos prestamos
+    agg_subq = (
+        select(
+            Cuota.prestamo_id,
+            func.coalesce(func.sum(case((Cuota.fecha_pago.isnot(None), Cuota.total_pagado), else_=0)), 0).label("total_abonos"),
+            func.sum(case((and_(Cuota.fecha_vencimiento < hoy, Cuota.fecha_pago.is_(None)), 1), else_=0)).label("vencidas"),
+            func.sum(case((and_(Cuota.fecha_vencimiento < umbral_moroso, Cuota.fecha_pago.is_(None)), 1), else_=0)).label("morosas"),
+        )
+        .where(Cuota.prestamo_id.in_(prestamo_ids))
+        .group_by(Cuota.prestamo_id)
+    )
+    agg_rows = db.execute(agg_subq).all()
+    agg_map = {r.prestamo_id: {"abonos": _safe_float(r.total_abonos), "vencidas": int(r.vencidas or 0), "morosas": int(r.morosas or 0)} for r in agg_rows}
+
+    # 6. Construir respuesta
+    prestamos_detalles: List[PrestamoDetalleRevision] = []
+    for prestamo, estado_rev, fecha_rev in rows:
+        estado_revision = estado_rev if estado_rev else "pendiente"
+        fecha_revision = fecha_rev.isoformat() if fecha_rev else None
+        agg = agg_map.get(prestamo.id, {"abonos": 0.0, "vencidas": 0, "morosas": 0})
+        total_prestamo = _safe_float(prestamo.total_financiamiento)
+        saldo = total_prestamo - agg["abonos"]
         prestamos_detalles.append(
             PrestamoDetalleRevision(
                 prestamo_id=prestamo.id,
                 cliente_id=prestamo.cliente_id,
-                cedula=prestamo.cedula,
-                nombres=prestamo.nombres,
-                total_prestamo=_safe_float(prestamo.total_financiamiento),
-                total_abonos=total_abonos,
+                cedula=prestamo.cedula or "",
+                nombres=prestamo.nombres or "",
+                total_prestamo=total_prestamo,
+                total_abonos=agg["abonos"],
                 saldo=saldo,
-                cuotas_vencidas=int(cuotas_vencidas),
-                cuotas_morosas=int(cuotas_morosas),
+                cuotas_vencidas=agg["vencidas"],
+                cuotas_morosas=agg["morosas"],
                 estado_revision=estado_revision,
                 fecha_revision=fecha_revision,
             )
         )
-    
-    total = len(prestamos_detalles)
-    revisados = sum(1 for p in prestamos_detalles if p.estado_revision == "revisado")
+
+    # Totales: revisados según filtro
+    if filtro_estado == "revisado":
+        revisados = total
+    elif filtro_estado in ("pendiente", "revisando"):
+        revisados = 0
+    else:
+        q_revisados = (
+            select(func.count())
+            .select_from(Prestamo)
+            .join(RevisionManualPrestamo, RevisionManualPrestamo.prestamo_id == Prestamo.id)
+            .where(RevisionManualPrestamo.estado_revision == "revisado")
+        )
+        if cedula_trim:
+            q_revisados = q_revisados.where(Prestamo.cedula.ilike(f"%{cedula_trim}%"))
+        revisados = db.scalar(q_revisados) or 0
     porcentaje = (revisados / total * 100) if total > 0 else 0.0
-    
+
     return ResumenRevisionManual(
         total_prestamos=total,
         prestamos_revisados=revisados,

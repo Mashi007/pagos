@@ -26,9 +26,15 @@ class RevisionManualService {
   private baseUrl = '/api/v1/revision-manual'
 
   /**
-   * Obtiene lista de préstamos para revisión manual con detalles completos
+   * Obtiene lista de préstamos para revisión manual (paginada, 20 por defecto)
+   * @param cedula - Búsqueda por cédula para acceder a un caso específico
    */
-  async getPreslamosRevision(filtro?: 'todos' | 'pendientes' | 'revisados' | 'revisando'): Promise<ResumenRevisionManual> {
+  async getPreslamosRevision(
+    filtro?: 'todos' | 'pendientes' | 'revisados' | 'revisando',
+    page = 1,
+    perPage = 20,
+    cedula?: string
+  ): Promise<ResumenRevisionManual> {
     const params = new URLSearchParams()
     if (filtro && filtro !== 'todos') {
       const estadoMap: Record<string, string> = {
@@ -38,7 +44,10 @@ class RevisionManualService {
       }
       params.set('filtro_estado', estadoMap[filtro])
     }
-    return await apiClient.get(`${this.baseUrl}/prestamos${params.toString() ? `?${params}` : ''}`)
+    params.set('limit', String(perPage))
+    params.set('offset', String((page - 1) * perPage))
+    if (cedula?.trim()) params.set('cedula', cedula.trim())
+    return await apiClient.get(`${this.baseUrl}/prestamos?${params}`)
   }
 
   /**

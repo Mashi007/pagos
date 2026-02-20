@@ -497,7 +497,12 @@ class ApiClient {
                           url.includes('/ai/training/') ||
                           url.includes('/cobranzas/') ||
                           url.includes('/pagos/kpis') ||
-                          url.includes('/pagos/stats')
+                          url.includes('/pagos/stats') ||
+                          url.includes('/revision-manual/')  // Render cold start + consulta pesada
+
+    // ✅ Timeout especial para revision-manual (Render cold start + BD)
+    const isRevisionManual = url.includes('/revision-manual/')
+    const revisionManualTimeout = 120000 // 120 segundos
 
     // ✅ Timeout especial para clientes-atrasados que puede procesar muchos registros (2868+)
     const isClientesAtrasados = url.includes('/cobranzas/clientes-atrasados')
@@ -508,7 +513,9 @@ class ApiClient {
     const tablasCamposTimeout = 90000 // 90 segundos para consulta de estructura completa de BD
 
     let defaultTimeout = DEFAULT_TIMEOUT_MS
-    if (isClientesAtrasados) {
+    if (isRevisionManual) {
+      defaultTimeout = revisionManualTimeout
+    } else if (isClientesAtrasados) {
       defaultTimeout = verySlowTimeout
     } else if (isTablasCampos) {
       defaultTimeout = tablasCamposTimeout
