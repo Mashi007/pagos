@@ -17,6 +17,7 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  Trash2,
 } from 'lucide-react'
 import { Input } from '../components/ui/input'
 import { toast } from 'sonner'
@@ -114,6 +115,31 @@ export function RevisionManual() {
       toast.error(`❌ ${errorMsg}`)
       console.error('Error iniciando revisión:', err)
     })
+  }
+
+  const handleEliminar = async (prestamoId: number, nombres: string) => {
+    const confirmar = window.confirm(
+      `⚠️ ELIMINAR PRÉSTAMO - ${nombres}\n\n` +
+      'Esta acción eliminará permanentemente:\n' +
+      '  - El préstamo\n' +
+      '  - Todas las cuotas asociadas\n' +
+      '  - El registro de revisión manual\n\n' +
+      '¿Estás seguro de que deseas eliminar?'
+    )
+    if (!confirmar) {
+      toast.info('ℹ️ Eliminación cancelada')
+      return
+    }
+
+    try {
+      await revisionManualService.eliminarPrestamo(prestamoId)
+      toast.success('✅ Préstamo eliminado')
+      queryClient.invalidateQueries({ queryKey: ['revision-manual-prestamos'] })
+    } catch (err: any) {
+      const errorMsg = err?.response?.data?.detail || 'Error al eliminar'
+      toast.error(`❌ ${errorMsg}`)
+      console.error('Error eliminando:', err)
+    }
   }
 
   const datosVisibles = data?.prestamos ?? []
@@ -333,7 +359,7 @@ export function RevisionManual() {
                       </td>
                       <td className="px-4 py-3 text-center">
                         {prestamo.estado_revision === 'pendiente' && (
-                          <div className="flex gap-2 justify-center">
+                          <div className="flex gap-2 justify-center flex-wrap">
                             <Button
                               size="sm"
                               className="bg-green-600 hover:bg-green-700 text-white text-xs h-8 px-2"
@@ -348,18 +374,38 @@ export function RevisionManual() {
                             >
                               ✎ No
                             </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300 text-xs h-8 px-2"
+                              onClick={() => handleEliminar(prestamo.prestamo_id, prestamo.nombres)}
+                            >
+                              <Trash2 className="h-3 w-3 mr-1" />
+                              Eliminar
+                            </Button>
                           </div>
                         )}
                         {prestamo.estado_revision === 'revisando' && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-blue-600 text-xs h-8"
-                            onClick={() => navigate(`/revision-manual/editar/${prestamo.prestamo_id}`)}
-                          >
-                            <Edit className="h-3 w-3 mr-1" />
-                            Continuar
-                          </Button>
+                          <div className="flex gap-2 justify-center">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-blue-600 text-xs h-8"
+                              onClick={() => navigate(`/revision-manual/editar/${prestamo.prestamo_id}`)}
+                            >
+                              <Edit className="h-3 w-3 mr-1" />
+                              Continuar
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-red-600 border-red-200 hover:bg-red-50 text-xs h-8"
+                              onClick={() => handleEliminar(prestamo.prestamo_id, prestamo.nombres)}
+                            >
+                              <Trash2 className="h-3 w-3 mr-1" />
+                              Eliminar
+                            </Button>
+                          </div>
                         )}
                         {prestamo.estado_revision === 'revisado' && (
                           <span className="text-xs text-gray-500">Finalizado</span>

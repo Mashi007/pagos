@@ -383,30 +383,42 @@ def eliminar_prestamo_revision(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
-    """Elimina un préstamo (y sus cuotas/pagos asociados) de la BD."""
+    """
+    Elimina un préstamo y todos sus datos asociados de la BD:
+    - Cuotas (instalaciones del crédito)
+    - Pagos (registros de pago del crédito)
+    - Revisión manual
+    - Préstamo
+    """
     prestamo = db.get(Prestamo, prestamo_id)
     if not prestamo:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
-    
-    # Eliminar cuotas asociadas
-    cuotas = db.execute(
-        select(Cuota).where(Cuota.prestamo_id == prestamo_id)
-    ).scalars().all()
+
+    # 1. Eliminar cuotas asociadas (antes que pagos, cuotas referencian pagos)
+    cuotas = db.execute(select(Cuota).where(Cuota.prestamo_id == prestamo_id)).scalars().all()
     for cuota in cuotas:
         db.delete(cuota)
-    
-    # Eliminar revisión manual asociada
+
+    # 2. Eliminar pagos asociados al crédito
+    pagos = db.execute(select(Pago).where(Pago.prestamo_id == prestamo_id)).scalars().all()
+    for pago in pagos:
+        db.delete(pago)
+
+    # 3. Eliminar registro de revisión manual
     rev_manual = db.execute(
         select(RevisionManualPrestamo).where(RevisionManualPrestamo.prestamo_id == prestamo_id)
     ).scalars().first()
     if rev_manual:
         db.delete(rev_manual)
-    
-    # Eliminar préstamo
+
+    # 4. Eliminar préstamo
     db.delete(prestamo)
     db.commit()
-    
-    return {"mensaje": "Préstamo eliminado de la BD", "prestamo_id": prestamo_id}
+
+    return {
+        "mensaje": "Préstamo eliminado de la BD (préstamo, cuotas y pagos)",
+        "prestamo_id": prestamo_id,
+    }
 
 
 @router.get("/pagos/{cedula}")
