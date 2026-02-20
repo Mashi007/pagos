@@ -107,5 +107,6 @@ class RevisionManualService {
   async getResumenRapidoRevision(): Promise<any> {
     return await apiClient.get(`${this.baseUrl}/resumen-rapido`)
   }
+}
 
 export const revisionManualService = new RevisionManualService()
