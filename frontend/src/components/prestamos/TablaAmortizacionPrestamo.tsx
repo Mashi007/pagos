@@ -15,6 +15,7 @@ interface Cuota {
   id: number
   numero_cuota: number
   fecha_vencimiento: string
+  fecha_pago?: string | null
   monto_cuota: number
   monto_capital?: number  // Opcional - puede no existir
   monto_interes?: number  // Opcional - puede no existir
@@ -53,20 +54,22 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
 
   // Función para determinar el estado correcto basado en los datos
   const determinarEstadoReal = (cuota: Cuota): string => {
-    const totalPagado = cuota.total_pagado || 0
+    const totalPagado = cuota.total_pagado ?? 0
+    const montoConciliado = cuota.pago_monto_conciliado ?? 0
+    const montoPagado = Math.max(Number(totalPagado) || 0, Number(montoConciliado) || 0)
     const montoCuota = cuota.monto_cuota || 0
     const pagoConciliado = cuota.pago_conciliado === true
 
-    // Si total_pagado >= monto_cuota y el pago está conciliado → CONCILIADO
-    if (totalPagado >= montoCuota - 0.01 && pagoConciliado) {
+    // Si monto pagado >= monto_cuota y el pago está conciliado → CONCILIADO
+    if (montoPagado >= montoCuota - 0.01 && pagoConciliado) {
       return 'CONCILIADO'
     }
-    // Si total_pagado >= monto_cuota (pagado pero no necesariamente conciliado en BD, pero se muestra como pagado)
-    if (totalPagado >= montoCuota - 0.01) {
+    // Si monto pagado >= monto_cuota (pagado pero no necesariamente conciliado en BD, pero se muestra como pagado)
+    if (montoPagado >= montoCuota - 0.01) {
       return 'PAGADO'
     }
     // Si tiene algún pago pero no completo
-    if (totalPagado > 0) {
+    if (montoPagado > 0) {
       const hoy = new Date()
       const fechaVencimiento = cuota.fecha_vencimiento ? new Date(cuota.fecha_vencimiento) : null
       if (fechaVencimiento && fechaVencimiento < hoy) {
@@ -116,12 +119,14 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
     return labels[estadoNormalizado] || estado
   }
 
-  // Total pendiente por pagar (cuotas no cubiertas al 100%)
+  // Total pendiente por pagar (cuotas no cubiertas al 100%) - usa total_pagado y pago_monto_conciliado
   const totalPendientePagar = cuotas
     ? cuotas.reduce((acc: number, c: Cuota) => {
         const montoCuota = typeof c.monto_cuota === 'number' ? c.monto_cuota : 0
         const totalPagado = typeof c.total_pagado === 'number' ? c.total_pagado : 0
-        const pendiente = Math.max(0, montoCuota - totalPagado)
+        const montoConciliado = typeof c.pago_monto_conciliado === 'number' ? c.pago_monto_conciliado : 0
+        const montoPagado = Math.max(totalPagado, montoConciliado)
+        const pendiente = Math.max(0, montoCuota - montoPagado)
         return acc + pendiente
       }, 0)
     : 0
@@ -294,13 +299,18 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
               {cuotasVisibles.map((cuota: Cuota) => {
                 // Determinar el estado real basado en los datos
                 const estadoReal = determinarEstadoReal(cuota)
-                
+                const totalPagado = typeof cuota.total_pagado === 'number' ? cuota.total_pagado : parseFloat(String(cuota.total_pagado ?? 0)) || 0
+                const montoConciliadoBackend = typeof cuota.pago_monto_conciliado === 'number' ? cuota.pago_monto_conciliado : parseFloat(String(cuota.pago_monto_conciliado ?? 0)) || 0
+                const montoCuota = typeof cuota.monto_cuota === 'number' ? cuota.monto_cuota : parseFloat(String(cuota.monto_cuota ?? 0)) || 0
+                const estaPagado = totalPagado > 0 || montoConciliadoBackend > 0 || ['PAGADO', 'PAGADA', 'CONCILIADO'].includes(estadoReal)
+                // Priorizar pago_monto_conciliado del backend (valores conciliados por préstamo), luego total_pagado, luego monto_cuota si está pagado
+                const montoPagoConciliado = montoConciliadoBackend > 0 ? montoConciliadoBackend : (totalPagado > 0 ? totalPagado : (estaPagado ? montoCuota : 0))
+
                 // Calcular monto_capital y monto_interes si no existen
                 // Capital = diferencia entre saldo inicial y final
                 const saldoInicial = typeof cuota.saldo_capital_inicial === 'number' ? cuota.saldo_capital_inicial : 0
                 const saldoFinal = typeof cuota.saldo_capital_final === 'number' ? cuota.saldo_capital_final : 0
-                const montoCuota = typeof cuota.monto_cuota === 'number' ? cuota.monto_cuota : 0
-                
+
                 const montoCapital = typeof cuota.monto_capital === 'number' && !isNaN(cuota.monto_capital)
                   ? cuota.monto_capital
                   : Math.max(0, saldoInicial - saldoFinal)
@@ -326,9 +336,9 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
                       ${saldoFinal.toFixed(2)}
                     </TableCell>
                     <TableCell className="text-right">
-                      {cuota.total_pagado && cuota.total_pagado > 0 ? (
+                      {montoPagoConciliado > 0 ? (
                         <span className={cuota.pago_conciliado ? 'text-emerald-600 font-medium' : 'text-blue-600 font-medium'}>
-                          ${(cuota.total_pagado as number).toFixed(2)}
+                          ${montoPagoConciliado.toFixed(2)}
                         </span>
                       ) : (
                         <span className="text-gray-400">—</span>
@@ -424,9 +434,11 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
                 <p className="text-sm text-gray-600">Pagadas</p>
                 <p className="text-2xl font-bold text-gray-700">
                   {cuotas.filter((c: Cuota) => {
-                    const totalPagado = c.total_pagado || 0
+                    const totalPagado = c.total_pagado ?? 0
+                    const montoConciliado = c.pago_monto_conciliado ?? 0
+                    const montoPagado = Math.max(Number(totalPagado) || 0, Number(montoConciliado) || 0)
                     const montoCuota = c.monto_cuota || 0
-                    return totalPagado >= montoCuota - 0.01
+                    return montoPagado >= montoCuota - 0.01
                   }).length} / {cuotas.length}
                 </p>
               </CardContent>

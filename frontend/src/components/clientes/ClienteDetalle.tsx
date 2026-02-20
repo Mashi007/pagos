@@ -140,7 +140,7 @@ export function ClienteDetalle() {
           </Button>
           <Button
             variant="default"
-            onClick={() => window.open(`${comunicacionesPath}?cliente_id=${cliente.id}`, '_blank')}
+            onClick={() => navigate(`${comunicacionesPath}?cliente_id=${cliente.id}`)}
           >
             <MessageSquare className="w-4 h-4 mr-2" />
             Comunicaciones
@@ -189,7 +189,7 @@ export function ClienteDetalle() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => window.open(`${prestamosPath}?cliente_id=${cliente.id}`, '_blank')}
+              onClick={() => navigate(`${prestamosPath}?cliente_id=${cliente.id}`)}
             >
               Ver todos
               <Link className="w-3 h-3 ml-1" />
@@ -252,7 +252,7 @@ export function ClienteDetalle() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => window.open(`${ticketsPath}?cliente_id=${cliente.id}`, '_blank')}
+              onClick={() => navigate(`${ticketsPath}?cliente_id=${cliente.id}`)}
             >
               Ver en CRM
               <Link className="w-3 h-3 ml-1" />

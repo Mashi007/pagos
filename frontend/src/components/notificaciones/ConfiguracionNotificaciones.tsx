@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { emailConfigService } from '../../services/notificacionService'
 import { notificacionService, type NotificacionPlantilla } from '../../services/notificacionService'
+import { getErrorDetail } from '../../types/errors'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
@@ -66,10 +67,21 @@ export function ConfiguracionNotificaciones() {
   const [plantillas, setPlantillas] = useState<NotificacionPlantilla[]>([])
   const [enviandoPruebaIndice, setEnviandoPruebaIndice] = useState<number | null>(null)
   const [plantillaSeleccionada, setPlantillaSeleccionada] = useState<number | null>(null)
+  const [smtpConfigurado, setSmtpConfigurado] = useState<boolean | null>(null)
 
   useEffect(() => {
     cargarDatos()
   }, [])
+
+  useEffect(() => {
+    if (modoPruebas) {
+      emailConfigService.verificarEstadoConfiguracionEmail()
+        .then((r) => setSmtpConfigurado(r?.configurada ?? false))
+        .catch(() => setSmtpConfigurado(false))
+    } else {
+      setSmtpConfigurado(null)
+    }
+  }, [modoPruebas])
 
   const cargarDatos = async () => {
     setCargando(true)
@@ -160,43 +172,51 @@ export function ConfiguracionNotificaciones() {
     plantillas.filter((p) => p.tipo === tipo)
 
 
+  const esEmailValido = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test((e || '').trim())
+
   const handleEnviarPrueba = async (indice: 0 | 1) => {
     const email = emailsPruebas[indice]?.trim()
-    if (modoPruebas && email) {
-      try {
-        setEnviandoPruebaIndice(indice)
-        
-        // Si hay plantilla seleccionada, usarla; si no, usar mensaje genérico
-        let asunto = 'Prueba de Notificaciones - RapiCredit'
-        let mensaje = 'Este es un correo de prueba para verificar que las plantillas de notificación se envían correctamente.'
-        
-        if (plantillaSeleccionada) {
-          const plantilla = plantillas.find(p => p.id === plantillaSeleccionada)
-          if (plantilla) {
-            asunto = plantilla.nombre || asunto
-            mensaje = plantilla.cuerpo || mensaje
-          }
-        }
-        
-        const resultado = await emailConfigService.probarConfiguracionEmail(
-          email,
-          asunto,
-          mensaje,
-          undefined
-        )
-        
-        if (resultado.success || resultado.mensaje?.includes('enviado')) {
-          toast.success(`Correo de prueba enviado exitosamente a ${email}`)
-        } else {
-          toast.error(resultado.mensaje || 'Error al enviar el correo de prueba')
-        }
-      } catch (error: any) {
-        toast.error(error?.message || 'Error al enviar el correo de prueba')
-      } finally {
-        setEnviandoPruebaIndice(null)
-      }
-    } else {
+    if (!modoPruebas || !email) {
       toast.error('Configura el correo para enviar pruebas')
+      return
+    }
+    if (!esEmailValido(email)) {
+      toast.error(`El correo "${email}" no tiene formato válido (ej: usuario@dominio.com)`)
+      return
+    }
+    try {
+      setEnviandoPruebaIndice(indice)
+      const estadoEmail = await emailConfigService.verificarEstadoConfiguracionEmail()
+      if (!estadoEmail?.configurada) {
+        const problemas = estadoEmail?.problemas?.join('. ') || 'servidor SMTP, usuario y contraseña'
+        toast.error(
+          `Configura el email SMTP antes de enviar pruebas: ${problemas} Ve a Configuración → Email.`,
+          { duration: 6000 }
+        )
+        setEnviandoPruebaIndice(null)
+        return
+      }
+      let asunto = 'Prueba de Notificaciones - RapiCredit'
+      let mensaje = 'Este es un correo de prueba para verificar que las plantillas de notificación se envían correctamente.'
+      if (plantillaSeleccionada) {
+        const plantilla = plantillas.find(p => p.id === plantillaSeleccionada)
+        if (plantilla) {
+          asunto = plantilla.nombre || asunto
+          mensaje = plantilla.cuerpo || mensaje
+        }
+      }
+      const resultado = await emailConfigService.probarConfiguracionEmail(email, asunto, mensaje, undefined)
+      if (resultado.success || resultado.mensaje?.includes('enviado')) {
+        toast.success(`Correo de prueba enviado exitosamente a ${email}`)
+      } else {
+        toast.error(resultado.mensaje || 'Error al enviar el correo de prueba')
+      }
+    } catch (error: unknown) {
+      const detalle = getErrorDetail(error)
+      const mensaje = detalle || (error as Error)?.message || 'Error al enviar el correo de prueba'
+      toast.error(mensaje, { duration: 5000 })
+    } finally {
+      setEnviandoPruebaIndice(null)
     }
   }
 
@@ -250,6 +270,18 @@ export function ConfiguracionNotificaciones() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {modoPruebas && smtpConfigurado === false && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
+              <TestTube className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-red-800">SMTP no configurado</p>
+                <p className="text-sm text-red-700 mt-1">
+                  Para enviar correos de prueba, configura el servidor SMTP en{' '}
+                  <Link to="/configuracion?tab=email" className="underline font-medium">Configuración → Email</Link>.
+                </p>
+              </div>
+            </div>
+          )}
           {/* Toggle Modo Prueba */}
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-gray-700">Prueba</span>
@@ -277,6 +309,7 @@ export function ConfiguracionNotificaciones() {
                 value={emailsPruebas[0]}
                 onChange={(e) => setEmailsPruebas((prev) => [e.target.value, prev[1]])}
                 className="max-w-xs h-9 bg-white"
+                maxLength={120}
               />
             </div>
             <div className="flex items-center gap-2">
@@ -287,6 +320,7 @@ export function ConfiguracionNotificaciones() {
                 value={emailsPruebas[1]}
                 onChange={(e) => setEmailsPruebas((prev) => [prev[0], e.target.value])}
                 className="max-w-xs h-9 bg-white"
+                maxLength={120}
               />
             </div>
           </div>
@@ -322,7 +356,7 @@ export function ConfiguracionNotificaciones() {
               {emailsPruebas[0]?.trim() && (
                 <Button
                   onClick={() => handleEnviarPrueba(0)}
-                  disabled={enviandoPruebaIndice === 0}
+                  disabled={enviandoPruebaIndice === 0 || smtpConfigurado === false}
                   className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:opacity-50 text-white font-semibold py-2 h-auto flex items-center justify-center gap-2 rounded-lg transition-all"
                 >
                   <Mail className="h-5 w-5" />
@@ -332,7 +366,7 @@ export function ConfiguracionNotificaciones() {
               {emailsPruebas[1]?.trim() && (
                 <Button
                   onClick={() => handleEnviarPrueba(1)}
-                  disabled={enviandoPruebaIndice === 1}
+                  disabled={enviandoPruebaIndice === 1 || smtpConfigurado === false}
                   className="w-full bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 disabled:opacity-50 text-white font-semibold py-2 h-auto flex items-center justify-center gap-2 rounded-lg transition-all"
                 >
                   <Mail className="h-5 w-5" />

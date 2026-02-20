@@ -35,7 +35,7 @@ import { getErrorDetail } from '../../types/errors'
 import { useClientes } from '../../hooks/useClientes'
 import { useQueryClient } from '@tanstack/react-query'
 import { clienteService } from '../../services/clienteService'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 
 export function ClientesList() {
   // Forzar nuevo build - versión actualizada
@@ -532,26 +532,26 @@ export function ClientesList() {
                           <Mail className="w-3 h-3 mr-2" />
                           {String(cliente.email ?? '')}
                           {cliente.email && (
-                            <a
-                              href={`/comunicaciones?cliente_id=${cliente.id}&tipo=email`}
-                              className="ml-2 text-green-600 hover:text-green-800"
+                            <Link
+                              to={`/comunicaciones?cliente_id=${cliente.id}&tipo=email`}
+                              className="ml-2 text-green-600 hover:text-green-800 inline-flex"
                               title="Ver comunicaciones de Email"
                             >
                               <MessageSquare className="w-4 h-4" />
-                            </a>
+                            </Link>
                           )}
                         </div>
                         <div className="flex items-center text-sm text-gray-600">
                           <Phone className="w-3 h-3 mr-2" />
                           {String(cliente.telefono ?? '')}
                           {cliente.telefono && (
-                            <a
-                              href={`/comunicaciones?cliente_id=${cliente.id}&tipo=whatsapp`}
-                              className="ml-2 text-green-600 hover:text-green-800"
+                            <Link
+                              to={`/comunicaciones?cliente_id=${cliente.id}&tipo=whatsapp`}
+                              className="ml-2 text-green-600 hover:text-green-800 inline-flex"
                               title="Ver comunicaciones de WhatsApp"
                             >
                               <MessageSquare className="w-4 h-4" />
-                            </a>
+                            </Link>
                           )}
                         </div>
                       </div>

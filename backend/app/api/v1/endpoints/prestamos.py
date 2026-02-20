@@ -503,7 +503,7 @@ def get_cuotas_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
     if not row:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
     q = (
-        select(Cuota, Pago.conciliado, Pago.monto_pagado)
+        select(Cuota, Pago.conciliado, Pago.verificado_concordancia, Pago.monto_pagado)
         .select_from(Cuota)
         .outerjoin(Pago, Cuota.pago_id == Pago.id)
         .where(Cuota.prestamo_id == prestamo_id)
@@ -530,11 +530,12 @@ def get_cuotas_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
             "estado": c.estado or "PENDIENTE",
             "dias_mora": c.dias_mora if c.dias_mora is not None else 0,
             "dias_morosidad": c.dias_morosidad if c.dias_morosidad is not None else 0,
-            "pago_conciliado": bool(pago_conciliado) if pago_conciliado is not None else False,
-            # Monto conciliado: usar total_pagado si la cuota tiene pago, independientemente de conciliado
+            # Conciliado: Pago.conciliado=True O verificado_concordancia='SI' (todos los valores conciliados por préstamo)
+            "pago_conciliado": bool(pago_conciliado) or (str(verificado_concordancia or "").strip().upper() == "SI"),
+            # Monto conciliado: total_pagado de la cuota (monto aplicado a esta cuota)
             "pago_monto_conciliado": float(c.total_pagado) if c.total_pagado is not None and c.total_pagado > 0 else 0,
         }
-        for c, pago_conciliado, pago_monto in rows
+        for c, pago_conciliado, verificado_concordancia, pago_monto in rows
     ]
 
 

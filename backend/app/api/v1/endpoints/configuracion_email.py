@@ -249,7 +249,13 @@ def post_email_probar(payload: ProbarEmailRequest = Body(...), db: Session = Dep
     if not destino or "@" not in destino:
         raise HTTPException(
             status_code=400,
-            detail="Indica un email de destino o activa Modo Pruebas y configura el Email de Pruebas.",
+            detail="Indica un email de destino válido (ej: usuario@dominio.com) o activa Modo Pruebas y configura el Email de Pruebas.",
+        )
+    # Validar formato básico de email (evitar truncados como usuario@dominio.c)
+    if "." not in destino.split("@")[-1] or len(destino.split("@")[-1].split(".")[-1]) < 2:
+        raise HTTPException(
+            status_code=400,
+            detail=f"El email '{destino}' no tiene formato válido. Verifica que el dominio esté completo (ej: .com, .net).",
         )
 
     subject = (payload.subject or "").strip() or "Prueba de email - RapiCredit"
