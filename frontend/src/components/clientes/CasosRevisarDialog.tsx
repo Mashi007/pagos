@@ -392,9 +392,13 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
                                 variant="outline"
                                 onClick={() => saveOne(c)}
                                 disabled={!hasChanges(c) || saving !== null}
+                                className="whitespace-nowrap"
+                                title="Guardar este cliente individualmente"
                               >
                                 {saving === c.id ? (
-                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  <>
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  </>
                                 ) : (
                                   <>
                                     <Save className="w-4 h-4 mr-1" />
@@ -444,16 +448,18 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
                 <Button
                   onClick={saveAll}
                   disabled={!anyChanged || saving !== null}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                  title="Guardar todos los cambios de una vez"
                 >
                   {saving === 'all' ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Guardando...
+                      Guardando {progress.current} de {progress.total}...
                     </>
                   ) : (
                     <>
                       <CheckCircle2 className="w-4 h-4 mr-2" />
-                      Guardar todos
+                      Guardar todos ({anyChanged ? 'cambios sin guardar' : 'sin cambios'})
                     </>
                   )}
                 </Button>
