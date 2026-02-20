@@ -2,7 +2,8 @@
 API v1
 """
 from fastapi import APIRouter
-from app.api.v1.endpoints import whatsapp, auth, configuracion, configuracion_informe_pagos, pagos, prestamos, notificaciones, notificaciones_tabs, dashboard, kpis, auditoria, clientes, tickets, comunicaciones, validadores, usuarios, reportes, modelos_vehiculos, analistas, concesionarios, ai_training, revision_manual
+from app.api.v1.endpoints import whatsapp, auth, configuracion, configuracion_informe_pagos, pagos, prestamos, notificaciones, notificaciones_tabs, dashboard, kpis, auditoria, clientes, tickets, comunicaciones, validadores, usuarios, modelos_vehiculos, analistas, concesionarios, ai_training, revision_manual
+from app.api.v1.endpoints.reportes import router as reportes_router
 
 api_router = APIRouter()
 
@@ -110,7 +111,7 @@ api_router.include_router(
 
 # Reportes (dashboard/resumen con datos reales BD)
 api_router.include_router(
-    reportes.router,
+    reportes_router,
     prefix="/reportes",
     tags=["reportes"],
 )
@@ -184,3 +185,5 @@ api_router.include_router(
     prefix="/revision-manual",
     tags=["revision-manual"],
 )
+
+

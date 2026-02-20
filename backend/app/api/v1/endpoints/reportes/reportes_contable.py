@@ -89,30 +89,50 @@ def _cuotas_a_filas_contable(rows, tasas_cache: dict) -> List[dict]:
 
 def _query_cuotas_contable(db: Session, fecha_inicio: date, fecha_fin: date):
     """Consulta cuotas con pago en el rango dado."""
-    q = (
-        select(
-            Cuota.id,
-            Cuota.numero_cuota,
-            Cuota.fecha_vencimiento,
-            Cuota.fecha_pago,
-            Cuota.monto,
-            Cuota.total_pagado if hasattr(Cuota, "total_pagado") else Cuota.monto,
-            Prestamo.cedula,
-            Prestamo.nombres,
-            Pago.fecha_pago.label("fecha_pago_real"),
+    where_conds = [
+        Cliente.estado == "ACTIVO",
+        Prestamo.estado == "APROBADO",
+        Cuota.fecha_pago.isnot(None),
+        Cuota.fecha_pago >= fecha_inicio,
+        Cuota.fecha_pago <= fecha_fin,
+    ]
+    if hasattr(Cuota, "pago_id") and hasattr(Cuota, "total_pagado"):
+        q = (
+            select(
+                Cuota.id,
+                Cuota.numero_cuota,
+                Cuota.fecha_vencimiento,
+                Cuota.fecha_pago,
+                Cuota.monto,
+                Cuota.total_pagado,
+                Prestamo.cedula,
+                Prestamo.nombres,
+                Pago.fecha_pago.label("fecha_pago_real"),
+            )
+            .select_from(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .outerjoin(Pago, Cuota.pago_id == Pago.id)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(*where_conds)
         )
-        .select_from(Cuota)
-        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-        .outerjoin(Pago, Cuota.pago_id == Pago.id)
-        .join(Cliente, Prestamo.cliente_id == Cliente.id)
-        .where(
-            Cliente.estado == "ACTIVO",
-            Prestamo.estado == "APROBADO",
-            Cuota.fecha_pago.isnot(None),
-            Cuota.fecha_pago >= fecha_inicio,
-            Cuota.fecha_pago <= fecha_fin,
+    else:
+        q = (
+            select(
+                Cuota.id,
+                Cuota.numero_cuota,
+                Cuota.fecha_vencimiento,
+                Cuota.fecha_pago,
+                Cuota.monto,
+                Cuota.monto.label("total_pagado"),
+                Prestamo.cedula,
+                Prestamo.nombres,
+                Cuota.fecha_pago.label("fecha_pago_real"),
+            )
+            .select_from(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(*where_conds)
         )
-    )
     return db.execute(q).fetchall()
 
 
@@ -299,8 +319,10 @@ def buscar_cedulas_contable(
             )
             .distinct()
         )
-        if hasattr(Cuota, "total_pagado"):
+        try:
             subq = subq.where(Cuota.total_pagado.isnot(None), Cuota.total_pagado > 0)
+        except AttributeError:
+            pass
         if q and q.strip():
             term = f"%{q.strip()}%"
             subq = subq.where(or_(Prestamo.cedula.ilike(term), Prestamo.nombres.ilike(term)))
