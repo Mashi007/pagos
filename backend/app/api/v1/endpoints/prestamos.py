@@ -23,6 +23,7 @@ from app.models.cuota import Cuota
 from app.models.pago import Pago
 from app.models.prestamo import Prestamo
 from app.models.user import User
+from app.models.revision_manual_prestamo import RevisionManualPrestamo
 from app.schemas.prestamo import PrestamoCreate, PrestamoResponse, PrestamoUpdate, PrestamoListResponse
 
 logger = logging.getLogger(__name__)
@@ -200,6 +201,16 @@ def listar_prestamos(
         ).group_by(Cuota.prestamo_id)
         for pid, cnt in db.execute(cuenta).all():
             cuotas_por_prestamo[pid] = cnt
+    
+    # Estados de revisión manual
+    revision_manual_estados = {}
+    if prestamo_ids:
+        rev_q = select(RevisionManualPrestamo.prestamo_id, RevisionManualPrestamo.estado_revision).where(
+            RevisionManualPrestamo.prestamo_id.in_(prestamo_ids)
+        )
+        for pid, estado in db.execute(rev_q).all():
+            revision_manual_estados[pid] = estado
+    
     items = []
     for row in rows:
         p, nombres_cliente, cedula_cliente = row[0], row[1], row[2]
@@ -221,6 +232,7 @@ def listar_prestamos(
             cedula=cedula_cliente or p.cedula,
             numero_cuotas=numero_cuotas,
             modalidad_pago=p.modalidad_pago,
+            revision_manual_estado=revision_manual_estados.get(p.id),  # None si no existe
         )
         items.append(item)
     total_pages = (total + per_page - 1) // per_page if total else 0

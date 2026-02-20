@@ -89,3 +89,4 @@ class PrestamoListResponse(PrestamoResponse):
     fecha_registro: Optional[datetime] = None
     numero_cuotas: Optional[int] = None
     modalidad_pago: Optional[str] = None
+    revision_manual_estado: Optional[str] = None  # pendiente | revisando | revisado (None si no tiene)

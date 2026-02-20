@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
-import { Plus, Search, Filter, Edit, Eye, Trash2, DollarSign, Calendar, Lock, CheckCircle2, X, RefreshCw } from 'lucide-react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Plus, Search, Filter, Edit, Eye, Trash2, DollarSign, Calendar, Lock, CheckCircle2, X, RefreshCw, AlertTriangle, HelpCircle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -24,6 +24,7 @@ import { toast } from 'sonner'
 
 export function PrestamosList() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(20)
   
@@ -652,6 +653,37 @@ export function PrestamosList() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
+                            {/* ICONO REVISIÓN MANUAL */}
+                            {prestamo.revision_manual_estado === 'pendiente' && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => navigate(`/revision-manual`)}
+                                title="No revisado - Click para revisar"
+                                className="hover:bg-orange-50 text-orange-600"
+                              >
+                                <AlertTriangle className="h-4 w-4" />
+                              </Button>
+                            )}
+                            
+                            {prestamo.revision_manual_estado === 'revisando' && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => navigate(`/revision-manual/editar/${prestamo.id}`)}
+                                title="En revisión - Click para continuar"
+                                className="hover:bg-yellow-50 text-yellow-600"
+                              >
+                                <HelpCircle className="h-4 w-4" />
+                              </Button>
+                            )}
+                            
+                            {prestamo.revision_manual_estado === 'revisado' && (
+                              <span title="Revisión completada" className="text-green-600">
+                                <CheckCircle2 className="h-4 w-4" />
+                              </span>
+                            )}
+
                             {/* Botón Ver Detalles - Visible cuando APROBADO, DESEMBOLSADO o tiene fecha_aprobacion */}
                             {(prestamo.estado === 'APROBADO' || prestamo.estado === 'DESEMBOLSADO' || prestamo.fecha_aprobacion) && (
                               <Button

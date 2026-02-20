@@ -2,7 +2,7 @@
 API v1
 """
 from fastapi import APIRouter
-from app.api.v1.endpoints import whatsapp, auth, configuracion, configuracion_informe_pagos, pagos, prestamos, notificaciones, notificaciones_tabs, dashboard, kpis, auditoria, cobranzas, clientes, tickets, comunicaciones, validadores, usuarios, reportes, modelos_vehiculos, analistas, concesionarios, ai_training
+from app.api.v1.endpoints import whatsapp, auth, configuracion, configuracion_informe_pagos, pagos, prestamos, notificaciones, notificaciones_tabs, dashboard, kpis, auditoria, cobranzas, clientes, tickets, comunicaciones, validadores, usuarios, reportes, modelos_vehiculos, analistas, concesionarios, ai_training, revision_manual
 
 api_router = APIRouter()
 
@@ -183,4 +183,11 @@ api_router.include_router(
     ai_training.router,
     prefix="/ai/training",
     tags=["ai-training"],
+)
+
+# Revisión Manual de Préstamos (post-migración: monitoreo y verificación manual)
+api_router.include_router(
+    revision_manual.router,
+    prefix="/revision-manual",
+    tags=["revision-manual"],
 )

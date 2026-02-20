@@ -1,0 +1,111 @@
+import { apiClient } from './api'
+
+export interface PrestamoDetalleRevision {
+  prestamo_id: number
+  cliente_id: number
+  cedula: string
+  nombres: string
+  total_prestamo: number
+  total_abonos: number
+  saldo: number
+  cuotas_vencidas: number
+  cuotas_morosas: number
+  estado_revision: string
+  fecha_revision: string | null
+}
+
+export interface ResumenRevisionManual {
+  total_prestamos: number
+  prestamos_revisados: number
+  prestamos_pendientes: number
+  porcentaje_completado: number
+  prestamos: PrestamoDetalleRevision[]
+}
+
+class RevisionManualService {
+  private baseUrl = '/api/v1/revision-manual'
+
+  /**
+   * Obtiene lista de préstamos para revisión manual con detalles completos
+   */
+  async getPreslamosRevision(filtro?: 'todos' | 'pendientes' | 'revisados' | 'revisando'): Promise<ResumenRevisionManual> {
+    const params = new URLSearchParams()
+    if (filtro && filtro !== 'todos') {
+      const estadoMap: Record<string, string> = {
+        'pendientes': 'pendiente',
+        'revisados': 'revisado',
+        'revisando': 'revisando'
+      }
+      params.set('filtro_estado', estadoMap[filtro])
+    }
+    return await apiClient.get(`${this.baseUrl}/prestamos${params.toString() ? `?${params}` : ''}`)
+  }
+
+  /**
+   * Confirma un préstamo como revisado (¿Sí?)
+   */
+  async confirmarPrestamoRevisado(prestamoId: number): Promise<any> {
+    return await apiClient.put(`${this.baseUrl}/prestamos/${prestamoId}/confirmar`, {})
+  }
+
+  /**
+   * Inicia revisión de un préstamo (¿No? - cambia a 'revisando')
+   */
+  async iniciarRevision(prestamoId: number): Promise<any> {
+    return await apiClient.put(`${this.baseUrl}/prestamos/${prestamoId}/iniciar-revision`, {})
+  }
+
+  /**
+   * Finaliza revisión (Guardar y Cerrar - cambia a 'revisado')
+   */
+  async finalizarRevision(prestamoId: number): Promise<any> {
+    return await apiClient.put(`${this.baseUrl}/prestamos/${prestamoId}/finalizar-revision`, {})
+  }
+
+  /**
+   * Edita datos del cliente
+   */
+  async editarCliente(clienteId: number, datos: any): Promise<any> {
+    return await apiClient.put(`${this.baseUrl}/clientes/${clienteId}`, datos, {
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }
+
+  /**
+   * Edita datos del préstamo
+   */
+  async editarPrestamo(prestamoId: number, datos: any): Promise<any> {
+    return await apiClient.put(`${this.baseUrl}/prestamos/${prestamoId}`, datos, {
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }
+
+  /**
+   * Elimina un préstamo (y sus cuotas)
+   */
+  async eliminarPrestamo(prestamoId: number): Promise<any> {
+    return await apiClient.delete(`${this.baseUrl}/prestamos/${prestamoId}`)
+  }
+
+  /**
+   * Obtiene pagos por cédula para edición
+   */
+  async getPagosPorCedula(cedula: string): Promise<any> {
+    return await apiClient.get(`${this.baseUrl}/pagos/${cedula}`)
+  }
+
+  /**
+   * Obtiene datos completos de un préstamo para edición
+   */
+  async getDetallePrestamoRevision(prestamoId: number): Promise<any> {
+    return await apiClient.get(`${this.baseUrl}/prestamos/${prestamoId}/detalle`)
+  }
+
+  /**
+   * Obtiene resumen rápido de revisión
+   */
+  async getResumenRapidoRevision(): Promise<any> {
+    return await apiClient.get(`${this.baseUrl}/resumen-rapido`)
+  }
+
+export const revisionManualService = new RevisionManualService()

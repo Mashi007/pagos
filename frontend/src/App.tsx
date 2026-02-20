@@ -50,6 +50,8 @@ import Solicitudes from './pages/Solicitudes'
 import EmbudoClientes from './pages/EmbudoClientes'
 import TicketsAtencion from './pages/TicketsAtencion'
 import EmbudoConcesionarios from './pages/EmbudoConcesionarios'
+import RevisionManual from './pages/RevisionManual'
+import EditarRevisionManual from './pages/EditarRevisionManual'
 // Ventas: en pausa (ruta redirige a /pagos)
 import ConversacionesWhatsAppPage from './pages/ConversacionesWhatsApp'
 import ComunicacionesPage from './pages/Comunicaciones'
@@ -181,6 +183,10 @@ function App() {
             path="reportes"
             element={<Reportes />}
           />
+
+          {/* Revisión Manual de Préstamos */}
+          <Route path="revision-manual" element={<RevisionManual />} />
+          <Route path="revision-manual/editar/:prestamoId" element={<EditarRevisionManual />} />
 
           {/* Cobranzas */}
           <Route
