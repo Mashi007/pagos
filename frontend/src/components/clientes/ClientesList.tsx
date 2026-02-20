@@ -732,8 +732,14 @@ export function ClientesList() {
       {/* Modal Casos a Revisar */}
       <CasosRevisarDialog
         open={showCasosRevisar}
-        onClose={() => setShowCasosRevisar(false)}
+        onClose={() => {
+          setShowCasosRevisar(false)
+          // ✅ Invalidar cache al cerrar para asegurar que se actualizó
+          queryClient.invalidateQueries({ queryKey: ['clientes'] })
+          queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
+        }}
         onSuccess={() => {
+          // ✅ Invalidar cache cuando se guarda exitosamente
           queryClient.invalidateQueries({ queryKey: ['clientes'] })
           queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
           showNotification('success', 'Cliente(s) actualizado(s) correctamente')
