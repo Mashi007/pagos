@@ -1,0 +1,24 @@
+fix: corregir lógica de búsqueda de pagos conciliados en tabla de amortización
+
+Problema:
+- Los pagos conciliados no aparecían en la tabla de amortización
+- El endpoint GET /prestamos/{id}/cuotas solo buscaba pagos por cuota.pago_id
+- Si pago_id era NULL, nunca encontraba los pagos conciliados
+
+Solución:
+- Implementar estrategia de búsqueda en 2 niveles:
+  1. Búsqueda directa por FK (cuota.pago_id)
+  2. Búsqueda por rango de fechas (±15 días del vencimiento)
+- Consolidar información de múltiples pagos conciliados por cuota
+- Calcular correctamente pago_conciliado y pago_monto_conciliado
+
+Cambios:
+- backend/app/api/v1/endpoints/prestamos.py: reescribir endpoint /cuotas
+- backend/scripts/auditoria_pagos_conciliados.py: script de diagnóstico
+- backend/sql/diagnostico_pagos_conciliados.sql: queries SQL de auditoría
+- docs/AUDITORIA_PAGOS_CONCILIADOS_2026_02_19.md: documentación completa
+
+Resultado:
+✅ Pagos conciliados ahora se muestran en tabla de amortización
+✅ Búsqueda flexible compatible con estructura actual de BD
+✅ Sin cambios en migraciones necesarios

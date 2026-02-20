@@ -506,20 +506,70 @@ def _generar_cuotas_amortizacion(db: Session, p: Prestamo, fecha_base: date, num
 
 @router.get("/{prestamo_id}/cuotas", response_model=list)
 def get_cuotas_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
-    """Lista las cuotas (tabla de amortización) de un préstamo, con info de pago conciliado."""
+    """
+    Lista las cuotas (tabla de amortización) de un préstamo, con info de pago conciliado.
+    
+    Estrategia mejorada:
+    1. Obtiene todas las cuotas del préstamo.
+    2. Para cada cuota, busca pagos coincidentes por fecha_vencimiento + rango de días.
+    3. Consolida información: si hay pagos conciliados, los retorna.
+    4. Calcula pago_conciliado=True si existe al menos un pago conciliado o verificado.
+    5. Retorna pago_monto_conciliado como suma de montos conciliados en el rango de fechas.
+    """
     row = db.get(Prestamo, prestamo_id)
     if not row:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
-    q = (
-        select(Cuota, Pago.conciliado, Pago.verificado_concordancia, Pago.monto_pagado)
-        .select_from(Cuota)
-        .outerjoin(Pago, Cuota.pago_id == Pago.id)
-        .where(Cuota.prestamo_id == prestamo_id)
-        .order_by(Cuota.numero_cuota)
-    )
-    rows = db.execute(q).all()
-    return [
-        {
+    
+    # Obtener todas las cuotas del préstamo
+    cuotas = db.execute(
+        select(Cuota).where(Cuota.prestamo_id == prestamo_id).order_by(Cuota.numero_cuota)
+    ).scalars().all()
+    
+    resultado = []
+    for c in cuotas:
+        # Estrategia de búsqueda de pagos:
+        # 1. Primero, si existe cuota.pago_id, buscar ese pago específico.
+        # 2. Si no, buscar pagos por rango de fechas (+-15 días del vencimiento).
+        
+        pago_conciliado_flag = False
+        pago_monto_conciliado = 0.0
+        pago_verificado_concordancia = ""
+        
+        if c.pago_id:
+            # Caso 1: La cuota tiene un pago_id vinculado directamente
+            pago = db.get(Pago, c.pago_id)
+            if pago:
+                pago_conciliado_flag = bool(pago.conciliado)
+                pago_monto_conciliado = float(pago.monto_pagado) if pago.monto_pagado else 0.0
+                pago_verificado_concordancia = str(pago.verificado_concordancia or "").strip().upper()
+                if pago_verificado_concordancia == "SI":
+                    pago_conciliado_flag = True
+        else:
+            # Caso 2: Buscar pagos por rango de fechas
+            # Si la cuota vence el 15/04/2025, buscar pagos entre el 01/04 y el 30/04 (rango amplio)
+            if c.fecha_vencimiento:
+                fecha_inicio = c.fecha_vencimiento - timedelta(days=15)
+                fecha_fin = c.fecha_vencimiento + timedelta(days=15)
+                
+                # Buscar pagos conciliados en este rango para el préstamo
+                pagos_en_rango = db.execute(
+                    select(Pago)
+                    .where(
+                        Pago.prestamo_id == prestamo_id,
+                        func.date(Pago.fecha_pago) >= fecha_inicio,
+                        func.date(Pago.fecha_pago) <= fecha_fin,
+                    )
+                    .order_by(Pago.fecha_pago.desc())
+                ).scalars().all()
+                
+                # Consolidar información de pagos en rango
+                for pago in pagos_en_rango:
+                    if pago.conciliado or (str(pago.verificado_concordancia or "").strip().upper() == "SI"):
+                        pago_conciliado_flag = True
+                        pago_monto_conciliado += float(pago.monto_pagado) if pago.monto_pagado else 0.0
+        
+        # Construir respuesta de cuota
+        resultado.append({
             "id": c.id,
             "prestamo_id": c.prestamo_id,
             "pago_id": c.pago_id,
@@ -527,24 +577,24 @@ def get_cuotas_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
             "fecha_vencimiento": c.fecha_vencimiento.isoformat() if c.fecha_vencimiento else None,
             "monto": float(c.monto) if c.monto is not None else 0,
             "monto_cuota": float(c.monto) if c.monto is not None else 0,
-            "monto_capital": None,  # Se calcula en frontend si es necesario
-            "monto_interes": None,  # Se calcula en frontend si es necesario
+            "monto_capital": None,
+            "monto_interes": None,
             "saldo_capital_inicial": float(c.saldo_capital_inicial) if c.saldo_capital_inicial is not None else 0,
             "saldo_capital_final": float(c.saldo_capital_final) if c.saldo_capital_final is not None else 0,
-            "capital_pagado": None,  # Se calcula en frontend si es necesario
-            "interes_pagado": None,  # Se calcula en frontend si es necesario
+            "capital_pagado": None,
+            "interes_pagado": None,
             "total_pagado": float(c.total_pagado) if c.total_pagado is not None else 0,
             "fecha_pago": c.fecha_pago.isoformat() if c.fecha_pago else None,
             "estado": c.estado or "PENDIENTE",
             "dias_mora": c.dias_mora if c.dias_mora is not None else 0,
             "dias_morosidad": c.dias_morosidad if c.dias_morosidad is not None else 0,
-            # Conciliado: Pago.conciliado=True O verificado_concordancia='SI' (todos los valores conciliados por préstamo)
-            "pago_conciliado": bool(pago_conciliado) or (str(verificado_concordancia or "").strip().upper() == "SI"),
-            # Monto conciliado: total_pagado de la cuota (monto aplicado a esta cuota)
-            "pago_monto_conciliado": float(c.total_pagado) if c.total_pagado is not None and c.total_pagado > 0 else 0,
-        }
-        for c, pago_conciliado, verificado_concordancia, pago_monto in rows
-    ]
+            # pago_conciliado: True si existe pago conciliado O verificado_concordancia='SI'
+            "pago_conciliado": pago_conciliado_flag,
+            # pago_monto_conciliado: suma de montos de pagos conciliados
+            "pago_monto_conciliado": pago_monto_conciliado,
+        })
+    
+    return resultado
 
 
 @router.post("/{prestamo_id}/generar-amortizacion", response_model=dict)
