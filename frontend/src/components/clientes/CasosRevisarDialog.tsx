@@ -141,13 +141,8 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
       // ✅ Verificar si el cliente cumple con los validadores
       // Remover SOLO si no tiene más valores placeholder
       const clienteActualizado = result
-      const cumpleValidadores = 
-        clienteActualizado.cedula !== PLACEHOLDERS.cedula &&
-        clienteActualizado.nombres !== PLACEHOLDERS.nombres &&
-        clienteActualizado.telefono !== PLACEHOLDERS.telefono &&
-        clienteActualizado.email !== PLACEHOLDERS.email
       
-      if (cumpleValidadores) {
+      if (cumpleConValidadores(clienteActualizado)) {
         // Cliente cumple validadores: remover de la lista
         setClientes(prev => prev.filter(x => x.id !== c.id))
       } else {
@@ -215,14 +210,9 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
           
           // Si fue actualizado, verificar si cumple validadores
           const clienteActualizado = updatedClientes.get(c.id)!
-          const cumpleValidadores = 
-            clienteActualizado.cedula !== PLACEHOLDERS.cedula &&
-            clienteActualizado.nombres !== PLACEHOLDERS.nombres &&
-            clienteActualizado.telefono !== PLACEHOLDERS.telefono &&
-            clienteActualizado.email !== PLACEHOLDERS.email
           
           // Mantener si NO cumple, remover si cumple
-          return !cumpleValidadores
+          return !cumpleConValidadores(clienteActualizado)
         })
         // Actualizar clientes que aún tienen placeholders
         .map(c => updatedClientes.get(c.id) || c)
