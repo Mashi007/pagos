@@ -9,7 +9,6 @@ interface EvaluacionRiesgoActionsProps {
   criteriosFaltantes: string[]
   onClose: () => void
   onSuccess: () => void
-  onSubmit: (e: React.FormEvent) => void
 }
 
 export function EvaluacionRiesgoActions({
@@ -20,7 +19,6 @@ export function EvaluacionRiesgoActions({
   criteriosFaltantes,
   onClose,
   onSuccess,
-  onSubmit,
 }: EvaluacionRiesgoActionsProps) {
   if (!resultado) {
     return (
