@@ -1,13 +1,13 @@
-"""
+﻿"""
 Endpoints del dashboard. Usa datos reales de la BD cuando existen (clientes);
-el resto permanece stub hasta tener modelos de préstamos/pagos/cuotas.
-Caché de dashboard/admin: se actualiza 2 veces al día (1:00, 13:00) para cargas rápidas.
+el resto permanece stub hasta tener modelos de prÃ©stamos/pagos/cuotas.
+CachÃ© de dashboard/admin: se actualiza 2 veces al dÃ­a (1:00, 13:00) para cargas rÃ¡pidas.
 
-CONCEPTO PAGO VENCIDO Y MOROSO (terminología unificada):
+CONCEPTO PAGO VENCIDO Y MOROSO (terminologÃ­a unificada):
 - Pago vencido = cuotas vencidas y no pagadas (fecha_vencimiento < hoy).
-- Vencido: si debo pagar hasta el 23 feb, NO estoy vencido hasta el 24 feb. Desde el 24 = vencido (1-89 días de atraso).
-- Moroso: 90+ días de atraso (se declara como moroso desde el día 90).
-- Condición: fecha_vencimiento < fecha_referencia AND fecha_pago IS NULL.
+- Vencido: si debo pagar hasta el 23 feb, NO estoy vencido hasta el 24 feb. Desde el 24 = vencido (1-89 dÃ­as de atraso).
+- Moroso: 90+ dÃ­as de atraso (se declara como moroso desde el dÃ­a 90).
+- CondiciÃ³n: fecha_vencimiento < fecha_referencia AND fecha_pago IS NULL.
 """
 import logging
 import threading
@@ -31,7 +31,7 @@ from app.models.prestamo import Prestamo
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
-# Caché para todos los gráficos del dashboard. Se actualiza a las 1:00, 13:00 (hora local).
+# CachÃ© para todos los grÃ¡ficos del dashboard. Se actualiza a las 1:00, 13:00 (hora local).
 _DASHBOARD_ADMIN_CACHE: dict[str, Any] = {"data": None, "refreshed_at": None}
 _CACHE_KPIS: dict[str, Any] = {"data": None, "refreshed_at": None}
 _CACHE_MOROSIDAD_DIA: dict[str, Any] = {"data": None, "refreshed_at": None}
@@ -39,10 +39,10 @@ _CACHE_FINANCIAMIENTO_RANGOS: dict[str, Any] = {"data": None, "refreshed_at": No
 _CACHE_COMPOSICION_MOROSIDAD: dict[str, Any] = {"data": None, "refreshed_at": None}
 _CACHE_COBRANZAS_SEMANALES: dict[str, Any] = {"data": None, "refreshed_at": None}
 _CACHE_MOROSIDAD_ANALISTA: dict[str, Any] = {"data": None, "refreshed_at": None}
-_CACHE_REFRESH_HOURS = (1, 13)  # 1 AM, 1 PM (hora local del servidor) - actualización automática de informes
+_CACHE_REFRESH_HOURS = (1, 13)  # 1 AM, 1 PM (hora local del servidor) - actualizaciÃ³n automÃ¡tica de informes
 _lock = threading.Lock()
 
-# Límite de longitud para filtros de texto (auditoría: evitar abuso/consultas inesperadas)
+# LÃ­mite de longitud para filtros de texto (auditorÃ­a: evitar abuso/consultas inesperadas)
 MAX_FILTER_STRING_LEN = 200
 
 
@@ -61,18 +61,18 @@ def _kpi(valor: float = 0, variacion: float = 0) -> dict:
 
 
 def _etiquetas_12_meses() -> list[dict]:
-    """Solo etiquetas de los últimos 12 meses (sin datos demo). Valores en cero."""
+    """Solo etiquetas de los Ãºltimos 12 meses (sin datos demo). Valores en cero."""
     meses = []
     hoy = datetime.now()
     nombres = ("Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic")
     for i in range(11, -1, -1):
         d = hoy - timedelta(days=30 * i)
         mes = d.month
-        año = d.year
-        label = f"{nombres[mes - 1]} {año}"
+        aÃ±o = d.year
+        label = f"{nombres[mes - 1]} {aÃ±o}"
         meses.append({
             "mes": label,
-            "year": año,
+            "year": aÃ±o,
             "month": mes,
             "cartera": 0,
             "cobrado": 0,
@@ -138,7 +138,7 @@ def _safe_float(val) -> float:
 
 def _rango_y_anterior(fecha_inicio: date, fecha_fin: date):
     """Dado un rango (inicio, fin), devuelve (inicio_dt, fin_dt, inicio_ant_dt, fin_ant_dt) para filtrar por fecha_registro.
-    Período anterior = mismo número de días antes de fecha_inicio.
+    PerÃ­odo anterior = mismo nÃºmero de dÃ­as antes de fecha_inicio.
     """
     from datetime import time as dt_time
     inicio_dt = datetime.combine(fecha_inicio, dt_time(0, 0, 0, 0))
@@ -159,7 +159,7 @@ def _compute_kpis_principales(
     concesionario: Optional[str],
     modelo: Optional[str],
 ) -> dict:
-    """Calcula KPIs principales (usado por endpoint y por refresh de caché)."""
+    """Calcula KPIs principales (usado por endpoint y por refresh de cachÃ©)."""
     try:
         activos = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "ACTIVO")) or 0
         total_clientes = activos  # Para KPIs: total = solo activos
@@ -185,7 +185,7 @@ def _compute_kpis_principales(
             inicio_dt, fin_dt = inicio_mes_actual, fin_mes_actual
             inicio_ant_dt, fin_ant_dt = inicio_mes_anterior, fin_mes_anterior
 
-        # Total préstamos: solo clientes ACTIVOS
+        # Total prÃ©stamos: solo clientes ACTIVOS
         conds = [
             Prestamo.cliente_id == Cliente.id,
             Prestamo.estado == "APROBADO",
@@ -269,7 +269,7 @@ def _compute_kpis_principales(
                 .where(and_(*conds_moro))
             )
         )
-        # Variación vs período anterior: morosidad del período anterior (vencido en ese período y no cobrado)
+        # VariaciÃ³n vs perÃ­odo anterior: morosidad del perÃ­odo anterior (vencido en ese perÃ­odo y no cobrado)
         inicio_ant_d = inicio_ant_dt.date() if hasattr(inicio_ant_dt, "date") else inicio_ant_dt
         fin_ant_d = fin_ant_dt.date() if hasattr(fin_ant_dt, "date") else fin_ant_dt
         conds_moro_ant = [
@@ -302,7 +302,7 @@ def _compute_kpis_principales(
         else:
             variacion_morosidad = 0.0
 
-        # Cuotas programadas del mes: suma monto_cuota con fecha_vencimiento en el período (join Prestamo para filtros)
+        # Cuotas programadas del mes: suma monto_cuota con fecha_vencimiento en el perÃ­odo (join Prestamo para filtros)
         inicio_d = inicio if usar_rango else inicio_dt.date()
         fin_d = fin if usar_rango else fin_dt.date()
         conds_cuota = [
@@ -375,7 +375,7 @@ def get_kpis_principales(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """KPIs principales. Con caché 2 veces/día (1:00, 13:00) cuando no se envían fechas ni filtros."""
+    """KPIs principales. Con cachÃ© 2 veces/dÃ­a (1:00, 13:00) cuando no se envÃ­an fechas ni filtros."""
     analista = _sanitize_filter_string(analista)
     concesionario = _sanitize_filter_string(concesionario)
     modelo = _sanitize_filter_string(modelo)
@@ -395,7 +395,7 @@ def get_kpis_principales(
 
 
 def _ultimo_dia_del_mes(d: datetime) -> datetime:
-    """Último día del mes a las 23:59 UTC para comparar con fecha_registro (timezone-aware)."""
+    """Ãšltimo dÃ­a del mes a las 23:59 UTC para comparar con fecha_registro (timezone-aware)."""
     siguiente = (d.replace(day=28) + timedelta(days=4)).replace(day=1)
     ultimo = siguiente - timedelta(seconds=1)
     if ultimo.tzinfo is None:
@@ -404,10 +404,10 @@ def _ultimo_dia_del_mes(d: datetime) -> datetime:
 
 
 def _primer_ultimo_dia_mes(d: datetime) -> tuple[date, date]:
-    """Devuelve (primer_día, último_día) del mes de d como date."""
+    """Devuelve (primer_dÃ­a, Ãºltimo_dÃ­a) del mes de d como date."""
     y, m = d.year, d.month
     inicio = date(y, m, 1)
-    # Último día del mes
+    # Ãšltimo dÃ­a del mes
     if m == 12:
         fin = date(y, 12, 31)
     else:
@@ -416,7 +416,7 @@ def _primer_ultimo_dia_mes(d: datetime) -> tuple[date, date]:
 
 
 def _meses_desde_rango(fecha_inicio: date, fecha_fin: date) -> list[dict]:
-    """Genera lista de meses (label, año, mes) entre fecha_inicio y fecha_fin (por mes natural)."""
+    """Genera lista de meses (label, aÃ±o, mes) entre fecha_inicio y fecha_fin (por mes natural)."""
     nombres = ("Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic")
     meses = []
     y, m = fecha_inicio.year, fecha_inicio.month
@@ -432,7 +432,7 @@ def _meses_desde_rango(fecha_inicio: date, fecha_fin: date) -> list[dict]:
 
 
 def _next_refresh_local() -> datetime:
-    """Próxima hora de refresco: 1:00 o 13:00 (hora local del servidor)."""
+    """PrÃ³xima hora de refresco: 1:00 o 13:00 (hora local del servidor)."""
     now = datetime.now()
     candidates = []
     for h in _CACHE_REFRESH_HOURS:
@@ -504,8 +504,8 @@ def _compute_dashboard_admin(
             ) or 0
             cartera_f = _safe_float(cartera)
             cobrado_f = _safe_float(cobrado)
-            # Pago vencido MENSUAL (no acumulado): cuotas que vencen en este mes, ya vencieron y no están pagadas.
-            # Solo cuotas con fecha_vencimiento en [inicio_d, fin_d] y fecha_vencimiento < hoy (ya pasó el vencimiento).
+            # Pago vencido MENSUAL (no acumulado): cuotas que vencen en este mes, ya vencieron y no estÃ¡n pagadas.
+            # Solo cuotas con fecha_vencimiento en [inicio_d, fin_d] y fecha_vencimiento < hoy (ya pasÃ³ el vencimiento).
             morosidad_f = db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0))
                 .select_from(Cuota)
@@ -550,22 +550,22 @@ def _compute_dashboard_admin(
 
 
 def _refresh_dashboard_admin_cache() -> None:
-    """Actualiza la caché de dashboard/admin en background (usa sesión propia)."""
+    """Actualiza la cachÃ© de dashboard/admin en background (usa sesiÃ³n propia)."""
     db = SessionLocal()
     try:
         data = _compute_dashboard_admin(db, None, None)
         with _lock:
             _DASHBOARD_ADMIN_CACHE["data"] = data
             _DASHBOARD_ADMIN_CACHE["refreshed_at"] = datetime.now()
-        logger.info("Caché dashboard/admin actualizada (1:00 / 13:00).")
+        logger.info("CachÃ© dashboard/admin actualizada (1:00 / 13:00).")
     except Exception as e:
-        logger.exception("Error al actualizar caché dashboard/admin: %s", e)
+        logger.exception("Error al actualizar cachÃ© dashboard/admin: %s", e)
     finally:
         db.close()
 
 
 def _refresh_all_dashboard_caches() -> None:
-    """Actualiza todas las cachés de gráficos del dashboard (1:00, 13:00)."""
+    """Actualiza todas las cachÃ©s de grÃ¡ficos del dashboard (1:00, 13:00)."""
     _refresh_dashboard_admin_cache()
     db = SessionLocal()
     try:
@@ -576,15 +576,15 @@ def _refresh_all_dashboard_caches() -> None:
                 _CACHE_KPIS["data"] = data
                 _CACHE_KPIS["refreshed_at"] = datetime.now()
         except Exception as e:
-            logger.exception("Error al actualizar caché kpis-principales: %s", e)
-        # Morosidad por día (default: sin fechas, dias=30)
+            logger.exception("Error al actualizar cachÃ© kpis-principales: %s", e)
+        # Morosidad por dÃ­a (default: sin fechas, dias=30)
         try:
             data = _compute_morosidad_por_dia(db, None, None, 30)
             with _lock:
                 _CACHE_MOROSIDAD_DIA["data"] = data
                 _CACHE_MOROSIDAD_DIA["refreshed_at"] = datetime.now()
         except Exception as e:
-            logger.exception("Error al actualizar caché morosidad-por-dia: %s", e)
+            logger.exception("Error al actualizar cachÃ© morosidad-por-dia: %s", e)
         # Financiamiento por rangos (default: sin filtros)
         try:
             data = _compute_financiamiento_por_rangos(db, None, None, None, None, None)
@@ -592,15 +592,15 @@ def _refresh_all_dashboard_caches() -> None:
                 _CACHE_FINANCIAMIENTO_RANGOS["data"] = data
                 _CACHE_FINANCIAMIENTO_RANGOS["refreshed_at"] = datetime.now()
         except Exception as e:
-            logger.exception("Error al actualizar caché financiamiento-por-rangos: %s", e)
-        # Composición morosidad (default: sin filtros)
+            logger.exception("Error al actualizar cachÃ© financiamiento-por-rangos: %s", e)
+        # ComposiciÃ³n morosidad (default: sin filtros)
         try:
             data = _compute_composicion_morosidad(db, None, None, None, None, None)
             with _lock:
                 _CACHE_COMPOSICION_MOROSIDAD["data"] = data
                 _CACHE_COMPOSICION_MOROSIDAD["refreshed_at"] = datetime.now()
         except Exception as e:
-            logger.exception("Error al actualizar caché composicion-morosidad: %s", e)
+            logger.exception("Error al actualizar cachÃ© composicion-morosidad: %s", e)
         # Cobranzas semanales (default: semanas=12)
         try:
             data = _compute_cobranzas_semanales(db, None, None, 12, None, None, None)
@@ -608,7 +608,7 @@ def _refresh_all_dashboard_caches() -> None:
                 _CACHE_COBRANZAS_SEMANALES["data"] = data
                 _CACHE_COBRANZAS_SEMANALES["refreshed_at"] = datetime.now()
         except Exception as e:
-            logger.exception("Error al actualizar caché cobranzas-semanales: %s", e)
+            logger.exception("Error al actualizar cachÃ© cobranzas-semanales: %s", e)
         # Morosidad por analista (default: sin filtros)
         try:
             data = _compute_morosidad_por_analista(db, None, None, None, None, None)
@@ -616,14 +616,14 @@ def _refresh_all_dashboard_caches() -> None:
                 _CACHE_MOROSIDAD_ANALISTA["data"] = data
                 _CACHE_MOROSIDAD_ANALISTA["refreshed_at"] = datetime.now()
         except Exception as e:
-            logger.exception("Error al actualizar caché morosidad-por-analista: %s", e)
-        logger.info("Cachés de gráficos del dashboard actualizadas (1:00 / 13:00).")
+            logger.exception("Error al actualizar cachÃ© morosidad-por-analista: %s", e)
+        logger.info("CachÃ©s de grÃ¡ficos del dashboard actualizadas (1:00 / 13:00).")
     finally:
         db.close()
 
 
 def _dashboard_cache_worker() -> None:
-    """Worker que refresca todas las cachés del dashboard a las 1:00 y 13:00 (hora local)."""
+    """Worker que refresca todas las cachÃ©s del dashboard a las 1:00 y 13:00 (hora local)."""
     while True:
         try:
             next_refresh = _next_refresh_local()
@@ -633,16 +633,16 @@ def _dashboard_cache_worker() -> None:
                 time.sleep(wait_secs)
             _refresh_all_dashboard_caches()
         except Exception as e:
-            logger.exception("Error en worker de caché dashboard: %s", e)
+            logger.exception("Error en worker de cachÃ© dashboard: %s", e)
             import time
             time.sleep(3600)
 
 
 def start_dashboard_cache_refresh() -> None:
-    """Inicia el hilo que actualiza la caché del dashboard a las 1:00 y 13:00."""
+    """Inicia el hilo que actualiza la cachÃ© del dashboard a las 1:00 y 13:00."""
     t = threading.Thread(target=_dashboard_cache_worker, daemon=True)
     t.start()
-    logger.info("Worker de caché dashboard iniciado (refresh 1:00, 13:00).")
+    logger.info("Worker de cachÃ© dashboard iniciado (refresh 1:00, 13:00).")
 
 
 @router.get("/admin")
@@ -652,7 +652,7 @@ def get_dashboard_admin(
     fecha_fin: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Dashboard admin: evolucion_mensual desde tabla cuotas. Con caché 2 veces/día (1:00, 13:00) cuando no se envían fechas."""
+    """Dashboard admin: evolucion_mensual desde tabla cuotas. Con cachÃ© 2 veces/dÃ­a (1:00, 13:00) cuando no se envÃ­an fechas."""
     use_cache = not (fecha_inicio and fecha_fin)
     if use_cache:
         with _lock:
@@ -663,7 +663,7 @@ def get_dashboard_admin(
             next_refresh = _next_refresh_local()
             if now < next_refresh:
                 return cached
-        # Caché vacía o expirada: calcular y guardar
+        # CachÃ© vacÃ­a o expirada: calcular y guardar
         data = _compute_dashboard_admin(db, fecha_inicio, fecha_fin)
         with _lock:
             _DASHBOARD_ADMIN_CACHE["data"] = data
@@ -721,9 +721,9 @@ def _compute_morosidad_por_dia(
     fecha_fin: Optional[str],
     dias: Optional[int],
 ) -> dict:
-    """Calcula pago vencido por día (usado por endpoint y por refresh de caché).
-    Siempre muestra el día de hoy como extremo derecho y hacia atrás según dias (7-90).
-    Pago vencido DIARIO (no acumulado): cuotas que vencen ese día y no están pagadas."""
+    """Calcula pago vencido por dÃ­a (usado por endpoint y por refresh de cachÃ©).
+    Siempre muestra el dÃ­a de hoy como extremo derecho y hacia atrÃ¡s segÃºn dias (7-90).
+    Pago vencido DIARIO (no acumulado): cuotas que vencen ese dÃ­a y no estÃ¡n pagadas."""
     try:
         hoy_utc = datetime.now(timezone.utc)
         hoy_date = date(hoy_utc.year, hoy_utc.month, hoy_utc.day)
@@ -735,7 +735,7 @@ def _compute_morosidad_por_dia(
         nombres_mes = ("Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic")
         d = inicio
         while d <= fin:
-            # Pago vencido del día d (no acumulado): cuotas que vencen ese día, ya vencieron y no están pagadas
+            # Pago vencido del dÃ­a d (no acumulado): cuotas que vencen ese dÃ­a, ya vencieron y no estÃ¡n pagadas
             morosidad_dia = db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0))
                 .select_from(Cuota)
@@ -768,7 +768,7 @@ def get_morosidad_por_dia(
     dias: Optional[int] = Query(30, ge=7, le=90),
     db: Session = Depends(get_db),
 ):
-    """Morosidad por día. Con caché 2 veces/día (1:00, 13:00) cuando no se envían fechas."""
+    """Morosidad por dÃ­a. Con cachÃ© 2 veces/dÃ­a (1:00, 13:00) cuando no se envÃ­an fechas."""
     use_cache = not (fecha_inicio and fecha_fin)
     if use_cache:
         with _lock:
@@ -786,7 +786,7 @@ def get_morosidad_por_dia(
 
 @router.get("/proyeccion-cobro-30-dias")
 def get_proyeccion_cobro_30_dias(db: Session = Depends(get_db)):
-    """Proyección de cobro: monto programado por día desde hoy hasta hoy+30. Por cada día suma monto de cuotas con fecha_vencimiento ese día (programado total y pendiente sin pagar)."""
+    """ProyecciÃ³n de cobro: monto programado por dÃ­a desde hoy hasta hoy+30. Por cada dÃ­a suma monto de cuotas con fecha_vencimiento ese dÃ­a (programado total y pendiente sin pagar)."""
     try:
         hoy_utc = datetime.now(timezone.utc)
         hoy_date = date(hoy_utc.year, hoy_utc.month, hoy_utc.day)
@@ -795,7 +795,7 @@ def get_proyeccion_cobro_30_dias(db: Session = Depends(get_db)):
         nombres_mes = ("Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic")
         d = hoy_date
         while d <= fin_date:
-            # Monto programado del día (clientes ACTIVOS e INACTIVOS)
+            # Monto programado del dÃ­a (clientes ACTIVOS e INACTIVOS)
             programado = db.scalar(
                 select(func.coalesce(func.sum(Cuota.monto), 0))
                 .select_from(Cuota)
@@ -835,8 +835,8 @@ def get_proyeccion_cobro_30_dias(db: Session = Depends(get_db)):
 
 @router.get("/monto-programado-proxima-semana")
 def get_monto_programado_proxima_semana(db: Session = Depends(get_db)):
-    """Monto programado por día desde hoy hasta una semana después (7 días).
-    Por cada día: suma de monto_cuota de cuotas con fecha_vencimiento ese día (tabla cuotas)."""
+    """Monto programado por dÃ­a desde hoy hasta una semana despuÃ©s (7 dÃ­as).
+    Por cada dÃ­a: suma de monto_cuota de cuotas con fecha_vencimiento ese dÃ­a (tabla cuotas)."""
     try:
         hoy_utc = datetime.now(timezone.utc)
         hoy_date = date(hoy_utc.year, hoy_utc.month, hoy_utc.day)
@@ -869,7 +869,7 @@ def get_monto_programado_proxima_semana(db: Session = Depends(get_db)):
 
 
 def _parse_fechas_concesionario(fecha_inicio: Optional[str], fecha_fin: Optional[str]):
-    """Parsea fechas o devuelve rango últimos 12 meses."""
+    """Parsea fechas o devuelve rango Ãºltimos 12 meses."""
     hoy = datetime.now(timezone.utc)
     hoy_date = date(hoy.year, hoy.month, hoy.day)
     if fecha_inicio and fecha_fin:
@@ -893,7 +893,7 @@ def get_prestamos_por_concesionario(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Préstamos aprobados por concesionario: por_mes (en el período) y acumulado desde el inicio. Origen: tabla prestamos, campo concesionario."""
+    """PrÃ©stamos aprobados por concesionario: por_mes (en el perÃ­odo) y acumulado desde el inicio. Origen: tabla prestamos, campo concesionario."""
     analista = _sanitize_filter_string(analista)
     concesionario = _sanitize_filter_string(concesionario)
     modelo = _sanitize_filter_string(modelo)
@@ -918,7 +918,7 @@ def get_prestamos_por_concesionario(
         if modelo:
             conds_base.append(Prestamo.modelo_vehiculo == modelo)
 
-        # Por mes: préstamos APROBADO en [inicio, fin] (clientes ACTIVOS e INACTIVOS)
+        # Por mes: prÃ©stamos APROBADO en [inicio, fin] (clientes ACTIVOS e INACTIVOS)
         q_por_mes = (
             select(
                 mes_expr.label("mes"),
@@ -937,7 +937,7 @@ def get_prestamos_por_concesionario(
             for r in rows_por_mes
         ]
 
-        # Acumulado: todos los préstamos APROBADO desde el inicio (clientes ACTIVOS e INACTIVOS)
+        # Acumulado: todos los prÃ©stamos APROBADO desde el inicio (clientes ACTIVOS e INACTIVOS)
         conds_acum = [Prestamo.estado == "APROBADO"]
         if analista:
             conds_acum.append(Prestamo.analista == analista)
@@ -978,10 +978,10 @@ def get_prestamos_por_modelo(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Préstamos aprobados por modelo: por_mes (en el período) y acumulado en el período.
+    """PrÃ©stamos aprobados por modelo: por_mes (en el perÃ­odo) y acumulado en el perÃ­odo.
     Respeta filtros analista, concesionario, modelo.
-    Usa Prestamo.modelo_vehiculo; si vacío, ModeloVehiculo.modelo vía modelo_vehiculo_id;
-    si sigue vacío, producto (excepto 'Financiamiento' genérico); si no, 'Sin modelo'."""
+    Usa Prestamo.modelo_vehiculo; si vacÃ­o, ModeloVehiculo.modelo vÃ­a modelo_vehiculo_id;
+    si sigue vacÃ­o, producto (excepto 'Financiamiento' genÃ©rico); si no, 'Sin modelo'."""
     analista = _sanitize_filter_string(analista)
     concesionario = _sanitize_filter_string(concesionario)
     modelo_filtro = _sanitize_filter_string(modelo)
@@ -991,7 +991,7 @@ def get_prestamos_por_modelo(
             func.date_trunc("month", Prestamo.fecha_registro),
             "YYYY-MM",
         )
-        # producto como fallback cuando modelo_vehiculo vacío (excluir "Financiamiento" genérico)
+        # producto como fallback cuando modelo_vehiculo vacÃ­o (excluir "Financiamiento" genÃ©rico)
         producto_valido = func.nullif(func.nullif(func.trim(Prestamo.producto), ""), "Financiamiento")
         # Nombre del modelo: modelo_vehiculo > ModeloVehiculo.modelo > producto > "Sin modelo"
         modelo_expr = func.coalesce(
@@ -1020,7 +1020,7 @@ def get_prestamos_por_modelo(
                 )
             )
 
-        # Por mes: préstamos APROBADO en [inicio, fin] (clientes ACTIVOS e INACTIVOS)
+        # Por mes: prÃ©stamos APROBADO en [inicio, fin] (clientes ACTIVOS e INACTIVOS)
         q_por_mes = (
             select(
                 mes_expr.label("mes"),
@@ -1040,7 +1040,7 @@ def get_prestamos_por_modelo(
             for r in rows_por_mes
         ]
 
-        # Acumulado: mismo período [inicio, fin] y filtros (no "desde el inicio")
+        # Acumulado: mismo perÃ­odo [inicio, fin] y filtros (no "desde el inicio")
         q_acum = (
             select(
                 modelo_expr.label("modelo"),
@@ -1066,7 +1066,7 @@ def get_prestamos_por_modelo(
 
 
 def _rangos_financiamiento():
-    """Bandas por total_financiamiento (tabla prestamos). Incluye $1,200-$1,400 y Más de $1,400."""
+    """Bandas por total_financiamiento (tabla prestamos). Incluye $1,200-$1,400 y MÃ¡s de $1,400."""
     return [
         (0, 200, "$0 - $200"),
         (200, 400, "$200 - $400"),
@@ -1075,7 +1075,7 @@ def _rangos_financiamiento():
         (800, 1000, "$800 - $1,000"),
         (1000, 1200, "$1,000 - $1,200"),
         (1200, 1400, "$1,200 - $1,400"),
-        (1400, 999999999, "Más de $1,400"),
+        (1400, 999999999, "MÃ¡s de $1,400"),
     ]
 
 
@@ -1087,8 +1087,8 @@ def _compute_financiamiento_por_rangos(
     concesionario: Optional[str],
     modelo: Optional[str],
 ) -> dict:
-    """Calcula financiamiento por rangos: cuenta préstamos APROBADOS por banda de total_financiamiento.
-    Filtra por fecha_registro cuando se envían fecha_inicio/fecha_fin. Incluye clientes ACTIVOS e INACTIVOS."""
+    """Calcula financiamiento por rangos: cuenta prÃ©stamos APROBADOS por banda de total_financiamiento.
+    Filtra por fecha_registro cuando se envÃ­an fecha_inicio/fecha_fin. Incluye clientes ACTIVOS e INACTIVOS."""
     try:
         conds_base = [
             Prestamo.cliente_id == Cliente.id,
@@ -1164,7 +1164,7 @@ def _compute_financiamiento_por_rangos(
             ("$800 - $1,000", 0),
             ("$1,000 - $1,200", 0),
             ("$1,200 - $1,400", 0),
-            ("Más de $1,400", 0),
+            ("MÃ¡s de $1,400", 0),
         ]
         total_p = max(1, sum(r[1] for r in rangos))
         return {
@@ -1186,7 +1186,7 @@ def get_financiamiento_por_rangos(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Bandas por total_financiamiento. Con caché 2 veces/día (1:00, 13:00) cuando no se envían filtros."""
+    """Bandas por total_financiamiento. Con cachÃ© 2 veces/dÃ­a (1:00, 13:00) cuando no se envÃ­an filtros."""
     analista = _sanitize_filter_string(analista)
     concesionario = _sanitize_filter_string(concesionario)
     modelo = _sanitize_filter_string(modelo)
@@ -1213,11 +1213,11 @@ def _compute_composicion_morosidad(
     concesionario: Optional[str],
     modelo: Optional[str],
 ) -> dict:
-    """Calcula composición de morosidad: cuotas vencidas sin pagar al día de hoy, agrupadas por días de atraso.
+    """Calcula composiciÃ³n de morosidad: cuotas vencidas sin pagar al dÃ­a de hoy, agrupadas por dÃ­as de atraso.
     Snapshot actual (usa current_date). Respeta filtros analista, concesionario, modelo."""
     try:
-        # Bandas: 1-30, 31-60, 61-89 = VENCIDO; 90+ = MOROSO (90+ días de atraso)
-        bandas = [(1, 30, "1-30 días"), (31, 60, "31-60 días"), (61, 89, "61-89 días"), (90, 999999, "90+ días (moroso)")]
+        # Bandas: 1-30, 31-60, 61-89 = VENCIDO; 90+ = MOROSO (90+ dÃ­as de atraso)
+        bandas = [(1, 30, "1-30 dÃ­as"), (31, 60, "31-60 dÃ­as"), (61, 89, "61-89 dÃ­as"), (90, 999999, "90+ dÃ­as (moroso)")]
         puntos = []
         total_monto = 0.0
         total_cuotas = 0
@@ -1261,10 +1261,10 @@ def _compute_composicion_morosidad(
     except Exception as e:
         logger.exception("Error en composicion-morosidad: %s", e)
         puntos = [
-            ("1-30 días", 12000, 45, 12),
-            ("31-60 días", 8500, 28, 9),
-            ("61-89 días", 6200, 18, 6),
-            ("90+ días (moroso)", 15800, 32, 10),
+            ("1-30 dÃ­as", 12000, 45, 12),
+            ("31-60 dÃ­as", 8500, 28, 9),
+            ("61-89 dÃ­as", 6200, 18, 6),
+            ("90+ dÃ­as (moroso)", 15800, 32, 10),
         ]
         return {
             "puntos": [{"categoria": c, "monto": m, "cantidad_cuotas": n, "cantidad_prestamos": np} for c, m, n, np in puntos],
@@ -1283,7 +1283,7 @@ def get_composicion_morosidad(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Composición de morosidad. Con caché 2 veces/día (1:00, 13:00) cuando no se envían filtros."""
+    """ComposiciÃ³n de morosidad. Con cachÃ© 2 veces/dÃ­a (1:00, 13:00) cuando no se envÃ­an filtros."""
     analista = _sanitize_filter_string(analista)
     concesionario = _sanitize_filter_string(concesionario)
     modelo = _sanitize_filter_string(modelo)
@@ -1311,7 +1311,7 @@ def get_cobranza_fechas_especificas(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Cobranza por fechas específicas. Stub: requiere tabla pagos/cobranzas."""
+    """Cobranza por fechas especÃ­ficas. Stub: requiere tabla pagos/cobranzas."""
     return {"dias": []}
 
 
@@ -1324,7 +1324,7 @@ def _compute_cobranzas_semanales(
     concesionario: Optional[str],
     modelo: Optional[str],
 ) -> dict:
-    """Calcula cobranzas semanales (usado por endpoint y por refresh de caché)."""
+    """Calcula cobranzas semanales (usado por endpoint y por refresh de cachÃ©)."""
     try:
         hoy = date.today()
         sem = []
@@ -1380,7 +1380,7 @@ def get_cobranzas_semanales(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Cobranzas semanales. Con caché 2 veces/día (1:00, 13:00) cuando no se envían filtros."""
+    """Cobranzas semanales. Con cachÃ© 2 veces/dÃ­a (1:00, 13:00) cuando no se envÃ­an filtros."""
     analista = _sanitize_filter_string(analista)
     concesionario = _sanitize_filter_string(concesionario)
     modelo = _sanitize_filter_string(modelo)
@@ -1409,8 +1409,8 @@ def _compute_morosidad_por_analista(
 ) -> dict:
     """
     Cuotas vencidas por analista: cuotas donde hoy > fecha_vencimiento y sin pagar (fecha_pago IS NULL).
-    El analista se toma del préstamo de cada cuota: cuotas JOIN prestamos ON cuotas.prestamo_id = prestamos.id.
-    Por cada analista: cantidad de cuotas vencidas y suma de monto (dólares vencidos).
+    El analista se toma del prÃ©stamo de cada cuota: cuotas JOIN prestamos ON cuotas.prestamo_id = prestamos.id.
+    Por cada analista: cantidad de cuotas vencidas y suma de monto (dÃ³lares vencidos).
     """
     try:
         hoy = date.today()
@@ -1471,7 +1471,7 @@ def get_morosidad_por_analista(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Morosidad por analista. Con caché 2 veces/día (1:00, 13:00) cuando no se envían filtros."""
+    """Morosidad por analista. Con cachÃ© 2 veces/dÃ­a (1:00, 13:00) cuando no se envÃ­an filtros."""
     analista = _sanitize_filter_string(analista)
     concesionario = _sanitize_filter_string(concesionario)
     modelo = _sanitize_filter_string(modelo)
@@ -1499,7 +1499,7 @@ def get_evolucion_morosidad(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Evolución de morosidad por mes. Datos reales: suma monto de cuotas vencidas no pagadas a fin de cada mes (Cuota). Si la tabla cuotas no tiene columna monto, devuelve 0."""
+    """EvoluciÃ³n de morosidad por mes. Datos reales: suma monto de cuotas vencidas no pagadas a fin de cada mes (Cuota). Si la tabla cuotas no tiene columna monto, devuelve 0."""
     analista = _sanitize_filter_string(analista)
     concesionario = _sanitize_filter_string(concesionario)
     modelo = _sanitize_filter_string(modelo)
@@ -1543,7 +1543,7 @@ def get_evolucion_pagos(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Evolución de pagos por mes. Datos reales desde Cuota (fecha_pago por mes)."""
+    """EvoluciÃ³n de pagos por mes. Datos reales desde Cuota (fecha_pago por mes)."""
     analista = _sanitize_filter_string(analista)
     concesionario = _sanitize_filter_string(concesionario)
     modelo = _sanitize_filter_string(modelo)
@@ -1590,9 +1590,9 @@ def get_evolucion_pagos(
         return {"meses": [{"mes": x["mes"], "pagos": x.get("pagos", 0), "monto": x.get("monto", 0)} for x in m]}
 
 
-# ========== Endpoints adicionales usados por modales/páginas (stub) ==========
+# ========== Endpoints adicionales usados por modales/pÃ¡ginas (stub) ==========
 
-@router.get("/cobranza-por-dia", summary="[Stub] Devuelve dias vacíos hasta tener tabla pagos/cobranzas.")
+@router.get("/cobranza-por-dia", summary="[Stub] Devuelve dias vacÃ­os hasta tener tabla pagos/cobranzas.")
 def get_cobranza_por_dia(
     fecha_inicio: Optional[str] = Query(None),
     fecha_fin: Optional[str] = Query(None),
@@ -1601,11 +1601,11 @@ def get_cobranza_por_dia(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Cobranza por día desde BD (Cuota.fecha_pago por día)."""
+    """Cobranza por dÃ­a desde BD (Cuota.fecha_pago por dÃ­a)."""
     return {"dias": []}
 
 
-@router.get("/cobranzas-mensuales", summary="[Stub] Devuelve meses vacíos hasta tener tabla pagos/cobranzas.")
+@router.get("/cobranzas-mensuales", summary="[Stub] Devuelve meses vacÃ­os hasta tener tabla pagos/cobranzas.")
 def get_cobranzas_mensuales(
     fecha_inicio: Optional[str] = Query(None),
     fecha_fin: Optional[str] = Query(None),
@@ -1618,7 +1618,7 @@ def get_cobranzas_mensuales(
     return {"meses": []}
 
 
-@router.get("/cobros-por-analista", summary="[Stub] Devuelve analistas vacíos hasta tener tabla pagos.")
+@router.get("/cobros-por-analista", summary="[Stub] Devuelve analistas vacÃ­os hasta tener tabla pagos.")
 def get_cobros_por_analista(
     fecha_inicio: Optional[str] = Query(None),
     fecha_fin: Optional[str] = Query(None),
@@ -1631,7 +1631,7 @@ def get_cobros_por_analista(
     return {"analistas": []}
 
 
-@router.get("/cobros-diarios", summary="[Stub] Devuelve dias vacíos hasta tener tabla pagos.")
+@router.get("/cobros-diarios", summary="[Stub] Devuelve dias vacÃ­os hasta tener tabla pagos.")
 def get_cobros_diarios(
     fecha_inicio: Optional[str] = Query(None),
     fecha_fin: Optional[str] = Query(None),
@@ -1644,7 +1644,7 @@ def get_cobros_diarios(
     return {"dias": []}
 
 
-@router.get("/cuentas-cobrar-tendencias", summary="[Stub] Devuelve tendencias vacías hasta tener datos.")
+@router.get("/cuentas-cobrar-tendencias", summary="[Stub] Devuelve tendencias vacÃ­as hasta tener datos.")
 def get_cuentas_cobrar_tendencias(
     fecha_inicio: Optional[str] = Query(None),
     fecha_fin: Optional[str] = Query(None),
@@ -1657,7 +1657,7 @@ def get_cuentas_cobrar_tendencias(
     return {"tendencias": []}
 
 
-@router.get("/distribucion-prestamos", summary="[Stub] Devuelve distribucion vacía hasta tener datos.")
+@router.get("/distribucion-prestamos", summary="[Stub] Devuelve distribucion vacÃ­a hasta tener datos.")
 def get_distribucion_prestamos(
     fecha_inicio: Optional[str] = Query(None),
     fecha_fin: Optional[str] = Query(None),
@@ -1666,11 +1666,11 @@ def get_distribucion_prestamos(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Distribución de préstamos desde BD."""
+    """DistribuciÃ³n de prÃ©stamos desde BD."""
     return {"distribucion": []}
 
 
-@router.get("/metricas-acumuladas", summary="[Stub] Devuelve metricas vacías hasta tener datos.")
+@router.get("/metricas-acumuladas", summary="[Stub] Devuelve metricas vacÃ­as hasta tener datos.")
 def get_metricas_acumuladas(
     fecha_inicio: Optional[str] = Query(None),
     fecha_fin: Optional[str] = Query(None),
@@ -1679,5 +1679,6 @@ def get_metricas_acumuladas(
     modelo: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Métricas acumuladas desde BD."""
+    """MÃ©tricas acumuladas desde BD."""
     return {"metricas": []}
+

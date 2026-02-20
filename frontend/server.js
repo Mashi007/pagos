@@ -415,7 +415,7 @@ app.get('/prestamos/*', (req, res) => {
 app.get('/chat-ai', (req, res) => {
   res.redirect(302, FRONTEND_BASE + '/chat-ai' + qs(req));
 });
-});
+
 
 // SPA fallback solo para /pagos y /pagos/* (el proxy ya atendió /api/*)
 // Incluye /pagos/chat-ai, /pagos/dashboard, etc.: cualquier ruta que no sea archivo estático recibe index.html
