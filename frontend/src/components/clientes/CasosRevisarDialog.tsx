@@ -23,6 +23,21 @@ const isPlaceholder = (value: string | undefined, field: keyof typeof PLACEHOLDE
   return v === PLACEHOLDERS[field] || !v
 }
 
+// ✅ Función helper para verificar si un cliente cumple con todos los validadores
+const cumpleConValidadores = (cliente: Cliente): boolean => {
+  return (
+    cliente.cedula !== PLACEHOLDERS.cedula &&
+    cliente.nombres !== PLACEHOLDERS.nombres &&
+    cliente.telefono !== PLACEHOLDERS.telefono &&
+    cliente.email !== PLACEHOLDERS.email &&
+    // Verificar que ninguno esté vacío
+    !!cliente.cedula?.trim() &&
+    !!cliente.nombres?.trim() &&
+    !!cliente.telefono?.trim() &&
+    !!cliente.email?.trim()
+  )
+}
+
 interface CasosRevisarDialogProps {
   open: boolean
   onClose: () => void
@@ -123,8 +138,23 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
         return next
       })
       
-      // Remover de la lista (caso resuelto)
-      setClientes(prev => prev.filter(x => x.id !== c.id))
+      // ✅ Verificar si el cliente cumple con los validadores
+      // Remover SOLO si no tiene más valores placeholder
+      const clienteActualizado = result
+      const cumpleValidadores = 
+        clienteActualizado.cedula !== PLACEHOLDERS.cedula &&
+        clienteActualizado.nombres !== PLACEHOLDERS.nombres &&
+        clienteActualizado.telefono !== PLACEHOLDERS.telefono &&
+        clienteActualizado.email !== PLACEHOLDERS.email
+      
+      if (cumpleValidadores) {
+        // Cliente cumple validadores: remover de la lista
+        setClientes(prev => prev.filter(x => x.id !== c.id))
+      } else {
+        // Cliente aún tiene placeholders: mantener en lista pero actualizar datos
+        setClientes(prev => prev.map(x => x.id === c.id ? clienteActualizado : x))
+      }
+      
       onSuccess?.()
     } catch (e) {
       const msg = getErrorMessage(e)
@@ -141,6 +171,8 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
     setRowErrors({})
     let ok = 0
     const errs: Record<number, string> = {}
+    const updatedClientes: Map<number, Cliente> = new Map()
+    
     for (const c of toSave) {
       try {
         const payload = edited[c.id] || {}
@@ -151,7 +183,8 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
           email: payload.email ?? c.email,
         }
         
-        await clienteService.updateCliente(String(c.id), updateData)
+        const result = await clienteService.updateCliente(String(c.id), updateData)
+        updatedClientes.set(c.id, result)
         ok++
         setEdited(prev => {
           const next = { ...prev }
@@ -172,7 +205,28 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
     
     setRowErrors(errs)
     if (ok) {
-      setClientes(prev => prev.filter(c => !(toSave.some(s => s.id === c.id) && !errs[c.id])))
+      // ✅ Remover clientes que cumplieron validadores, mantener los que no
+      setClientes(prev => 
+        prev.filter(c => {
+          // Si no fue actualizado sin error, mantener en lista
+          if (!updatedClientes.has(c.id) || errs[c.id]) {
+            return true
+          }
+          
+          // Si fue actualizado, verificar si cumple validadores
+          const clienteActualizado = updatedClientes.get(c.id)!
+          const cumpleValidadores = 
+            clienteActualizado.cedula !== PLACEHOLDERS.cedula &&
+            clienteActualizado.nombres !== PLACEHOLDERS.nombres &&
+            clienteActualizado.telefono !== PLACEHOLDERS.telefono &&
+            clienteActualizado.email !== PLACEHOLDERS.email
+          
+          // Mantener si NO cumple, remover si cumple
+          return !cumpleValidadores
+        })
+        // Actualizar clientes que aún tienen placeholders
+        .map(c => updatedClientes.get(c.id) || c)
+      )
       onSuccess?.()
     }
     setSaving(null)

@@ -1,5 +1,5 @@
 import { PrestamosList } from '../components/prestamos/PrestamosList'
-import { DollarSign, Bell, List } from 'lucide-react'
+import { DollarSign, Bell, Search } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { usePrestamos } from '../hooks/usePrestamos'
 import { Link } from 'react-router-dom'
@@ -31,7 +31,7 @@ export function Prestamos() {
                 to="/prestamos?estado=EN_REVISION"
                 className="ml-2 inline-flex items-center gap-1 text-blue-600 hover:underline font-medium"
               >
-                <List className="h-4 w-4" />
+                <Search className="h-4 w-4" />
                 Ver en lista
               </Link>
             </p>
