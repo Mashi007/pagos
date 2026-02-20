@@ -1,0 +1,27 @@
+-- ====================================================================
+-- SCRIPTS TEMPORALES A ARCHIVAR (diagnósticos)
+-- ====================================================================
+-- Estos archivos fueron necesarios durante la migración pero no van a producción
+-- Se guardan en archivo histórico por auditoría
+
+ARCHIVOS TEMPORALES:
+- debug_por_que_no_asignados.sql
+- diagnostico_455_pagos_sin_cuota.sql
+- diagnostico_pagos_sin_asignar.sql
+- diagnostico_real_455_pagos.sql
+- diagnostico_donde_esta_diferencia_40.sql
+- INVESTIGACION_1_pago_sin_asignar.sql
+- CORRECCION_cuotas_parciales.sql (no ejecutado)
+- 00_PLAN_MIGRACION.sql (guía)
+
+SCRIPTS DE PRODUCCIÓN (mantener):
+✅ 0_PRIMERO_ver_estado_actual.sql
+✅ 1_reset_cuotas_para_migracion.sql
+✅ 2_copiar_fechas_documento_a_cuotas.sql
+✅ 3_asignar_pagos_cedulas_unicas_MEJORADO.sql
+✅ 4_asignar_pagos_cedulas_duplicadas_MEJORADO.sql
+✅ 5_verificacion_final_migracion.sql
+✅ RESET_COMPLETO.sql
+✅ CORRECCION_MANUAL_pago_39528.sql
+✅ backfill_prestamo_id_en_pagos.sql
+✅ HOJA_RUTA_MIGRACION_PAGOS_FINAL.md
