@@ -1,12 +1,18 @@
 -- ====================================================================
--- AUDITORIA SQL - VERIFICAR PAGOS CONCILIADOS PARA PRESTAMO #4601
+-- AUDITORIA SQL - VERIFICAR PAGOS CONCILIADOS
 -- ====================================================================
--- Script para ejecutar directamente en PostgreSQL para diagnosticar
--- por qué los pagos conciliados no aparecen en la tabla de amortización
+-- Este script diagnostica por qué los pagos conciliados no aparecen
+-- en la tabla de amortización.
+--
+-- USO:
+-- psql $DATABASE_URL < diagnostico_pagos_conciliados.sql
+--
+-- O en pgAdmin: Copiar, pegar y ejecutar en la consola SQL
+--
+-- Reemplazar 4601 con el ID de préstamo que desees auditar
+-- ====================================================================
 
--- ====================================================================
--- 1. INFORMACIÓN DEL PRÉSTAMO
--- ====================================================================
+-- PASO 1: Información del Préstamo
 SELECT 
     p.id,
     p.cliente_id,
@@ -21,9 +27,7 @@ SELECT
 FROM public.prestamos p
 WHERE p.id = 4601;
 
--- ====================================================================
--- 2. CUOTAS DEL PRÉSTAMO
--- ====================================================================
+-- PASO 2: Cuotas del Préstamo
 SELECT 
     c.id,
     c.numero_cuota,
@@ -37,9 +41,7 @@ FROM public.cuotas c
 WHERE c.prestamo_id = 4601
 ORDER BY c.numero_cuota;
 
--- ====================================================================
--- 3. TODOS LOS PAGOS REGISTRADOS PARA ESTE PRÉSTAMO
--- ====================================================================
+-- PASO 3: Todos los Pagos Registrados
 SELECT 
     p.id,
     p.prestamo_id,
@@ -55,9 +57,7 @@ FROM public.pagos p
 WHERE p.prestamo_id = 4601
 ORDER BY p.fecha_pago DESC;
 
--- ====================================================================
--- 4. ANÁLISIS: CUOTAS vs PAGOS (Búsqueda por FK)
--- ====================================================================
+-- PASO 4: Análisis - Cuotas vs Pagos (búsqueda por FK)
 SELECT 
     c.numero_cuota,
     c.fecha_vencimiento,
@@ -69,20 +69,17 @@ SELECT
     p.conciliado,
     p.verificado_concordancia,
     CASE 
-        WHEN p.conciliado = true THEN '✅ CONCILIADO'
-        WHEN p.verificado_concordancia = 'SI' THEN '✅ VERIFICADO SI'
-        WHEN p.id IS NULL THEN '❌ SIN PAGO'
-        ELSE '⚠️  PAGO SIN CONCILIAR'
+        WHEN p.conciliado = true THEN 'CONCILIADO'
+        WHEN p.verificado_concordancia = 'SI' THEN 'VERIFICADO'
+        WHEN p.id IS NULL THEN 'SIN PAGO'
+        ELSE 'NO CONCILIADO'
     END as estado_conciliacion
 FROM public.cuotas c
 LEFT JOIN public.pagos p ON c.pago_id = p.id
 WHERE c.prestamo_id = 4601
 ORDER BY c.numero_cuota;
 
--- ====================================================================
--- 5. ANÁLISIS: BÚSQUEDA ALTERNATIVA POR RANGO DE FECHAS
--- ====================================================================
--- Para cada cuota, buscar pagos en rango ±15 días (como lo hace el nuevo endpoint)
+-- PASO 5: Búsqueda por Rango de Fechas (como lo hace el nuevo endpoint)
 WITH cuotas_con_rangos AS (
     SELECT 
         numero_cuota,
@@ -113,9 +110,7 @@ LEFT JOIN public.pagos p ON (
 WHERE p.id IS NOT NULL
 ORDER BY c.numero_cuota, p.fecha_pago;
 
--- ====================================================================
--- 6. CONTEOS RESUMEN
--- ====================================================================
+-- PASO 6: Resumen de Conteos
 SELECT 
     'Total Cuotas' as metrica,
     COUNT(*) as valor
@@ -135,7 +130,7 @@ FROM public.pagos
 WHERE prestamo_id = 4601 AND (conciliado = true OR verificado_concordancia = 'SI')
 UNION ALL
 SELECT 
-    'Pagos Sin Conciliar',
+    'Pagos No Conciliados',
     COUNT(*)
 FROM public.pagos
 WHERE prestamo_id = 4601 AND (conciliado != true OR conciliado IS NULL)
@@ -147,20 +142,17 @@ FROM public.cuotas
 WHERE prestamo_id = 4601 AND pago_id IS NOT NULL
 UNION ALL
 SELECT 
-    'Cuotas SIN pago_id (NULL)',
+    'Cuotas sin pago_id (NULL)',
     COUNT(*)
 FROM public.cuotas
 WHERE prestamo_id = 4601 AND pago_id IS NULL;
 
--- ====================================================================
--- 7. TOTAL FINANCIERO
--- ====================================================================
+-- PASO 7: Totales Financieros
 SELECT 
-    'Total Financiamiento' as concepto,
+    'Total Financiamiento (suma cuotas)' as concepto,
     SUM(c.monto_cuota)::numeric(14,2) as valor
 FROM public.cuotas c
-JOIN public.prestamos p ON c.prestamo_id = p.id
-WHERE p.id = 4601
+WHERE c.prestamo_id = 4601
 UNION ALL
 SELECT 
     'Total Pagado (cuotas.total_pagado)',
@@ -169,7 +161,7 @@ FROM public.cuotas c
 WHERE c.prestamo_id = 4601
 UNION ALL
 SELECT 
-    'Total Pagos Registrados (pagos.monto_pagado)',
+    'Total Pagos Registrados',
     SUM(p.monto_pagado)::numeric(14,2)
 FROM public.pagos p
 WHERE p.prestamo_id = 4601
@@ -181,44 +173,17 @@ FROM public.pagos p
 WHERE p.prestamo_id = 4601 AND (p.conciliado = true OR p.verificado_concordancia = 'SI');
 
 -- ====================================================================
--- 8. DIAGNOSTICO: ¿POR QUÉ NO SE VEN LOS PAGOS CONCILIADOS?
+-- FIN DE LA AUDITORIA
 -- ====================================================================
--- Este query identifica la raíz del problema
-SELECT 
-    'PROBLEMA DIAGNOSTICADO' as tipo,
-    CASE 
-        WHEN (
-            SELECT COUNT(*) 
-            FROM public.pagos 
-            WHERE prestamo_id = 4601 AND pago_id IS NULL
-        ) > 0 THEN 'cuota.pago_id está NULL - FK no vinculada'
-        WHEN (
-            SELECT COUNT(*) 
-            FROM public.pagos 
-            WHERE prestamo_id = 4601 AND conciliado = false
-        ) > 0 THEN 'Pagos no conciliados en BD'
-        WHEN (
-            SELECT COUNT(*) 
-            FROM public.pagos 
-            WHERE prestamo_id = 4601
-        ) = 0 THEN 'No hay pagos registrados para este préstamo'
-        ELSE 'Datos parecen estar correctos'
-    END as diagnostico
-UNION ALL
-SELECT 
-    'SOLUCIÓN IMPLEMENTADA',
-    'Nuevo endpoint busca pagos por rango de fechas (±15 días) cuando pago_id=NULL'
-UNION ALL
-SELECT 
-    'VERIFICAR',
-    'Ejecutar el endpoint GET /prestamos/4601/cuotas después del deploy'
-;
-
+-- Interpretación de resultados:
+--
+-- 1. Si PASO 3 muestra pagos con conciliado=true pero PASO 4 no los encuentra
+--    → El nuevo endpoint los ENCONTRARA (búsqueda por rango)
+--
+-- 2. Si PASO 2 muestra pago_id=NULL pero PASO 5 encuentra pagos en rango
+--    → Confirmación de que el problema estaba en la FK débil
+--
+-- 3. Si PASO 7 muestra "Total Pagos Conciliados" > 0
+--    → Hay pagos para mostrar; el endpoint debe retornarlos
+--
 -- ====================================================================
--- NOTAS DE EJECUCIÓN:
--- ====================================================================
--- 1. Ejecutar este script contra la BD de Render
--- 2. Reemplazar 4601 por otro prestamo_id si es necesario
--- 3. Los resultados mostrarán si los pagos conciliados existen pero no se vinculan
--- 4. Si los queries anteriores muestran pagos conciliados pero con pago_id=NULL,
---    es confirmación de que el nuevo endpoint corrige el problema
