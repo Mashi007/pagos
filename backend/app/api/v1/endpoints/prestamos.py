@@ -9,7 +9,7 @@ from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import delete, func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -110,9 +110,17 @@ class AprobarManualBody(BaseModel):
     total_financiamiento: Optional[float] = None
     numero_cuotas: Optional[int] = None
     modalidad_pago: Optional[str] = None
+
     cuota_periodo: Optional[float] = None
     tasa_interes: Optional[float] = None
     observaciones: Optional[str] = None
+
+    @field_validator("numero_cuotas")
+    @classmethod
+    def numero_cuotas_rango(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and (v < 1 or v > 12):
+            raise ValueError("numero_cuotas debe estar entre 1 y 12")
+        return v
 
 
 @router.get("", response_model=dict)

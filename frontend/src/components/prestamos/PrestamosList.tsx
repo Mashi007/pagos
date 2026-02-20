@@ -25,6 +25,7 @@ import { toast } from 'sonner'
 export function PrestamosList() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState(20)
   
   // Leer requiere_revision y cliente_id de los parámetros de URL
   const requiereRevisionParam = searchParams.get('requiere_revision')
@@ -32,10 +33,12 @@ export function PrestamosList() {
   const clienteIdParam = searchParams.get('cliente_id')
   const clienteIdFromUrl = clienteIdParam ? parseInt(clienteIdParam, 10) : undefined
   const clienteIdValid = clienteIdFromUrl && !Number.isNaN(clienteIdFromUrl) ? clienteIdFromUrl : undefined
+  const estadoFromUrl = searchParams.get('estado')
+  const estadoValidInit = estadoFromUrl && ['DRAFT', 'EN_REVISION', 'EVALUADO', 'APROBADO', 'DESEMBOLSADO', 'RECHAZADO'].includes(estadoFromUrl) ? estadoFromUrl : undefined
 
   const [filters, setFilters] = useState<PrestamoFilters>({
     search: '',
-    estado: undefined,
+    estado: estadoValidInit,
     cedula: '',
     cliente_id: clienteIdValid,
     analista: undefined,
@@ -52,10 +55,13 @@ export function PrestamosList() {
     const cid = searchParams.get('cliente_id')
     const cidNum = cid ? parseInt(cid, 10) : undefined
     const cidValid = cidNum && !Number.isNaN(cidNum) ? cidNum : undefined
+    const estadoParam = searchParams.get('estado')
+    const estadoValid = estadoParam && ['DRAFT', 'EN_REVISION', 'EVALUADO', 'APROBADO', 'DESEMBOLSADO', 'RECHAZADO'].includes(estadoParam) ? estadoParam : undefined
     setFilters(prev => ({
       ...prev,
       requiere_revision: reqRev,
       cliente_id: cidValid,
+      estado: estadoValid,
     }))
   }, [searchParams])
   const [showFilters, setShowFilters] = useState(false)
@@ -68,7 +74,7 @@ export function PrestamosList() {
   const [deletePrestamoId, setDeletePrestamoId] = useState<number | null>(null)
 
   const queryClient = useQueryClient()
-  const { data, isLoading, error } = usePrestamos(filters, page)
+  const { data, isLoading, error } = usePrestamos(filters, page, perPage)
   const deletePrestamo = useDeletePrestamo()
   const { canEditPrestamo, canDeletePrestamo, canApprovePrestamo, canViewEvaluacionRiesgo } = usePermissions()
 
@@ -141,6 +147,7 @@ export function PrestamosList() {
       EN_REVISION: 'En Revisión',
       EVALUADO: 'Evaluado',
       APROBADO: 'Aprobado',
+      DESEMBOLSADO: 'Desembolsado',
       RECHAZADO: 'Rechazado',
     }
     return labels[estado] || estado
@@ -201,6 +208,12 @@ export function PrestamosList() {
           setShowCrearPrestamo(false)
           setEditingPrestamo(null)
         }}
+        onAprobarManual={(p) => {
+          setShowCrearPrestamo(false)
+          setEditingPrestamo(null)
+          setAprobacionManualPrestamo(p)
+          setShowAprobarManual(true)
+        }}
       />
     )
   }
@@ -259,8 +272,14 @@ export function PrestamosList() {
         />
       )}
 
-      {/* KPIs */}
-      <PrestamosKPIs />
+      {/* KPIs - con filtros alineados a la lista */}
+      <PrestamosKPIs
+        analista={filters.analista}
+        concesionario={filters.concesionario}
+        modelo={filters.modelo}
+        fecha_inicio={filters.fecha_inicio}
+        fecha_fin={filters.fecha_fin}
+      />
 
       {/* Encabezado */}
       <div className="flex justify-between items-center">
@@ -392,12 +411,12 @@ export function PrestamosList() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="ALL">Todos los estados</SelectItem>
-                      <SelectItem value="DRAFT">ðŸ”µ Borrador</SelectItem>
+                      <SelectItem value="DRAFT">Borrador</SelectItem>
                       <SelectItem value="EN_REVISION">En Revisión</SelectItem>
-                      <SelectItem value="EVALUADO">ðŸ”· Evaluado</SelectItem>
+                      <SelectItem value="EVALUADO">Evaluado</SelectItem>
                       <SelectItem value="APROBADO">Aprobado</SelectItem>
-                      <SelectItem value="DESEMBOLSADO">ðŸ”µ Desembolsado</SelectItem>
-                      <SelectItem value="RECHAZADO">ðŸ”´ Rechazado</SelectItem>
+                      <SelectItem value="DESEMBOLSADO">Desembolsado</SelectItem>
+                      <SelectItem value="RECHAZADO">Rechazado</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -694,8 +713,23 @@ export function PrestamosList() {
               {/* Paginación - siempre visible cuando hay datos */}
               {data && data.total > 0 && (
                 <div className="flex flex-col gap-4 mt-6 pt-4 border-t">
-                  <div className="text-sm text-gray-600">
-                    Mostrando <span className="font-semibold">{(page - 1) * 10 + 1}</span> - <span className="font-semibold">{Math.min(page * 10, data.total)}</span> de <span className="font-semibold">{data.total}</span> préstamos
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="text-sm text-gray-600">
+                      Mostrando <span className="font-semibold">{(page - 1) * perPage + 1}</span> - <span className="font-semibold">{Math.min(page * perPage, data.total)}</span> de <span className="font-semibold">{data.total}</span> préstamos
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-600">Filas por página:</span>
+                      <Select value={String(perPage)} onValueChange={(v) => { setPerPage(Number(v)); setPage(1) }}>
+                        <SelectTrigger className="w-[80px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="10">10</SelectItem>
+                          <SelectItem value="20">20</SelectItem>
+                          <SelectItem value="50">50</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                   
                   <div className="flex items-center justify-center gap-1 flex-wrap">

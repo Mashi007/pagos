@@ -1,8 +1,13 @@
 import { PrestamosList } from '../components/prestamos/PrestamosList'
-import { DollarSign, Bell } from 'lucide-react'
+import { DollarSign, Bell, FileSearch } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
+import { usePrestamos } from '../hooks/usePrestamos'
+import { Link } from 'react-router-dom'
 
 export function Prestamos() {
+  const { data: enRevisionData } = usePrestamos({ estado: 'EN_REVISION' }, 1, 1)
+  const enRevisionCount = enRevisionData?.total ?? 0
+
   return (
     <div className="space-y-6 p-6">
       <div className="flex items-center gap-3 mb-6">
@@ -18,8 +23,21 @@ export function Prestamos() {
             Novedades
           </CardTitle>
         </CardHeader>
-        <CardContent className="text-sm text-gray-700">
-          <p>No hay novedades en este momento.</p>
+        <CardContent className="text-sm text-gray-700 space-y-2">
+          {enRevisionCount > 0 ? (
+            <p>
+              Hay <strong>{enRevisionCount}</strong> préstamo{enRevisionCount !== 1 ? 's' : ''} en revisión pendiente{enRevisionCount !== 1 ? 's' : ''} de aprobación.
+              <Link
+                to="/prestamos?estado=EN_REVISION"
+                className="ml-2 inline-flex items-center gap-1 text-blue-600 hover:underline font-medium"
+              >
+                <FileSearch className="h-4 w-4" />
+                Ver en lista
+              </Link>
+            </p>
+          ) : (
+            <p>No hay préstamos pendientes de revisión. Use los filtros para buscar por estado, analista o fechas.</p>
+          )}
         </CardContent>
       </Card>
 

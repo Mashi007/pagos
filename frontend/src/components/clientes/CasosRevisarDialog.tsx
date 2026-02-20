@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AlertCircle, Save, X, Loader2, CheckCircle2 } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table'
 import { LoadingSpinner } from '../ui/loading-spinner'
 import { clienteService } from '../../services/clienteService'
+import { clienteKeys } from '../../hooks/useClientes'
 import { Cliente } from '../../types'
 import { getErrorMessage } from '../../types/errors'
 
@@ -34,6 +36,7 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
   const [error, setError] = useState<string | null>(null)
   const [edited, setEdited] = useState<Record<number, Partial<Cliente>>>({})
   const [rowErrors, setRowErrors] = useState<Record<number, string>>({})
+  const queryClient = useQueryClient()
 
   const loadCasos = useCallback(async () => {
     if (!open) return
@@ -95,17 +98,32 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
     })
     try {
       const payload = edited[c.id] || {}
-      await clienteService.updateCliente(String(c.id), {
+      const updateData = {
         cedula: payload.cedula ?? c.cedula,
         nombres: payload.nombres ?? c.nombres,
         telefono: payload.telefono ?? c.telefono,
         email: payload.email ?? c.email,
+      }
+      
+      // Realizar actualización
+      const result = await clienteService.updateCliente(String(c.id), updateData)
+      
+      // ✅ Invalidar cache de React Query para reflejar cambios
+      queryClient.invalidateQueries({ queryKey: clienteKeys.lists() })
+      queryClient.invalidateQueries({ queryKey: clienteKeys.detail(String(c.id)) })
+      queryClient.invalidateQueries({
+        queryKey: ['clientes', 'search'],
+        exact: false
       })
+      
+      // Limpiar ediciones locales
       setEdited(prev => {
         const next = { ...prev }
         delete next[c.id]
         return next
       })
+      
+      // Remover de la lista (caso resuelto)
       setClientes(prev => prev.filter(x => x.id !== c.id))
       onSuccess?.()
     } catch (e) {
@@ -126,12 +144,14 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
     for (const c of toSave) {
       try {
         const payload = edited[c.id] || {}
-        await clienteService.updateCliente(String(c.id), {
+        const updateData = {
           cedula: payload.cedula ?? c.cedula,
           nombres: payload.nombres ?? c.nombres,
           telefono: payload.telefono ?? c.telefono,
           email: payload.email ?? c.email,
-        })
+        }
+        
+        await clienteService.updateCliente(String(c.id), updateData)
         ok++
         setEdited(prev => {
           const next = { ...prev }
@@ -142,6 +162,14 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
         errs[c.id] = getErrorMessage(e)
       }
     }
+    
+    // ✅ Invalidar cache de React Query después de guardar todos
+    queryClient.invalidateQueries({ queryKey: clienteKeys.lists() })
+    queryClient.invalidateQueries({
+      queryKey: ['clientes', 'search'],
+      exact: false
+    })
+    
     setRowErrors(errs)
     if (ok) {
       setClientes(prev => prev.filter(c => !(toSave.some(s => s.id === c.id) && !errs[c.id])))

@@ -8,7 +8,7 @@ import { Prestamo } from '../../types'
 import { prestamoService } from '../../services/prestamoService'
 import { useQuery } from '@tanstack/react-query'
 import { formatDate } from '../../utils'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 import { exportarAExcel, exportarAPDF } from '../../utils/exportUtils'
 
 interface Cuota {

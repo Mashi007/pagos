@@ -38,9 +38,10 @@ interface CrearPrestamoFormProps {
   prestamo?: Prestamo // Préstamo existente para edición
   onClose: () => void
   onSuccess: () => void
+  onAprobarManual?: (prestamo: Prestamo) => void
 }
 
-export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestamoFormProps) {
+export function CrearPrestamoForm({ prestamo, onClose, onSuccess, onAprobarManual }: CrearPrestamoFormProps) {
   const createPrestamo = useCreatePrestamo()
   const updatePrestamo = useUpdatePrestamo()
   const { canEditPrestamo, canApprovePrestamo } = usePermissions()
@@ -92,6 +93,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
   const [numeroCuotas, setNumeroCuotas] = useState<number>(12) // Valor por defecto: 12 cuotas
   const [cuotaPeriodo, setCuotaPeriodo] = useState<number>(0)
   const [showConfirmCreate, setShowConfirmCreate] = useState(false)
+  const [showRechazarDialog, setShowRechazarDialog] = useState(false)
 
   // Errores de UI para marcar campos obligatorios visualmente
   const [uiErrors, setUiErrors] = useState<{ concesionario?: boolean; analista?: boolean }>({})
@@ -827,20 +829,19 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                     <Button
                       type="button"
                       onClick={() => {
-                        // TODO: Implementar aprobación
-                        console.log('Aprobar préstamo')
+                        if (onAprobarManual && prestamo) {
+                          onAprobarManual(prestamo)
+                          onClose()
+                        }
                       }}
                       className="flex-1 bg-green-600 hover:bg-green-700"
                     >
-                      <AlertCircle className="h-4 w-4 mr-2" />
+                      <CheckCircle2 className="h-4 w-4 mr-2" />
                       Aprobar
                     </Button>
                     <Button
                       type="button"
-                      onClick={() => {
-                        // TODO: Implementar rechazo
-                        console.log('Rechazar préstamo')
-                      }}
+                      onClick={() => setShowRechazarDialog(true)}
                       variant="destructive"
                       className="flex-1"
                     >
@@ -887,6 +888,40 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess }: CrearPrestam
                 </Button>
                 <Button onClick={() => crearOActualizarPrestamo()} disabled={createPrestamo.isPending}>
                   {createPrestamo.isPending ? 'Guardando...' : 'Continuar'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Modal de confirmación de rechazo */}
+          <Dialog open={showRechazarDialog} onOpenChange={setShowRechazarDialog}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Confirmar rechazo del préstamo</DialogTitle>
+              </DialogHeader>
+              <p className="text-sm text-gray-600">
+                ¿Está seguro de rechazar este préstamo? El estado cambiará a Rechazado y no podrá revertirse.
+              </p>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowRechazarDialog(false)}>
+                  Cancelar
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={async () => {
+                    if (prestamo?.id) {
+                      await updatePrestamo.mutateAsync({
+                        id: prestamo.id,
+                        data: { estado: 'RECHAZADO' },
+                      })
+                      setShowRechazarDialog(false)
+                      onSuccess()
+                      onClose()
+                    }
+                  }}
+                  disabled={updatePrestamo.isPending}
+                >
+                  {updatePrestamo.isPending ? 'Rechazando...' : 'Rechazar'}
                 </Button>
               </DialogFooter>
             </DialogContent>

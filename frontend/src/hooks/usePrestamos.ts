@@ -13,7 +13,7 @@ const STALE_TIME_LONG = 10 * 60 * 1000 // 10 minutos
 export const prestamoKeys = {
   all: ['prestamos'] as const,
   lists: () => [...prestamoKeys.all, 'list'] as const,
-  list: (filters?: PrestamoFilters, page?: number) => [...prestamoKeys.lists(), filters, page] as const,
+  list: (filters?: PrestamoFilters, page?: number, perPage?: number) => [...prestamoKeys.lists(), filters, page, perPage] as const,
   details: () => [...prestamoKeys.all, 'detail'] as const,
   detail: (id: number) => [...prestamoKeys.details(), id] as const,
   search: (query: string) => [...prestamoKeys.all, 'search', query] as const,
@@ -42,7 +42,7 @@ export function usePrestamos(
   perPage: number = DEFAULT_PER_PAGE
 ) {
   return useQuery({
-    queryKey: prestamoKeys.list(filters, page),
+    queryKey: prestamoKeys.list(filters, page, perPage),
     queryFn: () => prestamoService.getPrestamos(filters, page, perPage),
     staleTime: 0, // Siempre refetch cuando se invalida (mejor para actualización inmediata de estado)
     refetchOnMount: true, // Refetch cuando el componente se monta

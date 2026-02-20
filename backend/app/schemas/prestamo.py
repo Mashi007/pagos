@@ -6,7 +6,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class PrestamoBase(BaseModel):
@@ -18,6 +18,13 @@ class PrestamoBase(BaseModel):
     analista: str = ""
     modalidad_pago: Optional[str] = None  # MENSUAL, QUINCENAL, SEMANAL
     numero_cuotas: Optional[int] = None
+
+    @field_validator("numero_cuotas")
+    @classmethod
+    def numero_cuotas_rango(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and (v < 1 or v > 12):
+            raise ValueError("numero_cuotas debe estar entre 1 y 12")
+        return v
     fecha_requerimiento: Optional[date] = None
     cuota_periodo: Optional[Decimal] = None
     producto: Optional[str] = None
@@ -37,6 +44,13 @@ class PrestamoUpdate(BaseModel):
     analista: Optional[str] = None
     modalidad_pago: Optional[str] = None
     numero_cuotas: Optional[int] = None
+
+    @field_validator("numero_cuotas")
+    @classmethod
+    def numero_cuotas_rango(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and (v < 1 or v > 12):
+            raise ValueError("numero_cuotas debe estar entre 1 y 12")
+        return v
     fecha_requerimiento: Optional[date] = None
     cuota_periodo: Optional[Decimal] = None
     producto: Optional[str] = None

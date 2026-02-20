@@ -272,7 +272,7 @@ def actualizar_clientes_lote(
             continue
         try:
             payload = ClienteUpdate(**{k: v for k, v in data.items() if v is not None})
-            update_cliente(cliente_id=cid, payload=payload, db=db)
+            _perform_update_cliente(cid, payload, db)
             actualizados += 1
         except HTTPException as e:
             detail = e.detail
@@ -425,11 +425,11 @@ def create_cliente(payload: ClienteCreate, db: Session = Depends(get_db)):
     return ClienteResponse.model_validate(row)
 
 
-@router.put("/{cliente_id}", response_model=ClienteResponse)
-def update_cliente(cliente_id: int, payload: ClienteUpdate, db: Session = Depends(get_db)):
+def _perform_update_cliente(cliente_id: int, payload: ClienteUpdate, db: Session) -> ClienteResponse:
     """
-    Actualizar cliente.
+    Lógica interna de actualización de cliente (reutilizable desde rutas y otros métodos).
     No se permite dejar cédula+nombres o email duplicados con otro cliente (distinto id) → 409.
+    Retorna ClienteResponse tras guardar en BD.
     """
     row = db.get(Cliente, cliente_id)
     if not row:
@@ -491,6 +491,15 @@ def update_cliente(cliente_id: int, payload: ClienteUpdate, db: Session = Depend
     db.commit()
     db.refresh(row)
     return ClienteResponse.model_validate(row)
+
+
+@router.put("/{cliente_id}", response_model=ClienteResponse)
+def update_cliente(cliente_id: int, payload: ClienteUpdate, db: Session = Depends(get_db)):
+    """
+    Actualizar cliente (endpoint HTTP).
+    No se permite dejar cédula+nombres o email duplicados con otro cliente (distinto id) → 409.
+    """
+    return _perform_update_cliente(cliente_id, payload, db)
 
 
 @router.delete("/{cliente_id}", status_code=204)
