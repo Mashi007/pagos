@@ -15,6 +15,7 @@ export interface PagoExcelRow {
   monto_pagado: number
   numero_documento: string
   prestamo_id: number | null
+  conciliado: boolean  // Sí/No - Conciliación
 }
 
 export function convertirFechaExcelPago(val: unknown): string {
@@ -96,6 +97,9 @@ export function validatePagoField(
       return { isValid: true }
 
     case 'prestamo_id':
+      return { isValid: true }
+
+    case 'conciliado':
       return { isValid: true }
 
     default:

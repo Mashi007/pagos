@@ -151,6 +151,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           numero_documento: numeroDoc || 'N/A',
           institucion_bancaria: null,
           notas: null,
+          conciliado: row.conciliado ?? false,
         }
 
         await pagoService.createPago(pagoData as any)
@@ -257,6 +258,8 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             prestamoIdRaw != null && String(prestamoIdRaw).trim() !== ''
               ? parseInt(String(prestamoIdRaw).trim(), 10)
               : null
+          const conciliacionRaw = (row[5]?.toString() || '').trim().toUpperCase()
+          const conciliado = conciliacionRaw === 'SI' || conciliacionRaw === 'SÍ' || conciliacionRaw === '1'
 
           const rowData: PagoExcelRow = {
             _rowIndex: i + 1,
@@ -267,6 +270,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             monto_pagado: monto,
             numero_documento: numeroDoc,
             prestamo_id: Number.isNaN(prestamoId) ? null : prestamoId,
+            conciliado,
           }
 
           let hasErrors = false
@@ -341,6 +345,8 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         const updated = { ...r }
         if (field === 'prestamo_id') {
           updated.prestamo_id = value === '' || value === 'none' ? null : (Number(value) || null)
+        } else if (field === 'conciliado') {
+          updated.conciliado = value === 'si' || value === 'SI' || value === true || value === '1'
         } else {
           ;(updated as any)[field] = field === 'monto_pagado' ? (Number(value) || 0) : value
         }

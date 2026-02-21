@@ -95,7 +95,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                   <Upload className="h-12 w-12 mx-auto mb-4 text-gray-400" />
                   <h3 className="text-lg font-semibold mb-2">{isDragging ? 'Suelta el archivo aquí' : 'Sube tu archivo Excel'}</h3>
                   <p className="text-gray-600 mb-4 text-sm">
-                    Columnas: Cédula | Fecha de pago | Monto | Documento | ID Préstamo (opcional, obligatorio si tiene varios créditos activos)
+                    Columnas: Cédula | Fecha de pago | Monto | Documento | ID Préstamo (opcional) | Conciliación (Sí/No)
                   </p>
                   <Button onClick={() => fileInputRef.current?.click()} disabled={isProcessing} className="mb-4">
                     <FileSpreadsheet className="mr-2 h-4 w-4" />
@@ -174,6 +174,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                           <th className="border p-2 text-left text-xs font-medium w-24">Monto</th>
                           <th className="border p-2 text-left text-xs font-medium w-28">Documento</th>
                           <th className="border p-2 text-left text-xs font-medium w-32">Crédito</th>
+                          <th className="border p-2 text-left text-xs font-medium w-24">Conciliación</th>
                           <th className="border p-2 text-left text-xs font-medium w-20">Acción</th>
                         </tr>
                       </thead>

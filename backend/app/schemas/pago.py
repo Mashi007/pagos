@@ -16,6 +16,7 @@ class PagoCreate(BaseModel):
     numero_documento: str
     institucion_bancaria: Optional[str] = None
     notas: Optional[str] = None
+    conciliado: Optional[bool] = None  # Sí/No en carga masiva
 
 
 class PagoUpdate(BaseModel):

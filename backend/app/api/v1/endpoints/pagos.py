@@ -762,6 +762,7 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db)):
         )
     ref = num_doc or "N/A"
     fecha_pago_ts = datetime.combine(payload.fecha_pago, dt_time.min)
+    conciliado = payload.conciliado if payload.conciliado is not None else False
     row = Pago(
         cedula_cliente=payload.cedula_cliente.strip(),
         prestamo_id=payload.prestamo_id,
@@ -772,6 +773,9 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db)):
         estado="PENDIENTE",
         notas=payload.notas.strip() if payload.notas else None,
         referencia_pago=ref,
+        conciliado=conciliado,
+        fecha_conciliacion=datetime.now(ZoneInfo(TZ_NEGOCIO)) if conciliado else None,
+        verificado_concordancia="SI" if conciliado else "NO",
     )
     db.add(row)
     db.commit()

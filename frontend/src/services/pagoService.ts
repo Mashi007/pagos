@@ -29,6 +29,7 @@ export interface PagoCreate {
   numero_documento: string
   institucion_bancaria: string | null
   notas?: string | null
+  conciliado?: boolean | null
 }
 
 export interface ApiResponse<T> {
