@@ -491,22 +491,39 @@ async def upload_conciliacion(
 
 @router.get("/kpis")
 def get_pagos_kpis(
+    mes: Optional[int] = Query(None, ge=1, le=12),
+    año: Optional[int] = Query(None, ge=2000, le=2100),
     fecha_inicio: Optional[str] = Query(None),
     fecha_fin: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
     """
-    KPIs de pagos para el mes en curso:
-    1. montoACobrarMes: cuÃ¡nto dinero deberÃ­a cobrarse en el mes en transcurso (cuotas con vencimiento en el mes).
-    2. montoCobradoMes: cuÃ¡nto dinero se ha cobrado = pagado en el mes.
+    KPIs de pagos para un mes:
+    1. montoACobrarMes: cuánto dinero debería cobrarse en el mes (cuotas con vencimiento en el mes).
+    2. montoCobradoMes: cuánto dinero se ha cobrado = pagado en el mes.
     3. morosidadMensualPorcentaje: pago vencido mensual en % (cuotas vencidas no cobradas / cartera * 100).
-       Concepto: vencido = fecha_vencimiento < hoy; moroso = 90+ días de atraso.
+    Parámetros: mes (1-12) y año (2000-2100). Si no se envían, se usa el mes actual.
     """
     try:
         hoy = _hoy_local()
-        inicio_mes = hoy.replace(day=1)
-        _, ultimo_dia = calendar.monthrange(hoy.year, hoy.month)
-        fin_mes = inicio_mes.replace(day=ultimo_dia)
+        if mes is not None and año is not None:
+            inicio_mes = hoy.replace(year=año, month=mes, day=1)
+            _, ultimo_dia = calendar.monthrange(año, mes)
+            fin_mes = inicio_mes.replace(day=ultimo_dia)
+        elif fecha_inicio and fecha_fin:
+            try:
+                inicio_mes = datetime.strptime(fecha_inicio[:10], "%Y-%m-%d").date()
+                fin_mes = datetime.strptime(fecha_fin[:10], "%Y-%m-%d").date()
+            except (ValueError, TypeError):
+                inicio_mes = hoy.replace(day=1)
+                _, ultimo_dia = calendar.monthrange(hoy.year, hoy.month)
+                fin_mes = inicio_mes.replace(day=ultimo_dia)
+        else:
+            inicio_mes = hoy.replace(day=1)
+            _, ultimo_dia = calendar.monthrange(hoy.year, hoy.month)
+            fin_mes = inicio_mes.replace(day=ultimo_dia)
+        # Fecha de referencia: para meses pasados = fin_mes; para mes actual = hoy
+        fecha_referencia = min(fin_mes, hoy)
 
         # Condiciones base: solo clientes ACTIVOS
         conds_activo = [
@@ -539,11 +556,11 @@ def get_pagos_kpis(
                 and_(*conds_activo),
                 Cuota.fecha_pago.isnot(None),
                 func.date(Cuota.fecha_pago) >= inicio_mes,
-                func.date(Cuota.fecha_pago) <= hoy,
+                func.date(Cuota.fecha_pago) <= fecha_referencia,
             )
         ) or 0
 
-        # 3) Morosidad mensual % (solo clientes ACTIVOS). Solo cuotas ya vencidas (fecha_vencimiento < hoy).
+        # 3) Morosidad mensual % (solo clientes ACTIVOS). Solo cuotas ya vencidas (fecha_vencimiento < fecha_referencia).
         total_vencido_mes = db.scalar(
             select(func.coalesce(func.sum(Cuota.monto), 0))
             .select_from(Cuota)
@@ -553,7 +570,7 @@ def get_pagos_kpis(
                 and_(*conds_activo),
                 Cuota.fecha_vencimiento >= inicio_mes,
                 Cuota.fecha_vencimiento <= fin_mes,
-                Cuota.fecha_vencimiento < hoy,
+                Cuota.fecha_vencimiento < fecha_referencia,
             )
         ) or 0
         no_cobrado_mes = db.scalar(
@@ -565,7 +582,7 @@ def get_pagos_kpis(
                 and_(*conds_activo),
                 Cuota.fecha_vencimiento >= inicio_mes,
                 Cuota.fecha_vencimiento <= fin_mes,
-                Cuota.fecha_vencimiento < hoy,
+                Cuota.fecha_vencimiento < fecha_referencia,
                 Cuota.fecha_pago.is_(None),
             )
         ) or 0
@@ -581,7 +598,7 @@ def get_pagos_kpis(
             .join(Cliente, Prestamo.cliente_id == Cliente.id)
             .where(and_(*conds_activo), Cuota.fecha_pago.is_(None))
         ) or 0
-        # Compatibilidad: clientes en mora / al dÃ­a (solo clientes ACTIVOS)
+        # Compatibilidad: clientes en mora / al día (solo clientes ACTIVOS)
         subq = (
             select(Prestamo.cliente_id)
             .select_from(Cuota)
@@ -590,7 +607,7 @@ def get_pagos_kpis(
             .where(
                 and_(*conds_activo),
                 Cuota.fecha_pago.is_(None),
-                Cuota.fecha_vencimiento < hoy,
+                Cuota.fecha_vencimiento < fecha_referencia,
             )
             .distinct()
         )
@@ -603,12 +620,14 @@ def get_pagos_kpis(
         ) or 0
         clientes_al_dia = max(0, clientes_con_prestamo - clientes_en_mora)
 
+        mes_resp = mes if mes is not None else inicio_mes.month
+        año_resp = año if año is not None else inicio_mes.year
         return {
             "montoACobrarMes": _safe_float(monto_a_cobrar_mes),
             "montoCobradoMes": _safe_float(monto_cobrado_mes),
             "morosidadMensualPorcentaje": round(morosidad_porcentaje, 2),
-            "mes": hoy.month,
-            "aÃ±o": hoy.year,
+            "mes": mes_resp,
+            "año": año_resp,
             "saldoPorCobrar": _safe_float(cartera_pendiente),
             "clientesEnMora": clientes_en_mora,
             "clientesAlDia": clientes_al_dia,
@@ -624,8 +643,8 @@ def get_pagos_kpis(
             "montoACobrarMes": 0.0,
             "montoCobradoMes": 0.0,
             "morosidadMensualPorcentaje": 0.0,
-            "mes": hoy.month,
-            "aÃ±o": hoy.year,
+            "mes": mes if mes is not None else hoy.month,
+            "año": año if año is not None else hoy.year,
             "saldoPorCobrar": 0.0,
             "clientesEnMora": 0,
             "clientesAlDia": 0,

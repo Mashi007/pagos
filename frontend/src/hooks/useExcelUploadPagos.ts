@@ -409,7 +409,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       onSuccess?.()
       onClose()
     } else if (fail === 0 && ok > 0 && (quedanConErrores || quedanSinGuardar)) {
-      addToast('info', 'Quedan filas pendientes. Use "Revisar Pagos" en cada una o corríjalas.')
+      addToast('warning', 'Quedan filas pendientes. Use "Revisar Pagos" en cada una o corríjalas.')
     }
   }, [getValidRows, serviceStatus, saveIndividualPago, addToast, onSuccess, onClose, prestamosPorCedula, excelData, savedRows, enviadosRevisar])
 
