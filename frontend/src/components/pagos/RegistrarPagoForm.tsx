@@ -26,10 +26,12 @@ interface RegistrarPagoFormProps {
   onClose: () => void
   onSuccess: () => void
   pagoInicial?: Partial<PagoCreate>
-  pagoId?: number  // âœ… Si está presente, es modo edición
+  pagoId?: number  // Si está presente, es modo edición
+  /** Si true, muestra "Guardar y Procesar": actualiza BD y aplica reglas (conciliación + aplicar a cuotas) */
+  modoGuardarYProcesar?: boolean
 }
 
-export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId }: RegistrarPagoFormProps) {
+export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId, modoGuardarYProcesar }: RegistrarPagoFormProps) {
   const isEditing = !!pagoId
   const [formData, setFormData] = useState<PagoCreate>({
     cedula_cliente: pagoInicial?.cedula_cliente || '',
@@ -134,13 +136,26 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId }: R
     setIsSubmitting(true)
     try {
       // Aplicar normalización al número de documento antes de enviar
-      const datosEnvio = {
+      const datosEnvio: any = {
         ...formData,
         numero_documento: numeroDocumentoNormalizado
       }
-      
+      if (modoGuardarYProcesar && formData.prestamo_id) {
+        datosEnvio.conciliado = true
+      }
+
       if (isEditing && pagoId) {
         await pagoService.updatePago(pagoId, datosEnvio)
+        if (modoGuardarYProcesar && formData.prestamo_id && formData.monto_pagado > 0) {
+          try {
+            const res = await pagoService.aplicarPagoACuotas(pagoId)
+            if (res.cuotas_completadas > 0 || res.cuotas_parciales > 0) {
+              console.log('Pago aplicado a cuotas:', res.message)
+            }
+          } catch (e) {
+            console.warn('No se pudo aplicar pago a cuotas:', e)
+          }
+        }
       } else {
         await pagoService.createPago(datosEnvio)
       }
@@ -426,6 +441,18 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId }: R
               />
             </div>
 
+            {modoGuardarYProcesar && (
+              <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-800">
+                <div className="flex items-start gap-2">
+                  <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <p>
+                    <strong>Guardar y Procesar</strong> actualizará el pago en la base de datos y aplicará las reglas de negocio
+                    (conciliación y aplicación a cuotas) automáticamente.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Botones */}
             <div className="flex justify-end gap-3 pt-4 border-t">
               <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
@@ -435,12 +462,12 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId }: R
                 {isSubmitting ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    {isEditing ? 'Actualizando...' : 'Registrando...'}
+                    {modoGuardarYProcesar ? 'Guardando y procesando...' : isEditing ? 'Actualizando...' : 'Registrando...'}
                   </>
                 ) : (
                   <>
-                    <DollarSign className="w-4 h-4 mr-2" />
-                    {isEditing ? 'Actualizar Pago' : 'Registrar Pago'}
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                    {modoGuardarYProcesar ? 'Guardar y Procesar' : isEditing ? 'Actualizar Pago' : 'Registrar Pago'}
                   </>
                 )}
               </Button>

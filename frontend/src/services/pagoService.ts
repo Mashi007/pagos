@@ -50,6 +50,7 @@ class PagoService {
       fechaHasta?: string
       analista?: string
       conciliado?: string
+      sin_prestamo?: string
     }
   ): Promise<{ pagos: Pago[]; total: number; page: number; per_page: number; total_pages: number }> {
     const params = new URLSearchParams({
@@ -61,6 +62,7 @@ class PagoService {
       ...(filters?.fechaHasta && { fecha_hasta: filters.fechaHasta }),
       ...(filters?.analista && { analista: filters.analista }),
       ...(filters?.conciliado && filters.conciliado !== 'all' && { conciliado: filters.conciliado }),
+      ...(filters?.sin_prestamo === 'si' && { sin_prestamo: 'si' }),
     })
     const url = `${this.baseUrl}/?${params.toString()}`
     return await apiClient.get<{ pagos: Pago[]; total: number; page: number; per_page: number; total_pages: number }>(url)

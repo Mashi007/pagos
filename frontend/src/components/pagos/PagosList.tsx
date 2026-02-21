@@ -15,6 +15,7 @@ import {
   MoreHorizontal,
   CheckCircle,
   XCircle,
+  Search,
 } from 'lucide-react'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -44,6 +45,7 @@ export function PagosList() {
     fechaHasta: '',
     analista: '',
     conciliado: 'si', // Por defecto: solo conciliados = SI
+    sin_prestamo: '', // si = solo pagos sin crédito asignado
   })
   const [showRegistrarPago, setShowRegistrarPago] = useState(false)
   const [showCargaMasivaPagos, setShowCargaMasivaPagos] = useState(false)
@@ -60,6 +62,7 @@ export function PagosList() {
     filters.fechaHasta,
     filters.analista,
     filters.conciliado !== 'si' ? filters.conciliado : null,
+    filters.sin_prestamo === 'si' ? 'sin_prestamo' : null,
   ].filter(Boolean).length
   const handleClearFilters = () => {
     setFilters({
@@ -69,7 +72,13 @@ export function PagosList() {
       fechaHasta: '',
       analista: '',
       conciliado: 'si',
+      sin_prestamo: '',
     })
+    setPage(1)
+  }
+  const handleRevisarPagos = () => {
+    setFilters(prev => ({ ...prev, sin_prestamo: 'si', conciliado: 'all' }))
+    setActiveTab('todos')
     setPage(1)
   }
   // Query para obtener pagos
@@ -125,6 +134,16 @@ export function PagosList() {
           >
             <RefreshCw className={`w-5 h-5 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
             Actualizar
+          </Button>
+          <Button
+            variant={filters.sin_prestamo === 'si' ? 'default' : 'outline'}
+            size="lg"
+            onClick={handleRevisarPagos}
+            className="px-6 py-6 text-base font-semibold"
+            title="Ver pagos sin número de crédito asignado"
+          >
+            <Search className="w-5 h-5 mr-2" />
+            Revisar Pagos
           </Button>
           <CargaMasivaMenu
             onSuccess={async () => {
@@ -232,6 +251,22 @@ export function PagosList() {
                     <Button variant="ghost" size="sm" onClick={() => handleFilterChange('cedula', '')}>
                       <X className="h-4 w-4 mr-1" />
                       Limpiar búsqueda
+                    </Button>
+                  </div>
+                )}
+                {filters.sin_prestamo === 'si' && (
+                  <div className="flex items-end">
+                    <Badge className="bg-amber-500 text-white px-3 py-1.5">
+                      Sin crédito asignado
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleFilterChange('sin_prestamo', '')}
+                      className="ml-2"
+                    >
+                      <X className="h-4 w-4 mr-1" />
+                      Ver todos
                     </Button>
                   </div>
                 )}
@@ -367,7 +402,7 @@ export function PagosList() {
                       ? 'No hay pagos registrados en el sistema.'
                       : 'No hay pagos que coincidan con los filtros aplicados.'}
                   </p>
-                  {(filters.cedula || filters.estado || filters.fechaDesde || filters.fechaHasta || filters.analista || (filters.conciliado && filters.conciliado !== 'si')) && (
+                  {(filters.cedula || filters.estado || filters.fechaDesde || filters.fechaHasta || filters.analista || (filters.conciliado && filters.conciliado !== 'si') || filters.sin_prestamo === 'si') && (
                     <Button className="mt-4" variant="outline" onClick={handleClearFilters}>
                       Limpiar Filtros
                     </Button>
@@ -381,6 +416,7 @@ export function PagosList() {
                         <TableRow>
                           <TableHead>ID</TableHead>
                           <TableHead>Cédula</TableHead>
+                          <TableHead>Crédito</TableHead>
                           <TableHead>Estado</TableHead>
                           <TableHead className="text-center">Cuotas Atrasadas</TableHead>
                           <TableHead>Monto</TableHead>
@@ -395,6 +431,13 @@ export function PagosList() {
                           <TableRow key={pago.id}>
                             <TableCell>{pago.id}</TableCell>
                             <TableCell>{pago.cedula_cliente}</TableCell>
+                            <TableCell>
+                              {pago.prestamo_id ? (
+                                <span className="text-sm font-medium">#{pago.prestamo_id}</span>
+                              ) : (
+                                <span className="text-amber-600 text-sm">Sin asignar</span>
+                              )}
+                            </TableCell>
                             <TableCell>{getEstadoBadge(pago.estado)}</TableCell>
                             <TableCell className="text-center">
                               <span className={pago.cuotas_atrasadas && pago.cuotas_atrasadas > 0 ? 'text-red-600 font-semibold' : ''}>
@@ -450,6 +493,8 @@ export function PagosList() {
                                             toast.success('Pago eliminado exitosamente')
                                             await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
                                             await queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false })
+                                            await queryClient.invalidateQueries({ queryKey: ['cuotas-prestamo'], exact: false })
+                                            await queryClient.invalidateQueries({ queryKey: ['prestamos'], exact: false })
                                           } catch (error) {
                                             toast.error('Error al eliminar el pago')
                                             console.error(error)
@@ -511,6 +556,8 @@ export function PagosList() {
                                             await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
                                             await queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false })
                                             await queryClient.invalidateQueries({ queryKey: ['dashboard'], exact: false })
+                                            await queryClient.invalidateQueries({ queryKey: ['cuotas-prestamo'], exact: false })
+                                            await queryClient.invalidateQueries({ queryKey: ['prestamos'], exact: false })
                                           } catch (error) {
                                             toast.error('Error al actualizar conciliación')
                                             console.error(error)
@@ -568,6 +615,7 @@ export function PagosList() {
       {showRegistrarPago && (
         <RegistrarPagoForm
           pagoId={pagoEditando?.id}
+          modoGuardarYProcesar={filters.sin_prestamo === 'si'}
           pagoInicial={pagoEditando ? {
             cedula_cliente: pagoEditando.cedula_cliente,
             prestamo_id: pagoEditando.prestamo_id,
@@ -600,6 +648,10 @@ export function PagosList() {
               await queryClient.invalidateQueries({ queryKey: ['dashboard-menu'], exact: false })
               // Invalidar también la query de últimos pagos (resumen)
               await queryClient.invalidateQueries({ queryKey: ['pagos-ultimos'], exact: false })
+              // Cuotas y préstamos (Guardar y Procesar actualiza cuotas en BD)
+              await queryClient.invalidateQueries({ queryKey: ['cuotas-prestamo'], exact: false })
+              await queryClient.invalidateQueries({ queryKey: ['prestamos'], exact: false })
+              await queryClient.invalidateQueries({ queryKey: ['pagos-por-cedula'], exact: false })
               // Refetch inmediato de KPIs para actualización en tiempo real
               await queryClient.refetchQueries({ queryKey: ['pagos-kpis'], exact: false })
               // Refetch de todas las queries relacionadas con pagos (no solo activas)
