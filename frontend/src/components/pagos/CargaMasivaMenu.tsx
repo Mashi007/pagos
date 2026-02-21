@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Upload, FileSpreadsheet, CheckCircle, ChevronDown } from 'lucide-react'
 import { Button } from '../../components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover'
-import { ExcelUploader } from './ExcelUploader'
+import { ExcelUploaderPagosUI } from './ExcelUploaderPagosUI'
 import { ConciliacionExcelUploader } from './ConciliacionExcelUploader'
 
 interface CargaMasivaMenuProps {
@@ -53,7 +53,7 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
 
       {/* Modal Carga Masiva Pagos */}
       {showPagos && (
-        <ExcelUploader
+        <ExcelUploaderPagosUI
           onClose={() => setShowPagos(false)}
           onSuccess={() => {
             setShowPagos(false)
