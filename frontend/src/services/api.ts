@@ -566,7 +566,12 @@ class ApiClient {
         if (isAuthFailure && process.env.NODE_ENV === 'development') {
           console.warn('⚠️ [ApiClient] Login/refresh no autorizado (401):', url)
         } else if (!isAuthFailure) {
-          console.error('❌ [ApiClient] POST recibió error 4xx:', { url, status: response.status, data: response.data })
+          const is409Pagos = response.status === 409 && url.includes('/pagos/')
+          if (is409Pagos) {
+            console.warn('⚠️ [ApiClient] POST 409 (documento duplicado, se reintenta con sufijo):', url)
+          } else {
+            console.error('❌ [ApiClient] POST recibió error 4xx:', { url, status: response.status, data: response.data })
+          }
         }
         // Crear un error de Axios para que se maneje correctamente, preservando el mensaje del backend
         const backendMessage = (response.data as any)?.detail || (response.data as any)?.message || `Request failed with status ${response.status}`
@@ -578,8 +583,13 @@ class ApiClient {
       }
 
       return response.data
-    } catch (error) {
-      console.error('❌ [ApiClient] POST error:', { url, error })
+    } catch (error: any) {
+      const is409Pagos = error?.response?.status === 409 && url.includes('/pagos/')
+      if (is409Pagos) {
+        console.warn('⚠️ [ApiClient] POST 409 (documento duplicado):', url)
+      } else {
+        console.error('❌ [ApiClient] POST error:', { url, error })
+      }
       throw error
     }
   }

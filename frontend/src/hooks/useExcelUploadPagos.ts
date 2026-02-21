@@ -38,15 +38,20 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [savedRows, setSavedRows] = useState<Set<number>>(new Set())
   const [enviadosRevisar, setEnviadosRevisar] = useState<Set<number>>(new Set())
+  const [duplicadosPendientesRevisar, setDuplicadosPendientesRevisar] = useState<Set<number>>(new Set())
   const [isSavingIndividual, setIsSavingIndividual] = useState(false)
   const [savingProgress, setSavingProgress] = useState<Record<number, boolean>>({})
   const [serviceStatus, setServiceStatus] = useState<'unknown' | 'online' | 'offline'>('unknown')
   const [toasts, setToasts] = useState<Array<{ id: string; type: 'error' | 'warning' | 'success'; message: string }>>([])
 
   const addToast = useCallback((type: 'error' | 'warning' | 'success', message: string) => {
-    const id = Date.now().toString()
+    const id = Date.now().toString() + Math.random().toString(36).slice(2)
     setToasts((prev) => [...prev, { id, type, message }])
-    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4000)
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 3500)
+  }, [])
+
+  const removeToast = useCallback((toastId: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== toastId))
   }, [])
 
   const checkServiceStatus = useCallback(async () => {
@@ -210,10 +215,10 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
   }, [excelData, savedRows, enviadosRevisar])
 
   const saveIndividualPago = useCallback(
-    async (row: PagoExcelRow): Promise<boolean> => {
+    async (row: PagoExcelRow, opts?: { skipToast?: boolean; skipRefresh?: boolean }): Promise<{ ok: boolean; was409?: boolean }> => {
       if (row._hasErrors) {
         addToast('error', 'Hay errores en esta fila. Corrígelos antes de guardar.')
-        return false
+        return { ok: false }
       }
       const cedulaNorm = (row.cedula || '').trim()
       const cedulaSinGuion = cedulaNorm.replace(/-/g, '')
@@ -221,7 +226,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         prestamosPorCedula[cedulaNorm] || prestamosPorCedula[cedulaSinGuion] || []
       if (prestamosActivos.length > 1 && !row.prestamo_id) {
         addToast('error', `Fila ${row._rowIndex}: La cédula ${cedulaNorm} tiene ${prestamosActivos.length} créditos activos. Seleccione uno.`)
-        return false
+        return { ok: false }
       }
       if (prestamosActivos.length === 0 && !row.prestamo_id) {
         addToast('warning', `Fila ${row._rowIndex}: No hay créditos activos para ${cedulaNorm}. Se guardará sin préstamo asociado.`)
@@ -257,14 +262,19 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
 
         await pagoService.createPago(pagoData as any)
         setSavedRows((prev) => new Set([...prev, row._rowIndex]))
-        refreshPagos()
-        addToast('success', `Pago ${row.cedula} guardado`)
+        setDuplicadosPendientesRevisar((prev) => {
+          const next = new Set(prev)
+          next.delete(row._rowIndex)
+          return next
+        })
+        if (!opts?.skipRefresh) refreshPagos()
+        if (!opts?.skipToast) addToast('success', `Pago ${row.cedula} guardado`)
         const valid = getValidRows()
         if (valid.length === 1 && valid[0]._rowIndex === row._rowIndex) {
           onSuccess?.()
           onClose()
         }
-        return true
+        return { ok: true }
       } catch (err: any) {
         const detail = err?.response?.data?.detail
         const msg =
@@ -272,13 +282,17 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             ? detail.map((d: any) => d.msg || d.message).join(' ')
             : detail || err?.message || 'Error al guardar'
         const is409 = err?.response?.status === 409
-        addToast(
-          'error',
-          is409
-            ? `Fila ${row._rowIndex}: ${msg} Cambie el Nº documento o verifique si ya se guardó.`
-            : `Fila ${row._rowIndex}: ${msg}`
-        )
-        return false
+        if (is409) {
+          setDuplicadosPendientesRevisar((prev) => new Set([...prev, row._rowIndex]))
+          addToast(
+            'warning',
+            `Fila ${row._rowIndex}: Documento duplicado. Use "Revisar Pagos" para confirmar uno a uno.`
+          )
+          return { ok: false, was409: true }
+        } else {
+          addToast('error', `Fila ${row._rowIndex}: ${msg}`)
+          return { ok: false }
+        }
       } finally {
         setSavingProgress((prev) => ({ ...prev, [row._rowIndex]: false }))
       }
@@ -311,22 +325,35 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       try {
         let pagoData = buildPagoData(numeroDoc)
         let usadoRetry409 = false
-        try {
-          await pagoService.createPago(pagoData as any)
-        } catch (err409: any) {
-          if (err409?.response?.status === 409 && numeroDoc) {
-            const docSuffix = `-REV${row._rowIndex}`
-            pagoData = buildPagoData(numeroDoc + docSuffix)
+        let succeeded = false
+        let lastErr: any = null
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
             await pagoService.createPago(pagoData as any)
-            usadoRetry409 = true
-          } else {
-            throw err409
+            succeeded = true
+            if (attempt > 0) usadoRetry409 = true
+            break
+          } catch (err409: any) {
+            lastErr = err409
+            if (err409?.response?.status === 409 && numeroDoc) {
+              const unique = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+              const docSuffix = `-REV${row._rowIndex}-${unique}`
+              pagoData = buildPagoData(numeroDoc + docSuffix)
+            } else {
+              throw err409
+            }
           }
         }
+        if (!succeeded) throw lastErr
         setEnviadosRevisar((prev) => new Set([...prev, row._rowIndex]))
+        setDuplicadosPendientesRevisar((prev) => {
+          const next = new Set(prev)
+          next.delete(row._rowIndex)
+          return next
+        })
         refreshPagos()
         if (usadoRetry409) {
-          addToast('warning', `Documento duplicado. Se envió con sufijo -REV${row._rowIndex} para corregir en Revisar Pagos.`)
+          addToast('warning', 'Documento duplicado. Se envió con sufijo único para corregir en Revisar Pagos.')
         } else if (row._hasErrors) {
           addToast('warning', 'Pago enviado a Revisar Pagos con errores. Corrígelo allí.')
         } else {
@@ -364,31 +391,51 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       addToast('error', 'Sin conexión')
       return
     }
-    for (const row of valid) {
+    const toSave = valid.filter((row) => {
+      if (duplicadosPendientesRevisar.has(row._rowIndex)) return false
       const cedulaNorm = (row.cedula || '').trim()
       const cedulaSinGuion = cedulaNorm.replace(/-/g, '')
       const prestamosActivos =
         prestamosPorCedula[cedulaNorm] || prestamosPorCedula[cedulaSinGuion] || []
-      if (prestamosActivos.length > 1 && !row.prestamo_id) {
-        addToast('error', `Fila ${row._rowIndex}: Seleccione el crédito para ${cedulaNorm}`)
-        return
-      }
+      if (prestamosActivos.length > 1 && !row.prestamo_id) return false
+      return true
+    })
+    const omitidos = valid.length - toSave.length
+    if (toSave.length === 0) {
+      addToast(
+        'warning',
+        omitidos > 0
+          ? `${omitidos} fila(s) pendientes: guarde uno a uno, corrija o envíe a Revisar Pagos.`
+          : 'No hay filas que cumplan criterios para guardar en lote.'
+      )
+      return
     }
     setIsSavingIndividual(true)
     let ok = 0
     let fail = 0
     const indicesGuardadosEstaRonda = new Set<number>()
-    for (const row of valid) {
-      const result = await saveIndividualPago(row)
-      if (result) {
+    let duplicados = 0
+    for (const row of toSave) {
+      const result = await saveIndividualPago(row, { skipToast: true, skipRefresh: true })
+      if (result.ok) {
         ok++
         indicesGuardadosEstaRonda.add(row._rowIndex)
       } else {
         fail++
+        if (result.was409) duplicados++
       }
     }
     if (ok > 0) addToast('success', `${ok} pago(s) guardado(s)`)
-    if (fail > 0) addToast('error', `${fail} fallaron`)
+    if (fail > 0) {
+      addToast('error', `${fail} fallaron`)
+      if (duplicados > 0) {
+        addToast('warning', `${duplicados} con documento duplicado. Use "Revisar Pagos" en cada fila para confirmar.`)
+      }
+    }
+    if (omitidos > 0) {
+      addToast('warning', `${omitidos} fila(s) omitidas: guarde uno a uno, corrija o envíe a Revisar Pagos.`)
+    }
+    if (ok > 0 || fail > 0) refreshPagos()
     setIsSavingIndividual(false)
     const quedanConErrores = excelData.some(
       (r) =>
@@ -409,7 +456,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     } else if (fail === 0 && ok > 0 && (quedanConErrores || quedanSinGuardar)) {
       addToast('warning', 'Quedan filas pendientes. Use "Revisar Pagos" en cada una o corríjalas.')
     }
-  }, [getValidRows, serviceStatus, saveIndividualPago, addToast, onSuccess, onClose, prestamosPorCedula, excelData, savedRows, enviadosRevisar])
+  }, [getValidRows, serviceStatus, saveIndividualPago, addToast, onSuccess, onClose, prestamosPorCedula, excelData, savedRows, enviadosRevisar, duplicadosPendientesRevisar])
 
   const processExcelFile = useCallback(
     async (file: File) => {
@@ -600,6 +647,8 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     saveAllValid,
     sendToRevisarPagos,
     enviadosRevisar,
+    duplicadosPendientesRevisar,
     onClose,
+    removeToast,
   }
 }

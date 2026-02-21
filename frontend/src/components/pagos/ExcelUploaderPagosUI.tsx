@@ -46,7 +46,9 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
     saveAllValid,
     sendToRevisarPagos,
     enviadosRevisar,
+    duplicadosPendientesRevisar,
     onClose,
+    removeToast,
   } = useExcelUploadPagos(props)
 
   const validCount = getValidRows().length
@@ -130,6 +132,11 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                       <Badge variant="outline">Total: {excelData.length}</Badge>
                       <Badge variant="outline" className="text-green-700">Válidos: {validCount}</Badge>
                       <Badge variant="outline">Guardados: {savedRows.size}</Badge>
+                      {duplicadosPendientesRevisar.size > 0 && (
+                        <Badge variant="outline" className="text-amber-700 border-amber-300">
+                          Duplicados: {duplicadosPendientesRevisar.size}
+                        </Badge>
+                      )}
                       <Button variant="outline" size="sm" onClick={() => setShowPreview(false)}>
                         <X className="mr-2 h-4 w-4" />
                         Cambiar archivo
@@ -197,7 +204,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                       </thead>
                       <tbody>
                         {excelData
-                          .filter((row) => !enviadosRevisar.has(row._rowIndex))
+                          .filter((row) => !enviadosRevisar.has(row._rowIndex) && !savedRows.has(row._rowIndex))
                           .map((row) => {
                           const cedulaNorm = (row.cedula || '').trim()
                           const cedulaSinGuion = cedulaNorm.replace(/-/g, '')
@@ -315,6 +322,43 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                     <CheckCircle className="h-4 w-4 mr-1" />
                                     Guardado
                                   </div>
+                                ) : duplicadosPendientesRevisar.has(row._rowIndex) ? (
+                                  <div className="flex flex-col gap-1">
+                                    <span className="text-xs text-amber-700 flex items-center">
+                                      <AlertTriangle className="h-4 w-4 mr-1" />
+                                      Documento duplicado
+                                    </span>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() =>
+                                        sendToRevisarPagos(row, () => navigate('/pagos?revisar=1'))
+                                      }
+                                      disabled={savingProgress[row._rowIndex] || serviceStatus === 'offline'}
+                                      className="text-amber-700 border-amber-300 hover:bg-amber-50 text-xs"
+                                      title="Enviar a Revisar Pagos para confirmar uno a uno"
+                                    >
+                                      {savingProgress[row._rowIndex] ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                      ) : (
+                                        <>
+                                          <Search className="h-3 w-3 mr-1" />
+                                          Revisar Pagos
+                                        </>
+                                      )}
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => saveIndividualPago(row)}
+                                      disabled={savingProgress[row._rowIndex] || serviceStatus === 'offline'}
+                                      className="text-gray-600 text-xs"
+                                      title="Cambie el documento o intente guardar de nuevo"
+                                    >
+                                      <Save className="h-3 w-3 mr-1" />
+                                      Guardar de nuevo
+                                    </Button>
+                                  </div>
                                 ) : !row._hasErrors ? (
                                   <div className="flex flex-col gap-1">
                                     <Button
@@ -406,11 +450,19 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
               initial={{ opacity: 0, x: 300 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 300 }}
-              className={`max-w-sm p-4 rounded-lg shadow-lg border-l-4 ${
+              className={`max-w-sm p-4 rounded-lg shadow-lg border-l-4 flex items-center justify-between gap-2 ${
                 t.type === 'error' ? 'bg-red-50 border-red-500 text-red-800' : t.type === 'warning' ? 'bg-yellow-50 border-yellow-500 text-yellow-800' : 'bg-green-50 border-green-500 text-green-800'
               }`}
             >
-              {t.message}
+              <span className="flex-1">{t.message}</span>
+              <button
+                type="button"
+                onClick={() => removeToast(t.id)}
+                className="flex-shrink-0 p-1 rounded hover:bg-black/10 opacity-70 hover:opacity-100"
+                aria-label="Cerrar"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </motion.div>
           ))}
         </AnimatePresence>
