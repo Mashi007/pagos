@@ -46,16 +46,39 @@ interface ResumenRevision {
 }
 
 const PER_PAGE = 20
+const STORAGE_KEY = 'revision-manual-state'
+
+function getStoredState(): { page: number; filtro: 'todos' | 'pendientes' | 'revisados' | 'revisando'; cedulaBuscar: string } {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY)
+    if (!raw) return { page: 1, filtro: 'todos', cedulaBuscar: '' }
+    const parsed = JSON.parse(raw)
+    const filtros: Array<'todos' | 'pendientes' | 'revisados' | 'revisando'> = ['todos', 'pendientes', 'revisados', 'revisando']
+    return {
+      page: Math.max(1, Number(parsed.page) || 1),
+      filtro: filtros.includes(parsed.filtro) ? parsed.filtro : 'todos',
+      cedulaBuscar: typeof parsed.cedulaBuscar === 'string' ? parsed.cedulaBuscar : '',
+    }
+  } catch {
+    return { page: 1, filtro: 'todos', cedulaBuscar: '' }
+  }
+}
 
 export function RevisionManual() {
-  const [filtro, setFiltro] = useState<'todos' | 'pendientes' | 'revisados' | 'revisando'>('todos')
-  const [page, setPage] = useState(1)
-  const [cedulaBuscar, setCedulaBuscar] = useState('')
-  const [cedulaInput, setCedulaInput] = useState('') // valor del input (para debounce o submit)
+  const stored = getStoredState()
+  const [filtro, setFiltro] = useState<'todos' | 'pendientes' | 'revisados' | 'revisando'>(stored.filtro)
+  const [page, setPage] = useState(stored.page)
+  const [cedulaBuscar, setCedulaBuscar] = useState(stored.cedulaBuscar)
+  const [cedulaInput, setCedulaInput] = useState(stored.cedulaBuscar) // valor del input (para debounce o submit)
   const [prestamosOcultos, setPrestamosOcultos] = useState<Set<number>>(new Set())
   const timeoutsRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map())
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+
+  // Persistir estado para mantener posición al volver de editar (Guardar y cerrar)
+  useEffect(() => {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ page, filtro, cedulaBuscar }))
+  }, [page, filtro, cedulaBuscar])
 
   // Limpiar timeouts al desmontar
   useEffect(() => {
