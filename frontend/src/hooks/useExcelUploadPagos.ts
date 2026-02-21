@@ -289,30 +289,45 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
   const sendToRevisarPagos = useCallback(
     async (row: PagoExcelRow, onNavigate: () => void): Promise<boolean> => {
       setSavingProgress((prev) => ({ ...prev, [row._rowIndex]: true }))
+      const buildPagoData = (numeroDoc: string) => ({
+        cedula_cliente: (row.cedula || '').trim(),
+        prestamo_id: null,
+        fecha_pago: convertirFechaParaBackendPago(row.fecha_pago) || new Date().toISOString().split('T')[0],
+        monto_pagado: Number(row.monto_pagado) || 0,
+        numero_documento: numeroDoc || '',
+        institucion_bancaria: null,
+        notas: null,
+        conciliado: row.conciliado ?? false,
+      })
+      let numeroDoc = (row.numero_documento || '').trim()
+      if (numeroDoc === 'NaN' || numeroDoc === 'nan') numeroDoc = ''
+      if (numeroDoc && /[eE]/.test(numeroDoc)) {
+        try {
+          numeroDoc = Math.floor(parseFloat(numeroDoc)).toString()
+        } catch {
+          /* keep as is */
+        }
+      }
       try {
-        let numeroDoc = (row.numero_documento || '').trim()
-        if (numeroDoc === 'NaN' || numeroDoc === 'nan') numeroDoc = ''
-        if (numeroDoc && /[eE]/.test(numeroDoc)) {
-          try {
-            numeroDoc = Math.floor(parseFloat(numeroDoc)).toString()
-          } catch {
-            /* keep as is */
+        let pagoData = buildPagoData(numeroDoc)
+        let usadoRetry409 = false
+        try {
+          await pagoService.createPago(pagoData as any)
+        } catch (err409: any) {
+          if (err409?.response?.status === 409 && numeroDoc) {
+            const docSuffix = `-REV${row._rowIndex}`
+            pagoData = buildPagoData(numeroDoc + docSuffix)
+            await pagoService.createPago(pagoData as any)
+            usadoRetry409 = true
+          } else {
+            throw err409
           }
         }
-        const pagoData = {
-          cedula_cliente: (row.cedula || '').trim(),
-          prestamo_id: null,
-          fecha_pago: convertirFechaParaBackendPago(row.fecha_pago) || new Date().toISOString().split('T')[0],
-          monto_pagado: Number(row.monto_pagado) || 0,
-          numero_documento: numeroDoc || '',
-          institucion_bancaria: null,
-          notas: null,
-          conciliado: row.conciliado ?? false,
-        }
-        await pagoService.createPago(pagoData as any)
         setEnviadosRevisar((prev) => new Set([...prev, row._rowIndex]))
         refreshPagos()
-        if (row._hasErrors) {
+        if (usadoRetry409) {
+          addToast('warning', `Documento duplicado. Se envió con sufijo -REV${row._rowIndex} para corregir en Revisar Pagos.`)
+        } else if (row._hasErrors) {
           addToast('warning', 'Pago enviado a Revisar Pagos con errores. Corrígelo allí.')
         } else {
           addToast('success', `Pago enviado a Revisar Pagos`)
