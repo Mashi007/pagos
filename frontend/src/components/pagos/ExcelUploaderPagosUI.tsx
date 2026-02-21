@@ -181,7 +181,11 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                       <tbody>
                         {excelData.map((row) => {
                           const cedulaNorm = (row.cedula || '').trim()
-                          const prestamosActivos = prestamosPorCedula[cedulaNorm] || []
+                          const cedulaSinGuion = cedulaNorm.replace(/-/g, '')
+                          const prestamosActivos =
+                            prestamosPorCedula[cedulaNorm] ||
+                            prestamosPorCedula[cedulaSinGuion] ||
+                            []
                           const tieneCreditos = prestamosActivos.length >= 1
                           const valorCredito =
                             row.prestamo_id != null

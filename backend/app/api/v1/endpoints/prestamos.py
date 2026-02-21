@@ -12,7 +12,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel, field_validator
-from sqlalchemy import delete, func, select, text
+from sqlalchemy import delete, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -359,17 +359,36 @@ def get_prestamos_stats(
     }
 
 
+def _normalizar_cedula_para_busqueda(cedula: str) -> str:
+    """Normaliza cédula para búsqueda: sin guiones, sin espacios, mayúsculas."""
+    if not cedula:
+        return ""
+    return (cedula or "").strip().upper().replace("-", "").replace(" ", "")
+
+
 @router.get("/cedula/{cedula}", response_model=dict)
 def listar_prestamos_por_cedula(cedula: str, db: Session = Depends(get_db)):
-    """Listado de préstamos por cédula del cliente (integrado con frontend)."""
+    """Listado de préstamos por cédula del cliente (integrado con frontend).
+    Acepta coincidencia exacta o normalizada (sin guiones, mayúsculas) para Cliente.cedula y Prestamo.cedula.
+    """
     cedula_clean = (cedula or "").strip()
     if not cedula_clean:
         return {"prestamos": [], "total": 0}
+    cedula_norm = _normalizar_cedula_para_busqueda(cedula_clean)
+    # Coincidencia: exacta o normalizada (V17709701 = V-17709701 = v17709701)
+    cond_cliente = or_(
+        Cliente.cedula == cedula_clean,
+        func.upper(func.replace(func.replace(Cliente.cedula, "-", ""), " ", "")) == cedula_norm,
+    )
+    cond_prestamo = or_(
+        Prestamo.cedula == cedula_clean,
+        func.upper(func.replace(func.replace(Prestamo.cedula, "-", ""), " ", "")) == cedula_norm,
+    )
     q = (
         select(Prestamo, Cliente.nombres, Cliente.cedula)
         .select_from(Prestamo)
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
-        .where(Cliente.cedula == cedula_clean)
+        .where(or_(cond_cliente, cond_prestamo))
         .order_by(Prestamo.id.desc())
     )
     rows = db.execute(q).all()

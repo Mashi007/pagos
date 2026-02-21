@@ -86,10 +86,11 @@ class PrestamoService {
     return await apiClient.put<Prestamo>(`${this.baseUrl}/${id}`, data)
   }
 
-  // Buscar préstamos por cédula
+  // Buscar préstamos por cédula (normaliza: sin guiones, trim)
   async getPrestamosByCedula(cedula: string): Promise<Prestamo[]> {
-    // El endpoint devuelve directamente una lista, no envuelta en ApiResponse
-    const response = await apiClient.get<Prestamo[]>(`${this.baseUrl}/cedula/${cedula}`)
+    const cedulaNorm = (cedula || '').trim().replace(/-/g, '')
+    if (!cedulaNorm) return []
+    const response = await apiClient.get<Prestamo[]>(`${this.baseUrl}/cedula/${encodeURIComponent(cedulaNorm)}`)
     
     if (Array.isArray(response)) return response
     if (response && typeof response === 'object') {

@@ -87,7 +87,10 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           const prestamos = (results[i] || []).filter((p: any) =>
             ESTADOS_PRESTAMO_ACTIVO.includes((p.estado || '').toUpperCase())
           )
-          map[cedula] = prestamos.map((p: any) => ({ id: p.id, estado: p.estado || '' }))
+          const arr = prestamos.map((p: any) => ({ id: p.id, estado: p.estado || '' }))
+          map[cedula] = arr
+          const cedulaSinGuion = cedula.replace(/-/g, '')
+          if (cedulaSinGuion !== cedula) map[cedulaSinGuion] = arr
         })
         setPrestamosPorCedula(map)
       })
@@ -106,7 +109,9 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       let changed = false
       const next = prev.map((r) => {
         const cedulaNorm = (r.cedula || '').trim()
-        const prestamos = prestamosPorCedula[cedulaNorm] || []
+        const cedulaSinGuion = cedulaNorm.replace(/-/g, '')
+        const prestamos =
+          prestamosPorCedula[cedulaNorm] || prestamosPorCedula[cedulaSinGuion] || []
         if (prestamos.length === 1 && (r.prestamo_id == null || r.prestamo_id === undefined)) {
           changed = true
           return { ...r, prestamo_id: prestamos[0].id }
@@ -136,7 +141,9 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         return false
       }
       const cedulaNorm = (row.cedula || '').trim()
-      const prestamosActivos = prestamosPorCedula[cedulaNorm] || []
+      const cedulaSinGuion = cedulaNorm.replace(/-/g, '')
+      const prestamosActivos =
+        prestamosPorCedula[cedulaNorm] || prestamosPorCedula[cedulaSinGuion] || []
       if (prestamosActivos.length > 1 && !row.prestamo_id) {
         addToast('error', `Fila ${row._rowIndex}: La cédula ${cedulaNorm} tiene ${prestamosActivos.length} créditos activos. Seleccione uno.`)
         return false
@@ -206,7 +213,9 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     }
     for (const row of valid) {
       const cedulaNorm = (row.cedula || '').trim()
-      const prestamosActivos = prestamosPorCedula[cedulaNorm] || []
+      const cedulaSinGuion = cedulaNorm.replace(/-/g, '')
+      const prestamosActivos =
+        prestamosPorCedula[cedulaNorm] || prestamosPorCedula[cedulaSinGuion] || []
       if (prestamosActivos.length > 1 && !row.prestamo_id) {
         addToast('error', `Fila ${row._rowIndex}: Seleccione el crédito para ${cedulaNorm}`)
         return
