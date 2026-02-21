@@ -29,7 +29,7 @@ export interface PagoCreate {
   numero_documento: string
   institucion_bancaria: string | null
   notas?: string | null
-  conciliado?: boolean | null
+  conciliado?: boolean
 }
 
 export interface ApiResponse<T> {
@@ -69,7 +69,7 @@ class PagoService {
     return await apiClient.post(`${this.baseUrl}/`, data)
   }
 
-  async updatePago(id: number, data: Partial<PagoCreate> & { conciliado?: boolean }): Promise<Pago> {
+  async updatePago(id: number, data: Partial<PagoCreate>): Promise<Pago> {
     return await apiClient.put(`${this.baseUrl}/${id}`, data)
   }
 

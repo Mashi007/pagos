@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Upload, FileSpreadsheet, X, CheckCircle, Save, Loader2, Eye, AlertTriangle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card'
 import { Button } from '../ui/button'
-import { Badge } from '../../components/ui/badge'
+import { Badge } from '../ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { useExcelUploadPagos, type ExcelUploaderPagosProps } from '../../hooks/useExcelUploadPagos'
 import { useNavigate } from 'react-router-dom'
@@ -165,7 +165,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                 </CardHeader>
                 <CardContent>
                   <div className="overflow-x-auto">
-                    <table className="w-full border-collapse min-w-[900px]">
+                    <table className="w-full border-collapse min-w-[980px]">
                       <thead>
                         <tr className="bg-gray-50">
                           <th className="border p-2 text-left text-xs font-medium w-12">Fila</th>
@@ -243,6 +243,20 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                 ) : (
                                   <span className="text-xs text-gray-400">—</span>
                                 )}
+                              </td>
+                              <td className="border p-2">
+                                <Select
+                                  value={row.conciliado ? 'si' : 'no'}
+                                  onValueChange={(v) => updateCellValue(row, 'conciliado', v)}
+                                >
+                                  <SelectTrigger className="h-8 text-xs">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="no">No</SelectItem>
+                                    <SelectItem value="si">Sí</SelectItem>
+                                  </SelectContent>
+                                </Select>
                               </td>
                               <td className="border p-2">
                                 {savedRows.has(row._rowIndex) ? (

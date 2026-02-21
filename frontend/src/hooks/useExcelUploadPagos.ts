@@ -346,7 +346,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         if (field === 'prestamo_id') {
           updated.prestamo_id = value === '' || value === 'none' ? null : (Number(value) || null)
         } else if (field === 'conciliado') {
-          updated.conciliado = value === 'si' || value === 'SI' || value === true || value === '1'
+          updated.conciliado = value === 'si' || value === 'SI' || String(value) === '1'
         } else {
           ;(updated as any)[field] = field === 'monto_pagado' ? (Number(value) || 0) : value
         }
