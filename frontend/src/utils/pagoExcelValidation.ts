@@ -38,6 +38,11 @@ export function convertirFechaExcelPago(val: unknown): string {
     }
   }
   if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return s
+  if (/^\d{2}-\d{2}-\d{2}$/.test(s)) {
+    const [d, m, yy] = s.split('-')
+    const y = parseInt(yy, 10) < 50 ? 2000 + parseInt(yy, 10) : 1900 + parseInt(yy, 10)
+    return `${d}/${m}/${y}`
+  }
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
     const [y, m, d] = s.split('-')
     return `${d}/${m}/${y}`
@@ -91,9 +96,10 @@ export function validatePagoField(
     }
 
     case 'numero_documento':
-      if (!strVal) return { isValid: false, message: 'Nº documento requerido' }
-      if (_options?.documentosEnArchivo?.has(strVal)) return { isValid: false, message: 'Documento duplicado en archivo' }
-      if (_options?.documentosExistentes?.has(strVal)) return { isValid: false, message: 'Documento ya existe en BD' }
+      // Regla: aceptar todo (cualquier formato: VE/123, números, alfanumérico, vacío)
+      const docNorm = (strVal === 'NaN' || strVal === 'nan' || strVal === 'undefined') ? '' : strVal
+      if (docNorm && _options?.documentosEnArchivo?.has(docNorm)) return { isValid: false, message: 'Documento duplicado en archivo' }
+      if (docNorm && _options?.documentosExistentes?.has(docNorm)) return { isValid: false, message: 'Documento ya existe en BD' }
       return { isValid: true }
 
     case 'prestamo_id':

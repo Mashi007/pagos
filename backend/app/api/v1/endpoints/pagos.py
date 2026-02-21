@@ -81,12 +81,19 @@ def listar_pagos(
     fecha_desde: Optional[str] = Query(None),
     fecha_hasta: Optional[str] = Query(None),
     analista: Optional[str] = Query(None),
+    conciliado: Optional[str] = Query(None, description="si=conciliados, no=no conciliados, vacío=todos"),
     db: Session = Depends(get_db),
 ):
-    """Listado paginado desde la tabla pagos. Filtros: cedula, estado, fecha_desde, fecha_hasta, analista (vÃ­a prestamo)."""
+    """Listado paginado desde la tabla pagos. Filtros: cedula, estado, fecha_desde, fecha_hasta, analista, conciliado."""
     try:
         q = select(Pago)
         count_q = select(func.count()).select_from(Pago)
+        if conciliado and conciliado.strip().lower() == "si":
+            q = q.where(Pago.conciliado == True)
+            count_q = count_q.where(Pago.conciliado == True)
+        elif conciliado and conciliado.strip().lower() == "no":
+            q = q.where(or_(Pago.conciliado == False, Pago.conciliado.is_(None)))
+            count_q = count_q.where(or_(Pago.conciliado == False, Pago.conciliado.is_(None)))
         if cedula and cedula.strip():
             q = q.where(Pago.cedula_cliente.ilike(f"%{cedula.strip()}%"))
             count_q = count_q.where(Pago.cedula_cliente.ilike(f"%{cedula.strip()}%"))

@@ -43,6 +43,7 @@ export function PagosList() {
     fechaDesde: '',
     fechaHasta: '',
     analista: '',
+    conciliado: 'si', // Por defecto: solo conciliados = SI
   })
   const [showRegistrarPago, setShowRegistrarPago] = useState(false)
   const [showCargaMasivaPagos, setShowCargaMasivaPagos] = useState(false)
@@ -58,6 +59,7 @@ export function PagosList() {
     filters.fechaDesde,
     filters.fechaHasta,
     filters.analista,
+    filters.conciliado !== 'si' ? filters.conciliado : null,
   ].filter(Boolean).length
   const handleClearFilters = () => {
     setFilters({
@@ -66,6 +68,7 @@ export function PagosList() {
       fechaDesde: '',
       fechaHasta: '',
       analista: '',
+      conciliado: 'si',
     })
     setPage(1)
   }
@@ -196,11 +199,24 @@ export function PagosList() {
         </TabsContent>
         {/* Tab: Todos los Pagos */}
         <TabsContent value="todos">
-          {/* Búsqueda por cédula siempre visible */}
+          {/* Búsqueda y filtro Conciliación siempre visible */}
           <Card className="mb-4">
             <CardContent className="pt-6">
-              <div className="flex flex-col sm:flex-row gap-4">
-                <div className="flex-1">
+              <div className="flex flex-col sm:flex-row gap-4 flex-wrap">
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">Conciliación</label>
+                  <Select value={filters.conciliado || 'si'} onValueChange={value => handleFilterChange('conciliado', value)}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Conciliación" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="si">Sí (conciliados)</SelectItem>
+                      <SelectItem value="no">No (pendientes)</SelectItem>
+                      <SelectItem value="all">Todos</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex-1 min-w-[200px]">
                   <label className="text-sm font-medium text-gray-700 mb-1 block">Buscar por cédula</label>
                   <Input
                     placeholder="Escriba cédula para filtrar..."
@@ -351,7 +367,7 @@ export function PagosList() {
                       ? 'No hay pagos registrados en el sistema.'
                       : 'No hay pagos que coincidan con los filtros aplicados.'}
                   </p>
-                  {(filters.cedula || filters.estado || filters.fechaDesde || filters.fechaHasta || filters.analista) && (
+                  {(filters.cedula || filters.estado || filters.fechaDesde || filters.fechaHasta || filters.analista || (filters.conciliado && filters.conciliado !== 'si')) && (
                     <Button className="mt-4" variant="outline" onClick={handleClearFilters}>
                       Limpiar Filtros
                     </Button>

@@ -135,6 +135,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         }
 
         let numeroDoc = (row.numero_documento || '').trim()
+        if (numeroDoc === 'NaN' || numeroDoc === 'nan') numeroDoc = ''
         if (numeroDoc && /[eE]/.test(numeroDoc)) {
           try {
             numeroDoc = Math.floor(parseFloat(numeroDoc)).toString()
@@ -148,7 +149,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           prestamo_id: prestamoId,
           fecha_pago: convertirFechaParaBackendPago(row.fecha_pago) || new Date().toISOString().split('T')[0],
           monto_pagado: Number(row.monto_pagado) || 0,
-          numero_documento: numeroDoc || 'N/A',
+          numero_documento: numeroDoc || '',
           institucion_bancaria: null,
           notas: null,
           conciliado: row.conciliado ?? false,
@@ -251,14 +252,19 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
 
           const cedula = (row[0]?.toString() || '').trim() || ''
           const fechaPago = convertirFechaExcelPago(row[1])
-          const monto = parseFloat(String(row[2] || 0)) || 0
-          const numeroDoc = (row[3]?.toString() || '').trim() || ''
+          const montoRaw = String(row[2] || 0).replace(',', '.')
+          const monto = parseFloat(montoRaw) || 0
+          let numeroDoc = (row[3]?.toString() || '').trim() || ''
+          if (numeroDoc === 'NaN' || numeroDoc === 'nan' || numeroDoc === 'undefined') numeroDoc = ''
           const prestamoIdRaw = row[4]
+          const conciliacionRawCol4 = (row[4]?.toString() || '').trim().toUpperCase()
+          const conciliacionRawCol5 = (row[5]?.toString() || '').trim().toUpperCase()
+          const isConciliacionCol4 = ['SI', 'SÍ', 'NO', '1', '0'].includes(conciliacionRawCol4)
           const prestamoId =
-            prestamoIdRaw != null && String(prestamoIdRaw).trim() !== ''
+            !isConciliacionCol4 && prestamoIdRaw != null && String(prestamoIdRaw).trim() !== ''
               ? parseInt(String(prestamoIdRaw).trim(), 10)
               : null
-          const conciliacionRaw = (row[5]?.toString() || '').trim().toUpperCase()
+          const conciliacionRaw = isConciliacionCol4 ? conciliacionRawCol4 : conciliacionRawCol5
           const conciliado = conciliacionRaw === 'SI' || conciliacionRaw === 'SÍ' || conciliacionRaw === '1'
 
           const rowData: PagoExcelRow = {
@@ -283,7 +289,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             if (!validation.isValid) hasErrors = true
           }
           rowData._validation.prestamo_id = { isValid: true }
-          if (numeroDoc) documentosEnArchivo.add(numeroDoc)
+          if (numeroDoc && numeroDoc !== 'NaN') documentosEnArchivo.add(numeroDoc)
           rowData._hasErrors = hasErrors
           processed.push(rowData)
         }
