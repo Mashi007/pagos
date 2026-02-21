@@ -332,6 +332,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         } else {
           addToast('success', `Pago enviado a Revisar Pagos`)
         }
+        onClose()
         onNavigate()
         return true
       } catch (err: any) {
@@ -352,7 +353,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         setSavingProgress((prev) => ({ ...prev, [row._rowIndex]: false }))
       }
     },
-    [addToast, refreshPagos]
+    [addToast, refreshPagos, onClose]
   )
 
   const saveAllValid = useCallback(async () => {
@@ -378,19 +379,39 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     setIsSavingIndividual(true)
     let ok = 0
     let fail = 0
+    const indicesGuardadosEstaRonda = new Set<number>()
     for (const row of valid) {
       const result = await saveIndividualPago(row)
-      if (result) ok++
-      else fail++
+      if (result) {
+        ok++
+        indicesGuardadosEstaRonda.add(row._rowIndex)
+      } else {
+        fail++
+      }
     }
     if (ok > 0) addToast('success', `${ok} pago(s) guardado(s)`)
     if (fail > 0) addToast('error', `${fail} fallaron`)
     setIsSavingIndividual(false)
-    if (fail === 0 && ok > 0) {
+    const quedanConErrores = excelData.some(
+      (r) =>
+        r._hasErrors &&
+        !indicesGuardadosEstaRonda.has(r._rowIndex) &&
+        !savedRows.has(r._rowIndex) &&
+        !enviadosRevisar.has(r._rowIndex)
+    )
+    const quedanSinGuardar = excelData.some(
+      (r) =>
+        !indicesGuardadosEstaRonda.has(r._rowIndex) &&
+        !savedRows.has(r._rowIndex) &&
+        !enviadosRevisar.has(r._rowIndex)
+    )
+    if (fail === 0 && ok > 0 && !quedanConErrores && !quedanSinGuardar) {
       onSuccess?.()
       onClose()
+    } else if (fail === 0 && ok > 0 && (quedanConErrores || quedanSinGuardar)) {
+      addToast('info', 'Quedan filas pendientes. Use "Revisar Pagos" en cada una o corríjalas.')
     }
-  }, [getValidRows, serviceStatus, saveIndividualPago, addToast, onSuccess, onClose, prestamosPorCedula])
+  }, [getValidRows, serviceStatus, saveIndividualPago, addToast, onSuccess, onClose, prestamosPorCedula, excelData, savedRows, enviadosRevisar])
 
   const processExcelFile = useCallback(
     async (file: File) => {

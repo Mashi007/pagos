@@ -332,18 +332,20 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                         </>
                                       )}
                                     </Button>
-                                    {!tieneCreditos && (
+                                    {(!tieneCreditos || prestamosActivos.length > 1) && (
                                       <Button
                                         size="sm"
                                         variant="outline"
                                         onClick={() =>
-                                          sendToRevisarPagos(row, () => {
-                                            onClose()
-                                            navigate('/pagos?revisar=1')
-                                          })
+                                          sendToRevisarPagos(row, () => navigate('/pagos?revisar=1'))
                                         }
                                         disabled={savingProgress[row._rowIndex] || serviceStatus === 'offline'}
                                         className="text-amber-700 border-amber-300 hover:bg-amber-50 text-xs"
+                                        title={
+                                          prestamosActivos.length > 1
+                                            ? 'Enviar a Revisar Pagos para asignar el crédito correcto'
+                                            : 'Enviar a Revisar Pagos'
+                                        }
                                       >
                                         {savingProgress[row._rowIndex] ? (
                                           <Loader2 className="h-3 w-3 animate-spin" />
@@ -366,10 +368,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                       size="sm"
                                       variant="outline"
                                       onClick={() =>
-                                        sendToRevisarPagos(row, () => {
-                                          onClose()
-                                          navigate('/pagos?revisar=1')
-                                        })
+                                        sendToRevisarPagos(row, () => navigate('/pagos?revisar=1'))
                                       }
                                       disabled={savingProgress[row._rowIndex] || serviceStatus === 'offline'}
                                       className="text-amber-700 border-amber-300 hover:bg-amber-50 text-xs"
