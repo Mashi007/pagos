@@ -504,6 +504,10 @@ class ApiClient {
     const isRevisionManual = url.includes('/revision-manual/')
     const revisionManualTimeout = 120000 // 120 segundos
 
+    // ✅ Timeout especial para reportes (Render cold start + consultas BD pesadas)
+    const isReportesDashboard = url.includes('/reportes/') && (url.includes('/dashboard/') || url.includes('/resumen'))
+    const reportesDashboardTimeout = 120000 // 120 segundos
+
     // ✅ Timeout especial para clientes-atrasados que puede procesar muchos registros (2868+)
     const isClientesAtrasados = url.includes('/cobranzas/clientes-atrasados')
     const verySlowTimeout = 120000 // 120 segundos para endpoints muy pesados
@@ -515,6 +519,8 @@ class ApiClient {
     let defaultTimeout = DEFAULT_TIMEOUT_MS
     if (isRevisionManual) {
       defaultTimeout = revisionManualTimeout
+    } else if (isReportesDashboard) {
+      defaultTimeout = reportesDashboardTimeout
     } else if (isClientesAtrasados) {
       defaultTimeout = verySlowTimeout
     } else if (isTablasCampos) {

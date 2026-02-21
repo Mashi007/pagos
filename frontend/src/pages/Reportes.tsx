@@ -48,15 +48,17 @@ export function Reportes() {
     data: resumenData,
     isLoading: loadingResumen,
     isError: errorResumen,
-    refetch: refetchResumen
+    refetch: refetchResumen,
+    isFetching: fetchingResumen,
   } = useQuery({
     queryKey: ['reportes-resumen'],
     queryFn: () => reporteService.getResumenDashboard(),
     enabled: puedeVerReportes, // Solo ejecutar si tiene permisos
     staleTime: 2 * 60 * 1000, // 2 minutos
-    retry: 2,
+    retry: 3, // Más reintentos por cold start en Render
+    retryDelay: (attemptIndex) => Math.min(2000 * 2 ** attemptIndex, 15000), // Backoff: 2s, 4s, 8s (máx 15s)
     refetchOnWindowFocus: true,
-    refetchInterval: puedeVerReportes ? 5 * 60 * 1000 : false, // 5 min (antes 30) para reducir carga
+    refetchInterval: puedeVerReportes ? 5 * 60 * 1000 : false, // 5 min para reducir carga
   })
 
   // Si el usuario no es admin, no puede ver reportes
@@ -243,21 +245,37 @@ export function Reportes() {
             refetchResumen()
             toast.info('Actualizando datos...')
           }}
-          disabled={loadingResumen}
+          disabled={loadingResumen || fetchingResumen}
           aria-label="Actualizar indicadores clave de rendimiento"
         >
-          <RefreshCw className={`mr-2 h-4 w-4 ${loadingResumen ? 'animate-spin' : ''}`} aria-hidden />
+          <RefreshCw className={`mr-2 h-4 w-4 ${(loadingResumen || fetchingResumen) ? 'animate-spin' : ''}`} aria-hidden />
           Actualizar KPIs
         </Button>
       </div>
 
       {/* Mensaje de error si hay problema cargando datos */}
       {errorResumen && (
-        <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-md">
-          <p className="font-semibold">Error al cargar datos de KPIs</p>
-          <p className="text-sm mt-1">
-            No se pudieron obtener los datos del servidor. Por favor, intenta actualizar manualmente.
-          </p>
+        <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-md flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <p className="font-semibold">Error al cargar datos de KPIs</p>
+            <p className="text-sm mt-1">
+              No se pudieron obtener los datos del servidor. El servidor puede estar iniciando (cold start). Intenta de nuevo.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refetchResumen()}
+            disabled={fetchingResumen}
+            className="shrink-0"
+          >
+            {fetchingResumen ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-2" />
+            )}
+            Reintentar
+          </Button>
         </div>
       )}
 
@@ -399,6 +417,7 @@ export function Reportes() {
       </Card>
 
       <DialogReporteFiltros
+        key={reporteSeleccionado ?? 'filtros'}
         open={dialogAbierto && reporteSeleccionado !== 'CONTABLE' && reporteSeleccionado !== 'MOROSIDAD'}
         onOpenChange={setDialogAbierto}
         tituloReporte={reporteSeleccionado && reporteSeleccionado !== 'CONTABLE' && reporteSeleccionado !== 'MOROSIDAD' ? tiposReporte.find((t) => t.value === reporteSeleccionado)?.label ?? reporteSeleccionado : ''}
@@ -407,6 +426,7 @@ export function Reportes() {
         }}
       />
       <DialogReporteContableFiltros
+        key="contable"
         open={dialogAbierto && reporteSeleccionado === 'CONTABLE'}
         onOpenChange={setDialogAbierto}
         onConfirm={(filtros) => generarReporteContable(filtros)}

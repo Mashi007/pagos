@@ -64,7 +64,7 @@ export function DialogContent({ children, className }: { children: React.ReactNo
   const content = (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center">
       <div
-        className="fixed inset-0 bg-black/50"
+        className="fixed inset-0 z-[9998] bg-black/50"
         onClick={() => context.onOpenChange(false)}
       />
       <div
@@ -72,6 +72,7 @@ export function DialogContent({ children, className }: { children: React.ReactNo
           'relative z-[9999] bg-white rounded-lg shadow-lg p-6 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto',
           className
         )}
+        onClick={(e) => e.stopPropagation()}
       >
         {children}
       </div>

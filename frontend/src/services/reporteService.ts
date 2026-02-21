@@ -76,7 +76,8 @@ export interface ResumenDashboard {
   total_prestamos: number
   total_pagos: number
   cartera_activa: number
-  prestamos_mora: number
+  /** Préstamos con cuotas vencidas 90+ días (backend: pagos_vencidos) */
+  pagos_vencidos: number
   pagos_mes: number
   fecha_actualizacion: string
 }
