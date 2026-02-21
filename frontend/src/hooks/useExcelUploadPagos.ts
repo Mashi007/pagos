@@ -282,8 +282,9 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             !isConciliacionCol4 && prestamoIdRaw != null && String(prestamoIdRaw).trim() !== ''
               ? parseInt(String(prestamoIdRaw).trim(), 10)
               : null
-          const conciliacionRaw = isConciliacionCol4 ? conciliacionRawCol4 : conciliacionRawCol5
-          const conciliado = conciliacionRaw === 'NO' || conciliacionRaw === '0' ? false : true
+          const conciliacionRaw = (isConciliacionCol4 ? conciliacionRawCol4 : conciliacionRawCol5).trim()
+          // Por defecto: Conciliación = Sí. Solo No si explícitamente "NO" (evitar que 0/celda vacía = No).
+          const conciliado = conciliacionRaw === 'NO' ? false : true
 
           const rowData: PagoExcelRow = {
             _rowIndex: i + 1,
