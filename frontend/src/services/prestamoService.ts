@@ -100,6 +100,29 @@ class PrestamoService {
     return []
   }
 
+  /**
+   * Batch: obtener préstamos para múltiples cédulas en una sola petición.
+   * Evita timeouts cuando hay muchas cédulas en carga masiva.
+   */
+  async getPrestamosByCedulasBatch(cedulas: string[]): Promise<Record<string, Prestamo[]>> {
+    const cedulasNorm = [...new Set((cedulas || []).map((c) => (c || '').trim().replace(/-/g, '')).filter((c) => c.length >= 5))]
+    if (cedulasNorm.length === 0) return {}
+    const response = await apiClient.post<{ prestamos: Record<string, any[]> }>(
+      `${this.baseUrl}/cedula/batch`,
+      { cedulas: cedulasNorm },
+      { timeout: 60000 }
+    )
+    const prestamos = (response as any)?.prestamos || {}
+    const result: Record<string, Prestamo[]> = {}
+    for (const ced of cedulasNorm) {
+      const arr = prestamos[ced] || []
+      result[ced] = Array.isArray(arr) ? arr : []
+      const cedSinGuion = ced.replace(/-/g, '')
+      if (cedSinGuion !== ced) result[cedSinGuion] = result[ced]
+    }
+    return result
+  }
+
   // Obtener resumen de préstamos por cédula (saldo, mora, etc.)
   async getResumenPrestamos(cedula: string): Promise<ResumenPrestamos> {
     const response = await apiClient.get<ResumenPrestamos>(`${this.baseUrl}/cedula/${cedula}/resumen`)

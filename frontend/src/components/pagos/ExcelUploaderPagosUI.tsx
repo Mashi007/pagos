@@ -33,6 +33,8 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
     serviceStatus,
     fileInputRef,
     prestamosPorCedula,
+    cedulasBuscando,
+    fetchSingleCedula,
     handleDragOver,
     handleDragLeave,
     handleDrop,
@@ -218,6 +220,11 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                   type="text"
                                   value={row.cedula}
                                   onChange={(e) => updateCellValue(row, 'cedula', e.target.value)}
+                                  onBlur={() => {
+                                    const c = (row.cedula || '').trim()
+                                    if (c.length >= 5) fetchSingleCedula(c)
+                                  }}
+                                  placeholder="Ej: V22546175"
                                   className={inputClass(row._validation.cedula?.isValid ?? true)}
                                 />
                               </td>
@@ -266,7 +273,26 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                     </SelectContent>
                                   </Select>
                                 ) : (
-                                  <span className="text-xs text-gray-400">—</span>
+                                  <div className="flex items-center gap-1">
+                                    {cedulaNorm && cedulasBuscando.has(cedulaNorm) ? (
+                                      <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                                    ) : cedulaNorm && cedulaNorm.length >= 5 ? (
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-7 text-xs px-2"
+                                        onClick={() => fetchSingleCedula(cedulaNorm)}
+                                        disabled={serviceStatus === 'offline'}
+                                      >
+                                        <Search className="h-3 w-3 mr-1" />
+                                        Buscar
+                                      </Button>
+                                    ) : null}
+                                    {(!cedulaNorm || cedulaNorm.length < 5) && (
+                                      <span className="text-xs text-gray-400">—</span>
+                                    )}
+                                  </div>
                                 )}
                               </td>
                               <td className="border p-2">
@@ -331,10 +357,33 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                     )}
                                   </div>
                                 ) : (
-                                  <span className="text-xs text-red-600 flex items-center">
-                                    <AlertTriangle className="h-4 w-4 mr-1" />
-                                    Corregir
-                                  </span>
+                                  <div className="flex flex-col gap-1">
+                                    <span className="text-xs text-red-600 flex items-center">
+                                      <AlertTriangle className="h-4 w-4 mr-1" />
+                                      Corregir
+                                    </span>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() =>
+                                        sendToRevisarPagos(row, () => {
+                                          onClose()
+                                          navigate('/pagos?revisar=1')
+                                        })
+                                      }
+                                      disabled={savingProgress[row._rowIndex] || serviceStatus === 'offline'}
+                                      className="text-amber-700 border-amber-300 hover:bg-amber-50 text-xs"
+                                    >
+                                      {savingProgress[row._rowIndex] ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                      ) : (
+                                        <>
+                                          <Search className="h-3 w-3 mr-1" />
+                                          Revisar Pagos
+                                        </>
+                                      )}
+                                    </Button>
+                                  </div>
                                 )}
                               </td>
                             </tr>

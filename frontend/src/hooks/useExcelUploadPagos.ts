@@ -68,38 +68,111 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
   }, [checkServiceStatus])
 
   const cedulasUnicas = useMemo(
-    () => [...new Set(excelData.map((r) => (r.cedula || '').trim()).filter(Boolean))],
+    () => [...new Set(excelData.map((r) => (r.cedula || '').trim()).filter((c) => c.length >= 5))],
     [excelData]
   )
 
   const [prestamosPorCedula, setPrestamosPorCedula] = useState<Record<string, Array<{ id: number; estado: string }>>>({})
+  const [cedulasBuscando, setCedulasBuscando] = useState<Set<string>>(new Set())
 
+  const mergePrestamosEnMap = useCallback(
+    (cedula: string, prestamos: Array<{ id: number; estado: string }>) => {
+      const activos = prestamos.filter((p) => ESTADOS_PRESTAMO_ACTIVO.includes((p.estado || '').toUpperCase()))
+      const arr = activos.map((p) => ({ id: p.id, estado: p.estado || '' }))
+      setPrestamosPorCedula((prev) => {
+        const next = { ...prev }
+        next[cedula] = arr
+        const cedulaSinGuion = cedula.replace(/-/g, '')
+        if (cedulaSinGuion !== cedula) next[cedulaSinGuion] = arr
+        return next
+      })
+    },
+    []
+  )
+
+  // Búsqueda por cédula individual (al hacer clic en Buscar o al salir del campo)
+  const fetchSingleCedula = useCallback(
+    async (cedula: string): Promise<boolean> => {
+      const cedulaNorm = (cedula || '').trim()
+      if (cedulaNorm.length < 5) return false
+      const cedulaSinGuion = cedulaNorm.replace(/-/g, '')
+      setCedulasBuscando((prev) => new Set([...prev, cedulaNorm]))
+      try {
+        const prestamos = await prestamoService.getPrestamosByCedula(cedulaNorm)
+        mergePrestamosEnMap(cedulaNorm, (prestamos || []).map((p: any) => ({ id: p.id, estado: p.estado || '' })))
+        return true
+      } catch {
+        return false
+      } finally {
+        setCedulasBuscando((prev) => {
+          const next = new Set(prev)
+          next.delete(cedulaNorm)
+          return next
+        })
+      }
+    },
+    [mergePrestamosEnMap]
+  )
+
+  // Carga inicial: usa batch (1 petición) si hay muchas cédulas para evitar timeouts
+  const BATCH_THRESHOLD = 5
   useEffect(() => {
     if (!showPreview || cedulasUnicas.length === 0) {
-      setPrestamosPorCedula({})
+      setPrestamosPorCedula((prev) => (Object.keys(prev).length ? {} : prev))
       return
     }
     let cancelled = false
-    Promise.all(cedulasUnicas.map((c) => prestamoService.getPrestamosByCedula(c)))
-      .then((results) => {
-        if (cancelled) return
-        const map: Record<string, Array<{ id: number; estado: string }>> = {}
-        cedulasUnicas.forEach((cedula, i) => {
-          const prestamos = (results[i] || []).filter((p: any) =>
-            ESTADOS_PRESTAMO_ACTIVO.includes((p.estado || '').toUpperCase())
-          )
-          const arr = prestamos.map((p: any) => ({ id: p.id, estado: p.estado || '' }))
-          map[cedula] = arr
-          const cedulaSinGuion = cedula.replace(/-/g, '')
-          if (cedulaSinGuion !== cedula) map[cedulaSinGuion] = arr
+    const timer = setTimeout(() => {
+      setCedulasBuscando((prev) => new Set([...prev, ...cedulasUnicas]))
+      const fetchPromise =
+        cedulasUnicas.length > BATCH_THRESHOLD
+          ? prestamoService.getPrestamosByCedulasBatch(cedulasUnicas).then((batch) => {
+              const map: Record<string, Array<{ id: number; estado: string }>> = {}
+              cedulasUnicas.forEach((cedula) => {
+                const prestamos = (batch[cedula] || batch[cedula.replace(/-/g, '')] || []).filter((p: any) =>
+                  ESTADOS_PRESTAMO_ACTIVO.includes((p.estado || '').toUpperCase())
+                )
+                const arr = prestamos.map((p: any) => ({ id: p.id, estado: p.estado || '' }))
+                map[cedula] = arr
+                const cedulaSinGuion = cedula.replace(/-/g, '')
+                if (cedulaSinGuion !== cedula) map[cedulaSinGuion] = arr
+              })
+              return map
+            })
+          : Promise.all(cedulasUnicas.map((c) => prestamoService.getPrestamosByCedula(c))).then((results) => {
+              const map: Record<string, Array<{ id: number; estado: string }>> = {}
+              cedulasUnicas.forEach((cedula, i) => {
+                const prestamos = (results[i] || []).filter((p: any) =>
+                  ESTADOS_PRESTAMO_ACTIVO.includes((p.estado || '').toUpperCase())
+                )
+                const arr = prestamos.map((p: any) => ({ id: p.id, estado: p.estado || '' }))
+                map[cedula] = arr
+                const cedulaSinGuion = cedula.replace(/-/g, '')
+                if (cedulaSinGuion !== cedula) map[cedulaSinGuion] = arr
+              })
+              return map
+            })
+
+      fetchPromise
+        .then((map) => {
+          if (!cancelled) setPrestamosPorCedula(map)
         })
-        setPrestamosPorCedula(map)
-      })
-      .catch(() => {
-        if (!cancelled) setPrestamosPorCedula({})
-      })
+        .catch(() => {
+          if (!cancelled) setPrestamosPorCedula({})
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setCedulasBuscando((prev) => {
+              const next = new Set(prev)
+              cedulasUnicas.forEach((c) => next.delete(c))
+              return next
+            })
+          }
+        })
+    }, 350)
     return () => {
       cancelled = true
+      clearTimeout(timer)
     }
   }, [showPreview, cedulasUnicas.join(',')])
 
@@ -205,10 +278,6 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
 
   const sendToRevisarPagos = useCallback(
     async (row: PagoExcelRow, onNavigate: () => void): Promise<boolean> => {
-      if (row._hasErrors) {
-        addToast('error', 'Hay errores en esta fila. Corrígelos antes de enviar.')
-        return false
-      }
       setSavingProgress((prev) => ({ ...prev, [row._rowIndex]: true }))
       try {
         let numeroDoc = (row.numero_documento || '').trim()
@@ -233,7 +302,11 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         await pagoService.createPago(pagoData as any)
         setEnviadosRevisar((prev) => new Set([...prev, row._rowIndex]))
         refreshPagos()
-        addToast('success', `Pago enviado a Revisar Pagos`)
+        if (row._hasErrors) {
+          addToast('warning', 'Pago enviado a Revisar Pagos con errores. Corrígelo allí.')
+        } else {
+          addToast('success', `Pago enviado a Revisar Pagos`)
+        }
         onNavigate()
         return true
       } catch (err: any) {
@@ -459,6 +532,8 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     serviceStatus,
     fileInputRef,
     prestamosPorCedula,
+    cedulasBuscando,
+    fetchSingleCedula,
     handleDragOver,
     handleDragLeave,
     handleDrop,

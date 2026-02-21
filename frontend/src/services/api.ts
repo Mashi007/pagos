@@ -549,9 +549,10 @@ class ApiClient {
                             url.includes('/ml-impago/entrenar') ||
                             url.includes('/fine-tuning/iniciar') ||
                             url.includes('/rag/generar-embeddings') ||
-                            url.includes('/configuracion/ai/chat') // ✅ Chat AI puede tardar más por consultas BD y OpenAI
+                            url.includes('/configuracion/ai/chat') ||
+                            url.includes('/prestamos/cedula/batch') // ✅ Batch carga masiva: muchas cédulas
 
-      const defaultTimeout = isSlowEndpoint ? 300000 : DEFAULT_TIMEOUT_MS // 5 minutos para ML y Chat AI, 30s por defecto
+      const defaultTimeout = isSlowEndpoint ? (url.includes('/prestamos/cedula/batch') ? 60000 : 300000) : DEFAULT_TIMEOUT_MS
       // Priorizar timeout explícito si se proporciona, sino usar el calculado
       const timeout = config?.timeout ?? defaultTimeout
       const finalConfig = { ...config, timeout }

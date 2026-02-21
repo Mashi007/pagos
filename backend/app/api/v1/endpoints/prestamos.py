@@ -366,6 +366,78 @@ def _normalizar_cedula_para_busqueda(cedula: str) -> str:
     return (cedula or "").strip().upper().replace("-", "").replace(" ", "")
 
 
+class PrestamosPorCedulasBatchBody(BaseModel):
+    """Body para consulta batch de préstamos por múltiples cédulas."""
+
+    cedulas: list[str] = []
+
+
+@router.post("/cedula/batch", response_model=dict)
+def listar_prestamos_por_cedulas_batch(
+    body: PrestamosPorCedulasBatchBody,
+    db: Session = Depends(get_db),
+):
+    """Consulta batch de préstamos por múltiples cédulas. Una sola petición para carga masiva."""
+    cedulas_clean = [(c or "").strip() for c in (body.cedulas or []) if (c or "").strip()]
+    cedulas_clean = list(dict.fromkeys(cedulas_clean))  # sin duplicados, orden preservado
+    if not cedulas_clean:
+        return {"prestamos": {}}
+
+    # Normalizar cada cédula para búsqueda
+    cedulas_norm = [_normalizar_cedula_para_busqueda(c) for c in cedulas_clean]
+    # Condición: para cada cédula, (Cliente coincide) OR (Prestamo coincide)
+    cond_pairs = []
+    for ced_clean, ced_norm in zip(cedulas_clean, cedulas_norm):
+        cond_cliente = or_(
+            Cliente.cedula == ced_clean,
+            func.upper(func.replace(func.replace(Cliente.cedula, "-", ""), " ", "")) == ced_norm,
+        )
+        cond_prestamo = or_(
+            Prestamo.cedula == ced_clean,
+            func.upper(func.replace(func.replace(Prestamo.cedula, "-", ""), " ", "")) == ced_norm,
+        )
+        cond_pairs.append(or_(cond_cliente, cond_prestamo))
+
+    q = (
+        select(Prestamo, Cliente.nombres, Cliente.cedula)
+        .select_from(Prestamo)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(or_(*cond_pairs))
+        .order_by(Prestamo.id.desc())
+    )
+    rows = db.execute(q).all()
+    prestamo_ids = [row[0].id for row in rows]
+    cuotas_por_prestamo = {}
+    if prestamo_ids:
+        cuenta = (
+            select(Cuota.prestamo_id, func.count())
+            .select_from(Cuota)
+            .where(Cuota.prestamo_id.in_(prestamo_ids))
+            .group_by(Cuota.prestamo_id)
+        )
+        for pid, cnt in db.execute(cuenta).all():
+            cuotas_por_prestamo[pid] = cnt
+
+    # Agrupar por cédula (normalizada para matchear)
+    resultado: dict[str, list] = {c: [] for c in cedulas_clean}
+    for row in rows:
+        p, nombres_cliente, cedula_cliente = row[0], row[1], row[2]
+        cedula_cli = (cedula_cliente or p.cedula or "").strip()
+        cedula_norm = _normalizar_cedula_para_busqueda(cedula_cli)
+        item = {
+            "id": p.id,
+            "cliente_id": p.cliente_id,
+            "estado": p.estado,
+            "cedula": cedula_cliente or p.cedula,
+        }
+        for ced_clean, ced_n in zip(cedulas_clean, cedulas_norm):
+            if ced_n == cedula_norm or ced_clean == cedula_cli:
+                resultado[ced_clean].append(item)
+                break
+
+    return {"prestamos": resultado}
+
+
 @router.get("/cedula/{cedula}", response_model=dict)
 def listar_prestamos_por_cedula(cedula: str, db: Session = Depends(get_db)):
     """Listado de préstamos por cédula del cliente (integrado con frontend).
