@@ -332,8 +332,6 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         } else {
           addToast('success', `Pago enviado a Revisar Pagos`)
         }
-        onClose()
-        onNavigate()
         return true
       } catch (err: any) {
         const detail = err?.response?.data?.detail
@@ -353,7 +351,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         setSavingProgress((prev) => ({ ...prev, [row._rowIndex]: false }))
       }
     },
-    [addToast, refreshPagos, onClose]
+    [addToast, refreshPagos]
   )
 
   const saveAllValid = useCallback(async () => {
