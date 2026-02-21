@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import {
   Card,
   CardContent,
@@ -74,6 +74,17 @@ export function RevisionManual() {
   const timeoutsRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map())
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const location = useLocation()
+
+  // Al volver tras finalizar (Guardar y Cerrar), mostrar "Todos" para que el préstamo finalizado sea visible
+  useEffect(() => {
+    const state = location.state as { fromFinalize?: boolean } | null
+    if (state?.fromFinalize) {
+      setFiltro('todos')
+      setPage(1)
+      navigate(location.pathname, { replace: true, state: {} })
+    }
+  }, [location.state, location.pathname, navigate])
 
   // Persistir estado para mantener posición al volver de editar (Guardar y cerrar)
   useEffect(() => {

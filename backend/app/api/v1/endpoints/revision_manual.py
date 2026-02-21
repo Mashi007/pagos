@@ -95,6 +95,34 @@ def _safe_float(val) -> float:
         return 0.0
 
 
+def _aplicar_saldo_cero_si_corresponde(db: Session, prestamo: Prestamo) -> None:
+    """
+    Si total_prestamo = total_abonos (saldo cero) para ESTE préstamo, aplicar:
+    - préstamo.estado: se mantiene (APROBADO, no FINALIZADO, para no romper reportes/KPIs)
+    - cliente.estado = FINALIZADO (solo para este caso)
+    - todos los pagos: conciliado=True, fecha_conciliacion=now
+    - todas las cuotas: estado=pagado
+    Cada préstamo se analiza por separado (no por cédula).
+    Solo se ejecuta al confirmar en Revisión Manual.
+    """
+    total_prestamo = _safe_float(prestamo.total_financiamiento)
+    cuotas = db.execute(select(Cuota).where(Cuota.prestamo_id == prestamo.id)).scalars().all()
+    total_abonos = sum(_safe_float(c.total_pagado) for c in cuotas)
+    if abs(total_prestamo - total_abonos) >= 0.01:
+        return
+    # Saldo cero: aplicar reglas (préstamo se mantiene APROBADO)
+    cliente = db.get(Cliente, prestamo.cliente_id)
+    if cliente:
+        cliente.estado = "FINALIZADO"
+    ahora = datetime.now()
+    pagos = db.execute(select(Pago).where(Pago.prestamo_id == prestamo.id)).scalars().all()
+    for pago in pagos:
+        pago.conciliado = True
+        pago.fecha_conciliacion = ahora
+    for cuota in cuotas:
+        cuota.estado = "pagado"
+
+
 @router.get("/prestamos", response_model=ResumenRevisionManual)
 def get_prestamos_revision_manual(
     db: Session = Depends(get_db),
@@ -236,6 +264,7 @@ def confirmar_prestamo_revisado(
         rev_manual.usuario_revision_email = current_user.get("email") if isinstance(current_user, dict) else getattr(current_user, "email", None)
         rev_manual.fecha_revision = datetime.now()
     
+    _aplicar_saldo_cero_si_corresponde(db, prestamo)
     db.commit()
     return {
         "mensaje": "Usted ha auditado todos los términos de este préstamo por lo que no podrá editar de nuevo",
@@ -787,6 +816,7 @@ def finalizar_revision_prestamo(
         rev_manual.usuario_revision_email = current_user.get("email") if isinstance(current_user, dict) else getattr(current_user, "email", None)
         rev_manual.fecha_revision = datetime.now()
     
+    _aplicar_saldo_cero_si_corresponde(db, prestamo)
     db.commit()
     return {
         "mensaje": "Usted ha auditado todos los términos de este préstamo por lo que no podrá editar de nuevo",

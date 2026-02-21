@@ -331,7 +331,7 @@ export function EditarRevisionManual() {
 
         // Pequeño delay antes de navegar para que el usuario vea el mensaje
         setTimeout(() => {
-          navigate('/revision-manual')
+          navigate('/revision-manual', { state: { fromFinalize: true } })
         }, 1500)
       } catch (err: any) {
         throw new Error(`Error al finalizar: ${err?.response?.data?.detail || 'Error desconocido'}`)
