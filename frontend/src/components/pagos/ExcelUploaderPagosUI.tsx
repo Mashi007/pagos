@@ -45,6 +45,9 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
     saveIndividualPago,
     saveAllValid,
     sendToRevisarPagos,
+    sendAllToRevisarPagos,
+    getRowsToRevisarPagos,
+    isSendingAllRevisar,
     enviadosRevisar,
     duplicadosPendientesRevisar,
     onClose,
@@ -158,6 +161,28 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                         <Search className="mr-2 h-4 w-4" />
                         Revisar Pagos
                       </Button>
+                      {getRowsToRevisarPagos().length > 0 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => sendAllToRevisarPagos()}
+                          disabled={isSendingAllRevisar || serviceStatus === 'offline'}
+                          className="bg-amber-100 border-amber-400 text-amber-800 hover:bg-amber-200"
+                          title="Enviar todas las filas pendientes (duplicados, errores, sin crédito) a Revisar Pagos"
+                        >
+                          {isSendingAllRevisar ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Enviando...
+                            </>
+                          ) : (
+                            <>
+                              <Search className="mr-2 h-4 w-4" />
+                              ENVIAR REVISAR PAGOS ({getRowsToRevisarPagos().length})
+                            </>
+                          )}
+                        </Button>
+                      )}
                     </div>
                     <Button
                       onClick={saveAllValid}

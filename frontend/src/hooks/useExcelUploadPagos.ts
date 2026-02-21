@@ -40,6 +40,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
   const [enviadosRevisar, setEnviadosRevisar] = useState<Set<number>>(new Set())
   const [duplicadosPendientesRevisar, setDuplicadosPendientesRevisar] = useState<Set<number>>(new Set())
   const [isSavingIndividual, setIsSavingIndividual] = useState(false)
+  const [isSendingAllRevisar, setIsSendingAllRevisar] = useState(false)
   const [savingProgress, setSavingProgress] = useState<Record<number, boolean>>({})
   const [serviceStatus, setServiceStatus] = useState<'unknown' | 'online' | 'offline'>('unknown')
   const [toasts, setToasts] = useState<Array<{ id: string; type: 'error' | 'warning' | 'success'; message: string }>>([])
@@ -213,6 +214,43 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
   const getValidRows = useCallback((): PagoExcelRow[] => {
     return excelData.filter((r) => !r._hasErrors && !savedRows.has(r._rowIndex) && !enviadosRevisar.has(r._rowIndex))
   }, [excelData, savedRows, enviadosRevisar])
+
+  const getRowsToRevisarPagos = useCallback((): PagoExcelRow[] => {
+    return excelData.filter((row) => {
+      if (savedRows.has(row._rowIndex) || enviadosRevisar.has(row._rowIndex)) return false
+      if (duplicadosPendientesRevisar.has(row._rowIndex)) return true
+      if (row._hasErrors) return true
+      const cedulaNorm = (row.cedula || '').trim()
+      const cedulaSinGuion = cedulaNorm.replace(/-/g, '')
+      const prestamosActivos =
+        prestamosPorCedula[cedulaNorm] || prestamosPorCedula[cedulaSinGuion] || []
+      return prestamosActivos.length !== 1
+    })
+  }, [excelData, savedRows, enviadosRevisar, duplicadosPendientesRevisar, prestamosPorCedula])
+
+  const sendAllToRevisarPagos = useCallback(async () => {
+    const rows = getRowsToRevisarPagos()
+    if (rows.length === 0) {
+      addToast('warning', 'No hay filas para enviar a Revisar Pagos')
+      return
+    }
+    if (serviceStatus === 'offline') {
+      addToast('error', 'Sin conexión')
+      return
+    }
+    setIsSendingAllRevisar(true)
+    let ok = 0
+    let fail = 0
+    for (const row of rows) {
+      const result = await sendToRevisarPagos(row, () => {})
+      if (result) ok++
+      else fail++
+    }
+    setIsSendingAllRevisar(false)
+    if (ok > 0) addToast('success', `${ok} enviado(s) a Revisar Pagos`)
+    if (fail > 0) addToast('error', `${fail} fallaron`)
+    if (ok > 0) refreshPagos()
+  }, [getRowsToRevisarPagos, sendToRevisarPagos, addToast, refreshPagos, serviceStatus])
 
   const saveIndividualPago = useCallback(
     async (row: PagoExcelRow, opts?: { skipToast?: boolean; skipRefresh?: boolean }): Promise<{ ok: boolean; was409?: boolean }> => {
@@ -646,6 +684,9 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     saveIndividualPago,
     saveAllValid,
     sendToRevisarPagos,
+    sendAllToRevisarPagos,
+    getRowsToRevisarPagos,
+    isSendingAllRevisar,
     enviadosRevisar,
     duplicadosPendientesRevisar,
     onClose,
