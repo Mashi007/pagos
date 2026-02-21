@@ -21,11 +21,12 @@ export function Dialog({ open = false, onOpenChange, children }: DialogProps) {
   const isOpen = isControlled ? open : internalOpen
   const setIsOpen = isControlled ? onOpenChange : setInternalOpen
 
+  // Sincronizar internalOpen cuando el Dialog es no controlado
   React.useEffect(() => {
-    if (isControlled) {
-      setIsOpen(open)
+    if (!isControlled) {
+      setInternalOpen(open)
     }
-  }, [open, isControlled, setIsOpen])
+  }, [open, isControlled])
 
   return (
     <DialogContext.Provider value={{ open: isOpen, onOpenChange: setIsOpen }}>

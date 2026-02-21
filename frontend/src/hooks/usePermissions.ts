@@ -89,18 +89,19 @@ export function usePermissions() {
 
   /**
    * Verifica si el usuario puede ver reportes
-   * - Solo ADMIN puede ver reportes
+   * - ADMIN: acceso total
+   * - OPERATIVO: puede ver y descargar reportes no financieros (Pagos, Morosidad, Vencimiento, Por cédula)
    */
   const canViewReports = (): boolean => {
-    return isAdmin()
+    return true // Todos los usuarios autenticados pueden ver la página de reportes
   }
 
   /**
-   * Verifica si el usuario puede descargar reportes
-   * - Solo ADMIN puede descargar
+   * Verifica si el usuario puede descargar reportes (en general).
+   * La descarga específica por tipo se valida con canAccessReport.
    */
   const canDownloadReports = (): boolean => {
-    return isAdmin()
+    return true // Todos pueden descargar los reportes a los que tienen acceso
   }
 
   /**

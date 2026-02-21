@@ -39,6 +39,7 @@ export function Reportes() {
   const [generandoReporte, setGenerandoReporte] = useState<string | null>(null)
   const [dialogAbierto, setDialogAbierto] = useState(false)
   const [reporteSeleccionado, setReporteSeleccionado] = useState<string | null>(null)
+  const [isRefreshingManual, setIsRefreshingManual] = useState(false)
   const queryClient = useQueryClient()
   const { canViewReports, canDownloadReports, canAccessReport } = usePermissions()
   const puedeVerReportes = canViewReports()
@@ -241,14 +242,25 @@ export function Reportes() {
           variant="outline"
           size="sm"
           className="shrink-0 w-fit"
-          onClick={() => {
-            refetchResumen()
-            toast.info('Actualizando datos...')
+          onClick={async () => {
+            setIsRefreshingManual(true)
+            try {
+              const result = await refetchResumen()
+              if (result.isSuccess) {
+                toast.success('KPIs actualizados correctamente')
+              } else if (result.isError) {
+                toast.error('Error al actualizar. Intenta de nuevo.')
+              }
+            } catch {
+              toast.error('Error al actualizar. Intenta de nuevo.')
+            } finally {
+              setIsRefreshingManual(false)
+            }
           }}
-          disabled={loadingResumen || fetchingResumen}
+          disabled={loadingResumen || fetchingResumen || isRefreshingManual}
           aria-label="Actualizar indicadores clave de rendimiento"
         >
-          <RefreshCw className={`mr-2 h-4 w-4 ${(loadingResumen || fetchingResumen) ? 'animate-spin' : ''}`} aria-hidden />
+          <RefreshCw className={`mr-2 h-4 w-4 ${(loadingResumen || fetchingResumen || isRefreshingManual) ? 'animate-spin' : ''}`} aria-hidden />
           Actualizar KPIs
         </Button>
       </div>
@@ -265,11 +277,18 @@ export function Reportes() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => refetchResumen()}
-            disabled={fetchingResumen}
+            onClick={async () => {
+              setIsRefreshingManual(true)
+              try {
+                await refetchResumen()
+              } finally {
+                setIsRefreshingManual(false)
+              }
+            }}
+            disabled={fetchingResumen || isRefreshingManual}
             className="shrink-0"
           >
-            {fetchingResumen ? (
+            {(fetchingResumen || isRefreshingManual) ? (
               <Loader2 className="h-4 w-4 animate-spin mr-2" />
             ) : (
               <RefreshCw className="h-4 w-4 mr-2" />
@@ -384,8 +403,10 @@ export function Reportes() {
                 <button
                   key={tipo.value}
                   type="button"
-                  disabled={!isDisponible || !tieneAcceso || isGenerando || !canDownloadReports()}
-                  onClick={() => {
+                  disabled={!isDisponible || !tieneAcceso || isGenerando}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
                     if (!tieneAcceso) {
                       toast.error('No tienes permisos para acceder a este reporte')
                       return
@@ -393,9 +414,9 @@ export function Reportes() {
                     abrirDialogoReporte(tipo.value)
                   }}
                   title={!tieneAcceso ? 'No tienes permisos para este reporte' : `Descargar ${tipo.label} en Excel`}
-                  className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border-2 transition-all min-h-[100px] ${
-                    isDisponible && tieneAcceso && canDownloadReports()
-                      ? 'hover:bg-blue-50 hover:border-blue-200 cursor-pointer hover:scale-105'
+                  className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border-2 transition-all min-h-[100px] select-none ${
+                    isDisponible && tieneAcceso
+                      ? 'hover:bg-blue-50 hover:border-blue-200 cursor-pointer hover:scale-105 active:scale-100'
                       : 'opacity-50 cursor-not-allowed'
                   }`}
                   aria-label={`Descargar reporte ${tipo.label} en Excel`}
