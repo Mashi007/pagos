@@ -171,7 +171,9 @@ export function ExcelUploaderPrestamosUI(props: ExcelUploaderPrestamosProps) {
                           <th className="border p-2 text-left text-xs font-medium w-24">Modalidad</th>
                           <th className="border p-2 text-left text-xs font-medium w-24">Fecha req.</th>
                           <th className="border p-2 text-left text-xs font-medium w-28">Producto</th>
+                          <th className="border p-2 text-left text-xs font-medium w-24">Concesionario</th>
                           <th className="border p-2 text-left text-xs font-medium w-24">Analista</th>
+                          <th className="border p-2 text-left text-xs font-medium w-28">Modelo vehículo</th>
                           <th className="border p-2 text-left text-xs font-medium w-16">Cuotas</th>
                           <th className="border p-2 text-left text-xs font-medium w-20">Acción</th>
                         </tr>
@@ -227,9 +229,27 @@ export function ExcelUploaderPrestamosUI(props: ExcelUploaderPrestamosProps) {
                             <td className="border p-2">
                               <input
                                 type="text"
+                                value={row.concesionario}
+                                onChange={(e) => updateCellValue(row, 'concesionario', e.target.value)}
+                                className={inputClass(row._validation.concesionario?.isValid ?? true)}
+                                placeholder="Concesionario"
+                              />
+                            </td>
+                            <td className="border p-2">
+                              <input
+                                type="text"
                                 value={row.analista}
                                 onChange={(e) => updateCellValue(row, 'analista', e.target.value)}
                                 className={inputClass(row._validation.analista?.isValid ?? true)}
+                              />
+                            </td>
+                            <td className="border p-2">
+                              <input
+                                type="text"
+                                value={row.modelo_vehiculo}
+                                onChange={(e) => updateCellValue(row, 'modelo_vehiculo', e.target.value)}
+                                className={inputClass(row._validation.modelo_vehiculo?.isValid ?? true)}
+                                placeholder="Modelo vehículo"
                               />
                             </td>
                             <td className="border p-2">

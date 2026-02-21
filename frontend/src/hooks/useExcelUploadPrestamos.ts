@@ -123,7 +123,7 @@ export function useExcelUploadPrestamos({ onClose, onSuccess }: ExcelUploaderPre
           producto: (row.producto || '').trim() || 'Financiamiento',
           concesionario: (row.concesionario || '').trim() || undefined,
           analista: (row.analista || '').trim() || '',
-          modelo_vehiculo: (row.modelo_vehiculo || '').trim() || undefined,
+          modelo: (row.modelo_vehiculo || '').trim() || undefined,
           numero_cuotas: numCuotas,
           cuota_periodo: cuotaPeriodo,
           tasa_interes: row.tasa_interes != null ? Number(row.tasa_interes) : 0,
@@ -135,6 +135,12 @@ export function useExcelUploadPrestamos({ onClose, onSuccess }: ExcelUploaderPre
         setSavedRows((prev) => new Set([...prev, row._rowIndex]))
         refreshPrestamos()
         addToast('success', `Préstamo ${row.cedula} guardado`)
+        // Si era el único préstamo válido pendiente → volver a /pagos/prestamos
+        const valid = getValidRows()
+        if (valid.length === 1 && valid[0]._rowIndex === row._rowIndex) {
+          onSuccess?.()
+          onClose()
+        }
         return true
       } catch (err: any) {
         const msg = err?.response?.data?.detail || err?.message || 'Error al guardar'
@@ -144,7 +150,7 @@ export function useExcelUploadPrestamos({ onClose, onSuccess }: ExcelUploaderPre
         setSavingProgress((prev) => ({ ...prev, [row._rowIndex]: false }))
       }
     },
-    [usuarioRegistro, addToast, refreshPrestamos, onSuccess, onClose, navigate]
+    [usuarioRegistro, addToast, refreshPrestamos, onSuccess, onClose, getValidRows]
   )
 
   const saveAllValid = useCallback(async () => {
@@ -168,7 +174,12 @@ export function useExcelUploadPrestamos({ onClose, onSuccess }: ExcelUploaderPre
     if (ok > 0) addToast('success', `${ok} préstamos guardados`)
     if (fail > 0) addToast('error', `${fail} fallaron`)
     setIsSavingIndividual(false)
-  }, [getValidRows, serviceStatus, saveIndividualPrestamo, addToast])
+    // Si se guardaron todos sin fallos y no hay problemas con validadores → volver a /pagos/prestamos
+    if (fail === 0 && ok > 0) {
+      onSuccess?.()
+      onClose()
+    }
+  }, [getValidRows, serviceStatus, saveIndividualPrestamo, addToast, onSuccess, onClose])
 
   const processExcelFile = useCallback(
     async (file: File) => {
