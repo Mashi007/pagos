@@ -228,30 +228,6 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     })
   }, [excelData, savedRows, enviadosRevisar, duplicadosPendientesRevisar, prestamosPorCedula])
 
-  const sendAllToRevisarPagos = useCallback(async () => {
-    const rows = getRowsToRevisarPagos()
-    if (rows.length === 0) {
-      addToast('warning', 'No hay filas para enviar a Revisar Pagos')
-      return
-    }
-    if (serviceStatus === 'offline') {
-      addToast('error', 'Sin conexión')
-      return
-    }
-    setIsSendingAllRevisar(true)
-    let ok = 0
-    let fail = 0
-    for (const row of rows) {
-      const result = await sendToRevisarPagos(row, () => {})
-      if (result) ok++
-      else fail++
-    }
-    setIsSendingAllRevisar(false)
-    if (ok > 0) addToast('success', `${ok} enviado(s) a Revisar Pagos`)
-    if (fail > 0) addToast('error', `${fail} fallaron`)
-    if (ok > 0) refreshPagos()
-  }, [getRowsToRevisarPagos, sendToRevisarPagos, addToast, refreshPagos, serviceStatus])
-
   const saveIndividualPago = useCallback(
     async (row: PagoExcelRow, opts?: { skipToast?: boolean; skipRefresh?: boolean }): Promise<{ ok: boolean; was409?: boolean }> => {
       if (row._hasErrors) {
@@ -418,6 +394,30 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     },
     [addToast, refreshPagos]
   )
+
+  const sendAllToRevisarPagos = useCallback(async () => {
+    const rows = getRowsToRevisarPagos()
+    if (rows.length === 0) {
+      addToast('warning', 'No hay filas para enviar a Revisar Pagos')
+      return
+    }
+    if (serviceStatus === 'offline') {
+      addToast('error', 'Sin conexión')
+      return
+    }
+    setIsSendingAllRevisar(true)
+    let ok = 0
+    let fail = 0
+    for (const row of rows) {
+      const result = await sendToRevisarPagos(row, () => {})
+      if (result) ok++
+      else fail++
+    }
+    setIsSendingAllRevisar(false)
+    if (ok > 0) addToast('success', `${ok} enviado(s) a Revisar Pagos`)
+    if (fail > 0) addToast('error', `${fail} fallaron`)
+    if (ok > 0) refreshPagos()
+  }, [getRowsToRevisarPagos, sendToRevisarPagos, addToast, refreshPagos, serviceStatus])
 
   const saveAllValid = useCallback(async () => {
     const valid = getValidRows()
