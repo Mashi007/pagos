@@ -1,114 +1,82 @@
-# Verificación: conexión Backend ↔ Frontend
+# Verificación: Conexión Backend ↔ Frontend
 
-**Objetivo:** Asegurar que la comunicación entre frontend y backend sea adecuada y eficiente.
-
----
-
-## 1. Arquitectura de la conexión
+## Arquitectura (https://rapicredit.onrender.com/pagos/prestamos)
 
 ```
-┌─────────────────┐     /api/* (relativo)      ┌──────────────────┐
-│   Navegador     │ ─────────────────────────► │  Express (Node)   │
-│   (React SPA)   │     same-origin             │  server.js        │
-└─────────────────┘                            └────────┬─────────┘
-                                                         │ proxy
-                                                         │ changeOrigin
-                                                         ▼
-                                                ┌──────────────────┐
-                                                │  Backend FastAPI │
-                                                │  (Python/Gunicorn)│
-                                                └──────────────────┘
+Usuario → https://rapicredit.onrender.com/pagos/prestamos (Frontend SPA)
+                ↓
+         Peticiones /api/v1/prestamos (relativas)
+                ↓
+         server.js (Express) - Proxy /api/* → API_BASE_URL
+                ↓
+         Backend (pagos-backend) - FastAPI
+                ↓
+         PostgreSQL (BD)
 ```
 
-**Flujo:**
-1. Frontend usa `baseURL: ''` en producción → peticiones relativas (`/api/v1/...`)
-2. El navegador envía a mismo origen (frontend Express)
-3. Express proxy reenvía a `API_BASE_URL` (backend)
-4. Respuesta fluye en sentido inverso
+## Configuración Verificada
 
----
+| Componente | Configuración | Estado |
+|------------|---------------|--------|
+| **Frontend** | `env.API_URL = ''` (producción) → rutas relativas | ✅ |
+| **prestamoService** | `baseUrl = '/api/v1/prestamos'` | ✅ |
+| **apiClient** | `baseURL = env.API_URL` (vacío → mismo origen) | ✅ |
+| **server.js** | Proxy `/api` → `API_BASE_URL` | ✅ |
+| **render.yaml** | `API_BASE_URL` desde `pagos-backend.RENDER_EXTERNAL_URL` | ✅ |
+| **Backend** | `GET/POST /api/v1/prestamos` (prefix `/api/v1` + router `/prestamos`) | ✅ |
 
-## 2. Puntos verificados
+## Endpoints Préstamos (Frontend → Backend)
 
-### 2.1 Configuración de URLs
+| Frontend | Backend | Método |
+|----------|---------|--------|
+| `prestamoService.getPrestamos()` | `GET /api/v1/prestamos` | ✅ |
+| `prestamoService.createPrestamo()` | `POST /api/v1/prestamos` | ✅ |
+| `prestamoService.updatePrestamo()` | `PUT /api/v1/prestamos/{id}` | ✅ |
+| `prestamoService.deletePrestamo()` | `DELETE /api/v1/prestamos/{id}` | ✅ |
 
-| Componente | Variable | Producción | Desarrollo |
-|------------|----------|------------|------------|
-| Frontend (api.ts) | `env.API_URL` | `''` (relativo) | `VITE_API_URL` o `''` |
-| server.js | `API_BASE_URL` | URL backend (Render) | `localhost:8000` |
-| Vite dev | proxy target | - | `VITE_API_URL` |
+## Cómo Verificar la Conexión
 
-**Resultado:** Correcto. En producción las peticiones van al mismo origen y el proxy las reenvía.
+### 1. Health check del backend (vía proxy)
 
-### 2.2 Proxy (server.js)
+El proxy reescribe `/api/health` y `/api/health/db` a la raíz del backend (`/health`, `/health/db`):
 
-| Aspecto | Estado | Detalle |
-|---------|--------|---------|
-| pathRewrite | ✅ | `/v1/...` → `/api/v1/...` (reconstruye path) |
-| Headers | ✅ | `Authorization`, `Cookie` se copian |
-| Timeout | ✅ | 60 s en proxyReq |
-| changeOrigin | ✅ | Necesario para backend en otro host |
-| Compresión | ✅ | Gzip (threshold 1KB, level 6) |
+```bash
+# Frontend (Express)
+curl -s https://rapicredit.onrender.com/health
 
-### 2.3 Cache de respuestas (proxy)
+# Backend (vía proxy) - verifica BD
+curl -s https://rapicredit.onrender.com/api/health/db
+# Respuesta esperada: {"status":"healthy","database":"connected"}
+```
 
-| Endpoint | Cache | Duración |
-|----------|-------|----------|
-| modelos-vehiculos, concesionarios, analistas, configuracion | ✅ | 5 min + stale 60 s |
-| dashboard, kpis | ✅ | 30 s + stale 10 s |
-| Resto (prestamos, pagos, etc.) | No cache | `no-cache, no-store` |
+### 2. Desde la consola del navegador (en /pagos/prestamos)
 
-### 2.4 Cliente API (api.ts)
+```javascript
+// Debe devolver datos (requiere estar logueado)
+fetch('/api/v1/prestamos?page=1&per_page=5', {
+  headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('access_token') || sessionStorage.getItem('access_token')) }
+}).then(r => r.json()).then(console.log)
+```
 
-| Aspecto | Estado | Detalle |
-|---------|--------|---------|
-| Timeout por defecto | ✅ | 30 s |
-| Endpoints lentos | ✅ | 60 s (dashboard, cobranzas, etc.) |
-| clientes-atrasados | ✅ | 120 s |
-| tablas-campos | ✅ | 90 s |
-| Refresh token | ✅ | Cola de peticiones, evita race conditions |
-| AbortController | ✅ | Cancelación de peticiones pendientes |
-| Token expirado | ✅ | Verificación previa, redirección inmediata |
+### 3. Logs en Render
 
-### 2.5 CORS
+- **pagos-frontend**: Buscar `➡️  Proxy de /api hacia: https://...` al iniciar
+- **pagos-backend**: Ver requests `GET /api/v1/prestamos` en los logs
 
-- El frontend usa rutas relativas → no hay peticiones cross-origin directas al backend
-- CSP `connect-src`: `'self'` + URL backend (por si hay peticiones directas)
+## Checklist de Diagnóstico
 
----
+Si la página no carga datos:
 
-## 3. Eficiencia
+1. [ ] ¿API_BASE_URL está configurado en pagos-frontend? (Render Dashboard → pagos-frontend → Environment)
+2. [ ] ¿El backend está activo? (Render puede poner servicios free en sleep)
+3. [ ] ¿Hay errores 401/403? (token expirado → hacer login de nuevo)
+4. [ ] ¿Hay errores 502? (proxy no puede conectar al backend)
+5. [ ] ¿Hay errores 404? (ruta incorrecta o backend no tiene el endpoint)
 
-### 3.1 Optimizaciones presentes
+## Variables de Entorno Requeridas (Render)
 
-- **Compresión gzip** en respuestas del proxy (reduce ~70% tamaño)
-- **Cache HTTP** para catálogos y dashboard
-- **Timeouts diferenciados** según tipo de endpoint
-- **Singleton** del cliente API (una instancia compartida)
-- **Logging reducido** en producción
-
-### 3.2 Posibles mejoras
-
-| Mejora | Impacto | Complejidad |
-|--------|---------|-------------|
-| Agent keepAlive (proxy→backend) | Medio: reutiliza conexiones TCP | Media (nueva dep) |
-| HTTP/2 | Bajo en este contexto | Alta |
-| Preconnect hints | Bajo | Baja |
-
----
-
-## 4. Correcciones aplicadas
-
-1. **Cache path:** Uso de `req.originalUrl` para detectar endpoints cacheados (más fiable que `req.path` en rutas montadas).
-2. **Proxy con localhost:** El proxy se registra también cuando `API_BASE_URL` es `localhost:8000` para pruebas locales del build de producción.
-
----
-
-## 5. Checklist de verificación
-
-- [ ] Login funciona (frontend → proxy → backend)
-- [ ] Listado de préstamos carga
-- [ ] Dashboard muestra KPIs
-- [ ] No hay errores CORS en consola
-- [ ] Respuestas de catálogos (modelos, concesionarios) tienen header `Cache-Control`
-- [ ] Peticiones con token expirado redirigen a login sin loops
+| Servicio | Variable | Origen |
+|----------|---------|--------|
+| pagos-frontend | API_BASE_URL | fromService: pagos-backend.RENDER_EXTERNAL_URL |
+| pagos-backend | DATABASE_URL | Manual |
+| pagos-backend | SECRET_KEY | Manual |

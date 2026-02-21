@@ -202,10 +202,15 @@ export function PrestamosList() {
   if (showExcelUpload) {
     return (
       <ExcelUploaderPrestamos
-        onClose={() => setShowExcelUpload(false)}
+        onClose={() => {
+          setShowExcelUpload(false)
+          queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
+          queryClient.invalidateQueries({ queryKey: ['revision-manual-prestamos'] })
+        }}
         onSuccess={() => {
           setShowExcelUpload(false)
           queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
+          queryClient.invalidateQueries({ queryKey: ['revision-manual-prestamos'] })
         }}
       />
     )

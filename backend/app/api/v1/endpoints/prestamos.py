@@ -1068,6 +1068,8 @@ def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db)):
     db.add(row)
     db.commit()
     db.refresh(row)
+    _registrar_en_revision_manual(db, row.id)
+    db.commit()
     return PrestamoResponse.model_validate(row)
 
 
