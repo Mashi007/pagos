@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Plus, Search, Filter, Edit, Eye, Trash2, DollarSign, Calendar, Lock, CheckCircle2, X, RefreshCw, AlertTriangle, Info } from 'lucide-react'
+import { Plus, Search, Filter, Edit, Eye, Trash2, DollarSign, Calendar, Lock, CheckCircle2, X, RefreshCw, AlertTriangle, Info, FileSpreadsheet } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -14,6 +14,7 @@ import { useConcesionariosActivos } from '../../hooks/useConcesionarios'
 import { useAnalistasActivos } from '../../hooks/useAnalistas'
 import { useModelosVehiculosActivos } from '../../hooks/useModelosVehiculos'
 import { CrearPrestamoForm } from './CrearPrestamoForm'
+import { ExcelUploaderPrestamos } from './ExcelUploaderPrestamos'
 import { PrestamosKPIs } from './PrestamosKPIs'
 import { PrestamoDetalleModal } from './PrestamoDetalleModal'
 import { AprobarPrestamoManualModal } from './AprobarPrestamoManualModal'
@@ -67,6 +68,7 @@ export function PrestamosList() {
   }, [searchParams])
   const [showFilters, setShowFilters] = useState(false)
   const [showCrearPrestamo, setShowCrearPrestamo] = useState(false)
+  const [showExcelUpload, setShowExcelUpload] = useState(false)
   const [showDetalle, setShowDetalle] = useState(false)
   const [showAprobarManual, setShowAprobarManual] = useState(false)
   const [aprobacionManualPrestamo, setAprobacionManualPrestamo] = useState<any>(null)
@@ -197,6 +199,18 @@ export function PrestamosList() {
     }
   }
 
+  if (showExcelUpload) {
+    return (
+      <ExcelUploaderPrestamos
+        onClose={() => setShowExcelUpload(false)}
+        onSuccess={() => {
+          setShowExcelUpload(false)
+          queryClient.invalidateQueries({ queryKey: prestamoKeys.all })
+        }}
+      />
+    )
+  }
+
   if (showCrearPrestamo) {
     return (
       <CrearPrestamoForm
@@ -307,6 +321,15 @@ export function PrestamosList() {
           >
             <RefreshCw className={`w-5 h-5 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
             Actualizar
+          </Button>
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={() => setShowExcelUpload(true)}
+            className="px-6 py-6 text-base font-semibold"
+          >
+            <FileSpreadsheet className="w-5 h-5 mr-2" />
+            Cargar Excel
           </Button>
           <Button
             size="lg"

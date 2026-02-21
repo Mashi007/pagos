@@ -78,6 +78,14 @@ class ClienteService {
     await apiClient.delete(`${this.baseUrl}/${id}`)
   }
 
+  // Obtener cliente por cédula exacta (para carga masiva de préstamos)
+  async getClienteByCedula(cedula: string): Promise<Cliente | null> {
+    if (!cedula?.trim()) return null
+    const list = await this.searchClientes(cedula.trim(), true)
+    const exact = list.find((c) => (c.cedula || '').trim().toUpperCase() === cedula.trim().toUpperCase())
+    return exact ?? null
+  }
+
   // Buscar clientes por término (usando filtros en endpoint principal)
   // IMPORTANTE: Por defecto filtra solo clientes ACTIVOS para formularios de préstamos
   // Para buscar todos los estados, pasar incluirTodosEstados: true
