@@ -270,12 +270,19 @@ def _generar_excel_contable(data: dict) -> bytes:
         "Importe MD", "Moneda documento", "Tasa", "Importe en ML", "Moneda Local",
     ]
     ws.append(headers)
-    for r in items:
+    if items:
+        for r in items:
+            ws.append([
+                r.get("cedula", ""), r.get("nombre", ""), r.get("tipo_documento", ""),
+                r.get("fecha_vencimiento", ""), r.get("fecha_pago", ""),
+                r.get("importe_md", 0), r.get("moneda_documento", "USD"),
+                r.get("tasa", 0), r.get("importe_ml", 0), r.get("moneda_local", "Bs."),
+            ])
+    else:
+        ws.append(["(Sin datos)"])
         ws.append([
-            r.get("cedula", ""), r.get("nombre", ""), r.get("tipo_documento", ""),
-            r.get("fecha_vencimiento", ""), r.get("fecha_pago", ""),
-            r.get("importe_md", 0), r.get("moneda_documento", "USD"),
-            r.get("tasa", 0), r.get("importe_ml", 0), r.get("moneda_local", "Bs."),
+            "No hay cuotas pagadas en el período seleccionado. "
+            "Verifique: 1) Que las fechas sean pasadas (no futuras). 2) Que existan cuotas con fecha de pago en ese mes.",
         ])
     buf = io.BytesIO()
     wb.save(buf)
@@ -372,10 +379,14 @@ def exportar_contable(
         cedulas_list = [c.strip() for c in cedulas.split(",") if c.strip()]
 
     data = get_reporte_contable_desde_cache(db, anos=anos_list, meses=meses_list, cedulas=cedulas_list)
+    items = data.get("items", [])
     content = _generar_excel_contable(data)
     hoy_str = date.today().isoformat()
+    headers = {"Content-Disposition": f"attachment; filename=reporte_contable_{hoy_str}.xlsx"}
+    if not items:
+        headers["X-Reporte-Contable-Vacio"] = "1"
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename=reporte_contable_{hoy_str}.xlsx"},
+        headers=headers,
     )

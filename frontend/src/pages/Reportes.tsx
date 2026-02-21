@@ -125,10 +125,16 @@ export function Reportes() {
       )
       const fechaCorte = new Date().toISOString().split('T')[0]
       const cedulas = filtros.cedulas === 'todas' ? undefined : filtros.cedulas
-      const blob = await reporteService.exportarReporteContable(filtros.años, filtros.meses, cedulas)
+      const { blob, vacio } = await reporteService.exportarReporteContable(filtros.años, filtros.meses, cedulas)
       descargarBlob(blob, `reporte_contable_${fechaCorte}.xlsx`)
       toast.dismiss(toastId)
-      toast.success('✓ Reporte Contable descargado exitosamente')
+      if (vacio) {
+        toast.warning(
+          'El reporte no tiene datos para el período seleccionado. Verifique que las fechas sean pasadas y que existan cuotas pagadas.'
+        )
+      } else {
+        toast.success('✓ Reporte Contable descargado exitosamente')
+      }
     } catch (error: unknown) {
       console.error('Error generando reporte:', error)
       toast.dismiss()

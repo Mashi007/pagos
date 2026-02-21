@@ -315,16 +315,6 @@ export function PrestamosList() {
           <Button
             variant="outline"
             size="lg"
-            onClick={handleRefresh}
-            className="px-6 py-6 text-base font-semibold"
-            disabled={isLoading}
-          >
-            <RefreshCw className={`w-5 h-5 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-            Actualizar
-          </Button>
-          <Button
-            variant="outline"
-            size="lg"
             onClick={() => setShowExcelUpload(true)}
             className="px-6 py-6 text-base font-semibold"
           >

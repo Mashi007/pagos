@@ -522,7 +522,7 @@ class ReporteService {
     años: number[],
     meses: number[],
     cedulas?: string[] | 'todas'
-  ): Promise<Blob> {
+  ): Promise<{ blob: Blob; vacio: boolean }> {
     const params = new URLSearchParams()
     if (años.length) params.set('años', años.join(','))
     if (meses.length) params.set('meses', meses.join(','))
@@ -534,7 +534,8 @@ class ReporteService {
       `${this.baseUrl}/exportar/contable?${params.toString()}`,
       { responseType: 'blob', timeout: 180000 }
     )
-    return response.data as Blob
+    const vacio = response.headers['x-reporte-contable-vacio'] === '1'
+    return { blob: response.data as Blob, vacio }
   }
 
   /**

@@ -137,7 +137,7 @@ export function DialogReporteContableFiltros({
           <DialogTitle>Reporte Contable</DialogTitle>
           <DialogDescription>
             {paso === 1 && 'Selecciona uno o varios años'}
-            {paso === 2 && 'Selecciona uno o varios meses'}
+            {paso === 2 && 'Selecciona uno o varios meses (solo meses pasados tendrán datos de pagos)'}
             {paso === 3 && 'Busca y selecciona cédulas, o marca "Todas"'}
           </DialogDescription>
         </DialogHeader>
