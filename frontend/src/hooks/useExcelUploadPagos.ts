@@ -114,8 +114,8 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     [mergePrestamosEnMap]
   )
 
-  // Carga inicial: usa batch (1 petición) si hay muchas cédulas para evitar timeouts
-  const BATCH_THRESHOLD = 5
+  // Carga inicial: usa batch (1 petición) si hay 3+ cédulas para evitar timeouts en servidores lentos
+  const BATCH_THRESHOLD = 3
   useEffect(() => {
     if (!showPreview || cedulasUnicas.length === 0) {
       setPrestamosPorCedula((prev) => (Object.keys(prev).length ? {} : prev))
@@ -266,8 +266,18 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         }
         return true
       } catch (err: any) {
-        const msg = err?.response?.data?.detail || err?.message || 'Error al guardar'
-        addToast('error', `Fila ${row._rowIndex}: ${msg}`)
+        const detail = err?.response?.data?.detail
+        const msg =
+          Array.isArray(detail)
+            ? detail.map((d: any) => d.msg || d.message).join(' ')
+            : detail || err?.message || 'Error al guardar'
+        const is409 = err?.response?.status === 409
+        addToast(
+          'error',
+          is409
+            ? `Fila ${row._rowIndex}: ${msg} Cambie el Nº documento o verifique si ya se guardó.`
+            : `Fila ${row._rowIndex}: ${msg}`
+        )
         return false
       } finally {
         setSavingProgress((prev) => ({ ...prev, [row._rowIndex]: false }))
@@ -310,8 +320,18 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         onNavigate()
         return true
       } catch (err: any) {
-        const msg = err?.response?.data?.detail || err?.message || 'Error al guardar'
-        addToast('error', `Fila ${row._rowIndex}: ${msg}`)
+        const detail = err?.response?.data?.detail
+        const msg =
+          Array.isArray(detail)
+            ? detail.map((d: any) => d.msg || d.message).join(' ')
+            : detail || err?.message || 'Error al guardar'
+        const is409 = err?.response?.status === 409
+        addToast(
+          'error',
+          is409
+            ? `Fila ${row._rowIndex}: ${msg} Cambie el Nº documento o verifique si ya se guardó.`
+            : `Fila ${row._rowIndex}: ${msg}`
+        )
         return false
       } finally {
         setSavingProgress((prev) => ({ ...prev, [row._rowIndex]: false }))
