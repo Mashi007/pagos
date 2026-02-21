@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   CreditCard,
@@ -33,7 +33,10 @@ import { CargaMasivaMenu } from './CargaMasivaMenu'
 import { PagosListResumen } from './PagosListResumen'
 import { PagosKPIsNuevo } from './PagosKPIsNuevo'
 import { toast } from 'sonner'
+import { useSearchParams } from 'react-router-dom'
+
 export function PagosList() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [activeTab, setActiveTab] = useState('todos')
   const [page, setPage] = useState(1)
   const [perPage] = useState(20)
@@ -81,6 +84,16 @@ export function PagosList() {
     setActiveTab('todos')
     setPage(1)
   }
+
+  useEffect(() => {
+    if (searchParams.get('revisar') === '1') {
+      setFilters(prev => ({ ...prev, sin_prestamo: 'si', conciliado: 'all' }))
+      setActiveTab('todos')
+      setPage(1)
+      setSearchParams({}, { replace: true })
+    }
+  }, [searchParams, setSearchParams])
+
   // Query para obtener pagos
   const { data, isLoading, error, isError } = useQuery({
     queryKey: ['pagos', page, perPage, filters],

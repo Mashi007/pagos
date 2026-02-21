@@ -5,7 +5,7 @@
  */
 
 import { motion, AnimatePresence } from 'framer-motion'
-import { Upload, FileSpreadsheet, X, CheckCircle, Save, Loader2, Eye, AlertTriangle } from 'lucide-react'
+import { Upload, FileSpreadsheet, X, CheckCircle, Save, Loader2, Eye, AlertTriangle, Search } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card'
 import { Button } from '../ui/button'
 import { Badge } from '../ui/badge'
@@ -42,6 +42,8 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
     getValidRows,
     saveIndividualPago,
     saveAllValid,
+    sendToRevisarPagos,
+    enviadosRevisar,
     onClose,
   } = useExcelUploadPagos(props)
 
@@ -134,6 +136,19 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                         <Eye className="mr-2 h-4 w-4" />
                         Ir a Pagos
                       </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          onClose()
+                          navigate('/pagos?revisar=1')
+                        }}
+                        className="bg-amber-50 border-amber-300"
+                        title="Ver pagos sin crédito asignado"
+                      >
+                        <Search className="mr-2 h-4 w-4" />
+                        Revisar Pagos
+                      </Button>
                     </div>
                     <Button
                       onClick={saveAllValid}
@@ -179,7 +194,9 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                         </tr>
                       </thead>
                       <tbody>
-                        {excelData.map((row) => {
+                        {excelData
+                          .filter((row) => !enviadosRevisar.has(row._rowIndex))
+                          .map((row) => {
                           const cedulaNorm = (row.cedula || '').trim()
                           const cedulaSinGuion = cedulaNorm.replace(/-/g, '')
                           const prestamosActivos =
@@ -273,21 +290,46 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                     Guardado
                                   </div>
                                 ) : !row._hasErrors ? (
-                                  <Button
-                                    size="sm"
-                                    onClick={() => saveIndividualPago(row)}
-                                    disabled={savingProgress[row._rowIndex] || serviceStatus === 'offline'}
-                                    className="bg-green-600 hover:bg-green-700 text-white text-xs"
-                                  >
-                                    {savingProgress[row._rowIndex] ? (
-                                      <Loader2 className="h-3 w-3 animate-spin" />
-                                    ) : (
-                                      <>
-                                        <Save className="h-3 w-3 mr-1" />
-                                        Guardar
-                                      </>
+                                  <div className="flex flex-col gap-1">
+                                    <Button
+                                      size="sm"
+                                      onClick={() => saveIndividualPago(row)}
+                                      disabled={savingProgress[row._rowIndex] || serviceStatus === 'offline'}
+                                      className="bg-green-600 hover:bg-green-700 text-white text-xs"
+                                    >
+                                      {savingProgress[row._rowIndex] ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                      ) : (
+                                        <>
+                                          <Save className="h-3 w-3 mr-1" />
+                                          Guardar
+                                        </>
+                                      )}
+                                    </Button>
+                                    {!tieneCreditos && (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() =>
+                                          sendToRevisarPagos(row, () => {
+                                            onClose()
+                                            navigate('/pagos?revisar=1')
+                                          })
+                                        }
+                                        disabled={savingProgress[row._rowIndex] || serviceStatus === 'offline'}
+                                        className="text-amber-700 border-amber-300 hover:bg-amber-50 text-xs"
+                                      >
+                                        {savingProgress[row._rowIndex] ? (
+                                          <Loader2 className="h-3 w-3 animate-spin" />
+                                        ) : (
+                                          <>
+                                            <Search className="h-3 w-3 mr-1" />
+                                            Revisar Pagos
+                                          </>
+                                        )}
+                                      </Button>
                                     )}
-                                  </Button>
+                                  </div>
                                 ) : (
                                   <span className="text-xs text-red-600 flex items-center">
                                     <AlertTriangle className="h-4 w-4 mr-1" />

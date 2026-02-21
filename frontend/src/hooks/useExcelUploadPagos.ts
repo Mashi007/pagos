@@ -37,6 +37,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
   const [showPreview, setShowPreview] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [savedRows, setSavedRows] = useState<Set<number>>(new Set())
+  const [enviadosRevisar, setEnviadosRevisar] = useState<Set<number>>(new Set())
   const [isSavingIndividual, setIsSavingIndividual] = useState(false)
   const [savingProgress, setSavingProgress] = useState<Record<number, boolean>>({})
   const [serviceStatus, setServiceStatus] = useState<'unknown' | 'online' | 'offline'>('unknown')
@@ -126,13 +127,14 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
     queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false })
     queryClient.invalidateQueries({ queryKey: ['pagos-ultimos'], exact: false })
+    queryClient.invalidateQueries({ queryKey: ['pagos-por-cedula'], exact: false })
     queryClient.invalidateQueries({ queryKey: ['kpis'], exact: false })
     queryClient.invalidateQueries({ queryKey: ['dashboard'], exact: false })
   }, [queryClient])
 
   const getValidRows = useCallback((): PagoExcelRow[] => {
-    return excelData.filter((r) => !r._hasErrors && !savedRows.has(r._rowIndex))
-  }, [excelData, savedRows])
+    return excelData.filter((r) => !r._hasErrors && !savedRows.has(r._rowIndex) && !enviadosRevisar.has(r._rowIndex))
+  }, [excelData, savedRows, enviadosRevisar])
 
   const saveIndividualPago = useCallback(
     async (row: PagoExcelRow): Promise<boolean> => {
@@ -199,6 +201,50 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       }
     },
     [prestamosPorCedula, addToast, refreshPagos, onSuccess, onClose, getValidRows]
+  )
+
+  const sendToRevisarPagos = useCallback(
+    async (row: PagoExcelRow, onNavigate: () => void): Promise<boolean> => {
+      if (row._hasErrors) {
+        addToast('error', 'Hay errores en esta fila. Corrígelos antes de enviar.')
+        return false
+      }
+      setSavingProgress((prev) => ({ ...prev, [row._rowIndex]: true }))
+      try {
+        let numeroDoc = (row.numero_documento || '').trim()
+        if (numeroDoc === 'NaN' || numeroDoc === 'nan') numeroDoc = ''
+        if (numeroDoc && /[eE]/.test(numeroDoc)) {
+          try {
+            numeroDoc = Math.floor(parseFloat(numeroDoc)).toString()
+          } catch {
+            /* keep as is */
+          }
+        }
+        const pagoData = {
+          cedula_cliente: (row.cedula || '').trim(),
+          prestamo_id: null,
+          fecha_pago: convertirFechaParaBackendPago(row.fecha_pago) || new Date().toISOString().split('T')[0],
+          monto_pagado: Number(row.monto_pagado) || 0,
+          numero_documento: numeroDoc || '',
+          institucion_bancaria: null,
+          notas: null,
+          conciliado: row.conciliado ?? false,
+        }
+        await pagoService.createPago(pagoData as any)
+        setEnviadosRevisar((prev) => new Set([...prev, row._rowIndex]))
+        refreshPagos()
+        addToast('success', `Pago enviado a Revisar Pagos`)
+        onNavigate()
+        return true
+      } catch (err: any) {
+        const msg = err?.response?.data?.detail || err?.message || 'Error al guardar'
+        addToast('error', `Fila ${row._rowIndex}: ${msg}`)
+        return false
+      } finally {
+        setSavingProgress((prev) => ({ ...prev, [row._rowIndex]: false }))
+      }
+    },
+    [addToast, refreshPagos]
   )
 
   const saveAllValid = useCallback(async () => {
@@ -423,6 +469,8 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     getValidRows,
     saveIndividualPago,
     saveAllValid,
+    sendToRevisarPagos,
+    enviadosRevisar,
     onClose,
   }
 }
