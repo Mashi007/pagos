@@ -99,6 +99,24 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     }
   }, [showPreview, cedulasUnicas.join(',')])
 
+  // Auto-asignar prestamo_id cuando la cédula tiene exactamente 1 crédito activo
+  useEffect(() => {
+    if (!showPreview || Object.keys(prestamosPorCedula).length === 0) return
+    setExcelData((prev) => {
+      let changed = false
+      const next = prev.map((r) => {
+        const cedulaNorm = (r.cedula || '').trim()
+        const prestamos = prestamosPorCedula[cedulaNorm] || []
+        if (prestamos.length === 1 && (r.prestamo_id == null || r.prestamo_id === undefined)) {
+          changed = true
+          return { ...r, prestamo_id: prestamos[0].id }
+        }
+        return r
+      })
+      return changed ? next : prev
+    })
+  }, [showPreview, prestamosPorCedula])
+
   const refreshPagos = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
     queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false })
@@ -265,7 +283,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
               ? parseInt(String(prestamoIdRaw).trim(), 10)
               : null
           const conciliacionRaw = isConciliacionCol4 ? conciliacionRawCol4 : conciliacionRawCol5
-          const conciliado = conciliacionRaw === 'SI' || conciliacionRaw === 'SÍ' || conciliacionRaw === '1'
+          const conciliado = conciliacionRaw === 'NO' || conciliacionRaw === '0' ? false : true
 
           const rowData: PagoExcelRow = {
             _rowIndex: i + 1,

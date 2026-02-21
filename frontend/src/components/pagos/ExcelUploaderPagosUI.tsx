@@ -182,7 +182,13 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                         {excelData.map((row) => {
                           const cedulaNorm = (row.cedula || '').trim()
                           const prestamosActivos = prestamosPorCedula[cedulaNorm] || []
-                          const necesitaSelector = prestamosActivos.length > 1
+                          const tieneCreditos = prestamosActivos.length >= 1
+                          const valorCredito =
+                            row.prestamo_id != null
+                              ? String(row.prestamo_id)
+                              : prestamosActivos.length === 1
+                                ? String(prestamosActivos[0].id)
+                                : 'none'
                           return (
                             <tr key={row._rowIndex} className={row._hasErrors ? 'bg-red-50' : 'bg-green-50'}>
                               <td className="border p-2 text-xs">{row._rowIndex}</td>
@@ -221,9 +227,9 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                 />
                               </td>
                               <td className="border p-2">
-                                {necesitaSelector ? (
+                                {tieneCreditos ? (
                                   <Select
-                                    value={row.prestamo_id ? String(row.prestamo_id) : 'none'}
+                                    value={valorCredito}
                                     onValueChange={(v) => updateCellValue(row, 'prestamo_id', v)}
                                   >
                                     <SelectTrigger className="h-8 text-xs">
@@ -238,8 +244,6 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                       ))}
                                     </SelectContent>
                                   </Select>
-                                ) : prestamosActivos.length === 1 ? (
-                                  <span className="text-xs text-gray-600">#{prestamosActivos[0].id}</span>
                                 ) : (
                                   <span className="text-xs text-gray-400">—</span>
                                 )}
