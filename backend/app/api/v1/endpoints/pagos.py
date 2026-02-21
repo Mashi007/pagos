@@ -787,6 +787,17 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db)):
     db.add(row)
     db.commit()
     db.refresh(row)
+    # Reglas de negocio: al conciliar con préstamo, aplicar pago a cuotas
+    if conciliado and row.prestamo_id and float(row.monto_pagado or 0) > 0:
+        try:
+            cuotas_completadas, cuotas_parciales = _aplicar_pago_a_cuotas_interno(row, db)
+            if cuotas_completadas > 0 or cuotas_parciales > 0:
+                row.estado = "PAGADO"
+            db.commit()
+            db.refresh(row)
+        except Exception as e:
+            logger.warning("Al crear pago conciliado, no se pudo aplicar a cuotas: %s", e)
+            db.rollback()
     return _pago_to_response(row)
 
 
@@ -841,7 +852,7 @@ def eliminar_pago(pago_id: int, db: Session = Depends(get_db)):
 
 
 def _estado_cuota_por_cobertura(total_pagado: float, monto_cuota: float, fecha_vencimiento: date) -> str:
-    """Determina estado segÃºn cobertura y fecha de vencimiento. Reglas de negocio."""
+    """Determina estado según cobertura y fecha de vencimiento. Reglas de negocio."""
     hoy = _hoy_local()
     if total_pagado >= monto_cuota - 0.01:
         return "PAGADO"
@@ -850,72 +861,83 @@ def _estado_cuota_por_cobertura(total_pagado: float, monto_cuota: float, fecha_v
     return "PENDIENTE"
 
 
+def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
+    """
+    Aplica el monto del pago a cuotas del préstamo. Reglas de negocio.
+    Retorna (cuotas_completadas, cuotas_parciales). No hace commit.
+    """
+    prestamo_id = pago.prestamo_id
+    if not prestamo_id:
+        return 0, 0
+    monto_restante = float(pago.monto_pagado) if pago.monto_pagado else 0
+    if monto_restante <= 0:
+        return 0, 0
+    fecha_pago_date = pago.fecha_pago.date() if hasattr(pago.fecha_pago, "date") and pago.fecha_pago else date.today()
+    hoy = _hoy_local()
+    cuotas_pendientes = (
+        db.execute(
+            select(Cuota)
+            .where(
+                Cuota.prestamo_id == prestamo_id,
+                Cuota.fecha_pago.is_(None),
+                or_(Cuota.total_pagado.is_(None), Cuota.total_pagado < Cuota.monto),
+            )
+            .order_by(Cuota.numero_cuota)
+        )
+    ).scalars().all()
+    cuotas_completadas = 0
+    cuotas_parciales = 0
+    for c in cuotas_pendientes:
+        monto_cuota = float(c.monto) if c.monto is not None else 0
+        total_pagado_actual = float(c.total_pagado or 0)
+        monto_necesario = monto_cuota - total_pagado_actual
+        if monto_restante <= 0 or monto_cuota <= 0:
+            break
+        a_aplicar = min(monto_restante, monto_necesario)
+        if a_aplicar <= 0:
+            continue
+        nuevo_total = total_pagado_actual + a_aplicar
+        c.total_pagado = Decimal(str(round(nuevo_total, 2)))
+        c.pago_id = pago.id
+        fecha_venc = c.fecha_vencimiento
+        if fecha_venc is not None and hasattr(fecha_venc, "date"):
+            fecha_venc = fecha_venc.date()
+        fecha_venc = fecha_venc or hoy
+        if nuevo_total >= monto_cuota - 0.01:
+            c.fecha_pago = fecha_pago_date
+            c.estado = "PAGADO"
+            cuotas_completadas += 1
+        else:
+            c.estado = _estado_cuota_por_cobertura(nuevo_total, monto_cuota, fecha_venc)
+            cuotas_parciales += 1
+        monto_restante -= a_aplicar
+    return cuotas_completadas, cuotas_parciales
+
+
 @router.post("/{pago_id}/aplicar-cuotas", response_model=dict)
 def aplicar_pago_a_cuotas(pago_id: int, db: Session = Depends(get_db)):
     """
     Aplica el monto del pago a cuotas del préstamo (por orden de numero_cuota).
-    Va a la Ãºltima cuota anterior no cubierta 100%; solo cuando se cubre 100% pasa a la siguiente.
-    - 100% cubierta â†’ estado PAGADO, fecha_pago asignada.
-    - Parcial + vencimiento futuro â†’ estado PAGO_ADELANTADO.
-    - Parcial + vencimiento pasado â†’ estado PENDIENTE.
+    Reglas de negocio: 100% cubierta → PAGADO; parcial + futuro → PAGO_ADELANTADO; parcial + vencido → PENDIENTE.
+    Actualiza pago.estado a PAGADO cuando se aplica a cuotas.
     """
     pago = db.get(Pago, pago_id)
     if not pago:
         raise HTTPException(status_code=404, detail="Pago no encontrado")
-    prestamo_id = pago.prestamo_id
-    if not prestamo_id:
+    if not pago.prestamo_id:
         return {
             "success": False,
             "cuotas_completadas": 0,
             "cuotas_parciales": 0,
-            "message": "El pago no tiene prÃ©stamo asociado.",
+            "message": "El pago no tiene préstamo asociado.",
         }
     monto_restante = float(pago.monto_pagado) if pago.monto_pagado else 0
     if monto_restante <= 0:
         return {"success": True, "cuotas_completadas": 0, "cuotas_parciales": 0, "message": "Monto del pago es cero."}
     try:
-        fecha_pago_date = pago.fecha_pago.date() if hasattr(pago.fecha_pago, "date") and pago.fecha_pago else date.today()
-        hoy = _hoy_local()
-
-        # Cuotas no cubiertas 100%: sin fecha_pago (no pagada) o con total_pagado < monto (parcial)
-        cuotas_pendientes = (
-            db.execute(
-                select(Cuota)
-                .where(
-                    Cuota.prestamo_id == prestamo_id,
-                    Cuota.fecha_pago.is_(None),
-                    or_(Cuota.total_pagado.is_(None), Cuota.total_pagado < Cuota.monto),
-                )
-                .order_by(Cuota.numero_cuota)
-            )
-        ).scalars().all()
-
-        cuotas_completadas = 0
-        cuotas_parciales = 0
-        for c in cuotas_pendientes:
-            monto_cuota = float(c.monto) if c.monto is not None else 0
-            total_pagado_actual = float(c.total_pagado or 0)
-            monto_necesario = monto_cuota - total_pagado_actual
-            if monto_restante <= 0 or monto_cuota <= 0:
-                break
-            a_aplicar = min(monto_restante, monto_necesario)
-            if a_aplicar <= 0:
-                continue
-            nuevo_total = total_pagado_actual + a_aplicar
-            c.total_pagado = Decimal(str(round(nuevo_total, 2)))
-            c.pago_id = pago_id
-            fecha_venc = c.fecha_vencimiento
-            if fecha_venc is not None and hasattr(fecha_venc, "date"):
-                fecha_venc = fecha_venc.date()
-            fecha_venc = fecha_venc or hoy
-            if nuevo_total >= monto_cuota - 0.01:
-                c.fecha_pago = fecha_pago_date
-                c.estado = "PAGADO"
-                cuotas_completadas += 1
-            else:
-                c.estado = _estado_cuota_por_cobertura(nuevo_total, monto_cuota, fecha_venc)
-                cuotas_parciales += 1
-            monto_restante -= a_aplicar
+        cuotas_completadas, cuotas_parciales = _aplicar_pago_a_cuotas_interno(pago, db)
+        if cuotas_completadas > 0 or cuotas_parciales > 0:
+            pago.estado = "PAGADO"
         db.commit()
         return {
             "success": True,
