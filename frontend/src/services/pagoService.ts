@@ -1,4 +1,4 @@
-import { apiClient } from './api'
+﻿import { apiClient } from './api'
 
 export interface Pago {
   id: number
@@ -12,13 +12,13 @@ export interface Pago {
   fecha_registro: string | Date | null
   fecha_conciliacion: string | Date | null
   conciliado: boolean
-  verificado_concordancia?: string | null  // SI/NO - Verificación de concordancia con módulo de pagos
+  verificado_concordancia?: string | null  // SI/NO - VerificaciÃ³n de concordancia con mÃ³dulo de pagos
   usuario_registro: string
   notas: string | null
   documento_nombre: string | null
   documento_tipo: string | null
   documento_ruta: string | null
-  cuotas_atrasadas?: number  // ✅ Campo calculado: cuotas vencidas con pago incompleto
+  cuotas_atrasadas?: number  // âœ… Campo calculado: cuotas vencidas con pago incompleto
 }
 
 export interface PagoCreate {
@@ -73,7 +73,7 @@ class PagoService {
     return await apiClient.post(`${this.baseUrl}/revisar-pagos/mover`, { pago_ids: pagoIds })
   }
 
-  /** Obtiene el 100% de los pagos para exportar (paginación automática sin límite) */
+  /** Obtiene el 100% de los pagos para exportar (paginaciÃ³n automÃ¡tica sin lÃ­mite) */
   async getAllPagosForExport(filters: {
     cedula?: string
     estado?: string
@@ -84,7 +84,7 @@ class PagoService {
     sin_prestamo?: string
   }): Promise<Pago[]> {
     const all: Pago[] = []
-    const perPage = 500
+    const perPage = 100
     let page = 1
     let totalPages = 1
     do {
@@ -105,7 +105,7 @@ class PagoService {
     return await apiClient.put(`${this.baseUrl}/${id}`, data)
   }
 
-  /** Actualiza solo el estado de conciliación (Sí/No) en BD */
+  /** Actualiza solo el estado de conciliaciÃ³n (SÃ­/No) en BD */
   async updateConciliado(id: number, conciliado: boolean): Promise<Pago> {
     return await apiClient.put(`${this.baseUrl}/${id}`, { conciliado })
   }
@@ -126,7 +126,7 @@ class PagoService {
     })
   }
 
-  // Cargar Excel de conciliación (2 columnas: Fecha de Depósito, Número de Documento)
+  // Cargar Excel de conciliaciÃ³n (2 columnas: Fecha de DepÃ³sito, NÃºmero de Documento)
   async uploadConciliacion(file: File): Promise<{
     pagos_conciliados: number
     pagos_no_encontrados: number
@@ -168,22 +168,22 @@ class PagoService {
   }
 
   // Obtener KPIs de pagos: 1) a cobrar en el mes, 2) cobrado en el mes, 3) morosidad %
-  async getKPIs(mes?: number, año?: number, config?: { signal?: AbortSignal }): Promise<{
+  async getKPIs(mes?: number, aÃ±o?: number, config?: { signal?: AbortSignal }): Promise<{
     montoACobrarMes: number
     montoCobradoMes: number
     morosidadMensualPorcentaje: number
     mes: number
-    año: number
+    aÃ±o: number
   }> {
     const params = new URLSearchParams()
     if (mes !== undefined) params.append('mes', mes.toString())
-    if (año !== undefined) params.append('año', año.toString())
+    if (aÃ±o !== undefined) params.append('aÃ±o', aÃ±o.toString())
 
     const queryString = params.toString()
     return await apiClient.get(`${this.baseUrl}/kpis${queryString ? '?' + queryString : ''}`, config)
   }
 
-  // Obtener últimos pagos por cédula (resumen)
+  // Obtener Ãºltimos pagos por cÃ©dula (resumen)
   async getUltimosPagos(
     page = 1,
     perPage = 20,
@@ -229,7 +229,7 @@ class PagoService {
     return response.data as Blob
   }
 
-  // Descargar PDF tabla de amortización completa por cédula
+  // Descargar PDF tabla de amortizaciÃ³n completa por cÃ©dula
   async descargarPDFAmortizacion(cedula: string): Promise<Blob> {
     const axiosInstance = apiClient.getAxiosInstance()
     const response = await axiosInstance.get(
@@ -241,3 +241,4 @@ class PagoService {
 }
 
 export const pagoService = new PagoService()
+

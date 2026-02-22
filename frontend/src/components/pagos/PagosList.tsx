@@ -93,9 +93,10 @@ export function PagosList() {
     if (!filters.sin_prestamo) return
     setIsExportingRevisar(true)
     try {
-      const pagos = await pagoService.getAllPagosForExport({
-        ...filters,
-        sin_prestamo: 'si',
+      const pagos = await pagoConErrorService.getAllForExport({
+        cedula: filters.cedula || undefined,
+        fechaDesde: filters.fechaDesde || undefined,
+        fechaHasta: filters.fechaHasta || undefined,
       })
       if (pagos.length === 0) {
         toast.info('No hay pagos para exportar')
@@ -792,3 +793,4 @@ export function PagosList() {
     </div>
   )
 }
+
