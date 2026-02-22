@@ -73,7 +73,8 @@ export function normalizarNumeroDocumento(val: unknown): string {
   }
   const s = String(val).trim()
   if (!s || s === 'NaN' || s === 'nan' || s === 'undefined') return ''
-  if (/[eE]/.test(s)) {
+  // Solo expandir notacion cientifica real (ej. 7.4E+14), NUNCA formatos como VE/191302960
+  if (/^\d+\.?\d*[eE][+-]?\d+$/.test(s)) {
     try {
       const n = parseFloat(s)
       return Number.isNaN(n) ? s : n.toFixed(0)
