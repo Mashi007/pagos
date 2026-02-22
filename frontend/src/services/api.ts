@@ -1,4 +1,4 @@
-import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, AxiosProgressEvent, AxiosResponse } from 'axios'
+﻿import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, AxiosProgressEvent, AxiosResponse } from 'axios'
 import toast from 'react-hot-toast'
 import { getErrorMessage, isAxiosError } from '../types/errors'
 import { env, BASE_PATH } from '../config/env'
@@ -568,7 +568,7 @@ class ApiClient {
         } else if (!isAuthFailure) {
           const is409Pagos = response.status === 409 && url.includes('/pagos/')
           if (is409Pagos) {
-            console.warn('⚠️ [ApiClient] POST 409 (documento duplicado, se reintenta con sufijo):', url)
+            console.warn('⚠️ [ApiClient] POST 409 (documento duplicado). Use Revisar Pagos para registrar en observaciones.', url)
           } else {
             console.error('❌ [ApiClient] POST recibió error 4xx:', { url, status: response.status, data: response.data })
           }
@@ -586,7 +586,7 @@ class ApiClient {
     } catch (error: any) {
       const is409Pagos = error?.response?.status === 409 && url.includes('/pagos/')
       if (is409Pagos) {
-        console.warn('⚠️ [ApiClient] POST 409 (documento duplicado):', url)
+        console.warn('⚠️ [ApiClient] POST 409 (documento duplicado). Use Revisar Pagos para registrar en observaciones:', url)
       } else {
         console.error('❌ [ApiClient] POST error:', { url, error })
       }

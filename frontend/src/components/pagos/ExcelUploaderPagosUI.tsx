@@ -1,4 +1,4 @@
-/**
+﻿/**
  * UI para carga masiva de pagos desde Excel.
  * Columnas: Cédula, Fecha de pago, Monto, Documento, ID Préstamo (opcional).
  * Solo créditos activos (APROBADO, DESEMBOLSADO) en el selector.
@@ -46,7 +46,9 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
     saveAllValid,
     sendToRevisarPagos,
     sendAllToRevisarPagos,
+    sendDuplicadosToRevisarPagos,
     getRowsToRevisarPagos,
+    getDuplicadosRows,
     isSendingAllRevisar,
     enviadosRevisar,
     duplicadosPendientesRevisar,
@@ -104,7 +106,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                   <Upload className="h-12 w-12 mx-auto mb-4 text-gray-400" />
                   <h3 className="text-lg font-semibold mb-2">{isDragging ? 'Suelta el archivo aquí' : 'Sube tu archivo Excel'}</h3>
                   <p className="text-gray-600 mb-4 text-sm">
-                    Columnas: Cédula | Fecha de pago | Monto | Documento | ID Préstamo (opcional) | Conciliación (Sí/No)
+                    Columnas: Cédula | Fecha de pago | Monto | Documento | ID Préstamo (opcional) | Conciliaciï¿½n (Sï¿½/No). Para nï¿½meros largos en Documento: use comilla antes ('740087464410397) para evitar notaciï¿½n cientï¿½fica
                   </p>
                   <Button onClick={() => fileInputRef.current?.click()} disabled={isProcessing} className="mb-4">
                     <FileSpreadsheet className="mr-2 h-4 w-4" />
@@ -139,6 +141,28 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                         <Badge variant="outline" className="text-amber-700 border-amber-300">
                           Duplicados: {duplicadosPendientesRevisar.size}
                         </Badge>
+                      )}
+                      {duplicadosPendientesRevisar.size > 0 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => sendDuplicadosToRevisarPagos()}
+                          disabled={isSendingAllRevisar || serviceStatus === 'offline'}
+                          className="bg-amber-100 border-amber-400 text-amber-800 hover:bg-amber-200"
+                          title="Enviar solo duplicados a Revisar Pagos (observaciones)"
+                        >
+                          {isSendingAllRevisar ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Enviando...
+                            </>
+                          ) : (
+                            <>
+                              <Search className="mr-2 h-4 w-4" />
+                              ENVIAR DUPLICADOS ({duplicadosPendientesRevisar.size})
+                            </>
+                          )}
+                        </Button>
                       )}
                       <Button variant="outline" size="sm" onClick={() => setShowPreview(false)}>
                         <X className="mr-2 h-4 w-4" />

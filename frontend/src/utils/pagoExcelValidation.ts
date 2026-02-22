@@ -64,6 +64,26 @@ export function convertirFechaParaBackendPago(f: string): string {
   return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : f.trim()
 }
 
+/** Convierte valor de documento a string sin notacion cientifica. Para numeros largos de Excel. */
+export function normalizarNumeroDocumento(val: unknown): string {
+  if (val == null || val === '') return ''
+  if (typeof val === 'number') {
+    if (Number.isNaN(val)) return ''
+    return val.toFixed(0)
+  }
+  const s = String(val).trim()
+  if (!s || s === 'NaN' || s === 'nan' || s === 'undefined') return ''
+  if (/[eE]/.test(s)) {
+    try {
+      const n = parseFloat(s)
+      return Number.isNaN(n) ? s : n.toFixed(0)
+    } catch {
+      return s
+    }
+  }
+  return s
+}
+
 export function validatePagoField(
   field: string,
   value: string | number,
@@ -101,7 +121,7 @@ export function validatePagoField(
     }
 
     case 'numero_documento':
-      // Regla: aceptar todo (cualquier formato: VE/123, nÃºmeros, alfanumÃ©rico, vacÃ­o)
+      // Aceptar CUALQUIER formato: Bs. BNC/ 3677878353, BNC/101754120, VE/123, numeros largos, etc. Regla: NO puede duplicarse.
       const docNorm = (strVal === 'NaN' || strVal === 'nan' || strVal === 'undefined') ? '' : strVal
       if (docNorm && _options?.documentosEnArchivo?.has(docNorm)) return { isValid: false, message: 'Documento duplicado en archivo' }
       if (docNorm && _options?.documentosExistentes?.has(docNorm)) return { isValid: false, message: 'Documento ya existe en BD' }

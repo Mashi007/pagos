@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Hook para carga masiva de pagos desde Excel.
  * Columnas: C�dula, Fecha de pago, Monto, Documento, ID Pr�stamo (opcional).
  * Solo pr�stamos activos (APROBADO, DESEMBOLSADO) en el selector.
@@ -18,6 +18,7 @@ import {
   validateExcelFile,
   validateExcelData,
   sanitizeFileName,
+  normalizarNumeroDocumento,
 } from '../utils/pagoExcelValidation'
 
 const ESTADOS_PRESTAMO_ACTIVO = ['APROBADO', 'DESEMBOLSADO']
@@ -301,7 +302,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           setDuplicadosPendientesRevisar((prev) => new Set([...prev, row._rowIndex]))
           addToast(
             'warning',
-            `Fila ${row._rowIndex}: Documento duplicado. Use "Revisar Pagos" para confirmar uno a uno.`
+            `Documento duplicado. Use "Revisar Pagos" para registrarlo en observaciones.`
           )
           return { ok: false, was409: true }
         } else {
@@ -397,6 +398,34 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     [addToast, refreshPagos, duplicadosPendientesRevisar, prestamosPorCedula]
   )
 
+  const getDuplicadosRows = useCallback((): PagoExcelRow[] => {
+    return excelData.filter((row) => duplicadosPendientesRevisar.has(row._rowIndex))
+  }, [excelData, duplicadosPendientesRevisar])
+
+  const sendDuplicadosToRevisarPagos = useCallback(async () => {
+    const rows = getDuplicadosRows()
+    if (rows.length === 0) {
+      addToast('warning', 'No hay duplicados pendientes')
+      return
+    }
+    if (serviceStatus === 'offline') {
+      addToast('error', 'Sin conexiÃ³n')
+      return
+    }
+    setIsSendingAllRevisar(true)
+    let ok = 0
+    let fail = 0
+    for (const row of rows) {
+      const result = await sendToRevisarPagos(row, () => {})
+      if (result) ok++
+      else fail++
+    }
+    setIsSendingAllRevisar(false)
+    if (ok > 0) addToast('success', "${ok} duplicado(s) enviado(s) a Revisar Pagos")
+    if (fail > 0) addToast('error', "${fail} fallaron")
+    if (ok > 0) refreshPagos()
+  }, [getDuplicadosRows, serviceStatus, sendToRevisarPagos, addToast, refreshPagos])
+
   const sendAllToRevisarPagos = useCallback(async () => {
     const rows = getRowsToRevisarPagos()
     if (rows.length === 0) {
@@ -469,7 +498,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     if (fail > 0) {
       addToast('error', `${fail} fallaron`)
       if (duplicados > 0) {
-        addToast('warning', `${duplicados} con documento duplicado. Use "Revisar Pagos" en cada fila para confirmar.`)
+        addToast('warning', `${duplicados} duplicado(s). Use "Enviar duplicados" para registrarlos en observaciones.`)
       }
     }
     if (omitidos > 0) {
@@ -541,8 +570,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           const fechaPago = convertirFechaExcelPago(row[1])
           const montoRaw = String(row[2] || 0).replace(',', '.')
           const monto = parseFloat(montoRaw) || 0
-          let numeroDoc = (row[3]?.toString() || '').trim() || ''
-          if (numeroDoc === 'NaN' || numeroDoc === 'nan' || numeroDoc === 'undefined') numeroDoc = ''
+          let numeroDoc = normalizarNumeroDocumento(row[3])
           const prestamoIdRaw = row[4]
           const conciliacionRawCol4 = (row[4]?.toString() || '').trim().toUpperCase()
           const conciliacionRawCol5 = (row[5]?.toString() || '').trim().toUpperCase()
@@ -687,7 +715,9 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     saveAllValid,
     sendToRevisarPagos,
     sendAllToRevisarPagos,
+    sendDuplicadosToRevisarPagos,
     getRowsToRevisarPagos,
+    getDuplicadosRows,
     isSendingAllRevisar,
     enviadosRevisar,
     duplicadosPendientesRevisar,
