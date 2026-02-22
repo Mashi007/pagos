@@ -1,7 +1,7 @@
-/**
- * Validación para carga masiva de pagos desde Excel.
- * Columnas: Cédula, Fecha de pago, Monto, Documento (Nº documento), ID Préstamo (opcional).
- * La coincidencia se realiza por cédula. Sin columna Nombre.
+﻿/**
+ * ValidaciÃ³n para carga masiva de pagos desde Excel.
+ * Columnas: CÃ©dula, Fecha de pago, Monto, Documento (NÂº documento), ID PrÃ©stamo (opcional).
+ * La coincidencia se realiza por cÃ©dula. Sin columna Nombre.
  */
 
 import { validateExcelFile, validateExcelData, sanitizeFileName } from './excelValidation'
@@ -15,7 +15,7 @@ export interface PagoExcelRow {
   monto_pagado: number
   numero_documento: string
   prestamo_id: number | null
-  conciliado: boolean  // Sí/No - Conciliación
+  conciliado: boolean  // SÃ­/No - ConciliaciÃ³n
 }
 
 export function convertirFechaExcelPago(val: unknown): string {
@@ -38,9 +38,14 @@ export function convertirFechaExcelPago(val: unknown): string {
     }
   }
   if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return s
+  // DD-MM-YY: yy < 50 -> 2000+yy (ej. 26->2026), yy >= 50 -> 1900+yy. Validacion 2020-2030 filtra anos fuera de rango.
   if (/^\d{2}-\d{2}-\d{2}$/.test(s)) {
     const [d, m, yy] = s.split('-')
     const y = parseInt(yy, 10) < 50 ? 2000 + parseInt(yy, 10) : 1900 + parseInt(yy, 10)
+    return `${d}/${m}/${y}`
+  }
+  if (/^\d{2}-\d{2}-\d{4}$/.test(s)) {
+    const [d, m, y] = s.split('-')
     return `${d}/${m}/${y}`
   }
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
@@ -68,9 +73,9 @@ export function validatePagoField(
 
   switch (field) {
     case 'cedula':
-      if (!strVal) return { isValid: false, message: 'Cédula requerida' }
+      if (!strVal) return { isValid: false, message: 'CÃ©dula requerida' }
       const c = strVal.replace(/[:$]/g, '')
-      return /^[VEJZ]\d{6,11}$/i.test(c) ? { isValid: true } : { isValid: false, message: 'Formato E/V/J/Z + 6-11 dígitos' }
+      return /^[VEJZ]\d{6,11}$/i.test(c) ? { isValid: true } : { isValid: false, message: 'Formato E/V/J/Z + 6-11 dÃ­gitos' }
 
     case 'fecha_pago':
       if (!strVal) return { isValid: false, message: 'Fecha de pago requerida' }
@@ -79,9 +84,9 @@ export function validatePagoField(
       const dn = parseInt(fm[1], 10)
       const mn = parseInt(fm[2], 10)
       const yn = parseInt(fm[3], 10)
-      if (dn < 1 || dn > 31) return { isValid: false, message: 'Día 1-31' }
+      if (dn < 1 || dn > 31) return { isValid: false, message: 'DÃ­a 1-31' }
       if (mn < 1 || mn > 12) return { isValid: false, message: 'Mes 1-12' }
-      if (yn < 2020 || yn > 2030) return { isValid: false, message: 'Año 2020-2030' }
+      if (yn < 2020 || yn > 2030) return { isValid: false, message: 'AÃ±o 2020-2030' }
       const fechaPago = new Date(yn, mn - 1, dn)
       const hoy = new Date()
       hoy.setHours(23, 59, 59, 999)
@@ -96,7 +101,7 @@ export function validatePagoField(
     }
 
     case 'numero_documento':
-      // Regla: aceptar todo (cualquier formato: VE/123, números, alfanumérico, vacío)
+      // Regla: aceptar todo (cualquier formato: VE/123, nÃºmeros, alfanumÃ©rico, vacÃ­o)
       const docNorm = (strVal === 'NaN' || strVal === 'nan' || strVal === 'undefined') ? '' : strVal
       if (docNorm && _options?.documentosEnArchivo?.has(docNorm)) return { isValid: false, message: 'Documento duplicado en archivo' }
       if (docNorm && _options?.documentosExistentes?.has(docNorm)) return { isValid: false, message: 'Documento ya existe en BD' }
@@ -114,3 +119,4 @@ export function validatePagoField(
 }
 
 export { validateExcelFile, validateExcelData, sanitizeFileName }
+
