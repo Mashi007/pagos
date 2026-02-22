@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   CreditCard,
@@ -29,6 +29,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/ta
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import { formatDate } from '../../utils'
 import { pagoService, type Pago } from '../../services/pagoService'
+import { pagoConErrorService, type PagoConError } from '../../services/pagoConErrorService'
 import { RegistrarPagoForm } from './RegistrarPagoForm'
 import { ExcelUploader } from './ExcelUploader'
 import { CargaMasivaMenu } from './CargaMasivaMenu'
@@ -55,7 +56,7 @@ export function PagosList() {
   const [showRegistrarPago, setShowRegistrarPago] = useState(false)
   const [showCargaMasivaPagos, setShowCargaMasivaPagos] = useState(false)
   const [agregarPagoOpen, setAgregarPagoOpen] = useState(false)
-  const [pagoEditando, setPagoEditando] = useState<Pago | null>(null)
+  const [pagoEditando, setPagoEditando] = useState<Pago | PagoConError | null>(null)
   const [accionesOpenId, setAccionesOpenId] = useState<number | null>(null)
   const [conciliandoId, setConciliandoId] = useState<number | null>(null)
   const [isExportingRevisar, setIsExportingRevisar] = useState(false)
@@ -119,15 +120,16 @@ export function PagosList() {
         'Documento nombre': p.documento_nombre ?? '',
         'Documento tipo': p.documento_tipo ?? '',
         'Documento ruta': p.documento_ruta ?? '',
-        'Cuotas atrasadas': p.cuotas_atrasadas ?? '',
+        'Errores': Array.isArray(p.errores_descripcion) ? JSON.stringify(p.errores_descripcion) : (p.errores_descripcion ?? ''),
       }))
       const nombre = `Revisar_Pagos_${new Date().toISOString().slice(0, 10)}.xlsx`
       await createAndDownloadExcel(datos, 'Revisar Pagos', nombre)
       // Tras guardar el Excel en PC, mover a revisar_pagos para que desaparezcan de la vista
       const ids = pagos.map((p) => p.id)
-      await pagoService.moverARevisarPagos(ids)
-      queryClient.invalidateQueries({ queryKey: ['pagos'] })
-      toast.success(`${pagos.length} pagos exportados y movidos a revisión`)
+      await pagoConErrorService.eliminarPorDescarga(ids)
+      queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
+      queryClient.invalidateQueries({ queryKey: ['pagos-con-errores'], exact: false })
+      toast.success(`${pagos.length} pagos exportados y eliminados de la listaón`)
     } catch (err) {
       console.error('Error exportando Revisar Pagos:', err)
       toast.error('Error al exportar. Intenta de nuevo.')
@@ -570,9 +572,14 @@ export function PagosList() {
                                         setAccionesOpenId(null)
                                         if (window.confirm(`¿Estás seguro de eliminar el pago ID ${pago.id}?`)) {
                                           try {
-                                            await pagoService.deletePago(pago.id)
+                                            if (esRevisarPagos) {
+                                              await pagoConErrorService.delete(pago.id)
+                                            } else {
+                                              await pagoService.deletePago(pago.id)
+                                            }
                                             toast.success('Pago eliminado exitosamente')
                                             await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
+                                            await queryClient.invalidateQueries({ queryKey: ['pagos-con-errores'], exact: false })
                                             await queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false })
                                             await queryClient.invalidateQueries({ queryKey: ['cuotas-prestamo'], exact: false })
                                             await queryClient.invalidateQueries({ queryKey: ['prestamos'], exact: false })
@@ -697,6 +704,7 @@ export function PagosList() {
         <RegistrarPagoForm
           pagoId={pagoEditando?.id}
           modoGuardarYProcesar={filters.sin_prestamo === 'si'}
+          esPagoConError={esRevisarPagos}
           pagoInicial={pagoEditando ? {
             cedula_cliente: pagoEditando.cedula_cliente,
             prestamo_id: pagoEditando.prestamo_id,

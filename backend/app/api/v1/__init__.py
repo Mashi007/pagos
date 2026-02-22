@@ -2,7 +2,7 @@
 API v1
 """
 from fastapi import APIRouter
-from app.api.v1.endpoints import whatsapp, auth, configuracion, configuracion_informe_pagos, pagos, prestamos, notificaciones, notificaciones_tabs, dashboard, kpis, auditoria, clientes, tickets, comunicaciones, validadores, usuarios, modelos_vehiculos, analistas, concesionarios, ai_training, revision_manual
+from app.api.v1.endpoints import whatsapp, auth, configuracion, configuracion_informe_pagos, pagos, pagos_con_errores, prestamos, notificaciones, notificaciones_tabs, dashboard, kpis, auditoria, clientes, tickets, comunicaciones, validadores, usuarios, modelos_vehiculos, analistas, concesionarios, ai_training, revision_manual
 from app.api.v1.endpoints.reportes import router as reportes_router
 
 api_router = APIRouter()
@@ -45,6 +45,12 @@ api_router.include_router(
     pagos.router,
     prefix="/pagos",
     tags=["pagos"],
+)
+# Pagos con errores (Revisar Pagos - tabla separada)
+api_router.include_router(
+    pagos_con_errores.router,
+    prefix="/pagos/con-errores",
+    tags=["pagos-con-errores"],
 )
 
 # Préstamos (datos reales BD: listado, stats, CRUD)

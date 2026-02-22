@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Hook para carga masiva de pagos desde Excel.
  * Columnas: Cédula, Fecha de pago, Monto, Documento, ID Préstamo (opcional).
  * Solo préstamos activos (APROBADO, DESEMBOLSADO) en el selector.
@@ -7,6 +7,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { pagoService } from '../services/pagoService'
+import { pagoConErrorService } from '../services/pagoConErrorService'
 import { prestamoService } from '../services/prestamoService'
 import { useIsMounted } from './useIsMounted'
 import {
@@ -337,28 +338,46 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         }
       }
       try {
-        let pagoData = buildPagoData(numeroDoc)
-        let usadoRetry409 = false
-        let succeeded = false
-        let lastErr: any = null
-        for (let attempt = 0; attempt < 3; attempt++) {
-          try {
-            await pagoService.createPago(pagoData as any)
-            succeeded = true
-            if (attempt > 0) usadoRetry409 = true
-            break
-          } catch (err409: any) {
-            lastErr = err409
-            if (err409?.response?.status === 409 && numeroDoc) {
-              const unique = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
-              const docSuffix = `-REV${row._rowIndex}-${unique}`
-              pagoData = buildPagoData(numeroDoc + docSuffix)
-            } else {
-              throw err409
+        if (row._hasErrors) {
+          const erroresDesc = Object.entries(row._validation || {})
+            .filter(([, v]) => !v.isValid)
+            .map(([field, v]) => ({ field, message: v.message }))
+          await pagoConErrorService.create({
+            cedula_cliente: (row.cedula || '').trim(),
+            prestamo_id: null,
+            fecha_pago: convertirFechaParaBackendPago(row.fecha_pago) || new Date().toISOString().split('T')[0],
+            monto_pagado: Number(row.monto_pagado) || 0,
+            numero_documento: numeroDoc || null,
+            institucion_bancaria: null,
+            notas: null,
+            conciliado: row.conciliado ?? false,
+            errores_descripcion: erroresDesc,
+            fila_origen: row._rowIndex,
+          })
+        } else {
+          let pagoData = buildPagoData(numeroDoc)
+          let usadoRetry409 = false
+          let succeeded = false
+          let lastErr: any = null
+          for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+              await pagoService.createPago(pagoData as any)
+              succeeded = true
+              if (attempt > 0) usadoRetry409 = true
+              break
+            } catch (err409: any) {
+              lastErr = err409
+              if (err409?.response?.status === 409 && numeroDoc) {
+                const unique = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+                const docSuffix = `-REV${row._rowIndex}-${unique}`
+                pagoData = buildPagoData(numeroDoc + docSuffix)
+              } else {
+                throw err409
+              }
             }
           }
+          if (!succeeded) throw lastErr
         }
-        if (!succeeded) throw lastErr
         setEnviadosRevisar((prev) => new Set([...prev, row._rowIndex]))
         setDuplicadosPendientesRevisar((prev) => {
           const next = new Set(prev)
@@ -373,6 +392,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         } else {
           addToast('success', `Pago enviado a Revisar Pagos`)
         }
+        onNavigate()
         return true
       } catch (err: any) {
         const detail = err?.response?.data?.detail

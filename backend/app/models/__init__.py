@@ -22,7 +22,7 @@ from app.models.variable_notificacion import VariableNotificacion
 from app.models.modelo_vehiculo import ModeloVehiculo
 from app.models.reporte_contable_cache import ReporteContableCache
 from app.models.revisar_pago import RevisarPago
-
+from app.models.pago_con_error import PagoConError
 __all__ = [
     "Base", "Cliente", "Prestamo", "Ticket", "Cuota", "Pago", "PagosWhatsapp",
     "PlantillaNotificacion", "VariableNotificacion",
@@ -32,5 +32,6 @@ __all__ = [
     "ModeloVehiculo",
     "ReporteContableCache",
     "RevisarPago",
-]
+    "PagoConError",
+    ]
 

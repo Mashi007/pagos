@@ -18,6 +18,7 @@ import { Input } from '../../components/ui/input'
 import { Textarea } from '../../components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
 import { pagoService, type PagoCreate } from '../../services/pagoService'
+import { pagoConErrorService } from '../../services/pagoConErrorService'
 import { usePrestamosByCedula, usePrestamo } from '../../hooks/usePrestamos'
 import { useDebounce } from '../../hooks/useDebounce'
 import { getErrorMessage, isAxiosError, getErrorDetail } from '../../types/errors'
@@ -29,9 +30,11 @@ interface RegistrarPagoFormProps {
   pagoId?: number  // Si está presente, es modo edición
   /** Si true, muestra "Guardar y Procesar": actualiza BD y aplica reglas (conciliación + aplicar a cuotas) */
   modoGuardarYProcesar?: boolean
+  /** Si true, edición usa pagos_con_errores */
+  esPagoConError?: boolean
 }
 
-export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId, modoGuardarYProcesar }: RegistrarPagoFormProps) {
+export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId, modoGuardarYProcesar, esPagoConError }: RegistrarPagoFormProps) {
   const isEditing = !!pagoId
   const [formData, setFormData] = useState<PagoCreate>({
     cedula_cliente: pagoInicial?.cedula_cliente || '',
@@ -145,8 +148,12 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId, mod
       }
 
       if (isEditing && pagoId) {
-        await pagoService.updatePago(pagoId, datosEnvio)
-        if (modoGuardarYProcesar && formData.prestamo_id && formData.monto_pagado > 0) {
+        if (esPagoConError) {
+          await pagoConErrorService.update(pagoId, datosEnvio)
+        } else {
+          await pagoService.updatePago(pagoId, datosEnvio)
+        }
+        if (!esPagoConError && modoGuardarYProcesar && formData.prestamo_id && formData.monto_pagado > 0) {
           try {
             const res = await pagoService.aplicarPagoACuotas(pagoId)
             if (res.cuotas_completadas > 0 || res.cuotas_parciales > 0) {
