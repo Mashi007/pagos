@@ -1,7 +1,7 @@
-﻿/**
+/**
  * Hook para carga masiva de pagos desde Excel.
- * Columnas: Cédula, Fecha de pago, Monto, Documento, ID Préstamo (opcional).
- * Solo préstamos activos (APROBADO, DESEMBOLSADO) en el selector.
+ * Columnas: C�dula, Fecha de pago, Monto, Documento, ID Pr�stamo (opcional).
+ * Solo pr�stamos activos (APROBADO, DESEMBOLSADO) en el selector.
  */
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
@@ -97,7 +97,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     []
   )
 
-  // Búsqueda por cédula individual (al hacer clic en Buscar o al salir del campo)
+  // B�squeda por c�dula individual (al hacer clic en Buscar o al salir del campo)
   const fetchSingleCedula = useCallback(
     async (cedula: string): Promise<boolean> => {
       const cedulaNorm = (cedula || '').trim()
@@ -121,7 +121,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     [mergePrestamosEnMap]
   )
 
-  // Carga inicial: usa batch (1 petición) si hay 3+ cédulas para evitar timeouts en servidores lentos
+  // Carga inicial: usa batch (1 petici�n) si hay 3+ c�dulas para evitar timeouts en servidores lentos
   const BATCH_THRESHOLD = 3
   useEffect(() => {
     if (!showPreview || cedulasUnicas.length === 0) {
@@ -183,7 +183,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     }
   }, [showPreview, cedulasUnicas.join(',')])
 
-  // Auto-asignar prestamo_id cuando la cédula tiene exactamente 1 crédito activo
+  // Auto-asignar prestamo_id cuando la c�dula tiene exactamente 1 cr�dito activo
   useEffect(() => {
     if (!showPreview || Object.keys(prestamosPorCedula).length === 0) return
     setExcelData((prev) => {
@@ -232,7 +232,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
   const saveIndividualPago = useCallback(
     async (row: PagoExcelRow, opts?: { skipToast?: boolean; skipRefresh?: boolean }): Promise<{ ok: boolean; was409?: boolean }> => {
       if (row._hasErrors) {
-        addToast('error', 'Hay errores en esta fila. Corrígelos antes de guardar.')
+        addToast('error', 'Hay errores en esta fila. Corr�gelos antes de guardar.')
         return { ok: false }
       }
       const cedulaNorm = (row.cedula || '').trim()
@@ -240,11 +240,11 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       const prestamosActivos =
         prestamosPorCedula[cedulaNorm] || prestamosPorCedula[cedulaSinGuion] || []
       if (prestamosActivos.length > 1 && !row.prestamo_id) {
-        addToast('error', `Fila ${row._rowIndex}: La cédula ${cedulaNorm} tiene ${prestamosActivos.length} créditos activos. Seleccione uno.`)
+        addToast('error', `Fila ${row._rowIndex}: La c�dula ${cedulaNorm} tiene ${prestamosActivos.length} cr�ditos activos. Seleccione uno.`)
         return { ok: false }
       }
       if (prestamosActivos.length === 0 && !row.prestamo_id) {
-        addToast('warning', `Fila ${row._rowIndex}: No hay créditos activos para ${cedulaNorm}. Se guardará sin préstamo asociado.`)
+        addToast('warning', `Fila ${row._rowIndex}: No hay cr�ditos activos para ${cedulaNorm}. Se guardar� sin pr�stamo asociado.`)
       }
 
       setSavingProgress((prev) => ({ ...prev, [row._rowIndex]: true }))
@@ -318,16 +318,6 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
   const sendToRevisarPagos = useCallback(
     async (row: PagoExcelRow, onNavigate: () => void): Promise<boolean> => {
       setSavingProgress((prev) => ({ ...prev, [row._rowIndex]: true }))
-      const buildPagoData = (numeroDoc: string) => ({
-        cedula_cliente: (row.cedula || '').trim(),
-        prestamo_id: null,
-        fecha_pago: convertirFechaParaBackendPago(row.fecha_pago) || new Date().toISOString().split('T')[0],
-        monto_pagado: Number(row.monto_pagado) || 0,
-        numero_documento: numeroDoc || '',
-        institucion_bancaria: null,
-        notas: null,
-        conciliado: row.conciliado ?? false,
-      })
       let numeroDoc = (row.numero_documento || '').trim()
       if (numeroDoc === 'NaN' || numeroDoc === 'nan') numeroDoc = ''
       if (numeroDoc && /[eE]/.test(numeroDoc)) {
@@ -337,7 +327,6 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           /* keep as is */
         }
       }
-      let usadoRetry409 = false
       try {
         if (row._hasErrors) {
           const camposConProblema = Object.entries(row._validation || {}).filter(([, v]) => !v.isValid).map(([field]) => field)
@@ -355,27 +344,27 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             fila_origen: row._rowIndex,
           })
         } else {
-          let pagoData = buildPagoData(numeroDoc)
-          let succeeded = false
-          let lastErr: any = null
-          for (let attempt = 0; attempt < 3; attempt++) {
-            try {
-              await pagoService.createPago(pagoData as any)
-              succeeded = true
-              if (attempt > 0) usadoRetry409 = true
-              break
-            } catch (err409: any) {
-              lastErr = err409
-              if (err409?.response?.status === 409 && numeroDoc) {
-                const unique = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
-                const docSuffix = `-REV${row._rowIndex}-${unique}`
-                pagoData = buildPagoData(numeroDoc + docSuffix)
-              } else {
-                throw err409
-              }
-            }
+          let observaciones: string
+          if (duplicadosPendientesRevisar.has(row._rowIndex)) {
+            observaciones = 'duplicado'
+          } else {
+            const cedulaNorm = (row.cedula || '').trim()
+            const cedulaSinGuion = cedulaNorm.replace(/-/g, '')
+            const prestamos = prestamosPorCedula[cedulaNorm] || prestamosPorCedula[cedulaSinGuion] || []
+            observaciones = prestamos.length === 0 ? 'sin_prestamo' : prestamos.length > 1 ? 'multiples_prestamos' : 'revisar'
           }
-          if (!succeeded) throw lastErr
+          await pagoConErrorService.create({
+            cedula_cliente: (row.cedula || '').trim(),
+            prestamo_id: null,
+            fecha_pago: convertirFechaParaBackendPago(row.fecha_pago) || new Date().toISOString().split('T')[0],
+            monto_pagado: Number(row.monto_pagado) || 0,
+            numero_documento: numeroDoc || null,
+            institucion_bancaria: null,
+            notas: null,
+            conciliado: row.conciliado ?? false,
+            observaciones: observaciones || undefined,
+            fila_origen: row._rowIndex,
+          })
         }
         setEnviadosRevisar((prev) => new Set([...prev, row._rowIndex]))
         setDuplicadosPendientesRevisar((prev) => {
@@ -384,13 +373,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           return next
         })
         refreshPagos()
-        if (usadoRetry409) {
-          addToast('warning', 'Documento duplicado. Se envió con sufijo único para corregir en Revisar Pagos.')
-        } else if (row._hasErrors) {
-          addToast('warning', 'Pago enviado a Revisar Pagos con errores. Corrígelo allí.')
-        } else {
-          addToast('success', `Pago enviado a Revisar Pagos`)
-        }
+        addToast(row._hasErrors ? 'warning' : 'success', row._hasErrors ? 'Pago enviado a Revisar Pagos con errores. Corr�gelo all�.' : 'Pago enviado a Revisar Pagos')
         onNavigate()
         return true
       } catch (err: any) {
@@ -403,7 +386,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         addToast(
           'error',
           is409
-            ? `Fila ${row._rowIndex}: ${msg} Cambie el Nº documento o verifique si ya se guardó.`
+            ? `Fila ${row._rowIndex}: ${msg} Cambie el N� documento o verifique si ya se guard�.`
             : `Fila ${row._rowIndex}: ${msg}`
         )
         return false
@@ -411,7 +394,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         setSavingProgress((prev) => ({ ...prev, [row._rowIndex]: false }))
       }
     },
-    [addToast, refreshPagos]
+    [addToast, refreshPagos, duplicadosPendientesRevisar, prestamosPorCedula]
   )
 
   const sendAllToRevisarPagos = useCallback(async () => {
@@ -421,7 +404,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       return
     }
     if (serviceStatus === 'offline') {
-      addToast('error', 'Sin conexión')
+      addToast('error', 'Sin conexi�n')
       return
     }
     setIsSendingAllRevisar(true)
@@ -441,11 +424,11 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
   const saveAllValid = useCallback(async () => {
     const valid = getValidRows()
     if (valid.length === 0) {
-      addToast('warning', 'No hay pagos válidos para guardar')
+      addToast('warning', 'No hay pagos v�lidos para guardar')
       return
     }
     if (serviceStatus === 'offline') {
-      addToast('error', 'Sin conexión')
+      addToast('error', 'Sin conexi�n')
       return
     }
     const toSave = valid.filter((row) => {
@@ -462,7 +445,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       addToast(
         'warning',
         omitidos > 0
-          ? `${omitidos} fila(s) pendientes: guarde uno a uno, corrija o envíe a Revisar Pagos.`
+          ? `${omitidos} fila(s) pendientes: guarde uno a uno, corrija o env�e a Revisar Pagos.`
           : 'No hay filas que cumplan criterios para guardar en lote.'
       )
       return
@@ -490,7 +473,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       }
     }
     if (omitidos > 0) {
-      addToast('warning', `${omitidos} fila(s) omitidas: guarde uno a uno, corrija o envíe a Revisar Pagos.`)
+      addToast('warning', `${omitidos} fila(s) omitidas: guarde uno a uno, corrija o env�e a Revisar Pagos.`)
     }
     if (ok > 0 || fail > 0) refreshPagos()
     setIsSavingIndividual(false)
@@ -511,7 +494,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       onSuccess?.()
       onClose()
     } else if (fail === 0 && ok > 0 && (quedanConErrores || quedanSinGuardar)) {
-      addToast('warning', 'Quedan filas pendientes. Use "Revisar Pagos" en cada una o corríjalas.')
+      addToast('warning', 'Quedan filas pendientes. Use "Revisar Pagos" en cada una o corr�jalas.')
     }
   }, [getValidRows, serviceStatus, saveIndividualPago, addToast, onSuccess, onClose, prestamosPorCedula, excelData, savedRows, enviadosRevisar, duplicadosPendientesRevisar])
 
@@ -529,7 +512,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         const data = await file.arrayBuffer()
         if (!isMounted()) return
         if (data.byteLength > 10 * 1024 * 1024) {
-          alert('Archivo demasiado grande. Máximo 10 MB')
+          alert('Archivo demasiado grande. M�ximo 10 MB')
           return
         }
         const { readExcelToJSON } = await import('../types/exceljs')
@@ -563,13 +546,13 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           const prestamoIdRaw = row[4]
           const conciliacionRawCol4 = (row[4]?.toString() || '').trim().toUpperCase()
           const conciliacionRawCol5 = (row[5]?.toString() || '').trim().toUpperCase()
-          const isConciliacionCol4 = ['SI', 'SÍ', 'NO', '1', '0'].includes(conciliacionRawCol4)
+          const isConciliacionCol4 = ['SI', 'S�', 'NO', '1', '0'].includes(conciliacionRawCol4)
           const prestamoId =
             !isConciliacionCol4 && prestamoIdRaw != null && String(prestamoIdRaw).trim() !== ''
               ? parseInt(String(prestamoIdRaw).trim(), 10)
               : null
           const conciliacionRaw = (isConciliacionCol4 ? conciliacionRawCol4 : conciliacionRawCol5).trim()
-          // Por defecto: Conciliación = Sí. Solo No si explícitamente "NO" (evitar que 0/celda vacía = No).
+          // Por defecto: Conciliaci�n = S�. Solo No si expl�citamente "NO" (evitar que 0/celda vac�a = No).
           const conciliado = conciliacionRaw === 'NO' ? false : true
 
           const rowData: PagoExcelRow = {

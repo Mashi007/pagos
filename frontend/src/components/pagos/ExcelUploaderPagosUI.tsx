@@ -144,7 +144,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                         <X className="mr-2 h-4 w-4" />
                         Cambiar archivo
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => navigate('/pagos')} className="bg-green-50 border-green-300">
+                      <Button variant="outline" size="sm" onClick={() => { navigate('/pagos'); onClose(); }} className="bg-green-50 border-green-300">
                         <Eye className="mr-2 h-4 w-4" />
                         Ir a Pagos
                       </Button>
@@ -152,8 +152,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                         variant="outline"
                         size="sm"
                         onClick={() => {
-                          onClose()
-                          navigate('/pagos?revisar=1')
+                          navigate('/pagos?revisar=1'); onClose()
                         }}
                         className="bg-amber-50 border-amber-300"
                         title="Ver pagos sin crédito asignado"
