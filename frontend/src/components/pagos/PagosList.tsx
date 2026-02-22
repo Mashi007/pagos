@@ -184,8 +184,10 @@ export function PagosList() {
   const handleRefresh = async () => {
     try {
       await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
+      await queryClient.invalidateQueries({ queryKey: ['pagos-con-errores'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['pagos'], exact: false })
+      await queryClient.refetchQueries({ queryKey: ['pagos-con-errores'], exact: false })
       await queryClient.refetchQueries({ queryKey: ['pagos-kpis'], exact: false })
       toast.success('Datos actualizados correctamente')
     } catch (error: unknown) {
@@ -478,7 +480,12 @@ export function PagosList() {
                   </p>
                   <Button
                     className="mt-4"
-                    onClick={() => queryClient.refetchQueries({ queryKey: ['pagos'] })}
+                    onClick={() =>
+                      queryClient.refetchQueries({
+                        queryKey: esRevisarPagos ? ['pagos-con-errores'] : ['pagos'],
+                        exact: false,
+                      })
+                    }
                   >
                     Reintentar
                   </Button>
@@ -508,7 +515,8 @@ export function PagosList() {
                           <TableHead>Cédula</TableHead>
                           <TableHead>Crédito</TableHead>
                           <TableHead>Estado</TableHead>
-                          <TableHead className="text-center">Cuotas Atrasadas</TableHead>
+                          {!esRevisarPagos && <TableHead className="text-center">Cuotas Atrasadas</TableHead>}
+                          {esRevisarPagos && <TableHead>Observaciones</TableHead>}
                           <TableHead>Monto</TableHead>
                           <TableHead>Fecha Pago</TableHead>
                           <TableHead>Nº Documento</TableHead>
@@ -529,11 +537,16 @@ export function PagosList() {
                               )}
                             </TableCell>
                             <TableCell>{getEstadoBadge(pago.estado)}</TableCell>
-                            <TableCell className="text-center">
-                              <span className={pago.cuotas_atrasadas && pago.cuotas_atrasadas > 0 ? 'text-red-600 font-semibold' : ''}>
-                                {pago.cuotas_atrasadas ?? 0}
-                              </span>
-                            </TableCell>
+                            {!esRevisarPagos && (
+                              <TableCell className="text-center">
+                                <span className={pago.cuotas_atrasadas && pago.cuotas_atrasadas > 0 ? 'text-red-600 font-semibold' : ''}>
+                                  {pago.cuotas_atrasadas ?? 0}
+                                </span>
+                              </TableCell>
+                            )}
+                            {esRevisarPagos && (
+                              <TableCell className="text-xs text-amber-700">{(pago as PagoConError).observaciones ?? '-'}</TableCell>
+                            )}
                             <TableCell>
                               ${typeof pago.monto_pagado === 'number' ? pago.monto_pagado.toFixed(2) : parseFloat(String(pago.monto_pagado || 0)).toFixed(2)}
                             </TableCell>
