@@ -337,6 +337,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           /* keep as is */
         }
       }
+      let usadoRetry409 = false
       try {
         if (row._hasErrors) {
           const erroresDesc = Object.entries(row._validation || {})
@@ -356,7 +357,6 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           })
         } else {
           let pagoData = buildPagoData(numeroDoc)
-          let usadoRetry409 = false
           let succeeded = false
           let lastErr: any = null
           for (let attempt = 0; attempt < 3; attempt++) {

@@ -120,7 +120,7 @@ export function PagosList() {
         'Documento nombre': p.documento_nombre ?? '',
         'Documento tipo': p.documento_tipo ?? '',
         'Documento ruta': p.documento_ruta ?? '',
-        'Errores': Array.isArray(p.errores_descripcion) ? JSON.stringify(p.errores_descripcion) : (p.errores_descripcion ?? ''),
+        'Errores': Array.isArray((p as PagoConError).errores_descripcion) ? JSON.stringify((p as PagoConError).errores_descripcion) : ((p as PagoConError).errores_descripcion ?? ''),
       }))
       const nombre = `Revisar_Pagos_${new Date().toISOString().slice(0, 10)}.xlsx`
       await createAndDownloadExcel(datos, 'Revisar Pagos', nombre)
@@ -147,10 +147,19 @@ export function PagosList() {
     }
   }, [searchParams, setSearchParams])
 
-  // Query para obtener pagos
+  const esRevisarPagos = filters.sin_prestamo === 'si'
   const { data, isLoading, error, isError } = useQuery({
-    queryKey: ['pagos', page, perPage, filters],
-    queryFn: () => pagoService.getAllPagos(page, perPage, filters),
+    queryKey: esRevisarPagos ? ['pagos-con-errores', page, perPage, filters] : ['pagos', page, perPage, filters],
+    queryFn: () =>
+      esRevisarPagos
+        ? pagoConErrorService.getAll(page, perPage, {
+            cedula: filters.cedula || undefined,
+            estado: filters.estado || undefined,
+            fechaDesde: filters.fechaDesde || undefined,
+            fechaHasta: filters.fechaHasta || undefined,
+            conciliado: filters.conciliado === 'all' ? undefined : filters.conciliado,
+          })
+        : pagoService.getAllPagos(page, perPage, filters),
     staleTime: 0, // Siempre refetch cuando se invalida (mejor para actualización inmediata)
     refetchOnMount: true, // Refetch cuando el componente se monta
     refetchOnWindowFocus: false, // No refetch en focus (evita requests innecesarios)
