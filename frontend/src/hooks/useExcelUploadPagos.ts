@@ -340,9 +340,8 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       let usadoRetry409 = false
       try {
         if (row._hasErrors) {
-          const erroresDesc = Object.entries(row._validation || {})
-            .filter(([, v]) => !v.isValid)
-            .map(([field, v]) => ({ field, message: v.message }))
+          const camposConProblema = Object.entries(row._validation || {}).filter(([, v]) => !v.isValid).map(([field]) => field)
+          const observaciones = camposConProblema.join(',')
           await pagoConErrorService.create({
             cedula_cliente: (row.cedula || '').trim(),
             prestamo_id: null,
@@ -352,7 +351,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             institucion_bancaria: null,
             notas: null,
             conciliado: row.conciliado ?? false,
-            errores_descripcion: erroresDesc,
+            observaciones: observaciones || undefined,
             fila_origen: row._rowIndex,
           })
         } else {

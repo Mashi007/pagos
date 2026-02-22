@@ -31,4 +31,5 @@ class PagoConError(Base):
     documento_ruta = Column(String(255), nullable=True)
     referencia_pago = Column(String(100), nullable=False, server_default=text("''"))
     errores_descripcion = Column(JSONB, nullable=True)
+    observaciones = Column(String(255), nullable=True)  # Nombres de campos con problema, separados por coma
     fila_origen = Column(Integer, nullable=True)

@@ -118,10 +118,7 @@ export function PagosList() {
         'Verificado concordancia': p.verificado_concordancia ?? '',
         'Usuario registro': p.usuario_registro ?? '',
         Notas: p.notas ?? '',
-        'Documento nombre': p.documento_nombre ?? '',
-        'Documento tipo': p.documento_tipo ?? '',
-        'Documento ruta': p.documento_ruta ?? '',
-        'Errores': Array.isArray((p as PagoConError).errores_descripcion) ? JSON.stringify((p as PagoConError).errores_descripcion) : ((p as PagoConError).errores_descripcion ?? ''),
+        'Observaciones': (p as PagoConError).observaciones ?? '',
       }))
       const nombre = `Revisar_Pagos_${new Date().toISOString().slice(0, 10)}.xlsx`
       await createAndDownloadExcel(datos, 'Revisar Pagos', nombre)

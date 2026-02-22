@@ -19,6 +19,7 @@ export interface PagoConError {
   documento_tipo: string | null
   documento_ruta: string | null
   errores_descripcion?: Record<string, unknown>[] | null
+  observaciones?: string | null
   fila_origen?: number | null
 }
 
@@ -32,6 +33,7 @@ export interface PagoConErrorCreate {
   notas?: string | null
   conciliado?: boolean
   errores_descripcion?: Record<string, unknown>[] | null
+  observaciones?: string | null
   fila_origen?: number | null
 }
 

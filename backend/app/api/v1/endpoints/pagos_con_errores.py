@@ -1,5 +1,5 @@
-"""
-Endpoints para pagos_con_errores: pagos con errores de validación desde Carga Masiva.
+﻿"""
+Endpoints para pagos_con_errores: pagos con errores de validaciÃ³n desde Carga Masiva.
 Revisar Pagos y front apuntan a esta tabla. No se mezclan con pagos que cumplen validadores.
 """
 import logging
@@ -29,6 +29,7 @@ class PagoConErrorCreate(BaseModel):
     notas: Optional[str] = None
     conciliado: Optional[bool] = False
     errores_descripcion: Optional[list[dict]] = None
+    observaciones: Optional[str] = None  # Nombres de campos con problema, separados por coma
     fila_origen: Optional[int] = None
 
 
@@ -42,6 +43,7 @@ class PagoConErrorUpdate(BaseModel):
     notas: Optional[str] = None
     conciliado: Optional[bool] = None
     errores_descripcion: Optional[list[dict]] = None
+    observaciones: Optional[str] = None
 
 
 def _pago_con_error_to_response(row: PagoConError) -> dict:
@@ -66,6 +68,7 @@ def _pago_con_error_to_response(row: PagoConError) -> dict:
         "documento_tipo": getattr(row, "documento_tipo", None),
         "documento_ruta": getattr(row, "documento_ruta", None),
         "errores_descripcion": row.errores_descripcion,
+        "observaciones": getattr(row, "observaciones", None) or "",
         "fila_origen": row.fila_origen,
     }
 
@@ -82,7 +85,7 @@ def listar_pagos_con_errores(
     conciliado: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Listado paginado de pagos con errores (Revisar Pagos). Se vacía al descargar Excel."""
+    """Listado paginado de pagos con errores (Revisar Pagos). Se vacÃ­a al descargar Excel."""
     try:
         q = select(PagoConError)
         count_q = select(func.count()).select_from(PagoConError)
@@ -152,6 +155,7 @@ def crear_pago_con_error(payload: PagoConErrorCreate, db: Session = Depends(get_
         notas=payload.notas,
         referencia_pago=ref,
         errores_descripcion=payload.errores_descripcion,
+        observaciones=(payload.observaciones or "").strip() or None,
         fila_origen=payload.fila_origen,
     )
     db.add(row)
@@ -166,7 +170,7 @@ class EliminarPorDescargaBody(BaseModel):
 
 @router.post("/eliminar-por-descarga", response_model=dict)
 def eliminar_por_descarga(payload: EliminarPorDescargaBody = Body(...), db: Session = Depends(get_db)):
-    """Elimina de pagos_con_errores los registros descargados. La lista se vacía y se rellena al enviar desde Carga Masiva."""
+    """Elimina de pagos_con_errores los registros descargados. La lista se vacÃ­a y se rellena al enviar desde Carga Masiva."""
     if not payload.ids:
         return {"eliminados": 0, "mensaje": "No hay IDs"}
     eliminados = 0
@@ -283,6 +287,8 @@ def actualizar_pago_con_error(pago_id: int, payload: PagoConErrorUpdate, db: Ses
         row.conciliado = payload.conciliado
     if payload.errores_descripcion is not None:
         row.errores_descripcion = payload.errores_descripcion
+    if payload.observaciones is not None:
+        row.observaciones = payload.observaciones.strip() or None
     db.commit()
     db.refresh(row)
     return _pago_con_error_to_response(row)
