@@ -1,4 +1,4 @@
-﻿import * as exceljsModule from 'exceljs'
+import * as exceljsModule from 'exceljs'
 
 /**
  * Tipos y helpers para exceljs (alternativa segura a xlsx)
@@ -63,9 +63,18 @@ export async function readExcelToJSON(file: File | ArrayBuffer): Promise<any[][]
       row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
         const val = cell.value
         const DOC_COL = 4 // NÂº documento: usar cell.text si value es NaN/null para preservar VE/, BNC/, MER/, etc.
-        if (colNumber === DOC_COL && (val == null || (typeof val === 'number' && Number.isNaN(val)))) {
-          const textVal = (cell as any).text
-          rowData[colNumber - 1] = textVal != null && String(textVal).trim() !== '' ? String(textVal).trim() : val
+        if (colNumber === DOC_COL) {
+          let docStr = ''
+          try {
+            const t = (cell as any).text
+            if (t != null && String(t).trim()) docStr = String(t).trim()
+            else if (typeof val === 'string' && val.trim()) docStr = val.trim()
+            else if (typeof val === 'number' && !Number.isNaN(val)) docStr = String(Math.floor(val))
+            else if (val != null && typeof val === 'object' && 'richText' in val) {
+              docStr = (val as any).richText?.map((x: any) => x?.text ?? '').join('') || ''
+            }
+          } catch { docStr = val != null ? String(val) : '' }
+          rowData[colNumber - 1] = docStr
         } else {
           rowData[colNumber - 1] = val
         }

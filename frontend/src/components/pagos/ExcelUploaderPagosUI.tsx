@@ -1,4 +1,4 @@
-﻿/**
+/**
  * UI para carga masiva de pagos desde Excel.
  * Columnas: Cédula, Fecha de pago, Monto, Documento, ID Préstamo (opcional).
  * Solo créditos activos (APROBADO, DESEMBOLSADO) en el selector.
