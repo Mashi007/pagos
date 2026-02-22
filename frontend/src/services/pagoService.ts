@@ -168,16 +168,16 @@ class PagoService {
   }
 
   // Obtener KPIs de pagos: 1) a cobrar en el mes, 2) cobrado en el mes, 3) morosidad %
-  async getKPIs(mes?: number, aÃ±o?: number, config?: { signal?: AbortSignal }): Promise<{
+  async getKPIs(mes?: number, anio?: number, config?: { signal?: AbortSignal }): Promise<{
     montoACobrarMes: number
     montoCobradoMes: number
     morosidadMensualPorcentaje: number
     mes: number
-    aÃ±o: number
+    anio: number
   }> {
     const params = new URLSearchParams()
     if (mes !== undefined) params.append('mes', mes.toString())
-    if (aÃ±o !== undefined) params.append('aÃ±o', aÃ±o.toString())
+    if (anio !== undefined) params.append('anio', anio.toString())
 
     const queryString = params.toString()
     return await apiClient.get(`${this.baseUrl}/kpis${queryString ? '?' + queryString : ''}`, config)
@@ -202,7 +202,7 @@ class PagoService {
       cuotas_atrasadas: number
       saldo_vencido: number
       total_prestamos: number
-    }>
+    }>,
     total: number
     page: number
     per_page: number
