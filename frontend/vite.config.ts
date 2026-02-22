@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+﻿import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -15,7 +15,7 @@ function removeHeavyChunksPreload(): Plugin {
   return {
     name: 'remove-heavy-chunks-preload',
     generateBundle(options, bundle) {
-      // ✅ Marcar chunks pesados para que no se incluyan en modulepreload
+      // âœ… Marcar chunks pesados para que no se incluyan en modulepreload
       Object.keys(bundle).forEach(fileName => {
         const chunk = bundle[fileName]
         if (chunk.type === 'chunk') {
@@ -25,7 +25,7 @@ function removeHeavyChunksPreload(): Plugin {
           if (isHeavyChunk) {
             // Marcar el chunk para que no se precargue
             chunk.modulePreload = false
-            // También marcar todas las dependencias del chunk pesado
+            // TambiÃ©n marcar todas las dependencias del chunk pesado
             if (chunk.imports) {
               chunk.imports.forEach(imp => {
                 const importedChunk = bundle[imp]
@@ -39,52 +39,52 @@ function removeHeavyChunksPreload(): Plugin {
       })
     },
     transformIndexHtml(html) {
-      // ✅ Eliminar TODOS los modulepreload y preload para chunks pesados (carga bajo demanda)
-      // Esto evita que el navegador precargue estos chunks automáticamente
+      // âœ… Eliminar TODOS los modulepreload y preload para chunks pesados (carga bajo demanda)
+      // Esto evita que el navegador precargue estos chunks automÃ¡ticamente
       let modifiedHtml = html
 
       // Lista de nombres de chunks pesados para usar en patrones
       const heavyChunkNames = ['exceljs', 'pdf-export', 'jspdf', 'html2canvas', 'jspdf-autotable']
 
-      // Eliminar modulepreload para chunks pesados (múltiples patrones)
+      // Eliminar modulepreload para chunks pesados (mÃºltiples patrones)
       heavyChunkNames.forEach(name => {
-        // Patrón 1: rel="modulepreload" ... nombre-chunk
+        // PatrÃ³n 1: rel="modulepreload" ... nombre-chunk
         modifiedHtml = modifiedHtml.replace(
           new RegExp(`<link[^>]*rel=["']modulepreload["'][^>]*${name}[^"']*["'][^>]*>`, 'gi'),
           ''
         )
-        // Patrón 2: nombre-chunk ... rel="modulepreload"
+        // PatrÃ³n 2: nombre-chunk ... rel="modulepreload"
         modifiedHtml = modifiedHtml.replace(
           new RegExp(`<link[^>]*${name}[^"']*["'][^>]*rel=["']modulepreload["'][^>]*>`, 'gi'),
           ''
         )
-        // Patrón 3: href contiene nombre-chunk con modulepreload
+        // PatrÃ³n 3: href contiene nombre-chunk con modulepreload
         modifiedHtml = modifiedHtml.replace(
           new RegExp(`<link[^>]*href=["'][^"']*${name}[^"']*["'][^>]*rel=["']modulepreload["'][^>]*>`, 'gi'),
           ''
         )
       })
 
-      // ✅ También eliminar cualquier preload que pueda estar causando la carga prematura
+      // âœ… TambiÃ©n eliminar cualquier preload que pueda estar causando la carga prematura
       heavyChunkNames.forEach(name => {
-        // Patrón 1: rel="preload" ... nombre-chunk
+        // PatrÃ³n 1: rel="preload" ... nombre-chunk
         modifiedHtml = modifiedHtml.replace(
           new RegExp(`<link[^>]*rel=["']preload["'][^>]*${name}[^"']*["'][^>]*>`, 'gi'),
           ''
         )
-        // Patrón 2: nombre-chunk ... rel="preload"
+        // PatrÃ³n 2: nombre-chunk ... rel="preload"
         modifiedHtml = modifiedHtml.replace(
           new RegExp(`<link[^>]*${name}[^"']*["'][^>]*rel=["']preload["'][^>]*>`, 'gi'),
           ''
         )
-        // Patrón 3: href contiene nombre-chunk con preload
+        // PatrÃ³n 3: href contiene nombre-chunk con preload
         modifiedHtml = modifiedHtml.replace(
           new RegExp(`<link[^>]*href=["'][^"']*${name}[^"']*["'][^>]*rel=["']preload["'][^>]*>`, 'gi'),
           ''
         )
       })
 
-      // ✅ Eliminar también cualquier referencia genérica a chunks pesados en links
+      // âœ… Eliminar tambiÃ©n cualquier referencia genÃ©rica a chunks pesados en links
       const allNamesPattern = heavyChunkNames.join('|')
       modifiedHtml = modifiedHtml.replace(
         new RegExp(`<link[^>]*href=["'][^"']*(${allNamesPattern})[^"']*["'][^>]*>`, 'gi'),
@@ -100,10 +100,10 @@ function removeHeavyChunksPreload(): Plugin {
 export default defineConfig({
   plugins: [
     react({
-      // Asegurar que React esté disponible correctamente
+      // Asegurar que React estÃ© disponible correctamente
       jsxRuntime: 'automatic',
     }),
-    removeHeavyChunksPreload(), // ✅ Eliminar preload de chunks pesados
+    removeHeavyChunksPreload(), // âœ… Eliminar preload de chunks pesados
   ],
   resolve: {
     alias: [
@@ -124,18 +124,18 @@ export default defineConfig({
     },
   },
   build: {
-    // ✅ Deshabilitar completamente modulePreload para evitar precarga automática
-    // Los chunks pesados se cargarán solo cuando se necesiten (lazy loading)
+    // âœ… Deshabilitar completamente modulePreload para evitar precarga automÃ¡tica
+    // Los chunks pesados se cargarÃ¡n solo cuando se necesiten (lazy loading)
     modulePreload: {
       polyfill: false, // Deshabilitar polyfill de modulePreload
       resolveDependencies(filename, deps) {
-        // ✅ CRÍTICO: Excluir chunks pesados de la resolución de dependencias
+        // âœ… CRÃTICO: Excluir chunks pesados de la resoluciÃ³n de dependencias
         // Esto previene que el navegador descubra y precargue estos chunks
         const heavyChunks = ['exceljs', 'pdf-export', 'jspdf', 'html2canvas', 'jspdf-autotable']
 
         // Si el chunk actual es uno pesado, no resolver dependencias
         if (heavyChunks.some(name => filename.includes(name))) {
-          return [] // Retornar array vacío = no preload
+          return [] // Retornar array vacÃ­o = no preload
         }
 
         // Si alguna dependencia es un chunk pesado, excluirla
@@ -147,12 +147,12 @@ export default defineConfig({
     },
     rollupOptions: {
       output: {
-        // ✅ Deshabilitar modulePreload para chunks pesados
+        // âœ… Deshabilitar modulePreload para chunks pesados
         experimentalMinChunkSize: 20000,
         manualChunks: (id) => {
           if (id.includes('node_modules')) {
             // React core - chunk separado (se carga primero por dependencia del entry)
-            // Reduce el tamaño del chunk principal index.js
+            // Reduce el tamaÃ±o del chunk principal index.js
             if ((id.includes('/react/') || id.includes('/react-dom/') ||
                  id.includes('\\react\\') || id.includes('\\react-dom\\')) &&
                 !id.includes('react-router') &&
@@ -172,9 +172,9 @@ export default defineConfig({
               return 'axios'
             }
 
-            // Librerías pesadas de exportación - LAZY LOADING (cargar solo cuando se necesiten)
-            // Estas librerías NO se incluyen en el bundle inicial, solo se cargan bajo demanda
-            // ✅ EXCELJS: Forzar chunk separado y evitar precarga
+            // LibrerÃ­as pesadas de exportaciÃ³n - LAZY LOADING (cargar solo cuando se necesiten)
+            // Estas librerÃ­as NO se incluyen en el bundle inicial, solo se cargan bajo demanda
+            // âœ… EXCELJS: Forzar chunk separado y evitar precarga
             if (id.includes('exceljs')) {
               return 'exceljs' // Chunk separado, se carga solo al exportar Excel
             }
@@ -202,7 +202,7 @@ export default defineConfig({
               return 'form-libs'
             }
 
-            // Radix UI components - estos dependen de React, así que deben cargarse después
+            // Radix UI components - estos dependen de React, asÃ­ que deben cargarse despuÃ©s
             if (id.includes('@radix-ui')) {
               return 'radix-ui'
             }
@@ -211,7 +211,7 @@ export default defineConfig({
             return 'vendor'
           }
 
-          // ✅ NO separar hooks y servicios - incluir en chunks principales para evitar 404
+          // âœ… NO separar hooks y servicios - incluir en chunks principales para evitar 404
           // Los hooks y servicios deben estar disponibles cuando se necesiten
           if (id.includes('/hooks/useConcesionarios') ||
               id.includes('/hooks/useAnalistas') ||
@@ -227,7 +227,7 @@ export default defineConfig({
         },
       },
       onwarn(warning, warn) {
-        // Suprimir warnings de CSS relacionados con propiedades problemáticas ya corregidas
+        // Suprimir warnings de CSS relacionados con propiedades problemÃ¡ticas ya corregidas
         if (warning.message && (
           warning.message.includes('webkit-text-size-adjust') ||
           warning.message.includes('moz-text-size-adjust') ||
@@ -243,21 +243,21 @@ export default defineConfig({
         warn(warning);
       },
       treeshake: {
-        moduleSideEffects: false, // Tree-shaking más agresivo
+        moduleSideEffects: false, // Tree-shaking mÃ¡s agresivo
       },
     },
-    chunkSizeWarningLimit: 1000, // index ~979 kB; aviso solo si algún chunk supera 1 MB
+    chunkSizeWarningLimit: 1000, // index ~979 kB; aviso solo si algÃºn chunk supera 1 MB
     target: 'esnext',
     minify: 'esbuild',
-    // Configuración de source maps para producción
+    // ConfiguraciÃ³n de source maps para producciÃ³n
     sourcemap: process.env.NODE_ENV === 'development' ? true : false,
-    // Configuración adicional para producción
+    // ConfiguraciÃ³n adicional para producciÃ³n
     reportCompressedSize: true,
     cssCodeSplit: true,
     // Suprimir warnings de CSS durante el build
     cssMinify: 'esbuild',
     // Optimizaciones adicionales
-    assetsInlineLimit: 4096, // Inline assets pequeños (< 4KB)
+    assetsInlineLimit: 4096, // Inline assets pequeÃ±os (< 4KB)
   },
   // Base path para servir la app en https://rapicredit.onrender.com/pagos
   base: '/pagos/',
@@ -265,7 +265,7 @@ export default defineConfig({
     port: 4173,
     host: true,
   },
-  // Configuración para Render
+  // ConfiguraciÃ³n para Render
   define: {
     'process.env.VITE_API_URL': JSON.stringify(process.env.VITE_API_URL || 'https://rapicredit.onrender.com'),
   },
