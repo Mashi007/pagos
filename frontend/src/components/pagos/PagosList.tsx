@@ -16,6 +16,8 @@ import {
   CheckCircle,
   XCircle,
   Search,
+  Download,
+  Loader2,
 } from 'lucide-react'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -56,6 +58,7 @@ export function PagosList() {
   const [pagoEditando, setPagoEditando] = useState<Pago | null>(null)
   const [accionesOpenId, setAccionesOpenId] = useState<number | null>(null)
   const [conciliandoId, setConciliandoId] = useState<number | null>(null)
+  const [isExportingRevisar, setIsExportingRevisar] = useState(false)
   const queryClient = useQueryClient()
   // Contar filtros activos (mismo criterio que Préstamos)
   const activeFiltersCount = [
@@ -83,6 +86,54 @@ export function PagosList() {
     setFilters(prev => ({ ...prev, sin_prestamo: 'si', conciliado: 'all' }))
     setActiveTab('todos')
     setPage(1)
+  }
+
+  const handleExportRevisarExcel = async () => {
+    if (!filters.sin_prestamo) return
+    setIsExportingRevisar(true)
+    try {
+      const pagos = await pagoService.getAllPagosForExport({
+        ...filters,
+        sin_prestamo: 'si',
+      })
+      if (pagos.length === 0) {
+        toast.info('No hay pagos para exportar')
+        return
+      }
+      const { createAndDownloadExcel } = await import('../../types/exceljs')
+      const datos = pagos.map((p) => ({
+        ID: p.id,
+        Cédula: p.cedula_cliente,
+        'ID Préstamo': p.prestamo_id ?? '',
+        'Fecha pago': typeof p.fecha_pago === 'string' ? p.fecha_pago : (p.fecha_pago as Date)?.toISOString?.()?.slice(0, 10) ?? '',
+        'Monto pagado': p.monto_pagado,
+        'Nº documento': p.numero_documento,
+        'Institución bancaria': p.institucion_bancaria ?? '',
+        Estado: p.estado,
+        'Fecha registro': p.fecha_registro ? (typeof p.fecha_registro === 'string' ? p.fecha_registro : (p.fecha_registro as Date)?.toISOString?.() ?? '') : '',
+        'Fecha conciliación': p.fecha_conciliacion ? (typeof p.fecha_conciliacion === 'string' ? p.fecha_conciliacion : (p.fecha_conciliacion as Date)?.toISOString?.() ?? '') : '',
+        Conciliado: p.conciliado ? 'Sí' : 'No',
+        'Verificado concordancia': p.verificado_concordancia ?? '',
+        'Usuario registro': p.usuario_registro ?? '',
+        Notas: p.notas ?? '',
+        'Documento nombre': p.documento_nombre ?? '',
+        'Documento tipo': p.documento_tipo ?? '',
+        'Documento ruta': p.documento_ruta ?? '',
+        'Cuotas atrasadas': p.cuotas_atrasadas ?? '',
+      }))
+      const nombre = `Revisar_Pagos_${new Date().toISOString().slice(0, 10)}.xlsx`
+      await createAndDownloadExcel(datos, 'Revisar Pagos', nombre)
+      // Tras guardar el Excel en PC, mover a revisar_pagos para que desaparezcan de la vista
+      const ids = pagos.map((p) => p.id)
+      await pagoService.moverARevisarPagos(ids)
+      queryClient.invalidateQueries({ queryKey: ['pagos'] })
+      toast.success(`${pagos.length} pagos exportados y movidos a revisión`)
+    } catch (err) {
+      console.error('Error exportando Revisar Pagos:', err)
+      toast.error('Error al exportar. Intenta de nuevo.')
+    } finally {
+      setIsExportingRevisar(false)
+    }
   }
 
   useEffect(() => {
@@ -158,6 +209,23 @@ export function PagosList() {
             <Search className="w-5 h-5 mr-2" />
             Revisar Pagos
           </Button>
+          {filters.sin_prestamo === 'si' && (
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={handleExportRevisarExcel}
+              disabled={isExportingRevisar}
+              className="px-6 py-6 text-base font-semibold"
+              title="Descargar todos los pagos a revisar en Excel"
+            >
+              {isExportingRevisar ? (
+                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+              ) : (
+                <Download className="w-5 h-5 mr-2" />
+              )}
+              Descargar Excel
+            </Button>
+          )}
           <CargaMasivaMenu
             onSuccess={async () => {
               try {

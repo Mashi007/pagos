@@ -12,7 +12,8 @@ from decimal import Decimal
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, Query, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, Query, HTTPException, UploadFile, File, Body
+from pydantic import BaseModel
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
@@ -22,7 +23,13 @@ from app.models.cliente import Cliente
 from app.models.cuota import Cuota
 from app.models.prestamo import Prestamo
 from app.models.pago import Pago
+from app.models.revisar_pago import RevisarPago
 from app.schemas.pago import PagoCreate, PagoUpdate, PagoResponse
+
+
+class MoverRevisarPagosBody(BaseModel):
+    """IDs de pagos exportados a Excel para mover a tabla revisar_pagos."""
+    pago_ids: list[int]
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -92,6 +99,10 @@ def listar_pagos(
         if sin_prestamo and sin_prestamo.strip().lower() == "si":
             q = q.where(Pago.prestamo_id.is_(None))
             count_q = count_q.where(Pago.prestamo_id.is_(None))
+            # Excluir pagos ya movidos a revisar_pagos (tabla temporal de validación)
+            revisar_subq = select(RevisarPago.pago_id)
+            q = q.where(~Pago.id.in_(revisar_subq))
+            count_q = count_q.where(~Pago.id.in_(revisar_subq))
         if conciliado and conciliado.strip().lower() == "si":
             q = q.where(Pago.conciliado == True)
             count_q = count_q.where(Pago.conciliado == True)
@@ -756,6 +767,28 @@ def get_pagos_stats(
             "cuotas_atrasadas": 0,
             "pagos_hoy": 0,
         }
+
+
+@router.post("/revisar-pagos/mover", response_model=dict)
+def mover_a_revisar_pagos(payload: MoverRevisarPagosBody = Body(...), db: Session = Depends(get_db)):
+    """
+    Mueve los pagos exportados a la tabla revisar_pagos (temporal de validación).
+    Tras descargar Excel y guardar en PC, estos pagos dejan de mostrarse en Revisar Pagos.
+    No interfiere con procesos ni reglas de negocio.
+    """
+    if not payload.pago_ids:
+        return {"movidos": 0, "mensaje": "No hay pagos para mover"}
+    insertados = 0
+    for pid in payload.pago_ids:
+        if not isinstance(pid, int) or pid <= 0:
+            continue
+        existing = db.scalar(select(RevisarPago.id).where(RevisarPago.pago_id == pid))
+        if existing:
+            continue
+        db.add(RevisarPago(pago_id=pid))
+        insertados += 1
+    db.commit()
+    return {"movidos": insertados, "mensaje": f"{insertados} pagos movidos a revisar_pagos"}
 
 
 @router.get("/{pago_id}", response_model=dict)

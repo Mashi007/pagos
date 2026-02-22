@@ -68,6 +68,34 @@ class PagoService {
     return await apiClient.get<{ pagos: Pago[]; total: number; page: number; per_page: number; total_pages: number }>(url)
   }
 
+  /** Mueve pagos exportados a revisar_pagos (dejan de mostrarse en Revisar Pagos) */
+  async moverARevisarPagos(pagoIds: number[]): Promise<{ movidos: number; mensaje: string }> {
+    return await apiClient.post(`${this.baseUrl}/revisar-pagos/mover`, { pago_ids: pagoIds })
+  }
+
+  /** Obtiene el 100% de los pagos para exportar (paginación automática sin límite) */
+  async getAllPagosForExport(filters: {
+    cedula?: string
+    estado?: string
+    fechaDesde?: string
+    fechaHasta?: string
+    analista?: string
+    conciliado?: string
+    sin_prestamo?: string
+  }): Promise<Pago[]> {
+    const all: Pago[] = []
+    const perPage = 500
+    let page = 1
+    let totalPages = 1
+    do {
+      const res = await this.getAllPagos(page, perPage, filters)
+      all.push(...res.pagos)
+      totalPages = res.total_pages
+      page++
+    } while (page <= totalPages)
+    return all
+  }
+
   async createPago(data: PagoCreate): Promise<Pago> {
     // Usar barra final para coincidir con el endpoint del backend
     return await apiClient.post(`${this.baseUrl}/`, data)

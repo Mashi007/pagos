@@ -21,6 +21,7 @@ from app.models.plantilla_notificacion import PlantillaNotificacion
 from app.models.variable_notificacion import VariableNotificacion
 from app.models.modelo_vehiculo import ModeloVehiculo
 from app.models.reporte_contable_cache import ReporteContableCache
+from app.models.revisar_pago import RevisarPago
 
 __all__ = [
     "Base", "Cliente", "Prestamo", "Ticket", "Cuota", "Pago", "PagosWhatsapp",
@@ -30,5 +31,6 @@ __all__ = [
     "PlantillaNotificacion", "VariableNotificacion",
     "ModeloVehiculo",
     "ReporteContableCache",
+    "RevisarPago",
 ]
 
