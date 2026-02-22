@@ -1,4 +1,4 @@
-﻿/**
+/**
  * ValidaciÃ³n para carga masiva de pagos desde Excel.
  * Columnas: CÃ©dula, Fecha de pago, Monto, Documento (NÂº documento), ID PrÃ©stamo (opcional).
  * La coincidencia se realiza por cÃ©dula. Sin columna Nombre.
@@ -124,7 +124,6 @@ export function validatePagoField(
     case 'numero_documento':
       // Aceptar CUALQUIER formato: VE/191302960, BNC/101754120, Bs. BNC/ 3677878353, numeros largos, etc. Regla: NO puede duplicarse.
       const docNorm = (strVal === 'NaN' || strVal === 'nan' || strVal === 'undefined') ? '' : strVal
-      if (docNorm && _options?.documentosEnArchivo?.has(docNorm)) return { isValid: false, message: 'Documento duplicado en archivo' }
       if (docNorm && _options?.documentosExistentes?.has(docNorm)) return { isValid: false, message: 'Documento ya existe en BD' }
       return { isValid: true }
 

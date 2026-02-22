@@ -544,20 +544,35 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         const requiredFields = ['cedula', 'fecha_pago', 'monto_pagado', 'numero_documento']
         const processed: PagoExcelRow[] = []
         const documentosEnArchivo = new Set<string>()
+        const headerRow = (jsonData[0] as unknown[]) ?? []
+        const cols = (() => {
+          const h = (i: number) => String(headerRow[i] ?? '').toLowerCase().trim()
+          const match = (i: number, ...keys: string[]) => keys.some(k => h(i).includes(k))
+          let cedula = 0, fecha = 1, monto = 2, documento = 3, prestamo = 4, conciliacion = 5
+          for (let i = 0; i < Math.max(headerRow.length, 6); i++) {
+            if (match(i, 'cedula', 'cÃ©dula')) cedula = i
+            if (match(i, 'fecha', 'date')) fecha = i
+            if (match(i, 'monto', 'amount')) monto = i
+            if (match(i, 'documento', 'nÂº documento', 'n documento', 'doc', 'referencia')) documento = i
+            if (match(i, 'prÃ©stamo', 'prestamo', 'credito', 'crÃ©dito')) prestamo = i
+            if (match(i, 'conciliacion', 'conciliaciÃ³n')) conciliacion = i
+          }
+          return { cedula, fecha, monto, documento, prestamo, conciliacion }
+        })()
 
         for (let i = 1; i < jsonData.length; i++) {
           if (!isMounted()) return
           const row = jsonData[i] as unknown[]
           if (!row || row.every((c) => c == null || c === '')) continue
 
-          const cedula = (row[0]?.toString() || '').trim() || ''
-          const fechaPago = convertirFechaExcelPago(row[1])
-          const montoRaw = String(row[2] || 0).replace(',', '.')
+          const cedula = (row[cols.cedula]?.toString() || '').trim() || ''
+          const fechaPago = convertirFechaExcelPago(row[cols.fecha])
+          const montoRaw = String(row[cols.monto] || 0).replace(',', '.')
           const monto = parseFloat(montoRaw) || 0
-          let numeroDoc = normalizarNumeroDocumento(row[3])
-          const prestamoIdRaw = row[4]
-          const conciliacionRawCol4 = (row[4]?.toString() || '').trim().toUpperCase()
-          const conciliacionRawCol5 = (row[5]?.toString() || '').trim().toUpperCase()
+          let numeroDoc = normalizarNumeroDocumento(row[cols.documento])
+          const prestamoIdRaw = row[cols.prestamo]
+          const conciliacionRawCol4 = (row[cols.prestamo]?.toString() || '').trim().toUpperCase()
+          const conciliacionRawCol5 = (row[cols.conciliacion]?.toString() || '').trim().toUpperCase()
           const isConciliacionCol4 = ['SI', 'S?', 'NO', '1', '0'].includes(conciliacionRawCol4)
           const prestamoId =
             !isConciliacionCol4 && prestamoIdRaw != null && String(prestamoIdRaw).trim() !== ''
