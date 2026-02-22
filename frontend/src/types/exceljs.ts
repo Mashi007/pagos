@@ -61,7 +61,14 @@ export async function readExcelToJSON(file: File | ArrayBuffer): Promise<any[][]
     worksheet.eachRow((row, rowNumber) => {
       const rowData: any[] = []
       row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-        rowData[colNumber - 1] = cell.value
+        const val = cell.value
+        const DOC_COL = 4 // NÂº documento: usar cell.text si value es NaN/null para preservar VE/, BNC/, MER/, etc.
+        if (colNumber === DOC_COL && (val == null || (typeof val === 'number' && Number.isNaN(val)))) {
+          const textVal = (cell as any).text
+          rowData[colNumber - 1] = textVal != null && String(textVal).trim() !== '' ? String(textVal).trim() : val
+        } else {
+          rowData[colNumber - 1] = val
+        }
       })
       data.push(rowData)
     })
@@ -227,3 +234,4 @@ export async function createMultiSheetExcel(
     throw new Error(`Error generando archivo Excel: ${error instanceof Error ? error.message : 'Error desconocido'}`)
   }
 }
+
