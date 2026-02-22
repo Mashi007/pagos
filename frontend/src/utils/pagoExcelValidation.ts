@@ -121,7 +121,7 @@ export function validatePagoField(
     }
 
     case 'numero_documento':
-      // Aceptar CUALQUIER formato: Bs. BNC/ 3677878353, BNC/101754120, VE/123, numeros largos, etc. Regla: NO puede duplicarse.
+      // Aceptar CUALQUIER formato: VE/191302960, BNC/101754120, Bs. BNC/ 3677878353, numeros largos, etc. Regla: NO puede duplicarse.
       const docNorm = (strVal === 'NaN' || strVal === 'nan' || strVal === 'undefined') ? '' : strVal
       if (docNorm && _options?.documentosEnArchivo?.has(docNorm)) return { isValid: false, message: 'Documento duplicado en archivo' }
       if (docNorm && _options?.documentosExistentes?.has(docNorm)) return { isValid: false, message: 'Documento ya existe en BD' }
