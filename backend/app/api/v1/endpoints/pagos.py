@@ -312,7 +312,8 @@ async def upload_excel_pagos(
         filas_omitidas = 0  # cÃ©dula vacÃ­a o monto <= 0
         errores = []
         errores_detalle = []
-        numeros_doc_en_lote: set[str] = set()  # NÂº documento no puede repetirse ni en archivo ni en BD
+        numeros_doc_en_lote: set[str] = set()
+        pagos_con_prestamo: list[Pago] = []  # Para aplicar reglas de negocio tras commit  # NÂº documento no puede repetirse ni en archivo ni en BD
         for i, row in enumerate(rows):
             if not row or all(cell is None for cell in row):
                 continue
@@ -395,6 +396,8 @@ async def upload_excel_pagos(
                 )
                 db.add(p)
                 registros += 1
+                if prestamo_id and monto > 0:
+                    pagos_con_prestamo.append(p)
                 if numero_doc_norm:
                     numeros_doc_en_lote.add(numero_doc_norm)
             except Exception as e:
@@ -417,7 +420,18 @@ async def upload_excel_pagos(
                     "error": msg,
                     "datos": datos_fila,
                 })
-        db.commit()
+        db.flush()  # Asigna IDs a los pagos insertados
+        # Reglas de negocio: aplicar pagos con prestamo_id a cuotas
+        cuotas_aplicadas = 0
+        for p in pagos_con_prestamo:
+            try:
+                cc, cp = _aplicar_pago_a_cuotas_interno(p, db)
+                if cc > 0 or cp > 0:
+                    p.estado = "PAGADO"
+                    cuotas_aplicadas += cc + cp
+            except Exception as e:
+                logger.warning("Carga masiva: no se pudo aplicar pago id=%s a cuotas: %s", getattr(p, "id", "?"), e)
+                db.commit()
         errores_limit = 50
         errores_detalle_limit = 100
         total_errores = len(errores)
@@ -425,6 +439,7 @@ async def upload_excel_pagos(
         return {
             "message": "Carga finalizada",
             "registros_procesados": registros,
+            "cuotas_aplicadas": cuotas_aplicadas,
             "filas_omitidas": filas_omitidas,
             "errores": errores[:errores_limit],
             "errores_detalle": errores_detalle[:errores_detalle_limit],
@@ -467,6 +482,7 @@ async def upload_conciliacion(
         pagos_conciliados = 0
         documentos_no_encontrados = []
         errores_detalle = []
+        pagos_para_aplicar: list[Pago] = []
         for i, row in enumerate(rows):
             if not row or (row[0] is None and row[1] is None):
                 continue
@@ -484,11 +500,23 @@ async def upload_conciliacion(
                 pago.conciliado = True
                 pago.fecha_conciliacion = ahora
                 pagos_conciliados += 1
+                if pago.prestamo_id and float(pago.monto_pagado or 0) > 0:
+                    pagos_para_aplicar.append(pago)
             except Exception as e:
                 errores_detalle.append(f"Fila {i + 2}: {e}")
+        cuotas_aplicadas = 0
+        for pago in pagos_para_aplicar:
+            try:
+                cc, cp = _aplicar_pago_a_cuotas_interno(pago, db)
+                if cc > 0 or cp > 0:
+                    pago.estado = "PAGADO"
+                    cuotas_aplicadas += cc + cp
+            except Exception as e:
+                logger.warning("Conciliacion: no se pudo aplicar pago id=%s a cuotas: %s", pago.id, e)
         db.commit()
         return {
             "pagos_conciliados": pagos_conciliados,
+            "cuotas_aplicadas": cuotas_aplicadas,
             "pagos_no_encontrados": len(documentos_no_encontrados),
             "documentos_no_encontrados": documentos_no_encontrados[:100],
             "errores": len(errores_detalle),
@@ -871,6 +899,7 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
                 status_code=409,
                 detail="Ya existe otro pago con ese NÂº de documento. El NÂº documento no puede repetirse.",
             )
+    aplicar_conciliado = False
     for k, v in data.items():
         if k == "notas" and v is not None:
             setattr(row, k, v.strip() or None)
@@ -886,6 +915,7 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
             row.conciliado = bool(v)
             row.fecha_conciliacion = datetime.now(ZoneInfo(TZ_NEGOCIO)) if v else None
             row.verificado_concordancia = "SI" if v else "NO"
+            aplicar_conciliado = bool(v)
         elif k == "verificado_concordancia" and v is not None:
             val = (v or "").strip().upper()
             row.verificado_concordancia = val if val in ("SI", "NO") else ("" if v == "" else str(v)[:10])
@@ -893,6 +923,15 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
             setattr(row, k, v)
     db.commit()
     db.refresh(row)
+    if aplicar_conciliado and row.prestamo_id and float(row.monto_pagado or 0) > 0:
+        try:
+            cuotas_completadas, cuotas_parciales = _aplicar_pago_a_cuotas_interno(row, db)
+            if cuotas_completadas > 0 or cuotas_parciales > 0:
+                row.estado = "PAGADO"
+            db.commit()
+            db.refresh(row)
+        except Exception as e:
+            logger.warning("Al actualizar pago conciliado, no se pudo aplicar a cuotas: %s", e)
     return _pago_to_response(row)
 
 
