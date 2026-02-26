@@ -88,15 +88,22 @@ def _cuotas_a_filas_contable(rows, tasas_cache: dict) -> List[dict]:
 
 
 def _query_cuotas_contable(db: Session, fecha_inicio: date, fecha_fin: date):
-    """Consulta cuotas con pago en el rango dado."""
-    where_conds = [
-        Cliente.estado == "ACTIVO",
-        Prestamo.estado == "APROBADO",
+    """Consulta cuotas con pago en el rango dado. Incluye todos los pagos (no filtra por ACTIVO/APROBADO).
+    Usa Cuota.fecha_pago o, si existe, Pago.fecha_pago como fecha de pago efectiva.
+    Excluye prestamos null: solo incluye cuotas con prestamo_id y prestamo valido (Prestamo.id no null)."""
+    prestamo_valido = and_(Cuota.prestamo_id.isnot(None), Prestamo.id.isnot(None))
+    rango_cuota = and_(
         Cuota.fecha_pago.isnot(None),
         Cuota.fecha_pago >= fecha_inicio,
         Cuota.fecha_pago <= fecha_fin,
-    ]
+    )
     if hasattr(Cuota, "pago_id") and hasattr(Cuota, "total_pagado"):
+        rango_pago = and_(
+            Pago.fecha_pago.isnot(None),
+            Pago.fecha_pago >= fecha_inicio,
+            Pago.fecha_pago <= fecha_fin,
+        )
+        where_rango = or_(rango_cuota, rango_pago)
         q = (
             select(
                 Cuota.id,
@@ -112,8 +119,7 @@ def _query_cuotas_contable(db: Session, fecha_inicio: date, fecha_fin: date):
             .select_from(Cuota)
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
             .outerjoin(Pago, Cuota.pago_id == Pago.id)
-            .join(Cliente, Prestamo.cliente_id == Cliente.id)
-            .where(*where_conds)
+            .where(and_(prestamo_valido, where_rango))
         )
     else:
         q = (
@@ -130,8 +136,7 @@ def _query_cuotas_contable(db: Session, fecha_inicio: date, fecha_fin: date):
             )
             .select_from(Cuota)
             .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .join(Cliente, Prestamo.cliente_id == Cliente.id)
-            .where(*where_conds)
+            .where(and_(prestamo_valido, rango_cuota))
         )
     return db.execute(q).fetchall()
 
@@ -386,6 +391,36 @@ def exportar_contable(
 
     data = get_reporte_contable_desde_cache(db, anos=anos_list, meses=meses_list, cedulas=cedulas_list)
     items = data.get("items", [])
+    # Si el cache no tiene datos para el periodo, consultar en vivo (p. ej. cache vacio o desactualizado)
+    if not items and anos_list and meses_list:
+        periodos = [(a, m) for a in anos_list for m in meses_list]
+        if periodos:
+            min_p = min(periodos, key=lambda p: (p[0], p[1]))
+            max_p = max(periodos, key=lambda p: (p[0], p[1]))
+            fi = date(min_p[0], min_p[1], 1)
+            _, ult = calendar.monthrange(max_p[0], max_p[1])
+            ff = date(max_p[0], max_p[1], ult)
+            rows = _query_cuotas_contable(db, fi, ff)
+            tasas_fb = {}
+            filas_fb = _cuotas_a_filas_contable(rows, tasas_fb)
+            if cedulas_list:
+                filas_fb = [f for f in filas_fb if f["cedula"] in cedulas_list]
+            items = [
+                {
+                    "cedula": f["cedula"],
+                    "nombre": f["nombre"],
+                    "tipo_documento": f["tipo_documento"],
+                    "fecha_vencimiento": f["fecha_vencimiento"].isoformat() if hasattr(f.get("fecha_vencimiento"), "isoformat") else str(f.get("fecha_vencimiento", "")),
+                    "fecha_pago": f["fecha_pago"].isoformat() if hasattr(f.get("fecha_pago"), "isoformat") else str(f.get("fecha_pago", "")),
+                    "importe_md": _safe_float(f.get("importe_md")),
+                    "moneda_documento": f.get("moneda_documento") or "USD",
+                    "tasa": _safe_float(f.get("tasa")),
+                    "importe_ml": _safe_float(f.get("importe_ml")),
+                    "moneda_local": f.get("moneda_local") or "Bs.",
+                }
+                for f in filas_fb
+            ]
+            data = {"items": items, "fecha_inicio": fi.isoformat(), "fecha_fin": ff.isoformat()}
     content = _generar_excel_contable(data)
     hoy_str = date.today().isoformat()
     headers = {"Content-Disposition": f"attachment; filename=reporte_contable_{hoy_str}.xlsx"}
