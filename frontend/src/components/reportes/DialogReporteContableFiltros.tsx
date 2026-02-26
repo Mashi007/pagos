@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+﻿import { useState, useEffect, useCallback } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -44,7 +44,7 @@ export function DialogReporteContableFiltros({
   const [loadingCedulas, setLoadingCedulas] = useState(false)
 
   const añoActual = new Date().getFullYear()
-  const añosOpciones = [añoActual, añoActual - 1, añoActual - 2, añoActual - 3, añoActual - 4]
+  const añosOpciones = [añoActual, añoActual - 1, añoActual - 2, añoActual - 3, añoActual - 4].filter((a) => a !== 2022 && a !== 2023)
 
   const buscarCedulas = useCallback(async (q: string) => {
     setLoadingCedulas(true)
