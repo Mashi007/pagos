@@ -1,4 +1,4 @@
-﻿"""
+"""
 Reportes contables (con cache).
 """
 import calendar
@@ -111,7 +111,7 @@ def _cuotas_a_filas_contable_con_signo(rows, tasas_cache: dict) -> List[dict]:
         else:
             importe_md = round(-monto_cuota, 2)
             fp_date = None
-            tipo_doc = f"Cuota {r.numero_cuota} (no pago)"
+            tipo_doc = f"Cuota {r.numero_cuota}"
 
         fv = r.fecha_vencimiento
         if fp_date is not None:
@@ -514,7 +514,7 @@ def exportar_contable(
                 "nombre": f["nombre"],
                 "tipo_documento": f["tipo_documento"],
                 "fecha_vencimiento": fv.isoformat() if hasattr(fv, "isoformat") else str(fv or ""),
-                "fecha_pago": fp.isoformat() if fp and hasattr(fp, "isoformat") else str(fp or ""),
+                "fecha_pago": fp.isoformat() if fp and hasattr(fp, "isoformat") else ("no pago" if fp is None else str(fp or "")),
                 "importe_md": _safe_float(f.get("importe_md")),
                 "moneda_documento": f.get("moneda_documento") or "USD",
                 "tasa": _safe_float(f.get("tasa")),
