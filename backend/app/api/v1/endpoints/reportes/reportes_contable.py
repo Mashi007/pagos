@@ -27,7 +27,7 @@ CONTABLE_CACHE_DIAS_ACTUALIZABLES = 7
 
 
 def _obtener_tasa_usd_bs(fecha: date) -> float:
-    """Obtiene tasa USD a Bolívares (Venezuela) para la fecha."""
+    """Obtiene tasa USD a BolÃ­vares (Venezuela) para la fecha."""
     from app.core.config import settings
     import urllib.request
     import json
@@ -108,9 +108,18 @@ def _cuotas_a_filas_contable_con_signo(rows, tasas_cache: dict) -> List[dict]:
             fp = getattr(r, "fecha_pago_real", None) or r.fecha_pago
             fp_date = fp.date() if hasattr(fp, "date") else (date.fromisoformat(str(fp)[:10]) if fp else None)
             tipo_doc = f"Cuota {r.numero_cuota}"
+            fecha_pago_text = None
         else:
-            importe_md = round(-monto_cuota, 2)
-            fp_date = None
+            fv = r.fecha_vencimiento
+            por_vencer = fv >= date.today()
+            if por_vencer:
+                importe_md = round(monto_cuota, 2)
+                fp_date = None
+                fecha_pago_text = "POR VENCER"
+            else:
+                importe_md = round(-monto_cuota, 2)
+                fp_date = None
+                fecha_pago_text = "no pago"
             tipo_doc = f"Cuota {r.numero_cuota}"
 
         fv = r.fecha_vencimiento
@@ -123,14 +132,18 @@ def _cuotas_a_filas_contable_con_signo(rows, tasas_cache: dict) -> List[dict]:
                 tasas_cache[fv] = _obtener_tasa_usd_bs(fv)
             tasa = tasas_cache[fv]
         importe_ml = round(importe_md * tasa, 2)
+        fa = getattr(r, "fecha_aprobacion", None)
+        fa_str = fa.date().isoformat() if fa and hasattr(fa, "date") else (fa.isoformat()[:10] if fa else "")
 
         items.append({
             "cuota_id": r.id,
             "cedula": r.cedula or "",
             "nombre": (r.nombres or "").strip(),
             "tipo_documento": tipo_doc,
+            "fecha_aprobacion_prestamo": fa_str,
             "fecha_vencimiento": fv,
             "fecha_pago": fp_date,
+            "fecha_pago_text": fecha_pago_text,
             "importe_md": importe_md,
             "moneda_documento": "USD",
             "tasa": tasa,
@@ -196,7 +209,7 @@ def _query_cuotas_contable(db: Session, fecha_inicio: date, fecha_fin: date):
 
 
 def _query_cuotas_por_vencimiento(db: Session, fecha_inicio: date, fecha_fin: date):
-    """Todas las cuotas con fecha_vencimiento en el rango (amortizacion). LEFT JOIN pagos."""
+    """Todas las cuotas con fecha_vencimiento en el rango (incl. pagadas, vencidas sin pago y futuras). LEFT JOIN pagos. No se filtra por date.today()."""
     prestamo_valido = and_(Cuota.prestamo_id.isnot(None), Prestamo.id.isnot(None))
     rango_vencimiento = and_(
         Cuota.fecha_vencimiento >= fecha_inicio,
@@ -207,6 +220,7 @@ def _query_cuotas_por_vencimiento(db: Session, fecha_inicio: date, fecha_fin: da
             select(
                 Cuota.id, Cuota.numero_cuota, Cuota.fecha_vencimiento, Cuota.fecha_pago,
                 Cuota.monto, Cuota.total_pagado, Prestamo.cedula, Prestamo.nombres,
+                Prestamo.fecha_aprobacion,
                 Pago.fecha_pago.label("fecha_pago_real"), Pago.monto_pagado.label("monto_pagado_real"),
             )
             .select_from(Cuota).join(Prestamo, Cuota.prestamo_id == Prestamo.id)
@@ -218,6 +232,7 @@ def _query_cuotas_por_vencimiento(db: Session, fecha_inicio: date, fecha_fin: da
             select(
                 Cuota.id, Cuota.numero_cuota, Cuota.fecha_vencimiento, Cuota.fecha_pago,
                 Cuota.monto, Cuota.monto.label("total_pagado"), Prestamo.cedula, Prestamo.nombres,
+                Prestamo.fecha_aprobacion,
                 Cuota.fecha_pago.label("fecha_pago_real"),
             )
             .select_from(Cuota).join(Prestamo, Cuota.prestamo_id == Prestamo.id)
@@ -227,7 +242,7 @@ def _query_cuotas_por_vencimiento(db: Session, fecha_inicio: date, fecha_fin: da
 
 
 def sync_reporte_contable_completo(db: Session) -> int:
-    """Sincroniza todo el histórico al cache. Retorna cantidad de filas insertadas."""
+    """Sincroniza todo el histÃ³rico al cache. Retorna cantidad de filas insertadas."""
     fi = date(2000, 1, 1)
     ff = date.today()
     rows = _query_cuotas_contable(db, fi, ff)
@@ -298,7 +313,7 @@ def get_reporte_contable_desde_cache(
     meses: List[int],
     cedulas: Optional[List[str]] = None,
 ) -> dict:
-    """Lee del cache filtrando por años, meses y opcionalmente cédulas."""
+    """Lee del cache filtrando por aÃ±os, meses y opcionalmente cÃ©dulas."""
     if not anos or not meses:
         return {"items": [], "fecha_inicio": "", "fecha_fin": ""}
 
@@ -372,10 +387,10 @@ def _generar_excel_contable(data: dict) -> bytes:
     ws.title = "Reporte Contable"
     items = data.get("items", [])
     ws.append(["Reporte Contable"])
-    ws.append([f"Período: {data.get('fecha_inicio', '')} a {data.get('fecha_fin', '')}"])
+    ws.append([f"PerÃ­odo: {data.get('fecha_inicio', '')} a {data.get('fecha_fin', '')}"])
     ws.append([])
     headers = [
-        "Cédula", "Nombre", "Tipo de documento", "Fecha de vencimiento", "Fecha de pago",
+        "CÃ©dula", "Nombre", "Tipo de documento", "Fecha de vencimiento", "Fecha de pago",
         "Importe MD", "Moneda documento", "Tasa", "Importe en ML", "Moneda Local",
     ]
     ws.append(headers)
@@ -383,6 +398,7 @@ def _generar_excel_contable(data: dict) -> bytes:
         for r in items:
             ws.append([
                 r.get("cedula", ""), r.get("nombre", ""), r.get("tipo_documento", ""),
+                r.get("fecha_aprobacion_prestamo", ""),
                 r.get("fecha_vencimiento", ""), r.get("fecha_pago", ""),
                 r.get("importe_md", 0), r.get("moneda_documento", "USD"),
                 r.get("tasa", 0), r.get("importe_ml", 0), r.get("moneda_local", "Bs."),
@@ -390,7 +406,7 @@ def _generar_excel_contable(data: dict) -> bytes:
     else:
         ws.append(["(Sin datos)"])
         ws.append([
-            "No hay cuotas pagadas en el período seleccionado. "
+            "No hay cuotas pagadas en el perÃ­odo seleccionado. "
             "Verifique: 1) Que las fechas sean pasadas (no futuras). 2) Que existan cuotas con fecha de pago en ese mes.",
         ])
     buf = io.BytesIO()
@@ -401,10 +417,10 @@ def _generar_excel_contable(data: dict) -> bytes:
 @router.get("/contable/cedulas")
 def buscar_cedulas_contable(
     db: Session = Depends(get_db),
-    q: Optional[str] = Query(None, description="Búsqueda por cédula o nombre"),
+    q: Optional[str] = Query(None, description="BÃºsqueda por cÃ©dula o nombre"),
     limit: int = Query(50, ge=1, le=200),
 ):
-    """Busca cédulas para filtrar reporte contable."""
+    """Busca cÃ©dulas para filtrar reporte contable."""
     try:
         ReporteContableCache.__table__.create(db.get_bind(), checkfirst=True)
     except Exception:
@@ -450,13 +466,13 @@ def buscar_cedulas_contable(
 def exportar_contable(
     request: Request,
     db: Session = Depends(get_db),
-    anos: Optional[str] = Query(None, description="Años separados por coma, ej. 2024,2025"),
+    anos: Optional[str] = Query(None, description="AÃ±os separados por coma, ej. 2024,2025"),
     meses: Optional[str] = Query(None, description="Meses 1-12 separados por coma, ej. 1,6,12"),
-    cedulas: Optional[str] = Query(None, description="Cédulas separadas por coma (vacío = todas)"),
+    cedulas: Optional[str] = Query(None, description="CÃ©dulas separadas por coma (vacÃ­o = todas)"),
 ):
     """Exporta reporte contable en Excel desde cache."""
     if anos is None:
-        anos = request.query_params.get("anos") or request.query_params.get("años")
+        anos = request.query_params.get("anos") or request.query_params.get("aÃ±os")
     try:
         ReporteContableCache.__table__.create(db.get_bind(), checkfirst=True)
     except Exception:
@@ -490,7 +506,7 @@ def exportar_contable(
     if cedulas and cedulas.strip():
         cedulas_list = [c.strip() for c in cedulas.split(",") if c.strip()]
 
-    # Todas las cuotas con vencimiento en el periodo: con pago -> Importe MD +; sin pago -> -
+    # Todas las cuotas con vencimiento en el periodo (pagadas, vencidas y futuras): con pago -> Importe MD +; sin pago -> -
     periodos = [(a, m) for a in anos_list for m in meses_list]
     if not periodos:
         data = {"items": [], "fecha_inicio": "", "fecha_fin": ""}
@@ -513,8 +529,9 @@ def exportar_contable(
                 "cedula": f["cedula"],
                 "nombre": f["nombre"],
                 "tipo_documento": f["tipo_documento"],
+                "fecha_aprobacion_prestamo": f.get("fecha_aprobacion_prestamo", ""),
                 "fecha_vencimiento": fv.isoformat() if hasattr(fv, "isoformat") else str(fv or ""),
-                "fecha_pago": fp.isoformat() if fp and hasattr(fp, "isoformat") else ("no pago" if fp is None else str(fp or "")),
+                "fecha_pago": fp.isoformat() if fp and hasattr(fp, "isoformat") else (f.get("fecha_pago_text") or "no pago"),
                 "importe_md": _safe_float(f.get("importe_md")),
                 "moneda_documento": f.get("moneda_documento") or "USD",
                 "tasa": _safe_float(f.get("tasa")),
