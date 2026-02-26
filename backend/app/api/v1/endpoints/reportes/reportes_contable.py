@@ -1,4 +1,4 @@
-"""
+﻿"""
 Reportes contables (con cache).
 """
 import calendar
@@ -525,8 +525,7 @@ def exportar_contable(
     content = _generar_excel_contable(data)
     hoy_str = date.today().isoformat()
     headers = {"Content-Disposition": f"attachment; filename=reporte_contable_{hoy_str}.xlsx"}
-    if not items:
-        headers["X-Reporte-Contable-Vacio"] = "1"
+    if not data.get("items", []):`n        headers["X-Reporte-Contable-Vacio"] = "1"
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
