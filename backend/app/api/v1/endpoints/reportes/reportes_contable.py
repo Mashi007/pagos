@@ -231,14 +231,18 @@ def get_reporte_contable_desde_cache(
     q = (
         select(ReporteContableCache)
         .where(or_(*condiciones) if len(condiciones) > 1 else condiciones[0])
-        .order_by(ReporteContableCache.fecha_pago.asc(), ReporteContableCache.cedula.asc())
+        .order_by(ReporteContableCache.fecha_pago.asc(), ReporteContableCache.cedula.asc(), ReporteContableCache.cuota_id.asc())
     )
     if cedulas:
         q = q.where(ReporteContableCache.cedula.in_(cedulas))
 
-    rows = db.execute(q).scalars().all()
-    items = [
-        {
+    # Todas las filas (una por cuota); no distinct por cedula
+    result = db.execute(q)
+    rows = result.all()
+    items = []
+    for row in rows:
+        r = row[0] if hasattr(row, "__getitem__") else row
+        items.append({
             "cedula": r.cedula,
             "nombre": r.nombre,
             "tipo_documento": r.tipo_documento,
@@ -249,9 +253,7 @@ def get_reporte_contable_desde_cache(
             "tasa": _safe_float(r.tasa),
             "importe_ml": _safe_float(r.importe_ml),
             "moneda_local": r.moneda_local or "Bs.",
-        }
-        for r in rows
-    ]
+        })
 
     min_periodo = min(periodos, key=lambda p: (p[0], p[1]))
     max_periodo = max(periodos, key=lambda p: (p[0], p[1]))
