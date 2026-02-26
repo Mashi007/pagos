@@ -6,7 +6,7 @@ import io
 from datetime import date, timedelta
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
 from sqlalchemy import func, select, and_, or_, delete
 from sqlalchemy.orm import Session
@@ -170,34 +170,37 @@ def sync_reporte_contable_completo(db: Session) -> int:
 
 
 def refresh_cache_ultimos_7_dias(db: Session) -> int:
-    """Elimina y reinserta en cache solo los últimos 7 días."""
+    """Elimina y reinserta en cache solo los ultimos 7 dias. Deduplica por cuota_id y borra por cuota_id para evitar UniqueViolation."""
     hoy = date.today()
     limite = hoy - timedelta(days=CONTABLE_CACHE_DIAS_ACTUALIZABLES)
-
-    db.execute(delete(ReporteContableCache).where(ReporteContableCache.fecha_pago >= limite))
-    db.commit()
 
     rows = _query_cuotas_contable(db, limite, hoy)
     tasas: dict = {}
     filas = _cuotas_a_filas_contable(rows, tasas)
+    # Deduplicate by cuota_id (keep last) in case the query returns duplicates
+    by_cuota: dict = {f["cuota_id"]: f for f in filas}
+    filas = list(by_cuota.values())
 
-    for f in filas:
-        db.add(ReporteContableCache(
-            cuota_id=f["cuota_id"],
-            cedula=f["cedula"],
-            nombre=f["nombre"],
-            tipo_documento=f["tipo_documento"],
-            fecha_vencimiento=f["fecha_vencimiento"],
-            fecha_pago=f["fecha_pago"],
-            importe_md=f["importe_md"],
-            moneda_documento=f["moneda_documento"],
-            tasa=f["tasa"],
-            importe_ml=f["importe_ml"],
-            moneda_local=f["moneda_local"],
-        ))
-    db.commit()
+    if filas:
+        cuota_ids = [f["cuota_id"] for f in filas]
+        db.execute(delete(ReporteContableCache).where(ReporteContableCache.cuota_id.in_(cuota_ids)))
+        db.commit()
+        for f in filas:
+            db.add(ReporteContableCache(
+                cuota_id=f["cuota_id"],
+                cedula=f["cedula"],
+                nombre=f["nombre"],
+                tipo_documento=f["tipo_documento"],
+                fecha_vencimiento=f["fecha_vencimiento"],
+                fecha_pago=f["fecha_pago"],
+                importe_md=f["importe_md"],
+                moneda_documento=f["moneda_documento"],
+                tasa=f["tasa"],
+                importe_ml=f["importe_ml"],
+                moneda_local=f["moneda_local"],
+            ))
+        db.commit()
     return len(filas)
-
 
 def get_reporte_contable_desde_cache(
     db: Session,
@@ -339,12 +342,15 @@ def buscar_cedulas_contable(
 
 @router.get("/exportar/contable")
 def exportar_contable(
+    request: Request,
     db: Session = Depends(get_db),
     anos: Optional[str] = Query(None, description="Años separados por coma, ej. 2024,2025"),
     meses: Optional[str] = Query(None, description="Meses 1-12 separados por coma, ej. 1,6,12"),
     cedulas: Optional[str] = Query(None, description="Cédulas separadas por coma (vacío = todas)"),
 ):
     """Exporta reporte contable en Excel desde cache."""
+    if anos is None:
+        anos = request.query_params.get("anos") or request.query_params.get("años")
     try:
         ReporteContableCache.__table__.create(db.get_bind(), checkfirst=True)
     except Exception:

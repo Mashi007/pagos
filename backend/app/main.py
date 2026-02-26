@@ -23,15 +23,13 @@ class RequestLogMiddleware(BaseHTTPMiddleware):
         start = time.perf_counter()
         response = await call_next(request)
         elapsed_ms = int((time.perf_counter() - start) * 1000)
-        logger.info(
-            "request method=%s path=%s status=%s elapsed_ms=%s",
-            request.method,
-            request.url.path,
-            response.status_code,
-            elapsed_ms,
-        )
+        status = response.status_code
+        msg = "request method=%s path=%s status=%s elapsed_ms=%s"
+        if status >= 500 or elapsed_ms >= 5000:
+            logger.warning(msg + " (slow_or_error)", request.method, request.url.path, status, elapsed_ms)
+        else:
+            logger.info(msg, request.method, request.url.path, status, elapsed_ms)
         return response
-
 
 # Crear aplicación FastAPI
 app = FastAPI(

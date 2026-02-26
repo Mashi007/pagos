@@ -248,6 +248,7 @@ export interface ProductosPorMes {
 
 class ReporteService {
   private baseUrl = '/api/v1/reportes'
+  // API expects query param 'anos' (no n-tilde); use 'meses_list' for months in cartera/pagos/morosidad/asesores.
 
   /**
    * Obtiene cuentas por cobrar por mes: por día cuándo debe cobrar
@@ -300,7 +301,7 @@ class ReporteService {
   ): Promise<Blob> {
     const params = new URLSearchParams({ formato })
     if (fechaCorte) params.set('fecha_corte', fechaCorte)
-    if (filtros?.años?.length) params.set('años', filtros.años.join(','))
+    if (filtros?.años?.length) params.set('anos', filtros.años.join(','))
     if (filtros?.meses?.length) params.set('meses_list', filtros.meses.join(','))
     const axiosInstance = apiClient.getAxiosInstance()
     const response = await axiosInstance.get(
@@ -400,7 +401,7 @@ class ReporteService {
     const params = new URLSearchParams({ formato })
     if (formato === 'excel') {
       params.set('meses', meses.toString())
-      if (filtros?.años?.length) params.set('años', filtros.años.join(','))
+      if (filtros?.años?.length) params.set('anos', filtros.años.join(','))
       if (filtros?.meses?.length) params.set('meses_list', filtros.meses.join(','))
     } else if (fechaInicio && fechaFin) {
       params.set('fecha_inicio', fechaInicio)
@@ -438,7 +439,7 @@ class ReporteService {
   ): Promise<Blob> {
     const params = new URLSearchParams({ formato })
     if (fechaCorte) params.set('fecha_corte', fechaCorte)
-    if (filtros?.años?.length) params.set('años', filtros.años.join(','))
+    if (filtros?.años?.length) params.set('anos', filtros.años.join(','))
     if (filtros?.meses?.length) params.set('meses_list', filtros.meses.join(','))
     const axiosInstance = apiClient.getAxiosInstance()
     const response = await axiosInstance.get(
@@ -475,7 +476,7 @@ class ReporteService {
   ): Promise<Blob> {
     const params = new URLSearchParams({ formato })
     if (fechaCorte) params.set('fecha_corte', fechaCorte)
-    if (filtros?.años?.length) params.set('años', filtros.años.join(','))
+    if (filtros?.años?.length) params.set('anos', filtros.años.join(','))
     if (filtros?.meses?.length) params.set('meses_list', filtros.meses.join(','))
     const axiosInstance = apiClient.getAxiosInstance()
     const response = await axiosInstance.get(
@@ -495,7 +496,7 @@ class ReporteService {
   ): Promise<Blob> {
     const params = new URLSearchParams({ formato })
     if (fechaCorte) params.set('fecha_corte', fechaCorte)
-    if (filtros?.años?.length) params.set('años', filtros.años.join(','))
+    if (filtros?.años?.length) params.set('anos', filtros.años.join(','))
     if (filtros?.meses?.length) params.set('meses_list', filtros.meses.join(','))
     const axiosInstance = apiClient.getAxiosInstance()
     const response = await axiosInstance.get(
@@ -524,7 +525,7 @@ class ReporteService {
     cedulas?: string[] | 'todas'
   ): Promise<{ blob: Blob; vacio: boolean }> {
     const params = new URLSearchParams()
-    if (años.length) params.set('años', años.join(','))
+    if (años.length) params.set('anos', años.join(','))
     if (meses.length) params.set('meses', meses.join(','))
     if (cedulas && cedulas !== 'todas' && cedulas.length > 0) {
       params.set('cedulas', cedulas.join(','))
@@ -585,4 +586,5 @@ class ReporteService {
 }
 
 export const reporteService = new ReporteService()
+
 

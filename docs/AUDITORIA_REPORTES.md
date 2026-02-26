@@ -1,17 +1,17 @@
-# Auditoría: Centro de Reportes (/pagos/reportes)
+﻿# AuditorÃ­a: Centro de Reportes (/pagos/reportes)
 
 **Fecha:** 2025-02-19  
 **URL:** https://rapicredit.onrender.com/pagos/reportes
 
 ## 1. Resumen ejecutivo
 
-| Aspecto | Estado | Observación |
+| Aspecto | Estado | ObservaciÃ³n |
 |---------|--------|-------------|
-| Datos desde BD | ✅ | Todos los reportes usan `get_db` y consultas reales |
+| Datos desde BD | âœ… | Todos los reportes usan `get_db` y consultas reales |
 | Tablas BD usadas | `clientes`, `prestamos`, `cuotas` | Filtro: `Cliente.estado = 'ACTIVO'`, `Prestamo.estado = 'APROBADO'` |
-| Exportación Excel | ✅ | Los 6 tipos tienen exportación Excel |
-| Exportación PDF | ✅ | Los 6 tipos tienen exportación PDF (algunos usaban plantilla incorrecta, corregido) |
-| Mock/Stub | ❌→✅ | Tabla "Reportes Generados" usaba mock; reemplazada por UI con datos reales |
+| ExportaciÃ³n Excel | âœ… | Los 6 tipos tienen exportaciÃ³n Excel |
+| ExportaciÃ³n PDF | âœ… | Los 6 tipos tienen exportaciÃ³n PDF (algunos usaban plantilla incorrecta, corregido) |
+| Mock/Stub | âŒâ†’âœ… | Tabla "Reportes Generados" usaba mock; reemplazada por UI con datos reales |
 
 ## 2. Endpoints y mapeo a BD
 
@@ -52,17 +52,31 @@
 - `Prestamo.producto`, `Prestamo.concesionario`
 - `Cuota.monto`, `Cuota.fecha_pago`
 
-## 4. Exportación Excel/PDF
+## 4. ExportaciÃ³n Excel/PDF
 
 | Reporte | Excel | PDF |
 |---------|-------|-----|
-| Cartera | ✅ | ✅ |
-| Pagos | ✅ | ✅ (incluye tabla pagos_por_dia) |
-| Morosidad | ✅ | ✅ (plantilla específica) |
-| Financiero | ✅ | ✅ (plantilla específica) |
-| Asesores | ✅ | ✅ (plantilla específica) |
-| Productos | ✅ | ✅ (plantilla específica) |
+| Cartera | âœ… | âœ… |
+| Pagos | âœ… | âœ… (incluye tabla pagos_por_dia) |
+| Morosidad | âœ… | âœ… (plantilla especÃ­fica) |
+| Financiero | âœ… | âœ… (plantilla especÃ­fica) |
+| Asesores | âœ… | âœ… (plantilla especÃ­fica) |
+| Productos | âœ… | âœ… (plantilla especÃ­fica) |
 
 ## 5. Nota sobre "Reportes Generados"
 
-No existe tabla en BD para historial de reportes generados. La sección muestra los tipos disponibles con descarga bajo demanda.
+No existe tabla en BD para historial de reportes generados. La secciÃ³n muestra los tipos disponibles con descarga bajo demanda.
+
+---
+## 9. Mejoras aplicadas (2026-02-25)
+
+1. **Parametros de filtros (frontend-backend):** En rontend/src/services/reporteService.ts se corregio el nombre del query param enviado al API: de 'anos' (o variante con ene) a 'anos' de forma consistente, para que el backend reciba correctamente los filtros de anos en exportar/cartera, exportar/pagos, exportar/morosidad, exportar/asesores, exportar/productos y exportar/contable.
+
+2. **Permisos y comentario en Reportes:** En rontend/src/pages/Reportes.tsx se anadio un comentario que aclara que el bloque \"Acceso Restringido\" se muestra cuando canViewReports() es false (por si en el futuro se restringe la pagina a solo admin); la restriccion por tipo de reporte se aplica con canAccessReport().
+
+3. **Aviso cold start:** En la misma pagina, cuando loadingResumen es true se muestra un texto breve bajo la descripcion: \"Cargando indicadoresâ€¦ Si tarda, el servidor puede estar iniciando. Puedes reintentar en unos segundos.\"
+
+### Recomendaciones pendientes (opcionales)
+
+- **Rate limiting:** Valorar limite por usuario o IP en los endpoints de exportacion (ej. N descargas por minuto) para entornos productivos.
+- **canViewReports():** Si se decide que solo administradores vean la pagina de reportes, cambiar canViewReports() en usePermissions.ts a return isAdmin() y la UI mostrara el bloque \"Acceso Restringido\" a operativos.

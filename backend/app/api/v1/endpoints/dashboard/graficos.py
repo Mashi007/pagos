@@ -668,7 +668,7 @@ def get_cobranza_fechas_especificas(
     return {"dias": []}
 
 
-@router.get("/cobranzas-semanales", summary="[Stub] Valores fijos hasta tener tabla pagos/cobranzas.")
+@router.get("/cobranzas-semanales", summary="Cobranzas semanales desde BD (Cuota/Prestamo).")
 def get_cobranzas_semanales(
     fecha_inicio: Optional[str] = Query(None),
     fecha_fin: Optional[str] = Query(None),
@@ -767,7 +767,7 @@ def get_evolucion_morosidad(
         return {"meses": [{"mes": x["mes"], "morosidad": x["morosidad"]} for x in m]}
 
 
-@router.get("/evolucion-pagos", summary="[Stub] Devuelve datos demo hasta tener tabla pagos.")
+@router.get("/evolucion-pagos", summary="Evolución de pagos por mes desde BD (Cuota.fecha_pago).")
 def get_evolucion_pagos(
     fecha_inicio: Optional[str] = Query(None),
     meses: Optional[int] = Query(12, ge=1, le=24),

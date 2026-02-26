@@ -62,7 +62,7 @@ export function Reportes() {
     refetchInterval: puedeVerReportes ? 5 * 60 * 1000 : false, // 5 min para reducir carga
   })
 
-  // Si el usuario no es admin, no puede ver reportes
+  // Bloque mostrado si canViewReports() restringe por rol (ej. solo admin). Restriccion por tipo de reporte: canAccessReport().
   if (!puedeVerReportes) {
     return (
       <motion.div
@@ -243,6 +243,11 @@ export function Reportes() {
           <p className="text-sm sm:text-base text-gray-600 max-w-xl">
             Genera y descarga reportes detallados del sistema. Datos en tiempo real desde la base de datos.
           </p>
+          {loadingResumen && (
+            <p className="text-xs text-amber-700 mt-1" role="status">
+              Cargando indicadores... Si tarda, el servidor puede estar iniciando. Puedes reintentar en unos segundos.
+            </p>
+          )}
         </div>
         <Button
           variant="outline"
