@@ -507,9 +507,12 @@ app.get(FRONTEND_BASE + '/*', (req, res, next) => {
   // No servir index.html para rutas que parecen archivos estáticos (assets)
   const subPath = req.path.slice(FRONTEND_BASE.length) || '/';
   if (subPath.startsWith('/assets/')) {
-    if (req.path.endsWith('.js')) res.type('application/javascript');
-    else if (req.path.endsWith('.css')) res.type('text/css');
-    return res.status(404).send('Not Found');
+    const filePath = path.join(distPath, subPath);
+    if (existsSync(filePath)) {
+      if (subPath.endsWith('.js')) res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+      else if (subPath.endsWith('.css')) res.setHeader('Content-Type', 'text/css');
+      return res.sendFile(filePath);
+    }
   }
   const staticFileExtensions = ['.js', '.css', '.svg', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.woff', '.woff2', '.ttf', '.eot'];
   if (staticFileExtensions.some(ext => req.path.endsWith(ext))) {
