@@ -356,7 +356,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
               return next
             })
             queryClient.invalidateQueries({ queryKey: ['pagos-con-errores'], exact: false })
-            if (!opts?.skipToast) addToast('info', `Fila ${row._rowIndex}: Duplicado enviado a Revisar Pagos.`)
+            if (!opts?.skipToast) addToast('success', `Fila ${row._rowIndex}: Duplicado enviado a Revisar Pagos.`)
           } catch (_) {
             if (!opts?.skipToast) {
               addToast(
