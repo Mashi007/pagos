@@ -90,7 +90,8 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         if (c && c.length >= 5 && looksLikeCedula(c)) candidates.add(c)
       })
     })
-    return [...candidates]
+    // Normalizar (sin guión) para que coincidan con las claves que devuelve el backend
+    return [...candidates].map((c) => (c || '').trim().replace(/-/g, '')).filter((c) => c.length >= 5 && looksLikeCedula(c))
   }, [excelData])
 
   const [prestamosPorCedula, setPrestamosPorCedula] = useState<Record<string, Array<{ id: number; estado: string }>>>({})
@@ -171,9 +172,12 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             setExcelData((prev) =>
               prev.map((r) => {
                 const cedulaLookup = cedulaLookupParaFila(r.cedula || '', r.numero_documento || '')
+                const cedulaColNorm = cedulaParaLookup(r.cedula) || (r.cedula || '').trim().replace(/-/g, '')
                 const cedulaSinGuion = cedulaLookup.replace(/-/g, '')
                 let prestamos =
                   map[cedulaLookup] || map[cedulaSinGuion] || map[cedulaLookup.toUpperCase()] || map[cedulaLookup.toLowerCase()] || []
+                if (prestamos.length === 0 && cedulaColNorm)
+                  prestamos = map[cedulaColNorm] || map[cedulaColNorm.toUpperCase()] || map[cedulaColNorm.toLowerCase()] || []
                 if (prestamos.length === 0 && fallbackKey) prestamos = map[fallbackKey] || []
                 if (prestamos.length === 1 && prestamoIdVacio(r.prestamo_id)) return { ...r, prestamo_id: prestamos[0].id }
                 return r
@@ -644,7 +648,8 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             if (c && c.length >= 5 && looksLikeCedula(c)) uniqueCedulasSet.add(c)
           })
         })
-        const uniqueCedulas = [...uniqueCedulasSet]
+        // Normalizar igual que el backend (sin guión) para que las claves del map coincidan con la respuesta
+        const uniqueCedulas = [...uniqueCedulasSet].map((c) => (c || '').trim().replace(/-/g, '')).filter((c) => c.length >= 5 && looksLikeCedula(c))
         if (uniqueCedulas.length > 0) {
           setCedulasBuscando((prev) => new Set([...prev, ...uniqueCedulas]))
           const prestamoIdVacio = (v: unknown) =>
@@ -692,17 +697,20 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
               setPrestamosPorCedula(map)
               const keysMap = Object.keys(map)
               const fallbackKey = keysMap.length === 1 ? keysMap[0] : null
-              setExcelData((prev) =>
-                prev.map((r) => {
-                  const cedulaLookup = cedulaLookupParaFila(r.cedula || '', r.numero_documento || '')
-                  const cedulaSinGuion = cedulaLookup.replace(/-/g, '')
-                  let prestamos =
-                    map[cedulaLookup] || map[cedulaSinGuion] || map[cedulaLookup.toUpperCase()] || map[cedulaLookup.toLowerCase()] || []
-                  if (prestamos.length === 0 && fallbackKey) prestamos = map[fallbackKey] || []
-                  if (prestamos.length === 1 && prestamoIdVacio(r.prestamo_id)) return { ...r, prestamo_id: prestamos[0].id }
-                  return r
-                })
-              )
+              // Usar siempre el array local "processed" para evitar race: prev puede estar vacío o desactualizado
+              const updated = processed.map((r) => {
+                const cedulaLookup = cedulaLookupParaFila(r.cedula || '', r.numero_documento || '')
+                const cedulaColNorm = cedulaParaLookup(r.cedula) || (r.cedula || '').trim().replace(/-/g, '')
+                const cedulaSinGuion = cedulaLookup.replace(/-/g, '')
+                let prestamos =
+                  map[cedulaLookup] || map[cedulaSinGuion] || map[cedulaLookup.toUpperCase()] || map[cedulaLookup.toLowerCase()] || []
+                if (prestamos.length === 0 && cedulaColNorm)
+                  prestamos = map[cedulaColNorm] || map[cedulaColNorm.toUpperCase()] || map[cedulaColNorm.toLowerCase()] || []
+                if (prestamos.length === 0 && fallbackKey) prestamos = map[fallbackKey] || []
+                if (prestamos.length === 1 && prestamoIdVacio(r.prestamo_id)) return { ...r, prestamo_id: prestamos[0].id }
+                return r
+              })
+              setExcelData(updated)
             })
             .catch(() => {
               if (isMounted()) setPrestamosPorCedula({})

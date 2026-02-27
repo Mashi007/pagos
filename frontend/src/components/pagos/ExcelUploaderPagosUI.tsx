@@ -11,7 +11,7 @@ import { Button } from '../ui/button'
 import { Badge } from '../ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { useExcelUploadPagos, type ExcelUploaderPagosProps } from '../../hooks/useExcelUploadPagos'
-import { cedulaLookupParaFila } from '../../utils/pagoExcelValidation'
+import { cedulaLookupParaFila, cedulaParaLookup } from '../../utils/pagoExcelValidation'
 import { useNavigate } from 'react-router-dom'
 
 const inputClass = (isValid: boolean) =>
@@ -256,10 +256,13 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                           .filter((row) => !enviadosRevisar.has(row._rowIndex) && !savedRows.has(row._rowIndex))
                           .map((row) => {
                           const cedulaLookup = cedulaLookupParaFila(row.cedula || '', row.numero_documento || '')
+                          const cedulaColNorm = cedulaParaLookup(row.cedula) || (row.cedula || '').trim().replace(/-/g, '')
                           const cedulaSinGuion = cedulaLookup.replace(/-/g, '')
                           let prestamosActivos =
                             prestamosPorCedula[cedulaLookup] ||
                             prestamosPorCedula[cedulaSinGuion] || prestamosPorCedula[cedulaLookup.toUpperCase()] || prestamosPorCedula[cedulaLookup.toLowerCase()] || []
+                          if (prestamosActivos.length === 0 && cedulaColNorm)
+                            prestamosActivos = prestamosPorCedula[cedulaColNorm] || prestamosPorCedula[cedulaColNorm.toUpperCase()] || prestamosPorCedula[cedulaColNorm.toLowerCase()] || []
                           if (prestamosActivos.length === 0) {
                             const keysMap = Object.keys(prestamosPorCedula)
                             if (keysMap.length === 1) prestamosActivos = prestamosPorCedula[keysMap[0]] || []
