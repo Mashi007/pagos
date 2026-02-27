@@ -36,15 +36,11 @@ router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 def _normalizar_numero_documento(val: Any) -> Optional[str]:
-    """Normaliza Nº documento: notación científica a dígitos; quita símbolos €, $, Bs al inicio/final."""
+    """Normaliza Nº documento: notación científica a dígitos. No se quitan símbolos; se acepta fielmente como en el Excel."""
     if val is None or val == "":
         return None
     s = (str(val) or "").strip()
     if not s or s.upper() in ("NAN", "NONE", "UNDEFINED"):
-        return None
-    # Quitar símbolos de moneda al inicio/final (ej. 74008740161353€ → 74008740161353)
-    s = re.sub(r"^[\s€$.,Bs]+|[\s€$.,Bs]+$", "", s, flags=re.IGNORECASE)
-    if not s:
         return None
     if re.match(r"^\d+\.?\d*[eE][+-]?\d+$", s):
         try:
@@ -376,7 +372,10 @@ async def upload_excel_pagos(
                 if not cedula or monto <= 0:
                     filas_omitidas += 1
                     continue
-                numero_doc_norm = (numero_doc or "").strip() or None
+                # Misma normalización que crear/actualizar (notación científica → dígitos; resto fiel). Regla: no aceptar duplicados.
+                numero_doc_norm = _normalizar_numero_documento(numero_doc) if (numero_doc or "").strip() else None
+                if numero_doc_norm is None and (numero_doc or "").strip():
+                    numero_doc_norm = (numero_doc or "").strip() or None
                 if numero_doc_norm:
                     if numero_doc_norm in numeros_doc_en_lote:
                         datos_fila = {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}
@@ -855,7 +854,7 @@ def obtener_pago(pago_id: int, db: Session = Depends(get_db)):
 def _numero_documento_ya_existe(
     db: Session, numero_documento: Optional[str], exclude_pago_id: Optional[int] = None
 ) -> bool:
-    """Comprueba si ya existe un pago con ese Nº documento (no se permite repetir)."""
+    """Regla única: no aceptar duplicados. Comprueba si ya existe un pago con ese Nº documento."""
     num = _normalizar_numero_documento(numero_documento)
     if not num:
         return False

@@ -64,6 +64,8 @@ export function convertirFechaParaBackendPago(f: string): string {
   return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : f.trim()
 }
 
+const LOOKS_LIKE_CEDULA = /^[VEJZ]\d{6,11}$/i
+
 /**
  * Extrae la cédula para búsqueda cuando la celda tiene prefijo (ej. "AUL V23107415" → "V23107415").
  * Solo para lookup/batch; no cambia el valor mostrado en la tabla.
@@ -73,9 +75,22 @@ export function cedulaParaLookup(val: unknown): string {
   const s = String(val).trim()
   if (!s) return ''
   const sinGuion = s.replace(/-/g, '')
-  if (/^[VEJZ]\d{6,11}$/i.test(sinGuion)) return sinGuion
+  if (LOOKS_LIKE_CEDULA.test(sinGuion)) return sinGuion
   const match = s.match(/[VEJZ]\d{6,11}/i)
   return match ? match[0].replace(/-/g, '') : s
+}
+
+/**
+ * Devuelve la cédula a usar para buscar préstamos en esta fila.
+ * Si la columna "Cédula" tiene número largo (ej. 740087406572495) y "Documento" tiene V27020005,
+ * usa el documento como cédula para lookup (evita que esas filas queden sin Crédito asignado).
+ */
+export function cedulaLookupParaFila(cedula: string, numero_documento: string): string {
+  const fromC = cedulaParaLookup(cedula) || (cedula || '').trim()
+  const fromD = cedulaParaLookup(numero_documento) || (numero_documento || '').trim()
+  if (fromC && LOOKS_LIKE_CEDULA.test(fromC.replace(/-/g, ''))) return fromC
+  if (fromD && LOOKS_LIKE_CEDULA.test(fromD.replace(/-/g, ''))) return fromD
+  return fromC || fromD
 }
 
 /**
@@ -85,7 +100,7 @@ export function cedulaParaLookup(val: unknown): string {
  * - Si viene como número (Excel sin comillas): se pasa a string de dígitos completos (>= 1e14).
  * - Si viene como string en notación científica (7.4E+14): se expande a dígitos.
  * - Si viene como string solo dígitos: se devuelve tal cual.
- * - Si tiene símbolos de moneda al inicio/final (€, $, Bs): se quitan.
+ * - Cualquier otro formato (dígitos + €/$, etc.) se devuelve fielmente como en el Excel; no se quitan símbolos.
  */
 export function normalizarNumeroDocumento(val: unknown): string {
   if (val == null || val === '') return ''
@@ -99,9 +114,7 @@ export function normalizarNumeroDocumento(val: unknown): string {
   }
   let s = String(val).trim().replace(/\s+/g, '')
   if (!s || s === 'NaN' || s === 'nan' || s === 'undefined') return ''
-  // Quitar símbolos de moneda al inicio y al final (ej. 74008740161353€ → 74008740161353)
-  s = s.replace(/^[\s€$.,Bs]+|[\s€$.,Bs]+$/gi, '')
-  if (!s) return ''
+  // Aceptar fielmente como está en el Excel: no se quitan símbolos (€, $, etc.)
   // Solo dígitos: devolver tal cual
   if (/^\d+$/.test(s)) return s
   // Notación científica: expandir a dígitos
@@ -117,7 +130,7 @@ export function normalizarNumeroDocumento(val: unknown): string {
       return s
     }
   }
-  // Si tras quitar €/$ queda solo dígitos (ej. "74008740161353€" ya limpiado arriba), no entra aquí; si queda "123abc" devolvemos tal cual
+  // Cualquier otro string (ej. 74008740161353€, €123, $456): devolver tal cual, fiel al Excel
   return s
 }
 
@@ -158,9 +171,10 @@ export function validatePagoField(
     }
 
     case 'numero_documento':
-      // Aceptar CUALQUIER formato; normalizar para reconocer números largos y notación científica (evita "no reconoce documento").
+      // Regla única: no aceptar duplicados. Aceptar cualquier formato; normalizar solo para comparar (números largos, notación científica).
       const docNorm = (strVal === 'NaN' || strVal === 'nan' || strVal === 'undefined') ? '' : (normalizarNumeroDocumento(value) || strVal).trim() || ''
-      if (docNorm && _options?.documentosExistentes?.has(docNorm)) return { isValid: false, message: 'Documento ya existe en BD' }
+      if (docNorm && _options?.documentosExistentes?.has(docNorm)) return { isValid: false, message: 'Documento ya existe en BD (no se permiten duplicados)' }
+      if (docNorm && _options?.documentosEnArchivo?.has(docNorm)) return { isValid: false, message: 'Documento duplicado en este archivo (no se permiten duplicados)' }
       return { isValid: true }
 
     case 'prestamo_id':

@@ -20,6 +20,7 @@ import {
   sanitizeFileName,
   normalizarNumeroDocumento,
   cedulaParaLookup,
+  cedulaLookupParaFila,
 } from '../utils/pagoExcelValidation'
 import { readExcelToJSON } from '../types/exceljs'
 
@@ -84,7 +85,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       [
         ...new Set(
           excelData
-            .map((r) => cedulaParaLookup(r.cedula) || (r.cedula != null ? String(r.cedula).trim() : ''))
+            .map((r) => cedulaLookupParaFila(r.cedula || '', r.numero_documento || ''))
             .filter((c) => c.length >= 5 && looksLikeCedula(c))
         ),
       ],
@@ -185,7 +186,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
               v == null || v === undefined || v === '' || v === 'none' || (typeof v === 'number' && Number.isNaN(v))
             setExcelData((prev) =>
               prev.map((r) => {
-                const cedulaLookup = cedulaParaLookup(r.cedula) || (r.cedula || '').trim()
+                const cedulaLookup = cedulaLookupParaFila(r.cedula || '', r.numero_documento || '')
                 const cedulaSinGuion = cedulaLookup.replace(/-/g, '')
                 const prestamos =
                   map[cedulaLookup] || map[cedulaSinGuion] || map[cedulaLookup.toUpperCase()] || map[cedulaLookup.toLowerCase()] || []
@@ -223,7 +224,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     setExcelData((prev) => {
       let changed = false
       const next = prev.map((r) => {
-        const cedulaLookup = cedulaParaLookup(r.cedula) || (r.cedula || '').trim()
+        const cedulaLookup = cedulaLookupParaFila(r.cedula || '', r.numero_documento || '')
         const cedulaSinGuion = cedulaLookup.replace(/-/g, '')
         const prestamos =
           prestamosPorCedula[cedulaLookup] || prestamosPorCedula[cedulaSinGuion] || prestamosPorCedula[cedulaLookup.toUpperCase()] || prestamosPorCedula[cedulaLookup.toLowerCase()] || []
@@ -255,7 +256,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       if (savedRows.has(row._rowIndex) || enviadosRevisar.has(row._rowIndex)) return false
       if (duplicadosPendientesRevisar.has(row._rowIndex)) return true
       if (row._hasErrors) return true
-      const cedulaLookup = cedulaParaLookup(row.cedula) || (row.cedula || '').trim()
+      const cedulaLookup = cedulaLookupParaFila(row.cedula || '', row.numero_documento || '')
       const cedulaSinGuion = cedulaLookup.replace(/-/g, '')
       const prestamosActivos =
         prestamosPorCedula[cedulaLookup] || prestamosPorCedula[cedulaSinGuion] || prestamosPorCedula[cedulaLookup.toUpperCase()] || prestamosPorCedula[cedulaLookup.toLowerCase()] || []
@@ -269,7 +270,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         addToast('error', 'Hay errores en esta fila. Corr?gelos antes de guardar.')
         return { ok: false }
       }
-      const cedulaLookup = cedulaParaLookup(row.cedula) || (row.cedula || '').trim()
+      const cedulaLookup = cedulaLookupParaFila(row.cedula || '', row.numero_documento || '')
       const cedulaSinGuion = cedulaLookup.replace(/-/g, '')
       const prestamosActivos =
         prestamosPorCedula[cedulaLookup] || prestamosPorCedula[cedulaSinGuion] || prestamosPorCedula[cedulaLookup.toUpperCase()] || prestamosPorCedula[cedulaLookup.toLowerCase()] || []
@@ -350,7 +351,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           const camposConProblema = Object.entries(row._validation || {}).filter(([, v]) => !v.isValid).map(([field]) => field)
           const observaciones = camposConProblema.join(',')
           await pagoConErrorService.create({
-            cedula_cliente: cedulaParaLookup(row.cedula) || (row.cedula || '').trim(),
+            cedula_cliente: cedulaLookupParaFila(row.cedula || '', row.numero_documento || ''),
             prestamo_id: null,
             fecha_pago: convertirFechaParaBackendPago(row.fecha_pago) || new Date().toISOString().split('T')[0],
             monto_pagado: Number(row.monto_pagado) || 0,
@@ -366,13 +367,13 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           if (duplicadosPendientesRevisar.has(row._rowIndex)) {
             observaciones = 'duplicado'
           } else {
-            const cedulaLookup = cedulaParaLookup(row.cedula) || (row.cedula || '').trim()
+            const cedulaLookup = cedulaLookupParaFila(row.cedula || '', row.numero_documento || '')
             const cedulaSinGuion = cedulaLookup.replace(/-/g, '')
             const prestamos = prestamosPorCedula[cedulaLookup] || prestamosPorCedula[cedulaSinGuion] || prestamosPorCedula[cedulaLookup.toUpperCase()] || prestamosPorCedula[cedulaLookup.toLowerCase()] || []
             observaciones = prestamos.length === 0 ? 'sin_prestamo' : prestamos.length > 1 ? 'multiples_prestamos' : 'revisar'
           }
           await pagoConErrorService.create({
-            cedula_cliente: cedulaParaLookup(row.cedula) || (row.cedula || '').trim(),
+            cedula_cliente: cedulaLookupParaFila(row.cedula || '', row.numero_documento || ''),
             prestamo_id: null,
             fecha_pago: convertirFechaParaBackendPago(row.fecha_pago) || new Date().toISOString().split('T')[0],
             monto_pagado: Number(row.monto_pagado) || 0,
@@ -479,7 +480,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     }
     const toSave = valid.filter((row) => {
       if (duplicadosPendientesRevisar.has(row._rowIndex)) return false
-      const cedulaLookup = cedulaParaLookup(row.cedula) || (row.cedula || '').trim()
+      const cedulaLookup = cedulaLookupParaFila(row.cedula || '', row.numero_documento || '')
       const cedulaSinGuion = cedulaLookup.replace(/-/g, '')
       const prestamosActivos =
         prestamosPorCedula[cedulaLookup] || prestamosPorCedula[cedulaSinGuion] || prestamosPorCedula[cedulaLookup.toUpperCase()] || prestamosPorCedula[cedulaLookup.toLowerCase()] || []
