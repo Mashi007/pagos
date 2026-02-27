@@ -61,23 +61,28 @@ export async function readExcelToJSON(file: File | ArrayBuffer): Promise<any[][]
     worksheet.eachRow((row, rowNumber) => {
       const rowData: any[] = []
       row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-        const val = cell.value
-        const DOC_COL = 4 // NÂº documento: usar cell.text si value es NaN/null para preservar VE/, BNC/, MER/, etc.
-        if (colNumber === DOC_COL) {
-          let docStr = ''
+        let val = cell.value
+        // Números largos (ej. 740087408305094): preservar dígitos completos, evitar notación científica
+        if (typeof val === 'number' && !Number.isNaN(val) && Math.abs(val) >= 1e14) {
+          try {
+            val = Math.abs(val) >= 1e15 ? BigInt(Math.round(val)).toString() : Math.round(val).toString()
+          } catch {
+            val = String(val)
+          }
+        } else if (colNumber === 4) {
           try {
             const t = (cell as any).text
-            if (t != null && String(t).trim()) docStr = String(t).trim()
-            else if (typeof val === 'string' && val.trim()) docStr = val.trim()
-            else if (typeof val === 'number' && !Number.isNaN(val)) docStr = String(Math.floor(val))
+            if (t != null && String(t).trim()) val = String(t).trim()
+            else if (typeof val === 'string' && val.trim()) val = val.trim()
+            else if (typeof val === 'number' && !Number.isNaN(val)) val = String(Math.floor(val))
             else if (val != null && typeof val === 'object' && 'richText' in val) {
-              docStr = (val as any).richText?.map((x: any) => x?.text ?? '').join('') || ''
+              val = (val as any).richText?.map((x: any) => x?.text ?? '').join('') || ''
             }
-          } catch { docStr = val != null ? String(val) : '' }
-          rowData[colNumber - 1] = docStr
-        } else {
-          rowData[colNumber - 1] = val
+          } catch {
+            val = val != null ? String(val) : val
+          }
         }
+        rowData[colNumber - 1] = val
       })
       data.push(rowData)
     })

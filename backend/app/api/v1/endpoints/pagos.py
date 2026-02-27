@@ -36,16 +36,20 @@ router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 def _normalizar_numero_documento(val: Any) -> Optional[str]:
-    """Normaliza Nº documento a string de dígitos (evita notación científica). Equivalente a 'comillas' en Excel."""
+    """Normaliza Nº documento: notación científica a dígitos; quita símbolos €, $, Bs al inicio/final."""
     if val is None or val == "":
         return None
     s = (str(val) or "").strip()
     if not s or s.upper() in ("NAN", "NONE", "UNDEFINED"):
         return None
+    # Quitar símbolos de moneda al inicio/final (ej. 74008740161353€ → 74008740161353)
+    s = re.sub(r"^[\s€$.,Bs]+|[\s€$.,Bs]+$", "", s, flags=re.IGNORECASE)
+    if not s:
+        return None
     if re.match(r"^\d+\.?\d*[eE][+-]?\d+$", s):
         try:
             n = float(s)
-            if n != n:  # NaN
+            if n != n:
                 return None
             return str(int(round(n)))
         except (ValueError, OverflowError):

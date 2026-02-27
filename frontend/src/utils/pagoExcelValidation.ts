@@ -66,27 +66,31 @@ export function convertirFechaParaBackendPago(f: string): string {
 
 /**
  * Normaliza el valor de la columna Documento al subir el Excel.
- * Acondiciona "comillas" automáticamente: documentos con formato solo números
- * (ej. 740087464410397) se convierten a texto completo para evitar notación científica.
- * - Si viene como número (Excel sin comillas): se pasa a string de dígitos completos.
+ * Acepta todos los formatos: solo números (ej. 740087408305094), notación científica, dígitos + €/$, VE/123, etc.
+ * Ver docs/AUDITORIA_FORMATO_DOCUMENTO_740087408305094.md para no reintroducir el error "no reconoce documento".
+ * - Si viene como número (Excel sin comillas): se pasa a string de dígitos completos (>= 1e14).
  * - Si viene como string en notación científica (7.4E+14): se expande a dígitos.
- * - Si viene como string solo dígitos: se devuelve tal cual (respeta ceros a la izquierda).
+ * - Si viene como string solo dígitos: se devuelve tal cual.
+ * - Si tiene símbolos de moneda al inicio/final (€, $, Bs): se quitan.
  */
 export function normalizarNumeroDocumento(val: unknown): string {
   if (val == null || val === '') return ''
   if (typeof val === 'number') {
     if (Number.isNaN(val)) return ''
-    // Números largos: siempre a string de dígitos (equivalente a "comillas" en Excel)
-    if (Math.abs(val) >= 1e15) {
-      try { return BigInt(Math.round(val)).toString() } catch { return val.toFixed(0) }
+    // Números largos (ej. 740087408305094): siempre string de dígitos completos, sin notación científica
+    if (Math.abs(val) >= 1e14) {
+      try { return Math.abs(val) >= 1e15 ? BigInt(Math.round(val)).toString() : String(Math.round(val)) } catch { return val.toFixed(0) }
     }
     return Math.round(val).toString()
   }
-  const s = String(val).trim().replace(/\s+/g, '')
+  let s = String(val).trim().replace(/\s+/g, '')
   if (!s || s === 'NaN' || s === 'nan' || s === 'undefined') return ''
-  // Solo dígitos (formato documento): devolver tal cual
+  // Quitar símbolos de moneda al inicio y al final (ej. 74008740161353€ → 74008740161353)
+  s = s.replace(/^[\s€$.,Bs]+|[\s€$.,Bs]+$/gi, '')
+  if (!s) return ''
+  // Solo dígitos: devolver tal cual
   if (/^\d+$/.test(s)) return s
-  // Notación científica: expandir a dígitos completos
+  // Notación científica: expandir a dígitos
   if (/^\d+\.?\d*[eE][+-]?\d+$/.test(s)) {
     try {
       const n = parseFloat(s)
@@ -99,6 +103,7 @@ export function normalizarNumeroDocumento(val: unknown): string {
       return s
     }
   }
+  // Si tras quitar €/$ queda solo dígitos (ej. "74008740161353€" ya limpiado arriba), no entra aquí; si queda "123abc" devolvemos tal cual
   return s
 }
 
