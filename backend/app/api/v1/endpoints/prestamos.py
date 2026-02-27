@@ -921,6 +921,11 @@ def aplicar_condiciones_aprobacion(prestamo_id: int, payload: AplicarCondiciones
     if payload.observaciones is not None:
         p.observaciones = payload.observaciones
     p.estado = "APROBADO"
+    if p.fecha_aprobacion is None:
+        fa = payload.fecha_base_calculo or getattr(p, "fecha_base_calculo", None) or date.today()
+        if hasattr(fa, "date"):
+            fa = fa.date() if callable(getattr(fa, "date", None)) else fa
+        p.fecha_aprobacion = datetime.combine(fa, datetime.min.time())
     _registrar_en_revision_manual(db, prestamo_id)
     db.commit()
     # Generar cuotas si no existen

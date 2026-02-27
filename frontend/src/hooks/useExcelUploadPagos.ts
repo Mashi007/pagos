@@ -184,7 +184,10 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     }
   }, [showPreview, cedulasUnicas.join(',')])
 
-  // Auto-asignar prestamo_id cuando la c?dula tiene exactamente 1 cr?dito activo
+  // Auto-asignar prestamo_id cuando la cédula tiene exactamente 1 crédito activo
+  const prestamoIdVacio = (v: unknown) =>
+    v == null || v === undefined || v === '' || v === 'none' || (typeof v === 'number' && Number.isNaN(v))
+
   useEffect(() => {
     if (!showPreview || Object.keys(prestamosPorCedula).length === 0) return
     setExcelData((prev) => {
@@ -194,7 +197,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         const cedulaSinGuion = cedulaNorm.replace(/-/g, '')
         const prestamos =
           prestamosPorCedula[cedulaNorm] || prestamosPorCedula[cedulaSinGuion] || []
-        if (prestamos.length === 1 && (r.prestamo_id == null || r.prestamo_id === undefined)) {
+        if (prestamos.length === 1 && prestamoIdVacio(r.prestamo_id)) {
           changed = true
           return { ...r, prestamo_id: prestamos[0].id }
         }

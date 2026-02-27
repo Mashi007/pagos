@@ -133,7 +133,7 @@ def _cuotas_a_filas_contable_con_signo(rows, tasas_cache: dict) -> List[dict]:
             tasa = tasas_cache[fv]
         importe_ml = round(importe_md * tasa, 2)
         fa = getattr(r, "fecha_aprobacion", None)
-        fa_str = fa.date().isoformat() if fa and hasattr(fa, "date") else (fa.isoformat()[:10] if fa else "")
+        fa_str = fa.date().isoformat() if fa and hasattr(fa, "date") else (fa.isoformat()[:10] if fa else "-")
 
         items.append({
             "cuota_id": r.id,
