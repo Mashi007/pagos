@@ -134,7 +134,8 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     [mergePrestamosEnMap]
   )
 
-  // Carga inicial: usa batch (1 petici?n) si hay 3+ c?dulas para evitar timeouts en servidores lentos
+  // Carga inicial: buscar préstamos por cédulas únicas y auto-asignar Crédito cuando hay 1 activo por cédula.
+  // Sin delay (0ms) para que el fetch arranque en cuanto hay preview y cédulas, evitando que el usuario vea Crédito vacío.
   const BATCH_THRESHOLD = 3
   useEffect(() => {
     if (!showPreview || cedulasUnicas.length === 0) {
@@ -181,7 +182,6 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         .then((map) => {
           if (!cancelled) {
             setPrestamosPorCedula(map)
-            // Indexar crédito en cuanto lleguen los préstamos (no depender del efecto posterior)
             const prestamoIdVacio = (v: unknown) =>
               v == null || v === undefined || v === '' || v === 'none' || v === 0 || (typeof v === 'number' && Number.isNaN(v))
             setExcelData((prev) =>
@@ -208,7 +208,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             })
           }
         })
-    }, 350)
+    }, 0)
     return () => {
       cancelled = true
       clearTimeout(timer)
@@ -645,6 +645,85 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         if (!isMounted()) return
         setExcelData(processed)
         setShowPreview(true)
+
+        // Asignar Crédito en cuanto lleguen los préstamos (misma lógica que el efecto; evita depender solo del timing del efecto)
+        const uniqueCedulas = [
+          ...new Set(
+            processed
+              .map((r) => cedulaLookupParaFila(r.cedula || '', r.numero_documento || ''))
+              .filter((c) => c.length >= 5 && looksLikeCedula(c))
+          ),
+        ]
+        if (uniqueCedulas.length > 0) {
+          setCedulasBuscando((prev) => new Set([...prev, ...uniqueCedulas]))
+          const prestamoIdVacio = (v: unknown) =>
+            v == null || v === undefined || v === '' || v === 'none' || v === 0 || (typeof v === 'number' && Number.isNaN(v))
+          const buildMap = (
+            batchOrResults: Record<string, any[]> | any[][]
+          ): Record<string, Array<{ id: number; estado: string }>> => {
+            const map: Record<string, Array<{ id: number; estado: string }>> = {}
+            const isResultsArray = Array.isArray(batchOrResults) && batchOrResults.length > 0 && Array.isArray((batchOrResults as any[])[0])
+            if (isResultsArray) {
+              const results = batchOrResults as any[][]
+              uniqueCedulas.forEach((cedula, i) => {
+                const prestamos = (results[i] || []).filter((p: any) =>
+                  ESTADOS_PRESTAMO_ACTIVO.includes((p.estado || '').toUpperCase())
+                )
+                const arr = prestamos.map((p: any) => ({ id: p.id, estado: p.estado || '' }))
+                map[cedula] = arr
+                const cedulaSinGuion = cedula.replace(/-/g, '')
+                if (cedulaSinGuion !== cedula) map[cedulaSinGuion] = arr
+                map[cedula.toUpperCase()] = arr
+                map[cedula.toLowerCase()] = arr
+              })
+            } else {
+              const batch = batchOrResults as Record<string, any[]>
+              uniqueCedulas.forEach((cedula) => {
+                const prestamos = (batch[cedula] || batch[cedula.replace(/-/g, '')] || []).filter((p: any) =>
+                  ESTADOS_PRESTAMO_ACTIVO.includes((p.estado || '').toUpperCase())
+                )
+                const arr = prestamos.map((p: any) => ({ id: p.id, estado: p.estado || '' }))
+                map[cedula] = arr
+                const cedulaSinGuion = cedula.replace(/-/g, '')
+                if (cedulaSinGuion !== cedula) map[cedulaSinGuion] = arr
+                map[cedula.toUpperCase()] = arr
+                map[cedula.toLowerCase()] = arr
+              })
+            }
+            return map
+          }
+          const fetchPromise =
+            uniqueCedulas.length > BATCH_THRESHOLD
+              ? prestamoService.getPrestamosByCedulasBatch(uniqueCedulas).then((batch) => buildMap((batch as any)?.prestamos || {}))
+              : Promise.all(uniqueCedulas.map((c) => prestamoService.getPrestamosByCedula(c))).then((results) => buildMap(results))
+          fetchPromise
+            .then((map) => {
+              if (!isMounted()) return
+              setPrestamosPorCedula(map)
+              setExcelData((prev) =>
+                prev.map((r) => {
+                  const cedulaLookup = cedulaLookupParaFila(r.cedula || '', r.numero_documento || '')
+                  const cedulaSinGuion = cedulaLookup.replace(/-/g, '')
+                  const prestamos =
+                    map[cedulaLookup] || map[cedulaSinGuion] || map[cedulaLookup.toUpperCase()] || map[cedulaLookup.toLowerCase()] || []
+                  if (prestamos.length === 1 && prestamoIdVacio(r.prestamo_id)) return { ...r, prestamo_id: prestamos[0].id }
+                  return r
+                })
+              )
+            })
+            .catch(() => {
+              if (isMounted()) setPrestamosPorCedula({})
+            })
+            .finally(() => {
+              if (isMounted()) {
+                setCedulasBuscando((prev) => {
+                  const next = new Set(prev)
+                  uniqueCedulas.forEach((c) => next.delete(c))
+                  return next
+                })
+              }
+            })
+        }
       } catch (err) {
         console.error('Error procesando Excel:', err)
         alert(`Error: ${err instanceof Error ? err.message : 'Error desconocido'}`)
