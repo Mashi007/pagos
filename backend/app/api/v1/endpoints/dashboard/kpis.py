@@ -83,9 +83,32 @@ def _compute_kpis_principales(
             conds.append(Prestamo.concesionario == concesionario)
         if modelo:
             conds.append(Prestamo.modelo_vehiculo == modelo)
+        conds_ant = [
+            Prestamo.cliente_id == Cliente.id,
+            Prestamo.estado == "APROBADO",
+            Prestamo.fecha_registro >= inicio_ant_dt,
+            Prestamo.fecha_registro <= fin_ant_dt,
+        ]
+        if analista:
+            conds_ant.append(Prestamo.analista == analista)
+        if concesionario:
+            conds_ant.append(Prestamo.concesionario == concesionario)
+        if modelo:
+            conds_ant.append(Prestamo.modelo_vehiculo == modelo)
         total_prestamos = db.scalar(
             select(func.count()).select_from(Prestamo).join(Cliente, Prestamo.cliente_id == Cliente.id).where(and_(*conds))
         ) or 0
+
+        total_prestamos_mes_anterior = db.scalar(
+            select(func.count())
+            .select_from(Prestamo)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(and_(*conds_ant))
+        ) or 0
+        if total_prestamos_mes_anterior and _safe_float(total_prestamos_mes_anterior) != 0:
+            variacion_prestamos = ((_safe_float(total_prestamos) - _safe_float(total_prestamos_mes_anterior)) / _safe_float(total_prestamos_mes_anterior)) * 100.0
+        else:
+            variacion_prestamos = 0.0
 
         total_mes_actual = db.scalar(
             select(func.coalesce(func.sum(Prestamo.total_financiamiento), 0))
@@ -100,18 +123,6 @@ def _compute_kpis_principales(
                 *([] if not modelo else [Prestamo.modelo_vehiculo == modelo]),
             ))
         ) or 0
-        conds_ant = [
-            Prestamo.cliente_id == Cliente.id,
-            Prestamo.estado == "APROBADO",
-            Prestamo.fecha_registro >= inicio_ant_dt,
-            Prestamo.fecha_registro <= fin_ant_dt,
-        ]
-        if analista:
-            conds_ant.append(Prestamo.analista == analista)
-        if concesionario:
-            conds_ant.append(Prestamo.concesionario == concesionario)
-        if modelo:
-            conds_ant.append(Prestamo.modelo_vehiculo == modelo)
         total_mes_anterior = db.scalar(
             select(func.coalesce(func.sum(Prestamo.total_financiamiento), 0))
             .select_from(Prestamo)
@@ -223,7 +234,7 @@ def _compute_kpis_principales(
         porcentaje_cuotas = (float(cuotas_pagadas_count) / float(total_cuotas_periodo) * 100.0) if total_cuotas_periodo else 0.0
 
         return {
-            "total_prestamos": _kpi(_safe_float(total_prestamos), 0.0),
+            "total_prestamos": _kpi(_safe_float(total_prestamos), round(variacion_prestamos, 1)),
             "creditos_nuevos_mes": _kpi(creditos_nuevos_valor, round(variacion_creditos, 1)),
             "total_clientes": _kpi(_safe_float(total_clientes), 0.0),
             "clientes_por_estado": {
