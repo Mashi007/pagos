@@ -617,10 +617,14 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           const conciliacionRawCol4 = (row[cols.prestamo]?.toString() || '').trim().toUpperCase()
           const conciliacionRawCol5 = (row[cols.conciliacion]?.toString() || '').trim().toUpperCase()
           const isConciliacionCol4 = ['SI', 'S?', 'NO', '1', '0'].includes(conciliacionRawCol4)
-          const prestamoId =
+          let prestamoId: number | null =
             !isConciliacionCol4 && prestamoIdRaw != null && String(prestamoIdRaw).trim() !== ''
               ? parseInt(String(prestamoIdRaw).trim(), 10)
               : null
+          // Si el Excel trae en columna Crédito un número de documento (ej. 740087...), no usarlo como prestamo_id
+          if (prestamoId != null && (Number.isNaN(prestamoId) || prestamoId < 1 || prestamoId > PRESTAMO_ID_MAX)) {
+            prestamoId = null
+          }
           const conciliacionRaw = (isConciliacionCol4 ? conciliacionRawCol4 : conciliacionRawCol5).trim()
           // Por defecto: Conciliaci?n = S?. Solo No si expl?citamente "NO" (evitar que 0/celda vac?a = No).
           const conciliado = conciliacionRaw === 'NO' ? false : true

@@ -68,16 +68,20 @@ const LOOKS_LIKE_CEDULA = /^[VEJZ]\d{6,11}$/i
 
 /**
  * Extrae la cédula para búsqueda cuando la celda tiene prefijo (ej. "AUL V23107415" → "V23107415").
+ * Si Excel guardó la cédula como número (ej. 23107415), normaliza a "V23107415" para que el batch y la auto-asignación de crédito funcionen.
  * Solo para lookup/batch; no cambia el valor mostrado en la tabla.
  */
 export function cedulaParaLookup(val: unknown): string {
   if (val == null || val === '') return ''
   const s = String(val).trim()
   if (!s) return ''
-  const sinGuion = s.replace(/-/g, '')
+  const sinGuion = s.replace(/-/g, '').replace(/\s+/g, '')
   if (LOOKS_LIKE_CEDULA.test(sinGuion)) return sinGuion
   const match = s.match(/[VEJZ]\d{6,11}/i)
-  return match ? match[0].replace(/-/g, '') : s
+  if (match) return match[0].replace(/-/g, '')
+  // Excel a veces guarda cédula como número y se pierde la letra (V/E/J); normalizar para batch y auto-asignación
+  if (/^\d{8}$/.test(sinGuion)) return 'V' + sinGuion
+  return s
 }
 
 /**
@@ -86,8 +90,8 @@ export function cedulaParaLookup(val: unknown): string {
  * usa el documento como cédula para lookup (evita que esas filas queden sin Crédito asignado).
  */
 export function cedulaLookupParaFila(cedula: string, numero_documento: string): string {
-  const fromC = cedulaParaLookup(cedula) || (cedula || '').trim()
-  const fromD = cedulaParaLookup(numero_documento) || (numero_documento || '').trim()
+  const fromC = cedulaParaLookup(cedula)
+  const fromD = cedulaParaLookup(numero_documento)
   if (fromC && LOOKS_LIKE_CEDULA.test(fromC.replace(/-/g, ''))) return fromC
   if (fromD && LOOKS_LIKE_CEDULA.test(fromD.replace(/-/g, ''))) return fromD
   return fromC || fromD
