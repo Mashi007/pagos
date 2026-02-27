@@ -258,8 +258,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                           const cedulaSinGuion = cedulaNorm.replace(/-/g, '')
                           const prestamosActivos =
                             prestamosPorCedula[cedulaNorm] ||
-                            prestamosPorCedula[cedulaSinGuion] ||
-                            []
+                            prestamosPorCedula[cedulaSinGuion] || prestamosPorCedula[cedulaNorm.toUpperCase()] || prestamosPorCedula[cedulaNorm.toLowerCase()] || []
                           const tieneCreditos = prestamosActivos.length >= 1
                           const valorCredito =
                             ((row.prestamo_id != null && String(row.prestamo_id) !== 'none') ? String(row.prestamo_id) : (prestamosActivos.length === 1 ? String(prestamosActivos[0].id) : 'none'))
