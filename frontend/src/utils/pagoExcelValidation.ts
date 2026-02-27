@@ -65,6 +65,20 @@ export function convertirFechaParaBackendPago(f: string): string {
 }
 
 /**
+ * Extrae la cédula para búsqueda cuando la celda tiene prefijo (ej. "AUL V23107415" → "V23107415").
+ * Solo para lookup/batch; no cambia el valor mostrado en la tabla.
+ */
+export function cedulaParaLookup(val: unknown): string {
+  if (val == null || val === '') return ''
+  const s = String(val).trim()
+  if (!s) return ''
+  const sinGuion = s.replace(/-/g, '')
+  if (/^[VEJZ]\d{6,11}$/i.test(sinGuion)) return sinGuion
+  const match = s.match(/[VEJZ]\d{6,11}/i)
+  return match ? match[0].replace(/-/g, '') : s
+}
+
+/**
  * Normaliza el valor de la columna Documento al subir el Excel.
  * Acepta todos los formatos: solo números (ej. 740087408305094), notación científica, dígitos + €/$, VE/123, etc.
  * Ver docs/AUDITORIA_FORMATO_DOCUMENTO_740087408305094.md para no reintroducir el error "no reconoce documento".
