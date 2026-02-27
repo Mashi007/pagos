@@ -65,22 +65,6 @@ export function convertirFechaParaBackendPago(f: string): string {
 }
 
 /**
- * Normaliza el valor de la columna Cédula al leer el Excel.
- * Si viene solo como número (6-11 dígitos), antepone "V" para que coincida con formato
- * venezolano y se use en la búsqueda de préstamos (evita que no haya escogitamiento automático de crédito).
- */
-export function normalizarCedulaExcel(val: unknown): string {
-  if (val == null || val === '') return ''
-  const s = String(val).trim().replace(/\s+/g, '').replace(/-/g, '')
-  if (!s) return ''
-  // Ya tiene formato V/E/J/Z + dígitos
-  if (/^[VEJZ]\d{6,11}$/i.test(s)) return s.toUpperCase()
-  // Solo dígitos (6-11): Excel a veces guarda la cédula como número y pierde la "V"
-  if (/^\d{6,11}$/.test(s)) return 'V' + s
-  return s
-}
-
-/**
  * Normaliza el valor de la columna Documento al subir el Excel.
  * Acondiciona "comillas" automáticamente: documentos con formato solo números
  * (ej. 740087464410397) se convierten a texto completo para evitar notación científica.
@@ -155,8 +139,8 @@ export function validatePagoField(
     }
 
     case 'numero_documento':
-      // Aceptar CUALQUIER formato: VE/191302960, BNC/101754120, Bs. BNC/ 3677878353, numeros largos, etc. Regla: NO puede duplicarse.
-      const docNorm = (strVal === 'NaN' || strVal === 'nan' || strVal === 'undefined') ? '' : strVal
+      // Aceptar CUALQUIER formato; normalizar para reconocer números largos y notación científica (evita "no reconoce documento").
+      const docNorm = (strVal === 'NaN' || strVal === 'nan' || strVal === 'undefined') ? '' : (normalizarNumeroDocumento(value) || strVal).trim() || ''
       if (docNorm && _options?.documentosExistentes?.has(docNorm)) return { isValid: false, message: 'Documento ya existe en BD' }
       return { isValid: true }
 

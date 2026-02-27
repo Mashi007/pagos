@@ -17,11 +17,6 @@ Garantizar que el crédito se asigne automáticamente cuando la cédula tiene un
 - **Solución:** En el frontend, `cedulasUnicas` solo incluye valores con **formato de cédula**: `V/E/J/Z` + 6–11 dígitos. Así no se usa nunca un número de documento como cédula para buscar préstamos.
 - **Archivo:** `frontend/src/hooks/useExcelUploadPagos.ts` (filtro `looksLikeCedula` en `cedulasUnicas`).
 
-### 1b. Cédula guardada como número en Excel (sin "V")
-- **Problema:** Si en el Excel la columna "Cédula" está guardada como **número** (ej. 23107415 en vez de "V23107415"), al leer se obtiene `"23107415"`. Eso no cumple `looksLikeCedula` (falta V/E/J/Z), no se incluye en `cedulasUnicas`, no se pide el batch de préstamos y **nunca se asigna el crédito automáticamente** (todos los casos con documento tipo 740087408305094 quedan sin escogitamiento).
-- **Solución:** Al leer cada fila del Excel se usa `normalizarCedulaExcel()`: si el valor es solo 6–11 dígitos se antepone `"V"` (cédula venezolana). Así `row.cedula` y `cedulasUnicas` tienen formato correcto, se hace el batch y la auto-asignación funciona.
-- **Archivos:** `frontend/src/utils/pagoExcelValidation.ts` (`normalizarCedulaExcel`), `frontend/src/hooks/useExcelUploadPagos.ts` (lectura de columna cédula).
-
 ### 2. Documento sin "comillas" (notación científica)
 - **Problema:** En Excel, números largos sin comillas se guardan como número y pueden leerse en notación científica (ej. 7.4E+14). Eso no cambia la cédula, pero si en algún flujo se usaba el documento para comparar o buscar, podía fallar la coincidencia.
 - **Solución:**

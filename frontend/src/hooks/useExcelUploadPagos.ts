@@ -19,7 +19,6 @@ import {
   validateExcelData,
   sanitizeFileName,
   normalizarNumeroDocumento,
-  normalizarCedulaExcel,
 } from '../utils/pagoExcelValidation'
 import { readExcelToJSON } from '../types/exceljs'
 
@@ -178,7 +177,23 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
 
       fetchPromise
         .then((map) => {
-          if (!cancelled) setPrestamosPorCedula(map)
+          if (!cancelled) {
+            setPrestamosPorCedula(map)
+            // Indexar crédito en cuanto lleguen los préstamos (no depender del efecto posterior)
+            const prestamoIdVacio = (v: unknown) =>
+              v == null || v === undefined || v === '' || v === 'none' || (typeof v === 'number' && Number.isNaN(v))
+            setExcelData((prev) =>
+              prev.map((r) => {
+                const cedulaNorm = (r.cedula || '').trim()
+                const cedulaSinGuion = cedulaNorm.replace(/-/g, '')
+                const prestamos =
+                  map[cedulaNorm] || map[cedulaSinGuion] || map[cedulaNorm.toUpperCase()] || map[cedulaNorm.toLowerCase()] || []
+                // Solo auto-asignar con 1 crédito; con 2 o más la asignación es manual
+                if (prestamos.length === 1 && prestamoIdVacio(r.prestamo_id)) return { ...r, prestamo_id: prestamos[0].id }
+                return r
+              })
+            )
+          }
         })
         .catch(() => {
           if (!cancelled) setPrestamosPorCedula({})
@@ -199,7 +214,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     }
   }, [showPreview, cedulasUnicas.join(',')])
 
-  // Auto-asignar prestamo_id cuando la cédula tiene exactamente 1 crédito activo
+  // Auto-asignar prestamo_id solo cuando la cédula tiene exactamente 1 crédito activo; con 2 o más, asignación manual
   const prestamoIdVacio = (v: unknown) =>
     v == null || v === undefined || v === '' || v === 'none' || (typeof v === 'number' && Number.isNaN(v))
 
@@ -582,7 +597,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           const row = jsonData[i] as unknown[]
           if (!row || row.every((c) => c == null || c === '')) continue
 
-          const cedula = normalizarCedulaExcel(row[cols.cedula]) || ''
+          const cedula = (row[cols.cedula] != null ? String(row[cols.cedula]).trim() : '').trim() || ''
           const fechaPago = convertirFechaExcelPago(row[cols.fecha])
           const montoRaw = String(row[cols.monto] || 0).replace(',', '.')
           const monto = parseFloat(montoRaw) || 0
