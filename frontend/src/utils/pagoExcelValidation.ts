@@ -64,20 +64,30 @@ export function convertirFechaParaBackendPago(f: string): string {
   return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : f.trim()
 }
 
-/** Convierte valor de documento a string sin notacion cientifica. Para numeros largos de Excel. */
+/**
+ * Convierte valor de documento a string sin notación científica.
+ * Aplica "comillas" automáticamente: números largos (ej. 740087464410397) se guardan
+ * como texto completo al subir el Excel, para evitar notación científica.
+ */
 export function normalizarNumeroDocumento(val: unknown): string {
   if (val == null || val === '') return ''
   if (typeof val === 'number') {
     if (Number.isNaN(val)) return ''
-    return val.toFixed(0)
+    if (Math.abs(val) >= 1e15) {
+      try { return BigInt(Math.round(val)).toString() } catch { return val.toFixed(0) }
+    }
+    return Math.round(val).toString()
   }
   const s = String(val).trim()
   if (!s || s === 'NaN' || s === 'nan' || s === 'undefined') return ''
-  // Solo expandir notacion cientifica real (ej. 7.4E+14), NUNCA formatos como VE/191302960
   if (/^\d+\.?\d*[eE][+-]?\d+$/.test(s)) {
     try {
       const n = parseFloat(s)
-      return Number.isNaN(n) ? s : n.toFixed(0)
+      if (Number.isNaN(n)) return s
+      if (Math.abs(n) >= 1e15) {
+        try { return BigInt(Math.round(n)).toString() } catch { return n.toFixed(0) }
+      }
+      return Math.round(n).toString()
     } catch {
       return s
     }
