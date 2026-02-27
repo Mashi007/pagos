@@ -78,19 +78,20 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     return () => clearInterval(interval)
   }, [checkServiceStatus])
 
-  // Solo incluir cédulas con formato real (V/E/J/Z + 6-11 dígitos) para no usar número de documento como cédula
+  // Incluir todas las cédulas válidas (V/E/J/Z + 6-11 dígitos) que aparezcan en columna Cédula O en columna Documento
   const looksLikeCedula = (c: string) => /^[VEJZ]\d{6,11}$/i.test((c || '').replace(/-/g, '').trim())
-  const cedulasUnicas = useMemo(
-    () =>
-      [
-        ...new Set(
-          excelData
-            .map((r) => cedulaLookupParaFila(r.cedula || '', r.numero_documento || ''))
-            .filter((c) => c.length >= 5 && looksLikeCedula(c))
-        ),
-      ],
-    [excelData]
-  )
+  const cedulasUnicas = useMemo(() => {
+    const candidates = new Set<string>()
+    excelData.forEach((r) => {
+      const fromCedula = cedulaParaLookup(r.cedula)
+      const fromDoc = cedulaParaLookup(r.numero_documento)
+      const lookup = cedulaLookupParaFila(r.cedula || '', r.numero_documento || '')
+      ;[fromCedula, fromDoc, lookup].forEach((c) => {
+        if (c && c.length >= 5 && looksLikeCedula(c)) candidates.add(c)
+      })
+    })
+    return [...candidates]
+  }, [excelData])
 
   const [prestamosPorCedula, setPrestamosPorCedula] = useState<Record<string, Array<{ id: number; estado: string }>>>({})
   const [cedulasBuscando, setCedulasBuscando] = useState<Set<string>>(new Set())
@@ -134,9 +135,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     [mergePrestamosEnMap]
   )
 
-  // Carga inicial: buscar préstamos por cédulas únicas y auto-asignar Crédito cuando hay 1 activo por cédula.
-  // Siempre usar batch (1 petición) para evitar diferencias de clave entre GET y POST.
-  const BATCH_THRESHOLD = 0
+  // Carga inicial: buscar préstamos por cédulas únicas (batch) y auto-asignar Crédito cuando hay 1 activo.
   useEffect(() => {
     if (!showPreview || cedulasUnicas.length === 0) {
       setPrestamosPorCedula((prev) => (Object.keys(prev).length ? {} : prev))
@@ -145,41 +144,23 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     let cancelled = false
     const timer = setTimeout(() => {
       setCedulasBuscando((prev) => new Set([...prev, ...cedulasUnicas]))
-      const fetchPromise =
-        cedulasUnicas.length > BATCH_THRESHOLD
-          ? prestamoService.getPrestamosByCedulasBatch(cedulasUnicas).then((batch) => {
-              const map: Record<string, Array<{ id: number; estado: string }>> = {}
-              cedulasUnicas.forEach((cedula) => {
-                const prestamos = (batch[cedula] || batch[cedula.replace(/-/g, '')] || []).filter((p: any) =>
-                  ESTADOS_PRESTAMO_ACTIVO.includes((p.estado || '').toUpperCase())
-                )
-                const arr = prestamos.map((p: any) => ({ id: p.id, estado: p.estado || '' }))
-                map[cedula] = arr
-                const cedulaSinGuion = cedula.replace(/-/g, '')
-                if (cedulaSinGuion !== cedula) map[cedulaSinGuion] = arr
-                map[cedula.toUpperCase()] = arr
-                map[cedula.toLowerCase()] = arr
-              })
-              return map
-            })
-          : prestamoService.getPrestamosByCedulasBatch(cedulasUnicas).then((batch) => {
-              const map: Record<string, Array<{ id: number; estado: string }>> = {}
-              const prestamosRaw = (batch as any)?.prestamos ?? batch
-              cedulasUnicas.forEach((cedula) => {
-                const prestamos = (prestamosRaw[cedula] || prestamosRaw[cedula.replace(/-/g, '')] || []).filter((p: any) =>
-                  ESTADOS_PRESTAMO_ACTIVO.includes((p.estado || '').toUpperCase())
-                )
-                const arr = prestamos.map((p: any) => ({ id: p.id, estado: p.estado || '' }))
-                map[cedula] = arr
-                const cedulaSinGuion = cedula.replace(/-/g, '')
-                if (cedulaSinGuion !== cedula) map[cedulaSinGuion] = arr
-                map[cedula.toUpperCase()] = arr
-                map[cedula.toLowerCase()] = arr
-              })
-              return map
-            })
-
-      fetchPromise
+      prestamoService
+        .getPrestamosByCedulasBatch(cedulasUnicas)
+        .then((batch) => {
+          const map: Record<string, Array<{ id: number; estado: string }>> = {}
+          cedulasUnicas.forEach((cedula) => {
+            const prestamos = (batch[cedula] || batch[cedula.replace(/-/g, '')] || []).filter((p: any) =>
+              ESTADOS_PRESTAMO_ACTIVO.includes((p.estado || '').toUpperCase())
+            )
+            const arr = prestamos.map((p: any) => ({ id: p.id, estado: p.estado || '' }))
+            map[cedula] = arr
+            const cedulaSinGuion = cedula.replace(/-/g, '')
+            if (cedulaSinGuion !== cedula) map[cedulaSinGuion] = arr
+            map[cedula.toUpperCase()] = arr
+            map[cedula.toLowerCase()] = arr
+          })
+          return map
+        })
         .then((map) => {
           if (!cancelled) {
             setPrestamosPorCedula(map)
@@ -591,9 +572,9 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           let cedula = 0, fecha = 1, monto = 2, documento = 3, prestamo = 4, conciliacion = 5
           for (let i = 0; i < Math.max(headerRow.length, 6); i++) {
             if (match(i, 'cedula', 'cÃ©dula')) cedula = i
-            if (match(i, 'fecha', 'date')) fecha = i
-            if (match(i, 'monto', 'amount')) monto = i
-            if (match(i, 'documento', 'nÂº documento', 'n documento', 'doc', 'referencia')) documento = i
+            if (match(i, 'fecha', 'fecha_pago', 'date')) fecha = i
+            if (match(i, 'monto', 'monto_pagado', 'amount')) monto = i
+            if (match(i, 'documento', 'numero_documento', 'nÂº documento', 'n documento', 'doc', 'referencia')) documento = i
             if (match(i, 'prÃ©stamo', 'prestamo', 'credito', 'crÃ©dito')) prestamo = i
             if (match(i, 'conciliacion', 'conciliaciÃ³n')) conciliacion = i
           }
@@ -653,14 +634,17 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         setExcelData(processed)
         setShowPreview(true)
 
-        // Asignar Crédito en cuanto lleguen los préstamos (misma lógica que el efecto; evita depender solo del timing del efecto)
-        const uniqueCedulas = [
-          ...new Set(
-            processed
-              .map((r) => cedulaLookupParaFila(r.cedula || '', r.numero_documento || ''))
-              .filter((c) => c.length >= 5 && looksLikeCedula(c))
-          ),
-        ]
+        // Asignar Crédito en cuanto lleguen los préstamos (misma lógica que el efecto)
+        const uniqueCedulasSet = new Set<string>()
+        processed.forEach((r) => {
+          const fromCedula = cedulaParaLookup(r.cedula)
+          const fromDoc = cedulaParaLookup(r.numero_documento)
+          const lookup = cedulaLookupParaFila(r.cedula || '', r.numero_documento || '')
+          ;[fromCedula, fromDoc, lookup].forEach((c) => {
+            if (c && c.length >= 5 && looksLikeCedula(c)) uniqueCedulasSet.add(c)
+          })
+        })
+        const uniqueCedulas = [...uniqueCedulasSet]
         if (uniqueCedulas.length > 0) {
           setCedulasBuscando((prev) => new Set([...prev, ...uniqueCedulas]))
           const prestamoIdVacio = (v: unknown) =>
