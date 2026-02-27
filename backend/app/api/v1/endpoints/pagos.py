@@ -36,7 +36,8 @@ router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 def _normalizar_numero_documento(val: Any) -> Optional[str]:
-    """Normaliza Nº documento: notación científica a dígitos. No se quitan símbolos; se acepta fielmente como en el Excel."""
+    """Normaliza Nº documento para guardado y comparación. ÚNICA REGLA: no duplicados (unique en BD).
+    Acepta CUALQUIER formato: números, notación científica, zelle/, BS./VZLA.REF, B RECIBO/..., cualquier texto (trim, máx 100 chars)."""
     if val is None or val == "":
         return None
     s = (str(val) or "").strip()
@@ -52,6 +53,7 @@ def _normalizar_numero_documento(val: Any) -> Optional[str]:
             return s
     if s.isdigit():
         return s
+    # Cualquier otro formato (zelle/, BS./VZLA.REF, alfanumérico) se acepta tal cual
     return s
 
 

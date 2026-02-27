@@ -1,7 +1,7 @@
 /**
  * Hook para carga masiva de pagos desde Excel.
- * Columnas: C?dula, Fecha de pago, Monto, Documento, ID Pr?stamo (opcional).
- * Solo pr?stamos activos (APROBADO, DESEMBOLSADO) en el selector.
+ * Columnas: Cédula, Fecha de pago, Monto, Documento, ID Préstamo (opcional).
+ * Solo préstamos activos (APROBADO, DESEMBOLSADO) en el selector.
  */
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
@@ -116,7 +116,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     []
   )
 
-  // B?squeda por c?dula individual (al hacer clic en Buscar o al salir del campo)
+  // Búsqueda por cédula individual (al hacer clic en Buscar o al salir del campo)
   const fetchSingleCedula = useCallback(
     async (cedula: string): Promise<boolean> => {
       const cedulaNorm = cedulaParaLookup(cedula) || (cedula || '').trim()
@@ -266,7 +266,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
   const saveIndividualPago = useCallback(
     async (row: PagoExcelRow, opts?: { skipToast?: boolean; skipRefresh?: boolean }): Promise<{ ok: boolean; was409?: boolean }> => {
       if (row._hasErrors) {
-        addToast('error', 'Hay errores en esta fila. Corr?gelos antes de guardar.')
+        addToast('error', 'Hay errores en esta fila. Corrígelos antes de guardar.')
         return { ok: false }
       }
       const cedulaLookup = cedulaLookupParaFila(row.cedula || '', row.numero_documento || '')
@@ -274,11 +274,11 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       const prestamosActivos =
         prestamosPorCedula[cedulaLookup] || prestamosPorCedula[cedulaSinGuion] || prestamosPorCedula[cedulaLookup.toUpperCase()] || prestamosPorCedula[cedulaLookup.toLowerCase()] || []
       if (prestamosActivos.length > 1 && !row.prestamo_id) {
-        addToast('error', `Fila ${row._rowIndex}: La c?dula ${cedulaLookup} tiene ${prestamosActivos.length} cr?ditos activos. Seleccione uno.`)
+        addToast('error', `Fila ${row._rowIndex}: La cédula ${cedulaLookup} tiene ${prestamosActivos.length} créditos activos. Seleccione uno.`)
         return { ok: false }
       }
       if (prestamosActivos.length === 0 && !row.prestamo_id) {
-        addToast('warning', `Fila ${row._rowIndex}: No hay cr?ditos activos para ${cedulaLookup}. Se guardar? sin pr?stamo asociado.`)
+        addToast('warning', `Fila ${row._rowIndex}: No hay créditos activos para ${cedulaLookup}. Se guardará sin préstamo asociado.`)
       }
 
       setSavingProgress((prev) => ({ ...prev, [row._rowIndex]: true }))
@@ -433,7 +433,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           return next
         })
         refreshPagos()
-        addToast(row._hasErrors ? 'warning' : 'success', row._hasErrors ? 'Pago enviado a Revisar Pagos con errores. Corr?gelo all?.' : 'Pago enviado a Revisar Pagos')
+        addToast(row._hasErrors ? 'warning' : 'success', row._hasErrors ? 'Pago enviado a Revisar Pagos con errores. Corrígelo allí.' : 'Pago enviado a Revisar Pagos')
         onNavigate()
         return true
       } catch (err: any) {
@@ -446,7 +446,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         addToast(
           'error',
           is409
-            ? `Fila ${row._rowIndex}: ${msg} Cambie el N? documento o verifique si ya se guard?.`
+            ? `Fila ${row._rowIndex}: ${msg} Cambie el Nº documento o verifique si ya se guardó.`
             : `Fila ${row._rowIndex}: ${msg}`
         )
         return false
@@ -480,8 +480,8 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       else fail++
     }
     setIsSendingAllRevisar(false)
-    if (ok > 0) addToast('success', "${ok} duplicado(s) enviado(s) a Revisar Pagos")
-    if (fail > 0) addToast('error', "${fail} fallaron")
+    if (ok > 0) addToast('success', `${ok} duplicado(s) enviado(s) a Revisar Pagos`)
+    if (fail > 0) addToast('error', `${fail} fallaron`)
     if (ok > 0) refreshPagos()
   }, [getDuplicadosRows, serviceStatus, sendToRevisarPagos, addToast, refreshPagos])
 
@@ -492,7 +492,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       return
     }
     if (serviceStatus === 'offline') {
-      addToast('error', 'Sin conexi?n')
+      addToast('error', 'Sin conexión')
       return
     }
     setIsSendingAllRevisar(true)
@@ -512,11 +512,11 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
   const saveAllValid = useCallback(async () => {
     const valid = getValidRows()
     if (valid.length === 0) {
-      addToast('warning', 'No hay pagos v?lidos para guardar')
+      addToast('warning', 'No hay pagos válidos para guardar')
       return
     }
     if (serviceStatus === 'offline') {
-      addToast('error', 'Sin conexi?n')
+      addToast('error', 'Sin conexión')
       return
     }
     const toSave = valid.filter((row) => {
@@ -533,7 +533,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       addToast(
         'warning',
         omitidos > 0
-          ? `${omitidos} fila(s) pendientes: guarde uno a uno, corrija o env?e a Revisar Pagos.`
+          ? `${omitidos} fila(s) pendientes: guarde uno a uno, corrija o envíe a Revisar Pagos.`
           : 'No hay filas que cumplan criterios para guardar en lote.'
       )
       return
@@ -561,7 +561,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       }
     }
     if (omitidos > 0) {
-      addToast('warning', `${omitidos} fila(s) omitidas: guarde uno a uno, corrija o env?e a Revisar Pagos.`)
+      addToast('warning', `${omitidos} fila(s) omitidas: guarde uno a uno, corrija o envíe a Revisar Pagos.`)
     }
     if (ok > 0 || fail > 0) refreshPagos()
     setIsSavingIndividual(false)
@@ -582,7 +582,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       onSuccess?.()
       onClose()
     } else if (fail === 0 && ok > 0 && (quedanConErrores || quedanSinGuardar)) {
-      addToast('warning', 'Quedan filas pendientes. Use "Revisar Pagos" en cada una o corr?jalas.')
+      addToast('warning', 'Quedan filas pendientes. Use "Revisar Pagos" en cada una o corríjalas.')
     }
   }, [getValidRows, serviceStatus, saveIndividualPago, addToast, onSuccess, onClose, prestamosPorCedula, excelData, savedRows, enviadosRevisar, duplicadosPendientesRevisar])
 
@@ -600,7 +600,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         const data = await file.arrayBuffer()
         if (!isMounted()) return
         if (data.byteLength > 10 * 1024 * 1024) {
-          alert('Archivo demasiado grande. M?ximo 10 MB')
+          alert('Archivo demasiado grande. Máximo 10 MB')
           return
         }
         const jsonData = await readExcelToJSON(data)
@@ -627,7 +627,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             if (match(i, 'cedula', 'cÃ©dula')) cedula = i
             if (match(i, 'fecha', 'fecha_pago', 'date')) fecha = i
             if (match(i, 'monto', 'monto_pagado', 'amount')) monto = i
-            if (match(i, 'documento', 'numero_documento', 'nÂº documento', 'n documento', 'doc', 'referencia')) documento = i
+            if (match(i, 'documento', 'numero_documento', 'nº documento', 'n documento', 'doc', 'referencia', 'nÂº documento')) documento = i
             if (match(i, 'prÃ©stamo', 'prestamo', 'credito', 'crÃ©dito')) prestamo = i
             if (match(i, 'conciliacion', 'conciliaciÃ³n')) conciliacion = i
           }
@@ -647,7 +647,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           const prestamoIdRaw = row[cols.prestamo]
           const conciliacionRawCol4 = (row[cols.prestamo]?.toString() || '').trim().toUpperCase()
           const conciliacionRawCol5 = (row[cols.conciliacion]?.toString() || '').trim().toUpperCase()
-          const isConciliacionCol4 = ['SI', 'S?', 'NO', '1', '0'].includes(conciliacionRawCol4)
+          const isConciliacionCol4 = ['SI', 'Sí', 'NO', '1', '0'].includes(conciliacionRawCol4)
           let prestamoId: number | null =
             !isConciliacionCol4 && prestamoIdRaw != null && String(prestamoIdRaw).trim() !== ''
               ? parseInt(String(prestamoIdRaw).trim(), 10)
@@ -657,7 +657,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             prestamoId = null
           }
           const conciliacionRaw = (isConciliacionCol4 ? conciliacionRawCol4 : conciliacionRawCol5).trim()
-          // Por defecto: Conciliaci?n = S?. Solo No si expl?citamente "NO" (evitar que 0/celda vac?a = No).
+          // Por defecto: Conciliación = Sí. Solo No si explícitamente "NO" (evitar que 0/celda vacía = No).
           const conciliado = conciliacionRaw === 'NO' ? false : true
 
           const rowData: PagoExcelRow = {
@@ -682,7 +682,8 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             if (!validation.isValid) hasErrors = true
           }
           rowData._validation.prestamo_id = { isValid: true }
-          if (numeroDoc && numeroDoc !== 'NaN') documentosEnArchivo.add(numeroDoc)
+          // Única regla documento: no duplicados (incl. vacío: solo una fila puede tener documento vacío)
+          documentosEnArchivo.add(numeroDoc && numeroDoc !== 'NaN' ? numeroDoc : '')
           rowData._hasErrors = hasErrors
           processed.push(rowData)
         }
@@ -840,8 +841,8 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         }
         const documentosEnArchivo = new Set<string>()
         prev.forEach((other) => {
-          if (other._rowIndex !== row._rowIndex && (other.numero_documento || '').trim())
-            documentosEnArchivo.add((other.numero_documento || '').trim())
+          if (other._rowIndex !== row._rowIndex)
+            documentosEnArchivo.add((other.numero_documento || '').trim() || '')
         })
         const validation = validatePagoField(field, (updated as any)[field], {
           documentosEnArchivo: field === 'numero_documento' ? documentosEnArchivo : undefined,

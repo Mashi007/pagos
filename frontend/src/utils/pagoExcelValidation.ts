@@ -98,27 +98,31 @@ export function cedulaLookupParaFila(cedula: string, numero_documento: string): 
 }
 
 /**
- * Normaliza el valor de la columna Documento al subir el Excel.
- * Acepta todos los formatos: solo números (ej. 740087408305094), notación científica, dígitos + €/$, VE/123, etc.
- * Ver docs/AUDITORIA_FORMATO_DOCUMENTO_740087408305094.md para no reintroducir el error "no reconoce documento".
- * - Si viene como número (Excel sin comillas): se pasa a string de dígitos completos (>= 1e14).
- * - Si viene como string en notación científica (7.4E+14): se expande a dígitos.
- * - Si viene como string solo dígitos: se devuelve tal cual.
- * - Cualquier otro formato (dígitos + €/$, etc.) se devuelve fielmente como en el Excel; no se quitan símbolos.
+ * Normaliza el valor de la columna Documento para comparación y guardado.
+ * ÚNICA REGLA DE NEGOCIO: no duplicados (el mismo valor no puede repetirse en el archivo ni en BD).
+ * Se acepta CUALQUIER formato: números (15–16 dígitos), notación científica, zelle/XXX, BS./VZLA.REF..., B RECIBO/..., o cualquier texto (trim solo en extremos).
  */
 export function normalizarNumeroDocumento(val: unknown): string {
   if (val == null || val === '') return ''
+  // Celdas Excel con richText u otro objeto: extraer texto para no guardar "[object Object]"
+  if (typeof val === 'object' && val !== null) {
+    const rt = (val as { richText?: Array<{ text?: string }> }).richText
+    if (Array.isArray(rt)) return rt.map((x) => x?.text ?? '').join('').trim() || ''
+    const t = (val as { text?: string }).text
+    if (t != null) return String(t).trim()
+    return ''
+  }
   if (typeof val === 'number') {
     if (Number.isNaN(val)) return ''
-    // Números largos (12+ dígitos): siempre string completo, sin notación científica (reconoce número largo)
+    // Números largos (12+ dígitos, incl. 16 dígitos tipo 3740087403067198): string completo sin notación científica
     if (Math.abs(val) >= 1e11) {
       try { return Math.abs(val) >= 1e15 ? BigInt(Math.round(val)).toString() : String(Math.round(val)) } catch { return val.toFixed(0) }
     }
     return Math.round(val).toString()
   }
-  let s = String(val).trim().replace(/\s+/g, '')
+  let s = String(val).trim()
   if (!s || s === 'NaN' || s === 'nan' || s === 'undefined') return ''
-  // Aceptar fielmente: número largo, alfanumérico (BS./VZLA.REF4068, BINANCE/335552), con símbolos
+  // Aceptar fielmente: solo dígitos (15 o 16 dígitos), notación científica, B RECIBO/000674, BS./VZLA.REF..., zelle/..., etc.
   if (/^\d+$/.test(s)) return s
   if (/^\d+\.?\d*[eE][+-]?\d+$/.test(s)) {
     try {
@@ -171,12 +175,13 @@ export function validatePagoField(
       return { isValid: true }
     }
 
-    case 'numero_documento':
-      // Regla única: no aceptar duplicados. Aceptar cualquier formato; normalizar solo para comparar (números largos, notación científica).
+    case 'numero_documento': {
+      // ÚNICA REGLA: no duplicados (mismo valor no puede repetirse en archivo ni en BD). Cualquier formato aceptado.
       const docNorm = (strVal === 'NaN' || strVal === 'nan' || strVal === 'undefined') ? '' : (normalizarNumeroDocumento(value) || strVal).trim() || ''
-      if (docNorm && _options?.documentosExistentes?.has(docNorm)) return { isValid: false, message: 'Documento ya existe en BD (no se permiten duplicados)' }
-      if (docNorm && _options?.documentosEnArchivo?.has(docNorm)) return { isValid: false, message: 'Documento duplicado en este archivo (no se permiten duplicados)' }
+      if (_options?.documentosExistentes?.has(docNorm)) return { isValid: false, message: 'Documento ya existe en BD. No se permiten duplicados.' }
+      if (_options?.documentosEnArchivo?.has(docNorm)) return { isValid: false, message: 'Documento duplicado en este archivo. No se permiten duplicados.' }
       return { isValid: true }
+    }
 
     case 'prestamo_id':
       return { isValid: true }

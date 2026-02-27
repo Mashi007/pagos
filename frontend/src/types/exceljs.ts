@@ -62,24 +62,26 @@ export async function readExcelToJSON(file: File | ArrayBuffer): Promise<any[][]
       const rowData: any[] = []
       row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
         let val = cell.value
-        // Número largo (12+ dígitos): en CUALQUIER columna leer como texto para no perder dígitos (reconoce número largo)
+        // Número largo (12–16 dígitos, ej. 740087443317051 o 3740087403067198): preferir cell.text ("número como texto") para no perder dígitos
         if (typeof val === 'number' && !Number.isNaN(val) && Math.abs(val) >= 1e11) {
           try {
             const t = (cell as any).text
-            if (t != null && String(t).trim() !== '' && /^\d+$/.test(String(t).trim())) val = String(t).trim()
+            const tStr = t != null ? String(t).trim() : ''
+            if (tStr !== '' && /^\d{12,20}$/.test(tStr)) val = tStr
             else val = Math.abs(val) >= 1e15 ? BigInt(Math.round(val)).toString() : Math.round(val).toString()
           } catch {
             val = Math.abs(val) >= 1e15 ? BigInt(Math.round(val)).toString() : Math.round(val).toString()
           }
-        } else if (colNumber === 4) {
+        } else if (val != null && typeof val === 'object' && 'richText' in val) {
+          // Cualquier celda con richText (ej. Nº documento con formato): extraer texto para no guardar [object Object]
+          val = (val as any).richText?.map((x: any) => x?.text ?? '').join('') || ''
+        } else if (colNumber === 3 || colNumber === 4 || colNumber === 5) {
+          // Columnas típicas de Monto/Documento/Préstamo: forzar string para zelle/, BS./VZLA.REF, etc.
           try {
             const t = (cell as any).text
             if (t != null && String(t).trim()) val = String(t).trim()
             else if (typeof val === 'string' && val.trim()) val = val.trim()
-            else if (typeof val === 'number' && !Number.isNaN(val)) val = String(Math.floor(val))
-            else if (val != null && typeof val === 'object' && 'richText' in val) {
-              val = (val as any).richText?.map((x: any) => x?.text ?? '').join('') || ''
-            }
+            else if (typeof val === 'number' && !Number.isNaN(val)) val = String(Math.round(val))
           } catch {
             val = val != null ? String(val) : val
           }
