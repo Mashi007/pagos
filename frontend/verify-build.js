@@ -1,4 +1,4 @@
-﻿/**
+/**
  * VerificaciÃ³n post-build: asegura que dist/assets/ contiene todos los chunks
  * necesarios. Si faltan archivos, el build falla para detectar builds incompletos
  * (p. ej. timeout/OOM en Render).
@@ -11,7 +11,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const distPath = path.join(__dirname, 'dist')
 const assetsPath = path.join(distPath, 'assets')
 
-const MIN_JS_CHUNKS = 2 // MÃ­nimo de chunks .js (entry + vendor; casi todas las pÃ¡ginas van en main para evitar 404 en Render)
+const MIN_JS_CHUNKS = 1 // Mínimo 1 chunk .js (entry; exceljs y demás van en el mismo bundle para evitar 404 en Render)
 
 if (!existsSync(distPath)) {
   console.error('âŒ verify-build: dist/ no existe')
