@@ -19,6 +19,7 @@ import {
   validateExcelData,
   sanitizeFileName,
   normalizarNumeroDocumento,
+  normalizarCedulaExcel,
 } from '../utils/pagoExcelValidation'
 import { readExcelToJSON } from '../types/exceljs'
 
@@ -581,7 +582,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           const row = jsonData[i] as unknown[]
           if (!row || row.every((c) => c == null || c === '')) continue
 
-          const cedula = (row[cols.cedula] != null ? String(row[cols.cedula]).trim() : '').trim() || ''
+          const cedula = normalizarCedulaExcel(row[cols.cedula]) || ''
           const fechaPago = convertirFechaExcelPago(row[cols.fecha])
           const montoRaw = String(row[cols.monto] || 0).replace(',', '.')
           const monto = parseFloat(montoRaw) || 0
