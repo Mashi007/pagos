@@ -11,6 +11,7 @@ import { Button } from '../ui/button'
 import { Badge } from '../ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { useExcelUploadPagos, type ExcelUploaderPagosProps } from '../../hooks/useExcelUploadPagos'
+import { cedulaLookupParaFila } from '../../utils/pagoExcelValidation'
 import { useNavigate } from 'react-router-dom'
 
 const inputClass = (isValid: boolean) =>
@@ -254,14 +255,14 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                         {excelData
                           .filter((row) => !enviadosRevisar.has(row._rowIndex) && !savedRows.has(row._rowIndex))
                           .map((row) => {
-                          const cedulaNorm = (row.cedula || '').trim()
-                          const cedulaSinGuion = cedulaNorm.replace(/-/g, '')
+                          const cedulaLookup = cedulaLookupParaFila(row.cedula || '', row.numero_documento || '')
+                          const cedulaSinGuion = cedulaLookup.replace(/-/g, '')
                           const prestamosActivos =
-                            prestamosPorCedula[cedulaNorm] ||
-                            prestamosPorCedula[cedulaSinGuion] || prestamosPorCedula[cedulaNorm.toUpperCase()] || prestamosPorCedula[cedulaNorm.toLowerCase()] || []
+                            prestamosPorCedula[cedulaLookup] ||
+                            prestamosPorCedula[cedulaSinGuion] || prestamosPorCedula[cedulaLookup.toUpperCase()] || prestamosPorCedula[cedulaLookup.toLowerCase()] || []
                           const tieneCreditos = prestamosActivos.length >= 1
-                          const valorCredito =
-                            ((row.prestamo_id != null && String(row.prestamo_id) !== 'none') ? String(row.prestamo_id) : (prestamosActivos.length === 1 ? String(prestamosActivos[0].id) : 'none'))
+                          const prestamoIdElegido = (row.prestamo_id != null && row.prestamo_id !== 0 && String(row.prestamo_id) !== 'none') ? String(row.prestamo_id) : null
+                          const valorCredito = prestamoIdElegido ?? (prestamosActivos.length === 1 ? String(prestamosActivos[0].id) : 'none')
                           return (
                             <tr key={row._rowIndex} className={row._hasErrors ? 'bg-red-50' : 'bg-green-50'}>
                               <td className="border p-2 text-xs">{row._rowIndex}</td>
@@ -271,7 +272,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                   value={row.cedula}
                                   onChange={(e) => updateCellValue(row, 'cedula', e.target.value)}
                                   onBlur={() => {
-                                    const c = (row.cedula || '').trim()
+                                    const c = cedulaLookupParaFila(row.cedula || '', row.numero_documento || '') || (row.cedula || '').trim()
                                     if (c.length >= 5) fetchSingleCedula(c)
                                   }}
                                   placeholder="Ej: V22546175"
@@ -324,22 +325,22 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                   </Select>
                                 ) : (
                                   <div className="flex items-center gap-1">
-                                    {cedulaNorm && cedulasBuscando.has(cedulaNorm) ? (
+                                    {cedulaLookup && cedulasBuscando.has(cedulaLookup) ? (
                                       <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
-                                    ) : cedulaNorm && cedulaNorm.length >= 5 ? (
+                                    ) : cedulaLookup && cedulaLookup.length >= 5 ? (
                                       <Button
                                         type="button"
                                         variant="outline"
                                         size="sm"
                                         className="h-7 text-xs px-2"
-                                        onClick={() => fetchSingleCedula(cedulaNorm)}
+                                        onClick={() => fetchSingleCedula(cedulaLookup)}
                                         disabled={serviceStatus === 'offline'}
                                       >
                                         <Search className="h-3 w-3 mr-1" />
                                         Buscar
                                       </Button>
                                     ) : null}
-                                    {(!cedulaNorm || cedulaNorm.length < 5) && (
+                                    {(!cedulaLookup || cedulaLookup.length < 5) && (
                                       <span className="text-xs text-gray-400">—</span>
                                     )}
                                   </div>

@@ -183,7 +183,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             setPrestamosPorCedula(map)
             // Indexar crédito en cuanto lleguen los préstamos (no depender del efecto posterior)
             const prestamoIdVacio = (v: unknown) =>
-              v == null || v === undefined || v === '' || v === 'none' || (typeof v === 'number' && Number.isNaN(v))
+              v == null || v === undefined || v === '' || v === 'none' || v === 0 || (typeof v === 'number' && Number.isNaN(v))
             setExcelData((prev) =>
               prev.map((r) => {
                 const cedulaLookup = cedulaLookupParaFila(r.cedula || '', r.numero_documento || '')
@@ -217,7 +217,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
 
   // Auto-asignar prestamo_id solo cuando la cédula tiene exactamente 1 crédito activo; con 2 o más, asignación manual
   const prestamoIdVacio = (v: unknown) =>
-    v == null || v === undefined || v === '' || v === 'none' || (typeof v === 'number' && Number.isNaN(v))
+    v == null || v === undefined || v === '' || v === 'none' || v === 0 || (typeof v === 'number' && Number.isNaN(v))
 
   useEffect(() => {
     if (!showPreview || Object.keys(prestamosPorCedula).length === 0) return
