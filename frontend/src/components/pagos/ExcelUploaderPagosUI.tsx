@@ -262,7 +262,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                             []
                           const tieneCreditos = prestamosActivos.length >= 1
                           const valorCredito =
-                            ((row.prestamo_id != null && row.prestamo_id !== '' && String(row.prestamo_id) !== 'none') ? String(row.prestamo_id) : (prestamosActivos.length === 1 ? String(prestamosActivos[0].id) : 'none'))
+                            ((row.prestamo_id != null && String(row.prestamo_id) !== 'none') ? String(row.prestamo_id) : (prestamosActivos.length === 1 ? String(prestamosActivos[0].id) : 'none'))
                           return (
                             <tr key={row._rowIndex} className={row._hasErrors ? 'bg-red-50' : 'bg-green-50'}>
                               <td className="border p-2 text-xs">{row._rowIndex}</td>
