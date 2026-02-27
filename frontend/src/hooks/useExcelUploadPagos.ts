@@ -20,6 +20,7 @@ import {
   sanitizeFileName,
   normalizarNumeroDocumento,
 } from '../utils/pagoExcelValidation'
+import { readExcelToJSON } from '../types/exceljs'
 
 const ESTADOS_PRESTAMO_ACTIVO = ['APROBADO', 'DESEMBOLSADO']
 
@@ -535,7 +536,6 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           alert('Archivo demasiado grande. M?ximo 10 MB')
           return
         }
-        const { readExcelToJSON } = await import('../types/exceljs')
         const jsonData = await readExcelToJSON(data)
         if (!isMounted()) return
         const dataValidation = validateExcelData(jsonData)

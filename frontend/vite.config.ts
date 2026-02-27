@@ -1,4 +1,4 @@
-﻿import { defineConfig } from 'vite'
+import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -174,9 +174,9 @@ export default defineConfig({
 
             // LibrerÃ­as pesadas de exportaciÃ³n - LAZY LOADING (cargar solo cuando se necesiten)
             // Estas librerÃ­as NO se incluyen en el bundle inicial, solo se cargan bajo demanda
-            // âœ… EXCELJS: Forzar chunk separado y evitar precarga
+            // Exceljs en vendor para evitar 404 del chunk exceljs-XXX.js (caché/hash en Render)
             if (id.includes('exceljs')) {
-              return 'exceljs' // Chunk separado, se carga solo al exportar Excel
+              return 'vendor'
             }
             if (id.includes('jspdf') || id.includes('html2canvas') || id.includes('jspdf-autotable')) {
               return 'pdf-export' // Chunk separado, se carga solo al exportar PDF
