@@ -308,6 +308,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                               <td className="border p-2">
                                 {tieneCreditos ? (
                                   <Select
+                                    key={`credito-${row._rowIndex}-${prestamosActivos.length}-${row.prestamo_id ?? 'n'}`}
                                     value={valorCredito}
                                     onValueChange={(v) => updateCellValue(row, 'prestamo_id', v)}
                                   >

@@ -980,7 +980,8 @@ def marcar_revision(
 
 @router.post("/{prestamo_id}/asignar-fecha-aprobacion", response_model=dict)
 def asignar_fecha_aprobacion(prestamo_id: int, payload: AsignarFechaAprobacionBody, db: Session = Depends(get_db)):
-    """Asigna fecha de aprobación, cambia estado a DESEMBOLSADO y genera cuotas si no existen."""
+    """Asigna fecha de aprobación/desembolso (misma fecha), cambia estado a DESEMBOLSADO y genera cuotas si no existen.
+    Útil si el préstamo quedó en APROBADO sin fecha; en flujo normal, aprobar-manual ya desembolsa con la misma fecha."""
     p = db.get(Prestamo, prestamo_id)
     if not p:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
@@ -1008,9 +1009,10 @@ def aprobar_manual(
     current_user: UserResponse = Depends(get_current_user),
 ):
     """
-    Aprobación manual de riesgo: una fecha (aprobación y base amortización), confirmación de documentos
+    Aprobación manual de riesgo: una fecha (aprobación = desembolso, misma fecha). Confirmación de documentos
     y declaración de políticas. Actualiza datos editables del préstamo, genera tabla de amortización
-    y registra en auditoría. Solo préstamos en DRAFT o EN_REVISION. Estado resultante: APROBADO.
+    y registra en auditoría. Solo préstamos en DRAFT o EN_REVISION. Al aprobar se desembolsa automáticamente:
+    estado resultante DESEMBOLSADO, fecha_aprobación = fecha de aprobación y desembolso.
     """
     if (getattr(current_user, "rol", None) or "").lower() != "administrador":
         raise HTTPException(
@@ -1051,7 +1053,7 @@ def aprobar_manual(
         p.fecha_aprobacion = datetime.combine(fecha_ap, datetime.min.time())
         p.fecha_base_calculo = fecha_ap
         p.usuario_aprobador = current_user.email
-        p.estado = "APROBADO"
+        p.estado = "DESEMBOLSADO"
 
         db.execute(delete(Cuota).where(Cuota.prestamo_id == prestamo_id))
         numero_cuotas = p.numero_cuotas or 12

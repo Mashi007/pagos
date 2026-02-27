@@ -135,8 +135,8 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
   )
 
   // Carga inicial: buscar préstamos por cédulas únicas y auto-asignar Crédito cuando hay 1 activo por cédula.
-  // Sin delay (0ms) para que el fetch arranque en cuanto hay preview y cédulas, evitando que el usuario vea Crédito vacío.
-  const BATCH_THRESHOLD = 3
+  // Siempre usar batch (1 petición) para evitar diferencias de clave entre GET y POST.
+  const BATCH_THRESHOLD = 0
   useEffect(() => {
     if (!showPreview || cedulasUnicas.length === 0) {
       setPrestamosPorCedula((prev) => (Object.keys(prev).length ? {} : prev))
@@ -162,10 +162,11 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
               })
               return map
             })
-          : Promise.all(cedulasUnicas.map((c) => prestamoService.getPrestamosByCedula(c))).then((results) => {
+          : prestamoService.getPrestamosByCedulasBatch(cedulasUnicas).then((batch) => {
               const map: Record<string, Array<{ id: number; estado: string }>> = {}
-              cedulasUnicas.forEach((cedula, i) => {
-                const prestamos = (results[i] || []).filter((p: any) =>
+              const prestamosRaw = (batch as any)?.prestamos ?? batch
+              cedulasUnicas.forEach((cedula) => {
+                const prestamos = (prestamosRaw[cedula] || prestamosRaw[cedula.replace(/-/g, '')] || []).filter((p: any) =>
                   ESTADOS_PRESTAMO_ACTIVO.includes((p.estado || '').toUpperCase())
                 )
                 const arr = prestamos.map((p: any) => ({ id: p.id, estado: p.estado || '' }))
@@ -692,10 +693,9 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             }
             return map
           }
-          const fetchPromise =
-            uniqueCedulas.length > BATCH_THRESHOLD
-              ? prestamoService.getPrestamosByCedulasBatch(uniqueCedulas).then((batch) => buildMap((batch as any)?.prestamos || {}))
-              : Promise.all(uniqueCedulas.map((c) => prestamoService.getPrestamosByCedula(c))).then((results) => buildMap(results))
+          const fetchPromise = prestamoService
+            .getPrestamosByCedulasBatch(uniqueCedulas)
+            .then((batch) => buildMap(batch || {}))
           fetchPromise
             .then((map) => {
               if (!isMounted()) return
