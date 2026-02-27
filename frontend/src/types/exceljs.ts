@@ -75,8 +75,8 @@ export async function readExcelToJSON(file: File | ArrayBuffer): Promise<any[][]
         } else if (val != null && typeof val === 'object' && 'richText' in val) {
           // Cualquier celda con richText (ej. Nº documento con formato): extraer texto para no guardar [object Object]
           val = (val as any).richText?.map((x: any) => x?.text ?? '').join('') || ''
-        } else if (colNumber === 3 || colNumber === 4 || colNumber === 5) {
-          // Columnas típicas de Monto/Documento/Préstamo: forzar string para zelle/, BS./VZLA.REF, etc.
+        } else if (colNumber >= 2 && colNumber <= 7) {
+          // Columnas típicas Monto(2)–Documento(4)–Préstamo(5)–Conciliación(6) y una más: forzar string para zelle/, números largos, etc.
           try {
             const t = (cell as any).text
             if (t != null && String(t).trim()) val = String(t).trim()

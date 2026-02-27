@@ -623,11 +623,11 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           const h = (i: number) => String(headerRow[i] ?? '').toLowerCase().trim()
           const match = (i: number, ...keys: string[]) => keys.some(k => h(i).includes(k))
           let cedula = 0, fecha = 1, monto = 2, documento = 3, prestamo = 4, conciliacion = 5
-          for (let i = 0; i < Math.max(headerRow.length, 6); i++) {
+          for (let i = 0; i < Math.max(headerRow.length, 8); i++) {
             if (match(i, 'cedula', 'cÃ©dula')) cedula = i
             if (match(i, 'fecha', 'fecha_pago', 'date')) fecha = i
             if (match(i, 'monto', 'monto_pagado', 'amount')) monto = i
-            if (match(i, 'documento', 'numero_documento', 'nº documento', 'n documento', 'doc', 'referencia', 'nÂº documento')) documento = i
+            if (match(i, 'documento', 'numero_documento', 'nº documento', 'n documento', 'doc', 'referencia', 'nÂº documento', 'zelle', 'numero doc')) documento = i
             if (match(i, 'prÃ©stamo', 'prestamo', 'credito', 'crÃ©dito')) prestamo = i
             if (match(i, 'conciliacion', 'conciliaciÃ³n')) conciliacion = i
           }

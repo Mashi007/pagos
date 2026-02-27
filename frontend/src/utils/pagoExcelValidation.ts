@@ -107,9 +107,17 @@ export function normalizarNumeroDocumento(val: unknown): string {
   // Celdas Excel con richText u otro objeto: extraer texto para no guardar "[object Object]"
   if (typeof val === 'object' && val !== null) {
     const rt = (val as { richText?: Array<{ text?: string }> }).richText
-    if (Array.isArray(rt)) return rt.map((x) => x?.text ?? '').join('').trim() || ''
+    if (Array.isArray(rt)) {
+      let out = rt.map((x) => x?.text ?? '').join('').trim() || ''
+      if (out.startsWith("'")) out = out.slice(1).trim()
+      return out
+    }
     const t = (val as { text?: string }).text
-    if (t != null) return String(t).trim()
+    if (t != null) {
+      let out = String(t).trim()
+      if (out.startsWith("'")) out = out.slice(1).trim()
+      return out
+    }
     return ''
   }
   if (typeof val === 'number') {
@@ -121,8 +129,10 @@ export function normalizarNumeroDocumento(val: unknown): string {
     return Math.round(val).toString()
   }
   let s = String(val).trim()
+  // Excel a veces guarda "número como texto" o texto con apóstrofo inicial; quitar solo el prefijo '
+  if (s.startsWith("'")) s = s.slice(1).trim()
   if (!s || s === 'NaN' || s === 'nan' || s === 'undefined') return ''
-  // Aceptar fielmente: solo dígitos (15 o 16 dígitos), notación científica, B RECIBO/000674, BS./VZLA.REF..., zelle/..., etc.
+  // Aceptar fielmente: solo dígitos (15 o 16 dígitos), notación científica, zelle/..., BS./VZLA.REF..., B RECIBO/..., etc.
   if (/^\d+$/.test(s)) return s
   if (/^\d+\.?\d*[eE][+-]?\d+$/.test(s)) {
     try {
