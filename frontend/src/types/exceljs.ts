@@ -62,12 +62,14 @@ export async function readExcelToJSON(file: File | ArrayBuffer): Promise<any[][]
       const rowData: any[] = []
       row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
         let val = cell.value
-        // Números largos (ej. 740087408305094): preservar dígitos completos, evitar notación científica
-        if (typeof val === 'number' && !Number.isNaN(val) && Math.abs(val) >= 1e14) {
+        // Número largo (12+ dígitos): en CUALQUIER columna leer como texto para no perder dígitos (reconoce número largo)
+        if (typeof val === 'number' && !Number.isNaN(val) && Math.abs(val) >= 1e11) {
           try {
-            val = Math.abs(val) >= 1e15 ? BigInt(Math.round(val)).toString() : Math.round(val).toString()
+            const t = (cell as any).text
+            if (t != null && String(t).trim() !== '' && /^\d+$/.test(String(t).trim())) val = String(t).trim()
+            else val = Math.abs(val) >= 1e15 ? BigInt(Math.round(val)).toString() : Math.round(val).toString()
           } catch {
-            val = String(val)
+            val = Math.abs(val) >= 1e15 ? BigInt(Math.round(val)).toString() : Math.round(val).toString()
           }
         } else if (colNumber === 4) {
           try {

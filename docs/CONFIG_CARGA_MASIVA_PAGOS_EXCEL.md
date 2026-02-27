@@ -9,7 +9,7 @@ El archivo se interpreta por **cabecera** (primera fila). Se buscan estas column
 | **Cédula**     | `cedula`, `cédula`                            | Identificación del cliente. Se usa para buscar préstamos (créditos) y enviar al backend. |
 | **Fecha pago** | `fecha`, `date`                               | Fecha del pago. Se normaliza a DD/MM/YYYY. |
 | **Monto**      | `monto`, `amount`                             | Monto numérico del pago. |
-| **Documento**  | `documento`, `nº documento`, `doc`, `referencia` | Número de documento (se acepta tal cual: dígitos, símbolos €/$/Bs, BINANCE/xxx, etc.). No se quitan símbolos. |
+| **Documento**  | `documento`, `numero_documento`, `nº documento`, `doc`, `referencia` | **Todos los formatos:** número largo (12+ dígitos), alfanumérico (BS./VZLA.REF4068, BINANCE/335552, BNCBS./483712), con símbolos. No se quitan símbolos. |
 | **Crédito**    | `préstamo`, `prestamo`, `credito`, `crédito`  | Opcional. Si viene vacío o no existe columna, se intenta **asignar automáticamente** cuando la cédula tiene un solo crédito activo. |
 | **Conciliación** | `conciliacion`, `conciliación`              | Sí/No. Por defecto Sí. |
 
@@ -33,7 +33,7 @@ Cabecera y datos como en el siguiente ejemplo son **compatibles** con la carga m
 
 ## Cómo se carga desde el Excel
 
-1. **Lectura** (`readExcelToJSON` en `frontend/src/types/exceljs.ts`): se lee la primera hoja; cada fila se convierte en un array de celdas; números muy largos (≥ 1e14) se pasan a string de dígitos para evitar notación científica.
+1. **Lectura** (`readExcelToJSON`): primera hoja → array de celdas. **Número largo (12+ dígitos)** en cualquier columna se lee como texto (se intenta `cell.text` y luego string sin notación científica) para reconocer bien el número largo; resto de formatos (BS./REF, BINANCE/xxx, etc.) se aceptan tal cual.
 2. **Validación de archivo** (`validateExcelFile`): extensión, tipo MIME.
 3. **Validación de datos** (`validateExcelData`): al menos una fila de datos además de la cabecera.
 4. **Detección de columnas**: se recorre la primera fila (cabecera) y se asigna cada campo al índice donde coincida alguna palabra clave.

@@ -106,18 +106,16 @@ export function normalizarNumeroDocumento(val: unknown): string {
   if (val == null || val === '') return ''
   if (typeof val === 'number') {
     if (Number.isNaN(val)) return ''
-    // Números largos (ej. 740087408305094): siempre string de dígitos completos, sin notación científica
-    if (Math.abs(val) >= 1e14) {
+    // Números largos (12+ dígitos): siempre string completo, sin notación científica (reconoce número largo)
+    if (Math.abs(val) >= 1e11) {
       try { return Math.abs(val) >= 1e15 ? BigInt(Math.round(val)).toString() : String(Math.round(val)) } catch { return val.toFixed(0) }
     }
     return Math.round(val).toString()
   }
   let s = String(val).trim().replace(/\s+/g, '')
   if (!s || s === 'NaN' || s === 'nan' || s === 'undefined') return ''
-  // Aceptar fielmente como está en el Excel: no se quitan símbolos (€, $, etc.)
-  // Solo dígitos: devolver tal cual
+  // Aceptar fielmente: número largo, alfanumérico (BS./VZLA.REF4068, BINANCE/335552), con símbolos
   if (/^\d+$/.test(s)) return s
-  // Notación científica: expandir a dígitos
   if (/^\d+\.?\d*[eE][+-]?\d+$/.test(s)) {
     try {
       const n = parseFloat(s)
@@ -130,7 +128,6 @@ export function normalizarNumeroDocumento(val: unknown): string {
       return s
     }
   }
-  // Cualquier otro string (ej. 74008740161353€, €123, $456): devolver tal cual, fiel al Excel
   return s
 }
 
