@@ -81,18 +81,18 @@ export function ConciliacionExcelUploader({ onClose, onSuccess }: ConciliacionEx
           initial={{ scale: 0.95, y: 20 }}
           animate={{ scale: 1, y: 0 }}
           exit={{ scale: 0.95 }}
-          className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+          className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col"
         >
-          {/* Header */}
-          <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center z-10">
+          {/* Header fijo (fuera del scroll, evita efecto scroll-linked en Firefox) */}
+          <div className="flex-shrink-0 bg-white border-b p-4 flex justify-between items-center rounded-t-lg">
             <h2 className="text-xl font-bold">Conciliación de Pagos</h2>
             <Button variant="ghost" size="icon" onClick={onClose}>
               <X className="w-5 h-5" />
             </Button>
           </div>
 
-          {/* Content */}
-          <div className="p-6 space-y-6">
+          {/* Contenido con scroll */}
+          <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6">
             {/* Instrucciones */}
             <Card>
               <CardContent className="pt-6">

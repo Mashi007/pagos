@@ -70,9 +70,10 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.9, opacity: 0 }}
-        className="bg-white rounded-lg shadow-xl max-w-[95vw] w-full max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-lg shadow-xl max-w-[95vw] w-full max-h-[90vh] flex flex-col"
       >
-        <div className="bg-gradient-to-r from-green-600 to-green-700 text-white p-6 rounded-t-lg">
+        {/* Cabecera fija (fuera del scroll, evita efecto scroll-linked en Firefox) */}
+        <div className="flex-shrink-0 bg-gradient-to-r from-green-600 to-green-700 text-white p-6 rounded-t-lg">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <FileSpreadsheet className="h-6 w-6" />
@@ -92,7 +93,8 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
           </div>
         </div>
 
-        <div className="p-6 space-y-6">
+        {/* Contenido con scroll */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6">
           {!showPreview ? (
             <Card>
               <CardContent className="pt-6">

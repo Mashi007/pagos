@@ -25,6 +25,8 @@ import {
 import { readExcelToJSON } from '../types/exceljs'
 
 const ESTADOS_PRESTAMO_ACTIVO = ['APROBADO', 'DESEMBOLSADO']
+// Límite de INTEGER en BD; si el valor parece número de documento (ej. 740087408451411), el backend devuelve 422
+const PRESTAMO_ID_MAX = 2147483647
 
 export interface ExcelUploaderPagosProps {
   onClose: () => void
@@ -283,6 +285,14 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
 
         let numeroDoc = normalizarNumeroDocumento(row.numero_documento) || ''
 
+        if (prestamoId != null && (prestamoId < 1 || prestamoId > PRESTAMO_ID_MAX)) {
+          addToast(
+            'error',
+            `Fila ${row._rowIndex}: El valor del crédito no es válido (parece un número de documento). Elija un crédito de la lista.`
+          )
+          return { ok: false }
+        }
+
         const pagoData = {
           cedula_cliente: cedulaLookup,
           prestamo_id: prestamoId,
@@ -315,7 +325,9 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           Array.isArray(detail)
             ? detail.map((d: any) => d.msg || d.message).join(' ')
             : detail || err?.message || 'Error al guardar'
-        const is409 = err?.response?.status === 409
+        const status = err?.response?.status
+        const is409 = status === 409
+        const is422 = status === 422
         if (is409) {
           setDuplicadosPendientesRevisar((prev) => new Set([...prev, row._rowIndex]))
           addToast(
@@ -323,10 +335,16 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             `Documento duplicado. Use "Revisar Pagos" para registrarlo en observaciones.`
           )
           return { ok: false, was409: true }
-        } else {
-          addToast('error', `Fila ${row._rowIndex}: ${msg}`)
+        }
+        if (is422 && (typeof msg === 'string' && msg.includes('prestamo_id'))) {
+          addToast(
+            'error',
+            `Fila ${row._rowIndex}: Crédito inválido. Elija un crédito de la lista (no use el número de documento).`
+          )
           return { ok: false }
         }
+        addToast('error', `Fila ${row._rowIndex}: ${msg}`)
+        return { ok: false }
       } finally {
         setSavingProgress((prev) => ({ ...prev, [row._rowIndex]: false }))
       }
