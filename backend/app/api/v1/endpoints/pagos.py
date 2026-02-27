@@ -34,6 +34,26 @@ class MoverRevisarPagosBody(BaseModel):
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
+
+def _normalizar_numero_documento(val: Any) -> Optional[str]:
+    """Normaliza Nº documento a string de dígitos (evita notación científica). Equivalente a 'comillas' en Excel."""
+    if val is None or val == "":
+        return None
+    s = (str(val) or "").strip()
+    if not s or s.upper() in ("NAN", "NONE", "UNDEFINED"):
+        return None
+    if re.match(r"^\d+\.?\d*[eE][+-]?\d+$", s):
+        try:
+            n = float(s)
+            if n != n:  # NaN
+                return None
+            return str(int(round(n)))
+        except (ValueError, OverflowError):
+            return s
+    if s.isdigit():
+        return s
+    return s
+
 # Zona horaria del negocio para "hoy" e "inicio_mes" (Monto cobrado mes, Pagos hoy)
 TZ_NEGOCIO = "America/Caracas"
 
@@ -831,8 +851,8 @@ def obtener_pago(pago_id: int, db: Session = Depends(get_db)):
 def _numero_documento_ya_existe(
     db: Session, numero_documento: Optional[str], exclude_pago_id: Optional[int] = None
 ) -> bool:
-    """Comprueba si ya existe un pago con ese NÂº documento (no se permite repetir)."""
-    num = (numero_documento or "").strip() or None
+    """Comprueba si ya existe un pago con ese Nº documento (no se permite repetir)."""
+    num = _normalizar_numero_documento(numero_documento)
     if not num:
         return False
     q = select(Pago.id).where(Pago.numero_documento == num)
@@ -844,8 +864,8 @@ def _numero_documento_ya_existe(
 @router.post("", response_model=dict, status_code=201)
 @router.post("/", include_in_schema=False, response_model=dict, status_code=201)
 def crear_pago(payload: PagoCreate, db: Session = Depends(get_db)):
-    """Crea un pago en la tabla pagos. NÂº documento no puede repetirse."""
-    num_doc = (payload.numero_documento or "").strip() or None
+    """Crea un pago en la tabla pagos. Nº documento no puede repetirse. Se normaliza (comillas automáticas)."""
+    num_doc = _normalizar_numero_documento(payload.numero_documento)
     if num_doc and _numero_documento_ya_existe(db, num_doc):
         raise HTTPException(
             status_code=409,
@@ -893,7 +913,7 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
         raise HTTPException(status_code=404, detail="Pago no encontrado")
     data = payload.model_dump(exclude_unset=True)
     if "numero_documento" in data and data["numero_documento"] is not None:
-        num_doc = (data["numero_documento"] or "").strip() or None
+        num_doc = _normalizar_numero_documento(data["numero_documento"])
         if num_doc and _numero_documento_ya_existe(db, num_doc, exclude_pago_id=pago_id):
             raise HTTPException(
                 status_code=409,
@@ -906,7 +926,7 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
         elif k == "institucion_bancaria" and v is not None:
             setattr(row, k, v.strip() or None)
         elif k == "numero_documento" and v is not None:
-            setattr(row, k, (v or "").strip() or None)
+            setattr(row, k, _normalizar_numero_documento(v))
         elif k == "cedula_cliente" and v is not None:
             setattr(row, k, v.strip())
         elif k == "fecha_pago" and v is not None:

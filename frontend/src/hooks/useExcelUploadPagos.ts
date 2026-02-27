@@ -76,8 +76,17 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     return () => clearInterval(interval)
   }, [checkServiceStatus])
 
+  // Solo incluir cédulas con formato real (V/E/J/Z + 6-11 dígitos) para no usar número de documento como cédula
+  const looksLikeCedula = (c: string) => /^[VEJZ]\d{6,11}$/i.test((c || '').replace(/-/g, '').trim())
   const cedulasUnicas = useMemo(
-    () => [...new Set(excelData.map((r) => (r.cedula || '').trim()).filter((c) => c.length >= 5))],
+    () =>
+      [
+        ...new Set(
+          excelData
+            .map((r) => (r.cedula != null ? String(r.cedula).trim() : ''))
+            .filter((c) => c.length >= 5 && looksLikeCedula(c))
+        ),
+      ],
     [excelData]
   )
 
@@ -572,11 +581,11 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           const row = jsonData[i] as unknown[]
           if (!row || row.every((c) => c == null || c === '')) continue
 
-          const cedula = (row[cols.cedula]?.toString() || '').trim() || ''
+          const cedula = (row[cols.cedula] != null ? String(row[cols.cedula]).trim() : '').trim() || ''
           const fechaPago = convertirFechaExcelPago(row[cols.fecha])
           const montoRaw = String(row[cols.monto] || 0).replace(',', '.')
           const monto = parseFloat(montoRaw) || 0
-          let numeroDoc = normalizarNumeroDocumento(row[cols.documento])
+          const numeroDoc = normalizarNumeroDocumento(row[cols.documento])
           const prestamoIdRaw = row[cols.prestamo]
           const conciliacionRawCol4 = (row[cols.prestamo]?.toString() || '').trim().toUpperCase()
           const conciliacionRawCol5 = (row[cols.conciliacion]?.toString() || '').trim().toUpperCase()
