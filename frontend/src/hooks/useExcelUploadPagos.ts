@@ -43,6 +43,8 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
   const [isProcessing, setIsProcessing] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  /** Evita doble petición batch: processExcelFile ya pide préstamos por cédula; el useEffect no vuelve a pedir para las mismas cédulas. */
+  const batchRequestedForCedulasRef = useRef<string | null>(null)
   const [savedRows, setSavedRows] = useState<Set<number>>(new Set())
   const [enviadosRevisar, setEnviadosRevisar] = useState<Set<number>>(new Set())
   const [duplicadosPendientesRevisar, setDuplicadosPendientesRevisar] = useState<Set<number>>(new Set())
@@ -139,11 +141,14 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
   )
 
   // Carga inicial: buscar préstamos por cédulas únicas (batch) y auto-asignar Crédito cuando hay 1 activo.
+  // Si processExcelFile ya pidió el batch para estas cédulas, no repetir la petición.
   useEffect(() => {
     if (!showPreview || cedulasUnicas.length === 0) {
       setPrestamosPorCedula((prev) => (Object.keys(prev).length ? {} : prev))
       return
     }
+    const cedulasKey = cedulasUnicas.join(',')
+    if (batchRequestedForCedulasRef.current === cedulasKey) return
     let cancelled = false
     const timer = setTimeout(() => {
       setCedulasBuscando((prev) => new Set([...prev, ...cedulasUnicas]))
@@ -330,10 +335,36 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         const is422 = status === 422
         if (is409) {
           setDuplicadosPendientesRevisar((prev) => new Set([...prev, row._rowIndex]))
-          addToast(
-            'warning',
-            `Documento duplicado. Use "Revisar Pagos" para registrarlo en observaciones.`
-          )
+          const numeroDoc = normalizarNumeroDocumento(row.numero_documento) || ''
+          try {
+            await pagoConErrorService.create({
+              cedula_cliente: cedulaLookupParaFila(row.cedula || '', row.numero_documento || ''),
+              prestamo_id: row.prestamo_id ?? null,
+              fecha_pago: convertirFechaParaBackendPago(row.fecha_pago) || new Date().toISOString().split('T')[0],
+              monto_pagado: Number(row.monto_pagado) || 0,
+              numero_documento: numeroDoc || null,
+              institucion_bancaria: null,
+              notas: null,
+              conciliado: row.conciliado ?? false,
+              observaciones: 'duplicado',
+              fila_origen: row._rowIndex,
+            })
+            setEnviadosRevisar((prev) => new Set([...prev, row._rowIndex]))
+            setDuplicadosPendientesRevisar((prev) => {
+              const next = new Set(prev)
+              next.delete(row._rowIndex)
+              return next
+            })
+            queryClient.invalidateQueries({ queryKey: ['pagos-con-errores'], exact: false })
+            if (!opts?.skipToast) addToast('info', `Fila ${row._rowIndex}: Duplicado enviado a Revisar Pagos.`)
+          } catch (_) {
+            if (!opts?.skipToast) {
+              addToast(
+                'warning',
+                `Documento duplicado. Use "Revisar Pagos" o "Enviar duplicados" para registrarlo en observaciones.`
+              )
+            }
+          }
           return { ok: false, was409: true }
         }
         if (is422 && (typeof msg === 'string' && msg.includes('prestamo_id'))) {
@@ -349,7 +380,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         setSavingProgress((prev) => ({ ...prev, [row._rowIndex]: false }))
       }
     },
-    [prestamosPorCedula, addToast, refreshPagos, onSuccess, onClose, getValidRows]
+    [prestamosPorCedula, addToast, refreshPagos, onSuccess, onClose, getValidRows, queryClient]
   )
 
   const sendToRevisarPagos = useCallback(
@@ -673,6 +704,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         // Normalizar igual que el backend (sin guión) para que las claves del map coincidan con la respuesta
         const uniqueCedulas = [...uniqueCedulasSet].map((c) => (c || '').trim().replace(/-/g, '')).filter((c) => c.length >= 5 && looksLikeCedula(c))
         if (uniqueCedulas.length > 0) {
+          batchRequestedForCedulasRef.current = uniqueCedulas.join(',')
           setCedulasBuscando((prev) => new Set([...prev, ...uniqueCedulas]))
           const prestamoIdVacio = (v: unknown) =>
             v == null || v === undefined || v === '' || v === 'none' || v === 0 || (typeof v === 'number' && Number.isNaN(v))

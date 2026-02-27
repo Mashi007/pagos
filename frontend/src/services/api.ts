@@ -1,4 +1,4 @@
-﻿import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, AxiosProgressEvent, AxiosResponse } from 'axios'
+import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, AxiosProgressEvent, AxiosResponse } from 'axios'
 import toast from 'react-hot-toast'
 import { getErrorMessage, isAxiosError } from '../types/errors'
 import { env, BASE_PATH } from '../config/env'
@@ -567,11 +567,10 @@ class ApiClient {
           console.warn('⚠️ [ApiClient] Login/refresh no autorizado (401):', url)
         } else if (!isAuthFailure) {
           const is409Pagos = response.status === 409 && url.includes('/pagos/')
-          if (is409Pagos) {
-            console.warn('⚠️ [ApiClient] POST 409 (documento duplicado). Use Revisar Pagos para registrar en observaciones.', url)
-          } else {
+          if (!is409Pagos) {
             console.error('❌ [ApiClient] POST recibió error 4xx:', { url, status: response.status, data: response.data })
           }
+          // 409 en pagos: no loguear por cada fila (satura consola); la UI ya muestra toast/resumen
         }
         // Crear un error de Axios para que se maneje correctamente, preservando el mensaje del backend
         const backendMessage = (response.data as any)?.detail || (response.data as any)?.message || `Request failed with status ${response.status}`
@@ -585,9 +584,7 @@ class ApiClient {
       return response.data
     } catch (error: any) {
       const is409Pagos = error?.response?.status === 409 && url.includes('/pagos/')
-      if (is409Pagos) {
-        console.warn('⚠️ [ApiClient] POST 409 (documento duplicado). Use Revisar Pagos para registrar en observaciones:', url)
-      } else {
+      if (!is409Pagos) {
         console.error('❌ [ApiClient] POST error:', { url, error })
       }
       throw error

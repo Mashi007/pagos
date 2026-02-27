@@ -24,11 +24,15 @@ class RequestLogMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         elapsed_ms = int((time.perf_counter() - start) * 1000)
         status = response.status_code
+        path = request.url.path
         msg = "request method=%s path=%s status=%s elapsed_ms=%s"
         if status >= 500 or elapsed_ms >= 5000:
-            logger.warning(msg + " (slow_or_error)", request.method, request.url.path, status, elapsed_ms)
+            logger.warning(msg + " (slow_or_error)", request.method, path, status, elapsed_ms)
+        elif request.method == "POST" and path.rstrip("/").endswith("/api/v1/pagos") and status == 409:
+            # 409 documento duplicado en carga masiva: muchos por lote; solo DEBUG para no saturar logs
+            logger.debug(msg, request.method, path, status, elapsed_ms)
         else:
-            logger.info(msg, request.method, request.url.path, status, elapsed_ms)
+            logger.info(msg, request.method, path, status, elapsed_ms)
         return response
 
 # Crear aplicación FastAPI
