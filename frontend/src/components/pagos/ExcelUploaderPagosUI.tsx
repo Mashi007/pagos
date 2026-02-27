@@ -106,7 +106,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                   <Upload className="h-12 w-12 mx-auto mb-4 text-gray-400" />
                   <h3 className="text-lg font-semibold mb-2">{isDragging ? 'Suelta el archivo aquí' : 'Sube tu archivo Excel'}</h3>
                   <p className="text-gray-600 mb-4 text-sm">
-                    Columnas: Cédula | Fecha de pago | Monto | Documento | ID Préstamo (opcional) | Conciliación (Sí/No). Para números largos en Documento: use comillas antes ('740087464410397) para evitar notación científica
+                    Columnas: Cédula | Fecha de pago | Monto | Documento | ID Préstamo (opcional) | Conciliación (Sí/No). Documento con solo números (ej. 740087464410397): el sistema los normaliza automáticamente al subir para evitar notación científica
                   </p>
                   <Button onClick={() => fileInputRef.current?.click()} disabled={isProcessing} className="mb-4">
                     <FileSpreadsheet className="mr-2 h-4 w-4" />

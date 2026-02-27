@@ -65,21 +65,28 @@ export function convertirFechaParaBackendPago(f: string): string {
 }
 
 /**
- * Convierte valor de documento a string sin notación científica.
- * Aplica "comillas" automáticamente: números largos (ej. 740087464410397) se guardan
- * como texto completo al subir el Excel, para evitar notación científica.
+ * Normaliza el valor de la columna Documento al subir el Excel.
+ * Acondiciona "comillas" automáticamente: documentos con formato solo números
+ * (ej. 740087464410397) se convierten a texto completo para evitar notación científica.
+ * - Si viene como número (Excel sin comillas): se pasa a string de dígitos completos.
+ * - Si viene como string en notación científica (7.4E+14): se expande a dígitos.
+ * - Si viene como string solo dígitos: se devuelve tal cual (respeta ceros a la izquierda).
  */
 export function normalizarNumeroDocumento(val: unknown): string {
   if (val == null || val === '') return ''
   if (typeof val === 'number') {
     if (Number.isNaN(val)) return ''
+    // Números largos: siempre a string de dígitos (equivalente a "comillas" en Excel)
     if (Math.abs(val) >= 1e15) {
       try { return BigInt(Math.round(val)).toString() } catch { return val.toFixed(0) }
     }
     return Math.round(val).toString()
   }
-  const s = String(val).trim()
+  const s = String(val).trim().replace(/\s+/g, '')
   if (!s || s === 'NaN' || s === 'nan' || s === 'undefined') return ''
+  // Solo dígitos (formato documento): devolver tal cual
+  if (/^\d+$/.test(s)) return s
+  // Notación científica: expandir a dígitos completos
   if (/^\d+\.?\d*[eE][+-]?\d+$/.test(s)) {
     try {
       const n = parseFloat(s)
