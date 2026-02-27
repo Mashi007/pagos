@@ -76,12 +76,15 @@ export async function readExcelToJSON(file: File | ArrayBuffer): Promise<any[][]
           // Cualquier celda con richText (ej. Nº documento con formato): extraer texto para no guardar [object Object]
           val = (val as any).richText?.map((x: any) => x?.text ?? '').join('') || ''
         } else if (colNumber >= 2 && colNumber <= 7) {
-          // Columnas típicas Monto(2)–Documento(4)–Préstamo(5)–Conciliación(6) y una más: forzar string para zelle/, números largos, etc.
+          // Columnas típicas Monto(2)–Documento(4)–Préstamo(5)–Conciliación(6): forzar string para zelle/, números largos, etc.
           try {
             const t = (cell as any).text
-            if (t != null && String(t).trim()) val = String(t).trim()
-            else if (typeof val === 'string' && val.trim()) val = val.trim()
-            else if (typeof val === 'number' && !Number.isNaN(val)) val = String(Math.round(val))
+            let str = ''
+            if (t != null && String(t).trim()) str = String(t).trim()
+            else if (typeof val === 'string' && val.trim()) str = val.trim()
+            else if (typeof val === 'number' && !Number.isNaN(val)) str = String(Math.round(val))
+            else if (val != null) str = String(val)
+            if (str) val = str.replace(/[\u200B-\u200D\uFEFF\r\n\t]/g, '').trim() || str
           } catch {
             val = val != null ? String(val) : val
           }

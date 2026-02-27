@@ -97,10 +97,17 @@ export function cedulaLookupParaFila(cedula: string, numero_documento: string): 
   return fromC || fromD
 }
 
+// Quita caracteres invisibles/control que Excel o copiar-pegar pueden incluir (evita que el mismo documento se vea como distinto)
+function limpiarDocumento(s: string): string {
+  return s.replace(/[\u200B-\u200D\uFEFF\r\n\t]/g, '').trim()
+}
+
 /**
  * Normaliza el valor de la columna Documento para comparación y guardado.
- * ÚNICA REGLA DE NEGOCIO: no duplicados (el mismo valor no puede repetirse en el archivo ni en BD).
- * Se acepta CUALQUIER formato: números (15–16 dígitos), notación científica, zelle/XXX, BS./VZLA.REF..., B RECIBO/..., o cualquier texto (trim solo en extremos).
+ *
+ * REGLA DE NEGOCIO (OBLIGATORIA):
+ * - DOCUMENTO ACEPTA CUALQUIER FORMATO (números, zelle/, BS./VZLA.REF, B RECIBO/, alfanumérico, etc.).
+ * - LO ÚNICO QUE NUNCA SE ACEPTA ES UN DOCUMENTO DUPLICADO (mismo valor en archivo o en BD).
  */
 export function normalizarNumeroDocumento(val: unknown): string {
   if (val == null || val === '') return ''
@@ -110,29 +117,28 @@ export function normalizarNumeroDocumento(val: unknown): string {
     if (Array.isArray(rt)) {
       let out = rt.map((x) => x?.text ?? '').join('').trim() || ''
       if (out.startsWith("'")) out = out.slice(1).trim()
-      return out
+      return limpiarDocumento(out)
     }
     const t = (val as { text?: string }).text
     if (t != null) {
       let out = String(t).trim()
       if (out.startsWith("'")) out = out.slice(1).trim()
-      return out
+      return limpiarDocumento(out)
     }
     return ''
   }
   if (typeof val === 'number') {
     if (Number.isNaN(val)) return ''
-    // Números largos (12+ dígitos, incl. 16 dígitos tipo 3740087403067198): string completo sin notación científica
+    // Números largos (12+ dígitos, incl. 15–16 dígitos): string completo sin notación científica
     if (Math.abs(val) >= 1e11) {
       try { return Math.abs(val) >= 1e15 ? BigInt(Math.round(val)).toString() : String(Math.round(val)) } catch { return val.toFixed(0) }
     }
     return Math.round(val).toString()
   }
   let s = String(val).trim()
-  // Excel a veces guarda "número como texto" o texto con apóstrofo inicial; quitar solo el prefijo '
   if (s.startsWith("'")) s = s.slice(1).trim()
+  s = limpiarDocumento(s)
   if (!s || s === 'NaN' || s === 'nan' || s === 'undefined') return ''
-  // Aceptar fielmente: solo dígitos (15 o 16 dígitos), notación científica, zelle/..., BS./VZLA.REF..., B RECIBO/..., etc.
   if (/^\d+$/.test(s)) return s
   if (/^\d+\.?\d*[eE][+-]?\d+$/.test(s)) {
     try {
@@ -186,7 +192,7 @@ export function validatePagoField(
     }
 
     case 'numero_documento': {
-      // ÚNICA REGLA: no duplicados (mismo valor no puede repetirse en archivo ni en BD). Cualquier formato aceptado.
+      // DOCUMENTO: aceptar CUALQUIER formato. ÚNICA restricción: NO DUPLICADO (ni en archivo ni en BD).
       const docNorm = (strVal === 'NaN' || strVal === 'nan' || strVal === 'undefined') ? '' : (normalizarNumeroDocumento(value) || strVal).trim() || ''
       if (_options?.documentosExistentes?.has(docNorm)) return { isValid: false, message: 'Documento ya existe en BD. No se permiten duplicados.' }
       if (_options?.documentosEnArchivo?.has(docNorm)) return { isValid: false, message: 'Documento duplicado en este archivo. No se permiten duplicados.' }

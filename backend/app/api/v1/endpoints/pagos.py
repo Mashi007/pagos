@@ -36,8 +36,9 @@ router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 def _normalizar_numero_documento(val: Any) -> Optional[str]:
-    """Normaliza Nº documento para guardado y comparación. ÚNICA REGLA: no duplicados (unique en BD).
-    Acepta CUALQUIER formato: números, notación científica, zelle/, BS./VZLA.REF, B RECIBO/..., cualquier texto (trim, máx 100 chars)."""
+    """Normaliza Nº documento para guardado y comparación.
+    REGLA: documento ACEPTA CUALQUIER FORMATO. Lo ÚNICO que no se acepta es DUPLICADO (unique en BD).
+    Trim y truncado a 100 chars; sin validación de formato."""
     if val is None or val == "":
         return None
     s = (str(val) or "").strip()
@@ -895,7 +896,7 @@ def _numero_documento_ya_existe(
 @router.post("", response_model=dict, status_code=201)
 @router.post("/", include_in_schema=False, response_model=dict, status_code=201)
 def crear_pago(payload: PagoCreate, db: Session = Depends(get_db)):
-    """Crea un pago en la tabla pagos. Nº documento no puede repetirse. Se normaliza y se trunca a 100 caracteres."""
+    """Crea un pago. Documento acepta cualquier formato. Única restricción: no duplicado (409 si ya existe)."""
     num_doc = _truncar_numero_documento(_normalizar_numero_documento(payload.numero_documento))
     if num_doc and _numero_documento_ya_existe(db, num_doc):
         raise HTTPException(

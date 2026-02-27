@@ -16,7 +16,7 @@ class PagoCreate(BaseModel):
     prestamo_id: Optional[int] = None
     fecha_pago: date
     monto_pagado: Decimal
-    numero_documento: str
+    numero_documento: str  # Cualquier formato aceptado. Única restricción: no duplicado (unique en BD).
     institucion_bancaria: Optional[str] = None
     notas: Optional[str] = None
     conciliado: Optional[bool] = None  # Sí/No en carga masiva
