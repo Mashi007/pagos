@@ -5,7 +5,10 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
+
+# Límite de INTEGER en PostgreSQL (evita 500 cuando se envía número de documento como prestamo_id)
+PRESTAMO_ID_MAX = 2147483647
 
 
 class PagoCreate(BaseModel):
@@ -18,6 +21,18 @@ class PagoCreate(BaseModel):
     notas: Optional[str] = None
     conciliado: Optional[bool] = None  # Sí/No en carga masiva
 
+    @field_validator("prestamo_id")
+    @classmethod
+    def prestamo_id_en_rango(cls, v: Optional[int]) -> Optional[int]:
+        if v is None:
+            return v
+        if v < 1 or v > PRESTAMO_ID_MAX:
+            raise ValueError(
+                f"prestamo_id debe estar entre 1 y {PRESTAMO_ID_MAX}. "
+                "Si el valor parece un número de documento (ej. 740087408451411), elija el crédito correcto en la lista."
+            )
+        return v
+
 
 class PagoUpdate(BaseModel):
     cedula_cliente: Optional[str] = None
@@ -29,6 +44,18 @@ class PagoUpdate(BaseModel):
     notas: Optional[str] = None
     conciliado: Optional[bool] = None
     verificado_concordancia: Optional[str] = None  # SI / NO
+
+    @field_validator("prestamo_id")
+    @classmethod
+    def prestamo_id_en_rango(cls, v: Optional[int]) -> Optional[int]:
+        if v is None:
+            return v
+        if v < 1 or v > PRESTAMO_ID_MAX:
+            raise ValueError(
+                f"prestamo_id debe estar entre 1 y {PRESTAMO_ID_MAX}. "
+                "Si el valor parece un número de documento, elija el crédito correcto."
+            )
+        return v
 
 
 class PagoResponse(BaseModel):

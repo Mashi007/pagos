@@ -294,9 +294,6 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           conciliado: row.conciliado ?? false,
         }
 
-        // Diagnóstico: ver en consola qué se envía al backend (quitar cuando deje de depurar)
-        console.log('[CargaMasiva] POST pago payload', { fila: row._rowIndex, numero_documento: pagoData.numero_documento, payload: pagoData })
-
         await pagoService.createPago(pagoData as any)
         setSavedRows((prev) => new Set([...prev, row._rowIndex]))
         setDuplicadosPendientesRevisar((prev) => {

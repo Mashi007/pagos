@@ -54,6 +54,23 @@ def _normalizar_numero_documento(val: Any) -> Optional[str]:
         return s
     return s
 
+
+# Límite de la columna numero_documento y referencia_pago en tabla pagos (String(100))
+_MAX_LEN_NUMERO_DOCUMENTO = 100
+# Límite de INTEGER en PostgreSQL; valores mayores (ej. número de documento) provocan 500
+_PRESTAMO_ID_MAX = 2147483647
+
+
+def _truncar_numero_documento(val: Optional[str]) -> Optional[str]:
+    """Trunca a 100 caracteres para no exceder la columna y evitar 500 en BD."""
+    if val is None or not val:
+        return None
+    s = (val or "").strip()
+    if not s:
+        return None
+    return s[:_MAX_LEN_NUMERO_DOCUMENTO] if len(s) > _MAX_LEN_NUMERO_DOCUMENTO else s
+
+
 # Zona horaria del negocio para "hoy" e "inicio_mes" (Monto cobrado mes, Pagos hoy)
 TZ_NEGOCIO = "America/Caracas"
 
@@ -360,7 +377,14 @@ async def upload_excel_pagos(
                         prestamo_id = None
                     else:
                         _s = str(_val_prestamo).strip()
-                        prestamo_id = int(_s) if (_s and _s.isdigit()) else None
+                        try:
+                            _pid = int(_s) if (_s and _s.isdigit()) else None
+                        except ValueError:
+                            _pid = None
+                        if _pid is not None and (_pid < 1 or _pid > _PRESTAMO_ID_MAX):
+                            prestamo_id = None  # valor fuera de rango (ej. número de documento en columna crédito)
+                        else:
+                            prestamo_id = _pid
                     fecha_val = row[2] if len(row) > 2 else None
                     _monto_raw = row[3] if len(row) > 3 else None
                     try:
@@ -372,10 +396,11 @@ async def upload_excel_pagos(
                 if not cedula or monto <= 0:
                     filas_omitidas += 1
                     continue
-                # Misma normalización que crear/actualizar (notación científica → dígitos; resto fiel). Regla: no aceptar duplicados.
+                # Misma normalización que crear/actualizar (notación científica → dígitos; resto fiel). Truncar a 100 para no exceder BD.
                 numero_doc_norm = _normalizar_numero_documento(numero_doc) if (numero_doc or "").strip() else None
                 if numero_doc_norm is None and (numero_doc or "").strip():
                     numero_doc_norm = (numero_doc or "").strip() or None
+                numero_doc_norm = _truncar_numero_documento(numero_doc_norm) if numero_doc_norm else None
                 if numero_doc_norm:
                     if numero_doc_norm in numeros_doc_en_lote:
                         datos_fila = {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}
@@ -408,6 +433,7 @@ async def upload_excel_pagos(
                         continue
 
                 fecha_pago = _parse_fecha(fecha_val)
+                ref_pago = ((numero_doc_norm or (numero_doc or "").strip()) or "Carga")[:_MAX_LEN_NUMERO_DOCUMENTO]
                 p = Pago(
                     cedula_cliente=cedula,
                     prestamo_id=prestamo_id,
@@ -415,7 +441,7 @@ async def upload_excel_pagos(
                     monto_pagado=monto,
                     numero_documento=numero_doc_norm,
                     estado="PENDIENTE",
-                    referencia_pago=(numero_doc_norm or numero_doc or "").strip() or "Carga",
+                    referencia_pago=ref_pago,
                 )
                 db.add(p)
                 registros += 1
@@ -867,14 +893,14 @@ def _numero_documento_ya_existe(
 @router.post("", response_model=dict, status_code=201)
 @router.post("/", include_in_schema=False, response_model=dict, status_code=201)
 def crear_pago(payload: PagoCreate, db: Session = Depends(get_db)):
-    """Crea un pago en la tabla pagos. Nº documento no puede repetirse. Se normaliza (comillas automáticas)."""
-    num_doc = _normalizar_numero_documento(payload.numero_documento)
+    """Crea un pago en la tabla pagos. Nº documento no puede repetirse. Se normaliza y se trunca a 100 caracteres."""
+    num_doc = _truncar_numero_documento(_normalizar_numero_documento(payload.numero_documento))
     if num_doc and _numero_documento_ya_existe(db, num_doc):
         raise HTTPException(
             status_code=409,
             detail="Ya existe un pago con ese NÂº de documento. El NÂº documento no puede repetirse.",
         )
-    ref = num_doc or "N/A"
+    ref = (num_doc or "N/A")[:_MAX_LEN_NUMERO_DOCUMENTO]
     fecha_pago_ts = datetime.combine(payload.fecha_pago, dt_time.min)
     conciliado = payload.conciliado if payload.conciliado is not None else False
     row = Pago(
@@ -916,7 +942,7 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
         raise HTTPException(status_code=404, detail="Pago no encontrado")
     data = payload.model_dump(exclude_unset=True)
     if "numero_documento" in data and data["numero_documento"] is not None:
-        num_doc = _normalizar_numero_documento(data["numero_documento"])
+        num_doc = _truncar_numero_documento(_normalizar_numero_documento(data["numero_documento"]))
         if num_doc and _numero_documento_ya_existe(db, num_doc, exclude_pago_id=pago_id):
             raise HTTPException(
                 status_code=409,
@@ -929,7 +955,7 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
         elif k == "institucion_bancaria" and v is not None:
             setattr(row, k, v.strip() or None)
         elif k == "numero_documento" and v is not None:
-            setattr(row, k, _normalizar_numero_documento(v))
+            setattr(row, k, _truncar_numero_documento(_normalizar_numero_documento(v)))
         elif k == "cedula_cliente" and v is not None:
             setattr(row, k, v.strip())
         elif k == "fecha_pago" and v is not None:
