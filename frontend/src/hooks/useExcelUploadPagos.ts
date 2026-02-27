@@ -185,12 +185,15 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             setPrestamosPorCedula(map)
             const prestamoIdVacio = (v: unknown) =>
               v == null || v === undefined || v === '' || v === 'none' || v === 0 || (typeof v === 'number' && Number.isNaN(v))
+            const keysMap = Object.keys(map)
+            const fallbackKey = keysMap.length === 1 ? keysMap[0] : null
             setExcelData((prev) =>
               prev.map((r) => {
                 const cedulaLookup = cedulaLookupParaFila(r.cedula || '', r.numero_documento || '')
                 const cedulaSinGuion = cedulaLookup.replace(/-/g, '')
-                const prestamos =
+                let prestamos =
                   map[cedulaLookup] || map[cedulaSinGuion] || map[cedulaLookup.toUpperCase()] || map[cedulaLookup.toLowerCase()] || []
+                if (prestamos.length === 0 && fallbackKey) prestamos = map[fallbackKey] || []
                 if (prestamos.length === 1 && prestamoIdVacio(r.prestamo_id)) return { ...r, prestamo_id: prestamos[0].id }
                 return r
               })
@@ -222,13 +225,16 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
 
   useEffect(() => {
     if (!showPreview || Object.keys(prestamosPorCedula).length === 0) return
+    const keysMap = Object.keys(prestamosPorCedula)
+    const fallbackKey = keysMap.length === 1 ? keysMap[0] : null
     setExcelData((prev) => {
       let changed = false
       const next = prev.map((r) => {
         const cedulaLookup = cedulaLookupParaFila(r.cedula || '', r.numero_documento || '')
         const cedulaSinGuion = cedulaLookup.replace(/-/g, '')
-        const prestamos =
+        let prestamos =
           prestamosPorCedula[cedulaLookup] || prestamosPorCedula[cedulaSinGuion] || prestamosPorCedula[cedulaLookup.toUpperCase()] || prestamosPorCedula[cedulaLookup.toLowerCase()] || []
+        if (prestamos.length === 0 && fallbackKey) prestamos = prestamosPorCedula[fallbackKey] || []
         if (prestamos.length === 1 && prestamoIdVacio(r.prestamo_id)) {
           changed = true
           return { ...r, prestamo_id: prestamos[0].id }
@@ -700,12 +706,15 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             .then((map) => {
               if (!isMounted()) return
               setPrestamosPorCedula(map)
+              const keysMap = Object.keys(map)
+              const fallbackKey = keysMap.length === 1 ? keysMap[0] : null
               setExcelData((prev) =>
                 prev.map((r) => {
                   const cedulaLookup = cedulaLookupParaFila(r.cedula || '', r.numero_documento || '')
                   const cedulaSinGuion = cedulaLookup.replace(/-/g, '')
-                  const prestamos =
+                  let prestamos =
                     map[cedulaLookup] || map[cedulaSinGuion] || map[cedulaLookup.toUpperCase()] || map[cedulaLookup.toLowerCase()] || []
+                  if (prestamos.length === 0 && fallbackKey) prestamos = map[fallbackKey] || []
                   if (prestamos.length === 1 && prestamoIdVacio(r.prestamo_id)) return { ...r, prestamo_id: prestamos[0].id }
                   return r
                 })

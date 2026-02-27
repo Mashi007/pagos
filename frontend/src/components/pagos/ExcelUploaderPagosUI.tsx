@@ -257,9 +257,13 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                           .map((row) => {
                           const cedulaLookup = cedulaLookupParaFila(row.cedula || '', row.numero_documento || '')
                           const cedulaSinGuion = cedulaLookup.replace(/-/g, '')
-                          const prestamosActivos =
+                          let prestamosActivos =
                             prestamosPorCedula[cedulaLookup] ||
                             prestamosPorCedula[cedulaSinGuion] || prestamosPorCedula[cedulaLookup.toUpperCase()] || prestamosPorCedula[cedulaLookup.toLowerCase()] || []
+                          if (prestamosActivos.length === 0) {
+                            const keysMap = Object.keys(prestamosPorCedula)
+                            if (keysMap.length === 1) prestamosActivos = prestamosPorCedula[keysMap[0]] || []
+                          }
                           const tieneCreditos = prestamosActivos.length >= 1
                           const prestamoIdElegido = (row.prestamo_id != null && row.prestamo_id !== 0 && String(row.prestamo_id) !== 'none') ? String(row.prestamo_id) : null
                           const valorCredito = prestamoIdElegido ?? (prestamosActivos.length === 1 ? String(prestamosActivos[0].id) : 'none')
