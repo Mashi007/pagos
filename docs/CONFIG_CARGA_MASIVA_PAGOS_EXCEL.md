@@ -15,6 +15,19 @@ El archivo se interpreta por **cabecera** (primera fila). Se buscan estas column
 
 Si no se encuentra una cabecera, se usan índices por defecto: 0=Cédula, 1=Fecha, 2=Monto, 3=Documento, 4=Crédito, 5=Conciliación.
 
+## Reglas por columna
+
+| Columna | Obligatorio | Formato / regla | Valor por defecto | Validación al guardar (backend) |
+|---------|-------------|------------------|-------------------|----------------------------------|
+| **Cédula** | Sí | V, E, J o Z + 6–11 dígitos (ej. V23107415). Se acepta con o sin guión. Si en la celda hay texto tipo "AUL V23107415", se extrae la cédula. Si Excel guardó solo 8 dígitos, se antepone V. | — | Requerida; debe existir para asignar crédito. |
+| **Fecha pago** | Sí | Cualquier fecha interpretable: DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD o número de serie de Excel. Se normaliza a DD/MM/YYYY. | — | Debe ser fecha válida YYYY-MM-DD; el backend rechaza inválida o futura. |
+| **Monto** | Sí | Número decimal (coma o punto como decimal). Debe ser > 0. | — | Requerido; debe ser > 0 (backend rechaza 0 o negativo). |
+| **Documento (Nº documento)** | Sí* | Cualquier formato: numérico (10+ dígitos), alfanumérico (BNC/, ZELLE/, BINANCE/…), con símbolos. Se normaliza para comparación (espacios colapsados, notación científica convertida a dígitos). **Única regla en carga masiva:** no puede estar duplicado ni en el archivo ni en la BD. | — | Requerido como string; no se acepta duplicado (409 si ya existe). |
+| **Crédito** | No | ID numérico del préstamo (entero positivo). Si la celda parece Sí/No/1/0 se ignora como crédito. Si viene vacío y la cédula tiene un solo crédito activo, se asigna automáticamente. | Asignación automática si 1 crédito por cédula (o 1 cédula en el archivo) | Si se envía, debe ser ID de préstamo existente y coherente con la cédula. |
+| **Conciliación** | No | Sí / No (o 1/0). Cualquier otro valor o vacío se trata como Sí. | Sí | Boolean; por defecto el backend usa false si no se envía. |
+
+\* En la previsualización solo se marca error por **documento duplicado**. Cédula, fecha y monto se validan al guardar; si son inválidos, el backend devuelve error (422) y la fila puede enviarse a Revisar Pagos.
+
 ### Ejemplo de Excel compatible (base típica)
 
 Cabecera y datos como en el siguiente ejemplo son **compatibles** con la carga masiva:

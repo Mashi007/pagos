@@ -245,6 +245,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     queryClient.invalidateQueries({ queryKey: ['pagos-por-cedula'], exact: false })
     queryClient.invalidateQueries({ queryKey: ['kpis'], exact: false })
     queryClient.invalidateQueries({ queryKey: ['dashboard'], exact: false })
+    queryClient.refetchQueries({ queryKey: ['pagos'], exact: false })
   }, [queryClient])
 
   const getValidRows = useCallback((): PagoExcelRow[] => {

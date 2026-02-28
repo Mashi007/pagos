@@ -310,9 +310,13 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                   type="text"
                                   value={row.numero_documento}
                                   onChange={(e) => updateCellValue(row, 'numero_documento', e.target.value)}
-                                  className={inputClass(row._validation.numero_documento?.isValid ?? true)}
-                                  placeholder="Nº documento"
+                                  className={inputClass(true)}
+                                  placeholder="Cualquier formato (ej. 740087…, BS./REF, con € $)"
+                                  title="Cualquier formato aceptado. Solo no duplicados."
                                 />
+                                {row._validation.numero_documento?.isValid === false && (
+                                  <p className="text-xs text-amber-700 mt-0.5">Duplicado. No se aceptan duplicados.</p>
+                                )}
                               </td>
                               <td className="border p-2">
                                 {tieneCreditos ? (

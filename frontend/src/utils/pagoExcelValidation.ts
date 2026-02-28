@@ -101,7 +101,8 @@ function limpiarDocumento(s: string): string {
 
 /**
  * Normaliza el valor a string para usar como clave de documento.
- * Cualquier formato aceptado; misma clave = mismo documento (para detectar duplicados).
+ * Acepta CUALQUIER formato: numérico, con € $ Bs, BNC/, ZELLE/, etc. No se quitan símbolos de moneda.
+ * Misma clave = mismo documento (para detectar duplicados). Única regla: no duplicados.
  */
 export function normalizarNumeroDocumento(val: unknown): string {
   if (val == null || val === '') return ''

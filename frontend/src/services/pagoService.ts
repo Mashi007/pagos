@@ -1,4 +1,4 @@
-﻿import { apiClient } from './api'
+import { apiClient } from './api'
 
 export interface Pago {
   id: number
@@ -64,7 +64,7 @@ class PagoService {
       ...(filters?.conciliado && filters.conciliado !== 'all' && { conciliado: filters.conciliado }),
       ...(filters?.sin_prestamo === 'si' && { sin_prestamo: 'si' }),
     })
-    const url = `${this.baseUrl}/?${params.toString()}`
+    const url = `${this.baseUrl}?${params.toString()}`
     return await apiClient.get<{ pagos: Pago[]; total: number; page: number; per_page: number; total_pages: number }>(url)
   }
 
@@ -97,8 +97,7 @@ class PagoService {
   }
 
   async createPago(data: PagoCreate): Promise<Pago> {
-    // Usar barra final para coincidir con el endpoint del backend
-    return await apiClient.post(`${this.baseUrl}/`, data)
+    return await apiClient.post(this.baseUrl, data)
   }
 
   async updatePago(id: number, data: Partial<PagoCreate>): Promise<Pago> {

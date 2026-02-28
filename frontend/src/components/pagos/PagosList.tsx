@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   CreditCard,
@@ -160,7 +160,7 @@ export function PagosList() {
         : pagoService.getAllPagos(page, perPage, filters),
     staleTime: 0, // Siempre refetch cuando se invalida (mejor para actualización inmediata)
     refetchOnMount: true, // Refetch cuando el componente se monta
-    refetchOnWindowFocus: false, // No refetch en focus (evita requests innecesarios)
+    refetchOnWindowFocus: true, // Refetch al volver a la pestaña para ver Crédito/Estado actualizados
   })
   const handleFilterChange = (key: string, value: string) => {
     // Convertir "all" a cadena vacía para que el servicio no incluya el filtro

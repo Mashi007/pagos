@@ -66,7 +66,7 @@ class PagoConErrorService {
       ...(filters?.fechaHasta && { fecha_hasta: filters.fechaHasta }),
       ...(filters?.conciliado && filters.conciliado !== 'all' && { conciliado: filters.conciliado }),
     })
-    return await apiClient.get(`${this.baseUrl}/?${params.toString()}`)
+    return await apiClient.get(`${this.baseUrl}?${params.toString()}`)
   }
 
   async getAllForExport(filters?: {
@@ -83,7 +83,7 @@ class PagoConErrorService {
   }
 
   async create(data: PagoConErrorCreate): Promise<PagoConError> {
-    return await apiClient.post(`${this.baseUrl}/`, data)
+    return await apiClient.post(this.baseUrl, data)
   }
 
   async update(id: number, data: Partial<PagoConErrorCreate>): Promise<PagoConError> {
