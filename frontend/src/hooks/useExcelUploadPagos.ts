@@ -392,7 +392,10 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       try {
         if (row._hasErrors) {
           const camposConProblema = Object.entries(row._validation || {}).filter(([, v]) => !v.isValid).map(([field]) => field)
-          const observaciones = camposConProblema.join(',')
+          const observaciones =
+            camposConProblema.length === 1 && camposConProblema[0] === 'numero_documento'
+              ? 'duplicado'
+              : camposConProblema.join(',')
           await pagoConErrorService.create({
             cedula_cliente: cedulaLookupParaFila(row.cedula || '', row.numero_documento || ''),
             prestamo_id: null,
