@@ -117,13 +117,15 @@ export function normalizarNumeroDocumento(val: unknown): string {
     else return ''
   } else if (typeof val === 'number') {
     if (Number.isNaN(val)) return ''
-    // Excel puede enviar números largos (ej. 740087415441562) como number; conservar todos los dígitos
-    if (Math.abs(val) >= 1e11) {
+    // Excel "número como texto" puede llegar como number; conservar todos los dígitos (evitar pérdida de precisión)
+    if (Math.abs(val) >= 1e12) {
       try {
-        s = Math.abs(val) >= 1e15 ? BigInt(Math.round(val)).toString() : String(Math.round(val))
+        s = BigInt(Math.round(val)).toString()
       } catch {
         s = val.toFixed(0)
       }
+    } else if (Math.abs(val) >= 1e11) {
+      s = String(Math.round(val))
     } else {
       s = Math.round(val).toString()
     }

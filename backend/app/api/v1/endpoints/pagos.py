@@ -376,15 +376,25 @@ async def upload_excel_pagos(
             return bool(re.match(r"^[VEJZ]\d{6,11}$", s, re.IGNORECASE))
 
         def _looks_like_documento(v: Any) -> bool:
-            """True si el valor parece Nº documento (cualquier formato): numérico largo, o con /, o BNC/ZELLE/etc."""
+            """True si el valor puede ser Nº documento (cualquier formato). Se acepta todo lo que no sea cédula."""
             if v is None or (isinstance(v, str) and not v.strip()):
                 return False
             s = _celda_a_string_documento(v)
             if not s or len(s) < 2:
                 return False
+            if _looks_like_cedula(v):
+                return False  # No confundir cédula con documento
+            # Numérico largo (ej. 740087467177192)
             if re.match(r"^\d{10,}$", s):
                 return True
+            # Con / o prefijos típicos (BNC/, ZELLE/, VE/, etc.)
             if "/" in s or re.search(r"^(BNC|ZELLE|BINANCE|VE|BS\.)", s, re.IGNORECASE):
+                return True
+            # Alfanumérico (ej. JPM99BMSWM4Y): cualquier combinación letras+números
+            if re.search(r"[A-Za-z]", s) and re.search(r"\d", s) and len(s) <= _MAX_LEN_NUMERO_DOCUMENTO:
+                return True
+            # Solo letras o solo números (6+ caracteres)
+            if len(s) >= 6:
                 return True
             return False
 
@@ -395,6 +405,21 @@ async def upload_excel_pagos(
                 return True
             s = str(v).strip()
             return bool(re.search(r"\d{1,4}[-\/]\d{1,2}[-\/]\d{1,4}", s))
+
+        def _extraer_documento_de_fila(row: tuple, col_documento: Optional[int]) -> str:
+            """Obtiene el valor de documento: primero columna indicada; si vacío, busca en todas las celdas (fallback)."""
+            if col_documento is not None and col_documento < len(row) and row[col_documento] is not None:
+                s = _celda_a_string_documento(row[col_documento])
+                if (s or "").strip():
+                    return s
+            for idx, cell in enumerate(row):
+                if cell is None:
+                    continue
+                if _looks_like_documento(cell):
+                    s = _celda_a_string_documento(cell)
+                    if (s or "").strip():
+                        return s
+            return ""
 
         def _parse_fecha(v: Any) -> date:
             if isinstance(v, datetime):
@@ -411,12 +436,9 @@ async def upload_excel_pagos(
                     continue
             return date.today()
 
-        registros = 0
-        filas_omitidas = 0  # cÃ©dula vacÃ­a o monto <= 0
-        errores = []
-        errores_detalle = []
-        numeros_doc_en_lote: set[str] = set()
-        pagos_con_prestamo: list[Pago] = []  # Para aplicar reglas de negocio tras commit  # NÂº documento no puede repetirse ni en archivo ni en BD
+        # --- FASE 1: Parsear todas las filas (ingresar todos los datos para validar después) ---
+        FilasParseadas: list[dict] = []
+        filas_omitidas = 0
         for i, row in enumerate(rows):
             if not row or all(cell is None for cell in row):
                 continue
@@ -426,9 +448,11 @@ async def upload_excel_pagos(
                 fecha_val: Any = None
                 monto = 0.0
                 numero_doc = ""
-                # Formato A: Documento en col0, Cédula en col1 (Documento, Cédula, Fecha, Monto)
+                col_doc: Optional[int] = None
+                # Formato A: Documento col0, Cédula col1
                 if len(row) >= 4 and _looks_like_documento(row[0]) and _looks_like_cedula(row[1]):
                     numero_doc = _celda_a_string_documento(row[0])
+                    col_doc = 0
                     cedula = str(row[1]).strip()
                     fecha_val = row[2] if len(row) > 2 else None
                     try:
@@ -444,6 +468,7 @@ async def upload_excel_pagos(
                         monto = 0.0
                     fecha_val = row[0]
                     numero_doc = _celda_a_string_documento(row[3])
+                    col_doc = 3
                 else:
                     # Formato estándar: Cédula, ID Préstamo, Fecha, Monto, Nº documento
                     cedula = str(row[0]).strip() if row[0] is not None else ""
@@ -457,7 +482,7 @@ async def upload_excel_pagos(
                         except ValueError:
                             _pid = None
                         if _pid is not None and (_pid < 1 or _pid > _PRESTAMO_ID_MAX):
-                            prestamo_id = None  # valor fuera de rango (ej. número de documento en columna crédito)
+                            prestamo_id = None
                         else:
                             prestamo_id = _pid
                     fecha_val = row[2] if len(row) > 2 else None
@@ -467,49 +492,87 @@ async def upload_excel_pagos(
                     except (TypeError, ValueError):
                         monto = 0.0
                     numero_doc = _celda_a_string_documento(row[4]) if len(row) > 4 else ""
+                    col_doc = 4 if len(row) > 4 else None
+
+                # Fallback: si documento vacío, buscar en cualquier celda de la fila
+                if not (numero_doc or "").strip():
+                    numero_doc = _extraer_documento_de_fila(row, col_doc)
 
                 if not cedula or monto <= 0:
                     filas_omitidas += 1
                     continue
-                # Misma normalización que crear/actualizar (notación científica → dígitos; resto fiel). Truncar a 100 para no exceder BD.
-                numero_doc_norm = _normalizar_numero_documento(numero_doc) if (numero_doc or "").strip() else None
-                if numero_doc_norm is None and (numero_doc or "").strip():
-                    raw = (numero_doc or "").strip()
-                    if raw.upper() not in ("NAN", "NONE", "UNDEFINED", "NA", "N/A"):
-                        numero_doc_norm = _canonical_numero_documento(numero_doc) or raw
-                numero_doc_norm = _truncar_numero_documento(numero_doc_norm) if numero_doc_norm else None
-                # ÚNICA REGLA: no duplicados. Solo aplica a documentos no vacíos; varias filas sin documento se permiten.
-                key_doc = (numero_doc_norm or "").strip()
-                if key_doc and key_doc in numeros_doc_en_lote:
+
+                FilasParseadas.append({
+                    "fila_idx": i + 2,
+                    "cedula": cedula,
+                    "prestamo_id": prestamo_id,
+                    "fecha_val": fecha_val,
+                    "monto": monto,
+                    "numero_doc_raw": (numero_doc or "").strip(),
+                })
+            except Exception as e:
+                errores.append(f"Fila {i + 2}: {e}")
+                errores_detalle.append({"fila": i + 2, "cedula": "", "error": str(e), "datos": {}})
+
+        # --- FASE 2: Validar documentos (única regla: no duplicados) e insertar ---
+        numeros_doc_en_lote: set[str] = set()
+        documentos_ya_en_bd: set[str] = set()
+        registros = 0
+        pagos_con_prestamo: list[Pago] = []
+
+        for item in FilasParseadas:
+            i = item["fila_idx"]
+            cedula = item["cedula"]
+            prestamo_id = item["prestamo_id"]
+            fecha_val = item["fecha_val"]
+            monto = item["monto"]
+            numero_doc = item["numero_doc_raw"]
+
+            numero_doc_norm = _normalizar_numero_documento(numero_doc) if (numero_doc or "").strip() else None
+            if numero_doc_norm is None and (numero_doc or "").strip():
+                raw = (numero_doc or "").strip()
+                if raw.upper() not in ("NAN", "NONE", "UNDEFINED", "NA", "N/A"):
+                    numero_doc_norm = _canonical_numero_documento(numero_doc) or raw
+            numero_doc_norm = _truncar_numero_documento(numero_doc_norm) if numero_doc_norm else None
+            key_doc = (numero_doc_norm or "").strip()
+
+            # Validación post-documentos: duplicado en archivo
+            if key_doc and key_doc in numeros_doc_en_lote:
+                datos_fila = {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}
+                errores.append(f"Fila {i}: Nº documento duplicado en este archivo")
+                errores_detalle.append({"fila": i, "cedula": cedula, "error": "Nº documento duplicado en este archivo. En el sistema ningún documento puede estar duplicado.", "datos": datos_fila})
+                continue
+
+            # Validación post-documentos: duplicado en BD (caché para no repetir consulta por la misma clave)
+            if key_doc:
+                if key_doc in documentos_ya_en_bd:
                     datos_fila = {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}
-                    errores.append(f"Fila {i + 2}: Nº documento duplicado en este archivo")
-                    errores_detalle.append({"fila": i + 2, "cedula": cedula, "error": "Nº documento duplicado en este archivo. En el sistema ningún documento puede estar duplicado.", "datos": datos_fila})
+                    errores.append(f"Fila {i}: Ya existe un pago con ese Nº de documento")
+                    errores_detalle.append({"fila": i, "cedula": cedula, "error": "Ya existe un pago con ese Nº de documento. En el sistema ningún documento puede estar duplicado.", "datos": datos_fila})
                     continue
-                if key_doc and _numero_documento_ya_existe(db, numero_doc_norm):
+                if _numero_documento_ya_existe(db, numero_doc_norm):
+                    documentos_ya_en_bd.add(key_doc)
                     datos_fila = {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}
-                    errores.append(f"Fila {i + 2}: Ya existe un pago con ese Nº de documento")
-                    errores_detalle.append({"fila": i + 2, "cedula": cedula, "error": "Ya existe un pago con ese Nº de documento. En el sistema ningún documento puede estar duplicado.", "datos": datos_fila})
+                    errores.append(f"Fila {i}: Ya existe un pago con ese Nº de documento")
+                    errores_detalle.append({"fila": i, "cedula": cedula, "error": "Ya existe un pago con ese Nº de documento. En el sistema ningún documento puede estar duplicado.", "datos": datos_fila})
+                    continue
+                numeros_doc_en_lote.add(key_doc)
+
+            # Préstamo obligatorio si la cédula tiene más de un préstamo
+            if prestamo_id is None and cedula.strip():
+                count_prestamos = db.scalar(
+                    select(func.count())
+                    .select_from(Prestamo)
+                    .join(Cliente, Prestamo.cliente_id == Cliente.id)
+                    .where(Cliente.cedula == cedula.strip())
+                ) or 0
+                if count_prestamos > 1:
+                    datos_fila = {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}
+                    errores.append(f"Fila {i}: La cédula {cedula} tiene {count_prestamos} préstamos. Debe indicar el ID del préstamo.")
+                    errores_detalle.append({"fila": i, "cedula": cedula, "error": f"Esta persona tiene {count_prestamos} préstamos. Debe indicar el ID del préstamo.", "datos": datos_fila})
                     continue
 
-                # Si la persona tiene más de un préstamo, prestamo_id es obligatorio
-                if prestamo_id is None and cedula.strip():
-                    count_prestamos = db.scalar(
-                        select(func.count())
-                        .select_from(Prestamo)
-                        .join(Cliente, Prestamo.cliente_id == Cliente.id)
-                        .where(Cliente.cedula == cedula.strip())
-                    ) or 0
-                    if count_prestamos > 1:
-                        datos_fila = {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}
-                        errores.append(f"Fila {i + 2}: La cédula {cedula} tiene {count_prestamos} préstamos. Debe indicar el ID del préstamo.")
-                        errores_detalle.append({
-                            "fila": i + 2,
-                            "cedula": cedula,
-                            "error": f"Esta persona tiene {count_prestamos} préstamos. Debe indicar el ID del préstamo (columna 2) al que aplica este pago.",
-                            "datos": datos_fila,
-                        })
-                        continue
-
+            try:
                 fecha_pago = _parse_fecha(fecha_val)
                 ref_pago = ((numero_doc_norm or (numero_doc or "").strip()) or "Carga")[:_MAX_LEN_NUMERO_DOCUMENTO]
                 p = Pago(
@@ -525,28 +588,10 @@ async def upload_excel_pagos(
                 registros += 1
                 if prestamo_id and monto > 0:
                     pagos_con_prestamo.append(p)
-                if key_doc:
-                    numeros_doc_en_lote.add(key_doc)
             except Exception as e:
-                msg = str(e)
-                errores.append(f"Fila {i + 2}: {msg}")
-                datos_fila = {}
-                if len(row) > 0:
-                    datos_fila["cedula"] = row[0]
-                if len(row) > 1:
-                    datos_fila["prestamo_id"] = row[1]
-                if len(row) > 2:
-                    datos_fila["fecha_pago"] = row[2]
-                if len(row) > 3:
-                    datos_fila["monto_pagado"] = row[3]
-                if len(row) > 4:
-                    datos_fila["numero_documento"] = row[4]
-                errores_detalle.append({
-                    "fila": i + 2,
-                    "cedula": str(datos_fila.get("cedula", "")),
-                    "error": msg,
-                    "datos": datos_fila,
-                })
+                errores.append(f"Fila {i}: {e}")
+                datos_fila = {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}
+                errores_detalle.append({"fila": i, "cedula": cedula, "error": str(e), "datos": datos_fila})
         db.flush()  # Asigna IDs a los pagos insertados
         # Reglas de negocio: aplicar pagos con prestamo_id a cuotas
         cuotas_aplicadas = 0
@@ -558,7 +603,7 @@ async def upload_excel_pagos(
                     cuotas_aplicadas += cc + cp
             except Exception as e:
                 logger.warning("Carga masiva: no se pudo aplicar pago id=%s a cuotas: %s", getattr(p, "id", "?"), e)
-                db.commit()
+        db.commit()
         errores_limit = 50
         errores_detalle_limit = 100
         total_errores = len(errores)
