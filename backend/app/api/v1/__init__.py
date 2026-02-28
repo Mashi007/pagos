@@ -40,17 +40,17 @@ api_router.include_router(
     tags=["configuracion"],
 )
 
+# Pagos con errores (Revisar Pagos) DEBE ir antes que /pagos para que GET /pagos/con-errores no coincida con GET /pagos/{pago_id} (evitar 422)
+api_router.include_router(
+    pagos_con_errores.router,
+    prefix="/pagos/con-errores",
+    tags=["pagos-con-errores"],
+)
 # Pagos (datos reales BD: kpis, stats)
 api_router.include_router(
     pagos.router,
     prefix="/pagos",
     tags=["pagos"],
-)
-# Pagos con errores (Revisar Pagos - tabla separada)
-api_router.include_router(
-    pagos_con_errores.router,
-    prefix="/pagos/con-errores",
-    tags=["pagos-con-errores"],
 )
 
 # Préstamos (datos reales BD: listado, stats, CRUD)
@@ -191,5 +191,6 @@ api_router.include_router(
     prefix="/revision-manual",
     tags=["revision-manual"],
 )
+
 
 

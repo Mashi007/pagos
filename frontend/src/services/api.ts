@@ -569,7 +569,7 @@ class ApiClient {
         if (isAuthFailure && process.env.NODE_ENV === 'development') {
           console.warn('⚠️ [ApiClient] Login/refresh no autorizado (401):', url)
         } else if (!isAuthFailure) {
-          const is409Pagos = response.status === 409 && url.includes('/pagos/')
+          const is409Pagos = response.status === 409 && url.includes('/pagos')
           if (!is409Pagos) {
             console.error('❌ [ApiClient] POST recibió error 4xx:', { url, status: response.status, data: response.data })
           }
@@ -586,7 +586,7 @@ class ApiClient {
 
       return response.data
     } catch (error: any) {
-      const is409Pagos = error?.response?.status === 409 && url.includes('/pagos/')
+      const is409Pagos = error?.response?.status === 409 && url.includes('/pagos')
       if (!is409Pagos) {
         console.error('❌ [ApiClient] POST error:', { url, error })
       }
@@ -750,3 +750,4 @@ export function useApiState() {
     success: false,
   }
 }
+
