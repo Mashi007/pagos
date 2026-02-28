@@ -1,19 +1,9 @@
 /**
- * Validación para carga masiva de pagos desde Excel.
- * Columnas: Cédula, Fecha de pago, Monto, Documento (Nº documento), ID Préstamo (opcional).
- * Regla general: no se aceptan duplicados en documentos (ni en archivo ni en el sistema).
- * Nº documento: cualquier formato; documentos numéricos 10-25 dígitos sin problemas.
- *
- * IMPORTANTE (evitar regresión): Los documentos solo numéricos (10-25 dígitos) solo se marcan
- * inválidos por duplicado (en archivo o en BD). No añadir '' al set documentosEnArchivo y usar
- * la misma normalización al añadir y al validar (useExcelUploadPagos + validatePagoField).
+ * Validación carga masiva de pagos (Excel).
+ * ÚNICA REGLA: no se acepta documento duplicado (ni en el archivo ni en el sistema).
  */
 
 import { validateExcelFile, validateExcelData, sanitizeFileName } from './excelValidation'
-
-/** Rango de dígitos admitido para documentos numéricos (sin restricción de formato; solo referencia). */
-export const DOCUMENTO_DIGITS_MIN = 10
-export const DOCUMENTO_DIGITS_MAX = 25
 
 export interface PagoExcelRow {
   _rowIndex: number
@@ -24,7 +14,7 @@ export interface PagoExcelRow {
   monto_pagado: number
   numero_documento: string
   prestamo_id: number | null
-  conciliado: boolean  // SÃ­/No - ConciliaciÃ³n
+  conciliado: boolean
 }
 
 export function convertirFechaExcelPago(val: unknown): string {
@@ -47,7 +37,6 @@ export function convertirFechaExcelPago(val: unknown): string {
     }
   }
   if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return s
-  // DD-MM-YY: yy < 50 -> 2000+yy (ej. 26->2026), yy >= 50 -> 1900+yy. Validacion 2020-2030 filtra anos fuera de rango.
   if (/^\d{2}-\d{2}-\d{2}$/.test(s)) {
     const [d, m, yy] = s.split('-')
     const y = parseInt(yy, 10) < 50 ? 2000 + parseInt(yy, 10) : 1900 + parseInt(yy, 10)
@@ -75,11 +64,6 @@ export function convertirFechaParaBackendPago(f: string): string {
 
 const LOOKS_LIKE_CEDULA = /^[VEJZ]\d{6,11}$/i
 
-/**
- * Extrae la cédula para búsqueda cuando la celda tiene prefijo (ej. "AUL V23107415" → "V23107415").
- * Si Excel guardó la cédula como número (ej. 23107415), normaliza a "V23107415" para que el batch y la auto-asignación de crédito funcionen.
- * Solo para lookup/batch; no cambia el valor mostrado en la tabla.
- */
 export function cedulaParaLookup(val: unknown): string {
   if (val == null || val === '') return ''
   const s = String(val).trim()
@@ -88,16 +72,10 @@ export function cedulaParaLookup(val: unknown): string {
   if (LOOKS_LIKE_CEDULA.test(sinGuion)) return sinGuion
   const match = s.match(/[VEJZ]\d{6,11}/i)
   if (match) return match[0].replace(/-/g, '')
-  // Excel a veces guarda cédula como número y se pierde la letra (V/E/J); normalizar para batch y auto-asignación
   if (/^\d{8}$/.test(sinGuion)) return 'V' + sinGuion
   return s
 }
 
-/**
- * Devuelve la cédula a usar para buscar préstamos en esta fila.
- * Si la columna "Cédula" tiene número largo (ej. 740087406572495) y "Documento" tiene V27020005,
- * usa el documento como cédula para lookup (evita que esas filas queden sin Crédito asignado).
- */
 export function cedulaLookupParaFila(cedula: string, numero_documento: string): string {
   const fromC = cedulaParaLookup(cedula)
   const fromD = cedulaParaLookup(numero_documento)
@@ -106,7 +84,7 @@ export function cedulaLookupParaFila(cedula: string, numero_documento: string): 
   return fromC || fromD
 }
 
-/** True si el valor parece un Nº de documento (10-25 dígitos u otros formatos BNC/ZELLE/…) y no una cédula V/E/J/Z. */
+/** True si el valor parece Nº documento (ej. 10+ dígitos, BNC/ZELLE) y no cédula V/E/J/Z. */
 export function looksLikeDocumentNotCedula(val: unknown): boolean {
   if (val == null || val === '') return false
   const s = String(val).trim()
@@ -117,15 +95,13 @@ export function looksLikeDocumentNotCedula(val: unknown): boolean {
   return false
 }
 
-// Quita caracteres invisibles/control que Excel o copiar-pegar pueden incluir (evita que el mismo documento se vea como distinto)
 function limpiarDocumento(s: string): string {
   return s.replace(/[\u200B-\u200D\uFEFF\r\n\t]/g, '').trim()
 }
 
 /**
- * Convierte CUALQUIER valor a string para uso como número de documento.
- * Reconocimiento genérico: BNC/, BINANCE, VE/, ZELLE/, numérico, BS. BNC / REF., etc.
- * Única regla: NO DUPLICADO (archivo o BD). No se valida formato; solo se normaliza para comparación.
+ * Normaliza el valor a string para usar como clave de documento.
+ * Cualquier formato aceptado; misma clave = mismo documento (para detectar duplicados).
  */
 export function normalizarNumeroDocumento(val: unknown): string {
   if (val == null || val === '') return ''
@@ -137,7 +113,6 @@ export function normalizarNumeroDocumento(val: unknown): string {
     else return ''
   } else if (typeof val === 'number') {
     if (Number.isNaN(val)) return ''
-    // Excel "número como texto" puede llegar como number; conservar todos los dígitos (evitar pérdida de precisión)
     if (Math.abs(val) >= 1e12) {
       try {
         s = BigInt(Math.round(val)).toString()
@@ -156,7 +131,6 @@ export function normalizarNumeroDocumento(val: unknown): string {
   if (s.startsWith("'")) s = s.slice(1).trim()
   s = limpiarDocumento(s)
   if (!s || /^(nan|none|undefined|na|n\/a)$/i.test(s)) return ''
-  // Notación científica → dígitos (mismo número = misma clave)
   if (/^\d+\.?\d*[eE][+-]?\d+$/.test(s)) {
     try {
       const n = parseFloat(s)
@@ -166,73 +140,28 @@ export function normalizarNumeroDocumento(val: unknown): string {
       /* mantener s */
     }
   }
-  // Colapsar espacios internos (alineado con backend: misma ref con distinto espaciado = duplicado)
   s = s.replace(/\s+/g, ' ').trim()
   return s
 }
 
+/** Única validación en carga masiva: documento duplicado = inválido. */
 export function validatePagoField(
   field: string,
   value: string | number,
-  _options?: { documentosExistentes?: Set<string>; documentosEnArchivo?: Set<string> }
+  options?: { documentosExistentes?: Set<string>; documentosEnArchivo?: Set<string> }
 ): { isValid: boolean; message?: string } {
-  const strVal = typeof value === 'number' ? String(value) : (value || '').toString().trim()
+  if (field !== 'numero_documento') return { isValid: true }
 
-  switch (field) {
-    case 'cedula':
-      if (!strVal) return { isValid: false, message: 'Cédula requerida' }
-      const c = strVal.replace(/[:$]/g, '')
-      if (/^[VEJZ]\d{6,11}$/i.test(c)) return { isValid: true }
-      // Si parece Nº documento (10+ dígitos, BNC/, ZELLE/, etc.) orientar al usuario; 10-25 dígitos aceptados sin problemas en columna documento
-      if (/^\d{10,}$/.test(c) || /^(BNC|ZELLE|BINANCE|VE|BS\.)\s*\/?/i.test(c))
-        return { isValid: false, message: 'Parece un Nº de documento. Use la columna Cédula para V/E/J/Z + dígitos y la columna Nº documento para la referencia.' }
-      return { isValid: false, message: 'Formato E/V/J/Z + 6-11 dígitos' }
+  const docNorm = (value === 'NaN' || value === 'nan' || value === 'undefined')
+    ? ''
+    : (normalizarNumeroDocumento(value) || String(value)).trim() || ''
+  if (!docNorm) return { isValid: true }
 
-    case 'fecha_pago':
-      if (!strVal) return { isValid: false, message: 'Fecha de pago requerida' }
-      const fm = strVal.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
-      if (!fm) return { isValid: false, message: 'Formato DD/MM/YYYY' }
-      const dn = parseInt(fm[1], 10)
-      const mn = parseInt(fm[2], 10)
-      const yn = parseInt(fm[3], 10)
-      if (dn < 1 || dn > 31) return { isValid: false, message: 'DÃ­a 1-31' }
-      if (mn < 1 || mn > 12) return { isValid: false, message: 'Mes 1-12' }
-      if (yn < 2020 || yn > 2030) return { isValid: false, message: 'AÃ±o 2020-2030' }
-      const fechaPago = new Date(yn, mn - 1, dn)
-      const hoy = new Date()
-      hoy.setHours(23, 59, 59, 999)
-      if (fechaPago > hoy) return { isValid: false, message: 'La fecha no puede ser futura' }
-      return { isValid: true }
-
-    case 'monto_pagado': {
-      const n = parseFloat(strVal)
-      if (Number.isNaN(n) || n <= 0) return { isValid: false, message: 'Monto > 0 requerido' }
-      if (n > 1000000) return { isValid: false, message: 'Monto muy alto. Verifique' }
-      return { isValid: true }
-    }
-
-    case 'numero_documento': {
-      // Cualquier formato aceptado; 10-25 dígitos sin problemas. ÚNICA regla: no duplicado (archivo o BD).
-      const docNorm = (strVal === 'NaN' || strVal === 'nan' || strVal === 'undefined') ? '' : (normalizarNumeroDocumento(value) || strVal).trim() || ''
-      if (!docNorm) return { isValid: true } // Vacío permitido; no cuenta como duplicado
-      // Solo marcar inválido si está explícitamente en los sets (documentos de otras filas o ya en BD)
-      const enSistema = _options?.documentosExistentes != null && _options.documentosExistentes.has(docNorm)
-      const enArchivo = _options?.documentosEnArchivo != null && _options.documentosEnArchivo.has(docNorm)
-      if (enSistema) return { isValid: false, message: 'Este documento ya existe en el sistema. Regla general: no se aceptan duplicados en documentos.' }
-      if (enArchivo) return { isValid: false, message: 'Documento duplicado en este archivo. Regla general: no se aceptan duplicados en documentos.' }
-      return { isValid: true }
-    }
-
-    case 'prestamo_id':
-      return { isValid: true }
-
-    case 'conciliado':
-      return { isValid: true }
-
-    default:
-      return { isValid: true }
-  }
+  if (options?.documentosExistentes?.has(docNorm))
+    return { isValid: false, message: 'Documento duplicado. No se aceptan duplicados.' }
+  if (options?.documentosEnArchivo?.has(docNorm))
+    return { isValid: false, message: 'Documento duplicado en este archivo. No se aceptan duplicados.' }
+  return { isValid: true }
 }
 
 export { validateExcelFile, validateExcelData, sanitizeFileName }
-

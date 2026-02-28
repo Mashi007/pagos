@@ -78,3 +78,24 @@ Efecto adicional (por si el fetch en processExcelFile falla o tarda): cuando `sh
 - **Documento**: se acepta fielmente (con €, $, Bs, BINANCE/xxx, etc.). Solo se normaliza cuando el valor viene como número o notación científica para no perder dígitos.
 - **Documentos duplicados**: no se aceptan; si el documento ya existe en BD o se repite en el archivo, se rechaza / se marca para revisión.
 - **Crédito**: si la cédula tiene exactamente un crédito en estado APROBADO o DESEMBOLSADO, se asigna automáticamente; si en el archivo solo hay una cédula con créditos, se usa como fallback para todas las filas.
+
+## Flujo 409 (duplicado) y Revisar Pagos
+
+Al guardar una fila (individual o en lote):
+
+1. El frontend hace **POST** a `/api/v1/pagos/` con el pago.
+2. Si el backend responde **409** (documento ya existe en BD), el frontend:
+   - Considera la fila como duplicado.
+   - Hace **POST** a `/api/v1/pagos/con-errores/` con los mismos datos y `observaciones: 'duplicado'` para registrarlos en **Revisar Pagos**.
+3. Por eso en la consola se ve la secuencia: **POST pagos → 409**, luego **POST con-errores → 201**, repetida por cada fila duplicada.
+
+Es el comportamiento esperado: no se puede saber que un documento está duplicado sin intentar crear el pago (o sin un endpoint previo de comprobación). Para reducir peticiones futuras se podría añadir un endpoint batch que compruebe qué documentos existen y otro batch para crear en con-errores.
+
+## Aviso CSS "Juego de reglas ignoradas debido a un mal selector"
+
+El mensaje suele aparecer en el CSS compilado (p. ej. `index-*.css`) y puede venir de:
+
+- **Tailwind** (variantes arbitrarias o selectores generados).
+- **Alguna dependencia** que incluye estilos con selectores no soportados en el navegador.
+
+Para localizar el selector problemático: hacer build (`npm run build`), abrir el `.css` generado en `dist/assets/` y revisar alrededor del carácter indicado (p. ej. columna 64116). En el código propio ya se evitan selectores como `after:content-['']` (ver comentario en `frontend/src/index.css` sobre el toggle switch). Si el selector está en código de una librería, el aviso puede ignorarse o actualizar la dependencia.

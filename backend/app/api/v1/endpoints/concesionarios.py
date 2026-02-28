@@ -48,7 +48,6 @@ def _concesionarios_from_db(
 
 
 @router.get("", response_model=dict)
-@router.get("/", include_in_schema=False, response_model=dict)
 def listar_concesionarios(
     skip: int = Query(0, ge=0),
     limit: Optional[int] = Query(1000, ge=1, le=5000),

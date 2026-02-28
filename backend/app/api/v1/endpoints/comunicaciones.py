@@ -82,7 +82,6 @@ def _build_cedula_to_cliente_index(db: Session, cedulas: List[str]) -> Dict[str,
 
 
 @router.get("", response_model=dict)
-@router.get("/", include_in_schema=False, response_model=dict)
 def listar_comunicaciones(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),

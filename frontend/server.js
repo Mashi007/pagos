@@ -461,48 +461,6 @@ function sendSpaIndex(req, res) {
   }
 }
 app.get(FRONTEND_BASE, sendSpaIndex);
-// Rutas explícitas para SPA (garantizar index.html y que React Router renderice)
-app.get(FRONTEND_BASE + '/chat-ai', (req, res) => {
-  res.status(200);
-  sendSpaIndex(req, res);
-});
-app.get(FRONTEND_BASE + '/notificaciones', (req, res) => {
-  res.status(200);
-  sendSpaIndex(req, res);
-});
-// Con barra final: redirigir a sin barra para consistencia con React Router
-app.get(FRONTEND_BASE + '/chat-ai/', (req, res) => {
-  res.redirect(302, FRONTEND_BASE + '/chat-ai' + qs(req));
-});
-app.get(FRONTEND_BASE + '/notificaciones/', (req, res) => {
-  res.redirect(302, FRONTEND_BASE + '/notificaciones' + qs(req));
-});
-app.get(FRONTEND_BASE + '/herramientas/notificaciones', (req, res) => {
-  res.redirect(302, FRONTEND_BASE + '/notificaciones' + qs(req));
-});
-app.get(FRONTEND_BASE + '/herramientas/notificaciones/', (req, res) => {
-  res.redirect(302, FRONTEND_BASE + '/notificaciones' + qs(req));
-});
-app.get(FRONTEND_BASE + '/herramientas/plantillas', (req, res) => {
-  res.redirect(302, FRONTEND_BASE + '/configuracion?tab=plantillas' + (req.url.includes('?') ? '' : ''));
-});
-app.get(FRONTEND_BASE + '/herramientas/plantillas/', (req, res) => {
-  res.redirect(302, FRONTEND_BASE + '/configuracion?tab=plantillas');
-});
-app.get(FRONTEND_BASE + '/notificaciones/plantillas', (req, res) => {
-  res.redirect(302, FRONTEND_BASE + '/configuracion?tab=plantillas');
-});
-app.get(FRONTEND_BASE + '/notificaciones/plantillas/', (req, res) => {
-  res.redirect(302, FRONTEND_BASE + '/configuracion?tab=plantillas');
-});
-// Página de Pagos (lista de pagos) — garantizar que renderice
-app.get(FRONTEND_BASE + '/pagos', (req, res) => {
-  res.status(200);
-  sendSpaIndex(req, res);
-});
-app.get(FRONTEND_BASE + '/pagos/', (req, res) => {
-  res.redirect(302, FRONTEND_BASE + '/pagos' + qs(req));
-});
 app.get(FRONTEND_BASE + '/*', (req, res, next) => {
   // No servir index.html para rutas que parecen archivos estáticos (assets)
   const subPath = req.path.slice(FRONTEND_BASE.length) || '/';

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Endpoints para pagos_con_errores: pagos con errores de validaciÃ³n desde Carga Masiva.
 Revisar Pagos y front apuntan a esta tabla. No se mezclan con pagos que cumplen validadores.
 """
@@ -74,7 +74,6 @@ def _pago_con_error_to_response(row: PagoConError) -> dict:
 
 
 @router.get("", response_model=dict)
-@router.get("/", include_in_schema=False, response_model=dict)
 def listar_pagos_con_errores(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
@@ -135,7 +134,6 @@ def listar_pagos_con_errores(
 
 
 @router.post("", response_model=dict, status_code=201)
-@router.post("/", include_in_schema=False, response_model=dict, status_code=201)
 def crear_pago_con_error(payload: PagoConErrorCreate, db: Session = Depends(get_db)):
     """Crea un pago con errores desde Carga Masiva (Revisar Pagos)."""
     try:

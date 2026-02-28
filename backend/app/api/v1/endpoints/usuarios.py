@@ -22,7 +22,6 @@ router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 @router.get("", response_model=dict)
-@router.get("/", include_in_schema=False, response_model=dict)
 def listar_usuarios(
     db: Session = Depends(get_db),
     page: int = Query(1, ge=1),
@@ -67,7 +66,7 @@ def obtener_usuario(user_id: int, db: Session = Depends(get_db)):
     return user_to_response(u)
 
 
-@router.post("/", response_model=UserResponse)
+@router.post("", response_model=UserResponse)
 def crear_usuario(body: UserCreate, db: Session = Depends(get_db)):
     """Crea un nuevo usuario. Email debe ser único."""
     email = body.email.lower().strip()

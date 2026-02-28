@@ -169,7 +169,6 @@ def _pago_to_response(row: Pago, cuotas_atrasadas: Optional[int] = None) -> dict
 
 
 @router.get("", response_model=dict)
-@router.get("/", include_in_schema=False, response_model=dict)
 def listar_pagos(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
@@ -1062,7 +1061,6 @@ def _numero_documento_ya_existe(
 
 
 @router.post("", response_model=dict, status_code=201)
-@router.post("/", include_in_schema=False, response_model=dict, status_code=201)
 def crear_pago(payload: PagoCreate, db: Session = Depends(get_db)):
     """Crea un pago. Documento acepta cualquier formato. Regla general: no duplicados (409 si ya existe)."""
     num_doc = _truncar_numero_documento(_normalizar_numero_documento(payload.numero_documento))

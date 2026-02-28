@@ -616,7 +616,6 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           return
         }
 
-        const requiredFields = ['cedula', 'fecha_pago', 'monto_pagado', 'numero_documento']
         const processed: PagoExcelRow[] = []
         const documentosEnArchivo = new Set<string>()
         const headerRow = (jsonData[0] as unknown[]) ?? []
@@ -681,20 +680,14 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             conciliado,
           }
 
-          let hasErrors = false
-          for (const field of requiredFields) {
-            const val = rowData[field as keyof PagoExcelRow]
-            const validation = validatePagoField(field, val as string | number, {
-              documentosEnArchivo: documentosEnArchivo,
-            })
-            rowData._validation[field] = validation
-            if (!validation.isValid) hasErrors = true
-          }
-          rowData._validation.prestamo_id = { isValid: true }
-          // Añadir a set SOLO después de validar; usar la misma clave que validatePagoField (normalizar igual)
+          // Única validación: documento duplicado
+          const docValidation = validatePagoField('numero_documento', rowData.numero_documento, { documentosEnArchivo })
+          rowData._validation.numero_documento = docValidation
+          rowData._validation.cedula = rowData._validation.fecha_pago = rowData._validation.monto_pagado = { isValid: true }
+          rowData._validation.prestamo_id = rowData._validation.conciliado = { isValid: true }
           const keyDoc = (normalizarNumeroDocumento(rowData.numero_documento) || String(rowData.numero_documento ?? '')).trim()
           if (keyDoc && keyDoc !== 'NaN') documentosEnArchivo.add(keyDoc)
-          rowData._hasErrors = hasErrors
+          rowData._hasErrors = !docValidation.isValid
           processed.push(rowData)
         }
 
@@ -857,12 +850,14 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             if (docNorm) documentosEnArchivo.add(docNorm)
           }
         })
-        const validation = validatePagoField(field, (updated as any)[field], {
-          documentosEnArchivo: field === 'numero_documento' ? documentosEnArchivo : undefined,
-        })
-        updated._validation = { ...r._validation, [field]: validation }
-        const required = ['cedula', 'fecha_pago', 'monto_pagado', 'numero_documento']
-        updated._hasErrors = required.some((f) => !updated._validation[f]?.isValid)
+        if (field === 'numero_documento') {
+          const validation = validatePagoField('numero_documento', (updated as any).numero_documento, { documentosEnArchivo })
+          updated._validation = { ...r._validation, numero_documento: validation }
+          updated._hasErrors = !validation.isValid
+        } else {
+          updated._validation = { ...r._validation, [field]: { isValid: true } }
+          updated._hasErrors = !updated._validation.numero_documento?.isValid
+        }
         return updated
       })
     )

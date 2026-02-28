@@ -76,7 +76,6 @@ def get_estados_cliente(db: Session = Depends(get_db)):
 
 
 @router.get("", summary="Listado paginado", response_model=dict)
-@router.get("/", include_in_schema=False, response_model=dict)
 def get_clientes(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),

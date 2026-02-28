@@ -161,7 +161,6 @@ def _sanitize_ticket_fks(db: Session, payload) -> dict:
 
 
 @router.get("", summary="Listado paginado de tickets", response_model=dict)
-@router.get("/", include_in_schema=False, response_model=dict)
 def get_tickets(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
