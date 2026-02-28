@@ -143,7 +143,9 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId, mod
         ...formData,
         numero_documento: numeroDocumentoNormalizado
       }
-      if (modoGuardarYProcesar && formData.prestamo_id) {
+      // Siempre conciliar cuando hay crédito asignado: así el backend aplica el pago a cuotas
+      // (desde tabla normal o desde "Revisar Pagos" con Guardar y Procesar)
+      if (formData.prestamo_id && formData.monto_pagado > 0) {
         datosEnvio.conciliado = true
       }
 
@@ -153,16 +155,7 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId, mod
         } else {
           await pagoService.updatePago(pagoId, datosEnvio)
         }
-        if (!esPagoConError && modoGuardarYProcesar && formData.prestamo_id && formData.monto_pagado > 0) {
-          try {
-            const res = await pagoService.aplicarPagoACuotas(pagoId)
-            if (res.cuotas_completadas > 0 || res.cuotas_parciales > 0) {
-              console.log('Pago aplicado a cuotas:', res.message)
-            }
-          } catch (e) {
-            console.warn('No se pudo aplicar pago a cuotas:', e)
-          }
-        }
+        // La asignación a cuotas la hace el backend al recibir conciliado=true (con prestamo_id y monto)
       } else {
         await pagoService.createPago(datosEnvio)
       }
