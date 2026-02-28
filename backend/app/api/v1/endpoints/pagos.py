@@ -1094,9 +1094,9 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db)):
     # Reglas de negocio: al conciliar con préstamo, aplicar pago a cuotas
     if conciliado and row.prestamo_id and float(row.monto_pagado or 0) > 0:
         try:
-            cuotas_completadas, cuotas_parciales = _aplicar_pago_a_cuotas_interno(row, db)
-            if cuotas_completadas > 0 or cuotas_parciales > 0:
-                row.estado = "PAGADO"
+            _aplicar_pago_a_cuotas_interno(row, db)
+            # PAGADO: pago procesado para el préstamo (haya o no cuotas pendientes donde abonar)
+            row.estado = "PAGADO"
             db.commit()
             db.refresh(row)
         except Exception as e:
@@ -1146,8 +1146,8 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
     if aplicar_conciliado and row.prestamo_id and float(row.monto_pagado or 0) > 0:
         try:
             cuotas_completadas, cuotas_parciales = _aplicar_pago_a_cuotas_interno(row, db)
-            if cuotas_completadas > 0 or cuotas_parciales > 0:
-                row.estado = "PAGADO"
+            # PAGADO si se abonó a alguna cuota o si no había cuotas pendientes (pago procesado para el préstamo)
+            row.estado = "PAGADO"
             db.commit()
             db.refresh(row)
         except Exception as e:
@@ -1251,8 +1251,8 @@ def aplicar_pago_a_cuotas(pago_id: int, db: Session = Depends(get_db)):
         return {"success": True, "cuotas_completadas": 0, "cuotas_parciales": 0, "message": "Monto del pago es cero."}
     try:
         cuotas_completadas, cuotas_parciales = _aplicar_pago_a_cuotas_interno(pago, db)
-        if cuotas_completadas > 0 or cuotas_parciales > 0:
-            pago.estado = "PAGADO"
+        # PAGADO siempre que se procese para el préstamo (haya o no cuotas pendientes)
+        pago.estado = "PAGADO"
         db.commit()
         return {
             "success": True,
