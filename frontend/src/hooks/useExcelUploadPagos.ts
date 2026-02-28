@@ -667,6 +667,8 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           // Por defecto: Conciliación = Sí. Solo No si explícitamente "NO" (evitar que 0/celda vacía = No).
           const conciliado = conciliacionRaw === 'NO' ? false : true
 
+          // Guardar documento siempre como string normalizado (evita número/científico y asegura misma clave en set)
+          const numeroDocStr = (numeroDoc && numeroDoc !== 'NaN') ? (normalizarNumeroDocumento(numeroDoc) || String(numeroDoc)).trim() : ''
           const rowData: PagoExcelRow = {
             _rowIndex: i + 1,
             _validation: {},
@@ -674,7 +676,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             cedula,
             fecha_pago: fechaPago,
             monto_pagado: monto,
-            numero_documento: numeroDoc,
+            numero_documento: numeroDocStr || (numeroDoc ?? ''),
             prestamo_id: Number.isNaN(prestamoId) ? null : prestamoId,
             conciliado,
           }
@@ -689,8 +691,8 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             if (!validation.isValid) hasErrors = true
           }
           rowData._validation.prestamo_id = { isValid: true }
-          // Única regla: no duplicados. Solo documentos no vacíos; varias filas sin documento se permiten.
-          if (numeroDoc && numeroDoc !== 'NaN') documentosEnArchivo.add(numeroDoc)
+          // Única regla: no duplicados. Añadir con la misma clave que usa validatePagoField (solo no vacíos).
+          if (numeroDocStr) documentosEnArchivo.add(numeroDocStr)
           rowData._hasErrors = hasErrors
           processed.push(rowData)
         }
@@ -846,12 +848,12 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         } else {
           ;(updated as any)[field] = field === 'monto_pagado' ? (Number(value) || 0) : value
         }
-        // REGLA ESTRICTA: ningún documento duplicado; misma normalización que en validación
+        // REGLA ESTRICTA: ningún documento duplicado; misma normalización que en validación; no añadir vacíos
         const documentosEnArchivo = new Set<string>()
         prev.forEach((other) => {
           if (other._rowIndex !== row._rowIndex) {
-            const docNorm = normalizarNumeroDocumento(other.numero_documento) || ''
-            documentosEnArchivo.add(docNorm)
+            const docNorm = (normalizarNumeroDocumento(other.numero_documento) || '').trim()
+            if (docNorm) documentosEnArchivo.add(docNorm)
           }
         })
         const validation = validatePagoField(field, (updated as any)[field], {
