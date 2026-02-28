@@ -83,3 +83,9 @@
    - Cédulas con formato correcto; asignación automática cuando hay un solo préstamo activo; fallback cuando solo hay una cédula con créditos en el archivo.
 
 La documentación (COHERENCIA_BACK_FRONT_CARGA_MASIVA, CONFIG_CARGA_MASIVA_PAGOS_EXCEL, AUDITORIA_FORMATO_DOCUMENTO_740087408305094, AUDITORIA_RECONOCIMIENTO_CREDITO_CARGA_MASIVA) describe el diseño y las reglas; las correcciones de **truncado de documento** y **validación de prestamo_id** se añadieron después en código y evitan los 500 que aún aparecían en logs. Para no perder esta información, conviene actualizar AUDITORIA_FORMATO_DOCUMENTO_740087408305094 con el umbral 1e11 (no 1e14) y añadir en CONFIG o en un doc de “errores evitados” la mención al truncado a 100 caracteres y a la validación de rango de `prestamo_id`.
+
+---
+
+## 4. Regresión: borde rojo en documentos 10–25 dígitos (evitar que vuelva)
+
+Si los campos **Nº documento** con números de 10–25 dígitos (sin duplicados) vuelven a marcarse en rojo en la UI de carga masiva, revisar **AUDITORIA_FORMATO_DOCUMENTO_740087408305094.md** → sección *"Regla de negocio: 10–25 dígitos y no duplicados (evitar regresión del borde rojo)"*: puntos de control en `pagoExcelValidation.ts` y `useExcelUploadPagos.ts`.

@@ -29,7 +29,7 @@ Cabecera y datos como en el siguiente ejemplo son **compatibles** con la carga m
 - **Cédula:** Formato V/E/J/Z + 6–11 dígitos. Se usa para buscar créditos activos; si hay un solo crédito para esa cédula, se asigna a todas las filas.
 - **numero_documento:** Números largos (15 dígitos, ej. 740087408305094) se aceptan tal cual. Si Excel los guarda como "número como texto" (triángulo verde), la lectura los convierte a string para no perder dígitos. No se quitan símbolos si hubiera €, $, Bs.
 - **fecha_pago:** Formato DD-MM-YYYY (ej. 05-11-2024) se normaliza a DD/MM/YYYY y se valida año 2020–2030 y que no sea futura.
-- **Duplicados:** Cada `numero_documento` debe ser único en el archivo y en la BD; si se repite, la fila se marca y no se acepta.
+- **Duplicados:** Regla general: no se aceptan duplicados en documentos (ni en archivo ni en BD). Cada `numero_documento` debe ser único; si se repite, la fila se marca y no se acepta. Documentos numéricos de **10 a 25 dígitos** se aceptan sin problemas; la única restricción es no duplicado. Ver también *AUDITORIA_FORMATO_DOCUMENTO_740087408305094.md* (evitar regresión del borde rojo en la UI).
 
 ## Cómo se carga desde el Excel
 

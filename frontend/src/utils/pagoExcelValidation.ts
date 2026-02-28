@@ -215,15 +215,11 @@ export function validatePagoField(
       // Cualquier formato aceptado; 10-25 dígitos sin problemas. ÚNICA regla: no duplicado (archivo o BD).
       const docNorm = (strVal === 'NaN' || strVal === 'nan' || strVal === 'undefined') ? '' : (normalizarNumeroDocumento(value) || strVal).trim() || ''
       if (!docNorm) return { isValid: true } // Vacío permitido; no cuenta como duplicado
-      // Documentos solo numéricos 10-25 dígitos: válidos salvo que estén en duplicados
-      if (/^\d{10,25}$/.test(docNorm)) {
-        if (_options?.documentosExistentes?.has(docNorm)) return { isValid: false, message: 'Este documento ya existe en el sistema. Regla general: no se aceptan duplicados en documentos.' }
-        if (_options?.documentosEnArchivo?.has(docNorm)) return { isValid: false, message: 'Documento duplicado en este archivo. Regla general: no se aceptan duplicados en documentos.' }
-        return { isValid: true }
-      }
-      // Resto de formatos (BNC/, ZELLE/, etc.): misma regla
-      if (_options?.documentosExistentes?.has(docNorm)) return { isValid: false, message: 'Este documento ya existe en el sistema. Regla general: no se aceptan duplicados en documentos.' }
-      if (_options?.documentosEnArchivo?.has(docNorm)) return { isValid: false, message: 'Documento duplicado en este archivo. Regla general: no se aceptan duplicados en documentos.' }
+      // Solo marcar inválido si está explícitamente en los sets (documentos de otras filas o ya en BD)
+      const enSistema = _options?.documentosExistentes != null && _options.documentosExistentes.has(docNorm)
+      const enArchivo = _options?.documentosEnArchivo != null && _options.documentosEnArchivo.has(docNorm)
+      if (enSistema) return { isValid: false, message: 'Este documento ya existe en el sistema. Regla general: no se aceptan duplicados en documentos.' }
+      if (enArchivo) return { isValid: false, message: 'Documento duplicado en este archivo. Regla general: no se aceptan duplicados en documentos.' }
       return { isValid: true }
     }
 

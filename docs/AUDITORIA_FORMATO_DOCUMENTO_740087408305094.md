@@ -68,3 +68,33 @@ Asegurar que el documento en formato **solo números largos** (ej. `740087408305
 4. No debe aparecer notación científica en UI ni en duplicados.
 
 Si en algún paso el valor aparece en notación científica o con menos dígitos, revisar el punto de control correspondiente en esta auditoría.
+
+---
+
+## Regla de negocio: 10–25 dígitos y no duplicados (evitar regresión del borde rojo)
+
+### Regla general
+- **No se aceptan duplicados en documentos:** ni en el archivo ni en el sistema (BD). Es la única restricción de contenido para Nº documento.
+- **Documentos numéricos de 10 a 25 dígitos:** se aceptan sin problemas. No se valida “formato”; solo se rechaza por duplicado.
+
+### Por qué volvía el “borde rojo” en la UI de carga masiva
+Los números de 15 dígitos (p. ej. `740087427577222`) se marcaban en rojo cuando:
+1. **Clave de duplicados inconsistente:** se añadía la cadena vacía `''` al set `documentosEnArchivo` o la normalización al añadir no coincidía con la usada al validar (número vs string, notación científica).
+2. **Columna interpretada como Cédula:** si la primera columna del Excel tenía los números largos y no se reconocía cabecera “Documento”, se leían como cédula y la validación de cédula (V/E/J/Z + 6–11 dígitos) fallaba.
+
+### Puntos de control para no regresar
+
+| Dónde | Qué debe cumplirse |
+|-------|---------------------|
+| `pagoExcelValidation.ts` | `validatePagoField('numero_documento')`: documentos solo numéricos 10–25 dígitos (`/^\d{10,25}$/`) solo se marcan inválidos si están en `documentosExistentes` o `documentosEnArchivo`. No añadir `''` al set. Comentario en cabecera del módulo: “no añadir '' a documentosEnArchivo; misma normalización al añadir y al validar”. |
+| `useExcelUploadPagos.ts` (processExcelFile) | Guardar `numero_documento` en cada fila como **string normalizado** (`numeroDocStr`); solo añadir al set con `if (numeroDocStr) documentosEnArchivo.add(numeroDocStr)`. Intercambio: si la columna “Cédula” trae número largo (`looksLikeDocumentNotCedula(cedula)`) y “Documento” está vacío o es una cédula, usar ese valor como documento y la otra celda como cédula. |
+| `useExcelUploadPagos.ts` (updateCellValue) | Al revalidar al editar una celda, construir `documentosEnArchivo` solo con documentos **no vacíos** de las demás filas: `if (docNorm) documentosEnArchivo.add(docNorm)`. |
+
+### Constantes y referencias en código
+- `DOCUMENTO_DIGITS_MIN = 10`, `DOCUMENTO_DIGITS_MAX = 25` en `pagoExcelValidation.ts` (documentación del rango aceptado).
+- Backend: “Documentos numéricos de 10 a 25 dígitos se aceptan sin problemas” en docstring de `pagos.py`; mensajes 409 con “Regla general: no se aceptan duplicados en documentos”.
+
+### Comprobación rápida (evitar regresión del borde rojo)
+1. Subir Excel con varias filas cuyos Nº documento sean **solo números de 15 dígitos** (todos distintos).
+2. En la previsualización, los campos **Documento** no deben tener borde rojo (solo rojo si hay duplicado en archivo o documento ya existente en BD).
+3. Si la primera columna del Excel son esos números y no hay cabecera “Documento”, deben seguir sin borde rojo en la columna Documento (intercambio cédula/documento por contenido).

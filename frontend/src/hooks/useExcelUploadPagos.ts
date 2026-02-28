@@ -691,8 +691,9 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             if (!validation.isValid) hasErrors = true
           }
           rowData._validation.prestamo_id = { isValid: true }
-          // Única regla: no duplicados. Añadir con la misma clave que usa validatePagoField (solo no vacíos).
-          if (numeroDocStr) documentosEnArchivo.add(numeroDocStr)
+          // Añadir a set SOLO después de validar; usar la misma clave que validatePagoField (normalizar igual)
+          const keyDoc = (normalizarNumeroDocumento(rowData.numero_documento) || String(rowData.numero_documento ?? '')).trim()
+          if (keyDoc && keyDoc !== 'NaN') documentosEnArchivo.add(keyDoc)
           rowData._hasErrors = hasErrors
           processed.push(rowData)
         }
