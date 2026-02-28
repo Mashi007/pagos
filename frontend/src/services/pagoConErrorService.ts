@@ -100,8 +100,9 @@ class PagoConErrorService {
 
   /** Elimina de pagos_con_errores tras descargar Excel. La lista se vacía y se rellena al enviar desde Carga Masiva. */
   async eliminarPorDescarga(ids: number[]): Promise<{ eliminados: number; mensaje: string }> {
-    return await apiClient.post(`${this.baseUrl}/eliminar-por-descarga`, { ids })
+    return await apiClient.post(`${this.baseUrl}/eliminar-por-descarga`, { ids }, { timeout: 120000 })
   }
 }
 
 export const pagoConErrorService = new PagoConErrorService()
+

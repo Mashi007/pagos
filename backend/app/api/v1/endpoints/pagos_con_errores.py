@@ -8,7 +8,7 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, Query, HTTPException, Body
 from pydantic import BaseModel
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -168,17 +168,12 @@ class EliminarPorDescargaBody(BaseModel):
 
 @router.post("/eliminar-por-descarga", response_model=dict)
 def eliminar_por_descarga(payload: EliminarPorDescargaBody = Body(...), db: Session = Depends(get_db)):
-    """Elimina de pagos_con_errores los registros descargados. La lista se vacÃ­a y se rellena al enviar desde Carga Masiva."""
-    if not payload.ids:
+    """Elimina de pagos_con_errores los registros descargados (borrado en lote). La lista se vac�a y se rellena al enviar desde Carga Masiva."""
+    valid_ids = [p for p in payload.ids if isinstance(p, int) and p > 0]
+    if not valid_ids:
         return {"eliminados": 0, "mensaje": "No hay IDs"}
-    eliminados = 0
-    for pid in payload.ids:
-        if not isinstance(pid, int) or pid <= 0:
-            continue
-        row = db.get(PagoConError, pid)
-        if row:
-            db.delete(row)
-            eliminados += 1
+    result = db.execute(delete(PagoConError).where(PagoConError.id.in_(valid_ids)))
+    eliminados = result.rowcount
     db.commit()
     return {"eliminados": eliminados, "mensaje": f"{eliminados} eliminados de pagos_con_errores"}
 
@@ -300,3 +295,5 @@ def eliminar_pago_con_error(pago_id: int, db: Session = Depends(get_db)):
     db.delete(row)
     db.commit()
     return None
+
+
