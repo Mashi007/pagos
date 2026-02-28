@@ -29,6 +29,33 @@ const ESTADOS_PRESTAMO_ACTIVO = ['APROBADO', 'DESEMBOLSADO']
 // Límite de INTEGER en BD; si el valor parece número de documento (ej. 740087408451411), el backend devuelve 422
 const PRESTAMO_ID_MAX = 2147483647
 
+/** Mapeo campo → texto para Observaciones en Revisar Pagos */
+const OBSERVACIONES_POR_CAMPO: Record<string, string> = {
+  numero_documento: 'Duplicado Excel',
+  fecha_pago: 'No Fecha',
+  cedula: 'No cliente',
+  monto_pagado: 'Monto inválido',
+  prestamo_id: 'Crédito inválido',
+  conciliado: 'Conciliación inválida',
+}
+
+function observacionesDesdeCampos(campos: string[]): string {
+  if (campos.length === 0) return 'Revisar'
+  return campos.map((c) => OBSERVACIONES_POR_CAMPO[c] || c).join(' / ')
+}
+
+/** Infiere observaciones desde el mensaje de error del backend (422, 400, etc.) */
+function observacionesDesdeError(msg: string): string {
+  const m = (msg || '').toLowerCase()
+  const partes: string[] = []
+  if (/fecha|date|formato.*dd|yyyy|invalid.*date/.test(m)) partes.push('No Fecha')
+  if (/cedula|cliente|client|not found|no existe|no encontrad/.test(m)) partes.push('No cliente')
+  if (/monto|amount|debe ser|greater|positive/.test(m)) partes.push('Monto inválido')
+  if (/prestamo|credito|crédito|prestamo_id/.test(m)) partes.push('Crédito inválido')
+  if (/documento|duplicado|already exists|ya existe/.test(m)) partes.push('Duplicado BD')
+  return partes.length > 0 ? partes.join(' / ') : 'Revisar'
+}
+
 export interface ExcelUploaderPagosProps {
   onClose: () => void
   onSuccess?: () => void
@@ -348,7 +375,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
               institucion_bancaria: null,
               notas: null,
               conciliado: row.conciliado ?? false,
-              observaciones: 'duplicado',
+              observaciones: 'Duplicado BD',
               fila_origen: row._rowIndex,
             })
             setEnviadosRevisar((prev) => new Set([...prev, row._rowIndex]))
@@ -369,11 +396,26 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           }
           return { ok: false, was409: true }
         }
-        if (is422 && (typeof msg === 'string' && msg.includes('prestamo_id'))) {
-          addToast(
-            'error',
-            `Fila ${row._rowIndex}: Crédito inválido. Elija un crédito de la lista (no use el número de documento).`
-          )
+        if (is422) {
+          const observaciones = observacionesDesdeError(msg)
+          try {
+            await pagoConErrorService.create({
+              cedula_cliente: cedulaLookupParaFila(row.cedula || '', row.numero_documento || ''),
+              prestamo_id: row.prestamo_id ?? null,
+              fecha_pago: convertirFechaParaBackendPago(row.fecha_pago) || new Date().toISOString().split('T')[0],
+              monto_pagado: Number(row.monto_pagado) || 0,
+              numero_documento: normalizarNumeroDocumento(row.numero_documento) || null,
+              institucion_bancaria: null,
+              notas: null,
+              conciliado: row.conciliado ?? false,
+              observaciones,
+              fila_origen: row._rowIndex,
+            })
+            queryClient.invalidateQueries({ queryKey: ['pagos-con-errores'], exact: false })
+            if (!opts?.skipToast) addToast('warning', `Fila ${row._rowIndex}: Enviado a Revisar Pagos (${observaciones}).`)
+          } catch {
+            if (!opts?.skipToast) addToast('error', `Fila ${row._rowIndex}: ${msg}`)
+          }
           return { ok: false }
         }
         addToast('error', `Fila ${row._rowIndex}: ${msg}`)
@@ -392,10 +434,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       try {
         if (row._hasErrors) {
           const camposConProblema = Object.entries(row._validation || {}).filter(([, v]) => !v.isValid).map(([field]) => field)
-          const observaciones =
-            camposConProblema.length === 1 && camposConProblema[0] === 'numero_documento'
-              ? 'duplicado'
-              : camposConProblema.join(',')
+          const observaciones = observacionesDesdeCampos(camposConProblema)
           await pagoConErrorService.create({
             cedula_cliente: cedulaLookupParaFila(row.cedula || '', row.numero_documento || ''),
             prestamo_id: null,
@@ -411,12 +450,12 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         } else {
           let observaciones: string
           if (duplicadosPendientesRevisar.has(row._rowIndex)) {
-            observaciones = 'duplicado'
+            observaciones = 'Duplicado Excel'
           } else {
             const cedulaLookup = cedulaLookupParaFila(row.cedula || '', row.numero_documento || '')
             const cedulaSinGuion = cedulaLookup.replace(/-/g, '')
             const prestamos = prestamosPorCedula[cedulaLookup] || prestamosPorCedula[cedulaSinGuion] || prestamosPorCedula[cedulaLookup.toUpperCase()] || prestamosPorCedula[cedulaLookup.toLowerCase()] || []
-            observaciones = prestamos.length === 0 ? 'sin_prestamo' : prestamos.length > 1 ? 'multiples_prestamos' : 'revisar'
+            observaciones = prestamos.length === 0 ? 'Crédito inválido' : prestamos.length > 1 ? 'Crédito inválido' : 'Revisar'
           }
           await pagoConErrorService.create({
             cedula_cliente: cedulaLookupParaFila(row.cedula || '', row.numero_documento || ''),
