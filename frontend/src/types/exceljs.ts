@@ -62,32 +62,26 @@ export async function readExcelToJSON(file: File | ArrayBuffer): Promise<any[][]
       const rowData: any[] = []
       row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
         let val = cell.value
-        // Número largo (12–16 dígitos, ej. 740087443317051 o 3740087403067198): preferir cell.text ("número como texto") para no perder dígitos
-        if (typeof val === 'number' && !Number.isNaN(val) && Math.abs(val) >= 1e11) {
-          try {
-            const t = (cell as any).text
-            const tStr = t != null ? String(t).trim() : ''
-            if (tStr !== '' && /^\d{12,20}$/.test(tStr)) val = tStr
-            else val = Math.abs(val) >= 1e15 ? BigInt(Math.round(val)).toString() : Math.round(val).toString()
-          } catch {
-            val = Math.abs(val) >= 1e15 ? BigInt(Math.round(val)).toString() : Math.round(val).toString()
+        // Número (en cualquier columna): si parece documento (10+ dígitos) o "número como texto", guardar como string para no perder formato
+        if (typeof val === 'number' && !Number.isNaN(val)) {
+          if (Math.abs(val) >= 1e10) {
+            try {
+              const t = (cell as any).text
+              const tStr = t != null ? String(t).replace(/[\u200B-\u200D\uFEFF\r\n\t]/g, '').trim() : ''
+              if (tStr && /^\d{10,25}$/.test(tStr)) val = tStr
+              else val = Math.abs(val) >= 1e15 ? BigInt(Math.round(val)).toString() : String(Math.round(val))
+            } catch {
+              val = Math.abs(val) >= 1e15 ? BigInt(Math.round(val)).toString() : String(Math.round(val))
+            }
           }
         } else if (val != null && typeof val === 'object' && 'richText' in val) {
-          // Cualquier celda con richText (ej. Nº documento con formato): extraer texto para no guardar [object Object]
           val = (val as any).richText?.map((x: any) => x?.text ?? '').join('') || ''
-        } else if (colNumber >= 2 && colNumber <= 7) {
-          // Columnas típicas Monto(2)–Documento(4)–Préstamo(5)–Conciliación(6): forzar string para zelle/, números largos, etc.
-          try {
-            const t = (cell as any).text
-            let str = ''
-            if (t != null && String(t).trim()) str = String(t).trim()
-            else if (typeof val === 'string' && val.trim()) str = val.trim()
-            else if (typeof val === 'number' && !Number.isNaN(val)) str = String(Math.round(val))
-            else if (val != null) str = String(val)
-            if (str) val = str.replace(/[\u200B-\u200D\uFEFF\r\n\t]/g, '').trim() || str
-          } catch {
-            val = val != null ? String(val) : val
-          }
+        }
+        // Columnas 1–8: forzar string y limpiar (documento puede estar en cualquier posición típica)
+        if (colNumber >= 1 && colNumber <= 8 && val != null) {
+          const t = (cell as any).text
+          let str = typeof val === 'string' ? val : (t != null && String(t).trim() ? String(t) : String(val))
+          if (str) val = str.replace(/[\u200B-\u200D\uFEFF\r\n\t]/g, '').trim() || str
         }
         rowData[colNumber - 1] = val
       })

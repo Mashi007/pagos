@@ -103,53 +103,38 @@ function limpiarDocumento(s: string): string {
 }
 
 /**
- * Normaliza el valor de la columna Documento para comparación y guardado.
- *
- * REGLA DE NEGOCIO (OBLIGATORIA):
- * - DOCUMENTO ACEPTA CUALQUIER FORMATO (números, zelle/, BS./VZLA.REF, B RECIBO/, alfanumérico, etc.).
- * - LO ÚNICO QUE NUNCA SE ACEPTA ES UN DOCUMENTO DUPLICADO (mismo valor en archivo o en BD).
+ * Convierte CUALQUIER valor a string para uso como número de documento.
+ * REGLA: documento acepta CUALQUIER FORMATO. Única restricción: NO DUPLICADO (archivo o BD).
+ * - No se valida formato (longitud, caracteres, etc.); solo se normaliza para comparación.
  */
 export function normalizarNumeroDocumento(val: unknown): string {
   if (val == null || val === '') return ''
-  // Celdas Excel con richText u otro objeto: extraer texto para no guardar "[object Object]"
+  let s: string
   if (typeof val === 'object' && val !== null) {
     const rt = (val as { richText?: Array<{ text?: string }> }).richText
-    if (Array.isArray(rt)) {
-      let out = rt.map((x) => x?.text ?? '').join('').trim() || ''
-      if (out.startsWith("'")) out = out.slice(1).trim()
-      return limpiarDocumento(out)
-    }
-    const t = (val as { text?: string }).text
-    if (t != null) {
-      let out = String(t).trim()
-      if (out.startsWith("'")) out = out.slice(1).trim()
-      return limpiarDocumento(out)
-    }
-    return ''
-  }
-  if (typeof val === 'number') {
+    if (Array.isArray(rt)) s = rt.map((x) => x?.text ?? '').join('')
+    else if ((val as { text?: string }).text != null) s = String((val as { text?: string }).text)
+    else return ''
+  } else if (typeof val === 'number') {
     if (Number.isNaN(val)) return ''
-    // Números largos (12+ dígitos, incl. 15–16 dígitos): string completo sin notación científica
-    if (Math.abs(val) >= 1e11) {
-      try { return Math.abs(val) >= 1e15 ? BigInt(Math.round(val)).toString() : String(Math.round(val)) } catch { return val.toFixed(0) }
-    }
-    return Math.round(val).toString()
+    if (Math.abs(val) >= 1e11)
+      try { s = Math.abs(val) >= 1e15 ? BigInt(Math.round(val)).toString() : String(Math.round(val)) } catch { s = val.toFixed(0) }
+    else s = Math.round(val).toString()
+  } else {
+    s = String(val)
   }
-  let s = String(val).trim()
+  s = s.trim()
   if (s.startsWith("'")) s = s.slice(1).trim()
   s = limpiarDocumento(s)
-  if (!s || s === 'NaN' || s === 'nan' || s === 'undefined') return ''
-  if (/^\d+$/.test(s)) return s
+  if (!s || s.toLowerCase() === 'nan' || s.toLowerCase() === 'undefined') return ''
+  // Solo expandir notación científica para que el mismo número no tenga dos claves (ej. "7.4E+14" vs "740...")
   if (/^\d+\.?\d*[eE][+-]?\d+$/.test(s)) {
     try {
       const n = parseFloat(s)
-      if (Number.isNaN(n)) return s
-      if (Math.abs(n) >= 1e15) {
-        try { return BigInt(Math.round(n)).toString() } catch { return n.toFixed(0) }
-      }
-      return Math.round(n).toString()
+      if (!Number.isNaN(n) && isFinite(n))
+        s = Math.abs(n) >= 1e15 ? BigInt(Math.round(n)).toString() : String(Math.round(n))
     } catch {
-      return s
+      /* mantener s */
     }
   }
   return s
@@ -192,7 +177,7 @@ export function validatePagoField(
     }
 
     case 'numero_documento': {
-      // DOCUMENTO: aceptar CUALQUIER formato. ÚNICA restricción: NO DUPLICADO (ni en archivo ni en BD).
+      // REGLA ESTRICTA: NINGÚN DOCUMENTO DUPLICADO (ni en archivo ni en BD). Cualquier formato aceptado.
       const docNorm = (strVal === 'NaN' || strVal === 'nan' || strVal === 'undefined') ? '' : (normalizarNumeroDocumento(value) || strVal).trim() || ''
       if (_options?.documentosExistentes?.has(docNorm)) return { isValid: false, message: 'Documento ya existe en BD. No se permiten duplicados.' }
       if (_options?.documentosEnArchivo?.has(docNorm)) return { isValid: false, message: 'Documento duplicado en este archivo. No se permiten duplicados.' }

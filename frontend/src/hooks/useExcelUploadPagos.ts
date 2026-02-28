@@ -682,7 +682,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             if (!validation.isValid) hasErrors = true
           }
           rowData._validation.prestamo_id = { isValid: true }
-          // Única regla documento: no duplicados (incl. vacío: solo una fila puede tener documento vacío)
+          // REGLA ESTRICTA: ningún documento duplicado (incl. vacío: solo una fila puede tener documento vacío)
           documentosEnArchivo.add(numeroDoc && numeroDoc !== 'NaN' ? numeroDoc : '')
           rowData._hasErrors = hasErrors
           processed.push(rowData)
@@ -839,10 +839,13 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         } else {
           ;(updated as any)[field] = field === 'monto_pagado' ? (Number(value) || 0) : value
         }
+        // REGLA ESTRICTA: ningún documento duplicado; misma normalización que en validación
         const documentosEnArchivo = new Set<string>()
         prev.forEach((other) => {
-          if (other._rowIndex !== row._rowIndex)
-            documentosEnArchivo.add((other.numero_documento || '').trim() || '')
+          if (other._rowIndex !== row._rowIndex) {
+            const docNorm = normalizarNumeroDocumento(other.numero_documento) || ''
+            documentosEnArchivo.add(docNorm)
+          }
         })
         const validation = validatePagoField(field, (updated as any)[field], {
           documentosEnArchivo: field === 'numero_documento' ? documentosEnArchivo : undefined,

@@ -404,17 +404,18 @@ async def upload_excel_pagos(
                 if numero_doc_norm is None and (numero_doc or "").strip():
                     numero_doc_norm = (numero_doc or "").strip() or None
                 numero_doc_norm = _truncar_numero_documento(numero_doc_norm) if numero_doc_norm else None
-                if numero_doc_norm:
-                    if numero_doc_norm in numeros_doc_en_lote:
-                        datos_fila = {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}
-                        errores.append(f"Fila {i + 2}: NÂº documento duplicado en este archivo")
-                        errores_detalle.append({"fila": i + 2, "cedula": cedula, "error": "NÂº documento duplicado en este archivo. El NÂº documento no puede repetirse.", "datos": datos_fila})
-                        continue
-                    if _numero_documento_ya_existe(db, numero_doc_norm):
-                        datos_fila = {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}
-                        errores.append(f"Fila {i + 2}: Ya existe un pago con ese NÂº de documento")
-                        errores_detalle.append({"fila": i + 2, "cedula": cedula, "error": "Ya existe un pago con ese NÂº de documento. El NÂº documento no puede repetirse.", "datos": datos_fila})
-                        continue
+                # REGLA ESTRICTA: ningún documento duplicado (ni en este archivo ni en BD). Clave única para comparar incluye vacío.
+                key_doc = (numero_doc_norm or "").strip() or ""
+                if key_doc in numeros_doc_en_lote:
+                    datos_fila = {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}
+                    errores.append(f"Fila {i + 2}: NÂº documento duplicado en este archivo")
+                    errores_detalle.append({"fila": i + 2, "cedula": cedula, "error": "NÂº documento duplicado en este archivo. El NÂº documento no puede repetirse.", "datos": datos_fila})
+                    continue
+                if numero_doc_norm and _numero_documento_ya_existe(db, numero_doc_norm):
+                    datos_fila = {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}
+                    errores.append(f"Fila {i + 2}: Ya existe un pago con ese NÂº de documento")
+                    errores_detalle.append({"fila": i + 2, "cedula": cedula, "error": "Ya existe un pago con ese NÂº de documento. El NÂº documento no puede repetirse.", "datos": datos_fila})
+                    continue
 
                 # Si la persona tiene más de un préstamo, prestamo_id es obligatorio
                 if prestamo_id is None and cedula.strip():
@@ -450,8 +451,7 @@ async def upload_excel_pagos(
                 registros += 1
                 if prestamo_id and monto > 0:
                     pagos_con_prestamo.append(p)
-                if numero_doc_norm:
-                    numeros_doc_en_lote.add(numero_doc_norm)
+                numeros_doc_en_lote.add(key_doc)
             except Exception as e:
                 msg = str(e)
                 errores.append(f"Fila {i + 2}: {msg}")
@@ -883,7 +883,7 @@ def obtener_pago(pago_id: int, db: Session = Depends(get_db)):
 def _numero_documento_ya_existe(
     db: Session, numero_documento: Optional[str], exclude_pago_id: Optional[int] = None
 ) -> bool:
-    """Regla única: no aceptar duplicados. Comprueba si ya existe un pago con ese Nº documento."""
+    """REGLA ESTRICTA: ningún documento duplicado. Comprueba si ya existe un pago con ese Nº documento."""
     num = _normalizar_numero_documento(numero_documento)
     if not num:
         return False
