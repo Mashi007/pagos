@@ -1,10 +1,15 @@
 /**
  * Validación para carga masiva de pagos desde Excel.
  * Columnas: Cédula, Fecha de pago, Monto, Documento (Nº documento), ID Préstamo (opcional).
- * Nº documento: se acepta CUALQUIER formato. ÚNICA regla: en el sistema ningún documento puede estar duplicado.
+ * Regla general: no se aceptan duplicados en documentos (ni en archivo ni en el sistema).
+ * Nº documento: cualquier formato; documentos numéricos 10-25 dígitos sin problemas.
  */
 
 import { validateExcelFile, validateExcelData, sanitizeFileName } from './excelValidation'
+
+/** Rango de dígitos admitido para documentos numéricos (sin restricción de formato; solo referencia). */
+export const DOCUMENTO_DIGITS_MIN = 10
+export const DOCUMENTO_DIGITS_MAX = 25
 
 export interface PagoExcelRow {
   _rowIndex: number
@@ -97,6 +102,17 @@ export function cedulaLookupParaFila(cedula: string, numero_documento: string): 
   return fromC || fromD
 }
 
+/** True si el valor parece un Nº de documento (10-25 dígitos u otros formatos BNC/ZELLE/…) y no una cédula V/E/J/Z. */
+export function looksLikeDocumentNotCedula(val: unknown): boolean {
+  if (val == null || val === '') return false
+  const s = String(val).trim()
+  if (!s) return false
+  if (LOOKS_LIKE_CEDULA.test(s.replace(/-/g, ''))) return false
+  if (/^\d{10,}$/.test(s)) return true
+  if (/^(BNC|ZELLE|BINANCE|VE\/|BS\.|REF\.?)\s*\/?/i.test(s) || /^[A-Z0-9\/\.\s\-]{10,}$/i.test(s)) return true
+  return false
+}
+
 // Quita caracteres invisibles/control que Excel o copiar-pegar pueden incluir (evita que el mismo documento se vea como distinto)
 function limpiarDocumento(s: string): string {
   return s.replace(/[\u200B-\u200D\uFEFF\r\n\t]/g, '').trim()
@@ -163,8 +179,8 @@ export function validatePagoField(
       if (!strVal) return { isValid: false, message: 'Cédula requerida' }
       const c = strVal.replace(/[:$]/g, '')
       if (/^[VEJZ]\d{6,11}$/i.test(c)) return { isValid: true }
-      // Si parece Nº documento (numérico largo, BNC/, ZELLE/, etc.) orientar al usuario
-      if (/^\d{12,}$/.test(c) || /^(BNC|ZELLE|BINANCE|VE|BS\.)\s*\/?/i.test(c))
+      // Si parece Nº documento (10+ dígitos, BNC/, ZELLE/, etc.) orientar al usuario; 10-25 dígitos aceptados sin problemas en columna documento
+      if (/^\d{10,}$/.test(c) || /^(BNC|ZELLE|BINANCE|VE|BS\.)\s*\/?/i.test(c))
         return { isValid: false, message: 'Parece un Nº de documento. Use la columna Cédula para V/E/J/Z + dígitos y la columna Nº documento para la referencia.' }
       return { isValid: false, message: 'Formato E/V/J/Z + 6-11 dígitos' }
 
@@ -192,11 +208,11 @@ export function validatePagoField(
     }
 
     case 'numero_documento': {
-      // Cualquier formato aceptado. ÚNICA regla: en el sistema ningún documento puede estar duplicado.
+      // Cualquier formato aceptado; 10-25 dígitos numéricos sin problemas. ÚNICA regla: no duplicado.
       const docNorm = (strVal === 'NaN' || strVal === 'nan' || strVal === 'undefined') ? '' : (normalizarNumeroDocumento(value) || strVal).trim() || ''
       if (!docNorm) return { isValid: true } // Vacío permitido; no cuenta como duplicado
-      if (_options?.documentosExistentes?.has(docNorm)) return { isValid: false, message: 'Este documento ya existe en el sistema. Ningún documento puede estar duplicado.' }
-      if (_options?.documentosEnArchivo?.has(docNorm)) return { isValid: false, message: 'Documento duplicado en este archivo. Ningún documento puede estar duplicado.' }
+      if (_options?.documentosExistentes?.has(docNorm)) return { isValid: false, message: 'Este documento ya existe en el sistema. Regla general: no se aceptan duplicados en documentos.' }
+      if (_options?.documentosEnArchivo?.has(docNorm)) return { isValid: false, message: 'Documento duplicado en este archivo. Regla general: no se aceptan duplicados en documentos.' }
       return { isValid: true }
     }
 

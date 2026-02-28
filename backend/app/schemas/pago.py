@@ -16,7 +16,7 @@ class PagoCreate(BaseModel):
     prestamo_id: Optional[int] = None
     fecha_pago: date
     monto_pagado: Decimal
-    numero_documento: str  # Cualquier formato. ÚNICA regla: no duplicado en el sistema.
+    numero_documento: str  # Cualquier formato. Regla general: no duplicados en documentos.
     institucion_bancaria: Optional[str] = None
     notas: Optional[str] = None
     conciliado: Optional[bool] = None  # Sí/No en carga masiva
@@ -47,7 +47,7 @@ class PagoUpdate(BaseModel):
     prestamo_id: Optional[int] = None
     fecha_pago: Optional[date] = None
     monto_pagado: Optional[Decimal] = None
-    numero_documento: Optional[str] = None  # Cualquier formato. ÚNICA regla: no duplicado en el sistema.
+    numero_documento: Optional[str] = None  # Cualquier formato. Regla general: no duplicados en documentos.
     institucion_bancaria: Optional[str] = None
     notas: Optional[str] = None
     conciliado: Optional[bool] = None

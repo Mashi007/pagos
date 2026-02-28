@@ -4,11 +4,11 @@ Endpoints de pagos. Datos reales desde BD.
 - GET /pagos/kpis, /stats, /ultimos; POST /upload, /conciliacion/upload, /{id}/aplicar-cuotas.
 
 Nº documento / referencia de pago:
-- Se acepta CUALQUIER formato (BNC/, BINANCE, VE/, ZELLE/, numérico, BS. BNC / REF., etc.).
-  No se valida formato ni se rechaza por contenido.
-- ÚNICA REGLA EN EL SISTEMA: ningún documento duplicado. En todo el sistema (carga masiva, crear,
+- Regla general: no se aceptan duplicados en documentos. En todo el sistema (carga masiva, crear,
   actualizar, BD) no puede existir dos pagos con el mismo Nº documento. Misma clave canónica =
-  duplicado → rechazo. Varias filas sin documento (vacío) se permiten.
+  duplicado → rechazo.
+- Se acepta CUALQUIER formato (BNC/, BINANCE, VE/, ZELLE/, numérico, etc.). Documentos numéricos
+  de 10 a 25 dígitos sin problemas. Varias filas sin documento (vacío) se permiten.
 """
 import calendar
 import io
@@ -540,7 +540,7 @@ async def upload_excel_pagos(
             if key_doc and key_doc in numeros_doc_en_lote:
                 datos_fila = {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}
                 errores.append(f"Fila {i}: Nº documento duplicado en este archivo")
-                errores_detalle.append({"fila": i, "cedula": cedula, "error": "Nº documento duplicado en este archivo. En el sistema ningún documento puede estar duplicado.", "datos": datos_fila})
+                errores_detalle.append({"fila": i, "cedula": cedula, "error": "Nº documento duplicado en este archivo. Regla general: no se aceptan duplicados en documentos.", "datos": datos_fila})
                 continue
 
             # Validación post-documentos: duplicado en BD (caché para no repetir consulta por la misma clave)
@@ -548,13 +548,13 @@ async def upload_excel_pagos(
                 if key_doc in documentos_ya_en_bd:
                     datos_fila = {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}
                     errores.append(f"Fila {i}: Ya existe un pago con ese Nº de documento")
-                    errores_detalle.append({"fila": i, "cedula": cedula, "error": "Ya existe un pago con ese Nº de documento. En el sistema ningún documento puede estar duplicado.", "datos": datos_fila})
+                    errores_detalle.append({"fila": i, "cedula": cedula, "error": "Ya existe un pago con ese Nº de documento. Regla general: no se aceptan duplicados en documentos.", "datos": datos_fila})
                     continue
                 if _numero_documento_ya_existe(db, numero_doc_norm):
                     documentos_ya_en_bd.add(key_doc)
                     datos_fila = {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}
                     errores.append(f"Fila {i}: Ya existe un pago con ese Nº de documento")
-                    errores_detalle.append({"fila": i, "cedula": cedula, "error": "Ya existe un pago con ese Nº de documento. En el sistema ningún documento puede estar duplicado.", "datos": datos_fila})
+                    errores_detalle.append({"fila": i, "cedula": cedula, "error": "Ya existe un pago con ese Nº de documento. Regla general: no se aceptan duplicados en documentos.", "datos": datos_fila})
                     continue
                 numeros_doc_en_lote.add(key_doc)
 
@@ -1028,7 +1028,7 @@ def obtener_pago(pago_id: int, db: Session = Depends(get_db)):
 def _numero_documento_ya_existe(
     db: Session, numero_documento: Optional[str], exclude_pago_id: Optional[int] = None
 ) -> bool:
-    """REGLA ESTRICTA: ningún documento duplicado. Comprueba si ya existe un pago con ese Nº documento."""
+    """Regla general: no duplicados en documentos. Comprueba si ya existe un pago con ese Nº documento."""
     num = _normalizar_numero_documento(numero_documento)
     if not num:
         return False
@@ -1041,12 +1041,12 @@ def _numero_documento_ya_existe(
 @router.post("", response_model=dict, status_code=201)
 @router.post("/", include_in_schema=False, response_model=dict, status_code=201)
 def crear_pago(payload: PagoCreate, db: Session = Depends(get_db)):
-    """Crea un pago. Documento acepta cualquier formato. Única restricción: no duplicado (409 si ya existe)."""
+    """Crea un pago. Documento acepta cualquier formato. Regla general: no duplicados (409 si ya existe)."""
     num_doc = _truncar_numero_documento(_normalizar_numero_documento(payload.numero_documento))
     if num_doc and _numero_documento_ya_existe(db, num_doc):
         raise HTTPException(
             status_code=409,
-            detail="Ya existe un pago con ese Nº de documento. En el sistema ningún documento puede estar duplicado.",
+            detail="Ya existe un pago con ese Nº de documento. Regla general: no se aceptan duplicados en documentos.",
         )
     ref = (num_doc or "N/A")[:_MAX_LEN_NUMERO_DOCUMENTO]
     fecha_pago_ts = datetime.combine(payload.fecha_pago, dt_time.min)
@@ -1094,7 +1094,7 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
         if num_doc and _numero_documento_ya_existe(db, num_doc, exclude_pago_id=pago_id):
             raise HTTPException(
                 status_code=409,
-                detail="Ya existe otro pago con ese Nº de documento. En el sistema ningún documento puede estar duplicado.",
+                detail="Ya existe otro pago con ese Nº de documento. Regla general: no se aceptan duplicados en documentos.",
             )
     aplicar_conciliado = False
     for k, v in data.items():

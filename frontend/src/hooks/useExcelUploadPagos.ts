@@ -21,6 +21,7 @@ import {
   normalizarNumeroDocumento,
   cedulaParaLookup,
   cedulaLookupParaFila,
+  looksLikeDocumentNotCedula,
 } from '../utils/pagoExcelValidation'
 import { readExcelToJSON } from '../types/exceljs'
 
@@ -639,11 +640,17 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           const row = jsonData[i] as unknown[]
           if (!row || row.every((c) => c == null || c === '')) continue
 
-          const cedula = (row[cols.cedula] != null ? String(row[cols.cedula]).trim() : '').trim() || ''
+          let cedula = (row[cols.cedula] != null ? String(row[cols.cedula]).trim() : '').trim() || ''
           const fechaPago = convertirFechaExcelPago(row[cols.fecha])
           const montoRaw = String(row[cols.monto] || 0).replace(',', '.')
           const monto = parseFloat(montoRaw) || 0
-          const numeroDoc = normalizarNumeroDocumento(row[cols.documento])
+          let numeroDoc = normalizarNumeroDocumento(row[cols.documento])
+          // Si la columna "Cédula" trae número largo (ej. 15 dígitos) y "Documento" está vacío o es una cédula, interpretar como documento en columna equivocada
+          if (looksLikeDocumentNotCedula(cedula) && (!numeroDoc || numeroDoc === 'NaN' || /^[VEJZ]\d{6,11}$/i.test(String(numeroDoc).replace(/-/g, '')))) {
+            numeroDoc = normalizarNumeroDocumento(cedula)
+            cedula = (row[cols.documento] != null ? String(row[cols.documento]).trim() : '').trim()
+            if (!cedula || looksLikeDocumentNotCedula(cedula)) cedula = ''
+          }
           const prestamoIdRaw = row[cols.prestamo]
           const conciliacionRawCol4 = (row[cols.prestamo]?.toString() || '').trim().toUpperCase()
           const conciliacionRawCol5 = (row[cols.conciliacion]?.toString() || '').trim().toUpperCase()
