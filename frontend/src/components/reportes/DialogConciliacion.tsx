@@ -119,10 +119,12 @@ export function DialogConciliacion({ open, onOpenChange, onGuardar }: DialogConc
       setFilas([])
     } catch (error: unknown) {
       const msg = getErrorDetail(error) || getErrorMessage(error) || 'Error al guardar'
-      const detail = (error as { response?: { data?: { detail?: { errores?: string[] } } } })?.response?.data?.detail
-      if (detail?.errores?.length) {
-        setErrores(detail.errores)
-        toast.error(detail.mensaje || 'Errores de validación')
+      const detailData = (error as any)?.response?.data?.detail
+      const errores = detailData?.errores || []
+      const mensaje = detailData?.mensaje || ''
+      if (errores && errores.length > 0) {
+        setErrores(errores)
+        toast.error(mensaje || 'Errores de validación')
       } else {
         toast.error(msg)
       }

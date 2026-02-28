@@ -555,7 +555,27 @@ class ReporteService {
   /**
    * Descarga un archivo (Excel, PDF, CSV)
    */
-  async downloadFile(
+
+  /**
+   * Envía filas de conciliación (cedula, total_financiamiento, total_abonos, columna_e, columna_f) para guardar en BD temporal.
+   */
+  async cargarConciliacion(filas: Array<{ cedula: string; total_financiamiento: number; total_abonos: number; columna_e?: string; columna_f?: string }>): Promise<{ ok: boolean; filas_guardadas: number }> {
+    return await apiClient.post(`${this.baseUrl}/conciliacion/cargar`, filas)
+  }
+
+  /**
+   * Exporta reporte Conciliación en Excel. Al descargar se eliminan los datos temporales.
+   */
+  async exportarReporteConciliacion(): Promise<Blob> {
+    const axiosInstance = apiClient.getAxiosInstance()
+    const response = await axiosInstance.get(
+      `${this.baseUrl}/exportar/conciliacion`,
+      { responseType: 'blob', timeout: 180000 }
+    )
+    return response.data as Blob
+  }
+
+    async downloadFile(
     url: string,
     filename: string
   ): Promise<void> {
@@ -586,5 +606,6 @@ class ReporteService {
 }
 
 export const reporteService = new ReporteService()
+
 
 

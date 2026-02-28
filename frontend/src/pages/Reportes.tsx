@@ -22,6 +22,7 @@ import { reporteService } from '../services/reporteService'
 import { toast } from 'sonner'
 import { DialogReporteFiltros, type FiltrosReporte } from '../components/reportes/DialogReporteFiltros'
 import { DialogReporteContableFiltros, type FiltrosReporteContable } from '../components/reportes/DialogReporteContableFiltros'
+import { DialogConciliacion } from '../components/reportes/DialogConciliacion'
 import { usePermissions } from '../hooks/usePermissions'
 
 /** Cada icono = un reporte. Click = abre diálogo años/meses, luego descarga Excel. */
@@ -407,7 +408,7 @@ export function Reportes() {
             {tiposReporte.map((tipo) => {
               const IconComponent = tipo.icon
               const isGenerando = generandoReporte === tipo.value
-              const isDisponible = ['CARTERA', 'PAGOS', 'MOROSIDAD', 'VENCIMIENTO', 'ASESORES', 'CONTABLE', 'CEDULA'].includes(tipo.value)
+              const isDisponible = ['CARTERA', 'PAGOS', 'MOROSIDAD', 'VENCIMIENTO', 'ASESORES', 'CONTABLE', 'CEDULA', 'CONCILIACION'].includes(tipo.value)
               const tieneAcceso = canAccessReport(tipo.value)
 
               return (
@@ -468,3 +469,10 @@ export function Reportes() {
 }
 
 export default Reportes
+
+
+
+
+
+
+

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Endpoints para pagos_con_errores: pagos con errores de validaciÃ³n desde Carga Masiva.
 Revisar Pagos y front apuntan a esta tabla. No se mezclan con pagos que cumplen validadores.
 """
@@ -168,7 +168,7 @@ class EliminarPorDescargaBody(BaseModel):
 
 @router.post("/eliminar-por-descarga", response_model=dict)
 def eliminar_por_descarga(payload: EliminarPorDescargaBody = Body(...), db: Session = Depends(get_db)):
-    """Elimina de pagos_con_errores los registros descargados (borrado en lote). La lista se vac�a y se rellena al enviar desde Carga Masiva."""
+    """Elimina de pagos_con_errores los registros descargados (borrado en lote). La lista se vacia y se rellena al enviar desde Carga Masiva."""
     valid_ids = [p for p in payload.ids if isinstance(p, int) and p > 0]
     if not valid_ids:
         return {"eliminados": 0, "mensaje": "No hay IDs"}
@@ -295,5 +295,6 @@ def eliminar_pago_con_error(pago_id: int, db: Session = Depends(get_db)):
     db.delete(row)
     db.commit()
     return None
+
 
 
