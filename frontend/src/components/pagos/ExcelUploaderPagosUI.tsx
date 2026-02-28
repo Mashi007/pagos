@@ -11,7 +11,7 @@ import { Button } from '../ui/button'
 import { Badge } from '../ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { useExcelUploadPagos, type ExcelUploaderPagosProps } from '../../hooks/useExcelUploadPagos'
-import { cedulaLookupParaFila, cedulaParaLookup } from '../../utils/pagoExcelValidation'
+import { cedulaLookupParaFila, cedulaParaLookup, OBSERVACIONES_POR_CAMPO } from '../../utils/pagoExcelValidation'
 import { useNavigate } from 'react-router-dom'
 
 const inputClass = (isValid: boolean) =>
@@ -287,6 +287,9 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                   placeholder="Ej: V22546175"
                                   className={inputClass(row._validation.cedula?.isValid ?? true)}
                                 />
+                                {row._validation.cedula?.isValid === false && (
+                                  <p className="text-xs text-amber-700 mt-0.5">{OBSERVACIONES_POR_CAMPO.cedula ?? 'No cliente'}</p>
+                                )}
                               </td>
                               <td className="border p-2">
                                 <input
@@ -296,6 +299,9 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                   placeholder="DD/MM/YYYY"
                                   className={inputClass(row._validation.fecha_pago?.isValid ?? true)}
                                 />
+                                {row._validation.fecha_pago?.isValid === false && (
+                                  <p className="text-xs text-amber-700 mt-0.5">{OBSERVACIONES_POR_CAMPO.fecha_pago ?? 'No Fecha'}</p>
+                                )}
                               </td>
                               <td className="border p-2">
                                 <input
@@ -304,58 +310,71 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                   onChange={(e) => updateCellValue(row, 'monto_pagado', e.target.value)}
                                   className={inputClass(row._validation.monto_pagado?.isValid ?? true)}
                                 />
+                                {row._validation.monto_pagado?.isValid === false && (
+                                  <p className="text-xs text-amber-700 mt-0.5">{OBSERVACIONES_POR_CAMPO.monto_pagado ?? 'Monto inválido'}</p>
+                                )}
                               </td>
                               <td className="border p-2">
                                 <input
                                   type="text"
                                   value={row.numero_documento}
                                   onChange={(e) => updateCellValue(row, 'numero_documento', e.target.value)}
-                                  className={inputClass(true)}
+                                  className={inputClass(row._validation.numero_documento?.isValid !== false)}
                                   placeholder="Cualquier formato (ej. 740087…, BS./REF, con € $)"
                                   title="Cualquier formato aceptado. Solo no duplicados."
                                 />
                                 {row._validation.numero_documento?.isValid === false && (
-                                  <p className="text-xs text-amber-700 mt-0.5">Duplicado. No se aceptan duplicados.</p>
+                                  <p className="text-xs text-amber-700 mt-0.5">{OBSERVACIONES_POR_CAMPO.numero_documento ?? 'Duplicado Excel'}</p>
                                 )}
                               </td>
                               <td className="border p-2">
                                 {tieneCreditos ? (
-                                  <Select
-                                    key={`credito-${row._rowIndex}-${prestamosActivos.length}-${row.prestamo_id ?? 'n'}`}
-                                    value={valorCredito}
-                                    onValueChange={(v) => updateCellValue(row, 'prestamo_id', v)}
-                                  >
-                                    <SelectTrigger className="h-8 text-xs">
-                                      <SelectValue placeholder="Seleccionar crédito" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="none">— Seleccionar —</SelectItem>
-                                      {prestamosActivos.map((p) => (
-                                        <SelectItem key={p.id} value={String(p.id)}>
-                                          Crédito #{p.id}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
+                                  <>
+                                    <Select
+                                      key={`credito-${row._rowIndex}-${prestamosActivos.length}-${row.prestamo_id ?? 'n'}`}
+                                      value={valorCredito}
+                                      onValueChange={(v) => updateCellValue(row, 'prestamo_id', v)}
+                                    >
+                                      <SelectTrigger className="h-8 text-xs">
+                                        <SelectValue placeholder="Seleccionar crédito" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="none">— Seleccionar —</SelectItem>
+                                        {prestamosActivos.map((p) => (
+                                          <SelectItem key={p.id} value={String(p.id)}>
+                                            Crédito #{p.id}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                    {prestamosActivos.length > 1 && valorCredito === 'none' && (
+                                      <p className="text-xs text-amber-700 mt-0.5">{OBSERVACIONES_POR_CAMPO.prestamo_id ?? 'Crédito inválido'}</p>
+                                    )}
+                                  </>
                                 ) : (
-                                  <div className="flex items-center gap-1">
-                                    {cedulaLookup && cedulasBuscando.has(cedulaLookup) ? (
-                                      <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
-                                    ) : cedulaLookup && cedulaLookup.length >= 5 ? (
-                                      <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        className="h-7 text-xs px-2"
-                                        onClick={() => fetchSingleCedula(cedulaLookup)}
-                                        disabled={serviceStatus === 'offline'}
-                                      >
-                                        <Search className="h-3 w-3 mr-1" />
-                                        Buscar
-                                      </Button>
-                                    ) : null}
-                                    {(!cedulaLookup || cedulaLookup.length < 5) && (
-                                      <span className="text-xs text-gray-400">—</span>
+                                  <div className="flex flex-col gap-0.5">
+                                    <div className="flex items-center gap-1">
+                                      {cedulaLookup && cedulasBuscando.has(cedulaLookup) ? (
+                                        <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                                      ) : cedulaLookup && cedulaLookup.length >= 5 ? (
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          className="h-7 text-xs px-2"
+                                          onClick={() => fetchSingleCedula(cedulaLookup)}
+                                          disabled={serviceStatus === 'offline'}
+                                        >
+                                          <Search className="h-3 w-3 mr-1" />
+                                          Buscar
+                                        </Button>
+                                      ) : null}
+                                      {(!cedulaLookup || cedulaLookup.length < 5) && (
+                                        <span className="text-xs text-gray-400">—</span>
+                                      )}
+                                    </div>
+                                    {cedulaLookup && cedulaLookup.length >= 5 && !tieneCreditos && (
+                                      <p className="text-xs text-amber-700 mt-0.5">{OBSERVACIONES_POR_CAMPO.prestamo_id ?? 'Crédito inválido'}</p>
                                     )}
                                   </div>
                                 )}
@@ -373,6 +392,9 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                     <SelectItem value="si">Sí</SelectItem>
                                   </SelectContent>
                                 </Select>
+                                {row._validation.conciliado?.isValid === false && (
+                                  <p className="text-xs text-amber-700 mt-0.5">{OBSERVACIONES_POR_CAMPO.conciliado ?? 'Conciliación inválida'}</p>
+                                )}
                               </td>
                               <td className="border p-2">
                                 {savedRows.has(row._rowIndex) ? (

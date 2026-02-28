@@ -5,6 +5,20 @@
 
 import { validateExcelFile, validateExcelData, sanitizeFileName } from './excelValidation'
 
+/** Texto de observación por columna; se muestra solo en la celda correspondiente del Excel. Especifican exactamente qué falla. */
+export const OBSERVACIONES_POR_CAMPO: Record<string, string> = {
+  numero_documento: 'Duplicado Excel (mismo documento repetido en el archivo)',
+  fecha_pago: 'Fecha inválida o formato incorrecto (use DD/MM/YYYY)',
+  cedula: 'Cédula no existe en clientes',
+  monto_pagado: 'Monto inválido o ≤ 0',
+  prestamo_id: 'Crédito inválido (ID fuera de rango o elegir en lista)',
+  conciliado: 'Conciliación inválida',
+}
+
+/** Observaciones específicas al enviar a Revisar sin error de validación pero con contexto de crédito. */
+export const OBSERVACION_SIN_CREDITO = 'Cédula sin crédito activo'
+export const OBSERVACION_MULTIPLES_CREDITOS = 'Múltiples créditos; elegir uno en la lista'
+
 export interface PagoExcelRow {
   _rowIndex: number
   _validation: Record<string, { isValid: boolean; message?: string }>

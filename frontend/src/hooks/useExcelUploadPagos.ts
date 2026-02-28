@@ -12,6 +12,9 @@ import { prestamoService } from '../services/prestamoService'
 import { useIsMounted } from './useIsMounted'
 import {
   type PagoExcelRow,
+  OBSERVACIONES_POR_CAMPO,
+  OBSERVACION_SIN_CREDITO,
+  OBSERVACION_MULTIPLES_CREDITOS,
   convertirFechaExcelPago,
   convertirFechaParaBackendPago,
   validatePagoField,
@@ -29,31 +32,24 @@ const ESTADOS_PRESTAMO_ACTIVO = ['APROBADO', 'DESEMBOLSADO']
 // Límite de INTEGER en BD; si el valor parece número de documento (ej. 740087408451411), el backend devuelve 422
 const PRESTAMO_ID_MAX = 2147483647
 
-/** Mapeo campo → texto para Observaciones en Revisar Pagos */
-const OBSERVACIONES_POR_CAMPO: Record<string, string> = {
-  numero_documento: 'Duplicado Excel',
-  fecha_pago: 'No Fecha',
-  cedula: 'No cliente',
-  monto_pagado: 'Monto inválido',
-  prestamo_id: 'Crédito inválido',
-  conciliado: 'Conciliación inválida',
-}
-
 function observacionesDesdeCampos(campos: string[]): string {
   if (campos.length === 0) return 'Revisar'
   return campos.map((c) => OBSERVACIONES_POR_CAMPO[c] || c).join(' / ')
 }
 
-/** Infiere observaciones desde el mensaje de error del backend (422, 400, etc.) */
+/** Infiere observaciones desde el mensaje de error del backend (422, 400, etc.) para especificar exactamente qué falló. */
 function observacionesDesdeError(msg: string): string {
   const m = (msg || '').toLowerCase()
   const partes: string[] = []
-  if (/fecha|date|formato.*dd|yyyy|invalid.*date/.test(m)) partes.push('No Fecha')
-  if (/cedula|cliente|client|not found|no existe|no encontrad/.test(m)) partes.push('No cliente')
-  if (/monto|amount|debe ser|greater|positive/.test(m)) partes.push('Monto inválido')
-  if (/prestamo|credito|crédito|prestamo_id/.test(m)) partes.push('Crédito inválido')
-  if (/documento|duplicado|already exists|ya existe/.test(m)) partes.push('Duplicado BD')
-  return partes.length > 0 ? partes.join(' / ') : 'Revisar'
+  if (/fecha_pago|formato.*yyyy-mm-dd|fecha.*inválid|invalid.*date|date.*format/.test(m) || (m.includes('fecha') && m.includes('debe')))
+    partes.push(OBSERVACIONES_POR_CAMPO.fecha_pago)
+  else if (/fecha|date/.test(m)) partes.push(OBSERVACIONES_POR_CAMPO.fecha_pago)
+  if (/cedula|cliente|client|not found|no existe|no encontrad|encontrado/.test(m)) partes.push(OBSERVACIONES_POR_CAMPO.cedula)
+  if (/monto|amount|debe ser|greater|positive|≤ 0|menor.*cero/.test(m)) partes.push(OBSERVACIONES_POR_CAMPO.monto_pagado)
+  if (/prestamo_id|prestamo.*entre|entre 1 y|id fuera|número de documento.*crédito/.test(m)) partes.push(OBSERVACIONES_POR_CAMPO.prestamo_id)
+  else if (/prestamo|credito|crédito/.test(m)) partes.push(OBSERVACIONES_POR_CAMPO.prestamo_id)
+  if (/documento|duplicado|already exists|ya existe/.test(m)) partes.push('Duplicado BD (documento ya existe en base de datos)')
+  return partes.length > 0 ? partes.join(' / ') : 'Revisar (error de validación)'
 }
 
 export interface ExcelUploaderPagosProps {
@@ -375,7 +371,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
               institucion_bancaria: null,
               notas: null,
               conciliado: row.conciliado ?? false,
-              observaciones: 'Duplicado BD',
+              observaciones: 'Duplicado BD (documento ya existe en base de datos)',
               fila_origen: row._rowIndex,
             })
             setEnviadosRevisar((prev) => new Set([...prev, row._rowIndex]))
@@ -450,12 +446,12 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         } else {
           let observaciones: string
           if (duplicadosPendientesRevisar.has(row._rowIndex)) {
-            observaciones = 'Duplicado Excel'
+            observaciones = OBSERVACIONES_POR_CAMPO.numero_documento
           } else {
             const cedulaLookup = cedulaLookupParaFila(row.cedula || '', row.numero_documento || '')
             const cedulaSinGuion = cedulaLookup.replace(/-/g, '')
             const prestamos = prestamosPorCedula[cedulaLookup] || prestamosPorCedula[cedulaSinGuion] || prestamosPorCedula[cedulaLookup.toUpperCase()] || prestamosPorCedula[cedulaLookup.toLowerCase()] || []
-            observaciones = prestamos.length === 0 ? 'Crédito inválido' : prestamos.length > 1 ? 'Crédito inválido' : 'Revisar'
+            observaciones = prestamos.length === 0 ? OBSERVACION_SIN_CREDITO : prestamos.length > 1 ? OBSERVACION_MULTIPLES_CREDITOS : 'Revisar'
           }
           await pagoConErrorService.create({
             cedula_cliente: cedulaLookupParaFila(row.cedula || '', row.numero_documento || ''),
