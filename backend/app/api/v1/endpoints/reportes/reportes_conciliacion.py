@@ -1,17 +1,16 @@
 """
-Reporte Conciliación: Excel con datos de clientes, préstamos, pagos, cuotas y tabla temporal.
-- Carga Excel (columnas por cédula) → guardar en conciliacion_temporal.
-- Descarga Excel (columnas A–L) → al descargar se vacía conciliacion_temporal.
+Reportes de Conciliación mejorado: con filtros, PDF export y optimizaciones.
 """
 import io
 import re
-from datetime import date
+import calendar
+from datetime import date, datetime, timedelta
 from decimal import Decimal
-from typing import Any, List
+from typing import Any, List, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, Query, Body
 from fastapi.responses import Response
-from sqlalchemy import func, select, delete
+from sqlalchemy import func, select, delete, and_, or_
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -77,13 +76,13 @@ def cargar_conciliacion_temporal(
         tf = row.get("total_financiamiento")
         ta = row.get("total_abonos")
         if not _validar_cedula(cedula):
-            errores.append(f"Fila {i + 1}: cédula inválida")
+            errores.append(f"Fila {i + 1}: cedula invalida")
             continue
         if not _validar_numero(tf):
-            errores.append(f"Fila {i + 1}: total financiamiento debe ser un número >= 0")
+            errores.append(f"Fila {i + 1}: total financiamiento debe ser un numero >= 0")
             continue
         if not _validar_numero(ta):
-            errores.append(f"Fila {i + 1}: total abonos debe ser un número >= 0")
+            errores.append(f"Fila {i + 1}: total abonos debe ser un numero >= 0")
             continue
         filas_ok.append({
             "cedula": str(cedula).strip(),
@@ -107,19 +106,33 @@ def cargar_conciliacion_temporal(
     return {"ok": True, "filas_guardadas": len(filas_ok)}
 
 
-def _generar_excel_conciliacion(db: Session) -> bytes:
-    """Genera Excel reporte Conciliación (columnas A–L) y deja lista la eliminación de temporales."""
+def _generar_excel_conciliacion(
+    db: Session,
+    fecha_inicio: Optional[date] = None,
+    fecha_fin: Optional[date] = None,
+    cedulas_filter: Optional[List[str]] = None,
+) -> bytes:
+    """Genera Excel reporte Conciliación con filtros opcionales."""
     import openpyxl
 
-    prestamos = (
-        db.execute(
-            select(Prestamo)
-            .where(Prestamo.estado == "APROBADO")
-            .order_by(Prestamo.id)
-        )
-    ).scalars().all()
+    # Construir query base
+    query = select(Prestamo).where(Prestamo.estado == "APROBADO")
+    
+    # Filtro por fecha de aprobación (si está disponible)
+    if fecha_inicio:
+        query = query.where(Prestamo.fecha_aprobacion >= datetime.combine(fecha_inicio, datetime.min.time()))
+    if fecha_fin:
+        query = query.where(Prestamo.fecha_aprobacion <= datetime.combine(fecha_fin, datetime.max.time()))
+    
+    query = query.order_by(Prestamo.id)
+    prestamos = db.execute(query).scalars().all()
 
-    # Mapa cedula -> conciliacion_temporal (una fila por cédula; si hay varias tomamos la primera)
+    # Filtro por cédulas si se proporciona
+    if cedulas_filter:
+        cedulas_filter_set = {c.strip().upper() for c in cedulas_filter}
+        prestamos = [p for p in prestamos if (p.cedula or "").strip().upper() in cedulas_filter_set]
+
+    # Mapa cedula -> conciliacion_temporal
     concilia_rows = db.execute(select(ConciliacionTemporal)).fetchall()
     concilia_por_cedula: dict = {}
     for r in concilia_rows:
@@ -143,7 +156,6 @@ def _generar_excel_conciliacion(db: Session) -> bytes:
                 .group_by(Pago.prestamo_id)
             ).fetchall()
         )
-        # Total cuotas por préstamo: count y sum(monto)
         rows_tot = db.execute(
             select(Cuota.prestamo_id, func.count())
             .where(Cuota.prestamo_id.in_(ids))
@@ -151,7 +163,6 @@ def _generar_excel_conciliacion(db: Session) -> bytes:
         ).fetchall()
         for r in rows_tot:
             total_cuotas_num_map[r[0]] = int(r[1])
-        # Cuotas pagadas (estado PAGADO)
         rows_pag = db.execute(
             select(Cuota.prestamo_id, func.count(), func.coalesce(func.sum(Cuota.monto), 0))
             .where(Cuota.prestamo_id.in_(ids), Cuota.estado == "PAGADO")
@@ -160,7 +171,6 @@ def _generar_excel_conciliacion(db: Session) -> bytes:
         for r in rows_pag:
             cuotas_pagadas_num_map[r[0]] = int(r[1])
             cuotas_pagadas_monto_map[r[0]] = _safe_float(r[2])
-        # Cuotas pendientes (estado != PAGADO): count y sum(monto)
         rows_pend = db.execute(
             select(Cuota.prestamo_id, func.count(), func.coalesce(func.sum(Cuota.monto), 0))
             .where(Cuota.prestamo_id.in_(ids), Cuota.estado != "PAGADO")
@@ -212,17 +222,231 @@ def _generar_excel_conciliacion(db: Session) -> bytes:
     return buf.getvalue()
 
 
-@router.get("/exportar/conciliacion")
-def exportar_conciliacion(db: Session = Depends(get_db)):
-    """
-    Genera Excel de conciliación (columnas A–L) y elimina los registros de conciliacion_temporal.
-    """
-    content = _generar_excel_conciliacion(db)
-    db.execute(delete(ConciliacionTemporal))
-    db.commit()
-    hoy_str = date.today().isoformat()
-    return Response(
-        content=content,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename=reporte_conciliacion_{hoy_str}.xlsx"},
+def _generar_pdf_conciliacion(
+    db: Session,
+    fecha_inicio: Optional[date] = None,
+    fecha_fin: Optional[date] = None,
+) -> bytes:
+    """Genera PDF reporte Conciliación con resumen y gráficos."""
+    from reportlab.lib.pagesizes import letter, landscape
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import inch
+    from reportlab.lib import colors
+    
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=landscape(letter), topMargin=0.5*inch, bottomMargin=0.5*inch)
+    styles = getSampleStyleSheet()
+    story = []
+    
+    # Título
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=16,
+        textColor=colors.HexColor('#1f2937'),
+        spaceAfter=12,
+        alignment=1,  # CENTER
     )
+    story.append(Paragraph("Reporte de Conciliación", title_style))
+    
+    # Rango de fechas
+    fecha_txt = "Todas las fechas"
+    if fecha_inicio and fecha_fin:
+        fecha_txt = f"{fecha_inicio.isoformat()} a {fecha_fin.isoformat()}"
+    elif fecha_inicio:
+        fecha_txt = f"Desde {fecha_inicio.isoformat()}"
+    elif fecha_fin:
+        fecha_txt = f"Hasta {fecha_fin.isoformat()}"
+    story.append(Paragraph(f"<b>Periodo:</b> {fecha_txt}", styles['Normal']))
+    story.append(Paragraph(f"<b>Generado:</b> {date.today().isoformat()}", styles['Normal']))
+    story.append(Spacer(1, 0.2*inch))
+    
+    # Resumen general
+    story.append(Paragraph("<b>Resumen General</b>", styles['Heading2']))
+    
+    query = select(Prestamo).where(Prestamo.estado == "APROBADO")
+    if fecha_inicio:
+        query = query.where(Prestamo.fecha_aprobacion >= datetime.combine(fecha_inicio, datetime.min.time()))
+    if fecha_fin:
+        query = query.where(Prestamo.fecha_aprobacion <= datetime.combine(fecha_fin, datetime.max.time()))
+    
+    prestamos = db.execute(query).scalars().all()
+    ids = [p.id for p in prestamos]
+    
+    total_financiamiento = sum(_safe_float(p.total_financiamiento) for p in prestamos) if prestamos else 0
+    total_pagos_general = 0
+    total_cuotas_pagadas_general = 0
+    total_cuotas_pendientes_general = 0
+    
+    if ids:
+        total_pagos_general = _safe_float(db.scalar(
+            select(func.coalesce(func.sum(Pago.monto_pagado), 0))
+            .where(Pago.prestamo_id.in_(ids))
+        ))
+        total_cuotas_pagadas_general = _safe_float(db.scalar(
+            select(func.coalesce(func.sum(Cuota.monto), 0))
+            .where(Cuota.prestamo_id.in_(ids), Cuota.estado == "PAGADO")
+        ))
+        total_cuotas_pendientes_general = _safe_float(db.scalar(
+            select(func.coalesce(func.sum(Cuota.monto), 0))
+            .where(Cuota.prestamo_id.in_(ids), Cuota.estado != "PAGADO")
+        ))
+    
+    resumen_data = [
+        ["Metrica", "Valor"],
+        ["Total Prestamos", str(len(prestamos))],
+        ["Total Financiamiento", f"${total_financiamiento:,.2f}"],
+        ["Total Pagos", f"${total_pagos_general:,.2f}"],
+        ["Cuotas Pagadas ($)", f"${total_cuotas_pagadas_general:,.2f}"],
+        ["Cuotas Pendientes ($)", f"${total_cuotas_pendientes_general:,.2f}"],
+    ]
+    
+    resumen_table = Table(resumen_data, colWidths=[3*inch, 3*inch])
+    resumen_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3b82f6')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 11),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('FONTSIZE', (0, 1), (-1, -1), 10),
+    ]))
+    story.append(resumen_table)
+    story.append(Spacer(1, 0.3*inch))
+    
+    # Percentaje cobrado
+    if total_financiamiento > 0:
+        pct_cobrado = (total_pagos_general / total_financiamiento) * 100
+    else:
+        pct_cobrado = 0
+    
+    story.append(Paragraph(f"<b>Porcentaje Cobrado:</b> {pct_cobrado:.2f}%", styles['Normal']))
+    
+    buf.seek(0)
+    doc.build(story)
+    return buf.getvalue()
+
+
+@router.get("/exportar/conciliacion")
+def exportar_conciliacion(
+    db: Session = Depends(get_db),
+    formato: str = Query("excel", pattern="^(excel|pdf)$"),
+    fecha_inicio: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    fecha_fin: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    cedulas: Optional[str] = Query(None, description="Cedulas separadas por coma"),
+):
+    """
+    Genera reporte Conciliación en Excel o PDF con filtros opcionales.
+    Al descargar Excel se eliminan automáticamente los datos temporales.
+    
+    Filtros:
+    - fecha_inicio, fecha_fin: rango de fechas de aprobación (YYYY-MM-DD)
+    - cedulas: lista de cédulas separadas por coma (ej: V12345678,E98765432)
+    """
+    # Parsear fechas
+    fi = None
+    ff = None
+    if fecha_inicio:
+        try:
+            fi = date.fromisoformat(fecha_inicio)
+        except ValueError:
+            pass
+    if fecha_fin:
+        try:
+            ff = date.fromisoformat(fecha_fin)
+        except ValueError:
+            pass
+    
+    # Parsear cédulas
+    cedulas_list = None
+    if cedulas:
+        cedulas_list = [c.strip() for c in cedulas.split(",") if c.strip()]
+    
+    hoy_str = date.today().isoformat()
+    
+    if formato == "excel":
+        content = _generar_excel_conciliacion(db, fi, ff, cedulas_list)
+        # Borra temporales al descargar Excel
+        db.execute(delete(ConciliacionTemporal))
+        db.commit()
+        return Response(
+            content=content,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename=reporte_conciliacion_{hoy_str}.xlsx"},
+        )
+    else:  # PDF
+        content = _generar_pdf_conciliacion(db, fi, ff)
+        return Response(
+            content=content,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=reporte_conciliacion_{hoy_str}.pdf"},
+        )
+
+
+@router.get("/conciliacion/resumen")
+def get_conciliacion_resumen(
+    db: Session = Depends(get_db),
+    fecha_inicio: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    fecha_fin: Optional[str] = Query(None, description="YYYY-MM-DD"),
+):
+    """
+    Obtiene resumen de conciliación sin descargar reporte.
+    Útil para mostrar en dashboard o vista previa.
+    """
+    fi = None
+    ff = None
+    if fecha_inicio:
+        try:
+            fi = date.fromisoformat(fecha_inicio)
+        except ValueError:
+            pass
+    if fecha_fin:
+        try:
+            ff = date.fromisoformat(fecha_fin)
+        except ValueError:
+            pass
+    
+    query = select(Prestamo).where(Prestamo.estado == "APROBADO")
+    if fi:
+        query = query.where(Prestamo.fecha_aprobacion >= datetime.combine(fi, datetime.min.time()))
+    if ff:
+        query = query.where(Prestamo.fecha_aprobacion <= datetime.combine(ff, datetime.max.time()))
+    
+    prestamos = db.execute(query).scalars().all()
+    ids = [p.id for p in prestamos]
+    
+    total_financiamiento = sum(_safe_float(p.total_financiamiento) for p in prestamos) if prestamos else 0
+    total_pagos = 0
+    total_cuotas_pagadas = 0
+    total_cuotas_pendientes = 0
+    
+    if ids:
+        total_pagos = _safe_float(db.scalar(
+            select(func.coalesce(func.sum(Pago.monto_pagado), 0))
+            .where(Pago.prestamo_id.in_(ids))
+        ))
+        total_cuotas_pagadas = _safe_float(db.scalar(
+            select(func.coalesce(func.sum(Cuota.monto), 0))
+            .where(Cuota.prestamo_id.in_(ids), Cuota.estado == "PAGADO")
+        ))
+        total_cuotas_pendientes = _safe_float(db.scalar(
+            select(func.coalesce(func.sum(Cuota.monto), 0))
+            .where(Cuota.prestamo_id.in_(ids), Cuota.estado != "PAGADO")
+        ))
+    
+    porcentaje_cobrado = (total_pagos / total_financiamiento * 100) if total_financiamiento > 0 else 0
+    
+    return {
+        "fecha_inicio": fi.isoformat() if fi else None,
+        "fecha_fin": ff.isoformat() if ff else None,
+        "cantidad_prestamos": len(prestamos),
+        "total_financiamiento": round(total_financiamiento, 2),
+        "total_pagos": round(total_pagos, 2),
+        "total_cuotas_pagadas": round(total_cuotas_pagadas, 2),
+        "total_cuotas_pendientes": round(total_cuotas_pendientes, 2),
+        "porcentaje_cobrado": round(porcentaje_cobrado, 2),
+        "saldo_pendiente": round(total_financiamiento - total_pagos, 2),
+    }
