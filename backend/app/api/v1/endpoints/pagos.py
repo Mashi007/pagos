@@ -349,7 +349,8 @@ async def upload_excel_pagos(
     if not file.filename or not file.filename.lower().endswith((".xlsx", ".xls")):
         raise HTTPException(status_code=400, detail="Debe subir un archivo Excel (.xlsx o .xls)")
     MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB (alineado con frontend)
-    MAX_ROWS = 10000  # Maximo filas de datos (alineado con frontend)
+    MAX_ROWS = 10000  # Límite máximo de filas (rechazo si se supera)
+    MAX_ROWS_RECOMENDADO = 2500  # Sin sobrecarga ni timeouts en servidor típico
     try:
         import openpyxl
         content = await file.read()
@@ -366,7 +367,13 @@ async def upload_excel_pagos(
         if len(rows) > MAX_ROWS:
             raise HTTPException(
                 status_code=400,
-                detail=f"El archivo tiene demasiadas filas ({len(rows)}). MÃ¡ximo permitido: {MAX_ROWS}.",
+                detail=f"El archivo tiene demasiadas filas ({len(rows)}). Máximo permitido: {MAX_ROWS}. Para evitar sobrecarga, se recomienda hasta {MAX_ROWS_RECOMENDADO} filas.",
+            )
+        if len(rows) > MAX_ROWS_RECOMENDADO:
+            logger.warning(
+                "Carga masiva con %s filas (recomendado hasta %s). Puede haber timeouts o lentitud.",
+                len(rows),
+                MAX_ROWS_RECOMENDADO,
             )
 
         def _looks_like_cedula(v: Any) -> bool:
@@ -517,6 +524,26 @@ async def upload_excel_pagos(
         # --- FASE 2: Validar documentos (única regla: no duplicados) e insertar ---
         numeros_doc_en_lote: set[str] = set()
         documentos_ya_en_bd: set[str] = set()
+        # Precarga en lote: documentos del archivo que ya existen en BD (evita N consultas)
+        docs_en_archivo: set[str] = set()
+        for item in FilasParseadas:
+            numero_doc = (item.get("numero_doc_raw") or "").strip()
+            if not numero_doc or numero_doc.upper() in ("NAN", "NONE", "UNDEFINED", "NA", "N/A"):
+                continue
+            numero_doc_norm = _normalizar_numero_documento(numero_doc)
+            if numero_doc_norm is None:
+                numero_doc_norm = _canonical_numero_documento(numero_doc) or numero_doc
+            numero_doc_norm = _truncar_numero_documento(numero_doc_norm)
+            if numero_doc_norm:
+                docs_en_archivo.add(numero_doc_norm)
+        if docs_en_archivo:
+            chunk_size = 1000
+            docs_list = list(docs_en_archivo)
+            for ichunk in range(0, len(docs_list), chunk_size):
+                chunk = docs_list[ichunk : ichunk + chunk_size]
+                existentes = db.execute(select(Pago.numero_documento).where(Pago.numero_documento.in_(chunk))).scalars().all()
+                documentos_ya_en_bd.update(str(d) for d in existentes if d)
+
         registros = 0
         pagos_con_prestamo: list[Pago] = []
 
@@ -543,15 +570,9 @@ async def upload_excel_pagos(
                 errores_detalle.append({"fila": i, "cedula": cedula, "error": "Nº documento duplicado en este archivo. Regla general: no se aceptan duplicados en documentos.", "datos": datos_fila})
                 continue
 
-            # Validación post-documentos: duplicado en BD (caché para no repetir consulta por la misma clave)
+            # Validación post-documentos: duplicado en BD (documentos_ya_en_bd precargado en lote)
             if key_doc:
                 if key_doc in documentos_ya_en_bd:
-                    datos_fila = {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}
-                    errores.append(f"Fila {i}: Ya existe un pago con ese Nº de documento")
-                    errores_detalle.append({"fila": i, "cedula": cedula, "error": "Ya existe un pago con ese Nº de documento. Regla general: no se aceptan duplicados en documentos.", "datos": datos_fila})
-                    continue
-                if _numero_documento_ya_existe(db, numero_doc_norm):
-                    documentos_ya_en_bd.add(key_doc)
                     datos_fila = {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}
                     errores.append(f"Fila {i}: Ya existe un pago con ese Nº de documento")
                     errores_detalle.append({"fila": i, "cedula": cedula, "error": "Ya existe un pago con ese Nº de documento. Regla general: no se aceptan duplicados en documentos.", "datos": datos_fila})
@@ -618,6 +639,8 @@ async def upload_excel_pagos(
             "errores_total": total_errores,
             "errores_detalle_total": total_errores_detalle,
             "errores_truncados": total_errores > errores_limit or total_errores_detalle > errores_detalle_limit,
+            "max_filas_recomendado": MAX_ROWS_RECOMENDADO,
+            "max_filas_permitido": MAX_ROWS,
         }
     except Exception as e:
         db.rollback()

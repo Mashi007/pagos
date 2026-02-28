@@ -166,6 +166,9 @@ export function ExcelUploader({ onClose, onSuccess }: ExcelUploaderProps) {
                   <p className="text-xs text-gray-500 mt-1">
                     Formatos aceptados: .xlsx o .xls. Las filas con cédula vacía o monto ≤ 0 se omiten.
                   </p>
+                  <p className="text-xs text-amber-600 mt-1 font-medium">
+                    Recomendado: hasta 2.500 filas para evitar sobrecarga y timeouts. Máximo permitido: 10.000 filas.
+                  </p>
                 </div>
               </CardContent>
             </Card>

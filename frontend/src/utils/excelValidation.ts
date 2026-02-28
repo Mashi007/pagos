@@ -5,7 +5,8 @@
 
 // Límites de seguridad
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
-const MAX_ROWS = 10000 // Máximo 10,000 filas
+const MAX_ROWS = 10000 // Máximo 10,000 filas (rechazo si se supera)
+export const MAX_ROWS_RECOMENDADO_CARGA_MASIVA = 2500 // Sin sobrecarga ni timeouts
 const MAX_COLUMNS = 100 // Máximo 100 columnas
 const ALLOWED_EXTENSIONS = ['.xlsx', '.xls']
 const ALLOWED_MIME_TYPES = [
@@ -170,8 +171,11 @@ export function validateExcelData(data: any[]): ExcelValidationResult {
   if (data.length > MAX_ROWS) {
     return {
       isValid: false,
-      error: `El archivo contiene demasiadas filas de datos (${data.length}). Máximo permitido: ${MAX_ROWS}`
+      error: `El archivo contiene demasiadas filas de datos (${data.length}). Máximo permitido: ${MAX_ROWS}. Recomendado hasta ${MAX_ROWS_RECOMENDADO_CARGA_MASIVA} para evitar sobrecarga.`
     }
+  }
+  if (data.length > MAX_ROWS_RECOMENDADO_CARGA_MASIVA) {
+    warnings.push(`El archivo tiene ${data.length} filas. Se recomienda hasta ${MAX_ROWS_RECOMENDADO_CARGA_MASIVA} para evitar timeouts y sobrecarga.`)
   }
 
   // 3. Validar que no haya filas excesivamente largas
