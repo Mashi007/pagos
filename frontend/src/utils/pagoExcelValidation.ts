@@ -1,7 +1,7 @@
 /**
- * ValidaciÃ³n para carga masiva de pagos desde Excel.
- * Columnas: CÃ©dula, Fecha de pago, Monto, Documento (NÂº documento), ID PrÃ©stamo (opcional).
- * La coincidencia se realiza por cÃ©dula. Sin columna Nombre.
+ * Validación para carga masiva de pagos desde Excel.
+ * Columnas: Cédula, Fecha de pago, Monto, Documento (Nº documento), ID Préstamo (opcional).
+ * Nº documento: se acepta CUALQUIER formato. ÚNICA regla: en el sistema ningún documento puede estar duplicado.
  */
 
 import { validateExcelFile, validateExcelData, sanitizeFileName } from './excelValidation'
@@ -104,8 +104,8 @@ function limpiarDocumento(s: string): string {
 
 /**
  * Convierte CUALQUIER valor a string para uso como número de documento.
- * REGLA: documento acepta CUALQUIER FORMATO. Única restricción: NO DUPLICADO (archivo o BD).
- * - No se valida formato (longitud, caracteres, etc.); solo se normaliza para comparación.
+ * Reconocimiento genérico: BNC/, BINANCE, VE/, ZELLE/, numérico, BS. BNC / REF., etc.
+ * Única regla: NO DUPLICADO (archivo o BD). No se valida formato; solo se normaliza para comparación.
  */
 export function normalizarNumeroDocumento(val: unknown): string {
   if (val == null || val === '') return ''
@@ -117,17 +117,24 @@ export function normalizarNumeroDocumento(val: unknown): string {
     else return ''
   } else if (typeof val === 'number') {
     if (Number.isNaN(val)) return ''
-    if (Math.abs(val) >= 1e11)
-      try { s = Math.abs(val) >= 1e15 ? BigInt(Math.round(val)).toString() : String(Math.round(val)) } catch { s = val.toFixed(0) }
-    else s = Math.round(val).toString()
+    // Excel puede enviar números largos (ej. 740087415441562) como number; conservar todos los dígitos
+    if (Math.abs(val) >= 1e11) {
+      try {
+        s = Math.abs(val) >= 1e15 ? BigInt(Math.round(val)).toString() : String(Math.round(val))
+      } catch {
+        s = val.toFixed(0)
+      }
+    } else {
+      s = Math.round(val).toString()
+    }
   } else {
     s = String(val)
   }
   s = s.trim()
   if (s.startsWith("'")) s = s.slice(1).trim()
   s = limpiarDocumento(s)
-  if (!s || s.toLowerCase() === 'nan' || s.toLowerCase() === 'undefined') return ''
-  // Solo expandir notación científica para que el mismo número no tenga dos claves (ej. "7.4E+14" vs "740...")
+  if (!s || /^(nan|none|undefined|na|n\/a)$/i.test(s)) return ''
+  // Notación científica → dígitos (mismo número = misma clave)
   if (/^\d+\.?\d*[eE][+-]?\d+$/.test(s)) {
     try {
       const n = parseFloat(s)
@@ -137,6 +144,8 @@ export function normalizarNumeroDocumento(val: unknown): string {
       /* mantener s */
     }
   }
+  // Colapsar espacios internos (alineado con backend: misma ref con distinto espaciado = duplicado)
+  s = s.replace(/\s+/g, ' ').trim()
   return s
 }
 
@@ -149,9 +158,13 @@ export function validatePagoField(
 
   switch (field) {
     case 'cedula':
-      if (!strVal) return { isValid: false, message: 'CÃ©dula requerida' }
+      if (!strVal) return { isValid: false, message: 'Cédula requerida' }
       const c = strVal.replace(/[:$]/g, '')
-      return /^[VEJZ]\d{6,11}$/i.test(c) ? { isValid: true } : { isValid: false, message: 'Formato E/V/J/Z + 6-11 dÃ­gitos' }
+      if (/^[VEJZ]\d{6,11}$/i.test(c)) return { isValid: true }
+      // Si parece Nº documento (numérico largo, BNC/, ZELLE/, etc.) orientar al usuario
+      if (/^\d{12,}$/.test(c) || /^(BNC|ZELLE|BINANCE|VE|BS\.)\s*\/?/i.test(c))
+        return { isValid: false, message: 'Parece un Nº de documento. Use la columna Cédula para V/E/J/Z + dígitos y la columna Nº documento para la referencia.' }
+      return { isValid: false, message: 'Formato E/V/J/Z + 6-11 dígitos' }
 
     case 'fecha_pago':
       if (!strVal) return { isValid: false, message: 'Fecha de pago requerida' }
@@ -177,10 +190,11 @@ export function validatePagoField(
     }
 
     case 'numero_documento': {
-      // REGLA ESTRICTA: NINGÚN DOCUMENTO DUPLICADO (ni en archivo ni en BD). Cualquier formato aceptado.
+      // Cualquier formato aceptado. ÚNICA regla: en el sistema ningún documento puede estar duplicado.
       const docNorm = (strVal === 'NaN' || strVal === 'nan' || strVal === 'undefined') ? '' : (normalizarNumeroDocumento(value) || strVal).trim() || ''
-      if (_options?.documentosExistentes?.has(docNorm)) return { isValid: false, message: 'Documento ya existe en BD. No se permiten duplicados.' }
-      if (_options?.documentosEnArchivo?.has(docNorm)) return { isValid: false, message: 'Documento duplicado en este archivo. No se permiten duplicados.' }
+      if (!docNorm) return { isValid: true } // Vacío permitido; no cuenta como duplicado
+      if (_options?.documentosExistentes?.has(docNorm)) return { isValid: false, message: 'Este documento ya existe en el sistema. Ningún documento puede estar duplicado.' }
+      if (_options?.documentosEnArchivo?.has(docNorm)) return { isValid: false, message: 'Documento duplicado en este archivo. Ningún documento puede estar duplicado.' }
       return { isValid: true }
     }
 

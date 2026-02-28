@@ -158,7 +158,7 @@ export function ExcelUploader({ onClose, onSuccess }: ExcelUploaderProps) {
                     <li><strong>ID Préstamo</strong> (obligatorio si la persona tiene más de un préstamo; número)</li>
                     <li><strong>Fecha de pago</strong> (fecha)</li>
                     <li><strong>Monto pagado</strong> (número, mayor a 0)</li>
-                    <li><strong>Número de documento</strong> (referencia del pago)</li>
+                    <li><strong>Número de documento</strong> (referencia del pago; cualquier formato: BNC, ZELLE, números, etc.; única restricción: no duplicados)</li>
                   </ol>
                   <p className="text-xs text-amber-600 mt-2 font-medium">
                     Si una persona tiene varios préstamos, debe indicar el ID del préstamo al que aplica cada pago.

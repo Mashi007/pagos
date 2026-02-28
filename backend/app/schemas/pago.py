@@ -16,10 +16,18 @@ class PagoCreate(BaseModel):
     prestamo_id: Optional[int] = None
     fecha_pago: date
     monto_pagado: Decimal
-    numero_documento: str  # Cualquier formato aceptado. Única restricción: no duplicado (unique en BD).
+    numero_documento: str  # Cualquier formato. ÚNICA regla: no duplicado en el sistema.
     institucion_bancaria: Optional[str] = None
     notas: Optional[str] = None
     conciliado: Optional[bool] = None  # Sí/No en carga masiva
+
+    @field_validator("numero_documento", mode="before")
+    @classmethod
+    def numero_documento_cualquier_formato(cls, v: object) -> str:
+        """Acepta cualquier formato; no se valida contenido. Solo se normaliza a string."""
+        if v is None:
+            return ""
+        return str(v).strip()
 
     @field_validator("prestamo_id")
     @classmethod
@@ -39,11 +47,20 @@ class PagoUpdate(BaseModel):
     prestamo_id: Optional[int] = None
     fecha_pago: Optional[date] = None
     monto_pagado: Optional[Decimal] = None
-    numero_documento: Optional[str] = None
+    numero_documento: Optional[str] = None  # Cualquier formato. ÚNICA regla: no duplicado en el sistema.
     institucion_bancaria: Optional[str] = None
     notas: Optional[str] = None
     conciliado: Optional[bool] = None
     verificado_concordancia: Optional[str] = None  # SI / NO
+
+    @field_validator("numero_documento", mode="before")
+    @classmethod
+    def numero_documento_cualquier_formato(cls, v: object) -> Optional[str]:
+        """Acepta cualquier formato; no se valida contenido. Solo se normaliza a string o None."""
+        if v is None:
+            return None
+        s = str(v).strip()
+        return s if s else None
 
     @field_validator("prestamo_id")
     @classmethod

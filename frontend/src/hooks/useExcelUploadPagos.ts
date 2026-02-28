@@ -682,8 +682,8 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             if (!validation.isValid) hasErrors = true
           }
           rowData._validation.prestamo_id = { isValid: true }
-          // REGLA ESTRICTA: ningún documento duplicado (incl. vacío: solo una fila puede tener documento vacío)
-          documentosEnArchivo.add(numeroDoc && numeroDoc !== 'NaN' ? numeroDoc : '')
+          // Única regla: no duplicados. Solo documentos no vacíos; varias filas sin documento se permiten.
+          if (numeroDoc && numeroDoc !== 'NaN') documentosEnArchivo.add(numeroDoc)
           rowData._hasErrors = hasErrors
           processed.push(rowData)
         }
