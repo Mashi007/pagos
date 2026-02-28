@@ -13,6 +13,9 @@ MAX_FILTER_STRING_LEN = 200
 # Cache state (shared across dashboard endpoints)
 _DASHBOARD_ADMIN_CACHE: dict[str, Any] = {"data": None, "refreshed_at": None}
 _CACHE_KPIS: dict[str, Any] = {"data": None, "refreshed_at": None}
+# Opciones de filtros: TTL corto (5 min) para evitar golpes repetidos al cargar dashboard
+_OPCIONES_FILTROS_TTL_SEC = 300
+_CACHE_OPCIONES_FILTROS: dict[str, Any] = {"data": None, "refreshed_at": None}
 _CACHE_MOROSIDAD_DIA: dict[str, Any] = {"data": None, "refreshed_at": None}
 _CACHE_FINANCIAMIENTO_RANGOS: dict[str, Any] = {"data": None, "refreshed_at": None}
 _CACHE_COMPOSICION_MOROSIDAD: dict[str, Any] = {"data": None, "refreshed_at": None}

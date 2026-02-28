@@ -2,6 +2,12 @@
 Endpoints de pagos. Datos reales desde BD.
 - Tabla pagos: GET/POST/PUT/DELETE /pagos/ (listado y CRUD para /pagos/pagos).
 - GET /pagos/kpis, /stats, /ultimos; POST /upload, /conciliacion/upload, /{id}/aplicar-cuotas.
+
+Nº documento / referencia de pago:
+- Reconocimiento genérico: se acepta cualquier formato (BNC/, BINANCE, VE/, ZELLE/, numérico,
+  BS. BNC / REF., etc.). No se valida formato ni se rechaza por contenido.
+- Única regla de negocio: no duplicados. Misma clave canónica (trim + colapsar espacios + truncar 100)
+  implica duplicado en archivo o en BD → rechazo. Varias filas sin documento se permiten.
 """
 import calendar
 import io
@@ -14,7 +20,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query, HTTPException, UploadFile, File, Body
 from pydantic import BaseModel
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -34,32 +40,57 @@ class MoverRevisarPagosBody(BaseModel):
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
+# Límite de la columna numero_documento y referencia_pago en tabla pagos (String(100))
+_MAX_LEN_NUMERO_DOCUMENTO = 100
+
+
+def _canonical_numero_documento(val: Any) -> Optional[str]:
+    """
+    Clave canónica para Nº documento: reconocimiento genérico de cualquier formato.
+    ÚNICA REGLA DE NEGOCIO: no duplicados (misma clave = duplicado).
+    - Acepta cualquier formato: BNC/, BINANCE, VE/, ZELLE/, numérico, BS. BNC / REF., etc.
+    - Normalización solo para comparación: trim, colapsar espacios internos, truncar 100.
+    - No se valida formato; no se rechaza por contenido. Vacío/NAN/None → None.
+    """
+    if val is None or val == "":
+        return None
+    s = str(val).strip()
+    if not s or s.upper() in ("NAN", "NONE", "UNDEFINED", "NA", "N/A"):
+        return None
+    # Colapsar espacios/tabs/saltos internos a un solo espacio (misma ref con distinto espaciado = duplicado)
+    s = re.sub(r"\s+", " ", s).strip()
+    if not s:
+        return None
+    return s[:_MAX_LEN_NUMERO_DOCUMENTO] if len(s) > _MAX_LEN_NUMERO_DOCUMENTO else s
+
 
 def _normalizar_numero_documento(val: Any) -> Optional[str]:
-    """Normaliza Nº documento para guardado y comparación.
-    REGLA: documento ACEPTA CUALQUIER FORMATO. Lo ÚNICO que no se acepta es DUPLICADO (unique en BD).
-    Trim y truncado a 100 chars; sin validación de formato."""
+    """
+    Normaliza Nº documento para guardado y comparación. Delega en clave canónica.
+    REGLA: cualquier formato aceptado; única restricción = no duplicados.
+    Para compatibilidad con Excel: notación científica → string de dígitos (mismo número = misma clave).
+    """
     if val is None or val == "":
         return None
     s = (str(val) or "").strip()
-    if not s or s.upper() in ("NAN", "NONE", "UNDEFINED"):
+    if not s or s.upper() in ("NAN", "NONE", "UNDEFINED", "NA", "N/A"):
         return None
+    # Solo normalizar notación científica a dígitos (evitar 7.4e14 vs 740087415441562 como claves distintas)
     if re.match(r"^\d+\.?\d*[eE][+-]?\d+$", s):
         try:
             n = float(s)
             if n != n:
                 return None
-            return str(int(round(n)))
+            s = str(int(round(n)))
         except (ValueError, OverflowError):
-            return s
-    if s.isdigit():
-        return s
-    # Cualquier otro formato (zelle/, BS./VZLA.REF, alfanumérico) se acepta tal cual
-    return s
+            pass
+    # Aplicar misma canonicalización que _canonical_numero_documento (trim + colapsar espacios + truncar)
+    s = re.sub(r"\s+", " ", s).strip()
+    if not s:
+        return None
+    return s[:_MAX_LEN_NUMERO_DOCUMENTO] if len(s) > _MAX_LEN_NUMERO_DOCUMENTO else s
 
 
-# Límite de la columna numero_documento y referencia_pago en tabla pagos (String(100))
-_MAX_LEN_NUMERO_DOCUMENTO = 100
 # Límite de INTEGER en PostgreSQL; valores mayores (ej. número de documento) provocan 500
 _PRESTAMO_ID_MAX = 2147483647
 
@@ -402,19 +433,21 @@ async def upload_excel_pagos(
                 # Misma normalización que crear/actualizar (notación científica → dígitos; resto fiel). Truncar a 100 para no exceder BD.
                 numero_doc_norm = _normalizar_numero_documento(numero_doc) if (numero_doc or "").strip() else None
                 if numero_doc_norm is None and (numero_doc or "").strip():
-                    numero_doc_norm = (numero_doc or "").strip() or None
+                    raw = (numero_doc or "").strip()
+                    if raw.upper() not in ("NAN", "NONE", "UNDEFINED", "NA", "N/A"):
+                        numero_doc_norm = _canonical_numero_documento(numero_doc) or raw
                 numero_doc_norm = _truncar_numero_documento(numero_doc_norm) if numero_doc_norm else None
-                # REGLA ESTRICTA: ningún documento duplicado (ni en este archivo ni en BD). Clave única para comparar incluye vacío.
-                key_doc = (numero_doc_norm or "").strip() or ""
-                if key_doc in numeros_doc_en_lote:
+                # ÚNICA REGLA: no duplicados. Solo aplica a documentos no vacíos; varias filas sin documento se permiten.
+                key_doc = (numero_doc_norm or "").strip()
+                if key_doc and key_doc in numeros_doc_en_lote:
                     datos_fila = {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}
-                    errores.append(f"Fila {i + 2}: NÂº documento duplicado en este archivo")
-                    errores_detalle.append({"fila": i + 2, "cedula": cedula, "error": "NÂº documento duplicado en este archivo. El NÂº documento no puede repetirse.", "datos": datos_fila})
+                    errores.append(f"Fila {i + 2}: Nº documento duplicado en este archivo")
+                    errores_detalle.append({"fila": i + 2, "cedula": cedula, "error": "Nº documento duplicado en este archivo. El Nº documento no puede repetirse.", "datos": datos_fila})
                     continue
-                if numero_doc_norm and _numero_documento_ya_existe(db, numero_doc_norm):
+                if key_doc and _numero_documento_ya_existe(db, numero_doc_norm):
                     datos_fila = {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}
-                    errores.append(f"Fila {i + 2}: Ya existe un pago con ese NÂº de documento")
-                    errores_detalle.append({"fila": i + 2, "cedula": cedula, "error": "Ya existe un pago con ese NÂº de documento. El NÂº documento no puede repetirse.", "datos": datos_fila})
+                    errores.append(f"Fila {i + 2}: Ya existe un pago con ese Nº de documento")
+                    errores_detalle.append({"fila": i + 2, "cedula": cedula, "error": "Ya existe un pago con ese Nº de documento. El Nº documento no puede repetirse.", "datos": datos_fila})
                     continue
 
                 # Si la persona tiene más de un préstamo, prestamo_id es obligatorio
@@ -451,7 +484,8 @@ async def upload_excel_pagos(
                 registros += 1
                 if prestamo_id and monto > 0:
                     pagos_con_prestamo.append(p)
-                numeros_doc_en_lote.add(key_doc)
+                if key_doc:
+                    numeros_doc_en_lote.add(key_doc)
             except Exception as e:
                 msg = str(e)
                 errores.append(f"Fila {i + 2}: {msg}")
@@ -539,14 +573,16 @@ async def upload_conciliacion(
             if not row or (row[0] is None and row[1] is None):
                 continue
             try:
-                numero_doc = str(row[1]).strip() if len(row) > 1 and row[1] is not None else ""
-                if not numero_doc:
+                numero_doc_raw = str(row[1]).strip() if len(row) > 1 and row[1] is not None else ""
+                if not numero_doc_raw:
                     continue
+                # Misma clave canónica que carga/crear: cualquier formato reconocido, búsqueda por valor normalizado
+                numero_doc = _truncar_numero_documento(_normalizar_numero_documento(numero_doc_raw)) or numero_doc_raw.strip()
                 pago_row = db.execute(
                     select(Pago).where(Pago.numero_documento == numero_doc).limit(1)
                 ).first()
                 if not pago_row:
-                    documentos_no_encontrados.append(numero_doc)
+                    documentos_no_encontrados.append(numero_doc_raw)
                     continue
                 pago = pago_row[0]
                 pago.conciliado = True
@@ -623,73 +659,96 @@ def get_pagos_kpis(
             Cliente.estado == "ACTIVO",
             Prestamo.estado == "APROBADO",
         ]
+        base_where = and_(*conds_activo)
 
-        # 1) Monto a cobrar en el mes en transcurso (solo clientes ACTIVOS)
-        monto_a_cobrar_mes = db.scalar(
-            select(func.coalesce(func.sum(Cuota.monto), 0))
-            .select_from(Cuota)
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .join(Cliente, Prestamo.cliente_id == Cliente.id)
-            .where(
-                and_(*conds_activo),
-                Cuota.fecha_vencimiento >= inicio_mes,
-                Cuota.fecha_vencimiento <= fin_mes,
-            )
-        ) or 0
+        # Una sola consulta con agregación condicional para los 5 montos (menos round-trips a BD)
+        aggr = select(
+            func.coalesce(
+                func.sum(
+                    case(
+                        (
+                            and_(
+                                Cuota.fecha_vencimiento >= inicio_mes,
+                                Cuota.fecha_vencimiento <= fin_mes,
+                            ),
+                            Cuota.monto,
+                        ),
+                        else_=0,
+                    )
+                ),
+                0,
+            ).label("monto_a_cobrar_mes"),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (
+                            and_(
+                                Cuota.fecha_pago.isnot(None),
+                                Cuota.fecha_pago >= inicio_mes,
+                                Cuota.fecha_pago <= fecha_referencia,
+                            ),
+                            Cuota.monto,
+                        ),
+                        else_=0,
+                    )
+                ),
+                0,
+            ).label("monto_cobrado_mes"),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (
+                            and_(
+                                Cuota.fecha_vencimiento >= inicio_mes,
+                                Cuota.fecha_vencimiento <= fin_mes,
+                                Cuota.fecha_vencimiento < fecha_referencia,
+                            ),
+                            Cuota.monto,
+                        ),
+                        else_=0,
+                    )
+                ),
+                0,
+            ).label("total_vencido_mes"),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (
+                            and_(
+                                Cuota.fecha_vencimiento >= inicio_mes,
+                                Cuota.fecha_vencimiento <= fin_mes,
+                                Cuota.fecha_vencimiento < fecha_referencia,
+                                Cuota.fecha_pago.is_(None),
+                            ),
+                            Cuota.monto,
+                        ),
+                        else_=0,
+                    )
+                ),
+                0,
+            ).label("no_cobrado_mes"),
+            func.coalesce(
+                func.sum(case((Cuota.fecha_pago.is_(None), Cuota.monto), else_=0)),
+                0,
+            ).label("cartera_pendiente"),
+        ).select_from(Cuota).join(Prestamo, Cuota.prestamo_id == Prestamo.id).join(
+            Cliente, Prestamo.cliente_id == Cliente.id
+        ).where(base_where)
 
-        # 2) Monto cobrado = pagado en el mes (solo clientes ACTIVOS)
-        monto_cobrado_mes = db.scalar(
-            select(func.coalesce(func.sum(Cuota.monto), 0))
-            .select_from(Cuota)
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .join(Cliente, Prestamo.cliente_id == Cliente.id)
-            .where(
-                and_(*conds_activo),
-                Cuota.fecha_pago.isnot(None),
-                func.date(Cuota.fecha_pago) >= inicio_mes,
-                func.date(Cuota.fecha_pago) <= fecha_referencia,
-            )
-        ) or 0
+        row = db.execute(aggr).one()
+        monto_a_cobrar_mes = row.monto_a_cobrar_mes or 0
+        monto_cobrado_mes = row.monto_cobrado_mes or 0
+        total_vencido_mes = row.total_vencido_mes or 0
+        no_cobrado_mes = row.no_cobrado_mes or 0
+        cartera_pendiente = row.cartera_pendiente or 0
 
-        # 3) Morosidad mensual % (solo clientes ACTIVOS). Solo cuotas ya vencidas (fecha_vencimiento < fecha_referencia).
-        total_vencido_mes = db.scalar(
-            select(func.coalesce(func.sum(Cuota.monto), 0))
-            .select_from(Cuota)
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .join(Cliente, Prestamo.cliente_id == Cliente.id)
-            .where(
-                and_(*conds_activo),
-                Cuota.fecha_vencimiento >= inicio_mes,
-                Cuota.fecha_vencimiento <= fin_mes,
-                Cuota.fecha_vencimiento < fecha_referencia,
-            )
-        ) or 0
-        no_cobrado_mes = db.scalar(
-            select(func.coalesce(func.sum(Cuota.monto), 0))
-            .select_from(Cuota)
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .join(Cliente, Prestamo.cliente_id == Cliente.id)
-            .where(
-                and_(*conds_activo),
-                Cuota.fecha_vencimiento >= inicio_mes,
-                Cuota.fecha_vencimiento <= fin_mes,
-                Cuota.fecha_vencimiento < fecha_referencia,
-                Cuota.fecha_pago.is_(None),
-            )
-        ) or 0
         morosidad_porcentaje = (
             (_safe_float(no_cobrado_mes) / _safe_float(total_vencido_mes) * 100.0)
             if total_vencido_mes and _safe_float(total_vencido_mes) > 0
             else 0.0
         )
-        cartera_pendiente = db.scalar(
-            select(func.coalesce(func.sum(Cuota.monto), 0))
-            .select_from(Cuota)
-            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-            .join(Cliente, Prestamo.cliente_id == Cliente.id)
-            .where(and_(*conds_activo), Cuota.fecha_pago.is_(None))
-        ) or 0
-        # Compatibilidad: clientes en mora / al día (solo clientes ACTIVOS)
+
+        # Conteos: clientes en mora y clientes con préstamo (2 consultas ligeras)
         subq = (
             select(Prestamo.cliente_id)
             .select_from(Cuota)

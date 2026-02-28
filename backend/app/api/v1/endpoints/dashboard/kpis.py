@@ -19,9 +19,11 @@ from app.models.prestamo import Prestamo
 
 from .utils import (
     _CACHE_KPIS,
+    _CACHE_OPCIONES_FILTROS,
     _DASHBOARD_ADMIN_CACHE,
     _lock,
     _next_refresh_local,
+    _OPCIONES_FILTROS_TTL_SEC,
     _safe_float,
     _sanitize_filter_string,
     _kpi,
@@ -257,7 +259,15 @@ def _compute_kpis_principales(
 
 @router.get("/opciones-filtros")
 def get_opciones_filtros(db: Session = Depends(get_db)):
-    """Opciones para filtros desde BD: analistas, concesionarios, modelos."""
+    """Opciones para filtros desde BD: analistas, concesionarios, modelos. Caché 5 min."""
+    now = datetime.now()
+    with _lock:
+        cached = _CACHE_OPCIONES_FILTROS.get("data")
+        refreshed = _CACHE_OPCIONES_FILTROS.get("refreshed_at")
+    if cached is not None and refreshed is not None:
+        age_sec = (now - refreshed).total_seconds()
+        if age_sec < _OPCIONES_FILTROS_TTL_SEC:
+            return cached
     try:
         analistas = [r[0] for r in db.execute(
             select(Prestamo.analista).select_from(Prestamo).join(Cliente, Prestamo.cliente_id == Cliente.id)
@@ -283,7 +293,11 @@ def get_opciones_filtros(db: Session = Depends(get_db)):
             .where(Prestamo.estado == "APROBADO", modelo_nombre.isnot(None))
             .distinct()
         ).all() if r[0]]
-        return {"analistas": analistas, "concesionarios": concesionarios, "modelos": modelos}
+        data = {"analistas": analistas, "concesionarios": concesionarios, "modelos": modelos}
+        with _lock:
+            _CACHE_OPCIONES_FILTROS["data"] = data
+            _CACHE_OPCIONES_FILTROS["refreshed_at"] = datetime.now()
+        return data
     except Exception:
         return {"analistas": [], "concesionarios": [], "modelos": []}
 

@@ -7,7 +7,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import and_, distinct, func, or_, select
+from sqlalchemy import and_, case, distinct, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db, SessionLocal
@@ -43,29 +43,37 @@ def _compute_morosidad_por_dia(
     fecha_fin: Optional[str],
     dias: Optional[int],
 ) -> dict:
-    """Calcula pago vencido por día (usado por endpoint y por refresh de caché)."""
+    """Calcula pago vencido por día: una sola consulta GROUP BY fecha_vencimiento (evita N consultas)."""
     try:
         hoy_utc = datetime.now(timezone.utc)
         hoy_date = date(hoy_utc.year, hoy_utc.month, hoy_utc.day)
         fin = hoy_date
         dias_efectivos = min(90, max(7, dias or 30))
         inicio = fin - timedelta(days=dias_efectivos)
-        resultado = []
         nombres_mes = ("Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic")
+
+        # Una sola consulta: suma por fecha_vencimiento (solo vencidas y no pagadas)
+        q = (
+            select(Cuota.fecha_vencimiento, func.coalesce(func.sum(Cuota.monto), 0).label("monto"))
+            .select_from(Cuota)
+            .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(
+                Prestamo.estado == "APROBADO",
+                Cuota.fecha_vencimiento >= inicio,
+                Cuota.fecha_vencimiento <= fin,
+                Cuota.fecha_vencimiento < hoy_date,
+                Cuota.fecha_pago.is_(None),
+            )
+            .group_by(Cuota.fecha_vencimiento)
+        )
+        rows = db.execute(q).all()
+        morosidad_por_fecha = {r[0]: _safe_float(r[1]) for r in rows}
+
+        resultado = []
         d = inicio
         while d <= fin:
-            morosidad_dia = db.scalar(
-                select(func.coalesce(func.sum(Cuota.monto), 0))
-                .select_from(Cuota)
-                .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-                .join(Cliente, Prestamo.cliente_id == Cliente.id)
-                .where(
-                    Prestamo.estado == "APROBADO",
-                    Cuota.fecha_vencimiento == d,
-                    Cuota.fecha_pago.is_(None),
-                )
-            ) if d < hoy_date else 0
-            morosidad_dia = _safe_float(morosidad_dia or 0)
+            morosidad_dia = morosidad_por_fecha.get(d, 0.0) if d < hoy_date else 0.0
             resultado.append({
                 "fecha": d.isoformat(),
                 "dia": f"{d.day} {nombres_mes[d.month - 1]}",
@@ -86,7 +94,7 @@ def _compute_financiamiento_por_rangos(
     concesionario: Optional[str],
     modelo: Optional[str],
 ) -> dict:
-    """Calcula financiamiento por rangos."""
+    """Calcula financiamiento por rangos: una sola consulta con CASE (evita 8 consultas)."""
     try:
         conds_base = [
             Prestamo.cliente_id == Cliente.id,
@@ -109,28 +117,31 @@ def _compute_financiamiento_por_rangos(
                 pass
 
         rangos_def = _rangos_financiamiento()
+        # Una consulta: cuenta por rango con CASE (rango 0..7)
+        tf = Prestamo.total_financiamiento
+        case_rango = case(
+            (tf < 200, 0),
+            (tf < 400, 1),
+            (tf < 600, 2),
+            (tf < 800, 3),
+            (tf < 1000, 4),
+            (tf < 1200, 5),
+            (tf < 1400, 6),
+            else_=7,
+        )
+        q = (
+            select(case_rango.label("rango_idx"), func.count().label("n"))
+            .select_from(Prestamo)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(and_(*conds_base))
+            .group_by(case_rango)
+        )
+        rows = db.execute(q).all()
+        counts_by_idx = {int(r[0]): int(r[1]) for r in rows}
         resultado = []
         total_p = 0
-        for min_val, max_val, cat in rangos_def:
-            if max_val >= 999999999:
-                q = (
-                    select(func.count().label("n"))
-                    .select_from(Prestamo)
-                    .join(Cliente, Prestamo.cliente_id == Cliente.id)
-                    .where(and_(*conds_base), Prestamo.total_financiamiento >= min_val)
-                )
-            else:
-                q = (
-                    select(func.count().label("n"))
-                    .select_from(Prestamo)
-                    .join(Cliente, Prestamo.cliente_id == Cliente.id)
-                    .where(
-                        and_(*conds_base),
-                        Prestamo.total_financiamiento >= min_val,
-                        Prestamo.total_financiamiento < max_val,
-                    )
-                )
-            n = int(db.scalar(q) or 0)
+        for idx, (min_val, max_val, cat) in enumerate(rangos_def):
+            n = counts_by_idx.get(idx, 0)
             total_p += n
             resultado.append({"categoria": cat, "cantidad_prestamos": n, "monto_total": 0.0})
         if total_p == 0:
