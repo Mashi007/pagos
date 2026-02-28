@@ -106,6 +106,24 @@ def _truncar_numero_documento(val: Optional[str]) -> Optional[str]:
     return s[:_MAX_LEN_NUMERO_DOCUMENTO] if len(s) > _MAX_LEN_NUMERO_DOCUMENTO else s
 
 
+def _celda_a_string_documento(val: Any) -> str:
+    """
+    Convierte el valor de una celda Excel a string para Nº documento.
+    Acepta cualquier tipo: str, int, float (evita notación científica para números largos).
+    """
+    if val is None:
+        return ""
+    if isinstance(val, float):
+        if val != val:
+            return ""  # NaN
+        if val == int(val):
+            return str(int(val))  # 740087415441562.0 -> "740087415441562" (sin 7.4e+14)
+        return str(val)
+    if isinstance(val, int):
+        return str(val)
+    return str(val).strip()
+
+
 # Zona horaria del negocio para "hoy" e "inicio_mes" (Monto cobrado mes, Pagos hoy)
 TZ_NEGOCIO = "America/Caracas"
 
@@ -355,7 +373,20 @@ async def upload_excel_pagos(
             if v is None:
                 return False
             s = str(v).strip()
-            return bool(re.match(r"^[VJ]\d{7,9}$", s, re.IGNORECASE))
+            return bool(re.match(r"^[VEJZ]\d{6,11}$", s, re.IGNORECASE))
+
+        def _looks_like_documento(v: Any) -> bool:
+            """True si el valor parece Nº documento (cualquier formato): numérico largo, o con /, o BNC/ZELLE/etc."""
+            if v is None or (isinstance(v, str) and not v.strip()):
+                return False
+            s = _celda_a_string_documento(v)
+            if not s or len(s) < 2:
+                return False
+            if re.match(r"^\d{10,}$", s):
+                return True
+            if "/" in s or re.search(r"^(BNC|ZELLE|BINANCE|VE|BS\.)", s, re.IGNORECASE):
+                return True
+            return False
 
         def _looks_like_date(v: Any) -> bool:
             if v is None:
@@ -395,17 +426,26 @@ async def upload_excel_pagos(
                 fecha_val: Any = None
                 monto = 0.0
                 numero_doc = ""
-                # Formato alternativo: Fecha, CÃ©dula, Cantidad, Documento (ej. Excel con columnas A=Fecha, B=CÃ©dula, C=Cantidad, D=Documento)
-                if len(row) >= 4 and _looks_like_date(row[0]) and _looks_like_cedula(row[1]):
+                # Formato A: Documento en col0, Cédula en col1 (Documento, Cédula, Fecha, Monto)
+                if len(row) >= 4 and _looks_like_documento(row[0]) and _looks_like_cedula(row[1]):
+                    numero_doc = _celda_a_string_documento(row[0])
+                    cedula = str(row[1]).strip()
+                    fecha_val = row[2] if len(row) > 2 else None
+                    try:
+                        monto = float(row[3]) if len(row) > 3 and row[3] is not None else 0.0
+                    except (TypeError, ValueError):
+                        monto = 0.0
+                # Formato B: Fecha, Cédula, Cantidad, Documento
+                elif len(row) >= 4 and _looks_like_date(row[0]) and _looks_like_cedula(row[1]):
                     cedula = str(row[1]).strip()
                     try:
                         monto = float(row[2]) if row[2] is not None else 0.0
                     except (TypeError, ValueError):
                         monto = 0.0
                     fecha_val = row[0]
-                    numero_doc = str(row[3]).strip() if row[3] is not None else ""
+                    numero_doc = _celda_a_string_documento(row[3])
                 else:
-                    # Formato estÃ¡ndar: CÃ©dula, ID PrÃ©stamo, Fecha, Monto, NÃºmero documento
+                    # Formato estándar: Cédula, ID Préstamo, Fecha, Monto, Nº documento
                     cedula = str(row[0]).strip() if row[0] is not None else ""
                     _val_prestamo = row[1] if len(row) > 1 else None
                     if _val_prestamo is None:
@@ -426,7 +466,7 @@ async def upload_excel_pagos(
                         monto = float(_monto_raw) if _monto_raw is not None else 0.0
                     except (TypeError, ValueError):
                         monto = 0.0
-                    numero_doc = str(row[4]).strip() if len(row) > 4 and row[4] is not None else ""
+                    numero_doc = _celda_a_string_documento(row[4]) if len(row) > 4 else ""
 
                 if not cedula or monto <= 0:
                     filas_omitidas += 1
