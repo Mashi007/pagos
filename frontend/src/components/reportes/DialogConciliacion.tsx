@@ -54,7 +54,7 @@ export function DialogConciliacion({ open, onOpenChange, onGuardar }: DialogConc
   const validar = useCallback((filasToValidate: FilaConciliacion[]) => {
     const err: string[] = []
     filasToValidate.forEach((f, i) => {
-      if (!validarCedula(f.cedula)) err.push(`Fila ${i + 1}: cedula invalida`)
+      // Cédulas inválidas se procesarán como "cedula no encontrada"
       if (!validarNumero(f.total_financiamiento)) err.push(`Fila ${i + 1}: total financiamiento debe ser un numero >= 0`)
       if (!validarNumero(f.total_abonos)) err.push(`Fila ${i + 1}: total abonos debe ser un numero >= 0`)
     })
@@ -112,13 +112,17 @@ export function DialogConciliacion({ open, onOpenChange, onGuardar }: DialogConc
   )
 
   const handleGuardar = async () => {
-    if (!validar(filas)) {
-      toast.error('Corrija los errores antes de guardar')
-      return
-    }
+    validar(filas) // Validate pero no bloques
     setGuardando(true)
     try {
-      await reporteService.cargarConciliacion(filas)
+      // Transform invalid cedulas to "cedula no encontrada"
+      const filasTransformadas = filas.map(f => {
+        if (!validarCedula(f.cedula)) {
+          return { ...f, cedula: 'cedula no encontrada' }
+        }
+        return f
+      })
+      await reporteService.cargarConciliacion(filasTransformadas)
       toast.success('Datos guardados correctamente. Puede descargar el reporte.')
       onGuardar?.()
       setTab('resumen')
