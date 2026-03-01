@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import {
@@ -13,6 +13,7 @@ import {
   CreditCard,
   Lock,
   Calculator,
+  CheckCircle2,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { getErrorMessage, getErrorDetail } from '../types/errors'
@@ -25,7 +26,7 @@ import { DialogReporteContableFiltros, type FiltrosReporteContable } from '../co
 import { DialogConciliacion } from '../components/reportes/DialogConciliacion'
 import { usePermissions } from '../hooks/usePermissions'
 
-/** Cada icono = un reporte. Click = abre diálogo años/meses, luego descarga Excel. */
+/** Cada icono = un reporte. Click = abre diÃ¡logo aÃ±os/meses, luego descarga Excel. */
 const tiposReporte = [
   { value: 'CARTERA', label: 'Cuentas por cobrar', icon: DollarSign },
   { value: 'MOROSIDAD', label: 'Morosidad', icon: TrendingUp },
@@ -33,13 +34,15 @@ const tiposReporte = [
   { value: 'PAGOS', label: 'Pagos', icon: Users },
   { value: 'ASESORES', label: 'Pago vencido', icon: UserCheck },
   { value: 'CONTABLE', label: 'Contable', icon: Calculator },
-  { value: 'CEDULA', label: 'Por cédula', icon: CreditCard },
+  { value: 'CEDULA', label: 'Por cÃ©dula', icon: CreditCard },
+  { value: 'CONCILIACION', label: 'Conciliación', icon: CheckCircle2 },
 ]
 
 export function Reportes() {
   const [generandoReporte, setGenerandoReporte] = useState<string | null>(null)
   const [dialogAbierto, setDialogAbierto] = useState(false)
   const [reporteSeleccionado, setReporteSeleccionado] = useState<string | null>(null)
+  const [dialogConciliacionAbierto, setDialogConciliacionAbierto] = useState(false)
   const [isRefreshingManual, setIsRefreshingManual] = useState(false)
   const queryClient = useQueryClient()
   const { canViewReports, canDownloadReports, canAccessReport } = usePermissions()
@@ -57,8 +60,8 @@ export function Reportes() {
     queryFn: () => reporteService.getResumenDashboard(),
     enabled: puedeVerReportes, // Solo ejecutar si tiene permisos
     staleTime: 2 * 60 * 1000, // 2 minutos
-    retry: 3, // Más reintentos por cold start en Render
-    retryDelay: (attemptIndex) => Math.min(2000 * 2 ** attemptIndex, 15000), // Backoff: 2s, 4s, 8s (máx 15s)
+    retry: 3, // MÃ¡s reintentos por cold start en Render
+    retryDelay: (attemptIndex) => Math.min(2000 * 2 ** attemptIndex, 15000), // Backoff: 2s, 4s, 8s (mÃ¡x 15s)
     refetchOnWindowFocus: true,
     refetchInterval: puedeVerReportes ? 5 * 60 * 1000 : false, // 5 min para reducir carga
   })
@@ -101,14 +104,18 @@ export function Reportes() {
     window.URL.revokeObjectURL(url)
   }
 
-  // Abrir diálogo al hacer clic en icono (o descargar directo si no requiere filtros)
+  // Abrir diÃ¡logo al hacer clic en icono (o descargar directo si no requiere filtros)
   const abrirDialogoReporte = (tipo: string) => {
+    if (tipo === 'CONCILIACION') {
+      setDialogConciliacionAbierto(true)
+      return
+    }
     if (tipo === 'MOROSIDAD') {
-      generarReporte(tipo, { años: [], meses: [] })
+      generarReporte(tipo, { aÃ±os: [], meses: [] })
       return
     }
     if (tipo === 'CEDULA') {
-      generarReporte(tipo, { años: [], meses: [] })
+      generarReporte(tipo, { aÃ±os: [], meses: [] })
       return
     }
     setReporteSeleccionado(tipo)
@@ -126,15 +133,15 @@ export function Reportes() {
       )
       const fechaCorte = new Date().toISOString().split('T')[0]
       const cedulas = filtros.cedulas === 'todas' ? undefined : filtros.cedulas
-      const { blob, vacio } = await reporteService.exportarReporteContable(filtros.años, filtros.meses, cedulas)
+      const { blob, vacio } = await reporteService.exportarReporteContable(filtros.aÃ±os, filtros.meses, cedulas)
       descargarBlob(blob, `reporte_contable_${fechaCorte}.xlsx`)
       toast.dismiss(toastId)
       if (vacio) {
         toast.warning(
-          'El reporte no tiene datos para el período seleccionado. Verifique que las fechas sean pasadas y que existan cuotas pagadas.'
+          'El reporte no tiene datos para el perÃ­odo seleccionado. Verifique que las fechas sean pasadas y que existan cuotas pagadas.'
         )
       } else {
-        toast.success('✓ Reporte Contable descargado exitosamente')
+        toast.success('âœ“ Reporte Contable descargado exitosamente')
       }
     } catch (error: unknown) {
       console.error('Error generando reporte:', error)
@@ -147,7 +154,7 @@ export function Reportes() {
     }
   }
 
-  // Generar reporte tras confirmar filtros en el diálogo
+  // Generar reporte tras confirmar filtros en el diÃ¡logo
   const generarReporte = async (tipo: string, filtros: FiltrosReporte) => {
     try {
       setGenerandoReporte(tipo)
@@ -166,40 +173,40 @@ export function Reportes() {
         const blob = await reporteService.exportarReporteCartera('excel', fechaCorte, filtros)
         descargarBlob(blob, `reporte_cartera_${fechaCorte}.${ext}`)
         toast.dismiss(toastId)
-        toast.success('✓ Reporte de Cartera descargado exitosamente')
+        toast.success('âœ“ Reporte de Cartera descargado exitosamente')
         queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
         queryClient.invalidateQueries({ queryKey: ['kpis'] })
       } else if (tipo === 'PAGOS') {
         const blob = await reporteService.exportarReportePagos('excel', undefined, undefined, 12, filtros)
         descargarBlob(blob, `reporte_pagos_${fechaCorte}.${ext}`)
         toast.dismiss(toastId)
-        toast.success('✓ Informe de Pagos descargado exitosamente')
+        toast.success('âœ“ Informe de Pagos descargado exitosamente')
         queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
         queryClient.invalidateQueries({ queryKey: ['kpis'] })
       } else if (tipo === 'MOROSIDAD') {
         const blob = await reporteService.exportarReporteMorosidadClientes(fechaCorte)
         descargarBlob(blob, `reporte_morosidad_${fechaCorte}.${ext}`)
         toast.dismiss(toastId)
-        toast.success('✓ Reporte de Morosidad descargado exitosamente')
+        toast.success('âœ“ Reporte de Morosidad descargado exitosamente')
       } else if (tipo === 'VENCIMIENTO') {
         const blob = await reporteService.exportarReporteMorosidad('excel', fechaCorte, filtros)
         descargarBlob(blob, `informe_vencimiento_pagos_${fechaCorte}.${ext}`)
         toast.dismiss(toastId)
-        toast.success('✓ Reporte de Vencimiento descargado exitosamente')
+        toast.success('âœ“ Reporte de Vencimiento descargado exitosamente')
       } else if (tipo === 'ASESORES') {
         // ASESORES ahora es Pago vencido (antes MOROSIDAD)
         const blob = await reporteService.exportarReporteMorosidad('excel', fechaCorte, filtros)
         descargarBlob(blob, `reporte_pago_vencido_${fechaCorte}.${ext}`)
         toast.dismiss(toastId)
-        toast.success('✓ Reporte de Pago Vencido descargado exitosamente')
+        toast.success('âœ“ Reporte de Pago Vencido descargado exitosamente')
       } else if (tipo === 'CEDULA') {
         const blob = await reporteService.exportarReporteCedula()
         descargarBlob(blob, `reporte_por_cedula_${fechaCorte}.${ext}`)
         toast.dismiss(toastId)
-        toast.success('✓ Reporte por Cédula descargado exitosamente')
+        toast.success('âœ“ Reporte por CÃ©dula descargado exitosamente')
       } else {
         toast.dismiss(toastId)
-        toast.info(`Generación de reporte ${tipo} próximamente disponible`)
+        toast.info(`GeneraciÃ³n de reporte ${tipo} prÃ³ximamente disponible`)
       }
     } catch (error: unknown) {
       console.error('Error generando reporte:', error)
@@ -213,7 +220,7 @@ export function Reportes() {
       } else if (errorMessage?.includes('404') || errorMessage?.includes('No se encontraron')) {
         mensajeError = 'No se encontraron datos para los filtros seleccionados.'
       } else if (errorMessage?.includes('timeout') || errorMessage?.includes('Timeout')) {
-        mensajeError = 'La operación está tomando demasiado tiempo. Por favor, intente con un rango de fechas más corto.'
+        mensajeError = 'La operaciÃ³n estÃ¡ tomando demasiado tiempo. Por favor, intente con un rango de fechas mÃ¡s corto.'
       } else if (!mensajeError) {
         mensajeError = 'No se pudo generar el reporte'
       }
@@ -224,7 +231,7 @@ export function Reportes() {
     }
   }
 
-  // KPIs desde el backend (datos reales desde BD) - asegurar que sean números (validación robusta)
+  // KPIs desde el backend (datos reales desde BD) - asegurar que sean nÃºmeros (validaciÃ³n robusta)
   const kpiCartera = Number(resumenData?.cartera_activa ?? 0) || 0
   const kpiPagosVencidos = Number(resumenData?.pagos_vencidos ?? 0) || 0
   const kpiTotalPrestamos = Number(resumenData?.total_prestamos ?? 0) || 0
@@ -237,7 +244,7 @@ export function Reportes() {
       transition={{ duration: 0.3 }}
       className="space-y-8"
     >
-      {/* Header balanceado: columna en móvil, fila en desktop */}
+      {/* Header balanceado: columna en mÃ³vil, fila en desktop */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Centro de Reportes</h1>
@@ -310,7 +317,7 @@ export function Reportes() {
         </div>
       )}
 
-      {/* KPI Cards: altura uniforme para diseño balanceado */}
+      {/* KPI Cards: altura uniforme para diseÃ±o balanceado */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="min-h-[120px] flex flex-col">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -347,12 +354,12 @@ export function Reportes() {
             ) : (
               <div className="text-2xl font-bold text-red-600">{kpiPagosVencidos.toLocaleString()}</div>
             )}
-            <p className="text-xs text-muted-foreground">Requieren atención</p>
+            <p className="text-xs text-muted-foreground">Requieren atenciÃ³n</p>
           </CardContent>
         </Card>
         <Card className="min-h-[120px] flex flex-col">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Préstamos</CardTitle>
+            <CardTitle className="text-sm font-medium">Total PrÃ©stamos</CardTitle>
             <FileText className="h-4 w-4 text-muted-foreground" aria-hidden />
           </CardHeader>
           <CardContent>
@@ -366,7 +373,7 @@ export function Reportes() {
             ) : (
               <div className="text-2xl font-bold">{kpiTotalPrestamos.toLocaleString()}</div>
             )}
-            <p className="text-xs text-muted-foreground">Préstamos activos</p>
+            <p className="text-xs text-muted-foreground">PrÃ©stamos activos</p>
           </CardContent>
         </Card>
         <Card className="min-h-[120px] flex flex-col">
@@ -392,7 +399,7 @@ export function Reportes() {
         </Card>
       </div>
 
-      {/* Reportes: solo iconos. Click = descarga Excel con distribución según backend. */}
+      {/* Reportes: solo iconos. Click = descarga Excel con distribuciÃ³n segÃºn backend. */}
       <Card className="shadow-sm">
         <CardHeader>
           <CardTitle className="flex items-center">
@@ -400,7 +407,7 @@ export function Reportes() {
             Descargar reportes
           </CardTitle>
           <p className="text-sm text-muted-foreground">
-            Haz clic en un icono para elegir años y meses, luego descarga el reporte en Excel.
+            Haz clic en un icono para elegir aÃ±os y meses, luego descarga el reporte en Excel.
           </p>
         </CardHeader>
         <CardContent>
@@ -464,11 +471,24 @@ export function Reportes() {
         onOpenChange={setDialogAbierto}
         onConfirm={(filtros) => generarReporteContable(filtros)}
       />
+          <DialogConciliacion
+        open={dialogConciliacionAbierto}
+        onOpenChange={setDialogConciliacionAbierto}
+        onGuardar={() => {
+          queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
+          queryClient.invalidateQueries({ queryKey: ['kpis'] })
+        }}
+      />
     </motion.div>
-  )
-}
 
-export default Reportes
+
+
+
+
+
+
+
+
 
 
 
