@@ -10,8 +10,6 @@ import {
   Trash2,
   RefreshCw,
   X,
-  ChevronDown,
-  FileSpreadsheet,
   MoreHorizontal,
   CheckCircle,
   XCircle,
@@ -257,46 +255,14 @@ export function PagosList() {
               }
             }}
           />
-          <Popover open={agregarPagoOpen} onOpenChange={setAgregarPagoOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                size="lg"
-                className="px-8 py-6 text-base font-semibold min-w-[200px] bg-primary text-primary-foreground hover:bg-primary/90"
-              >
-                <Plus className="w-5 h-5 mr-2" />
-                Agregar pago
-                <ChevronDown className="w-4 h-4 ml-2" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-72 p-3" align="end">
-              <div className="space-y-2">
-                <button
-                  type="button"
-                  className="w-full flex items-center gap-3 px-4 py-3 text-left rounded-md hover:bg-blue-50"
-                  onClick={() => {
-                    setShowRegistrarPago(true)
-                    setAgregarPagoOpen(false)
-                  }}
-                >
-                  <Edit className="w-5 h-5 text-gray-600" />
-                  <span>Registrar un pago</span>
-                  <span className="text-xs text-gray-500 ml-auto">Formulario</span>
-                </button>
-                <button
-                  type="button"
-                  className="w-full flex items-center gap-3 px-4 py-3 text-left rounded-md hover:bg-blue-50"
-                  onClick={() => {
-                    setShowCargaMasivaPagos(true)
-                    setAgregarPagoOpen(false)
-                  }}
-                >
-                  <FileSpreadsheet className="w-5 h-5 text-gray-600" />
-                  <span>Carga masiva</span>
-                  <span className="text-xs text-gray-500 ml-auto">Excel</span>
-                </button>
-              </div>
-            </PopoverContent>
-          </Popover>
+          <Button
+              size="lg"
+              className="px-8 py-6 text-base font-semibold min-w-[200px] bg-primary text-primary-foreground hover:bg-primary/90"
+              onClick={() => setShowRegistrarPago(true)}
+            >
+              <Plus className="w-5 h-5 mr-2" />
+              Agregar pago
+            </Button>
       </div>
       {/* Pestañas: por defecto Resumen por Cliente (detalles por cliente, más reciente a más antiguo) */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
