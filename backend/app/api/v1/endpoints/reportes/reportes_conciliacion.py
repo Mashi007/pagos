@@ -33,6 +33,9 @@ def _validar_cedula(cedula: Any) -> bool:
     if cedula is None:
         return False
     s = str(cedula).strip()
+    # Allow "cedula no encontrada" as special valid value
+    if s.lower() == "cedula no encontrada":
+        return True
     return bool(s and CEDULA_PATTERN.match(s))
 
 
