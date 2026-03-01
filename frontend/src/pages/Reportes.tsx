@@ -220,6 +220,14 @@ return (
       transition={{ duration: 0.3 }}
       className="space-y-8"
     >
+      {/* Header con título */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <FileText className="h-8 w-8 text-blue-600" />
+          <h1 className="text-3xl font-bold text-gray-900">Centro de Reportes</h1>
+        </div>
+      </div>
+
       {/* Reportes: solo iconos. Click = descarga Excel con distribución segÃºn backend. */}
       <Card className="shadow-sm">
         <CardContent className="pt-6">
