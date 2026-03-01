@@ -48,25 +48,7 @@ export function Reportes() {
   const { canViewReports, canDownloadReports, canAccessReport } = usePermissions()
   const puedeVerReportes = canViewReports()
 
-  // Obtener resumen del dashboard para KPIs - hooks SIEMPRE antes de cualquier return
-  const {
-    data: resumenData,
-    isLoading: loadingResumen,
-    isError: errorResumen,
-    refetch: refetchResumen,
-    isFetching: fetchingResumen,
-  } = useQuery({
-    queryKey: ['reportes-resumen'],
-    queryFn: () => reporteService.getResumenDashboard(),
-    enabled: puedeVerReportes, // Solo ejecutar si tiene permisos
-    staleTime: 2 * 60 * 1000, // 2 minutos
-    retry: 3, // Más reintentos por cold start en Render
-    retryDelay: (attemptIndex) => Math.min(2000 * 2 ** attemptIndex, 15000), // Backoff: 2s, 4s, 8s (máx 15s)
-    refetchOnWindowFocus: true,
-    refetchInterval: puedeVerReportes ? 5 * 60 * 1000 : false, // 5 min para reducir carga
-  })
-
-  // Bloque mostrado si canViewReports() restringe por rol (ej. solo admin). Restriccion por tipo de reporte: canAccessReport().
+// Bloque mostrado si canViewReports() restringe por rol (ej. solo admin). Restriccion por tipo de reporte: canAccessReport().
   if (!puedeVerReportes) {
     return (
       <motion.div
@@ -175,14 +157,14 @@ export function Reportes() {
         toast.dismiss(toastId)
         toast.success('âœ“ Reporte de Cartera descargado exitosamente')
         queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
-        queryClient.invalidateQueries({ queryKey: ['kpis'] })
+        
       } else if (tipo === 'PAGOS') {
         const blob = await reporteService.exportarReportePagos('excel', undefined, undefined, 12, filtros)
         descargarBlob(blob, `reporte_pagos_${fechaCorte}.${ext}`)
         toast.dismiss(toastId)
         toast.success('âœ“ Informe de Pagos descargado exitosamente')
         queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
-        queryClient.invalidateQueries({ queryKey: ['kpis'] })
+        
       } else if (tipo === 'MOROSIDAD') {
         const blob = await reporteService.exportarReporteMorosidadClientes(fechaCorte)
         descargarBlob(blob, `reporte_morosidad_${fechaCorte}.${ext}`)
@@ -231,101 +213,13 @@ export function Reportes() {
     }
   }
 
-  // KPIs desde el backend (datos reales desde BD) - asegurar que sean nÃºmeros (validación robusta)
-  const kpiCartera = Number(resumenData?.cartera_activa ?? 0) || 0
-  const kpiPagosVencidos = Number(resumenData?.pagos_vencidos ?? 0) || 0
-  const kpiTotalPrestamos = Number(resumenData?.total_prestamos ?? 0) || 0
-  const kpiPagosMes = Number(resumenData?.pagos_mes ?? 0) || 0
-
-  return (
+return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
       className="space-y-8"
     >
-      {/* KPI Cards: altura uniforme para diseÃ±o balanceado */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="min-h-[120px] flex flex-col">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Cartera Activa</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" aria-hidden />
-          </CardHeader>
-          <CardContent>
-            {loadingResumen ? (
-              <div className="flex items-center space-x-2">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" aria-hidden />
-                <span className="text-sm text-muted-foreground">Cargando...</span>
-              </div>
-            ) : errorResumen ? (
-              <div className="text-2xl font-bold text-gray-400">--</div>
-            ) : (
-              <div className="text-2xl font-bold">{formatCurrency(kpiCartera)}</div>
-            )}
-            <p className="text-xs text-muted-foreground mt-1">Total en cartera</p>
-          </CardContent>
-        </Card>
-        <Card className="min-h-[120px] flex flex-col">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pagos Vencidos</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" aria-hidden />
-          </CardHeader>
-          <CardContent>
-            {loadingResumen ? (
-              <div className="flex items-center space-x-2">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" aria-hidden />
-                <span className="text-sm text-muted-foreground">Cargando...</span>
-              </div>
-            ) : errorResumen ? (
-              <div className="text-2xl font-bold text-gray-400">--</div>
-            ) : (
-              <div className="text-2xl font-bold text-red-600">{kpiPagosVencidos.toLocaleString()}</div>
-            )}
-            <p className="text-xs text-muted-foreground">Requieren atención</p>
-          </CardContent>
-        </Card>
-        <Card className="min-h-[120px] flex flex-col">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Préstamos</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" aria-hidden />
-          </CardHeader>
-          <CardContent>
-            {loadingResumen ? (
-              <div className="flex items-center space-x-2">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" aria-hidden />
-                <span className="text-sm text-muted-foreground">Cargando...</span>
-              </div>
-            ) : errorResumen ? (
-              <div className="text-2xl font-bold text-gray-400">--</div>
-            ) : (
-              <div className="text-2xl font-bold">{kpiTotalPrestamos.toLocaleString()}</div>
-            )}
-            <p className="text-xs text-muted-foreground">Préstamos activos</p>
-          </CardContent>
-        </Card>
-        <Card className="min-h-[120px] flex flex-col">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pagos del Mes</CardTitle>
-            <Download className="h-4 w-4 text-muted-foreground" aria-hidden />
-          </CardHeader>
-          <CardContent>
-            {loadingResumen ? (
-              <div className="flex items-center space-x-2">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" aria-hidden />
-                <span className="text-sm text-muted-foreground">Cargando...</span>
-              </div>
-            ) : errorResumen ? (
-              <div className="text-2xl font-bold text-gray-400">--</div>
-            ) : (
-              <div className="text-2xl font-bold text-green-600">
-                {formatCurrency(kpiPagosMes)}
-              </div>
-            )}
-            <p className="text-xs text-muted-foreground">Este mes</p>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Reportes: solo iconos. Click = descarga Excel con distribución segÃºn backend. */}
       <Card className="shadow-sm">
         <CardContent className="pt-6">
@@ -394,7 +288,7 @@ export function Reportes() {
         onOpenChange={setDialogConciliacionAbierto}
         onGuardar={() => {
           queryClient.invalidateQueries({ queryKey: ['reportes-resumen'] })
-          queryClient.invalidateQueries({ queryKey: ['kpis'] })
+          
         }}
       />
     </motion.div>
