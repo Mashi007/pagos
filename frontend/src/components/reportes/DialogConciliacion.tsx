@@ -278,7 +278,7 @@ export function DialogConciliacion({ open, onOpenChange, onGuardar }: DialogConc
             </>
           )}
 
-          {/* Tab Resumen */}
+          
           {tab === 'resumen' && (
             <>
               <p className="text-sm text-muted-foreground">
