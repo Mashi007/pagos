@@ -19,7 +19,7 @@ import type { PagoExcelRow } from '../../utils/pagoExcelValidation'
 
 export interface FilaEditableProps {
   rows: PagoExcelRow[]
-  prestamosPorCedula: Record<string, Array<{ id: number; numero: string; monto: number; estado: string }>>
+  prestamosPorCedula: Record<string, Array<{ id: number; estado: string }>>
   onRowsChange: (newRows: PagoExcelRow[]) => void
   onUpdateCell: (row: PagoExcelRow, field: string, value: string | number) => void
   saveRowIfValid: (row: PagoExcelRow) => Promise<boolean>
