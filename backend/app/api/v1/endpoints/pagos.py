@@ -840,12 +840,13 @@ def validar_filas_batch(
             })
         
         # LUEGO: buscar en PAGOS pero SIN aplicar a CUOTA (duplicado)
+        subquery_pagos_con_cuota = select(Cuota.pago_id).where(Cuota.pago_id.isnot(None)).distinct()
         rows_pagos_sin_cuota = db.execute(
             select(Pago.numero_documento, Pago.id, Pago.cedula_cliente,
                    Pago.fecha_pago, Pago.monto_pagado)
             .where(
                 Pago.numero_documento.in_(docs_norm_limpios),
-                ~Pago.id.in_(select(Cuota.pago_id).where(Cuota.pago_id.isnot(None)))
+                ~Pago.id.in_(subquery_pagos_con_cuota)
             )
         ).all()
         
