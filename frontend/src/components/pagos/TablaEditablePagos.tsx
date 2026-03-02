@@ -69,15 +69,15 @@ export function TablaEditablePagos({
     <div className="space-y-4">
       {/* Encabezado con resumen */}
       <div className="bg-blue-50 border border-blue-400 rounded p-4">
-        <h2 className="text-lg font-bold text-blue-800 mb-2">Vista previa — Pagos cargados</h2>
+        <h2 className="text-lg font-bold text-blue-800 mb-2">Pagos cargados</h2>
         <div className="flex flex-wrap gap-4 text-sm">
-          <span className="font-medium text-gray-700">Total: <strong>{total}</strong></span>
+          <span className="font-medium text-gray-700">Total: <strong className="text-gray-900">{total}</strong></span>
           <span className="font-medium text-green-700">
-            ✓ Válidos: <strong>{validos}</strong>
+            Válidos: <strong>{validos}</strong>
           </span>
           {conError > 0 && (
             <span className="font-medium text-red-700">
-              ✗ Con errores: <strong>{conError}</strong>
+              Con errores: <strong>{conError}</strong>
             </span>
           )}
         </div>
