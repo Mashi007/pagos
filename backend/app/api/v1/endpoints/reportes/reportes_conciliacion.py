@@ -425,8 +425,8 @@ def _generar_pdf_conciliacion(
     
     story.append(Paragraph(f"<b>Porcentaje Cobrado:</b> {pct_cobrado:.2f}%", styles['Normal']))
     
-    buf.seek(0)
     doc.build(story)
+    buf.seek(0)
     return buf.getvalue()
 
 
