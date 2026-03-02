@@ -874,6 +874,7 @@ def validar_filas_batch(
                     # Parsear fecha en formato DD/MM/YYYY
                     fecha_obj = dt.strptime(fecha_str.replace('-', '/'), '%d/%m/%Y').date()
                     # Buscar pago con cédula exacta, fecha exacta y monto exacto
+                    # Nota: cedula_cliente mapea a columna "cedula" en BD
                     query = select(Pago).where(
                         Pago.cedula_cliente == cedula,
                         Pago.monto_pagado == monto,
