@@ -11,6 +11,8 @@ import {
   RefreshCw,
   X,
   MoreHorizontal,
+  FileSpreadsheet,
+  ChevronDown,
   CheckCircle,
   XCircle,
   Search,
@@ -30,6 +32,8 @@ import { pagoService, type Pago } from '../../services/pagoService'
 import { pagoConErrorService, type PagoConError } from '../../services/pagoConErrorService'
 import { RegistrarPagoForm } from './RegistrarPagoForm'
 import { ExcelUploader } from './ExcelUploader'
+import { ExcelUploaderPagosUI } from './ExcelUploaderPagosUI'
+import { ConciliacionExcelUploader } from './ConciliacionExcelUploader'
 import { CargaMasivaMenu } from './CargaMasivaMenu'
 import { PagosListResumen } from './PagosListResumen'
 import { PagosKPIsNuevo } from './PagosKPIsNuevo'
@@ -53,6 +57,7 @@ export function PagosList() {
   })
   const [showRegistrarPago, setShowRegistrarPago] = useState(false)
   const [showCargaMasivaPagos, setShowCargaMasivaPagos] = useState(false)
+  const [showConciliacion, setShowConciliacion] = useState(false)
   const [agregarPagoOpen, setAgregarPagoOpen] = useState(false)
   const [pagoEditando, setPagoEditando] = useState<Pago | PagoConError | null>(null)
   const [accionesOpenId, setAccionesOpenId] = useState<number | null>(null)
@@ -235,34 +240,59 @@ export function PagosList() {
               Descargar Excel
             </Button>
           )}
-          <CargaMasivaMenu
-            onSuccess={async () => {
-              try {
-                // Invalidar todas las queries relacionadas con pagos
-                await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
-                await queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false }) // ✓ Invalidar KPIs específicamente
-                await queryClient.invalidateQueries({ queryKey: ['kpis'], exact: false })
-                await queryClient.invalidateQueries({ queryKey: ['dashboard'], exact: false })
-                await queryClient.invalidateQueries({ queryKey: ['kpis-principales-menu'], exact: false })
-                await queryClient.invalidateQueries({ queryKey: ['dashboard-menu'], exact: false })
-                await queryClient.invalidateQueries({ queryKey: ['pagos-ultimos'], exact: false })
-                // Refetch inmediato de KPIs y pagos
-                await queryClient.refetchQueries({ queryKey: ['pagos-kpis'], exact: false })
-                await queryClient.refetchQueries({ queryKey: ['pagos'], exact: false })
-                toast.success('Datos actualizados correctamente')
-              } catch (error) {
-                console.error('âŒ Error actualizando dashboard:', error)
-              }
-            }}
-          />
-          <Button
-              size="lg"
-              className="px-8 py-6 text-base font-semibold min-w-[200px] bg-primary text-primary-foreground hover:bg-primary/90"
-              onClick={() => setShowRegistrarPago(true)}
-            >
-              <Plus className="w-5 h-5 mr-2" />
-              Agregar pago
-            </Button>
+          {/* CargaMasivaMenu OCULTO - sus opciones se movieron al botón "Agregar pago" */}
+          <Popover open={agregarPagoOpen} onOpenChange={setAgregarPagoOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                size="lg"
+                className="px-8 py-6 text-base font-semibold min-w-[200px] bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                <Plus className="w-5 h-5 mr-2" />
+                Agregar pago
+                <ChevronDown className="w-4 h-4 ml-2" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-72 p-3" align="end">
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left rounded-md hover:bg-blue-50"
+                  onClick={() => {
+                    setShowRegistrarPago(true)
+                    setAgregarPagoOpen(false)
+                  }}
+                >
+                  <Edit className="w-5 h-5 text-gray-600" />
+                  <span>Registrar un pago</span>
+                  <span className="text-xs text-gray-500 ml-auto">Formulario</span>
+                </button>
+                <button
+                  type="button"
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left rounded-md hover:bg-blue-50"
+                  onClick={() => {
+                    setShowCargaMasivaPagos(true)
+                    setAgregarPagoOpen(false)
+                  }}
+                >
+                  <FileSpreadsheet className="w-5 h-5 text-gray-600" />
+                  <span>Pagos (Excel)</span>
+                  <span className="text-xs text-gray-500 ml-auto">Excel</span>
+                </button>
+                <button
+                  type="button"
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left rounded-md hover:bg-blue-50"
+                  onClick={() => {
+                    setShowConciliacion(true)
+                    setAgregarPagoOpen(false)
+                  }}
+                >
+                  <CheckCircle className="w-5 h-5 text-gray-600" />
+                  <span>Conciliación</span>
+                  <span className="text-xs text-gray-500 ml-auto">Carga</span>
+                </button>
+              </div>
+            </PopoverContent>
+          </Popover>
       </div>
       {/* Pestañas: por defecto Resumen por Cliente (detalles por cliente, más reciente a más antiguo) */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
