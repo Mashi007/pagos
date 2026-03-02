@@ -1,4 +1,4 @@
-﻿/**
+/**
  * UI para carga masiva de pagos desde Excel.
  * Columnas: CÃ©dula, Fecha de pago, Monto, Documento, ID PrÃ©stamo (opcional).
  * Solo crÃ©ditos activos (APROBADO, DESEMBOLSADO) en el selector.
@@ -12,6 +12,7 @@ import { Badge } from '../ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { useExcelUploadPagos, type ExcelUploaderPagosProps } from '../../hooks/useExcelUploadPagos'
 import { PagosConErroresSection } from './PagosConErroresSection'
+import { TablaEditablePagos } from './TablaEditablePagos'
 import { cedulaLookupParaFila, cedulaParaLookup, OBSERVACIONES_POR_CAMPO } from '../../utils/pagoExcelValidation'
 import { useNavigate } from 'react-router-dom'
 
@@ -43,8 +44,10 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
     handleFileSelect,
     updateCellValue,
     setShowPreview,
+    setExcelData,
     getValidRows,
     saveIndividualPago,
+    saveRowIfValid,
     saveAllValid,
     sendToRevisarPagos,
     sendAllToRevisarPagos,
@@ -232,6 +235,17 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                 </CardContent>
               </Card>
 
+              <TablaEditablePagos
+                rows={excelData.filter((row) => !enviadosRevisar.has(row._rowIndex) && !savedRows.has(row._rowIndex))}
+                prestamosPorCedula={prestamosPorCedula}
+                onRowsChange={setExcelData}
+                onUpdateCell={updateCellValue}
+                saveRowIfValid={saveRowIfValid}
+              />
+
+              {/* ANTERIOR - TABLA HTML REMOVIDA */}
+              {false && (
+              <>
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center">
@@ -518,6 +532,8 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                   </div>
                 </CardContent>
               </Card>
+              </>
+              )} {/* Fin comentario tabla antigua */}
             </div>
           )}
         </div>

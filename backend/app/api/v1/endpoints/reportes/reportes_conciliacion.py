@@ -136,6 +136,14 @@ async def cargar_conciliacion_excel(
             except Exception as e:
                 errores.append(f"Fila {i + 2}: {str(e)}")
         
+        # Log para debugging
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[Conciliacion] Procesadas {len(rows)} filas del Excel")
+        logger.info(f"[Conciliacion] Filas válidas: {len(filas_ok)}, Errores: {len(errores)}")
+        if errores:
+            logger.warning(f"[Conciliacion] Errores encontrados: {errores[:5]}")
+        
         if errores:
             return {
                 "ok": False,
@@ -143,6 +151,16 @@ async def cargar_conciliacion_excel(
                 "errores": errores[:50],
                 "filas_ok": 0,
                 "filas_con_error": len(errores),
+            }
+        
+        if not filas_ok:
+            logger.error(f"[Conciliacion] Ninguna fila válida para procesar")
+            return {
+                "ok": False,
+                "mensaje": "No se encontraron filas válidas para procesar",
+                "filas_ok": 0,
+                "filas_con_error": len(rows),
+                "errores": ["Todas las filas fueron rechazadas"],
             }
         
         # Borrar datos previos e insertar nuevos
@@ -154,6 +172,7 @@ async def cargar_conciliacion_excel(
                 total_abonos=f["total_abonos"],
             ))
         db.commit()
+        logger.info(f"[Conciliacion] {len(filas_ok)} filas guardadas exitosamente en BD")
         
         return {
             "ok": True,
