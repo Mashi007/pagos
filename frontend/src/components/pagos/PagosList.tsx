@@ -31,7 +31,6 @@ import { formatDate } from '../../utils'
 import { pagoService, type Pago } from '../../services/pagoService'
 import { pagoConErrorService, type PagoConError } from '../../services/pagoConErrorService'
 import { RegistrarPagoForm } from './RegistrarPagoForm'
-import { ExcelUploader } from './ExcelUploader'
 import { ExcelUploaderPagosUI } from './ExcelUploaderPagosUI'
 import { ConciliacionExcelUploader } from './ConciliacionExcelUploader'
 import { CargaMasivaMenu } from './CargaMasivaMenu'
@@ -783,7 +782,7 @@ export function PagosList() {
       )}
       {/* Carga masiva de pagos (Excel) desde Agregar pago */}
       {showCargaMasivaPagos && (
-        <ExcelUploader
+        <ExcelUploaderPagosUI
           onClose={() => setShowCargaMasivaPagos(false)}
           onSuccess={async () => {
             setShowCargaMasivaPagos(false)

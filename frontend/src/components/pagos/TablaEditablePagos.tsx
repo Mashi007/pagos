@@ -17,10 +17,8 @@ export function TablaEditablePagos({
   rows,
   onUpdateCell,
 }: FilaEditableProps) {
-  console.log('🟦 TablaEditablePagos recibió rows:', rows?.length || 0, rows)
-  
   if (!rows || rows.length === 0) {
-    return <div className="text-gray-500 p-4 border border-dashed border-gray-300 rounded">❌ No hay datos para mostrar</div>
+    return <div className="text-gray-500 p-4 border border-dashed border-gray-300 rounded">No hay datos para mostrar</div>
   }
 
   return (

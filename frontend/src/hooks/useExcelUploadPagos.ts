@@ -679,32 +679,22 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
 
   const processExcelFile = useCallback(
     async (file: File) => {
-      console.log('🔴 processExcelFile INICIADO')
       if (!isMounted()) return
-      console.log('🔴 isMounted check pasado')
       setIsProcessing(true)
-      console.log('🔴 setIsProcessing(true) llamado')
       try {
-        console.log('🔴 Validando archivo')
         const fileValidation = validateExcelFile(file)
-        console.log('🔴 Validación:', fileValidation)
         if (!fileValidation.isValid) {
           alert(`Error: ${fileValidation.error}`)
           return
         }
-        console.log('🔴 Sanitizando nombre')
         sanitizeFileName(file.name)
-        console.log('🔴 Leyendo arrayBuffer')
         const data = await file.arrayBuffer()
-        console.log('🔴 arrayBuffer leído:', data.byteLength, 'bytes')
         if (!isMounted()) return
         if (data.byteLength > 10 * 1024 * 1024) {
           alert('Archivo demasiado grande. MÃ¡ximo 10 MB')
           return
         }
-        console.log('🔴 Parseando JSON desde Excel')
         const jsonData = await readExcelToJSON(data)
-        console.log('🔴 JSON parseado:', jsonData.length, 'rows')
         if (!isMounted()) return
         const dataValidation = validateExcelData(jsonData)
         if (!dataValidation.isValid) {
@@ -792,12 +782,8 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         }
 
         if (!isMounted()) return
-        console.log('✅ EXCEL PARSEADO:', processed.length, 'filas')
-        console.log('Filas:', processed)
         setExcelData(processed)
-        console.log('✅ setExcelData llamado')
         setShowPreview(true)
-        console.log('✅ setShowPreview(true) llamado')
 
         // Asignar CrÃ©dito en cuanto lleguen los prÃ©stamos (misma lÃ³gica que el efecto)
         const uniqueCedulasSet = new Set<string>()
@@ -888,12 +874,10 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             })
         }
       } catch (err) {
-        console.error('🔴 ERROR ATRAPADO:', err)
+        console.error('Error procesando Excel:', err)
         alert(`Error: ${err instanceof Error ? err.message : 'Error desconocido'}`)
       } finally {
-        console.log('🔴 FINALLY: Llamando setIsProcessing(false)')
         setIsProcessing(false)
-        console.log('🔴 PROCESO COMPLETADO')
       }
     },
     [isMounted]
