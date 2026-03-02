@@ -293,7 +293,7 @@ def _generar_excel_conciliacion(
     for p in prestamos:
         cedula = (p.cedula or "").strip()
         nombres = (p.nombres or "").strip()
-        cliente = db.execute(select(Cliente).where(Cliente.id == p.cliente_id)).scalar().first() if p.cliente_id else None
+        cliente = db.execute(select(Cliente).where(Cliente.id == p.cliente_id)).scalar() if p.cliente_id else None
         if cliente:
             nombres = (cliente.nombres or nombres or "").strip()
             cedula = (cliente.cedula or cedula or "").strip()
