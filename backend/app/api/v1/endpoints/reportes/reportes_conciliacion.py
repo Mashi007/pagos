@@ -76,6 +76,106 @@ def _normalizar_cedula(cedula: str) -> str:
 
 
 
+@router.post("/conciliacion/cargar")
+async def cargar_conciliacion(
+    filas: List[dict] = Body(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Carga datos de conciliación directamente (frontend los procesa).
+    
+    Esperado:
+    [
+        {
+            "cedula": "V12345678",
+            "total_financiamiento": 1000,
+            "total_abonos": 500,
+            "columna_e": "...",  # opcional
+            "columna_f": "..."   # opcional
+        }
+    ]
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"[Conciliacion] Recibidas {len(filas)} filas para guardar")
+    
+    try:
+        # Validar y procesar filas
+        errores: List[str] = []
+        filas_ok: List[dict] = []
+        
+        for i, fila in enumerate(filas):
+            try:
+                cedula = fila.get("cedula")
+                tf = fila.get("total_financiamiento")
+                ta = fila.get("total_abonos")
+                
+                if not _validar_cedula(cedula):
+                    errores.append(f"Fila {i + 1}: cédula inválida ({cedula})")
+                    continue
+                if not _validar_numero(tf):
+                    errores.append(f"Fila {i + 1}: total financiamiento debe ser un número ≥ 0")
+                    continue
+                if not _validar_numero(ta):
+                    errores.append(f"Fila {i + 1}: total abonos debe ser un número ≥ 0")
+                    continue
+                
+                filas_ok.append({
+                    "cedula": _normalizar_cedula(str(cedula).strip()),
+                    "total_financiamiento": _parse_numero(tf),
+                    "total_abonos": _parse_numero(ta),
+                })
+            except Exception as e:
+                errores.append(f"Fila {i + 1}: {str(e)}")
+        
+        logger.info(f"[Conciliacion] Filas válidas: {len(filas_ok)}, Errores: {len(errores)}")
+        
+        if errores:
+            logger.warning(f"[Conciliacion] Errores encontrados: {errores[:5]}")
+            return {
+                "ok": False,
+                "mensaje": f"Se encontraron {len(errores)} errores de validación",
+                "errores": errores[:50],
+                "filas_guardadas": 0,
+                "filas_con_error": len(errores),
+            }
+        
+        if not filas_ok:
+            logger.error(f"[Conciliacion] Ninguna fila válida para procesar")
+            return {
+                "ok": False,
+                "mensaje": "No se encontraron filas válidas para procesar",
+                "filas_guardadas": 0,
+                "filas_con_error": len(filas),
+                "errores": ["Todas las filas fueron rechazadas"],
+            }
+        
+        # Borrar datos previos e insertar nuevos
+        db.execute(delete(ConciliacionTemporal))
+        for f in filas_ok:
+            db.add(ConciliacionTemporal(
+                cedula=f["cedula"],
+                total_financiamiento=f["total_financiamiento"],
+                total_abonos=f["total_abonos"],
+            ))
+        db.commit()
+        logger.info(f"[Conciliacion] {len(filas_ok)} filas guardadas exitosamente en BD")
+        
+        return {
+            "ok": True,
+            "mensaje": f"Carga exitosa: {len(filas_ok)} filas procesadas",
+            "filas_guardadas": len(filas_ok),
+            "filas_con_error": 0,
+            "errores": [],
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[Conciliacion] Error al procesar: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error al procesar datos: {str(e)}")
+
+
 @router.post("/conciliacion/cargar-excel-debug")
 async def cargar_conciliacion_excel_debug(
     file: UploadFile = File(...),
