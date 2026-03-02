@@ -463,7 +463,7 @@ def _generar_excel_conciliacion(
     ws = wb.active
     ws.title = "Conciliacion"
     
-    # Headers - 12 columnas base
+    # Headers - 12 columnas base + Observaciones
     headers = [
         "Nombre",                          # A
         "Cedula",                          # B
@@ -477,6 +477,7 @@ def _generar_excel_conciliacion(
         "Cuotas Pagadas ($)",              # J
         "Cuotas Pendientes (num)",         # K
         "Cuotas Pendientes ($)",           # L
+        "Observaciones",                   # M
     ]
     ws.append(headers)
     
@@ -534,13 +535,21 @@ def _generar_excel_conciliacion(
                 round(pend_monto, 2) if pend_monto else 0, # L
             ]
             
-            # Agregar columna "error TC" si hay diferencia en Total Financiamiento
-            if tf_excel > 0 and tf_sistema > 0 and tf_excel != tf_sistema:
-                row.append(f"error TC: {round(abs(tf_excel - tf_sistema), 2)}")
+            # Construir observaciones basadas en discrepancias
+            observaciones = []
             
-            # Agregar columna "error E" si hay diferencia en Abonos
+            # Verificar diferencia en Total Financiamiento
+            if tf_excel > 0 and tf_sistema > 0 and tf_excel != tf_sistema:
+                diff_tf = round(abs(tf_excel - tf_sistema), 2)
+                observaciones.append(f"error TC: {diff_tf}")
+            
+            # Verificar diferencia en Abonos
             if abonos_excel > 0 and abonos_sistema > 0 and abonos_excel != abonos_sistema:
-                row.append(f"error E: {round(abs(abonos_excel - abonos_sistema), 2)}")
+                diff_abonos = round(abs(abonos_excel - abonos_sistema), 2)
+                observaciones.append(f"error E: {diff_abonos}")
+            
+            # Agregar columna Observaciones (M)
+            row.append(" | ".join(observaciones) if observaciones else "")
         except Exception as e:
             continue
         
