@@ -235,13 +235,15 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                 </CardContent>
               </Card>
 
-              <TablaEditablePagos
-                rows={excelData.filter((row) => !enviadosRevisar.has(row._rowIndex) && !savedRows.has(row._rowIndex))}
-                prestamosPorCedula={prestamosPorCedula}
-                onRowsChange={setExcelData}
-                onUpdateCell={updateCellValue}
-                saveRowIfValid={saveRowIfValid}
-              />
+              {/* TABLA EDITABLE - NUEVA INTERFAZ */}
+              {excelData.length > 0 && (
+                <TablaEditablePagos
+                  rows={excelData.filter((row) => !enviadosRevisar.has(row._rowIndex) && !savedRows.has(row._rowIndex))}
+                  prestamosPorCedula={prestamosPorCedula}
+                  onUpdateCell={updateCellValue}
+                  saveRowIfValid={saveRowIfValid}
+                />
+              )}
 
               {/* ANTERIOR - TABLA HTML REMOVIDA */}
               {false && (

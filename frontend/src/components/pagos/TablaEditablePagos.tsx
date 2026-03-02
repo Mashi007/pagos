@@ -20,9 +20,9 @@ import type { PagoExcelRow } from '../../utils/pagoExcelValidation'
 export interface FilaEditableProps {
   rows: PagoExcelRow[]
   prestamosPorCedula: Record<string, Array<{ id: number; estado: string }>>
-  onRowsChange: (newRows: PagoExcelRow[]) => void
+  onRowsChange?: (newRows: PagoExcelRow[]) => void
   onUpdateCell: (row: PagoExcelRow, field: string, value: string | number) => void
-  saveRowIfValid: (row: PagoExcelRow) => Promise<boolean>
+  saveRowIfValid?: (row: PagoExcelRow) => Promise<boolean>
 }
 
 const inputClass = (isValid: boolean, isSaving?: boolean) =>
@@ -54,6 +54,7 @@ export function TablaEditablePagos({
   const handleCellChange = useCallback(
     (row: PagoExcelRow, field: string, value: string | number) => {
       onUpdateCell(row, field, value)
+      // NO intenta auto-guardar, solo actualiza validación
     },
     [onUpdateCell]
   )
