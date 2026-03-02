@@ -262,29 +262,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         if (prestamos.length === 0 && fallbackKey) prestamos = prestamosPorCedula[fallbackKey] || []
         if (prestamos.length === 1 && prestamoIdVacio(r.prestamo_id)) {
           changed = true
-        
-  const moveErrorToReviewPagos = useCallback(
-    async (id: number) => {
-      try {
-        await pagoConErrorService.moveToReviewPagos(id)
-        setPagosConErrores(prev => prev.filter(p => p.id !== id))
-        addToast('success', 'Movido a Revisar Pagos')
-        queryClient.invalidateQueries({ queryKey: ['pagosConErrores'] })
-      } catch (error) {
-        addToast('error', 'Error al mover a revisar pagos')
-      }
-    },
-    [addToast, queryClient]
-  )
-
-  const dismissError = useCallback(
-    (id: number) => {
-      setPagosConErrores(prev => prev.filter(p => p.id !== id))
-    },
-    []
-  )
-
-  return { ...r, prestamo_id: prestamos[0].id }
+          return { ...r, prestamo_id: prestamos[0].id }
         }
         return r
       })
