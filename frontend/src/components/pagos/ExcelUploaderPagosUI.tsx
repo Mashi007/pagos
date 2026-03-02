@@ -139,7 +139,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
             <div className="space-y-4">
               {/* TABLA EDITABLE - SIEMPRE SE MUESTRA */}
               <TablaEditablePagos
-                rows={excelData.filter((row) => !enviadosRevisar.has(row._rowIndex) && !savedRows.has(row._rowIndex))}
+                rows={excelData}
                 prestamosPorCedula={prestamosPorCedula}
                 onUpdateCell={updateCellValue}
                 saveRowIfValid={saveRowIfValid}
