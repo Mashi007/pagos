@@ -1,0 +1,30 @@
+Mejoras robustas: Startup BD y Health Check
+
+Implementadas mejoras para resolver problema de tabla 'prestamo' no existente en Render:
+
+Backend:
+- main.py: _startup_db_with_retry mejorada
+  * max_attempts: 5 → 10
+  * delay: 2s → 3s con backoff exponencial
+  * Verifica explícitamente que tabla 'prestamos' existe
+  * Valida acceso a tabla con COUNT(*)
+  * Logging detallado con [DB Startup] prefix
+
+- core/database.py: Engine mejorado
+  * connect_timeout: 10 segundos
+  * application_name: rapicredit_backend
+
+- api/v1/endpoints/health.py: Nuevos endpoints
+  * GET /health/: Health check básico
+  * GET /health/db: Verifica conexión, tablas críticas, acceso
+  * GET /health/detailed: Reporte completo (desarrollo)
+  * Registrado en render.yaml como healthCheckPath
+
+- scripts/health_check_db.py: Script local para verificar BD antes de deploy
+
+Documentación:
+- MEJORAS_DB_STARTUP.md: Guía completa de cambios, testing y troubleshooting
+
+Testing:
+- Syntax OK en todos los archivos Python
+- Health endpoints listos para monitoreo automático en Render
