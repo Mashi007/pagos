@@ -1,4 +1,4 @@
-"""
+﻿"""
 Reportes de Conciliación mejorado: con filtros, PDF export y optimizaciones.
 """
 import io
@@ -8,7 +8,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, Query, Body
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, Query, Body, File
 from fastapi.responses import Response
 from sqlalchemy import func, select, delete, and_, or_
 from sqlalchemy.orm import Session
@@ -58,6 +58,103 @@ def _parse_numero(val: Any) -> Decimal:
         return Decimal("0")
 
 
+
+@router.post("/conciliacion/cargar-excel")
+async def cargar_conciliacion_excel(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Carga archivo Excel de conciliación (cédula, total_financiamiento, total_abonos).
+    Valida datos y los almacena en tabla temporal para generación de reportes.
+    
+    Formato esperado (columnas A, B, C):
+    - Cédula: V12345678 o E98765432
+    - Total Financiamiento: monto numérico
+    - Total Abonos: monto numérico
+    - Columna E, F (opcionales): datos adicionales
+    """
+    if not file.filename or not file.filename.lower().endswith((".xlsx", ".xls")):
+        raise HTTPException(status_code=400, detail="Debe subir un archivo Excel (.xlsx o .xls)")
+    
+    try:
+        import openpyxl
+        import io
+        content = await file.read()
+        wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+        ws = wb.active
+        if not ws:
+            raise HTTPException(status_code=400, detail="Archivo Excel vacío")
+        
+        rows = list(ws.iter_rows(min_row=2, values_only=True))
+        if not rows:
+            raise HTTPException(status_code=400, detail="No se encontraron filas en el archivo")
+        
+        errores: List[str] = []
+        filas_ok: List[dict] = []
+        
+        for i, row in enumerate(rows):
+            if not row or all(cell is None for cell in row[:3]):
+                continue
+            
+            try:
+                cedula = row[0] if len(row) > 0 and row[0] is not None else None
+                tf = row[1] if len(row) > 1 and row[1] is not None else None
+                ta = row[2] if len(row) > 2 and row[2] is not None else None
+                
+                if not _validar_cedula(cedula):
+                    errores.append(f"Fila {i + 2}: cédula inválida ({cedula})")
+                    continue
+                if not _validar_numero(tf):
+                    errores.append(f"Fila {i + 2}: total financiamiento debe ser un número ≥ 0")
+                    continue
+                if not _validar_numero(ta):
+                    errores.append(f"Fila {i + 2}: total abonos debe ser un número ≥ 0")
+                    continue
+                
+                filas_ok.append({
+                    "cedula": str(cedula).strip(),
+                    "total_financiamiento": _parse_numero(tf),
+                    "total_abonos": _parse_numero(ta),
+                    "columna_e": str(row[4]).strip() if len(row) > 4 and row[4] is not None else None,
+                    "columna_f": str(row[5]).strip() if len(row) > 5 and row[5] is not None else None,
+                })
+            except Exception as e:
+                errores.append(f"Fila {i + 2}: {str(e)}")
+        
+        if errores:
+            return {
+                "ok": False,
+                "mensaje": f"Se encontraron {len(errores)} errores de validación",
+                "errores": errores[:50],
+                "filas_ok": 0,
+                "filas_con_error": len(errores),
+            }
+        
+        # Borrar datos previos e insertar nuevos
+        db.execute(delete(ConciliacionTemporal))
+        for f in filas_ok:
+            db.add(ConciliacionTemporal(
+                cedula=f["cedula"],
+                total_financiamiento=f["total_financiamiento"],
+                total_abonos=f["total_abonos"],
+                columna_e=f.get("columna_e"),
+                columna_f=f.get("columna_f"),
+            ))
+        db.commit()
+        
+        return {
+            "ok": True,
+            "mensaje": f"Carga exitosa: {len(filas_ok)} filas procesadas",
+            "filas_ok": len(filas_ok),
+            "filas_con_error": 0,
+            "errores": [],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error al procesar Excel: {str(e)}") from e
 @router.post("/conciliacion/cargar")
 def cargar_conciliacion_temporal(
     body: List[dict] = Body(...),
@@ -453,3 +550,4 @@ def get_conciliacion_resumen(
         "porcentaje_cobrado": round(porcentaje_cobrado, 2),
         "saldo_pendiente": round(total_financiamiento - total_pagos, 2),
     }
+
