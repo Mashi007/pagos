@@ -137,6 +137,16 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
             </Card>
           ) : (
             <div className="space-y-4">
+              {/* TABLA EDITABLE - PRIMERA (MÁS VISIBLE) */}
+              {excelData.length > 0 && (
+                <TablaEditablePagos
+                  rows={excelData.filter((row) => !enviadosRevisar.has(row._rowIndex) && !savedRows.has(row._rowIndex))}
+                  prestamosPorCedula={prestamosPorCedula}
+                  onUpdateCell={updateCellValue}
+                  saveRowIfValid={saveRowIfValid}
+                />
+              )}
+
               <Card className="border-green-200 bg-green-50">
                 <CardContent className="pt-4">
                   <div className="flex flex-wrap items-center justify-between gap-4">
@@ -234,16 +244,6 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                   </div>
                 </CardContent>
               </Card>
-
-              {/* TABLA EDITABLE - NUEVA INTERFAZ */}
-              {excelData.length > 0 && (
-                <TablaEditablePagos
-                  rows={excelData.filter((row) => !enviadosRevisar.has(row._rowIndex) && !savedRows.has(row._rowIndex))}
-                  prestamosPorCedula={prestamosPorCedula}
-                  onUpdateCell={updateCellValue}
-                  saveRowIfValid={saveRowIfValid}
-                />
-              )}
 
               {/* ANTERIOR - TABLA HTML REMOVIDA */}
               {false && (
