@@ -204,8 +204,7 @@ export function DialogConciliacion({ open, onOpenChange, onGuardar }: DialogConc
             Cargar Datos
           </button>
           <button
-            onClick={() => setTab('resumen')} style={{ display: 'none' }}
-            className={`px-4 py-2 ${tab === 'resumen' ? 'border-b-2 border-blue-500 font-semibold' : 'text-gray-500'}`}
+            onClick={() => setTab('resumen')} className={`px-4 py-2 ${tab === 'resumen' ? 'border-b-2 border-blue-500 font-semibold' : 'text-gray-500'}`}
           >
             Resumen & Descarga
           </button>
@@ -285,7 +284,7 @@ export function DialogConciliacion({ open, onOpenChange, onGuardar }: DialogConc
           )}
 
           
-          {false && (
+          {tab === 'resumen' && (
             <>
               <p className="text-sm text-muted-foreground">
                 Ver resumen de conciliacion o descargar reporte en Excel/PDF con filtros opcionales.

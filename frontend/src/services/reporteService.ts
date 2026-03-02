@@ -1,4 +1,4 @@
-﻿import { apiClient } from './api'
+import { apiClient } from './api'
 
 export interface ReporteCartera {
   fecha_corte: string
@@ -76,6 +76,7 @@ export interface ResumenDashboard {
   total_prestamos: number
   total_pagos: number
   cartera_activa: number
+  /** Préstamos con cuotas vencidas 90+ días (backend: pagos_vencidos) */
   pagos_vencidos: number
   pagos_mes: number
   fecha_actualizacion: string
@@ -245,31 +246,22 @@ export interface ProductosPorMes {
   }>
 }
 
-export interface ResumenConciliacion {
-  fecha_generacion: string
-  total_filas: number
-  filas_procesadas: number
-  filas_con_discrepancia: number
-  monto_total_financiamiento: number
-  monto_total_abonos: number
-  diferencia_total: number
-  cedulas_unicas: number
-  cedulas_con_discrepancia: Array<{
-    cedula: string
-    total_financiamiento: number
-    total_abonos: number
-    diferencia: number
-  }>
-}
-
 class ReporteService {
   private baseUrl = '/api/v1/reportes'
+  // API expects query param 'anos' (no n-tilde); use 'meses_list' for months in cartera/pagos/morosidad/asesores.
 
+  /**
+   * Obtiene cuentas por cobrar por mes: por día cuándo debe cobrar
+   */
   async getCarteraPorMes(meses: number = 12): Promise<CarteraPorMes> {
     const params = new URLSearchParams({ meses: meses.toString() })
     return await apiClient.get(`${this.baseUrl}/cartera/por-mes?${params.toString()}`)
   }
 
+  /**
+   * Obtiene reporte de cartera
+   * @param fechaCorte Opcional. Si no se proporciona, usa la fecha actual
+   */
   async getReporteCartera(fechaCorte?: string): Promise<ReporteCartera> {
     const params = new URLSearchParams()
     if (fechaCorte) params.set('fecha_corte', fechaCorte)
@@ -277,6 +269,11 @@ class ReporteService {
     return await apiClient.get(`${this.baseUrl}/cartera${query ? `?${query}` : ''}`)
   }
 
+  /**
+   * Obtiene reporte de pagos en un rango de fechas
+   * @param fechaInicio Fecha de inicio (requerida)
+   * @param fechaFin Fecha de fin (requerida)
+   */
   async getReportePagos(
     fechaInicio: string,
     fechaFin: string
@@ -285,11 +282,18 @@ class ReporteService {
     return await apiClient.get(`${this.baseUrl}/pagos?${params.toString()}`)
   }
 
+  /**
+   * Obtiene pagos agrupados por mes/año. Cada mes tiene lista ordenada descendente por fecha.
+   */
   async getPagosPorMes(meses: number = 12): Promise<PagosPorMes> {
     const params = new URLSearchParams({ meses: meses.toString() })
     return await apiClient.get(`${this.baseUrl}/pagos/por-mes?${params.toString()}`)
   }
 
+  /**
+   * Exporta reporte de cartera en Excel o PDF
+   * @param filtros años y meses seleccionados (para Excel)
+   */
   async exportarReporteCartera(
     formato: 'excel' | 'pdf',
     fechaCorte?: string,
@@ -307,10 +311,17 @@ class ReporteService {
     return response.data as Blob
   }
 
+  /**
+   * Obtiene resumen para dashboard
+   */
   async getResumenDashboard(): Promise<ResumenDashboard> {
     return await apiClient.get(`${this.baseUrl}/dashboard/resumen`)
   }
 
+  /**
+   * Obtiene reporte de morosidad
+   * @param fechaCorte Opcional. Si no se proporciona, usa la fecha actual
+   */
   async getReporteMorosidad(fechaCorte?: string): Promise<ReporteMorosidad> {
     const params = new URLSearchParams()
     if (fechaCorte) params.set('fecha_corte', fechaCorte)
@@ -318,6 +329,9 @@ class ReporteService {
     return await apiClient.get(`${this.baseUrl}/morosidad${query ? `?${query}` : ''}`)
   }
 
+  /**
+   * Obtiene informe pago vencido por rangos de días (1 día, 15 días, 30 días, 2 meses, 90+ moroso)
+   */
   async getMorosidadPorRangos(fechaCorte?: string): Promise<MorosidadPorRangos> {
     const params = new URLSearchParams()
     if (fechaCorte) params.set('fecha_corte', fechaCorte)
@@ -325,6 +339,10 @@ class ReporteService {
     return await apiClient.get(`${this.baseUrl}/morosidad/por-rangos${query ? `?${query}` : ''}`)
   }
 
+  /**
+   * Obtiene reporte financiero
+   * @param fechaCorte Opcional. Si no se proporciona, usa la fecha actual
+   */
   async getReporteFinanciero(fechaCorte?: string): Promise<ReporteFinanciero> {
     const params = new URLSearchParams()
     if (fechaCorte) params.set('fecha_corte', fechaCorte)
@@ -332,11 +350,18 @@ class ReporteService {
     return await apiClient.get(`${this.baseUrl}/financiero${query ? `?${query}` : ''}`)
   }
 
+  /**
+   * Obtiene asesores por mes: una pestaña por mes, orden descendente por morosidad
+   */
   async getAsesoresPorMes(meses: number = 12): Promise<AsesoresPorMes> {
     const params = new URLSearchParams({ meses: meses.toString() })
     return await apiClient.get(`${this.baseUrl}/asesores/por-mes?${params.toString()}`)
   }
 
+  /**
+   * Obtiene reporte de asesores
+   * @param fechaCorte Opcional. Si no se proporciona, usa la fecha actual
+   */
   async getReporteAsesores(fechaCorte?: string): Promise<ReporteAsesores> {
     const params = new URLSearchParams()
     if (fechaCorte) params.set('fecha_corte', fechaCorte)
@@ -344,11 +369,18 @@ class ReporteService {
     return await apiClient.get(`${this.baseUrl}/asesores${query ? `?${query}` : ''}`)
   }
 
+  /**
+   * Obtiene productos por mes: modelo y suma ventas (70% valor prestado) por modelo
+   */
   async getProductosPorMes(meses: number = 12): Promise<ProductosPorMes> {
     const params = new URLSearchParams({ meses: meses.toString() })
     return await apiClient.get(`${this.baseUrl}/productos/por-mes?${params.toString()}`)
   }
 
+  /**
+   * Obtiene reporte de productos
+   * @param fechaCorte Opcional. Si no se proporciona, usa la fecha actual
+   */
   async getReporteProductos(fechaCorte?: string): Promise<ReporteProductos> {
     const params = new URLSearchParams()
     if (fechaCorte) params.set('fecha_corte', fechaCorte)
@@ -356,6 +388,9 @@ class ReporteService {
     return await apiClient.get(`${this.baseUrl}/productos${query ? `?${query}` : ''}`)
   }
 
+  /**
+   * Exporta reporte de pagos. Excel: una pestaña por mes (Día | Cantidad pagos | Cantidad cédulas | Monto).
+   */
   async exportarReportePagos(
     formato: 'excel' | 'pdf',
     fechaInicio?: string,
@@ -380,6 +415,9 @@ class ReporteService {
     return response.data as Blob
   }
 
+  /**
+   * Exporta reporte Morosidad (clientes con cuotas 90+ días): Nombre, Cédula, Cant cuotas, Total USD
+   */
   async exportarReporteMorosidadClientes(fechaCorte?: string): Promise<Blob> {
     const params = new URLSearchParams()
     if (fechaCorte) params.set('fecha_corte', fechaCorte)
@@ -391,6 +429,9 @@ class ReporteService {
     return response.data as Blob
   }
 
+  /**
+   * Exporta reporte de morosidad (Vencimiento) en Excel o PDF
+   */
   async exportarReporteMorosidad(
     formato: 'excel' | 'pdf',
     fechaCorte?: string,
@@ -408,6 +449,9 @@ class ReporteService {
     return response.data as Blob
   }
 
+  /**
+   * Exporta reporte financiero en Excel o PDF
+   */
   async exportarReporteFinanciero(
     formato: 'excel' | 'pdf',
     fechaCorte?: string
@@ -422,6 +466,9 @@ class ReporteService {
     return response.data as Blob
   }
 
+  /**
+   * Exporta reporte de asesores en Excel o PDF
+   */
   async exportarReporteAsesores(
     formato: 'excel' | 'pdf',
     fechaCorte?: string,
@@ -439,6 +486,9 @@ class ReporteService {
     return response.data as Blob
   }
 
+  /**
+   * Exporta reporte de productos en Excel o PDF
+   */
   async exportarReporteProductos(
     formato: 'excel' | 'pdf',
     fechaCorte?: string,
@@ -456,12 +506,19 @@ class ReporteService {
     return response.data as Blob
   }
 
+  /**
+   * Busca cédulas para filtrar reporte contable.
+   */
   async buscarCedulasContable(q?: string): Promise<{ cedulas: Array<{ cedula: string; nombre: string }> }> {
     const params = new URLSearchParams()
     if (q) params.set('q', q)
     return await apiClient.get(`${this.baseUrl}/contable/cedulas?${params.toString()}`)
   }
 
+  /**
+   * Exporta reporte contable en Excel desde cache.
+   * Filtros: años, meses, cedulas (opcional). Política: últimos 7 días se actualizan.
+   */
   async exportarReporteContable(
     años: number[],
     meses: number[],
@@ -482,6 +539,10 @@ class ReporteService {
     return { blob: response.data as Blob, vacio }
   }
 
+  /**
+   * Exporta reporte por cédula en Excel.
+   * Columnas: ID préstamo | Cédula | Nombre | Total financiamiento | Total abono | Cuotas totales | Cuotas pagadas | Cuotas atrasadas | Cuotas atrasadas ($).
+   */
   async exportarReporteCedula(): Promise<Blob> {
     const axiosInstance = apiClient.getAxiosInstance()
     const response = await axiosInstance.get(
@@ -491,53 +552,40 @@ class ReporteService {
     return response.data as Blob
   }
 
-  async cargarConciliacion(
-    filas: Array<{ cedula: string; total_financiamiento: number; total_abonos: number; columna_e?: string; columna_f?: string }>,
-    fechaInicio?: string,
-    fechaFin?: string,
-    cedulas?: string[]
-  ): Promise<{ ok: boolean; filas_guardadas: number }> {
-    const params = new URLSearchParams()
-    if (fechaInicio) params.set('fecha_inicio', fechaInicio)
-    if (fechaFin) params.set('fecha_fin', fechaFin)
-    if (cedulas?.length) params.set('cedulas', cedulas.join(','))
-    const query = params.toString()
-    const url = `${this.baseUrl}/conciliacion/cargar${query ? `?${query}` : ''}`
-    return await apiClient.post(url, filas)
+  /**
+   * Descarga un archivo (Excel, PDF, CSV)
+   */
+
+  /**
+   * Env�a filas de conciliaci�n (cedula, total_financiamiento, total_abonos, columna_e, columna_f) para guardar en BD temporal.
+   */
+  async cargarConciliacionExcel(
+    file: File
+  ): Promise<{ ok: boolean; filas_ok: number; filas_con_error: number; errores: string[] }> {
+    const formData = new FormData()
+    formData.append('file', file)
+    return await apiClient.post(`${this.baseUrl}/conciliacion/cargar-excel`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
   }
 
-  async obtenerResumenConciliacion(
-    fechaInicio?: string,
-    fechaFin?: string,
-    cedulas?: string[]
-  ): Promise<ResumenConciliacion> {
-    const params = new URLSearchParams()
-    if (fechaInicio) params.set('fecha_inicio', fechaInicio)
-    if (fechaFin) params.set('fecha_fin', fechaFin)
-    if (cedulas?.length) params.set('cedulas', cedulas.join(','))
-    const query = params.toString()
-    return await apiClient.get(`${this.baseUrl}/conciliacion/resumen${query ? `?${query}` : ''}`)
+  async cargarConciliacion(filas: Array<{ cedula: string; total_financiamiento: number; total_abonos: number; columna_e?: string; columna_f?: string }>): Promise<{ ok: boolean; filas_guardadas: number }> {
+    return await apiClient.post(`${this.baseUrl}/conciliacion/cargar`, filas)
   }
 
-  async exportarReporteConciliacion(
-    fechaInicio?: string,
-    fechaFin?: string,
-    cedulas?: string[]
-  ): Promise<Blob> {
-    const params = new URLSearchParams()
-    if (fechaInicio) params.set('fecha_inicio', fechaInicio)
-    if (fechaFin) params.set('fecha_fin', fechaFin)
-    if (cedulas?.length) params.set('cedulas', cedulas.join(','))
-    const query = params.toString()
+  /**
+   * Exporta reporte Conciliaci�n en Excel. Al descargar se eliminan los datos temporales.
+   */
+  async exportarReporteConciliacion(): Promise<Blob> {
     const axiosInstance = apiClient.getAxiosInstance()
     const response = await axiosInstance.get(
-      `${this.baseUrl}/exportar/conciliacion${query ? `?${query}` : ''}`,
+      `${this.baseUrl}/exportar/conciliacion`,
       { responseType: 'blob', timeout: 180000 }
     )
     return response.data as Blob
   }
 
-  async downloadFile(
+    async downloadFile(
     url: string,
     filename: string
   ): Promise<void> {
@@ -548,6 +596,7 @@ class ReporteService {
         timeout: 180000,
       })
 
+      // Crear un enlace temporal para descargar
       const blob = new Blob([response.data as BlobPart], {
         type: response.headers['content-type'] || 'application/octet-stream'
       })
@@ -567,3 +616,6 @@ class ReporteService {
 }
 
 export const reporteService = new ReporteService()
+
+
+
