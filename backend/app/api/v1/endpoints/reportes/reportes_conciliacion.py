@@ -1,4 +1,4 @@
-﻿"""
+"""
 Reportes de Conciliación mejorado: con filtros, PDF export y optimizaciones.
 """
 import io
@@ -58,6 +58,23 @@ def _parse_numero(val: Any) -> Decimal:
         return Decimal("0")
 
 
+def _normalizar_cedula(cedula: str) -> str:
+    """
+    Normaliza cédula para comparación exacta.
+    - Elimina espacios y tabs
+    - Convierte a mayúsculas
+    - Elimina caracteres especiales comunes
+    
+    Ejemplos:
+        "V 12345678"  → "V12345678"
+        "E 98765432"  → "E98765432"
+        "  v12345678" → "V12345678"
+    """
+    if not cedula:
+        return ""
+    return cedula.replace(" ", "").replace("\t", "").strip().upper()
+
+
 
 @router.post("/conciliacion/cargar-excel")
 async def cargar_conciliacion_excel(
@@ -113,7 +130,7 @@ async def cargar_conciliacion_excel(
                     continue
                 
                 filas_ok.append({
-                    "cedula": str(cedula).strip(),
+                    "cedula": _normalizar_cedula(str(cedula).strip()),
                     "total_financiamiento": _parse_numero(tf),
                     "total_abonos": _parse_numero(ta),
                     "columna_e": str(row[4]).strip() if len(row) > 4 and row[4] is not None else None,
@@ -227,18 +244,19 @@ def _generar_excel_conciliacion(
     query = query.order_by(Prestamo.id)
     prestamos = db.execute(query).scalars().all()
 
-    # Filtro por cédulas si se proporciona
+    # Filtro por cédulas si se proporciona (con normalización)
     if cedulas_filter:
-        cedulas_filter_set = {c.strip().upper() for c in cedulas_filter}
-        prestamos = [p for p in prestamos if (p.cedula or "").strip().upper() in cedulas_filter_set]
+        cedulas_filter_set = {_normalizar_cedula(c) for c in cedulas_filter}
+        prestamos = [p for p in prestamos if _normalizar_cedula(p.cedula or "") in cedulas_filter_set]
 
-    # Mapa cedula -> conciliacion_temporal
+    # Mapa cedula -> conciliacion_temporal (normalizado)
     concilia_rows = db.execute(select(ConciliacionTemporal)).fetchall()
     concilia_por_cedula: dict = {}
     for r in concilia_rows:
         c = r[0] if hasattr(r, "__getitem__") else r
-        if c.cedula not in concilia_por_cedula:
-            concilia_por_cedula[c.cedula] = c
+        cedula_norm = _normalizar_cedula(c.cedula)
+        if cedula_norm and cedula_norm not in concilia_por_cedula:
+            concilia_por_cedula[cedula_norm] = c
 
     ids = [p.id for p in prestamos]
     total_pagos_map: dict = {}
@@ -292,16 +310,19 @@ def _generar_excel_conciliacion(
     ])
     for p in prestamos:
         cedula = (p.cedula or "").strip()
+        cedula_normalizada = _normalizar_cedula(cedula)
         nombres = (p.nombres or "").strip()
         cliente = db.execute(select(Cliente).where(Cliente.id == p.cliente_id)).scalar() if p.cliente_id else None
         if cliente:
             nombres = (cliente.nombres or nombres or "").strip()
             cedula = (cliente.cedula or cedula or "").strip()
+            cedula_normalizada = _normalizar_cedula(cedula)
         else:
             if not nombres and not cedula:
                 nombres = "no existe"
                 cedula = "no existe"
-        concilia = concilia_por_cedula.get(cedula) if cedula and cedula != "no existe" else None
+                cedula_normalizada = ""
+        concilia = concilia_por_cedula.get(cedula_normalizada) if cedula_normalizada else None
         col_e = concilia.columna_e if concilia else ""
         col_f = concilia.columna_f if concilia else ""
         total_pagos = _safe_float(total_pagos_map.get(p.id, 0))
