@@ -837,7 +837,17 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             const cedulasExistentesBD = new Set(
               (resultado.cedulas_existentes || []).map((c: string) => c.replace(/-/g, '').toUpperCase())
             )
-            const documentosDuplicadosBD = new Set(resultado.documentos_duplicados || [])
+            
+            // Documentos confirmados (encontrados en CUOTAS = pago ya aplicado)
+            const documentosConfirmadosBD = new Set(
+              (resultado.documentos_confirmados || []).map((d: any) => normalizarNumeroDocumento(d.numero_documento))
+            )
+            
+            // Documentos duplicados (en PAGOS pero sin aplicar a CUOTA)
+            const documentosDuplicadosBD = new Set(
+              (resultado.documentos_duplicados || []).map((d: any) => normalizarNumeroDocumento(d.numero_documento))
+            )
+            
             const pagosSospechosos = (resultado.pagos_sospechosos || []).reduce(
               (map: Map<string, any>, p: any) => {
                 const key = `${p.cedula}_${p.fecha_pago}_${p.monto_pagado}`
@@ -860,10 +870,20 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
                     todasCedulas.filter(c => !cedulasExistentesBD.has(c))
                   ),
                 })
-                const vDoc = validatePagoField('numero_documento', r.numero_documento, {
-                  documentosDuplicadosBD,
-                  documentosEnArchivo: documentosDuplicadosEnArchivo,
-                })
+                
+                // Documento confirmado (en CUOTAS) = VÁLIDO ✓
+                // Documento duplicado (en PAGOS sin CUOTA) = ERROR ✗
+                let vDoc = r._validation.numero_documento
+                if (docNorm && documentosConfirmadosBD.has(docNorm)) {
+                  vDoc = { isValid: true, message: 'Confirmado en sistema (pago ya aplicado)' }
+                } else if (docNorm && documentosDuplicadosBD.has(docNorm)) {
+                  vDoc = { isValid: false, message: 'Documento duplicado (pago sin aplicar a cuota)' }
+                } else {
+                  vDoc = validatePagoField('numero_documento', r.numero_documento, {
+                    documentosEnArchivo: documentosDuplicadosEnArchivo,
+                  })
+                }
+                
                 // Si es patrón duplicado (misma cédula+fecha+monto) y sin número de documento, marcar como sospechoso
                 const vMonto = pagoSospechoso && !r.numero_documento
                   ? { isValid: false, message: 'Patrón idéntico (cédula+fecha+monto) ya existe en BD' }

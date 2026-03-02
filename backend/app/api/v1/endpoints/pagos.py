@@ -56,6 +56,17 @@ class ValidarFilasBatchBody(BaseModel):
     # Opcional: validar patrones de duplicados completos
     filas: list[dict] = []  # [{cedula, fecha_pago, monto_pagado, numero_documento}, ...]
 
+
+class DetalleDocumentoDB(BaseModel):
+    """Detalles de un documento encontrado en BD."""
+    existe: bool
+    confirmado: bool  # True si coinciden cédula + monto + fecha
+    cedula_bd: Optional[str] = None
+    fecha_pago_bd: Optional[str] = None
+    monto_pagado_bd: Optional[float] = None
+    pago_id: Optional[int] = None
+    detalle: str = ""
+
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -774,9 +785,12 @@ def validar_filas_batch(
     """
     Valida en lote:
     - Cédulas: deben existir en tabla clientes
-    - Documentos: no deben existir en tabla pagos (duplicados)
-    Retorna sets de cédulas válidas y documentos duplicados.
+    - Documentos: se verifica en tabla CUOTAS (si existe → confirmado/válido)
+                  Si NO existe en CUOTAS pero SÍ en PAGOS → duplicado sin aplicar
+    Retorna cédulas válidas y documentos con estado de confirmación.
     """
+    from app.models.cuota import Cuota
+    
     # Normalizar cédulas (sin guión, uppercase)
     cedulas_norm = list({
         c.strip().replace("-", "").upper()
@@ -792,21 +806,59 @@ def validar_filas_batch(
         ).all()
         cedulas_existentes = {r[0].strip().replace("-", "").upper() for r in rows}
 
-    # Documentos que ya existen en tabla pagos (duplicados)
-    documentos_duplicados: set[str] = set()
+    # Documentos: verificar contra CUOTAS (si existe → confirmado) y PAGOS (si existe sin cuota → duplicado)
+    documentos_confirmados: list[dict] = []  # Documentos encontrados en CUOTAS (pago ya aplicado)
+    documentos_duplicados: list[dict] = []   # Documentos en PAGOS pero NO aplicados a CUOTA
+    
     docs_norm = [
         _canonical_numero_documento(d)
         for d in (body.documentos or [])
         if d and d.strip()
     ]
     docs_norm_limpios = [d for d in docs_norm if d]
+    
     if docs_norm_limpios:
-        rows_docs = db.execute(
-            select(Pago.numero_documento).where(
-                Pago.numero_documento.in_(docs_norm_limpios)
+        # PRIMERO: buscar en CUOTAS (pago confirmado/aplicado)
+        rows_cuotas = db.execute(
+            select(Pago.numero_documento, Pago.id, Pago.cedula_cliente, 
+                   Pago.fecha_pago, Pago.monto_pagado)
+            .join(Cuota, Pago.id == Cuota.pago_id)
+            .where(Pago.numero_documento.in_(docs_norm_limpios))
+            .distinct()
+        ).all()
+        
+        docs_confirmados_set = set()
+        for row in rows_cuotas:
+            docs_confirmados_set.add(row[0])
+            documentos_confirmados.append({
+                "numero_documento": row[0],
+                "pago_id": row[1],
+                "cedula": row[2],
+                "fecha_pago": row[3].isoformat() if row[3] else None,
+                "monto_pagado": float(row[4]) if row[4] else 0,
+                "estado": "confirmado",  # Pago ya aplicado a cuota
+            })
+        
+        # LUEGO: buscar en PAGOS pero SIN aplicar a CUOTA (duplicado)
+        rows_pagos_sin_cuota = db.execute(
+            select(Pago.numero_documento, Pago.id, Pago.cedula_cliente,
+                   Pago.fecha_pago, Pago.monto_pagado)
+            .where(
+                Pago.numero_documento.in_(docs_norm_limpios),
+                ~Pago.id.in_(select(Cuota.pago_id).where(Cuota.pago_id.isnot(None)))
             )
         ).all()
-        documentos_duplicados = {r[0] for r in rows_docs if r[0]}
+        
+        for row in rows_pagos_sin_cuota:
+            if row[0] not in docs_confirmados_set:
+                documentos_duplicados.append({
+                    "numero_documento": row[0],
+                    "pago_id": row[1],
+                    "cedula": row[2],
+                    "fecha_pago": row[3].isoformat() if row[3] else None,
+                    "monto_pagado": float(row[4]) if row[4] else 0,
+                    "estado": "duplicado_sin_aplicar",  # Pago existe pero no se aplicó a cuota
+                })
 
     # Patrones sospechosos: cédula + fecha + monto iguales (posible duplicado completo)
     pagos_sospechosos: list[dict] = []
@@ -817,10 +869,8 @@ def validar_filas_batch(
             monto = fila.get('monto_pagado', 0)
             if cedula and fecha_str and monto > 0:
                 try:
-                    # Parsear fecha (esperamos formato DD/MM/YYYY o similar)
                     from datetime import datetime as dt
                     fecha_obj = dt.strptime(fecha_str.replace('-', '/'), '%d/%m/%Y').date()
-                    # Buscar pago con misma cédula, fecha y monto
                     query = select(Pago).where(
                         Pago.cedula == cedula,
                         Pago.fecha_pago.cast(db.Text).like(f"{fecha_obj}%"),
@@ -836,11 +886,12 @@ def validar_filas_batch(
                             "detalle": f"Existe pago idéntico (ID: {existing[0].id})"
                         })
                 except Exception:
-                    pass  # Si falla el parse, ignorar esta validación
+                    pass
 
     return {
         "cedulas_existentes": list(cedulas_existentes),
-        "documentos_duplicados": list(documentos_duplicados),
+        "documentos_confirmados": documentos_confirmados,  # Pagos ya aplicados a cuotas
+        "documentos_duplicados": documentos_duplicados,     # Pagos sin aplicar (duplicado)
         "pagos_sospechosos": pagos_sospechosos,
     }
 
