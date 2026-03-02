@@ -782,8 +782,12 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         }
 
         if (!isMounted()) return
+        console.log('✅ EXCEL PARSEADO:', processed.length, 'filas')
+        console.log('Filas:', processed)
         setExcelData(processed)
+        console.log('✅ setExcelData llamado')
         setShowPreview(true)
+        console.log('✅ setShowPreview(true) llamado')
 
         // Asignar CrÃ©dito en cuanto lleguen los prÃ©stamos (misma lÃ³gica que el efecto)
         const uniqueCedulasSet = new Set<string>()
