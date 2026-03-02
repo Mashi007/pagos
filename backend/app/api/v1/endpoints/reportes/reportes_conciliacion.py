@@ -85,11 +85,10 @@ async def cargar_conciliacion_excel(
     Carga archivo Excel de conciliación (cédula, total_financiamiento, total_abonos).
     Valida datos y los almacena en tabla temporal para generación de reportes.
     
-    Formato esperado (columnas A, B, C):
-    - Cédula: V12345678 o E98765432
-    - Total Financiamiento: monto numérico
-    - Total Abonos: monto numérico
-    - Columna E, F (opcionales): datos adicionales
+    Formato esperado (3 columnas):
+    - Columna A: Cédula (V12345678 o E98765432) - solo para concatenación
+    - Columna B: Total Financiamiento (monto numérico)
+    - Columna C: Total Abonos (monto numérico)
     """
     if not file.filename or not file.filename.lower().endswith((".xlsx", ".xls")):
         raise HTTPException(status_code=400, detail="Debe subir un archivo Excel (.xlsx o .xls)")
@@ -133,8 +132,6 @@ async def cargar_conciliacion_excel(
                     "cedula": _normalizar_cedula(str(cedula).strip()),
                     "total_financiamiento": _parse_numero(tf),
                     "total_abonos": _parse_numero(ta),
-                    "columna_e": str(row[4]).strip() if len(row) > 4 and row[4] is not None else None,
-                    "columna_f": str(row[5]).strip() if len(row) > 5 and row[5] is not None else None,
                 })
             except Exception as e:
                 errores.append(f"Fila {i + 2}: {str(e)}")
@@ -301,43 +298,74 @@ def _generar_excel_conciliacion(
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Conciliacion"
-    ws.append([
-        "Nombre", "Cedula", "Numero de credito", "Total financiamiento",
-        "Columna E", "Columna F",
-        "Total pagos realizados", "Total cuotas",
-        "Cuotas pagadas (num)", "Cuotas pagadas ($)",
-        "Cuotas pendientes (num)", "Cuotas pendientes ($)",
-    ])
+    
+    # Headers - 12 columnas base
+    headers = [
+        "Nombre",                          # A
+        "Cedula",                          # B
+        "Numero de Prestamo",              # C
+        "Total Financiamiento Excel",      # D
+        "Total Financiamiento Sistema",    # E
+        "Abonos Excel",                    # F
+        "Abonos Sistema",                  # G
+        "Total Cuotas",                    # H
+        "Cuotas Pagadas (num)",            # I
+        "Cuotas Pagadas ($)",              # J
+        "Cuotas Pendientes (num)",         # K
+        "Cuotas Pendientes ($)",           # L
+    ]
+    ws.append(headers)
+    
+    # Procesar cada préstamo
     for p in prestamos:
         cedula = (p.cedula or "").strip()
         cedula_normalizada = _normalizar_cedula(cedula)
-        nombres = (p.nombres or "").strip()
-        cliente = db.execute(select(Cliente).where(Cliente.id == p.cliente_id)).scalar() if p.cliente_id else None
-        if cliente:
-            nombres = (cliente.nombres or nombres or "").strip()
-            cedula = (cliente.cedula or cedula or "").strip()
-            cedula_normalizada = _normalizar_cedula(cedula)
-        else:
-            if not nombres and not cedula:
-                nombres = "no existe"
-                cedula = "no existe"
-                cedula_normalizada = ""
+        
+        # Buscar cliente por cédula
+        cliente = db.execute(select(Cliente).where(Cliente.cedula == cedula)).scalar()
+        nombre = (cliente.nombres or "").strip() if cliente else ""
+        
+        # Buscar datos del Excel por cédula
         concilia = concilia_por_cedula.get(cedula_normalizada) if cedula_normalizada else None
-        col_e = concilia.columna_e if concilia else ""
-        col_f = concilia.columna_f if concilia else ""
-        total_pagos = _safe_float(total_pagos_map.get(p.id, 0))
+        tf_excel = _safe_float(concilia.total_financiamiento) if concilia else 0
+        abonos_excel = _safe_float(concilia.total_abonos) if concilia else 0
+        
+        # Datos del Sistema (tabla prestamos)
+        tf_sistema = _safe_float(p.total_financiamiento)
+        abonos_sistema = _safe_float(p.total_abonos)
+        
+        # Datos de cuotas
         tot_cuotas = total_cuotas_num_map.get(p.id, p.numero_cuotas or 0)
         pag_num = cuotas_pagadas_num_map.get(p.id, 0)
         pag_monto = cuotas_pagadas_monto_map.get(p.id, 0)
         pend_num = cuotas_pendientes_num_map.get(p.id, 0)
         pend_monto = cuotas_pendientes_monto_map.get(p.id, 0)
-        ws.append([
-            nombres, cedula, p.id, _safe_float(p.total_financiamiento),
-            col_e or "", col_f or "",
-            round(total_pagos, 2), tot_cuotas,
-            pag_num, round(pag_monto, 2),
-            pend_num, round(pend_monto, 2),
-        ])
+        
+        # Crear fila base (12 columnas)
+        row = [
+            nombre,                                    # A
+            cedula,                                    # B
+            p.id,                                      # C
+            round(tf_excel, 2) if tf_excel else "",   # D
+            round(tf_sistema, 2) if tf_sistema else "", # E
+            round(abonos_excel, 2) if abonos_excel else "",     # F
+            round(abonos_sistema, 2) if abonos_sistema else "",  # G
+            tot_cuotas,                               # H
+            pag_num,                                  # I
+            round(pag_monto, 2),                      # J
+            pend_num,                                 # K
+            round(pend_monto, 2),                     # L
+        ]
+        
+        # Agregar columna "error TC" si hay diferencia en Total Financiamiento
+        if tf_excel > 0 and tf_sistema > 0 and tf_excel != tf_sistema:
+            row.append(f"error TC: {round(abs(tf_excel - tf_sistema), 2)}")
+        
+        # Agregar columna "error E" si hay diferencia en Abonos
+        if abonos_excel > 0 and abonos_sistema > 0 and abonos_excel != abonos_sistema:
+            row.append(f"error E: {round(abs(abonos_excel - abonos_sistema), 2)}")
+        
+        ws.append(row)
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
