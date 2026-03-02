@@ -76,6 +76,53 @@ def _normalizar_cedula(cedula: str) -> str:
 
 
 
+@router.post("/conciliacion/cargar-excel-debug")
+async def cargar_conciliacion_excel_debug(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    """DEBUG: Carga Excel y muestra exactamente qué lee"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    logger.info(f"[DEBUG] Archivo recibido: {file.filename}")
+    
+    if not file.filename or not file.filename.lower().endswith((".xlsx", ".xls")):
+        logger.error(f"[DEBUG] Archivo no es Excel: {file.filename}")
+        return {"error": "Debe subir un archivo Excel (.xlsx o .xls)"}
+    
+    try:
+        import openpyxl
+        content = await file.read()
+        logger.info(f"[DEBUG] Tamaño archivo: {len(content)} bytes")
+        
+        wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+        ws = wb.active
+        logger.info(f"[DEBUG] Hoja activa: {ws.title}")
+        
+        rows = list(ws.iter_rows(min_row=2, values_only=True))
+        logger.info(f"[DEBUG] Total filas (sin header): {len(rows)}")
+        
+        # Log primeras 5 filas
+        for i, row in enumerate(rows[:5]):
+            logger.info(f"[DEBUG] Fila {i+2}: {row}")
+            if row and len(row) >= 3:
+                logger.info(f"[DEBUG]   -> [0]={row[0]} ({type(row[0]).__name__}), [1]={row[1]} ({type(row[1]).__name__}), [2]={row[2]} ({type(row[2]).__name__})")
+        
+        return {
+            "debug": True,
+            "archivo": file.filename,
+            "tamaño_bytes": len(content),
+            "hoja": ws.title,
+            "total_filas": len(rows),
+            "primeras_filas": [dict(cedula=row[0], tf=row[1], ta=row[2]) if row and len(row) >= 3 else None for row in rows[:5]],
+        }
+        
+    except Exception as e:
+        logger.error(f"[DEBUG] Error: {str(e)}", exc_info=True)
+        return {"error": str(e)}
+
+
 @router.post("/conciliacion/cargar-excel")
 async def cargar_conciliacion_excel(
     file: UploadFile = File(...),
