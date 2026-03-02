@@ -502,7 +502,7 @@ async def upload_excel_pagos(
                     col_doc = 3
                     prestamo_id = None
                 # Formato A: Documento, Cédula, Fecha, Monto
-                if len(row) >= 4 and _looks_like_documento(row[0]) and _looks_like_cedula(row[1]):
+                elif len(row) >= 4 and _looks_like_documento(row[0]) and _looks_like_cedula(row[1]):
                     numero_doc = _celda_a_string_documento(row[0])
                     col_doc = 0
                     cedula = str(row[1]).strip()
@@ -1319,3 +1319,5 @@ def aplicar_pago_a_cuotas(pago_id: int, db: Session = Depends(get_db)):
             status_code=500,
             detail=f"Error al aplicar el pago a cuotas: {str(e)}",
         ) from e
+
+

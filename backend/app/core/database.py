@@ -19,6 +19,11 @@ engine = create_engine(
     pool_pre_ping=True,
     pool_size=5,
     max_overflow=10,
+    connect_args={
+        "connect_timeout": 10,  # Timeout de conexión inicial (en segundos)
+        "application_name": "rapicredit_backend",
+    },
+    echo=False,  # Cambiar a True para logging de SQL si es necesario en DEBUG
 )
 
 # expire_on_commit=False evita el error F405: al cerrar la sesión los objetos no se "expiran",

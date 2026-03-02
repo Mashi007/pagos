@@ -61,9 +61,16 @@ app.add_middleware(
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
 
-def _startup_db_with_retry(engine, max_attempts: int = 5, delay_sec: float = 2.0):
-    """Intenta crear tablas y verificar BD con reintentos (evita fallo por BD no lista en Render)."""
-    from sqlalchemy import text
+def _startup_db_with_retry(engine, max_attempts: int = 10, delay_sec: float = 3.0):
+    """Intenta crear tablas y verificar BD con reintentos (evita fallo por BD no lista en Render).
+    
+    Mejorado:
+    - Aumentados intentos de 5 a 10
+    - Delay inicial de 3 segundos con backoff exponencial
+    - Verificación explícita de que la tabla 'prestamos' existe
+    - Logging más detallado para debugging en Render
+    """
+    from sqlalchemy import text, inspect
     from app.models import (  # noqa: F401
         Base, Cliente, Prestamo, Ticket, Cuota, PagosWhatsapp, Configuracion, Auditoria,
         User, DefinicionCampo, ConversacionAI, DiccionarioSemantico,
@@ -71,24 +78,61 @@ def _startup_db_with_retry(engine, max_attempts: int = 5, delay_sec: float = 2.0
         PlantillaNotificacion, VariableNotificacion,
     )
     last_error = None
+    current_delay = delay_sec
+    
     for attempt in range(1, max_attempts + 1):
         try:
+            logger.info(f"[DB Startup {attempt}/{max_attempts}] Conectando a base de datos...")
+            
+            # Crear tablas
             Base.metadata.create_all(bind=engine)
-            logger.info("Base de datos: tablas creadas o ya existentes.")
+            logger.info("[DB Startup] Tablas creadas o ya existentes.")
+            
+            # Verificar conexión básica
             with engine.connect() as conn:
-                conn.execute(text("SELECT 1"))
-            logger.info("Conexión a BD verificada.")
+                result = conn.execute(text("SELECT 1"))
+                if not result.fetchone():
+                    raise Exception("SELECT 1 no retornó resultado")
+            logger.info("[DB Startup] Conexión básica verificada.")
+            
+            # Verificar que tabla crítica 'prestamos' existe
+            inspector = inspect(engine)
+            tables = inspector.get_table_names()
+            logger.info(f"[DB Startup] Tablas en BD: {tables}")
+            
+            if 'prestamos' not in tables:
+                raise Exception("Tabla crítica 'prestamos' no fue creada. Tablas disponibles: " + str(tables))
+            
+            logger.info("[DB Startup] ✅ Tabla 'prestamos' verificada exitosamente.")
+            
+            # Contar registros en tabla crítica para verificar acceso
+            with engine.connect() as conn:
+                result = conn.execute(text("SELECT COUNT(*) FROM prestamos"))
+                count = result.scalar()
+                logger.info(f"[DB Startup] Tabla 'prestamos' contiene {count} registros.")
+            
+            logger.info("[DB Startup] ✅ BASE DE DATOS INICIALIZADA CORRECTAMENTE")
             return
+            
         except Exception as e:
             last_error = e
             logger.warning(
-                "Intento %s/%s de conexión a BD falló: %s. Reintentando en %.1fs...",
-                attempt, max_attempts, e, delay_sec,
+                f"[DB Startup {attempt}/{max_attempts}] Error: {type(e).__name__}: {str(e)[:200]}"
             )
+            
             if attempt < max_attempts:
-                time.sleep(delay_sec)
-    logger.error("No se pudo conectar a la BD tras %s intentos: %s", max_attempts, last_error)
-    raise last_error
+                logger.info(f"[DB Startup] Reintentando en {current_delay:.1f}s...")
+                time.sleep(current_delay)
+                current_delay *= 1.5  # Backoff exponencial: 3s, 4.5s, 6.75s, etc.
+    
+    logger.error(
+        f"[DB Startup] ❌ FALLO CRÍTICO tras {max_attempts} intentos. "
+        f"Última excepción: {type(last_error).__name__}: {str(last_error)}"
+    )
+    raise RuntimeError(
+        f"No se pudo inicializar la base de datos tras {max_attempts} intentos. "
+        f"Error final: {str(last_error)}"
+    ) from last_error
 
 
 @app.on_event("startup")
