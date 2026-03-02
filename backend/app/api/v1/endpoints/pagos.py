@@ -43,6 +43,10 @@ router = APIRouter(dependencies=[Depends(get_current_user)])
 
 # Límite de la columna numero_documento y referencia_pago en tabla pagos (String(100))
 _MAX_LEN_NUMERO_DOCUMENTO = 100
+# Validación de monto para NUMERIC(14, 2): máximo ~999,999,999,999.99 (12 dígitos antes del decimal)
+_MAX_MONTO_PAGADO = 999_999_999_999.99
+_MIN_MONTO_PAGADO = 0.01  # Monto mínimo válido (> 0)
+_PRESTAMO_ID_MAX = 2_147_483_647  # INT max en BD (32-bit signed)
 
 
 def _canonical_numero_documento(val: Any) -> Optional[str]:
@@ -104,6 +108,31 @@ def _truncar_numero_documento(val: Optional[str]) -> Optional[str]:
     if not s:
         return None
     return s[:_MAX_LEN_NUMERO_DOCUMENTO] if len(s) > _MAX_LEN_NUMERO_DOCUMENTO else s
+
+
+
+def _validar_monto(monto_raw: Any) -> tuple[bool, float, str]:
+    """
+    Valida que el monto esté dentro de los rangos permitidos para NUMERIC(14, 2).
+    Retorna: (es_válido, monto_parseado, mensaje_error)
+    """
+    try:
+        monto = float(monto_raw) if monto_raw is not None else 0.0
+    except (TypeError, ValueError):
+        return (False, 0.0, f"No se puede parsear el monto: {monto_raw}")
+    
+    # Validar rango: debe estar entre 0.01 y 999,999,999,999.99
+    if monto < _MIN_MONTO_PAGADO:
+        return (False, monto, f"Monto debe ser mayor a {_MIN_MONTO_PAGADO}")
+    
+    if monto > _MAX_MONTO_PAGADO:
+        # Probablemente es una fecha convertida a número de Excel (días desde 1900)
+        # Las fechas en Excel típicamente son números entre 1 y ~50000
+        if monto < 100000:
+            return (False, monto, f"Monto sospechosamente pequeño para ser una cantidad; parece ser una fecha o número de secuencia: {monto}")
+        return (False, monto, f"Monto excede límite máximo ({_MAX_MONTO_PAGADO}): {monto}")
+    
+    return (True, monto, "")
 
 
 def _celda_a_string_documento(val: Any) -> str:
@@ -467,17 +496,23 @@ async def upload_excel_pagos(
                     col_doc = 0
                     cedula = str(row[1]).strip()
                     fecha_val = row[2] if len(row) > 2 else None
-                    try:
-                        monto = float(row[3]) if len(row) > 3 and row[3] is not None else 0.0
-                    except (TypeError, ValueError):
-                        monto = 0.0
+                    es_válido, monto, err_msg = _validar_monto(row[3]) if len(row) > 3 else (True, 0.0, '')
+
+                    if not es_válido and monto != 0.0:
+
+                        errores.append(f'Fila {i + 2} (Formato A): {err_msg}')
+
+                        continue
                 # Formato B: Fecha, Cédula, Cantidad, Documento
                 elif len(row) >= 4 and _looks_like_date(row[0]) and _looks_like_cedula(row[1]):
                     cedula = str(row[1]).strip()
-                    try:
-                        monto = float(row[2]) if row[2] is not None else 0.0
-                    except (TypeError, ValueError):
-                        monto = 0.0
+                    es_válido, monto, err_msg = _validar_monto(row[2])
+
+                    if not es_válido and monto != 0.0:
+
+                        errores.append(f'Fila {i + 2} (Formato B): {err_msg}')
+
+                        continue
                     fecha_val = row[0]
                     numero_doc = _celda_a_string_documento(row[3])
                     col_doc = 3
@@ -499,10 +534,10 @@ async def upload_excel_pagos(
                             prestamo_id = _pid
                     fecha_val = row[2] if len(row) > 2 else None
                     _monto_raw = row[3] if len(row) > 3 else None
-                    try:
-                        monto = float(_monto_raw) if _monto_raw is not None else 0.0
-                    except (TypeError, ValueError):
-                        monto = 0.0
+                    es_válido, monto, err_msg = _validar_monto(_monto_raw)
+                    if not es_válido and monto != 0.0:
+                        errores.append(f'Fila {i + 2} (Formato C): {err_msg}')
+                        continue
                     numero_doc = _celda_a_string_documento(row[4]) if len(row) > 4 else ""
                     col_doc = 4 if len(row) > 4 else None
 
@@ -1273,5 +1308,8 @@ def aplicar_pago_a_cuotas(pago_id: int, db: Session = Depends(get_db)):
             status_code=500,
             detail=f"Error al aplicar el pago a cuotas: {str(e)}",
         ) from e
+
+
+
 
 
