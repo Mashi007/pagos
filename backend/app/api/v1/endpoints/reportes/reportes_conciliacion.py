@@ -504,10 +504,8 @@ def _generar_excel_conciliacion(
         # Datos del Sistema (tabla prestamos)
         try:
             tf_sistema = _safe_float(p.total_financiamiento) if p.total_financiamiento else 0
-            abonos_sistema = _safe_float(p.total_abonos) if p.total_abonos else 0
         except Exception:
             tf_sistema = 0
-            abonos_sistema = 0
         
         # Datos de cuotas
         tot_cuotas = total_cuotas_num_map.get(p.id, p.numero_cuotas or 0)
@@ -515,6 +513,9 @@ def _generar_excel_conciliacion(
         pag_monto = cuotas_pagadas_monto_map.get(p.id, 0)
         pend_num = cuotas_pendientes_num_map.get(p.id, 0)
         pend_monto = cuotas_pendientes_monto_map.get(p.id, 0)
+        
+        # Abonos Sistema = suma de cuotas pagadas (monto)
+        abonos_sistema = pag_monto
         
         # Crear fila base (12 columnas)
         try:
