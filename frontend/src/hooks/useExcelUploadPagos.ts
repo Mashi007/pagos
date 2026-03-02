@@ -933,6 +933,26 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     )
   }, [])
 
+  const moveErrorToReviewPagos = useCallback(
+    async (id: number) => {
+      try {
+        await pagoConErrorService.moveToReviewPagos(id)
+        setPagosConErrores(prev => prev.filter(p => p.id !== id))
+        addToast('success', 'Movido a Revisar Pagos')
+        queryClient.invalidateQueries({ queryKey: ['pagosConErrores'] })
+      } catch (error) {
+        addToast('error', 'Error al mover a revisar pagos')
+      }
+    },
+    [addToast, queryClient]
+  )
+
+  const dismissError = useCallback(
+    (id: number) => {
+      setPagosConErrores(prev => prev.filter(p => p.id !== id))
+    },
+    []
+  )
   return {
     isDragging,
     uploadedFile,
@@ -974,4 +994,6 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     dismissError,
   }
 }
+
+
 
