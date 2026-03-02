@@ -102,6 +102,11 @@ class PagoConErrorService {
   async eliminarPorDescarga(ids: number[]): Promise<{ eliminados: number; mensaje: string }> {
     return await apiClient.post(`${this.baseUrl}/eliminar-por-descarga`, { ids }, { timeout: 120000 })
   }
+
+  /** Mueve un pago con error a la tabla revisar_pago para análisis manual */
+  async moveToReviewPagos(id: number): Promise<{ id: number; mensaje: string }> {
+    return await apiClient.post(`${this.baseUrl}/${id}/mover-a-revisar`, {})
+  }
 }
 
 export const pagoConErrorService = new PagoConErrorService()
