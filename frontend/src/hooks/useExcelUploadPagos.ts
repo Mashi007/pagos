@@ -825,12 +825,6 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             const resultado = await pagoService.validarFilasBatch({
               cedulas: todasCedulas,
               documentos: todosDocumentos,
-              filas: processed.map(r => ({
-                cedula: r.cedula,
-                fecha_pago: r.fecha_pago,
-                monto_pagado: r.monto_pagado,
-                numero_documento: r.numero_documento,
-              })),
             })
             if (!isMounted()) return
 
