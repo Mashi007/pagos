@@ -53,6 +53,8 @@ class ValidarFilasBatchBody(BaseModel):
     """Batch de cédulas y documentos para validar contra BD."""
     cedulas: list[str] = []
     documentos: list[str] = []  # Solo los no vacíos
+    # Opcional: validar patrones de duplicados completos
+    filas: list[dict] = []  # [{cedula, fecha_pago, monto_pagado, numero_documento}, ...]
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -806,9 +808,40 @@ def validar_filas_batch(
         ).all()
         documentos_duplicados = {r[0] for r in rows_docs if r[0]}
 
+    # Patrones sospechosos: cédula + fecha + monto iguales (posible duplicado completo)
+    pagos_sospechosos: list[dict] = []
+    if body.filas:
+        for fila in body.filas:
+            cedula = (fila.get('cedula') or '').strip().replace('-', '').upper()
+            fecha_str = fila.get('fecha_pago', '')
+            monto = fila.get('monto_pagado', 0)
+            if cedula and fecha_str and monto > 0:
+                try:
+                    # Parsear fecha (esperamos formato DD/MM/YYYY o similar)
+                    from datetime import datetime as dt
+                    fecha_obj = dt.strptime(fecha_str.replace('-', '/'), '%d/%m/%Y').date()
+                    # Buscar pago con misma cédula, fecha y monto
+                    query = select(Pago).where(
+                        Pago.cedula == cedula,
+                        Pago.fecha_pago.cast(db.Text).like(f"{fecha_obj}%"),
+                        Pago.monto_pagado == monto
+                    )
+                    existing = db.execute(query).first()
+                    if existing:
+                        pagos_sospechosos.append({
+                            "cedula": cedula,
+                            "fecha_pago": fecha_str,
+                            "monto_pagado": monto,
+                            "tipo": "patron_duplicado",
+                            "detalle": f"Existe pago idéntico (ID: {existing[0].id})"
+                        })
+                except Exception:
+                    pass  # Si falla el parse, ignorar esta validación
+
     return {
         "cedulas_existentes": list(cedulas_existentes),
         "documentos_duplicados": list(documentos_duplicados),
+        "pagos_sospechosos": pagos_sospechosos,
     }
 
 

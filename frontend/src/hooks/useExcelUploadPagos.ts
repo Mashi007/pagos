@@ -825,6 +825,12 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             const resultado = await pagoService.validarFilasBatch({
               cedulas: todasCedulas,
               documentos: todosDocumentos,
+              filas: processed.map(r => ({
+                cedula: r.cedula,
+                fecha_pago: r.fecha_pago,
+                monto_pagado: r.monto_pagado,
+                numero_documento: r.numero_documento,
+              })),
             })
             if (!isMounted()) return
 
@@ -832,11 +838,22 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
               (resultado.cedulas_existentes || []).map((c: string) => c.replace(/-/g, '').toUpperCase())
             )
             const documentosDuplicadosBD = new Set(resultado.documentos_duplicados || [])
+            const pagosSospechosos = (resultado.pagos_sospechosos || []).reduce(
+              (map: Map<string, any>, p: any) => {
+                const key = `${p.cedula}_${p.fecha_pago}_${p.monto_pagado}`
+                map.set(key, p)
+                return map
+              },
+              new Map()
+            )
 
             setExcelData((prev) =>
               prev.map((r) => {
                 const cedulaNorm = r.cedula.replace(/-/g, '').toUpperCase()
                 const docNorm = normalizarNumeroDocumento(r.numero_documento)
+                const pagoSospechoso = pagosSospechosos.get(
+                  `${cedulaNorm}_${r.fecha_pago}_${r.monto_pagado}`
+                )
 
                 const vCedula = validatePagoField('cedula', r.cedula, {
                   cedulasInvalidas: new Set(
@@ -847,11 +864,16 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
                   documentosDuplicadosBD,
                   documentosEnArchivo: documentosDuplicadosEnArchivo,
                 })
+                // Si es patrón duplicado (misma cédula+fecha+monto) y sin número de documento, marcar como sospechoso
+                const vMonto = pagoSospechoso && !r.numero_documento
+                  ? { isValid: false, message: 'Patrón idéntico (cédula+fecha+monto) ya existe en BD' }
+                  : r._validation.monto_pagado
 
                 const newValidation: Record<string, { isValid: boolean; message?: string }> = {
                   ...r._validation,
                   cedula: vCedula,
                   numero_documento: vDoc,
+                  monto_pagado: vMonto,
                 }
                 const hasErrors =
                   !newValidation['cedula']?.isValid ||

@@ -143,9 +143,11 @@ class PagoService {
   async validarFilasBatch(data: {
     cedulas: string[]
     documentos: string[]
+    filas?: Array<{ cedula: string; fecha_pago: string; monto_pagado: number; numero_documento: string }>
   }): Promise<{
     cedulas_existentes: string[]
     documentos_duplicados: string[]
+    pagos_sospechosos?: Array<any>
   }> {
     return await apiClient.post(`${this.baseUrl}/validar-filas-batch`, data)
   }
