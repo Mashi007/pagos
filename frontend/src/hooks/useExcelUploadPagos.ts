@@ -743,7 +743,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           const prestamoIdRaw = row[cols.prestamo]
           const conciliacionRawCol4 = (row[cols.prestamo]?.toString() || '').trim().toUpperCase()
           const conciliacionRawCol5 = (row[cols.conciliacion]?.toString() || '').trim().toUpperCase()
-          const isConciliacionCol4 = ['SI', 'SÃ­', 'NO', '1', '0'].includes(conciliacionRawCol4)
+          const isConciliacionCol4 = ['SI', 'SÍ', 'Sí', 'NO', '1', '0'].includes(conciliacionRawCol4)
           let prestamoId: number | null =
             !isConciliacionCol4 && prestamoIdRaw != null && String(prestamoIdRaw).trim() !== ''
               ? parseInt(String(prestamoIdRaw).trim(), 10)

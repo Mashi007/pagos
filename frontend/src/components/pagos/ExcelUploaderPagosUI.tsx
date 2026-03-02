@@ -111,9 +111,9 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                   onDrop={handleDrop}
                 >
                   <Upload className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-                  <h3 className="text-lg font-semibold mb-2">{isDragging ? 'Suelta el archivo aquÃ­' : 'Sube tu archivo Excel'}</h3>
+                  <h3 className="text-lg font-semibold mb-2">{isDragging ? 'Suelta el archivo aquí' : 'Sube tu archivo Excel'}</h3>
                   <p className="text-gray-600 mb-4 text-sm">
-                    Columnas: CÃ©dula | Fecha de pago | Monto | Documento | ID PrÃ©stamo (opcional) | ConciliaciÃ³n (SÃ­/No). Documento con solo nÃºmeros (ej. 740087464410397): el sistema los normaliza automÃ¡ticamente al subir para evitar notaciÃ³n cientÃ­fica
+                    Columnas: Cédula | Fecha de pago | Monto | Documento | ID Préstamo (opcional) | Conciliación (Sí/No). Documentos numéricos largos se normalizan automáticamente.
                   </p>
                   <Button onClick={() => fileInputRef.current?.click()} disabled={isProcessing} className="mb-4">
                     <FileSpreadsheet className="mr-2 h-4 w-4" />
