@@ -52,24 +52,10 @@ export function TablaEditablePagos({
   }, [rows])
 
   const handleCellChange = useCallback(
-    async (row: PagoExcelRow, field: string, value: string | number) => {
+    (row: PagoExcelRow, field: string, value: string | number) => {
       onUpdateCell(row, field, value)
-      
-      // Luego de cambiar, revisar si ahora es válido para auto-guardar
-      setTimeout(async () => {
-        const updatedRow = rows.find((r) => r._rowIndex === row._rowIndex)
-        if (updatedRow && !updatedRow._hasErrors && !savingIndices.has(row._rowIndex)) {
-          setSavingIndices((prev) => new Set([...prev, row._rowIndex]))
-          const success = await saveRowIfValid(updatedRow)
-          setSavingIndices((prev) => {
-            const next = new Set(prev)
-            next.delete(row._rowIndex)
-            return next
-          })
-        }
-      }, 100)
     },
-    [rows, onUpdateCell, saveRowIfValid, savingIndices]
+    [onUpdateCell]
   )
 
   const filasValidas = rows.filter((r) => !r._hasErrors)

@@ -943,8 +943,8 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
   )
 
   const updateCellValue = useCallback((row: PagoExcelRow, field: string, value: string | number) => {
-    setExcelData((prev) =>
-      prev.map((r) => {
+    setExcelData((prev) => {
+      const updated = prev.map((r) => {
         if (r._rowIndex !== row._rowIndex) return r
         const updated = { ...r }
         if (field === 'prestamo_id') {
@@ -972,8 +972,21 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         }
         return updated
       })
-    )
-  }, [])
+      
+      // Auto-guardar si fila cumple validadores (sin errores)
+      const updatedRow = updated.find((r) => r._rowIndex === row._rowIndex)
+      if (updatedRow && !updatedRow._hasErrors && !savingProgress[row._rowIndex]) {
+        // Dispara async sin await (background task)
+        setTimeout(() => {
+          saveRowIfValid(updatedRow).catch(() => {
+            // Error silencioso: se maneja en el endpoint
+          })
+        }, 0)
+      }
+      
+      return updated
+    })
+  }, [saveRowIfValid, savingProgress])
 
   const moveErrorToReviewPagos = useCallback(
     async (id: number) => {
