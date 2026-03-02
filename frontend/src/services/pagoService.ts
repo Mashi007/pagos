@@ -140,6 +140,16 @@ class PagoService {
     })
   }
 
+  async validarFilasBatch(data: {
+    cedulas: string[]
+    documentos: string[]
+  }): Promise<{
+    cedulas_existentes: string[]
+    documentos_duplicados: string[]
+  }> {
+    return await apiClient.post(`${this.baseUrl}/validar-filas-batch`, data)
+  }
+
   async guardarFilaEditable(data: {
     cedula: string
     prestamo_id: number | null

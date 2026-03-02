@@ -734,7 +734,6 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           const montoRaw = String(row[cols.monto] || 0).replace(',', '.')
           const monto = parseFloat(montoRaw) || 0
           let numeroDoc = normalizarNumeroDocumento(row[cols.documento])
-          // Si la columna "CÃ©dula" trae nÃºmero largo (ej. 15 dÃ­gitos) y "Documento" estÃ¡ vacÃ­o o es una cÃ©dula, interpretar como documento en columna equivocada
           if (looksLikeDocumentNotCedula(cedula) && (!numeroDoc || numeroDoc === 'NaN' || /^[VEJZ]\d{6,11}$/i.test(String(numeroDoc).replace(/-/g, '')))) {
             numeroDoc = normalizarNumeroDocumento(cedula)
             cedula = (row[cols.documento] != null ? String(row[cols.documento]).trim() : '').trim()
@@ -748,15 +747,11 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             !isConciliacionCol4 && prestamoIdRaw != null && String(prestamoIdRaw).trim() !== ''
               ? parseInt(String(prestamoIdRaw).trim(), 10)
               : null
-          // Si el Excel trae en columna CrÃ©dito un nÃºmero de documento (ej. 740087...), no usarlo como prestamo_id
           if (prestamoId != null && (Number.isNaN(prestamoId) || prestamoId < 1 || prestamoId > PRESTAMO_ID_MAX)) {
             prestamoId = null
           }
           const conciliacionRaw = (isConciliacionCol4 ? conciliacionRawCol4 : conciliacionRawCol5).trim()
-          // Por defecto: ConciliaciÃ³n = SÃ­. Solo No si explÃ­citamente "NO" (evitar que 0/celda vacÃ­a = No).
           const conciliado = conciliacionRaw === 'NO' ? false : true
-
-          // Guardar documento siempre como string normalizado (evita nÃºmero/cientÃ­fico y asegura misma clave en set)
           const numeroDocStr = (numeroDoc && numeroDoc !== 'NaN') ? (normalizarNumeroDocumento(numeroDoc) || String(numeroDoc)).trim() : ''
           const rowData: PagoExcelRow = {
             _rowIndex: i + 1,
@@ -770,20 +765,89 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             conciliado,
           }
 
-          // Ãšnica validaciÃ³n: documento duplicado
-          const docValidation = validatePagoField('numero_documento', rowData.numero_documento, { documentosEnArchivo })
-          rowData._validation.numero_documento = docValidation
-          rowData._validation.cedula = rowData._validation.fecha_pago = rowData._validation.monto_pagado = { isValid: true }
-          rowData._validation.prestamo_id = rowData._validation.conciliado = { isValid: true }
+          // Validaciones locales inmediatas (fecha, monto, duplicados en archivo)
+          const vCedula = validatePagoField('cedula', rowData.cedula)
+          const vFecha = validatePagoField('fecha_pago', rowData.fecha_pago)
+          const vMonto = validatePagoField('monto_pagado', rowData.monto_pagado)
           const keyDoc = (normalizarNumeroDocumento(rowData.numero_documento) || String(rowData.numero_documento ?? '')).trim()
+          const vDoc = validatePagoField('numero_documento', rowData.numero_documento, { documentosEnArchivo })
           if (keyDoc && keyDoc !== 'NaN') documentosEnArchivo.add(keyDoc)
-          rowData._hasErrors = !docValidation.isValid
+
+          rowData._validation = {
+            cedula: vCedula,
+            fecha_pago: vFecha,
+            monto_pagado: vMonto,
+            numero_documento: vDoc,
+            prestamo_id: { isValid: true },
+            conciliado: { isValid: true },
+          }
+          rowData._hasErrors = !vCedula.isValid || !vFecha.isValid || !vMonto.isValid || !vDoc.isValid
           processed.push(rowData)
         }
 
         if (!isMounted()) return
+
+        // Mostrar tabla inmediatamente con validaciones locales
         setExcelData(processed)
         setShowPreview(true)
+
+        // Validación batch contra BD (cédulas vs clientes, documentos vs pagos)
+        const todasCedulas = [...new Set(
+          processed.map(r => r.cedula.replace(/-/g, '').toUpperCase()).filter(c => /^[VEJZ]\d{6,11}$/i.test(c))
+        )]
+        const todosDocumentos = [...new Set(
+          processed.map(r => normalizarNumeroDocumento(r.numero_documento)).filter(d => !!d)
+        )]
+        if (todasCedulas.length > 0 || todosDocumentos.length > 0) {
+          try {
+            const resultado = await pagoService.validarFilasBatch({
+              cedulas: todasCedulas,
+              documentos: todosDocumentos,
+            })
+            if (!isMounted()) return
+
+            const cedulasExistentesBD = new Set(
+              (resultado.cedulas_existentes || []).map((c: string) => c.replace(/-/g, '').toUpperCase())
+            )
+            const documentosDuplicadosBD = new Set(resultado.documentos_duplicados || [])
+
+            setExcelData((prev) =>
+              prev.map((r) => {
+                const cedulaNorm = r.cedula.replace(/-/g, '').toUpperCase()
+                const docNorm = normalizarNumeroDocumento(r.numero_documento)
+
+                const vCedula = validatePagoField('cedula', r.cedula, {
+                  cedulasInvalidas: new Set(
+                    todasCedulas.filter(c => !cedulasExistentesBD.has(c))
+                  ),
+                })
+                const vDoc = validatePagoField('numero_documento', r.numero_documento, {
+                  documentosDuplicadosBD,
+                  documentosEnArchivo: new Set(
+                    processed
+                      .filter(o => o._rowIndex !== r._rowIndex)
+                      .map(o => normalizarNumeroDocumento(o.numero_documento))
+                      .filter(Boolean)
+                  ),
+                })
+
+                const newValidation: Record<string, { isValid: boolean; message?: string }> = {
+                  ...r._validation,
+                  cedula: vCedula,
+                  numero_documento: vDoc,
+                }
+                const hasErrors =
+                  !newValidation['cedula']?.isValid ||
+                  !newValidation['fecha_pago']?.isValid ||
+                  !newValidation['monto_pagado']?.isValid ||
+                  !newValidation['numero_documento']?.isValid
+                return { ...r, _validation: newValidation, _hasErrors: hasErrors }
+              })
+            )
+          } catch {
+            // Si falla la validación batch, dejar las validaciones locales
+          }
+        }
 
         // Asignar CrÃ©dito en cuanto lleguen los prÃ©stamos (misma lÃ³gica que el efecto)
         const uniqueCedulasSet = new Set<string>()

@@ -48,6 +48,12 @@ class GuardarFilaEditableBody(BaseModel):
     fecha_pago: str  # formato "DD-MM-YYYY"
     numero_documento: Optional[str] = None
 
+
+class ValidarFilasBatchBody(BaseModel):
+    """Batch de cédulas y documentos para validar contra BD."""
+    cedulas: list[str] = []
+    documentos: list[str] = []  # Solo los no vacíos
+
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -756,6 +762,54 @@ async def upload_excel_pagos(
         db.rollback()
         logger.exception("Error upload Excel pagos: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post("/validar-filas-batch", response_model=dict)
+def validar_filas_batch(
+    body: ValidarFilasBatchBody = Body(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Valida en lote:
+    - Cédulas: deben existir en tabla clientes
+    - Documentos: no deben existir en tabla pagos (duplicados)
+    Retorna sets de cédulas válidas y documentos duplicados.
+    """
+    # Normalizar cédulas (sin guión, uppercase)
+    cedulas_norm = list({
+        c.strip().replace("-", "").upper()
+        for c in (body.cedulas or [])
+        if c and c.strip()
+    })
+
+    # Cédulas que existen en tabla clientes
+    cedulas_existentes: set[str] = set()
+    if cedulas_norm:
+        rows = db.execute(
+            select(Cliente.cedula).where(Cliente.cedula.in_(cedulas_norm))
+        ).all()
+        cedulas_existentes = {r[0].strip().replace("-", "").upper() for r in rows}
+
+    # Documentos que ya existen en tabla pagos (duplicados)
+    documentos_duplicados: set[str] = set()
+    docs_norm = [
+        _canonical_numero_documento(d)
+        for d in (body.documentos or [])
+        if d and d.strip()
+    ]
+    docs_norm_limpios = [d for d in docs_norm if d]
+    if docs_norm_limpios:
+        rows_docs = db.execute(
+            select(Pago.numero_documento).where(
+                Pago.numero_documento.in_(docs_norm_limpios)
+            )
+        ).all()
+        documentos_duplicados = {r[0] for r in rows_docs if r[0]}
+
+    return {
+        "cedulas_existentes": list(cedulas_existentes),
+        "documentos_duplicados": list(documentos_duplicados),
+    }
 
 
 @router.post("/guardar-fila-editable", response_model=dict)

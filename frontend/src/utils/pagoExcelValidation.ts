@@ -159,23 +159,76 @@ export function normalizarNumeroDocumento(val: unknown): string {
   return s
 }
 
-/** Única validación en carga masiva: documento duplicado = inválido. */
+const MAX_MONTO = 999_999_999_999.99
+const FECHA_REGEX = /^(\d{2})\/(\d{2})\/(\d{4})$/
+
+/** Valida un campo de fila de pago. Retorna isValid + mensaje de error. */
 export function validatePagoField(
   field: string,
   value: string | number,
-  options?: { documentosExistentes?: Set<string>; documentosEnArchivo?: Set<string> }
+  options?: {
+    documentosExistentes?: Set<string>
+    documentosEnArchivo?: Set<string>
+    cedulasInvalidas?: Set<string>
+    documentosDuplicadosBD?: Set<string>
+  }
 ): { isValid: boolean; message?: string } {
-  if (field !== 'numero_documento') return { isValid: true }
 
-  const docNorm = (value === 'NaN' || value === 'nan' || value === 'undefined')
-    ? ''
-    : (normalizarNumeroDocumento(value) || String(value)).trim() || ''
-  if (!docNorm) return { isValid: true }
+  // ── CÉDULA ──────────────────────────────────────────────────────────────
+  if (field === 'cedula') {
+    const s = String(value ?? '').trim().replace(/-/g, '').toUpperCase()
+    if (!s) return { isValid: false, message: 'Cédula requerida' }
+    if (!/^[VEJZ]\d{6,11}$/.test(s))
+      return { isValid: false, message: 'Formato inválido (ej: V12345678)' }
+    if (options?.cedulasInvalidas?.has(s))
+      return { isValid: false, message: 'Cédula no existe en clientes' }
+    return { isValid: true }
+  }
 
-  if (options?.documentosExistentes?.has(docNorm))
-    return { isValid: false, message: 'Documento duplicado. No se aceptan duplicados.' }
-  if (options?.documentosEnArchivo?.has(docNorm))
-    return { isValid: false, message: 'Documento duplicado en este archivo. No se aceptan duplicados.' }
+  // ── FECHA ────────────────────────────────────────────────────────────────
+  if (field === 'fecha_pago') {
+    const s = String(value ?? '').trim()
+    if (!s) return { isValid: false, message: 'Fecha requerida' }
+    const m = FECHA_REGEX.exec(s)
+    if (!m) return { isValid: false, message: 'Formato inválido (use DD/MM/YYYY)' }
+    const [, dd, mm, yyyy] = m
+    const d = new Date(Number(yyyy), Number(mm) - 1, Number(dd))
+    if (
+      d.getFullYear() !== Number(yyyy) ||
+      d.getMonth() !== Number(mm) - 1 ||
+      d.getDate() !== Number(dd)
+    ) return { isValid: false, message: 'Fecha inválida' }
+    const year = Number(yyyy)
+    if (year < 2000 || year > 2100)
+      return { isValid: false, message: 'Año fuera de rango (2000-2100)' }
+    return { isValid: true }
+  }
+
+  // ── MONTO ────────────────────────────────────────────────────────────────
+  if (field === 'monto_pagado') {
+    const n = typeof value === 'number' ? value : parseFloat(String(value ?? '').replace(',', '.'))
+    if (isNaN(n) || !isFinite(n)) return { isValid: false, message: 'Monto inválido' }
+    if (n <= 0) return { isValid: false, message: 'El monto debe ser mayor a 0' }
+    if (n > MAX_MONTO) return { isValid: false, message: `Monto excede el límite (${MAX_MONTO})` }
+    return { isValid: true }
+  }
+
+  // ── NÚMERO DE DOCUMENTO ──────────────────────────────────────────────────
+  if (field === 'numero_documento') {
+    const docNorm = (value === 'NaN' || value === 'nan' || value === 'undefined')
+      ? ''
+      : (normalizarNumeroDocumento(value) || String(value)).trim() || ''
+    if (!docNorm) return { isValid: true }  // Documento vacío es permitido
+
+    if (options?.documentosDuplicadosBD?.has(docNorm))
+      return { isValid: false, message: 'Documento ya existe en la base de datos' }
+    if (options?.documentosExistentes?.has(docNorm))
+      return { isValid: false, message: 'Documento duplicado. No se aceptan duplicados.' }
+    if (options?.documentosEnArchivo?.has(docNorm))
+      return { isValid: false, message: 'Documento repetido en este archivo' }
+    return { isValid: true }
+  }
+
   return { isValid: true }
 }
 
