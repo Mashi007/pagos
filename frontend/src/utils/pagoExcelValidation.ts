@@ -192,15 +192,30 @@ export function validatePagoField(
     const m = FECHA_REGEX.exec(s)
     if (!m) return { isValid: false, message: 'Formato inválido (use DD/MM/YYYY)' }
     const [, dd, mm, yyyy] = m
-    const d = new Date(Number(yyyy), Number(mm) - 1, Number(dd))
-    if (
-      d.getFullYear() !== Number(yyyy) ||
-      d.getMonth() !== Number(mm) - 1 ||
-      d.getDate() !== Number(dd)
-    ) return { isValid: false, message: 'Fecha inválida' }
+    const day = Number(dd)
+    const month = Number(mm)
     const year = Number(yyyy)
+    
+    // Validar rango de mes ANTES de crear la fecha
+    if (month < 1 || month > 12)
+      return { isValid: false, message: 'Mes inválido (1-12)' }
+    
+    // Validar rango de día ANTES de crear la fecha
+    if (day < 1 || day > 31)
+      return { isValid: false, message: 'Día inválido (1-31)' }
+    
+    // Validar que la fecha sea real (rechaza 30/02/2025, etc.)
+    const d = new Date(year, month - 1, day)
+    if (
+      d.getFullYear() !== year ||
+      d.getMonth() !== month - 1 ||
+      d.getDate() !== day
+    ) return { isValid: false, message: 'Fecha inválida (ej: 30 de febrero)' }
+    
+    // Validar rango de año
     if (year < 2000 || year > 2100)
       return { isValid: false, message: 'Año fuera de rango (2000-2100)' }
+    
     return { isValid: true }
   }
 
