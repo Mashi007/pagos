@@ -427,6 +427,10 @@ async def upload_excel_pagos(
                         return s
             return ""
 
+
+        # Initialize error tracking
+        errores: list[str] = []
+        errores_detalle: list[dict] = []
         def _parse_fecha(v: Any) -> date:
             if isinstance(v, datetime):
                 return v.date()
