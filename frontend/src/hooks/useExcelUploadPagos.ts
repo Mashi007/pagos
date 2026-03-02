@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Hook para carga masiva de pagos desde Excel.
  * Columnas: CÃ©dula, Fecha de pago, Monto, Documento, ID PrÃ©stamo (opcional).
  * Solo prÃ©stamos activos (APROBADO, DESEMBOLSADO) en el selector.
@@ -318,6 +318,48 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       return prestamosActivos.length !== 1
     })
   }, [excelData, savedRows, enviadosRevisar, duplicadosPendientesRevisar, prestamosPorCedula])
+
+  const saveRowIfValid = useCallback(
+    async (row: PagoExcelRow): Promise<boolean> => {
+      if (row._hasErrors) {
+        return false
+      }
+      try {
+        const cedulaLookup = cedulaLookupParaFila(row.cedula || '', row.numero_documento || '')
+        const cedulaSinGuion = cedulaLookup.replace(/-/g, '')
+        const prestamosActivos =
+          prestamosPorCedula[cedulaLookup] || prestamosPorCedula[cedulaSinGuion] || prestamosPorCedula[cedulaLookup.toUpperCase()] || prestamosPorCedula[cedulaLookup.toLowerCase()] || []
+        
+        let prestamoId: number | null = row.prestamo_id
+        if (!prestamoId && prestamosActivos.length === 1) {
+          prestamoId = prestamosActivos[0].id
+        }
+        if (prestamosActivos.length > 1 && !prestamoId) {
+          return false
+        }
+        
+        const numeroDoc = normalizarNumeroDocumento(row.numero_documento) || ''
+        const fechaFormato = convertirFechaParaBackendPago(row.fecha_pago) || new Date().toISOString().split('T')[0]
+        const fechaDDMMYYYY = fechaFormato.split('-').reverse().join('-')
+        
+        await pagoService.guardarFilaEditable({
+          cedula: cedulaLookup,
+          prestamo_id: prestamoId,
+          monto_pagado: Number(row.monto_pagado) || 0,
+          fecha_pago: fechaDDMMYYYY,
+          numero_documento: numeroDoc || null,
+        })
+        
+        setSavedRows((prev) => new Set([...prev, row._rowIndex]))
+        setExcelData((prev) => prev.filter((r) => r._rowIndex !== row._rowIndex))
+        refreshPagos()
+        return true
+      } catch (err: any) {
+        return false
+      }
+    },
+    [prestamosPorCedula, refreshPagos]
+  )
 
   const saveIndividualPago = useCallback(
     async (row: PagoExcelRow, opts?: { skipToast?: boolean; skipRefresh?: boolean }): Promise<{ ok: boolean; was409?: boolean }> => {
@@ -977,6 +1019,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     setExcelData,
     getValidRows,
     saveIndividualPago,
+    saveRowIfValid,
     saveAllValid,
     sendToRevisarPagos,
     sendAllToRevisarPagos,

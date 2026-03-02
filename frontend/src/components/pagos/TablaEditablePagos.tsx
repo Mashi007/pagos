@@ -10,33 +10,19 @@
 
 import { useState, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Eye, AlertTriangle, CheckCircle, Loader2, Save, X } from 'lucide-react'
+import { Eye, AlertTriangle, CheckCircle, Loader2, Save } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card'
 import { Button } from '../ui/button'
 import { Badge } from '../ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
-import { pagoService } from '../../services/pagoService'
-import { OBSERVACIONES_POR_CAMPO } from '../../utils/pagoExcelValidation'
+import type { PagoExcelRow } from '../../utils/pagoExcelValidation'
 
-export interface FilaEditable {
-  _rowIndex: number
-  cedula: string
-  fecha_pago: string // "DD-MM-YYYY"
-  monto_pagado: number | string
-  numero_documento: string
-  prestamo_id: number | null
-  conciliado: boolean
-  _validation: Record<string, { isValid: boolean; errorType?: string; message?: string }>
-  _hasErrors: boolean
-  _saving?: boolean
-}
-
-interface TablaEditablePagosProps {
-  rows: FilaEditable[]
+export interface FilaEditableProps {
+  rows: PagoExcelRow[]
   prestamosPorCedula: Record<string, Array<{ id: number; numero: string; monto: number; estado: string }>>
-  onRowSaved: (rowIndex: number) => void
-  onRowError: (rowIndex: number, error: string) => void
-  serviceDatos?: boolean
+  onRowsChange: (newRows: PagoExcelRow[]) => void
+  onUpdateCell: (row: PagoExcelRow, field: string, value: string | number) => void
+  saveRowIfValid: (row: PagoExcelRow) => Promise<boolean>
 }
 
 const inputClass = (isValid: boolean, isSaving?: boolean) =>
@@ -48,106 +34,45 @@ const inputClass = (isValid: boolean, isSaving?: boolean) =>
         : 'border-red-600 bg-red-50 text-red-900 focus:ring-2 focus:ring-red-500'
   }`
 
-const errorColor = (errorType?: string) => {
-  switch (errorType) {
-    case 'CEDULA':
-      return 'bg-red-50 border-l-4 border-l-red-500'
-    case 'MONTO':
-      return 'bg-yellow-50 border-l-4 border-l-yellow-500'
-    case 'FECHA':
-      return 'bg-orange-50 border-l-4 border-l-orange-500'
-    case 'DOCUMENTO':
-      return 'bg-red-100 border-l-4 border-l-red-700'
-    default:
-      return 'bg-red-50 border-l-4 border-l-red-500'
-  }
-}
-
 export function TablaEditablePagos({
   rows,
   prestamosPorCedula,
-  onRowSaved,
-  onRowError,
-  serviceDatos = false,
-}: TablaEditablePagosProps) {
-  const [editingCell, setEditingCell] = useState<string | null>(null)
+  onRowsChange,
+  onUpdateCell,
+  saveRowIfValid,
+}: FilaEditableProps) {
+  const [savingIndices, setSavingIndices] = useState<Set<number>>(new Set())
 
   // Contadores dinámicos
   const stats = useMemo(() => {
     const cargados = rows.length
-    const guardados = rows.filter((r) => r._saving === false).length // Ya guardadas y removidas
+    const guardados = 0 // Las filas guardadas desaparecen de excelData
     const aRevisar = rows.filter((r) => r._hasErrors).length
     return { cargados, guardados, aRevisar }
   }, [rows])
 
   const handleCellChange = useCallback(
-    (row: FilaEditable, field: string, value: string) => {
-      row[field as keyof FilaEditable] = value
-      // Las validaciones se harán inline (simuladas aquí)
-      // En el hook real, la validación ocurre en updateCellValue
+    async (row: PagoExcelRow, field: string, value: string | number) => {
+      onUpdateCell(row, field, value)
+      
+      // Luego de cambiar, revisar si ahora es válido para auto-guardar
+      setTimeout(async () => {
+        const updatedRow = rows.find((r) => r._rowIndex === row._rowIndex)
+        if (updatedRow && !updatedRow._hasErrors && !savingIndices.has(row._rowIndex)) {
+          setSavingIndices((prev) => new Set([...prev, row._rowIndex]))
+          const success = await saveRowIfValid(updatedRow)
+          setSavingIndices((prev) => {
+            const next = new Set(prev)
+            next.delete(row._rowIndex)
+            return next
+          })
+        }
+      }, 100)
     },
-    []
-  )
-
-  const handleSaveRow = useCallback(
-    async (row: FilaEditable) => {
-      // Validaciones finales antes de guardar
-      const errores: string[] = []
-
-      // Validar cédula
-      if (!row.cedula || !/^[VEJZ]\d{6,11}$/i.test(row.cedula.trim())) {
-        errores.push('CEDULA')
-      }
-
-      // Validar monto
-      const monto = parseFloat(String(row.monto_pagado))
-      if (isNaN(monto) || monto <= 0 || monto > 999_999_999_999.99) {
-        errores.push('MONTO')
-      }
-
-      // Validar fecha
-      const fechaRegex = /^(\d{2})-(\d{2})-(\d{4})$/
-      if (!fechaRegex.test(row.fecha_pago)) {
-        errores.push('FECHA')
-      }
-
-      // Validar documento (duplicado)
-      if (
-        row.numero_documento &&
-        rows.filter(
-          (r) => r.numero_documento === row.numero_documento && r._rowIndex !== row._rowIndex
-        ).length > 0
-      ) {
-        errores.push('DOCUMENTO')
-      }
-
-      if (errores.length > 0) {
-        onRowError(row._rowIndex, `Errores: ${errores.join(', ')}`)
-        return
-      }
-
-      row._saving = true
-
-      try {
-        await pagoService.guardarFilaEditable({
-          cedula: row.cedula.trim(),
-          prestamo_id: row.prestamo_id && row.prestamo_id !== 0 ? row.prestamo_id : null,
-          monto_pagado: monto,
-          fecha_pago: row.fecha_pago,
-          numero_documento: row.numero_documento || null,
-        })
-
-        onRowSaved(row._rowIndex)
-      } catch (error) {
-        row._saving = false
-        onRowError(row._rowIndex, `Error al guardar: ${String(error)}`)
-      }
-    },
-    [rows, onRowSaved, onRowError]
+    [rows, onUpdateCell, saveRowIfValid, savingIndices]
   )
 
   const filasValidas = rows.filter((r) => !r._hasErrors)
-  const filasConError = rows.filter((r) => r._hasErrors)
 
   return (
     <div className="space-y-4">
@@ -196,130 +121,133 @@ export function TablaEditablePagos({
               </thead>
               <tbody>
                 <AnimatePresence mode="popLayout">
-                  {rows.map((row) => (
-                    <motion.tr
-                      key={row._rowIndex}
-                      initial={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: -20 }}
-                      className={`border-t transition-colors ${
-                        row._hasErrors ? 'bg-red-50' : row._saving === false ? 'bg-gray-50' : 'bg-white'
-                      }`}
-                    >
-                      <td className="border p-2 text-xs font-medium">{row._rowIndex}</td>
+                  {rows.map((row) => {
+                    const isSaving = savingIndices.has(row._rowIndex)
+                    return (
+                      <motion.tr
+                        key={row._rowIndex}
+                        initial={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -20 }}
+                        className={`border-t transition-colors ${
+                          row._hasErrors ? 'bg-red-50' : isSaving ? 'bg-gray-100' : 'bg-gray-50'
+                        }`}
+                      >
+                        <td className="border p-2 text-xs font-medium">{row._rowIndex}</td>
 
-                      {/* Cédula */}
-                      <td className="border p-2">
-                        <input
-                          type="text"
-                          value={row.cedula}
-                          onChange={(e) => handleCellChange(row, 'cedula', e.target.value)}
-                          disabled={row._saving}
-                          placeholder="V12345678"
-                          className={inputClass(
-                            row._validation.cedula?.isValid !== false,
-                            row._saving
+                        {/* Cédula */}
+                        <td className="border p-2">
+                          <input
+                            type="text"
+                            value={row.cedula}
+                            onChange={(e) => handleCellChange(row, 'cedula', e.target.value)}
+                            disabled={isSaving}
+                            placeholder="V12345678"
+                            className={inputClass(
+                              row._validation.cedula?.isValid !== false,
+                              isSaving
+                            )}
+                          />
+                          {row._validation.cedula?.isValid === false && (
+                            <p className="text-xs text-red-700 mt-0.5">❌ CEDULA</p>
                           )}
-                        />
-                        {row._validation.cedula?.isValid === false && (
-                          <p className="text-xs text-red-700 mt-0.5">❌ CEDULA</p>
-                        )}
-                      </td>
+                        </td>
 
-                      {/* Fecha */}
-                      <td className="border p-2">
-                        <input
-                          type="text"
-                          value={row.fecha_pago}
-                          onChange={(e) => handleCellChange(row, 'fecha_pago', e.target.value)}
-                          disabled={row._saving}
-                          placeholder="DD-MM-YYYY"
-                          className={inputClass(
-                            row._validation.fecha_pago?.isValid !== false,
-                            row._saving
+                        {/* Fecha */}
+                        <td className="border p-2">
+                          <input
+                            type="text"
+                            value={row.fecha_pago}
+                            onChange={(e) => handleCellChange(row, 'fecha_pago', e.target.value)}
+                            disabled={isSaving}
+                            placeholder="DD/MM/YYYY"
+                            className={inputClass(
+                              row._validation.fecha_pago?.isValid !== false,
+                              isSaving
+                            )}
+                          />
+                          {row._validation.fecha_pago?.isValid === false && (
+                            <p className="text-xs text-red-700 mt-0.5">❌ FECHA</p>
                           )}
-                        />
-                        {row._validation.fecha_pago?.isValid === false && (
-                          <p className="text-xs text-red-700 mt-0.5">❌ FECHA</p>
-                        )}
-                      </td>
+                        </td>
 
-                      {/* Monto */}
-                      <td className="border p-2">
-                        <input
-                          type="number"
-                          value={row.monto_pagado}
-                          onChange={(e) => handleCellChange(row, 'monto_pagado', e.target.value)}
-                          disabled={row._saving}
-                          placeholder="0.00"
-                          step="0.01"
-                          className={inputClass(
-                            row._validation.monto_pagado?.isValid !== false,
-                            row._saving
+                        {/* Monto */}
+                        <td className="border p-2">
+                          <input
+                            type="number"
+                            value={row.monto_pagado}
+                            onChange={(e) => handleCellChange(row, 'monto_pagado', e.target.value)}
+                            disabled={isSaving}
+                            placeholder="0.00"
+                            step="0.01"
+                            className={inputClass(
+                              row._validation.monto_pagado?.isValid !== false,
+                              isSaving
+                            )}
+                          />
+                          {row._validation.monto_pagado?.isValid === false && (
+                            <p className="text-xs text-yellow-700 mt-0.5">❌ MONTO</p>
                           )}
-                        />
-                        {row._validation.monto_pagado?.isValid === false && (
-                          <p className="text-xs text-yellow-700 mt-0.5">❌ MONTO</p>
-                        )}
-                      </td>
+                        </td>
 
-                      {/* Documento */}
-                      <td className="border p-2">
-                        <input
-                          type="text"
-                          value={row.numero_documento}
-                          onChange={(e) => handleCellChange(row, 'numero_documento', e.target.value)}
-                          disabled={row._saving}
-                          placeholder="VE/xxx o 7400874..."
-                          className={inputClass(
-                            row._validation.numero_documento?.isValid !== false,
-                            row._saving
+                        {/* Documento */}
+                        <td className="border p-2">
+                          <input
+                            type="text"
+                            value={row.numero_documento}
+                            onChange={(e) => handleCellChange(row, 'numero_documento', e.target.value)}
+                            disabled={isSaving}
+                            placeholder="VE/xxx o 7400874..."
+                            className={inputClass(
+                              row._validation.numero_documento?.isValid !== false,
+                              isSaving
+                            )}
+                            title="Debe ser único (no duplicado en BD ni en este lote)"
+                          />
+                          {row._validation.numero_documento?.isValid === false && (
+                            <p className="text-xs text-red-900 mt-0.5">❌ DUPLICADO</p>
                           )}
-                          title="Debe ser único (no duplicado en BD ni en este lote)"
-                        />
-                        {row._validation.numero_documento?.isValid === false && (
-                          <p className="text-xs text-red-900 mt-0.5">❌ DUPLICADO</p>
-                        )}
-                      </td>
+                        </td>
 
-                      {/* Crédito */}
-                      <td className="border p-2">
-                        {prestamosPorCedula[row.cedula] && prestamosPorCedula[row.cedula].length > 0 ? (
-                          <Select
-                            value={String(row.prestamo_id || '')}
-                            onValueChange={(v) =>
-                              handleCellChange(row, 'prestamo_id', v === '' ? '0' : v)
-                            }
-                            disabled={row._saving}
-                          >
-                            <SelectTrigger className="h-8 text-xs">
-                              <SelectValue placeholder="Seleccionar" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="">-- Seleccionar --</SelectItem>
-                              {prestamosPorCedula[row.cedula].map((p) => (
-                                <SelectItem key={p.id} value={String(p.id)}>
-                                  Cred. #{p.id}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <span className="text-xs text-gray-400">--</span>
-                        )}
-                      </td>
+                        {/* Crédito */}
+                        <td className="border p-2">
+                          {prestamosPorCedula[row.cedula] && prestamosPorCedula[row.cedula].length > 0 ? (
+                            <Select
+                              value={String(row.prestamo_id || '')}
+                              onValueChange={(v) =>
+                                handleCellChange(row, 'prestamo_id', v === '' ? '0' : v)
+                              }
+                              disabled={isSaving}
+                            >
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue placeholder="Seleccionar" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="">-- Seleccionar --</SelectItem>
+                                {prestamosPorCedula[row.cedula].map((p) => (
+                                  <SelectItem key={p.id} value={String(p.id)}>
+                                    Cred. #{p.id}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <span className="text-xs text-gray-400">--</span>
+                          )}
+                        </td>
 
-                      {/* Estado */}
-                      <td className="border p-2 text-center">
-                        {row._saving ? (
-                          <Loader2 className="h-4 w-4 animate-spin mx-auto text-blue-500" />
-                        ) : row._hasErrors ? (
-                          <AlertTriangle className="h-4 w-4 mx-auto text-red-500" />
-                        ) : (
-                          <CheckCircle className="h-4 w-4 mx-auto text-green-500" />
-                        )}
-                      </td>
-                    </motion.tr>
-                  ))}
+                        {/* Estado */}
+                        <td className="border p-2 text-center">
+                          {isSaving ? (
+                            <Loader2 className="h-4 w-4 animate-spin mx-auto text-blue-500" />
+                          ) : row._hasErrors ? (
+                            <AlertTriangle className="h-4 w-4 mx-auto text-red-500" />
+                          ) : (
+                            <CheckCircle className="h-4 w-4 mx-auto text-green-500" />
+                          )}
+                        </td>
+                      </motion.tr>
+                    )
+                  })}
                 </AnimatePresence>
               </tbody>
             </table>
