@@ -246,6 +246,19 @@ export interface ProductosPorMes {
   }>
 }
 
+export interface ResumenConciliacion {
+  total_filas: number
+  filas_procesadas: number
+  monto_total_financiamiento: number
+  monto_total_abonos: number
+  diferencia_total: number
+  cedulas_unicas: number
+  filas_con_discrepancia: number
+  fecha_inicio?: string
+  fecha_fin?: string
+}
+
+
 class ReporteService {
   private baseUrl = '/api/v1/reportes'
   // API expects query param 'anos' (no n-tilde); use 'meses_list' for months in cartera/pagos/morosidad/asesores.
@@ -559,6 +572,13 @@ class ReporteService {
   /**
    * Env�a filas de conciliaci�n (cedula, total_financiamiento, total_abonos, columna_e, columna_f) para guardar en BD temporal.
    */
+  async cargarConciliacion(filas: Array<{ cedula: string; total_financiamiento: number; total_abonos: number; columna_e?: string; columna_f?: string }>): Promise<{ ok: boolean; filas_guardadas: number }> {
+    return await apiClient.post(`${this.baseUrl}/conciliacion/cargar`, filas)
+  }
+
+  /**
+   * Exporta reporte Conciliaci�n en Excel. Al descargar se eliminan los datos temporales.
+   */
   async cargarConciliacionExcel(
     file: File
   ): Promise<{ ok: boolean; filas_ok: number; filas_con_error: number; errores: string[] }> {
@@ -569,17 +589,32 @@ class ReporteService {
     })
   }
 
-  async cargarConciliacion(filas: Array<{ cedula: string; total_financiamiento: number; total_abonos: number; columna_e?: string; columna_f?: string }>): Promise<{ ok: boolean; filas_guardadas: number }> {
-    return await apiClient.post(`${this.baseUrl}/conciliacion/cargar`, filas)
+  async obtenerResumenConciliacion(
+    fechaInicio?: string,
+    fechaFin?: string
+  ): Promise<ResumenConciliacion> {
+    const params = new URLSearchParams()
+    if (fechaInicio) params.set('fecha_inicio', fechaInicio)
+    if (fechaFin) params.set('fecha_fin', fechaFin)
+    const query = params.toString()
+    return await apiClient.get(`${this.baseUrl}/conciliacion/resumen${query ? `?${query}` : ''}`)
   }
 
-  /**
-   * Exporta reporte Conciliaci�n en Excel. Al descargar se eliminan los datos temporales.
-   */
-  async exportarReporteConciliacion(): Promise<Blob> {
+  async exportarReporteConciliacion(
+    fechaInicio?: string,
+    fechaFin?: string,
+    cedulas?: string[],
+    formato?: 'excel' | 'pdf'
+  ): Promise<Blob> {
+    const params = new URLSearchParams()
+    if (fechaInicio) params.set('fecha_inicio', fechaInicio)
+    if (fechaFin) params.set('fecha_fin', fechaFin)
+    if (cedulas?.length) params.set('cedulas', cedulas.join(','))
+    if (formato) params.set('formato', formato)
+    const query = params.toString()
     const axiosInstance = apiClient.getAxiosInstance()
     const response = await axiosInstance.get(
-      `${this.baseUrl}/exportar/conciliacion`,
+      `${this.baseUrl}/exportar/conciliacion${query ? `?${query}` : ''}`,
       { responseType: 'blob', timeout: 180000 }
     )
     return response.data as Blob

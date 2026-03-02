@@ -167,7 +167,8 @@ export function DialogConciliacion({ open, onOpenChange, onGuardar }: DialogConc
       const blob = await reporteService.exportarReporteConciliacion(
         filtroFechaInicio || undefined,
         filtroFechaFin || undefined,
-        filtroCedulas ? filtroCedulas.split(',').map(c => c.trim()) : undefined
+        filtroCedulas ? filtroCedulas.split(',').map(c => c.trim()) : undefined,
+        formatoDescarga
       )
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')

@@ -542,12 +542,12 @@ def get_conciliacion_resumen(
     return {
         "fecha_inicio": fi.isoformat() if fi else None,
         "fecha_fin": ff.isoformat() if ff else None,
-        "cantidad_prestamos": len(prestamos),
-        "total_financiamiento": round(total_financiamiento, 2),
-        "total_pagos": round(total_pagos, 2),
-        "total_cuotas_pagadas": round(total_cuotas_pagadas, 2),
-        "total_cuotas_pendientes": round(total_cuotas_pendientes, 2),
-        "porcentaje_cobrado": round(porcentaje_cobrado, 2),
-        "saldo_pendiente": round(total_financiamiento - total_pagos, 2),
+        "total_filas": len(prestamos),
+        "filas_procesadas": len(prestamos),
+        "monto_total_financiamiento": round(total_financiamiento, 2),
+        "monto_total_abonos": round(total_pagos, 2),
+        "diferencia_total": round(total_financiamiento - total_pagos, 2),
+        "cedulas_unicas": len(set(p.cedula for p in prestamos if p.cedula)),
+        "filas_con_discrepancia": len([p for p in prestamos if (p.total_financiamiento or 0) != (total_cuotas_pagadas or 0)]),
     }
 
