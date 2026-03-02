@@ -490,7 +490,18 @@ async def upload_excel_pagos(
                 monto = 0.0
                 numero_doc = ""
                 col_doc: Optional[int] = None
-                # Formato A: Documento col0, Cédula col1
+                # Formato D (PRINCIPAL): Cédula, Monto, Fecha, Nº documento
+                if len(row) >= 4 and _looks_like_cedula(row[0]) and row[1] is not None and _looks_like_date(row[2]):
+                    cedula = str(row[0]).strip()
+                    es_válido, monto, err_msg = _validar_monto(row[1])
+                    if not es_válido and monto != 0.0:
+                        errores.append(f'Fila {i + 2} (Formato D - Principal): {err_msg}')
+                        continue
+                    fecha_val = row[2]
+                    numero_doc = _celda_a_string_documento(row[3]) if len(row) > 3 else ""
+                    col_doc = 3
+                    prestamo_id = None
+                # Formato A: Documento, Cédula, Fecha, Monto
                 if len(row) >= 4 and _looks_like_documento(row[0]) and _looks_like_cedula(row[1]):
                     numero_doc = _celda_a_string_documento(row[0])
                     col_doc = 0
@@ -503,7 +514,7 @@ async def upload_excel_pagos(
                         errores.append(f'Fila {i + 2} (Formato A): {err_msg}')
 
                         continue
-                # Formato B: Fecha, Cédula, Cantidad, Documento
+                # Formato B: Fecha, Cédula, Monto, Documento
                 elif len(row) >= 4 and _looks_like_date(row[0]) and _looks_like_cedula(row[1]):
                     cedula = str(row[1]).strip()
                     es_válido, monto, err_msg = _validar_monto(row[2])
@@ -517,7 +528,7 @@ async def upload_excel_pagos(
                     numero_doc = _celda_a_string_documento(row[3])
                     col_doc = 3
                 else:
-                    # Formato estándar: Cédula, ID Préstamo, Fecha, Monto, Nº documento
+                    # Formato C (Alternativo): Cédula, ID Préstamo, Fecha, Monto, Nº documento
                     cedula = str(row[0]).strip() if row[0] is not None else ""
                     _val_prestamo = row[1] if len(row) > 1 else None
                     if _val_prestamo is None:
@@ -1308,8 +1319,3 @@ def aplicar_pago_a_cuotas(pago_id: int, db: Session = Depends(get_db)):
             status_code=500,
             detail=f"Error al aplicar el pago a cuotas: {str(e)}",
         ) from e
-
-
-
-
-
