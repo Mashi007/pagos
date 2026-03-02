@@ -152,8 +152,6 @@ async def cargar_conciliacion_excel(
                 cedula=f["cedula"],
                 total_financiamiento=f["total_financiamiento"],
                 total_abonos=f["total_abonos"],
-                columna_e=f.get("columna_e"),
-                columna_f=f.get("columna_f"),
             ))
         db.commit()
         

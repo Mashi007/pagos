@@ -15,6 +15,4 @@ class ConciliacionTemporal(Base):
     cedula = Column(String(20), nullable=False, index=True)
     total_financiamiento = Column(Numeric(14, 2), nullable=False)
     total_abonos = Column(Numeric(14, 2), nullable=False)
-    columna_e = Column(String(255), nullable=True)
-    columna_f = Column(String(255), nullable=True)
     creado_en = Column(DateTime(timezone=False), nullable=False, server_default=func.now())
