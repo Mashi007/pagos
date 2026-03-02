@@ -521,6 +521,10 @@ async def upload_excel_pagos(
                     "numero_doc_raw": (numero_doc or "").strip(),
                 })
             except Exception as e:
+        # Initialize error tracking lists
+        errores: list[str] = []
+        errores_detalle: list[dict] = []
+
                 errores.append(f"Fila {i + 2}: {e}")
                 errores_detalle.append({"fila": i + 2, "cedula": "", "error": str(e), "datos": {}})
 
