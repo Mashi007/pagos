@@ -50,6 +50,7 @@ export function DialogConciliacion({ open, onOpenChange, onGuardar }: DialogConc
   const [filtroCedulas, setFiltroCedulas] = useState('')
   const [formatoDescarga, setFormatoDescarga] = useState<'excel' | 'pdf'>('excel')
   const [tab, setTab] = useState<'carga' | 'resumen'>('carga')
+  const [descargaDisponible, setDescargaDisponible] = useState(false)
 
   const validar = useCallback((filasToValidate: FilaConciliacion[]) => {
     const err: string[] = []
@@ -123,7 +124,8 @@ export function DialogConciliacion({ open, onOpenChange, onGuardar }: DialogConc
         return f
       })
       await reporteService.cargarConciliacion(filasTransformadas)
-      toast.success('Datos guardados correctamente. Puede descargar el reporte.')
+      setDescargaDisponible(true)
+        toast.success('Datos guardados. Ya puede descargar el reporte.')
       onGuardar?.()
       setTab('resumen')
       setFilas([])
@@ -202,7 +204,7 @@ export function DialogConciliacion({ open, onOpenChange, onGuardar }: DialogConc
             Cargar Datos
           </button>
           <button
-            onClick={() => setTab('resumen')}
+            onClick={() => setTab('resumen')} style={{ display: 'none' }}
             className={`px-4 py-2 ${tab === 'resumen' ? 'border-b-2 border-blue-500 font-semibold' : 'text-gray-500'}`}
           >
             Resumen & Descarga
@@ -283,7 +285,7 @@ export function DialogConciliacion({ open, onOpenChange, onGuardar }: DialogConc
           )}
 
           
-          {tab === 'resumen' && (
+          {false && (
             <>
               <p className="text-sm text-muted-foreground">
                 Ver resumen de conciliacion o descargar reporte en Excel/PDF con filtros opcionales.
@@ -339,34 +341,34 @@ export function DialogConciliacion({ open, onOpenChange, onGuardar }: DialogConc
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div>
                       <span className="text-gray-600">Total Filas:</span>
-                      <p className="font-semibold">{resumen.total_filas}</p>
+                      <p className="font-semibold">{resumen?.total_filas}</p>
                     </div>
                     <div>
                       <span className="text-gray-600">Filas Procesadas:</span>
-                      <p className="font-semibold">{resumen.filas_procesadas}</p>
+                      <p className="font-semibold">{resumen?.filas_procesadas}</p>
                     </div>
                     <div>
                       <span className="text-gray-600">Total Financiamiento:</span>
-                      <p className="font-semibold">${resumen.monto_total_financiamiento.toLocaleString('es-ES')}</p>
+                      <p className="font-semibold">${resumen?.monto_total_financiamiento.toLocaleString('es-ES')}</p>
                     </div>
                     <div>
                       <span className="text-gray-600">Total Abonos:</span>
-                      <p className="font-semibold text-green-600">${resumen.monto_total_abonos.toLocaleString('es-ES')}</p>
+                      <p className="font-semibold text-green-600">${resumen?.monto_total_abonos.toLocaleString('es-ES')}</p>
                     </div>
                     <div>
                       <span className="text-gray-600">Diferencia Total:</span>
-                      <p className={`font-semibold ${resumen.diferencia_total < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        ${resumen.diferencia_total.toLocaleString('es-ES')}
+                      <p className={`font-semibold ${(resumen?.diferencia_total ?? 0) < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        ${(resumen?.diferencia_total ?? 0).toLocaleString('es-ES')}
                       </p>
                     </div>
                     <div>
                       <span className="text-gray-600">Cédulas Únicas:</span>
-                      <p className="font-semibold">{resumen.cedulas_unicas}</p>
+                      <p className="font-semibold">{resumen?.cedulas_unicas}</p>
                     </div>
                     <div>
                       <span className="text-gray-600">Filas con Discrepancia:</span>
-                      <p className={`font-semibold ${resumen.filas_con_discrepancia > 0 ? 'text-orange-600' : 'text-green-600'}`}>
-                        {resumen.filas_con_discrepancia}
+                      <p className={`font-semibold ${(resumen?.filas_con_discrepancia ?? 0) > 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                        {resumen?.filas_con_discrepancia}
                       </p>
                     </div>
                   </div>
