@@ -321,18 +321,29 @@ def _generar_excel_conciliacion(
         cedula = (p.cedula or "").strip()
         cedula_normalizada = _normalizar_cedula(cedula)
         
-        # Buscar cliente por cédula
-        cliente = db.execute(select(Cliente).where(Cliente.cedula == cedula)).scalar()
-        nombre = (cliente.nombres or "").strip() if cliente else ""
+        # Buscar cliente por cédula (usar cédula exacta de prestamo, no normalizada)
+        try:
+            cliente = db.execute(select(Cliente).where(Cliente.cedula == cedula)).scalar()
+            nombre = (cliente.nombres or "").strip() if cliente else ""
+        except Exception as e:
+            nombre = ""
         
         # Buscar datos del Excel por cédula
         concilia = concilia_por_cedula.get(cedula_normalizada) if cedula_normalizada else None
-        tf_excel = _safe_float(concilia.total_financiamiento) if concilia else 0
-        abonos_excel = _safe_float(concilia.total_abonos) if concilia else 0
+        try:
+            tf_excel = _safe_float(concilia.total_financiamiento) if concilia else 0
+            abonos_excel = _safe_float(concilia.total_abonos) if concilia else 0
+        except Exception:
+            tf_excel = 0
+            abonos_excel = 0
         
         # Datos del Sistema (tabla prestamos)
-        tf_sistema = _safe_float(p.total_financiamiento)
-        abonos_sistema = _safe_float(p.total_abonos)
+        try:
+            tf_sistema = _safe_float(p.total_financiamiento) if p.total_financiamiento else 0
+            abonos_sistema = _safe_float(p.total_abonos) if p.total_abonos else 0
+        except Exception:
+            tf_sistema = 0
+            abonos_sistema = 0
         
         # Datos de cuotas
         tot_cuotas = total_cuotas_num_map.get(p.id, p.numero_cuotas or 0)
@@ -342,28 +353,31 @@ def _generar_excel_conciliacion(
         pend_monto = cuotas_pendientes_monto_map.get(p.id, 0)
         
         # Crear fila base (12 columnas)
-        row = [
-            nombre,                                    # A
-            cedula,                                    # B
-            p.id,                                      # C
-            round(tf_excel, 2) if tf_excel else "",   # D
-            round(tf_sistema, 2) if tf_sistema else "", # E
-            round(abonos_excel, 2) if abonos_excel else "",     # F
-            round(abonos_sistema, 2) if abonos_sistema else "",  # G
-            tot_cuotas,                               # H
-            pag_num,                                  # I
-            round(pag_monto, 2),                      # J
-            pend_num,                                 # K
-            round(pend_monto, 2),                     # L
-        ]
-        
-        # Agregar columna "error TC" si hay diferencia en Total Financiamiento
-        if tf_excel > 0 and tf_sistema > 0 and tf_excel != tf_sistema:
-            row.append(f"error TC: {round(abs(tf_excel - tf_sistema), 2)}")
-        
-        # Agregar columna "error E" si hay diferencia en Abonos
-        if abonos_excel > 0 and abonos_sistema > 0 and abonos_excel != abonos_sistema:
-            row.append(f"error E: {round(abs(abonos_excel - abonos_sistema), 2)}")
+        try:
+            row = [
+                nombre,                                    # A
+                cedula,                                    # B
+                p.id,                                      # C
+                round(tf_excel, 2) if tf_excel > 0 else "",   # D
+                round(tf_sistema, 2) if tf_sistema > 0 else "", # E
+                round(abonos_excel, 2) if abonos_excel > 0 else "",     # F
+                round(abonos_sistema, 2) if abonos_sistema > 0 else "",  # G
+                int(tot_cuotas) if tot_cuotas else 0,     # H
+                int(pag_num) if pag_num else 0,           # I
+                round(pag_monto, 2) if pag_monto else 0,  # J
+                int(pend_num) if pend_num else 0,         # K
+                round(pend_monto, 2) if pend_monto else 0, # L
+            ]
+            
+            # Agregar columna "error TC" si hay diferencia en Total Financiamiento
+            if tf_excel > 0 and tf_sistema > 0 and tf_excel != tf_sistema:
+                row.append(f"error TC: {round(abs(tf_excel - tf_sistema), 2)}")
+            
+            # Agregar columna "error E" si hay diferencia en Abonos
+            if abonos_excel > 0 and abonos_sistema > 0 and abonos_excel != abonos_sistema:
+                row.append(f"error E: {round(abs(abonos_excel - abonos_sistema), 2)}")
+        except Exception as e:
+            continue
         
         ws.append(row)
     buf = io.BytesIO()
@@ -516,22 +530,31 @@ def exportar_conciliacion(
     
     hoy_str = date.today().isoformat()
     
-    if formato == "excel":
-        content = _generar_excel_conciliacion(db, fi, ff, cedulas_list)
-        # Borra temporales al descargar Excel
-        db.execute(delete(ConciliacionTemporal))
-        db.commit()
-        return Response(
-            content=content,
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": f"attachment; filename=reporte_conciliacion_{hoy_str}.xlsx"},
-        )
-    else:  # PDF
-        content = _generar_pdf_conciliacion(db, fi, ff)
-        return Response(
-            content=content,
-            media_type="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename=reporte_conciliacion_{hoy_str}.pdf"},
+    try:
+        if formato == "excel":
+            content = _generar_excel_conciliacion(db, fi, ff, cedulas_list)
+            # Borra temporales al descargar Excel
+            db.execute(delete(ConciliacionTemporal))
+            db.commit()
+            return Response(
+                content=content,
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                headers={"Content-Disposition": f"attachment; filename=reporte_conciliacion_{hoy_str}.xlsx"},
+            )
+        else:  # PDF
+            content = _generar_pdf_conciliacion(db, fi, ff)
+            return Response(
+                content=content,
+                media_type="application/pdf",
+                headers={"Content-Disposition": f"attachment; filename=reporte_conciliacion_{hoy_str}.pdf"},
+            )
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error generando reporte conciliacion: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error generando reporte: {str(e)}"
         )
 
 
