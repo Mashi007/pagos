@@ -1,4 +1,4 @@
-"""
+﻿"""
 Endpoints de pagos. Datos reales desde BD.
 - Tabla pagos: GET/POST/PUT/DELETE /pagos/ (listado y CRUD para /pagos/pagos).
 - GET /pagos/kpis, /stats, /ultimos; POST /upload, /conciliacion/upload, /{id}/aplicar-cuotas.
@@ -449,6 +449,8 @@ async def upload_excel_pagos(
         # --- FASE 1: Parsear todas las filas (ingresar todos los datos para validar después) ---
         FilasParseadas: list[dict] = []
         filas_omitidas = 0
+        errores: list[str] = []
+        errores_detalle: list[dict] = []
         for i, row in enumerate(rows):
             if not row or all(cell is None for cell in row):
                 continue
@@ -521,10 +523,6 @@ async def upload_excel_pagos(
                     "numero_doc_raw": (numero_doc or "").strip(),
                 })
             except Exception as e:
-        # Initialize error tracking lists
-        errores: list[str] = []
-        errores_detalle: list[dict] = []
-
                 errores.append(f"Fila {i + 2}: {e}")
                 errores_detalle.append({"fila": i + 2, "cedula": "", "error": str(e), "datos": {}})
 
@@ -1275,4 +1273,5 @@ def aplicar_pago_a_cuotas(pago_id: int, db: Session = Depends(get_db)):
             status_code=500,
             detail=f"Error al aplicar el pago a cuotas: {str(e)}",
         ) from e
+
 
