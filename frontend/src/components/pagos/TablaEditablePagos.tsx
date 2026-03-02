@@ -17,14 +17,17 @@ export function TablaEditablePagos({
   rows,
   onUpdateCell,
 }: FilaEditableProps) {
+  console.log('🟦 TablaEditablePagos recibió rows:', rows?.length || 0, rows)
+  
   if (!rows || rows.length === 0) {
-    return <div className="text-gray-500">No hay datos para mostrar</div>
+    return <div className="text-gray-500 p-4 border border-dashed border-gray-300 rounded">❌ No hay datos para mostrar</div>
   }
 
   return (
     <div className="space-y-4">
       {/* Encabezado simple */}
-      <div className="bg-green-50 border border-green-200 rounded p-4">
+      <div className="bg-blue-50 border border-blue-400 rounded p-4">
+        <h2 className="text-xl font-bold text-blue-700 mb-3">✅ TABLA EDITABLE - NUEVA INTERFAZ</h2>
         <div className="flex gap-4">
           <span className="text-sm">
             <strong>Total:</strong> {rows.length}
