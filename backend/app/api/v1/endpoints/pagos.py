@@ -864,29 +864,33 @@ def validar_filas_batch(
     # Patrones sospechosos: cédula + fecha + monto iguales (posible duplicado completo)
     pagos_sospechosos: list[dict] = []
     if body.filas:
+        from datetime import datetime as dt
         for fila in body.filas:
             cedula = (fila.get('cedula') or '').strip().replace('-', '').upper()
             fecha_str = fila.get('fecha_pago', '')
             monto = fila.get('monto_pagado', 0)
             if cedula and fecha_str and monto > 0:
                 try:
-                    from datetime import datetime as dt
+                    # Parsear fecha en formato DD/MM/YYYY
                     fecha_obj = dt.strptime(fecha_str.replace('-', '/'), '%d/%m/%Y').date()
+                    # Buscar pago con cédula exacta, fecha exacta y monto exacto
                     query = select(Pago).where(
-                        Pago.cedula == cedula,
-                        Pago.fecha_pago.cast(db.Text).like(f"{fecha_obj}%"),
-                        Pago.monto_pagado == monto
+                        Pago.cedula_cliente == cedula,
+                        Pago.monto_pagado == monto,
+                        func.date(Pago.fecha_pago) == fecha_obj
                     )
                     existing = db.execute(query).first()
                     if existing:
+                        row = existing[0]
                         pagos_sospechosos.append({
                             "cedula": cedula,
                             "fecha_pago": fecha_str,
                             "monto_pagado": monto,
                             "tipo": "patron_duplicado",
-                            "detalle": f"Existe pago idéntico (ID: {existing[0].id})"
+                            "detalle": f"Existe pago idéntico (ID: {row.id})"
                         })
-                except Exception:
+                except (ValueError, Exception):
+                    # Si falla el parse de fecha, ignorar
                     pass
 
     return {
