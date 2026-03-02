@@ -99,7 +99,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
 
         {/* Contenido con scroll */}
         <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6">
-          {!showPreview ? (
+          {!showPreview && excelData.length === 0 ? (
             <Card>
               <CardContent className="pt-6">
                 <div
