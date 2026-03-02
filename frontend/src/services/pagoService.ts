@@ -140,6 +140,22 @@ class PagoService {
     })
   }
 
+  async guardarFilaEditable(data: {
+    cedula: string
+    prestamo_id: number | null
+    monto_pagado: number
+    fecha_pago: string // formato "DD-MM-YYYY"
+    numero_documento: string | null
+  }): Promise<{
+    success: boolean
+    pago_id: number
+    message: string
+    cuotas_completadas: number
+    cuotas_parciales: number
+  }> {
+    return await apiClient.post(`${this.baseUrl}/guardar-fila-editable`, data)
+  }
+
   async getStats(filters?: {
     analista?: string
     concesionario?: string

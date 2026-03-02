@@ -1,4 +1,4 @@
-﻿"""
+"""
 Endpoints de pagos. Datos reales desde BD.
 - Tabla pagos: GET/POST/PUT/DELETE /pagos/ (listado y CRUD para /pagos/pagos).
 - GET /pagos/kpis, /stats, /ultimos; POST /upload, /conciliacion/upload, /{id}/aplicar-cuotas.
@@ -38,6 +38,15 @@ from app.schemas.pago import PagoCreate, PagoUpdate, PagoResponse
 class MoverRevisarPagosBody(BaseModel):
     """IDs de pagos exportados a Excel para mover a tabla revisar_pagos."""
     pago_ids: list[int]
+
+
+class GuardarFilaEditableBody(BaseModel):
+    """Datos de una fila editable validada para guardar como Pago."""
+    cedula: str
+    prestamo_id: Optional[int] = None
+    monto_pagado: float
+    fecha_pago: str  # formato "DD-MM-YYYY"
+    numero_documento: Optional[str] = None
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -747,6 +756,109 @@ async def upload_excel_pagos(
         db.rollback()
         logger.exception("Error upload Excel pagos: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post("/guardar-fila-editable", response_model=dict)
+def guardar_fila_editable(
+    body: GuardarFilaEditableBody = Body(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Guarda una fila editable validada (desde Preview).
+    Si cumple validadores, inserta en pagos, aplica cuotas y retorna éxito.
+    Auto-marca como conciliado ('SI') para aplicar reglas de negocio inmediatamente.
+    """
+    try:
+        cedula = (body.cedula or "").strip()
+        monto = body.monto_pagado
+        numero_doc = (body.numero_documento or "").strip() if body.numero_documento else None
+        prestamo_id = body.prestamo_id
+
+        # Validaciones post-guardado
+        if not cedula:
+            raise HTTPException(status_code=400, detail="Cédula requerida")
+        if not _looks_like_cedula_inline(cedula):
+            raise HTTPException(status_code=400, detail="Cédula inválida (debe ser V/E/J/Z + 6-11 dígitos)")
+        if monto <= 0:
+            raise HTTPException(status_code=400, detail="Monto debe ser > 0")
+        if monto > _MAX_MONTO_PAGADO:
+            raise HTTPException(status_code=400, detail=f"Monto excede límite máximo: {_MAX_MONTO_PAGADO}")
+
+        # Parsear fecha
+        try:
+            fecha_pago = datetime.strptime(body.fecha_pago[:10], "%d-%m-%Y").date()
+        except (ValueError, IndexError):
+            raise HTTPException(status_code=400, detail="Fecha inválida (formato: DD-MM-YYYY)")
+
+        # Normalizar documento
+        numero_doc_norm = _normalizar_numero_documento(numero_doc) if numero_doc else None
+        if numero_doc_norm is None and numero_doc:
+            numero_doc_norm = _canonical_numero_documento(numero_doc) or numero_doc
+        numero_doc_norm = _truncar_numero_documento(numero_doc_norm) if numero_doc_norm else None
+
+        # Validar duplicado en BD (documento)
+        if numero_doc_norm:
+            pago_existente = db.execute(
+                select(Pago).where(Pago.numero_documento == numero_doc_norm).limit(1)
+            ).first()
+            if pago_existente:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Ya existe un pago con este documento: {numero_doc_norm}"
+                )
+
+        # Si prestamo_id es None, buscar automáticamente
+        if prestamo_id is None:
+            cliente_row = db.execute(
+                select(Prestamo.id)
+                .join(Cliente, Prestamo.cliente_id == Cliente.id)
+                .where(Cliente.cedula == cedula)
+                .limit(1)
+            ).first()
+            if cliente_row:
+                prestamo_id = cliente_row[0]
+
+        # Crear pago
+        ref_pago = (numero_doc_norm or (numero_doc or "Carga"))[:_MAX_LEN_NUMERO_DOCUMENTO]
+        pago = Pago(
+            cedula_cliente=cedula,
+            prestamo_id=prestamo_id,
+            fecha_pago=datetime.combine(fecha_pago, dt_time.min),
+            monto_pagado=Decimal(str(round(monto, 2))),
+            numero_documento=numero_doc_norm,
+            estado="PAGADO",  # Auto-marcar como PAGADO (se aplica a cuotas)
+            referencia_pago=ref_pago,
+        )
+        db.add(pago)
+        db.flush()
+
+        # Aplicar a cuotas si prestamo_id existe
+        cuotas_completadas = 0
+        cuotas_parciales = 0
+        if pago.prestamo_id and monto > 0:
+            cuotas_completadas, cuotas_parciales = _aplicar_pago_a_cuotas_interno(pago, db)
+
+        db.commit()
+
+        return {
+            "success": True,
+            "pago_id": pago.id,
+            "message": "Fila guardada exitosamente",
+            "cuotas_completadas": cuotas_completadas,
+            "cuotas_parciales": cuotas_parciales,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception("Error guardar-fila-editable: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+def _looks_like_cedula_inline(cedula: str) -> bool:
+    """Validar cédula inline (helper)."""
+    return bool(re.match(r"^[VEJZ]\d{6,11}$", cedula.strip(), re.IGNORECASE))
 
 
 @router.post("/conciliacion/upload", response_model=dict)
