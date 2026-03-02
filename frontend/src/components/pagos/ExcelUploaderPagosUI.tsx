@@ -1,7 +1,7 @@
-/**
+﻿/**
  * UI para carga masiva de pagos desde Excel.
- * Columnas: Cédula, Fecha de pago, Monto, Documento, ID Préstamo (opcional).
- * Solo créditos activos (APROBADO, DESEMBOLSADO) en el selector.
+ * Columnas: CÃ©dula, Fecha de pago, Monto, Documento, ID PrÃ©stamo (opcional).
+ * Solo crÃ©ditos activos (APROBADO, DESEMBOLSADO) en el selector.
  */
 
 import { motion, AnimatePresence } from 'framer-motion'
@@ -11,6 +11,7 @@ import { Button } from '../ui/button'
 import { Badge } from '../ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { useExcelUploadPagos, type ExcelUploaderPagosProps } from '../../hooks/useExcelUploadPagos'
+import { PagosConErroresSection } from './PagosConErroresSection'
 import { cedulaLookupParaFila, cedulaParaLookup, OBSERVACIONES_POR_CAMPO } from '../../utils/pagoExcelValidation'
 import { useNavigate } from 'react-router-dom'
 
@@ -107,9 +108,9 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                   onDrop={handleDrop}
                 >
                   <Upload className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-                  <h3 className="text-lg font-semibold mb-2">{isDragging ? 'Suelta el archivo aquí' : 'Sube tu archivo Excel'}</h3>
+                  <h3 className="text-lg font-semibold mb-2">{isDragging ? 'Suelta el archivo aquÃ­' : 'Sube tu archivo Excel'}</h3>
                   <p className="text-gray-600 mb-4 text-sm">
-                    Columnas: Cédula | Fecha de pago | Monto | Documento | ID Préstamo (opcional) | Conciliación (Sí/No). Documento con solo números (ej. 740087464410397): el sistema los normaliza automáticamente al subir para evitar notación científica
+                    Columnas: CÃ©dula | Fecha de pago | Monto | Documento | ID PrÃ©stamo (opcional) | ConciliaciÃ³n (SÃ­/No). Documento con solo nÃºmeros (ej. 740087464410397): el sistema los normaliza automÃ¡ticamente al subir para evitar notaciÃ³n cientÃ­fica
                   </p>
                   <Button onClick={() => fileInputRef.current?.click()} disabled={isProcessing} className="mb-4">
                     <FileSpreadsheet className="mr-2 h-4 w-4" />
@@ -138,7 +139,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                   <div className="flex flex-wrap items-center justify-between gap-4">
                     <div className="flex items-center gap-2 flex-wrap">
                       <Badge variant="outline">Total: {excelData.length}</Badge>
-                      <Badge variant="outline" className="text-green-700">Válidos: {validCount}</Badge>
+                      <Badge variant="outline" className="text-green-700">VÃ¡lidos: {validCount}</Badge>
                       <Badge variant="outline">Guardados: {savedRows.size}</Badge>
                       {duplicadosPendientesRevisar.size > 0 && (
                         <Badge variant="outline" className="text-amber-700 border-amber-300">
@@ -182,7 +183,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                           navigate('/pagos?revisar=1'); onClose()
                         }}
                         className="bg-amber-50 border-amber-300"
-                        title="Ver pagos sin crédito asignado"
+                        title="Ver pagos sin crÃ©dito asignado"
                       >
                         <Search className="mr-2 h-4 w-4" />
                         Revisar Pagos
@@ -194,7 +195,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                           onClick={() => sendAllToRevisarPagos()}
                           disabled={isSendingAllRevisar || serviceStatus === 'offline'}
                           className="bg-amber-100 border-amber-400 text-amber-800 hover:bg-amber-200"
-                          title="Enviar todas las filas pendientes (duplicados, errores, sin crédito) a Revisar Pagos"
+                          title="Enviar todas las filas pendientes (duplicados, errores, sin crÃ©dito) a Revisar Pagos"
                         >
                           {isSendingAllRevisar ? (
                             <>
@@ -235,7 +236,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                 <CardHeader>
                   <CardTitle className="flex items-center">
                     <Eye className="mr-2 h-5 w-5" />
-                    Previsualización
+                    PrevisualizaciÃ³n
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -244,13 +245,13 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                       <thead>
                         <tr className="bg-gray-50">
                           <th className="border p-2 text-left text-xs font-medium w-12">Fila</th>
-                          <th className="border p-2 text-left text-xs font-medium w-24">Cédula</th>
+                          <th className="border p-2 text-left text-xs font-medium w-24">CÃ©dula</th>
                           <th className="border p-2 text-left text-xs font-medium w-24">Fecha pago</th>
                           <th className="border p-2 text-left text-xs font-medium w-24">Monto</th>
                           <th className="border p-2 text-left text-xs font-medium w-28">Documento</th>
-                          <th className="border p-2 text-left text-xs font-medium w-32">Crédito</th>
-                          <th className="border p-2 text-left text-xs font-medium w-24">Conciliación</th>
-                          <th className="border p-2 text-left text-xs font-medium w-20">Acción</th>
+                          <th className="border p-2 text-left text-xs font-medium w-32">CrÃ©dito</th>
+                          <th className="border p-2 text-left text-xs font-medium w-24">ConciliaciÃ³n</th>
+                          <th className="border p-2 text-left text-xs font-medium w-20">AcciÃ³n</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -311,7 +312,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                   className={inputClass(row._validation.monto_pagado?.isValid ?? true)}
                                 />
                                 {row._validation.monto_pagado?.isValid === false && (
-                                  <p className="text-xs text-amber-700 mt-0.5">{OBSERVACIONES_POR_CAMPO.monto_pagado ?? 'Monto inválido'}</p>
+                                  <p className="text-xs text-amber-700 mt-0.5">{OBSERVACIONES_POR_CAMPO.monto_pagado ?? 'Monto invÃ¡lido'}</p>
                                 )}
                               </td>
                               <td className="border p-2">
@@ -320,7 +321,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                   value={row.numero_documento}
                                   onChange={(e) => updateCellValue(row, 'numero_documento', e.target.value)}
                                   className={inputClass(row._validation.numero_documento?.isValid !== false)}
-                                  placeholder="Cualquier formato (ej. 740087…, BS./REF, con € $)"
+                                  placeholder="Cualquier formato (ej. 740087â€¦, BS./REF, con â‚¬ $)"
                                   title="Cualquier formato aceptado. Solo no duplicados."
                                 />
                                 {row._validation.numero_documento?.isValid === false && (
@@ -336,19 +337,19 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                       onValueChange={(v) => updateCellValue(row, 'prestamo_id', v)}
                                     >
                                       <SelectTrigger className="h-8 text-xs">
-                                        <SelectValue placeholder="Seleccionar crédito" />
+                                        <SelectValue placeholder="Seleccionar crÃ©dito" />
                                       </SelectTrigger>
                                       <SelectContent>
-                                        <SelectItem value="none">— Seleccionar —</SelectItem>
+                                        <SelectItem value="none">â€” Seleccionar â€”</SelectItem>
                                         {prestamosActivos.map((p) => (
                                           <SelectItem key={p.id} value={String(p.id)}>
-                                            Crédito #{p.id}
+                                            CrÃ©dito #{p.id}
                                           </SelectItem>
                                         ))}
                                       </SelectContent>
                                     </Select>
                                     {prestamosActivos.length > 1 && valorCredito === 'none' && (
-                                      <p className="text-xs text-amber-700 mt-0.5">{OBSERVACIONES_POR_CAMPO.prestamo_id ?? 'Crédito inválido'}</p>
+                                      <p className="text-xs text-amber-700 mt-0.5">{OBSERVACIONES_POR_CAMPO.prestamo_id ?? 'CrÃ©dito invÃ¡lido'}</p>
                                     )}
                                   </>
                                 ) : (
@@ -370,11 +371,11 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                         </Button>
                                       ) : null}
                                       {(!cedulaLookup || cedulaLookup.length < 5) && (
-                                        <span className="text-xs text-gray-400">—</span>
+                                        <span className="text-xs text-gray-400">â€”</span>
                                       )}
                                     </div>
                                     {cedulaLookup && cedulaLookup.length >= 5 && !tieneCreditos && (
-                                      <p className="text-xs text-amber-700 mt-0.5">{OBSERVACIONES_POR_CAMPO.prestamo_id ?? 'Crédito inválido'}</p>
+                                      <p className="text-xs text-amber-700 mt-0.5">{OBSERVACIONES_POR_CAMPO.prestamo_id ?? 'CrÃ©dito invÃ¡lido'}</p>
                                     )}
                                   </div>
                                 )}
@@ -389,11 +390,11 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                   </SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="no">No</SelectItem>
-                                    <SelectItem value="si">Sí</SelectItem>
+                                    <SelectItem value="si">SÃ­</SelectItem>
                                   </SelectContent>
                                 </Select>
                                 {row._validation.conciliado?.isValid === false && (
-                                  <p className="text-xs text-amber-700 mt-0.5">{OBSERVACIONES_POR_CAMPO.conciliado ?? 'Conciliación inválida'}</p>
+                                  <p className="text-xs text-amber-700 mt-0.5">{OBSERVACIONES_POR_CAMPO.conciliado ?? 'ConciliaciÃ³n invÃ¡lida'}</p>
                                 )}
                               </td>
                               <td className="border p-2">
@@ -467,7 +468,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                         className="text-amber-700 border-amber-300 hover:bg-amber-50 text-xs"
                                         title={
                                           prestamosActivos.length > 1
-                                            ? 'Enviar a Revisar Pagos para asignar el crédito correcto'
+                                            ? 'Enviar a Revisar Pagos para asignar el crÃ©dito correcto'
                                             : 'Enviar a Revisar Pagos'
                                         }
                                       >
@@ -550,4 +551,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
     </motion.div>
   )
 }
+
+
+
 

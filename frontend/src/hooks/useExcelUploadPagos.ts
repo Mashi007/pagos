@@ -1,7 +1,7 @@
-/**
+﻿/**
  * Hook para carga masiva de pagos desde Excel.
- * Columnas: Cédula, Fecha de pago, Monto, Documento, ID Préstamo (opcional).
- * Solo préstamos activos (APROBADO, DESEMBOLSADO) en el selector.
+ * Columnas: CÃ©dula, Fecha de pago, Monto, Documento, ID PrÃ©stamo (opcional).
+ * Solo prÃ©stamos activos (APROBADO, DESEMBOLSADO) en el selector.
  */
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
@@ -29,7 +29,7 @@ import {
 import { readExcelToJSON } from '../types/exceljs'
 
 const ESTADOS_PRESTAMO_ACTIVO = ['APROBADO', 'DESEMBOLSADO']
-// Límite de INTEGER en BD; si el valor parece número de documento (ej. 740087408451411), el backend devuelve 422
+// LÃ­mite de INTEGER en BD; si el valor parece nÃºmero de documento (ej. 740087408451411), el backend devuelve 422
 const PRESTAMO_ID_MAX = 2147483647
 
 function observacionesDesdeCampos(campos: string[]): string {
@@ -37,19 +37,19 @@ function observacionesDesdeCampos(campos: string[]): string {
   return campos.map((c) => OBSERVACIONES_POR_CAMPO[c] || c).join(' / ')
 }
 
-/** Infiere observaciones desde el mensaje de error del backend (422, 400, etc.) para especificar exactamente qué falló. */
+/** Infiere observaciones desde el mensaje de error del backend (422, 400, etc.) para especificar exactamente quÃ© fallÃ³. */
 function observacionesDesdeError(msg: string): string {
   const m = (msg || '').toLowerCase()
   const partes: string[] = []
-  if (/fecha_pago|formato.*yyyy-mm-dd|fecha.*inválid|invalid.*date|date.*format/.test(m) || (m.includes('fecha') && m.includes('debe')))
+  if (/fecha_pago|formato.*yyyy-mm-dd|fecha.*invÃ¡lid|invalid.*date|date.*format/.test(m) || (m.includes('fecha') && m.includes('debe')))
     partes.push(OBSERVACIONES_POR_CAMPO.fecha_pago)
   else if (/fecha|date/.test(m)) partes.push(OBSERVACIONES_POR_CAMPO.fecha_pago)
   if (/cedula|cliente|client|not found|no existe|no encontrad|encontrado/.test(m)) partes.push(OBSERVACIONES_POR_CAMPO.cedula)
-  if (/monto|amount|debe ser|greater|positive|≤ 0|menor.*cero/.test(m)) partes.push(OBSERVACIONES_POR_CAMPO.monto_pagado)
-  if (/prestamo_id|prestamo.*entre|entre 1 y|id fuera|número de documento.*crédito/.test(m)) partes.push(OBSERVACIONES_POR_CAMPO.prestamo_id)
-  else if (/prestamo|credito|crédito/.test(m)) partes.push(OBSERVACIONES_POR_CAMPO.prestamo_id)
+  if (/monto|amount|debe ser|greater|positive|â‰¤ 0|menor.*cero/.test(m)) partes.push(OBSERVACIONES_POR_CAMPO.monto_pagado)
+  if (/prestamo_id|prestamo.*entre|entre 1 y|id fuera|nÃºmero de documento.*crÃ©dito/.test(m)) partes.push(OBSERVACIONES_POR_CAMPO.prestamo_id)
+  else if (/prestamo|credito|crÃ©dito/.test(m)) partes.push(OBSERVACIONES_POR_CAMPO.prestamo_id)
   if (/documento|duplicado|already exists|ya existe/.test(m)) partes.push('Duplicado BD (documento ya existe en base de datos)')
-  return partes.length > 0 ? partes.join(' / ') : 'Revisar (error de validación)'
+  return partes.length > 0 ? partes.join(' / ') : 'Revisar (error de validaciÃ³n)'
 }
 
 export interface ExcelUploaderPagosProps {
@@ -67,7 +67,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
   const [isProcessing, setIsProcessing] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  /** Evita doble petición batch: processExcelFile ya pide préstamos por cédula; el useEffect no vuelve a pedir para las mismas cédulas. */
+  /** Evita doble peticiÃ³n batch: processExcelFile ya pide prÃ©stamos por cÃ©dula; el useEffect no vuelve a pedir para las mismas cÃ©dulas. */
   const batchRequestedForCedulasRef = useRef<string | null>(null)
   const [savedRows, setSavedRows] = useState<Set<number>>(new Set())
   const [enviadosRevisar, setEnviadosRevisar] = useState<Set<number>>(new Set())
@@ -77,6 +77,15 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
   const [savingProgress, setSavingProgress] = useState<Record<number, boolean>>({})
   const [serviceStatus, setServiceStatus] = useState<'unknown' | 'online' | 'offline'>('unknown')
   const [toasts, setToasts] = useState<Array<{ id: string; type: 'error' | 'warning' | 'success'; message: string }>>([])
+  const [pagosConErrores, setPagosConErrores] = useState<Array<{
+    id: number
+    fila_origen: number
+    cedula: string
+    monto: number
+    errores: string[]
+    accion: string
+  }>>([])
+  const [registrosConError, setRegistrosConError] = useState(0)
 
   const addToast = useCallback((type: 'error' | 'warning' | 'success', message: string) => {
     const id = Date.now().toString() + Math.random().toString(36).slice(2)
@@ -106,7 +115,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     return () => clearInterval(interval)
   }, [checkServiceStatus])
 
-  // Incluir todas las cédulas válidas (V/E/J/Z + 6-11 dígitos) que aparezcan en columna Cédula O en columna Documento
+  // Incluir todas las cÃ©dulas vÃ¡lidas (V/E/J/Z + 6-11 dÃ­gitos) que aparezcan en columna CÃ©dula O en columna Documento
   const looksLikeCedula = (c: string) => /^[VEJZ]\d{6,11}$/i.test((c || '').replace(/-/g, '').trim())
   const cedulasUnicas = useMemo(() => {
     const candidates = new Set<string>()
@@ -118,7 +127,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         if (c && c.length >= 5 && looksLikeCedula(c)) candidates.add(c)
       })
     })
-    // Normalizar (sin guión) para que coincidan con las claves que devuelve el backend
+    // Normalizar (sin guiÃ³n) para que coincidan con las claves que devuelve el backend
     return [...candidates].map((c) => (c || '').trim().replace(/-/g, '')).filter((c) => c.length >= 5 && looksLikeCedula(c))
   }, [excelData])
 
@@ -140,7 +149,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     []
   )
 
-  // Búsqueda por cédula individual (al hacer clic en Buscar o al salir del campo)
+  // BÃºsqueda por cÃ©dula individual (al hacer clic en Buscar o al salir del campo)
   const fetchSingleCedula = useCallback(
     async (cedula: string): Promise<boolean> => {
       const cedulaNorm = cedulaParaLookup(cedula) || (cedula || '').trim()
@@ -164,8 +173,8 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     [mergePrestamosEnMap]
   )
 
-  // Carga inicial: buscar préstamos por cédulas únicas (batch) y auto-asignar Crédito cuando hay 1 activo.
-  // Si processExcelFile ya pidió el batch para estas cédulas, no repetir la petición.
+  // Carga inicial: buscar prÃ©stamos por cÃ©dulas Ãºnicas (batch) y auto-asignar CrÃ©dito cuando hay 1 activo.
+  // Si processExcelFile ya pidiÃ³ el batch para estas cÃ©dulas, no repetir la peticiÃ³n.
   useEffect(() => {
     if (!showPreview || cedulasUnicas.length === 0) {
       setPrestamosPorCedula((prev) => (Object.keys(prev).length ? {} : prev))
@@ -235,7 +244,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     }
   }, [showPreview, cedulasUnicas.join(',')])
 
-  // Auto-asignar prestamo_id solo cuando la cédula tiene exactamente 1 crédito activo; con 2 o más, asignación manual
+  // Auto-asignar prestamo_id solo cuando la cÃ©dula tiene exactamente 1 crÃ©dito activo; con 2 o mÃ¡s, asignaciÃ³n manual
   const prestamoIdVacio = (v: unknown) =>
     v == null || v === undefined || v === '' || v === 'none' || v === 0 || (typeof v === 'number' && Number.isNaN(v))
 
@@ -253,7 +262,29 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         if (prestamos.length === 0 && fallbackKey) prestamos = prestamosPorCedula[fallbackKey] || []
         if (prestamos.length === 1 && prestamoIdVacio(r.prestamo_id)) {
           changed = true
-          return { ...r, prestamo_id: prestamos[0].id }
+        
+  const moveErrorToReviewPagos = useCallback(
+    async (id: number) => {
+      try {
+        await pagoConErrorService.moveToReviewPagos(id)
+        setPagosConErrores(prev => prev.filter(p => p.id !== id))
+        addToast('success', 'Movido a Revisar Pagos')
+        queryClient.invalidateQueries({ queryKey: ['pagosConErrores'] })
+      } catch (error) {
+        addToast('error', 'Error al mover a revisar pagos')
+      }
+    },
+    [addToast, queryClient]
+  )
+
+  const dismissError = useCallback(
+    (id: number) => {
+      setPagosConErrores(prev => prev.filter(p => p.id !== id))
+    },
+    []
+  )
+
+  return { ...r, prestamo_id: prestamos[0].id }
         }
         return r
       })
@@ -291,7 +322,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
   const saveIndividualPago = useCallback(
     async (row: PagoExcelRow, opts?: { skipToast?: boolean; skipRefresh?: boolean }): Promise<{ ok: boolean; was409?: boolean }> => {
       if (row._hasErrors) {
-        addToast('error', 'Hay errores en esta fila. Corrígelos antes de guardar.')
+        addToast('error', 'Hay errores en esta fila. CorrÃ­gelos antes de guardar.')
         return { ok: false }
       }
       const cedulaLookup = cedulaLookupParaFila(row.cedula || '', row.numero_documento || '')
@@ -299,11 +330,11 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       const prestamosActivos =
         prestamosPorCedula[cedulaLookup] || prestamosPorCedula[cedulaSinGuion] || prestamosPorCedula[cedulaLookup.toUpperCase()] || prestamosPorCedula[cedulaLookup.toLowerCase()] || []
       if (prestamosActivos.length > 1 && !row.prestamo_id) {
-        addToast('error', `Fila ${row._rowIndex}: La cédula ${cedulaLookup} tiene ${prestamosActivos.length} créditos activos. Seleccione uno.`)
+        addToast('error', `Fila ${row._rowIndex}: La cÃ©dula ${cedulaLookup} tiene ${prestamosActivos.length} crÃ©ditos activos. Seleccione uno.`)
         return { ok: false }
       }
       if (prestamosActivos.length === 0 && !row.prestamo_id) {
-        addToast('warning', `Fila ${row._rowIndex}: No hay créditos activos para ${cedulaLookup}. Se guardará sin préstamo asociado.`)
+        addToast('warning', `Fila ${row._rowIndex}: No hay crÃ©ditos activos para ${cedulaLookup}. Se guardarÃ¡ sin prÃ©stamo asociado.`)
       }
 
       setSavingProgress((prev) => ({ ...prev, [row._rowIndex]: true }))
@@ -318,7 +349,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         if (prestamoId != null && (prestamoId < 1 || prestamoId > PRESTAMO_ID_MAX)) {
           addToast(
             'error',
-            `Fila ${row._rowIndex}: El valor del crédito no es válido (parece un número de documento). Elija un crédito de la lista.`
+            `Fila ${row._rowIndex}: El valor del crÃ©dito no es vÃ¡lido (parece un nÃºmero de documento). Elija un crÃ©dito de la lista.`
           )
           return { ok: false }
         }
@@ -473,7 +504,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           return next
         })
         refreshPagos()
-        addToast(row._hasErrors ? 'warning' : 'success', row._hasErrors ? 'Pago enviado a Revisar Pagos con errores. Corrígelo allí.' : 'Pago enviado a Revisar Pagos')
+        addToast(row._hasErrors ? 'warning' : 'success', row._hasErrors ? 'Pago enviado a Revisar Pagos con errores. CorrÃ­gelo allÃ­.' : 'Pago enviado a Revisar Pagos')
         onNavigate()
         return true
       } catch (err: any) {
@@ -486,7 +517,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         addToast(
           'error',
           is409
-            ? `Fila ${row._rowIndex}: ${msg} Cambie el Nº documento o verifique si ya se guardó.`
+            ? `Fila ${row._rowIndex}: ${msg} Cambie el NÂº documento o verifique si ya se guardÃ³.`
             : `Fila ${row._rowIndex}: ${msg}`
         )
         return false
@@ -508,7 +539,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       return
     }
     if (serviceStatus === 'offline') {
-      addToast('error', 'Sin conexión')
+      addToast('error', 'Sin conexiÃ³n')
       return
     }
     setIsSendingAllRevisar(true)
@@ -532,7 +563,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       return
     }
     if (serviceStatus === 'offline') {
-      addToast('error', 'Sin conexión')
+      addToast('error', 'Sin conexiÃ³n')
       return
     }
     setIsSendingAllRevisar(true)
@@ -552,11 +583,11 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
   const saveAllValid = useCallback(async () => {
     const valid = getValidRows()
     if (valid.length === 0) {
-      addToast('warning', 'No hay pagos válidos para guardar')
+      addToast('warning', 'No hay pagos vÃ¡lidos para guardar')
       return
     }
     if (serviceStatus === 'offline') {
-      addToast('error', 'Sin conexión')
+      addToast('error', 'Sin conexiÃ³n')
       return
     }
     const toSave = valid.filter((row) => {
@@ -573,7 +604,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       addToast(
         'warning',
         omitidos > 0
-          ? `${omitidos} fila(s) pendientes: guarde uno a uno, corrija o envíe a Revisar Pagos.`
+          ? `${omitidos} fila(s) pendientes: guarde uno a uno, corrija o envÃ­e a Revisar Pagos.`
           : 'No hay filas que cumplan criterios para guardar en lote.'
       )
       return
@@ -601,7 +632,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       }
     }
     if (omitidos > 0) {
-      addToast('warning', `${omitidos} fila(s) omitidas: guarde uno a uno, corrija o envíe a Revisar Pagos.`)
+      addToast('warning', `${omitidos} fila(s) omitidas: guarde uno a uno, corrija o envÃ­e a Revisar Pagos.`)
     }
     if (ok > 0 || fail > 0) refreshPagos()
     setIsSavingIndividual(false)
@@ -622,7 +653,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       onSuccess?.()
       onClose()
     } else if (fail === 0 && ok > 0 && (quedanConErrores || quedanSinGuardar)) {
-      addToast('warning', 'Quedan filas pendientes. Use "Revisar Pagos" en cada una o corríjalas.')
+      addToast('warning', 'Quedan filas pendientes. Use "Revisar Pagos" en cada una o corrÃ­jalas.')
     }
   }, [getValidRows, serviceStatus, saveIndividualPago, addToast, onSuccess, onClose, prestamosPorCedula, excelData, savedRows, enviadosRevisar, duplicadosPendientesRevisar])
 
@@ -640,7 +671,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         const data = await file.arrayBuffer()
         if (!isMounted()) return
         if (data.byteLength > 10 * 1024 * 1024) {
-          alert('Archivo demasiado grande. Máximo 10 MB')
+          alert('Archivo demasiado grande. MÃ¡ximo 10 MB')
           return
         }
         const jsonData = await readExcelToJSON(data)
@@ -663,12 +694,12 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           const match = (i: number, ...keys: string[]) => keys.some(k => h(i).includes(k))
           let cedula = 0, fecha = 1, monto = 2, documento = 3, prestamo = 4, conciliacion = 5
           for (let i = 0; i < Math.max(headerRow.length, 8); i++) {
-            if (match(i, 'cedula', 'cÃ©dula')) cedula = i
+            if (match(i, 'cedula', 'cÃƒÂ©dula')) cedula = i
             if (match(i, 'fecha', 'fecha_pago', 'date')) fecha = i
             if (match(i, 'monto', 'monto_pagado', 'amount')) monto = i
-            if (match(i, 'documento', 'numero_documento', 'nº documento', 'n documento', 'doc', 'referencia', 'nÂº documento', 'zelle', 'numero doc')) documento = i
-            if (match(i, 'prÃ©stamo', 'prestamo', 'credito', 'crÃ©dito')) prestamo = i
-            if (match(i, 'conciliacion', 'conciliaciÃ³n')) conciliacion = i
+            if (match(i, 'documento', 'numero_documento', 'nÂº documento', 'n documento', 'doc', 'referencia', 'nÃ‚Âº documento', 'zelle', 'numero doc')) documento = i
+            if (match(i, 'prÃƒÂ©stamo', 'prestamo', 'credito', 'crÃƒÂ©dito')) prestamo = i
+            if (match(i, 'conciliacion', 'conciliaciÃƒÂ³n')) conciliacion = i
           }
           return { cedula, fecha, monto, documento, prestamo, conciliacion }
         })()
@@ -683,7 +714,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           const montoRaw = String(row[cols.monto] || 0).replace(',', '.')
           const monto = parseFloat(montoRaw) || 0
           let numeroDoc = normalizarNumeroDocumento(row[cols.documento])
-          // Si la columna "Cédula" trae número largo (ej. 15 dígitos) y "Documento" está vacío o es una cédula, interpretar como documento en columna equivocada
+          // Si la columna "CÃ©dula" trae nÃºmero largo (ej. 15 dÃ­gitos) y "Documento" estÃ¡ vacÃ­o o es una cÃ©dula, interpretar como documento en columna equivocada
           if (looksLikeDocumentNotCedula(cedula) && (!numeroDoc || numeroDoc === 'NaN' || /^[VEJZ]\d{6,11}$/i.test(String(numeroDoc).replace(/-/g, '')))) {
             numeroDoc = normalizarNumeroDocumento(cedula)
             cedula = (row[cols.documento] != null ? String(row[cols.documento]).trim() : '').trim()
@@ -692,20 +723,20 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           const prestamoIdRaw = row[cols.prestamo]
           const conciliacionRawCol4 = (row[cols.prestamo]?.toString() || '').trim().toUpperCase()
           const conciliacionRawCol5 = (row[cols.conciliacion]?.toString() || '').trim().toUpperCase()
-          const isConciliacionCol4 = ['SI', 'Sí', 'NO', '1', '0'].includes(conciliacionRawCol4)
+          const isConciliacionCol4 = ['SI', 'SÃ­', 'NO', '1', '0'].includes(conciliacionRawCol4)
           let prestamoId: number | null =
             !isConciliacionCol4 && prestamoIdRaw != null && String(prestamoIdRaw).trim() !== ''
               ? parseInt(String(prestamoIdRaw).trim(), 10)
               : null
-          // Si el Excel trae en columna Crédito un número de documento (ej. 740087...), no usarlo como prestamo_id
+          // Si el Excel trae en columna CrÃ©dito un nÃºmero de documento (ej. 740087...), no usarlo como prestamo_id
           if (prestamoId != null && (Number.isNaN(prestamoId) || prestamoId < 1 || prestamoId > PRESTAMO_ID_MAX)) {
             prestamoId = null
           }
           const conciliacionRaw = (isConciliacionCol4 ? conciliacionRawCol4 : conciliacionRawCol5).trim()
-          // Por defecto: Conciliación = Sí. Solo No si explícitamente "NO" (evitar que 0/celda vacía = No).
+          // Por defecto: ConciliaciÃ³n = SÃ­. Solo No si explÃ­citamente "NO" (evitar que 0/celda vacÃ­a = No).
           const conciliado = conciliacionRaw === 'NO' ? false : true
 
-          // Guardar documento siempre como string normalizado (evita número/científico y asegura misma clave en set)
+          // Guardar documento siempre como string normalizado (evita nÃºmero/cientÃ­fico y asegura misma clave en set)
           const numeroDocStr = (numeroDoc && numeroDoc !== 'NaN') ? (normalizarNumeroDocumento(numeroDoc) || String(numeroDoc)).trim() : ''
           const rowData: PagoExcelRow = {
             _rowIndex: i + 1,
@@ -719,7 +750,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             conciliado,
           }
 
-          // Única validación: documento duplicado
+          // Ãšnica validaciÃ³n: documento duplicado
           const docValidation = validatePagoField('numero_documento', rowData.numero_documento, { documentosEnArchivo })
           rowData._validation.numero_documento = docValidation
           rowData._validation.cedula = rowData._validation.fecha_pago = rowData._validation.monto_pagado = { isValid: true }
@@ -734,7 +765,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         setExcelData(processed)
         setShowPreview(true)
 
-        // Asignar Crédito en cuanto lleguen los préstamos (misma lógica que el efecto)
+        // Asignar CrÃ©dito en cuanto lleguen los prÃ©stamos (misma lÃ³gica que el efecto)
         const uniqueCedulasSet = new Set<string>()
         processed.forEach((r) => {
           const fromCedula = cedulaParaLookup(r.cedula)
@@ -744,7 +775,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             if (c && c.length >= 5 && looksLikeCedula(c)) uniqueCedulasSet.add(c)
           })
         })
-        // Normalizar igual que el backend (sin guión) para que las claves del map coincidan con la respuesta
+        // Normalizar igual que el backend (sin guiÃ³n) para que las claves del map coincidan con la respuesta
         const uniqueCedulas = [...uniqueCedulasSet].map((c) => (c || '').trim().replace(/-/g, '')).filter((c) => c.length >= 5 && looksLikeCedula(c))
         if (uniqueCedulas.length > 0) {
           batchRequestedForCedulasRef.current = uniqueCedulas.join(',')
@@ -794,7 +825,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
               setPrestamosPorCedula(map)
               const keysMap = Object.keys(map)
               const fallbackKey = keysMap.length === 1 ? keysMap[0] : null
-              // Usar siempre el array local "processed" para evitar race: prev puede estar vacío o desactualizado
+              // Usar siempre el array local "processed" para evitar race: prev puede estar vacÃ­o o desactualizado
               const updated = processed.map((r) => {
                 const cedulaLookup = cedulaLookupParaFila(r.cedula || '', r.numero_documento || '')
                 const cedulaColNorm = cedulaParaLookup(r.cedula) || (r.cedula || '').trim().replace(/-/g, '')
@@ -881,7 +912,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         } else {
           ;(updated as any)[field] = field === 'monto_pagado' ? (Number(value) || 0) : value
         }
-        // REGLA ESTRICTA: ningún documento duplicado; misma normalización que en validación; no añadir vacíos
+        // REGLA ESTRICTA: ningÃºn documento duplicado; misma normalizaciÃ³n que en validaciÃ³n; no aÃ±adir vacÃ­os
         const documentosEnArchivo = new Set<string>()
         prev.forEach((other) => {
           if (other._rowIndex !== row._rowIndex) {
@@ -937,5 +968,10 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     duplicadosPendientesRevisar,
     onClose,
     removeToast,
+    pagosConErrores,
+    registrosConError,
+    moveErrorToReviewPagos,
+    dismissError,
   }
 }
+
