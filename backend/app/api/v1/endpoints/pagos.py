@@ -30,6 +30,7 @@ from app.models.cliente import Cliente
 from app.models.cuota import Cuota
 from app.models.prestamo import Prestamo
 from app.models.pago import Pago
+from app.models.pago_con_error import PagoConError
 from app.models.revisar_pago import RevisarPago
 from app.schemas.pago import PagoCreate, PagoUpdate, PagoResponse
 
@@ -496,6 +497,15 @@ async def upload_excel_pagos(
                     es_válido, monto, err_msg = _validar_monto(row[1])
                     if not es_válido and monto != 0.0:
                         errores.append(f'Fila {i + 2} (Formato D - Principal): {err_msg}')
+                        pagos_con_error_list.append({
+                            "fila_idx": i + 2,
+                            "cedula": cedula,
+                            "prestamo_id": prestamo_id,
+                            "fecha_val": fecha_val,
+                            "monto": monto,
+                            "numero_doc": numero_doc,
+                            "errores": [err_msg]
+                        })
                         continue
                     fecha_val = row[2]
                     numero_doc = _celda_a_string_documento(row[3]) if len(row) > 3 else ""
@@ -558,6 +568,16 @@ async def upload_excel_pagos(
 
                 if not cedula or monto <= 0:
                     filas_omitidas += 1
+                    # Guardar en lista de errores para despues guardar en BD
+                    pagos_con_error_list.append({
+                        "fila_idx": i + 2,
+                        "cedula": cedula or "",
+                        "prestamo_id": prestamo_id,
+                        "fecha_val": fecha_val,
+                        "monto": monto,
+                        "numero_doc": numero_doc,
+                        "errores": ["Cedula vacia o monto <= 0"]
+                    })
                     continue
 
                 FilasParseadas.append({
@@ -597,6 +617,7 @@ async def upload_excel_pagos(
 
         registros = 0
         pagos_con_prestamo: list[Pago] = []
+        pagos_con_error_list: list[dict] = []  # Filas con error para guardar en pagos_con_errores
 
         for item in FilasParseadas:
             i = item["fila_idx"]
@@ -665,6 +686,23 @@ async def upload_excel_pagos(
                 datos_fila = {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}
                 errores_detalle.append({"fila": i, "cedula": cedula, "error": str(e), "datos": datos_fila})
         db.flush()  # Asigna IDs a los pagos insertados
+        # --- GUARDAR PAGOS CON ERRORES EN BD ---
+        for pce_data in pagos_con_error_list:
+            try:
+                pce = PagoConError(
+                    cedula_cliente=pce_data["cedula"],
+                    prestamo_id=pce_data["prestamo_id"],
+                    fecha_pago=datetime.combine(_parse_fecha(pce_data["fecha_val"]), dt_time.min) if pce_data["fecha_val"] else datetime.now(),
+                    monto_pagado=pce_data["monto"],
+                    numero_documento=pce_data["numero_doc"],
+                    estado="PENDIENTE",
+                    errores_descripcion=pce_data["errores"],
+                    observaciones="validacion",
+                    fila_origen=pce_data["fila_idx"]
+                )
+                db.add(pce)
+            except Exception as e:
+                logger.warning(f"No se pudo guardar error de fila {pce_data['fila_idx']}: {e}")
         # Reglas de negocio: aplicar pagos con prestamo_id a cuotas
         cuotas_aplicadas = 0
         for p in pagos_con_prestamo:
@@ -683,8 +721,20 @@ async def upload_excel_pagos(
         return {
             "message": "Carga finalizada",
             "registros_procesados": registros,
+            "registros_con_error": len(pagos_con_error_list),
             "cuotas_aplicadas": cuotas_aplicadas,
             "filas_omitidas": filas_omitidas,
+            "pagos_con_errores": [
+                {
+                    "id": pce.id,
+                    "fila_origen": pce.fila_origen,
+                    "cedula": pce.cedula_cliente,
+                    "monto": float(pce.monto_pagado) if pce.monto_pagado else 0,
+                    "errores": pce.errores_descripcion or [],
+                    "accion": "revisar"
+                }
+                for pce in (db.query(PagoConError).filter(PagoConError.fila_origen.in_([p['fila_idx'] for p in pagos_con_error_list])).all() if pagos_con_error_list else [])
+            ],
             "errores": errores[:errores_limit],
             "errores_detalle": errores_detalle[:errores_detalle_limit],
             "errores_total": total_errores,
@@ -1319,5 +1369,6 @@ def aplicar_pago_a_cuotas(pago_id: int, db: Session = Depends(get_db)):
             status_code=500,
             detail=f"Error al aplicar el pago a cuotas: {str(e)}",
         ) from e
+
 
 
