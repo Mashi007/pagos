@@ -707,7 +707,6 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         }
 
         const processed: PagoExcelRow[] = []
-        const documentosEnArchivo = new Set<string>()
         const headerRow = (jsonData[0] as unknown[]) ?? []
         const cols = (() => {
           const h = (i: number) => String(headerRow[i] ?? '').toLowerCase().trim()
@@ -765,23 +764,20 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             conciliado,
           }
 
-          // Validaciones locales inmediatas (fecha, monto, duplicados en archivo)
+          // Validaciones locales inmediatas (fecha, monto; documentos duplicados se validan después)
           const vCedula = validatePagoField('cedula', rowData.cedula)
           const vFecha = validatePagoField('fecha_pago', rowData.fecha_pago)
           const vMonto = validatePagoField('monto_pagado', rowData.monto_pagado)
-          const keyDoc = (normalizarNumeroDocumento(rowData.numero_documento) || String(rowData.numero_documento ?? '')).trim()
-          const vDoc = validatePagoField('numero_documento', rowData.numero_documento, { documentosEnArchivo })
-          if (keyDoc && keyDoc !== 'NaN') documentosEnArchivo.add(keyDoc)
 
           rowData._validation = {
             cedula: vCedula,
             fecha_pago: vFecha,
             monto_pagado: vMonto,
-            numero_documento: vDoc,
+            numero_documento: { isValid: true },  // Se valida después en lote
             prestamo_id: { isValid: true },
             conciliado: { isValid: true },
           }
-          rowData._hasErrors = !vCedula.isValid || !vFecha.isValid || !vMonto.isValid || !vDoc.isValid
+          rowData._hasErrors = !vCedula.isValid || !vFecha.isValid || !vMonto.isValid
           processed.push(rowData)
         }
 
@@ -791,7 +787,33 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         setExcelData(processed)
         setShowPreview(true)
 
-        // Validación batch contra BD (cédulas vs clientes, documentos vs pagos)
+        // PRIMERO: detectar duplicados internos en el archivo (misma clave aparece 2+ veces)
+        const docFreq = new Map<string, number>()
+        processed.forEach((r) => {
+          const docNorm = normalizarNumeroDocumento(r.numero_documento)
+          if (docNorm) docFreq.set(docNorm, (docFreq.get(docNorm) ?? 0) + 1)
+        })
+        const documentosDuplicadosEnArchivo = new Set(
+          Array.from(docFreq.entries()).filter(([, count]) => count > 1).map(([doc]) => doc)
+        )
+
+        // Marcar filas con duplicados internos
+        setExcelData((prev) =>
+          prev.map((r) => {
+            const docNorm = normalizarNumeroDocumento(r.numero_documento)
+            if (docNorm && documentosDuplicadosEnArchivo.has(docNorm)) {
+              const msg = 'Documento repetido en este archivo'
+              return {
+                ...r,
+                _validation: { ...r._validation, numero_documento: { isValid: false, message: msg } },
+                _hasErrors: true,
+              }
+            }
+            return r
+          })
+        )
+
+        // LUEGO: validación batch contra BD (cédulas vs clientes, documentos vs pagos)
         const todasCedulas = [...new Set(
           processed.map(r => r.cedula.replace(/-/g, '').toUpperCase()).filter(c => /^[VEJZ]\d{6,11}$/i.test(c))
         )]
@@ -823,12 +845,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
                 })
                 const vDoc = validatePagoField('numero_documento', r.numero_documento, {
                   documentosDuplicadosBD,
-                  documentosEnArchivo: new Set(
-                    processed
-                      .filter(o => o._rowIndex !== r._rowIndex)
-                      .map(o => normalizarNumeroDocumento(o.numero_documento))
-                      .filter(Boolean)
-                  ),
+                  documentosEnArchivo: documentosDuplicadosEnArchivo,
                 })
 
                 const newValidation: Record<string, { isValid: boolean; message?: string }> = {
