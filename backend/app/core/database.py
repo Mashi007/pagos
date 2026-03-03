@@ -16,12 +16,19 @@ if _db_url.startswith("postgres://"):
 
 engine = create_engine(
     _db_url,
-    pool_pre_ping=True,
-    pool_size=5,
-    max_overflow=10,
+    # Configuración de pool optimizada para Render (PostgreSQL con SSL inestable)
+    pool_pre_ping=True,  # Verifica que la conexión esté viva antes de usarla
+    pool_size=10,  # Más conexiones en pool (mejor concurrencia)
+    max_overflow=20,  # Permite más conexiones temporales si es necesario
+    pool_recycle=3600,  # Recicla conexiones cada hora (evita stale connections)
+    pool_timeout=30,  # Timeout esperando conexión disponible (en segundos)
     connect_args={
-        "connect_timeout": 10,  # Timeout de conexión inicial (en segundos)
+        "connect_timeout": 30,  # Timeout de conexión inicial (aumentado)
         "application_name": "rapicredit_backend",
+        "sslmode": "require",  # Fuerza SSL para seguridad
+        "tcp_keepalives": True,  # Mantiene conexión viva
+        "tcp_keepalives_idle": 30,
+        "tcp_keepalives_interval": 10,
     },
     echo=False,  # Cambiar a True para logging de SQL si es necesario en DEBUG
 )
