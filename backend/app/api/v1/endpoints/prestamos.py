@@ -376,21 +376,23 @@ def listar_prestamos_por_cedulas_batch(
     body: PrestamosPorCedulasBatchBody,
     db: Session = Depends(get_db),
 ):
-    """Consulta batch OPTIMIZADA: coincidencia exacta solo (muy rápida).
+    """Consulta batch OPTIMIZADA: búsqueda rápida con normalización.
     
-    Para carga masiva de pagos. Solo busca préstamos cuya cédula coincida EXACTAMENTE
-    con la proporcionada. Las cédulas con/sin guiones se normalizan en el frontend.
-    
-    Evita búsquedas normalizadas complejas en SQL para ser **rápido y confiable**.
+    Estrategia:
+    1. Búsqueda exacta primero (si cédula en request = cédula en BD) - muy rápido
+    2. Si no encuentra, busca todos los préstamos (sin WHERE) y filtra por normalización en Python
+       (más rápido que SQL con func.upper/replace para strings)
     """
     cedulas_clean = [(c or "").strip() for c in (body.cedulas or []) if (c or "").strip()]
     cedulas_clean = list(dict.fromkeys(cedulas_clean))
     if not cedulas_clean:
         return {"prestamos": {}}
 
-    # Una sola query indexada: búsqueda exacta
-    # Cliente.cedula IN (...) and Prestamo.cedula IN (...) usan índices
-    q = (
+    resultado: dict[str, list] = {c: [] for c in cedulas_clean}
+    cedulas_encontradas = set()
+    
+    # PASO 1: Búsqueda exacta (muy rápida, usa índices)
+    q_exacto = (
         select(Prestamo.id, Prestamo.cliente_id, Prestamo.estado, Prestamo.cedula, Cliente.cedula)
         .select_from(Prestamo)
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
@@ -399,21 +401,55 @@ def listar_prestamos_por_cedulas_batch(
             Prestamo.cedula.in_(cedulas_clean),
         ))
         .order_by(Prestamo.id.desc())
-        .limit(50000)  # Seguridad: máximo 50k resultados
+        .limit(50000)
     )
     
-    resultado: dict[str, list] = {c: [] for c in cedulas_clean}
-    for p_id, cli_id, p_estado, p_cedula, cli_cedula in db.execute(q):
+    for p_id, cli_id, p_estado, p_cedula, cli_cedula in db.execute(q_exacto):
         cedula_cli = (cli_cedula or p_cedula or "").strip()
-        
-        # Agregar a la cédula exacta encontrada
         if cedula_cli in cedulas_clean:
+            cedulas_encontradas.add(cedula_cli)
             resultado[cedula_cli].append({
                 "id": p_id,
                 "cliente_id": cli_id,
                 "estado": p_estado,
                 "cedula": cedula_cli,
             })
+    
+    # PASO 2: Para cédulas NO encontradas, buscar con normalización (sin guiones)
+    cedulas_faltantes = [c for c in cedulas_clean if c not in cedulas_encontradas]
+    if cedulas_faltantes:
+        # Mapeo: cédula normalizada (sin guiones) → cédula original solicitada
+        cedulas_norm_map = {}
+        for ced in cedulas_faltantes:
+            ced_norm = ced.replace("-", "").replace(" ", "").upper()
+            cedulas_norm_map[ced_norm] = ced
+        
+        # Buscar TODOS los préstamos y filtar en Python (más rápido que SQL con func.replace)
+        q_todos = (
+            select(Prestamo.id, Prestamo.cliente_id, Prestamo.estado, Prestamo.cedula, Cliente.cedula)
+            .select_from(Prestamo)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .order_by(Prestamo.id.desc())
+        )
+        
+        for p_id, cli_id, p_estado, p_cedula, cli_cedula in db.execute(q_todos):
+            cedula_cli = (cli_cedula or p_cedula or "").strip()
+            cedula_cli_norm = cedula_cli.replace("-", "").replace(" ", "").upper()
+            
+            # Match normalizado
+            if cedula_cli_norm in cedulas_norm_map:
+                ced_original = cedulas_norm_map[cedula_cli_norm]
+                cedulas_encontradas.add(ced_original)
+                resultado[ced_original].append({
+                    "id": p_id,
+                    "cliente_id": cli_id,
+                    "estado": p_estado,
+                    "cedula": cedula_cli,
+                })
+                # Eliminar del mapa para no procesar nuevamente
+                del cedulas_norm_map[cedula_cli_norm]
+                if not cedulas_norm_map:
+                    break  # Ya encontró todas las cédulas faltantes
 
     return {"prestamos": resultado}
 
