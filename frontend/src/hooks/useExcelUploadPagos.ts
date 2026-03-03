@@ -927,8 +927,8 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
               setPrestamosPorCedula(map)
               const keysMap = Object.keys(map)
               const fallbackKey = keysMap.length === 1 ? keysMap[0] : null
-              // Usar siempre el array local "processed" para evitar race: prev puede estar vacÃ­o o desactualizado
-              const updated = processed.map((r) => {
+              // USAR validatedData (con validaciones) NO processed (sin validaciones)
+              const updated = validatedData.map((r) => {
                 const cedulaLookup = cedulaLookupParaFila(r.cedula || '', r.numero_documento || '')
                 const cedulaColNorm = cedulaParaLookup(r.cedula) || (r.cedula || '').trim().replace(/-/g, '')
                 const cedulaSinGuion = cedulaLookup.replace(/-/g, '')
