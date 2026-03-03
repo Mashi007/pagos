@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Hook para carga masiva de pagos desde Excel.
  * Columnas: Cédula, Fecha de pago, Monto, Documento, ID Préstamo (opcional).
  * Solo Préstamos activos (APROBADO, DESEMBOLSADO) en el selector.
@@ -524,7 +524,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           return next
         })
         refreshPagos()
-        addToast(row._hasErrors ? 'warning' : 'success', row._hasErrors ? 'Pago enviado a Revisar Pagos con errores. Corrígelo allí.' : 'Pago enviado a Revisar Pagos')
+        addToast(row._hasErrors ? 'warning' : 'success', row._hasErrors ? 'Pago enviado a Revisar Pagos con errores.' : 'Pago guardado correctamente.')
         onNavigate()
         return true
       } catch (err: any) {
@@ -629,6 +629,8 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       )
       return
     }
+    // Mostrar UNA SOLA notificación de "En proceso"
+    addToast('success', `Guardando ${toSave.length} pago(s)...`)
     setIsSavingIndividual(true)
     let ok = 0
     let fail = 0
@@ -644,15 +646,19 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         if (result.was409) duplicados++
       }
     }
-    if (ok > 0) addToast('success', `${ok} pago(s) guardado(s)`)
-    if (fail > 0) {
-      addToast('error', `${fail} fallaron`)
+    // Mostrar RESUMEN FINAL en lugar de notificaciones individuales
+    if (ok > 0 && fail === 0) {
+      addToast('success', `✓ ${ok} pago(s) guardado(s) correctamente`)
+    } else if (ok > 0 && fail > 0) {
+      addToast('warning', `✓ ${ok} guardado(s) | ✗ ${fail} fallo(s)`)
       if (duplicados > 0) {
-        addToast('warning', `${duplicados} duplicado(s). Use "Enviar duplicados" para registrarlos en observaciones.`)
+        addToast('warning', `${duplicados} duplicado(s). Use "Enviar duplicados" para registrarlos.`)
       }
+    } else if (fail > 0) {
+      addToast('error', `✗ ${fail} pago(s) no se pudieron guardar`)
     }
     if (omitidos > 0) {
-      addToast('warning', `${omitidos} fila(s) omitidas: guarde uno a uno, corrija o envíe a Revisar Pagos.`)
+      addToast('warning', `${omitidos} fila(s) omitidas: revise los criterios de guardado.`)
     }
     if (ok > 0 || fail > 0) refreshPagos()
     setIsSavingIndividual(false)
