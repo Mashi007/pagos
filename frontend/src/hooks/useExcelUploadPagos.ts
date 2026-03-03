@@ -392,6 +392,8 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           next.delete(row._rowIndex)
           return next
         })
+        // REMOVER fila de la tabla editable (ya se guardó exitosamente)
+        setExcelData((prev) => prev.filter((r) => r._rowIndex !== row._rowIndex))
         if (!opts?.skipRefresh) refreshPagos()
         if (!opts?.skipToast) addToast('success', `Pago ${row.cedula} guardado`)
         const valid = getValidRows()
