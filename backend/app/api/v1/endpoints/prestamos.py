@@ -424,12 +424,20 @@ def listar_prestamos_por_cedulas_batch(
             ced_norm = ced.replace("-", "").replace(" ", "").upper()
             cedulas_norm_map[ced_norm] = ced
         
-        # Buscar TODOS los préstamos y filtar en Python (más rápido que SQL con func.replace)
+        # Buscar préstamos: intentar primero por primeros 2 caracteres (prefijo) para reducir volumen
+        # Ej: "V-17709701" normalizdo a "V17709701" → prefijo "V1"
+        prefijos = set()
+        for ced_norm in cedulas_norm_map.keys():
+            if len(ced_norm) >= 2:
+                prefijos.add(ced_norm[:2])  # Primeros 2 caracteres del código normalizado
+        
+        # Búsqueda: TODOS los préstamos (limit 100k para evitar memory issues)
         q_todos = (
             select(Prestamo.id, Prestamo.cliente_id, Prestamo.estado, Prestamo.cedula, Cliente.cedula)
             .select_from(Prestamo)
             .join(Cliente, Prestamo.cliente_id == Cliente.id)
             .order_by(Prestamo.id.desc())
+            .limit(100000)  # Safety limit: máximo 100k préstamos
         )
         
         for p_id, cli_id, p_estado, p_cedula, cli_cedula in db.execute(q_todos):
