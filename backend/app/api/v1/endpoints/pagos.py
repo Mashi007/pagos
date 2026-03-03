@@ -1,4 +1,4 @@
-"""
+﻿"""
 Endpoints de pagos. Datos reales desde BD.
 - Tabla pagos: GET/POST/PUT/DELETE /pagos/ (listado y CRUD para /pagos/pagos).
 - GET /pagos/kpis, /stats, /ultimos; POST /upload, /conciliacion/upload, /{id}/aplicar-cuotas.
@@ -176,7 +176,7 @@ TZ_NEGOCIO = "America/Caracas"
 
 
 def _hoy_local() -> date:
-    """Fecha de hoy en la zona horaria del negocio (evita que servidor UTC desfase el dÃ­a)."""
+    """Fecha de hoy en la zona horaria del negocio (evita que servidor UTC desfase el día)."""
     return datetime.now(ZoneInfo(TZ_NEGOCIO)).date()
 
 
@@ -269,7 +269,7 @@ def listar_pagos(
             q = q.join(Prestamo, Pago.prestamo_id == Prestamo.id).where(Prestamo.analista == analista.strip())
             count_q = count_q.join(Prestamo, Pago.prestamo_id == Prestamo.id).where(Prestamo.analista == analista.strip())
         total = db.scalar(count_q) or 0
-        # Orden: mÃ¡s reciente primero (fecha_pago desc, luego id desc)
+        # Orden: más reciente primero (fecha_pago desc, luego id desc)
         q = q.order_by(Pago.fecha_registro.desc().nullslast(), Pago.id.desc()).offset((page - 1) * per_page).limit(per_page)
         rows = db.execute(q).scalars().all()
         items = [_pago_to_response(r) for r in rows]
@@ -296,12 +296,12 @@ def get_ultimos_pagos(
     db: Session = Depends(get_db),
 ):
     """
-    Resumen de Ãºltimos pagos por cÃ©dula (para PagosListResumen).
+    Resumen de últimos pagos por cédula (para PagosListResumen).
     Items: cedula, pago_id, prestamo_id, estado_pago, monto_ultimo_pago, fecha_ultimo_pago,
     cuotas_atrasadas, saldo_vencido, total_prestamos.
     """
     hoy = _hoy_local()
-    # Subconsulta: cÃ©dulas distintas ordenadas por pago mÃ¡s reciente (mÃ¡s actual a mÃ¡s antiguo)
+    # Subconsulta: cédulas distintas ordenadas por pago más reciente (más actual a más antiguo)
     subq = (
         select(
             Pago.cedula_cliente,
@@ -940,7 +940,7 @@ async def upload_conciliacion(
     db: Session = Depends(get_db),
 ):
     """
-    Carga archivo de conciliaciÃ³n (Excel: Fecha de DepÃ³sito, NÃºmero de Documento).
+    Carga archivo de conciliación (Excel: Fecha de Depósito, Número de Documento).
     Marca pagos encontrados por numero_documento como conciliados.
     """
     if not file.filename or not file.filename.lower().endswith((".xlsx", ".xls")):
@@ -1007,7 +1007,7 @@ async def upload_conciliacion(
         }
     except Exception as e:
         db.rollback()
-        logger.exception("Error upload conciliaciÃ³n: %s", e)
+        logger.exception("Error upload conciliación: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -1197,7 +1197,7 @@ def get_pagos_kpis(
 
 
 def _stats_conds_cuota(analista: Optional[str], concesionario: Optional[str], modelo: Optional[str]):
-    """Condiciones base para filtrar cuotas por prÃ©stamo (solo clientes ACTIVOS + analista/concesionario/modelo)."""
+    """Condiciones base para filtrar cuotas por préstamo (solo clientes ACTIVOS + analista/concesionario/modelo)."""
     conds = [
         Cuota.prestamo_id == Prestamo.id,
         Prestamo.cliente_id == Cliente.id,
@@ -1223,7 +1223,7 @@ def get_pagos_stats(
     db: Session = Depends(get_db),
 ):
     """
-    EstadÃ­sticas de pagos desde BD (solo clientes ACTIVOS): total_pagos, total_pagado, pagos_por_estado,
+    Estadísticas de pagos desde BD (solo clientes ACTIVOS): total_pagos, total_pagado, pagos_por_estado,
     cuotas_pagadas, cuotas_pendientes, cuotas_atrasadas, pagos_hoy.
     """
     hoy = _hoy_local()
@@ -1392,7 +1392,7 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db)):
 
 @router.put("/{pago_id}", response_model=dict)
 def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get_db)):
-    """Actualiza un pago en la tabla pagos. NÂº documento no puede repetirse."""
+    """Actualiza un pago en la tabla pagos. Nº documento no puede repetirse."""
     row = db.get(Pago, pago_id)
     if not row:
         raise HTTPException(status_code=404, detail="Pago no encontrado")

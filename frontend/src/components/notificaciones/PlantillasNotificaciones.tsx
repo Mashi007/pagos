@@ -59,7 +59,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
     { key: 'nombre', label: 'Nombre' },
     { key: 'cedula', label: 'Cédula' },
     { key: 'fecha_vencimiento', label: 'Fecha venc.' },
-    { key: 'numero_cuota', label: 'NÂº cuota' },
+    { key: 'numero_cuota', label: 'Nº cuota' },
     { key: 'monto', label: 'Monto' },
     { key: 'dias_atraso', label: 'Días atraso' },
   ]
@@ -576,7 +576,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
       return
     }
 
-    if (!window.confirm(`Â¿Eliminar plantilla "${selected.nombre}"?`)) return
+    if (!window.confirm(`¿Eliminar plantilla "${selected.nombre}"?`)) return
 
     try {
       await notificacionService.eliminarPlantilla(selected.id)
@@ -653,7 +653,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
   }
 
   const handleEliminarDesdeResumen = async (plantilla: NotificacionPlantilla) => {
-    if (!window.confirm(`Â¿Está seguro de eliminar la plantilla "${plantilla.nombre}"?`)) {
+    if (!window.confirm(`¿Está seguro de eliminar la plantilla "${plantilla.nombre}"?`)) {
       return
     }
 
