@@ -145,7 +145,6 @@ class PagoService {
     documentos: string[]
   }): Promise<{
     cedulas_existentes: string[]
-    documentos_confirmados: Array<any>
     documentos_duplicados: Array<any>
   }> {
     return await apiClient.post(`${this.baseUrl}/validar-filas-batch`, data)

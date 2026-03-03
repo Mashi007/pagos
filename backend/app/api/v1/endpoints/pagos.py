@@ -807,53 +807,27 @@ def validar_filas_batch(
     docs_norm_limpios = [d for d in docs_norm if d]
     
     if docs_norm_limpios:
-        # PRIMERO: buscar en CUOTAS (pago confirmado/aplicado)
-        rows_cuotas = db.execute(
+        # Buscar documentos que YA EXISTEN en tabla PAGOS (sin importar si están en CUOTAS)
+        # Si existe en PAGOS = DUPLICADO (rechazar)
+        rows_pagos = db.execute(
             select(Pago.numero_documento, Pago.id, Pago.cedula_cliente, 
                    Pago.fecha_pago, Pago.monto_pagado)
-            .join(Cuota, Pago.id == Cuota.pago_id)
             .where(Pago.numero_documento.in_(docs_norm_limpios))
-            .distinct()
         ).all()
         
-        docs_confirmados_set = set()
-        for row in rows_cuotas:
-            docs_confirmados_set.add(row[0])
-            documentos_confirmados.append({
+        for row in rows_pagos:
+            documentos_duplicados.append({
                 "numero_documento": row[0],
                 "pago_id": row[1],
                 "cedula": row[2],
                 "fecha_pago": row[3].isoformat() if row[3] else None,
                 "monto_pagado": float(row[4]) if row[4] else 0,
-                "estado": "confirmado",  # Pago ya aplicado a cuota
+                "estado": "duplicado",
             })
-        
-        # LUEGO: buscar en PAGOS pero SIN aplicar a CUOTA (duplicado)
-        subquery_pagos_con_cuota = select(Cuota.pago_id).where(Cuota.pago_id.isnot(None)).distinct()
-        rows_pagos_sin_cuota = db.execute(
-            select(Pago.numero_documento, Pago.id, Pago.cedula_cliente,
-                   Pago.fecha_pago, Pago.monto_pagado)
-            .where(
-                Pago.numero_documento.in_(docs_norm_limpios),
-                ~Pago.id.in_(subquery_pagos_con_cuota)
-            )
-        ).all()
-        
-        for row in rows_pagos_sin_cuota:
-            if row[0] not in docs_confirmados_set:
-                documentos_duplicados.append({
-                    "numero_documento": row[0],
-                    "pago_id": row[1],
-                    "cedula": row[2],
-                    "fecha_pago": row[3].isoformat() if row[3] else None,
-                    "monto_pagado": float(row[4]) if row[4] else 0,
-                    "estado": "duplicado_sin_aplicar",  # Pago existe pero no se aplicó a cuota
-                })
 
     return {
         "cedulas_existentes": list(cedulas_existentes),
-        "documentos_confirmados": documentos_confirmados,  # Pagos ya aplicados a cuotas
-        "documentos_duplicados": documentos_duplicados,     # Pagos sin aplicar (duplicado)
+        "documentos_duplicados": documentos_duplicados,  # Documentos que YA existen en tabla PAGOS
     }
 
 

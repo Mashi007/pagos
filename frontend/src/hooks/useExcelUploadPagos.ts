@@ -816,12 +816,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
               (resultado.cedulas_existentes || []).map((c: string) => c.replace(/-/g, '').toUpperCase())
             )
             
-            // Documentos confirmados (encontrados en CUOTAS = pago ya aplicado)
-            const documentosConfirmadosBD = new Set(
-              (resultado.documentos_confirmados || []).map((d: any) => normalizarNumeroDocumento(d.numero_documento))
-            )
-            
-            // Documentos duplicados (en PAGOS pero sin aplicar a CUOTA)
+            // Documentos duplicados (existen en tabla PAGOS)
             const documentosDuplicadosBD = new Set(
               (resultado.documentos_duplicados || []).map((d: any) => normalizarNumeroDocumento(d.numero_documento))
             )
@@ -837,18 +832,15 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
                   ),
                 })
                 
-                // Documento: chequear primero si ya tiene error de duplicado en archivo
-                // Si no, entonces revisar contra BD (confirmado o duplicado sin aplicar)
+                // Documento: revisar primero si está duplicado en archivo o BD
                 let vDoc = r._validation.numero_documento
                 const esDuplicadoEnArchivo = docNorm && documentosDuplicadosEnArchivo.has(docNorm)
+                const esDuplicadoEnBD = docNorm && documentosDuplicadosBD.has(docNorm)
                 
                 if (esDuplicadoEnArchivo) {
-                  // Preservar el error de duplicado en archivo
                   vDoc = { isValid: false, message: 'Documento repetido en este archivo' }
-                } else if (docNorm && documentosConfirmadosBD.has(docNorm)) {
-                  vDoc = { isValid: true, message: 'Confirmado en sistema (pago ya aplicado)' }
-                } else if (docNorm && documentosDuplicadosBD.has(docNorm)) {
-                  vDoc = { isValid: false, message: 'Documento duplicado (pago sin aplicar a cuota)' }
+                } else if (esDuplicadoEnBD) {
+                  vDoc = { isValid: false, message: 'Documento ya existe en la base de datos' }
                 } else {
                   vDoc = validatePagoField('numero_documento', r.numero_documento, {
                     documentosEnArchivo: documentosDuplicadosEnArchivo,
