@@ -1063,6 +1063,50 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     },
     []
   )
+
+  const sendAllErrorsToRevisarPagos = useCallback(async () => {
+    const erroresRows = excelData.filter((r) => r._hasErrors)
+    if (erroresRows.length === 0) {
+      addToast('warning', 'No hay filas con errores para enviar')
+      return
+    }
+    if (serviceStatus === 'offline') {
+      addToast('error', 'Sin conexión')
+      return
+    }
+    // Mostrar notificación de progreso
+    addToast('warning', `Enviando ${erroresRows.length} fila(s) a Revisar Pagos...`)
+    setIsSavingIndividual(true)
+    let ok = 0
+    let fail = 0
+    const indicesEnviados = new Set<number>()
+    
+    for (const row of erroresRows) {
+      try {
+        await sendToRevisarPagos(row, () => {})
+        ok++
+        indicesEnviados.add(row._rowIndex)
+      } catch {
+        fail++
+      }
+    }
+    
+    // Remover filas enviadas de excelData
+    setExcelData((prev) => prev.filter((r) => !indicesEnviados.has(r._rowIndex)))
+    
+    // Mostrar resumen único
+    if (ok > 0 && fail === 0) {
+      addToast('success', `✓ ${ok} fila(s) enviada(s) a Revisar Pagos`)
+    } else if (ok > 0 && fail > 0) {
+      addToast('warning', `✓ ${ok} enviada(s) | ✗ ${fail} fallo(s)`)
+    } else if (fail > 0) {
+      addToast('error', `✗ ${fail} fila(s) no se pudieron enviar`)
+    }
+    
+    refreshPagos()
+    setIsSavingIndividual(false)
+  }, [excelData, serviceStatus, sendToRevisarPagos, addToast, refreshPagos])
+
   return {
     isDragging,
     uploadedFile,
@@ -1091,6 +1135,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     saveAllValid,
     sendToRevisarPagos,
     sendAllToRevisarPagos,
+    sendAllErrorsToRevisarPagos,
     sendDuplicadosToRevisarPagos,
     getRowsToRevisarPagos,
     getDuplicadosRows,

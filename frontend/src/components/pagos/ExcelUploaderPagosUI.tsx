@@ -51,6 +51,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
     saveAllValid,
     sendToRevisarPagos,
     sendAllToRevisarPagos,
+    sendAllErrorsToRevisarPagos,
     sendDuplicadosToRevisarPagos,
     getRowsToRevisarPagos,
     getDuplicadosRows,
@@ -62,6 +63,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
   } = useExcelUploadPagos(props)
 
   const validCount = getValidRows().length
+  const errorCount = excelData.filter((r) => r._hasErrors).length
 
   return (
     <motion.div
@@ -238,6 +240,23 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                         <>
                           <Save className="mr-2 h-4 w-4" />
                           Guardar Todos ({validCount})
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      onClick={sendAllErrorsToRevisarPagos}
+                      disabled={errorCount === 0 || isSavingIndividual || serviceStatus === 'offline'}
+                      className="bg-yellow-600 hover:bg-yellow-700"
+                    >
+                      {isSavingIndividual ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          Enviando...
+                        </>
+                      ) : (
+                        <>
+                          <AlertTriangle className="mr-2 h-4 w-4" />
+                          Revisar Pagos ({errorCount})
                         </>
                       )}
                     </Button>
