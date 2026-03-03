@@ -169,6 +169,27 @@ class ApiClient {
         return response
       },
       async (error) => {
+        // Auto-retry para errores 500 transitorios (conexión SSL, timeouts, etc.)
+        const requestConfigForRetry = error.config
+        const retryCount = (requestConfigForRetry as any)._retryCount || 0
+        const maxRetries = 3
+        
+        if (
+          error.response?.status === 500 &&
+          retryCount < maxRetries &&
+          requestConfigForRetry.method !== 'get' // No reintentar GET en teoría, pero POST sí es seguro para carga
+        ) {
+          (requestConfigForRetry as any)._retryCount = retryCount + 1
+          const delayMs = 500 * Math.pow(2, retryCount) // 500ms, 1s, 2s
+          
+          console.warn(`⚠️ [ApiClient] Error 500 (intento ${retryCount + 1}/${maxRetries}), reintentando en ${delayMs}ms:`, {
+            url: requestConfigForRetry.url,
+            method: requestConfigForRetry.method
+          })
+          
+          await new Promise(resolve => setTimeout(resolve, delayMs))
+          return this.client(requestConfigForRetry)
+        }
         const originalRequest = error.config
 
         // ✅ Limpiar AbortController cuando el request falla
