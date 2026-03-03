@@ -787,7 +787,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         setExcelData(processed)
         setShowPreview(true)
 
-        // PRIMERO: detectar duplicados internos en el archivo (misma clave aparece 2+ veces)
+        // Detectar duplicados internos en el archivo (misma clave aparece 2+ veces)
         const docFreq = new Map<string, number>()
         processed.forEach((r) => {
           const docNorm = normalizarNumeroDocumento(r.numero_documento)
@@ -797,23 +797,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           Array.from(docFreq.entries()).filter(([, count]) => count > 1).map(([doc]) => doc)
         )
 
-        // Marcar filas con duplicados internos
-        setExcelData((prev) =>
-          prev.map((r) => {
-            const docNorm = normalizarNumeroDocumento(r.numero_documento)
-            if (docNorm && documentosDuplicadosEnArchivo.has(docNorm)) {
-              const msg = 'Documento repetido en este archivo'
-              return {
-                ...r,
-                _validation: { ...r._validation, numero_documento: { isValid: false, message: msg } },
-                _hasErrors: true,
-              }
-            }
-            return r
-          })
-        )
-
-        // LUEGO: validación batch contra BD (cédulas vs clientes, documentos vs pagos)
+        // Validación batch contra BD (cédulas vs clientes, documentos vs pagos)
         const todasCedulas = [...new Set(
           processed.map(r => r.cedula.replace(/-/g, '').toUpperCase()).filter(c => /^[VEJZ]\d{6,11}$/i.test(c))
         )]
@@ -853,10 +837,15 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
                   ),
                 })
                 
-                // Documento confirmado (en CUOTAS) = VÁLIDO ✓
-                // Documento duplicado (en PAGOS sin CUOTA) = ERROR ✗
+                // Documento: chequear primero si ya tiene error de duplicado en archivo
+                // Si no, entonces revisar contra BD (confirmado o duplicado sin aplicar)
                 let vDoc = r._validation.numero_documento
-                if (docNorm && documentosConfirmadosBD.has(docNorm)) {
+                const esDuplicadoEnArchivo = docNorm && documentosDuplicadosEnArchivo.has(docNorm)
+                
+                if (esDuplicadoEnArchivo) {
+                  // Preservar el error de duplicado en archivo
+                  vDoc = { isValid: false, message: 'Documento repetido en este archivo' }
+                } else if (docNorm && documentosConfirmadosBD.has(docNorm)) {
                   vDoc = { isValid: true, message: 'Confirmado en sistema (pago ya aplicado)' }
                 } else if (docNorm && documentosDuplicadosBD.has(docNorm)) {
                   vDoc = { isValid: false, message: 'Documento duplicado (pago sin aplicar a cuota)' }
