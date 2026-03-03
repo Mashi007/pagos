@@ -376,63 +376,44 @@ def listar_prestamos_por_cedulas_batch(
     body: PrestamosPorCedulasBatchBody,
     db: Session = Depends(get_db),
 ):
-    """Consulta batch de préstamos por múltiples cédulas. Una sola petición para carga masiva."""
+    """Consulta batch OPTIMIZADA: coincidencia exacta solo (muy rápida).
+    
+    Para carga masiva de pagos. Solo busca préstamos cuya cédula coincida EXACTAMENTE
+    con la proporcionada. Las cédulas con/sin guiones se normalizan en el frontend.
+    
+    Evita búsquedas normalizadas complejas en SQL para ser **rápido y confiable**.
+    """
     cedulas_clean = [(c or "").strip() for c in (body.cedulas or []) if (c or "").strip()]
-    cedulas_clean = list(dict.fromkeys(cedulas_clean))  # sin duplicados, orden preservado
+    cedulas_clean = list(dict.fromkeys(cedulas_clean))
     if not cedulas_clean:
         return {"prestamos": {}}
 
-    # Normalizar cada cédula para búsqueda
-    cedulas_norm = [_normalizar_cedula_para_busqueda(c) for c in cedulas_clean]
-    # Condición: para cada cédula, (Cliente coincide) OR (Prestamo coincide)
-    cond_pairs = []
-    for ced_clean, ced_norm in zip(cedulas_clean, cedulas_norm):
-        cond_cliente = or_(
-            Cliente.cedula == ced_clean,
-            func.upper(func.replace(func.replace(Cliente.cedula, "-", ""), " ", "")) == ced_norm,
-        )
-        cond_prestamo = or_(
-            Prestamo.cedula == ced_clean,
-            func.upper(func.replace(func.replace(Prestamo.cedula, "-", ""), " ", "")) == ced_norm,
-        )
-        cond_pairs.append(or_(cond_cliente, cond_prestamo))
-
+    # Una sola query indexada: búsqueda exacta
+    # Cliente.cedula IN (...) and Prestamo.cedula IN (...) usan índices
     q = (
-        select(Prestamo, Cliente.nombres, Cliente.cedula)
+        select(Prestamo.id, Prestamo.cliente_id, Prestamo.estado, Prestamo.cedula, Cliente.cedula)
         .select_from(Prestamo)
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
-        .where(or_(*cond_pairs))
+        .where(or_(
+            Cliente.cedula.in_(cedulas_clean),
+            Prestamo.cedula.in_(cedulas_clean),
+        ))
         .order_by(Prestamo.id.desc())
+        .limit(50000)  # Seguridad: máximo 50k resultados
     )
-    rows = db.execute(q).all()
-    prestamo_ids = [row[0].id for row in rows]
-    cuotas_por_prestamo = {}
-    if prestamo_ids:
-        cuenta = (
-            select(Cuota.prestamo_id, func.count())
-            .select_from(Cuota)
-            .where(Cuota.prestamo_id.in_(prestamo_ids))
-            .group_by(Cuota.prestamo_id)
-        )
-        for pid, cnt in db.execute(cuenta).all():
-            cuotas_por_prestamo[pid] = cnt
-
-    # Agrupar por cédula (normalizada para matchear)
+    
     resultado: dict[str, list] = {c: [] for c in cedulas_clean}
-    for row in rows:
-        p, nombres_cliente, cedula_cliente = row[0], row[1], row[2]
-        cedula_cli = (cedula_cliente or p.cedula or "").strip()
-        cedula_norm = _normalizar_cedula_para_busqueda(cedula_cli)
-        item = {
-            "id": p.id,
-            "cliente_id": p.cliente_id,
-            "estado": p.estado,
-            "cedula": cedula_cliente or p.cedula,
-        }
-        for ced_clean, ced_n in zip(cedulas_clean, cedulas_norm):
-            if ced_n == cedula_norm or ced_clean == cedula_cli:
-                resultado[ced_clean].append(item)
-                break
+    for p_id, cli_id, p_estado, p_cedula, cli_cedula in db.execute(q):
+        cedula_cli = (cli_cedula or p_cedula or "").strip()
+        
+        # Agregar a la cédula exacta encontrada
+        if cedula_cli in cedulas_clean:
+            resultado[cedula_cli].append({
+                "id": p_id,
+                "cliente_id": cli_id,
+                "estado": p_estado,
+                "cedula": cedula_cli,
+            })
 
     return {"prestamos": resultado}
 
