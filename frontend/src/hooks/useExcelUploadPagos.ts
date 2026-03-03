@@ -783,10 +783,6 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
 
         if (!isMounted()) return
 
-        // Mostrar tabla inmediatamente con validaciones locales
-        setExcelData(processed)
-        setShowPreview(true)
-
         // Detectar duplicados internos en el archivo (misma clave aparece 2+ veces)
         const docFreq = new Map<string, number>()
         processed.forEach((r) => {
@@ -804,6 +800,10 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
         const todosDocumentos = [...new Set(
           processed.map(r => normalizarNumeroDocumento(r.numero_documento)).filter(d => !!d)
         )]
+        
+        let cedulasExistentesBD = new Set<string>()
+        let documentosDuplicadosBD = new Set<string>()
+        
         if (todasCedulas.length > 0 || todosDocumentos.length > 0) {
           try {
             const resultado = await pagoService.validarFilasBatch({
@@ -812,58 +812,60 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             })
             if (!isMounted()) return
 
-            const cedulasExistentesBD = new Set(
+            cedulasExistentesBD = new Set(
               (resultado.cedulas_existentes || []).map((c: string) => c.replace(/-/g, '').toUpperCase())
             )
             
-            // Documentos duplicados (existen en tabla PAGOS)
-            const documentosDuplicadosBD = new Set(
+            documentosDuplicadosBD = new Set(
               (resultado.documentos_duplicados || []).map((d: any) => normalizarNumeroDocumento(d.numero_documento))
             )
-
-            setExcelData((prev) =>
-              prev.map((r) => {
-                const cedulaNorm = r.cedula.replace(/-/g, '').toUpperCase()
-                const docNorm = normalizarNumeroDocumento(r.numero_documento)
-
-                const vCedula = validatePagoField('cedula', r.cedula, {
-                  cedulasInvalidas: new Set(
-                    todasCedulas.filter(c => !cedulasExistentesBD.has(c))
-                  ),
-                })
-                
-                // Documento: revisar primero si está duplicado en archivo o BD
-                let vDoc = r._validation.numero_documento
-                const esDuplicadoEnArchivo = docNorm && documentosDuplicadosEnArchivo.has(docNorm)
-                const esDuplicadoEnBD = docNorm && documentosDuplicadosBD.has(docNorm)
-                
-                if (esDuplicadoEnArchivo) {
-                  vDoc = { isValid: false, message: 'Documento repetido en este archivo' }
-                } else if (esDuplicadoEnBD) {
-                  vDoc = { isValid: false, message: 'Documento ya existe en la base de datos' }
-                } else {
-                  vDoc = validatePagoField('numero_documento', r.numero_documento, {
-                    documentosEnArchivo: documentosDuplicadosEnArchivo,
-                  })
-                }
-
-                const newValidation: Record<string, { isValid: boolean; message?: string }> = {
-                  ...r._validation,
-                  cedula: vCedula,
-                  numero_documento: vDoc,
-                }
-                const hasErrors =
-                  !newValidation['cedula']?.isValid ||
-                  !newValidation['fecha_pago']?.isValid ||
-                  !newValidation['monto_pagado']?.isValid ||
-                  !newValidation['numero_documento']?.isValid
-                return { ...r, _validation: newValidation, _hasErrors: hasErrors }
-              })
-            )
           } catch {
-            // Si falla la validación batch, dejar las validaciones locales
+            // Si falla validación batch, continuar con sets vacíos
           }
         }
+
+        if (!isMounted()) return
+
+        // UNA SOLA actualización con todas las validaciones
+        const validatedData = processed.map((r) => {
+          const docNorm = normalizarNumeroDocumento(r.numero_documento)
+
+          const vCedula = validatePagoField('cedula', r.cedula, {
+            cedulasInvalidas: new Set(
+              todasCedulas.filter(c => !cedulasExistentesBD.has(c))
+            ),
+          })
+          
+          // Documento: revisar primero si está duplicado en archivo o BD
+          let vDoc = r._validation.numero_documento
+          const esDuplicadoEnArchivo = docNorm && documentosDuplicadosEnArchivo.has(docNorm)
+          const esDuplicadoEnBD = docNorm && documentosDuplicadosBD.has(docNorm)
+          
+          if (esDuplicadoEnArchivo) {
+            vDoc = { isValid: false, message: 'Documento repetido en este archivo' }
+          } else if (esDuplicadoEnBD) {
+            vDoc = { isValid: false, message: 'Documento ya existe en la base de datos' }
+          } else {
+            vDoc = validatePagoField('numero_documento', r.numero_documento, {
+              documentosEnArchivo: documentosDuplicadosEnArchivo,
+            })
+          }
+
+          const newValidation: Record<string, { isValid: boolean; message?: string }> = {
+            ...r._validation,
+            cedula: vCedula,
+            numero_documento: vDoc,
+          }
+          const hasErrors =
+            !newValidation['cedula']?.isValid ||
+            !newValidation['fecha_pago']?.isValid ||
+            !newValidation['monto_pagado']?.isValid ||
+            !newValidation['numero_documento']?.isValid
+          return { ...r, _validation: newValidation, _hasErrors: hasErrors }
+        })
+
+        setExcelData(validatedData)
+        setShowPreview(true)
 
         // Asignar CrÃ©dito en cuanto lleguen los prÃ©stamos (misma lÃ³gica que el efecto)
         const uniqueCedulasSet = new Set<string>()
