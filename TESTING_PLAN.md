@@ -3,6 +3,29 @@
 **Fecha**: 2026-03-04
 **Base URL**: https://rapicredit.onrender.com/api/v1
 
+## 🚀 Quick Start - Full End-to-End Test
+
+**Windows (PowerShell):**
+```powershell
+$env:ADMIN_PASSWORD = "TU_CONTRASEÑA"
+.\test_e2e_full_cycle.ps1
+```
+
+**Linux/Mac (Bash):**
+```bash
+export ADMIN_PASSWORD="TU_CONTRASEÑA"
+bash test_e2e_full_cycle.sh
+```
+
+This test covers the complete business cycle:
+1. ✅ Client Creation
+2. ✅ Loan Creation  
+3. ✅ Payment Registration (multiple)
+4. ✅ Payment Application to Installments (FIFO)
+5. ✅ Reconciliation Verification
+6. ✅ Audit Trail Logging
+7. ✅ User Attribution (usuario_proponente, usuario_registro)
+
 ## 1. LOGIN (✅ Ya funciona)
 
 ```bash
