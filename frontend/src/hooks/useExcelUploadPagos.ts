@@ -476,7 +476,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
   )
 
   const sendToRevisarPagos = useCallback(
-    async (row: PagoExcelRow, onNavigate: () => void, skipRefresh = false, skipToast = false): Promise<boolean> => {
+    async (row: PagoExcelRow, onNavigate: () => void, skipRefresh = false, skipToast = false, skipStateUpdate = false): Promise<boolean> => {
       setSavingProgress((prev) => ({ ...prev, [row._rowIndex]: true }))
       let numeroDoc = normalizarNumeroDocumento(row.numero_documento) || ''
       try {
@@ -518,12 +518,14 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
             fila_origen: row._rowIndex,
           })
         }
-        setEnviadosRevisar((prev) => new Set([...prev, row._rowIndex]))
-        setDuplicadosPendientesRevisar((prev) => {
-          const next = new Set(prev)
-          next.delete(row._rowIndex)
-          return next
-        })
+        if (!skipStateUpdate) {
+          setEnviadosRevisar((prev) => new Set([...prev, row._rowIndex]))
+          setDuplicadosPendientesRevisar((prev) => {
+            const next = new Set(prev)
+            next.delete(row._rowIndex)
+            return next
+          })
+        }
         if (!skipRefresh) refreshPagos()
         if (!skipToast) addToast(row._hasErrors ? 'warning' : 'success', row._hasErrors ? 'Pago enviado a Revisar Pagos con errores.' : 'Pago guardado correctamente.')
         onNavigate()
@@ -569,7 +571,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     const indicesEnviados = new Set<number>()
     for (const row of rows) {
       try {
-        const result = await sendToRevisarPagos(row, () => {}, true, true)
+        const result = await sendToRevisarPagos(row, () => {}, true, true, true)
         if (result) { ok++; indicesEnviados.add(row._rowIndex) }
         else fail++
       } catch {
@@ -577,6 +579,12 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       }
     }
     if (indicesEnviados.size > 0) {
+      setEnviadosRevisar((prev) => new Set([...prev, ...indicesEnviados]))
+      setDuplicadosPendientesRevisar((prev) => {
+        const next = new Set(prev)
+        indicesEnviados.forEach((i) => next.delete(i))
+        return next
+      })
       setExcelData((prev) => prev.filter((r) => !indicesEnviados.has(r._rowIndex)))
     }
     setIsSendingAllRevisar(false)
@@ -602,7 +610,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     const indicesEnviados = new Set<number>()
     for (const row of rows) {
       try {
-        const result = await sendToRevisarPagos(row, () => {}, true, true)
+        const result = await sendToRevisarPagos(row, () => {}, true, true, true)
         if (result) { ok++; indicesEnviados.add(row._rowIndex) }
         else fail++
       } catch {
@@ -610,6 +618,12 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       }
     }
     if (indicesEnviados.size > 0) {
+      setEnviadosRevisar((prev) => new Set([...prev, ...indicesEnviados]))
+      setDuplicadosPendientesRevisar((prev) => {
+        const next = new Set(prev)
+        indicesEnviados.forEach((i) => next.delete(i))
+        return next
+      })
       setExcelData((prev) => prev.filter((r) => !indicesEnviados.has(r._rowIndex)))
     }
     setIsSendingAllRevisar(false)
@@ -1100,8 +1114,8 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     
     for (const row of erroresRows) {
       try {
-        // skipRefresh=true, skipToast=true: un solo refresh y un solo toast al final
-        await sendToRevisarPagos(row, () => {}, true, true)
+        // skipRefresh=true, skipToast=true, skipStateUpdate=true: cero re-renders durante el loop
+        await sendToRevisarPagos(row, () => {}, true, true, true)
         ok++
         indicesEnviados.add(row._rowIndex)
       } catch {
@@ -1109,8 +1123,14 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       }
     }
     
-    // Actualización ÚNICA de estado: eliminar todas las filas enviadas de una sola vez
+    // Actualización ÚNICA de estado al final: cero re-renders durante el loop
     if (indicesEnviados.size > 0) {
+      setEnviadosRevisar((prev) => new Set([...prev, ...indicesEnviados]))
+      setDuplicadosPendientesRevisar((prev) => {
+        const next = new Set(prev)
+        indicesEnviados.forEach((i) => next.delete(i))
+        return next
+      })
       setExcelData((prev) => prev.filter((r) => !indicesEnviados.has(r._rowIndex)))
     }
     
