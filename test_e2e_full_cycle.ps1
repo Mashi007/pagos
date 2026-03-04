@@ -175,6 +175,36 @@ if ($PrestamoState -ne "DRAFT") {
 }
 Log-Success "Loan state is DRAFT"
 
+# [NUEVA VALIDACIÓN] Verificar que se generaron las cuotas
+Log-Test "3.1" "VERIFY CUOTAS WERE GENERATED"
+
+$CuotasResponse = Invoke-ApiRequest -Method GET -Endpoint "/prestamos/$PrestamoId/cuotas" `
+    -Headers $Headers
+
+if ($CuotasResponse -and $CuotasResponse.Count -gt 0) {
+    Log-Success "Cuotas generated automatically"
+    Log-Info "Total cuotas: $($CuotasResponse.Count)"
+    
+    # Validar que tenemos 12 cuotas
+    if ($CuotasResponse.Count -eq $PlazoMeses) {
+        Log-Success "Cuota count matches expected ($PlazoMeses)"
+    } else {
+        Log-Error "Expected $PlazoMeses cuotas, got $($CuotasResponse.Count)"
+    }
+    
+    # Validar estados de cuotas
+    $FirstQuota = $CuotasResponse[0]
+    Log-Info "First cuota - ID: $($FirstQuota.id) | Numero: $($FirstQuota.numero_cuota) | Estado: $($FirstQuota.estado) | Monto: $($FirstQuota.monto)"
+    
+    if ($FirstQuota.estado -eq "PENDIENTE") {
+        Log-Success "Cuota state is PENDIENTE"
+    } else {
+        Log-Error "First cuota should be PENDIENTE, got: $($FirstQuota.estado)"
+    }
+} else {
+    Log-Error "No cuotas generated for loan"
+}
+
 # ============================================================
 # PHASE 4: PAYMENT 1 - FIRST INSTALLMENT PAYMENT
 # ============================================================

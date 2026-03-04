@@ -1292,7 +1292,8 @@ def get_auditoria_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
 
 @router.post("", response_model=PrestamoResponse, status_code=201)
 def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db), current_user: UserResponse = Depends(get_current_user)):
-    """Crea un préstamo en BD. Valida que cliente_id exista. cedula/nombres se toman del Cliente."""
+    """Crea un préstamo en BD. Valida que cliente_id exista. cedula/nombres se toman del Cliente.
+    Automáticamente genera las cuotas de amortización."""
     cliente = db.get(Cliente, payload.cliente_id)
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
@@ -1321,6 +1322,24 @@ def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db), curr
     db.add(row)
     db.commit()
     db.refresh(row)
+    
+    # [MEJORA] Generar cuotas automáticamente
+    numero_cuotas = payload.numero_cuotas or 12
+    total_financiamiento = float(payload.total_financiamiento)
+    monto_cuota = _resolver_monto_cuota(row, total_financiamiento, numero_cuotas)
+    
+    try:
+        cuotas_generadas = _generar_cuotas_amortizacion(db, row, hoy, numero_cuotas, monto_cuota)
+        db.commit()
+        logger.info(f"Préstamo {row.id}: {cuotas_generadas} cuotas generadas automáticamente")
+    except Exception as e:
+        logger.error(f"Error generando cuotas para préstamo {row.id}: {e}")
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al generar cuotas: {str(e)}"
+        )
+    
     _registrar_en_revision_manual(db, row.id)
     db.commit()
     return PrestamoResponse.model_validate(row)
