@@ -749,7 +749,7 @@ async def upload_excel_pagos(
                 ref_pago = ((numero_doc_norm or (numero_doc or "").strip()) or "Carga")[:_MAX_LEN_NUMERO_DOCUMENTO]
                 usuario_email = current_user.email if current_user else "sistema@rapicredit.com"
                 p = Pago(
-                    cedula_cliente=cedula,
+                    cedula_cliente=cedula.strip().upper() if cedula else "",  # Normalize to uppercase
                     prestamo_id=prestamo_id,
                     fecha_pago=datetime.combine(fecha_pago, dt_time.min),
                     monto_pagado=monto,
@@ -771,7 +771,7 @@ async def upload_excel_pagos(
         for pce_data in pagos_con_error_list:
             try:
                 pce = PagoConError(
-                    cedula_cliente=pce_data["cedula"],
+                    cedula_cliente=pce_data["cedula"].strip().upper() if pce_data["cedula"] else "",  # Normalize
                     prestamo_id=pce_data["prestamo_id"],
                     fecha_pago=datetime.combine(_parse_fecha(pce_data["fecha_val"]), dt_time.min) if pce_data["fecha_val"] else datetime.now(),
                     monto_pagado=pce_data["monto"],
@@ -963,7 +963,7 @@ def guardar_fila_editable(
         ref_pago = (numero_doc_norm or (numero_doc or "Carga"))[:_MAX_LEN_NUMERO_DOCUMENTO]
         ahora_conciliacion = datetime.now(ZoneInfo(TZ_NEGOCIO))
         pago = Pago(
-            cedula_cliente=cedula,
+            cedula_cliente=cedula.strip().upper() if cedula else "",  # Normalize to uppercase
             prestamo_id=prestamo_id,
             fecha_pago=datetime.combine(fecha_pago, dt_time.min),
             monto_pagado=Decimal(str(round(monto, 2))),
