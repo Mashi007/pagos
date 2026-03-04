@@ -385,7 +385,7 @@ def create_cliente(payload: ClienteCreate, db: Session = Depends(get_db)):
     No permitido duplicados: misma cédula, mismo nombre, mismo email o mismo teléfono → 409.
     Aplica a Nuevo Cliente y Carga masiva.
     """
-    cedula_norm = _normalize_for_duplicate(payload.cedula) or "Z999999999"
+    cedula_norm = (_normalize_for_duplicate(payload.cedula) or "Z999999999").upper()  # Uppercase para consistency
     nombres_norm = _normalize_for_duplicate(payload.nombres)
     email_norm = _normalize_for_duplicate(payload.email)
     telefono_dig = _digits_telefono(payload.telefono)
@@ -466,7 +466,7 @@ def _perform_update_cliente(cliente_id: int, payload: ClienteUpdate, db: Session
     # Validar duplicados: no permitir cédula, nombre, email ni teléfono igual a otro cliente
     # Z999999999 puede repetirse (clientes sin cédula)
     if "cedula" in data:
-        cedula_norm = _normalize_for_duplicate(data.get("cedula") or getattr(row, "cedula") or "") or "Z999999999"
+        cedula_norm = (_normalize_for_duplicate(data.get("cedula") or getattr(row, "cedula") or "") or "Z999999999").upper()  # Uppercase para consistency
         data["cedula"] = cedula_norm
         if cedula_norm and cedula_norm != "Z999999999":
             existing = db.execute(
