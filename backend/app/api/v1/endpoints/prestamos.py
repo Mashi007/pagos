@@ -1195,6 +1195,65 @@ def aprobar_manual(
         ) from e
 
 
+@router.post("/{prestamo_id}/rechazar", response_model=PrestamoResponse)
+def rechazar_prestamo(
+    prestamo_id: int,
+    payload: dict,  # {"motivo_rechazo": "string"}
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
+    """
+    Rechaza un préstamo en estados tempranos (DRAFT, EN_REVISION, EVALUADO).
+    Solo usuario con rol 'administrador' puede rechazar.
+    Registra motivo en auditoría.
+    """
+    if (getattr(current_user, "rol", None) or "").lower() != "administrador":
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administración puede rechazar préstamos.",
+        )
+    
+    prestamo = db.get(Prestamo, prestamo_id)
+    if not prestamo:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+    
+    # Solo puedo rechazar en estados tempranos
+    if prestamo.estado not in ("DRAFT", "EN_REVISION", "EVALUADO"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"No se puede rechazar préstamo en estado {prestamo.estado}. Solo DRAFT, EN_REVISION, EVALUADO.",
+        )
+    
+    motivo = (payload.get("motivo_rechazo") or "Sin motivo especificado").strip()[:500]
+    
+    try:
+        prestamo.estado = "RECHAZADO"
+        prestamo.usuario_aprobador = current_user.email
+        prestamo.fecha_aprobacion = datetime.now()
+        prestamo.observaciones = f"[RECHAZADO] {motivo}" if prestamo.observaciones else f"Rechazado: {motivo}"
+        
+        # Auditar rechazo
+        audit = Auditoria(
+            usuario_id=_audit_user_id(db, current_user),
+            accion="RECHAZO_PRESTAMO",
+            entidad="prestamos",
+            entidad_id=prestamo_id,
+            detalles=f"Rechazo de préstamo. Motivo: {motivo}. Usuario: {current_user.email}.",
+            exito=True,
+        )
+        db.add(audit)
+        db.commit()
+        db.refresh(prestamo)
+        return PrestamoResponse.model_validate(prestamo)
+    except Exception as e:
+        db.rollback()
+        logger.exception("Error rechazar prestamo_id=%s: %s", prestamo_id, e)
+        raise HTTPException(
+            status_code=500,
+            detail="Error al rechazar el préstamo.",
+        ) from e
+
+
 @router.get("/{prestamo_id}/evaluacion-riesgo", response_model=dict)
 def get_evaluacion_riesgo(prestamo_id: int, db: Session = Depends(get_db)):
     """Devuelve datos de evaluación de riesgo (ML manual/calculado) del préstamo."""

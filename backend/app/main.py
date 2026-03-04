@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from app.core.config import settings
 from app.api.v1 import api_router
+from app.middleware.audit_middleware import AuditMiddleware
 
 # Configurar logging
 logging.basicConfig(
@@ -45,6 +46,9 @@ app = FastAPI(
 
 # Log de cada request (método, ruta, status, tiempo) para depuración en Render
 app.add_middleware(RequestLogMiddleware)
+
+# Auditoría automática: registra todos los POST/PUT/DELETE/PATCH en tabla auditoria
+app.add_middleware(AuditMiddleware)
 
 # Configurar CORS
 app.add_middleware(

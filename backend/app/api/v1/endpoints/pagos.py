@@ -447,6 +447,7 @@ def get_ultimos_pagos(
 async def upload_excel_pagos(
     file: UploadFile = File(..., alias="file"),
     db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
 ):
     """
     Carga masiva de pagos desde Excel.
@@ -745,6 +746,7 @@ async def upload_excel_pagos(
             try:
                 fecha_pago = _parse_fecha(fecha_val)
                 ref_pago = ((numero_doc_norm or (numero_doc or "").strip()) or "Carga")[:_MAX_LEN_NUMERO_DOCUMENTO]
+                usuario_email = current_user.email if current_user else "sistema@rapicredit.com"
                 p = Pago(
                     cedula_cliente=cedula,
                     prestamo_id=prestamo_id,
@@ -753,6 +755,7 @@ async def upload_excel_pagos(
                     numero_documento=numero_doc_norm,
                     estado="PENDIENTE",
                     referencia_pago=ref_pago,
+                    usuario_registro=usuario_email,  # [MEJORADO] Usuario real desde JWT
                 )
                 db.add(p)
                 registros += 1
@@ -895,6 +898,7 @@ def validar_filas_batch(
 def guardar_fila_editable(
     body: GuardarFilaEditableBody = Body(...),
     db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
 ):
     """
     Guarda una fila editable validada (desde Preview).
@@ -906,6 +910,7 @@ def guardar_fila_editable(
         monto = body.monto_pagado
         numero_doc = (body.numero_documento or "").strip() if body.numero_documento else None
         prestamo_id = body.prestamo_id
+        usuario_email = current_user.email if current_user else "sistema@rapicredit.com"
 
         # Validaciones post-guardado
         if not cedula:
@@ -967,6 +972,7 @@ def guardar_fila_editable(
             conciliado=True,  # [B2] Usar solo conciliado
             fecha_conciliacion=ahora_conciliacion,
             verificado_concordancia="SI",  # Legacy: sync con conciliado
+            usuario_registro=usuario_email,  # [MEJORADO] Usuario real desde JWT
         )
         db.add(pago)
         db.flush()
@@ -1414,7 +1420,7 @@ def _numero_documento_ya_existe(
 
 
 @router.post("", response_model=dict, status_code=201)
-def crear_pago(payload: PagoCreate, db: Session = Depends(get_db)):
+def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user: UserResponse = Depends(get_current_user)):
     """Crea un pago. Documento acepta cualquier formato. Regla general: no duplicados (409 si ya existe)."""
     num_doc = _truncar_numero_documento(_normalizar_numero_documento(payload.numero_documento))
     if num_doc and _numero_documento_ya_existe(db, num_doc):
@@ -1425,6 +1431,7 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db)):
     ref = (num_doc or "N/A")[:_MAX_LEN_NUMERO_DOCUMENTO]
     fecha_pago_ts = datetime.combine(payload.fecha_pago, dt_time.min)
     conciliado = payload.conciliado if payload.conciliado is not None else False  # [B2] Default False
+    usuario_email = current_user.email if current_user else "sistema@rapicredit.com"
     row = Pago(
         cedula_cliente=payload.cedula_cliente.strip(),
         prestamo_id=payload.prestamo_id,
@@ -1438,6 +1445,7 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db)):
         conciliado=conciliado,  # [B2] Usar solo conciliado, no verificado_concordancia
         fecha_conciliacion=datetime.now(ZoneInfo(TZ_NEGOCIO)) if conciliado else None,
         verificado_concordancia="SI" if conciliado else "",  # Legacy: sync con conciliado
+        usuario_registro=usuario_email,  # [MEJORADO] Usuario real desde JWT
     )
     db.add(row)
     db.commit()
