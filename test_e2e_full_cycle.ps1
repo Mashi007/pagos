@@ -145,7 +145,7 @@ Log-Test "3" "CREATE LOAN"
 
 $MontoPrestamai = 100000
 $TasaInteres = 8.5
-$PlazoMeses = 36
+$PlazoMeses = 12  # Changed from 36 (max allowed is 12)
 $TipoAmortizacion = "FRANCESA"
 
 $PrestamoResponse = Invoke-ApiRequest -Method POST -Endpoint "/prestamos" `
