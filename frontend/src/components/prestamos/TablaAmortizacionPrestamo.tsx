@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Download, Eye, FileText, CheckCircle, Clock, AlertCircle } from 'lucide-react'
+import { generarReciboPagoPDF } from '../../utils/reciboPagoPDF'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
 import { Badge } from '../../components/ui/badge'
@@ -40,6 +41,45 @@ interface TablaAmortizacionPrestamoProps {
 
 export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestamoProps) {
   const [showFullTable, setShowFullTable] = useState(false)
+  const [descargandoRecibo, setDescargandoRecibo] = useState<number | null>(null)
+
+  const descargarRecibo = async (cuota: Cuota) => {
+    setDescargandoRecibo(cuota.id)
+    try {
+      await generarReciboPagoPDF(
+        {
+          id: prestamo.id,
+          cedula: prestamo.cedula,
+          nombres: prestamo.nombres,
+          numero_cuotas: prestamo.numero_cuotas,
+          total_financiamiento: prestamo.total_financiamiento,
+          modalidad_pago: prestamo.modalidad_pago,
+        },
+        {
+          id: cuota.id,
+          numero_cuota: cuota.numero_cuota,
+          fecha_vencimiento: cuota.fecha_vencimiento,
+          fecha_pago: cuota.fecha_pago,
+          monto_cuota: cuota.monto_cuota,
+          monto_capital: cuota.monto_capital,
+          monto_interes: cuota.monto_interes,
+          saldo_capital_final: cuota.saldo_capital_final,
+          total_pagado: cuota.total_pagado,
+          pago_monto_conciliado: cuota.pago_monto_conciliado,
+          pago_id: cuota.pago_id,
+          pago_conciliado: cuota.pago_conciliado,
+          estado: cuota.estado,
+          numero_documento: null,
+        }
+      )
+      toast.success(`Recibo cuota ${cuota.numero_cuota} descargado`)
+    } catch (err) {
+      console.error('Error generando recibo:', err)
+      toast.error('Error al generar el recibo')
+    } finally {
+      setDescargandoRecibo(null)
+    }
+  }
 
   // Cargar cuotas del préstamo
   const { data: cuotas, isLoading, error } = useQuery({
@@ -263,6 +303,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
                 <TableHead className="text-right">Saldo Pendiente</TableHead>
                 <TableHead className="text-right">Pago conciliado</TableHead>
                 <TableHead>Estado</TableHead>
+                <TableHead className="text-center">Recibo</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -327,12 +368,30 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
                         </div>
                       )}
                     </TableCell>
+                    <TableCell className="text-center">
+                      {estaPagado && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          title={`Descargar recibo cuota ${cuota.numero_cuota}`}
+                          onClick={() => descargarRecibo(cuota)}
+                          disabled={descargandoRecibo === cuota.id}
+                          className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50"
+                        >
+                          {descargandoRecibo === cuota.id ? (
+                            <span className="text-xs">⏳</span>
+                          ) : (
+                            <FileText className="h-4 w-4" />
+                          )}
+                        </Button>
+                      )}
+                    </TableCell>
                   </TableRow>
                 )
               })}
               {!showFullTable && cuotas.length > 5 && (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-4">
+                  <TableCell colSpan={9} className="text-center py-4">
                     <Button variant="ghost" onClick={() => setShowFullTable(true)}>
                       Ver {cuotas.length - 5} cuotas más...
                     </Button>
