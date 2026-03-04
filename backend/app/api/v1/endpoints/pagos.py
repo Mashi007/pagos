@@ -1,4 +1,4 @@
-﻿"""
+"""
 Endpoints de pagos. Datos reales desde BD.
 - Tabla pagos: GET/POST/PUT/DELETE /pagos/ (listado y CRUD para /pagos/pagos).
 - GET /pagos/kpis, /stats, /ultimos; POST /upload, /conciliacion/upload, /{id}/aplicar-cuotas.
@@ -892,15 +892,21 @@ def guardar_fila_editable(
                 prestamo_id = cliente_row[0]
 
         # Crear pago
+        # [A2] Marcar conciliado=True y verificado_concordancia="SI" desde el momento de la creación,
+        # ya que guardar-fila-editable implica que el pago fue revisado y validado manualmente.
         ref_pago = (numero_doc_norm or (numero_doc or "Carga"))[:_MAX_LEN_NUMERO_DOCUMENTO]
+        ahora_conciliacion = datetime.now(ZoneInfo(TZ_NEGOCIO))
         pago = Pago(
             cedula_cliente=cedula,
             prestamo_id=prestamo_id,
             fecha_pago=datetime.combine(fecha_pago, dt_time.min),
             monto_pagado=Decimal(str(round(monto, 2))),
             numero_documento=numero_doc_norm,
-            estado="PAGADO",  # Auto-marcar como PAGADO (se aplica a cuotas)
+            estado="PAGADO",
             referencia_pago=ref_pago,
+            conciliado=True,
+            fecha_conciliacion=ahora_conciliacion,
+            verificado_concordancia="SI",
         )
         db.add(pago)
         db.flush()
@@ -1376,16 +1382,18 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db)):
     db.add(row)
     db.commit()
     db.refresh(row)
-    # Reglas de negocio: al conciliar con préstamo, aplicar pago a cuotas
-    if conciliado and row.prestamo_id and float(row.monto_pagado or 0) > 0:
+    # [C3] Aplicar FIFO a cuotas siempre que el pago tenga prestamo_id,
+    # independientemente de si conciliado=True. El flag conciliado es una
+    # confirmación bancaria separada; la distribución de cuotas debe ocurrir
+    # en cuanto el pago está asociado a un préstamo.
+    if row.prestamo_id and float(row.monto_pagado or 0) > 0:
         try:
             _aplicar_pago_a_cuotas_interno(row, db)
-            # PAGADO: pago procesado para el préstamo (haya o no cuotas pendientes donde abonar)
             row.estado = "PAGADO"
             db.commit()
             db.refresh(row)
         except Exception as e:
-            logger.warning("Al crear pago conciliado, no se pudo aplicar a cuotas: %s", e)
+            logger.warning("Al crear pago, no se pudo aplicar a cuotas (FIFO): %s", e)
             db.rollback()
     return _pago_to_response(row)
 

@@ -58,7 +58,8 @@ class CuotaUpdateData(BaseModel):
     fecha_vencimiento: Optional[str] = None
     monto: Optional[float] = Field(None, ge=0)
     total_pagado: Optional[float] = Field(None, ge=0)
-    estado: Optional[str] = Field(None, pattern="^(pendiente|pagado|conciliado)$")
+    # [A1] Acepta mayúsculas y minúsculas; el endpoint normaliza a MAYÚSCULAS antes de guardar.
+    estado: Optional[str] = Field(None, pattern="^(pendiente|pagado|conciliado|PENDIENTE|PAGADO|CONCILIADO)$")
     observaciones: Optional[str] = None
 
 # ===== SCHEMAS RESPUESTA =====
@@ -120,7 +121,7 @@ def _aplicar_saldo_cero_si_corresponde(db: Session, prestamo: Prestamo) -> None:
         pago.conciliado = True
         pago.fecha_conciliacion = ahora
     for cuota in cuotas:
-        cuota.estado = "pagado"
+        cuota.estado = "PAGADO"  # [A1] Usar MAYÚSCULAS para consistencia con el resto del backend
 
 
 @router.get("/prestamos", response_model=ResumenRevisionManual)
@@ -639,11 +640,13 @@ def editar_cuota_revision(
     
     # Validar y actualizar estado
     if update_data.estado is not None:
-        estados_validos = ["pendiente", "pagado", "conciliado"]
-        if update_data.estado not in estados_validos:
+        # [A1] Normalizar siempre a MAYÚSCULAS antes de persistir
+        estado_normalizado = update_data.estado.upper()
+        estados_validos = ["PENDIENTE", "PAGADO", "CONCILIADO"]
+        if estado_normalizado not in estados_validos:
             raise HTTPException(status_code=400, detail=f"Estado inválido. Válidos: {estados_validos}")
-        cambios_dict['estado'] = (cuota.estado, update_data.estado)
-        cuota.estado = update_data.estado
+        cambios_dict['estado'] = (cuota.estado, estado_normalizado)
+        cuota.estado = estado_normalizado
     
     if not cambios_dict:
         return {"mensaje": "No hay cambios que guardar", "cuota_id": cuota_id}

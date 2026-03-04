@@ -616,9 +616,55 @@ def get_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
     return resp
 
 
+def _calcular_monto_cuota_frances(total: float, tasa_periodo: float, n: int) -> float:
+    """
+    Calcula la cuota fija de un préstamo con amortización francesa (sistema francés / annuity).
+    Fórmula: C = P * [i * (1+i)^n] / [(1+i)^n - 1]
+    donde P=capital, i=tasa por período, n=número de cuotas.
+    Si tasa_periodo == 0 devuelve la cuota plana (P/n).
+    """
+    if tasa_periodo <= 0 or n <= 0:
+        return total / n if n else 0
+    factor = (1 + tasa_periodo) ** n
+    return total * (tasa_periodo * factor) / (factor - 1)
+
+
+def _resolver_monto_cuota(prestamo: "Prestamo", total: float, numero_cuotas: int) -> float:
+    """
+    [C1] Determina el monto de cuota considerando la tasa de interés del préstamo.
+    - tasa_interes == 0 (o NULL): cuota plana = total / numero_cuotas.
+    - tasa_interes > 0: amortización francesa.
+      La tasa se almacena como porcentaje anual (ej. 12 = 12% anual).
+      Se convierte al período: MENSUAL → tasa/12, QUINCENAL → tasa/24, SEMANAL → tasa/52.
+    """
+    tasa_anual = float(prestamo.tasa_interes or 0)
+    if tasa_anual <= 0 or numero_cuotas <= 0:
+        return total / numero_cuotas if numero_cuotas else 0
+    modalidad = (prestamo.modalidad_pago or "MENSUAL").upper()
+    periodos_por_anio = 12 if modalidad == "MENSUAL" else (24 if modalidad == "QUINCENAL" else 52)
+    tasa_periodo = (tasa_anual / 100) / periodos_por_anio
+    return _calcular_monto_cuota_frances(total, tasa_periodo, numero_cuotas)
+
+
 def _generar_cuotas_amortizacion(db: Session, p: Prestamo, fecha_base: date, numero_cuotas: int, monto_cuota: float) -> int:
-    """Genera filas en cuotas. fecha_vencimiento = último día del período (fecha_base + delta*n - 1).
-    MENSUAL 30d, QUINCENAL 15d, SEMANAL 7d. Ej: base 1 ene QUINCENAL → cuota 1 vence 15 ene, cuota 2 vence 31 ene."""
+    """
+    Genera filas en tabla cuotas para el préstamo dado.
+
+    Fecha de vencimiento = fecha_base + (delta * n) - 1 días:
+      - MENSUAL (30d):   cuota 1 → día 29, cuota 2 → día 59, etc.
+      - QUINCENAL (15d): cuota 1 → día 14, cuota 2 → día 29, etc.
+      - SEMANAL (7d):    cuota 1 → día 6, cuota 2 → día 13, etc.
+
+    [C1] Cálculo del monto de cuota:
+    - Si tasa_interes == 0 (o NULL): cuota plana = total_financiamiento / numero_cuotas.
+    - Si tasa_interes > 0: amortización francesa. La tasa se interpreta como tasa ANUAL
+      nominal; se convierte al período según modalidad_pago antes de calcular.
+      El `monto_cuota` que recibe este helper ya viene calculado por el caller; si el
+      caller quiere usar interés debe llamar a _calcular_monto_cuota_frances primero.
+
+    Los campos monto_capital e monto_interes no se almacenan en cuotas (ver auditoría B3);
+    se derivan en el frontend desde saldo_capital_inicial / saldo_capital_final.
+    """
     modalidad = (p.modalidad_pago or "MENSUAL").upper()
     delta_dias = 30 if modalidad == "MENSUAL" else (15 if modalidad == "QUINCENAL" else 7)
     cliente_id = p.cliente_id
@@ -677,23 +723,25 @@ def get_cuotas_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
         pago_monto_conciliado = 0.0
         pago_verificado_concordancia = ""
         
+        # [C2] pago_monto_conciliado = monto real abonado a ESTA cuota (cuota.total_pagado),
+        # no el monto total del pago (que puede cubrir múltiples cuotas).
+        pago_monto_conciliado = float(c.total_pagado or 0)
+
         if c.pago_id:
             # Caso 1: La cuota tiene un pago_id vinculado directamente
             pago = db.get(Pago, c.pago_id)
             if pago:
                 pago_conciliado_flag = bool(pago.conciliado)
-                pago_monto_conciliado = float(pago.monto_pagado) if pago.monto_pagado else 0.0
                 pago_verificado_concordancia = str(pago.verificado_concordancia or "").strip().upper()
                 if pago_verificado_concordancia == "SI":
                     pago_conciliado_flag = True
         else:
-            # Caso 2: Buscar pagos por rango de fechas
-            # Si la cuota vence el 15/04/2025, buscar pagos entre el 01/04 y el 30/04 (rango amplio)
+            # Caso 2: Sin pago_id directo — buscar pagos conciliados por rango de fechas
+            # Solo necesitamos el flag de conciliación; el monto ya viene de cuota.total_pagado.
             if c.fecha_vencimiento:
                 fecha_inicio = c.fecha_vencimiento - timedelta(days=15)
                 fecha_fin = c.fecha_vencimiento + timedelta(days=15)
-                
-                # Buscar pagos conciliados en este rango para el préstamo
+
                 pagos_en_rango = db.execute(
                     select(Pago)
                     .where(
@@ -703,12 +751,11 @@ def get_cuotas_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
                     )
                     .order_by(Pago.fecha_pago.desc())
                 ).scalars().all()
-                
-                # Consolidar información de pagos en rango
+
                 for pago in pagos_en_rango:
                     if pago.conciliado or (str(pago.verificado_concordancia or "").strip().upper() == "SI"):
                         pago_conciliado_flag = True
-                        pago_monto_conciliado += float(pago.monto_pagado) if pago.monto_pagado else 0.0
+                        break  # un pago conciliado en rango es suficiente para marcar el flag
         
         # Construir respuesta de cuota
         resultado.append({
@@ -921,7 +968,7 @@ def generar_amortizacion(prestamo_id: int, db: Session = Depends(get_db)):
     total = float(p.total_financiamiento or 0)
     if numero_cuotas <= 0 or total <= 0:
         raise HTTPException(status_code=400, detail="Préstamo sin número de cuotas o monto válido.")
-    monto_cuota = total / numero_cuotas
+    monto_cuota = _resolver_monto_cuota(p, total, numero_cuotas)  # [C1] usa amortización francesa si tasa > 0
     fecha_base = p.fecha_base_calculo if getattr(p, "fecha_base_calculo", None) else date.today()
     if hasattr(fecha_base, "date"):
         fecha_base = fecha_base.date() if callable(getattr(fecha_base, "date", None)) else fecha_base
@@ -936,6 +983,14 @@ def aplicar_condiciones_aprobacion(prestamo_id: int, payload: AplicarCondiciones
     p = db.get(Prestamo, prestamo_id)
     if not p:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+    # [A3] Solo se pueden aplicar condiciones en estados previos a DESEMBOLSADO
+    _ESTADOS_APROBABLES = ("DRAFT", "EN_REVISION", "APROBADO", "EVALUADO")
+    if p.estado not in _ESTADOS_APROBABLES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No se pueden aplicar condiciones a un préstamo en estado '{p.estado}'. "
+                   f"Estados permitidos: {', '.join(_ESTADOS_APROBABLES)}.",
+        )
     if payload.tasa_interes is not None:
         p.tasa_interes = Decimal(str(payload.tasa_interes))
     if payload.plazo_maximo is not None:
@@ -957,7 +1012,7 @@ def aplicar_condiciones_aprobacion(prestamo_id: int, payload: AplicarCondiciones
     if existentes == 0:
         numero_cuotas = p.numero_cuotas or 12
         total = float(p.total_financiamiento or 0)
-        monto_cuota = total / numero_cuotas if numero_cuotas else 0
+        monto_cuota = _resolver_monto_cuota(p, total, numero_cuotas)  # [C1] usa amortización francesa si tasa > 0
         fecha_base = p.fecha_base_calculo or date.today()
         if hasattr(fecha_base, "date"):
             fecha_base = fecha_base.date() if callable(getattr(fecha_base, "date", None)) else fecha_base
@@ -1009,6 +1064,14 @@ def asignar_fecha_aprobacion(prestamo_id: int, payload: AsignarFechaAprobacionBo
     p = db.get(Prestamo, prestamo_id)
     if not p:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
+    # [A3] Solo se puede desembolsar un préstamo aprobado, no uno ya desembolsado o rechazado
+    _ESTADOS_DESEMBOLSABLES = ("DRAFT", "EN_REVISION", "APROBADO", "EVALUADO")
+    if p.estado not in _ESTADOS_DESEMBOLSABLES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No se puede asignar fecha de desembolso a un préstamo en estado '{p.estado}'. "
+                   f"Estados permitidos: {', '.join(_ESTADOS_DESEMBOLSABLES)}.",
+        )
     p.fecha_aprobacion = datetime.combine(payload.fecha_aprobacion, datetime.min.time()) if isinstance(payload.fecha_aprobacion, date) else payload.fecha_aprobacion
     p.estado = "DESEMBOLSADO"
     _registrar_en_revision_manual(db, prestamo_id)
@@ -1017,7 +1080,7 @@ def asignar_fecha_aprobacion(prestamo_id: int, payload: AsignarFechaAprobacionBo
     if existentes == 0:
         numero_cuotas = p.numero_cuotas or 12
         total = float(p.total_financiamiento or 0)
-        monto_cuota = total / numero_cuotas if numero_cuotas else 0
+        monto_cuota = _resolver_monto_cuota(p, total, numero_cuotas)  # [C1] usa amortización francesa si tasa > 0
         fecha_base = payload.fecha_aprobacion
         cuotas_recalculadas = _generar_cuotas_amortizacion(db, p, fecha_base, numero_cuotas, monto_cuota)
     db.commit()
@@ -1084,7 +1147,7 @@ def aprobar_manual(
         total = float(p.total_financiamiento or 0)
         if numero_cuotas <= 0 or total <= 0:
             raise HTTPException(status_code=400, detail="Número de cuotas o monto de financiamiento inválido.")
-        monto_cuota = total / numero_cuotas
+        monto_cuota = _resolver_monto_cuota(p, total, numero_cuotas)  # [C1] usa amortización francesa si tasa > 0
         creadas = _generar_cuotas_amortizacion(db, p, fecha_ap, numero_cuotas, monto_cuota)
 
         audit = Auditoria(
