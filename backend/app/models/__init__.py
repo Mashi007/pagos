@@ -23,6 +23,7 @@ from app.models.revisar_pago import RevisarPago
 from app.models.pago_con_error import PagoConError
 from app.models.conciliacion_temporal import ConciliacionTemporal
 from app.models.cliente_con_error import ClienteConError
+from app.models.prestamo_con_error import PrestamoConError
 
 __all__ = [
     "Base", "Cliente", "Prestamo", "Ticket", "Cuota", "CuotaPago", "Pago", "PagosWhatsapp",

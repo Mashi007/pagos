@@ -1385,3 +1385,287 @@ def delete_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
     db.delete(row)
     db.commit()
     return None
+
+
+# ============================================================================
+# CARGA MASIVA DE PRÉSTAMOS DESDE EXCEL
+# ============================================================================
+
+from fastapi import UploadFile, File
+from app.models.prestamo_con_error import PrestamoConError
+
+try:
+    import openpyxl
+except ImportError:
+    openpyxl = None
+
+
+def _validate_modalidad_pago(modalidad: str) -> bool:
+    """Valida que modalidad sea MENSUAL, QUINCENAL o SEMANAL."""
+    if not modalidad:
+        return False
+    mod = str(modalidad).strip().upper()
+    return mod in ("MENSUAL", "QUINCENAL", "SEMANAL")
+
+
+def _parse_decimal(value: any) -> Decimal:
+    """Parsea valor a Decimal."""
+    if value is None:
+        return Decimal("0.00")
+    try:
+        return Decimal(str(value))
+    except:
+        return None
+
+
+@router.post("/upload-excel", response_model=dict)
+async def upload_prestamos_excel(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+    """
+    Carga masiva de préstamos desde Excel.
+    Formato esperado: Cédula Cliente | Monto Financiamiento | Modalidad Pago | Nº Cuotas | Producto | Analista | Concesionario
+    
+    Validaciones:
+    - Cédula: válida en BD (cliente existe)
+    - Monto: > 0
+    - Modalidad: MENSUAL|QUINCENAL|SEMANAL
+    - Nº Cuotas: 1-12
+    - Analista: requerido
+    - Concesionario: opcional
+    
+    Respuesta: {registros_creados, registros_con_error}
+    """
+    if not file.filename or not file.filename.lower().endswith((".xlsx", ".xls")):
+        raise HTTPException(status_code=400, detail="Debe subir un archivo Excel (.xlsx o .xls)")
+    
+    if not openpyxl:
+        raise HTTPException(status_code=500, detail="Excel library not available")
+    
+    try:
+        content = await file.read()
+        wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+        ws = wb.active
+        
+        if not ws:
+            return {
+                "registros_creados": 0,
+                "registros_con_error": 0,
+                "clientes_con_errores": []
+            }
+        
+        registros_creados = 0
+        registros_con_error = 0
+        prestamos_con_errores = []
+        
+        # Pre-cargar clientes para validar
+        clientes_cedulas = {}
+        for cliente in db.execute(select(Cliente.id, Cliente.cedula)).all():
+            clientes_cedulas[cliente.cedula.upper() if cliente.cedula else ""] = cliente.id
+        
+        usuario_email = current_user.email if hasattr(current_user, 'email') else "sistema@rapicredit.com"
+        hoy = date.today()
+        
+        # Procesar filas (saltar header)
+        for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+            if not row or all(cell is None for cell in row):
+                continue
+            
+            try:
+                cedula_raw = row[0] if len(row) > 0 else None
+                monto_raw = row[1] if len(row) > 1 else None
+                modalidad_raw = row[2] if len(row) > 2 else None
+                cuotas_raw = row[3] if len(row) > 3 else None
+                producto_raw = row[4] if len(row) > 4 else None
+                analista_raw = row[5] if len(row) > 5 else None
+                concesionario_raw = row[6] if len(row) > 6 else None
+                
+                errores = []
+                
+                # Validar cédula
+                cedula = str(cedula_raw or "").strip().upper()
+                if not cedula:
+                    errores.append("Cédula es requerida")
+                elif cedula not in clientes_cedulas:
+                    errores.append(f"Cliente con cédula {cedula} no existe en BD")
+                
+                # Validar monto
+                monto = _parse_decimal(monto_raw)
+                if monto is None:
+                    errores.append("Monto Financiamiento inválido")
+                elif monto <= 0:
+                    errores.append("Monto debe ser mayor a 0")
+                
+                # Validar modalidad
+                modalidad = str(modalidad_raw or "").strip().upper()
+                if not modalidad:
+                    errores.append("Modalidad Pago es requerida (MENSUAL|QUINCENAL|SEMANAL)")
+                elif not _validate_modalidad_pago(modalidad):
+                    errores.append("Modalidad debe ser MENSUAL, QUINCENAL o SEMANAL")
+                
+                # Validar cuotas
+                try:
+                    cuotas = int(cuotas_raw) if cuotas_raw else None
+                    if cuotas is None:
+                        errores.append("Nº Cuotas es requerido")
+                    elif cuotas < 1 or cuotas > 12:
+                        errores.append("Nº Cuotas debe estar entre 1 y 12")
+                except (ValueError, TypeError):
+                    errores.append("Nº Cuotas debe ser número entero")
+                
+                # Validar producto
+                producto = str(producto_raw or "").strip()
+                if not producto:
+                    errores.append("Producto es requerido")
+                
+                # Validar analista
+                analista = str(analista_raw or "").strip()
+                if not analista:
+                    errores.append("Analista es requerido")
+                
+                # Concesionario es opcional
+                concesionario = str(concesionario_raw or "").strip() if concesionario_raw else None
+                
+                # Si hay errores, agregar a lista de revisión
+                if errores:
+                    prestamo_error = PrestamoConError(
+                        cedula_cliente=cedula or None,
+                        total_financiamiento=monto,
+                        modalidad_pago=modalidad or None,
+                        numero_cuotas=cuotas if 'cuotas' in locals() and isinstance(cuotas, int) else None,
+                        producto=producto or None,
+                        analista=analista or None,
+                        concesionario=concesionario,
+                        estado="PENDIENTE",
+                        errores_descripcion="; ".join(errores),
+                        fila_origen=idx,
+                        usuario_registro=usuario_email
+                    )
+                    db.add(prestamo_error)
+                    registros_con_error += 1
+                    prestamos_con_errores.append({
+                        "cedula": cedula,
+                        "fila": idx,
+                        "errores": "; ".join(errores)
+                    })
+                    continue
+                
+                # Crear préstamo
+                cliente_id = clientes_cedulas[cedula]
+                cliente = db.get(Cliente, cliente_id)
+                
+                prestamo = Prestamo(
+                    cliente_id=cliente_id,
+                    cedula=cliente.cedula or "",
+                    nombres=cliente.nombres or "",
+                    total_financiamiento=monto,
+                    fecha_requerimiento=hoy,
+                    modalidad_pago=modalidad,
+                    numero_cuotas=cuotas,
+                    cuota_periodo=Decimal("0.00"),
+                    producto=producto,
+                    estado="DRAFT",
+                    concesionario=concesionario,
+                    analista=analista,
+                    usuario_proponente=usuario_email,
+                )
+                db.add(prestamo)
+                db.flush()  # Obtener ID del préstamo
+                
+                # Generar cuotas automáticamente
+                monto_cuota = _resolver_monto_cuota(prestamo, float(monto), cuotas)
+                _generar_cuotas_amortizacion(db, prestamo, hoy, cuotas, monto_cuota)
+                
+                # Registrar en revisión manual
+                _registrar_en_revision_manual(db, prestamo.id)
+                
+                registros_creados += 1
+                
+            except Exception as e:
+                logger.error(f"Error procesando fila {idx}: {e}")
+                prestamo_error = PrestamoConError(
+                    cedula_cliente=str(row[0]) if len(row) > 0 else None,
+                    total_financiamiento=_parse_decimal(row[1]) if len(row) > 1 else None,
+                    errores_descripcion=f"Error general: {str(e)[:200]}",
+                    fila_origen=idx,
+                    usuario_registro=usuario_email
+                )
+                db.add(prestamo_error)
+                registros_con_error += 1
+                prestamos_con_errores.append({
+                    "cedula": str(row[0]) if len(row) > 0 else "?",
+                    "fila": idx,
+                    "errores": str(e)[:100]
+                })
+        
+        db.commit()
+        
+        return {
+            "registros_creados": registros_creados,
+            "registros_con_error": registros_con_error,
+            "mensaje": f"Se crearon {registros_creados} préstamo(s) y {registros_con_error} con error(es)",
+            "prestamos_con_errores": prestamos_con_errores[:10]  # Mostrar primeros 10
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.exception("Error cargando Excel de préstamos: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error procesando archivo: {str(e)[:200]}"
+        )
+
+
+@router.get("/revisar/lista", response_model=dict)
+def get_prestamos_con_errores(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """
+    Listado de préstamos con errores de validación (pendientes de revisión).
+    Paginado para facilitar corrección manual.
+    """
+    total = db.scalar(select(func.count()).select_from(PrestamoConError)) or 0
+    rows = db.execute(
+        select(PrestamoConError)
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+    ).scalars().all()
+    
+    return {
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "items": [
+            {
+                "id": r.id,
+                "cedula_cliente": r.cedula_cliente,
+                "total_financiamiento": str(r.total_financiamiento) if r.total_financiamiento else None,
+                "modalidad_pago": r.modalidad_pago,
+                "numero_cuotas": r.numero_cuotas,
+                "producto": r.producto,
+                "analista": r.analista,
+                "concesionario": r.concesionario,
+                "errores": r.errores_descripcion,
+                "fila_origen": r.fila_origen,
+                "estado": r.estado,
+                "fecha_registro": r.fecha_registro.isoformat() if r.fecha_registro else None,
+            }
+            for r in rows
+        ]
+    }
+
+
+@router.delete("/revisar/{error_id}", status_code=204)
+def resolver_prestamo_error(error_id: int, db: Session = Depends(get_db)):
+    """Marcar préstamo con error como resuelto (eliminar de la lista)."""
+    row = db.get(PrestamoConError, error_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Registro no encontrado")
+    
+    db.delete(row)
+    db.commit()
+    return None
