@@ -2,7 +2,8 @@
 API v1
 """
 from fastapi import APIRouter
-from app.api.v1.endpoints import whatsapp, auth, configuracion, configuracion_informe_pagos, pagos, pagos_con_errores, prestamos, notificaciones, notificaciones_tabs, dashboard, kpis, auditoria, clientes, tickets, comunicaciones, validadores, usuarios, modelos_vehiculos, analistas, concesionarios, ai_training, revision_manual, health
+from app.api.v1.endpoints import whatsapp, auth, configuracion, configuracion_informe_pagos, pagos, pagos_con_errores, prestamos, notificaciones, notificaciones_tabs, dashboard, auditoria, clientes, tickets, comunicaciones, validadores, usuarios, modelos_vehiculos, analistas, concesionarios, ai_training, revision_manual, health
+from app.api.v1.endpoints.dashboard import kpis
 from app.api.v1.endpoints.reportes import router as reportes_router
 
 api_router = APIRouter()
