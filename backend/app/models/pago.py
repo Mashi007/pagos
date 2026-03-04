@@ -23,7 +23,7 @@ class Pago(Base):
     estado = Column(String(30), nullable=True)
     fecha_registro = Column(DateTime(timezone=False), nullable=False, server_default=func.now())
     fecha_conciliacion = Column(DateTime(timezone=False), nullable=True)
-    conciliado = Column(Boolean, nullable=True)
+    conciliado = Column(Boolean, nullable=False, server_default=text("false"))  # [B2] Siempre boolean, no nullable
     verificado_concordancia = Column(String(10), nullable=False, server_default=text("''"))
     usuario_registro = Column(String(255), nullable=True)
     notas = Column(Text, nullable=True)

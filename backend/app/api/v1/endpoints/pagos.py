@@ -175,9 +175,31 @@ def _celda_a_string_documento(val: Any) -> str:
 TZ_NEGOCIO = "America/Caracas"
 
 
-def _hoy_local() -> date:
-    """Fecha de hoy en la zona horaria del negocio (evita que servidor UTC desfase el día)."""
-    return datetime.now(ZoneInfo(TZ_NEGOCIO)).date()
+def _validar_transicion_estado_cuota(estado_anterior: str, estado_nuevo: str) -> bool:
+    """
+    [validar_transiciones] Valida transiciones permitidas entre estados de cuota.
+    
+    Transiciones permitidas:
+    PENDIENTE → PAGADO, PAGO_ADELANTADO
+    PAGO_ADELANTADO → PAGADO
+    PAGADO → PAGADO (idempotente)
+    """
+    transiciones_permitidas = {
+        "PENDIENTE": ["PAGADO", "PAGO_ADELANTADO", "PENDIENTE"],
+        "PAGO_ADELANTADO": ["PAGADO", "PAGO_ADELANTADO"],
+        "PAGADO": ["PAGADO"],  # Idempotente
+    }
+    return estado_nuevo in transiciones_permitidas.get(estado_anterior, [])
+    """
+    [M5] Calcula el número de días en mora (días vencidos).
+    Si fecha_vencimiento >= hoy → 0 (no hay mora)
+    Si fecha_vencimiento < hoy → (hoy - fecha_vencimiento).days
+    """
+    hoy = _hoy_local()
+    if not fecha_vencimiento:
+        return 0
+    dias = (hoy - fecha_vencimiento).days
+    return max(0, dias)
 
 
 def _safe_float(val) -> float:
@@ -904,9 +926,9 @@ def guardar_fila_editable(
             numero_documento=numero_doc_norm,
             estado="PAGADO",
             referencia_pago=ref_pago,
-            conciliado=True,
+            conciliado=True,  # [B2] Usar solo conciliado
             fecha_conciliacion=ahora_conciliacion,
-            verificado_concordancia="SI",
+            verificado_concordancia="SI",  # Legacy: sync con conciliado
         )
         db.add(pago)
         db.flush()
@@ -1364,7 +1386,7 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db)):
         )
     ref = (num_doc or "N/A")[:_MAX_LEN_NUMERO_DOCUMENTO]
     fecha_pago_ts = datetime.combine(payload.fecha_pago, dt_time.min)
-    conciliado = payload.conciliado if payload.conciliado is not None else False
+    conciliado = payload.conciliado if payload.conciliado is not None else False  # [B2] Default False
     row = Pago(
         cedula_cliente=payload.cedula_cliente.strip(),
         prestamo_id=payload.prestamo_id,
@@ -1375,9 +1397,9 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db)):
         estado="PENDIENTE",
         notas=payload.notas.strip() if payload.notas else None,
         referencia_pago=ref,
-        conciliado=conciliado,
+        conciliado=conciliado,  # [B2] Usar solo conciliado, no verificado_concordancia
         fecha_conciliacion=datetime.now(ZoneInfo(TZ_NEGOCIO)) if conciliado else None,
-        verificado_concordancia="SI" if conciliado else "NO",
+        verificado_concordancia="SI" if conciliado else "",  # Legacy: sync con conciliado
     )
     db.add(row)
     db.commit()
@@ -1513,10 +1535,20 @@ def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
         fecha_venc = fecha_venc or hoy
         if nuevo_total >= monto_cuota - 0.01:
             c.fecha_pago = fecha_pago_date
-            c.estado = "PAGADO"
+            estado_nuevo = "PAGADO"
+            if not _validar_transicion_estado_cuota(c.estado, estado_nuevo):  # [validar_transiciones]
+                logger.warning(f"Transición de estado inválida en cuota {c.id}: {c.estado} → {estado_nuevo}")
+                c.estado = estado_nuevo  # Forzar transición igualmente (log informativo)
+            else:
+                c.estado = estado_nuevo
+            c.dias_mora = 0  # [M5] Sin mora si está pagada
             cuotas_completadas += 1
         else:
-            c.estado = _estado_cuota_por_cobertura(nuevo_total, monto_cuota, fecha_venc)
+            estado_nuevo = _estado_cuota_por_cobertura(nuevo_total, monto_cuota, fecha_venc)
+            if not _validar_transicion_estado_cuota(c.estado, estado_nuevo):  # [validar_transiciones]
+                logger.warning(f"Transición de estado inválida en cuota {c.id}: {c.estado} → {estado_nuevo}")
+            c.estado = estado_nuevo
+            c.dias_mora = _calcular_dias_mora(fecha_venc)  # [M5] Calcular mora
             cuotas_parciales += 1
         monto_restante -= a_aplicar
     return cuotas_completadas, cuotas_parciales

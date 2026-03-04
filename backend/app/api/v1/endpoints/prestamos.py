@@ -685,7 +685,11 @@ def _generar_cuotas_amortizacion(db: Session, p: Prestamo, fecha_base: date, num
             monto=monto_cuota_dec,
             saldo_capital_inicial=saldo_inicial,
             saldo_capital_final=saldo_final,
+            # [B3] Calcular desglose: capital = diferencia de saldos; interés = residuo
+            monto_capital=saldo_inicial - saldo_final,
+            monto_interes=monto_cuota_dec - (saldo_inicial - saldo_final),
             estado="PENDIENTE",
+            dias_mora=0,
         )
         db.add(c)
         creadas += 1
@@ -766,8 +770,8 @@ def get_cuotas_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
             "fecha_vencimiento": c.fecha_vencimiento.isoformat() if c.fecha_vencimiento else None,
             "monto": float(c.monto) if c.monto is not None else 0,
             "monto_cuota": float(c.monto) if c.monto is not None else 0,
-            "monto_capital": None,
-            "monto_interes": None,
+            "monto_capital": float(c.monto_capital) if c.monto_capital is not None else 0,  # [B3]
+            "monto_interes": float(c.monto_interes) if c.monto_interes is not None else 0,  # [B3]
             "saldo_capital_inicial": float(c.saldo_capital_inicial) if c.saldo_capital_inicial is not None else 0,
             "saldo_capital_final": float(c.saldo_capital_final) if c.saldo_capital_final is not None else 0,
             "capital_pagado": None,

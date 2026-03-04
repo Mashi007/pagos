@@ -23,6 +23,8 @@ class Cuota(Base):
     monto = Column("monto_cuota", Numeric(14, 2), nullable=False)
     saldo_capital_inicial = Column(Numeric(14, 2), nullable=False)
     saldo_capital_final = Column(Numeric(14, 2), nullable=False)
+    monto_capital = Column(Numeric(14, 2), nullable=False, server_default=text("0"))  # [B3]
+    monto_interes = Column(Numeric(14, 2), nullable=False, server_default=text("0"))  # [B3]
     total_pagado = Column(Numeric(14, 2), nullable=True)
     dias_mora = Column(Integer, nullable=True)
     dias_morosidad = Column(Integer, nullable=True)
