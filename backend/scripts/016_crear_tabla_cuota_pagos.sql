@@ -30,12 +30,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_cuota_pagos_cuota_pago ON public.cuota_pago
 
 -- 4. Migración de datos existentes: Convertir pago_id existentes en cuota_pagos
 -- (Solo si hay datos en cuotas con pago_id no NULL)
-INSERT INTO public.cuota_pagos (cuota_id, pago_id, monto_aplicado, fecha_aplicacion, es_pago_completo, creado_en)
+INSERT INTO public.cuota_pagos (cuota_id, pago_id, monto_aplicado, fecha_aplicacion, orden_aplicacion, es_pago_completo, creado_en)
 SELECT 
     c.id as cuota_id,
     c.pago_id,
     c.total_pagado as monto_aplicado,
     COALESCE(c.fecha_pago, CURRENT_TIMESTAMP) as fecha_aplicacion,
+    1 as orden_aplicacion,  # [FIXED] Orden FIFO (solo un pago por cuota en datos legacy)
     (c.total_pagado >= c.monto_cuota - 0.01) as es_pago_completo,
     COALESCE(c.creado_en, CURRENT_TIMESTAMP) as creado_en
 FROM public.cuotas c
