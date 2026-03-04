@@ -24,6 +24,7 @@
 BEGIN;
 
 -- PASO 2: Verificar integridad antes de agregar FK
+-- NOTA: En BD la columna se llama "cedula", no "cedula_cliente"
 DO $$
 DECLARE
     huerfanos_count INTEGER;
@@ -32,8 +33,8 @@ BEGIN
     FROM public.pagos p
     WHERE NOT EXISTS (
         SELECT 1 FROM public.clientes c
-        WHERE c.cedula = p.cedula_cliente
-    ) AND p.cedula_cliente != '';
+        WHERE c.cedula = p.cedula
+    ) AND p.cedula != '';
     
     IF huerfanos_count > 0 THEN
         RAISE EXCEPTION 'ERROR: Hay % pagos con cedulas huérfanas. Ejecutar 017_audit_cedulas_huerfanas.sql y limpiar antes de continuar.', huerfanos_count;
@@ -41,15 +42,16 @@ BEGIN
 END $$;
 
 -- PASO 3: Agregar FK constraint
+-- NOTA: Columna en BD es "cedula", se mapea a cedula_cliente en ORM
 ALTER TABLE public.pagos
-ADD CONSTRAINT fk_pagos_cedula_cliente
-FOREIGN KEY (cedula_cliente)
+ADD CONSTRAINT fk_pagos_cedula
+FOREIGN KEY (cedula)
 REFERENCES public.clientes(cedula)
 ON DELETE SET NULL
 ON UPDATE CASCADE;
 
 -- PASO 4: Crear índice para mejorar performance de FK
-CREATE INDEX IF NOT EXISTS idx_pagos_cedula_cliente ON public.pagos(cedula_cliente);
+CREATE INDEX IF NOT EXISTS idx_pagos_cedula ON public.pagos(cedula);
 
 COMMIT;
 
@@ -61,17 +63,17 @@ COMMIT;
 -- 1. Ver que FK existe
 SELECT constraint_name, table_name, column_name
 FROM information_schema.key_column_usage
-WHERE table_name = 'pagos' AND constraint_name = 'fk_pagos_cedula_cliente';
+WHERE table_name = 'pagos' AND constraint_name = 'fk_pagos_cedula';
 
 -- 2. Ver que índice existe
 SELECT indexname FROM pg_indexes
-WHERE tablename = 'pagos' AND indexname = 'idx_pagos_cedula_cliente';
+WHERE tablename = 'pagos' AND indexname = 'idx_pagos_cedula';
 
 -- 3. Verificar que no hay cedulas huérfanas
 SELECT COUNT(*) as cedulas_huerfanas
 FROM public.pagos p
 WHERE NOT EXISTS (
     SELECT 1 FROM public.clientes c
-    WHERE c.cedula = p.cedula_cliente
+    WHERE c.cedula = p.cedula
 );
 -- Resultado esperado: 0

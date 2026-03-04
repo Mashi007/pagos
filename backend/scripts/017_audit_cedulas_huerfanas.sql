@@ -14,21 +14,22 @@ CREATE TABLE IF NOT EXISTS public.audit_cedulas_huerfanas (
 );
 
 -- 2. Auditar: cedulas en pagos sin cliente en BD
+-- NOTA: En BD la columna se llama "cedula", no "cedula_cliente"
 INSERT INTO public.audit_cedulas_huerfanas (cedula_cliente, cantidad_pagos, cantidad_prestamos, cantidad_clientes, notas)
 SELECT 
-    p.cedula_cliente,
+    p.cedula,
     COUNT(DISTINCT p.id) as pagos,
     COUNT(DISTINCT pr.id) as prestamos,
     COUNT(DISTINCT c.id) as clientes,
     'Cedula con pagos pero SIN cliente en BD' as notas
 FROM public.pagos p
-LEFT JOIN public.clientes c ON p.cedula_cliente = c.cedula
-LEFT JOIN public.prestamos pr ON p.cedula_cliente = pr.cedula
+LEFT JOIN public.clientes c ON p.cedula = c.cedula
+LEFT JOIN public.prestamos pr ON p.cedula = pr.cedula
 WHERE NOT EXISTS (
     SELECT 1 FROM public.clientes c2
-    WHERE c2.cedula = p.cedula_cliente
+    WHERE c2.cedula = p.cedula
 )
-GROUP BY p.cedula_cliente
+GROUP BY p.cedula
 ORDER BY COUNT(DISTINCT p.id) DESC;
 
 -- 3. Ver resultados
