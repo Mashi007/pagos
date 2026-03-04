@@ -26,6 +26,8 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.documento import normalize_documento
+from app.core.serializers import to_float, format_date_iso
 from app.models.cliente import Cliente
 from app.models.cuota import Cuota
 from app.models.prestamo import Prestamo
@@ -69,65 +71,9 @@ _MIN_MONTO_PAGADO = 0.01  # Monto mínimo válido (> 0)
 _PRESTAMO_ID_MAX = 2_147_483_647  # INT max en BD (32-bit signed)
 
 
-def _canonical_numero_documento(val: Any) -> Optional[str]:
-    """
-    Clave canónica para Nº documento: reconocimiento genérico de cualquier formato.
-    ÚNICA REGLA DE NEGOCIO: no duplicados (misma clave = duplicado).
-    - Acepta cualquier formato: BNC/, BINANCE, VE/, ZELLE/, numérico, BS. BNC / REF., etc.
-    - Normalización solo para comparación: trim, colapsar espacios internos, truncar 100.
-    - No se valida formato; no se rechaza por contenido. Vacío/NAN/None → None.
-    """
-    if val is None or val == "":
-        return None
-    s = str(val).strip()
-    if not s or s.upper() in ("NAN", "NONE", "UNDEFINED", "NA", "N/A"):
-        return None
-    # Colapsar espacios/tabs/saltos internos a un solo espacio (misma ref con distinto espaciado = duplicado)
-    s = re.sub(r"\s+", " ", s).strip()
-    if not s:
-        return None
-    return s[:_MAX_LEN_NUMERO_DOCUMENTO] if len(s) > _MAX_LEN_NUMERO_DOCUMENTO else s
-
-
-def _normalizar_numero_documento(val: Any) -> Optional[str]:
-    """
-    Normaliza Nº documento para guardado y comparación. Delega en clave canónica.
-    REGLA: cualquier formato aceptado; única restricción = no duplicados.
-    Para compatibilidad con Excel: notación científica → string de dígitos (mismo número = misma clave).
-    """
-    if val is None or val == "":
-        return None
-    s = (str(val) or "").strip()
-    if not s or s.upper() in ("NAN", "NONE", "UNDEFINED", "NA", "N/A"):
-        return None
-    # Solo normalizar notación científica a dígitos (evitar 7.4e14 vs 740087415441562 como claves distintas)
-    if re.match(r"^\d+\.?\d*[eE][+-]?\d+$", s):
-        try:
-            n = float(s)
-            if n != n:
-                return None
-            s = str(int(round(n)))
-        except (ValueError, OverflowError):
-            pass
-    # Aplicar misma canonicalización que _canonical_numero_documento (trim + colapsar espacios + truncar)
-    s = re.sub(r"\s+", " ", s).strip()
-    if not s:
-        return None
-    return s[:_MAX_LEN_NUMERO_DOCUMENTO] if len(s) > _MAX_LEN_NUMERO_DOCUMENTO else s
-
-
-# Límite de INTEGER en PostgreSQL; valores mayores (ej. número de documento) provocan 500
-_PRESTAMO_ID_MAX = 2147483647
-
-
-def _truncar_numero_documento(val: Optional[str]) -> Optional[str]:
-    """Trunca a 100 caracteres para no exceder la columna y evitar 500 en BD."""
-    if val is None or not val:
-        return None
-    s = (val or "").strip()
-    if not s:
-        return None
-    return s[:_MAX_LEN_NUMERO_DOCUMENTO] if len(s) > _MAX_LEN_NUMERO_DOCUMENTO else s
+# Todas las funciones de normalización de documento están centralizadas en app.core.documento
+# Se usan ahora: normalize_documento() que consolidaba las 3 funciones anteriores.
+# Esto evita duplicación y facilita mantenimiento.
 
 
 
@@ -680,10 +626,7 @@ async def upload_excel_pagos(
             numero_doc = (item.get("numero_doc_raw") or "").strip()
             if not numero_doc or numero_doc.upper() in ("NAN", "NONE", "UNDEFINED", "NA", "N/A"):
                 continue
-            numero_doc_norm = _normalizar_numero_documento(numero_doc)
-            if numero_doc_norm is None:
-                numero_doc_norm = _canonical_numero_documento(numero_doc) or numero_doc
-            numero_doc_norm = _truncar_numero_documento(numero_doc_norm)
+            numero_doc_norm = normalize_documento(numero_doc)
             if numero_doc_norm:
                 docs_en_archivo.add(numero_doc_norm)
         if docs_en_archivo:
@@ -706,12 +649,7 @@ async def upload_excel_pagos(
             monto = item["monto"]
             numero_doc = item["numero_doc_raw"]
 
-            numero_doc_norm = _normalizar_numero_documento(numero_doc) if (numero_doc or "").strip() else None
-            if numero_doc_norm is None and (numero_doc or "").strip():
-                raw = (numero_doc or "").strip()
-                if raw.upper() not in ("NAN", "NONE", "UNDEFINED", "NA", "N/A"):
-                    numero_doc_norm = _canonical_numero_documento(numero_doc) or raw
-            numero_doc_norm = _truncar_numero_documento(numero_doc_norm) if numero_doc_norm else None
+            numero_doc_norm = normalize_documento(numero_doc)
             key_doc = (numero_doc_norm or "").strip()
 
             # Validación post-documentos: duplicado en archivo
@@ -870,7 +808,7 @@ def validar_filas_batch(
     documentos_duplicados: list[dict] = []   # Documentos en PAGOS pero NO aplicados a CUOTA
     
     docs_norm = [
-        _canonical_numero_documento(d)
+        normalize_documento(d)
         for d in (body.documentos or [])
         if d and d.strip()
     ]
@@ -936,10 +874,7 @@ def guardar_fila_editable(
             raise HTTPException(status_code=400, detail="Fecha inválida (formato: DD-MM-YYYY)")
 
         # Normalizar documento
-        numero_doc_norm = _normalizar_numero_documento(numero_doc) if numero_doc else None
-        if numero_doc_norm is None and numero_doc:
-            numero_doc_norm = _canonical_numero_documento(numero_doc) or numero_doc
-        numero_doc_norm = _truncar_numero_documento(numero_doc_norm) if numero_doc_norm else None
+        numero_doc_norm = normalize_documento(numero_doc)
 
         # Validar duplicado en BD (documento)
         if numero_doc_norm:
@@ -1051,7 +986,7 @@ async def upload_conciliacion(
                 if not numero_doc_raw:
                     continue
                 # Misma clave canónica que carga/crear: cualquier formato reconocido, búsqueda por valor normalizado
-                numero_doc = _truncar_numero_documento(_normalizar_numero_documento(numero_doc_raw)) or numero_doc_raw.strip()
+                numero_doc = normalize_documento(numero_doc_raw)
                 pago_row = db.execute(
                     select(Pago).where(Pago.numero_documento == numero_doc).limit(1)
                 ).first()
@@ -1417,7 +1352,7 @@ def _numero_documento_ya_existe(
     db: Session, numero_documento: Optional[str], exclude_pago_id: Optional[int] = None
 ) -> bool:
     """Regla general: no duplicados en documentos. Comprueba si ya existe un pago con ese Nº documento."""
-    num = _normalizar_numero_documento(numero_documento)
+    num = normalize_documento(numero_documento)
     if not num:
         return False
     q = select(Pago.id).where(Pago.numero_documento == num)
@@ -1429,7 +1364,7 @@ def _numero_documento_ya_existe(
 @router.post("", response_model=dict, status_code=201)
 def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user: UserResponse = Depends(get_current_user)):
     """Crea un pago. Documento acepta cualquier formato. Regla general: no duplicados (409 si ya existe)."""
-    num_doc = _truncar_numero_documento(_normalizar_numero_documento(payload.numero_documento))
+    num_doc = normalize_documento(payload.numero_documento)
     if num_doc and _numero_documento_ya_existe(db, num_doc):
         raise HTTPException(
             status_code=409,
@@ -1496,7 +1431,7 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
         raise HTTPException(status_code=404, detail="Pago no encontrado")
     data = payload.model_dump(exclude_unset=True)
     if "numero_documento" in data and data["numero_documento"] is not None:
-        num_doc = _truncar_numero_documento(_normalizar_numero_documento(data["numero_documento"]))
+        num_doc = normalize_documento(data["numero_documento"])
         if num_doc and _numero_documento_ya_existe(db, num_doc, exclude_pago_id=pago_id):
             raise HTTPException(
                 status_code=409,
@@ -1509,7 +1444,7 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
         elif k == "institucion_bancaria" and v is not None:
             setattr(row, k, v.strip() or None)
         elif k == "numero_documento" and v is not None:
-            setattr(row, k, _truncar_numero_documento(_normalizar_numero_documento(v)))
+            setattr(row, k, normalize_documento(v))
         elif k == "cedula_cliente" and v is not None:
             setattr(row, k, v.strip())
         elif k == "fecha_pago" and v is not None:

@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.serializers import to_float, format_datetime_iso
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.cuota import Cuota
@@ -743,13 +744,8 @@ def get_detalle_prestamo_revision(
     ]
 
     def _dt_iso(dt):
-        if dt is None:
-            return None
-        if hasattr(dt, "date"):
-            d = dt.date() if callable(getattr(dt, "date", None)) else dt
-        else:
-            d = dt
-        return d.isoformat() if hasattr(d, "isoformat") else str(d)
+        """Convierte datetime/date a ISO format. Usa la versión centralizada."""
+        return format_datetime_iso(dt)
 
     return {
         "cliente": {

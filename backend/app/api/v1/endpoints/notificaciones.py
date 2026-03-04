@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.services.notificacion_service import format_cuota_item, _item, _item_tab
 from app.models.cuota import Cuota
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
@@ -47,41 +48,8 @@ def get_notificaciones_envios_config(db: Session) -> dict:
     return {}
 
 
-def _item(cliente: Cliente, cuota: Cuota, dias_atraso: int = None) -> dict:
-    """Un registro para lista: nombre, cedula, y datos de cuota."""
-    d = {
-        "cliente_id": cliente.id,
-        "nombre": cliente.nombres,
-        "cedula": cliente.cedula,
-        "numero_cuota": cuota.numero_cuota,
-        "fecha_vencimiento": cuota.fecha_vencimiento.isoformat() if cuota.fecha_vencimiento else None,
-        "monto": float(cuota.monto) if cuota.monto is not None else None,
-    }
-    if dias_atraso is not None:
-        d["dias_atraso"] = dias_atraso
-    return d
-
-
-def _item_tab(cliente: Cliente, cuota: Cuota, dias_atraso: int = None, dias_antes: int = None) -> dict:
-    """Item con forma esperada por el frontend (pestañas): correo, telefono, estado, etc."""
-    d = {
-        "cliente_id": cliente.id,
-        "nombre": cliente.nombres or "",
-        "cedula": cliente.cedula or "",
-        "correo": (cliente.email or "").strip(),
-        "telefono": (cliente.telefono or "").strip(),
-        "modelo_vehiculo": None,
-        "fecha_vencimiento": cuota.fecha_vencimiento.isoformat() if cuota.fecha_vencimiento else None,
-        "numero_cuota": cuota.numero_cuota,
-        "monto_cuota": float(cuota.monto) if cuota.monto is not None else None,
-        "prestamo_id": cliente.id,
-        "estado": "PENDIENTE",
-    }
-    if dias_atraso is not None:
-        d["dias_atraso"] = dias_atraso
-    if dias_antes is not None:
-        d["dias_antes_vencimiento"] = dias_antes
-    return d
+# Las funciones _item e _item_tab están ahora en app.services.notificacion_service
+# para evitar duplicación y facilitar mantenimiento. Se importan desde allí.
 
 
 # --- Helpers plantillas ---
