@@ -1079,20 +1079,17 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     setIsSavingIndividual(true)
     let ok = 0
     let fail = 0
-    const indicesEnviados = new Set<number>()
     
     for (const row of erroresRows) {
       try {
         await sendToRevisarPagos(row, () => {})
         ok++
-        indicesEnviados.add(row._rowIndex)
+        // Eliminar fila inmediatamente después de enviarla exitosamente
+        setExcelData((prev) => prev.filter((r) => r._rowIndex !== row._rowIndex))
       } catch {
         fail++
       }
     }
-    
-    // Remover filas enviadas de excelData
-    setExcelData((prev) => prev.filter((r) => !indicesEnviados.has(r._rowIndex)))
     
     // Mostrar resumen único
     if (ok > 0 && fail === 0) {
