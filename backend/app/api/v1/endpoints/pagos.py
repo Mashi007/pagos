@@ -32,6 +32,7 @@ from app.models.prestamo import Prestamo
 from app.models.pago import Pago
 from app.models.pago_con_error import PagoConError
 from app.models.revisar_pago import RevisarPago
+from app.models.cuota_pago import CuotaPago
 from app.schemas.pago import PagoCreate, PagoUpdate, PagoResponse
 
 
@@ -173,6 +174,15 @@ def _celda_a_string_documento(val: Any) -> str:
 
 # Zona horaria del negocio para "hoy" e "inicio_mes" (Monto cobrado mes, Pagos hoy)
 TZ_NEGOCIO = "America/Caracas"
+
+
+def _hoy_local() -> date:
+    """
+    [MORA] Retorna la fecha actual en la zona horaria del negocio (America/Caracas).
+    Usada para calcular dias_mora, detectar vencimientos, y acciones automáticas.
+    """
+    tz = ZoneInfo(TZ_NEGOCIO)
+    return datetime.now(tz).date()
 
 
 def _validar_transicion_estado_cuota(estado_anterior: str, estado_nuevo: str) -> bool:
@@ -1525,6 +1535,7 @@ def _estado_cuota_por_cobertura(total_pagado: float, monto_cuota: float, fecha_v
 def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
     """
     Aplica el monto del pago a cuotas del préstamo. Reglas de negocio.
+    Crea registros en cuota_pagos para historial completo (no solo sobrescribe pago_id).
     Retorna (cuotas_completadas, cuotas_parciales). No hace commit.
     """
     prestamo_id = pago.prestamo_id
@@ -1548,6 +1559,8 @@ def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
     ).scalars().all()
     cuotas_completadas = 0
     cuotas_parciales = 0
+    orden_aplicacion = 0  # Para rastrear secuencia FIFO en cuota_pagos
+    
     for c in cuotas_pendientes:
         monto_cuota = float(c.monto) if c.monto is not None else 0
         total_pagado_actual = float(c.total_pagado or 0)
@@ -1560,6 +1573,20 @@ def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
         nuevo_total = total_pagado_actual + a_aplicar
         c.total_pagado = Decimal(str(round(nuevo_total, 2)))
         c.pago_id = pago.id
+        
+        # NUEVO: Registrar en cuota_pagos para historial completo
+        es_pago_completo = nuevo_total >= monto_cuota - 0.01
+        cuota_pago = CuotaPago(
+            cuota_id=c.id,
+            pago_id=pago.id,
+            monto_aplicado=Decimal(str(round(a_aplicar, 2))),
+            fecha_aplicacion=datetime.now(),
+            orden_aplicacion=orden_aplicacion,
+            es_pago_completo=es_pago_completo,
+        )
+        db.add(cuota_pago)
+        orden_aplicacion += 1
+        
         fecha_venc = c.fecha_vencimiento
         if fecha_venc is not None and hasattr(fecha_venc, "date"):
             fecha_venc = fecha_venc.date()

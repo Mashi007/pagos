@@ -1232,13 +1232,17 @@ def get_auditoria_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=PrestamoResponse, status_code=201)
-def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db)):
+def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db), current_user: UserResponse = Depends(get_current_user)):
     """Crea un préstamo en BD. Valida que cliente_id exista. cedula/nombres se toman del Cliente."""
     cliente = db.get(Cliente, payload.cliente_id)
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
     from datetime import date
     hoy = date.today()
+    
+    # Usar email del usuario actual (no hardcoded)
+    usuario_proponente_email = current_user.email if current_user else "itmaster@rapicreditca.com"
+    
     row = Prestamo(
         cliente_id=payload.cliente_id,
         cedula=cliente.cedula or "",
@@ -1253,6 +1257,7 @@ def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db)):
         concesionario=payload.concesionario,
         modelo_vehiculo=payload.modelo,
         analista=payload.analista or "",
+        usuario_proponente=usuario_proponente_email,
     )
     db.add(row)
     db.commit()
