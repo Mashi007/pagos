@@ -477,7 +477,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
   )
 
   const sendToRevisarPagos = useCallback(
-    async (row: PagoExcelRow, onNavigate: () => void): Promise<boolean> => {
+    async (row: PagoExcelRow, onNavigate: () => void, skipRefresh = false, skipToast = false): Promise<boolean> => {
       setSavingProgress((prev) => ({ ...prev, [row._rowIndex]: true }))
       let numeroDoc = normalizarNumeroDocumento(row.numero_documento) || ''
       try {
@@ -525,8 +525,8 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
           next.delete(row._rowIndex)
           return next
         })
-        refreshPagos()
-        addToast(row._hasErrors ? 'warning' : 'success', row._hasErrors ? 'Pago enviado a Revisar Pagos con errores.' : 'Pago guardado correctamente.')
+        if (!skipRefresh) refreshPagos()
+        if (!skipToast) addToast(row._hasErrors ? 'warning' : 'success', row._hasErrors ? 'Pago enviado a Revisar Pagos con errores.' : 'Pago guardado correctamente.')
         onNavigate()
         return true
       } catch (err: any) {
@@ -1083,7 +1083,8 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     
     for (const row of erroresRows) {
       try {
-        await sendToRevisarPagos(row, () => {})
+        // skipRefresh=true, skipToast=true: un solo refresh y un solo toast al final
+        await sendToRevisarPagos(row, () => {}, true, true)
         ok++
         indicesEnviados.add(row._rowIndex)
       } catch {
@@ -1096,7 +1097,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       setExcelData((prev) => prev.filter((r) => !indicesEnviados.has(r._rowIndex)))
     }
     
-    // Mostrar resumen único
+    // Mostrar resumen único (suprimir toasts individuales del sendToRevisarPagos con skipRefresh)
     if (ok > 0 && fail === 0) {
       addToast('success', `✓ ${ok} fila(s) enviada(s) a Revisar Pagos`)
     } else if (ok > 0 && fail > 0) {
@@ -1105,7 +1106,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       addToast('error', `✗ ${fail} fila(s) no se pudieron enviar`)
     }
     
-    // Refresh ÚNICO al final
+    // Refresh ÚNICO al final en lugar de uno por cada fila
     if (ok > 0) {
       refreshPagos()
     }
