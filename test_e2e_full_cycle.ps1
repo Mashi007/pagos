@@ -21,25 +21,23 @@ $Gray = [ConsoleColor]::DarkGray
 function Log-Test {
     param([string]$Number, [string]$Description)
     Write-Host ""
-    Write-Host "═══════════════════════════════════════" -ForegroundColor $Blue
-    Write-Host "[TEST $Number] $Description" -ForegroundColor $Yellow
-    Write-Host "═══════════════════════════════════════" -ForegroundColor $Blue
+    Write-Host "[TEST $Number] $Description" -ForegroundColor $Yellow -BackgroundColor $Blue
 }
 
 function Log-Success {
     param([string]$Message)
-    Write-Host "✅ $Message" -ForegroundColor $Green
+    Write-Host "[OK] $Message" -ForegroundColor $Green
 }
 
 function Log-Error {
     param([string]$Message)
-    Write-Host "❌ $Message" -ForegroundColor $Red
+    Write-Host "[ERROR] $Message" -ForegroundColor $Red
     exit 1
 }
 
 function Log-Info {
     param([string]$Message)
-    Write-Host "ℹ️  $Message" -ForegroundColor $Blue
+    Write-Host "    $Message" -ForegroundColor $Blue
 }
 
 function Invoke-ApiRequest {
@@ -74,10 +72,10 @@ function Invoke-ApiRequest {
 
 # Start
 Write-Host ""
-Write-Host "╔════════════════════════════════════════════════════════════╗" -ForegroundColor $Green
-Write-Host "║     RapiCredit API - Full Cycle End-to-End Testing         ║" -ForegroundColor $Green
-Write-Host "║  Client Creation → Loan → Payments → Reconciliation        ║" -ForegroundColor $Green
-Write-Host "╚════════════════════════════════════════════════════════════╝" -ForegroundColor $Green
+Write-Host "=====================================================================" -ForegroundColor $Green
+Write-Host "     RapiCredit API - Full Cycle End-to-End Testing" -ForegroundColor $Green
+Write-Host "  Client Creation -> Loan -> Payments -> Reconciliation" -ForegroundColor $Green
+Write-Host "=====================================================================" -ForegroundColor $Green
 Write-Host ""
 
 # ============================================================
@@ -111,16 +109,21 @@ Log-Test "2" "CREATE CLIENT"
 
 $ClienteCedula = "V98765432"
 $ClienteNombres = "Juan Carlos"
-$ClienteApellidos = "García López"
+$ClienteApellidos = "Garcia Lopez"
 
 $ClienteResponse = Invoke-ApiRequest -Method POST -Endpoint "/clientes" `
     -Body @{
-        cedula    = $ClienteCedula
-        nombres   = $ClienteNombres
-        apellidos = $ClienteApellidos
-        email     = "juan.garcia@example.com"
-        telefono  = "04261234567"
-        estado    = "ACTIVO"
+        cedula             = $ClienteCedula
+        nombres            = $ClienteNombres
+        apellidos          = $ClienteApellidos
+        email              = "juan.garcia@example.com"
+        telefono           = "04261234567"
+        direccion          = "Calle 1, Caracas"
+        fecha_nacimiento   = "1985-01-15"
+        ocupacion          = "Empleado"
+        estado             = "ACTIVO"
+        usuario_registro   = $Email
+        notas              = "Cliente de prueba E2E"
     } -Headers $Headers
 
 $ClienteId = $ClienteResponse.id
@@ -129,7 +132,7 @@ if (-not $ClienteId) {
 }
 
 Log-Success "Client created"
-Log-Info "Client ID: $ClienteId | Cédula: $ClienteCedula"
+Log-Info "Client ID: $ClienteId | Cedula: $ClienteCedula"
 
 # ============================================================
 # PHASE 3: LOAN CREATION
@@ -224,7 +227,9 @@ $CuotaResponse = Invoke-ApiRequest -Method GET -Endpoint "/prestamos/$PrestamoId
     -Headers $Headers
 
 Log-Success "First installment state verified"
-Log-Info "Total installments: $($CuotaResponse.cuotas.Count)"
+if ($CuotaResponse.cuotas) {
+    Log-Info "Total installments: $($CuotaResponse.cuotas.Count)"
+}
 
 # ============================================================
 # PHASE 6: AUDIT TRAIL VERIFICATION
@@ -255,22 +260,22 @@ Log-Info "Installments covered: 4"
 # ============================================================
 Log-Test "8" "FINAL VERIFICATION - Full Cycle"
 
-Log-Success "Client creation: ✅"
+Log-Success "Client creation"
 Log-Info "  - ID: $ClienteId"
-Log-Info "  - Cédula: $ClienteCedula"
+Log-Info "  - Cedula: $ClienteCedula"
 Log-Info "  - Names: $ClienteNombres $ClienteApellidos"
 
-Log-Success "Loan creation: ✅"
+Log-Success "Loan creation"
 Log-Info "  - ID: $PrestamoId"
 Log-Info "  - Amount: $MontoPrestamai"
 Log-Info "  - State: DRAFT"
 Log-Info "  - Months: $PlazoMeses"
 
-Log-Success "Payment 1: ✅"
+Log-Success "Payment 1"
 Log-Info "  - ID: $Pago1Id"
 Log-Info "  - Amount: $Pago1Monto"
 
-Log-Success "Payment 2: ✅"
+Log-Success "Payment 2"
 Log-Info "  - ID: $Pago2Id"
 Log-Info "  - Amount: $Pago2Monto"
 
@@ -280,24 +285,23 @@ Log-Success "Total paid: $TotalPagado"
 # FINAL SUMMARY
 # ============================================================
 Write-Host ""
-Write-Host "╔════════════════════════════════════════════════════════════╗" -ForegroundColor $Green
-Write-Host "║          ✅ FULL CYCLE TESTING COMPLETED SUCCESSFULLY!     ║" -ForegroundColor $Green
-Write-Host "╚════════════════════════════════════════════════════════════╝" -ForegroundColor $Green
+Write-Host "=====================================================================" -ForegroundColor $Green
+Write-Host "          FULL CYCLE TESTING COMPLETED SUCCESSFULLY!" -ForegroundColor $Green
+Write-Host "=====================================================================" -ForegroundColor $Green
 Write-Host ""
 
 Write-Host "SUMMARY" -ForegroundColor $Yellow
-Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-Write-Host "Phase 1: Authentication          ✅" -ForegroundColor $Green
-Write-Host "Phase 2: Client Creation         ✅ (ID: $ClienteId)" -ForegroundColor $Green
-Write-Host "Phase 3: Loan Creation            ✅ (ID: $PrestamoId)" -ForegroundColor $Green
-Write-Host "Phase 4: Payments                 ✅ (P1: $Pago1Id, P2: $Pago2Id)" -ForegroundColor $Green
-Write-Host "Phase 5: Payment Application      ✅" -ForegroundColor $Green
-Write-Host "Phase 6: Audit Trail              ✅" -ForegroundColor $Green
-Write-Host "Phase 7: Reconciliation           ✅" -ForegroundColor $Green
-Write-Host "Phase 8: Final Verification       ✅" -ForegroundColor $Green
-Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
+Write-Host "-----" -ForegroundColor $Yellow
+Write-Host "Phase 1: Authentication          [OK]" -ForegroundColor $Green
+Write-Host "Phase 2: Client Creation         [OK] (ID: $ClienteId)" -ForegroundColor $Green
+Write-Host "Phase 3: Loan Creation            [OK] (ID: $PrestamoId)" -ForegroundColor $Green
+Write-Host "Phase 4: Payments                 [OK] (P1: $Pago1Id, P2: $Pago2Id)" -ForegroundColor $Green
+Write-Host "Phase 5: Payment Application      [OK]" -ForegroundColor $Green
+Write-Host "Phase 6: Audit Trail              [OK]" -ForegroundColor $Green
+Write-Host "Phase 7: Reconciliation           [OK]" -ForegroundColor $Green
+Write-Host "Phase 8: Final Verification       [OK]" -ForegroundColor $Green
 Write-Host ""
+
 Write-Host "Data for SQL Verification:" -ForegroundColor $Blue
 Write-Host "SELECT * FROM public.clientes WHERE cedula = '$ClienteCedula';" -ForegroundColor $Gray
 Write-Host "SELECT * FROM public.prestamos WHERE id = $PrestamoId;" -ForegroundColor $Gray
@@ -310,5 +314,5 @@ Write-Host "Next Steps:" -ForegroundColor $Green
 Write-Host "1. Query the database using the SQL above" -ForegroundColor $Blue
 Write-Host "2. Verify all records were created correctly" -ForegroundColor $Blue
 Write-Host "3. Check cuota_pagos join table for payment applications" -ForegroundColor $Blue
-Write-Host "4. Verify audit trail contains all actions with usuario_id/usuario_registro" -ForegroundColor $Blue
-Write-Host "5. Test additional flows (prepayments, late payments, etc.)" -ForegroundColor $Blue
+Write-Host "4. Verify audit trail contains all actions" -ForegroundColor $Blue
+Write-Host "5. Test additional flows" -ForegroundColor $Blue
