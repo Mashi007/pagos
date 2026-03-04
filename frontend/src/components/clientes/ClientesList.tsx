@@ -12,7 +12,8 @@ import {
   MessageSquare,
   RefreshCw,
   AlertCircle,
-  Eye
+  Eye,
+  FileSpreadsheet
 } from 'lucide-react'
 
 import { Button } from '../../components/ui/button'
@@ -25,6 +26,7 @@ import { AlertWithIcon } from '../../components/ui/alert'
 import { CrearClienteForm } from './CrearClienteForm'
 import { ClientesKPIs } from './ClientesKPIs'
 import { CasosRevisarDialog } from './CasosRevisarDialog'
+import { ExcelUploaderUI } from './ExcelUploaderUI'
 
 import { useDebounce } from '../../hooks/useDebounce'
 import { useClientesStats } from '../../hooks/useClientesStats'
@@ -47,6 +49,7 @@ export function ClientesList() {
   const [perPage, setPerPage] = useState(20) // Tamaño de página configurable
   const [showFilters, setShowFilters] = useState(false)
   const [showCrearCliente, setShowCrearCliente] = useState(false)
+  const [showExcelUpload, setShowExcelUpload] = useState(false)
   const [clienteSeleccionado, setClienteSeleccionado] = useState<any>(null)
   const [showEditarCliente, setShowEditarCliente] = useState(false)
   const [showEliminarCliente, setShowEliminarCliente] = useState(false)
@@ -277,14 +280,40 @@ export function ClientesList() {
             <AlertCircle className="w-5 h-5 mr-2" />
             Cargar casos a revisar
           </Button>
-          <Button
-            size="lg"
-            onClick={() => setShowCrearCliente(true)}
-            className="px-8 py-6 text-base font-semibold min-w-[200px]"
-          >
-            <Plus className="w-5 h-5 mr-2" />
-            Nuevo Cliente
-          </Button>
+          <div className="relative group">
+            <Button
+              size="lg"
+              className="px-8 py-6 text-base font-semibold min-w-[200px] flex items-center justify-between"
+            >
+              <span className="flex items-center">
+                <Plus className="w-5 h-5 mr-2" />
+                Nuevo Cliente
+              </span>
+              <span className="ml-2">▼</span>
+            </Button>
+            {/* Dropdown Menu */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="absolute right-0 top-full mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-50 hidden group-hover:block"
+            >
+              <motion.button
+                onClick={() => setShowCrearCliente(true)}
+                className="w-full text-left px-4 py-3 hover:bg-blue-50 flex items-center gap-2 text-gray-700 hover:text-blue-600 border-b border-gray-100 first:rounded-t-lg transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Crear cliente manual
+              </motion.button>
+              <motion.button
+                onClick={() => setShowExcelUpload(true)}
+                className="w-full text-left px-4 py-3 hover:bg-blue-50 flex items-center gap-2 text-gray-700 hover:text-blue-600 last:rounded-b-lg transition-colors"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                Cargar desde Excel
+              </motion.button>
+            </motion.div>
+          </div>
         </div>
       </div>
 
@@ -815,6 +844,21 @@ export function ClientesList() {
               </div>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal Carga Excel */}
+      <AnimatePresence>
+        {showExcelUpload && (
+          <ExcelUploaderUI
+            onClose={() => setShowExcelUpload(false)}
+            onSuccess={() => {
+              setShowExcelUpload(false)
+              queryClient.invalidateQueries({ queryKey: ['clientes'] })
+              queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
+              showNotification('success', 'Cliente(s) cargado(s) exitosamente')
+            }}
+          />
         )}
       </AnimatePresence>
 
