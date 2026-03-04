@@ -110,10 +110,12 @@ Log-Test "2" "CREATE CLIENT"
 # Generate unique values for this test run
 $timestamp = Get-Date -Format "yyyyMMddHHmmss"
 $randomId = Get-Random -Minimum 1000 -Maximum 9999
-$ClienteCedula = "V" + $timestamp.Substring(8)  # Last 6 digits
+$ClienteCedula = "V" + $timestamp.Substring(8)  # Last 6 digits - will be uppercase automatically
 $ClienteNombres = "Juan Carlos $randomId"
 $ClienteApellidos = "Garcia Lopez"
 $ClienteEmail = "test.e2e.$timestamp@example.com"
+
+# Note: cedula will be normalized to uppercase by backend automatically
 
 $ClienteResponse = Invoke-ApiRequest -Method POST -Endpoint "/clientes" `
     -Body @{
