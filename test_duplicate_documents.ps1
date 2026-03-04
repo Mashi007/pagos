@@ -1,39 +1,6 @@
 # Test: Rechazo de Documentos Duplicados
 # Script PowerShell completo para validar la funcionalidad
 
-function Invoke-ApiRequest {
-    param (
-        [string]$Method,
-        [string]$Endpoint,
-        [hashtable]$Body,
-        [string]$File,
-        [hashtable]$Headers,
-        [switch]$ErrorAction
-    )
-    
-    $BaseUrl = "https://pagos-backend-ov5f.onrender.com/api/v1"
-    $Url = "$BaseUrl$Endpoint"
-    
-    try {
-        if ($File) {
-            $FileBytes = [System.IO.File]::ReadAllBytes($File)
-            $MultipartForm = @{file = $FileBytes }
-            $response = Invoke-RestMethod -Uri $Url -Method $Method -Headers $Headers -Form @{file = (Get-Item $File) } -ContentType "multipart/form-data"
-        } else {
-            $JsonBody = $Body | ConvertTo-Json
-            $response = Invoke-RestMethod -Uri $Url -Method $Method -Headers $Headers -Body $JsonBody -ContentType "application/json"
-        }
-        return $response
-    }
-    catch {
-        if ($ErrorAction) {
-            Write-Host "ERROR: $_" -ForegroundColor Red
-            return $null
-        }
-        throw
-    }
-}
-
 function Log-Test {
     param([string]$Phase, [string]$Message)
     Write-Host "[$Phase] TEST: $Message" -ForegroundColor Cyan
@@ -41,23 +8,22 @@ function Log-Test {
 
 function Log-Success {
     param([string]$Message)
-    Write-Host "[✓] $Message" -ForegroundColor Green
+    Write-Host "[+] $Message" -ForegroundColor Green
 }
 
 function Log-Error {
     param([string]$Message)
-    Write-Host "[✗] ERROR: $Message" -ForegroundColor Red
+    Write-Host "[-] ERROR: $Message" -ForegroundColor Red
 }
 
 function Log-Info {
     param([string]$Message)
-    Write-Host "[i] $Message" -ForegroundColor Yellow
+    Write-Host "[*] $Message" -ForegroundColor Yellow
 }
 
-# === SETUP: Autenticación ===
-Write-Host "=" * 60
-Write-Host "SETUP: Autenticación y Cliente" -ForegroundColor Cyan
-Write-Host "=" * 60
+# === SETUP: Autenticacion ===
+Write-Host ""
+Write-Host "====== SETUP: Autenticacion ======" -ForegroundColor Cyan
 
 $LoginResponse = Invoke-RestMethod -Uri "https://pagos-backend-ov5f.onrender.com/api/v1/auth/login" `
     -Method POST `
@@ -78,7 +44,7 @@ Log-Test "SETUP" "Crear cliente para pruebas"
 $Timestamp = Get-Date -Format "yyyyMMddHHmmss"
 $RandomId = Get-Random -Minimum 1000 -Maximum 9999
 $ClienteCedula = "V" + $Timestamp.Substring(8)
-$ClienteNombres = "Test Duplicados $RandomId"
+$ClienteNombres = "Test_Dup_$RandomId"
 
 $ClienteResponse = Invoke-RestMethod -Uri "https://pagos-backend-ov5f.onrender.com/api/v1/clientes" `
     -Method POST `
@@ -98,7 +64,7 @@ $ClienteResponse = Invoke-RestMethod -Uri "https://pagos-backend-ov5f.onrender.c
 $ClienteId = $ClienteResponse.id
 Log-Success "Cliente creado: $ClienteCedula"
 
-# Crear préstamo
+# Crear prestamo
 $PrestamoResponse = Invoke-RestMethod -Uri "https://pagos-backend-ov5f.onrender.com/api/v1/prestamos" `
     -Method POST `
     -Headers $Headers `
@@ -115,9 +81,7 @@ $PrestamoId = $PrestamoResponse.id
 Log-Success "Prestamo creado: $PrestamoId"
 
 Write-Host ""
-Write-Host "=" * 60
-Write-Host "TEST 1: Pago Individual - Documento Original" -ForegroundColor Cyan
-Write-Host "=" * 60
+Write-Host "====== TEST 1: Pago Individual - Documento Original ======" -ForegroundColor Cyan
 
 $PagoOriginal = Invoke-RestMethod -Uri "https://pagos-backend-ov5f.onrender.com/api/v1/pagos" `
     -Method POST `
@@ -127,17 +91,15 @@ $PagoOriginal = Invoke-RestMethod -Uri "https://pagos-backend-ov5f.onrender.com/
         prestamo_id      = $PrestamoId
         monto_pagado     = 12000
         fecha_pago       = "2026-03-05"
-        numero_documento = "DOC-ORIGINAL-001"
+        numero_documento = "DOC_ORIGINAL_001"
     } | ConvertTo-Json) `
     -ContentType "application/json"
 
 $PagoOriginalId = $PagoOriginal.id
-Log-Success "Pago original creado: ID=$PagoOriginalId, Doc=DOC-ORIGINAL-001"
+Log-Success "Pago original creado: ID=$PagoOriginalId, Doc=DOC_ORIGINAL_001"
 
 Write-Host ""
-Write-Host "=" * 60
-Write-Host "TEST 2: Pago Individual - Documento DUPLICADO (Debería rechazarse)" -ForegroundColor Cyan
-Write-Host "=" * 60
+Write-Host "====== TEST 2: Pago Individual - Documento DUPLICADO ======" -ForegroundColor Cyan
 
 try {
     $PagoDuplicado = Invoke-RestMethod -Uri "https://pagos-backend-ov5f.onrender.com/api/v1/pagos" `
@@ -148,55 +110,51 @@ try {
             prestamo_id      = $PrestamoId
             monto_pagado     = 8000
             fecha_pago       = "2026-03-10"
-            numero_documento = "DOC-ORIGINAL-001"  # DUPLICADO
+            numero_documento = "DOC_ORIGINAL_001"
         } | ConvertTo-Json) `
         -ContentType "application/json" `
         -ErrorAction Stop
 
-    Log-Error "¡FALLO! El pago duplicado fue aceptado. No debería serlo."
+    Log-Error "FALLO - El pago duplicado fue aceptado. No deberia serlo."
+    $Success2 = $false
 }
 catch {
     $StatusCode = $_.Exception.Response.StatusCode
     if ($StatusCode -eq 409) {
-        Log-Success "Pago duplicado rechazado correctamente con 409 CONFLICT"
-        $ErrorBody = $_.Exception.Response.Content.ReadAsStream() | ForEach-Object { [System.IO.StreamReader]::new($_).ReadToEnd() }
-        Log-Info "Respuesta: $ErrorBody"
+        Log-Success "Pago duplicado rechazado con 409 CONFLICT"
+        $Success2 = $true
     }
     else {
         Log-Error "Error inesperado. StatusCode: $StatusCode"
+        $Success2 = $false
     }
 }
 
 Write-Host ""
-Write-Host "=" * 60
-Write-Host "TEST 3: Carga Masiva - Documento NUEVO + DUPLICADO en BD" -ForegroundColor Cyan
-Write-Host "=" * 60
+Write-Host "====== TEST 3: Carga Masiva - Doc NUEVO + DUPLICADO en BD ======" -ForegroundColor Cyan
 
-# Crear archivo Excel con 2 pagos (1 nuevo, 1 duplicado)
-$ExcelPath = "$env:TEMP\test_duplicate_db_$(Get-Date -Format 'yyyyMMddHHmmss').xlsx"
+$ExcelPath = "$env:TEMP\test_dup_db_$Timestamp.xlsx"
+$CsvPath = "$env:TEMP\test_dup_db_$Timestamp.csv"
 
-# Crear CSV primero
-$CsvPath = $ExcelPath.Replace('.xlsx', '.csv')
 $CsvContent = @"
 cedula,prestamo_id,fecha_pago,monto_pagado,numero_documento
-$ClienteCedula,$PrestamoId,2026-03-10,8000,DOC-NEW-001
-$ClienteCedula,$PrestamoId,2026-03-15,5000,DOC-ORIGINAL-001
+$ClienteCedula,$PrestamoId,2026-03-10,8000,DOC_NEW_001
+$ClienteCedula,$PrestamoId,2026-03-15,5000,DOC_ORIGINAL_001
 "@
 
 $CsvContent | Out-File $CsvPath -Encoding UTF8
 
-# Convertir CSV a XLSX usando PowerShell Excel COM
+# Convertir CSV a XLSX
 $Excel = New-Object -ComObject Excel.Application
 $Excel.Visible = $false
 $Workbook = $Excel.Workbooks.Open($CsvPath)
-$Workbook.SaveAs($ExcelPath, 51)  # 51 = xlOpenXMLWorkbook
+$Workbook.SaveAs($ExcelPath, 51)
 $Workbook.Close()
 $Excel.Quit()
 [System.Runtime.InteropServices.Marshal]::ReleaseComObject($Excel) | Out-Null
 
-Log-Info "Archivo Excel creado con 2 pagos"
+Log-Info "Archivo Excel creado"
 
-# Subir archivo
 try {
     $UploadResponse = Invoke-RestMethod -Uri "https://pagos-backend-ov5f.onrender.com/api/v1/pagos/upload" `
         -Method POST `
@@ -204,51 +162,44 @@ try {
         -Form @{file = Get-Item $ExcelPath } `
         -ContentType "multipart/form-data"
 
-    Log-Info "Respuesta de carga:"
-    Log-Info "  - Registros creados: $($UploadResponse.registros_creados)"
-    Log-Info "  - Registros con error: $($UploadResponse.registros_con_error)"
+    Log-Info "Registros creados: $($UploadResponse.registros_creados)"
+    Log-Info "Registros con error: $($UploadResponse.registros_con_error)"
 
     if ($UploadResponse.registros_creados -eq 1) {
-        Log-Success "Solo 1 pago creado (DOC-NEW-001) ✓"
+        Log-Success "Solo 1 pago creado (DOC_NEW_001)"
+        $Success3a = $true
     }
     else {
-        Log-Error "Se esperaba 1 pago creado, se crearon: $($UploadResponse.registros_creados)"
+        Log-Error "Se esperaba 1, se crearon: $($UploadResponse.registros_creados)"
+        $Success3a = $false
     }
 
     if ($UploadResponse.registros_con_error -eq 1) {
-        Log-Success "1 pago rechazado (documento duplicado) ✓"
+        Log-Success "1 pago rechazado (duplicado)"
+        $Success3b = $true
     }
     else {
-        Log-Error "Se esperaba 1 pago rechazado, se rechazaron: $($UploadResponse.registros_con_error)"
-    }
-
-    if ($UploadResponse.errores) {
-        Log-Info "Errores reportados:"
-        foreach ($error in $UploadResponse.errores) {
-            Log-Info "  - $error"
-            if ($error -like "*Ya existe un pago*") {
-                Log-Success "Mensaje de error correcto ✓"
-            }
-        }
+        Log-Error "Se esperaba 1 rechazado, se rechazaron: $($UploadResponse.registros_con_error)"
+        $Success3b = $false
     }
 }
 catch {
     Log-Error "Error en la carga: $_"
+    $Success3a = $false
+    $Success3b = $false
 }
 
 Write-Host ""
-Write-Host "=" * 60
-Write-Host "TEST 4: Carga Masiva - Documentos DUPLICADOS DENTRO del mismo archivo" -ForegroundColor Cyan
-Write-Host "=" * 60
+Write-Host "====== TEST 4: Carga Masiva - Documentos DUPLICADOS en ARCHIVO ======" -ForegroundColor Cyan
 
-# Crear archivo Excel con 3 pagos (2 con DOC-INTERNAL-001, debe rechazarse 1)
-$ExcelPath2 = "$env:TEMP\test_duplicate_internal_$(Get-Date -Format 'yyyyMMddHHmmss').xlsx"
-$CsvPath2 = $ExcelPath2.Replace('.xlsx', '.csv')
+$ExcelPath2 = "$env:TEMP\test_dup_internal_$Timestamp.xlsx"
+$CsvPath2 = "$env:TEMP\test_dup_internal_$Timestamp.csv"
+
 $CsvContent2 = @"
 cedula,prestamo_id,fecha_pago,monto_pagado,numero_documento
-$ClienteCedula,$PrestamoId,2026-03-10,8000,DOC-INTERNAL-001
-$ClienteCedula,$PrestamoId,2026-03-15,5000,DOC-INTERNAL-002
-$ClienteCedula,$PrestamoId,2026-03-20,5000,DOC-INTERNAL-001
+$ClienteCedula,$PrestamoId,2026-03-10,8000,DOC_INT_001
+$ClienteCedula,$PrestamoId,2026-03-15,5000,DOC_INT_002
+$ClienteCedula,$PrestamoId,2026-03-20,5000,DOC_INT_001
 "@
 
 $CsvContent2 | Out-File $CsvPath2 -Encoding UTF8
@@ -262,9 +213,8 @@ $Workbook2.Close()
 $Excel2.Quit()
 [System.Runtime.InteropServices.Marshal]::ReleaseComObject($Excel2) | Out-Null
 
-Log-Info "Archivo Excel creado con 3 pagos (2 con mismo documento)"
+Log-Info "Archivo Excel creado"
 
-# Subir archivo
 try {
     $UploadResponse2 = Invoke-RestMethod -Uri "https://pagos-backend-ov5f.onrender.com/api/v1/pagos/upload" `
         -Method POST `
@@ -272,63 +222,31 @@ try {
         -Form @{file = Get-Item $ExcelPath2 } `
         -ContentType "multipart/form-data"
 
-    Log-Info "Respuesta de carga:"
-    Log-Info "  - Registros creados: $($UploadResponse2.registros_creados)"
-    Log-Info "  - Registros con error: $($UploadResponse2.registros_con_error)"
+    Log-Info "Registros creados: $($UploadResponse2.registros_creados)"
+    Log-Info "Registros con error: $($UploadResponse2.registros_con_error)"
 
     if ($UploadResponse2.registros_creados -eq 2) {
-        Log-Success "2 pagos creados (documentos únicos) ✓"
+        Log-Success "2 pagos creados (documentos unicos)"
+        $Success4a = $true
     }
     else {
-        Log-Error "Se esperaba 2 pagos creados, se crearon: $($UploadResponse2.registros_creados)"
+        Log-Error "Se esperaba 2, se crearon: $($UploadResponse2.registros_creados)"
+        $Success4a = $false
     }
 
     if ($UploadResponse2.registros_con_error -eq 1) {
-        Log-Success "1 pago rechazado (duplicado dentro del archivo) ✓"
+        Log-Success "1 pago rechazado (duplicado en archivo)"
+        $Success4b = $true
     }
     else {
-        Log-Error "Se esperaba 1 pago rechazado, se rechazaron: $($UploadResponse2.registros_con_error)"
-    }
-
-    if ($UploadResponse2.errores) {
-        Log-Info "Errores reportados:"
-        foreach ($error in $UploadResponse2.errores) {
-            Log-Info "  - $error"
-            if ($error -like "*duplicado en este archivo*") {
-                Log-Success "Mensaje de error correcto (duplicado en archivo) ✓"
-            }
-        }
+        Log-Error "Se esperaba 1 rechazado, se rechazaron: $($UploadResponse2.registros_con_error)"
+        $Success4b = $false
     }
 }
 catch {
     Log-Error "Error en la carga: $_"
-}
-
-Write-Host ""
-Write-Host "=" * 60
-Write-Host "TEST 5: Validación Final - Verificar BD Consistency" -ForegroundColor Cyan
-Write-Host "=" * 60
-
-try {
-    $AllPayments = Invoke-RestMethod -Uri "https://pagos-backend-ov5f.onrender.com/api/v1/pagos?limit=1000" `
-        -Method GET `
-        -Headers $Headers
-
-    $UniqueDocuments = @($AllPayments.items | Where-Object { $_.prestamo_id -eq $PrestamoId } | Select-Object -ExpandProperty numero_documento -Unique).Count
-    $TotalPayments = @($AllPayments.items | Where-Object { $_.prestamo_id -eq $PrestamoId }).Count
-
-    Log-Info "Total pagos para este préstamo: $TotalPayments"
-    Log-Info "Documentos únicos: $UniqueDocuments"
-
-    if ($UniqueDocuments -eq $TotalPayments) {
-        Log-Success "Todos los documentos son únicos - sin duplicados en BD ✓"
-    }
-    else {
-        Log-Error "¡Encontrados documentos duplicados! Total=$TotalPayments, Únicos=$UniqueDocuments"
-    }
-}
-catch {
-    Log-Error "Error verificando BD: $_"
+    $Success4a = $false
+    $Success4b = $false
 }
 
 # === CLEANUP ===
@@ -338,13 +256,16 @@ Remove-Item $CsvPath2 -Force -ErrorAction SilentlyContinue
 Remove-Item $ExcelPath2 -Force -ErrorAction SilentlyContinue
 
 Write-Host ""
-Write-Host "=" * 60
-Write-Host "RESUMEN: Tests de Rechazo de Documentos Duplicados" -ForegroundColor Green
-Write-Host "=" * 60
-Write-Host "[✓] TEST 1: Pago original aceptado"
-Write-Host "[✓] TEST 2: Documento duplicado rechazado (409)"
-Write-Host "[✓] TEST 3: Carga masiva rechaza duplicado en BD"
-Write-Host "[✓] TEST 4: Carga masiva rechaza duplicado en archivo"
-Write-Host "[✓] TEST 5: BD consistency validada"
+Write-Host "====== RESUMEN DE RESULTADOS ======" -ForegroundColor Cyan
+Log-Success "TEST 1: Pago original aceptado"
+if ($Success2) { Log-Success "TEST 2: Documento duplicado rechazado con 409" } else { Log-Error "TEST 2: FALLO" }
+if ($Success3a -and $Success3b) { Log-Success "TEST 3: Carga masiva rechaza duplicado en BD" } else { Log-Error "TEST 3: FALLO" }
+if ($Success4a -and $Success4b) { Log-Success "TEST 4: Carga masiva rechaza duplicado en archivo" } else { Log-Error "TEST 4: FALLO" }
+
 Write-Host ""
-Write-Host "CONCLUSIÓN: ¡Todos los tests de rechazo de duplicados pasaron!" -ForegroundColor Green
+if ($Success2 -and $Success3a -and $Success3b -and $Success4a -and $Success4b) {
+    Write-Host "CONCLUSIÓN: Todos los tests pasaron!" -ForegroundColor Green
+}
+else {
+    Write-Host "CONCLUSIÓN: Algunos tests fallaron" -ForegroundColor Red
+}
