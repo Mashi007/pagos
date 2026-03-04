@@ -34,6 +34,7 @@ from app.models.pago_con_error import PagoConError
 from app.models.revisar_pago import RevisarPago
 from app.models.cuota_pago import CuotaPago
 from app.schemas.pago import PagoCreate, PagoUpdate, PagoResponse
+from app.schemas.auth import UserResponse
 
 
 class MoverRevisarPagosBody(BaseModel):
