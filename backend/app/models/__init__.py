@@ -22,6 +22,7 @@ from app.models.reporte_contable_cache import ReporteContableCache
 from app.models.revisar_pago import RevisarPago
 from app.models.pago_con_error import PagoConError
 from app.models.conciliacion_temporal import ConciliacionTemporal
+from app.models.cliente_con_error import ClienteConError
 
 __all__ = [
     "Base", "Cliente", "Prestamo", "Ticket", "Cuota", "CuotaPago", "Pago", "PagosWhatsapp",
@@ -33,5 +34,6 @@ __all__ = [
     "ReporteContableCache",
     "RevisarPago",
     "PagoConError",
+    "ClienteConError",
     "ConciliacionTemporal",
 ]

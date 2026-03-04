@@ -558,3 +558,286 @@ def delete_cliente(cliente_id: int, db: Session = Depends(get_db)):
             status_code=409,
             detail="No se puede eliminar: el cliente tiene registros asociados (préstamos, cuotas, tickets, etc.).",
         ) from e
+
+
+# ============================================================================
+# CARGA MASIVA DE CLIENTES DESDE EXCEL
+# ============================================================================
+
+from datetime import date, datetime
+from fastapi import UploadFile, File
+import io
+from decimal import Decimal
+
+try:
+    import openpyxl
+except ImportError:
+    openpyxl = None
+
+from app.models.cliente_con_error import ClienteConError
+
+
+def _normalize_cedula_excel(cedula_str: str) -> str:
+    """Normaliza cédula desde Excel: uppercase, sin espacios."""
+    if not cedula_str:
+        return ""
+    return str(cedula_str).strip().upper()
+
+
+def _validate_email(email: str) -> bool:
+    """Valida formato básico de email."""
+    if not email:
+        return False
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return bool(re.match(pattern, email))
+
+
+def _parse_fecha(fecha_val: any) -> date:
+    """Intenta parsear fecha en múltiples formatos."""
+    if isinstance(fecha_val, date):
+        return fecha_val
+    if isinstance(fecha_val, datetime):
+        return fecha_val.date()
+    if not fecha_val:
+        return None
+    
+    s = str(fecha_val).strip()
+    for fmt in ("%d-%m-%Y", "%Y-%m-%d", "%d/%m/%Y", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(s, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+@router.post("/upload-excel", response_model=dict)
+async def upload_clientes_excel(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+    """
+    Carga masiva de clientes desde Excel.
+    Formato esperado: Cédula | Nombres | Dirección | Fecha Nacimiento | Ocupación | Correo | Teléfono
+    
+    Validaciones:
+    - Cédula: V|E|J|Z + 6-11 dígitos, única en BD
+    - Email: formato válido, único en BD
+    - Teléfono: requerido
+    - Nombres: requerido
+    
+    Respuesta: {registros_creados, registros_con_error, clientes_con_errores}
+    """
+    if not file.filename or not file.filename.lower().endswith((".xlsx", ".xls")):
+        raise HTTPException(status_code=400, detail="Debe subir un archivo Excel (.xlsx o .xls)")
+    
+    if not openpyxl:
+        raise HTTPException(status_code=500, detail="Excel library not available")
+    
+    try:
+        content = await file.read()
+        wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+        ws = wb.active
+        
+        if not ws:
+            return {
+                "registros_creados": 0,
+                "registros_con_error": 0,
+                "clientes_con_errores": []
+            }
+        
+        registros_creados = 0
+        registros_con_error = 0
+        clientes_con_errores = []
+        
+        # Cargar emails y cédulas existentes para validación rápida
+        cedulas_existentes = set(
+            db.execute(select(Cliente.cedula)).scalars().all()
+        )
+        emails_existentes = set(
+            db.execute(select(Cliente.email)).scalars().all()
+        )
+        cedulas_en_lote = set()
+        emails_en_lote = set()
+        
+        usuario_email = current_user.email if hasattr(current_user, 'email') else "sistema@rapicredit.com"
+        
+        # Procesar filas (saltar header)
+        for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+            if not row or all(cell is None for cell in row):
+                continue
+            
+            try:
+                cedula_raw = row[0] if len(row) > 0 else None
+                nombres_raw = row[1] if len(row) > 1 else None
+                direccion_raw = row[2] if len(row) > 2 else None
+                fecha_nac_raw = row[3] if len(row) > 3 else None
+                ocupacion_raw = row[4] if len(row) > 4 else None
+                email_raw = row[5] if len(row) > 5 else None
+                telefono_raw = row[6] if len(row) > 6 else None
+                
+                errores = []
+                
+                # Validar cédula
+                cedula = _normalize_cedula_excel(str(cedula_raw or ""))
+                if not cedula:
+                    errores.append("Cédula es requerida")
+                elif not re.match(r"^[VEJZ]\d{6,11}$", cedula):
+                    errores.append("Cédula debe ser V|E|J|Z + 6-11 dígitos")
+                elif cedula in cedulas_existentes or cedula in cedulas_en_lote:
+                    errores.append("Cédula duplicada (existe en BD o en este lote)")
+                else:
+                    cedulas_en_lote.add(cedula)
+                
+                # Validar nombres
+                nombres = str(nombres_raw or "").strip()
+                if not nombres:
+                    errores.append("Nombres es requerido")
+                
+                # Validar dirección
+                direccion = str(direccion_raw or "").strip()
+                if not direccion:
+                    errores.append("Dirección es requerida")
+                
+                # Validar fecha nacimiento
+                fecha_nac = _parse_fecha(fecha_nac_raw)
+                if not fecha_nac:
+                    errores.append("Fecha de nacimiento inválida")
+                
+                # Validar ocupación
+                ocupacion = str(ocupacion_raw or "").strip()
+                if not ocupacion:
+                    errores.append("Ocupación es requerida")
+                
+                # Validar email
+                email = str(email_raw or "").strip()
+                if not email:
+                    errores.append("Email es requerido")
+                elif not _validate_email(email):
+                    errores.append("Email no tiene formato válido")
+                elif email in emails_existentes or email in emails_en_lote:
+                    errores.append("Email duplicado (existe en BD o en este lote)")
+                else:
+                    emails_en_lote.add(email)
+                
+                # Validar teléfono
+                telefono = str(telefono_raw or "").strip()
+                if not telefono:
+                    errores.append("Teléfono es requerido")
+                
+                # Si hay errores, agregar a lista de revisión
+                if errores:
+                    cliente_error = ClienteConError(
+                        cedula=cedula or None,
+                        nombres=nombres,
+                        telefono=telefono or None,
+                        email=email or None,
+                        direccion=direccion,
+                        fecha_nacimiento=str(fecha_nac_raw) if fecha_nac_raw else None,
+                        ocupacion=ocupacion or None,
+                        estado="PENDIENTE",
+                        errores_descripcion="; ".join(errores),
+                        fila_origen=idx,
+                        usuario_registro=usuario_email
+                    )
+                    db.add(cliente_error)
+                    registros_con_error += 1
+                    continue
+                
+                # Crear cliente
+                cliente = Cliente(
+                    cedula=cedula,
+                    nombres=nombres,
+                    telefono=telefono,
+                    email=email,
+                    direccion=direccion,
+                    fecha_nacimiento=fecha_nac,
+                    ocupacion=ocupacion,
+                    estado="ACTIVO",
+                    usuario_registro=usuario_email,
+                    notas="Cargado desde Excel"
+                )
+                db.add(cliente)
+                registros_creados += 1
+                
+            except Exception as e:
+                logger.error(f"Error procesando fila {idx}: {e}")
+                cliente_error = ClienteConError(
+                    cedula=str(row[0]) if len(row) > 0 else None,
+                    nombres=str(row[1]) if len(row) > 1 else None,
+                    telefono=str(row[6]) if len(row) > 6 else None,
+                    email=str(row[5]) if len(row) > 5 else None,
+                    errores_descripcion=f"Error general: {str(e)[:200]}",
+                    fila_origen=idx,
+                    usuario_registro=usuario_email
+                )
+                db.add(cliente_error)
+                registros_con_error += 1
+        
+        db.commit()
+        
+        return {
+            "registros_creados": registros_creados,
+            "registros_con_error": registros_con_error,
+            "mensaje": f"Se crearon {registros_creados} cliente(s) y {registros_con_error} con error(es)"
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.exception("Error cargando Excel de clientes: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error procesando archivo: {str(e)[:200]}"
+        )
+
+
+@router.get("/revisar/lista", response_model=dict)
+def get_clientes_con_errores(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """
+    Listado de clientes con errores de validación (pendientes de revisión).
+    Paginado para facilitar corrección manual.
+    """
+    total = db.scalar(select(func.count()).select_from(ClienteConError)) or 0
+    rows = db.execute(
+        select(ClienteConError)
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+    ).scalars().all()
+    
+    return {
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "items": [
+            {
+                "id": r.id,
+                "cedula": r.cedula,
+                "nombres": r.nombres,
+                "email": r.email,
+                "telefono": r.telefono,
+                "errores": r.errores_descripcion,
+                "fila_origen": r.fila_origen,
+                "estado": r.estado,
+                "fecha_registro": r.fecha_registro.isoformat() if r.fecha_registro else None,
+            }
+            for r in rows
+        ]
+    }
+
+
+@router.delete("/revisar/{error_id}", status_code=204)
+def resolver_cliente_error(error_id: int, db: Session = Depends(get_db)):
+    """Marcar cliente con error como resuelto (eliminar de la lista)."""
+    row = db.get(ClienteConError, error_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Registro no encontrado")
+    
+    db.delete(row)
+    db.commit()
+    return None
+
+
