@@ -786,12 +786,17 @@ async def upload_excel_pagos(
                 logger.warning(f"No se pudo guardar error de fila {pce_data['fila_idx']}: {e}")
         # Reglas de negocio: aplicar pagos con prestamo_id a cuotas
         cuotas_aplicadas = 0
+        pagos_articulados = 0  # Track how many payments were successfully articulated
         for p in pagos_con_prestamo:
             try:
                 cc, cp = _aplicar_pago_a_cuotas_interno(p, db)
                 if cc > 0 or cp > 0:
                     p.estado = "PAGADO"
                     cuotas_aplicadas += cc + cp
+                    pagos_articulados += 1
+                    logger.info(f"Pago {p.id}: articulado a {cc + cp} cuota(s)")
+                else:
+                    logger.warning(f"Pago {p.id} (monto={p.monto_pagado}) no se pudo aplicar a cuotas")
             except Exception as e:
                 logger.warning("Carga masiva: no se pudo aplicar pago id=%s a cuotas: %s", getattr(p, "id", "?"), e)
         db.commit()
@@ -804,6 +809,7 @@ async def upload_excel_pagos(
             "registros_procesados": registros,
             "registros_con_error": len(pagos_con_error_list),
             "cuotas_aplicadas": cuotas_aplicadas,
+            "pagos_articulados": pagos_articulados,  # [NUEVA] Número de pagos que se articularon a cuotas
             "filas_omitidas": filas_omitidas,
             "pagos_con_errores": [
                 {
