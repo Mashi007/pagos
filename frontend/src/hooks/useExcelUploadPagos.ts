@@ -277,7 +277,6 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     queryClient.invalidateQueries({ queryKey: ['pagos-por-cedula'], exact: false })
     queryClient.invalidateQueries({ queryKey: ['kpis'], exact: false })
     queryClient.invalidateQueries({ queryKey: ['dashboard'], exact: false })
-    queryClient.refetchQueries({ queryKey: ['pagos'], exact: false })
   }, [queryClient])
 
   const getValidRows = useCallback((): PagoExcelRow[] => {
@@ -567,16 +566,24 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     setIsSendingAllRevisar(true)
     let ok = 0
     let fail = 0
+    const indicesEnviados = new Set<number>()
     for (const row of rows) {
-      const result = await sendToRevisarPagos(row, () => {})
-      if (result) ok++
-      else fail++
+      try {
+        const result = await sendToRevisarPagos(row, () => {}, true, true)
+        if (result) { ok++; indicesEnviados.add(row._rowIndex) }
+        else fail++
+      } catch {
+        fail++
+      }
+    }
+    if (indicesEnviados.size > 0) {
+      setExcelData((prev) => prev.filter((r) => !indicesEnviados.has(r._rowIndex)))
     }
     setIsSendingAllRevisar(false)
     if (ok > 0) addToast('success', `${ok} duplicado(s) enviado(s) a Revisar Pagos`)
     if (fail > 0) addToast('error', `${fail} fallaron`)
     if (ok > 0) refreshPagos()
-  }, [getDuplicadosRows, serviceStatus, sendToRevisarPagos, addToast, refreshPagos])
+  }, [getDuplicadosRows, serviceStatus, sendToRevisarPagos, addToast, refreshPagos, setExcelData])
 
   const sendAllToRevisarPagos = useCallback(async () => {
     const rows = getRowsToRevisarPagos()
@@ -589,18 +596,28 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       return
     }
     setIsSendingAllRevisar(true)
+    addToast('warning', `Enviando ${rows.length} fila(s) a Revisar Pagos...`)
     let ok = 0
     let fail = 0
+    const indicesEnviados = new Set<number>()
     for (const row of rows) {
-      const result = await sendToRevisarPagos(row, () => {})
-      if (result) ok++
-      else fail++
+      try {
+        const result = await sendToRevisarPagos(row, () => {}, true, true)
+        if (result) { ok++; indicesEnviados.add(row._rowIndex) }
+        else fail++
+      } catch {
+        fail++
+      }
+    }
+    if (indicesEnviados.size > 0) {
+      setExcelData((prev) => prev.filter((r) => !indicesEnviados.has(r._rowIndex)))
     }
     setIsSendingAllRevisar(false)
-    if (ok > 0) addToast('success', `${ok} enviado(s) a Revisar Pagos`)
-    if (fail > 0) addToast('error', `${fail} fallaron`)
+    if (ok > 0 && fail === 0) addToast('success', `✓ ${ok} fila(s) enviada(s) a Revisar Pagos`)
+    else if (ok > 0 && fail > 0) addToast('warning', `✓ ${ok} enviada(s) | ✗ ${fail} fallo(s)`)
+    else if (fail > 0) addToast('error', `✗ ${fail} fila(s) no se pudieron enviar`)
     if (ok > 0) refreshPagos()
-  }, [getRowsToRevisarPagos, sendToRevisarPagos, addToast, refreshPagos, serviceStatus])
+  }, [getRowsToRevisarPagos, sendToRevisarPagos, addToast, refreshPagos, serviceStatus, setExcelData])
 
   const saveAllValid = useCallback(async () => {
     const valid = getValidRows()
