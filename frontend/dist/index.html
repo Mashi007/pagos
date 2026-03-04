@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="./logos/rAPI.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Sistema de Préstamos y Cobranza RapiCredit" />
+    <meta name="theme-color" content="#1e40af" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title>RAPICREDIT - Sistema de Préstamos y Cobranza</title>
+    <!-- Suprimir warnings CSS "mal selector" (Tailwind/PostCSS) - debe ejecutarse antes de cargar estilos -->
+    <script>
+      (function(){var w=console.warn,e=console.error;function s(m){if(!m||typeof m!=='string')return false;var l=m.toLowerCase();return l.indexOf('reglas ignoradas')!==-1||l.indexOf('mal selector')!==-1||l.indexOf('bad selector')!==-1||/index-[a-zA-Z0-9]+\.css:\d+:\d+/.test(m);}
+      console.warn=function(){var a=Array.prototype.slice.call(arguments);var m=a.map(function(x){return x&&typeof x==='object'&&x.message?x.message:String(x);}).join(' ');if(s(m))return;w.apply(console,arguments);};
+      console.error=function(){var a=Array.prototype.slice.call(arguments);var m=a.map(function(x){return x&&typeof x==='object'&&x.message?x.message:String(x);}).join(' ');if(s(m))return;e.apply(console,arguments);};})();
+    </script>
+    <!-- Estilos críticos inline para prevenir FOUC (Flash of Unstyled Content) -->
+    <style>
+      /* Mostrar #root en cuanto haya contenido; solo ocultar brevemente para evitar FOUC */
+      #root:not(.styles-loaded) {
+        visibility: visible;
+        opacity: 1;
+      }
+      /* Estilos básicos para evitar layout shift */
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      #root {
+        min-height: 100vh;
+        transition: opacity 0.2s ease-in;
+      }
+      /* Placeholder visible mientras carga la app; React lo reemplaza al montar */
+      .app-loading-placeholder {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        padding: 1rem;
+        text-align: center;
+        color: #1e40af;
+        font-size: 1.125rem;
+      }
+    </style>
+    <script type="module" crossorigin src="/pagos/assets/index-DCuuWm4b.js"></script>
+    <link rel="stylesheet" crossorigin href="/pagos/assets/index-CraQQcL5.css">
+  </head>
+  <body>
+    <div id="root"><div class="app-loading-placeholder" aria-live="polite">Cargando RapiCredit…</div></div>
+    <!-- Script para suprimir warnings de CSS conocidos (selectores malformados) -->
+    <!-- IMPORTANTE: Este script debe ejecutarse ANTES de cualquier otro para interceptar warnings tempranos -->
+    <script>
+      // ✅ Interceptar errores de CSS ANTES de que se muestren en consola
+      (function() {
+        'use strict';
+        const originalWarn = console.warn;
+        const originalError = console.error;
+        function toMessage(args) {
+          var arr = Array.prototype.slice.call(args);
+          return arr.map(function(arg) {
+            if (arg != null && typeof arg === 'object' && typeof arg.message === 'string') return arg.message;
+            if (arg != null && typeof arg === 'object' && typeof arg.defaultMessage === 'string') return arg.defaultMessage;
+            return String(arg);
+          }).join(' ');
+        }
+        function shouldSuppressCSS(msg) {
+          if (!msg || typeof msg !== 'string') return false;
+          var m = msg.toLowerCase();
+          return m.indexOf('juego de reglas') !== -1 || m.indexOf('reglas ignoradas') !== -1 ||
+            m.indexOf('mal selector') !== -1 || m.indexOf('bad selector') !== -1 ||
+            m.indexOf('debido a un mal selector') !== -1 ||
+            (m.indexOf('index-') !== -1 && m.indexOf('.css') !== -1 && (m.indexOf('ignoradas') !== -1 || m.indexOf('selector') !== -1)) ||
+            /index-[a-zA-Z0-9]+\.css:\d+:\d+/.test(msg);
+        }
+        console.warn = function() {
+          if (shouldSuppressCSS(toMessage(arguments))) return;
+          originalWarn.apply(console, arguments);
+        };
+        console.error = function() {
+          if (shouldSuppressCSS(toMessage(arguments))) return;
+          originalError.apply(console, arguments);
+        };
+      })();
+    </script>
+    <script>
+      (function() {
+        'use strict';
+        // ✅ Interceptar console.warn INMEDIATAMENTE (antes de que se cargue cualquier CSS)
+        const originalWarn = console.warn;
+        const originalError = console.error;
+
+        // Construir mensaje: si algún arg es objeto con .message, usarlo (navegador a veces envía así el warning CSS)
+        // arguments es array-like, no Array; convertir a array para poder usar .map
+        function getMessage(args) {
+          var arr = Array.prototype.slice.call(args);
+          return arr.map(function(arg) {
+            if (arg != null && typeof arg === 'object' && typeof arg.message === 'string') return arg.message;
+            if (arg != null && typeof arg === 'object' && typeof arg.defaultMessage === 'string') return arg.defaultMessage;
+            return typeof arg === 'string' ? arg : (arg && typeof arg.toString === 'function' ? arg.toString() : String(arg));
+          }).join(' ');
+        }
+        // Función para verificar si un mensaje debe ser suprimido
+        function shouldSuppress(message) {
+          if (!message || typeof message !== 'string') return false;
+          const lowerMessage = message.toLowerCase();
+          // Captura temprana: cualquier mensaje que contenga "reglas ignoradas" y "selector" (aviso CSS del navegador)
+          if (lowerMessage.indexOf('reglas ignoradas') !== -1 && lowerMessage.indexOf('selector') !== -1) return true;
+
+          // ✅ Patrones específicos del warning que estamos viendo
+          const patterns = [
+            // Patrones principales (español)
+            'juego de reglas ignoradas',
+            'reglas ignoradas',
+            'debido a un mal selector',
+            'mal selector',
+            'selector inválido',
+            'regla ignorada',
+            'propiedad desconocida',
+            'declaración rechazada',
+            // Patrones principales (inglés)
+            'ignored due to bad selector',
+            'ignored debido a un mal selector',
+            'ignored due to malformed selector',
+            'bad selector',
+            'malformed selector',
+            'ruleset ignored',
+            'invalid selector',
+            'unknown property',
+            'declaration dropped',
+            // Patrones de archivos CSS (con hash y números de línea)
+            '.css:',
+            'index-',
+            // Patrones de propiedades CSS problemáticas
+            'webkit-text-size-adjust',
+            'moz-text-size-adjust',
+            'text-size-adjust',
+            '-moz-osx-font-smoothing',
+            // Patrones de errores de parsing
+            'css parsing error',
+            'error de análisis css',
+            // Patrones específicos de Tailwind
+            'after\\:left-\\[',
+            'after\\:top-\\[',
+            'placeholder\\:text-',
+            // Patrones adicionales para el mensaje específico
+            'menu:',
+            'ignoradas debido',
+            // Patrón específico para el mensaje exacto del navegador
+            'juego de reglas ignoradas debido a un mal selector',
+          ];
+
+          // Verificar si el mensaje contiene alguno de los patrones
+          for (const pattern of patterns) {
+            if (lowerMessage.includes(pattern)) {
+              return true;
+            }
+          }
+
+          // ✅ Verificar combinaciones específicas (archivo CSS con hash + ignored/mal selector)
+          // Captura formatos como: "index-C7ALWOJe.css:1:53929" o "menu:148:25"
+          const cssFilePattern = /(index-[a-z0-9]+\.css|menu|\.css):\d+:\d+/i;
+          if (cssFilePattern.test(message) && (
+            lowerMessage.includes('ignored') ||
+            lowerMessage.includes('ignoradas') ||
+            lowerMessage.includes('bad selector') ||
+            lowerMessage.includes('mal selector') ||
+            lowerMessage.includes('malformed') ||
+            lowerMessage.includes('debido') ||
+            lowerMessage.includes('juego de reglas')
+          )) {
+            return true;
+          }
+
+          // ✅ Verificar combinaciones específicas (archivo CSS + ignored/mal selector)
+          if ((lowerMessage.includes('.css:') || lowerMessage.includes('index-') || lowerMessage.includes('menu:')) && (
+            lowerMessage.includes('ignored') ||
+            lowerMessage.includes('ignoradas') ||
+            lowerMessage.includes('bad selector') ||
+            lowerMessage.includes('mal selector') ||
+            lowerMessage.includes('malformed') ||
+            lowerMessage.includes('debido')
+          )) {
+            return true;
+          }
+
+          // ✅ Verificar el patrón específico "Juego de reglas ignoradas debido a un mal selector"
+          // Con o sin información de archivo y línea
+          if (lowerMessage.includes('juego de reglas') && lowerMessage.includes('ignoradas') &&
+              (lowerMessage.includes('debido') || lowerMessage.includes('mal selector'))) {
+            return true;
+          }
+
+          // ✅ Capturar mensajes que contienen "ignoradas" o "ignored" junto con "selector" y un archivo CSS
+          if ((lowerMessage.includes('ignoradas') || lowerMessage.includes('ignored')) &&
+              (lowerMessage.includes('selector') || lowerMessage.includes('mal selector') || lowerMessage.includes('bad selector')) &&
+              (lowerMessage.includes('.css') || lowerMessage.includes('index-') || cssFilePattern.test(message))) {
+            return true;
+          }
+
+          return false;
+        }
+
+        // Interceptar console.warn
+        console.warn = function() {
+          const message = getMessage(arguments);
+          if (shouldSuppress(message)) return;
+          originalWarn.apply(console, arguments);
+        };
+
+        // También interceptar console.error para capturar errores similares
+        console.error = function() {
+          const message = getMessage(arguments);
+          if (shouldSuppress(message)) return;
+          originalError.apply(console, arguments);
+        };
+      })();
+    </script>
+    <!-- Script para manejar errores de carga de módulos (cache desactualizado) -->
+    <script>
+      // Detectar errores de carga de módulos JavaScript
+      // Esto ocurre cuando el navegador tiene cache del index.html anterior
+      // con referencias a archivos con hashes antiguos que ya no existen
+      let reloadAttempted = false;
+
+      function reloadPage() {
+        if (reloadAttempted) return;
+        reloadAttempted = true;
+        console.warn('Módulo no encontrado (cache desactualizado). Recargando...');
+        var base = window.location.href.split('?')[0].split('#')[0];
+        window.location.replace(base + '?nocache=' + Date.now());
+      }
+
+      window.addEventListener('error', function(event) {
+        // Verificar si es un error de carga de módulo
+        if (event.target && event.target.tagName === 'SCRIPT' && event.target.type === 'module') {
+          const errorMessage = (event.message || '').toLowerCase();
+          const errorSource = (event.filename || event.target.src || '').toLowerCase();
+
+          // Detectar errores de módulo que no se pudo cargar
+          if (
+            errorMessage.includes('failed to fetch dynamically imported module') ||
+            errorMessage.includes('error loading dynamically imported module') ||
+            errorMessage.includes('failed to load module') ||
+            errorMessage.includes('ha fallado la carga del módulo') ||
+            errorMessage.includes('failed to load module script') ||
+            (errorSource.includes('/assets/') && errorSource.includes('.js'))
+          ) {
+            reloadPage();
+            return;
+          }
+        }
+      }, true); // Usar capture phase para capturar errores antes de que se propaguen
+
+      // También manejar errores no capturados de promesas rechazadas (ej. lazy import fallido por chunk 404)
+      window.addEventListener('unhandledrejection', function(event) {
+        var r = event.reason;
+        var msg = (r && (typeof r.message === 'string' ? r.message : (r.errMsg || r.msg || String(r)))) || '';
+        msg = msg.toLowerCase();
+        var isChunk = msg.indexOf('dynamically imported module') !== -1 ||
+          (msg.indexOf('failed to fetch') !== -1 && msg.indexOf('module') !== -1) ||
+          (msg.indexOf('error loading') !== -1 && msg.indexOf('module') !== -1) ||
+          msg.indexOf('failed to load module') !== -1 ||
+          (msg.indexOf('/assets/') !== -1 && msg.indexOf('.js') !== -1) ||
+          (msg.indexOf('comunicaciones-') !== -1 || msg.indexOf('notificaciones-') !== -1 || msg.indexOf('clientes-') !== -1) && msg.indexOf('.js') !== -1;
+        if (isChunk) {
+          event.preventDefault();
+          event.stopPropagation();
+          reloadPage();
+        }
+      }, true);
+    </script>
+    <!-- Script para prevenir FOUC: mostrar contenido cuando los estilos estén listos -->
+    <script>
+      // Función para verificar que los estilos estén cargados
+      function checkStylesLoaded() {
+        // Verificar que el CSS principal esté cargado
+        // Buscar enlaces de estilos o verificar que las variables CSS estén disponibles
+        const root = document.getElementById('root');
+        if (root) {
+          // Esperar a que React renderice y los estilos estén aplicados
+          // Usar requestAnimationFrame para asegurar que el render esté completo
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              // Verificar que las variables CSS de Tailwind estén disponibles
+              const computedStyle = window.getComputedStyle(root);
+              // Si hay estilos aplicados (no es el estilo por defecto), mostrar contenido
+              if (computedStyle && computedStyle.fontFamily) {
+                root.classList.add('styles-loaded');
+              } else {
+                // Si aún no hay estilos, intentar de nuevo después de un breve delay
+                setTimeout(checkStylesLoaded, 50);
+              }
+            });
+          });
+        }
+      }
+
+      // Iniciar verificación cuando el DOM esté listo
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', checkStylesLoaded);
+      } else {
+        // DOM ya está listo
+        checkStylesLoaded();
+      }
+
+      // Fallback: mostrar contenido después de un timeout máximo (evitar bloqueo infinito)
+      setTimeout(() => {
+        const root = document.getElementById('root');
+        if (root) {
+          root.classList.add('styles-loaded');
+        }
+      }, 2000); // Máximo 2 segundos
+    </script>
+  </body>
+</html>
