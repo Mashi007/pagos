@@ -17,7 +17,7 @@ interface FormularioAprobacionCondicionesProps {
 
 export function FormularioAprobacionCondiciones({ prestamo, onClose, onSuccess }: FormularioAprobacionCondicionesProps) {
   const [condicionesAprobacion, setCondicionesAprobacion] = useState({
-    tasa_interes: prestamo.tasa_interes ? parseFloat(prestamo.tasa_interes.toString()) : 0.0,
+    tasa_interes: 0.0, // Siempre 0% — producto sin interés
     plazo_maximo: prestamo.numero_cuotas || 36,
     fecha_base_calculo: prestamo.fecha_base_calculo || new Date().toISOString().split('T')[0],
     observaciones: prestamo.observaciones || ''
@@ -31,16 +31,8 @@ export function FormularioAprobacionCondiciones({ prestamo, onClose, onSuccess }
   useEffect(() => {
     const obtenerSugerencias = async () => {
       try {
-        // Intentar obtener la última evaluación para las sugerencias
-        // Si no hay evaluación previa, usar valores por defecto
-        const response = await prestamoService.getAuditoria(prestamo.id)
-        // Buscar la evaluación más reciente en auditoría o usar valores del préstamo
-        if (prestamo.tasa_interes && prestamo.tasa_interes > 0) {
-          setCondicionesAprobacion(prev => ({
-            ...prev,
-            tasa_interes: parseFloat(prestamo.tasa_interes.toString()) || 8.0
-          }))
-        }
+        await prestamoService.getAuditoria(prestamo.id)
+        // tasa_interes siempre 0% — no se sobreescribe desde sugerencias
       } catch (error) {
         console.log('No se encontraron sugerencias previas, usando valores por defecto')
       }

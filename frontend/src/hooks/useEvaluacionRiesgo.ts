@@ -172,7 +172,7 @@ export function useEvaluacionRiesgo({ prestamo, onSuccess, onClose }: UseEvaluac
   useEffect(() => {
     if (resultado?.sugerencias) {
       setCondicionesAprobacion({
-        tasa_interes: resultado.sugerencias.tasa_interes_sugerida || 8.0,
+        tasa_interes: 0.0, // Siempre 0% — producto sin interés
         plazo_maximo: resultado.sugerencias.plazo_maximo_sugerido || 36,
         fecha_base_calculo: new Date().toISOString().split('T')[0],
         observaciones: `Aprobado después de evaluación de riesgo. Puntuación: ${resultado.puntuacion_total?.toFixed(2)}/100, Riesgo: ${resultado.clasificacion_riesgo}`,

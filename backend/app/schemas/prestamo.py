@@ -78,7 +78,7 @@ class PrestamoResponse(BaseModel):
     nombres: Optional[str] = None
     cuota_periodo: Optional[Decimal] = None
     fecha_requerimiento: Optional[date] = None
-    tasa_interes: Optional[Decimal] = None
+    tasa_interes: Optional[Decimal] = Decimal("0.00")  # Siempre 0% por defecto (producto sin interés)
     producto: Optional[str] = None
 
 

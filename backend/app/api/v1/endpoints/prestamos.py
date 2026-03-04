@@ -101,7 +101,7 @@ def _registrar_en_revision_manual(db: Session, prestamo_id: int) -> None:
 
 # --- Schemas para body de endpoints adicionales ---
 class AplicarCondicionesBody(BaseModel):
-    tasa_interes: Optional[float] = None
+    tasa_interes: Optional[float] = 0.0  # Siempre 0% por defecto
     plazo_maximo: Optional[int] = None
     fecha_base_calculo: Optional[date] = None
     observaciones: Optional[str] = None
@@ -128,7 +128,7 @@ class AprobarManualBody(BaseModel):
     modalidad_pago: Optional[str] = None
 
     cuota_periodo: Optional[float] = None
-    tasa_interes: Optional[float] = None
+    tasa_interes: Optional[float] = 0.0  # Siempre 0% por defecto
     observaciones: Optional[str] = None
 
     @field_validator("numero_cuotas")

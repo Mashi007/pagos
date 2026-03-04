@@ -196,7 +196,7 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                         <div>
                           <label className="text-xs text-blue-700">Tasa de Interés Sugerida:</label>
                           <p className="text-lg font-bold text-blue-900">
-                            {resultado.sugerencias.tasa_interes_sugerida || 8.0}%
+                            {resultado.sugerencias.tasa_interes_sugerida || 0}%
                           </p>
                         </div>
                         <div>
@@ -234,11 +234,11 @@ export function EvaluacionRiesgoForm({ prestamo, onClose, onSuccess }: Evaluacio
                                   })
                                 }
                                 className="pl-10"
-                                placeholder={resultado.sugerencias.tasa_interes_sugerida?.toString() || '8.0'}
+                                placeholder={resultado.sugerencias.tasa_interes_sugerida?.toString() || '0'}
                               />
                             </div>
                             <p className="text-xs text-gray-500">
-                              Sugerido: {resultado.sugerencias.tasa_interes_sugerida || 8.0}%
+                              Sugerido: {resultado.sugerencias.tasa_interes_sugerida || 0}%
                             </p>
                           </div>
                           <div className="space-y-2">
