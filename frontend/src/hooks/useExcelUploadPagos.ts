@@ -75,6 +75,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
   const [isSavingIndividual, setIsSavingIndividual] = useState(false)
   const [isSendingAllRevisar, setIsSendingAllRevisar] = useState(false)
   const [savingProgress, setSavingProgress] = useState<Record<number, boolean>>({})
+  const [batchProgress, setBatchProgress] = useState<{ sent: number; total: number } | null>(null)
   const [serviceStatus, setServiceStatus] = useState<'unknown' | 'online' | 'offline'>('unknown')
   const [toasts, setToasts] = useState<Array<{ id: string; type: 'error' | 'warning' | 'success'; message: string }>>([])
   const [pagosConErrores, setPagosConErrores] = useState<Array<{
@@ -557,36 +558,29 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
 
   const sendDuplicadosToRevisarPagos = useCallback(async () => {
     const rows = getDuplicadosRows()
-    if (rows.length === 0) {
-      addToast('warning', 'No hay duplicados pendientes')
-      return
-    }
-    if (serviceStatus === 'offline') {
-      addToast('error', 'Sin conexión')
-      return
-    }
+    if (rows.length === 0) { addToast('warning', 'No hay duplicados pendientes'); return }
+    if (serviceStatus === 'offline') { addToast('error', 'Sin conexión'); return }
     setIsSendingAllRevisar(true)
-    let ok = 0
-    let fail = 0
+    setBatchProgress({ sent: 0, total: rows.length })
+    let ok = 0; let fail = 0
     const indicesEnviados = new Set<number>()
-    for (const row of rows) {
-      try {
-        const result = await sendToRevisarPagos(row, () => {}, true, true, true)
-        if (result) { ok++; indicesEnviados.add(row._rowIndex) }
+    const CHUNK = 8
+    for (let i = 0; i < rows.length; i += CHUNK) {
+      const chunk = rows.slice(i, i + CHUNK)
+      const results = await Promise.allSettled(chunk.map((row) => sendToRevisarPagos(row, () => {}, true, true, true)))
+      const chunkOk = new Set<number>()
+      results.forEach((r, idx) => {
+        if (r.status === 'fulfilled' && r.value) { ok++; chunkOk.add(chunk[idx]._rowIndex); indicesEnviados.add(chunk[idx]._rowIndex) }
         else fail++
-      } catch {
-        fail++
-      }
+      })
+      if (chunkOk.size > 0) setExcelData((prev) => prev.filter((r) => !chunkOk.has(r._rowIndex)))
+      setBatchProgress({ sent: Math.min(i + CHUNK, rows.length), total: rows.length })
     }
     if (indicesEnviados.size > 0) {
       setEnviadosRevisar((prev) => new Set([...prev, ...indicesEnviados]))
-      setDuplicadosPendientesRevisar((prev) => {
-        const next = new Set(prev)
-        indicesEnviados.forEach((i) => next.delete(i))
-        return next
-      })
-      setExcelData((prev) => prev.filter((r) => !indicesEnviados.has(r._rowIndex)))
+      setDuplicadosPendientesRevisar((prev) => { const next = new Set(prev); indicesEnviados.forEach((i) => next.delete(i)); return next })
     }
+    setBatchProgress(null)
     setIsSendingAllRevisar(false)
     if (ok > 0) addToast('success', `${ok} duplicado(s) enviado(s) a Revisar Pagos`)
     if (fail > 0) addToast('error', `${fail} fallaron`)
@@ -595,37 +589,29 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
 
   const sendAllToRevisarPagos = useCallback(async () => {
     const rows = getRowsToRevisarPagos()
-    if (rows.length === 0) {
-      addToast('warning', 'No hay filas para enviar a Revisar Pagos')
-      return
-    }
-    if (serviceStatus === 'offline') {
-      addToast('error', 'Sin conexión')
-      return
-    }
+    if (rows.length === 0) { addToast('warning', 'No hay filas para enviar a Revisar Pagos'); return }
+    if (serviceStatus === 'offline') { addToast('error', 'Sin conexión'); return }
     setIsSendingAllRevisar(true)
-    addToast('warning', `Enviando ${rows.length} fila(s) a Revisar Pagos...`)
-    let ok = 0
-    let fail = 0
+    setBatchProgress({ sent: 0, total: rows.length })
+    let ok = 0; let fail = 0
     const indicesEnviados = new Set<number>()
-    for (const row of rows) {
-      try {
-        const result = await sendToRevisarPagos(row, () => {}, true, true, true)
-        if (result) { ok++; indicesEnviados.add(row._rowIndex) }
+    const CHUNK = 8
+    for (let i = 0; i < rows.length; i += CHUNK) {
+      const chunk = rows.slice(i, i + CHUNK)
+      const results = await Promise.allSettled(chunk.map((row) => sendToRevisarPagos(row, () => {}, true, true, true)))
+      const chunkOk = new Set<number>()
+      results.forEach((r, idx) => {
+        if (r.status === 'fulfilled' && r.value) { ok++; chunkOk.add(chunk[idx]._rowIndex); indicesEnviados.add(chunk[idx]._rowIndex) }
         else fail++
-      } catch {
-        fail++
-      }
+      })
+      if (chunkOk.size > 0) setExcelData((prev) => prev.filter((r) => !chunkOk.has(r._rowIndex)))
+      setBatchProgress({ sent: Math.min(i + CHUNK, rows.length), total: rows.length })
     }
     if (indicesEnviados.size > 0) {
       setEnviadosRevisar((prev) => new Set([...prev, ...indicesEnviados]))
-      setDuplicadosPendientesRevisar((prev) => {
-        const next = new Set(prev)
-        indicesEnviados.forEach((i) => next.delete(i))
-        return next
-      })
-      setExcelData((prev) => prev.filter((r) => !indicesEnviados.has(r._rowIndex)))
+      setDuplicadosPendientesRevisar((prev) => { const next = new Set(prev); indicesEnviados.forEach((i) => next.delete(i)); return next })
     }
+    setBatchProgress(null)
     setIsSendingAllRevisar(false)
     if (ok > 0 && fail === 0) addToast('success', `✓ ${ok} fila(s) enviada(s) a Revisar Pagos`)
     else if (ok > 0 && fail > 0) addToast('warning', `✓ ${ok} enviada(s) | ✗ ${fail} fallo(s)`)
@@ -1097,56 +1083,33 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
 
   const sendAllErrorsToRevisarPagos = useCallback(async () => {
     const erroresRows = excelData.filter((r) => r._hasErrors)
-    if (erroresRows.length === 0) {
-      addToast('warning', 'No hay filas con errores para enviar')
-      return
-    }
-    if (serviceStatus === 'offline') {
-      addToast('error', 'Sin conexión')
-      return
-    }
-    // Mostrar notificación de progreso
-    addToast('warning', `Enviando ${erroresRows.length} fila(s) a Revisar Pagos...`)
+    if (erroresRows.length === 0) { addToast('warning', 'No hay filas con errores para enviar'); return }
+    if (serviceStatus === 'offline') { addToast('error', 'Sin conexión'); return }
     setIsSavingIndividual(true)
-    let ok = 0
-    let fail = 0
+    setBatchProgress({ sent: 0, total: erroresRows.length })
+    let ok = 0; let fail = 0
     const indicesEnviados = new Set<number>()
-    
-    for (const row of erroresRows) {
-      try {
-        // skipRefresh=true, skipToast=true, skipStateUpdate=true: cero re-renders durante el loop
-        await sendToRevisarPagos(row, () => {}, true, true, true)
-        ok++
-        indicesEnviados.add(row._rowIndex)
-      } catch {
-        fail++
-      }
+    const CHUNK = 8
+    for (let i = 0; i < erroresRows.length; i += CHUNK) {
+      const chunk = erroresRows.slice(i, i + CHUNK)
+      const results = await Promise.allSettled(chunk.map((row) => sendToRevisarPagos(row, () => {}, true, true, true)))
+      const chunkOk = new Set<number>()
+      results.forEach((r, idx) => {
+        if (r.status === 'fulfilled' && r.value) { ok++; chunkOk.add(chunk[idx]._rowIndex); indicesEnviados.add(chunk[idx]._rowIndex) }
+        else fail++
+      })
+      if (chunkOk.size > 0) setExcelData((prev) => prev.filter((r) => !chunkOk.has(r._rowIndex)))
+      setBatchProgress({ sent: Math.min(i + CHUNK, erroresRows.length), total: erroresRows.length })
     }
-    
-    // Actualización ÚNICA de estado al final: cero re-renders durante el loop
     if (indicesEnviados.size > 0) {
       setEnviadosRevisar((prev) => new Set([...prev, ...indicesEnviados]))
-      setDuplicadosPendientesRevisar((prev) => {
-        const next = new Set(prev)
-        indicesEnviados.forEach((i) => next.delete(i))
-        return next
-      })
-      setExcelData((prev) => prev.filter((r) => !indicesEnviados.has(r._rowIndex)))
+      setDuplicadosPendientesRevisar((prev) => { const next = new Set(prev); indicesEnviados.forEach((i) => next.delete(i)); return next })
     }
-    
-    // Mostrar resumen único (suprimir toasts individuales del sendToRevisarPagos con skipRefresh)
-    if (ok > 0 && fail === 0) {
-      addToast('success', `✓ ${ok} fila(s) enviada(s) a Revisar Pagos`)
-    } else if (ok > 0 && fail > 0) {
-      addToast('warning', `✓ ${ok} enviada(s) | ✗ ${fail} fallo(s)`)
-    } else if (fail > 0) {
-      addToast('error', `✗ ${fail} fila(s) no se pudieron enviar`)
-    }
-    
-    // Refresh ÚNICO al final en lugar de uno por cada fila
-    if (ok > 0) {
-      refreshPagos()
-    }
+    setBatchProgress(null)
+    if (ok > 0 && fail === 0) addToast('success', `✓ ${ok} fila(s) enviada(s) a Revisar Pagos`)
+    else if (ok > 0 && fail > 0) addToast('warning', `✓ ${ok} enviada(s) | ✗ ${fail} fallo(s)`)
+    else if (fail > 0) addToast('error', `✗ ${fail} fila(s) no se pudieron enviar`)
+    if (ok > 0) refreshPagos()
     setIsSavingIndividual(false)
   }, [excelData, serviceStatus, sendToRevisarPagos, addToast, refreshPagos])
 
@@ -1191,6 +1154,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     registrosConError,
     moveErrorToReviewPagos,
     dismissError,
+    batchProgress,
   }
 }
 

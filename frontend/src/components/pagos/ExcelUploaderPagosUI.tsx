@@ -60,6 +60,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
     duplicadosPendientesRevisar,
     onClose,
     removeToast,
+    batchProgress,
   } = useExcelUploadPagos(props)
 
   const validCount = getValidRows().length
@@ -148,6 +149,21 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                 onUpdateCell={updateCellValue}
                 saveRowIfValid={saveRowIfValid}
               />
+
+              {batchProgress && (
+                <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
+                  <div className="flex items-center justify-between mb-1 text-sm font-medium text-blue-800">
+                    <span>Enviando a Revisar Pagos...</span>
+                    <span>{batchProgress.sent} / {batchProgress.total}</span>
+                  </div>
+                  <div className="w-full bg-blue-200 rounded-full h-2">
+                    <div
+                      className="bg-blue-600 h-2 rounded-full transition-all duration-200"
+                      style={{ width: `${Math.round((batchProgress.sent / batchProgress.total) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
 
               <Card className="border-green-200 bg-green-50">
                 <CardContent className="pt-4">
