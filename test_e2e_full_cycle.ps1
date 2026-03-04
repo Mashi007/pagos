@@ -182,7 +182,7 @@ $Pago1Monto = [math]::Round($MontoPrestamai / $PlazoMeses, 2)
 
 $Pago1Response = Invoke-ApiRequest -Method POST -Endpoint "/pagos" `
     -Body @{
-        cedula            = $ClienteCedula
+        cedula_cliente    = $ClienteCedula
         prestamo_id       = $PrestamoId
         monto_pagado      = $Pago1Monto
         fecha_pago        = "2026-03-04"
@@ -206,7 +206,7 @@ $Pago2Monto = [math]::Round(($MontoPrestamai / $PlazoMeses) * 3, 2)
 
 $Pago2Response = Invoke-ApiRequest -Method POST -Endpoint "/pagos" `
     -Body @{
-        cedula            = $ClienteCedula
+        cedula_cliente    = $ClienteCedula
         prestamo_id       = $PrestamoId
         monto_pagado      = $Pago2Monto
         fecha_pago        = "2026-03-11"
