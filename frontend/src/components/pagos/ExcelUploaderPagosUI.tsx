@@ -102,7 +102,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
 
         {/* Contenido con scroll */}
         <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6">
-          {excelData.length === 0 ? (
+          {excelData.length === 0 && enviadosRevisar.size === 0 && savedRows.size === 0 ? (
             <Card>
               <CardContent className="pt-6">
                 <div
@@ -139,6 +139,42 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
               </CardContent>
             </Card>
           ) : null}
+
+          {/* RESUMEN FINAL: excelData vacío pero filas ya procesadas */}
+          {excelData.length === 0 && (enviadosRevisar.size > 0 || savedRows.size > 0) && (
+            <Card className="border-green-300 bg-green-50">
+              <CardContent className="pt-8 pb-8 text-center space-y-4">
+                <CheckCircle className="h-16 w-16 mx-auto text-green-500" />
+                <h3 className="text-xl font-bold text-green-800">¡Procesamiento completado!</h3>
+                <div className="flex justify-center gap-6 text-sm mt-2">
+                  {savedRows.size > 0 && (
+                    <span className="bg-green-100 text-green-800 px-4 py-2 rounded-full font-semibold">
+                      ✓ {savedRows.size} guardado(s)
+                    </span>
+                  )}
+                  {enviadosRevisar.size > 0 && (
+                    <span className="bg-amber-100 text-amber-800 px-4 py-2 rounded-full font-semibold">
+                      ⚠ {enviadosRevisar.size} enviado(s) a Revisar Pagos
+                    </span>
+                  )}
+                </div>
+                <div className="flex justify-center gap-3 pt-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => { navigate('/pagos?revisar=1'); onClose(); }}
+                    className="bg-amber-50 border-amber-300 text-amber-800"
+                  >
+                    <Search className="mr-2 h-4 w-4" />
+                    Ver Revisar Pagos
+                  </Button>
+                  <Button variant="outline" onClick={onClose} className="border-gray-300">
+                    <X className="mr-2 h-4 w-4" />
+                    Cerrar
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* TABLA EDITABLE - RENDERIZA SIEMPRE CUANDO HAY DATOS */}
           {excelData.length > 0 && (
