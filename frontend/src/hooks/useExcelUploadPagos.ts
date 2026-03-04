@@ -1079,16 +1079,21 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     setIsSavingIndividual(true)
     let ok = 0
     let fail = 0
+    const indicesEnviados = new Set<number>()
     
     for (const row of erroresRows) {
       try {
         await sendToRevisarPagos(row, () => {})
         ok++
-        // Eliminar fila inmediatamente después de enviarla exitosamente
-        setExcelData((prev) => prev.filter((r) => r._rowIndex !== row._rowIndex))
+        indicesEnviados.add(row._rowIndex)
       } catch {
         fail++
       }
+    }
+    
+    // Actualización ÚNICA de estado: eliminar todas las filas enviadas de una sola vez
+    if (indicesEnviados.size > 0) {
+      setExcelData((prev) => prev.filter((r) => !indicesEnviados.has(r._rowIndex)))
     }
     
     // Mostrar resumen único
@@ -1100,7 +1105,10 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
       addToast('error', `✗ ${fail} fila(s) no se pudieron enviar`)
     }
     
-    refreshPagos()
+    // Refresh ÚNICO al final
+    if (ok > 0) {
+      refreshPagos()
+    }
     setIsSavingIndividual(false)
   }, [excelData, serviceStatus, sendToRevisarPagos, addToast, refreshPagos])
 
