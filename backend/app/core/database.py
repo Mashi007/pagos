@@ -16,21 +16,20 @@ if _db_url.startswith("postgres://"):
 
 engine = create_engine(
     _db_url,
-    # Configuración de pool optimizada para Render (PostgreSQL con SSL inestable)
-    pool_pre_ping=True,  # Verifica que la conexión esté viva antes de usarla
-    pool_size=10,  # Más conexiones en pool (mejor concurrencia)
-    max_overflow=20,  # Permite más conexiones temporales si es necesario
-    pool_recycle=3600,  # Recicla conexiones cada hora (evita stale connections)
-    pool_timeout=30,  # Timeout esperando conexión disponible (en segundos)
+    pool_pre_ping=True,   # Verifica que la conexión esté viva antes de usarla (reconexión automática)
+    pool_size=10,          # Conexiones mantenidas en pool
+    max_overflow=20,       # Conexiones adicionales permitidas bajo carga
+    pool_recycle=1800,     # Recicla conexiones cada 30 min (evita SSL stale)
+    pool_timeout=30,       # Tiempo max esperando conexión disponible
     connect_args={
-        "connect_timeout": 30,  # Timeout de conexión inicial (aumentado)
+        "connect_timeout": 15,        # Timeout de conexión inicial (psycopg2)
         "application_name": "rapicredit_backend",
-        "sslmode": "require",  # Fuerza SSL para seguridad
-        "tcp_keepalives": True,  # Mantiene conexión viva
-        "tcp_keepalives_idle": 30,
-        "tcp_keepalives_interval": 10,
+        "keepalives": 1,              # Habilitar TCP keepalives (psycopg2 nativo)
+        "keepalives_idle": 60,        # Inicia keepalive tras 60s de inactividad
+        "keepalives_interval": 10,    # Envía keepalive cada 10s
+        "keepalives_count": 5,        # Máximo 5 keepalives sin respuesta antes de cerrar
     },
-    echo=False,  # Cambiar a True para logging de SQL si es necesario en DEBUG
+    echo=False,
 )
 
 # expire_on_commit=False evita el error F405: al cerrar la sesión los objetos no se "expiran",
