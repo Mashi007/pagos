@@ -107,16 +107,20 @@ $Headers = @{
 # ============================================================
 Log-Test "2" "CREATE CLIENT"
 
-$ClienteCedula = "V98765432"
-$ClienteNombres = "Juan Carlos"
+# Generate unique values for this test run
+$timestamp = Get-Date -Format "yyyyMMddHHmmss"
+$randomId = Get-Random -Minimum 1000 -Maximum 9999
+$ClienteCedula = "V" + $timestamp.Substring(8)  # Last 6 digits
+$ClienteNombres = "Juan Carlos $randomId"
 $ClienteApellidos = "Garcia Lopez"
+$ClienteEmail = "test.e2e.$timestamp@example.com"
 
 $ClienteResponse = Invoke-ApiRequest -Method POST -Endpoint "/clientes" `
     -Body @{
         cedula             = $ClienteCedula
         nombres            = $ClienteNombres
         apellidos          = $ClienteApellidos
-        email              = "juan.garcia@example.com"
+        email              = $ClienteEmail
         telefono           = "04261234567"
         direccion          = "Calle 1, Caracas"
         fecha_nacimiento   = "1985-01-15"
@@ -146,14 +150,13 @@ $TipoAmortizacion = "FRANCESA"
 
 $PrestamoResponse = Invoke-ApiRequest -Method POST -Endpoint "/prestamos" `
     -Body @{
-        cedula_cliente      = $ClienteCedula
-        monto               = $MontoPrestamai
-        tasa_interes        = $TasaInteres
-        plazo_meses         = $PlazoMeses
-        tipo_amortizacion   = $TipoAmortizacion
-        modelo_vehiculo     = "Toyota Corolla 2023"
-        concesionario       = "Automotriz Central C.A."
-        analista            = "Carlos Mendez"
+        cliente_id           = $ClienteId
+        total_financiamiento = $MontoPrestamai
+        numero_cuotas        = $PlazoMeses
+        modelo               = "Toyota Corolla 2023"
+        concesionario        = "Automotriz Central C.A."
+        analista             = "Carlos Mendez"
+        modalidad_pago       = "MENSUAL"
     } -Headers $Headers
 
 $PrestamoId = $PrestamoResponse.id
