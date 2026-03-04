@@ -99,30 +99,41 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
     const montoCuota = cuota.monto_cuota || 0
     const pagoConciliado = cuota.pago_conciliado === true
 
+    // [MORA] Nuevas reglas de estado
     // Si monto pagado >= monto_cuota y el pago está conciliado → CONCILIADO
     if (montoPagado >= montoCuota - 0.01 && pagoConciliado) {
       return 'CONCILIADO'
     }
-    // Si monto pagado >= monto_cuota (pagado pero no necesariamente conciliado en BD, pero se muestra como pagado)
+    // Si monto pagado >= monto_cuota → PAGADO
     if (montoPagado >= montoCuota - 0.01) {
       return 'PAGADO'
     }
-    // Si tiene algún pago pero no completo
-    if (montoPagado > 0) {
-      const hoy = new Date()
-      const fechaVencimiento = cuota.fecha_vencimiento ? new Date(cuota.fecha_vencimiento) : null
-      if (fechaVencimiento && fechaVencimiento < hoy) {
-        return 'ATRASADO'
-      }
-      return 'PARCIAL'
-    }
-    // Si no hay pago, verificar vencimiento
+    
+    // Calcular días vencidos
     const hoy = new Date()
     const fechaVencimiento = cuota.fecha_vencimiento ? new Date(cuota.fecha_vencimiento) : null
+    let diasMora = 0
     if (fechaVencimiento && fechaVencimiento < hoy) {
-      return 'ATRASADO'
+      diasMora = Math.floor((hoy.getTime() - fechaVencimiento.getTime()) / (1000 * 60 * 60 * 24))
     }
-    // Si no hay pago y no está vencido, devolver el estado original o PENDIENTE
+    
+    // Si tiene pago parcial
+    if (montoPagado > 0) {
+      if (diasMora > 90) {
+        return 'MORA'
+      } else if (diasMora > 0) {
+        return 'VENCIDO'
+      }
+      return 'PAGO_ADELANTADO'
+    }
+    
+    // Sin pago
+    if (diasMora > 90) {
+      return 'MORA'
+    } else if (diasMora > 0) {
+      return 'VENCIDO'
+    }
+    
     return cuota.estado || 'PENDIENTE'
   }
 
@@ -135,8 +146,8 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
       PAGADA: 'bg-green-100 text-green-800',
       CONCILIADO: 'bg-emerald-100 text-emerald-800 border border-emerald-300',
       PAGO_ADELANTADO: 'bg-blue-100 text-blue-800',
-      ATRASADO: 'bg-red-100 text-red-800',
-      VENCIDA: 'bg-red-100 text-red-800',
+      VENCIDO: 'bg-orange-100 text-orange-800',  // [MORA] Nueva: vencida pero <= 90 días
+      MORA: 'bg-red-100 text-red-800',           // [MORA] Nueva: >= 91 días
       PARCIAL: 'bg-blue-100 text-blue-800',
     }
     return badges[estadoNormalizado as keyof typeof badges] || badges.PENDIENTE
@@ -151,8 +162,8 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
       PAGADA: 'Pagada',
       CONCILIADO: 'Conciliado',
       PAGO_ADELANTADO: 'Pago adelantado',
-      ATRASADO: 'Atrasado',
-      VENCIDA: 'Vencida',
+      VENCIDO: 'Vencido (≤90 d)',      // [MORA] Nueva
+      MORA: 'Mora (>90 d)',             // [MORA] Nueva
       PARCIAL: 'Parcial',
     }
     return labels[estadoNormalizado] || estado

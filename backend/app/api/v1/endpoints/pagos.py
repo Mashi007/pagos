@@ -190,16 +190,44 @@ def _validar_transicion_estado_cuota(estado_anterior: str, estado_nuevo: str) ->
         "PAGADO": ["PAGADO"],  # Idempotente
     }
     return estado_nuevo in transiciones_permitidas.get(estado_anterior, [])
+
+
+def _calcular_dias_mora(fecha_vencimiento: date) -> int:
     """
-    [M5] Calcula el número de días en mora (días vencidos).
-    Si fecha_vencimiento >= hoy → 0 (no hay mora)
-    Si fecha_vencimiento < hoy → (hoy - fecha_vencimiento).days
+    [MORA] Calcula el número de días en mora desde la fecha de vencimiento.
+    
+    - Si fecha_vencimiento >= hoy → 0 (no hay mora)
+    - Si fecha_vencimiento < hoy → (hoy - fecha_vencimiento).days (días vencidos)
+    
+    Regla: Mora se acumula desde el día siguiente a fecha_vencimiento hasta que pague 100%.
     """
     hoy = _hoy_local()
     if not fecha_vencimiento:
         return 0
     dias = (hoy - fecha_vencimiento).days
     return max(0, dias)
+
+
+def _clasificar_nivel_mora(dias_mora: int, total_pagado: float, monto_cuota: float) -> str:
+    """
+    [MORA] Clasifica el nivel de mora según días vencidos.
+    
+    Reglas:
+    - Si total_pagado >= monto_cuota (100%) → PAGADO (sin mora)
+    - Si dias_mora == 0 y total_pagado == 0 → PENDIENTE (vigente, no vencida)
+    - Si 0 < dias_mora <= 90 → VENCIDO (dentro de plazo de cobranza)
+    - Si dias_mora > 90 → MORA (severa, automatiza acciones de cobranza)
+    - Si 0 < total_pagado < monto_cuota:
+        - Con dias_mora <= 90 → VENCIDO (pago parcial dentro de plazo)
+        - Con dias_mora > 90 → MORA (pago parcial ya en mora severa)
+    """
+    if total_pagado >= monto_cuota - 0.01:
+        return "PAGADO"
+    if dias_mora == 0:
+        return "PENDIENTE"
+    if dias_mora > 90:
+        return "MORA"
+    return "VENCIDO"  # 1 <= dias_mora <= 90
 
 
 def _safe_float(val) -> float:
@@ -1482,13 +1510,16 @@ def eliminar_pago(pago_id: int, db: Session = Depends(get_db)):
 
 
 def _estado_cuota_por_cobertura(total_pagado: float, monto_cuota: float, fecha_vencimiento: date) -> str:
-    """Determina estado según cobertura y fecha de vencimiento. Reglas de negocio."""
-    hoy = _hoy_local()
-    if total_pagado >= monto_cuota - 0.01:
-        return "PAGADO"
-    if total_pagado > 0:
-        return "PAGO_ADELANTADO" if fecha_vencimiento > hoy else "PENDIENTE"
-    return "PENDIENTE"
+    """
+    [MORA] Determina estado según cobertura y fecha de vencimiento.
+    Usa la nueva clasificación: PENDIENTE | VENCIDO (1-90d) | MORA (>90d) | PAGO_ADELANTADO
+    """
+    dias_mora = _calcular_dias_mora(fecha_vencimiento)
+    return _clasificar_nivel_mora(dias_mora, total_pagado, monto_cuota)
+    # Nota: Si total_pagado > 0 pero < monto_cuota:
+    #   - _clasificar_nivel_mora devuelve VENCIDO o MORA según días
+    # Si total_pagado == 0:
+    #   - devuelve PENDIENTE si dias_mora == 0, sino VENCIDO/MORA
 
 
 def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:

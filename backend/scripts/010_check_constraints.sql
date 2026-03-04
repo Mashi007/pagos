@@ -22,12 +22,12 @@ ALTER TABLE public.cuotas
     ADD CONSTRAINT ck_cuotas_monto_positivo
     CHECK (monto_cuota > 0);
 
--- 4. CHECK en cuotas.estado (valores permitidos)
+-- 4. CHECK en cuotas.estado (valores permitidos) - [MORA]
 ALTER TABLE public.cuotas
     DROP CONSTRAINT IF EXISTS ck_cuotas_estado_valido;
 ALTER TABLE public.cuotas
     ADD CONSTRAINT ck_cuotas_estado_valido
-    CHECK (estado IN ('PENDIENTE', 'PAGADO', 'PAGO_ADELANTADO'));
+    CHECK (estado IN ('PENDIENTE', 'PAGADO', 'PAGO_ADELANTADO', 'VENCIDO', 'MORA'));
 
 -- 5. CHECK en prestamos.total_financiamiento > 0
 ALTER TABLE public.prestamos
