@@ -317,23 +317,35 @@ export function PrestamosList() {
             <CheckCircle2 className="w-5 h-5 mr-2" />
             Revisión Manual
           </Button>
-          <Button
-            variant="outline"
-            size="lg"
-            onClick={() => setShowExcelUpload(true)}
-            className="px-6 py-6 text-base font-semibold"
-          >
-            <FileSpreadsheet className="w-5 h-5 mr-2" />
-            Cargar Excel
-          </Button>
-          <Button
-            size="lg"
-            onClick={() => setShowCrearPrestamo(true)}
-            className="px-8 py-6 text-base font-semibold min-w-[200px]"
-          >
-            <Plus className="w-5 h-5 mr-2" />
-            Nuevo Préstamo
-          </Button>
+          <div className="relative group">
+            <Button
+              size="lg"
+              className="px-8 py-6 text-base font-semibold min-w-[200px] flex items-center justify-between"
+            >
+              <span className="flex items-center">
+                <Plus className="w-5 h-5 mr-2" />
+                Nuevo Préstamo
+              </span>
+              <span className="ml-2">▼</span>
+            </Button>
+            {/* Dropdown Menu */}
+            <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-50 hidden group-hover:block">
+              <button
+                onClick={() => setShowCrearPrestamo(true)}
+                className="w-full text-left px-4 py-3 hover:bg-blue-50 flex items-center gap-2 text-gray-700 hover:text-blue-600 border-b border-gray-100 first:rounded-t-lg transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Crear préstamo manual
+              </button>
+              <button
+                onClick={() => setShowExcelUpload(true)}
+                className="w-full text-left px-4 py-3 hover:bg-blue-50 flex items-center gap-2 text-gray-700 hover:text-blue-600 last:rounded-b-lg transition-colors"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                Cargar desde Excel
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
