@@ -1433,8 +1433,23 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
     fecha_pago_ts = datetime.combine(payload.fecha_pago, dt_time.min)
     conciliado = payload.conciliado if payload.conciliado is not None else False  # [B2] Default False
     usuario_email = current_user.email if current_user else "sistema@rapicredit.com"
+    
+    # Normalizar cédula: uppercase para evitar FK mismatch
+    cedula_normalizada = payload.cedula_cliente.strip().upper() if payload.cedula_cliente else ""
+    
+    # Validar que cedula existe en clientes si se proporciona y hay prestamo_id
+    if cedula_normalizada and payload.prestamo_id:
+        cliente = db.execute(
+            select(Cliente).where(Cliente.cedula == cedula_normalizada)
+        ).first()
+        if not cliente:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No existe cliente con cedula {cedula_normalizada}"
+            )
+    
     row = Pago(
-        cedula_cliente=payload.cedula_cliente.strip(),
+        cedula_cliente=cedula_normalizada,
         prestamo_id=payload.prestamo_id,
         fecha_pago=fecha_pago_ts,
         monto_pagado=payload.monto_pagado,
