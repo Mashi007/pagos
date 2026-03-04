@@ -2,6 +2,7 @@
  * Hook para carga masiva de pagos desde Excel.
  * Columnas: Cédula, Fecha de pago, Monto, Documento, ID Préstamo (opcional).
  * Solo Préstamos activos (APROBADO, DESEMBOLSADO) en el selector.
+ * v3 – procesamiento paralelo 8-concurrent con feedback por chunk
  */
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
@@ -591,6 +592,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     const rows = getRowsToRevisarPagos()
     if (rows.length === 0) { addToast('warning', 'No hay filas para enviar a Revisar Pagos'); return }
     if (serviceStatus === 'offline') { addToast('error', 'Sin conexión'); return }
+    console.log('[ExcelPagos v3] sendAllToRevisarPagos paralelo – filas:', rows.length)
     setIsSendingAllRevisar(true)
     setBatchProgress({ sent: 0, total: rows.length })
     let ok = 0; let fail = 0
@@ -1085,6 +1087,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     const erroresRows = excelData.filter((r) => r._hasErrors)
     if (erroresRows.length === 0) { addToast('warning', 'No hay filas con errores para enviar'); return }
     if (serviceStatus === 'offline') { addToast('error', 'Sin conexión'); return }
+    console.log('[ExcelPagos v3] sendAllErrorsToRevisarPagos paralelo – filas:', erroresRows.length)
     setIsSavingIndividual(true)
     setBatchProgress({ sent: 0, total: erroresRows.length })
     let ok = 0; let fail = 0

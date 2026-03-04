@@ -160,9 +160,9 @@ export function PagosList() {
             conciliado: filters.conciliado === 'all' ? undefined : filters.conciliado,
           })
         : pagoService.getAllPagos(page, perPage, filters),
-    staleTime: 0, // Siempre refetch cuando se invalida (mejor para actualización inmediata)
-    refetchOnMount: true, // Refetch cuando el componente se monta
-    refetchOnWindowFocus: true, // Refetch al volver a la pestaña para ver Crédito/Estado actualizados
+    staleTime: 15_000, // 15 s – evita múltiples refetch por re-renders y cambios de foco durante batch
+    refetchOnMount: true,
+    refetchOnWindowFocus: false, // Desactivado para no interrumpir batch con GETs innecesarios
   })
   const handleFilterChange = (key: string, value: string) => {
     // Convertir "all" a cadena vacía para que el servicio no incluya el filtro
