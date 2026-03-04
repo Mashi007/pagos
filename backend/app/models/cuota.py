@@ -4,7 +4,7 @@ Columnas: id, prestamo_id, numero_cuota, fecha_vencimiento, fecha_pago, monto_cu
 saldo_capital_inicial, saldo_capital_final, total_pagado, dias_mora, estado, observaciones,
 es_cuota_especial, creado_en, actualizado_en, dias_morosidad, cliente_id.
 """
-from sqlalchemy import Column, Integer, Numeric, Date, String, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, Numeric, Date, String, Boolean, DateTime, ForeignKey, text
 from sqlalchemy.sql import func
 
 from app.core.database import Base

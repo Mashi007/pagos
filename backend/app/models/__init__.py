@@ -1,8 +1,9 @@
-﻿from app.core.database import Base
+from app.core.database import Base
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.ticket import Ticket
 from app.models.cuota import Cuota
+from app.models.cuota_pago import CuotaPago
 from app.models.pagos_whatsapp import PagosWhatsapp
 from app.models.conversacion_cobranza import ConversacionCobranza
 from app.models.pagos_informe import PagosInforme
@@ -23,7 +24,7 @@ from app.models.pago_con_error import PagoConError
 from app.models.conciliacion_temporal import ConciliacionTemporal
 
 __all__ = [
-    "Base", "Cliente", "Prestamo", "Ticket", "Cuota", "Pago", "PagosWhatsapp",
+    "Base", "Cliente", "Prestamo", "Ticket", "Cuota", "CuotaPago", "Pago", "PagosWhatsapp",
     "PlantillaNotificacion", "VariableNotificacion",
     "ConversacionCobranza", "PagosInforme", "MensajeWhatsapp",
     "Configuracion", "Auditoria", "User", "DefinicionCampo", "ConversacionAI", "DiccionarioSemantico",
