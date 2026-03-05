@@ -291,6 +291,8 @@ export function ClientesList() {
               </span>
               <span className="ml-2">▼</span>
             </Button>
+            {/* Puente invisible para que el hover no se pierda al bajar el cursor al menú */}
+            <div className="absolute left-0 right-0 top-full h-2 z-40" aria-hidden="true" />
             {/* Dropdown Menu */}
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
