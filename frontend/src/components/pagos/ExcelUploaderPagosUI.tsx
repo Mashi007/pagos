@@ -427,7 +427,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                         <SelectValue placeholder="Seleccionar crédito" />
                                       </SelectTrigger>
                                       <SelectContent>
-                                        <SelectItem value="none">â€” Seleccionar â€”</SelectItem>
+                                        <SelectItem value="none">— Seleccionar —</SelectItem>
                                         {prestamosActivos.map((p) => (
                                           <SelectItem key={p.id} value={String(p.id)}>
                                             Crédito #{p.id}
@@ -458,7 +458,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                         </Button>
                                       ) : null}
                                       {(!cedulaLookup || cedulaLookup.length < 5) && (
-                                        <span className="text-xs text-gray-400">â€”</span>
+                                        <span className="text-xs text-gray-400">—</span>
                                       )}
                                     </div>
                                     {cedulaLookup && cedulaLookup.length >= 5 && !tieneCreditos && (

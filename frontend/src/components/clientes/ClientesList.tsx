@@ -331,16 +331,6 @@ export function ClientesList() {
             {(isRefetching || statsLoading) ? 'Actualizando...' : 'Actualizar'}
           </Button>
           <Button
-            variant="outline"
-            size="lg"
-            onClick={() => setShowCasosRevisar(true)}
-            className="px-6 py-6 text-base font-semibold border-amber-400 text-amber-700 hover:bg-amber-50"
-            title="Cargar clientes con valores placeholder (cédula, nombres, teléfono o email a revisar)"
-          >
-            <AlertCircle className="w-5 h-5 mr-2" />
-            Cargar casos a revisar
-          </Button>
-          <Button
             variant={showRevisarClientes ? 'default' : 'outline'}
             size="lg"
             onClick={() => setSearchParams(showRevisarClientes ? {} : { revisar: '1' })}
@@ -349,6 +339,33 @@ export function ClientesList() {
           >
             <Search className="w-5 h-5 mr-2" />
             Revisar clientes
+          </Button>
+          {showRevisarClientes && (
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={handleExportRevisarExcel}
+              disabled={isExportingRevisar || !revisarData?.items?.length}
+              className="px-6 py-6 text-base font-semibold"
+              title="Descargar todos los clientes a revisar en Excel"
+            >
+              {isExportingRevisar ? (
+                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+              ) : (
+                <Download className="w-5 h-5 mr-2" />
+              )}
+              Descargar Excel
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={() => setShowCasosRevisar(true)}
+            className="px-6 py-6 text-base font-semibold border-amber-400 text-amber-700 hover:bg-amber-50"
+            title="Cargar clientes con valores placeholder (cédula, nombres, teléfono o email a revisar)"
+          >
+            <AlertCircle className="w-5 h-5 mr-2" />
+            Cargar casos a revisar
           </Button>
           <div className="relative group">
             <Button

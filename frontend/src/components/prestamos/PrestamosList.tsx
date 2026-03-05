@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Plus, Search, Filter, Edit, Eye, Trash2, DollarSign, Calendar, Lock, CheckCircle2, X, RefreshCw, AlertTriangle, Info, FileSpreadsheet } from 'lucide-react'
+import { Plus, Search, Filter, Edit, Eye, Trash2, DollarSign, Calendar, Lock, CheckCircle2, X, RefreshCw, AlertTriangle, Info, FileSpreadsheet, Download, Loader2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -8,7 +8,7 @@ import { Badge } from '../../components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import { usePrestamos, useDeletePrestamo, prestamoKeys, type PrestamoFilters } from '../../hooks/usePrestamos'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { usePermissions } from '../../hooks/usePermissions'
 import { useConcesionariosActivos } from '../../hooks/useConcesionarios'
 import { useAnalistasActivos } from '../../hooks/useAnalistas'
@@ -29,6 +29,8 @@ export function PrestamosList() {
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(20)
   
+  // Vista "Revisar préstamos" (enviados desde carga masiva), misma lógica que Clientes/Pagos
+  const showRevisarPrestamos = searchParams.get('revisar') === '1'
   // Leer requiere_revision y cliente_id de los parámetros de URL
   const requiereRevisionParam = searchParams.get('requiere_revision')
   const requiereRevision = requiereRevisionParam === 'true' ? true : undefined
@@ -75,6 +77,9 @@ export function PrestamosList() {
   const [editingPrestamo, setEditingPrestamo] = useState<any>(null)
   const [viewingPrestamo, setViewingPrestamo] = useState<any>(null)
   const [deletePrestamoId, setDeletePrestamoId] = useState<number | null>(null)
+  const [pageRevisar, setPageRevisar] = useState(1)
+  const [isExportingRevisar, setIsExportingRevisar] = useState(false)
+  const perPageRevisar = 20
 
   const queryClient = useQueryClient()
   const { data, isLoading, error } = usePrestamos(filters, page, perPage)
@@ -84,6 +89,60 @@ export function PrestamosList() {
   const { data: concesionarios = [] } = useConcesionariosActivos()
   const { data: analistas = [] } = useAnalistasActivos()
   const { data: modelosVehiculos = [] } = useModelosVehiculosActivos()
+
+  const { data: revisarData, isLoading: revisarLoading, refetch: refetchRevisar } = useQuery({
+    queryKey: ['prestamos-con-errores', pageRevisar, perPageRevisar],
+    queryFn: () => prestamoService.getPrestamosConErrores(pageRevisar, perPageRevisar),
+    enabled: showRevisarPrestamos,
+  })
+
+  const handleExportRevisarExcel = async () => {
+    if (!revisarData?.items?.length) return
+    setIsExportingRevisar(true)
+    try {
+      const total = revisarData.total
+      const perPage = 100
+      const pages = Math.ceil(total / perPage) || 1
+      const allItems: Array<Record<string, unknown>> = []
+      for (let p = 1; p <= pages; p++) {
+        const res = await prestamoService.getPrestamosConErrores(p, perPage)
+        if (res.items?.length) allItems.push(...res.items.map((it: any) => ({
+          'Fila origen': it.fila_origen ?? '',
+          'Cédula cliente': it.cedula_cliente ?? '',
+          'Total financiamiento': it.total_financiamiento ?? '',
+          'Modalidad pago': it.modalidad_pago ?? '',
+          'Nº cuotas': it.numero_cuotas ?? '',
+          Producto: it.producto ?? '',
+          Analista: it.analista ?? '',
+          Concesionario: it.concesionario ?? '',
+          Errores: it.errores ?? '',
+          Estado: it.estado ?? '',
+          'Fecha registro': it.fecha_registro ?? '',
+        })))
+      }
+      const { createAndDownloadExcel } = await import('../../types/exceljs')
+      const nombre = `Revisar_Prestamos_${new Date().toISOString().slice(0, 10)}.xlsx`
+      await createAndDownloadExcel(allItems, 'Revisar Préstamos', nombre)
+      toast.success(`${allItems.length} préstamo(s) exportados a Excel`)
+    } catch (err) {
+      console.error('Error exportando Revisar Préstamos:', err)
+      toast.error('Error al exportar. Intenta de nuevo.')
+    } finally {
+      setIsExportingRevisar(false)
+    }
+  }
+
+  const handleResolverPrestamoError = async (errorId: number) => {
+    try {
+      await prestamoService.resolverPrestamoError(errorId)
+      queryClient.invalidateQueries({ queryKey: ['prestamos-con-errores'] })
+      refetchRevisar()
+      toast.success('Marcado como resuelto')
+    } catch (e) {
+      console.error(e)
+      toast.error('Error al marcar como resuelto')
+    }
+  }
 
   // Función para limpiar filtros
   const handleClearFilters = () => {
@@ -317,6 +376,27 @@ export function PrestamosList() {
             <CheckCircle2 className="w-5 h-5 mr-2" />
             Revisión Manual
           </Button>
+          <Button
+            variant={showRevisarPrestamos ? 'default' : 'outline'}
+            size="lg"
+            onClick={() => setSearchParams(showRevisarPrestamos ? {} : { revisar: '1' })}
+            className="px-6 py-6 text-base font-semibold"
+          >
+            <Search className="w-5 h-5 mr-2" />
+            Revisar préstamos
+          </Button>
+          {showRevisarPrestamos && (
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={handleExportRevisarExcel}
+              disabled={isExportingRevisar || !revisarData?.items?.length}
+              className="px-6 py-6 text-base font-semibold"
+            >
+              {isExportingRevisar ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Download className="w-5 h-5 mr-2" />}
+              Descargar Excel
+            </Button>
+          )}
           <div className="relative group">
             <Button
               size="lg"
