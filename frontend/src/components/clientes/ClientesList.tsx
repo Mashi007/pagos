@@ -13,7 +13,10 @@ import {
   RefreshCw,
   AlertCircle,
   Eye,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Download,
+  Loader2,
+  X
 } from 'lucide-react'
 
 import { Button } from '../../components/ui/button'
@@ -38,10 +41,13 @@ import { useClientes } from '../../hooks/useClientes'
 import { useEstadosCliente } from '../../hooks/useEstadosCliente'
 import { useQueryClient } from '@tanstack/react-query'
 import { clienteService } from '../../services/clienteService'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, useSearchParams, Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 
 export function ClientesList() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const showRevisarClientes = searchParams.get('revisar') === '1'
   const { opciones: opcionesEstado } = useEstadosCliente()
   const [searchTerm, setSearchTerm] = useState('')
   const [filters, setFilters] = useState<ClienteFilters>({})
@@ -55,6 +61,9 @@ export function ClientesList() {
   const [showEliminarCliente, setShowEliminarCliente] = useState(false)
   const [showCasosRevisar, setShowCasosRevisar] = useState(false)
   const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null)
+  const [pageRevisar, setPageRevisar] = useState(1)
+  const [isExportingRevisar, setIsExportingRevisar] = useState(false)
+  const perPageRevisar = 20
 
   const showNotification = (type: 'success' | 'error', message: string) => {
     setNotification({ type, message })
@@ -148,6 +157,57 @@ export function ClientesList() {
     isLoading: statsLoading,
     refetch: refetchStats
   } = useClientesStats()
+
+  const { data: revisarData, isLoading: revisarLoading, refetch: refetchRevisar } = useQuery({
+    queryKey: ['clientes-con-errores', pageRevisar, perPageRevisar],
+    queryFn: () => clienteService.getClientesConErrores(pageRevisar, perPageRevisar),
+    enabled: showRevisarClientes,
+  })
+
+  const handleExportRevisarExcel = async () => {
+    if (!revisarData?.items?.length) return
+    setIsExportingRevisar(true)
+    try {
+      const total = revisarData.total
+      const perPage = 100
+      const pages = Math.ceil(total / perPage) || 1
+      const allItems: Array<Record<string, unknown>> = []
+      for (let p = 1; p <= pages; p++) {
+        const res = await clienteService.getClientesConErrores(p, perPage)
+        if (res.items?.length) allItems.push(...res.items.map((it: any) => ({
+          'Fila origen': it.fila_origen ?? '',
+          Cédula: it.cedula ?? '',
+          Nombres: it.nombres ?? '',
+          Email: it.email ?? '',
+          Teléfono: it.telefono ?? '',
+          Errores: it.errores ?? '',
+          Estado: it.estado ?? '',
+          'Fecha registro': it.fecha_registro ?? '',
+        })))
+      }
+      const { createAndDownloadExcel } = await import('../../types/exceljs')
+      const nombre = `Revisar_Clientes_${new Date().toISOString().slice(0, 10)}.xlsx`
+      await createAndDownloadExcel(allItems, 'Revisar Clientes', nombre)
+      showNotification('success', `${allItems.length} cliente(s) exportados a Excel`)
+    } catch (err) {
+      console.error('Error exportando Revisar Clientes:', err)
+      showNotification('error', 'Error al exportar. Intenta de nuevo.')
+    } finally {
+      setIsExportingRevisar(false)
+    }
+  }
+
+  const handleResolverClienteError = async (errorId: number) => {
+    try {
+      await clienteService.resolverClienteError(errorId)
+      queryClient.invalidateQueries({ queryKey: ['clientes-con-errores'] })
+      refetchRevisar()
+      showNotification('success', 'Marcado como resuelto')
+    } catch (e) {
+      console.error(e)
+      showNotification('error', 'Error al marcar como resuelto')
+    }
+  }
 
   // Datos mockeados para desarrollo
   const mockClientes = [
@@ -280,6 +340,16 @@ export function ClientesList() {
             <AlertCircle className="w-5 h-5 mr-2" />
             Cargar casos a revisar
           </Button>
+          <Button
+            variant={showRevisarClientes ? 'default' : 'outline'}
+            size="lg"
+            onClick={() => setSearchParams(showRevisarClientes ? {} : { revisar: '1' })}
+            className="px-6 py-6 text-base font-semibold"
+            title="Ver clientes enviados desde carga masiva para revisión manual (descargar Excel)"
+          >
+            <Search className="w-5 h-5 mr-2" />
+            Revisar clientes
+          </Button>
           <div className="relative group">
             <Button
               size="lg"
@@ -318,6 +388,122 @@ export function ClientesList() {
           </div>
         </div>
       </div>
+
+      {/* Sección Revisar clientes (enviados desde carga masiva) */}
+      {showRevisarClientes && (
+        <Card className="border-amber-200 bg-amber-50/50">
+          <CardContent className="p-4">
+            <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <Search className="w-5 h-5 text-amber-600" />
+                  Revisar clientes
+                </h2>
+                <p className="text-sm text-gray-600 mt-1">
+                  Clientes enviados desde la carga masiva para revisión manual. Descarga el Excel para corregir y reimportar.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSearchParams({})}
+                  title="Cerrar y volver al listado normal"
+                >
+                  <X className="w-4 h-4 mr-1" />
+                  Cerrar
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExportRevisarExcel}
+                  disabled={isExportingRevisar || !revisarData?.items?.length}
+                  title="Descargar todos los clientes a revisar en Excel"
+                >
+                  {isExportingRevisar ? (
+                    <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4 mr-1" />
+                  )}
+                  Descargar Excel
+                </Button>
+              </div>
+            </div>
+            {revisarLoading ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="w-8 h-8 animate-spin text-amber-600" />
+              </div>
+            ) : !revisarData?.items?.length ? (
+              <p className="text-gray-500 text-center py-6">No hay clientes pendientes de revisión.</p>
+            ) : (
+              <>
+                <div className="overflow-x-auto rounded border border-gray-200 bg-white">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-12">Fila</TableHead>
+                        <TableHead>Cédula</TableHead>
+                        <TableHead>Nombres</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Teléfono</TableHead>
+                        <TableHead>Errores</TableHead>
+                        <TableHead className="w-28">Acción</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {revisarData.items.map((item: { id: number; fila_origen?: number; cedula?: string | null; nombres?: string | null; email?: string | null; telefono?: string | null; errores?: string | null }) => (
+                        <TableRow key={item.id}>
+                          <TableCell className="font-mono text-xs">{item.fila_origen ?? '-'}</TableCell>
+                          <TableCell>{item.cedula ?? '-'}</TableCell>
+                          <TableCell>{item.nombres ?? '-'}</TableCell>
+                          <TableCell>{item.email ?? '-'}</TableCell>
+                          <TableCell>{item.telefono ?? '-'}</TableCell>
+                          <TableCell className="max-w-xs truncate text-amber-700" title={item.errores ?? ''}>{item.errores ?? '-'}</TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-green-600 hover:text-green-700"
+                              onClick={() => handleResolverClienteError(item.id)}
+                            >
+                              Marcar resuelto
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                {revisarData.total > perPageRevisar && (
+                  <div className="flex items-center justify-between mt-3 text-sm text-gray-600">
+                    <span>
+                      {((pageRevisar - 1) * perPageRevisar) + 1}–{Math.min(pageRevisar * perPageRevisar, revisarData.total)} de {revisarData.total}
+                    </span>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={pageRevisar <= 1}
+                        onClick={() => setPageRevisar((p) => Math.max(1, p - 1))}
+                      >
+                        Anterior
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={pageRevisar * perPageRevisar >= revisarData.total}
+                        onClick={() => setPageRevisar((p) => p + 1)}
+                      >
+                        Siguiente
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* KPIs de Clientes */}
       <ClientesKPIs
