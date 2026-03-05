@@ -129,7 +129,7 @@ export function PagosList() {
       await pagoConErrorService.eliminarPorDescarga(ids)
       queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
       queryClient.invalidateQueries({ queryKey: ['pagos-con-errores'], exact: false })
-      toast.success(`${pagos.length} pagos exportados y eliminados de la listaón`)
+      toast.success(`${pagos.length} pagos exportados y eliminados de la lista`)
     } catch (err) {
       console.error('Error exportando Revisar Pagos:', err)
       toast.error('Error al exportar. Intenta de nuevo.')

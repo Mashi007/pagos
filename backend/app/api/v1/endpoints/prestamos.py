@@ -9,7 +9,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel, field_validator
 from sqlalchemy import delete, func, or_, select, text
@@ -1700,6 +1700,29 @@ def get_prestamos_con_errores(
             for r in rows
         ]
     }
+
+
+class EliminarPorDescargaBody(BaseModel):
+    """IDs de registros exportados a Excel para eliminar de prestamos_con_errores."""
+    ids: list[int]
+
+
+@router.post("/revisar/eliminar-por-descarga", response_model=dict)
+def eliminar_prestamos_por_descarga(
+    payload: EliminarPorDescargaBody = Body(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Elimina de prestamos_con_errores los registros descargados (borrado en lote).
+    Misma regla que Pagos: al descargar Excel se vacía la lista; se rellena al enviar desde Carga Masiva.
+    """
+    valid_ids = [i for i in payload.ids if isinstance(i, int) and i > 0]
+    if not valid_ids:
+        return {"eliminados": 0, "mensaje": "No hay IDs"}
+    result = db.execute(delete(PrestamoConError).where(PrestamoConError.id.in_(valid_ids)))
+    eliminados = result.rowcount
+    db.commit()
+    return {"eliminados": eliminados, "mensaje": f"{eliminados} eliminados de prestamos_con_errores"}
 
 
 @router.delete("/revisar/{error_id}", status_code=204)

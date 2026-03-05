@@ -130,6 +130,11 @@ class PrestamoService {
     await apiClient.delete(`${this.baseUrl}/revisar/${errorId}`)
   }
 
+  /** Elimina de prestamos_con_errores tras descargar Excel (misma regla que Pagos). La lista se vacía y se rellena al enviar desde Carga Masiva. */
+  async eliminarPorDescarga(ids: number[]): Promise<{ eliminados: number; mensaje: string }> {
+    return await apiClient.post(`${this.baseUrl}/revisar/eliminar-por-descarga`, { ids }, { timeout: 120000 })
+  }
+
   // Actualizar préstamo (backend devuelve el préstamo actualizado directamente)
   async updatePrestamo(id: number, data: Partial<PrestamoForm>): Promise<Prestamo> {
     return await apiClient.put<Prestamo>(`${this.baseUrl}/${id}`, data)

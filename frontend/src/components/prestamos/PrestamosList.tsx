@@ -104,26 +104,37 @@ export function PrestamosList() {
       const perPage = 100
       const pages = Math.ceil(total / perPage) || 1
       const allItems: Array<Record<string, unknown>> = []
+      const allIds: number[] = []
       for (let p = 1; p <= pages; p++) {
         const res = await prestamoService.getPrestamosConErrores(p, perPage)
-        if (res.items?.length) allItems.push(...res.items.map((it: any) => ({
-          'Fila origen': it.fila_origen ?? '',
-          'Cédula cliente': it.cedula_cliente ?? '',
-          'Total financiamiento': it.total_financiamiento ?? '',
-          'Modalidad pago': it.modalidad_pago ?? '',
-          'Nº cuotas': it.numero_cuotas ?? '',
-          Producto: it.producto ?? '',
-          Analista: it.analista ?? '',
-          Concesionario: it.concesionario ?? '',
-          Errores: it.errores ?? '',
-          Estado: it.estado ?? '',
-          'Fecha registro': it.fecha_registro ?? '',
-        })))
+        if (res.items?.length) {
+          for (const it of res.items) {
+            allIds.push(it.id)
+            allItems.push({
+              'Fila origen': it.fila_origen ?? '',
+              'Cédula cliente': it.cedula_cliente ?? '',
+              'Total financiamiento': it.total_financiamiento ?? '',
+              'Modalidad pago': it.modalidad_pago ?? '',
+              'Nº cuotas': it.numero_cuotas ?? '',
+              Producto: it.producto ?? '',
+              Analista: it.analista ?? '',
+              Concesionario: it.concesionario ?? '',
+              Errores: it.errores ?? '',
+              Estado: it.estado ?? '',
+              'Fecha registro': it.fecha_registro ?? '',
+            })
+          }
+        }
       }
       const { createAndDownloadExcel } = await import('../../types/exceljs')
       const nombre = `Revisar_Prestamos_${new Date().toISOString().slice(0, 10)}.xlsx`
       await createAndDownloadExcel(allItems, 'Revisar Préstamos', nombre)
-      toast.success(`${allItems.length} préstamo(s) exportados a Excel`)
+      if (allIds.length > 0) {
+        await prestamoService.eliminarPorDescarga(allIds)
+        queryClient.invalidateQueries({ queryKey: ['prestamos-con-errores'] })
+        refetchRevisar()
+      }
+      toast.success(`${allItems.length} préstamo(s) exportados y eliminados de la lista`)
     } catch (err) {
       console.error('Error exportando Revisar Préstamos:', err)
       toast.error('Error al exportar. Intenta de nuevo.')
