@@ -1618,6 +1618,49 @@ async def upload_prestamos_excel(
         )
 
 
+class RevisarPrestamoAgregarBody(BaseModel):
+    """Datos de una fila para enviar a revisión manual (prestamos_con_errores)."""
+    cedula_cliente: Optional[str] = None
+    total_financiamiento: Optional[float] = None
+    modalidad_pago: Optional[str] = None
+    numero_cuotas: Optional[int] = None
+    producto: Optional[str] = None
+    analista: Optional[str] = None
+    concesionario: Optional[str] = None
+    errores_descripcion: Optional[str] = None
+    fila_origen: Optional[int] = None
+
+
+@router.post("/revisar/agregar", response_model=dict)
+def agregar_prestamo_a_revisar(
+    body: RevisarPrestamoAgregarBody,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """
+    Envía una fila a la tabla prestamos_con_errores (revisar préstamos).
+    Usado desde la carga masiva cuando el usuario pulsa "Enviar a Revisar Préstamos".
+    """
+    usuario_email = getattr(current_user, "email", None) or "sistema@rapicredit.com"
+    row = PrestamoConError(
+        cedula_cliente=body.cedula_cliente,
+        total_financiamiento=Decimal(str(body.total_financiamiento)) if body.total_financiamiento is not None else None,
+        modalidad_pago=body.modalidad_pago,
+        numero_cuotas=body.numero_cuotas,
+        producto=body.producto,
+        analista=body.analista,
+        concesionario=body.concesionario,
+        estado="PENDIENTE",
+        errores_descripcion=body.errores_descripcion or "Enviado a revisión desde carga masiva",
+        fila_origen=body.fila_origen,
+        usuario_registro=usuario_email,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return {"id": row.id, "mensaje": "Préstamo enviado a Revisar Préstamos"}
+
+
 @router.get("/revisar/lista", response_model=dict)
 def get_prestamos_con_errores(
     page: int = Query(1, ge=1),

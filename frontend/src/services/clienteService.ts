@@ -78,6 +78,47 @@ class ClienteService {
     await apiClient.delete(`${this.baseUrl}/${id}`)
   }
 
+  // --- Revisar Clientes (clientes_con_errores) ---
+
+  /** Lista de clientes enviados a revisión (paginado) */
+  async getClientesConErrores(
+    page = 1,
+    perPage = 20
+  ): Promise<{ total: number; page: number; per_page: number; items: Array<{
+    id: number
+    cedula: string | null
+    nombres: string | null
+    email: string | null
+    telefono: string | null
+    errores: string | null
+    fila_origen: number | null
+    estado: string | null
+    fecha_registro: string | null
+  }> }> {
+    const params = new URLSearchParams({ page: String(page), per_page: String(perPage) })
+    return await apiClient.get(`${this.baseUrl}/revisar/lista?${params}`)
+  }
+
+  /** Enviar una fila a Revisar Clientes (desde carga masiva). Elimina de pantalla al enviar. */
+  async agregarClienteARevisar(data: {
+    cedula?: string | null
+    nombres?: string | null
+    direccion?: string | null
+    fecha_nacimiento?: string | null
+    ocupacion?: string | null
+    email?: string | null
+    telefono?: string | null
+    errores_descripcion?: string | null
+    fila_origen?: number | null
+  }): Promise<{ id: number; mensaje: string }> {
+    return await apiClient.post(`${this.baseUrl}/revisar/agregar`, data)
+  }
+
+  /** Eliminar de la lista Revisar Clientes (marcar como resuelto) */
+  async resolverClienteError(errorId: number): Promise<void> {
+    await apiClient.delete(`${this.baseUrl}/revisar/${errorId}`)
+  }
+
   // Obtener cliente por cédula exacta (para carga masiva de préstamos)
   async getClienteByCedula(cedula: string): Promise<Cliente | null> {
     if (!cedula?.trim()) return null

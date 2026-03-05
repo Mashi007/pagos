@@ -829,6 +829,49 @@ def get_clientes_con_errores(
     }
 
 
+class RevisarClienteAgregarBody(BaseModel):
+    """Datos de una fila para enviar a revisión manual (clientes_con_errores)."""
+    cedula: Optional[str] = None
+    nombres: Optional[str] = None
+    direccion: Optional[str] = None
+    fecha_nacimiento: Optional[str] = None
+    ocupacion: Optional[str] = None
+    email: Optional[str] = None
+    telefono: Optional[str] = None
+    errores_descripcion: Optional[str] = None
+    fila_origen: Optional[int] = None
+
+
+@router.post("/revisar/agregar", response_model=dict)
+def agregar_cliente_a_revisar(
+    body: RevisarClienteAgregarBody,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+    """
+    Envía una fila a la tabla clientes_con_errores (revisar clientes).
+    Usado desde la carga masiva cuando el usuario pulsa "Enviar a Revisar Clientes".
+    """
+    usuario_email = current_user.email if hasattr(current_user, "email") else "sistema@rapicredit.com"
+    row = ClienteConError(
+        cedula=body.cedula,
+        nombres=body.nombres,
+        direccion=body.direccion,
+        fecha_nacimiento=body.fecha_nacimiento,
+        ocupacion=body.ocupacion,
+        email=body.email,
+        telefono=body.telefono,
+        estado="PENDIENTE",
+        errores_descripcion=body.errores_descripcion or "Enviado a revisión desde carga masiva",
+        fila_origen=body.fila_origen,
+        usuario_registro=usuario_email,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return {"id": row.id, "mensaje": "Cliente enviado a Revisar Clientes"}
+
+
 @router.delete("/revisar/{error_id}", status_code=204)
 def resolver_cliente_error(error_id: int, db: Session = Depends(get_db)):
     """Marcar cliente con error como resuelto (eliminar de la lista)."""

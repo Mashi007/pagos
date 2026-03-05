@@ -15,6 +15,7 @@ import {
   Info,
   CheckCircle2,
   Loader2,
+  Search,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card'
 import { Button } from '../ui/button'
@@ -62,6 +63,14 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
     saveIndividualClient,
     saveAllValidClients,
     confirmSaveOmittingExistingCedulas,
+    cancelCedulasModal,
+    sendToRevisarClientes,
+    sendAllToRevisarClientes,
+    sendAllErrorsToRevisarClientes,
+    getRowsToRevisarClientes,
+    enviadosRevisar,
+    isSendingAllRevisar,
+    batchProgress,
     onClose,
     navigate,
   } = useExcelUpload(props)
@@ -218,6 +227,11 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                           {getSavedClientsCount()} en Dashboard
                         </Badge>
                       )}
+                      {enviadosRevisar.size > 0 && (
+                        <Badge variant="outline" className="text-amber-700 bg-amber-50">
+                          {enviadosRevisar.size} enviado(s) a Revisar Clientes
+                        </Badge>
+                      )}
                       <div className="flex items-center space-x-2">
                         <input
                           type="checkbox"
@@ -247,6 +261,62 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                           Ir al Dashboard de Clientes
                         </Button>
                       )}
+                      {enviadosRevisar.size > 0 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => navigate('/clientes')}
+                          className="bg-amber-50 border-amber-300 text-amber-800"
+                          title="Ver lista Revisar Clientes"
+                        >
+                          <Search className="mr-2 h-4 w-4" />
+                          Ver Revisar Clientes
+                        </Button>
+                      )}
+                      {getRowsToRevisarClientes().length > 0 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => sendAllToRevisarClientes()}
+                          disabled={isSendingAllRevisar || serviceStatus === 'offline'}
+                          className="bg-amber-100 border-amber-400 text-amber-800 hover:bg-amber-200"
+                          title="Enviar todas las filas pendientes a Revisar Clientes"
+                        >
+                          {isSendingAllRevisar ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Enviando...
+                            </>
+                          ) : (
+                            <>
+                              <Search className="mr-2 h-4 w-4" />
+                              ENVIAR REVISAR CLIENTES ({getRowsToRevisarClientes().length})
+                            </>
+                          )}
+                        </Button>
+                      )}
+                      {totalRows - validRows > 0 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => sendAllErrorsToRevisarClientes()}
+                          disabled={isSavingIndividual || serviceStatus === 'offline'}
+                          className="bg-yellow-100 border-yellow-500 text-yellow-800 hover:bg-yellow-200"
+                          title="Enviar solo filas con errores a Revisar Clientes"
+                        >
+                          {isSavingIndividual && !isSendingAllRevisar ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Enviando...
+                            </>
+                          ) : (
+                            <>
+                              <AlertTriangle className="mr-2 h-4 w-4" />
+                              Revisar Clientes ({totalRows - validRows})
+                            </>
+                          )}
+                        </Button>
+                      )}
                       <Button
                         onClick={saveAllValidClients}
                         disabled={
@@ -268,6 +338,11 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                           </>
                         )}
                       </Button>
+                      {batchProgress && (
+                        <span className="text-sm text-gray-600">
+                          {batchProgress.sent}/{batchProgress.total} enviados
+                        </span>
+                      )}
                     </div>
                   </div>
                 </CardContent>
@@ -742,45 +817,69 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                               </td>
 
                               <td className="border p-2">
-                                <div className="flex items-center justify-center space-x-1">
-                                  {savedClients.has(row._rowIndex) ? (
-                                    <div className="flex items-center text-green-600">
-                                      <CheckCircle className="h-4 w-4 mr-1" />
-                                      <span className="text-xs">Guardado</span>
-                                    </div>
-                                  ) : esDuplicado ? (
-                                    <div className="flex flex-col items-center text-red-700 text-xs">
-                                      <span>No se puede guardar</span>
-                                      <span className="text-[10px]">(duplicado en archivo)</span>
-                                    </div>
-                                  ) : isClientValid(row) ? (
-                                    <Button
-                                      size="sm"
-                                      onClick={() => saveIndividualClient(row)}
-                                      disabled={
-                                        savingProgress[row._rowIndex] ||
-                                        serviceStatus === 'offline'
-                                      }
-                                      className="bg-green-600 hover:bg-green-700 text-white text-xs px-2 py-1"
-                                    >
-                                      {savingProgress[row._rowIndex] ? (
-                                        <>
-                                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                                          Guardando...
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Save className="h-3 w-3 mr-1" />
-                                          Guardar
-                                        </>
-                                      )}
-                                    </Button>
-                                  ) : (
-                                    <div className="flex items-center text-gray-400">
-                                      <AlertTriangle className="h-4 w-4 mr-1" />
-                                      <span className="text-xs">Incompleto</span>
-                                    </div>
-                                  )}
+                                <div className="flex flex-col items-center gap-1">
+                                  <div className="flex items-center justify-center space-x-1">
+                                    {savedClients.has(row._rowIndex) ? (
+                                      <div className="flex items-center text-green-600">
+                                        <CheckCircle className="h-4 w-4 mr-1" />
+                                        <span className="text-xs">Guardado</span>
+                                      </div>
+                                    ) : esDuplicado ? (
+                                      <div className="flex flex-col items-center text-red-700 text-xs">
+                                        <span>No se puede guardar</span>
+                                        <span className="text-[10px]">(duplicado en archivo)</span>
+                                      </div>
+                                    ) : isClientValid(row) ? (
+                                      <Button
+                                        size="sm"
+                                        onClick={() => saveIndividualClient(row)}
+                                        disabled={
+                                          savingProgress[row._rowIndex] ||
+                                          serviceStatus === 'offline'
+                                        }
+                                        className="bg-green-600 hover:bg-green-700 text-white text-xs px-2 py-1"
+                                      >
+                                        {savingProgress[row._rowIndex] ? (
+                                          <>
+                                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                            Guardando...
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Save className="h-3 w-3 mr-1" />
+                                            Guardar
+                                          </>
+                                        )}
+                                      </Button>
+                                    ) : (
+                                      <div className="flex items-center text-gray-400">
+                                        <AlertTriangle className="h-4 w-4 mr-1" />
+                                        <span className="text-xs">Incompleto</span>
+                                      </div>
+                                    )}
+                                    {!savedClients.has(row._rowIndex) && (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => sendToRevisarClientes(row)}
+                                        disabled={
+                                          savingProgress[row._rowIndex] ||
+                                          serviceStatus === 'offline'
+                                        }
+                                        className="text-amber-700 border-amber-400 text-xs px-2 py-1 hover:bg-amber-50"
+                                        title="Enviar a Revisar Clientes"
+                                      >
+                                        {savingProgress[row._rowIndex] ? (
+                                          <Loader2 className="h-3 w-3 animate-spin" />
+                                        ) : (
+                                          <>
+                                            <Search className="h-3 w-3 mr-1" />
+                                            Revisar
+                                          </>
+                                        )}
+                                      </Button>
+                                    )}
+                                  </div>
                                 </div>
                               </td>
 

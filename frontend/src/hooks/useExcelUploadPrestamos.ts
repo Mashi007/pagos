@@ -39,7 +39,10 @@ export function useExcelUploadPrestamos({ onClose, onSuccess }: ExcelUploaderPre
   const [showPreview, setShowPreview] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [savedRows, setSavedRows] = useState<Set<number>>(new Set())
+  const [enviadosRevisar, setEnviadosRevisar] = useState<Set<number>>(new Set())
   const [isSavingIndividual, setIsSavingIndividual] = useState(false)
+  const [isSendingAllRevisar, setIsSendingAllRevisar] = useState(false)
+  const [batchProgress, setBatchProgress] = useState<{ sent: number; total: number } | null>(null)
   const [savingProgress, setSavingProgress] = useState<Record<number, boolean>>({})
   const [serviceStatus, setServiceStatus] = useState<'unknown' | 'online' | 'offline'>('unknown')
   const [toasts, setToasts] = useState<Array<{ id: string; type: 'error' | 'warning' | 'success'; message: string }>>([])
@@ -78,8 +81,122 @@ export function useExcelUploadPrestamos({ onClose, onSuccess }: ExcelUploaderPre
   }, [queryClient])
 
   const getValidRows = useCallback((): PrestamoExcelRow[] => {
-    return excelData.filter((r) => !r._hasErrors && !savedRows.has(r._rowIndex))
-  }, [excelData, savedRows])
+    return excelData.filter((r) => !r._hasErrors && !savedRows.has(r._rowIndex) && !enviadosRevisar.has(r._rowIndex))
+  }, [excelData, savedRows, enviadosRevisar])
+
+  const getRowsToRevisarPrestamos = useCallback((): PrestamoExcelRow[] => {
+    return excelData.filter((r) => !savedRows.has(r._rowIndex) && !enviadosRevisar.has(r._rowIndex))
+  }, [excelData, savedRows, enviadosRevisar])
+
+  const sendToRevisarPrestamos = useCallback(
+    async (row: PrestamoExcelRow, skipToast = false, skipStateUpdate = false): Promise<boolean> => {
+      setSavingProgress((prev) => ({ ...prev, [row._rowIndex]: true }))
+      const erroresDesc = row._hasErrors && row._validation
+        ? Object.entries(row._validation)
+            .filter(([, v]) => !v?.isValid)
+            .map(([k]) => k)
+            .join('; ') || 'Enviado a revisión'
+        : 'Enviado a revisión desde carga masiva'
+      try {
+        await prestamoService.agregarPrestamoARevisar({
+          cedula_cliente: (row.cedula || '').trim() || null,
+          total_financiamiento: Number(row.total_financiamiento) || null,
+          modalidad_pago: (row.modalidad_pago || '').trim() || null,
+          numero_cuotas: row.numero_cuotas ?? null,
+          producto: (row.producto || '').trim() || null,
+          analista: (row.analista || '').trim() || null,
+          concesionario: (row.concesionario || '').trim() || null,
+          errores_descripcion: erroresDesc,
+          fila_origen: row._rowIndex,
+        })
+        if (!skipStateUpdate) setEnviadosRevisar((prev) => new Set([...prev, row._rowIndex]))
+        if (!skipToast) addToast(row._hasErrors ? 'warning' : 'success', `Fila ${row._rowIndex} enviada a Revisar Préstamos`)
+        setExcelData((prev) => prev.filter((r) => r._rowIndex !== row._rowIndex))
+        refreshPrestamos()
+        return true
+      } catch (err: unknown) {
+        const e = err as { response?: { data?: { detail?: string } }; message?: string }
+        const msg = e?.response?.data?.detail || e?.message || 'Error al enviar'
+        if (!skipToast) addToast('error', `Fila ${row._rowIndex}: ${msg}`)
+        return false
+      } finally {
+        setSavingProgress((prev) => ({ ...prev, [row._rowIndex]: false }))
+      }
+    },
+    [addToast, refreshPrestamos]
+  )
+
+  const sendAllToRevisarPrestamos = useCallback(async () => {
+    const rows = getRowsToRevisarPrestamos()
+    if (rows.length === 0) {
+      addToast('warning', 'No hay filas para enviar a Revisar Préstamos')
+      return
+    }
+    if (serviceStatus === 'offline') {
+      addToast('error', 'Sin conexión')
+      return
+    }
+    setIsSendingAllRevisar(true)
+    setBatchProgress({ sent: 0, total: rows.length })
+    let ok = 0
+    let fail = 0
+    const CHUNK = 8
+    for (let i = 0; i < rows.length; i += CHUNK) {
+      const chunk = rows.slice(i, i + CHUNK)
+      const results = await Promise.allSettled(chunk.map((row) => sendToRevisarPrestamos(row, true, true)))
+      const chunkOk = new Set<number>()
+      results.forEach((r, idx) => {
+        if (r.status === 'fulfilled' && r.value) {
+          ok++
+          chunkOk.add(chunk[idx]._rowIndex)
+        } else fail++
+      })
+      if (chunkOk.size > 0) setEnviadosRevisar((prev) => new Set([...prev, ...chunkOk]))
+      setBatchProgress({ sent: Math.min(i + CHUNK, rows.length), total: rows.length })
+    }
+    setBatchProgress(null)
+    setIsSendingAllRevisar(false)
+    if (ok > 0 && fail === 0) addToast('success', `✓ ${ok} fila(s) enviada(s) a Revisar Préstamos`)
+    else if (ok > 0 && fail > 0) addToast('warning', `✓ ${ok} enviada(s) | ✗ ${fail} fallo(s)`)
+    else if (fail > 0) addToast('error', `✗ ${fail} fila(s) no se pudieron enviar`)
+    if (ok > 0) refreshPrestamos()
+  }, [getRowsToRevisarPrestamos, serviceStatus, sendToRevisarPrestamos, addToast, refreshPrestamos])
+
+  const sendAllErrorsToRevisarPrestamos = useCallback(async () => {
+    const errorRows = excelData.filter((r) => r._hasErrors)
+    if (errorRows.length === 0) {
+      addToast('warning', 'No hay filas con errores para enviar')
+      return
+    }
+    if (serviceStatus === 'offline') {
+      addToast('error', 'Sin conexión')
+      return
+    }
+    setIsSavingIndividual(true)
+    setBatchProgress({ sent: 0, total: errorRows.length })
+    let ok = 0
+    let fail = 0
+    const CHUNK = 8
+    for (let i = 0; i < errorRows.length; i += CHUNK) {
+      const chunk = errorRows.slice(i, i + CHUNK)
+      const results = await Promise.allSettled(chunk.map((row) => sendToRevisarPrestamos(row, true, true)))
+      const chunkOk = new Set<number>()
+      results.forEach((r, idx) => {
+        if (r.status === 'fulfilled' && r.value) {
+          ok++
+          chunkOk.add(chunk[idx]._rowIndex)
+        } else fail++
+      })
+      if (chunkOk.size > 0) setEnviadosRevisar((prev) => new Set([...prev, ...chunkOk]))
+      setBatchProgress({ sent: Math.min(i + CHUNK, errorRows.length), total: errorRows.length })
+    }
+    setBatchProgress(null)
+    setIsSavingIndividual(false)
+    if (ok > 0 && fail === 0) addToast('success', `✓ ${ok} fila(s) enviada(s) a Revisar Préstamos`)
+    else if (ok > 0 && fail > 0) addToast('warning', `✓ ${ok} enviada(s) | ✗ ${fail} fallo(s)`)
+    else if (fail > 0) addToast('error', `✗ ${fail} fila(s) no se pudieron enviar`)
+    if (ok > 0) refreshPrestamos()
+  }, [excelData, serviceStatus, sendToRevisarPrestamos, addToast, refreshPrestamos])
 
   const saveIndividualPrestamo = useCallback(
     async (row: PrestamoExcelRow): Promise<boolean> => {
@@ -133,9 +250,9 @@ export function useExcelUploadPrestamos({ onClose, onSuccess }: ExcelUploaderPre
 
         await prestamoService.createPrestamo(prestamoData as any)
         setSavedRows((prev) => new Set([...prev, row._rowIndex]))
+        setExcelData((prev) => prev.filter((r) => r._rowIndex !== row._rowIndex))
         refreshPrestamos()
         addToast('success', `Préstamo ${row.cedula} guardado`)
-        // Si era el único préstamo válido pendiente → volver a /pagos/prestamos
         const valid = getValidRows()
         if (valid.length === 1 && valid[0]._rowIndex === row._rowIndex) {
           onSuccess?.()
@@ -327,6 +444,9 @@ export function useExcelUploadPrestamos({ onClose, onSuccess }: ExcelUploaderPre
     showPreview,
     toasts,
     savedRows,
+    enviadosRevisar,
+    isSendingAllRevisar,
+    batchProgress,
     isSavingIndividual,
     savingProgress,
     serviceStatus,
@@ -338,8 +458,12 @@ export function useExcelUploadPrestamos({ onClose, onSuccess }: ExcelUploaderPre
     updateCellValue,
     setShowPreview,
     getValidRows,
+    getRowsToRevisarPrestamos,
     saveIndividualPrestamo,
     saveAllValid,
+    sendToRevisarPrestamos,
+    sendAllToRevisarPrestamos,
+    sendAllErrorsToRevisarPrestamos,
     onClose,
     navigate,
   }

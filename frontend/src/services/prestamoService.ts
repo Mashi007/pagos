@@ -81,6 +81,55 @@ class PrestamoService {
     return await apiClient.post<Prestamo>(this.baseUrl, data)
   }
 
+  // --- Revisar Préstamos (prestamos_con_errores) ---
+
+  /** Lista de préstamos enviados a revisión (paginado) */
+  async getPrestamosConErrores(
+    page = 1,
+    perPage = 20
+  ): Promise<{
+    total: number
+    page: number
+    per_page: number
+    items: Array<{
+      id: number
+      cedula_cliente: string | null
+      total_financiamiento: string | null
+      modalidad_pago: string | null
+      numero_cuotas: number | null
+      producto: string | null
+      analista: string | null
+      concesionario: string | null
+      errores: string | null
+      fila_origen: number | null
+      estado: string | null
+      fecha_registro: string | null
+    }>
+  }> {
+    const params = new URLSearchParams({ page: String(page), per_page: String(perPage) })
+    return await apiClient.get(`${this.baseUrl}/revisar/lista?${params}`)
+  }
+
+  /** Enviar una fila a Revisar Préstamos (desde carga masiva). */
+  async agregarPrestamoARevisar(data: {
+    cedula_cliente?: string | null
+    total_financiamiento?: number | null
+    modalidad_pago?: string | null
+    numero_cuotas?: number | null
+    producto?: string | null
+    analista?: string | null
+    concesionario?: string | null
+    errores_descripcion?: string | null
+    fila_origen?: number | null
+  }): Promise<{ id: number; mensaje: string }> {
+    return await apiClient.post(`${this.baseUrl}/revisar/agregar`, data)
+  }
+
+  /** Eliminar de la lista Revisar Préstamos (marcar como resuelto) */
+  async resolverPrestamoError(errorId: number): Promise<void> {
+    await apiClient.delete(`${this.baseUrl}/revisar/${errorId}`)
+  }
+
   // Actualizar préstamo (backend devuelve el préstamo actualizado directamente)
   async updatePrestamo(id: number, data: Partial<PrestamoForm>): Promise<Prestamo> {
     return await apiClient.put<Prestamo>(`${this.baseUrl}/${id}`, data)
