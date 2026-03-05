@@ -63,7 +63,6 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
     saveIndividualClient,
     saveAllValidClients,
     confirmSaveOmittingExistingCedulas,
-    cancelCedulasModal,
     sendToRevisarClientes,
     sendAllToRevisarClientes,
     sendAllErrorsToRevisarClientes,

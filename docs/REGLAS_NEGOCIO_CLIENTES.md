@@ -60,15 +60,17 @@
 
 ## 6. Duplicados (no permitido: misma cédula, nombre, email o teléfono)
 
-- **Regla de negocio deseada:** No se permite crear un cliente con:
-  - La misma **cédula** y el mismo **nombre completo** que otro cliente, ni
-  - El mismo **email** que otro cliente (si el email está informado).
-- **Estado actual:** El backend **no** valida explícitamente estos duplicados en `create_cliente`. El frontend está preparado para:
-  - Errores **400 / 409 / 503** con `detail` que contenga referencias a “cedula” y “nombre” o “email”.
-  - Mostrar mensaje amigable y opción “Abrir cliente existente” si el servidor devuelve un ID de cliente existente en el mensaje.
-- **Recomendación:** Implementar en backend la validación antes de `db.add(row)` en `create_cliente` (y, si se desea, en `update_cliente` para email):
-  - Misma cédula + mismos nombres → 409 con mensaje y `existing_id`.
-  - Mismo email (no vacío) → 409 con mensaje y `existing_id`.
+- **Regla de negocio:** No se permite crear ni actualizar un cliente dejando:
+  - **Cédula duplicada** (misma cédula que otro cliente; excepción: `Z999999999` puede repetirse).
+  - **Nombre completo duplicado** (mismo nombre que otro cliente).
+  - **Email duplicado** (mismo email que otro cliente, si está informado).
+- **Estado actual:** El backend **sí** valida en `create_cliente` y en `update_cliente` (`_perform_update_cliente`):
+  - Misma cédula (distinta de Z999999999) → **409** con mensaje y ID del cliente existente.
+  - Mismo nombre completo → **409**.
+  - Mismo email (no vacío) → **409**.
+  - Teléfono duplicado: se reemplaza por `+589999999999` en create; en update se sustituye para evitar duplicado.
+- **Carga masiva:** En `upload_clientes_excel` se valida cédula y email contra BD y contra el lote; filas con "Cédula duplicada" o "Email duplicado" van a `clientes_con_errores`.
+- **Referencia:** Ver también `docs/REGLAS_NEGOCIO_DUPLICADOS.md` (regla explícita: **clientes – cédula no duplicada**).
 
 ---
 
