@@ -183,8 +183,8 @@ class ClienteService {
   }
 
   // Obtener estadísticas generales de todos los clientes
-  async getStats(): Promise<{ total: number; activos: number; inactivos: number; finalizados: number }> {
-    const response = await apiClient.get<{ total: number; activos: number; inactivos: number; finalizados: number }>(
+  async getStats(): Promise<{ total: number; activos: number; inactivos: number; finalizados: number; nuevos_este_mes: number }> {
+    const response = await apiClient.get<{ total: number; activos: number; inactivos: number; finalizados: number; nuevos_este_mes: number }>(
       `${this.baseUrl}/stats`
     )
     return response

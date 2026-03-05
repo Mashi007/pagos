@@ -26,8 +26,10 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
   const {
     isDragging,
     uploadedFile,
+    excelData,
     isProcessing,
     showPreview,
+    setShowPreview,
     showValidationModal,
     setShowValidationModal,
     toasts,
@@ -49,7 +51,6 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
     handleDrop,
     handleFileSelect,
     updateCellValue,
-    setShowPreview,
     removeToast,
     getValidClients,
     getDisplayData,
@@ -91,10 +92,10 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.9, opacity: 0 }}
-        className="bg-white rounded-lg shadow-xl max-w-[95vw] w-full max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-lg shadow-xl max-w-[95vw] w-full max-h-[90vh] flex flex-col"
       >
-        {/* Header */}
-        <div className="bg-gradient-to-r from-green-600 to-green-700 text-white p-6 rounded-t-lg">
+        {/* Cabecera fija (fuera del scroll) */}
+        <div className="flex-shrink-0 bg-gradient-to-r from-green-600 to-green-700 text-white p-6 rounded-t-lg">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <FileSpreadsheet className="h-6 w-6" />
@@ -124,21 +125,15 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                     : 'Verificando...'}
               </div>
             </div>
-            <div className="flex items-center space-x-2">
-              <Button
-                onClick={onClose}
-                variant="ghost"
-                size="sm"
-                className="text-white hover:bg-white/20 p-2"
-              >
-                <X className="h-5 w-5" />
-              </Button>
-            </div>
+            <Button onClick={onClose} variant="ghost" size="sm" className="text-white hover:bg-white/20 p-2">
+              <X className="h-5 w-5" />
+            </Button>
           </div>
         </div>
 
-        <div className="p-6 space-y-6">
-          {!showPreview ? (
+        {/* Contenido con scroll */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6">
+          {excelData.length === 0 && enviadosRevisar.size === 0 && getSavedClientsCount() === 0 ? (
             <Card>
               <CardContent className="pt-6">
                 <div
@@ -151,12 +146,11 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                 >
                   <Upload className="h-12 w-12 mx-auto mb-4 text-gray-400" />
                   <h3 className="text-lg font-semibold mb-2">
-                    {isDragging ? 'Suelta el archivo aquí' : 'Sube tu archivo Excel'}
+                    {isDragging ? 'Suelta el archivo aquÃ­' : 'Sube tu archivo Excel'}
                   </h3>
-                  <p className="text-gray-600 mb-4">
-                    Arrastra y suelta tu archivo Excel o haz clic para seleccionar
+                  <p className="text-gray-600 mb-4 text-sm">
+                    Columnas: CÃ©dula | Nombres | Apellidos | Email | TelÃ©fono | Estado (opcional). CÃ©dula no duplicada en sistema ni en el archivo.
                   </p>
-
                   <Button
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isProcessing}
@@ -165,374 +159,69 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                     <FileSpreadsheet className="mr-2 h-4 w-4" />
                     Seleccionar archivo
                   </Button>
-
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".xlsx,.xls"
-                    onChange={handleFileSelect}
-                    className="hidden"
-                  />
-
+                  <input ref={fileInputRef} type="file" accept=".xlsx,.xls" onChange={handleFileSelect} className="hidden" />
                   {isProcessing && (
                     <div className="mt-4">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto" />
+                      <Loader2 className="h-8 w-8 animate-spin mx-auto text-green-600" />
                       <p className="text-sm text-gray-600 mt-2">Procesando archivo...</p>
                     </div>
                   )}
-
                   {uploadedFile && (
                     <div className="mt-4 p-3 bg-green-50 rounded-lg">
-                      <div className="flex items-center space-x-2">
-                        <FileSpreadsheet className="h-5 w-5 text-green-600" />
-                        <span className="text-sm font-medium text-green-800">{uploadedFile.name}</span>
-                      </div>
+                      <FileSpreadsheet className="h-5 w-5 text-green-600 inline mr-2" />
+                      <span className="text-sm font-medium text-green-800">{uploadedFile.name}</span>
                     </div>
                   )}
                 </div>
               </CardContent>
             </Card>
-          ) : (
+          ) : null}
+
+          {/* RESUMEN FINAL: excelData vacÃ­o pero filas ya procesadas */}
+          {excelData.length === 0 && (enviadosRevisar.size > 0 || getSavedClientsCount() > 0) && (
+            <Card className="border-green-300 bg-green-50">
+              <CardContent className="pt-8 pb-8 text-center space-y-4">
+                <CheckCircle className="h-16 w-16 mx-auto text-green-500" />
+                <h3 className="text-xl font-bold text-green-800">¡Procesamiento completado!</h3>
+                <div className="flex justify-center gap-6 text-sm mt-2">
+                  {getSavedClientsCount() > 0 && (
+                    <span className="bg-green-100 text-green-800 px-4 py-2 rounded-full font-semibold">
+                      ✓ {getSavedClientsCount()} guardado(s)
+                    </span>
+                  )}
+                  {enviadosRevisar.size > 0 && (
+                    <span className="bg-amber-100 text-amber-800 px-4 py-2 rounded-full font-semibold">
+                      ⚠ {enviadosRevisar.size} enviado(s) a Revisar Clientes
+                    </span>
+                  )}
+                </div>
+                <div className="flex justify-center gap-3 pt-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => { navigate('/clientes'); onClose(); }}
+                    className="bg-amber-50 border-amber-300 text-amber-800"
+                  >
+                    <Search className="mr-2 h-4 w-4" />
+                    Ver Revisar Clientes
+                  </Button>
+                  <Button variant="outline" onClick={onClose} className="border-gray-300">
+                    <X className="mr-2 h-4 w-4" />
+                    Cerrar
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Tabla y estadÃ­sticas cuando hay datos */}
+          {excelData.length > 0 && (
             <div className="space-y-4">
-              {/* Stats */}
-              <Card className="border-blue-200 bg-blue-50">
-                <CardContent className="pt-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <Badge variant="outline" className="text-blue-700">
-                        Total: {totalRows} filas
-                      </Badge>
-                      <Badge variant="outline" className="text-green-700">
-                        Válidos: {getValidClients().length}
-                      </Badge>
-                      <Badge variant="outline" className="text-blue-700">
-                        Guardados: {getSavedClientsCount()}
-                      </Badge>
-                      <Badge variant="outline" className="text-red-700">
-                        Con errores:{' '}
-                        {totalRows - getValidClients().length - getSavedClientsCount()}
-                      </Badge>
-                      {hasDuplicates && (
-                        <Badge
-                          variant="outline"
-                          className="text-red-800 bg-red-100 border-red-400"
-                        >
-                          Regla estricta: NO DUPLICADOS (cédula, nombres, email, tel). Corrija las
-                          filas marcadas para poder guardarlas.
-                        </Badge>
-                      )}
-                      {getSavedClientsCount() > 0 && (
-                        <Badge variant="outline" className="text-green-700 bg-green-50">
-                          {getSavedClientsCount()} en Dashboard
-                        </Badge>
-                      )}
-                      {enviadosRevisar.size > 0 && (
-                        <Badge variant="outline" className="text-amber-700 bg-amber-50">
-                          {enviadosRevisar.size} enviado(s) a Revisar Clientes
-                        </Badge>
-                      )}
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          id="showOnlyPending"
-                          checked={showOnlyPending}
-                          onChange={(e) => setShowOnlyPending(e.target.checked)}
-                          className="rounded"
-                        />
-                        <label htmlFor="showOnlyPending" className="text-sm text-gray-600">
-                          Solo pendientes
-                        </label>
-                      </div>
-                    </div>
-                    <div className="flex space-x-2">
-                      <Button onClick={() => setShowPreview(false)} variant="outline" size="sm">
-                        <X className="mr-2 h-4 w-4" />
-                        Cambiar archivo
-                      </Button>
-                      {getSavedClientsCount() > 0 && (
-                        <Button
-                          onClick={() => navigate('/clientes')}
-                          variant="outline"
-                          size="sm"
-                          className="bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100 font-semibold"
-                        >
-                          <Eye className="mr-2 h-4 w-4" />
-                          Ir al Dashboard de Clientes
-                        </Button>
-                      )}
-                      {enviadosRevisar.size > 0 && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => navigate('/clientes')}
-                          className="bg-amber-50 border-amber-300 text-amber-800"
-                          title="Ver lista Revisar Clientes"
-                        >
-                          <Search className="mr-2 h-4 w-4" />
-                          Ver Revisar Clientes
-                        </Button>
-                      )}
-                      {getRowsToRevisarClientes().length > 0 && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => sendAllToRevisarClientes()}
-                          disabled={isSendingAllRevisar || serviceStatus === 'offline'}
-                          className="bg-amber-100 border-amber-400 text-amber-800 hover:bg-amber-200"
-                          title="Enviar todas las filas pendientes a Revisar Clientes"
-                        >
-                          {isSendingAllRevisar ? (
-                            <>
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              Enviando...
-                            </>
-                          ) : (
-                            <>
-                              <Search className="mr-2 h-4 w-4" />
-                              ENVIAR REVISAR CLIENTES ({getRowsToRevisarClientes().length})
-                            </>
-                          )}
-                        </Button>
-                      )}
-                      {totalRows - validRows > 0 && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => sendAllErrorsToRevisarClientes()}
-                          disabled={isSavingIndividual || serviceStatus === 'offline'}
-                          className="bg-yellow-100 border-yellow-500 text-yellow-800 hover:bg-yellow-200"
-                          title="Enviar solo filas con errores a Revisar Clientes"
-                        >
-                          {isSavingIndividual && !isSendingAllRevisar ? (
-                            <>
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              Enviando...
-                            </>
-                          ) : (
-                            <>
-                              <AlertTriangle className="mr-2 h-4 w-4" />
-                              Revisar Clientes ({totalRows - validRows})
-                            </>
-                          )}
-                        </Button>
-                      )}
-                      <Button
-                        onClick={saveAllValidClients}
-                        disabled={
-                          getValidClients().length === 0 ||
-                          isSavingIndividual ||
-                          serviceStatus === 'offline'
-                        }
-                        className="bg-green-600 hover:bg-green-700 disabled:opacity-50"
-                      >
-                        {isSavingIndividual ? (
-                          <>
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                            Guardando...
-                          </>
-                        ) : (
-                          <>
-                            <Save className="mr-2 h-4 w-4" />
-                            Guardar Todos ({getValidClients().length})
-                          </>
-                        )}
-                      </Button>
-                      {batchProgress && (
-                        <span className="text-sm text-gray-600">
-                          {batchProgress.sent}/{batchProgress.total} enviados
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Validation modal */}
-              <AnimatePresence>
-                {showValidationModal && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-                  >
-                    <motion.div
-                      initial={{ scale: 0.9, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0.9, opacity: 0 }}
-                      className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] overflow-y-auto"
-                    >
-                      <div className="p-6">
-                        <div className="flex items-center justify-between mb-4">
-                          <h2 className="text-2xl font-bold text-red-600 flex items-center">
-                            <AlertTriangle className="mr-2 h-6 w-6" />
-                            Errores de Validación Encontrados
-                          </h2>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setShowValidationModal(false)}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-
-                        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                          <p className="text-sm text-red-700">
-                            <strong>No se puede guardar:</strong> Se encontraron{' '}
-                            {totalRows - validRows} registros con errores que deben corregirse antes
-                            de continuar.
-                          </p>
-                          <p className="text-sm text-red-600 mt-1">
-                            <strong>Errores incluyen:</strong> Campos de validación inválidos.
-                          </p>
-                        </div>
-
-                        <div className="space-y-4 max-h-[50vh] overflow-y-auto">
-                          {getDisplayData()
-                            .filter((row) => row._hasErrors)
-                            .map((row, index) => (
-                              <div
-                                key={index}
-                                className="border border-red-200 rounded-lg p-4 bg-red-50"
-                              >
-                                <div className="flex items-center justify-between mb-3">
-                                  <h3 className="font-semibold text-red-800">
-                                    Fila {row._rowIndex}: {row.nombres}
-                                  </h3>
-                                  <Badge
-                                    variant="outline"
-                                    className="text-red-600 border-red-300"
-                                  >
-                                    {Object.keys(row._validation).filter(
-                                      (f) => !row._validation[f]?.isValid
-                                    ).length}{' '}
-                                    errores
-                                  </Badge>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                  {Object.entries(row._validation).map(([field, validation]) => {
-                                    const v = validation as { isValid?: boolean; message?: string }
-                                    if (v?.isValid) return null
-                                    return (
-                                      <div key={field} className="flex items-start space-x-2">
-                                        <div className="w-2 h-2 bg-red-500 rounded-full mt-2 flex-shrink-0" />
-                                        <div className="flex-1">
-                                          <span className="text-sm font-medium text-gray-700 capitalize">
-                                            {field}:
-                                          </span>
-                                          <div className="text-sm text-red-600 mt-1">
-                                            {v?.message}
-                                          </div>
-                                        </div>
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                              </div>
-                            ))}
-                        </div>
-
-                        <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                          <div className="flex items-start space-x-2">
-                            <AlertTriangle className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                            <div className="text-sm text-blue-800">
-                              <strong>Instrucciones para corregir:</strong>
-                              <ul className="mt-2 ml-4 list-disc space-y-1">
-                                <li>
-                                  Los campos con fondo rojo en la tabla tienen errores de validación
-                                </li>
-                                <li>Haz clic en cualquier campo para editarlo directamente</li>
-                                <li>
-                                  Los errores se corrigen automáticamente al escribir valores
-                                  válidos
-                                </li>
-                                <li>
-                                  Una vez corregidos todos los errores, podrás guardar los datos
-                                </li>
-                              </ul>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="mt-6 flex justify-end space-x-3">
-                          <Button variant="outline" onClick={() => setShowValidationModal(false)}>
-                            Cerrar
-                          </Button>
-                          <Button
-                            onClick={() => {
-                              setShowValidationModal(false)
-                              const tableElement = document.querySelector('.overflow-x-auto')
-                              if (tableElement) {
-                                tableElement.scrollIntoView({ behavior: 'smooth' })
-                              }
-                            }}
-                            className="bg-blue-600 hover:bg-blue-700"
-                          >
-                            Ir a Corregir Errores
-                          </Button>
-                        </div>
-                      </div>
-                    </motion.div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Cedulas existentes modal */}
-              <AnimatePresence>
-                {showModalCedulasExistentes && cedulasExistentesEnBD.length > 0 && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-                  >
-                    <motion.div
-                      initial={{ scale: 0.9, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0.9, opacity: 0 }}
-                      className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6"
-                    >
-                      <div className="flex items-center gap-2 mb-4">
-                        <AlertTriangle className="h-6 w-6 text-amber-600 flex-shrink-0" />
-                        <h2 className="text-xl font-bold text-gray-800">
-                          Cédulas ya registradas
-                        </h2>
-                      </div>
-                      <p className="text-sm text-gray-600 mb-3">
-                        Las siguientes cédulas ya existen en el sistema. Si continúa, esas filas se
-                        omitirán y solo se guardarán el resto.
-                      </p>
-                      <ul className="mb-4 max-h-40 overflow-y-auto rounded border border-gray-200 bg-gray-50 p-2 text-sm font-mono">
-                        {cedulasExistentesEnBD.map((ced, idx) => (
-                          <li key={idx} className="py-0.5">
-                            {ced}
-                          </li>
-                        ))}
-                      </ul>
-                      <div className="flex justify-end gap-2">
-                        <Button variant="outline" onClick={cancelCedulasModal}>
-                          Cancelar
-                        </Button>
-                        <Button
-                          className="bg-green-600 hover:bg-green-700"
-                          onClick={confirmSaveOmittingExistingCedulas}
-                        >
-                          Sí, guardar el resto
-                        </Button>
-                      </div>
-                    </motion.div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
               {/* Preview table */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center">
                     <Eye className="mr-2 h-5 w-5" />
-                    Previsualización de Datos
+                    PrevisualizaciÃ³n de Datos
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -547,25 +236,25 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                             Fila
                           </th>
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-24">
-                            Cédula
+                            CÃ©dula
                           </th>
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-48">
                             Nombres y Apellidos
                           </th>
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-28">
-                            Teléfono
+                            TelÃ©fono
                           </th>
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-40">
                             Email
                           </th>
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-48">
-                            Dirección
+                            DirecciÃ³n
                           </th>
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-24">
                             Fecha Nac.
                           </th>
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-32">
-                            Ocupación
+                            OcupaciÃ³n
                           </th>
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-24">
                             Estado
@@ -896,7 +585,7 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                                     <span className="text-xs">({motivosDuplicado.join(', ')})</span>
                                   </div>
                                 ) : (
-                                  <span className="text-gray-400 text-xs">—</span>
+                                  <span className="text-gray-400 text-xs">Ã¢â‚¬â€</span>
                                 )}
                               </td>
                             </tr>
@@ -910,6 +599,307 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                     </div>
                   </div>
                 </CardContent>
+              {batchProgress && (
+                <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
+                  <div className="flex items-center justify-between mb-1 text-sm font-medium text-blue-800">
+                    <span>Enviando a Revisar Clientes...</span>
+                    <span>{batchProgress.sent} / {batchProgress.total}</span>
+                  </div>
+                  <div className="w-full bg-blue-200 rounded-full h-2">
+                    <div
+                      className="bg-blue-600 h-2 rounded-full transition-all duration-200"
+                      style={{ width: `${Math.round((batchProgress.sent / batchProgress.total) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <Card className="border-green-200 bg-green-50">
+                <CardContent className="pt-4">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge variant="outline">Total: {totalRows} filas</Badge>
+                      <Badge variant="outline" className="text-green-700">VÃ¡lidos: {getValidClients().length}</Badge>
+                      <Badge variant="outline">Guardados: {getSavedClientsCount()}</Badge>
+                      {hasDuplicates && (
+                        <Badge variant="outline" className="text-red-800 bg-red-100 border-red-400">
+                          NO DUPLICADOS (cÃ©dula, nombres, email, tel)
+                        </Badge>
+                      )}
+                      {enviadosRevisar.size > 0 && (
+                        <Badge variant="outline" className="text-amber-700 border-amber-300">
+                          {enviadosRevisar.size} a Revisar Clientes
+                        </Badge>
+                      )}
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id="showOnlyPending"
+                          checked={showOnlyPending}
+                          onChange={(e) => setShowOnlyPending(e.target.checked)}
+                          className="rounded"
+                        />
+                        <label htmlFor="showOnlyPending" className="text-sm text-gray-600">Solo pendientes</label>
+                      </div>
+                      <Button variant="outline" size="sm" onClick={() => setShowPreview(false)}>
+                        <X className="mr-2 h-4 w-4" />
+                        Cambiar archivo
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => { navigate('/clientes'); onClose(); }} className="bg-green-50 border-green-300">
+                        <Eye className="mr-2 h-4 w-4" />
+                        Ir a Clientes
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => { navigate('/clientes'); onClose(); }}
+                        className="bg-amber-50 border-amber-300"
+                        title="Ver clientes enviados a revisión"
+                      >
+                        <Search className="mr-2 h-4 w-4" />
+                        Revisar Clientes
+                      </Button>
+                      {getRowsToRevisarClientes().length > 0 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => sendAllToRevisarClientes()}
+                          disabled={isSendingAllRevisar || serviceStatus === 'offline'}
+                          className="bg-amber-100 border-amber-400 text-amber-800 hover:bg-amber-200"
+                          title="Enviar todas las filas pendientes a Revisar Clientes"
+                        >
+                          {isSendingAllRevisar ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Enviando...
+                            </>
+                          ) : (
+                            <>
+                              <Search className="mr-2 h-4 w-4" />
+                              ENVIAR REVISAR CLIENTES ({getRowsToRevisarClientes().length})
+                            </>
+                          )}
+                        </Button>
+                      )}
+                    </div>
+                    <Button
+                      onClick={saveAllValidClients}
+                      disabled={getValidClients().length === 0 || isSavingIndividual || serviceStatus === 'offline'}
+                      className="bg-green-600 hover:bg-green-700"
+                    >
+                      {isSavingIndividual ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          Guardando...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="mr-2 h-4 w-4" />
+                          Guardar Todos ({getValidClients().length})
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      onClick={sendAllErrorsToRevisarClientes}
+                      disabled={totalRows - validRows === 0 || isSavingIndividual || serviceStatus === 'offline'}
+                      className="bg-yellow-600 hover:bg-yellow-700"
+                    >
+                      {isSavingIndividual ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          Enviando...
+                        </>
+                      ) : (
+                        <>
+                          <AlertTriangle className="mr-2 h-4 w-4" />
+                          Revisar Clientes ({totalRows - validRows})
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Validation modal */}
+              <AnimatePresence>
+                {showValidationModal && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+                  >
+                    <motion.div
+                      initial={{ scale: 0.9, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0.9, opacity: 0 }}
+                      className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] overflow-y-auto"
+                    >
+                      <div className="p-6">
+                        <div className="flex items-center justify-between mb-4">
+                          <h2 className="text-2xl font-bold text-red-600 flex items-center">
+                            <AlertTriangle className="mr-2 h-6 w-6" />
+                            Errores de ValidaciÃ³n Encontrados
+                          </h2>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setShowValidationModal(false)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+
+                        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                          <p className="text-sm text-red-700">
+                            <strong>No se puede guardar:</strong> Se encontraron{' '}
+                            {totalRows - validRows} registros con errores que deben corregirse antes
+                            de continuar.
+                          </p>
+                          <p className="text-sm text-red-600 mt-1">
+                            <strong>Errores incluyen:</strong> Campos de validaciÃƒÂ³n invÃ¡lidos.
+                          </p>
+                        </div>
+
+                        <div className="space-y-4 max-h-[50vh] overflow-y-auto">
+                          {getDisplayData()
+                            .filter((row) => row._hasErrors)
+                            .map((row, index) => (
+                              <div
+                                key={index}
+                                className="border border-red-200 rounded-lg p-4 bg-red-50"
+                              >
+                                <div className="flex items-center justify-between mb-3">
+                                  <h3 className="font-semibold text-red-800">
+                                    Fila {row._rowIndex}: {row.nombres}
+                                  </h3>
+                                  <Badge
+                                    variant="outline"
+                                    className="text-red-600 border-red-300"
+                                  >
+                                    {Object.keys(row._validation).filter(
+                                      (f) => !row._validation[f]?.isValid
+                                    ).length}{' '}
+                                    errores
+                                  </Badge>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                  {Object.entries(row._validation).map(([field, validation]) => {
+                                    const v = validation as { isValid?: boolean; message?: string }
+                                    if (v?.isValid) return null
+                                    return (
+                                      <div key={field} className="flex items-start space-x-2">
+                                        <div className="w-2 h-2 bg-red-500 rounded-full mt-2 flex-shrink-0" />
+                                        <div className="flex-1">
+                                          <span className="text-sm font-medium text-gray-700 capitalize">
+                                            {field}:
+                                          </span>
+                                          <div className="text-sm text-red-600 mt-1">
+                                            {v?.message}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            ))}
+                        </div>
+
+                        <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                          <div className="flex items-start space-x-2">
+                            <AlertTriangle className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                            <div className="text-sm text-blue-800">
+                              <strong>Instrucciones para corregir:</strong>
+                              <ul className="mt-2 ml-4 list-disc space-y-1">
+                                <li>
+                                  Los campos con fondo rojo en la tabla tienen errores de validaciÃƒÂ³n
+                                </li>
+                                <li>Haz clic en cualquier campo para editarlo directamente</li>
+                                <li>
+                                  Los errores se corrigen automÃ¡ticamente al escribir valores
+                                  vÃ¡lidos
+                                </li>
+                                <li>
+                                  Una vez corregidos todos los errores, podrÃ¡s guardar los datos
+                                </li>
+                              </ul>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-6 flex justify-end space-x-3">
+                          <Button variant="outline" onClick={() => setShowValidationModal(false)}>
+                            Cerrar
+                          </Button>
+                          <Button
+                            onClick={() => {
+                              setShowValidationModal(false)
+                              const tableElement = document.querySelector('.overflow-x-auto')
+                              if (tableElement) {
+                                tableElement.scrollIntoView({ behavior: 'smooth' })
+                              }
+                            }}
+                            className="bg-blue-600 hover:bg-blue-700"
+                          >
+                            Ir a Corregir Errores
+                          </Button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Cedulas existentes modal */}
+              <AnimatePresence>
+                {showModalCedulasExistentes && cedulasExistentesEnBD.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+                  >
+                    <motion.div
+                      initial={{ scale: 0.9, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0.9, opacity: 0 }}
+                      className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6"
+                    >
+                      <div className="flex items-center gap-2 mb-4">
+                        <AlertTriangle className="h-6 w-6 text-amber-600 flex-shrink-0" />
+                        <h2 className="text-xl font-bold text-gray-800">
+                          CÃ©dulas ya registradas
+                        </h2>
+                      </div>
+                      <p className="text-sm text-gray-600 mb-3">
+                        Las siguientes cÃ©dulas ya existen en el sistema. Si continÃºa, esas filas se
+                        omitirÃ¡n y solo se guardarÃ¡n el resto.
+                      </p>
+                      <ul className="mb-4 max-h-40 overflow-y-auto rounded border border-gray-200 bg-gray-50 p-2 text-sm font-mono">
+                        {cedulasExistentesEnBD.map((ced, idx) => (
+                          <li key={idx} className="py-0.5">
+                            {ced}
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="flex justify-end gap-2">
+                        <Button variant="outline" onClick={cancelCedulasModal}>
+                          Cancelar
+                        </Button>
+                        <Button
+                          className="bg-green-600 hover:bg-green-700"
+                          onClick={confirmSaveOmittingExistingCedulas}
+                        >
+                          SÃ­, guardar el resto
+                        </Button>
+                      </div>
+                    </motion.div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               </Card>
             </div>
           )}

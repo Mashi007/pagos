@@ -6,6 +6,7 @@ interface ClientesStats {
   activos: number
   inactivos: number
   finalizados: number
+  nuevos_este_mes: number
 }
 
 export function useClientesStats() {

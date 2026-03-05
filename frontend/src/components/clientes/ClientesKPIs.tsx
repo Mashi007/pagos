@@ -3,16 +3,15 @@ import { Badge } from '../../components/ui/badge'
 import {
   Users,
   UserCheck,
-  UserX,
+  UserPlus,
   UserMinus,
   TrendingUp,
-  TrendingDown,
-  Minus
+  TrendingDown
 } from 'lucide-react'
 
 interface ClientesKPIsProps {
   activos: number
-  inactivos: number
+  nuevosEsteMes: number
   finalizados: number
   total: number
   isLoading?: boolean
@@ -20,7 +19,7 @@ interface ClientesKPIsProps {
 
 export function ClientesKPIs({
   activos,
-  inactivos,
+  nuevosEsteMes,
   finalizados,
   total,
   isLoading = false
@@ -28,7 +27,6 @@ export function ClientesKPIs({
 
   // Calcular porcentajes
   const porcentajeActivos = total > 0 ? Math.round((activos / total) * 100) : 0
-  const porcentajeInactivos = total > 0 ? Math.round((inactivos / total) * 100) : 0
   const porcentajeFinalizados = total > 0 ? Math.round((finalizados / total) * 100) : 0
 
   if (isLoading) {
@@ -89,23 +87,22 @@ export function ClientesKPIs({
         </CardContent>
       </Card>
 
-      {/* Clientes Inactivos */}
+      {/* Nuevos Clientes en este mes */}
       <Card className="border-orange-200 bg-orange-50">
         <CardContent className="p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-orange-600 mb-1">Clientes Inactivos</p>
-              <p className="text-2xl font-bold text-orange-700">{inactivos.toLocaleString()}</p>
+              <p className="text-sm font-medium text-orange-600 mb-1">Nuevos Clientes en este mes</p>
+              <p className="text-2xl font-bold text-orange-700">{nuevosEsteMes.toLocaleString()}</p>
             </div>
             <div className="p-2 bg-orange-100 rounded-full">
-              <UserX className="h-5 w-5 text-orange-600" />
+              <UserPlus className="h-5 w-5 text-orange-600" />
             </div>
           </div>
-          <div className="mt-2 flex items-center gap-2">
+          <div className="mt-2">
             <Badge variant="outline" className="text-orange-700 border-orange-300">
-              {porcentajeInactivos}%
+              Este mes
             </Badge>
-            <Minus className="h-4 w-4 text-orange-600" />
           </div>
         </CardContent>
       </Card>

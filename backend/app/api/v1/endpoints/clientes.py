@@ -5,8 +5,10 @@ Endpoints de clientes: CONECTADOS A LA TABLA REAL `clientes` (public.clientes).
 - Todos los datos son REALES: listado, stats, get, create, update, delete y cambio de estado
   usan Depends(get_db) y consultas contra la tabla clientes. No hay stubs ni datos demo.
 """
+import calendar
 import logging
 import re
+from datetime import date
 from typing import Optional, Any
 
 from fastapi import APIRouter, Query, Depends, HTTPException
@@ -173,17 +175,33 @@ def get_clientes(
 @router.get("/stats")
 def get_clientes_stats(db: Session = Depends(get_db)):
     """
-    Estadísticas de clientes por estado: total, activos, inactivos, finalizados.
+    Estadísticas de clientes: total, activos, inactivos, finalizados, nuevos_este_mes.
+    nuevos_este_mes = clientes con fecha_registro en el mes actual (calendario).
     """
     total = db.scalar(select(func.count()).select_from(Cliente)) or 0
     activos = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "ACTIVO")) or 0
     inactivos = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "INACTIVO")) or 0
     finalizados = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "FINALIZADO")) or 0
+    # Nuevos clientes registrados en el mes actual
+    hoy = date.today()
+    primer_dia_mes = hoy.replace(day=1)
+    _, ultimo_dia_num = calendar.monthrange(hoy.year, hoy.month)
+    ultimo_dia_mes = hoy.replace(day=ultimo_dia_num)
+    nuevos_este_mes = (
+        db.scalar(
+            select(func.count()).select_from(Cliente).where(
+                func.date(Cliente.fecha_registro) >= primer_dia_mes,
+                func.date(Cliente.fecha_registro) <= ultimo_dia_mes,
+            )
+        )
+        or 0
+    )
     return {
         "total": total,
         "activos": activos,
         "inactivos": inactivos,
         "finalizados": finalizados,
+        "nuevos_este_mes": nuevos_este_mes,
     }
 
 
