@@ -302,7 +302,16 @@ export function ClientesList() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* KPIs primero (mismo orden que Pagos: KPIs → botones) */}
+      <ClientesKPIs
+        activos={statsData?.activos || 0}
+        nuevosEsteMes={statsData?.nuevos_este_mes ?? 0}
+        finalizados={statsData?.finalizados || 0}
+        total={statsData?.total || 0}
+        isLoading={statsLoading}
+      />
+
+      {/* Título y botones */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Clientes</h1>
@@ -521,15 +530,6 @@ export function ClientesList() {
           </CardContent>
         </Card>
       )}
-
-      {/* KPIs de Clientes */}
-      <ClientesKPIs
-        activos={statsData?.activos || 0}
-        nuevosEsteMes={statsData?.nuevos_este_mes ?? 0}
-        finalizados={statsData?.finalizados || 0}
-        total={statsData?.total || 0}
-        isLoading={statsLoading}
-      />
 
       {/* Filtros y búsqueda */}
       <Card>

@@ -147,7 +147,7 @@ export function ExcelUploaderPrestamosUI(props: ExcelUploaderPrestamosProps) {
                 <div className="flex justify-center gap-3 pt-2">
                   <Button
                     variant="outline"
-                    onClick={() => { navigate('/prestamos'); onClose(); }}
+                    onClick={() => { navigate('/prestamos?revisar=1'); onClose(); }}
                     className="bg-amber-50 border-amber-300 text-amber-800"
                   >
                     <Search className="mr-2 h-4 w-4" />
@@ -370,7 +370,7 @@ export function ExcelUploaderPrestamosUI(props: ExcelUploaderPrestamosProps) {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => { navigate('/prestamos'); onClose(); }}
+                        onClick={() => { navigate('/prestamos?revisar=1'); onClose(); }}
                         className="bg-amber-50 border-amber-300"
                         title="Ver préstamos enviados a revisión"
                       >

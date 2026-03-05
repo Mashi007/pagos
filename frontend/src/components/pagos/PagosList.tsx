@@ -198,9 +198,9 @@ export function PagosList() {
   }
   return (
     <div className="space-y-6">
-      {/* KPIs */}
+      {/* Estructura: KPIs primero, luego botones (igual que Clientes y Préstamos) */}
       <PagosKPIsNuevo />
-      {/* Acciones: título ya está en PagosPage */}
+      {/* Título de sección en PagosPage; aquí solo acciones */}
       <div className="flex justify-end items-center gap-3 flex-wrap">
           <Button
             variant="outline"

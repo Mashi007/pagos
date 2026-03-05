@@ -351,7 +351,7 @@ export function PrestamosList() {
         />
       )}
 
-      {/* KPIs - con filtros alineados a la lista */}
+      {/* KPIs primero (mismo orden que Pagos: KPIs → botones) */}
       <PrestamosKPIs
         analista={filters.analista}
         concesionario={filters.concesionario}
@@ -360,13 +360,13 @@ export function PrestamosList() {
         fecha_fin={filters.fecha_fin}
       />
 
-      {/* Encabezado */}
-      <div className="flex justify-between items-center">
+      {/* Título y botones */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Préstamos</h1>
           <p className="text-gray-600 mt-1">Gestión de préstamos y financiamiento</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-2 flex-wrap">
           <Button
             variant="outline"
             size="lg"
@@ -408,6 +408,8 @@ export function PrestamosList() {
               </span>
               <span className="ml-2">▼</span>
             </Button>
+            {/* Puente invisible para que el hover no se pierda al bajar el cursor al menú */}
+            <div className="absolute left-0 right-0 top-full h-2 z-40" aria-hidden="true" />
             {/* Dropdown Menu */}
             <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-50 hidden group-hover:block">
               <button
@@ -428,6 +430,145 @@ export function PrestamosList() {
           </div>
         </div>
       </div>
+
+      {/* Sección Revisar préstamos (enviados desde carga masiva) */}
+      {showRevisarPrestamos && (
+        <Card className="border-amber-200 bg-amber-50/50">
+          <CardContent className="p-4">
+            <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <Search className="w-5 h-5 text-amber-600" />
+                  Revisar préstamos
+                </h2>
+                <p className="text-sm text-gray-600 mt-1">
+                  Préstamos enviados desde la carga masiva para revisión manual. Descarga el Excel para corregir y reimportar.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSearchParams({})}
+                  title="Cerrar y volver al listado normal"
+                >
+                  <X className="w-4 h-4 mr-1" />
+                  Cerrar
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExportRevisarExcel}
+                  disabled={isExportingRevisar || !revisarData?.items?.length}
+                  title="Descargar todos los préstamos a revisar en Excel"
+                >
+                  {isExportingRevisar ? (
+                    <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4 mr-1" />
+                  )}
+                  Descargar Excel
+                </Button>
+              </div>
+            </div>
+            {revisarLoading ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="w-8 h-8 animate-spin text-amber-600" />
+              </div>
+            ) : !revisarData?.items?.length ? (
+              <p className="text-gray-500 text-center py-6">No hay préstamos pendientes de revisión.</p>
+            ) : (
+              <>
+                <div className="overflow-x-auto rounded border border-gray-200 bg-white">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-12">Fila</TableHead>
+                        <TableHead>Cédula</TableHead>
+                        <TableHead>Total</TableHead>
+                        <TableHead>Modalidad</TableHead>
+                        <TableHead className="w-16">Cuotas</TableHead>
+                        <TableHead>Producto</TableHead>
+                        <TableHead>Analista</TableHead>
+                        <TableHead>Concesionario</TableHead>
+                        <TableHead className="max-w-[200px]">Errores</TableHead>
+                        <TableHead>Estado</TableHead>
+                        <TableHead>Fecha</TableHead>
+                        <TableHead className="w-28">Acción</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {revisarData.items.map((item: {
+                        id: number
+                        fila_origen?: number | null
+                        cedula_cliente?: string | null
+                        total_financiamiento?: string | null
+                        modalidad_pago?: string | null
+                        numero_cuotas?: number | null
+                        producto?: string | null
+                        analista?: string | null
+                        concesionario?: string | null
+                        errores?: string | null
+                        estado?: string | null
+                        fecha_registro?: string | null
+                      }) => (
+                        <TableRow key={item.id}>
+                          <TableCell className="font-mono text-xs">{item.fila_origen ?? '-'}</TableCell>
+                          <TableCell>{item.cedula_cliente ?? '-'}</TableCell>
+                          <TableCell>{item.total_financiamiento ?? '-'}</TableCell>
+                          <TableCell>{item.modalidad_pago ?? '-'}</TableCell>
+                          <TableCell>{item.numero_cuotas ?? '-'}</TableCell>
+                          <TableCell>{item.producto ?? '-'}</TableCell>
+                          <TableCell>{item.analista ?? '-'}</TableCell>
+                          <TableCell>{item.concesionario ?? '-'}</TableCell>
+                          <TableCell className="max-w-[200px] truncate text-amber-700" title={item.errores ?? ''}>{item.errores ?? '-'}</TableCell>
+                          <TableCell>{item.estado ?? '-'}</TableCell>
+                          <TableCell>{item.fecha_registro ? formatDate(item.fecha_registro) : '-'}</TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-green-600 hover:text-green-700"
+                              onClick={() => handleResolverPrestamoError(item.id)}
+                            >
+                              Marcar resuelto
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                {revisarData.total > perPageRevisar && (
+                  <div className="flex items-center justify-between mt-3 text-sm text-gray-600">
+                    <span>
+                      {((pageRevisar - 1) * perPageRevisar) + 1}–{Math.min(pageRevisar * perPageRevisar, revisarData.total)} de {revisarData.total}
+                    </span>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={pageRevisar <= 1}
+                        onClick={() => setPageRevisar((p) => Math.max(1, p - 1))}
+                      >
+                        Anterior
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={pageRevisar * perPageRevisar >= revisarData.total}
+                        onClick={() => setPageRevisar((p) => p + 1)}
+                      >
+                        Siguiente
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Filtros y búsqueda */}
       <Card>
