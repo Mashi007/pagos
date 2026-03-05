@@ -408,7 +408,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                   value={row.numero_documento}
                                   onChange={(e) => updateCellValue(row, 'numero_documento', e.target.value)}
                                   className={inputClass(row._validation.numero_documento?.isValid !== false)}
-                                  placeholder="Cualquier formato (ej. 740087â€¦, BS./REF, con â‚¬ $)"
+                                  placeholder="Cualquier formato (ej. 740087…, BS./REF, con € $)"
                                   title="Cualquier formato aceptado. Solo no duplicados."
                                 />
                                 {row._validation.numero_documento?.isValid === false && (
@@ -424,7 +424,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                       onValueChange={(v) => updateCellValue(row, 'prestamo_id', v)}
                                     >
                                       <SelectTrigger className="h-8 text-xs">
-                                        <SelectValue placeholder="Seleccionar crÃ©dito" />
+                                        <SelectValue placeholder="Seleccionar crédito" />
                                       </SelectTrigger>
                                       <SelectContent>
                                         <SelectItem value="none">â€” Seleccionar â€”</SelectItem>
@@ -436,7 +436,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                       </SelectContent>
                                     </Select>
                                     {prestamosActivos.length > 1 && valorCredito === 'none' && (
-                                      <p className="text-xs text-amber-700 mt-0.5">{OBSERVACIONES_POR_CAMPO.prestamo_id ?? 'Crédito invÃ¡lido'}</p>
+                                      <p className="text-xs text-amber-700 mt-0.5">{OBSERVACIONES_POR_CAMPO.prestamo_id ?? 'Crédito inválido'}</p>
                                     )}
                                   </>
                                 ) : (
@@ -462,7 +462,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                       )}
                                     </div>
                                     {cedulaLookup && cedulaLookup.length >= 5 && !tieneCreditos && (
-                                      <p className="text-xs text-amber-700 mt-0.5">{OBSERVACIONES_POR_CAMPO.prestamo_id ?? 'Crédito invÃ¡lido'}</p>
+                                      <p className="text-xs text-amber-700 mt-0.5">{OBSERVACIONES_POR_CAMPO.prestamo_id ?? 'Crédito inválido'}</p>
                                     )}
                                   </div>
                                 )}
@@ -477,11 +477,11 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                   </SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="no">No</SelectItem>
-                                    <SelectItem value="si">SÃ­</SelectItem>
+                                    <SelectItem value="si">Sí</SelectItem>
                                   </SelectContent>
                                 </Select>
                                 {row._validation.conciliado?.isValid === false && (
-                                  <p className="text-xs text-amber-700 mt-0.5">{OBSERVACIONES_POR_CAMPO.conciliado ?? 'Conciliación invÃ¡lida'}</p>
+                                  <p className="text-xs text-amber-700 mt-0.5">{OBSERVACIONES_POR_CAMPO.conciliado ?? 'Conciliación inválida'}</p>
                                 )}
                               </td>
                               <td className="border p-2">
@@ -555,7 +555,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                         className="text-amber-700 border-amber-300 hover:bg-amber-50 text-xs"
                                         title={
                                           prestamosActivos.length > 1
-                                            ? 'Enviar a Revisar Pagos para asignar el crÃ©dito correcto'
+                                            ? 'Enviar a Revisar Pagos para asignar el crédito correcto'
                                             : 'Enviar a Revisar Pagos'
                                         }
                                       >
