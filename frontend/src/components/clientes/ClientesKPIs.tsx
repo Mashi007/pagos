@@ -3,7 +3,7 @@ import { Badge } from '../../components/ui/badge'
 import {
   Users,
   UserCheck,
-  UserPlus,
+  PlusCircle,
   UserMinus,
   TrendingUp,
   TrendingDown
@@ -96,7 +96,7 @@ export function ClientesKPIs({
               <p className="text-2xl font-bold text-orange-700">{nuevosEsteMes.toLocaleString()}</p>
             </div>
             <div className="p-2 bg-orange-100 rounded-full">
-              <UserPlus className="h-5 w-5 text-orange-600" />
+              <PlusCircle className="h-5 w-5 text-orange-600" />
             </div>
           </div>
           <div className="mt-2">

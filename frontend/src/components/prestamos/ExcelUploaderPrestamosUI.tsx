@@ -63,9 +63,10 @@ export function ExcelUploaderPrestamosUI(props: ExcelUploaderPrestamosProps) {
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.9, opacity: 0 }}
-        className="bg-white rounded-lg shadow-xl max-w-[95vw] w-full max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-lg shadow-xl max-w-[95vw] w-full max-h-[90vh] flex flex-col"
       >
-        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 rounded-t-lg">
+        {/* Cabecera fija (fuera del scroll) */}
+        <div className="flex-shrink-0 bg-gradient-to-r from-green-600 to-green-700 text-white p-6 rounded-t-lg">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <FileSpreadsheet className="h-6 w-6" />
@@ -85,13 +86,14 @@ export function ExcelUploaderPrestamosUI(props: ExcelUploaderPrestamosProps) {
           </div>
         </div>
 
-        <div className="p-6 space-y-6">
-          {!showPreview ? (
+        {/* Contenido con scroll */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6">
+          {excelData.length === 0 && enviadosRevisar.size === 0 && savedRows.size === 0 ? (
             <Card>
               <CardContent className="pt-6">
                 <div
                   className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                    isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'
+                    isDragging ? 'border-green-500 bg-green-50' : 'border-gray-300 hover:border-gray-400'
                   }`}
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
@@ -109,24 +111,27 @@ export function ExcelUploaderPrestamosUI(props: ExcelUploaderPrestamosProps) {
                   <input ref={fileInputRef} type="file" accept=".xlsx,.xls" onChange={handleFileSelect} className="hidden" />
                   {isProcessing && (
                     <div className="mt-4">
-                      <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-600" />
+                      <Loader2 className="h-8 w-8 animate-spin mx-auto text-green-600" />
                       <p className="text-sm text-gray-600 mt-2">Procesando archivo...</p>
                     </div>
                   )}
                   {uploadedFile && (
-                    <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-                      <FileSpreadsheet className="h-5 w-5 text-blue-600 inline mr-2" />
-                      <span className="text-sm font-medium text-blue-800">{uploadedFile.name}</span>
+                    <div className="mt-4 p-3 bg-green-50 rounded-lg">
+                      <FileSpreadsheet className="h-5 w-5 text-green-600 inline mr-2" />
+                      <span className="text-sm font-medium text-green-800">{uploadedFile.name}</span>
                     </div>
                   )}
                 </div>
               </CardContent>
             </Card>
-          ) : excelData.length === 0 && (savedRows.size > 0 || enviadosRevisar.size > 0) ? (
+          ) : null}
+
+          {/* RESUMEN FINAL: excelData vacío pero filas ya procesadas */}
+          {excelData.length === 0 && (enviadosRevisar.size > 0 || savedRows.size > 0) && (
             <Card className="border-green-300 bg-green-50">
               <CardContent className="pt-8 pb-8 text-center space-y-4">
                 <CheckCircle className="h-16 w-16 mx-auto text-green-500" />
-                <h3 className="text-xl font-bold text-green-800">Procesamiento completado</h3>
+                <h3 className="text-xl font-bold text-green-800">¡Procesamiento completado!</h3>
                 <div className="flex justify-center gap-6 text-sm mt-2">
                   {savedRows.size > 0 && (
                     <span className="bg-green-100 text-green-800 px-4 py-2 rounded-full font-semibold">
@@ -155,117 +160,16 @@ export function ExcelUploaderPrestamosUI(props: ExcelUploaderPrestamosProps) {
                 </div>
               </CardContent>
             </Card>
-          ) : (
+          )}
+
+          {/* Tabla, progreso y estadísticas cuando hay datos (mismo orden que Pagos) */}
+          {excelData.length > 0 && (
             <div className="space-y-4">
-              {batchProgress && (
-                <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
-                  <div className="flex items-center justify-between mb-1 text-sm font-medium text-blue-800">
-                    <span>Enviando a Revisar Préstamos...</span>
-                    <span>{batchProgress.sent} / {batchProgress.total}</span>
-                  </div>
-                  <div className="w-full bg-blue-200 rounded-full h-2">
-                    <div
-                      className="bg-blue-600 h-2 rounded-full transition-all duration-200"
-                      style={{ width: `${Math.round((batchProgress.sent / batchProgress.total) * 100)}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              <Card className="border-blue-200 bg-blue-50">
-                <CardContent className="pt-4">
-                  <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Badge variant="outline">Total: {excelData.length}</Badge>
-                      <Badge variant="outline" className="text-green-700">Válidos: {validCount}</Badge>
-                      <Badge variant="outline">Guardados: {savedRows.size}</Badge>
-                      {enviadosRevisar.size > 0 && (
-                        <Badge variant="outline" className="text-amber-700 bg-amber-50">
-                          {enviadosRevisar.size} enviado(s) a Revisar
-                        </Badge>
-                      )}
-                      <Button variant="outline" size="sm" onClick={() => setShowPreview(false)}>
-                        <X className="mr-2 h-4 w-4" />
-                        Cambiar archivo
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => navigate('/prestamos')} className="bg-blue-50 border-blue-300">
-                        <Eye className="mr-2 h-4 w-4" />
-                        Ir a Préstamos
-                      </Button>
-                      {enviadosRevisar.size > 0 && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => navigate('/prestamos')}
-                          className="bg-amber-50 border-amber-300 text-amber-800"
-                          title="Ver Revisar Préstamos"
-                        >
-                          <Search className="mr-2 h-4 w-4" />
-                          Ver Revisar Préstamos
-                        </Button>
-                      )}
-                      {getRowsToRevisarPrestamos().length > 0 && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => sendAllToRevisarPrestamos()}
-                          disabled={isSendingAllRevisar || serviceStatus === 'offline'}
-                          className="bg-amber-100 border-amber-400 text-amber-800 hover:bg-amber-200"
-                          title="Enviar todas las filas pendientes a Revisar Préstamos"
-                        >
-                          {isSendingAllRevisar ? (
-                            <>
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              Enviando...
-                            </>
-                          ) : (
-                            <>
-                              <Search className="mr-2 h-4 w-4" />
-                              ENVIAR REVISAR PRÉSTAMOS ({getRowsToRevisarPrestamos().length})
-                            </>
-                          )}
-                        </Button>
-                      )}
-                      {errorCount > 0 && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => sendAllErrorsToRevisarPrestamos()}
-                          disabled={isSavingIndividual || serviceStatus === 'offline'}
-                          className="bg-yellow-100 border-yellow-500 text-yellow-800 hover:bg-yellow-200"
-                          title="Enviar solo filas con errores a Revisar Préstamos"
-                        >
-                          <AlertTriangle className="mr-2 h-4 w-4" />
-                          Revisar Préstamos ({errorCount})
-                        </Button>
-                      )}
-                    </div>
-                    <Button
-                      onClick={saveAllValid}
-                      disabled={validCount === 0 || isSavingIndividual || serviceStatus === 'offline'}
-                      className="bg-blue-600 hover:bg-blue-700"
-                    >
-                      {isSavingIndividual ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                          Guardando...
-                        </>
-                      ) : (
-                        <>
-                          <Save className="mr-2 h-4 w-4" />
-                          Guardar Todos ({validCount})
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center">
                     <Eye className="mr-2 h-5 w-5" />
-                    Previsualización
+                    Previsualización de Datos
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -382,7 +286,7 @@ export function ExcelUploaderPrestamosUI(props: ExcelUploaderPrestamosProps) {
                                     size="sm"
                                     onClick={() => saveIndividualPrestamo(row)}
                                     disabled={savingProgress[row._rowIndex] || serviceStatus === 'offline'}
-                                    className="bg-blue-600 hover:bg-blue-700 text-white text-xs"
+                                    className="bg-green-600 hover:bg-green-700 text-white text-xs"
                                   >
                                     {savingProgress[row._rowIndex] ? (
                                       <Loader2 className="h-3 w-3 animate-spin" />
@@ -424,6 +328,112 @@ export function ExcelUploaderPrestamosUI(props: ExcelUploaderPrestamosProps) {
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {batchProgress && (
+                <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
+                  <div className="flex items-center justify-between mb-1 text-sm font-medium text-blue-800">
+                    <span>Enviando a Revisar Préstamos...</span>
+                    <span>{batchProgress.sent} / {batchProgress.total}</span>
+                  </div>
+                  <div className="w-full bg-blue-200 rounded-full h-2">
+                    <div
+                      className="bg-blue-600 h-2 rounded-full transition-all duration-200"
+                      style={{ width: `${Math.round((batchProgress.sent / batchProgress.total) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <Card className="border-green-200 bg-green-50">
+                <CardContent className="pt-4">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge variant="outline">Total: {excelData.length}</Badge>
+                      <Badge variant="outline" className="text-green-700">Válidos: {validCount}</Badge>
+                      <Badge variant="outline">Guardados: {savedRows.size}</Badge>
+                      {enviadosRevisar.size > 0 && (
+                        <Badge variant="outline" className="text-amber-700 border-amber-300">
+                          {enviadosRevisar.size} a Revisar Préstamos
+                        </Badge>
+                      )}
+                      <Button variant="outline" size="sm" onClick={() => setShowPreview(false)}>
+                        <X className="mr-2 h-4 w-4" />
+                        Cambiar archivo
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => { navigate('/prestamos'); onClose(); }} className="bg-green-50 border-green-300">
+                        <Eye className="mr-2 h-4 w-4" />
+                        Ir a Préstamos
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => { navigate('/prestamos'); onClose(); }}
+                        className="bg-amber-50 border-amber-300"
+                        title="Ver préstamos enviados a revisión"
+                      >
+                        <Search className="mr-2 h-4 w-4" />
+                        Revisar Préstamos
+                      </Button>
+                      {getRowsToRevisarPrestamos().length > 0 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => sendAllToRevisarPrestamos()}
+                          disabled={isSendingAllRevisar || serviceStatus === 'offline'}
+                          className="bg-amber-100 border-amber-400 text-amber-800 hover:bg-amber-200"
+                          title="Enviar todas las filas pendientes a Revisar Préstamos"
+                        >
+                          {isSendingAllRevisar ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Enviando...
+                            </>
+                          ) : (
+                            <>
+                              <Search className="mr-2 h-4 w-4" />
+                              ENVIAR REVISAR PRÉSTAMOS ({getRowsToRevisarPrestamos().length})
+                            </>
+                          )}
+                        </Button>
+                      )}
+                    </div>
+                    <Button
+                      onClick={saveAllValid}
+                      disabled={validCount === 0 || isSavingIndividual || serviceStatus === 'offline'}
+                      className="bg-green-600 hover:bg-green-700"
+                    >
+                      {isSavingIndividual ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          Guardando...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="mr-2 h-4 w-4" />
+                          Guardar Todos ({validCount})
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      onClick={sendAllErrorsToRevisarPrestamos}
+                      disabled={errorCount === 0 || isSavingIndividual || serviceStatus === 'offline'}
+                      className="bg-yellow-600 hover:bg-yellow-700"
+                    >
+                      {isSavingIndividual ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          Enviando...
+                        </>
+                      ) : (
+                        <>
+                          <AlertTriangle className="mr-2 h-4 w-4" />
+                          Revisar Préstamos ({errorCount})
+                        </>
+                      )}
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
