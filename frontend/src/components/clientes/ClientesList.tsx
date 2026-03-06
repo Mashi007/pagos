@@ -72,15 +72,15 @@ export function ClientesList() {
   // Funciones para manejar acciones
   const handleEditarCliente = async (cliente: { id: number; [key: string]: unknown }) => {
     try {
-      // ✅ Obtener cliente completo desde la API para asegurar todos los campos
-      console.log('�� Obteniendo datos completos del cliente ID:', cliente.id)
+      // ? Obtener cliente completo desde la API para asegurar todos los campos
+      console.log('?? Obteniendo datos completos del cliente ID:', cliente.id)
       const clienteCompleto = await clienteService.getCliente(String(cliente.id))
-      console.log('�� Cliente completo obtenido:', clienteCompleto)
+      console.log('?? Cliente completo obtenido:', clienteCompleto)
 
       setClienteSeleccionado(clienteCompleto)
       setShowEditarCliente(true)
     } catch (error) {
-      console.error('❌ Error al obtener cliente completo:', error)
+      console.error('? Error al obtener cliente completo:', error)
       // Si falla, usar el cliente de la lista como fallback
       setClienteSeleccionado(cliente)
       setShowEditarCliente(true)
@@ -96,16 +96,16 @@ export function ClientesList() {
     if (!clienteSeleccionado) return
 
     try {
-      console.log('��️ Eliminando cliente:', clienteSeleccionado.id)
+      console.log('??? Eliminando cliente:', clienteSeleccionado.id)
 
-      // ✅ ACTIVAR: Llamada real a la API para eliminar
+      // ? ACTIVAR: Llamada real a la API para eliminar
       await clienteService.deleteCliente(String(clienteSeleccionado.id))
 
-      console.log('✅ Cliente eliminado exitosamente')
+      console.log('? Cliente eliminado exitosamente')
 
       // Refrescar la lista
       queryClient.invalidateQueries({ queryKey: ['clientes'] })
-      queryClient.invalidateQueries({ queryKey: ['clientes-stats'] }) // ✅ Actualizar estad\u00EDsticas
+      queryClient.invalidateQueries({ queryKey: ['clientes-stats'] }) // ? Actualizar estad\u00EDsticas
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       queryClient.invalidateQueries({ queryKey: ['kpis'] })
 
@@ -114,10 +114,10 @@ export function ClientesList() {
       setClienteSeleccionado(null)
 
       // Mostrar mensaje de xito - UNA SOLA NOTIFICACIN
-      showNotification('success', '✅ Cliente eliminado permanentemente de la base de datos')
+      showNotification('success', '? Cliente eliminado permanentemente de la base de datos')
 
     } catch (error: unknown) {
-      console.error('❌ Error eliminando cliente:', error)
+      console.error('? Error eliminando cliente:', error)
       const detail = getErrorDetail(error)
       const mensaje = detail || 'Error al eliminar el cliente. Intenta nuevamente.'
       showNotification('error', mensaje)
@@ -129,7 +129,7 @@ export function ClientesList() {
     setShowEditarCliente(false)
     setClienteSeleccionado(null)
     queryClient.invalidateQueries({ queryKey: ['clientes'] })
-    queryClient.invalidateQueries({ queryKey: ['clientes-stats'] }) // ✅ Actualizar estad\u00EDsticas
+    queryClient.invalidateQueries({ queryKey: ['clientes-stats'] }) // ? Actualizar estad\u00EDsticas
   }
   useSimpleAuth()
   const queryClient = useQueryClient()
@@ -176,7 +176,7 @@ export function ClientesList() {
           res.items.forEach((it: any) => { if (it.id) idsToDelete.push(it.id) })
           allItems.push(...res.items.map((it: any) => ({
           'Fila origen': it.fila_origen ?? '',
-          'C\u00E9dula': it.cedula ?? '',
+          C�dula: it.cedula ?? '',
           Nombres: it.nombres ?? '',
           Email: it.email ?? '',
           'Tel\u00E9fono': it.telefono ?? '',
@@ -232,7 +232,7 @@ export function ClientesList() {
     }
   ]
 
-  // ✅ CORRECCIN: Usar datos reales si existen, sino usar mock solo si no hay respuesta del servidor
+  // ? CORRECCIN: Usar datos reales si existen, sino usar mock solo si no hay respuesta del servidor
   // Si clientesResponse existe (incluso si data es un array vaco), usar los datos reales
   const clientes = clientesResponse?.data !== undefined 
     ? (Array.isArray(clientesResponse.data) ? clientesResponse.data : [])
@@ -739,10 +739,10 @@ export function ClientesList() {
                           onClick={() => navigate(`/clientes/${cliente.id}`)}
                           className="font-medium text-gray-900 hover:text-blue-600 hover:underline text-left"
                         >
-                          {typeof cliente.Nombres === 'string' || typeof cliente.Nombres === 'number' ? cliente.Nombres : (cliente as any).nombre ?? ''}
+                          {(cliente as any).nombres || (cliente as any).Nombres || (cliente as any).nombre || ''}
                         </button>
                         <div className="text-sm text-gray-500">
-                          'C\u00E9dula': {String(cliente.cedula ?? '')} | ID: {String(cliente.id ?? '')}
+                          C�dula: {String(cliente.cedula ?? '')} | ID: {String(cliente.id ?? '')}
                         </div>
                       </div>
                     </TableCell>
@@ -815,7 +815,7 @@ export function ClientesList() {
                           <MessageSquare className="w-4 h-4" />
                         </Button>
 
-                        {/* ✅ BOTN EDITAR - ACTIVO Y FUNCIONAL */}
+                        {/* ? BOTN EDITAR - ACTIVO Y FUNCIONAL */}
                         <Button
                           variant="outline"
                           size="icon"
@@ -826,14 +826,14 @@ export function ClientesList() {
                           <Edit className="w-4 h-4" />
                         </Button>
 
-                        {/* ✅ BOTN ELIMINAR - ACTIVO Y FUNCIONAL */}
+                        {/* ? BOTN ELIMINAR - ACTIVO Y FUNCIONAL */}
                         <Button
                           variant="outline"
                           size="icon"
                           title="Eliminar cliente"
                           className="text-red-600 border-red-400 bg-red-50 hover:text-white hover:bg-red-600 hover:border-red-600 font-medium cursor-pointer transition-colors h-8 w-8"
                           onClick={() => {
-                            console.log('�� Botn Eliminar clickeado para cliente ID:', cliente.id)
+                            console.log('?? Botn Eliminar clickeado para cliente ID:', cliente.id)
                             handleEliminarCliente(cliente)
                           }}
                         >
@@ -909,14 +909,14 @@ export function ClientesList() {
           <CrearClienteForm
             onClose={() => setShowCrearCliente(false)}
             onSuccess={() => {
-              // ✅ CORRECCIN: Invalidar queries para actualizar datos
+              // ? CORRECCIN: Invalidar queries para actualizar datos
               queryClient.invalidateQueries({ queryKey: ['clientes'] })
               queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
               queryClient.invalidateQueries({ queryKey: ['dashboard'] })
               queryClient.invalidateQueries({ queryKey: ['kpis'] })
             }}
             onClienteCreated={() => {
-              // ✅ CORRECCIN: Invalidar queries para actualizar datos
+              // ? CORRECCIN: Invalidar queries para actualizar datos
               queryClient.invalidateQueries({ queryKey: ['clientes'] })
               queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
               queryClient.invalidateQueries({ queryKey: ['dashboard'] })
@@ -976,7 +976,7 @@ export function ClientesList() {
                     Eliminar Cliente
                   </h3>
                   <p className="text-sm text-red-600 font-medium">
-                     ️ ELIMINACIN PERMANENTE - No se puede deshacer
+                     ? ELIMINACIN PERMANENTE - No se puede deshacer
                   </p>
                 </div>
               </div>
@@ -985,14 +985,14 @@ export function ClientesList() {
                 <p className="text-gray-700">
                   Ests seguro de que quieres <span className="font-semibold text-red-600">ELIMINAR PERMANENTEMENTE</span> al cliente{' '}
                   <span className="font-semibold">
-                    {clienteSeleccionado.Nombres}
+                    {(clienteSeleccionado as any)?.nombres ?? clienteSeleccionado?.Nombres ?? '}
                   </span>?
                 </p>
                 <p className="text-sm text-red-600 mt-2 font-medium">
-                   ️ El cliente ser eliminado completamente de la base de datos.
+                   ? El cliente ser eliminado completamente de la base de datos.
                 </p>
                 <p className="text-sm text-gray-500 mt-1">
-                  'C\u00E9dula': {clienteSeleccionado.cedula}
+                  C�dula: {clienteSeleccionado.cedula}
                 </p>
               </div>
 
@@ -1033,7 +1033,7 @@ export function ClientesList() {
         )}
       </AnimatePresence>
 
-      {/* ✅ NOTIFICACIN ÚNICA */}
+      {/* ? NOTIFICACIN �NICA */}
       {notification && (
         <motion.div
           initial={{ opacity: 0, y: -50 }}
@@ -1054,7 +1054,7 @@ export function ClientesList() {
               onClick={() => setNotification(null)}
               className="ml-2 text-gray-500 hover:text-gray-700"
             >
-              ×
+              �
             </button>
           </div>
         </motion.div>
