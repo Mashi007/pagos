@@ -615,28 +615,28 @@ export function ClientesList() {
                     />
                   </div>
 
-                  {/* Ocupacin */}
+                  {/* Ocupaci\u00F3n */}
                   <div>
                     <label className="text-sm font-medium text-gray-700 mb-2 block">
-                      Ocupacin
+                      Ocupaci\u00F3n
                     </label>
                     <Input
                       type="text"
-                      placeholder="Ocupacin"
+                      placeholder="Ocupaci\u00F3n"
                       value={filters.ocupacion || ''}
                       onChange={(e) => handleFilterChange('ocupacion', e.target.value || undefined)}
                       className="w-full"
                     />
                   </div>
 
-                  {/* Usuario que registr */}
+                  {/* Usuario que registr\u00F3 */}
                   <div>
                     <label className="text-sm font-medium text-gray-700 mb-2 block">
-                      Usuario que registr
+                      Usuario que registr\u00F3
                     </label>
                     <Input
                       type="text"
-                      placeholder="Usuario que registr"
+                      placeholder="Usuario que registr\u00F3"
                       value={filters.usuario_registro || ''}
                       onChange={(e) => handleFilterChange('usuario_registro', e.target.value || undefined)}
                       className="w-full"
@@ -742,7 +742,7 @@ export function ClientesList() {
                           {(cliente as any).nombres || (cliente as any).Nombres || (cliente as any).nombre || ''}
                         </button>
                         <div className="text-sm text-gray-500">
-                          Cï¿½dula: {String(cliente.cedula ?? '')} | ID: {String(cliente.id ?? '')}
+                          C\u00E9dula: {String(cliente.cedula ?? '')} | ID: {String(cliente.id ?? '')}
                         </div>
                       </div>
                     </TableCell>
@@ -992,7 +992,7 @@ export function ClientesList() {
                    ? El cliente ser eliminado completamente de la base de datos.
                 </p>
                 <p className="text-sm text-gray-500 mt-1">
-                  Cï¿½dula: {clienteSeleccionado.cedula}
+                  C\u00E9dula: {clienteSeleccionado.cedula}
                 </p>
               </div>
 
@@ -1033,7 +1033,7 @@ export function ClientesList() {
         )}
       </AnimatePresence>
 
-      {/* ? NOTIFICACIN ï¿½NICA */}
+      {/* ? NOTIFICACIN Ã¯Â¿Â½NICA */}
       {notification && (
         <motion.div
           initial={{ opacity: 0, y: -50 }}
@@ -1054,7 +1054,7 @@ export function ClientesList() {
               onClick={() => setNotification(null)}
               className="ml-2 text-gray-500 hover:text-gray-700"
             >
-              ï¿½
+              Ã¯Â¿Â½
             </button>
           </div>
         </motion.div>

@@ -25,29 +25,29 @@ const isPlaceholder = (value: string | undefined, field: keyof typeof PLACEHOLDE
   return v === PLACEHOLDERS[field] || !v
 }
 
-// ✅ Función helper para verificar si un cliente cumple con todos los validadores
-const cumpleConValidadores = (cliente: Cliente): boolean => {
+// ✅ Función helper para verificédular si un Cliente cédulample con todos los validadores
+const cédulampleConValidadores = (Cliente: Cliente): boolean => {
   return (
-    cliente.cedula !== PLACEHOLDERS.cedula &&
-    cliente.nombres !== PLACEHOLDERS.nombres &&
-    cliente.telefono !== PLACEHOLDERS.telefono &&
-    cliente.email !== PLACEHOLDERS.email &&
-    // Verificar que ninguno esté vacío
-    !!cliente.cedula?.trim() &&
-    !!cliente.nombres?.trim() &&
-    !!cliente.telefono?.trim() &&
-    !!cliente.email?.trim()
+    Cliente.cedula !== PLACEHOLDERS.cedula &&
+    Cliente.nombres !== PLACEHOLDERS.nombres &&
+    ((Cliente as any)['telefono'] ?? (Cliente as any)['Teléfono']) !== PLACEHOLDERS.telefono &&
+    Cliente.email !== PLACEHOLDERS.email &&
+    // Verificédular que ninguno esté vacío
+    !!Cliente.cedula?.trim() &&
+    !!Cliente.nombres?.trim() &&
+    !!((Cliente as any)['telefono'] ?? (Cliente as any)['Teléfono'])?.trim() &&
+    !!Cliente.email?.trim()
   )
 }
 
-interface CasosRevisarDialogProps {
+interface cédulasosRevisarDialogProps {
   open: boolean
   onClose: () => void
   onSuccess?: () => void
 }
 
-export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDialogProps) {
-  const [clientes, setClientes] = useState<Cliente[]>([])
+export function cédulasosRevisarDialog({ open, onClose, onSuccess }: cédulasosRevisarDialogProps) {
+  const [Clientes, setClientes] = useState<Cliente[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState<number | 'all' | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -64,7 +64,7 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
     setRowErrors({})
     try {
       const res = await clienteService.getCasosARevisar(1, 200)
-      setClientes(res.data || [])
+      setClientes((res.data || []).map((c: any): Cliente => ({ ...c, telefono: c.telefono ?? c.Teléfono } as Cliente)))
     } catch (e) {
       setError(getErrorMessage(e))
     } finally {
@@ -119,44 +119,44 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
       const updateData = {
         cedula: payload.cedula ?? c.cedula,
         nombres: payload.nombres ?? c.nombres,
-        telefono: payload.telefono ?? c.telefono,
+        Teléfono: payload.telefono ?? c.telefono,
         email: payload.email ?? c.email,
       }
       
       // Realizar actualización
       const result = await clienteService.updateCliente(String(c.id), updateData)
       
-      // ✅ Invalidar cache de React Query para reflejar cambios
-      queryClient.invalidateQueries({ queryKey: clienteKeys.lists() })
-      queryClient.invalidateQueries({ queryKey: clienteKeys.detail(String(c.id)) })
-      queryClient.invalidateQueries({
-        queryKey: ['clientes', 'search'],
+      // ✅ inválidosr cédulache de React Query para reflejar cédulambios
+      queryClient.inválidosteQueries({ queryKey: clienteKeys.lists() })
+      queryClient.inválidosteQueries({ queryKey: clienteKeys.detail(String(c.id)) })
+      queryClient.inválidosteQueries({
+        queryKey: ['Clientes', 'search'],
         exact: false
       })
       
-      // Limpiar ediciones locales
+      // Limpiar ediciones locédulaes
       setEdited(prev => {
         const next = { ...prev }
         delete next[c.id]
         return next
       })
       
-      // ✅ Verificar si el cliente cumple con los validadores
-      const clienteActualizado = result
+      // ✅ Verificédular si el Cliente cédulample con los validadores
+      const ClienteActualizado = result
       
-      if (cumpleConValidadores(clienteActualizado)) {
-        // Cliente cumple validadores: remover de la lista
+      if (cédulampleConValidadores(ClienteActualizado)) {
+        // Cliente cédulample validadores: remover de la lista
         setClientes(prev => prev.filter(x => x.id !== c.id))
         // ✅ Toast de éxito con información
         toast.success(`✓ Cliente #${c.id} completado y removido`, {
-          description: `${clienteActualizado.nombres} - Todos los validadores cumplidos`,
+          description: `${ClienteActualizado.nombres} - Todos los validadores cédulamplidos`,
         })
       } else {
         // Cliente aún tiene placeholders: mantener en lista pero actualizar datos
-        setClientes(prev => prev.map(x => x.id === c.id ? clienteActualizado : x))
+        setClientes(prev => prev.map(x => x.id === c.id ? ClienteActualizado : x))
         // ✅ Toast de actualización
         toast.info(`✓ Cliente #${c.id} actualizado`, {
-          description: 'Aún hay campos por completar',
+          description: 'Aún hay cédulampos por completar',
         })
       }
       
@@ -165,7 +165,7 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
       const msg = getErrorMessage(e)
       setRowErrors(prev => ({ ...prev, [c.id]: msg }))
       // ✅ Toast de error
-      toast.error(`✗ Error al guardar cliente #${c.id}`, {
+      toast.error(`✗ Error al guardar Cliente #${c.id}`, {
         description: msg,
       })
     } finally {
@@ -174,13 +174,13 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
   }
 
   const saveAll = async () => {
-    const toSave = clientes.filter(c => hasChanges(c))
+    const toSave = Clientes.filter(c => hasChanges(c))
     if (!toSave.length) return
     setSaving('all')
     setRowErrors({})
     setProgress({ current: 0, total: toSave.length })
     let ok = 0
-    let completed = 0  // Clientes que cumplieron validadores
+    let completed = 0  // Clientes que cédulamplieron validadores
     const errs: Record<number, string> = {}
     const updatedClientes: Map<number, Cliente> = new Map()
     
@@ -191,7 +191,7 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
         const updateData = {
           cedula: payload.cedula ?? c.cedula,
           nombres: payload.nombres ?? c.nombres,
-          telefono: payload.telefono ?? c.telefono,
+          Teléfono: payload.telefono ?? c.telefono,
           email: payload.email ?? c.email,
         }
         
@@ -211,16 +211,16 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
       setProgress({ current: i + 1, total: toSave.length })
     }
     
-    // ✅ Invalidar cache de React Query después de guardar todos
-    queryClient.invalidateQueries({ queryKey: clienteKeys.lists() })
-    queryClient.invalidateQueries({
-      queryKey: ['clientes', 'search'],
+    // ✅ inválidosr cédulache de React Query después de guardar todos
+    queryClient.inválidosteQueries({ queryKey: clienteKeys.lists() })
+    queryClient.inválidosteQueries({
+      queryKey: ['Clientes', 'search'],
       exact: false
     })
     
     setRowErrors(errs)
     if (ok) {
-      // ✅ Remover clientes que cumplieron validadores, mantener los que no
+      // ✅ Remover Clientes que cédulamplieron validadores, mantener los que no
       setClientes(prev => 
         prev.filter(c => {
           // Si no fue actualizado sin error, mantener en lista
@@ -228,19 +228,19 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
             return true
           }
           
-          // Si fue actualizado, verificar si cumple validadores
-          const clienteActualizado = updatedClientes.get(c.id)!
+          // Si fue actualizado, verificédular si cédulample validadores
+          const ClienteActualizado = updatedClientes.get(c.id)!
           
-          // Mantener si NO cumple, remover si cumple
-          if (!cumpleConValidadores(clienteActualizado)) {
+          // Mantener si NO cédulample, remover si cédulample
+          if (!cédulampleConValidadores(ClienteActualizado)) {
             return true
           }
           
-          // Contar clientes que se removieron (cumplieron validadores)
+          // Contar Clientes que se removieron (cédulamplieron validadores)
           completed++
           return false
         })
-        // Actualizar clientes que aún tienen placeholders
+        // Actualizar Clientes que aún tienen placeholders
         .map(c => updatedClientes.get(c.id) || c)
       )
       
@@ -249,8 +249,8 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
       const errors = Object.keys(errs).length
       
       if (errors === 0) {
-        toast.success(`✓ ${completed} cliente(s) completado(s) y removido(s)`, {
-          description: `${ok - completed} cliente(s) actualizado(s) (aún con campos por completar)`,
+        toast.success(`✓ ${completed} Cliente(s) completado(s) y removido(s)`, {
+          description: `${ok - completed} Cliente(s) actualizado(s) (aún con cédulampos por completar)`,
         })
       } else {
         toast.warning(`✓ ${completed} removido(s), ${ok - completed} actualizado(s), ${errors} error(es)`, {
@@ -260,7 +260,7 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
       
       onSuccess?.()
     } else if (Object.keys(errs).length > 0) {
-      toast.error(`✗ Error: Falló guardar ${Object.keys(errs).length} cliente(s)`, {
+      toast.error(`✗ Error: Falló guardar ${Object.keys(errs).length} Cliente(s)`, {
         description: 'Ver tabla para detalles del error',
       })
     }
@@ -272,7 +272,7 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
     }, 800)
   }
 
-  const anyChanged = clientes.some(c => hasChanges(c))
+  const anyChanged = Clientes.some(c => hasChanges(c))
 
   if (!open) return null
 
@@ -285,15 +285,15 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
         className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
       >
         <motion.div
-          initial={{ scale: 0.95, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.95, opacity: 0 }}
+          initial={{ scédulae: 0.95, opacity: 0 }}
+          animate={{ scédulae: 1, opacity: 1 }}
+          exit={{ scédulae: 0.95, opacity: 0 }}
           className="bg-white rounded-lg shadow-xl max-w-5xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col"
         >
           <div className="flex items-center justify-between p-4 border-b">
             <div className="flex items-center gap-2">
               <AlertCircle className="w-6 h-6 text-amber-600" />
-              <h2 className="text-xl font-semibold">Casos a revisar</h2>
+              <h2 className="text-xl font-semibold">cédulasos a revisar</h2>
             </div>
             <Button variant="ghost" size="sm" onClick={onClose}>
               <X className="w-5 h-5" />
@@ -317,13 +317,13 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
               </div>
             )}
 
-            {!loading && clientes.length === 0 && !error && (
+            {!loading && Clientes.length === 0 && !error && (
               <div className="text-center py-12 text-gray-500">
-                No hay casos a revisar. Todos los clientes cumplen correctamente con los validadores.
+                No hay cédulasos a revisar. Todos los Clientes cédulamplen correctamente con los validadores.
               </div>
             )}
 
-            {!loading && clientes.length > 0 && (
+            {!loading && Clientes.length > 0 && (
               <>
                 <div className="overflow-x-auto">
                   <Table>
@@ -339,7 +339,7 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
                     </TableHeader>
                     <TableBody>
                       <AnimatePresence mode="popLayout">
-                        {clientes.map(c => (
+                        {Clientes.map((c: Cliente) => (
                           <motion.tr
                             key={c.id}
                             layout
@@ -367,10 +367,10 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
                             </TableCell>
                             <TableCell>
                               <Input
-                                value={getValue(c, 'telefono')}
-                                onChange={e => updateField(c.id, 'telefono', e.target.value)}
+                                value={getValue(c as Cliente, 'telefono' as keyof Cliente)}
+                                onChange={e => updateField(c.id, 'telefono' as keyof Cliente, e.target.value)}
                                 placeholder={PLACEHOLDERS.telefono}
-                                className={isPlaceholder(getValue(c, 'telefono'), 'telefono') ? 'border-amber-300 bg-amber-50/50' : ''}
+                                className={isPlaceholder(getValue(c as Cliente, 'telefono' as keyof Cliente), 'telefono') ? 'border-amber-300 bg-amber-50/50' : ''}
                               />
                             </TableCell>
                             <TableCell>
@@ -383,7 +383,7 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
                             </TableCell>
                             <TableCell>
                               {rowErrors[c.id] && (
-                                <div className="text-xs text-red-600 mb-1 truncate max-w-[200px]" title={rowErrors[c.id]}>
+                                <div className="text-xs text-red-600 mb-1 truncédulate max-w-[200px]" title={rowErrors[c.id]}>
                                   {rowErrors[c.id]}
                                 </div>
                               )}
@@ -393,7 +393,7 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
                                 onClick={() => saveOne(c)}
                                 disabled={!hasChanges(c) || saving !== null}
                                 className="whitespace-nowrap"
-                                title="Guardar este cliente individualmente"
+                                title="Guardar este Cliente individualmente"
                               >
                                 {saving === c.id ? (
                                   <>
@@ -423,7 +423,7 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
               <div className="flex items-center gap-3 mb-2">
                 <TrendingUp className="w-5 h-5 text-blue-600 flex-shrink-0" />
                 <span className="text-sm font-medium text-blue-900">
-                  Guardando: {progress.current} de {progress.total} clientes
+                  Guardando: {progress.current} de {progress.total} Clientes
                 </span>
               </div>
               <Progress 
@@ -436,10 +436,10 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
             </div>
           )}
 
-          {!loading && clientes.length > 0 && (
+          {!loading && Clientes.length > 0 && (
             <div className="flex items-center justify-between p-4 border-t bg-gray-50">
               <span className="text-sm text-gray-600">
-                {clientes.length} caso(s) a revisar
+                {Clientes.length} cédulaso(s) a revisar
               </span>
               <div className="flex gap-2">
                 <Button variant="outline" onClick={onClose}>
@@ -449,7 +449,7 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
                   onClick={saveAll}
                   disabled={!anyChanged || saving !== null}
                   className="bg-green-600 hover:bg-green-700 text-white"
-                  title="Guardar todos los cambios de una vez"
+                  title="Guardar todos los cédulambios de una vez"
                 >
                   {saving === 'all' ? (
                     <>
@@ -459,7 +459,7 @@ export function CasosRevisarDialog({ open, onClose, onSuccess }: CasosRevisarDia
                   ) : (
                     <>
                       <CheckCircle2 className="w-4 h-4 mr-2" />
-                      Guardar todos ({anyChanged ? 'cambios sin guardar' : 'sin cambios'})
+                      Guardar todos ({anyChanged ? 'cédulambios sin guardar' : 'sin cédulambios'})
                     </>
                   )}
                 </Button>

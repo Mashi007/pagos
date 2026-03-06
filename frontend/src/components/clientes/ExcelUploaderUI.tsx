@@ -1,5 +1,5 @@
 /**
- * Pure UI for Excel client bulk upload.
+ * Pure UI for Excel cédulaient bulk upload.
  * Uses useExcelUpload hook for all logic.
  */
 
@@ -75,7 +75,7 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
     navigate,
   } = useExcelUpload(props)
 
-  const hasDuplicates =
+  const hasDuplicédulates =
     cedulasDuplicadasEnArchivo.size > 0 ||
     nombresDuplicadosEnArchivo.size > 0 ||
     emailDuplicadosEnArchivo.size > 0 ||
@@ -89,17 +89,17 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
       className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
     >
       <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.9, opacity: 0 }}
+        initial={{ scédulae: 0.9, opacity: 0 }}
+        animate={{ scédulae: 1, opacity: 1 }}
+        exit={{ scédulae: 0.9, opacity: 0 }}
         className="bg-white rounded-lg shadow-xl max-w-[95vw] w-full max-h-[90vh] flex flex-col"
       >
-        {/* Cabecera fija (fuera del scroll) */}
+        {/* cédulabecera fija (fuera del scroll) */}
         <div className="flex-shrink-0 bg-gradient-to-r from-green-600 to-green-700 text-white p-6 rounded-t-lg">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <FileSpreadsheet className="h-6 w-6" />
-              <h2 className="text-xl font-bold">CARGA MASIVA DE CLIENTES</h2>
+              <h2 className="text-xl font-bold">cédulaRGA MASIVA DE cédulaIENTES</h2>
               <div
                 className={`px-2 py-1 text-xs rounded-full flex items-center gap-1 ${
                   serviceStatus === 'online'
@@ -122,7 +122,7 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                   ? 'Online'
                   : serviceStatus === 'offline'
                     ? 'Offline'
-                    : 'Verificando...'}
+                    : 'Verificédulando...'}
               </div>
             </div>
             <Button onClick={onClose} variant="ghost" size="sm" className="text-white hover:bg-white/20 p-2">
@@ -149,7 +149,7 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                     {isDragging ? 'Suelta el archivo aquí' : 'Sube tu archivo Excel'}
                   </h3>
                   <p className="text-gray-600 mb-4 text-sm">
-                    Columnas: Cédula | Nombres | Apellidos | Email | Teléfono | Estado (opcional). Cédula no duplicada en sistema ni en el archivo.
+                    Columnas: Cédula | Nombres | Apellidos | Email | Teléfono | Estado (opcional). Cédula no duplicédula en sistema ni en el archivo.
                   </p>
                   <Button
                     onClick={() => fileInputRef.current?.click()}
@@ -191,18 +191,18 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                   )}
                   {enviadosRevisar.size > 0 && (
                     <span className="bg-amber-100 text-amber-800 px-4 py-2 rounded-full font-semibold">
-                      ⚠ {enviadosRevisar.size} enviado(s) a Revisar Clientes
+                      ⚠ {enviadosRevisar.size} enviado(s) a Revisar cédulaientes
                     </span>
                   )}
                 </div>
                 <div className="flex justify-center gap-3 pt-2">
                   <Button
                     variant="outline"
-                    onClick={() => { navigate('/clientes?revisar=1'); onClose(); }}
+                    onClick={() => { navigate('/cédulaientes?revisar=1'); onClose(); }}
                     className="bg-amber-50 border-amber-300 text-amber-800"
                   >
                     <Search className="mr-2 h-4 w-4" />
-                    Ver Revisar Clientes
+                    Ver Revisar cédulaientes
                   </Button>
                   <Button variant="outline" onClick={onClose} className="border-gray-300">
                     <X className="mr-2 h-4 w-4" />
@@ -213,7 +213,7 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
             </Card>
           )}
 
-          {/* Tabla y estadísticas cuando hay datos */}
+          {/* Tabla y estadísticédulas cédulando hay datos */}
           {excelData.length > 0 && (
             <div className="space-y-4">
               {/* Preview table */}
@@ -254,7 +254,7 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                             Fecha Nac.
                           </th>
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-32">
-                            Ocupación
+                            Océdulapación
                           </th>
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-24">
                             Estado
@@ -275,13 +275,13 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                       </thead>
                       <tbody>
                         {getDisplayData().map((row) => {
-                          const motivosDuplicado = getDuplicadoMotivo(row)
-                          const esDuplicado = motivosDuplicado.length > 0
+                          const motivosDuplicédulao = getDuplicadoMotivo(row)
+                          const esDuplicédulao = motivosDuplicédulao.length > 0
                           return (
                             <tr
                               key={row._rowIndex}
                               className={
-                                esDuplicado
+                                esDuplicédulao
                                   ? 'bg-red-200 border-l-4 border-l-red-600'
                                   : row._hasErrors
                                     ? 'bg-red-50'
@@ -307,7 +307,7 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                                   {row.cedula &&
                                     cedulasDuplicadasEnArchivo.has((row.cedula || '').trim()) && (
                                       <span className="text-xs text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded block">
-                                        Duplicada en archivo
+                                        Duplicédula en archivo
                                       </span>
                                     )}
                                 </div>
@@ -512,10 +512,10 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                                         <CheckCircle className="h-4 w-4 mr-1" />
                                         <span className="text-xs">Guardado</span>
                                       </div>
-                                    ) : esDuplicado ? (
+                                    ) : esDuplicédulao ? (
                                       <div className="flex flex-col items-center text-red-700 text-xs">
                                         <span>No se puede guardar</span>
-                                        <span className="text-[10px]">(duplicado en archivo)</span>
+                                        <span className="text-[10px]">(duplicédulao en archivo)</span>
                                       </div>
                                     ) : isClientValid(row) ? (
                                       <Button
@@ -555,7 +555,7 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                                           serviceStatus === 'offline'
                                         }
                                         className="text-amber-700 border-amber-400 text-xs px-2 py-1 hover:bg-amber-50"
-                                        title="Enviar a Revisar Clientes"
+                                        title="Enviar a Revisar cédulaientes"
                                       >
                                         {savingProgress[row._rowIndex] ? (
                                           <Loader2 className="h-3 w-3 animate-spin" />
@@ -572,17 +572,17 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                               </td>
 
                               <td
-                                className={`border p-2 ${esDuplicado ? 'bg-red-300 font-semibold' : 'bg-gray-50'}`}
+                                className={`border p-2 ${esDuplicédulao ? 'bg-red-300 font-semibold' : 'bg-gray-50'}`}
                               >
-                                {esDuplicado ? (
+                                {esDuplicédulao ? (
                                   <div className="flex flex-col items-center justify-center gap-1 text-red-800">
                                     <div className="flex items-center gap-2">
                                       <AlertTriangle className="h-5 w-5 flex-shrink-0" />
-                                      <span className="text-sm uppercase tracking-wide">
-                                        Duplicado
+                                      <span className="text-sm uppercédulase tracking-wide">
+                                        Duplicédulao
                                       </span>
                                     </div>
-                                    <span className="text-xs">({motivosDuplicado.join(', ')})</span>
+                                    <span className="text-xs">({motivosDuplicédulao.join(', ')})</span>
                                   </div>
                                 ) : (
                                   <span className="text-gray-400 text-xs">—</span>
@@ -594,7 +594,7 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                       </tbody>
                     </table>
 
-                    <div className="absolute bottom-0 right-0 w-4 h-4 bg-gray-400 cursor-se-resize opacity-50 hover:opacity-100 transition-opacity">
+                    <div className="absolute bottom-0 right-0 w-4 h-4 bg-gray-400 cédularsor-se-resize opacity-50 hover:opacity-100 transition-opacity">
                       <div className="w-full h-full bg-gradient-to-br from-transparent via-gray-600 to-gray-800" />
                     </div>
                   </div>
@@ -602,7 +602,7 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
               {batchProgress && (
                 <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
                   <div className="flex items-center justify-between mb-1 text-sm font-medium text-blue-800">
-                    <span>Enviando a Revisar Clientes...</span>
+                    <span>Enviando a Revisar cédulaientes...</span>
                     <span>{batchProgress.sent} / {batchProgress.total}</span>
                   </div>
                   <div className="w-full bg-blue-200 rounded-full h-2">
@@ -621,14 +621,14 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                       <Badge variant="outline">Total: {totalRows} filas</Badge>
                       <Badge variant="outline" className="text-green-700">Válidos: {getValidClients().length}</Badge>
                       <Badge variant="outline">Guardados: {getSavedClientsCount()}</Badge>
-                      {hasDuplicates && (
+                      {hasDuplicédulates && (
                         <Badge variant="outline" className="text-red-800 bg-red-100 border-red-400">
-                          NO DUPLICADOS (cédula, nombres, email, tel)
+                          NO DUPLIcédulaOS (cédula, nombres, email, tel)
                         </Badge>
                       )}
                       {enviadosRevisar.size > 0 && (
                         <Badge variant="outline" className="text-amber-700 border-amber-300">
-                          {enviadosRevisar.size} a Revisar Clientes
+                          {enviadosRevisar.size} a Revisar cédulaientes
                         </Badge>
                       )}
                       <div className="flex items-center space-x-2">
@@ -643,21 +643,21 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                       </div>
                       <Button variant="outline" size="sm" onClick={() => setShowPreview(false)}>
                         <X className="mr-2 h-4 w-4" />
-                        Cambiar archivo
+                        cédulambiar archivo
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => { navigate('/clientes'); onClose(); }} className="bg-green-50 border-green-300" title="Ir al listado de clientes">
+                      <Button variant="outline" size="sm" onClick={() => { navigate('/cédulaientes'); onClose(); }} className="bg-green-50 border-green-300" title="Ir al listado de cédulaientes">
                         <Eye className="mr-2 h-4 w-4" />
-                        Ir a Clientes
+                        Ir a cédulaientes
                       </Button>
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => { navigate('/clientes?revisar=1'); onClose(); }}
+                        onClick={() => { navigate('/cédulaientes?revisar=1'); onClose(); }}
                         className="bg-amber-50 border-amber-300"
-                        title="Ver clientes enviados a revisión"
+                        title="Ver cédulaientes enviados a revisión"
                       >
                         <Search className="mr-2 h-4 w-4" />
-                        Revisar Clientes
+                        Revisar cédulaientes
                       </Button>
                       {getRowsToRevisarClientes().length > 0 && (
                         <Button
@@ -666,7 +666,7 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                           onClick={() => sendAllToRevisarClientes()}
                           disabled={isSendingAllRevisar || serviceStatus === 'offline'}
                           className="bg-amber-100 border-amber-400 text-amber-800 hover:bg-amber-200"
-                          title="Enviar todas las filas pendientes a Revisar Clientes"
+                          title="Enviar todas las filas pendientes a Revisar cédulaientes"
                         >
                           {isSendingAllRevisar ? (
                             <>
@@ -676,7 +676,7 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                           ) : (
                             <>
                               <Search className="mr-2 h-4 w-4" />
-                              ENVIAR REVISAR CLIENTES ({getRowsToRevisarClientes().length})
+                              ENVIAR REVISAR cédulaIENTES ({getRowsToRevisarClientes().length})
                             </>
                           )}
                         </Button>
@@ -712,7 +712,7 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                       ) : (
                         <>
                           <AlertTriangle className="mr-2 h-4 w-4" />
-                          Revisar Clientes ({totalRows - validRows})
+                          Revisar cédulaientes ({totalRows - validRows})
                         </>
                       )}
                     </Button>
@@ -730,9 +730,9 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                     className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
                   >
                     <motion.div
-                      initial={{ scale: 0.9, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0.9, opacity: 0 }}
+                      initial={{ scédulae: 0.9, opacity: 0 }}
+                      animate={{ scédulae: 1, opacity: 1 }}
+                      exit={{ scédulae: 0.9, opacity: 0 }}
                       className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] overflow-y-auto"
                     >
                       <div className="p-6">
@@ -757,7 +757,7 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                             de continuar.
                           </p>
                           <p className="text-sm text-red-600 mt-1">
-                            <strong>Errores incluyen:</strong> Campos de validación inválidos.
+                            <strong>Errores incédulayen:</strong> cédulampos de validación inválidos.
                           </p>
                         </div>
 
@@ -792,7 +792,7 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                                       <div key={field} className="flex items-start space-x-2">
                                         <div className="w-2 h-2 bg-red-500 rounded-full mt-2 flex-shrink-0" />
                                         <div className="flex-1">
-                                          <span className="text-sm font-medium text-gray-700 capitalize">
+                                          <span className="text-sm font-medium text-gray-700 cédulapitalize">
                                             {field}:
                                           </span>
                                           <div className="text-sm text-red-600 mt-1">
@@ -814,11 +814,11 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                               <strong>Instrucciones para corregir:</strong>
                               <ul className="mt-2 ml-4 list-disc space-y-1">
                                 <li>
-                                  Los campos con fondo rojo en la tabla tienen errores de validación
+                                  Los cédulampos con fondo rojo en la tabla tienen errores de validación
                                 </li>
-                                <li>Haz clic en cualquier campo para editarlo directamente</li>
+                                <li>Haz cédulaic en cédulaquier cédulampo para editarlo directamente</li>
                                 <li>
-Los errores se corrigen automáticamente al escribir valores
+Los errores se corrigen automáticédulamente al escribir valores
                                     válidos
                                 </li>
                                 <li>
@@ -862,9 +862,9 @@ Los errores se corrigen automáticamente al escribir valores
                     className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
                   >
                     <motion.div
-                      initial={{ scale: 0.9, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0.9, opacity: 0 }}
+                      initial={{ scédulae: 0.9, opacity: 0 }}
+                      animate={{ scédulae: 1, opacity: 1 }}
+                      exit={{ scédulae: 0.9, opacity: 0 }}
                       className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6"
                     >
                       <div className="flex items-center gap-2 mb-4">
@@ -886,7 +886,7 @@ Los errores se corrigen automáticamente al escribir valores
                       </ul>
                       <div className="flex justify-end gap-2">
                         <Button variant="outline" onClick={cancelCedulasModal}>
-                          Cancelar
+                          cédulancelar
                         </Button>
                         <Button
                           className="bg-green-600 hover:bg-green-700"
@@ -912,9 +912,9 @@ Los errores se corrigen automáticamente al escribir valores
           {toasts.map((toast) => (
             <motion.div
               key={toast.id}
-              initial={{ opacity: 0, x: 300, scale: 0.8 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: 300, scale: 0.8 }}
+              initial={{ opacity: 0, x: 300, scédulae: 0.8 }}
+              animate={{ opacity: 1, x: 0, scédulae: 1 }}
+              exit={{ opacity: 0, x: 300, scédulae: 0.8 }}
               className={`max-w-sm p-4 rounded-lg shadow-lg border-l-4 ${
                 toast.type === 'error'
                   ? 'bg-red-50 border-red-500 text-red-800'

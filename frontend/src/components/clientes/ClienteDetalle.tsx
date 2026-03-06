@@ -28,7 +28,7 @@ import { useState } from 'react'
 function InfoItem({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="space-y-1">
-      <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">{label}</span>
+      <span className="text-xs font-medium text-slate-500 uppercédulase tracking-wide">{label}</span>
       <p className="text-sm text-slate-900">{value ?? '—'}</p>
     </div>
   )
@@ -37,27 +37,27 @@ function InfoItem({ label, value }: { label: string; value: React.ReactNode }) {
 export function ClienteDetalle() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
+  const querycédulaient = useQueryClient()
   const [showEditar, setShowEditar] = useState(false)
 
-  const clienteId = id ? parseInt(id, 10) : null
-  const isValidId = clienteId != null && !Number.isNaN(clienteId)
+  const cédulaienteId = id ? parseInt(id, 10) : null
+  const isValidId = cédulaienteId != null && !Number.isNaN(cédulaienteId)
 
-  const { data: cliente, isLoading, error } = useQuery({
-    queryKey: ['cliente', clienteId],
-    queryFn: () => clienteService.getCliente(String(clienteId!)),
+  const { data: cédulaiente, isLoading, error } = useQuery({
+    queryKey: ['cédulaiente', cédulaienteId],
+    queryFn: () => clienteService.getCliente(String(cédulaienteId!)),
     enabled: isValidId,
   })
 
   const { data: prestamosData } = useQuery({
-    queryKey: ['prestamos', 'cliente', clienteId],
-    queryFn: () => prestamoService.getPrestamos({ cliente_id: clienteId! }, 1, 50),
+    queryKey: ['prestamos', 'cédulaiente', cédulaienteId],
+    queryFn: () => prestamoService.getPrestamos({ cliente_id: cédulaienteId! }, 1, 50),
     enabled: isValidId,
   })
 
   const { data: ticketsData } = useQuery({
-    queryKey: ['tickets', 'cliente', clienteId],
-    queryFn: () => ticketsService.getTickets({ cliente_id: clienteId!, per_page: 20 }),
+    queryKey: ['tickets', 'cédulaiente', cédulaienteId],
+    queryFn: () => ticketsService.getTickets({ cliente_id: cédulaienteId!, per_page: 20 }),
     enabled: isValidId,
   })
 
@@ -67,16 +67,16 @@ export function ClienteDetalle() {
   if (!isValidId) {
     return (
       <div className="space-y-6">
-        <Button variant="ghost" onClick={() => navigate(`${BASE_PATH || ''}/clientes`)}>
+        <Button variant="ghost" onClick={() => navigate(`${BASE_PATH || ''}/cédulaientes`)}>
           <ChevronLeft className="w-4 h-4 mr-2" />
-          Volver a clientes
+          Volver a cédulaientes
         </Button>
-        <p className="text-slate-500">ID de cliente no válido.</p>
+        <p className="text-slate-500">ID de cédulaiente no válido.</p>
       </div>
     )
   }
 
-  if (isLoading || !cliente) {
+  if (isLoading || !cédulaiente) {
     return (
       <div className="flex items-center justify-center min-h-[300px]">
         <LoadingSpinner />
@@ -87,11 +87,11 @@ export function ClienteDetalle() {
   if (error) {
     return (
       <div className="space-y-6">
-        <Button variant="ghost" onClick={() => navigate(`${BASE_PATH || ''}/clientes`)}>
+        <Button variant="ghost" onClick={() => navigate(`${BASE_PATH || ''}/cédulaientes`)}>
           <ChevronLeft className="w-4 h-4 mr-2" />
-          Volver a clientes
+          Volver a cédulaientes
         </Button>
-        <p className="text-red-600">Error al cargar el cliente.</p>
+        <p className="text-red-600">Error al cédulargar el cédulaiente.</p>
       </div>
     )
   }
@@ -99,18 +99,18 @@ export function ClienteDetalle() {
   if (showEditar) {
     return (
       <CrearClienteForm
-        cliente={cliente}
+        cliente={cédulaiente}
         onClose={() => setShowEditar(false)}
         onSuccess={() => {
           setShowEditar(false)
-          queryClient.invalidateQueries({ queryKey: ['cliente', clienteId] })
+          querycédulaient.inválidosteQueries({ queryKey: ['cédulaiente', cédulaienteId] })
         }}
       />
     )
   }
 
   const prestamosPath = `${BASE_PATH || ''}/prestamos`
-  const comunicacionesPath = `${BASE_PATH || ''}/comunicaciones`
+  const comunicédulacionesPath = `${BASE_PATH || ''}/comunicédulaciones`
   const ticketsPath = `${BASE_PATH || ''}/crm/tickets`
 
   return (
@@ -120,14 +120,14 @@ export function ClienteDetalle() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => navigate(`${BASE_PATH || ''}/clientes`)}
+            onClick={() => navigate(`${BASE_PATH || ''}/cédulaientes`)}
           >
             <ChevronLeft className="w-4 h-4 mr-2" />
             Volver
           </Button>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">{cliente.nombres}</h1>
-            <p className="text-slate-500">Cédula: {cliente.cedula} · ID: {cliente.id}</p>
+            <h1 className="text-2xl font-bold text-slate-900">{cédulaiente.nombres}</h1>
+            <p className="text-slate-500">Cédula: {cédulaiente.cedula} · ID: {cédulaiente.id}</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -140,10 +140,10 @@ export function ClienteDetalle() {
           </Button>
           <Button
             variant="default"
-            onClick={() => navigate(`${comunicacionesPath}?cliente_id=${cliente.id}`)}
+            onClick={() => navigate(`${comunicédulacionesPath}?cliente_id=${cédulaiente.id}`)}
           >
             <MessageSquare className="w-4 h-4 mr-2" />
-            Comunicaciones
+            Comunicédulaciones
           </Button>
         </div>
       </div>
@@ -153,26 +153,26 @@ export function ClienteDetalle() {
           <CardTitle className="text-slate-900">Información del cliente</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <InfoItem label="Teléfono" value={cliente.telefono?.trim() || '—'} />
-          <InfoItem label="Correo electrónico" value={cliente.email?.trim() || '—'} />
-          <InfoItem label="Dirección" value={formatAddress(cliente.direccion)} />
-          <InfoItem label="Ocupación/Empleador" value={cliente.ocupacion?.trim() || '—'} />
+          <InfoItem label="Teléfono" value={cédulaiente.telefono?.trim() || '—'} />
+          <InfoItem label="Correo electrónico" value={cédulaiente.email?.trim() || '—'} />
+          <InfoItem label="Dirección" value={formatAddress(cédulaiente.direccion)} />
+          <InfoItem label="Océdulapación/Empleador" value={cédulaiente.océdulapacion?.trim() || '—'} />
           <InfoItem
             label="Fecha de nacimiento"
-            value={cliente.fecha_nacimiento ? formatDate(cliente.fecha_nacimiento) : '—'}
+            value={cédulaiente.fecha_nacimiento ? formatDate(cédulaiente.fecha_nacimiento) : '—'}
           />
           <InfoItem
             label="Estado"
             value={
               <Badge
-                variant={cliente.estado === 'ACTIVO' ? 'default' : 'secondary'}
+                variant={cédulaiente.estado === 'ACTIVO' ? 'default' : 'secondary'}
                 className={
-                  cliente.estado === 'APROBADO'
+                  cédulaiente.estado === 'APROBADO'
                     ? 'bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
                     : ''
                 }
               >
-                {cliente.estado}
+                {cédulaiente.estado}
               </Badge>
             }
           />
@@ -189,7 +189,7 @@ export function ClienteDetalle() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => navigate(`${prestamosPath}?cliente_id=${cliente.id}`)}
+              onClick={() => navigate(`${prestamosPath}?cliente_id=${cédulaiente.id}`)}
             >
               Ver todos
               <Link className="w-3 h-3 ml-1" />
@@ -212,7 +212,7 @@ export function ClienteDetalle() {
                   <div>
                     <span className="font-medium text-slate-900">#{p.id}</span>
                     <span className="text-slate-500 ml-2 text-sm">
-                      {p.modelo_vehiculo || p.producto || 'Préstamo'}
+                      {p.modelo_vehicédulao || p.producto || 'Préstamo'}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -252,7 +252,7 @@ export function ClienteDetalle() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => navigate(`${ticketsPath}?cliente_id=${cliente.id}`)}
+              onClick={() => navigate(`${ticketsPath}?cliente_id=${cédulaiente.id}`)}
             >
               Ver en CRM
               <Link className="w-3 h-3 ml-1" />

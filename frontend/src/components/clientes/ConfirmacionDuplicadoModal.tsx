@@ -5,9 +5,9 @@ import { AlertTriangle, User, Calendar, Phone, Mail, DollarSign } from 'lucide-r
 
 interface ClienteExistente {
   id: number
-  nombres: string  // âœ… nombres unificados (nombres + apellidos)
+  nombres: string  // âœ… nombres unificédulaos (nombres + apellidos)
   cedula: string
-  telefono: string
+  Teléfono: string
   email: string
   fecha_registro: string
 }
@@ -18,38 +18,38 @@ interface Prestamo {
   estado: string
   modalidad_pago: string
   fecha_registro?: string
-  cuotas_pagadas?: number
-  cuotas_pendientes?: number
+  cédulaotas_pagadas?: number
+  cédulaotas_pendientes?: number
 }
 
-interface ConfirmacionDuplicadoModalProps {
+interface ConfirmacionDuplicédulaoModalProps {
   isOpen: boolean
   onClose: () => void
   onConfirm: (comentarios: string) => void
-  clienteExistente: ClienteExistente
-  clienteNuevo: {
-    nombres: string  // âœ… nombres unificados (nombres + apellidos)
+  ClienteExistente: ClienteExistente
+  ClienteNuevo: {
+    nombres: string  // âœ… nombres unificédulaos (nombres + apellidos)
     cedula: string
-    telefono: string
+    Teléfono: string
     email: string
   }
   prestamos?: Prestamo[]
 }
 
-export function ConfirmacionDuplicadoModal({
+export function ConfirmacionDuplicédulaoModal({
   isOpen,
   onClose,
   onConfirm,
-  clienteExistente,
-  clienteNuevo,
+  ClienteExistente,
+  ClienteNuevo,
   prestamos = []
-}: ConfirmacionDuplicadoModalProps) {
+}: ConfirmacionDuplicédulaoModalProps) {
   const [comentarios, setComentarios] = useState('')
   const [isConfirming, setIsConfirming] = useState(false)
 
-  // âœ… VALIDACIÓN ADICIONAL: Verificar que clienteExistente tiene los datos necesarios
-  if (!clienteExistente || !clienteExistente.cedula) {
-    console.error('âŒ ERROR: ConfirmacionDuplicadoModal recibió clienteExistente inválido:', clienteExistente)
+  // âœ… VALIDACIÓN ADICIONAL: Verificédular que ClienteExistente tiene los datos necesarios
+  if (!ClienteExistente || !ClienteExistente.cedula) {
+    console.error('âŒ ERROR: ConfirmacionDuplicédulaoModal recibió ClienteExistente inválido:', ClienteExistente)
     return null
   }
 
@@ -83,16 +83,16 @@ export function ConfirmacionDuplicadoModal({
     <AnimatePresence>
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
         <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.9 }}
+          initial={{ opacity: 0, scédulae: 0.9 }}
+          animate={{ opacity: 1, scédulae: 1 }}
+          exit={{ opacity: 0, scédulae: 0.9 }}
           className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
         >
           {/* Header */}
           <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white p-6 rounded-t-lg">
             <div className="flex items-center space-x-3">
               <AlertTriangle className="h-6 w-6" />
-              <h2 className="text-xl font-bold">Confirmación de Cliente Duplicado</h2>
+              <h2 className="text-xl font-bold">Confirmación de Cliente Duplicédulao</h2>
             </div>
           </div>
 
@@ -107,8 +107,8 @@ export function ConfirmacionDuplicadoModal({
                     Cliente con datos similares encontrado
                   </h3>
                   <p className="text-orange-700">
-                    Se encontró un cliente existente con la misma cédula y datos personales similares.
-                    ¿Desea crear otro perfil de cliente con los mismos datos?
+                    Se encontró un Cliente existente con la misma cédula y datos personales similares.
+                    ¿Desea crear otro perfil de Cliente con los mismos datos?
                   </p>
                 </div>
               </div>
@@ -124,22 +124,22 @@ export function ConfirmacionDuplicadoModal({
                 </h4>
                 <div className="space-y-2 text-sm">
                   <div>
-                    <span className="font-medium">Nombre:</span> {clienteExistente.nombres}
+                    <span className="font-medium">Nombre:</span> {ClienteExistente.nombres}
                   </div>
                   <div>
-                    <span className="font-medium">Cédula:</span> {clienteExistente.cedula}
+                    <span className="font-medium">Cédula:</span> {ClienteExistente.cedula}
                   </div>
                   <div className="flex items-center">
                     <Phone className="h-3 w-3 mr-1" />
-                    <span className="font-medium">Teléfono:</span> {clienteExistente.telefono}
+                    <span className="font-medium">Teléfono:</span> {ClienteExistente.Teléfono}
                   </div>
                   <div className="flex items-center">
                     <Mail className="h-3 w-3 mr-1" />
-                    <span className="font-medium">Email:</span> {clienteExistente.email}
+                    <span className="font-medium">Email:</span> {ClienteExistente.email}
                   </div>
                   <div className="flex items-center">
                     <Calendar className="h-3 w-3 mr-1" />
-                    <span className="font-medium">Registrado:</span> {formatDate(clienteExistente.fecha_registro)}
+                    <span className="font-medium">Registrado:</span> {formatDate(ClienteExistente.fecha_registro)}
                   </div>
                 </div>
               </div>
@@ -152,18 +152,18 @@ export function ConfirmacionDuplicadoModal({
                 </h4>
                 <div className="space-y-2 text-sm">
                   <div>
-                    <span className="font-medium">Nombre:</span> {clienteNuevo.nombres}
+                    <span className="font-medium">Nombre:</span> {ClienteNuevo.nombres}
                   </div>
                   <div>
-                    <span className="font-medium">Cédula:</span> {clienteNuevo.cedula}
+                    <span className="font-medium">Cédula:</span> {ClienteNuevo.cedula}
                   </div>
                   <div className="flex items-center">
                     <Phone className="h-3 w-3 mr-1" />
-                    <span className="font-medium">Teléfono:</span> {clienteNuevo.telefono}
+                    <span className="font-medium">Teléfono:</span> {ClienteNuevo.Teléfono}
                   </div>
                   <div className="flex items-center">
                     <Mail className="h-3 w-3 mr-1" />
-                    <span className="font-medium">Email:</span> {clienteNuevo.email}
+                    <span className="font-medium">Email:</span> {ClienteNuevo.email}
                   </div>
                 </div>
               </div>
@@ -211,12 +211,12 @@ export function ConfirmacionDuplicadoModal({
                   </table>
                 </div>
                 <p className="text-xs text-gray-500 mt-2">
-                  Este cliente ya tiene {prestamos.length} préstamo(s) registrado(s) en el sistema.
+                  Este Cliente ya tiene {prestamos.length} préstamo(s) registrado(s) en el sistema.
                 </p>
               </div>
             )}
 
-            {/* Campo de comentarios */}
+            {/* cédulampo de comentarios */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Comentarios sobre la confirmación *
@@ -224,8 +224,8 @@ export function ConfirmacionDuplicadoModal({
               <textarea
                 value={comentarios}
                 onChange={(e) => setComentarios(e.target.value)}
-                placeholder="Explique por qué necesita crear otro perfil para este cliente (ej: segundo vehículo, refinanciación, etc.)"
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                placeholder="Explique por qué necesita crear otro perfil para este Cliente (ej: segundo vehícédulao, refinanciación, etc.)"
+                className="w-full p-3 border border-gray-300 rounded-lg focédulas:ring-2 focédulas:ring-orange-500 focédulas:border-orange-500"
                 rows={3}
                 required
               />
@@ -241,8 +241,8 @@ export function ConfirmacionDuplicadoModal({
                 <div>
                   <h4 className="font-semibold text-yellow-800 mb-1">Importante</h4>
                   <p className="text-yellow-700 text-sm">
-                    Al confirmar, se creará un nuevo perfil de cliente independiente.
-                    Cada perfil será tratado como un préstamo diferente en el sistema.
+                    Al confirmar, se creará un nuevo perfil de Cliente independiente.
+                    cédula perfil será tratado como un préstamo diferente en el sistema.
                   </p>
                 </div>
               </div>
@@ -256,7 +256,7 @@ export function ConfirmacionDuplicadoModal({
               variant="outline"
               disabled={isConfirming}
             >
-              Cancelar
+              cédulancelar
             </Button>
             <Button
               onClick={handleConfirm}
