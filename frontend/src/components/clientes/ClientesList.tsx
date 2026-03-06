@@ -52,7 +52,7 @@ export function ClientesList() {
   const [searchTerm, setSearchTerm] = useState('')
   const [filters, setFilters] = useState<ClienteFilters>({})
   const [currentPage, setCurrentPage] = useState(1)
-  const [perPage, setPerPage] = useState(20) // TamaÒo de p·gina configurable
+  const [perPage, setPerPage] = useState(20) // Tamao de pgina configurable
   const [showFilters, setShowFilters] = useState(false)
   const [showCrearCliente, setShowCrearCliente] = useState(false)
   const [showExcelUpload, setShowExcelUpload] = useState(false)
@@ -76,9 +76,9 @@ export function ClientesList() {
   const handleEditarCliente = async (cliente: { id: number; [key: string]: unknown }) => {
     try {
       // ‚úÖ Obtener cliente completo desde la API para asegurar todos los campos
-      console.log('üìù Obteniendo datos completos del cliente ID:', cliente.id)
+      console.log('ÔøΩÔøΩ Obteniendo datos completos del cliente ID:', cliente.id)
       const clienteCompleto = await clienteService.getCliente(String(cliente.id))
-      console.log('üìù Cliente completo obtenido:', clienteCompleto)
+      console.log('ÔøΩÔøΩ Cliente completo obtenido:', clienteCompleto)
 
       setClienteSeleccionado(clienteCompleto)
       setShowEditarCliente(true)
@@ -99,7 +99,7 @@ export function ClientesList() {
     if (!clienteSeleccionado) return
 
     try {
-      console.log('üóëÔ∏è Eliminando cliente:', clienteSeleccionado.id)
+      console.log('ÔøΩÔøΩÔ∏è Eliminando cliente:', clienteSeleccionado.id)
 
       // ‚úÖ ACTIVAR: Llamada real a la API para eliminar
       await clienteService.deleteCliente(String(clienteSeleccionado.id))
@@ -108,7 +108,7 @@ export function ClientesList() {
 
       // Refrescar la lista
       queryClient.invalidateQueries({ queryKey: ['clientes'] })
-      queryClient.invalidateQueries({ queryKey: ['clientes-stats'] }) // ‚úÖ Actualizar estadÌsticas
+      queryClient.invalidateQueries({ queryKey: ['clientes-stats'] }) // ‚úÖ Actualizar estad√≠sticas
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       queryClient.invalidateQueries({ queryKey: ['kpis'] })
 
@@ -116,7 +116,7 @@ export function ClientesList() {
       setShowEliminarCliente(false)
       setClienteSeleccionado(null)
 
-      // Mostrar mensaje de Èxito - UNA SOLA NOTIFICACI”N
+      // Mostrar mensaje de xito - UNA SOLA NOTIFICACIN
       showNotification('success', '‚úÖ Cliente eliminado permanentemente de la base de datos')
 
     } catch (error: unknown) {
@@ -132,7 +132,7 @@ export function ClientesList() {
     setShowEditarCliente(false)
     setClienteSeleccionado(null)
     queryClient.invalidateQueries({ queryKey: ['clientes'] })
-    queryClient.invalidateQueries({ queryKey: ['clientes-stats'] }) // ‚úÖ Actualizar estadÌsticas
+    queryClient.invalidateQueries({ queryKey: ['clientes-stats'] }) // ‚úÖ Actualizar estad√≠sticas
   }
   useSimpleAuth()
   const queryClient = useQueryClient()
@@ -176,10 +176,10 @@ export function ClientesList() {
         const res = await clienteService.getClientesConErrores(p, perPage)
         if (res.items?.length) allItems.push(...res.items.map((it: any) => ({
           'Fila origen': it.fila_origen ?? '',
-          CÈdula: it.cedula ?? '',
+          C√©dula: it.cedula ?? '',
           Nombres: it.nombres ?? '',
           Email: it.email ?? '',
-          TelÈfono: it.telefono ?? '',
+          Tel√©fono: it.telefono ?? '',
           Errores: it.errores ?? '',
           Estado: it.estado ?? '',
           'Fecha registro': it.fecha_registro ?? '',
@@ -214,7 +214,7 @@ export function ClientesList() {
   const mockClientes = [
     {
       id: '1',
-      nombre: 'Juan PÈrez',
+      nombre: 'Juan Prez',
       email: 'juan@example.com',
       telefono: '+1234567890',
       estado: 'ACTIVO',
@@ -223,7 +223,7 @@ export function ClientesList() {
     },
     {
       id: '2',
-      nombre: 'MarÌa GarcÌa',
+      nombre: 'Mar√≠a Garca',
       email: 'maria@example.com',
       telefono: '+1234567891',
       estado: 'MORA',
@@ -232,8 +232,8 @@ export function ClientesList() {
     }
   ]
 
-  // ‚úÖ CORRECCI”N: Usar datos reales si existen, sino usar mock solo si no hay respuesta del servidor
-  // Si clientesResponse existe (incluso si data es un array vacÌo), usar los datos reales
+  // ‚úÖ CORRECCIN: Usar datos reales si existen, sino usar mock solo si no hay respuesta del servidor
+  // Si clientesResponse existe (incluso si data es un array vaco), usar los datos reales
   const clientes = clientesResponse?.data !== undefined 
     ? (Array.isArray(clientesResponse.data) ? clientesResponse.data : [])
     : mockClientes // Solo usar mock si no hay respuesta del servidor (clientesResponse es undefined)
@@ -259,7 +259,7 @@ export function ClientesList() {
 
   const handlePerPageChange = (newPerPage: number) => {
     setPerPage(newPerPage)
-    setCurrentPage(1) // Resetear a p·gina 1 cuando cambia el tamaÒo
+    setCurrentPage(1) // Resetear a pgina 1 cuando cambia el tamao
   }
 
   if (isLoading) {
@@ -312,7 +312,7 @@ export function ClientesList() {
         isLoading={statsLoading}
       />
 
-      {/* TÌtulo y botones */}
+      {/* Ttulo y botones */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Clientes</h1>
@@ -335,7 +335,7 @@ export function ClientesList() {
             }}
             disabled={isRefetching || isLoading || statsLoading}
             className="px-6 py-6 text-base font-semibold"
-            title="Actualizar datos y estadÌsticas"
+            title="Actualizar datos y estad√≠sticas"
           >
             <RefreshCw className={`w-5 h-5 mr-2 ${(isRefetching || statsLoading) ? 'animate-spin' : ''}`} />
             {(isRefetching || statsLoading) ? 'Actualizando...' : 'Actualizar'}
@@ -345,7 +345,7 @@ export function ClientesList() {
             size="lg"
             onClick={() => setSearchParams(showRevisarClientes ? {} : { revisar: '1' })}
             className="px-6 py-6 text-base font-semibold"
-            title="Ver clientes enviados desde carga masiva para revisiÛn manual (descargar Excel)"
+            title="Ver clientes enviados desde carga m√°siva para revisi√≥n manual (descargar Excel)"
           >
             <Search className="w-5 h-5 mr-2" />
             Revisar clientes
@@ -372,7 +372,7 @@ export function ClientesList() {
             size="lg"
             onClick={() => setShowCasosRevisar(true)}
             className="px-6 py-6 text-base font-semibold border-amber-400 text-amber-700 hover:bg-amber-50"
-            title="Cargar clientes con valores placeholder (cÈdula, nombres, telÈfono o email a revisar)"
+            title="Cargar clientes con valores placeholder (C√©dula, nombres, Tel√©fono o email a revisar)"
           >
             <AlertCircle className="w-5 h-5 mr-2" />
             Cargar casos a revisar
@@ -388,7 +388,7 @@ export function ClientesList() {
               </span>
               <span className="ml-2">?</span>
             </Button>
-            {/* Puente invisible para que el hover no se pierda al bajar el cursor al men˙ */}
+            {/* Puente invisible para que el hover no se pierda al bajar el cursor al men */}
             <div className="absolute left-0 right-0 top-full h-2 z-40" aria-hidden="true" />
             {/* Dropdown Menu */}
             <motion.div
@@ -416,7 +416,7 @@ export function ClientesList() {
         </div>
       </div>
 
-      {/* SecciÛn Revisar clientes (enviados desde carga masiva) */}
+      {/* Seccin Revisar clientes (enviados desde carga m√°siva) */}
       {showRevisarClientes && (
         <Card className="border-amber-200 bg-amber-50/50">
           <CardContent className="p-4">
@@ -427,7 +427,7 @@ export function ClientesList() {
                   Revisar clientes
                 </h2>
                 <p className="text-sm text-gray-600 mt-1">
-                  Clientes enviados desde la carga masiva para revisiÛn manual. Descarga el Excel para corregir y reimportar.
+                  Clientes enviados desde la carga m√°siva para revisi√≥n manual. Descarga el Excel para corregir y reimportar.
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -461,7 +461,7 @@ export function ClientesList() {
                 <Loader2 className="w-8 h-8 animate-spin text-amber-600" />
               </div>
             ) : !revisarData?.items?.length ? (
-              <p className="text-gray-500 text-center py-6">No hay clientes pendientes de revisiÛn.</p>
+              <p className="text-gray-500 text-center py-6">No hay clientes pendientes de revisi√≥n.</p>
             ) : (
               <>
                 <div className="overflow-x-auto rounded border border-gray-200 bg-white">
@@ -469,10 +469,10 @@ export function ClientesList() {
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-12">Fila</TableHead>
-                        <TableHead>CÈdula</TableHead>
+                        <TableHead>C√©dula</TableHead>
                         <TableHead>Nombres</TableHead>
                         <TableHead>Email</TableHead>
-                        <TableHead>TelÈfono</TableHead>
+                        <TableHead>Tel√©fono</TableHead>
                         <TableHead>Errores</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -493,7 +493,7 @@ export function ClientesList() {
                 {revisarData.total > perPageRevisar && (
                   <div className="flex items-center justify-between mt-3 text-sm text-gray-600">
                     <span>
-                      {((pageRevisar - 1) * perPageRevisar) + 1}ñ{Math.min(pageRevisar * perPageRevisar, revisarData.total)} de {revisarData.total}
+                      {((pageRevisar - 1) * perPageRevisar) + 1}{Math.min(pageRevisar * perPageRevisar, revisarData.total)} de {revisarData.total}
                     </span>
                     <div className="flex gap-2">
                       <Button
@@ -521,7 +521,7 @@ export function ClientesList() {
         </Card>
       )}
 
-      {/* Filtros y b˙squeda */}
+      {/* Filtros y bsqueda */}
       <Card>
         <CardContent className="p-4">
           <div className="flex flex-col sm:flex-row gap-4">
@@ -529,7 +529,7 @@ export function ClientesList() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <Input
-                  placeholder="Buscar por cÈdula o nombres..."
+                  placeholder="Buscar por C√©dula o nombres..."
                   value={searchTerm}
                   onChange={(e) => handleSearch(e.target.value)}
                   className="pl-10"
@@ -557,18 +557,18 @@ export function ClientesList() {
               <div className="space-y-4">
                 <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
                   <Filter className="w-4 h-4" />
-                  Filtros de B˙squeda
+                  Filtros de Bsqueda
                 </h3>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {/* CÈdula de identidad */}
+                  {/* C√©dula de identidad */}
                   <div>
                     <label className="text-sm font-medium text-gray-700 mb-2 block">
-                      CÈdula de identidad
+                      C√©dula de identidad
                     </label>
                     <Input
                       type="text"
-                      placeholder="CÈdula de identidad"
+                      placeholder="C√©dula de identidad"
                       value={filters.cedula || ''}
                       onChange={(e) => handleFilterChange('cedula', e.target.value || undefined)}
                       className="w-full"
@@ -611,42 +611,42 @@ export function ClientesList() {
                     />
                   </div>
 
-                  {/* TelÈfono */}
+                  {/* Tel√©fono */}
                   <div>
                     <label className="text-sm font-medium text-gray-700 mb-2 block">
-                      TelÈfono
+                      Tel√©fono
                     </label>
                     <Input
                       type="text"
-                      placeholder="TelÈfono"
+                      placeholder="Tel√©fono"
                       value={filters.telefono || ''}
                       onChange={(e) => handleFilterChange('telefono', e.target.value || undefined)}
                       className="w-full"
                     />
                   </div>
 
-                  {/* OcupaciÛn */}
+                  {/* Ocupacin */}
                   <div>
                     <label className="text-sm font-medium text-gray-700 mb-2 block">
-                      OcupaciÛn
+                      Ocupacin
                     </label>
                     <Input
                       type="text"
-                      placeholder="OcupaciÛn"
+                      placeholder="Ocupacin"
                       value={filters.ocupacion || ''}
                       onChange={(e) => handleFilterChange('ocupacion', e.target.value || undefined)}
                       className="w-full"
                     />
                   </div>
 
-                  {/* Usuario que registrÛ */}
+                  {/* Usuario que registr */}
                   <div>
                     <label className="text-sm font-medium text-gray-700 mb-2 block">
-                      Usuario que registrÛ
+                      Usuario que registr
                     </label>
                     <Input
                       type="text"
-                      placeholder="Usuario que registrÛ"
+                      placeholder="Usuario que registr"
                       value={filters.usuario_registro || ''}
                       onChange={(e) => handleFilterChange('usuario_registro', e.target.value || undefined)}
                       className="w-full"
@@ -695,7 +695,7 @@ export function ClientesList() {
                   </div>
                 </div>
 
-                {/* BotÛn Limpiar Filtros */}
+                {/* Botn Limpiar Filtros */}
                 <div className="flex justify-end pt-2">
                   <Button variant="outline" onClick={clearFilters}>
                     Limpiar Filtros
@@ -717,7 +717,7 @@ export function ClientesList() {
                   <TableHead className="font-semibold">Cliente</TableHead>
                   <TableHead className="font-semibold">Contacto</TableHead>
                   <TableHead className="font-semibold">Estado</TableHead>
-                  <TableHead className="font-semibold">Fecha ActualizaciÛn</TableHead>
+                  <TableHead className="font-semibold">Fecha Actualizacin</TableHead>
                   <TableHead className="text-right font-semibold">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -733,9 +733,9 @@ export function ClientesList() {
                       ) : clientesResponse?.total === 0 ? (
                         'No hay clientes que coincidan con los filtros seleccionados'
                       ) : clientesResponse?.total && clientesResponse.total > 0 ? (
-                        `Se encontraron ${clientesResponse.total} clientes pero no se pudieron cargar. Verifica la consola para m·s detalles.`
+                        `Se encontraron ${clientesResponse.total} clientes pero no se pudieron cargar. Verifica la consola para ms detalles.`
                       ) : (
-                        'No se pudieron cargar los clientes. Verifica la consola para m·s detalles.'
+                        'No se pudieron cargar los clientes. Verifica la consola para ms detalles.'
                       )}
                     </TableCell>
                   </TableRow>
@@ -752,7 +752,7 @@ export function ClientesList() {
                           {typeof cliente.nombres === 'string' || typeof cliente.nombres === 'number' ? cliente.nombres : (cliente as any).nombre ?? ''}
                         </button>
                         <div className="text-sm text-gray-500">
-                          CÈdula: {String(cliente.cedula ?? '')} | ID: {String(cliente.id ?? '')}
+                          C√©dula: {String(cliente.cedula ?? '')} | ID: {String(cliente.id ?? '')}
                         </div>
                       </div>
                     </TableCell>
@@ -825,7 +825,7 @@ export function ClientesList() {
                           <MessageSquare className="w-4 h-4" />
                         </Button>
 
-                        {/* ‚úÖ BOT”N EDITAR - ACTIVO Y FUNCIONAL */}
+                        {/* ‚úÖ BOTN EDITAR - ACTIVO Y FUNCIONAL */}
                         <Button
                           variant="outline"
                           size="icon"
@@ -836,14 +836,14 @@ export function ClientesList() {
                           <Edit className="w-4 h-4" />
                         </Button>
 
-                        {/* ‚úÖ BOT”N ELIMINAR - ACTIVO Y FUNCIONAL */}
+                        {/* ‚úÖ BOTN ELIMINAR - ACTIVO Y FUNCIONAL */}
                         <Button
                           variant="outline"
                           size="icon"
                           title="Eliminar cliente"
                           className="text-red-600 border-red-400 bg-red-50 hover:text-white hover:bg-red-600 hover:border-red-600 font-medium cursor-pointer transition-colors h-8 w-8"
                           onClick={() => {
-                            console.log('üî¥ BotÛn Eliminar clickeado para cliente ID:', cliente.id)
+                            console.log('ÔøΩÔøΩ Botn Eliminar clickeado para cliente ID:', cliente.id)
                             handleEliminarCliente(cliente)
                           }}
                         >
@@ -860,7 +860,7 @@ export function ClientesList() {
         </CardContent>
       </Card>
 
-      {/* PaginaciÛn */}
+      {/* Paginacin */}
       {(totalPages > 1 || clientesResponse?.total) && (
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
@@ -869,7 +869,7 @@ export function ClientesList() {
             </div>
             <div className="flex items-center gap-2">
               <label className="text-sm text-gray-700 whitespace-nowrap">
-                Por p·gina:
+                Por pgina:
               </label>
               <select
                 value={perPage}
@@ -890,7 +890,7 @@ export function ClientesList() {
           {totalPages > 1 && (
             <div className="flex items-center gap-2">
               <div className="text-sm text-gray-700 mr-2">
-                P·gina {currentPage} de {totalPages}
+                Pgina {currentPage} de {totalPages}
               </div>
               <Button
                 variant="outline"
@@ -919,13 +919,13 @@ export function ClientesList() {
           <CrearClienteForm
             onClose={() => setShowCrearCliente(false)}
             onSuccess={() => {
-              // ‚úÖ CORRECCI”N: Invalidar queries para actualizar datos
+              // ‚úÖ CORRECCIN: Invalidar queries para actualizar datos
               queryClient.invalidateQueries({ queryKey: ['clientes'] })
               queryClient.invalidateQueries({ queryKey: ['dashboard'] })
               queryClient.invalidateQueries({ queryKey: ['kpis'] })
             }}
             onClienteCreated={() => {
-              // ‚úÖ CORRECCI”N: Invalidar queries para actualizar datos
+              // ‚úÖ CORRECCIN: Invalidar queries para actualizar datos
               queryClient.invalidateQueries({ queryKey: ['clientes'] })
               queryClient.invalidateQueries({ queryKey: ['dashboard'] })
               queryClient.invalidateQueries({ queryKey: ['kpis'] })
@@ -964,7 +964,7 @@ export function ClientesList() {
         open={showCasosRevisar}
         onClose={() => {
           setShowCasosRevisar(false)
-          // ? Invalidar cache al cerrar para asegurar que se actualizÛ
+          // ? Invalidar cache al cerrar para asegurar que se actualiz
           queryClient.invalidateQueries({ queryKey: ['clientes'] })
           queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
         }}
@@ -976,7 +976,7 @@ export function ClientesList() {
         }}
       />
 
-      {/* Modal Confirmar EliminaciÛn */}
+      {/* Modal Confirmar Eliminacin */}
       <AnimatePresence>
         {showEliminarCliente && clienteSeleccionado && (
           <motion.div
@@ -1000,23 +1000,23 @@ export function ClientesList() {
                     Eliminar Cliente
                   </h3>
                   <p className="text-sm text-red-600 font-medium">
-                    ‚ö Ô∏è ELIMINACI”N PERMANENTE - No se puede deshacer
+                     Ô∏è ELIMINACIN PERMANENTE - No se puede deshacer
                   </p>
                 </div>
               </div>
 
               <div className="mb-6">
                 <p className="text-gray-700">
-                  øEst·s seguro de que quieres <span className="font-semibold text-red-600">ELIMINAR PERMANENTEMENTE</span> al cliente{' '}
+                  Ests seguro de que quieres <span className="font-semibold text-red-600">ELIMINAR PERMANENTEMENTE</span> al cliente{' '}
                   <span className="font-semibold">
                     {clienteSeleccionado.nombres}
                   </span>?
                 </p>
                 <p className="text-sm text-red-600 mt-2 font-medium">
-                  ‚ö Ô∏è El cliente ser· eliminado completamente de la base de datos.
+                   Ô∏è El cliente ser eliminado completamente de la base de datos.
                 </p>
                 <p className="text-sm text-gray-500 mt-1">
-                  CÈdula: {clienteSeleccionado.cedula}
+                  C√©dula: {clienteSeleccionado.cedula}
                 </p>
               </div>
 
@@ -1057,7 +1057,7 @@ export function ClientesList() {
         )}
       </AnimatePresence>
 
-      {/* ‚úÖ NOTIFICACI”N √öNICA */}
+      {/* ‚úÖ NOTIFICACIN √öNICA */}
       {notification && (
         <motion.div
           initial={{ opacity: 0, y: -50 }}
