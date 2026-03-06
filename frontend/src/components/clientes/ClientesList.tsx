@@ -11,7 +11,6 @@ import {
   Calendar,
   MessageSquare,
   RefreshCw,
-  AlertCircle,
   Eye,
   FileSpreadsheet,
   Download,
@@ -28,7 +27,6 @@ import { LoadingSpinner } from '../../components/ui/loading-spinner'
 import { AlertWithIcon } from '../../components/ui/alert'
 import { CrearClienteForm } from './CrearClienteForm'
 import { ClientesKPIs } from './ClientesKPIs'
-import { CasosRevisarDialog } from './CasosRevisarDialog'
 import { ExcelUploaderUI } from './ExcelUploaderUI'
 
 import { useDebounce } from '../../hooks/useDebounce'
@@ -59,7 +57,6 @@ export function ClientesList() {
   const [clienteSeleccionado, setClienteSeleccionado] = useState<any>(null)
   const [showEditarCliente, setShowEditarCliente] = useState(false)
   const [showEliminarCliente, setShowEliminarCliente] = useState(false)
-  const [showCasosRevisar, setShowCasosRevisar] = useState(false)
   const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null)
   const [pageRevisar, setPageRevisar] = useState(1)
   const [isExportingRevisar, setIsExportingRevisar] = useState(false)
@@ -172,25 +169,28 @@ export function ClientesList() {
       const perPage = 100
       const pages = Math.ceil(total / perPage) || 1
       const allItems: Array<Record<string, unknown>> = []
+      const idsToDelete: number[] = []
       for (let p = 1; p <= pages; p++) {
         const res = await clienteService.getClientesConErrores(p, perPage)
-        if (res.items?.length) allItems.push(...res.items.map((it: any) => ({
+        if (res.items?.length) {
+          res.items.forEach((it: any) => { if (it.id) idsToDelete.push(it.id) })
+          allItems.push(...res.items.map((it: any) => ({
           'Fila origen': it.fila_origen ?? '',
           'C\u00E9dula': it.cedula ?? '',
-          Nombres: it.Nombres ?? '',
+          Nombres: it.nombres ?? '',
           Email: it.email ?? '',
           'Tel\u00E9fono': it.telefono ?? '',
           Errores: it.errores ?? '',
           Estado: it.estado ?? '',
           'Fecha registro': it.fecha_registro ?? '',
         })))
+        }
       }
       const { createAndDownloadExcel } = await import('../../types/exceljs')
       const nombre = `Revisar_Clientes_${new Date().toISOString().slice(0, 10)}.xlsx`
       await createAndDownloadExcel(allItems, 'Revisar Clientes', nombre)
       
-      // Extraer IDs de items para eliminar de la BD tras descarga
-      const idsToDelete = revisarData.items.map((item: any) => item.id).filter((id: any) => id)
+      // Eliminar en BD todos los registros descargados
       if (idsToDelete.length > 0) {
         try {
           await clienteService.eliminarPorDescarga(idsToDelete)
@@ -200,7 +200,7 @@ export function ClientesList() {
       }
       
       // Invalidar queries y refrescar vista
-      queryClient.invalidateQueries({ queryKey: ['clientesConErrores'] })
+      queryClient.invalidateQueries({ queryKey: ['clientes-con-errores'] })
       refetchRevisar()
       showNotification('success', `${allItems.length} cliente(s) exportados y eliminados`)
     } catch (err) {
@@ -367,16 +367,6 @@ export function ClientesList() {
               Descargar Excel
             </Button>
           )}
-          <Button
-            variant="outline"
-            size="lg"
-            onClick={() => setShowCasosRevisar(true)}
-            className="px-6 py-6 text-base font-semibold border-amber-400 text-amber-700 hover:bg-amber-50"
-            title="Cargar clientes con valores placeholder (C\u00E9dula, Nombres, Tel\u00E9fono o email a revisar)"
-          >
-            <AlertCircle className="w-5 h-5 mr-2" />
-            Cargar casos a revisar
-          </Button>
           <div className="relative group">
             <Button
               size="lg"
@@ -477,11 +467,11 @@ export function ClientesList() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {revisarData.items.map((item: { id: number; fila_origen?: number; cedula?: string | null; Nombres?: string | null; email?: string | null; telefono?: string | null; errores?: string | null }) => (
+                      {revisarData.items.map((item: { id: number; fila_origen?: number; cedula?: string | null; nombres?: string | null; email?: string | null; telefono?: string | null; errores?: string | null }) => (
                         <TableRow key={item.id}>
                           <TableCell className="font-mono text-xs">{item.fila_origen ?? '-'}</TableCell>
                           <TableCell>{item.cedula ?? '-'}</TableCell>
-                          <TableCell>{item.Nombres ?? '-'}</TableCell>
+                          <TableCell>{item.nombres ?? '-'}</TableCell>
                           <TableCell>{item.email ?? '-'}</TableCell>
                           <TableCell>{item.telefono ?? '-'}</TableCell>
                           <TableCell className="max-w-xs truncate text-amber-700" title={item.errores ?? ''}>{item.errores ?? '-'}</TableCell>
@@ -921,12 +911,14 @@ export function ClientesList() {
             onSuccess={() => {
               // ✅ CORRECCIN: Invalidar queries para actualizar datos
               queryClient.invalidateQueries({ queryKey: ['clientes'] })
+              queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
               queryClient.invalidateQueries({ queryKey: ['dashboard'] })
               queryClient.invalidateQueries({ queryKey: ['kpis'] })
             }}
             onClienteCreated={() => {
               // ✅ CORRECCIN: Invalidar queries para actualizar datos
               queryClient.invalidateQueries({ queryKey: ['clientes'] })
+              queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
               queryClient.invalidateQueries({ queryKey: ['dashboard'] })
               queryClient.invalidateQueries({ queryKey: ['kpis'] })
             }}
@@ -959,22 +951,6 @@ export function ClientesList() {
         )}
       </AnimatePresence>
 
-      {/* Modal Casos a Revisar */}
-      <CasosRevisarDialog
-        open={showCasosRevisar}
-        onClose={() => {
-          setShowCasosRevisar(false)
-          // ? Invalidar cache al cerrar para asegurar que se actualiz
-          queryClient.invalidateQueries({ queryKey: ['clientes'] })
-          queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
-        }}
-        onSuccess={() => {
-          // ? Invalidar cache cuando se guarda exitosamente
-          queryClient.invalidateQueries({ queryKey: ['clientes'] })
-          queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
-          showNotification('success', 'Cliente(s) actualizado(s) correctamente')
-        }}
-      />
 
       {/* Modal Confirmar Eliminacin */}
       <AnimatePresence>
