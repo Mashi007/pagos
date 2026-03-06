@@ -105,7 +105,7 @@ export function ClientesList() {
 
       // Refrescar la lista
       queryClient.invalidateQueries({ queryKey: ['clientes'] })
-      queryClient.invalidateQueries({ queryKey: ['clientes-stats'] }) // ? Actualizar estad\u00EDsticas
+      queryClient.invalidateQueries({ queryKey: ['clientes-stats'] }) // ? Actualizar estadísticas
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       queryClient.invalidateQueries({ queryKey: ['kpis'] })
 
@@ -129,7 +129,7 @@ export function ClientesList() {
     setShowEditarCliente(false)
     setClienteSeleccionado(null)
     queryClient.invalidateQueries({ queryKey: ['clientes'] })
-    queryClient.invalidateQueries({ queryKey: ['clientes-stats'] }) // ? Actualizar estad\u00EDsticas
+    queryClient.invalidateQueries({ queryKey: ['clientes-stats'] }) // ? Actualizar estadísticas
   }
   useSimpleAuth()
   const queryClient = useQueryClient()
@@ -176,10 +176,10 @@ export function ClientesList() {
           res.items.forEach((it: any) => { if (it.id) idsToDelete.push(it.id) })
           allItems.push(...res.items.map((it: any) => ({
           'Fila origen': it.fila_origen ?? '',
-          'C\u00E9dula': it.cedula ?? '',
+          'Cédula': it.cedula ?? '',
           Nombres: it.nombres ?? '',
           Email: it.email ?? '',
-          'Tel\u00E9fono': it.telefono ?? '',
+          'Teléfono': it.telefono ?? '',
           Errores: it.errores ?? '',
           Estado: it.estado ?? '',
           'Fecha registro': it.fecha_registro ?? '',
@@ -335,7 +335,7 @@ export function ClientesList() {
             }}
             disabled={isRefetching || isLoading || statsLoading}
             className="px-6 py-6 text-base font-semibold"
-            title="Actualizar datos y estad\u00EDsticas"
+            title="Actualizar datos y estadísticas"
           >
             <RefreshCw className={`w-5 h-5 mr-2 ${(isRefetching || statsLoading) ? 'animate-spin' : ''}`} />
             {(isRefetching || statsLoading) ? 'Actualizando...' : 'Actualizar'}
@@ -345,7 +345,7 @@ export function ClientesList() {
             size="lg"
             onClick={() => setSearchParams(showRevisarClientes ? {} : { revisar: '1' })}
             className="px-6 py-6 text-base font-semibold"
-            title="Ver clientes enviados desde carga m\u00E1siva para revisi\u00F3n manual (descargar Excel)"
+            title="Ver clientes enviados desde carga másiva para revisión manual (descargar Excel)"
           >
             <Search className="w-5 h-5 mr-2" />
             Revisar clientes
@@ -406,7 +406,7 @@ export function ClientesList() {
         </div>
       </div>
 
-      {/* Seccin Revisar clientes (enviados desde carga m\u00E1siva) */}
+      {/* Seccin Revisar clientes (enviados desde carga másiva) */}
       {showRevisarClientes && (
         <Card className="border-amber-200 bg-amber-50/50">
           <CardContent className="p-4">
@@ -417,7 +417,7 @@ export function ClientesList() {
                   Revisar clientes
                 </h2>
                 <p className="text-sm text-gray-600 mt-1">
-                  Clientes enviados desde la carga m\u00E1siva para revisi\u00F3n manual. Descarga el Excel para corregir y reimportar.
+                  Clientes enviados desde la carga másiva para revisión manual. Descarga el Excel para corregir y reimportar.
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -451,7 +451,7 @@ export function ClientesList() {
                 <Loader2 className="w-8 h-8 animate-spin text-amber-600" />
               </div>
             ) : !revisarData?.items?.length ? (
-              <p className="text-gray-500 text-center py-6">No hay clientes pendientes de revisi\u00F3n.</p>
+              <p className="text-gray-500 text-center py-6">No hay clientes pendientes de revisión.</p>
             ) : (
               <>
                 <div className="overflow-x-auto rounded border border-gray-200 bg-white">
@@ -459,10 +459,10 @@ export function ClientesList() {
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-12">Fila</TableHead>
-                        <TableHead>C\u00E9dula</TableHead>
+                        <TableHead>Cédula</TableHead>
                         <TableHead>Nombres</TableHead>
                         <TableHead>Email</TableHead>
-                        <TableHead>Tel\u00E9fono</TableHead>
+                        <TableHead>Teléfono</TableHead>
                         <TableHead>Errores</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -511,7 +511,7 @@ export function ClientesList() {
         </Card>
       )}
 
-      {/* Filtros y bsqueda */}
+      {/* Filtros y Búsqueda */}
       <Card>
         <CardContent className="p-4">
           <div className="flex flex-col sm:flex-row gap-4">
@@ -519,7 +519,7 @@ export function ClientesList() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <Input
-                  placeholder="Buscar por C\u00E9dula o Nombres..."
+                  placeholder="Buscar por Cédula o Nombres..."
                   value={searchTerm}
                   onChange={(e) => handleSearch(e.target.value)}
                   className="pl-10"
@@ -547,18 +547,18 @@ export function ClientesList() {
               <div className="space-y-4">
                 <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
                   <Filter className="w-4 h-4" />
-                  Filtros de Bsqueda
+                  Filtros de Búsqueda
                 </h3>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {/* C\u00E9dula de identidad */}
+                  {/* Cédula de identidad */}
                   <div>
                     <label className="text-sm font-medium text-gray-700 mb-2 block">
-                      C\u00E9dula de identidad
+                      Cédula de identidad
                     </label>
                     <Input
                       type="text"
-                      placeholder="C\u00E9dula de identidad"
+                      placeholder="Cédula de identidad"
                       value={filters.cedula || ''}
                       onChange={(e) => handleFilterChange('cedula', e.target.value || undefined)}
                       className="w-full"
@@ -601,42 +601,42 @@ export function ClientesList() {
                     />
                   </div>
 
-                  {/* Tel\u00E9fono */}
+                  {/* Teléfono */}
                   <div>
                     <label className="text-sm font-medium text-gray-700 mb-2 block">
-                      Tel\u00E9fono
+                      Teléfono
                     </label>
                     <Input
                       type="text"
-                      placeholder="Tel\u00E9fono"
+                      placeholder="Teléfono"
                       value={filters.telefono || ''}
                       onChange={(e) => handleFilterChange('telefono', e.target.value || undefined)}
                       className="w-full"
                     />
                   </div>
 
-                  {/* Ocupaci\u00F3n */}
+                  {/* Ocupación */}
                   <div>
                     <label className="text-sm font-medium text-gray-700 mb-2 block">
-                      Ocupaci\u00F3n
+                      Ocupación
                     </label>
                     <Input
                       type="text"
-                      placeholder="Ocupaci\u00F3n"
+                      placeholder="Ocupación"
                       value={filters.ocupacion || ''}
                       onChange={(e) => handleFilterChange('ocupacion', e.target.value || undefined)}
                       className="w-full"
                     />
                   </div>
 
-                  {/* Usuario que registr\u00F3 */}
+                  {/* Usuario que registró */}
                   <div>
                     <label className="text-sm font-medium text-gray-700 mb-2 block">
-                      Usuario que registr\u00F3
+                      Usuario que registró
                     </label>
                     <Input
                       type="text"
-                      placeholder="Usuario que registr\u00F3"
+                      placeholder="Usuario que registró"
                       value={filters.usuario_registro || ''}
                       onChange={(e) => handleFilterChange('usuario_registro', e.target.value || undefined)}
                       className="w-full"
@@ -707,7 +707,7 @@ export function ClientesList() {
                   <TableHead className="font-semibold">Cliente</TableHead>
                   <TableHead className="font-semibold">Contacto</TableHead>
                   <TableHead className="font-semibold">Estado</TableHead>
-                  <TableHead className="font-semibold">Fecha Actualizacin</TableHead>
+                  <TableHead className="font-semibold">Fecha Actualización</TableHead>
                   <TableHead className="text-right font-semibold">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -742,7 +742,7 @@ export function ClientesList() {
                           {(cliente as any).nombres || (cliente as any).Nombres || (cliente as any).nombre || ''}
                         </button>
                         <div className="text-sm text-gray-500">
-                          C\u00E9dula: {String(cliente.cedula ?? '')} | ID: {String(cliente.id ?? '')}
+                          Cédula: {String(cliente.cedula ?? '')} | ID: {String(cliente.id ?? '')}
                         </div>
                       </div>
                     </TableCell>
@@ -992,7 +992,7 @@ export function ClientesList() {
                    ? El cliente ser eliminado completamente de la base de datos.
                 </p>
                 <p className="text-sm text-gray-500 mt-1">
-                  C\u00E9dula: {clienteSeleccionado.cedula}
+                  Cédula: {clienteSeleccionado.cedula}
                 </p>
               </div>
 
@@ -1062,5 +1062,6 @@ export function ClientesList() {
     </div>
   )
 }
+
 
 
