@@ -1,4 +1,4 @@
-import { apiClient, ApiResponse, PaginatedResponse, buildUrl } from './api'
+﻿import { apiClient, ApiResponse, PaginatedResponse, buildUrl } from './api'
 import { Cliente, ClienteForm, ClienteFilters } from '../types'
 import { logger } from '../utils/logger'
 
@@ -311,7 +311,11 @@ class ClienteService {
     const response = await apiClient.post<any>(`${this.baseUrl}/actualizar-lote`, actualizaciones)
     return response
   }
-}
+
+  // Eliminar clientes con errores tras su descarga en Excel
+  async eliminarPorDescarga(ids: number[]): Promise<{ deleted: number }> {
+    return apiClient.post(this.baseUrl + "/revisar/eliminar-por-descarga", ids)
+  }}
 
 // Instancia singleton del servicio
 export const clienteService = new ClienteService()

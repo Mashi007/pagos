@@ -188,7 +188,21 @@ export function ClientesList() {
       const { createAndDownloadExcel } = await import('../../types/exceljs')
       const nombre = `Revisar_Clientes_${new Date().toISOString().slice(0, 10)}.xlsx`
       await createAndDownloadExcel(allItems, 'Revisar Clientes', nombre)
-      showNotification('success', `${allItems.length} cliente(s) exportados a Excel`)
+      
+      // Extraer IDs de items para eliminar de la BD tras descarga
+      const idsToDelete = revisarData.items.map((item: any) => item.id).filter((id: any) => id)
+      if (idsToDelete.length > 0) {
+        try {
+          await clienteService.eliminarPorDescarga(idsToDelete)
+        } catch (err) {
+          console.error('Error eliminando clientes tras descarga:', err)
+        }
+      }
+      
+      // Invalidar queries y refrescar vista
+      queryClient.invalidateQueries({ queryKey: ['clientesConErrores'] })
+      refetchRevisar()
+      showNotification('success', `${allItems.length} cliente(s) exportados y eliminados`)
     } catch (err) {
       console.error('Error exportando Revisar Clientes:', err)
       showNotification('error', 'Error al exportar. Intenta de nuevo.')
@@ -1096,3 +1110,5 @@ export function ClientesList() {
     </div>
   )
 }
+
+

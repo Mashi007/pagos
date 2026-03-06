@@ -11,11 +11,11 @@ import re
 from datetime import date
 from typing import Optional, Any
 
-from fastapi import APIRouter, Query, Depends, HTTPException
+from fastapi import APIRouter, Query, Depends, HTTPException, Body
 
 from app.core.deps import get_current_user
 from pydantic import BaseModel, ValidationError
-from sqlalchemy import select, func, or_
+from sqlalchemy import select, func, or_, delete
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import ProgrammingError, OperationalError, IntegrityError
 
@@ -900,5 +900,21 @@ def resolver_cliente_error(error_id: int, db: Session = Depends(get_db)):
     db.delete(row)
     db.commit()
     return None
+
+@router.post("/revisar/eliminar-por-descarga")
+def eliminar_clientes_por_descarga(
+    ids: list[int] = Body(...),
+    db: Session = Depends(get_db),
+):
+    ""Elimina registros de clientes_con_errores tras su descarga en Excel.""
+    if not ids:
+        return {"deleted": 0}
+    
+    result = db.execute(
+        delete(ClienteConError).where(ClienteConError.id.in_(ids))
+    )
+    db.commit()
+    return {"deleted": result.rowcount}
+
 
 
