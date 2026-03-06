@@ -1,4 +1,4 @@
-"""
+﻿"""
 Schemas Pydantic para Préstamo (request/response).
 Alineados con la tabla public.prestamos en la BD (columnas confirmadas).
 """
@@ -7,6 +7,15 @@ from decimal import Decimal
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, field_validator
+
+PRESTAMO_ESTADOS_VALIDOS = frozenset({"APROBADO", "DRAFT", "EN_REVISION", "EVALUADO", "RECHAZADO", "DESEMBOLSADO"})
+
+def _normalizar_estado_prestamo(v):
+    if not v or not str(v).strip(): return "DRAFT"
+    s = str(v).strip().upper()
+    if s == "PROBADO": return "APROBADO"
+    if s == "RAFT": return "DRAFT"
+    return s
 
 
 class PrestamoBase(BaseModel):
@@ -25,6 +34,12 @@ class PrestamoBase(BaseModel):
         if v is not None and (v < 1 or v > 12):
             raise ValueError("numero_cuotas debe estar entre 1 y 12")
         return v
+
+    @field_validator("estado")
+    @classmethod
+    def estado_normalizado(cls, v: Optional[str]) -> str:
+        return _normalizar_estado_prestamo(v or "DRAFT")
+
     fecha_requerimiento: Optional[date] = None
     cuota_periodo: Optional[Decimal] = None
     producto: Optional[str] = None
@@ -52,6 +67,13 @@ class PrestamoUpdate(BaseModel):
         if v is not None and (v < 1 or v > 12):
             raise ValueError("numero_cuotas debe estar entre 1 y 12")
         return v
+
+    @field_validator("estado")
+    @classmethod
+    def estado_normalizado(cls, v: Optional[str]) -> Optional[str]:
+        if v is None: return None
+        return _normalizar_estado_prestamo(v)
+
     fecha_requerimiento: Optional[date] = None
     cuota_periodo: Optional[Decimal] = None
     producto: Optional[str] = None

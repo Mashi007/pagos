@@ -1303,9 +1303,10 @@ def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db), curr
     # Usar email del usuario actual (no hardcoded)
     usuario_proponente_email = current_user.email if current_user else "itmaster@rapicreditca.com"
     
-    fecha_req = payload.fecha_requerimiento or hoy
-    estado_inicial = "APROBADO" if getattr(payload, "aprobado_por_carga_masiva", False) else (payload.estado or "DRAFT")
-    fecha_aprob = datetime.combine(fecha_req, time.min) if getattr(payload, "aprobado_por_carga_masiva", False) else None
+    es_carga_masiva = getattr(payload, "aprobado_por_carga_masiva", False)
+    estado_inicial = "APROBADO" if es_carga_masiva else (payload.estado or "DRAFT")
+    # Carga masiva: fecha_aprobacion = fecha_registro (se asigna después del commit/refresh)
+    fecha_aprob = None if es_carga_masiva else None
     row = Prestamo(
         cliente_id=payload.cliente_id,
         cedula=cliente.cedula or "",
@@ -1326,6 +1327,10 @@ def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db), curr
     db.add(row)
     db.commit()
     db.refresh(row)
+    if es_carga_masiva and row.fecha_registro:
+        row.fecha_aprobacion = row.fecha_registro
+        db.commit()
+        db.refresh(row)
     
     # [MEJORA] Generar cuotas automáticamente
     numero_cuotas = payload.numero_cuotas or 12
