@@ -108,7 +108,7 @@ export function ClientesList() {
 
       // Refrescar la lista
       queryClient.invalidateQueries({ queryKey: ['clientes'] })
-      queryClient.invalidateQueries({ queryKey: ['clientes-stats'] }) // ✅ Actualizar estadísticas
+      queryClient.invalidateQueries({ queryKey: ['clientes-stats'] }) // ✅ Actualizar estad\u00EDsticas
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       queryClient.invalidateQueries({ queryKey: ['kpis'] })
 
@@ -132,7 +132,7 @@ export function ClientesList() {
     setShowEditarCliente(false)
     setClienteSeleccionado(null)
     queryClient.invalidateQueries({ queryKey: ['clientes'] })
-    queryClient.invalidateQueries({ queryKey: ['clientes-stats'] }) // ✅ Actualizar estadísticas
+    queryClient.invalidateQueries({ queryKey: ['clientes-stats'] }) // ✅ Actualizar estad\u00EDsticas
   }
   useSimpleAuth()
   const queryClient = useQueryClient()
@@ -176,10 +176,10 @@ export function ClientesList() {
         const res = await clienteService.getClientesConErrores(p, perPage)
         if (res.items?.length) allItems.push(...res.items.map((it: any) => ({
           'Fila origen': it.fila_origen ?? '',
-          Cédula: it.cedula ?? '',
-          Nombres: it.nombres ?? '',
+          'C\u00E9dula': it.cedula ?? '',
+          Nombres: it.Nombres ?? '',
           Email: it.email ?? '',
-          Teléfono: it.telefono ?? '',
+          'Tel\u00E9fono': it.telefono ?? '',
           Errores: it.errores ?? '',
           Estado: it.estado ?? '',
           'Fecha registro': it.fecha_registro ?? '',
@@ -223,7 +223,7 @@ export function ClientesList() {
     },
     {
       id: '2',
-      nombre: 'María Garca',
+      nombre: 'Mar\u00EDa Garca',
       email: 'maria@example.com',
       telefono: '+1234567891',
       estado: 'MORA',
@@ -335,7 +335,7 @@ export function ClientesList() {
             }}
             disabled={isRefetching || isLoading || statsLoading}
             className="px-6 py-6 text-base font-semibold"
-            title="Actualizar datos y estadísticas"
+            title="Actualizar datos y estad\u00EDsticas"
           >
             <RefreshCw className={`w-5 h-5 mr-2 ${(isRefetching || statsLoading) ? 'animate-spin' : ''}`} />
             {(isRefetching || statsLoading) ? 'Actualizando...' : 'Actualizar'}
@@ -345,7 +345,7 @@ export function ClientesList() {
             size="lg"
             onClick={() => setSearchParams(showRevisarClientes ? {} : { revisar: '1' })}
             className="px-6 py-6 text-base font-semibold"
-            title="Ver clientes enviados desde carga másiva para revisión manual (descargar Excel)"
+            title="Ver clientes enviados desde carga m\u00E1siva para revisi\u00F3n manual (descargar Excel)"
           >
             <Search className="w-5 h-5 mr-2" />
             Revisar clientes
@@ -372,7 +372,7 @@ export function ClientesList() {
             size="lg"
             onClick={() => setShowCasosRevisar(true)}
             className="px-6 py-6 text-base font-semibold border-amber-400 text-amber-700 hover:bg-amber-50"
-            title="Cargar clientes con valores placeholder (Cédula, nombres, Teléfono o email a revisar)"
+            title="Cargar clientes con valores placeholder (C\u00E9dula, Nombres, Tel\u00E9fono o email a revisar)"
           >
             <AlertCircle className="w-5 h-5 mr-2" />
             Cargar casos a revisar
@@ -416,7 +416,7 @@ export function ClientesList() {
         </div>
       </div>
 
-      {/* Seccin Revisar clientes (enviados desde carga másiva) */}
+      {/* Seccin Revisar clientes (enviados desde carga m\u00E1siva) */}
       {showRevisarClientes && (
         <Card className="border-amber-200 bg-amber-50/50">
           <CardContent className="p-4">
@@ -427,7 +427,7 @@ export function ClientesList() {
                   Revisar clientes
                 </h2>
                 <p className="text-sm text-gray-600 mt-1">
-                  Clientes enviados desde la carga másiva para revisión manual. Descarga el Excel para corregir y reimportar.
+                  Clientes enviados desde la carga m\u00E1siva para revisi\u00F3n manual. Descarga el Excel para corregir y reimportar.
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -461,7 +461,7 @@ export function ClientesList() {
                 <Loader2 className="w-8 h-8 animate-spin text-amber-600" />
               </div>
             ) : !revisarData?.items?.length ? (
-              <p className="text-gray-500 text-center py-6">No hay clientes pendientes de revisión.</p>
+              <p className="text-gray-500 text-center py-6">No hay clientes pendientes de revisi\u00F3n.</p>
             ) : (
               <>
                 <div className="overflow-x-auto rounded border border-gray-200 bg-white">
@@ -469,19 +469,19 @@ export function ClientesList() {
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-12">Fila</TableHead>
-                        <TableHead>Cédula</TableHead>
+                        <TableHead>C\u00E9dula</TableHead>
                         <TableHead>Nombres</TableHead>
                         <TableHead>Email</TableHead>
-                        <TableHead>Teléfono</TableHead>
+                        <TableHead>Tel\u00E9fono</TableHead>
                         <TableHead>Errores</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {revisarData.items.map((item: { id: number; fila_origen?: number; cedula?: string | null; nombres?: string | null; email?: string | null; telefono?: string | null; errores?: string | null }) => (
+                      {revisarData.items.map((item: { id: number; fila_origen?: number; cedula?: string | null; Nombres?: string | null; email?: string | null; telefono?: string | null; errores?: string | null }) => (
                         <TableRow key={item.id}>
                           <TableCell className="font-mono text-xs">{item.fila_origen ?? '-'}</TableCell>
                           <TableCell>{item.cedula ?? '-'}</TableCell>
-                          <TableCell>{item.nombres ?? '-'}</TableCell>
+                          <TableCell>{item.Nombres ?? '-'}</TableCell>
                           <TableCell>{item.email ?? '-'}</TableCell>
                           <TableCell>{item.telefono ?? '-'}</TableCell>
                           <TableCell className="max-w-xs truncate text-amber-700" title={item.errores ?? ''}>{item.errores ?? '-'}</TableCell>
@@ -529,7 +529,7 @@ export function ClientesList() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <Input
-                  placeholder="Buscar por Cédula o nombres..."
+                  placeholder="Buscar por C\u00E9dula o Nombres..."
                   value={searchTerm}
                   onChange={(e) => handleSearch(e.target.value)}
                   className="pl-10"
@@ -561,14 +561,14 @@ export function ClientesList() {
                 </h3>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {/* Cédula de identidad */}
+                  {/* C\u00E9dula de identidad */}
                   <div>
                     <label className="text-sm font-medium text-gray-700 mb-2 block">
-                      Cédula de identidad
+                      C\u00E9dula de identidad
                     </label>
                     <Input
                       type="text"
-                      placeholder="Cédula de identidad"
+                      placeholder="C\u00E9dula de identidad"
                       value={filters.cedula || ''}
                       onChange={(e) => handleFilterChange('cedula', e.target.value || undefined)}
                       className="w-full"
@@ -611,14 +611,14 @@ export function ClientesList() {
                     />
                   </div>
 
-                  {/* Teléfono */}
+                  {/* Tel\u00E9fono */}
                   <div>
                     <label className="text-sm font-medium text-gray-700 mb-2 block">
-                      Teléfono
+                      Tel\u00E9fono
                     </label>
                     <Input
                       type="text"
-                      placeholder="Teléfono"
+                      placeholder="Tel\u00E9fono"
                       value={filters.telefono || ''}
                       onChange={(e) => handleFilterChange('telefono', e.target.value || undefined)}
                       className="w-full"
@@ -749,10 +749,10 @@ export function ClientesList() {
                           onClick={() => navigate(`/clientes/${cliente.id}`)}
                           className="font-medium text-gray-900 hover:text-blue-600 hover:underline text-left"
                         >
-                          {typeof cliente.nombres === 'string' || typeof cliente.nombres === 'number' ? cliente.nombres : (cliente as any).nombre ?? ''}
+                          {typeof cliente.Nombres === 'string' || typeof cliente.Nombres === 'number' ? cliente.Nombres : (cliente as any).nombre ?? ''}
                         </button>
                         <div className="text-sm text-gray-500">
-                          Cédula: {String(cliente.cedula ?? '')} | ID: {String(cliente.id ?? '')}
+                          'C\u00E9dula': {String(cliente.cedula ?? '')} | ID: {String(cliente.id ?? '')}
                         </div>
                       </div>
                     </TableCell>
@@ -1009,14 +1009,14 @@ export function ClientesList() {
                 <p className="text-gray-700">
                   Ests seguro de que quieres <span className="font-semibold text-red-600">ELIMINAR PERMANENTEMENTE</span> al cliente{' '}
                   <span className="font-semibold">
-                    {clienteSeleccionado.nombres}
+                    {clienteSeleccionado.Nombres}
                   </span>?
                 </p>
                 <p className="text-sm text-red-600 mt-2 font-medium">
                    ️ El cliente ser eliminado completamente de la base de datos.
                 </p>
                 <p className="text-sm text-gray-500 mt-1">
-                  Cédula: {clienteSeleccionado.cedula}
+                  'C\u00E9dula': {clienteSeleccionado.cedula}
                 </p>
               </div>
 
