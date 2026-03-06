@@ -1382,6 +1382,20 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
         row.numero_cuotas = payload.numero_cuotas
     db.commit()
     db.refresh(row)
+    # Si quedó en APROBADO y no tiene cuotas, generar tabla de amortización automáticamente
+    if row.estado == "APROBADO":
+        existentes = db.scalar(select(func.count()).select_from(Cuota).where(Cuota.prestamo_id == prestamo_id)) or 0
+        if existentes == 0:
+            numero_cuotas = row.numero_cuotas or 12
+            total_fin = float(row.total_financiamiento or 0)
+            if numero_cuotas > 0 and total_fin > 0:
+                monto_cuota = _resolver_monto_cuota(row, total_fin, numero_cuotas)
+                fecha_base = row.fecha_aprobacion.date() if getattr(row, "fecha_aprobacion", None) else (row.fecha_registro.date() if getattr(row, "fecha_registro", None) else date.today())
+                if hasattr(fecha_base, "date") and callable(getattr(fecha_base, "date", None)):
+                    fecha_base = fecha_base.date()
+                _generar_cuotas_amortizacion(db, row, fecha_base, numero_cuotas, monto_cuota)
+                db.commit()
+                db.refresh(row)
     return PrestamoResponse.model_validate(row)
 
 
