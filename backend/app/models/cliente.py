@@ -20,7 +20,7 @@ class Cliente(Base):
     fecha_nacimiento = Column(Date, nullable=False)
     ocupacion = Column(String(100), nullable=False)
     estado = Column(String(20), nullable=False, index=True)
-    fecha_registro = Column(DateTime(timezone=False), nullable=False, server_default=text("'2025-10-31 00:00:00'"))
+    fecha_registro = Column(DateTime(timezone=False), nullable=False, server_default=text("CURRENT_TIMESTAMP"))
     fecha_actualizacion = Column(DateTime(timezone=False), nullable=False, server_default=text("CURRENT_TIMESTAMP"))
     usuario_registro = Column(String(50), nullable=False)
     notas = Column(Text, nullable=False)
