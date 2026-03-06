@@ -906,7 +906,7 @@ def eliminar_clientes_por_descarga(
     ids: list[int] = Body(...),
     db: Session = Depends(get_db),
 ):
-    ""Elimina registros de clientes_con_errores tras su descarga en Excel.""
+    """Elimina registros de clientes_con_errores tras su descarga en Excel."""
     if not ids:
         return {"deleted": 0}
     
@@ -915,6 +915,7 @@ def eliminar_clientes_por_descarga(
     )
     db.commit()
     return {"deleted": result.rowcount}
+
 
 
 
