@@ -1,11 +1,11 @@
-"""
+﻿"""
 Endpoints de préstamos. Datos reales desde BD (tabla prestamos).
 Todos los endpoints usan Depends(get_db). No hay stubs ni datos demo.
 """
 import calendar
 import io
 import logging
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, time
 from decimal import Decimal
 from typing import Optional
 
@@ -1303,6 +1303,9 @@ def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db), curr
     # Usar email del usuario actual (no hardcoded)
     usuario_proponente_email = current_user.email if current_user else "itmaster@rapicreditca.com"
     
+    fecha_req = payload.fecha_requerimiento or hoy
+    estado_inicial = "APROBADO" if getattr(payload, "aprobado_por_carga_masiva", False) else (payload.estado or "DRAFT")
+    fecha_aprob = datetime.combine(fecha_req, time.min) if getattr(payload, "aprobado_por_carga_masiva", False) else None
     row = Prestamo(
         cliente_id=payload.cliente_id,
         cedula=cliente.cedula or "",
@@ -1313,7 +1316,8 @@ def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db), curr
         numero_cuotas=payload.numero_cuotas or 12,
         cuota_periodo=payload.cuota_periodo or 0,
         producto=payload.producto or "Financiamiento",
-        estado=payload.estado or "DRAFT",
+        estado=estado_inicial,
+        fecha_aprobacion=fecha_aprob,
         concesionario=payload.concesionario,
         modelo_vehiculo=payload.modelo,
         analista=payload.analista or "",

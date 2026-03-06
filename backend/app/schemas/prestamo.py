@@ -32,6 +32,7 @@ class PrestamoBase(BaseModel):
 
 class PrestamoCreate(PrestamoBase):
     """Campos para crear préstamo. cedula/nombres se rellenan desde Cliente si no se envían."""
+    aprobado_por_carga_masiva: Optional[bool] = False  # Si True: estado=APROBADO, fecha_aprobacion=fecha_requerimiento
 
 
 class PrestamoUpdate(BaseModel):

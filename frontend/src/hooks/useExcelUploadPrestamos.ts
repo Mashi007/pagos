@@ -249,7 +249,7 @@ export function useExcelUploadPrestamos({ onClose, onSuccess }: ExcelUploaderPre
           cuota_periodo: cuotaPeriodo,
           tasa_interes: row.tasa_interes != null ? Number(row.tasa_interes) : 0,
           observaciones: (row.observaciones || '').trim() || undefined,
-          estado: 'DRAFT',
+          aprobado_por_carga_masiva: true,
         }
 
         await prestamoService.createPrestamo(prestamoData as any)
