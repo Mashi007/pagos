@@ -88,6 +88,10 @@ export function useExcelUploadPrestamos({ onClose, onSuccess }: ExcelUploaderPre
     return excelData.filter((r) => !savedRows.has(r._rowIndex) && !enviadosRevisar.has(r._rowIndex))
   }, [excelData, savedRows, enviadosRevisar])
 
+  const getDisplayData = useCallback((): PrestamoExcelRow[] => {
+    return excelData.filter((r) => !savedRows.has(r._rowIndex) && !enviadosRevisar.has(r._rowIndex))
+  }, [excelData, savedRows, enviadosRevisar])
+
   const sendToRevisarPrestamos = useCallback(
     async (row: PrestamoExcelRow, skipToast = false, skipStateUpdate = false): Promise<boolean> => {
       setSavingProgress((prev) => ({ ...prev, [row._rowIndex]: true }))
@@ -459,6 +463,7 @@ export function useExcelUploadPrestamos({ onClose, onSuccess }: ExcelUploaderPre
     setShowPreview,
     getValidRows,
     getRowsToRevisarPrestamos,
+    getDisplayData,
     saveIndividualPrestamo,
     saveAllValid,
     sendToRevisarPrestamos,

@@ -1327,14 +1327,15 @@ def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db), curr
     numero_cuotas = payload.numero_cuotas or 12
     total_financiamiento = float(payload.total_financiamiento)
     monto_cuota = _resolver_monto_cuota(row, total_financiamiento, numero_cuotas)
-    
+    prestamo_id = row.id  # guardar antes del try para no acceder a row tras rollback
+
     try:
         cuotas_generadas = _generar_cuotas_amortizacion(db, row, hoy, numero_cuotas, monto_cuota)
         db.commit()
-        logger.info(f"Préstamo {row.id}: {cuotas_generadas} cuotas generadas automáticamente")
+        logger.info(f"Préstamo {prestamo_id}: {cuotas_generadas} cuotas generadas automáticamente")
     except Exception as e:
-        logger.error(f"Error generando cuotas para préstamo {row.id}: {e}")
         db.rollback()
+        logger.error("Error generando cuotas para préstamo %s: %s", prestamo_id, str(e))
         raise HTTPException(
             status_code=500,
             detail=f"Error al generar cuotas: {str(e)}"

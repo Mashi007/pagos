@@ -37,6 +37,7 @@ export function ExcelUploaderPrestamosUI(props: ExcelUploaderPrestamosProps) {
     setShowPreview,
     getValidRows,
     getRowsToRevisarPrestamos,
+    getDisplayData,
     saveIndividualPrestamo,
     saveAllValid,
     sendToRevisarPrestamos,
@@ -191,7 +192,7 @@ export function ExcelUploaderPrestamosUI(props: ExcelUploaderPrestamosProps) {
                         </tr>
                       </thead>
                       <tbody>
-                        {excelData.map((row) => (
+                        {getDisplayData().map((row) => (
                           <tr key={row._rowIndex} className={row._hasErrors ? 'bg-red-50' : 'bg-green-50'}>
                             <td className="border p-2 text-xs">{row._rowIndex}</td>
                             <td className="border p-2">
