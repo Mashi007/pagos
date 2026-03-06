@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Search,
@@ -176,7 +176,7 @@ export function ClientesList() {
           res.items.forEach((it: any) => { if (it.id) idsToDelete.push(it.id) })
           allItems.push(...res.items.map((it: any) => ({
           'Fila origen': it.fila_origen ?? '',
-          C�dula: it.cedula ?? '',
+          'C\u00E9dula': it.cedula ?? '',
           Nombres: it.nombres ?? '',
           Email: it.email ?? '',
           'Tel\u00E9fono': it.telefono ?? '',
@@ -742,7 +742,7 @@ export function ClientesList() {
                           {(cliente as any).nombres || (cliente as any).Nombres || (cliente as any).nombre || ''}
                         </button>
                         <div className="text-sm text-gray-500">
-                          C�dula: {String(cliente.cedula ?? '')} | ID: {String(cliente.id ?? '')}
+                          Cï¿½dula: {String(cliente.cedula ?? '')} | ID: {String(cliente.id ?? '')}
                         </div>
                       </div>
                     </TableCell>
@@ -985,14 +985,14 @@ export function ClientesList() {
                 <p className="text-gray-700">
                   Ests seguro de que quieres <span className="font-semibold text-red-600">ELIMINAR PERMANENTEMENTE</span> al cliente{' '}
                   <span className="font-semibold">
-                    {(clienteSeleccionado as any)?.nombres ?? clienteSeleccionado?.Nombres ?? '}
+                    {(clienteSeleccionado as any)?.nombres ?? clienteSeleccionado?.Nombres ?? ''}
                   </span>?
                 </p>
                 <p className="text-sm text-red-600 mt-2 font-medium">
                    ? El cliente ser eliminado completamente de la base de datos.
                 </p>
                 <p className="text-sm text-gray-500 mt-1">
-                  C�dula: {clienteSeleccionado.cedula}
+                  Cï¿½dula: {clienteSeleccionado.cedula}
                 </p>
               </div>
 
@@ -1033,7 +1033,7 @@ export function ClientesList() {
         )}
       </AnimatePresence>
 
-      {/* ? NOTIFICACIN �NICA */}
+      {/* ? NOTIFICACIN ï¿½NICA */}
       {notification && (
         <motion.div
           initial={{ opacity: 0, y: -50 }}
@@ -1054,7 +1054,7 @@ export function ClientesList() {
               onClick={() => setNotification(null)}
               className="ml-2 text-gray-500 hover:text-gray-700"
             >
-              �
+              ï¿½
             </button>
           </div>
         </motion.div>
