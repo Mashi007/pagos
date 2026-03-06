@@ -107,7 +107,8 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
     return () => clearInterval(interval)
   }, [checkServiceStatus])
 
-  // Toast helpers
+  // Toast helpers: auto-cierre tras unos segundos para no acumular (carga masiva)
+  const TOAST_DURATION_MS = 2500
   const addToast = useCallback(
     (
       type: 'error' | 'warning' | 'success',
@@ -116,11 +117,11 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
       field = 'general',
       rowIndex = -1
     ) => {
-      const id = Date.now().toString()
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
       setToasts((prev) => [...prev, { id, type, message, suggestion, field, rowIndex }])
       setTimeout(() => {
         setToasts((prev) => prev.filter((t) => t.id !== id))
-      }, 3000)
+      }, TOAST_DURATION_MS)
     },
     []
   )
@@ -233,12 +234,10 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
     return excelData.filter((row) => isClientValid(row) && !savedClients.has(row._rowIndex))
   }, [excelData, isClientValid, savedClients])
 
+  // Siempre excluir filas ya guardadas: al guardar cada fila debe eliminarse de la tabla
   const getDisplayData = useCallback((): ExcelRow[] => {
-    if (showOnlyPending) {
-      return excelData.filter((row) => !savedClients.has(row._rowIndex))
-    }
-    return excelData
-  }, [excelData, showOnlyPending, savedClients])
+    return excelData.filter((row) => !savedClients.has(row._rowIndex))
+  }, [excelData, savedClients])
 
   const getSavedClientsCount = useCallback(() => savedClients.size, [savedClients])
 
@@ -303,7 +302,7 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
         }))
         setTimeout(() => {
           setToasts((prev) => prev.filter((t) => t.id !== successToast.id))
-        }, 3000)
+        }, TOAST_DURATION_MS)
       } else {
         const newViolationCount = currentTracker.violationCount + 1
         const shouldShow =
@@ -325,7 +324,7 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
           setToasts((prev) => [...prev, errorToast])
           setTimeout(() => {
             setToasts((prev) => prev.filter((t) => t.id !== errorToast.id))
-          }, 3000)
+          }, TOAST_DURATION_MS)
         }
         setViolationTracker((prev) => ({
           ...prev,
