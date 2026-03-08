@@ -66,6 +66,15 @@ def _backend_base_url() -> str:
     url = (getattr(settings, "BACKEND_PUBLIC_URL", None) or "").strip()
     if url:
         return url.rstrip("/")
+    # Si solo tienes GOOGLE_REDIRECT_URI en Render (ej. rapicredit), usar su origen
+    redirect_uri = (getattr(settings, "GOOGLE_REDIRECT_URI", None) or "").strip()
+    if redirect_uri and redirect_uri.startswith("http"):
+        try:
+            parsed = urllib.parse.urlparse(redirect_uri)
+            if parsed.scheme and parsed.netloc:
+                return f"{parsed.scheme}://{parsed.netloc}"
+        except Exception:
+            pass
     return "https://pagos-f2qf.onrender.com"
 
 
