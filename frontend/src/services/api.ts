@@ -609,7 +609,9 @@ class ApiClient {
     } catch (error: any) {
       const is409Pagos = error?.response?.status === 409 && url.includes('/pagos')
       if (!is409Pagos) {
-        console.error('❌ [ApiClient] POST error:', { url, error })
+        const status = error?.response?.status
+        const detail = error?.response?.data?.detail ?? error?.response?.data?.message
+        console.error('❌ [ApiClient] POST error:', { url, status, detail: detail ?? error?.message })
       }
       throw error
     }

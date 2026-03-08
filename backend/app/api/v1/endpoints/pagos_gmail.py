@@ -52,7 +52,11 @@ def run_now(db: Session = Depends(get_db)):
         log_pagos_gmail_config_status()
         raise HTTPException(
             status_code=503,
-            detail="Gmail/Google no configurado o credenciales inválidas. Si en los logs aparece 'invalid_client', compruebe GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET en Render y en Google Cloud Console (OAuth 2.0).",
+            detail=(
+                "Credenciales OAuth inválidas (Google devolvió 'invalid_client'). "
+                "Vaya a Configuración > Informe de pagos: pegue el mismo Client ID y Client secret que en Google Cloud, guarde, "
+                "y luego pulse «Conectar con Google» para obtener un nuevo token. Sin reconectar, el token antiguo no funciona con el secret nuevo."
+            ),
         )
     return {"sync_id": sync_id, "status": status}
 
