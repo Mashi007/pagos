@@ -18,6 +18,7 @@ import {
   Search,
   Download,
   Loader2,
+  Mail,
 } from 'lucide-react'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -33,7 +34,6 @@ import { pagoConErrorService, type PagoConError } from '../../services/pagoConEr
 import { RegistrarPagoForm } from './RegistrarPagoForm'
 import { ExcelUploaderPagosUI } from './ExcelUploaderPagosUI'
 import { ConciliacionExcelUploader } from './ConciliacionExcelUploader'
-import { CargaMasivaMenu } from './CargaMasivaMenu'
 import { PagosListResumen } from './PagosListResumen'
 import { PagosKPIsNuevo } from './PagosKPIsNuevo'
 import { toast } from 'sonner'
@@ -62,7 +62,37 @@ export function PagosList() {
   const [accionesOpenId, setAccionesOpenId] = useState<number | null>(null)
   const [conciliandoId, setConciliandoId] = useState<number | null>(null)
   const [isExportingRevisar, setIsExportingRevisar] = useState(false)
+  const [loadingGmail, setLoadingGmail] = useState(false)
+  const [gmailStatus, setGmailStatus] = useState<{
+    last_run: string | null
+    last_status: string | null
+    last_emails: number
+    last_files: number
+    next_run_approx: string | null
+  } | null>(null)
   const queryClient = useQueryClient()
+
+  useEffect(() => {
+    if (!agregarPagoOpen) return
+    pagoService.getGmailStatus().then(setGmailStatus).catch(() => setGmailStatus(null))
+  }, [agregarPagoOpen])
+
+  const handleGenerarExcelDesdeGmail = async () => {
+    setAgregarPagoOpen(false)
+    setLoadingGmail(true)
+    toast.info('Puede tardar 1-2 minutos según la cantidad de correos.')
+    try {
+      await pagoService.runGmailNow()
+      await pagoService.downloadGmailExcel()
+      toast.success('Excel generado desde Gmail descargado.')
+      pagoService.getGmailStatus().then(setGmailStatus)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Error al generar Excel desde Gmail.'
+      toast.error(msg)
+    } finally {
+      setLoadingGmail(false)
+    }
+  }
   // Contar filtros activos (mismo criterio que Préstamos)
   const activeFiltersCount = [
     filters.cedula,
@@ -239,7 +269,6 @@ export function PagosList() {
               Descargar Excel
             </Button>
           )}
-          {/* CargaMasivaMenu OCULTO - sus opciones se movieron al botón "Agregar pago" */}
           <Popover open={agregarPagoOpen} onOpenChange={setAgregarPagoOpen}>
             <PopoverTrigger asChild>
               <Button
@@ -252,6 +281,17 @@ export function PagosList() {
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-72 p-3" align="end">
+              {gmailStatus && (
+                <p className="text-xs text-gray-600 px-2 py-1.5 mb-2 border-b border-gray-100">
+                  {gmailStatus.last_status === 'error' ? (
+                    <span className="text-amber-600">Última sync Gmail falló</span>
+                  ) : gmailStatus.last_run ? (
+                    <>Última sync: {new Date(gmailStatus.last_run).toLocaleString('es-VE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} – {gmailStatus.last_emails} correos, {gmailStatus.last_files} archivos</>
+                  ) : (
+                    <span className="text-gray-500">Sin sync Gmail aún</span>
+                  )}
+                </p>
+              )}
               <div className="space-y-2">
                 <button
                   type="button"
@@ -288,6 +328,16 @@ export function PagosList() {
                   <CheckCircle className="w-5 h-5 text-gray-600" />
                   <span>Conciliación</span>
                   <span className="text-xs text-gray-500 ml-auto">Carga</span>
+                </button>
+                <button
+                  type="button"
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left rounded-md hover:bg-blue-50 disabled:opacity-50"
+                  onClick={handleGenerarExcelDesdeGmail}
+                  disabled={loadingGmail}
+                >
+                  <Mail className="w-5 h-5 text-gray-600" />
+                  <span>{loadingGmail ? 'Generando...' : 'Generar Excel desde Gmail'}</span>
+                  <span className="text-xs text-gray-500 ml-auto">Gmail</span>
                 </button>
               </div>
             </PopoverContent>
