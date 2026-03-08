@@ -1,4 +1,4 @@
-﻿"""
+"""
 Endpoints de pagos. Datos reales desde BD.
 - Tabla pagos: GET/POST/PUT/DELETE /pagos/ (listado y CRUD para /pagos/pagos).
 - GET /pagos/kpis, /stats, /ultimos; POST /upload, /conciliacion/upload, /{id}/aplicar-cuotas.
@@ -80,7 +80,7 @@ _PRESTAMO_ID_MAX = 2_147_483_647  # INT max en BD (32-bit signed)
 def _validar_monto(monto_raw: Any) -> tuple[bool, float, str]:
     """
     Valida que el monto estÃ© dentro de los rangos permitidos para NUMERIC(14, 2).
-    Retorna: (es_vÃ¡lido, monto_parseado, mensaje_error)
+    Retorna: (es_valido, monto_parseado, mensaje_error)
     """
     try:
         monto = float(monto_raw) if monto_raw is not None else 0.0
@@ -519,8 +519,8 @@ async def upload_excel_pagos(
                 # Formato D (PRINCIPAL): CÃ©dula, Monto, Fecha, NÂº documento
                 if len(row) >= 4 and _looks_like_cedula(row[0]) and row[1] is not None and _looks_like_date(row[2]):
                     cedula = str(row[0]).strip()
-                    es_vÃ¡lido, monto, err_msg = _validar_monto(row[1])
-                    if not es_vÃ¡lido and monto != 0.0:
+                    es_valido, monto, err_msg = _validar_monto(row[1])
+                    if not es_valido and monto != 0.0:
                         errores.append(f'Fila {i + 2} (Formato D - Principal): {err_msg}')
                         pagos_con_error_list.append({
                             "fila_idx": i + 2,
@@ -542,9 +542,9 @@ async def upload_excel_pagos(
                     col_doc = 0
                     cedula = str(row[1]).strip()
                     fecha_val = row[2] if len(row) > 2 else None
-                    es_vÃ¡lido, monto, err_msg = _validar_monto(row[3]) if len(row) > 3 else (True, 0.0, '')
+                    es_valido, monto, err_msg = _validar_monto(row[3]) if len(row) > 3 else (True, 0.0, '')
 
-                    if not es_vÃ¡lido and monto != 0.0:
+                    if not es_valido and monto != 0.0:
 
                         errores.append(f'Fila {i + 2} (Formato A): {err_msg}')
 
@@ -552,9 +552,9 @@ async def upload_excel_pagos(
                 # Formato B: Fecha, CÃ©dula, Monto, Documento
                 elif len(row) >= 4 and _looks_like_date(row[0]) and _looks_like_cedula(row[1]):
                     cedula = str(row[1]).strip()
-                    es_vÃ¡lido, monto, err_msg = _validar_monto(row[2])
+                    es_valido, monto, err_msg = _validar_monto(row[2])
 
-                    if not es_vÃ¡lido and monto != 0.0:
+                    if not es_valido and monto != 0.0:
 
                         errores.append(f'Fila {i + 2} (Formato B): {err_msg}')
 
@@ -580,8 +580,8 @@ async def upload_excel_pagos(
                             prestamo_id = _pid
                     fecha_val = row[2] if len(row) > 2 else None
                     _monto_raw = row[3] if len(row) > 3 else None
-                    es_vÃ¡lido, monto, err_msg = _validar_monto(_monto_raw)
-                    if not es_vÃ¡lido and monto != 0.0:
+                    es_valido, monto, err_msg = _validar_monto(_monto_raw)
+                    if not es_valido and monto != 0.0:
                         errores.append(f'Fila {i + 2} (Formato C): {err_msg}')
                         continue
                     numero_doc = _celda_a_string_documento(row[4]) if len(row) > 4 else ""
@@ -1028,7 +1028,7 @@ async def upload_conciliacion(
 @router.get("/kpis")
 def get_pagos_kpis(
     mes: Optional[int] = Query(None, ge=1, le=12),
-    aÃ±o: Optional[int] = Query(None, ge=2000, le=2100),
+    anio: Optional[int] = Query(None, ge=2000, le=2100),
     fecha_inicio: Optional[str] = Query(None),
     fecha_fin: Optional[str] = Query(None),
     db: Session = Depends(get_db),
@@ -1038,13 +1038,13 @@ def get_pagos_kpis(
     1. montoACobrarMes: cuÃ¡nto dinero deberÃ­a cobrarse en el mes (cuotas con vencimiento en el mes).
     2. montoCobradoMes: cuÃ¡nto dinero se ha cobrado = pagado en el mes.
     3. morosidadMensualPorcentaje: pago vencido mensual en % (cuotas vencidas no cobradas / cartera * 100).
-    ParÃ¡metros: mes (1-12) y aÃ±o (2000-2100). Si no se envÃ­an, se usa el mes actual.
+    ParÃ¡metros: mes (1-12) y anio (2000-2100). Si no se envÃ­an, se usa el mes actual.
     """
     try:
         hoy = _hoy_local()
-        if mes is not None and aÃ±o is not None:
-            inicio_mes = hoy.replace(year=aÃ±o, month=mes, day=1)
-            _, ultimo_dia = calendar.monthrange(aÃ±o, mes)
+        if mes is not None and anio is not None:
+            inicio_mes = hoy.replace(year=anio, month=mes, day=1)
+            _, ultimo_dia = calendar.monthrange(anio, mes)
             fin_mes = inicio_mes.replace(day=ultimo_dia)
         elif fecha_inicio and fecha_fin:
             try:
@@ -1180,14 +1180,14 @@ def get_pagos_kpis(
         clientes_al_dia = max(0, clientes_con_prestamo - clientes_en_mora)
 
         mes_resp = mes if mes is not None else inicio_mes.month
-        aÃ±o_resp = aÃ±o if aÃ±o is not None else inicio_mes.year
+        anio_resp = anio if anio is not None else inicio_mes.year
         return {
             "montoACobrarMes": _safe_float(monto_a_cobrar_mes),
             "montoCobradoMes": _safe_float(monto_cobrado_mes),
             "morosidadMensualPorcentaje": round(morosidad_porcentaje, 2),
             "mes": mes_resp,
-            "anio": año_resp,
-            "aÃ±o": aÃ±o_resp,
+            "anio": anio_resp,
+            "anio": anio_resp,
             "saldoPorCobrar": _safe_float(cartera_pendiente),
             "clientesEnMora": clientes_en_mora,
             "clientesAlDia": clientes_al_dia,
@@ -1204,8 +1204,8 @@ def get_pagos_kpis(
             "montoCobradoMes": 0.0,
             "morosidadMensualPorcentaje": 0.0,
             "mes": mes if mes is not None else hoy.month,
-            "anio": año if año is not None else hoy.year,
-            "aÃ±o": aÃ±o if aÃ±o is not None else hoy.year,
+            "anio": anio if anio is not None else hoy.year,
+            "anio": anio if anio is not None else hoy.year,
             "saldoPorCobrar": 0.0,
             "clientesEnMora": 0,
             "clientesAlDia": 0,
