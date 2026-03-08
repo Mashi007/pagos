@@ -1,4 +1,4 @@
-import { DollarSign, Calendar, TrendingUp } from 'lucide-react'
+﻿import { DollarSign, Calendar, TrendingUp } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import { usePagosKPIs } from '../../hooks/usePagos'
 
@@ -10,7 +10,7 @@ export function PagosKPIsNuevo() {
     montoCobradoMes: 0,
     morosidadMensualPorcentaje: 0,
     mes: new Date().getMonth() + 1,
-    año: new Date().getFullYear(),
+    anio: new Date().getFullYear(),
   }
 
   if (isLoading) {
@@ -72,7 +72,7 @@ export function PagosKPIsNuevo() {
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-gray-900">KPIs de Pagos (mensuales)</h2>
         <span className="text-sm text-gray-500">
-          {nombreMes} {kpiDataFinal.año}
+          {nombreMes} {kpiDataFinal.anio ?? (kpiDataFinal as any)?.["año"] ?? new Date().getFullYear()}
         </span>
       </div>
 
@@ -90,7 +90,7 @@ export function PagosKPIsNuevo() {
               })}
             </div>
             <p className="text-xs text-gray-600 mt-1">
-              Cuánto debería cobrarse en {nombreMes} (vencimientos del mes)
+              CuÃ¡nto deberÃ­a cobrarse en {nombreMes} (vencimientos del mes)
             </p>
           </CardContent>
         </Card>
@@ -131,4 +131,6 @@ export function PagosKPIsNuevo() {
     </div>
   )
 }
+
+
 

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+﻿import { useState, useMemo, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -73,7 +73,7 @@ import {
   PolarRadiusAxis,
 } from 'recharts'
 
-// Submenús eliminados: financiamiento, cuotas, cobranza, analisis, pagos
+// SubmenÃºs eliminados: financiamiento, cuotas, cobranza, analisis, pagos
 
 export function DashboardMenu() {
   const navigate = useNavigate()
@@ -82,19 +82,19 @@ export function DashboardMenu() {
   const queryClient = useQueryClient()
 
   const [filtros, setFiltros] = useState<DashboardFiltros>({})
-  const [periodo, setPeriodo] = useState('ultimos_12_meses') // Por defecto últimos 12 meses para que los gráficos muestren datos recientes
-  /** Período por gráfico: cada gráfico puede usar el general o uno propio. Key = id del gráfico, value = día|semana|mes|año o '' = usar general */
+  const [periodo, setPeriodo] = useState('ultimos_12_meses') // Por defecto Ãºltimos 12 meses para que los grÃ¡ficos muestren datos recientes
+  /** PerÃ­odo por grÃ¡fico: cada grÃ¡fico puede usar el general o uno propio. Key = id del grÃ¡fico, value = dÃ­a|semana|mes|aÃ±o o '' = usar general */
   const [periodoPorGrafico, setPeriodoPorGrafico] = useState<Record<string, string>>({})
   const { construirParams, construirFiltrosObject, tieneFiltrosActivos, cantidadFiltrosActivos } = useDashboardFiltros(filtros)
 
-  /** Período efectivo para un gráfico: el del gráfico si está definido, si no el general */
+  /** PerÃ­odo efectivo para un grÃ¡fico: el del grÃ¡fico si estÃ¡ definido, si no el general */
   const getPeriodoGrafico = (chartId: string) => periodoPorGrafico[chartId] || periodo
   const setPeriodoGrafico = (chartId: string, value: string) => {
     setPeriodoPorGrafico((prev) => (value ? { ...prev, [chartId]: value } : { ...prev, [chartId]: '' }))
   }
 
-  // âœ… OPTIMIZACIÓN PRIORIDAD 1: Carga por batches con priorización
-  // Batch 1: CRÍTICO - Opciones de filtros y KPIs principales (carga inmediata)
+  // Ã¢Å“â€¦ OPTIMIZACIÃ“N PRIORIDAD 1: Carga por batches con priorizaciÃ³n
+  // Batch 1: CRÃTICO - Opciones de filtros y KPIs principales (carga inmediata)
   const { data: opcionesFiltros, isLoading: loadingOpcionesFiltros, isError: errorOpcionesFiltros } = useQuery({
     queryKey: ['opciones-filtros'],
     queryFn: async (): Promise<OpcionesFiltrosResponse> => {
@@ -102,12 +102,12 @@ export function DashboardMenu() {
       return response as OpcionesFiltrosResponse
     },
     staleTime: 30 * 60 * 1000, // 30 minutos - cambian muy poco
-    refetchOnWindowFocus: false, // No recargar automáticamente
-    // âœ… Prioridad máxima - carga inmediatamente
+    refetchOnWindowFocus: false, // No recargar automÃ¡ticamente
+    // Ã¢Å“â€¦ Prioridad mÃ¡xima - carga inmediatamente
   })
 
-  // Batch 1: CRÍTICO - KPIs principales (visible primero para el usuario)
-  // Los KPIs siempre reflejan solo el mes actual (ej. febrero) - independiente del período de los gráficos
+  // Batch 1: CRÃTICO - KPIs principales (visible primero para el usuario)
+  // Los KPIs siempre reflejan solo el mes actual (ej. febrero) - independiente del perÃ­odo de los grÃ¡ficos
   const mesActualKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
   const { data: kpisPrincipales, isLoading: loadingKPIs, isError: errorKPIs, refetch } = useQuery({
     queryKey: ['kpis-principales-menu', 'mes', mesActualKey, JSON.stringify(filtros)],
@@ -123,14 +123,15 @@ export function DashboardMenu() {
       )
       return response as KpisPrincipalesResponse
     },
-    staleTime: 4 * 60 * 60 * 1000, // 4 h: el backend actualiza caché a las 6:00, 13:00, 16:00
-    refetchOnWindowFocus: false,
-    refetchOnMount: false, // Usar caché; el backend refresca 3 veces al día
+    staleTime: 5 * 60 * 1000, // 5 min para datos más frescos
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
+    refetchInterval: 10 * 60 * 1000, // Refrescar cada 10 min
     enabled: true,
     retry: false,
   })
 
-  // Batch 2: IMPORTANTE - Dashboard admin (gráfico principal). Siempre con período que incluya 2025 si hay datos.
+  // Batch 2: IMPORTANTE - Dashboard admin (grÃ¡fico principal). Siempre con perÃ­odo que incluya 2025 si hay datos.
   const periodoEvolucion = getPeriodoGrafico('evolucion') || periodo || 'ultimos_12_meses'
   const { data: datosDashboard, isLoading: loadingDashboard, isError: errorDashboardAdmin } = useQuery({
     queryKey: ['dashboard-menu', periodoEvolucion, JSON.stringify(filtros)],
@@ -145,21 +146,21 @@ export function DashboardMenu() {
       const response = await apiClient.get(`/api/v1/dashboard/admin${queryString ? `?${queryString}` : ''}`, { timeout: 60000 })
       return response as DashboardAdminResponse
     },
-    staleTime: 4 * 60 * 60 * 1000, // 4 h: backend actualiza caché a las 6:00, 13:00, 16:00
+    staleTime: 4 * 60 * 60 * 1000, // 4 h: backend actualiza cachÃ© a las 6:00, 13:00, 16:00
     retry: 1,
-    refetchOnWindowFocus: false, // Evitar refetch al cambiar de pestaña (carga lenta)
+    refetchOnWindowFocus: false, // Evitar refetch al cambiar de pestaÃ±a (carga lenta)
     enabled: true,
   })
 
-  // Batch 3: Morosidad por día (desde tabla cuotas). Respeta rango del período (ej. desde 2025).
+  // Batch 3: Morosidad por dÃ­a (desde tabla cuotas). Respeta rango del perÃ­odo (ej. desde 2025).
   const periodoTendencia = getPeriodoGrafico('tendencia') || periodo || 'ultimos_12_meses'
-  const diasMorosidad = (periodoTendencia === 'dia' || periodoTendencia === 'día') ? 7 : periodoTendencia === 'semana' ? 14 : periodoTendencia === 'mes' ? 30 : 90
+  const diasMorosidad = (periodoTendencia === 'dia' || periodoTendencia === 'dÃ­a') ? 7 : periodoTendencia === 'semana' ? 14 : periodoTendencia === 'mes' ? 30 : 90
   const { data: datosMorosidadPorDia, isLoading: loadingMorosidadPorDia } = useQuery({
     queryKey: ['morosidad-por-dia', periodoTendencia, diasMorosidad, JSON.stringify(filtros)],
     queryFn: async () => {
       const queryParams = new URLSearchParams()
       queryParams.append('dias', String(diasMorosidad))
-      // No enviar fecha_inicio/fecha_fin: el backend siempre usa hoy y hacia atrás
+      // No enviar fecha_inicio/fecha_fin: el backend siempre usa hoy y hacia atrÃ¡s
       const response = await apiClient.get<{ dias: Array<{ fecha: string; dia: string; morosidad: number }> }>(
         `/api/v1/dashboard/morosidad-por-dia?${queryParams.toString()}`
       )
@@ -170,8 +171,8 @@ export function DashboardMenu() {
     refetchOnWindowFocus: false,
   })
 
-  // Batch 3: Gráficos secundarios rápidos. Período por gráfico; filtros (fecha_inicio/fecha_fin) se envían siempre.
-  // Batch 4: BAJA - Gráficos menos críticos. Período con fallback para incluir 2025.
+  // Batch 3: GrÃ¡ficos secundarios rÃ¡pidos. PerÃ­odo por grÃ¡fico; filtros (fecha_inicio/fecha_fin) se envÃ­an siempre.
+  // Batch 4: BAJA - GrÃ¡ficos menos crÃ­ticos. PerÃ­odo con fallback para incluir 2025.
   const periodoRangos = getPeriodoGrafico('rangos') || periodo || 'ultimos_12_meses'
   const { data: datosFinanciamientoRangos, isLoading: loadingFinanciamientoRangos, isError: errorFinanciamientoRangos, error: errorFinanciamientoRangosDetail, refetch: refetchFinanciamientoRangos } = useQuery({
     queryKey: ['financiamiento-rangos', periodoRangos, JSON.stringify(filtros)],
@@ -189,7 +190,7 @@ export function DashboardMenu() {
         return response as FinanciamientoPorRangosResponse
       } catch (error: unknown) {
         // Si el error es 500 o de red, lanzar el error para que React Query lo maneje
-        // Si es otro error, retornar respuesta vacía para no romper el dashboard
+        // Si es otro error, retornar respuesta vacÃ­a para no romper el dashboard
         const err = error as { response?: { status?: number }; code?: string }
         const status = err?.response?.status
         if ((status != null && status >= 500) || err?.code === 'ERR_NETWORK' || err?.code === 'ECONNABORTED') {
@@ -205,7 +206,7 @@ export function DashboardMenu() {
     staleTime: 4 * 60 * 60 * 1000, // 4 h: alineado con refresh backend
     refetchOnWindowFocus: false,
     enabled: true,
-    retry: 1, // âœ… Permitir 1 reintento para errores de red
+    retry: 1, // Ã¢Å“â€¦ Permitir 1 reintento para errores de red
     retryDelay: 2000, // Esperar 2 segundos antes de reintentar
   })
 
@@ -256,7 +257,7 @@ export function DashboardMenu() {
       Object.entries(params).forEach(([key, value]) => {
         if (value) queryParams.append(key, value.toString())
       })
-      queryParams.append('semanas', '12') // Últimas 12 semanas
+      queryParams.append('semanas', '12') // Ãšltimas 12 semanas
       const response = await apiClient.get(
         `/api/v1/dashboard/cobranzas-semanales?${queryParams.toString()}`,
         { timeout: 60000 }
@@ -302,21 +303,21 @@ export function DashboardMenu() {
 
   const [isRefreshing, setIsRefreshing] = useState(false)
 
-  // Mostrar toast cuando falla la carga del gráfico principal (auditoría: no fallar en silencio)
+  // Mostrar toast cuando falla la carga del grÃ¡fico principal (auditorÃ­a: no fallar en silencio)
   useEffect(() => {
     if (errorDashboardAdmin) {
-      toast.error('No se pudo cargar el gráfico de evolución mensual. Intenta de nuevo o recarga la página.')
+      toast.error('No se pudo cargar el grÃ¡fico de evoluciÃ³n mensual. Intenta de nuevo o recarga la pÃ¡gina.')
     }
   }, [errorDashboardAdmin])
 
-  // NOTA: No necesitamos invalidar queries manualmente aquí
-  // React Query detecta automáticamente los cambios en queryKey (que incluye JSON.stringify(filtros))
-  // y refetch automáticamente cuando cambian los filtros o el período
+  // NOTA: No necesitamos invalidar queries manualmente aquÃ­
+  // React Query detecta automÃ¡ticamente los cambios en queryKey (que incluye JSON.stringify(filtros))
+  // y refetch automÃ¡ticamente cuando cambian los filtros o el perÃ­odo
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
     try {
-      // Invalidar y refrescar solo las queries usadas por esta página (auditoría: alinear con queryKeys reales)
+      // Invalidar y refrescar solo las queries usadas por esta pÃ¡gina (auditorÃ­a: alinear con queryKeys reales)
       await queryClient.invalidateQueries({ queryKey: ['kpis-principales-menu'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['dashboard-menu'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['morosidad-por-dia'], exact: false })
@@ -348,19 +349,19 @@ export function DashboardMenu() {
   const evolucionMensual = datosDashboard?.evolucion_mensual || []
   const COLORS_CONCESIONARIOS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#6366f1']
 
-  // Etiqueta del período activo (general)
+  // Etiqueta del perÃ­odo activo (general)
   const rangoFechasLabel = useMemo(() => {
     const obj = construirFiltrosObject(periodo)
     if (obj.fecha_inicio && obj.fecha_fin) {
       const fIni = new Date(obj.fecha_inicio)
       const fFin = new Date(obj.fecha_fin)
       const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' }
-      return `${fIni.toLocaleDateString('es-ES', opts)} – ${fFin.toLocaleDateString('es-ES', opts)}`
+      return `${fIni.toLocaleDateString('es-ES', opts)} â€“ ${fFin.toLocaleDateString('es-ES', opts)}`
     }
     return getPeriodoEtiqueta(periodo)
   }, [periodo, filtros, construirFiltrosObject])
 
-  /** Etiqueta de rango de fechas para un gráfico (usa período del gráfico o el general) */
+  /** Etiqueta de rango de fechas para un grÃ¡fico (usa perÃ­odo del grÃ¡fico o el general) */
   const getRangoFechasLabelGrafico = (chartId: string) => {
     const p = getPeriodoGrafico(chartId)
     const obj = construirFiltrosObject(p)
@@ -368,19 +369,19 @@ export function DashboardMenu() {
       const fIni = new Date(obj.fecha_inicio)
       const fFin = new Date(obj.fecha_fin)
       const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' }
-      return `${fIni.toLocaleDateString('es-ES', opts)} – ${fFin.toLocaleDateString('es-ES', opts)}`
+      return `${fIni.toLocaleDateString('es-ES', opts)} â€“ ${fFin.toLocaleDateString('es-ES', opts)}`
     }
     return getPeriodoEtiqueta(p)
   }
 
-  /** Selector de período por gráfico (dropdown para cada tarjeta) */
+  /** Selector de perÃ­odo por grÃ¡fico (dropdown para cada tarjeta) */
   const SelectorPeriodoGrafico = ({ chartId }: { chartId: string }) => (
     <Select
       value={periodoPorGrafico[chartId] || 'general'}
       onValueChange={(v) => setPeriodoGrafico(chartId, v === 'general' ? '' : v)}
     >
       <SelectTrigger className="w-[160px] h-8 text-xs border-gray-200 bg-white/80">
-        <SelectValue placeholder="Período" />
+        <SelectValue placeholder="PerÃ­odo" />
       </SelectTrigger>
       <SelectContent>
         <SelectItem value="general">General (barra superior)</SelectItem>
@@ -393,7 +394,7 @@ export function DashboardMenu() {
     </Select>
   )
 
-  // Estilos de mayor calidad para todos los gráficos (tooltips, ejes, grid)
+  // Estilos de mayor calidad para todos los grÃ¡ficos (tooltips, ejes, grid)
   const chartTooltipStyle = {
     contentStyle: { backgroundColor: 'rgba(255,255,255,0.98)', border: '1px solid #e5e7eb', borderRadius: '10px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', padding: '14px 16px' },
     labelStyle: { fontWeight: 600, color: '#111827', marginBottom: 8, fontSize: 13 },
@@ -403,14 +404,14 @@ export function DashboardMenu() {
   const chartAxisTick = { fontSize: 13, fill: '#374151', fontWeight: 500 }
   const chartLegendStyle = { wrapperStyle: { paddingTop: 14 }, iconType: 'rect' as const, iconSize: 12 }
 
-  // Bandas desde backend: $0-$200 ... $1000-$1200, $1200-$1400, Más de $1400 (cantidad de préstamos por banda)
+  // Bandas desde backend: $0-$200 ... $1000-$1200, $1200-$1400, MÃ¡s de $1400 (cantidad de prÃ©stamos por banda)
   const datosBandas200 = useMemo(() => {
     try {
       if (!datosFinanciamientoRangos?.rangos || datosFinanciamientoRangos.rangos.length === 0) {
         return []
       }
-      // Orden descendente (mayor banda arriba): Más de $1400, $1200-$1400, $1000-$1200, ...
-      const orden = ['Más de $1,400', '$1,200 - $1,400', '$1,000 - $1,200', '$800 - $1,000', '$600 - $800', '$400 - $600', '$200 - $400', '$0 - $200']
+      // Orden descendente (mayor banda arriba): MÃ¡s de $1400, $1200-$1400, $1000-$1200, ...
+      const orden = ['MÃ¡s de $1,400', '$1,200 - $1,400', '$1,000 - $1,200', '$800 - $1,000', '$600 - $800', '$400 - $600', '$200 - $400', '$0 - $200']
       return [...datosFinanciamientoRangos.rangos]
         .sort((a, b) => orden.indexOf(b.categoria) - orden.indexOf(a.categoria))
         .map(r => ({
@@ -425,7 +426,7 @@ export function DashboardMenu() {
   }, [datosFinanciamientoRangos])
 
   // Asegurar que el componente siempre renderice, incluso si hay errores
-  // Si hay un error crítico en las queries principales, mostrar mensaje pero no bloquear
+  // Si hay un error crÃ­tico en las queries principales, mostrar mensaje pero no bloquear
   const hasCriticalError = errorOpcionesFiltros || errorKPIs || errorDashboardAdmin
   
   return (
@@ -451,14 +452,14 @@ export function DashboardMenu() {
                   <div className="absolute inset-0 h-2 w-2 rounded-full bg-emerald-400 animate-ping opacity-75"></div>
                 </div>
                 <p className="text-gray-600 font-semibold text-sm tracking-wide">
-                  Bienvenido, <span className="text-cyan-600 font-black">{userName}</span> • Monitoreo Estratégico
+                  Bienvenido, <span className="text-cyan-600 font-black">{userName}</span> â€¢ Monitoreo EstratÃ©gico
                 </p>
               </div>
             </div>
           </div>
         </motion.div>
         
-        {/* Mensaje de error si hay problemas críticos */}
+        {/* Mensaje de error si hay problemas crÃ­ticos */}
         {hasCriticalError && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -468,13 +469,13 @@ export function DashboardMenu() {
             <div className="flex items-center gap-2 text-yellow-800">
               <AlertTriangle className="h-5 w-5" />
               <p className="text-sm font-medium">
-                Algunos datos no se pudieron cargar. Por favor, recarga la página o intenta más tarde.
+                Algunos datos no se pudieron cargar. Por favor, recarga la pÃ¡gina o intenta mÃ¡s tarde.
               </p>
             </div>
           </motion.div>
         )}
 
-        {/* Barra de filtros: período general (cada gráfico puede usar este o uno propio) */}
+        {/* Barra de filtros: perÃ­odo general (cada grÃ¡fico puede usar este o uno propio) */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -490,7 +491,7 @@ export function DashboardMenu() {
                   </div>
                   <Select value={periodo} onValueChange={(v) => setPeriodo(v)}>
                     <SelectTrigger className="w-[180px] h-9 border-gray-200 bg-gray-50/80">
-                      <SelectValue placeholder="Período" />
+                      <SelectValue placeholder="PerÃ­odo" />
                     </SelectTrigger>
                     <SelectContent>
                       {PERIODOS_VALORES.map((p) => (
@@ -548,7 +549,7 @@ export function DashboardMenu() {
                 className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
               >
                 <KpiCardLarge
-                  title="Préstamos (mensual)"
+                  title="PrÃ©stamos (mensual)"
                   value={kpisPrincipales.total_prestamos.valor_actual}
                   variation={kpisPrincipales.total_prestamos.variacion_porcentual !== undefined ? {
                     percent: kpisPrincipales.total_prestamos.variacion_porcentual,
@@ -561,7 +562,7 @@ export function DashboardMenu() {
                   format="number"
                 />
                 <KpiCardLarge
-                  title="Créditos nuevos (mensual)"
+                  title="CrÃ©ditos nuevos (mensual)"
                   value={kpisPrincipales.creditos_nuevos_mes.valor_actual}
                   variation={kpisPrincipales.creditos_nuevos_mes.variacion_porcentual !== undefined ? {
                     percent: kpisPrincipales.creditos_nuevos_mes.variacion_porcentual,
@@ -587,7 +588,7 @@ export function DashboardMenu() {
                 />
                 <KpiCardLarge
                   title="Pago vencido (mensual)"
-                  subtitle="Cuotas vencidas sin pagar (solo si ya pasó la fecha de vencimiento)"
+                  subtitle="Cuotas vencidas sin pagar (solo si ya pasÃ³ la fecha de vencimiento)"
                   value={kpisPrincipales.total_morosidad_usd.valor_actual}
                   variation={kpisPrincipales.total_morosidad_usd.variacion_porcentual !== undefined ? {
                     percent: kpisPrincipales.total_morosidad_usd.variacion_porcentual,
@@ -604,7 +605,7 @@ export function DashboardMenu() {
           </>
         )}
 
-        {/* GRÁFICOS PRINCIPALES */}
+        {/* GRÃFICOS PRINCIPALES */}
         {loadingDashboard ? (
           <div className="space-y-6">
             <div className="h-[400px] bg-gray-100 rounded-xl animate-pulse" />
@@ -616,29 +617,29 @@ export function DashboardMenu() {
               <div className="flex items-center gap-3 text-red-700">
                 <AlertTriangle className="h-5 w-5 shrink-0" />
                 <div>
-                  <p className="font-medium">Error al cargar el gráfico de evolución mensual</p>
-                  <p className="text-sm mt-1">Usa el botón «Actualizar» en la barra de filtros o recarga la página.</p>
+                  <p className="font-medium">Error al cargar el grÃ¡fico de evoluciÃ³n mensual</p>
+                  <p className="text-sm mt-1">Usa el botÃ³n Â«ActualizarÂ» en la barra de filtros o recarga la pÃ¡gina.</p>
                 </div>
               </div>
             </CardContent>
           </Card>
         ) : datosDashboard ? (
           <div className="space-y-6">
-            {/* Aviso cuando no hay datos en los gráficos */}
+            {/* Aviso cuando no hay datos en los grÃ¡ficos */}
             {kpisPrincipales && Number(kpisPrincipales.total_prestamos?.valor_actual ?? 0) === 0 && (!datosDashboard?.evolucion_mensual?.length || datosDashboard.evolucion_mensual.every((e: { cartera: number; cobrado: number }) => !e.cartera && !e.cobrado)) ? (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.15 }}>
                 <Card className="border-amber-200 bg-amber-50/80">
                   <CardContent className="p-4 flex items-center gap-3">
                     <Info className="h-5 w-5 text-amber-600 shrink-0" />
                     <p className="text-sm text-amber-800">
-                      Los gráficos están vacíos porque no hay datos en el período. Cargue <strong>préstamos</strong> y <strong>cuotas</strong> en el sistema para ver la información. Puede usar la opción <strong>Últimos 12 meses</strong> si ya tiene datos de meses anteriores.
+                      Los grÃ¡ficos estÃ¡n vacÃ­os porque no hay datos en el perÃ­odo. Cargue <strong>prÃ©stamos</strong> y <strong>cuotas</strong> en el sistema para ver la informaciÃ³n. Puede usar la opciÃ³n <strong>Ãšltimos 12 meses</strong> si ya tiene datos de meses anteriores.
                     </p>
                   </CardContent>
                 </Card>
               </motion.div>
             ) : null}
 
-            {/* Gráfico de Evolución Mensual */}
+            {/* GrÃ¡fico de EvoluciÃ³n Mensual */}
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -649,7 +650,7 @@ export function DashboardMenu() {
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
                         <LineChart className="h-5 w-5 text-cyan-600" />
-                        <span>Evolución Mensual</span>
+                        <span>EvoluciÃ³n Mensual</span>
                       </CardTitle>
                       <div className="flex items-center gap-2 flex-wrap">
                         <SelectorPeriodoGrafico chartId="evolucion" />
@@ -696,13 +697,13 @@ export function DashboardMenu() {
                         )}
                       </ChartWithDateRangeSlider>
                     ) : (
-                      <div className="flex items-center justify-center py-16 text-gray-500">No hay datos para el período seleccionado</div>
+                      <div className="flex items-center justify-center py-16 text-gray-500">No hay datos para el perÃ­odo seleccionado</div>
                     )}
                   </CardContent>
                 </Card>
               </motion.div>
 
-            {/* Pago vencido por día - desde tabla cuotas */}
+            {/* Pago vencido por dÃ­a - desde tabla cuotas */}
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -713,19 +714,19 @@ export function DashboardMenu() {
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
                         <AlertTriangle className="h-5 w-5 text-red-600" />
-                        <span>Pago vencido por día</span>
+                        <span>Pago vencido por dÃ­a</span>
                       </CardTitle>
                       <div className="flex items-center gap-2">
                         <SelectorPeriodoGrafico chartId="tendencia" />
                         <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
-                          {(periodoTendencia === 'dia' || periodoTendencia === 'día') ? '7 días' : periodoTendencia === 'semana' ? '14 días' : periodoTendencia === 'mes' ? '30 días' : '90 días'}
+                          {(periodoTendencia === 'dia' || periodoTendencia === 'dÃ­a') ? '7 dÃ­as' : periodoTendencia === 'semana' ? '14 dÃ­as' : periodoTendencia === 'mes' ? '30 dÃ­as' : '90 dÃ­as'}
                         </Badge>
                       </div>
                     </div>
                   </CardHeader>
                   <CardContent className="p-6 pt-4">
                     {loadingMorosidadPorDia ? (
-                      <div className="flex items-center justify-center py-16 text-gray-500">Cargando pago vencido por día...</div>
+                      <div className="flex items-center justify-center py-16 text-gray-500">Cargando pago vencido por dÃ­a...</div>
                     ) : datosMorosidadPorDia && datosMorosidadPorDia.length > 0 ? (
                       <ChartWithDateRangeSlider data={datosMorosidadPorDia} dataKey="fecha" chartHeight={400}>
                         {(filteredData) => (
@@ -742,13 +743,13 @@ export function DashboardMenu() {
                         )}
                       </ChartWithDateRangeSlider>
                     ) : (
-                      <div className="flex items-center justify-center py-16 text-gray-500">No hay datos de pago vencido por día para el período seleccionado</div>
+                      <div className="flex items-center justify-center py-16 text-gray-500">No hay datos de pago vencido por dÃ­a para el perÃ­odo seleccionado</div>
                     )}
                   </CardContent>
                 </Card>
               </motion.div>
 
-            {/* Monto programado por día: hoy hasta una semana después */}
+            {/* Monto programado por dÃ­a: hoy hasta una semana despuÃ©s */}
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -759,14 +760,14 @@ export function DashboardMenu() {
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
                         <DollarSign className="h-5 w-5 text-emerald-600" />
-                        <span>Monto programado por día</span>
+                        <span>Monto programado por dÃ­a</span>
                       </CardTitle>
                       <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
                         Hoy hasta 1 semana
                       </Badge>
                     </div>
                     <CardDescription className="text-gray-600 text-sm">
-                      Suma de monto_cuota (cuotas con vencimiento cada día) desde hoy hasta 7 días después
+                      Suma de monto_cuota (cuotas con vencimiento cada dÃ­a) desde hoy hasta 7 dÃ­as despuÃ©s
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="p-6 pt-4">
@@ -784,7 +785,7 @@ export function DashboardMenu() {
                         </BarChart>
                       </ResponsiveContainer>
                     ) : (
-                      <div className="flex items-center justify-center py-16 text-gray-500">No hay datos de monto programado para los próximos 7 días</div>
+                      <div className="flex items-center justify-center py-16 text-gray-500">No hay datos de monto programado para los prÃ³ximos 7 dÃ­as</div>
                     )}
                   </CardContent>
                 </Card>
@@ -793,9 +794,9 @@ export function DashboardMenu() {
           </div>
         ) : null}
 
-        {/* GRÁFICOS: BANDAS DE $200 USD Y COBRANZA PLANIFICADA VS REAL */}
+        {/* GRÃFICOS: BANDAS DE $200 USD Y COBRANZA PLANIFICADA VS REAL */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* GRÁFICO DE BANDAS DE $200 USD */}
+          {/* GRÃFICO DE BANDAS DE $200 USD */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -806,7 +807,7 @@ export function DashboardMenu() {
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
                       <BarChart3 className="h-5 w-5 text-indigo-600" />
-                      <span>Distribución por Bandas de $200 USD</span>
+                      <span>DistribuciÃ³n por Bandas de $200 USD</span>
                     </CardTitle>
                     <div className="flex items-center gap-2">
                       <SelectorPeriodoGrafico chartId="rangos" />
@@ -823,11 +824,11 @@ export function DashboardMenu() {
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={filteredData} layout="vertical" margin={{ top: 14, right: 24, left: 120, bottom: 24 }}>
                           <CartesianGrid {...chartCartesianGrid} />
-                          <XAxis type="number" domain={[600, 2000]} tick={chartAxisTick} tickFormatter={(value) => value.toLocaleString('es-EC')} label={{ value: 'Cantidad de Préstamos', position: 'insideBottom', offset: -10, style: { textAnchor: 'middle', fill: '#374151', fontSize: 13, fontWeight: 600 } }} allowDecimals={false} />
+                          <XAxis type="number" domain={[600, 2000]} tick={chartAxisTick} tickFormatter={(value) => value.toLocaleString('es-EC')} label={{ value: 'Cantidad de PrÃ©stamos', position: 'insideBottom', offset: -10, style: { textAnchor: 'middle', fill: '#374151', fontSize: 13, fontWeight: 600 } }} allowDecimals={false} />
                           <YAxis type="category" dataKey="categoriaFormateada" width={115} tick={{ fontSize: 11, fill: '#4b5563', fontWeight: 500 }} interval={0} tickLine={false} />
-                          <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [`${value.toLocaleString('es-EC')} préstamos`, 'Cantidad']} labelFormatter={(label) => `Banda: ${label}`} cursor={{ fill: 'rgba(99, 102, 241, 0.08)' }} />
+                          <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [`${value.toLocaleString('es-EC')} prÃ©stamos`, 'Cantidad']} labelFormatter={(label) => `Banda: ${label}`} cursor={{ fill: 'rgba(99, 102, 241, 0.08)' }} />
                           <Legend {...chartLegendStyle} />
-                          <Bar dataKey="cantidad" radius={[0, 6, 6, 0]} name="Cantidad de Préstamos">
+                          <Bar dataKey="cantidad" radius={[0, 6, 6, 0]} name="Cantidad de PrÃ©stamos">
                             {filteredData.map((entry, index) => {
                               const maxCant = Math.max(...filteredData.map(d => d.cantidad))
                               const intensity = maxCant > 0 ? entry.cantidad / maxCant : 0
@@ -846,7 +847,7 @@ export function DashboardMenu() {
               </Card>
             </motion.div>
 
-          {/* Préstamos aprobados por modelo de vehículo (barras horizontales) */}
+          {/* PrÃ©stamos aprobados por modelo de vehÃ­culo (barras horizontales) */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -858,7 +859,7 @@ export function DashboardMenu() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
                     <BarChart3 className="h-5 w-5 text-violet-600" />
-                    <span>Préstamos aprobados por modelo de vehículo</span>
+                    <span>PrÃ©stamos aprobados por modelo de vehÃ­culo</span>
                   </CardTitle>
                   <div className="flex items-center gap-2">
                     <SelectorPeriodoGrafico chartId="rangos" />
@@ -873,7 +874,7 @@ export function DashboardMenu() {
                   </div>
                 </div>
                 <p className="text-xs text-gray-600 mt-1">
-                  Distribución en porcentaje (acumulado). Usa el filtro Modelo en la barra superior para filtrar por vehículo.
+                  DistribuciÃ³n en porcentaje (acumulado). Usa el filtro Modelo en la barra superior para filtrar por vehÃ­culo.
                 </p>
               </CardHeader>
               <CardContent className="p-6 flex-1">
@@ -910,13 +911,13 @@ export function DashboardMenu() {
                             interval={0}
                             tickLine={false}
                             axisLine={{ stroke: '#e5e7eb' }}
-                            tickFormatter={(name) => (name && name.length > 22 ? `${name.slice(0, 20)}…` : name)}
+                            tickFormatter={(name) => (name && name.length > 22 ? `${name.slice(0, 20)}â€¦` : name)}
                           />
                           <Tooltip
                             contentStyle={chartTooltipStyle.contentStyle}
                             labelStyle={chartTooltipStyle.labelStyle}
                             formatter={(value: number, _name: string, props: { payload?: { cantidad: number; porcentaje: number } }) => [
-                              `${props.payload?.cantidad?.toLocaleString('es-EC') ?? value} préstamos (${Number(value ?? props.payload?.porcentaje ?? 0).toFixed(1)}%)`,
+                              `${props.payload?.cantidad?.toLocaleString('es-EC') ?? value} prÃ©stamos (${Number(value ?? props.payload?.porcentaje ?? 0).toFixed(1)}%)`,
                               '% del total',
                             ]}
                             labelFormatter={(label) => `Modelo: ${label}`}
@@ -936,9 +937,9 @@ export function DashboardMenu() {
           </motion.div>
         </div>
 
-        {/* GRÁFICOS DE MOROSIDAD */}
+        {/* GRÃFICOS DE MOROSIDAD */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Composición de Pago vencido (monto en USD) */}
+          {/* ComposiciÃ³n de Pago vencido (monto en USD) */}
           <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -950,17 +951,17 @@ export function DashboardMenu() {
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
                       <BarChart3 className="h-5 w-5 text-red-600" />
-                      <span>Composición de Pago vencido (USD)</span>
+                      <span>ComposiciÃ³n de Pago vencido (USD)</span>
                     </CardTitle>
                     <div className="flex items-center gap-2">
                       <SelectorPeriodoGrafico chartId="composicion-morosidad" />
                       <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
-                        Al día de hoy
+                        Al dÃ­a de hoy
                       </Badge>
                     </div>
                   </div>
                   <p className="text-xs text-gray-600 mt-1">
-                  Cuotas vencidas sin pagar. 1-30, 31-60 y 61-89 días = Vencido; 90+ días = Moroso (snapshot al día de hoy).
+                  Cuotas vencidas sin pagar. 1-30, 31-60 y 61-89 dÃ­as = Vencido; 90+ dÃ­as = Moroso (snapshot al dÃ­a de hoy).
                 </p>
                 </CardHeader>
                 <CardContent className="p-6 flex-1">
@@ -986,7 +987,7 @@ export function DashboardMenu() {
               </Card>
             </motion.div>
 
-          {/* Cantidad de préstamos en mora por rango de días */}
+          {/* Cantidad de prÃ©stamos en mora por rango de dÃ­as */}
           <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -998,17 +999,17 @@ export function DashboardMenu() {
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
                       <BarChart3 className="h-5 w-5 text-rose-600" />
-                      <span>Cantidad de préstamos con pago vencido</span>
+                      <span>Cantidad de prÃ©stamos con pago vencido</span>
                     </CardTitle>
                     <div className="flex items-center gap-2">
                       <SelectorPeriodoGrafico chartId="composicion-morosidad" />
                       <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
-                        Al día de hoy
+                        Al dÃ­a de hoy
                       </Badge>
                     </div>
                   </div>
                   <p className="text-xs text-gray-600 mt-1">
-                    Préstamos con cuotas vencidas sin pagar. 1-30, 31-60 y 61-89 días = Vencido; 90+ días = Moroso (snapshot al día de hoy).
+                    PrÃ©stamos con cuotas vencidas sin pagar. 1-30, 31-60 y 61-89 dÃ­as = Vencido; 90+ dÃ­as = Moroso (snapshot al dÃ­a de hoy).
                   </p>
                 </CardHeader>
                 <CardContent className="p-6 flex-1">
@@ -1019,10 +1020,10 @@ export function DashboardMenu() {
                         <BarChart data={filteredData} margin={{ top: 12, right: 24, left: 12, bottom: 12 }}>
                           <CartesianGrid {...chartCartesianGrid} />
                           <XAxis dataKey="categoria" tick={chartAxisTick} />
-                          <YAxis tick={chartAxisTick} allowDecimals={false} label={{ value: 'Cantidad de préstamos', angle: -90, position: 'insideLeft', style: { fill: '#374151', fontSize: 12 } }} />
-                          <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [typeof value === 'number' ? value.toLocaleString('es-EC') : value, 'Préstamos']} />
+                          <YAxis tick={chartAxisTick} allowDecimals={false} label={{ value: 'Cantidad de prÃ©stamos', angle: -90, position: 'insideLeft', style: { fill: '#374151', fontSize: 12 } }} />
+                          <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [typeof value === 'number' ? value.toLocaleString('es-EC') : value, 'PrÃ©stamos']} />
                           <Legend {...chartLegendStyle} />
-                          <Bar dataKey="cantidad_prestamos" fill="#be123c" name="Cantidad de préstamos" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="cantidad_prestamos" fill="#be123c" name="Cantidad de prÃ©stamos" radius={[4, 4, 0, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
                     )}
@@ -1035,7 +1036,7 @@ export function DashboardMenu() {
             </motion.div>
         </div>
 
-        {/* Pago vencido por Analista: 1 gráfico por fila, bloques independientes */}
+        {/* Pago vencido por Analista: 1 grÃ¡fico por fila, bloques independientes */}
         <div className="flex flex-col gap-6 mt-6">
           {/* Fila 1: solo Cuotas vencidas por analista (radar) */}
           <motion.div
@@ -1049,12 +1050,12 @@ export function DashboardMenu() {
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
                       <Users className="h-5 w-5 text-orange-600" />
-                      <span>Pago vencido por Analista — Cuotas vencidas</span>
+                      <span>Pago vencido por Analista â€” Cuotas vencidas</span>
                     </CardTitle>
                     <div className="flex items-center gap-2">
                       <SelectorPeriodoGrafico chartId="morosidad-analista" />
                       <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
-                        Al día de hoy
+                        Al dÃ­a de hoy
                       </Badge>
                     </div>
                   </div>
@@ -1072,7 +1073,7 @@ export function DashboardMenu() {
                           <PolarAngleAxis
                             dataKey="analista"
                             tick={{ fontSize: 11, fill: '#374151', fontWeight: 500 }}
-                            tickFormatter={(name) => (name && name.length > 18 ? `${name.slice(0, 16)}…` : name)}
+                            tickFormatter={(name) => (name && name.length > 18 ? `${name.slice(0, 16)}â€¦` : name)}
                           />
                           <PolarRadiusAxis angle={90} tick={{ fontSize: 11, fill: '#6b7280' }} domain={[0, 'auto']} />
                           <Radar name="Cuotas vencidas" dataKey="cantidad_cuotas_vencidas" stroke="#ea580c" strokeWidth={2} fill="#f97316" fillOpacity={0.4} />
@@ -1088,7 +1089,7 @@ export function DashboardMenu() {
               </Card>
             </motion.div>
 
-          {/* Fila 2: solo Dólares vencidos por analista (barras) */}
+          {/* Fila 2: solo DÃ³lares vencidos por analista (barras) */}
           <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1100,12 +1101,12 @@ export function DashboardMenu() {
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <CardTitle className="flex items-center gap-2 text-lg font-bold text-gray-800">
                       <DollarSign className="h-5 w-5 text-amber-600" />
-                      <span>Pago vencido por Analista — Dólares vencidos</span>
+                      <span>Pago vencido por Analista â€” DÃ³lares vencidos</span>
                     </CardTitle>
                     <div className="flex items-center gap-2">
                       <SelectorPeriodoGrafico chartId="morosidad-analista" />
                       <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
-                        Al día de hoy
+                        Al dÃ­a de hoy
                       </Badge>
                     </div>
                   </div>
@@ -1116,7 +1117,7 @@ export function DashboardMenu() {
                     <div className="flex items-center justify-center py-16 text-gray-500">Cargando...</div>
                   ) : datosMorosidadAnalista && datosMorosidadAnalista.length > 0 ? (
                     <>
-                      <h4 className="text-sm font-semibold text-gray-700 mb-1 text-center">Dólares vencidos por analista</h4>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-1 text-center">DÃ³lares vencidos por analista</h4>
                       <ResponsiveContainer width="100%" height={Math.max(380, Math.min(620, datosMorosidadAnalista.length * 28))}>
                         <BarChart data={datosMorosidadAnalista} layout="vertical" margin={{ top: 12, right: 32, left: 16, bottom: 12 }} barCategoryGap="12%">
                           <CartesianGrid {...chartCartesianGrid} horizontal={false} />
@@ -1129,11 +1130,11 @@ export function DashboardMenu() {
                             interval={0}
                             tickLine={false}
                             axisLine={{ stroke: '#e5e7eb' }}
-                            tickFormatter={(name) => (name && name.length > 24 ? `${name.slice(0, 22)}…` : name)}
+                            tickFormatter={(name) => (name && name.length > 24 ? `${name.slice(0, 22)}â€¦` : name)}
                           />
-                          <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [formatCurrency(value), 'Dólares vencidos']} labelFormatter={(label) => `Analista: ${label}`} cursor={{ fill: 'rgba(234, 88, 12, 0.06)' }} />
+                          <Tooltip contentStyle={chartTooltipStyle.contentStyle} labelStyle={chartTooltipStyle.labelStyle} formatter={(value: number) => [formatCurrency(value), 'DÃ³lares vencidos']} labelFormatter={(label) => `Analista: ${label}`} cursor={{ fill: 'rgba(234, 88, 12, 0.06)' }} />
                           <Legend {...chartLegendStyle} />
-                          <Bar dataKey="monto_vencido" name="Dólares vencidos" fill="#ea580c" radius={[0, 4, 4, 0]} maxBarSize={28} />
+                          <Bar dataKey="monto_vencido" name="DÃ³lares vencidos" fill="#ea580c" radius={[0, 4, 4, 0]} maxBarSize={28} />
                         </BarChart>
                       </ResponsiveContainer>
                     </>
@@ -1151,3 +1152,4 @@ export function DashboardMenu() {
 }
 
 export default DashboardMenu
+

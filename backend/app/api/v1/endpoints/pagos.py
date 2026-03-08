@@ -1,14 +1,14 @@
-"""
+﻿"""
 Endpoints de pagos. Datos reales desde BD.
 - Tabla pagos: GET/POST/PUT/DELETE /pagos/ (listado y CRUD para /pagos/pagos).
 - GET /pagos/kpis, /stats, /ultimos; POST /upload, /conciliacion/upload, /{id}/aplicar-cuotas.
 
-Nº documento / referencia de pago:
+NÂº documento / referencia de pago:
 - Regla general: no se aceptan duplicados en documentos. En todo el sistema (carga masiva, crear,
-  actualizar, BD) no puede existir dos pagos con el mismo Nº documento. Misma clave canónica =
-  duplicado → rechazo.
-- Se acepta CUALQUIER formato (BNC/, BINANCE, VE/, ZELLE/, numérico, etc.). Documentos numéricos
-  de 10 a 25 dígitos sin problemas. Varias filas sin documento (vacío) se permiten.
+  actualizar, BD) no puede existir dos pagos con el mismo NÂº documento. Misma clave canÃ³nica =
+  duplicado â†’ rechazo.
+- Se acepta CUALQUIER formato (BNC/, BINANCE, VE/, ZELLE/, numÃ©rico, etc.). Documentos numÃ©ricos
+  de 10 a 25 dÃ­gitos sin problemas. Varias filas sin documento (vacÃ­o) se permiten.
 """
 import calendar
 import io
@@ -54,33 +54,33 @@ class GuardarFilaEditableBody(BaseModel):
 
 
 class ValidarFilasBatchBody(BaseModel):
-    """Batch de cédulas y documentos para validar contra BD."""
+    """Batch de cÃ©dulas y documentos para validar contra BD."""
     cedulas: list[str] = []
-    documentos: list[str] = []  # Solo los no vacíos
+    documentos: list[str] = []  # Solo los no vacÃ­os
 
 
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
-# Límite de la columna numero_documento y referencia_pago en tabla pagos (String(100))
+# LÃ­mite de la columna numero_documento y referencia_pago en tabla pagos (String(100))
 _MAX_LEN_NUMERO_DOCUMENTO = 100
-# Validación de monto para NUMERIC(14, 2): máximo ~999,999,999,999.99 (12 dígitos antes del decimal)
+# ValidaciÃ³n de monto para NUMERIC(14, 2): mÃ¡ximo ~999,999,999,999.99 (12 dÃ­gitos antes del decimal)
 _MAX_MONTO_PAGADO = 999_999_999_999.99
-_MIN_MONTO_PAGADO = 0.01  # Monto mínimo válido (> 0)
+_MIN_MONTO_PAGADO = 0.01  # Monto mÃ­nimo vÃ¡lido (> 0)
 _PRESTAMO_ID_MAX = 2_147_483_647  # INT max en BD (32-bit signed)
 
 
-# Todas las funciones de normalización de documento están centralizadas en app.core.documento
+# Todas las funciones de normalizaciÃ³n de documento estÃ¡n centralizadas en app.core.documento
 # Se usan ahora: normalize_documento() que consolidaba las 3 funciones anteriores.
-# Esto evita duplicación y facilita mantenimiento.
+# Esto evita duplicaciÃ³n y facilita mantenimiento.
 
 
 
 def _validar_monto(monto_raw: Any) -> tuple[bool, float, str]:
     """
-    Valida que el monto esté dentro de los rangos permitidos para NUMERIC(14, 2).
-    Retorna: (es_válido, monto_parseado, mensaje_error)
+    Valida que el monto estÃ© dentro de los rangos permitidos para NUMERIC(14, 2).
+    Retorna: (es_vÃ¡lido, monto_parseado, mensaje_error)
     """
     try:
         monto = float(monto_raw) if monto_raw is not None else 0.0
@@ -92,19 +92,19 @@ def _validar_monto(monto_raw: Any) -> tuple[bool, float, str]:
         return (False, monto, f"Monto debe ser mayor a {_MIN_MONTO_PAGADO}")
     
     if monto > _MAX_MONTO_PAGADO:
-        # Probablemente es una fecha convertida a número de Excel (días desde 1900)
-        # Las fechas en Excel típicamente son números entre 1 y ~50000
+        # Probablemente es una fecha convertida a nÃºmero de Excel (dÃ­as desde 1900)
+        # Las fechas en Excel tÃ­picamente son nÃºmeros entre 1 y ~50000
         if monto < 100000:
-            return (False, monto, f"Monto sospechosamente pequeño para ser una cantidad; parece ser una fecha o número de secuencia: {monto}")
-        return (False, monto, f"Monto excede límite máximo ({_MAX_MONTO_PAGADO}): {monto}")
+            return (False, monto, f"Monto sospechosamente pequeÃ±o para ser una cantidad; parece ser una fecha o nÃºmero de secuencia: {monto}")
+        return (False, monto, f"Monto excede lÃ­mite mÃ¡ximo ({_MAX_MONTO_PAGADO}): {monto}")
     
     return (True, monto, "")
 
 
 def _celda_a_string_documento(val: Any) -> str:
     """
-    Convierte el valor de una celda Excel a string para Nº documento.
-    Acepta cualquier tipo: str, int, float (evita notación científica para números largos).
+    Convierte el valor de una celda Excel a string para NÂº documento.
+    Acepta cualquier tipo: str, int, float (evita notaciÃ³n cientÃ­fica para nÃºmeros largos).
     """
     if val is None:
         return ""
@@ -126,7 +126,7 @@ TZ_NEGOCIO = "America/Caracas"
 def _hoy_local() -> date:
     """
     [MORA] Retorna la fecha actual en la zona horaria del negocio (America/Caracas).
-    Usada para calcular dias_mora, detectar vencimientos, y acciones automáticas.
+    Usada para calcular dias_mora, detectar vencimientos, y acciones automÃ¡ticas.
     """
     tz = ZoneInfo(TZ_NEGOCIO)
     return datetime.now(tz).date()
@@ -137,9 +137,9 @@ def _validar_transicion_estado_cuota(estado_anterior: str, estado_nuevo: str) ->
     [validar_transiciones] Valida transiciones permitidas entre estados de cuota.
     
     Transiciones permitidas:
-    PENDIENTE → PAGADO, PAGO_ADELANTADO
-    PAGO_ADELANTADO → PAGADO
-    PAGADO → PAGADO (idempotente)
+    PENDIENTE â†’ PAGADO, PAGO_ADELANTADO
+    PAGO_ADELANTADO â†’ PAGADO
+    PAGADO â†’ PAGADO (idempotente)
     """
     transiciones_permitidas = {
         "PENDIENTE": ["PAGADO", "PAGO_ADELANTADO", "PENDIENTE"],
@@ -151,12 +151,12 @@ def _validar_transicion_estado_cuota(estado_anterior: str, estado_nuevo: str) ->
 
 def _calcular_dias_mora(fecha_vencimiento: date) -> int:
     """
-    [MORA] Calcula el número de días en mora desde la fecha de vencimiento.
+    [MORA] Calcula el nÃºmero de dÃ­as en mora desde la fecha de vencimiento.
     
-    - Si fecha_vencimiento >= hoy → 0 (no hay mora)
-    - Si fecha_vencimiento < hoy → (hoy - fecha_vencimiento).days (días vencidos)
+    - Si fecha_vencimiento >= hoy â†’ 0 (no hay mora)
+    - Si fecha_vencimiento < hoy â†’ (hoy - fecha_vencimiento).days (dÃ­as vencidos)
     
-    Regla: Mora se acumula desde el día siguiente a fecha_vencimiento hasta que pague 100%.
+    Regla: Mora se acumula desde el dÃ­a siguiente a fecha_vencimiento hasta que pague 100%.
     """
     hoy = _hoy_local()
     if not fecha_vencimiento:
@@ -167,16 +167,16 @@ def _calcular_dias_mora(fecha_vencimiento: date) -> int:
 
 def _clasificar_nivel_mora(dias_mora: int, total_pagado: float, monto_cuota: float) -> str:
     """
-    [MORA] Clasifica el nivel de mora según días vencidos.
+    [MORA] Clasifica el nivel de mora segÃºn dÃ­as vencidos.
     
     Reglas:
-    - Si total_pagado >= monto_cuota (100%) → PAGADO (sin mora)
-    - Si dias_mora == 0 y total_pagado == 0 → PENDIENTE (vigente, no vencida)
-    - Si 0 < dias_mora <= 90 → VENCIDO (dentro de plazo de cobranza)
-    - Si dias_mora > 90 → MORA (severa, automatiza acciones de cobranza)
+    - Si total_pagado >= monto_cuota (100%) â†’ PAGADO (sin mora)
+    - Si dias_mora == 0 y total_pagado == 0 â†’ PENDIENTE (vigente, no vencida)
+    - Si 0 < dias_mora <= 90 â†’ VENCIDO (dentro de plazo de cobranza)
+    - Si dias_mora > 90 â†’ MORA (severa, automatiza acciones de cobranza)
     - Si 0 < total_pagado < monto_cuota:
-        - Con dias_mora <= 90 → VENCIDO (pago parcial dentro de plazo)
-        - Con dias_mora > 90 → MORA (pago parcial ya en mora severa)
+        - Con dias_mora <= 90 â†’ VENCIDO (pago parcial dentro de plazo)
+        - Con dias_mora > 90 â†’ MORA (pago parcial ya en mora severa)
     """
     if total_pagado >= monto_cuota - 0.01:
         return "PAGADO"
@@ -231,8 +231,8 @@ def listar_pagos(
     fecha_desde: Optional[str] = Query(None),
     fecha_hasta: Optional[str] = Query(None),
     analista: Optional[str] = Query(None),
-    conciliado: Optional[str] = Query(None, description="si=conciliados, no=no conciliados, vacío=todos"),
-    sin_prestamo: Optional[str] = Query(None, description="si=solo pagos sin crédito asignado (prestamo_id NULL)"),
+    conciliado: Optional[str] = Query(None, description="si=conciliados, no=no conciliados, vacÃ­o=todos"),
+    sin_prestamo: Optional[str] = Query(None, description="si=solo pagos sin crÃ©dito asignado (prestamo_id NULL)"),
     db: Session = Depends(get_db),
 ):
     """Listado paginado desde la tabla pagos. Filtros: cedula, estado, fecha_desde, fecha_hasta, analista, conciliado, sin_prestamo."""
@@ -242,7 +242,7 @@ def listar_pagos(
         if sin_prestamo and sin_prestamo.strip().lower() == "si":
             q = q.where(Pago.prestamo_id.is_(None))
             count_q = count_q.where(Pago.prestamo_id.is_(None))
-            # Excluir pagos ya movidos a revisar_pagos (tabla temporal de validación)
+            # Excluir pagos ya movidos a revisar_pagos (tabla temporal de validaciÃ³n)
             revisar_subq = select(RevisarPago.pago_id)
             q = q.where(~Pago.id.in_(revisar_subq))
             count_q = count_q.where(~Pago.id.in_(revisar_subq))
@@ -276,7 +276,7 @@ def listar_pagos(
             q = q.join(Prestamo, Pago.prestamo_id == Prestamo.id).where(Prestamo.analista == analista.strip())
             count_q = count_q.join(Prestamo, Pago.prestamo_id == Prestamo.id).where(Prestamo.analista == analista.strip())
         total = db.scalar(count_q) or 0
-        # Orden: más reciente primero (fecha_pago desc, luego id desc)
+        # Orden: mÃ¡s reciente primero (fecha_pago desc, luego id desc)
         q = q.order_by(Pago.fecha_registro.desc().nullslast(), Pago.id.desc()).offset((page - 1) * per_page).limit(per_page)
         rows = db.execute(q).scalars().all()
         items = [_pago_to_response(r) for r in rows]
@@ -303,12 +303,12 @@ def get_ultimos_pagos(
     db: Session = Depends(get_db),
 ):
     """
-    Resumen de últimos pagos por cédula (para PagosListResumen).
+    Resumen de Ãºltimos pagos por cÃ©dula (para PagosListResumen).
     Items: cedula, pago_id, prestamo_id, estado_pago, monto_ultimo_pago, fecha_ultimo_pago,
     cuotas_atrasadas, saldo_vencido, total_prestamos.
     """
     hoy = _hoy_local()
-    # Subconsulta: cédulas distintas ordenadas por pago más reciente (más actual a más antiguo)
+    # Subconsulta: cÃ©dulas distintas ordenadas por pago mÃ¡s reciente (mÃ¡s actual a mÃ¡s antiguo)
     subq = (
         select(
             Pago.cedula_cliente,
@@ -403,8 +403,8 @@ async def upload_excel_pagos(
     if not file.filename or not file.filename.lower().endswith((".xlsx", ".xls")):
         raise HTTPException(status_code=400, detail="Debe subir un archivo Excel (.xlsx o .xls)")
     MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB (alineado con frontend)
-    MAX_ROWS = 10000  # Límite máximo de filas (rechazo si se supera)
-    MAX_ROWS_RECOMENDADO = 2500  # Sin sobrecarga ni timeouts en servidor típico
+    MAX_ROWS = 10000  # LÃ­mite mÃ¡ximo de filas (rechazo si se supera)
+    MAX_ROWS_RECOMENDADO = 2500  # Sin sobrecarga ni timeouts en servidor tÃ­pico
     try:
         import openpyxl
         content = await file.read()
@@ -421,7 +421,7 @@ async def upload_excel_pagos(
         if len(rows) > MAX_ROWS:
             raise HTTPException(
                 status_code=400,
-                detail=f"El archivo tiene demasiadas filas ({len(rows)}). Máximo permitido: {MAX_ROWS}. Para evitar sobrecarga, se recomienda hasta {MAX_ROWS_RECOMENDADO} filas.",
+                detail=f"El archivo tiene demasiadas filas ({len(rows)}). MÃ¡ximo permitido: {MAX_ROWS}. Para evitar sobrecarga, se recomienda hasta {MAX_ROWS_RECOMENDADO} filas.",
             )
         if len(rows) > MAX_ROWS_RECOMENDADO:
             logger.warning(
@@ -437,24 +437,24 @@ async def upload_excel_pagos(
             return bool(re.match(r"^[VEJZ]\d{6,11}$", s, re.IGNORECASE))
 
         def _looks_like_documento(v: Any) -> bool:
-            """True si el valor puede ser Nº documento (cualquier formato). Se acepta todo lo que no sea cédula."""
+            """True si el valor puede ser NÂº documento (cualquier formato). Se acepta todo lo que no sea cÃ©dula."""
             if v is None or (isinstance(v, str) and not v.strip()):
                 return False
             s = _celda_a_string_documento(v)
             if not s or len(s) < 2:
                 return False
             if _looks_like_cedula(v):
-                return False  # No confundir cédula con documento
-            # Numérico largo (ej. 740087467177192)
+                return False  # No confundir cÃ©dula con documento
+            # NumÃ©rico largo (ej. 740087467177192)
             if re.match(r"^\d{10,}$", s):
                 return True
-            # Con / o prefijos típicos (BNC/, ZELLE/, VE/, etc.)
+            # Con / o prefijos tÃ­picos (BNC/, ZELLE/, VE/, etc.)
             if "/" in s or re.search(r"^(BNC|ZELLE|BINANCE|VE|BS\.)", s, re.IGNORECASE):
                 return True
-            # Alfanumérico (ej. JPM99BMSWM4Y): cualquier combinación letras+números
+            # AlfanumÃ©rico (ej. JPM99BMSWM4Y): cualquier combinaciÃ³n letras+nÃºmeros
             if re.search(r"[A-Za-z]", s) and re.search(r"\d", s) and len(s) <= _MAX_LEN_NUMERO_DOCUMENTO:
                 return True
-            # Solo letras o solo números (6+ caracteres)
+            # Solo letras o solo nÃºmeros (6+ caracteres)
             if len(s) >= 6:
                 return True
             return False
@@ -468,7 +468,7 @@ async def upload_excel_pagos(
             return bool(re.search(r"\d{1,4}[-\/]\d{1,2}[-\/]\d{1,4}", s))
 
         def _extraer_documento_de_fila(row: tuple, col_documento: Optional[int]) -> str:
-            """Obtiene el valor de documento: primero columna indicada; si vacío, busca en todas las celdas (fallback)."""
+            """Obtiene el valor de documento: primero columna indicada; si vacÃ­o, busca en todas las celdas (fallback)."""
             if col_documento is not None and col_documento < len(row) and row[col_documento] is not None:
                 s = _celda_a_string_documento(row[col_documento])
                 if (s or "").strip():
@@ -501,7 +501,7 @@ async def upload_excel_pagos(
                     continue
             return date.today()
 
-        # --- FASE 1: Parsear todas las filas (ingresar todos los datos para validar después) ---
+        # --- FASE 1: Parsear todas las filas (ingresar todos los datos para validar despuÃ©s) ---
         FilasParseadas: list[dict] = []
         filas_omitidas = 0
         errores: list[str] = []
@@ -516,11 +516,11 @@ async def upload_excel_pagos(
                 monto = 0.0
                 numero_doc = ""
                 col_doc: Optional[int] = None
-                # Formato D (PRINCIPAL): Cédula, Monto, Fecha, Nº documento
+                # Formato D (PRINCIPAL): CÃ©dula, Monto, Fecha, NÂº documento
                 if len(row) >= 4 and _looks_like_cedula(row[0]) and row[1] is not None and _looks_like_date(row[2]):
                     cedula = str(row[0]).strip()
-                    es_válido, monto, err_msg = _validar_monto(row[1])
-                    if not es_válido and monto != 0.0:
+                    es_vÃ¡lido, monto, err_msg = _validar_monto(row[1])
+                    if not es_vÃ¡lido and monto != 0.0:
                         errores.append(f'Fila {i + 2} (Formato D - Principal): {err_msg}')
                         pagos_con_error_list.append({
                             "fila_idx": i + 2,
@@ -536,25 +536,25 @@ async def upload_excel_pagos(
                     numero_doc = _celda_a_string_documento(row[3]) if len(row) > 3 else ""
                     col_doc = 3
                     prestamo_id = None
-                # Formato A: Documento, Cédula, Fecha, Monto
+                # Formato A: Documento, CÃ©dula, Fecha, Monto
                 elif len(row) >= 4 and _looks_like_documento(row[0]) and _looks_like_cedula(row[1]):
                     numero_doc = _celda_a_string_documento(row[0])
                     col_doc = 0
                     cedula = str(row[1]).strip()
                     fecha_val = row[2] if len(row) > 2 else None
-                    es_válido, monto, err_msg = _validar_monto(row[3]) if len(row) > 3 else (True, 0.0, '')
+                    es_vÃ¡lido, monto, err_msg = _validar_monto(row[3]) if len(row) > 3 else (True, 0.0, '')
 
-                    if not es_válido and monto != 0.0:
+                    if not es_vÃ¡lido and monto != 0.0:
 
                         errores.append(f'Fila {i + 2} (Formato A): {err_msg}')
 
                         continue
-                # Formato B: Fecha, Cédula, Monto, Documento
+                # Formato B: Fecha, CÃ©dula, Monto, Documento
                 elif len(row) >= 4 and _looks_like_date(row[0]) and _looks_like_cedula(row[1]):
                     cedula = str(row[1]).strip()
-                    es_válido, monto, err_msg = _validar_monto(row[2])
+                    es_vÃ¡lido, monto, err_msg = _validar_monto(row[2])
 
-                    if not es_válido and monto != 0.0:
+                    if not es_vÃ¡lido and monto != 0.0:
 
                         errores.append(f'Fila {i + 2} (Formato B): {err_msg}')
 
@@ -563,7 +563,7 @@ async def upload_excel_pagos(
                     numero_doc = _celda_a_string_documento(row[3])
                     col_doc = 3
                 else:
-                    # Formato C (Alternativo): Cédula, ID Préstamo, Fecha, Monto, Nº documento
+                    # Formato C (Alternativo): CÃ©dula, ID PrÃ©stamo, Fecha, Monto, NÂº documento
                     cedula = str(row[0]).strip() if row[0] is not None else ""
                     _val_prestamo = row[1] if len(row) > 1 else None
                     if _val_prestamo is None:
@@ -580,14 +580,14 @@ async def upload_excel_pagos(
                             prestamo_id = _pid
                     fecha_val = row[2] if len(row) > 2 else None
                     _monto_raw = row[3] if len(row) > 3 else None
-                    es_válido, monto, err_msg = _validar_monto(_monto_raw)
-                    if not es_válido and monto != 0.0:
+                    es_vÃ¡lido, monto, err_msg = _validar_monto(_monto_raw)
+                    if not es_vÃ¡lido and monto != 0.0:
                         errores.append(f'Fila {i + 2} (Formato C): {err_msg}')
                         continue
                     numero_doc = _celda_a_string_documento(row[4]) if len(row) > 4 else ""
                     col_doc = 4 if len(row) > 4 else None
 
-                # Fallback: si documento vacío, buscar en cualquier celda de la fila
+                # Fallback: si documento vacÃ­o, buscar en cualquier celda de la fila
                 if not (numero_doc or "").strip():
                     numero_doc = _extraer_documento_de_fila(row, col_doc)
 
@@ -617,7 +617,7 @@ async def upload_excel_pagos(
                 errores.append(f"Fila {i + 2}: {e}")
                 errores_detalle.append({"fila": i + 2, "cedula": "", "error": str(e), "datos": {}})
 
-        # --- FASE 2: Validar documentos (única regla: no duplicados) e insertar ---
+        # --- FASE 2: Validar documentos (Ãºnica regla: no duplicados) e insertar ---
         numeros_doc_en_lote: set[str] = set()
         documentos_ya_en_bd: set[str] = set()
         # Precarga en lote: documentos del archivo que ya existen en BD (evita N consultas)
@@ -652,23 +652,23 @@ async def upload_excel_pagos(
             numero_doc_norm = normalize_documento(numero_doc)
             key_doc = (numero_doc_norm or "").strip()
 
-            # Validación post-documentos: duplicado en archivo
+            # ValidaciÃ³n post-documentos: duplicado en archivo
             if key_doc and key_doc in numeros_doc_en_lote:
                 datos_fila = {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}
-                errores.append(f"Fila {i}: Nº documento duplicado en este archivo")
-                errores_detalle.append({"fila": i, "cedula": cedula, "error": "Nº documento duplicado en este archivo. Regla general: no se aceptan duplicados en documentos.", "datos": datos_fila})
+                errores.append(f"Fila {i}: NÂº documento duplicado en este archivo")
+                errores_detalle.append({"fila": i, "cedula": cedula, "error": "NÂº documento duplicado en este archivo. Regla general: no se aceptan duplicados en documentos.", "datos": datos_fila})
                 continue
 
-            # Validación post-documentos: duplicado en BD (documentos_ya_en_bd precargado en lote)
+            # ValidaciÃ³n post-documentos: duplicado en BD (documentos_ya_en_bd precargado en lote)
             if key_doc:
                 if key_doc in documentos_ya_en_bd:
                     datos_fila = {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}
-                    errores.append(f"Fila {i}: Ya existe un pago con ese Nº de documento")
-                    errores_detalle.append({"fila": i, "cedula": cedula, "error": "Ya existe un pago con ese Nº de documento. Regla general: no se aceptan duplicados en documentos.", "datos": datos_fila})
+                    errores.append(f"Fila {i}: Ya existe un pago con ese NÂº de documento")
+                    errores_detalle.append({"fila": i, "cedula": cedula, "error": "Ya existe un pago con ese NÂº de documento. Regla general: no se aceptan duplicados en documentos.", "datos": datos_fila})
                     continue
                 numeros_doc_en_lote.add(key_doc)
 
-            # Préstamo obligatorio si la cédula tiene más de un préstamo
+            # PrÃ©stamo obligatorio si la cÃ©dula tiene mÃ¡s de un prÃ©stamo
             if prestamo_id is None and cedula.strip():
                 count_prestamos = db.scalar(
                     select(func.count())
@@ -678,8 +678,8 @@ async def upload_excel_pagos(
                 ) or 0
                 if count_prestamos > 1:
                     datos_fila = {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}
-                    errores.append(f"Fila {i}: La cédula {cedula} tiene {count_prestamos} préstamos. Debe indicar el ID del préstamo.")
-                    errores_detalle.append({"fila": i, "cedula": cedula, "error": f"Esta persona tiene {count_prestamos} préstamos. Debe indicar el ID del préstamo.", "datos": datos_fila})
+                    errores.append(f"Fila {i}: La cÃ©dula {cedula} tiene {count_prestamos} prÃ©stamos. Debe indicar el ID del prÃ©stamo.")
+                    errores_detalle.append({"fila": i, "cedula": cedula, "error": f"Esta persona tiene {count_prestamos} prÃ©stamos. Debe indicar el ID del prÃ©stamo.", "datos": datos_fila})
                     continue
 
             try:
@@ -747,7 +747,7 @@ async def upload_excel_pagos(
             "registros_procesados": registros,
             "registros_con_error": len(pagos_con_error_list),
             "cuotas_aplicadas": cuotas_aplicadas,
-            "pagos_articulados": pagos_articulados,  # [NUEVA] Número de pagos que se articularon a cuotas
+            "pagos_articulados": pagos_articulados,  # [NUEVA] NÃºmero de pagos que se articularon a cuotas
             "filas_omitidas": filas_omitidas,
             "pagos_con_errores": [
                 {
@@ -781,21 +781,21 @@ def validar_filas_batch(
 ):
     """
     Valida en lote:
-    - Cédulas: deben existir en tabla clientes
-    - Documentos: se verifica en tabla CUOTAS (si existe → confirmado/válido)
-                  Si NO existe en CUOTAS pero SÍ en PAGOS → duplicado sin aplicar
-    Retorna cédulas válidas y documentos con estado de confirmación.
+    - CÃ©dulas: deben existir en tabla clientes
+    - Documentos: se verifica en tabla CUOTAS (si existe â†’ confirmado/vÃ¡lido)
+                  Si NO existe en CUOTAS pero SÃ en PAGOS â†’ duplicado sin aplicar
+    Retorna cÃ©dulas vÃ¡lidas y documentos con estado de confirmaciÃ³n.
     """
     from app.models.cuota import Cuota
     
-    # Normalizar cédulas (sin guión, uppercase)
+    # Normalizar cÃ©dulas (sin guiÃ³n, uppercase)
     cedulas_norm = list({
         c.strip().replace("-", "").upper()
         for c in (body.cedulas or [])
         if c and c.strip()
     })
 
-    # Cédulas que existen en tabla clientes
+    # CÃ©dulas que existen en tabla clientes
     cedulas_existentes: set[str] = set()
     if cedulas_norm:
         rows = db.execute(
@@ -803,7 +803,7 @@ def validar_filas_batch(
         ).all()
         cedulas_existentes = {r[0].strip().replace("-", "").upper() for r in rows}
 
-    # Documentos: verificar contra CUOTAS (si existe → confirmado) y PAGOS (si existe sin cuota → duplicado)
+    # Documentos: verificar contra CUOTAS (si existe â†’ confirmado) y PAGOS (si existe sin cuota â†’ duplicado)
     documentos_confirmados: list[dict] = []  # Documentos encontrados en CUOTAS (pago ya aplicado)
     documentos_duplicados: list[dict] = []   # Documentos en PAGOS pero NO aplicados a CUOTA
     
@@ -815,7 +815,7 @@ def validar_filas_batch(
     docs_norm_limpios = [d for d in docs_norm if d]
     
     if docs_norm_limpios:
-        # Buscar documentos que YA EXISTEN en tabla PAGOS (sin importar si están en CUOTAS)
+        # Buscar documentos que YA EXISTEN en tabla PAGOS (sin importar si estÃ¡n en CUOTAS)
         # Si existe en PAGOS = DUPLICADO (rechazar)
         rows_pagos = db.execute(
             select(Pago.numero_documento, Pago.id, Pago.cedula_cliente, 
@@ -847,7 +847,7 @@ def guardar_fila_editable(
 ):
     """
     Guarda una fila editable validada (desde Preview).
-    Si cumple validadores, inserta en pagos, aplica cuotas y retorna éxito.
+    Si cumple validadores, inserta en pagos, aplica cuotas y retorna Ã©xito.
     Auto-marca como conciliado ('SI') para aplicar reglas de negocio inmediatamente.
     """
     try:
@@ -859,19 +859,19 @@ def guardar_fila_editable(
 
         # Validaciones post-guardado
         if not cedula:
-            raise HTTPException(status_code=400, detail="Cédula requerida")
+            raise HTTPException(status_code=400, detail="CÃ©dula requerida")
         if not _looks_like_cedula_inline(cedula):
-            raise HTTPException(status_code=400, detail="Cédula inválida (debe ser V/E/J/Z + 6-11 dígitos)")
+            raise HTTPException(status_code=400, detail="CÃ©dula invÃ¡lida (debe ser V/E/J/Z + 6-11 dÃ­gitos)")
         if monto <= 0:
             raise HTTPException(status_code=400, detail="Monto debe ser > 0")
         if monto > _MAX_MONTO_PAGADO:
-            raise HTTPException(status_code=400, detail=f"Monto excede límite máximo: {_MAX_MONTO_PAGADO}")
+            raise HTTPException(status_code=400, detail=f"Monto excede lÃ­mite mÃ¡ximo: {_MAX_MONTO_PAGADO}")
 
         # Parsear fecha
         try:
             fecha_pago = datetime.strptime(body.fecha_pago[:10], "%d-%m-%Y").date()
         except (ValueError, IndexError):
-            raise HTTPException(status_code=400, detail="Fecha inválida (formato: DD-MM-YYYY)")
+            raise HTTPException(status_code=400, detail="Fecha invÃ¡lida (formato: DD-MM-YYYY)")
 
         # Normalizar documento
         numero_doc_norm = normalize_documento(numero_doc)
@@ -887,7 +887,7 @@ def guardar_fila_editable(
                     detail=f"Ya existe un pago con este documento: {numero_doc_norm}"
                 )
 
-        # Si prestamo_id es None, buscar automáticamente
+        # Si prestamo_id es None, buscar automÃ¡ticamente
         if prestamo_id is None:
             cliente_row = db.execute(
                 select(Prestamo.id)
@@ -899,7 +899,7 @@ def guardar_fila_editable(
                 prestamo_id = cliente_row[0]
 
         # Crear pago
-        # [A2] Marcar conciliado=True y verificado_concordancia="SI" desde el momento de la creación,
+        # [A2] Marcar conciliado=True y verificado_concordancia="SI" desde el momento de la creaciÃ³n,
         # ya que guardar-fila-editable implica que el pago fue revisado y validado manualmente.
         ref_pago = (numero_doc_norm or (numero_doc or "Carga"))[:_MAX_LEN_NUMERO_DOCUMENTO]
         ahora_conciliacion = datetime.now(ZoneInfo(TZ_NEGOCIO))
@@ -944,7 +944,7 @@ def guardar_fila_editable(
 
 
 def _looks_like_cedula_inline(cedula: str) -> bool:
-    """Validar cédula inline (helper)."""
+    """Validar cÃ©dula inline (helper)."""
     return bool(re.match(r"^[VEJZ]\d{6,11}$", cedula.strip(), re.IGNORECASE))
 
 
@@ -954,7 +954,7 @@ async def upload_conciliacion(
     db: Session = Depends(get_db),
 ):
     """
-    Carga archivo de conciliación (Excel: Fecha de Depósito, Número de Documento).
+    Carga archivo de conciliaciÃ³n (Excel: Fecha de DepÃ³sito, NÃºmero de Documento).
     Marca pagos encontrados por numero_documento como conciliados.
     """
     if not file.filename or not file.filename.lower().endswith((".xlsx", ".xls")):
@@ -985,7 +985,7 @@ async def upload_conciliacion(
                 numero_doc_raw = str(row[1]).strip() if len(row) > 1 and row[1] is not None else ""
                 if not numero_doc_raw:
                     continue
-                # Misma clave canónica que carga/crear: cualquier formato reconocido, búsqueda por valor normalizado
+                # Misma clave canÃ³nica que carga/crear: cualquier formato reconocido, bÃºsqueda por valor normalizado
                 numero_doc = normalize_documento(numero_doc_raw)
                 pago_row = db.execute(
                     select(Pago).where(Pago.numero_documento == numero_doc).limit(1)
@@ -1021,30 +1021,30 @@ async def upload_conciliacion(
         }
     except Exception as e:
         db.rollback()
-        logger.exception("Error upload conciliación: %s", e)
+        logger.exception("Error upload conciliaciÃ³n: %s", e)
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/kpis")
 def get_pagos_kpis(
     mes: Optional[int] = Query(None, ge=1, le=12),
-    año: Optional[int] = Query(None, ge=2000, le=2100),
+    aÃ±o: Optional[int] = Query(None, ge=2000, le=2100),
     fecha_inicio: Optional[str] = Query(None),
     fecha_fin: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
     """
     KPIs de pagos para un mes:
-    1. montoACobrarMes: cuánto dinero debería cobrarse en el mes (cuotas con vencimiento en el mes).
-    2. montoCobradoMes: cuánto dinero se ha cobrado = pagado en el mes.
+    1. montoACobrarMes: cuÃ¡nto dinero deberÃ­a cobrarse en el mes (cuotas con vencimiento en el mes).
+    2. montoCobradoMes: cuÃ¡nto dinero se ha cobrado = pagado en el mes.
     3. morosidadMensualPorcentaje: pago vencido mensual en % (cuotas vencidas no cobradas / cartera * 100).
-    Parámetros: mes (1-12) y año (2000-2100). Si no se envían, se usa el mes actual.
+    ParÃ¡metros: mes (1-12) y aÃ±o (2000-2100). Si no se envÃ­an, se usa el mes actual.
     """
     try:
         hoy = _hoy_local()
-        if mes is not None and año is not None:
-            inicio_mes = hoy.replace(year=año, month=mes, day=1)
-            _, ultimo_dia = calendar.monthrange(año, mes)
+        if mes is not None and aÃ±o is not None:
+            inicio_mes = hoy.replace(year=aÃ±o, month=mes, day=1)
+            _, ultimo_dia = calendar.monthrange(aÃ±o, mes)
             fin_mes = inicio_mes.replace(day=ultimo_dia)
         elif fecha_inicio and fecha_fin:
             try:
@@ -1070,7 +1070,7 @@ def get_pagos_kpis(
         ]
         base_where = and_(*conds_activo)
 
-        # Una sola consulta con agregación condicional para los 5 montos (menos round-trips a BD)
+        # Una sola consulta con agregaciÃ³n condicional para los 5 montos (menos round-trips a BD)
         aggr = select(
             func.coalesce(
                 func.sum(
@@ -1157,7 +1157,7 @@ def get_pagos_kpis(
             else 0.0
         )
 
-        # Conteos: clientes en mora y clientes con préstamo (2 consultas ligeras)
+        # Conteos: clientes en mora y clientes con prÃ©stamo (2 consultas ligeras)
         subq = (
             select(Prestamo.cliente_id)
             .select_from(Cuota)
@@ -1180,13 +1180,14 @@ def get_pagos_kpis(
         clientes_al_dia = max(0, clientes_con_prestamo - clientes_en_mora)
 
         mes_resp = mes if mes is not None else inicio_mes.month
-        año_resp = año if año is not None else inicio_mes.year
+        aÃ±o_resp = aÃ±o if aÃ±o is not None else inicio_mes.year
         return {
             "montoACobrarMes": _safe_float(monto_a_cobrar_mes),
             "montoCobradoMes": _safe_float(monto_cobrado_mes),
             "morosidadMensualPorcentaje": round(morosidad_porcentaje, 2),
             "mes": mes_resp,
-            "año": año_resp,
+            "anio": año_resp,
+            "aÃ±o": aÃ±o_resp,
             "saldoPorCobrar": _safe_float(cartera_pendiente),
             "clientesEnMora": clientes_en_mora,
             "clientesAlDia": clientes_al_dia,
@@ -1203,7 +1204,8 @@ def get_pagos_kpis(
             "montoCobradoMes": 0.0,
             "morosidadMensualPorcentaje": 0.0,
             "mes": mes if mes is not None else hoy.month,
-            "año": año if año is not None else hoy.year,
+            "anio": año if año is not None else hoy.year,
+            "aÃ±o": aÃ±o if aÃ±o is not None else hoy.year,
             "saldoPorCobrar": 0.0,
             "clientesEnMora": 0,
             "clientesAlDia": 0,
@@ -1211,7 +1213,7 @@ def get_pagos_kpis(
 
 
 def _stats_conds_cuota(analista: Optional[str], concesionario: Optional[str], modelo: Optional[str]):
-    """Condiciones base para filtrar cuotas por préstamo (solo clientes ACTIVOS + analista/concesionario/modelo)."""
+    """Condiciones base para filtrar cuotas por prÃ©stamo (solo clientes ACTIVOS + analista/concesionario/modelo)."""
     conds = [
         Cuota.prestamo_id == Prestamo.id,
         Prestamo.cliente_id == Cliente.id,
@@ -1237,7 +1239,7 @@ def get_pagos_stats(
     db: Session = Depends(get_db),
 ):
     """
-    Estadísticas de pagos desde BD (solo clientes ACTIVOS): total_pagos, total_pagado, pagos_por_estado,
+    EstadÃ­sticas de pagos desde BD (solo clientes ACTIVOS): total_pagos, total_pagado, pagos_por_estado,
     cuotas_pagadas, cuotas_pendientes, cuotas_atrasadas, pagos_hoy.
     """
     hoy = _hoy_local()
@@ -1320,7 +1322,7 @@ def get_pagos_stats(
 @router.post("/revisar-pagos/mover", response_model=dict)
 def mover_a_revisar_pagos(payload: MoverRevisarPagosBody = Body(...), db: Session = Depends(get_db)):
     """
-    Mueve los pagos exportados a la tabla revisar_pagos (temporal de validación).
+    Mueve los pagos exportados a la tabla revisar_pagos (temporal de validaciÃ³n).
     Tras descargar Excel y guardar en PC, estos pagos dejan de mostrarse en Revisar Pagos.
     No interfiere con procesos ni reglas de negocio.
     """
@@ -1351,7 +1353,7 @@ def obtener_pago(pago_id: int, db: Session = Depends(get_db)):
 def _numero_documento_ya_existe(
     db: Session, numero_documento: Optional[str], exclude_pago_id: Optional[int] = None
 ) -> bool:
-    """Regla general: no duplicados en documentos. Comprueba si ya existe un pago con ese Nº documento."""
+    """Regla general: no duplicados en documentos. Comprueba si ya existe un pago con ese NÂº documento."""
     num = normalize_documento(numero_documento)
     if not num:
         return False
@@ -1368,14 +1370,14 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
     if num_doc and _numero_documento_ya_existe(db, num_doc):
         raise HTTPException(
             status_code=409,
-            detail="Ya existe un pago con ese Nº de documento. Regla general: no se aceptan duplicados en documentos.",
+            detail="Ya existe un pago con ese NÂº de documento. Regla general: no se aceptan duplicados en documentos.",
         )
     ref = (num_doc or "N/A")[:_MAX_LEN_NUMERO_DOCUMENTO]
     fecha_pago_ts = datetime.combine(payload.fecha_pago, dt_time.min)
     conciliado = payload.conciliado if payload.conciliado is not None else False  # [B2] Default False
     usuario_email = current_user.email if current_user else "sistema@rapicredit.com"
     
-    # Normalizar cédula: uppercase para evitar FK mismatch
+    # Normalizar cÃ©dula: uppercase para evitar FK mismatch
     cedula_normalizada = payload.cedula_cliente.strip().upper() if payload.cedula_cliente else ""
     
     # Validar que cedula existe en clientes si se proporciona y hay prestamo_id
@@ -1409,8 +1411,8 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
     db.refresh(row)
     # [C3] Aplicar FIFO a cuotas siempre que el pago tenga prestamo_id,
     # independientemente de si conciliado=True. El flag conciliado es una
-    # confirmación bancaria separada; la distribución de cuotas debe ocurrir
-    # en cuanto el pago está asociado a un préstamo.
+    # confirmaciÃ³n bancaria separada; la distribuciÃ³n de cuotas debe ocurrir
+    # en cuanto el pago estÃ¡ asociado a un prÃ©stamo.
     if row.prestamo_id and float(row.monto_pagado or 0) > 0:
         try:
             _aplicar_pago_a_cuotas_interno(row, db)
@@ -1425,7 +1427,7 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
 
 @router.put("/{pago_id}", response_model=dict)
 def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get_db)):
-    """Actualiza un pago en la tabla pagos. Nº documento no puede repetirse."""
+    """Actualiza un pago en la tabla pagos. NÂº documento no puede repetirse."""
     row = db.get(Pago, pago_id)
     if not row:
         raise HTTPException(status_code=404, detail="Pago no encontrado")
@@ -1435,7 +1437,7 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
         if num_doc and _numero_documento_ya_existe(db, num_doc, exclude_pago_id=pago_id):
             raise HTTPException(
                 status_code=409,
-                detail="Ya existe otro pago con ese Nº de documento. Regla general: no se aceptan duplicados en documentos.",
+                detail="Ya existe otro pago con ese NÂº de documento. Regla general: no se aceptan duplicados en documentos.",
             )
     aplicar_conciliado = False
     for k, v in data.items():
@@ -1464,7 +1466,7 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
     if aplicar_conciliado and row.prestamo_id and float(row.monto_pagado or 0) > 0:
         try:
             cuotas_completadas, cuotas_parciales = _aplicar_pago_a_cuotas_interno(row, db)
-            # PAGADO si se abonó a alguna cuota o si no había cuotas pendientes (pago procesado para el préstamo)
+            # PAGADO si se abonÃ³ a alguna cuota o si no habÃ­a cuotas pendientes (pago procesado para el prÃ©stamo)
             row.estado = "PAGADO"
             db.commit()
             db.refresh(row)
@@ -1486,20 +1488,20 @@ def eliminar_pago(pago_id: int, db: Session = Depends(get_db)):
 
 def _estado_cuota_por_cobertura(total_pagado: float, monto_cuota: float, fecha_vencimiento: date) -> str:
     """
-    [MORA] Determina estado según cobertura y fecha de vencimiento.
-    Usa la nueva clasificación: PENDIENTE | VENCIDO (1-90d) | MORA (>90d) | PAGO_ADELANTADO
+    [MORA] Determina estado segÃºn cobertura y fecha de vencimiento.
+    Usa la nueva clasificaciÃ³n: PENDIENTE | VENCIDO (1-90d) | MORA (>90d) | PAGO_ADELANTADO
     """
     dias_mora = _calcular_dias_mora(fecha_vencimiento)
     return _clasificar_nivel_mora(dias_mora, total_pagado, monto_cuota)
     # Nota: Si total_pagado > 0 pero < monto_cuota:
-    #   - _clasificar_nivel_mora devuelve VENCIDO o MORA según días
+    #   - _clasificar_nivel_mora devuelve VENCIDO o MORA segÃºn dÃ­as
     # Si total_pagado == 0:
     #   - devuelve PENDIENTE si dias_mora == 0, sino VENCIDO/MORA
 
 
 def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
     """
-    Aplica el monto del pago a cuotas del préstamo. Reglas de negocio.
+    Aplica el monto del pago a cuotas del prÃ©stamo. Reglas de negocio.
     Crea registros en cuota_pagos para historial completo (no solo sobrescribe pago_id).
     Retorna (cuotas_completadas, cuotas_parciales). No hace commit.
     """
@@ -1560,16 +1562,16 @@ def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
             c.fecha_pago = fecha_pago_date
             estado_nuevo = "PAGADO"
             if not _validar_transicion_estado_cuota(c.estado, estado_nuevo):  # [validar_transiciones]
-                logger.warning(f"Transición de estado inválida en cuota {c.id}: {c.estado} → {estado_nuevo}")
-                c.estado = estado_nuevo  # Forzar transición igualmente (log informativo)
+                logger.warning(f"TransiciÃ³n de estado invÃ¡lida en cuota {c.id}: {c.estado} â†’ {estado_nuevo}")
+                c.estado = estado_nuevo  # Forzar transiciÃ³n igualmente (log informativo)
             else:
                 c.estado = estado_nuevo
-            c.dias_mora = 0  # [M5] Sin mora si está pagada
+            c.dias_mora = 0  # [M5] Sin mora si estÃ¡ pagada
             cuotas_completadas += 1
         else:
             estado_nuevo = _estado_cuota_por_cobertura(nuevo_total, monto_cuota, fecha_venc)
             if not _validar_transicion_estado_cuota(c.estado, estado_nuevo):  # [validar_transiciones]
-                logger.warning(f"Transición de estado inválida en cuota {c.id}: {c.estado} → {estado_nuevo}")
+                logger.warning(f"TransiciÃ³n de estado invÃ¡lida en cuota {c.id}: {c.estado} â†’ {estado_nuevo}")
             c.estado = estado_nuevo
             c.dias_mora = _calcular_dias_mora(fecha_venc)  # [M5] Calcular mora
             cuotas_parciales += 1
@@ -1580,8 +1582,8 @@ def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
 @router.post("/{pago_id}/aplicar-cuotas", response_model=dict)
 def aplicar_pago_a_cuotas(pago_id: int, db: Session = Depends(get_db)):
     """
-    Aplica el monto del pago a cuotas del préstamo (por orden de numero_cuota).
-    Reglas de negocio: 100% cubierta → PAGADO; parcial + futuro → PAGO_ADELANTADO; parcial + vencido → PENDIENTE.
+    Aplica el monto del pago a cuotas del prÃ©stamo (por orden de numero_cuota).
+    Reglas de negocio: 100% cubierta â†’ PAGADO; parcial + futuro â†’ PAGO_ADELANTADO; parcial + vencido â†’ PENDIENTE.
     Actualiza pago.estado a PAGADO cuando se aplica a cuotas.
     """
     pago = db.get(Pago, pago_id)
@@ -1592,21 +1594,21 @@ def aplicar_pago_a_cuotas(pago_id: int, db: Session = Depends(get_db)):
             "success": False,
             "cuotas_completadas": 0,
             "cuotas_parciales": 0,
-            "message": "El pago no tiene préstamo asociado.",
+            "message": "El pago no tiene prÃ©stamo asociado.",
         }
     monto_restante = float(pago.monto_pagado) if pago.monto_pagado else 0
     if monto_restante <= 0:
         return {"success": True, "cuotas_completadas": 0, "cuotas_parciales": 0, "message": "Monto del pago es cero."}
     try:
         cuotas_completadas, cuotas_parciales = _aplicar_pago_a_cuotas_interno(pago, db)
-        # PAGADO siempre que se procese para el préstamo (haya o no cuotas pendientes)
+        # PAGADO siempre que se procese para el prÃ©stamo (haya o no cuotas pendientes)
         pago.estado = "PAGADO"
         db.commit()
         return {
             "success": True,
             "cuotas_completadas": cuotas_completadas,
             "cuotas_parciales": cuotas_parciales,
-            "message": f"Se aplicó el pago: {cuotas_completadas} cuota(s) completadas, {cuotas_parciales} parcial(es).",
+            "message": f"Se aplicÃ³ el pago: {cuotas_completadas} cuota(s) completadas, {cuotas_parciales} parcial(es).",
         }
     except HTTPException:
         raise
@@ -1617,6 +1619,7 @@ def aplicar_pago_a_cuotas(pago_id: int, db: Session = Depends(get_db)):
             status_code=500,
             detail=f"Error al aplicar el pago a cuotas: {str(e)}",
         ) from e
+
 
 
 

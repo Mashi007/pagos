@@ -1759,3 +1759,4 @@ def resolver_prestamo_error(error_id: int, db: Session = Depends(get_db)):
     db.delete(row)
     db.commit()
     return None
+
