@@ -46,9 +46,11 @@ def _credentials_oauth(scopes: List[str]) -> Optional[Any]:
     client_secret = get_google_oauth_client_secret()
     refresh_token = get_google_oauth_refresh_token()
     if not client_id or not client_secret or not refresh_token:
+        missing = [k for k, v in [("google_oauth_client_id", client_id), ("google_oauth_client_secret", client_secret), ("google_oauth_refresh_token", refresh_token)] if not (v and str(v).strip())]
         logger.warning(
-            "[INFORME_PAGOS] OAuth: faltan client_id (%s), client_secret (%s) o refresh_token (%s).",
-            "OK" if client_id else "VACÍO", "OK" if client_secret else "VACÍO", "OK" if refresh_token else "VACÍO",
+            "[INFORME_PAGOS] [CONFIG] OAuth no puede usarse: faltan en BD (informe_pagos_config): %s. "
+            "Configure estos campos en Configuración > Informe de pagos o bien use GOOGLE_CLIENT_ID/SECRET y GMAIL_TOKENS_PATH por env.",
+            ", ".join(missing) or "client_id, client_secret o refresh_token",
         )
         return None
     try:
@@ -64,7 +66,14 @@ def _credentials_oauth(scopes: List[str]) -> Optional[Any]:
         logger.info("[INFORME_PAGOS] OAuth: credenciales refrescadas OK.")
         return creds
     except Exception as e:
+        err_str = str(e).lower()
         logger.exception("[INFORME_PAGOS] OAuth FALLO: error refrescando credenciales: %s", e)
+        if "invalid_client" in err_str or "unauthorized" in err_str:
+            logger.warning(
+                "[CONFIG] Google devolvió 'invalid_client'/'Unauthorized': "
+                "revisar que GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET (env o BD informe_pagos) coincidan exactamente con Google Cloud Console > APIs y servicios > Credenciales > OAuth 2.0. "
+                "Si regeneró el Client Secret, actualícelo en Render/BD."
+            )
         return None
 
 

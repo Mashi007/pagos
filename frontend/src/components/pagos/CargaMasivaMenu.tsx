@@ -5,6 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/pop
 import { ExcelUploaderPagosUI } from './ExcelUploaderPagosUI'
 import { ConciliacionExcelUploader } from './ConciliacionExcelUploader'
 import toast from 'react-hot-toast'
+import { getErrorMessage } from '../../types/errors'
 import { pagoService } from '../../services/pagoService'
 
 interface CargaMasivaMenuProps {
@@ -41,8 +42,7 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
       toast.success('Excel generado desde Gmail descargado.')
       pagoService.getGmailStatus().then(setGmailStatus)
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Error al generar Excel desde Gmail.'
-      toast.error(msg)
+      toast.error(getErrorMessage(e))
     } finally {
       setLoadingGmail(false)
     }

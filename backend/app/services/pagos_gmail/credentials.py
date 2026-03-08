@@ -13,6 +13,57 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Prefijo para que en logs sea fácil buscar qué está mal configurado
+CONFIG_LOG_PREFIX = "[PAGOS_GMAIL_CONFIG]"
+
+
+def log_pagos_gmail_config_status() -> None:
+    """
+    Escribe en log el estado de la configuración (sin valores sensibles) para diagnosticar
+    por qué falla el pipeline. Buscar en logs "[PAGOS_GMAIL_CONFIG]" para ver qué falta.
+    """
+    items = []
+    # Env / settings (pipeline directo)
+    client_id = getattr(settings, "GOOGLE_CLIENT_ID", None)
+    client_secret = getattr(settings, "GOOGLE_CLIENT_SECRET", None)
+    tokens_path = getattr(settings, "GMAIL_TOKENS_PATH", "gmail_tokens.json") or "gmail_tokens.json"
+    has_file = os.path.isfile(tokens_path)
+    items.append(f"GOOGLE_CLIENT_ID={('OK' if (client_id and client_id.strip()) else 'NO CONFIGURADO')}")
+    items.append(f"GOOGLE_CLIENT_SECRET={('OK' if (client_secret and client_secret.strip()) else 'NO CONFIGURADO')}")
+    items.append(f"GMAIL_TOKENS_PATH={tokens_path} (archivo {'existe' if has_file else 'NO EXISTE'})")
+    if has_file:
+        try:
+            with open(tokens_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            has_refresh = bool(data.get("refresh_token"))
+            items.append(f"refresh_token en archivo={'OK' if has_refresh else 'NO'}")
+        except Exception as e:
+            items.append(f"lectura archivo tokens: error ({e})")
+    # Fallback: informe_pagos (BD)
+    try:
+        from app.core.informe_pagos_config_holder import (
+            get_google_oauth_client_id,
+            get_google_oauth_client_secret,
+            get_google_oauth_refresh_token,
+            sync_from_db,
+        )
+        sync_from_db()
+        cid = get_google_oauth_client_id()
+        csec = get_google_oauth_client_secret()
+        ref = get_google_oauth_refresh_token()
+        items.append(
+            f"informe_pagos (BD): client_id={'OK' if (cid and cid.strip()) else 'NO'}, "
+            f"client_secret={'OK' if (csec and csec.strip()) else 'NO'}, "
+            f"refresh_token={'OK' if (ref and ref.strip()) else 'NO'}"
+        )
+    except Exception as e:
+        items.append(f"informe_pagos (BD): no disponible ({e})")
+    # Gemini (necesario para extraer datos de comprobantes)
+    gemini_key = getattr(settings, "GEMINI_API_KEY", None)
+    items.append(f"GEMINI_API_KEY={('OK' if (gemini_key and gemini_key.strip()) else 'NO CONFIGURADO')}")
+    logger.warning("%s Estado: %s", CONFIG_LOG_PREFIX, " | ".join(items))
+
+
 SCOPES_GMAIL_DRIVE_SHEETS = [
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/gmail.modify",
@@ -31,13 +82,24 @@ def get_pagos_gmail_credentials() -> Optional[Any]:
     client_id = getattr(settings, "GOOGLE_CLIENT_ID", None)
     client_secret = getattr(settings, "GOOGLE_CLIENT_SECRET", None)
     tokens_path = getattr(settings, "GMAIL_TOKENS_PATH", "gmail_tokens.json")
-    if client_id and client_secret and tokens_path and os.path.isfile(tokens_path):
+    if not client_id or not client_secret:
+        logger.warning(
+            "%s No se usa archivo de tokens: GOOGLE_CLIENT_ID o GOOGLE_CLIENT_SECRET no configurados (env).",
+            CONFIG_LOG_PREFIX,
+        )
+    elif not tokens_path or not os.path.isfile(tokens_path):
+        logger.warning(
+            "%s No se usa archivo de tokens: GMAIL_TOKENS_PATH vacío o archivo no existe (%s).",
+            CONFIG_LOG_PREFIX, tokens_path or "(vacío)",
+        )
+    elif client_id and client_secret and tokens_path and os.path.isfile(tokens_path):
         try:
             with open(tokens_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             refresh_token = data.get("refresh_token")
             if not refresh_token:
-                logger.warning("[PAGOS_GMAIL] No refresh_token en %s", tokens_path)
+                logger.warning("%s Archivo %s no contiene refresh_token. Revisar contenido del archivo.", CONFIG_LOG_PREFIX, tokens_path)
+                log_pagos_gmail_config_status()
                 return _fallback_informe_pagos_creds()
             from google.oauth2.credentials import Credentials
             from google.auth.transport.requests import Request
@@ -55,7 +117,14 @@ def get_pagos_gmail_credentials() -> Optional[Any]:
             return creds
         except Exception as e:
             logger.exception("[PAGOS_GMAIL] Error cargando/refrescando tokens: %s", e)
-    return _fallback_informe_pagos_creds()
+            log_pagos_gmail_config_status()
+    else:
+        log_pagos_gmail_config_status()
+
+    creds_fallback = _fallback_informe_pagos_creds()
+    if creds_fallback is None:
+        log_pagos_gmail_config_status()
+    return creds_fallback
 
 
 def _fallback_informe_pagos_creds() -> Optional[Any]:

@@ -37,6 +37,7 @@ import { ConciliacionExcelUploader } from './ConciliacionExcelUploader'
 import { PagosListResumen } from './PagosListResumen'
 import { PagosKPIsNuevo } from './PagosKPIsNuevo'
 import { toast } from 'sonner'
+import { getErrorMessage } from '../../types/errors'
 import { useSearchParams } from 'react-router-dom'
 
 export function PagosList() {
@@ -87,8 +88,7 @@ export function PagosList() {
       toast.success('Excel generado desde Gmail descargado.')
       pagoService.getGmailStatus().then(setGmailStatus)
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Error al generar Excel desde Gmail.'
-      toast.error(msg)
+      toast.error(getErrorMessage(e))
     } finally {
       setLoadingGmail(false)
     }

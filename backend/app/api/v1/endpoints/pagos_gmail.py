@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.pagos_gmail_sync import PagosGmailSync, PagosGmailSyncItem
+from app.services.pagos_gmail.credentials import log_pagos_gmail_config_status
 from app.services.pagos_gmail.pipeline import run_pipeline
 
 logger = logging.getLogger(__name__)
@@ -48,7 +49,11 @@ def run_now(db: Session = Depends(get_db)):
         )
     sync_id, status = run_pipeline(db)
     if status == "no_credentials":
-        raise HTTPException(status_code=503, detail="Gmail/Google no configurado. Configure GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET y tokens.")
+        log_pagos_gmail_config_status()
+        raise HTTPException(
+            status_code=503,
+            detail="Gmail/Google no configurado o credenciales inválidas. Si en los logs aparece 'invalid_client', compruebe GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET en Render y en Google Cloud Console (OAuth 2.0).",
+        )
     return {"sync_id": sync_id, "status": status}
 
 

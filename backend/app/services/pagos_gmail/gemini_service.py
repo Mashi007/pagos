@@ -25,6 +25,10 @@ def extract_payment_data(file_content: bytes, filename: str, api_key: Optional[s
     """
     key = api_key or getattr(settings, "GEMINI_API_KEY", None)
     if not key:
+        logger.warning(
+            "[CONFIG] GEMINI_API_KEY no configurado. Configure la variable de entorno GEMINI_API_KEY "
+            "(obtener en https://aistudio.google.com/apikey) para extraer datos de comprobantes."
+        )
         return _empty_result("GEMINI_API_KEY no configurado")
     model_name = getattr(settings, "GEMINI_MODEL", "gemini-1.5-flash")
     mime = get_mime_type(filename)
