@@ -201,6 +201,17 @@ def login(credentials: LoginRequest, request: Request, db: Session = Depends(get
 
     email = credentials.email.lower().strip()
 
+    # Recordarme: token largo (dias) o normal (minutos)
+    remember = credentials.remember if credentials.remember is not None else True
+    if remember:
+        access_expire_minutes = settings.REMEMBER_ME_ACCESS_TOKEN_EXPIRE_DAYS * 24 * 60
+        refresh_expire_days = settings.REMEMBER_ME_REFRESH_TOKEN_EXPIRE_DAYS
+        expires_in_seconds = access_expire_minutes * 60
+    else:
+        access_expire_minutes = None
+        refresh_expire_days = None
+        expires_in_seconds = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+
     # 1) Buscar usuario en BD
     u = db.query(User).filter(User.email == email).first()
     if u:
@@ -219,13 +230,13 @@ def login(credentials: LoginRequest, request: Request, db: Session = Depends(get
         db.commit()
         db.refresh(u)
         user = user_to_response(u)
-        access_token = create_access_token(subject=user.email, extra={"email": user.email})
-        refresh_token = create_refresh_token(subject=user.email)
+        access_token = create_access_token(subject=user.email, extra={"email": user.email}, expire_minutes=access_expire_minutes)
+        refresh_token = create_refresh_token(subject=user.email, expire_days=refresh_expire_days)
         return LoginResponse(
             access_token=access_token,
             refresh_token=refresh_token,
             token_type="bearer",
-            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            expires_in=expires_in_seconds,
             user=user,
         )
 
@@ -247,13 +258,13 @@ def login(credentials: LoginRequest, request: Request, db: Session = Depends(get
         )
     _LOGIN_ATTEMPTS[client_ip] = []
     user = _fake_user(settings.ADMIN_EMAIL)
-    access_token = create_access_token(subject=user.email, extra={"email": user.email})
-    refresh_token = create_refresh_token(subject=user.email)
+    access_token = create_access_token(subject=user.email, extra={"email": user.email}, expire_minutes=access_expire_minutes)
+    refresh_token = create_refresh_token(subject=user.email, expire_days=refresh_expire_days)
     return LoginResponse(
         access_token=access_token,
         refresh_token=refresh_token,
         token_type="bearer",
-        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        expires_in=expires_in_seconds,
         user=user,
     )
 

@@ -1,33 +1,33 @@
-/**
- * Constantes del dashboard: períodos y etiquetas.
- * Una sola fuente de verdad para evitar desajustes (ej. "día" vs "dia").
+﻿/**
+ * Constantes del dashboard: periodos y etiquetas.
+ * Usamos secuencias Unicode para evitar problemas de codificacion en el navegador.
  */
 
-/** Valor del período "Hoy" (usado en Select y en cálculo de fechas) */
-export const PERIODO_DIA = 'día' as const
+/** Valor del periodo "Hoy" (usado en Select y en calculo de fechas) */
+export const PERIODO_DIA = 'd\u00EDa' as const
 
-/** Valores de período admitidos en el selector general */
+/** Valores de periodo admitidos en el selector general */
 export const PERIODOS_VALORES = [
   'ultimos_12_meses',
   PERIODO_DIA,
   'semana',
   'mes',
-  'año',
+  'a\u00F1o',
 ] as const
 
 export type PeriodoValor = (typeof PERIODOS_VALORES)[number]
 
 /** Etiquetas para mostrar en la UI */
 export const PERIODOS_ETIQUETAS: Record<string, string> = {
-  ultimos_12_meses: 'Últimos 12 meses',
-  día: 'Hoy',
+  ultimos_12_meses: 'Ultimos 12 meses',
+  'd\u00EDa': 'Hoy',
   dia: 'Hoy',
   semana: 'Esta semana',
   mes: 'Este mes',
-  año: 'Este año',
+  'a\u00F1o': 'Este a\u00F1o',
 }
 
-/** Obtiene la etiqueta de un período (acepta "día" o "dia") */
+/** Obtiene la etiqueta de un periodo (acepta "dia" o "d\u00EDa") */
 export function getPeriodoEtiqueta(periodo: string): string {
-  return PERIODOS_ETIQUETAS[periodo] ?? 'Últimos 12 meses'
+  return PERIODOS_ETIQUETAS[periodo] ?? 'Ultimos 12 meses'
 }

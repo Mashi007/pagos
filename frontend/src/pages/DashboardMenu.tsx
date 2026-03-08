@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+﻿import { useState, useMemo, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -154,7 +154,7 @@ export function DashboardMenu() {
 
   // Batch 3: Morosidad por dÃ­a (desde tabla cuotas). Respeta rango del perÃ­odo (ej. desde 2025).
   const periodoTendencia = getPeriodoGrafico('tendencia') || periodo || 'ultimos_12_meses'
-  const diasMorosidad = (periodoTendencia === 'dia' || periodoTendencia === 'dÃ­a') ? 7 : periodoTendencia === 'semana' ? 14 : periodoTendencia === 'mes' ? 30 : 90
+  const diasMorosidad = (periodoTendencia === 'dia' || periodoTendencia === 'd\u00EDa') ? 7 : periodoTendencia === 'semana' ? 14 : periodoTendencia === 'mes' ? 30 : 90
   const { data: datosMorosidadPorDia, isLoading: loadingMorosidadPorDia } = useQuery({
     queryKey: ['morosidad-por-dia', periodoTendencia, diasMorosidad, JSON.stringify(filtros)],
     queryFn: async () => {
@@ -356,7 +356,7 @@ export function DashboardMenu() {
       const fIni = new Date(obj.fecha_inicio)
       const fFin = new Date(obj.fecha_fin)
       const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' }
-      return `${fIni.toLocaleDateString('es-ES', opts)} â€“ ${fFin.toLocaleDateString('es-ES', opts)}`
+      return `${fIni.toLocaleDateString('es-ES', opts)}  \u2013  ${fFin.toLocaleDateString('es-ES', opts)}`
     }
     return getPeriodoEtiqueta(periodo)
   }, [periodo, filtros, construirFiltrosObject])
@@ -369,7 +369,7 @@ export function DashboardMenu() {
       const fIni = new Date(obj.fecha_inicio)
       const fFin = new Date(obj.fecha_fin)
       const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' }
-      return `${fIni.toLocaleDateString('es-ES', opts)} â€“ ${fFin.toLocaleDateString('es-ES', opts)}`
+      return `${fIni.toLocaleDateString('es-ES', opts)}  \u2013  ${fFin.toLocaleDateString('es-ES', opts)}`
     }
     return getPeriodoEtiqueta(p)
   }
@@ -452,7 +452,7 @@ export function DashboardMenu() {
                   <div className="absolute inset-0 h-2 w-2 rounded-full bg-emerald-400 animate-ping opacity-75"></div>
                 </div>
                 <p className="text-gray-600 font-semibold text-sm tracking-wide">
-                  Bienvenido, <span className="text-cyan-600 font-black">{userName}</span> â€¢ Monitoreo EstratÃ©gico
+                  Bienvenido, <span className="text-cyan-600 font-black">{userName}</span>  \u2022  Monitoreo Estrat\u00E9gico
                 </p>
               </div>
             </div>
@@ -719,7 +719,7 @@ export function DashboardMenu() {
                       <div className="flex items-center gap-2">
                         <SelectorPeriodoGrafico chartId="tendencia" />
                         <Badge variant="secondary" className="text-xs font-medium text-gray-600 bg-white/80 border border-gray-200">
-                          {(periodoTendencia === 'dia' || periodoTendencia === 'dÃ­a') ? '7 dÃ­as' : periodoTendencia === 'semana' ? '14 dÃ­as' : periodoTendencia === 'mes' ? '30 dÃ­as' : '90 dÃ­as'}
+                          {(periodoTendencia === 'dia' || periodoTendencia === 'd\u00EDa') ? '7 d\u00EDas' : periodoTendencia === 'semana' ? '14 d\u00EDas' : periodoTendencia === 'mes' ? '30 d\u00EDas' : '90 d\u00EDas'}
                         </Badge>
                       </div>
                     </div>
@@ -749,7 +749,7 @@ export function DashboardMenu() {
                 </Card>
               </motion.div>
 
-            {/* Monto programado por dÃ­a: hoy hasta una semana despuÃ©s */}
+            {/* Monto programado por dÃ­a: hoy hasta una semana despu\u00E9s */}
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -767,7 +767,7 @@ export function DashboardMenu() {
                       </Badge>
                     </div>
                     <CardDescription className="text-gray-600 text-sm">
-                      Suma de monto_cuota (cuotas con vencimiento cada dÃ­a) desde hoy hasta 7 dÃ­as despuÃ©s
+                      Suma de monto_cuota (cuotas con vencimiento cada d\u00EDa) desde hoy hasta 7 d\u00EDas despu\u00E9s
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="p-6 pt-4">
@@ -785,7 +785,7 @@ export function DashboardMenu() {
                         </BarChart>
                       </ResponsiveContainer>
                     ) : (
-                      <div className="flex items-center justify-center py-16 text-gray-500">No hay datos de monto programado para los prÃ³ximos 7 dÃ­as</div>
+                      <div className="flex items-center justify-center py-16 text-gray-500">No hay datos de monto programado para los prÃ³ximos 7 d\u00EDas</div>
                     )}
                   </CardContent>
                 </Card>
@@ -961,7 +961,7 @@ export function DashboardMenu() {
                     </div>
                   </div>
                   <p className="text-xs text-gray-600 mt-1">
-                  Cuotas vencidas sin pagar. 1-30, 31-60 y 61-89 dÃ­as = Vencido; 90+ dÃ­as = Moroso (snapshot al dÃ­a de hoy).
+                  Cuotas vencidas sin pagar. 1-30, 31-60 y 61-89 d\u00EDas = Vencido; 90+ d\u00EDas = Moroso (snapshot al dÃ­a de hoy).
                 </p>
                 </CardHeader>
                 <CardContent className="p-6 flex-1">
@@ -987,7 +987,7 @@ export function DashboardMenu() {
               </Card>
             </motion.div>
 
-          {/* Cantidad de prÃ©stamos en mora por rango de dÃ­as */}
+          {/* Cantidad de prÃ©stamos en mora por rango de d\u00EDas */}
           <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1009,7 +1009,7 @@ export function DashboardMenu() {
                     </div>
                   </div>
                   <p className="text-xs text-gray-600 mt-1">
-                    PrÃ©stamos con cuotas vencidas sin pagar. 1-30, 31-60 y 61-89 dÃ­as = Vencido; 90+ dÃ­as = Moroso (snapshot al dÃ­a de hoy).
+                    PrÃ©stamos con cuotas vencidas sin pagar. 1-30, 31-60 y 61-89 d\u00EDas = Vencido; 90+ d\u00EDas = Moroso (snapshot al dÃ­a de hoy).
                   </p>
                 </CardHeader>
                 <CardContent className="p-6 flex-1">

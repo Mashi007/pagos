@@ -1,4 +1,4 @@
-"""
+﻿"""
 Configuración del sistema usando Pydantic Settings
 """
 import json
@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     )
     # Refresh token: duración en días (solo para renovar access token; no obliga a login hasta que expire).
     REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=7, description="Días hasta que expire el refresh token")
+    REMEMBER_ME_ACCESS_TOKEN_EXPIRE_DAYS: int = Field(default=30, description="Dias del access token cuando Recordarme esta activo")
+    REMEMBER_ME_REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=90, description="Dias del refresh token cuando Recordarme esta activo")
 
     # Usuario admin único (auth sin tabla users). Opcional.
     ADMIN_EMAIL: Optional[str] = Field(None, description="Email del usuario admin para login")
