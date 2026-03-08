@@ -2,7 +2,7 @@
 API v1
 """
 from fastapi import APIRouter
-from app.api.v1.endpoints import whatsapp, auth, configuracion, configuracion_informe_pagos, pagos, pagos_con_errores, prestamos, notificaciones, notificaciones_tabs, dashboard, auditoria, clientes, tickets, comunicaciones, validadores, usuarios, modelos_vehiculos, analistas, concesionarios, ai_training, revision_manual, health
+from app.api.v1.endpoints import whatsapp, auth, configuracion, configuracion_informe_pagos, pagos, pagos_gmail, pagos_con_errores, prestamos, notificaciones, notificaciones_tabs, dashboard, auditoria, clientes, tickets, comunicaciones, validadores, usuarios, modelos_vehiculos, analistas, concesionarios, ai_training, revision_manual, health
 from app.api.v1.endpoints.dashboard import kpis
 from app.api.v1.endpoints.reportes import router as reportes_router
 
@@ -60,6 +60,12 @@ api_router.include_router(
     tags=["pagos"],
 )
 
+# Pagos Gmail (pipeline Gmail -> Drive -> Gemini -> Sheets)
+api_router.include_router(
+    pagos_gmail.router,
+    prefix="/pagos/gmail",
+    tags=["pagos-gmail"],
+)
 # Préstamos (datos reales BD: listado, stats, CRUD)
 api_router.include_router(
     prestamos.router,

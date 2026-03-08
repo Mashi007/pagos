@@ -74,6 +74,32 @@ def _job_informe_pagos_email() -> None:
         logger.exception("Error en job informe_pagos_email: %s", e)
 
 
+
+def _job_pagos_gmail_pipeline() -> None:
+    """Job cada 15 min: Gmail -> Drive -> Gemini -> Sheets (modulo Pagos)."""
+    db = SessionLocal()
+    try:
+        from app.api.v1.endpoints.pagos_gmail import _is_pipeline_running
+        from app.services.pagos_gmail.pipeline import run_pipeline
+        if _is_pipeline_running(db):
+            logger.info("Pagos Gmail pipeline: omitido (ya hay una ejecucion en curso)")
+            return
+        sync_id, status = run_pipeline(db)
+        logger.info("Pagos Gmail pipeline: sync_id=%s status=%s", sync_id, status)
+    except Exception as e:
+        logger.exception("Error en job pagos_gmail_pipeline: %s", e)
+    finally:
+        db.close()
+
+
+def _job_pagos_gmail_sheet_2359() -> None:
+    """Job 23:59: crear hoja del dia siguiente (Pagos_Cobros_DDMesAAAA)."""
+    try:
+        from app.services.pagos_gmail.cron_helpers import ensure_sheet_for_tomorrow
+        ensure_sheet_for_tomorrow()
+    except Exception as e:
+        logger.exception("Error en job pagos_gmail_sheet_2359: %s", e)
+
 def start_scheduler() -> None:
     """Inicia el scheduler: notificaciones 2:00; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30."""
     global _scheduler
@@ -120,6 +146,21 @@ def start_scheduler() -> None:
         id="informe_pagos_4h30",
         name="Email informe pagos 16:30",
     )
+    # Pagos Gmail: pipeline cada 15 min
+    _scheduler.add_job(
+        _job_pagos_gmail_pipeline,
+        CronTrigger(minute="*/15", timezone=SCHEDULER_TZ),
+        id="pagos_gmail_pipeline",
+        name="Pagos Gmail pipeline (cada 15 min)",
+    )
+    # Pagos Gmail: crear hoja del dia siguiente a las 23:59
+    _scheduler.add_job(
+        _job_pagos_gmail_sheet_2359,
+        CronTrigger(hour=23, minute=59, timezone=SCHEDULER_TZ),
+        id="pagos_gmail_sheet_2359",
+        name="Pagos Gmail hoja 23:59",
+    )
+    
     _scheduler.start()
     logger.info(
         "Scheduler iniciado: notificaciones 2:00; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30 (%s).",

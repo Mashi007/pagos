@@ -1,4 +1,4 @@
-﻿"""
+"""
 Configuración del sistema usando Pydantic Settings
 """
 import json
@@ -168,6 +168,19 @@ class Settings(BaseSettings):
     )
 
     # ============================================
+
+    # ============================================
+    # Gmail / Drive / Sheets / Gemini (pagos desde correo)
+    # ============================================
+    GOOGLE_CLIENT_ID: Optional[str] = Field(None, description="OAuth 2.0 Client ID para Gmail/Drive/Sheets")
+    GOOGLE_CLIENT_SECRET: Optional[str] = Field(None, description="OAuth 2.0 Client Secret")
+    GOOGLE_REDIRECT_URI: Optional[str] = Field(None, description="Redirect URI tras autorizar Gmail (ej. https://tu-backend/api/v1/pagos/gmail/callback)")
+    GMAIL_TOKENS_PATH: str = Field(default="gmail_tokens.json", description="Ruta al JSON con access/refresh tokens")
+    GEMINI_API_KEY: Optional[str] = Field(None, description="API Key de Google AI Studio para Gemini")
+    DRIVE_ROOT_FOLDER_ID: str = Field(default="1uzFPzUo00urjiWmeql1F30xgwpjdhm2o", description="ID carpeta raiz Drive para adjuntos")
+    GEMINI_MODEL: str = Field(default="gemini-1.5-flash", description="Modelo Gemini para extraccion de datos")
+    PAGOS_GMAIL_CRON_MINUTES: int = Field(default=15, description="Intervalo en minutos del cron (cada 15 min)")
+
     # Tasa USD/Bs Venezuela (reporte contable)
     # ============================================
     TASA_USD_BS_DEFAULT: Optional[float] = Field(
