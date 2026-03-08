@@ -1,4 +1,4 @@
-﻿import { useState } from 'react'
+import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Search,
@@ -303,16 +303,7 @@ export function ClientesList() {
 
   return (
     <div className="space-y-6">
-      {/* KPIs primero (mismo orden que Pagos: KPIs ? botones) */}
-      <ClientesKPIs
-        activos={statsData?.activos || 0}
-        nuevosEsteMes={statsData?.nuevos_este_mes ?? 0}
-        finalizados={statsData?.finalizados || 0}
-        total={statsData?.total || 0}
-        isLoading={statsLoading}
-      />
-
-      {/* Ttulo y botones */}
+      {/* Titulo primero, luego KPIs */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Clientes</h1>
@@ -405,6 +396,14 @@ export function ClientesList() {
           </div>
         </div>
       </div>
+
+      <ClientesKPIs
+        activos={statsData?.activos || 0}
+        nuevosEsteMes={statsData?.nuevos_este_mes ?? 0}
+        finalizados={statsData?.finalizados || 0}
+        total={statsData?.total || 0}
+        isLoading={statsLoading}
+      />
 
       {/* Seccin Revisar clientes (enviados desde carga másiva) */}
       {showRevisarClientes && (

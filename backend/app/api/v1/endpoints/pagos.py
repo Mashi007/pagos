@@ -1,4 +1,4 @@
-"""
+﻿"""
 Endpoints de pagos. Datos reales desde BD.
 - Tabla pagos: GET/POST/PUT/DELETE /pagos/ (listado y CRUD para /pagos/pagos).
 - GET /pagos/kpis, /stats, /ultimos; POST /upload, /conciliacion/upload, /{id}/aplicar-cuotas.
@@ -504,6 +504,7 @@ async def upload_excel_pagos(
         # --- FASE 1: Parsear todas las filas (ingresar todos los datos para validar despuÃ©s) ---
         FilasParseadas: list[dict] = []
         filas_omitidas = 0
+        pagos_con_error_list: list[dict] = []  # Filas con error para guardar en pagos_con_errores
         errores: list[str] = []
         errores_detalle: list[dict] = []
         for i, row in enumerate(rows):
@@ -639,8 +640,6 @@ async def upload_excel_pagos(
 
         registros = 0
         pagos_con_prestamo: list[Pago] = []
-        pagos_con_error_list: list[dict] = []  # Filas con error para guardar en pagos_con_errores
-
         for item in FilasParseadas:
             i = item["fila_idx"]
             cedula = item["cedula"]

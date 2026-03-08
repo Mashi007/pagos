@@ -281,8 +281,13 @@ def get_prestamos_stats(
         inicio_mes = date(anio_u, mes_u, 1)
         fin_mes = date(anio_u, mes_u, ultimo_dia)
     else:
-        primer_dia_mes = db.scalar(text("SELECT date_trunc('month', CURRENT_DATE)::date"))
-        ultimo_dia_mes = db.scalar(text("SELECT (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month' - INTERVAL '1 day')::date"))
+        # Zona Venezuela para coincidir con negocio
+        primer_dia_mes = db.scalar(text(
+            "SELECT date_trunc('month', (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas'))::date"
+        ))
+        ultimo_dia_mes = db.scalar(text(
+            "SELECT (date_trunc('month', (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas') + INTERVAL '1 month') - INTERVAL '1 day')::date"
+        ))
         if primer_dia_mes is None or ultimo_dia_mes is None:
             hoy = date.today()
             inicio_mes = hoy.replace(day=1)
@@ -295,17 +300,19 @@ def get_prestamos_stats(
             mes_u = inicio_mes.month
             anio_u = inicio_mes.year
 
-    # Fecha de referencia: aprobación o registro (para "aprobados en el mes")
+    # Fecha de referencia en Venezuela (fecha_* sin tz, asumimos UTC)
     # Solo clientes ACTIVOS (consistente con dashboard, pagos, reportes)
-    fecha_ref = func.coalesce(func.date(Prestamo.fecha_aprobacion), func.date(Prestamo.fecha_registro))
+    _cond_fecha = text(
+        "((COALESCE(prestamos.fecha_aprobacion, prestamos.fecha_registro) "
+        "AT TIME ZONE 'UTC') AT TIME ZONE 'America/Caracas')::date BETWEEN :inicio AND :fin"
+    ).bindparams(inicio=inicio_mes, fin=fin_mes)
     q_base = (
         select(Prestamo)
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
         .where(
             Cliente.estado == "ACTIVO",
             Prestamo.estado == "APROBADO",
-            fecha_ref >= inicio_mes,
-            fecha_ref <= fin_mes,
+            _cond_fecha,
         )
     )
     if analista and analista.strip():
@@ -316,14 +323,17 @@ def get_prestamos_stats(
         q_base = q_base.where(Prestamo.modelo_vehiculo == modelo.strip())
     subq = q_base.subquery()
     total = db.scalar(select(func.count()).select_from(subq)) or 0
+    _cond_fecha2 = text(
+        "((COALESCE(prestamos.fecha_aprobacion, prestamos.fecha_registro) "
+        "AT TIME ZONE 'UTC') AT TIME ZONE 'America/Caracas')::date BETWEEN :inicio AND :fin"
+    ).bindparams(inicio=inicio_mes, fin=fin_mes)
     q_estado = (
         select(Prestamo.estado, func.count())
         .select_from(Prestamo)
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
         .where(
             Cliente.estado == "ACTIVO",
-            fecha_ref >= inicio_mes,
-            fecha_ref <= fin_mes,
+            _cond_fecha2,
         )
     )
     if analista and analista.strip():

@@ -54,6 +54,10 @@ async def health_check_db(db: Session = Depends(get_db)):
             "clientes",
             "prestamos",
             "cuotas",
+            "pagos",
+            "pagos_con_errores",
+            "revisar_pagos",
+            "cuota_pagos",
             "pagos_whatsapp",
             "tickets",
         ]
@@ -107,7 +111,7 @@ async def health_check_detailed(db: Session = Depends(get_db)):
         
         # Counts principales
         counts = {}
-        table_counts = ["clientes", "prestamos", "cuotas", "pagos_whatsapp", "tickets"]
+        table_counts = ["clientes", "prestamos", "cuotas", "pagos", "pagos_con_errores", "pagos_whatsapp", "tickets"]
         for table in table_counts:
             if table in tables:
                 try:

@@ -1,4 +1,4 @@
-﻿import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -549,7 +549,7 @@ export function DashboardMenu() {
                 className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
               >
                 <KpiCardLarge
-                  title="PrÃ©stamos (mensual)"
+                  title="Prestamos (mensual)"
                   value={kpisPrincipales.total_prestamos.valor_actual}
                   variation={kpisPrincipales.total_prestamos.variacion_porcentual !== undefined ? {
                     percent: kpisPrincipales.total_prestamos.variacion_porcentual,
@@ -562,7 +562,7 @@ export function DashboardMenu() {
                   format="number"
                 />
                 <KpiCardLarge
-                  title="CrÃ©ditos nuevos (mensual)"
+                  title="Creditos nuevos (mensual)"
                   value={kpisPrincipales.creditos_nuevos_mes.valor_actual}
                   variation={kpisPrincipales.creditos_nuevos_mes.variacion_porcentual !== undefined ? {
                     percent: kpisPrincipales.creditos_nuevos_mes.variacion_porcentual,

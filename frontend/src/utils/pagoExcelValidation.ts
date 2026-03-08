@@ -76,6 +76,17 @@ export function convertirFechaParaBackendPago(f: string): string {
   return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : f.trim()
 }
 
+/** Parsea numero de credito (ej: VE/96179604, 96, 96179604) y extrae prestamo_id. */
+export function parsePrestamoIdFromNumeroCredito(raw: unknown): number | null {
+  if (raw == null || (typeof raw === 'string' && raw.trim() === '')) return null
+  const s = String(raw).trim()
+  if (!s) return null
+  const soloDigitos = s.replace(/^[A-Za-z\/\-_]+\s*/i, '').replace(/[^0-9]/g, '')
+  if (!soloDigitos) return null
+  const n = parseInt(soloDigitos, 10)
+  return Number.isNaN(n) || n < 1 ? null : n
+}
+
 const LOOKS_LIKE_CEDULA = /^[VEJZ]\d{6,11}$/i
 
 export function cedulaParaLookup(val: unknown): string {
