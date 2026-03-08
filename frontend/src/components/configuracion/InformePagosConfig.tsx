@@ -332,10 +332,15 @@ export function InformePagosConfig() {
               <div>
                 <label className="text-sm font-medium block mb-1">Client ID (OAuth)</label>
                 <Input
-                  placeholder="Ej: 123456789-xxx.apps.googleusercontent.com"
+                  placeholder="Ej: 336520671892-xxx.apps.googleusercontent.com"
                   value={config.google_oauth_client_id ?? ''}
                   onChange={(e) => handleChange('google_oauth_client_id', e.target.value)}
+                  maxLength={512}
+                  className="font-mono text-sm"
                 />
+                <p className="text-xs text-gray-500 mt-1">
+                  Pega el ID completo desde Google Cloud (debe terminar en <code className="bg-gray-100 px-1 rounded">.apps.googleusercontent.com</code>).
+                </p>
               </div>
               <div>
                 <label className="text-sm font-medium block mb-1">Client Secret (OAuth)</label>
@@ -353,7 +358,8 @@ export function InformePagosConfig() {
                     placeholder={config.google_oauth_client_secret === '***' ? 'Escribe aquí el nuevo secret para cambiarlo' : 'Client secret'}
                     value={config.google_oauth_client_secret === '***' ? oauthSecretEdit : (oauthSecretEdit || (config.google_oauth_client_secret ?? ''))}
                     onChange={(e) => setOauthSecretEdit(e.target.value)}
-                    className="flex-1"
+                    maxLength={512}
+                    className="flex-1 font-mono text-sm"
                   />
                 </div>
                 <p className="text-xs text-gray-500 mt-1">

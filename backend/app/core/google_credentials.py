@@ -70,9 +70,10 @@ def _credentials_oauth(scopes: List[str]) -> Optional[Any]:
         logger.exception("[INFORME_PAGOS] OAuth FALLO: error refrescando credenciales: %s", e)
         if "invalid_client" in err_str or "unauthorized" in err_str:
             logger.warning(
-                "[CONFIG] Google devolvió 'invalid_client'/'Unauthorized': "
-                "revisar que GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET (env o BD informe_pagos) coincidan exactamente con Google Cloud Console > APIs y servicios > Credenciales > OAuth 2.0. "
-                "Si regeneró el Client Secret, actualícelo en Render/BD."
+                "[CONFIG] Google devolvió 'invalid_client'/'Unauthorized'. "
+                "En este momento se usan las credenciales de la BD (informe_pagos_config), no las variables de entorno: "
+                "actualice 'Client ID' y 'Client secret' en la app (Configuración > Informe de pagos) para que coincidan exactamente con Google Cloud Console > APIs y servicios > Credenciales > OAuth 2.0. "
+                "Si regeneró el Client Secret en la consola, péguelo de nuevo en la configuración."
             )
         return None
 
