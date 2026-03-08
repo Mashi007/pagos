@@ -1,10 +1,10 @@
-"""
+﻿"""
 Conexión a la base de datos PostgreSQL.
 Proporciona engine, sesión y dependencia get_db para inyectar en endpoints.
 """
 from typing import Generator
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
 
 from app.core.config import settings
@@ -31,6 +31,14 @@ engine = create_engine(
     },
     echo=False,
 )
+
+@event.listens_for(engine, "connect")
+def _set_timezone_vzla(dbapi_connection, connection_record):
+    """Set session timezone to Venezuela (America/Caracas) for every new connection."""
+    cursor = dbapi_connection.cursor()
+    cursor.execute("SET timezone = 'America/Caracas'")
+    cursor.close()
+
 
 # expire_on_commit=False evita el error F405: al cerrar la sesión los objetos no se "expiran",
 # así la serialización de la respuesta (Pydantic/model_validate) no intenta lazy load fuera de la sesión.

@@ -1,6 +1,6 @@
 """
 Endpoints de clientes: CONECTADOS A LA TABLA REAL `clientes` (public.clientes).
-- Conexión: engine/sesión desde app.core.database (DATABASE_URL en .env).
+- ConexiÃ³n: engine/sesiÃ³n desde app.core.database (DATABASE_URL en .env).
 - Modelo: app.models.cliente.Cliente con __tablename__ = "clientes".
 - Todos los datos son REALES: listado, stats, get, create, update, delete y cambio de estado
   usan Depends(get_db) y consultas contra la tabla clientes. No hay stubs ni datos demo.
@@ -15,7 +15,7 @@ from fastapi import APIRouter, Query, Depends, HTTPException, Body
 
 from app.core.deps import get_current_user
 from pydantic import BaseModel, ValidationError
-from sqlalchemy import select, func, or_, delete
+from sqlalchemy import select, func, or_, delete, text
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import ProgrammingError, OperationalError, IntegrityError
 
@@ -138,7 +138,7 @@ def get_clientes(
             try:
                 clientes_list.append(_row_to_cliente_response(r))
             except (ValidationError, TypeError, AttributeError) as ve:
-                logger.warning("Fila cliente id=%s omitida por validación: %s", getattr(r, "id", "?"), ve)
+                logger.warning("Fila cliente id=%s omitida por validaciÃ³n: %s", getattr(r, "id", "?"), ve)
                 continue
         if rows and not clientes_list:
             logger.error("Ninguna fila pudo serializarse; revisar esquema de tabla clientes.")
@@ -161,7 +161,7 @@ def get_clientes(
             detail=f"Error al cargar el listado de clientes: {e!s}.{hint}",
         ) from e
     except ValidationError as ve:
-        logger.exception("Error de validación en listado de clientes: %s", ve)
+        logger.exception("Error de validaciÃ³n en listado de clientes: %s", ve)
         raise HTTPException(status_code=500, detail=f"Error al cargar el listado de clientes: {ve!s}") from ve
     except Exception as e:
         logger.exception("Error en listado de clientes: %s", e)
@@ -175,27 +175,28 @@ def get_clientes(
 @router.get("/stats")
 def get_clientes_stats(db: Session = Depends(get_db)):
     """
-    Estadísticas de clientes: total, activos, inactivos, finalizados, nuevos_este_mes.
+    EstadÃ­sticas de clientes: total, activos, inactivos, finalizados, nuevos_este_mes.
     nuevos_este_mes = clientes con fecha_registro en el mes actual (calendario).
     """
     total = db.scalar(select(func.count()).select_from(Cliente)) or 0
     activos = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "ACTIVO")) or 0
     inactivos = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "INACTIVO")) or 0
     finalizados = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "FINALIZADO")) or 0
-    # Nuevos clientes registrados en el mes actual
-    hoy = date.today()
-    primer_dia_mes = hoy.replace(day=1)
-    _, ultimo_dia_num = calendar.monthrange(hoy.year, hoy.month)
-    ultimo_dia_mes = hoy.replace(day=ultimo_dia_num)
-    nuevos_este_mes = (
-        db.scalar(
-            select(func.count()).select_from(Cliente).where(
-                func.date(Cliente.fecha_registro) >= primer_dia_mes,
-                func.date(Cliente.fecha_registro) <= ultimo_dia_mes,
+    # Nuevos clientes registrados en el mes actual (usar fecha de la BD para coincidir con fecha_registro)
+    primer_dia_mes = db.scalar(text("SELECT date_trunc('month', CURRENT_DATE)::date"))
+    ultimo_dia_mes = db.scalar(text("SELECT (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month' - INTERVAL '1 day')::date"))
+    if primer_dia_mes is None or ultimo_dia_mes is None:
+        nuevos_este_mes = 0
+    else:
+        nuevos_este_mes = (
+            db.scalar(
+                select(func.count()).select_from(Cliente).where(
+                    func.date(Cliente.fecha_registro) >= primer_dia_mes,
+                    func.date(Cliente.fecha_registro) <= ultimo_dia_mes,
+                )
             )
+            or 0
         )
-        or 0
-    )
     return {
         "total": total,
         "activos": activos,
@@ -210,12 +211,12 @@ class EstadoPayload(BaseModel):
 
 
 class CheckCedulasRequest(BaseModel):
-    """Lista de cédulas a comprobar (p. ej. desde carga masiva)."""
+    """Lista de cÃ©dulas a comprobar (p. ej. desde carga masiva)."""
     cedulas: list[str] = []
 
 
 class CheckCedulasResponse(BaseModel):
-    """Cédulas que ya existen en la tabla clientes."""
+    """CÃ©dulas que ya existen en la tabla clientes."""
     existing_cedulas: list[str] = []
 
 
@@ -278,7 +279,7 @@ def get_casos_a_revisar(
 
 
 class ActualizarLoteItem(BaseModel):
-    """Item para actualización en lote."""
+    """Item para actualizaciÃ³n en lote."""
     id: int
     cedula: Optional[str] = None
     nombres: Optional[str] = None
@@ -290,7 +291,7 @@ class ActualizarLoteItem(BaseModel):
 
 
 class ActualizarLoteResponse(BaseModel):
-    """Respuesta de actualización en lote."""
+    """Respuesta de actualizaciÃ³n en lote."""
     actualizados: int = 0
     errores: list[dict] = []
     total_procesados: int = 0
@@ -302,8 +303,8 @@ def actualizar_clientes_lote(
     db: Session = Depends(get_db),
 ):
     """
-    Actualizar múltiples clientes. Cada item debe tener id y los campos a actualizar.
-    Usa las mismas validaciones que update_cliente (duplicados → 409).
+    Actualizar mÃºltiples clientes. Cada item debe tener id y los campos a actualizar.
+    Usa las mismas validaciones que update_cliente (duplicados â†’ 409).
     """
     actualizados = 0
     errores: list[dict] = []
@@ -336,8 +337,8 @@ def actualizar_clientes_lote(
 @router.post("/check-cedulas", response_model=CheckCedulasResponse)
 def check_cedulas(payload: CheckCedulasRequest, db: Session = Depends(get_db)):
     """
-    Comprobar qué cédulas ya están registradas (para advertir en carga masiva antes de guardar).
-    Recibe una lista de cédulas y devuelve las que ya existen en la BD.
+    Comprobar quÃ© cÃ©dulas ya estÃ¡n registradas (para advertir en carga masiva antes de guardar).
+    Recibe una lista de cÃ©dulas y devuelve las que ya existen en la BD.
     """
     if not payload.cedulas:
         return CheckCedulasResponse(existing_cedulas=[])
@@ -345,7 +346,7 @@ def check_cedulas(payload: CheckCedulasRequest, db: Session = Depends(get_db)):
     if not cedulas_norm:
         return CheckCedulasResponse(existing_cedulas=[])
     # Consultar solo las que existen (sin duplicar en respuesta)
-    # Z999999999 no se considera "existente" para bloquear: puede repetirse (clientes sin cédula)
+    # Z999999999 no se considera "existente" para bloquear: puede repetirse (clientes sin cÃ©dula)
     seen: set[str] = set()
     existing: list[str] = []
     for ced in cedulas_norm:
@@ -387,12 +388,12 @@ def get_cliente(cliente_id: int, db: Session = Depends(get_db)):
 
 
 def _normalize_for_duplicate(s: str) -> str:
-    """Normaliza string para comparación de duplicados (strip, case)."""
+    """Normaliza string para comparaciÃ³n de duplicados (strip, case)."""
     return (s or "").strip()
 
 
 def _digits_telefono(s: str) -> str:
-    """Solo dígitos del teléfono para comparar duplicados."""
+    """Solo dÃ­gitos del telÃ©fono para comparar duplicados."""
     return re.sub(r"\D", "", (s or "").strip())
 
 
@@ -400,7 +401,7 @@ def _digits_telefono(s: str) -> str:
 def create_cliente(payload: ClienteCreate, db: Session = Depends(get_db)):
     """
     Crear cliente en la BD.
-    No permitido duplicados: misma cédula, mismo nombre, mismo email o mismo teléfono → 409.
+    No permitido duplicados: misma cÃ©dula, mismo nombre, mismo email o mismo telÃ©fono â†’ 409.
     Aplica a Nuevo Cliente y Carga masiva.
     """
     cedula_norm = (_normalize_for_duplicate(payload.cedula) or "Z999999999").upper()  # Uppercase para consistency
@@ -408,7 +409,7 @@ def create_cliente(payload: ClienteCreate, db: Session = Depends(get_db)):
     email_norm = _normalize_for_duplicate(payload.email)
     telefono_dig = _digits_telefono(payload.telefono)
 
-    # Prohibir duplicado por cédula (Z999999999 puede repetirse: clientes sin cédula)
+    # Prohibir duplicado por cÃ©dula (Z999999999 puede repetirse: clientes sin cÃ©dula)
     if cedula_norm != "Z999999999":
         existing_cedula = db.execute(
             select(Cliente.id).where(Cliente.cedula == cedula_norm)
@@ -416,7 +417,7 @@ def create_cliente(payload: ClienteCreate, db: Session = Depends(get_db)):
         if existing_cedula:
             raise HTTPException(
                 status_code=409,
-                detail=f"Ya existe un cliente con la misma cédula. Cliente existente ID: {existing_cedula[0]}",
+                detail=f"Ya existe un cliente con la misma cÃ©dula. Cliente existente ID: {existing_cedula[0]}",
             )
 
     # Prohibir duplicado por nombre completo
@@ -430,7 +431,7 @@ def create_cliente(payload: ClienteCreate, db: Session = Depends(get_db)):
                 detail=f"Ya existe un cliente con el mismo nombre completo. Cliente existente ID: {existing_nombres[0]}",
             )
 
-    # Prohibir duplicado por email (si no vacío)
+    # Prohibir duplicado por email (si no vacÃ­o)
     if email_norm:
         existing_email = db.execute(
             select(Cliente.id).where(Cliente.email == email_norm)
@@ -441,7 +442,7 @@ def create_cliente(payload: ClienteCreate, db: Session = Depends(get_db)):
                 detail=f"Ya existe un cliente con el mismo email. Cliente existente ID: {existing_email[0]}",
             )
 
-    # Si teléfono duplicado (2 números exactamente iguales) → reemplazar por +589999999999
+    # Si telÃ©fono duplicado (2 nÃºmeros exactamente iguales) â†’ reemplazar por +589999999999
     telefono_final = payload.telefono
     if len(telefono_dig) >= 8:
         rows_telefono = db.execute(
@@ -472,8 +473,8 @@ def create_cliente(payload: ClienteCreate, db: Session = Depends(get_db)):
 
 def _perform_update_cliente(cliente_id: int, payload: ClienteUpdate, db: Session) -> ClienteResponse:
     """
-    Lógica interna de actualización de cliente (reutilizable desde rutas y otros métodos).
-    No se permite dejar cédula+nombres o email duplicados con otro cliente (distinto id) → 409.
+    LÃ³gica interna de actualizaciÃ³n de cliente (reutilizable desde rutas y otros mÃ©todos).
+    No se permite dejar cÃ©dula+nombres o email duplicados con otro cliente (distinto id) â†’ 409.
     Retorna ClienteResponse tras guardar en BD.
     """
     row = db.get(Cliente, cliente_id)
@@ -481,8 +482,8 @@ def _perform_update_cliente(cliente_id: int, payload: ClienteUpdate, db: Session
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
     data = payload.model_dump(exclude_unset=True)
 
-    # Validar duplicados: no permitir cédula, nombre, email ni teléfono igual a otro cliente
-    # Z999999999 puede repetirse (clientes sin cédula)
+    # Validar duplicados: no permitir cÃ©dula, nombre, email ni telÃ©fono igual a otro cliente
+    # Z999999999 puede repetirse (clientes sin cÃ©dula)
     if "cedula" in data:
         cedula_norm = (_normalize_for_duplicate(data.get("cedula") or getattr(row, "cedula") or "") or "Z999999999").upper()  # Uppercase para consistency
         data["cedula"] = cedula_norm
@@ -493,7 +494,7 @@ def _perform_update_cliente(cliente_id: int, payload: ClienteUpdate, db: Session
             if existing:
                 raise HTTPException(
                     status_code=409,
-                    detail=f"Ya existe otro cliente con la misma cédula. Cliente existente ID: {existing[0]}",
+                    detail=f"Ya existe otro cliente con la misma cÃ©dula. Cliente existente ID: {existing[0]}",
                 )
     if "nombres" in data:
         nombres_norm = _normalize_for_duplicate(data.get("nombres") or getattr(row, "nombres") or "")
@@ -542,27 +543,27 @@ def _perform_update_cliente(cliente_id: int, payload: ClienteUpdate, db: Session
 def update_cliente(cliente_id: int, payload: ClienteUpdate, db: Session = Depends(get_db)):
     """
     Actualizar cliente (endpoint HTTP).
-    No se permite dejar cédula+nombres o email duplicados con otro cliente (distinto id) → 409.
+    No se permite dejar cÃ©dula+nombres o email duplicados con otro cliente (distinto id) â†’ 409.
     """
     return _perform_update_cliente(cliente_id, payload, db)
 
 
 @router.delete("/{cliente_id}", status_code=204)
 def delete_cliente(cliente_id: int, db: Session = Depends(get_db)):
-    """Eliminar cliente. No se puede si tiene préstamos asociados."""
+    """Eliminar cliente. No se puede si tiene prÃ©stamos asociados."""
     row = db.get(Cliente, cliente_id)
     if not row:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
 
-    # Verificar si tiene préstamos (FK bloquea el delete)
+    # Verificar si tiene prÃ©stamos (FK bloquea el delete)
     count_prestamos = db.scalar(
         select(func.count()).select_from(Prestamo).where(Prestamo.cliente_id == cliente_id)
     ) or 0
     if count_prestamos > 0:
         raise HTTPException(
             status_code=409,
-            detail=f"No se puede eliminar: el cliente tiene {count_prestamos} préstamo(s) asociado(s). "
-            "Elimine o reasigne los préstamos antes de eliminar al cliente.",
+            detail=f"No se puede eliminar: el cliente tiene {count_prestamos} prÃ©stamo(s) asociado(s). "
+            "Elimine o reasigne los prÃ©stamos antes de eliminar al cliente.",
         )
 
     try:
@@ -574,7 +575,7 @@ def delete_cliente(cliente_id: int, db: Session = Depends(get_db)):
         logger.warning("IntegrityError al eliminar cliente %s: %s", cliente_id, e)
         raise HTTPException(
             status_code=409,
-            detail="No se puede eliminar: el cliente tiene registros asociados (préstamos, cuotas, tickets, etc.).",
+            detail="No se puede eliminar: el cliente tiene registros asociados (prÃ©stamos, cuotas, tickets, etc.).",
         ) from e
 
 
@@ -596,14 +597,14 @@ from app.models.cliente_con_error import ClienteConError
 
 
 def _normalize_cedula_excel(cedula_str: str) -> str:
-    """Normaliza cédula desde Excel: uppercase, sin espacios."""
+    """Normaliza cÃ©dula desde Excel: uppercase, sin espacios."""
     if not cedula_str:
         return ""
     return str(cedula_str).strip().upper()
 
 
 def _validate_email(email: str) -> bool:
-    """Valida formato básico de email."""
+    """Valida formato bÃ¡sico de email."""
     if not email:
         return False
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
@@ -611,7 +612,7 @@ def _validate_email(email: str) -> bool:
 
 
 def _parse_fecha(fecha_val: any) -> date:
-    """Intenta parsear fecha en múltiples formatos."""
+    """Intenta parsear fecha en mÃºltiples formatos."""
     if isinstance(fecha_val, date):
         return fecha_val
     if isinstance(fecha_val, datetime):
@@ -636,12 +637,12 @@ async def upload_clientes_excel(
 ):
     """
     Carga masiva de clientes desde Excel.
-    Formato esperado: Cédula | Nombres | Dirección | Fecha Nacimiento | Ocupación | Correo | Teléfono
+    Formato esperado: CÃ©dula | Nombres | DirecciÃ³n | Fecha Nacimiento | OcupaciÃ³n | Correo | TelÃ©fono
     
     Validaciones:
-    - Cédula: V|E|J|Z + 6-11 dígitos, única en BD
-    - Email: formato válido, único en BD
-    - Teléfono: requerido
+    - CÃ©dula: V|E|J|Z + 6-11 dÃ­gitos, Ãºnica en BD
+    - Email: formato vÃ¡lido, Ãºnico en BD
+    - TelÃ©fono: requerido
     - Nombres: requerido
     
     Respuesta: {registros_creados, registros_con_error, clientes_con_errores}
@@ -668,7 +669,7 @@ async def upload_clientes_excel(
         registros_con_error = 0
         clientes_con_errores = []
         
-        # Cargar emails y cédulas existentes para validación rápida
+        # Cargar emails y cÃ©dulas existentes para validaciÃ³n rÃ¡pida
         cedulas_existentes = set(
             db.execute(select(Cliente.cedula)).scalars().all()
         )
@@ -696,14 +697,14 @@ async def upload_clientes_excel(
                 
                 errores = []
                 
-                # Validar cédula
+                # Validar cÃ©dula
                 cedula = _normalize_cedula_excel(str(cedula_raw or ""))
                 if not cedula:
-                    errores.append("Cédula es requerida")
+                    errores.append("CÃ©dula es requerida")
                 elif not re.match(r"^[VEJZ]\d{6,11}$", cedula):
-                    errores.append("Cédula debe ser V|E|J|Z + 6-11 dígitos")
+                    errores.append("CÃ©dula debe ser V|E|J|Z + 6-11 dÃ­gitos")
                 elif cedula in cedulas_existentes or cedula in cedulas_en_lote:
-                    errores.append("Cédula duplicada (existe en BD o en este lote)")
+                    errores.append("CÃ©dula duplicada (existe en BD o en este lote)")
                 else:
                     cedulas_en_lote.add(cedula)
                 
@@ -712,38 +713,38 @@ async def upload_clientes_excel(
                 if not nombres:
                     errores.append("Nombres es requerido")
                 
-                # Validar dirección
+                # Validar direcciÃ³n
                 direccion = str(direccion_raw or "").strip()
                 if not direccion:
-                    errores.append("Dirección es requerida")
+                    errores.append("DirecciÃ³n es requerida")
                 
                 # Validar fecha nacimiento
                 fecha_nac = _parse_fecha(fecha_nac_raw)
                 if not fecha_nac:
-                    errores.append("Fecha de nacimiento inválida")
+                    errores.append("Fecha de nacimiento invÃ¡lida")
                 
-                # Validar ocupación
+                # Validar ocupaciÃ³n
                 ocupacion = str(ocupacion_raw or "").strip()
                 if not ocupacion:
-                    errores.append("Ocupación es requerida")
+                    errores.append("OcupaciÃ³n es requerida")
                 
                 # Validar email
                 email = str(email_raw or "").strip()
                 if not email:
                     errores.append("Email es requerido")
                 elif not _validate_email(email):
-                    errores.append("Email no tiene formato válido")
+                    errores.append("Email no tiene formato vÃ¡lido")
                 elif email in emails_existentes or email in emails_en_lote:
                     errores.append("Email duplicado (existe en BD o en este lote)")
                 else:
                     emails_en_lote.add(email)
                 
-                # Validar teléfono
+                # Validar telÃ©fono
                 telefono = str(telefono_raw or "").strip()
                 if not telefono:
-                    errores.append("Teléfono es requerido")
+                    errores.append("TelÃ©fono es requerido")
                 
-                # Si hay errores, agregar a lista de revisión
+                # Si hay errores, agregar a lista de revisiÃ³n
                 if errores:
                     cliente_error = ClienteConError(
                         cedula=cedula or None,
@@ -816,8 +817,8 @@ def get_clientes_con_errores(
     db: Session = Depends(get_db),
 ):
     """
-    Listado de clientes con errores de validación (pendientes de revisión).
-    Paginado para facilitar corrección manual.
+    Listado de clientes con errores de validaciÃ³n (pendientes de revisiÃ³n).
+    Paginado para facilitar correcciÃ³n manual.
     """
     total = db.scalar(select(func.count()).select_from(ClienteConError)) or 0
     rows = db.execute(
@@ -848,7 +849,7 @@ def get_clientes_con_errores(
 
 
 class RevisarClienteAgregarBody(BaseModel):
-    """Datos de una fila para enviar a revisión manual (clientes_con_errores)."""
+    """Datos de una fila para enviar a revisiÃ³n manual (clientes_con_errores)."""
     cedula: Optional[str] = None
     nombres: Optional[str] = None
     direccion: Optional[str] = None
@@ -867,7 +868,7 @@ def agregar_cliente_a_revisar(
     current_user = Depends(get_current_user),
 ):
     """
-    Envía una fila a la tabla clientes_con_errores (revisar clientes).
+    EnvÃ­a una fila a la tabla clientes_con_errores (revisar clientes).
     Usado desde la carga masiva cuando el usuario pulsa "Enviar a Revisar Clientes".
     """
     usuario_email = current_user.email if hasattr(current_user, "email") else "sistema@rapicredit.com"
@@ -880,7 +881,7 @@ def agregar_cliente_a_revisar(
         email=body.email,
         telefono=body.telefono,
         estado="PENDIENTE",
-        errores_descripcion=body.errores_descripcion or "Enviado a revisión desde carga masiva",
+        errores_descripcion=body.errores_descripcion or "Enviado a revisiÃ³n desde carga masiva",
         fila_origen=body.fila_origen,
         usuario_registro=usuario_email,
     )

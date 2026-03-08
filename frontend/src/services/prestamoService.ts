@@ -1,4 +1,4 @@
-import { apiClient, ApiResponse, PaginatedResponse, buildUrl } from './api'
+﻿import { apiClient, ApiResponse, PaginatedResponse, buildUrl } from './api'
 import { Prestamo, PrestamoForm } from '../types'
 import { logger } from '../utils/logger'
 
@@ -284,14 +284,14 @@ class PrestamoService {
     fecha_inicio?: string
     fecha_fin?: string
     mes?: number
-    año?: number
+    anio?: number
   }): Promise<{
     totalFinanciamiento: number
     totalPrestamos: number
     promedioMonto: number
     totalCarteraVigente: number
     mes?: number
-    año?: number
+    anio?: number
   }> {
     try {
       const now = new Date()
@@ -301,9 +301,9 @@ class PrestamoService {
             ...(filters.concesionario && { concesionario: filters.concesionario }),
             ...(filters.modelo && { modelo: filters.modelo }),
             mes: filters.mes ?? now.getMonth() + 1,
-            año: filters.año ?? now.getFullYear(),
+            anio: filters.anio ?? now.getFullYear(),
           }
-        : { mes: now.getMonth() + 1, año: now.getFullYear() }
+        : { mes: now.getMonth() + 1, anio: now.getFullYear() }
       const url = buildUrl(`${this.baseUrl}/stats`, params)
       const body = await apiClient.get<{
         total?: number
@@ -312,7 +312,7 @@ class PrestamoService {
         promedio_monto?: number
         cartera_vigente?: number
         mes?: number
-        año?: number
+        anio?: number
       }>(url)
       const total = body?.total ?? 0
       return {
@@ -321,7 +321,7 @@ class PrestamoService {
         promedioMonto: body?.promedio_monto ?? 0,
         totalCarteraVigente: body?.cartera_vigente ?? 0,
         mes: body?.mes,
-        año: body?.año,
+        anio: body?.anio,
       }
     } catch {
       const now = new Date()
@@ -331,7 +331,7 @@ class PrestamoService {
         promedioMonto: 0,
         totalCarteraVigente: 0,
         mes: now.getMonth() + 1,
-        año: now.getFullYear(),
+        anio: now.getFullYear(),
       }
     }
   }

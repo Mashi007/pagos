@@ -265,7 +265,7 @@ def get_prestamos_stats(
     concesionario: Optional[str] = Query(None),
     modelo: Optional[str] = Query(None),
     mes: Optional[int] = Query(None),
-    año: Optional[int] = Query(None),
+    anio: Optional[int] = Query(None),
     db: Session = Depends(get_db),
 ):
     """Estadísticas de préstamos mensuales desde BD (solo clientes ACTIVOS).
@@ -273,13 +273,27 @@ def get_prestamos_stats(
     b) total: cantidad de préstamos APROBADOS en el mes.
     c) cartera_vigente: suma de monto de cuotas con vencimiento en el mes no cobradas.
     d) Usa COALESCE(fecha_aprobacion, fecha_registro) para determinar 'aprobados en el mes'."""
-    hoy = date.today()
-    mes_u = mes if mes is not None and 1 <= mes <= 12 else hoy.month
-    año_u = año if año is not None and año >= 2000 else hoy.year
-    import calendar
-    _, ultimo_dia = calendar.monthrange(año_u, mes_u)
-    inicio_mes = date(año_u, mes_u, 1)
-    fin_mes = date(año_u, mes_u, ultimo_dia)
+    # Usar mes/anio de la BD cuando no se pasan, para coincidir con fechas de aprobacion/registro
+    if mes is not None and 1 <= mes <= 12 and anio is not None and anio >= 2000:
+        mes_u = mes
+        anio_u = anio
+        _, ultimo_dia = calendar.monthrange(anio_u, mes_u)
+        inicio_mes = date(anio_u, mes_u, 1)
+        fin_mes = date(anio_u, mes_u, ultimo_dia)
+    else:
+        primer_dia_mes = db.scalar(text("SELECT date_trunc('month', CURRENT_DATE)::date"))
+        ultimo_dia_mes = db.scalar(text("SELECT (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month' - INTERVAL '1 day')::date"))
+        if primer_dia_mes is None or ultimo_dia_mes is None:
+            hoy = date.today()
+            inicio_mes = hoy.replace(day=1)
+            fin_mes = hoy
+            mes_u = inicio_mes.month
+            anio_u = inicio_mes.year
+        else:
+            inicio_mes = primer_dia_mes
+            fin_mes = ultimo_dia_mes
+            mes_u = inicio_mes.month
+            anio_u = inicio_mes.year
 
     # Fecha de referencia: aprobación o registro (para "aprobados en el mes")
     # Solo clientes ACTIVOS (consistente con dashboard, pagos, reportes)
@@ -354,7 +368,7 @@ def get_prestamos_stats(
         "promedio_monto": promedio_monto,
         "cartera_vigente": cartera_vigente,
         "mes": mes_u,
-        "año": año_u,
+        "anio": anio_u,
     }
 
 
