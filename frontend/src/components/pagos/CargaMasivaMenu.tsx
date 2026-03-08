@@ -11,12 +11,20 @@ interface CargaMasivaMenuProps {
   onSuccess?: () => void
 }
 
+interface GmailStatus {
+  last_run: string | null
+  last_status: string | null
+  last_emails: number
+  last_files: number
+  next_run_approx: string | null
+}
+
 export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
   const [showPagos, setShowPagos] = useState(false)
   const [showConciliacion, setShowConciliacion] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
   const [loadingGmail, setLoadingGmail] = useState(false)
-  const [gmailStatus, setGmailStatus] = useState(null)
+  const [gmailStatus, setGmailStatus] = useState<GmailStatus | null>(null)
 
   useEffect(() => {
     if (!isOpen) return
@@ -33,7 +41,7 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
       toast.success('Excel generado desde Gmail descargado.')
       pagoService.getGmailStatus().then(setGmailStatus)
     } catch (e) {
-      const msg = e?.message || 'Error al generar Excel desde Gmail.'
+      const msg = e instanceof Error ? e.message : 'Error al generar Excel desde Gmail.'
       toast.error(msg)
     } finally {
       setLoadingGmail(false)
