@@ -206,6 +206,12 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
             if not mensaje_tiene_fila_valida:
                 logger.info("[PAGOS_GMAIL] Correo procesado con todo NA: marcado como leído (no era comprobante de pago o imagen ilegible)")
             emails_ok += 1
+            # Commit incremental: persiste cada correo procesado de inmediato.
+            # Si el servidor se reinicia o cae a mitad del pipeline (Render free tier),
+            # los correos ya procesados quedan guardados en BD y no se reprocesan.
+            sync.emails_processed = emails_ok
+            sync.files_processed = files_ok
+            db.commit()
         sync.finished_at = datetime.utcnow()
         sync.emails_processed = emails_ok
         sync.files_processed = files_ok

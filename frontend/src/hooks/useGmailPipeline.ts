@@ -24,7 +24,7 @@ interface UseGmailPipelineOptions {
 }
 
 const POLL_INTERVAL_MS = 4000
-const POLL_MAX_ATTEMPTS = 75 // 75 × 4s = 5 min máximo de espera
+const POLL_MAX_ATTEMPTS = 150 // 150 × 4s = 10 min máximo de espera
 
 export function useGmailPipeline({ onDone, onStatusUpdate }: UseGmailPipelineOptions = {}) {
   const [loading, setLoading] = useState(false)
@@ -76,8 +76,13 @@ export function useGmailPipeline({ onDone, onStatusUpdate }: UseGmailPipelineOpt
           }
           if (attempt >= POLL_MAX_ATTEMPTS) {
             setLoading(false)
-            toast('El procesamiento sigue en curso. Puede descargar el Excel en unos minutos.', { duration: 8000 })
-            onDone?.(s)
+            const processed = s.last_emails ?? 0
+            toast(
+              `El procesamiento sigue en curso (${processed} correo(s) procesados hasta ahora). ` +
+              'Espere unos minutos y pulse «Generar Excel desde Gmail» de nuevo para descargar.',
+              { duration: 12000 }
+            )
+            // Pipeline aún en curso: no abrir diálogo de descarga para evitar 404
             return
           }
           _pollStatus(attempt + 1)
