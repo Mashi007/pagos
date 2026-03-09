@@ -50,20 +50,25 @@ export function useGmailPipeline({ onDone, onStatusUpdate }: UseGmailPipelineOpt
           if (s.last_status && s.last_status !== 'running') {
             // Pipeline terminado
             setLoading(false)
-            onDone?.(s)
             const emails = s.last_emails ?? 0
             const files = s.last_files ?? 0
+            const hasData = !!(s.latest_data_date)
             if (s.last_status === 'error') {
               toast.error('Error al procesar correos. Revise los logs del servidor.')
+              onDone?.(s)
             } else if (emails === 0 && files === 0) {
-              if (s.latest_data_date) {
-                toast(`Sin correos nuevos. Hay datos del ${s.latest_data_date} disponibles para descargar.`, { duration: 7000 })
+              if (hasData) {
+                // Datos de una ejecución anterior disponibles para descargar
+                toast(`Sin correos nuevos. Hay datos del ${s.latest_data_date} listos para descargar.`, { duration: 7000 })
+                onDone?.(s)
               } else {
                 toast('No se encontraron correos para procesar. Revise que haya correos no leídos con adjuntos (imagen/PDF).', { duration: 6000 })
+                // Sin datos: no abrir el diálogo de descarga
               }
             } else {
-              const dateHint = s.latest_data_date ? ` (fecha: ${s.latest_data_date})` : ''
+              const dateHint = s.latest_data_date ? ` (fecha correo: ${s.latest_data_date})` : ''
               toast.success(`Listo: ${emails} correo(s), ${files} archivo(s) procesados.${dateHint}`)
+              onDone?.(s)
             }
             return
           }
