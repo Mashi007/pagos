@@ -13,6 +13,7 @@ interface GmailStatus {
   last_status: string | null
   last_emails: number
   last_files: number
+  last_error?: string | null
   next_run_approx: string | null
   latest_data_date?: string | null  // fecha más reciente con datos disponibles para descargar
 }
@@ -54,7 +55,8 @@ export function useGmailPipeline({ onDone, onStatusUpdate }: UseGmailPipelineOpt
             const files = s.last_files ?? 0
             const hasData = !!(s.latest_data_date)
             if (s.last_status === 'error') {
-              toast.error('Error al procesar correos. Puede reintentarlo con «Generar Excel desde Gmail».')
+              const errDetail = s.last_error ? `\n${s.last_error}` : ''
+              toast.error(`Error al procesar correos.${errDetail}`, { duration: 10000 })
               // No abrir diálogo de descarga en caso de error
             } else if (emails === 0 && files === 0) {
               if (hasData) {

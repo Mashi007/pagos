@@ -275,6 +275,7 @@ class PagoService {
     last_status: string | null
     last_emails: number
     last_files: number
+    last_error?: string | null
     next_run_approx: string | null
     latest_data_date?: string | null
   }> {

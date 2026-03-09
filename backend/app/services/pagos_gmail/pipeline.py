@@ -83,10 +83,12 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
     sync_id = sync.id
     emails_ok = 0
     files_ok = 0
+    drive_errors = 0
     try:
         messages = list_unread_with_attachments(gmail_svc)
         max_emails = getattr(settings, "PAGOS_GMAIL_MAX_EMAILS_PER_RUN", 0)
         total_unread = len(messages)
+        logger.info("[PAGOS_GMAIL] Correos no leídos encontrados: %d (máx por ejecución: %s)", total_unread, max_emails or "sin límite")
         if max_emails and max_emails > 0 and total_unread > max_emails:
             messages = messages[:max_emails]
             logger.info("[PAGOS_GMAIL] Limité a %d correos por ejecución (había %d no leídos; resto en próxima pasada)", max_emails, total_unread)
@@ -100,11 +102,16 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
             subject = (headers.get("subject") or headers.get("Subject") or "").strip() or sender
             msg_date = get_message_date(headers)
             folder_name = get_folder_name_from_date(msg_date)
+            logger.info("[PAGOS_GMAIL] Procesando correo %s | asunto: %s | carpeta: %s", msg_id, subject[:60], folder_name)
             folder_id = get_or_create_folder(drive_svc, folder_name)
             if not folder_id:
+                drive_errors += 1
+                logger.warning("[PAGOS_GMAIL] No se pudo crear carpeta Drive '%s' para msg %s — se omite este correo", folder_name, msg_id)
                 continue
             sheet_id = get_or_create_sheet_for_date(drive_svc, sheets_svc, msg_date)
             if not sheet_id:
+                drive_errors += 1
+                logger.warning("[PAGOS_GMAIL] No se pudo crear hoja Sheets para msg %s (fecha: %s) — se omite este correo", msg_id, msg_date)
                 continue
             sheet_name = get_sheet_name_for_date(msg_date)
             full_payload = get_message_full_payload(gmail_svc, msg_id)
@@ -200,11 +207,21 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
                 logger.info("[PAGOS_GMAIL] Correo procesado con todo NA: marcado como leído (no era comprobante de pago o imagen ilegible)")
             emails_ok += 1
         sync.finished_at = datetime.utcnow()
-        sync.status = "success"
         sync.emails_processed = emails_ok
         sync.files_processed = files_ok
+        if drive_errors > 0 and emails_ok == 0:
+            sync.status = "error"
+            sync.error_message = (
+                f"Fallo de Drive/Sheets en {drive_errors} correo(s): no se pudo crear carpeta o hoja. "
+                "Verifica permisos de la cuenta de servicio en Google Drive/Sheets."
+            )
+            logger.error("[PAGOS_GMAIL] Pipeline terminó con 0 correos procesados y %d fallos de Drive/Sheets", drive_errors)
+        else:
+            sync.status = "success"
+            if drive_errors > 0:
+                logger.warning("[PAGOS_GMAIL] %d correos omitidos por fallo Drive/Sheets; %d procesados correctamente", drive_errors, emails_ok)
         db.commit()
-        return sync_id, "success"
+        return sync_id, sync.status
     except Exception as e:
         logger.exception("Pipeline error: %s", e)
         sync.finished_at = datetime.utcnow()

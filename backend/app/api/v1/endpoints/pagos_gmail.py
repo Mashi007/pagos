@@ -152,6 +152,7 @@ def status(db: Session = Depends(get_db)):
         "last_status": last.status if last else None,
         "last_emails": last.emails_processed if last else 0,
         "last_files": last.files_processed if last else 0,
+        "last_error": last.error_message if last and last.status == "error" else None,
         "next_run_approx": next_at.isoformat() if next_at else None,
         "latest_data_date": latest_data_date,  # fecha más reciente con datos para descargar
     }

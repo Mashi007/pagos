@@ -54,9 +54,11 @@ def _message_has_extractable_content(payload: dict) -> bool:
 
 def list_unread_with_attachments(service: Any) -> List[dict]:
     """
-    Lista todos los mensajes NO LEÍDOS (labelIds=["UNREAD"]) que tengan contenido extraíble
-    (adjunto permitido o imagen/PDF en el cuerpo). No se filtra por asunto; se procesan todos.
-    Tras procesar cada mensaje el pipeline lo marca como leído (mark_as_read).
+    Lista TODOS los mensajes NO LEÍDOS. No filtra por contenido: el filtro de metadata
+    (format="metadata") no devuelve partes anidadas, por lo que correos Fwd: con imágenes
+    dentro de message/rfc822 serían excluidos erróneamente. En cambio, el pipeline procesa
+    cada correo (obteniendo el payload completo), extrae lo que encuentra y, si no hay
+    imágenes, guarda una fila NA. Todos se marcan como leídos al finalizar.
     """
     try:
         result = service.users().messages().list(userId="me", labelIds=["UNREAD"], maxResults=500).execute()
@@ -68,8 +70,6 @@ def list_unread_with_attachments(service: Any) -> List[dict]:
                 userId="me", id=mid, format="metadata", metadataHeaders=["From", "Date", "Subject"]
             ).execute()
             payload = meta.get("payload", {})
-            if not _message_has_extractable_content(payload):
-                continue
             headers = {h["name"].lower(): h["value"] for h in payload.get("headers", [])}
             out.append({"id": mid, "payload": payload, "headers": headers})
         return out
