@@ -57,7 +57,7 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId, mod
     debouncedCedula.length >= 2 ? debouncedCedula : ''
   )
 
-  // Obtener información del préstamo seleccionado para validaciones
+  // Información del préstamo seleccionado (el crédito solo puede ser uno de la lista por cédula)
   const { data: prestamoSeleccionado } = usePrestamo(formData.prestamo_id || 0)
 
   // Auto-seleccionar préstamo si hay solo uno disponible
@@ -81,9 +81,12 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId, mod
       newErrors.cedula_cliente = 'Cédula requerida'
     }
 
-    // Si hay préstamos disponibles, el ID de préstamo es obligatorio
+    // Crédito: solo se acepta uno de la lista obtenida por cédula (tabla prestamos). Si hay más de uno, debe escogerse.
     if (prestamos && prestamos.length > 0 && !formData.prestamo_id) {
-      newErrors.prestamo_id = 'Debe seleccionar un crédito'
+      newErrors.prestamo_id = prestamos.length > 1 ? 'Debe escoger un crédito de la lista' : 'Debe seleccionar el crédito'
+    }
+    if (formData.prestamo_id && prestamos && prestamos.length > 0 && !prestamos.some(p => p.id === formData.prestamo_id)) {
+      newErrors.prestamo_id = 'El crédito debe ser uno de la lista para esta cédula'
     }
 
     // âœ… CRITERIO 1: Verificación de cédula del pago vs cédula del préstamo
@@ -276,20 +279,15 @@ export function RegistrarPagoForm({ onClose, onSuccess, pagoInicial, pagoId, mod
                       })}
                     </SelectContent>
                   </Select>
-                ) : (
-                  <Input
-                    type="number"
-                    value={formData.prestamo_id || ''}
-                    onChange={e => setFormData({ ...formData, prestamo_id: e.target.value ? parseInt(e.target.value) : null })}
-                    placeholder="ID del crédito"
-                    disabled={!formData.cedula_cliente}
-                    className={errors.prestamo_id ? 'border-red-500' : ''}
-                  />
-                )}
+                ) : formData.cedula_cliente && prestamos && prestamos.length === 0 ? (
+                  <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                    No hay préstamo asociado
+                  </div>
+                ) : null}
                 {(errors.prestamo_id || (formData.cedula_cliente && prestamos && prestamos.length > 0 && !formData.prestamo_id)) && (
                   <p className="text-sm text-red-600 flex items-center gap-1">
                     <AlertCircle className="w-4 h-4" />
-                    {errors.prestamo_id || 'Debe seleccionar un crédito'}
+                    {errors.prestamo_id || (prestamos && prestamos.length > 1 ? 'Debe escoger un crédito de la lista' : 'Debe seleccionar un crédito')}
                   </p>
                 )}
 
