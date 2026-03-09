@@ -19,10 +19,14 @@ from app.services.pagos_gmail.helpers import get_mime_type
 
 logger = logging.getLogger(__name__)
 
+PAGOS_NA = "NA"  # No aplica: no hubo la información o al ser manual no se identifica
+
 GEMINI_PROMPT = (
-    "Este es un comprobante de pago (puede ser imagen o PDF). Extrae exactamente estos 4 datos en formato JSON: "
+    "Este es un comprobante de pago (puede ser imagen o PDF, adjunto o imagen pegada en el cuerpo del correo). "
+    "Extrae exactamente estos 4 datos en formato JSON: "
     "{ \"fecha_pago\": \"...\", \"cedula\": \"...\", \"monto\": \"...\", \"numero_referencia\": \"...\" } "
-    "Si no encuentras algun dato, usa 'No encontrado'. Responde SOLO con el JSON, sin texto adicional."
+    "Si no identificas claramente un dato, usa 'NA'. No adivines. NA = no hubo la información o no se puede identificar. "
+    "Responde SOLO con el JSON, sin texto adicional."
 )
 
 
@@ -35,9 +39,9 @@ def extract_payment_data(file_content: bytes, filename: str, api_key: Optional[s
         logger.warning(
             "[CONFIG] GEMINI_API_KEY no configurado. Configure la variable de entorno GEMINI_API_KEY "
             "(obtener en https://aistudio.google.com/apikey) para extraer datos de comprobantes. "
-            "El pipeline seguirá guardando filas con 'No encontrado' en los campos extraídos."
+            "El pipeline seguirá guardando filas con 'NA' en los campos extraídos."
         )
-        return _empty_result("GEMINI_API_KEY no configurado")
+        return _empty_result(PAGOS_NA)
     model_name = getattr(settings, "GEMINI_MODEL", "gemini-2.0-flash")
     logger.debug("[PAGOS_GMAIL] Gemini extrayendo datos de comprobante: %s (modelo %s)", filename, model_name)
     mime = get_mime_type(filename)
@@ -114,30 +118,41 @@ def _find_json_object(text: str) -> Optional[str]:
     return None
 
 
+def _normalize_to_na(val: Any) -> str:
+    """Convierte a NA si está vacío, es 'No encontrado' o no se identifica claramente."""
+    if val is None:
+        return PAGOS_NA
+    s = str(val).strip()
+    if not s or s.lower() in ("no encontrado", "n/a", "n.a.", "-", "—"):
+        return PAGOS_NA
+    return s
+
+
 def _parse_gemini_json(text: str) -> Dict[str, str]:
-    """Extrae JSON del texto (puede venir con markdown o texto extra)."""
-    default = {"fecha_pago": "No encontrado", "cedula": "No encontrado", "monto": "No encontrado", "numero_referencia": "No encontrado"}
+    """Extrae JSON del texto (puede venir con markdown o texto extra). Normaliza vacíos/No encontrado a NA."""
+    default = {"fecha_pago": PAGOS_NA, "cedula": PAGOS_NA, "monto": PAGOS_NA, "numero_referencia": PAGOS_NA}
     try:
         json_str = _find_json_object(text)
         if not json_str:
-            # Fallback: regex simple para JSON sin llaves en valores
             match = re.search(r"\{[^{}]*\}", text, re.DOTALL)
             json_str = match.group(0) if match else None
         if json_str:
             data = json.loads(json_str)
             return {
-                "fecha_pago": str(data.get("fecha_pago", default["fecha_pago"])),
-                "cedula": str(data.get("cedula", default["cedula"])),
-                "monto": str(data.get("monto", default["monto"])),
-                "numero_referencia": str(data.get("numero_referencia", default["numero_referencia"])),
+                "fecha_pago": _normalize_to_na(data.get("fecha_pago", default["fecha_pago"])),
+                "cedula": _normalize_to_na(data.get("cedula", default["cedula"])),
+                "monto": _normalize_to_na(data.get("monto", default["monto"])),
+                "numero_referencia": _normalize_to_na(data.get("numero_referencia", default["numero_referencia"])),
             }
     except json.JSONDecodeError:
         pass
-    return default
+    return default.copy()
 
 
-def _empty_result(reason: str) -> Dict[str, str]:
-    return {"fecha_pago": "No encontrado", "cedula": "No encontrado", "monto": "No encontrado", "numero_referencia": reason}
+def _empty_result(reason: str = "") -> Dict[str, str]:
+    if reason:
+        logger.debug("[PAGOS_GMAIL] Gemini sin datos: %s", reason)
+    return {"fecha_pago": PAGOS_NA, "cedula": PAGOS_NA, "monto": PAGOS_NA, "numero_referencia": PAGOS_NA}
 
 
 # --- Cobranza: papeleta de depósito / comprobante (mismo formato que ocr_service para poder sustituir Vision)

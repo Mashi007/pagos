@@ -1,12 +1,13 @@
 """
 Módulo centralizado para normalización de documentos de pago.
-Consolidación de la lógica de canonicalización que antes estaba duplicada en pagos.py.
 
-Regla general:
-- No se aceptan duplicados en documentos (misma clave canónica = duplicado → rechazo)
-- Se acepta CUALQUIER formato (BNC/, BINANCE, VE/, ZELLE/, numérico, etc.)
-- Documentos numéricos de 10 a 25 dígitos sin problemas
-- Varias filas sin documento (vacío) se permiten
+REGLA GENERAL: documento acepta TODOS los formatos sin distinción.
+ÚNICA RESTRICCIÓN: nunca duplicados (en archivo ni en BD).
+
+- Cualquier formato: BNC/, BINANCE, VE/, ZELLE/, numérico, BS., € $, REF., etc.
+- No se valida formato; no se rechaza por contenido
+- Vacío permitido en varias filas
+- Duplicado → rechazo
 """
 import re
 from typing import Any, Optional

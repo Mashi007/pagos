@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { useExcelUploadPagos, type ExcelUploaderPagosProps } from '../../hooks/useExcelUploadPagos'
 import { PagosConErroresSection } from './PagosConErroresSection'
 import { TablaEditablePagos } from './TablaEditablePagos'
-import { cedulaLookupParaFila, cedulaParaLookup, OBSERVACIONES_POR_CAMPO } from '../../utils/pagoExcelValidation'
+import { cedulaLookupParaFila, cedulaParaLookup, OBSERVACIONES_POR_CAMPO, parsePrestamoIdFromNumeroCredito } from '../../utils/pagoExcelValidation'
 import { useNavigate } from 'react-router-dom'
 
 const inputClass = (isValid: boolean) =>
@@ -358,9 +358,13 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                             if (keysMap.length === 1) prestamosActivos = prestamosPorCedula[keysMap[0]] || []
                           }
                           const tieneCreditos = prestamosActivos.length >= 1
-                          const prestamoIdElegido = (row.prestamo_id != null && row.prestamo_id !== 0 && String(row.prestamo_id) !== 'none') ? String(row.prestamo_id) : null
-                          // Solo mostrar como elegido si está en la lista de créditos de esta cédula (evita mostrar número de documento como crédito)
-                          const esValidoEnLista = prestamoIdElegido != null && prestamosActivos.some((p) => String(p.id) === prestamoIdElegido)
+                          // Normalizar prestamo_id: acepta numérico o formato VE-96179604, VE/96179604, etc.
+                          const rawId = row.prestamo_id
+                          const idNormalizado = rawId != null && rawId !== 0 && String(rawId) !== 'none'
+                            ? (typeof rawId === 'number' ? rawId : parsePrestamoIdFromNumeroCredito(rawId))
+                            : null
+                          const prestamoIdElegido = idNormalizado != null ? String(idNormalizado) : null
+                          const esValidoEnLista = prestamoIdElegido != null && prestamosActivos.some((p) => p.id === idNormalizado)
                           const valorCredito = esValidoEnLista ? prestamoIdElegido : (prestamosActivos.length === 1 ? String(prestamosActivos[0].id) : 'none')
                           return (
                             <tr key={row._rowIndex} className={row._hasErrors ? 'bg-red-50' : 'bg-green-50'}>
@@ -386,6 +390,10 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                                   type="text"
                                   value={row.fecha_pago}
                                   onChange={(e) => updateCellValue(row, 'fecha_pago', e.target.value)}
+                                  onBlur={() => {
+                                    const c = cedulaLookupParaFila(row.cedula || '', row.numero_documento || '') || (row.cedula || '').trim()
+                                    if (c.length >= 5) fetchSingleCedula(c)
+                                  }}
                                   placeholder="DD/MM/YYYY"
                                   className={inputClass(row._validation.fecha_pago?.isValid ?? true)}
                                 />

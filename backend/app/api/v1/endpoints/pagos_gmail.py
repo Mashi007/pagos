@@ -168,41 +168,54 @@ def confirmar_dia(body: ConfirmarDiaBody = Body(...), db: Session = Depends(get_
     }
 
 
+def _find_sheet_date_with_data(db: Session, from_date: datetime) -> tuple[Optional[datetime], list]:
+    """
+    Busca la fecha más reciente que tenga datos, probando from_date y hasta 3 días anteriores.
+    Devuelve (sheet_date, items) si hay datos; si no, (None, []).
+    """
+    from app.services.pagos_gmail.helpers import get_sheet_name_for_date
+    for delta in range(4):
+        d = from_date - timedelta(days=delta)
+        sheet_name = get_sheet_name_for_date(d)
+        items = db.execute(
+            select(PagosGmailSyncItem)
+            .join(PagosGmailSync, PagosGmailSyncItem.sync_id == PagosGmailSync.id)
+            .where(PagosGmailSyncItem.sheet_name == sheet_name)
+            .order_by(PagosGmailSyncItem.created_at)
+        ).scalars().all()
+        if items:
+            return d, items
+    return None, []
+
+
 @router.get("/download-excel")
 def download_excel(fecha: Optional[str] = None, db: Session = Depends(get_db)):
     """
     Genera y devuelve un Excel con los ítems del día. Por defecto usa la fecha actual (America/Caracas; después de 23:50 se considera el día siguiente).
+    Si no hay datos para esa fecha, busca en los 3 días anteriores (evita desajuste por zona horaria o fecha del correo).
     Opcional: ?fecha=YYYY-MM-DD para descargar un día concreto.
+    Si no hay datos en ninguna fecha reciente, devuelve 404 con mensaje claro (no se descarga un Excel vacío).
     Columnas: Asunto, Fecha Pago, Cédula, Monto, Referencia, Link.
-    Los datos se generan al ejecutar el pipeline: en la app pulse «Generar Excel desde Gmail», espere a que termine, y luego descargue.
     """
     from openpyxl import Workbook
     from app.services.pagos_gmail.helpers import get_sheet_name_for_date
     sheet_date = _sheet_date_from_fecha(fecha)
-    sheet_name = get_sheet_name_for_date(sheet_date)
-    items = db.execute(
-        select(PagosGmailSyncItem)
-        .join(PagosGmailSync, PagosGmailSyncItem.sync_id == PagosGmailSync.id)
-        .where(PagosGmailSyncItem.sheet_name == sheet_name)
-        .order_by(PagosGmailSyncItem.created_at)
-    ).scalars().all()
+    sheet_date_found, items = _find_sheet_date_with_data(db, sheet_date)
+    if not sheet_date_found or not items:
+        requested_str = sheet_date.strftime("%Y-%m-%d")
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"Sin datos para {requested_str}. "
+                "Pulse «Generar Excel desde Gmail» (Cargar datos > Generar Excel desde Gmail), espere a que termine y vuelva a descargar. "
+                "Se procesan correos no leídos con adjuntos (imagen/PDF). Verifique que GEMINI_API_KEY esté configurado en el servidor."
+            ),
+        )
+    sheet_date = sheet_date_found
     wb = Workbook()
     ws = wb.active
     ws.title = "Pagos"
     ws.append(["Asunto", "Fecha Pago", "Cedula", "Monto", "Referencia", "Link"])
-    if not items:
-        ws.append([
-            (
-                f"Sin datos para {sheet_date.strftime('%Y-%m-%d')}. "
-                "En la app: pulse «Generar Excel desde Gmail» (Cargar datos > Generar Excel desde Gmail), espere a que termine y vuelva a descargar. "
-                "Solo se procesan correos no leídos con adjuntos y con un email en el Asunto. GEMINI_API_KEY debe estar configurado en el servidor."
-            ),
-            "",
-            "",
-            "",
-            "",
-            "",
-        ])
     for it in items:
         ws.append([
             (getattr(it, "asunto", None) or it.correo_origen) or "",

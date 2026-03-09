@@ -30,14 +30,13 @@ from app.services.pagos_gmail.gmail_service import (
     list_unread_with_attachments,
     mark_as_read,
 )
-from app.services.pagos_gmail.gemini_service import extract_payment_data
+from app.services.pagos_gmail.gemini_service import extract_payment_data, PAGOS_NA
 from app.services.pagos_gmail.helpers import extract_sender_email, get_folder_name_from_date, get_sheet_name_for_date
 from app.services.pagos_gmail.sheets_service import append_row
 
 logger = logging.getLogger(__name__)
 
-# Cuando no se puede extraer información válida del comprobante, se escribe en la fila del Excel/BD
-NCIV = "NCIV"  # No contiene información válida
+# NA = No aplica: no hubo la información o al ser manual no se identifica (mismas columnas en adjuntos y cuerpo)
 
 
 def run_pipeline(db: Session) -> tuple[Optional[int], str]:
@@ -83,49 +82,49 @@ def run_pipeline(db: Session) -> tuple[Optional[int], str]:
             if not sheet_id:
                 continue
             sheet_name = get_sheet_name_for_date(msg_date)
-            mensaje_tiene_fila_valida = False  # Si al menos una fila tiene datos válidos (no todo NCIV), marcar correo como leído
+            mensaje_tiene_fila_valida = False  # Si al menos una fila tiene datos válidos (no todo NA), marcar correo como leído
             full_payload = get_message_full_payload(gmail_svc, msg_id)
             if not full_payload and payload.get("parts"):
                 full_payload = payload
             attachments = get_all_images_and_files_for_message(gmail_svc, msg_id, full_payload)
             if len(attachments) > 1:
-                # Más de 1 adjunto: una fila con asunto y NCIV (no se extrae por archivo)
-                row = [subject, NCIV, NCIV, NCIV, NCIV, ""]
+                # Más de 1 adjunto: una fila con asunto y NA (no se extrae por archivo)
+                row = [subject, PAGOS_NA, PAGOS_NA, PAGOS_NA, PAGOS_NA, ""]
                 if append_row(sheets_svc, sheet_id, row):
                     item = PagosGmailSyncItem(
                         sync_id=sync_id,
                         correo_origen=sender,
                         asunto=subject,
-                        fecha_pago=NCIV,
-                        cedula=NCIV,
-                        monto=NCIV,
-                        numero_referencia=NCIV,
+                        fecha_pago=PAGOS_NA,
+                        cedula=PAGOS_NA,
+                        monto=PAGOS_NA,
+                        numero_referencia=PAGOS_NA,
                         drive_file_id=None,
                         drive_link=None,
                         sheet_name=sheet_name,
                     )
                     db.add(item)
                     files_ok += 1
-                logger.info("[PAGOS_GMAIL] Correo con %d adjuntos: fila única NCIV (asunto en columna A)", len(attachments))
+                logger.info("[PAGOS_GMAIL] Correo con %d adjuntos: fila única NA (asunto en columna A)", len(attachments))
             elif len(attachments) == 0:
-                # Sin adjuntos extraíbles: una fila con asunto y NCIV
-                row = [subject, NCIV, NCIV, NCIV, NCIV, ""]
+                # Sin adjuntos ni imágenes en cuerpo: una fila con asunto y NA
+                row = [subject, PAGOS_NA, PAGOS_NA, PAGOS_NA, PAGOS_NA, ""]
                 if append_row(sheets_svc, sheet_id, row):
                     item = PagosGmailSyncItem(
                         sync_id=sync_id,
                         correo_origen=sender,
                         asunto=subject,
-                        fecha_pago=NCIV,
-                        cedula=NCIV,
-                        monto=NCIV,
-                        numero_referencia=NCIV,
+                        fecha_pago=PAGOS_NA,
+                        cedula=PAGOS_NA,
+                        monto=PAGOS_NA,
+                        numero_referencia=PAGOS_NA,
                         drive_file_id=None,
                         drive_link=None,
                         sheet_name=sheet_name,
                     )
                     db.add(item)
                     files_ok += 1
-                logger.info("[PAGOS_GMAIL] Correo sin adjuntos extraíbles: fila NCIV")
+                logger.info("[PAGOS_GMAIL] Correo sin adjuntos ni imágenes en cuerpo: fila NA")
             else:
                 for filename, content, mime_type in attachments:
                     try:
@@ -138,10 +137,10 @@ def run_pipeline(db: Session) -> tuple[Optional[int], str]:
                         data = extract_payment_data(content, filename)
                         if delay_gemini > 0:
                             time.sleep(delay_gemini)
-                        # ¿Información válida? Al menos un campo distinto de vacío o "No encontrado"
+                        # ¿Información válida? Al menos un campo distinto de vacío o NA
                         def _v(x: Optional[str]) -> str:
                             v = (x or "").strip()
-                            return v if v and v != "No encontrado" else ""
+                            return v if v and v.upper() != "NA" else ""
                         f = _v(data.get("fecha_pago"))
                         c = _v(data.get("cedula"))
                         m = _v(data.get("monto"))
@@ -149,12 +148,11 @@ def run_pipeline(db: Session) -> tuple[Optional[int], str]:
                         tiene_valido = bool(f or c or m or r)
                         if tiene_valido:
                             mensaje_tiene_fila_valida = True
-                            # Campos válidos se muestran; el resto NCIV
-                            row = [subject, f or NCIV, c or NCIV, m or NCIV, r or NCIV, drive_link or ""]
-                            item_vals = {"fecha_pago": f or NCIV, "cedula": c or NCIV, "monto": m or NCIV, "numero_referencia": r or NCIV}
+                            row = [subject, f or PAGOS_NA, c or PAGOS_NA, m or PAGOS_NA, r or PAGOS_NA, drive_link or ""]
+                            item_vals = {"fecha_pago": f or PAGOS_NA, "cedula": c or PAGOS_NA, "monto": m or PAGOS_NA, "numero_referencia": r or PAGOS_NA}
                         else:
-                            row = [subject, NCIV, NCIV, NCIV, NCIV, drive_link or ""]
-                            item_vals = {"fecha_pago": NCIV, "cedula": NCIV, "monto": NCIV, "numero_referencia": NCIV}
+                            row = [subject, PAGOS_NA, PAGOS_NA, PAGOS_NA, PAGOS_NA, drive_link or ""]
+                            item_vals = {"fecha_pago": PAGOS_NA, "cedula": PAGOS_NA, "monto": PAGOS_NA, "numero_referencia": PAGOS_NA}
                         if append_row(sheets_svc, sheet_id, row):
                             item = PagosGmailSyncItem(
                                 sync_id=sync_id,
@@ -171,29 +169,28 @@ def run_pipeline(db: Session) -> tuple[Optional[int], str]:
                             db.add(item)
                             files_ok += 1
                     except Exception as e:
-                        logger.warning("Error procesando adjunto %s: %s", filename, e)
-                        # Fila con NCIV para que quede registrado el correo
-                        row = [subject, NCIV, NCIV, NCIV, NCIV, ""]
+                        logger.warning("Error procesando adjunto/cuerpo %s: %s", filename, e)
+                        row = [subject, PAGOS_NA, PAGOS_NA, PAGOS_NA, PAGOS_NA, ""]
                         if append_row(sheets_svc, sheet_id, row):
                             item = PagosGmailSyncItem(
                                 sync_id=sync_id,
                                 correo_origen=sender,
                                 asunto=subject,
-                                fecha_pago=NCIV,
-                                cedula=NCIV,
-                                monto=NCIV,
-                                numero_referencia=NCIV,
+                                fecha_pago=PAGOS_NA,
+                                cedula=PAGOS_NA,
+                                monto=PAGOS_NA,
+                                numero_referencia=PAGOS_NA,
                                 drive_file_id=None,
                                 drive_link=None,
                                 sheet_name=sheet_name,
                             )
                             db.add(item)
                             files_ok += 1
-            # Marcar como leído solo si al menos una fila tiene información válida (no todo NCIV); si no, dejar no leído para reintentar
+            # Marcar como leído solo si al menos una fila tiene información válida (no todo NA)
             if mensaje_tiene_fila_valida:
                 mark_as_read(gmail_svc, msg_id)
             else:
-                logger.info("[PAGOS_GMAIL] Correo sin filas válidas (todo NCIV): se deja como no leído para próxima ejecución")
+                logger.info("[PAGOS_GMAIL] Correo sin filas válidas (todo NA): se deja como no leído para próxima ejecución")
             emails_ok += 1
         sync.finished_at = datetime.utcnow()
         sync.status = "success"

@@ -1,13 +1,15 @@
 /**
  * Validación carga masiva de pagos (Excel).
- * ÚNICA REGLA: no se acepta documento duplicado (ni en el archivo ni en el sistema).
+ *
+ * NÚMERO DE DOCUMENTO: acepta TODOS los formatos sin distinción (numérico, BNC/, ZELLE, BS., € $, etc.).
+ * ÚNICA REGLA para documento: nunca duplicados (ni en el archivo ni en la BD).
  */
 
 import { validateExcelFile, validateExcelData, sanitizeFileName } from './excelValidation'
 
 /** Texto de observación por columna; se muestra solo en la celda correspondiente del Excel. Especifican exactamente qué falla. */
 export const OBSERVACIONES_POR_CAMPO: Record<string, string> = {
-  numero_documento: 'Duplicado Excel (mismo documento repetido en el archivo)',
+  numero_documento: 'Documento duplicado (en archivo o en BD). Única regla: no duplicados.',
   fecha_pago: 'Fecha inválida o formato incorrecto (use DD/MM/YYYY)',
   cedula: 'Cédula no existe en clientes',
   monto_pagado: 'Monto inválido o ≤ 0',

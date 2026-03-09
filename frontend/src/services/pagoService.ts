@@ -289,13 +289,25 @@ class PagoService {
     return res
   }
 
-  /** Pagos Gmail: descargar Excel del día (datos del Sheet). */
-  async downloadGmailExcel(): Promise<void> {
+  /** Pagos Gmail: descargar Excel del día (datos del Sheet). Si no hay datos, lanza error con mensaje del backend. */
+  async downloadGmailExcel(fecha?: string): Promise<void> {
     const axiosInstance = apiClient.getAxiosInstance()
-    const response = await axiosInstance.get(`${this.baseUrl}/gmail/download-excel`, {
+    const url = fecha ? `${this.baseUrl}/gmail/download-excel?fecha=${encodeURIComponent(fecha)}` : `${this.baseUrl}/gmail/download-excel`
+    const response = await axiosInstance.get(url, {
       responseType: 'blob',
       timeout: 60000,
     })
+    if (response.status === 404) {
+      const data = response.data as Blob
+      try {
+        const text = await data.text()
+        const json = JSON.parse(text) as { detail?: string }
+        throw new Error(json.detail || 'Sin datos para esa fecha.')
+      } catch (e) {
+        if (e instanceof Error && (e.message.includes('Sin datos') || e.message.includes('ejecutar'))) throw e
+        throw new Error('Sin datos para descargar. Ejecute «Generar Excel desde Gmail» primero.')
+      }
+    }
     const blob = response.data as Blob
     const disposition = response.headers?.['content-disposition']
     let filename = 'Pagos_Gmail.xlsx'
