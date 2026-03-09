@@ -49,9 +49,11 @@ def _message_has_extractable_content(payload: dict) -> bool:
 
 def list_unread_with_attachments(service: Any) -> List[dict]:
     """
-    Lista solo mensajes NO LEÍDOS. Si un correo fue leído no se volverá a revisar para digitalizar información.
-    Filtros: (1) al menos un adjunto permitido O imagen/PDF en el cuerpo,
-    (2) el Asunto contenga una dirección de email. Tras procesar cada mensaje se marca como leído (mark_as_read).
+    Lista solo mensajes NO LEÍDOS (labelIds=["UNREAD"]).
+    Si un mensaje ya está leído, no se vuelve a listar ni a procesar; así se evita volver desde cero en cada ejecución.
+    Tras procesar cada mensaje el pipeline lo marca como leído (mark_as_read).
+    Filtros: (1) al menos un adjunto permitido O imagen/PDF en el cuerpo;
+    (2) obligatorio: el Asunto debe contener una dirección de email; si no, no se procesa.
     """
     try:
         result = service.users().messages().list(userId="me", labelIds=["UNREAD"], maxResults=100).execute()
@@ -211,8 +213,11 @@ def get_all_images_and_files_for_message(
     service: Any, message_id: str, payload: dict
 ) -> List[Tuple[str, bytes, str]]:
     """
-    Todos los archivos/imágenes a procesar: adjuntos permitidos + imágenes inline (MIME) + imágenes en cuerpo HTML.
-    Returns (filename, content_bytes, mime_type). Sin duplicados por (filename, size) cuando sea posible.
+    Revisa imágenes (y PDFs) como adjuntos y como parte del cuerpo del mensaje.
+    Origen 1: adjuntos al correo (get_attachments_for_message).
+    Origen 2: imágenes inline en partes MIME (Content-Disposition: inline) con body.data o attachmentId.
+    Origen 3: imágenes embebidas en el HTML del cuerpo (data:image/...;base64,...).
+    Returns (filename, content_bytes, mime_type). Sin duplicados por (filename, size).
     """
     seen = set()
     out = []
@@ -235,7 +240,7 @@ def get_all_images_and_files_for_message(
 
 
 def mark_as_read(service: Any, message_id: str) -> None:
-    """Marca el mensaje como leído en Gmail; así no se volverá a listar ni a procesar en futuras ejecuciones."""
+    """Marca el mensaje como leído en Gmail (quita UNREAD). No se volverá a leer ni a procesar; evita reprocesar desde cero."""
     try:
         service.users().messages().modify(userId="me", id=message_id, body={"removeLabelIds": ["UNREAD"]}).execute()
     except Exception as e:

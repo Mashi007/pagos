@@ -108,7 +108,7 @@ def run_pipeline(db: Session) -> tuple[Optional[int], str]:
                         files_ok += 1
                 except Exception as e:
                     logger.warning("Error procesando adjunto %s: %s", filename, e)
-            # Tras descargar y procesar la información del correo, marcarlo como leído en Gmail
+            # Marcar como leído para no volver a procesarlo en futuras ejecuciones (solo se listan UNREAD)
             mark_as_read(gmail_svc, msg_id)
             emails_ok += 1
         sync.finished_at = datetime.utcnow()

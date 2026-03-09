@@ -34,6 +34,7 @@ import { pagoConErrorService, type PagoConError } from '../../services/pagoConEr
 import { RegistrarPagoForm } from './RegistrarPagoForm'
 import { ExcelUploaderPagosUI } from './ExcelUploaderPagosUI'
 import { ConciliacionExcelUploader } from './ConciliacionExcelUploader'
+import { ConfirmarBorrarDiaDialog } from './ConfirmarBorrarDiaDialog'
 import { PagosListResumen } from './PagosListResumen'
 import { PagosKPIsNuevo } from './PagosKPIsNuevo'
 import { toast } from 'sonner'
@@ -64,6 +65,7 @@ export function PagosList() {
   const [conciliandoId, setConciliandoId] = useState<number | null>(null)
   const [isExportingRevisar, setIsExportingRevisar] = useState(false)
   const [loadingGmail, setLoadingGmail] = useState(false)
+  const [showConfirmarBorrar, setShowConfirmarBorrar] = useState(false)
   const [gmailStatus, setGmailStatus] = useState<{
     last_run: string | null
     last_status: string | null
@@ -87,17 +89,7 @@ export function PagosList() {
       await pagoService.downloadGmailExcel()
       toast.success('Excel descargado.')
       pagoService.getGmailStatus().then(setGmailStatus)
-      // Pregunta tras la descarga: ¿borrar información del día? Sí = se borra en BD. No = se mantiene en BD.
-      const quiereBorrar = window.confirm(
-        '¿Quiere borrar la información del día? Sí = se borra. No = se mantiene en BD.'
-      )
-      const result = await pagoService.confirmarDiaGmail(quiereBorrar)
-      if (result.confirmado) {
-        toast.success(result.mensaje || 'Información del día borrada.')
-      } else {
-        toast(result.mensaje || 'Información del día se mantiene en BD.')
-      }
-      pagoService.getGmailStatus().then(setGmailStatus)
+      setShowConfirmarBorrar(true)
     } catch (e) {
       toast.error(getErrorMessage(e))
     } finally {
@@ -856,6 +848,20 @@ export function PagosList() {
           }}
         />
       )}
+
+      <ConfirmarBorrarDiaDialog
+        open={showConfirmarBorrar}
+        onOpenChange={setShowConfirmarBorrar}
+        onElegir={async (borrar) => {
+          const result = await pagoService.confirmarDiaGmail(borrar)
+          if (result.confirmado) {
+            toast.success(result.mensaje || 'Información del día borrada.')
+          } else {
+            toast(result.mensaje || 'Información del día se mantiene en BD.')
+          }
+          pagoService.getGmailStatus().then(setGmailStatus)
+        }}
+      />
     </div>
   )
 }
