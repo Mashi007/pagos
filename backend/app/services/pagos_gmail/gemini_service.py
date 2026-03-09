@@ -45,12 +45,14 @@ GEMINI_PROMPT = (
     "- Incluir la moneda en el valor: '142.00 USD', '80000.00 Bs', '135 USDT', '260.00 USD'.\n"
     "- Busca: 'Deposito Us$', 'Monto', 'Monto (Bs.)', importe principal destacado visualmente.\n\n"
     "NUMERO_REFERENCIA (usar en este orden de prioridad según banco):\n"
-    "- BNC: campo 'Ref:' (ej: Ref: 130611935). Si no está, usar 'Serial:'.\n"
-    "- Mercantil: campo 'Serial:' (número largo, ej: 740087405431516).\n"
-    "- Banesco: campo 'Operación:' (ej: 3701189898485).\n"
+    "- BNC: campo 'Ref:' (ej: Ref: 130611935 → devolver solo '130611935'). Si no está, usar 'Serial:'.\n"
+    "- Mercantil: campo 'Serial:' (número largo, ej: Serial: 740087405431516 → devolver solo '740087405431516').\n"
+    "- Banesco: campo 'Operación:' (ej: Operación: 3701189898485 → devolver solo '3701189898485').\n"
     "- Cualquier banco: 'ID de orden', 'Nro. de referencia', 'N° de referencia', 'NÚMERO DE REFERENCIA', "
     "'Número de operación', 'Código de operación', 'Nro. comprobante'.\n"
-    "- Si hay varios números, preferir el más largo o el más prominente en el comprobante.\n\n"
+    "- Si hay varios números, preferir el más largo o el más prominente en el comprobante.\n"
+    "- IMPORTANTE: devolver SOLO el número o código alfanumérico, SIN incluir la etiqueta "
+    "(no escribir 'Ref:', 'Serial:', 'Operación:', etc., solo el valor).\n\n"
     "FECHA_PAGO:\n"
     "- Busca la fecha de la operación/transacción en cualquier formato (dd/mm/yyyy, yyyy-mm-dd, 'DD MAR YYYY').\n\n"
     "Si un dato genuinamente NO aparece en la imagen, usa 'NA'. Responde SOLO el JSON."
@@ -143,11 +145,26 @@ def _find_json_object(text: str) -> Optional[str]:
 
 
 def _normalize_to_na(val: Any) -> str:
-    """Convierte a NA si está vacío, es 'No encontrado' o no se identifica claramente."""
+    """Convierte a NA si está vacío, es 'No encontrado' o no se identifica claramente.
+    Para numero_referencia también elimina etiquetas residuales como 'Ref:', 'Serial:', etc.
+    """
     if val is None:
         return PAGOS_NA
     s = str(val).strip()
-    if not s or s.lower() in ("no encontrado", "n/a", "n.a.", "-", "—"):
+    if not s or s.lower() in ("no encontrado", "n/a", "n.a.", "-", "—", "na"):
+        return PAGOS_NA
+    # Eliminar etiquetas bancarias residuales que Gemini pueda incluir antes del número
+    import re as _re
+    s = _re.sub(
+        r"^(Ref|Serial|Operaci[oó]n|N[°º]?\s*de\s*(referencia|operaci[oó]n|transferencia)|"
+        r"ID\s*de\s*orden|N[°º]mero\s*de\s*referencia|NÚMERO\s*DE\s*REFERENCIA|"
+        r"Nro\.?\s*de\s*referencia|C[oó]digo\s*de\s*operaci[oó]n|Nro\.?\s*comprobante)"
+        r"\s*[:\-]?\s*",
+        "", s, flags=_re.IGNORECASE,
+    ).strip()
+    # Eliminar también texto entre paréntesis al final: "130611935 (Ref:)" → "130611935"
+    s = _re.sub(r"\s*\(.*?\)\s*$", "", s).strip()
+    if not s:
         return PAGOS_NA
     return s
 
