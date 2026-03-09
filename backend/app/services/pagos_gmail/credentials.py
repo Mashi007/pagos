@@ -64,10 +64,20 @@ def log_pagos_gmail_config_status() -> None:
     logger.warning("%s Estado: %s", CONFIG_LOG_PREFIX, " | ".join(items))
 
 
+# Scopes para pipeline con archivo de tokens (pueden incluir drive completo)
 SCOPES_GMAIL_DRIVE_SHEETS = [
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/gmail.modify",
     "https://www.googleapis.com/auth/drive",
+    "https://www.googleapis.com/auth/drive.file",
+    "https://www.googleapis.com/auth/spreadsheets",
+]
+
+# Scopes que coincide con el token de Configuración > Google (informe de pagos).
+# Ese token se emite con drive.file (no drive completo); pedir "drive" en refresh da invalid_scope.
+SCOPES_INFORME_PAGOS_GMAIL = [
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/gmail.modify",
     "https://www.googleapis.com/auth/drive.file",
     "https://www.googleapis.com/auth/spreadsheets",
 ]
@@ -128,10 +138,14 @@ def get_pagos_gmail_credentials() -> Optional[Any]:
 
 
 def _fallback_informe_pagos_creds() -> Optional[Any]:
-    """Usa credenciales de informe pagos (OAuth o SA) si tienen los scopes necesarios."""
+    """
+    Usa credenciales de informe pagos (OAuth o SA) si tienen los scopes necesarios.
+    Usa SCOPES_INFORME_PAGOS_GMAIL (drive.file, no drive completo) para no provocar
+    invalid_scope al refrescar el token emitido por «Conectar con Google».
+    """
     try:
         from app.core.google_credentials import get_google_credentials
-        return get_google_credentials(SCOPES_GMAIL_DRIVE_SHEETS)
+        return get_google_credentials(SCOPES_INFORME_PAGOS_GMAIL)
     except Exception as e:
         logger.debug("[PAGOS_GMAIL] Fallback informe_pagos no disponible: %s", e)
     return None
