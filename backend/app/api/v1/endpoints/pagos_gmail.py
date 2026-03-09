@@ -211,28 +211,41 @@ def confirmar_dia(body: ConfirmarDiaBody = Body(...), db: Session = Depends(get_
 
 def _find_most_recent_data(db: Session) -> tuple[Optional[str], Optional[datetime], list]:
     """
-    Busca el sheet_name más reciente con datos (sin importar la fecha del correo).
-    Útil para descargar el último batch procesado aunque los correos sean de semanas atrás.
-    Devuelve (sheet_name, email_date, items) o (None, None, []).
+    Devuelve TODOS los ítems del sync más reciente que tiene ítems (independientemente de la fecha
+    del correo). Así el usuario descarga exactamente lo que se procesó en el último run, aunque
+    los correos sean de fechas distintas o de semanas atrás.
+    Devuelve (sheet_name_ref, email_date_ref, items) o (None, None, []).
+    sheet_name_ref y email_date_ref son del ítem más reciente del sync (solo para nombrar el archivo).
     """
     from app.services.pagos_gmail.helpers import parse_date_from_sheet_name
-    row = db.execute(
-        select(PagosGmailSyncItem.sheet_name)
-        .join(PagosGmailSync, PagosGmailSyncItem.sync_id == PagosGmailSync.id)
-        .order_by(desc(PagosGmailSyncItem.created_at))
+    # Sync más reciente que tiene ítems
+    sync_row = db.execute(
+        select(PagosGmailSync)
+        .where(PagosGmailSync.files_processed > 0)
+        .order_by(desc(PagosGmailSync.started_at))
         .limit(1)
     ).scalars().first()
-    if not row:
+    if not sync_row:
+        # Fallback: buscar cualquier ítem aunque files_processed sea 0
+        sync_row = db.execute(
+            select(PagosGmailSync)
+            .join(PagosGmailSyncItem, PagosGmailSyncItem.sync_id == PagosGmailSync.id)
+            .order_by(desc(PagosGmailSync.started_at))
+            .limit(1)
+        ).scalars().first()
+    if not sync_row:
         return None, None, []
-    sheet_name = row
     items = db.execute(
         select(PagosGmailSyncItem)
-        .join(PagosGmailSync, PagosGmailSyncItem.sync_id == PagosGmailSync.id)
-        .where(PagosGmailSyncItem.sheet_name == sheet_name)
+        .where(PagosGmailSyncItem.sync_id == sync_row.id)
         .order_by(PagosGmailSyncItem.created_at)
     ).scalars().all()
-    email_date = parse_date_from_sheet_name(sheet_name)
-    return sheet_name, email_date, items
+    if not items:
+        return None, None, []
+    # Fecha del primer ítem del sync (para nombre del archivo)
+    first_sheet_name = items[0].sheet_name or ""
+    email_date = parse_date_from_sheet_name(first_sheet_name)
+    return first_sheet_name, email_date, list(items)
 
 
 def _find_sheet_by_fecha(db: Session, fecha_date: datetime) -> tuple[Optional[str], list]:

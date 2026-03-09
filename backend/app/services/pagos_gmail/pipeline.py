@@ -107,13 +107,13 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
             if not sheet_id:
                 continue
             sheet_name = get_sheet_name_for_date(msg_date)
-            mensaje_tiene_fila_valida = False  # Si al menos una fila tiene datos válidos (no todo NA), marcar correo como leído
             full_payload = get_message_full_payload(gmail_svc, msg_id)
             if not full_payload and payload.get("parts"):
                 full_payload = payload
             attachments = get_all_images_and_files_for_message(gmail_svc, msg_id, full_payload)
-            if len(attachments) > 1:
-                # Más de 1 adjunto: una fila con asunto y NA (no se extrae por archivo)
+            mensaje_tiene_fila_valida = False
+            if len(attachments) == 0:
+                # Sin adjuntos ni imágenes en cuerpo: fila NA
                 row = [subject, PAGOS_NA, PAGOS_NA, PAGOS_NA, PAGOS_NA, ""]
                 if append_row(sheets_svc, sheet_id, row):
                     item = PagosGmailSyncItem(
@@ -130,27 +130,9 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
                     )
                     db.add(item)
                     files_ok += 1
-                logger.info("[PAGOS_GMAIL] Correo con %d adjuntos: fila única NA (asunto en columna A)", len(attachments))
-            elif len(attachments) == 0:
-                # Sin adjuntos ni imágenes en cuerpo: una fila con asunto y NA
-                row = [subject, PAGOS_NA, PAGOS_NA, PAGOS_NA, PAGOS_NA, ""]
-                if append_row(sheets_svc, sheet_id, row):
-                    item = PagosGmailSyncItem(
-                        sync_id=sync_id,
-                        correo_origen=sender,
-                        asunto=subject,
-                        fecha_pago=PAGOS_NA,
-                        cedula=PAGOS_NA,
-                        monto=PAGOS_NA,
-                        numero_referencia=PAGOS_NA,
-                        drive_file_id=None,
-                        drive_link=None,
-                        sheet_name=sheet_name,
-                    )
-                    db.add(item)
-                    files_ok += 1
-                logger.info("[PAGOS_GMAIL] Correo sin adjuntos ni imágenes en cuerpo: fila NA")
+                logger.info("[PAGOS_GMAIL] Correo sin adjuntos ni imágenes: fila NA")
             else:
+                # 1 o más imágenes/PDFs: procesar cada uno con Gemini (incluye imágenes dentro de Fwd:)
                 for filename, content, mime_type in attachments:
                     try:
                         up = upload_file(drive_svc, MediaIoBaseUpload, folder_id, filename, content, mime_type)
@@ -211,11 +193,11 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
                             )
                             db.add(item)
                             files_ok += 1
-            # Marcar como leído solo si al menos una fila tiene información válida (no todo NA)
-            if mensaje_tiene_fila_valida:
-                mark_as_read(gmail_svc, msg_id)
-            else:
-                logger.info("[PAGOS_GMAIL] Correo sin filas válidas (todo NA): se deja como no leído para próxima ejecución")
+            # Marcar siempre como leído una vez procesado (evita que el mismo correo se reprocese
+            # indefinidamente si Gemini no puede extraer datos — ej. notificaciones de vencimiento).
+            mark_as_read(gmail_svc, msg_id)
+            if not mensaje_tiene_fila_valida:
+                logger.info("[PAGOS_GMAIL] Correo procesado con todo NA: marcado como leído (no era comprobante de pago o imagen ilegible)")
             emails_ok += 1
         sync.finished_at = datetime.utcnow()
         sync.status = "success"
