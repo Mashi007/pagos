@@ -154,6 +154,21 @@ def normalizar_fecha_pago(fecha: Optional[str]) -> str:
     return v  # no reconocido: devolver sin modificar
 
 
+def normalizar_referencia(ref: Optional[str]) -> str:
+    """
+    Elimina ceros iniciales de la referencia.
+    '000130611935' → '130611935', '001234' → '1234'.
+    NA, vacío o valor no numérico → devuelve sin modificar.
+    """
+    v = (ref or "").strip()
+    if not v or v.upper() == "NA":
+        return v
+    if re.match(r"^\d+$", v):
+        return v.lstrip("0") or v[-1]  # si todo eran ceros, conservar el último
+    # Alfanumérico (letras + números): no tocar
+    return v
+
+
 def formatear_cedula(cedula: Optional[str]) -> str:
     """
     Aplica formato venezolano a la cédula extraída por Gemini:
