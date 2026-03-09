@@ -22,12 +22,24 @@ logger = logging.getLogger(__name__)
 PAGOS_NA = "NA"  # No aplica: no hubo la información o al ser manual no se identifica
 
 GEMINI_PROMPT = (
-    "Este es un comprobante de pago (puede ser imagen o PDF, adjunto o imagen pegada en el cuerpo del correo). "
-    "Extrae exactamente estos 4 datos en formato JSON: "
-    "{ \"fecha_pago\": \"...\", \"cedula\": \"...\", \"monto\": \"...\", \"numero_referencia\": \"...\" } "
-    "Donde 'numero_referencia' es el serial, número de documento, código de operación o código de transferencia que identifica la transacción. "
-    "Si no identificas claramente un dato, usa 'NA'. No adivines. NA = no hubo la información o no se puede identificar. "
-    "Responde SOLO con el JSON, sin texto adicional."
+    "Eres un asistente especializado en leer comprobantes de pago venezolanos. "
+    "La imagen puede ser una captura de pantalla de app bancaria (Banesco, Mercantil, BDV, Bicentenario, "
+    "Bancamiga, BOD, BNC, Banplus, Fondo Común), un comprobante de Pago Móvil, una transferencia "
+    "interbancaria, un recibo de depósito, o cualquier comprobante de pago o cobranza. "
+    "Extrae estos 4 datos y responde ÚNICAMENTE con el JSON (sin explicaciones, sin markdown):\n"
+    "{\n"
+    "  \"fecha_pago\": \"fecha de la operación en cualquier formato que aparezca en la imagen\",\n"
+    "  \"cedula\": \"número de cédula o RIF del pagador o beneficiario (solo dígitos, sin V- E- J-)\",\n"
+    "  \"monto\": \"monto total de la operación con decimales si los hay (ej: 150.00 o 1500000.00)\",\n"
+    "  \"numero_referencia\": \"número de referencia, comprobante, serial, código de operación, "
+    "número de transacción, código de confirmación o número de documento\"\n"
+    "}\n"
+    "Reglas:\n"
+    "- Extrae CUALQUIER número largo que identifique la transacción como referencia.\n"
+    "- Para la cédula, busca 'C.I.', 'Cédula', 'V-', 'Titular', 'Pagador', 'RIF' o cualquier número de identidad.\n"
+    "- Para el monto, busca 'Bs', 'BsS', 'Bs.F', '$', 'Monto', 'Total', 'Importe' o cualquier cantidad monetaria.\n"
+    "- Si un dato genuinamente no aparece en la imagen usa 'NA'.\n"
+    "- Responde SOLO el JSON."
 )
 
 
@@ -44,29 +56,29 @@ def extract_payment_data(file_content: bytes, filename: str, api_key: Optional[s
         )
         return _empty_result(PAGOS_NA)
     model_name = getattr(settings, "GEMINI_MODEL", "gemini-2.0-flash")
-    logger.debug("[PAGOS_GMAIL] Gemini extrayendo datos de comprobante: %s (modelo %s)", filename, model_name)
+    logger.info("[PAGOS_GMAIL] Gemini extrayendo datos: archivo=%s modelo=%s tamaño=%d bytes", filename, model_name, len(file_content))
     mime = get_mime_type(filename)
     try:
         import google.generativeai as genai
         genai.configure(api_key=key)
         model = genai.GenerativeModel(model_name)
         part = {"inline_data": {"mime_type": mime, "data": base64.b64encode(file_content).decode("utf-8")}}
-        safety = {
-            "HARM_CATEGORY_HARASSMENT": "BLOCK_NONE",
-            "HARM_CATEGORY_HATE_SPEECH": "BLOCK_NONE",
-            "HARM_CATEGORY_SEXUALLY_EXPLICIT": "BLOCK_NONE",
-            "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_NONE",
-        }
         last_error = None
         for attempt in range(GEMINI_RATE_LIMIT_MAX_RETRIES + 1):
             try:
                 response = model.generate_content(
                     [GEMINI_PROMPT, part],
                     generation_config=genai.types.GenerationConfig(temperature=0.1),
-                    safety_settings=safety,
                 )
                 text = (response.text or "").strip()
-                return _parse_gemini_json(text)
+                logger.info("[PAGOS_GMAIL] Gemini respuesta raw: %s", text[:300])
+                result = _parse_gemini_json(text)
+                all_na = all(v == PAGOS_NA for v in result.values())
+                if all_na:
+                    logger.warning("[PAGOS_GMAIL] Gemini devolvió todo NA para %s — respuesta: %s", filename, text[:200])
+                else:
+                    logger.info("[PAGOS_GMAIL] Gemini extrajo: %s", result)
+                return result
             except Exception as e:
                 last_error = e
                 if _is_rate_limit_error(e) and attempt < GEMINI_RATE_LIMIT_MAX_RETRIES:
