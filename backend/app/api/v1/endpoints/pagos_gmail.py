@@ -1,5 +1,7 @@
 """
 Endpoints para el pipeline Gmail -> Drive -> Gemini -> Sheets (módulo Pagos).
+La información a extraer puede estar en adjuntos al correo o en imágenes en el cuerpo del email
+(partes MIME inline o imágenes embebidas en HTML como data:image/...;base64,...).
 - POST /pagos/gmail/run-now: ejecutar pipeline ahora
 - GET /pagos/gmail/download-excel: descargar Excel del día (datos del Sheet del día)
 - GET /pagos/gmail/status: última ejecución y próxima programada
@@ -93,8 +95,11 @@ def _get_sheet_date_for_download() -> datetime:
 @router.get("/download-excel")
 def download_excel(db: Session = Depends(get_db)):
     """
-    Genera y devuelve un Excel con los ítems del día (según lógica 23:50).
+    Genera y devuelve un Excel con los ítems del día (según lógica 23:50 America/Caracas).
     Columnas: Correo Origen, Fecha Pago, Cédula, Monto, Referencia, Link (para carga masiva).
+    Los datos provienen del pipeline Gmail -> Drive -> Gemini -> Sheets: ejecute POST /run-now
+    y tenga GEMINI_API_KEY configurado para que Gemini extraiga fecha, cédula, monto y referencia
+    de cada adjunto (imagen/PDF). Si no hay ítems para la fecha, se añade una fila informativa.
     """
     from openpyxl import Workbook
     from app.services.pagos_gmail.helpers import get_sheet_name_for_date
@@ -110,6 +115,17 @@ def download_excel(db: Session = Depends(get_db)):
     ws = wb.active
     ws.title = "Pagos"
     ws.append(["Correo Origen", "Fecha Pago", "Cedula", "Monto", "Referencia", "Link"])
+    if not items:
+        # Sin ítems: el pipeline no ha procesado correos para esta fecha o no se ha ejecutado.
+        # Añadir una fila informativa para que el Excel no llegue solo con cabeceras.
+        ws.append([
+            f"Sin datos para {sheet_date.strftime('%Y-%m-%d')}. Ejecute el pipeline (Gmail -> Gemini -> Sheets) y asegúrese de tener GEMINI_API_KEY configurado.",
+            "",
+            "",
+            "",
+            "",
+            "",
+        ])
     for it in items:
         ws.append([
             it.correo_origen or "",

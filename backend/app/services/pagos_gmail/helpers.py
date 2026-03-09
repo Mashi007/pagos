@@ -22,6 +22,18 @@ MIME_BY_EXT = {
 
 EXTENSIONS_ALLOWED = set(MIME_BY_EXT.keys())
 
+# Mime types que consideramos imagen o PDF para extracción (adjuntos + cuerpo)
+MIME_IMAGE_OR_PDF = {
+    "image/jpeg", "image/png", "image/gif", "image/webp", "image/heic",
+    "application/pdf",
+}
+
+def ext_for_mime(mime: str) -> str:
+    """Extensión por defecto para un mime type (para nombres de archivo inline)."""
+    m = (mime or "").lower()
+    rev = {v: k for k, v in MIME_BY_EXT.items()}
+    return rev.get(m, "jpg" if m.startswith("image/") else "bin")
+
 
 def get_folder_name_from_date(d: datetime) -> str:
     """Nombre de carpeta: 8Marzo2026, 15Abril2026."""
@@ -44,6 +56,14 @@ def get_mime_type(filename: str) -> str:
 def is_allowed_attachment(filename: str) -> bool:
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
     return ext in EXTENSIONS_ALLOWED
+
+
+def subject_contains_email(subject: Optional[str]) -> bool:
+    """True si el Asunto del correo contiene al menos una dirección de email (ej. para filtrar correos válidos)."""
+    if not subject or not subject.strip():
+        return False
+    # Patrón: secuencia de caracteres + @ + secuencia + punto + dominio
+    return bool(re.search(r"\S+@\S+\.\S+", subject.strip()))
 
 
 def extract_sender_email(from_header_value: Optional[str]) -> str:

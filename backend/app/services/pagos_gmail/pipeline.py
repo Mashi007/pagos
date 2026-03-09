@@ -1,5 +1,7 @@
 """
 Orquestación: Gmail -> Drive -> Gemini -> Sheets; marcar correo leído; registrar en BD (pagos_gmail_sync, pagos_gmail_sync_item).
+Solo se procesan correos cuyo Asunto contiene una dirección de email; si no hay email en el Asunto se ignora el mensaje.
+La información a extraer puede estar en adjuntos al email o en imágenes en el cuerpo (MIME inline o HTML base64).
 """
 import logging
 from datetime import datetime
@@ -18,8 +20,9 @@ from app.services.pagos_gmail.drive_service import (
 )
 from app.services.pagos_gmail.gmail_service import (
     build_gmail_service,
-    get_attachments_for_message,
+    get_all_images_and_files_for_message,
     get_message_date,
+    get_message_full_payload,
     list_unread_with_attachments,
     mark_as_read,
 )
@@ -66,13 +69,17 @@ def run_pipeline(db: Session) -> tuple[Optional[int], str]:
             if not sheet_id:
                 continue
             sheet_name = get_sheet_name_for_date(msg_date)
-            attachments = get_attachments_for_message(gmail_svc, msg_id, payload)
+            full_payload = get_message_full_payload(gmail_svc, msg_id)
+            if not full_payload and payload.get("parts"):
+                full_payload = payload
+            attachments = get_all_images_and_files_for_message(gmail_svc, msg_id, full_payload)
             for filename, content, mime_type in attachments:
                 try:
                     up = upload_file(drive_svc, MediaIoBaseUpload, folder_id, filename, content, mime_type)
                     if not up:
                         continue
                     file_id, drive_link = up
+                    logger.info("[PAGOS_GMAIL] Extrayendo datos con Gemini: %s", filename)
                     data = extract_payment_data(content, filename)
                     row = [
                         sender,
@@ -98,6 +105,7 @@ def run_pipeline(db: Session) -> tuple[Optional[int], str]:
                         files_ok += 1
                 except Exception as e:
                     logger.warning("Error procesando adjunto %s: %s", filename, e)
+            # Tras descargar y procesar la información del correo, marcarlo como leído en Gmail
             mark_as_read(gmail_svc, msg_id)
             emails_ok += 1
         sync.finished_at = datetime.utcnow()
