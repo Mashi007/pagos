@@ -1,5 +1,6 @@
 """
 Orquestación: Gmail -> Drive -> Gemini -> Sheets; marcar correo leído; registrar en BD (pagos_gmail_sync, pagos_gmail_sync_item).
+Solo se procesan correos NO LEÍDOS: si un email fue leído no se volverá a revisar para digitalizar información.
 Solo se procesan correos cuyo Asunto contiene una dirección de email; si no hay email en el Asunto se ignora el mensaje.
 La información a extraer puede estar en adjuntos al email o en imágenes en el cuerpo (MIME inline o HTML base64).
 """

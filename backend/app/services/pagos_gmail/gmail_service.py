@@ -49,8 +49,9 @@ def _message_has_extractable_content(payload: dict) -> bool:
 
 def list_unread_with_attachments(service: Any) -> List[dict]:
     """
-    Lista mensajes no leídos que: (1) tengan al menos un adjunto permitido O imagen/PDF en el cuerpo,
-    y (2) el Asunto contenga una dirección de email. Si el Asunto no tiene email, el mensaje no se toma en cuenta.
+    Lista solo mensajes NO LEÍDOS. Si un correo fue leído no se volverá a revisar para digitalizar información.
+    Filtros: (1) al menos un adjunto permitido O imagen/PDF en el cuerpo,
+    (2) el Asunto contenga una dirección de email. Tras procesar cada mensaje se marca como leído (mark_as_read).
     """
     try:
         result = service.users().messages().list(userId="me", labelIds=["UNREAD"], maxResults=100).execute()
@@ -234,6 +235,7 @@ def get_all_images_and_files_for_message(
 
 
 def mark_as_read(service: Any, message_id: str) -> None:
+    """Marca el mensaje como leído en Gmail; así no se volverá a listar ni a procesar en futuras ejecuciones."""
     try:
         service.users().messages().modify(userId="me", id=message_id, body={"removeLabelIds": ["UNREAD"]}).execute()
     except Exception as e:
