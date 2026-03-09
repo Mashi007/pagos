@@ -72,7 +72,7 @@ def extract_payment_data(file_content: bytes, filename: str, api_key: Optional[s
         )
         return _empty_result(PAGOS_NA)
     model_name = getattr(settings, "GEMINI_MODEL", "gemini-2.0-flash")
-    logger.info("[PAGOS_GMAIL] Gemini extrayendo datos: archivo=%s modelo=%s tamaño=%d bytes", filename, model_name, len(file_content))
+    logger.warning("[PAGOS_GMAIL] Gemini → archivo=%s modelo=%s tamaño=%d bytes", filename, model_name, len(file_content))
     mime = get_mime_type(filename)
     try:
         import google.generativeai as genai
@@ -87,13 +87,15 @@ def extract_payment_data(file_content: bytes, filename: str, api_key: Optional[s
                     generation_config=genai.types.GenerationConfig(temperature=0.1),
                 )
                 text = (response.text or "").strip()
-                logger.info("[PAGOS_GMAIL] Gemini respuesta raw: %s", text[:300])
+                logger.warning("[PAGOS_GMAIL] Gemini raw(%s): %s", filename, text[:400] if text else "(VACÍO)")
                 result = _parse_gemini_json(text)
                 all_na = all(v == PAGOS_NA for v in result.values())
                 if all_na:
-                    logger.warning("[PAGOS_GMAIL] Gemini devolvió todo NA para %s — respuesta: %s", filename, text[:200])
+                    logger.warning("[PAGOS_GMAIL] Gemini TODO NA para %s", filename)
                 else:
-                    logger.info("[PAGOS_GMAIL] Gemini extrajo: %s", result)
+                    logger.warning("[PAGOS_GMAIL] Gemini OK: fecha=%s cedula=%s monto=%s ref=%s",
+                        result.get("fecha_pago"), result.get("cedula"),
+                        result.get("monto"), result.get("numero_referencia"))
                 return result
             except Exception as e:
                 last_error = e

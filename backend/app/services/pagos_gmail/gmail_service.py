@@ -283,12 +283,12 @@ def get_all_images_and_files_for_message(
         for filename, content, mime in items:
             size = len(content)
             if size < MIN_PAYMENT_IMAGE_BYTES:
-                logger.debug("[PAGOS_GMAIL] Imagen descartada por tamaño pequeño: %s (%d bytes) — probable logo/ícono", filename, size)
+                logger.warning("[PAGOS_GMAIL] Descartada (< 10KB): %s (%d bytes)", filename, size)
                 continue
             key = (filename, size)
             if key not in seen:
                 seen.add(key)
-                logger.info("[PAGOS_GMAIL] Imagen aceptada: %s (%d bytes, %s)", filename, size, mime)
+                logger.warning("[PAGOS_GMAIL] Aceptada: %s (%d bytes, %s)", filename, size, mime)
                 out.append((filename, content, mime))
 
     _add(get_attachments_for_message(service, message_id, payload))
@@ -297,7 +297,7 @@ def get_all_images_and_files_for_message(
     _add(_get_images_from_rfc822_parts(service, message_id, payload.get("parts", [])))
 
     if not out:
-        logger.info("[PAGOS_GMAIL] Ninguna imagen >= 10KB encontrada para msg %s — todas descartadas o no había", message_id)
+        logger.warning("[PAGOS_GMAIL] CERO imágenes >= 10KB para msg %s — todo descartado o correo sin imágenes", message_id)
     return out
 
 

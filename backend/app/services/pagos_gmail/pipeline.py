@@ -50,6 +50,7 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
     para evitar timeout en la respuesta HTTP); si no, crea uno nuevo.
     Returns (sync_id, "success"|"error"|"no_credentials").
     """
+    logger.warning("[PAGOS_GMAIL] ▶ INICIO pipeline (existing_sync_id=%s)", existing_sync_id)
     creds = get_pagos_gmail_credentials()
     if not creds:
         if existing_sync_id:
@@ -63,11 +64,14 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
                     db.commit()
             except Exception:
                 pass
+        logger.warning("[PAGOS_GMAIL] ✗ Sin credenciales — pipeline abortado")
         return existing_sync_id, "no_credentials"
+    logger.warning("[PAGOS_GMAIL] ✓ Credenciales OK — construyendo servicios Google")
     drive_svc, MediaIoBaseUpload = build_drive_service(creds)
     gmail_svc = build_gmail_service(creds)
     from googleapiclient.discovery import build
     sheets_svc = build("sheets", "v4", credentials=creds, cache_discovery=False)
+    logger.warning("[PAGOS_GMAIL] ✓ Servicios Drive/Gmail/Sheets construidos")
     if existing_sync_id:
         from sqlalchemy import select as sa_select
         sync = db.execute(sa_select(PagosGmailSync).where(PagosGmailSync.id == existing_sync_id)).scalars().first()
@@ -86,13 +90,16 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
     files_ok = 0
     drive_errors = 0
     try:
+        logger.warning("[PAGOS_GMAIL] → Listando correos no leídos en Gmail...")
         messages = list_unread_with_attachments(gmail_svc)
         max_emails = getattr(settings, "PAGOS_GMAIL_MAX_EMAILS_PER_RUN", 0)
         total_unread = len(messages)
-        logger.info("[PAGOS_GMAIL] Correos no leídos encontrados: %d (máx por ejecución: %s)", total_unread, max_emails or "sin límite")
+        logger.warning("[PAGOS_GMAIL] ✓ Correos no leídos encontrados: %d (máx por ejecución: %s)", total_unread, max_emails or "sin límite")
+        if total_unread == 0:
+            logger.warning("[PAGOS_GMAIL] ℹ No hay correos no leídos — pipeline termina sin procesar nada")
         if max_emails and max_emails > 0 and total_unread > max_emails:
             messages = messages[:max_emails]
-            logger.info("[PAGOS_GMAIL] Limité a %d correos por ejecución (había %d no leídos; resto en próxima pasada)", max_emails, total_unread)
+            logger.warning("[PAGOS_GMAIL] ℹ Limitado a %d correos (de %d no leídos)", max_emails, total_unread)
         delay_gemini = getattr(settings, "PAGOS_GMAIL_DELAY_BETWEEN_GEMINI_SECONDS", 0) or 0
         for msg_info in messages:
             msg_id = msg_info["id"]
@@ -103,7 +110,7 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
             subject = (headers.get("subject") or headers.get("Subject") or "").strip() or sender
             msg_date = get_message_date(headers)
             folder_name = get_folder_name_from_date(msg_date)
-            logger.info("[PAGOS_GMAIL] Procesando correo %s | asunto: %s | carpeta: %s", msg_id, subject[:60], folder_name)
+            logger.warning("[PAGOS_GMAIL] ── Correo %d/%d id=%s | de=%s | asunto=%s", emails_ok+1, len(messages), msg_id, sender[:40], subject[:50])
             folder_id = get_or_create_folder(drive_svc, folder_name)
             if not folder_id:
                 drive_errors += 1
@@ -118,6 +125,7 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
             full_payload = get_message_full_payload(gmail_svc, msg_id)
             if not full_payload and payload.get("parts"):
                 full_payload = payload
+            logger.warning("[PAGOS_GMAIL]   folder_id=%s sheet_id=%s", folder_id, sheet_id)
             # Extraer siempre el remitente original del Fwd: para trazabilidad.
             # correo_origen = email del pagador real (inner sender), no del que reenvió.
             # Si no es un forwarded, correo_origen queda con el sender externo.
@@ -131,6 +139,9 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
                     subject = forwarded_raw
                 logger.info("[PAGOS_GMAIL] Remitente reenviado extraído: %s → correo_origen=%s asunto=%s", forwarded_raw, sender, subject[:80])
             attachments = get_all_images_and_files_for_message(gmail_svc, msg_id, full_payload)
+            logger.warning("[PAGOS_GMAIL]   imágenes/adjuntos encontrados: %d — %s",
+                len(attachments),
+                ", ".join(f"{f}({len(c)}B)" for f, c, _ in attachments) if attachments else "ninguno")
             mensaje_tiene_fila_valida = False
             fila_guardada = False  # garantía: al menos 1 fila por correo
 
@@ -216,6 +227,7 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
         sync.finished_at = datetime.utcnow()
         sync.emails_processed = emails_ok
         sync.files_processed = files_ok
+        logger.warning("[PAGOS_GMAIL] ■ FIN pipeline: emails=%d filas=%d drive_errors=%d", emails_ok, files_ok, drive_errors)
         if drive_errors > 0 and emails_ok == 0:
             sync.status = "error"
             sync.error_message = (
