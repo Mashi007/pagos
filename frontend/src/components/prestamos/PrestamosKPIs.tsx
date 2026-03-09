@@ -1,9 +1,15 @@
-import { DollarSign, TrendingUp, Users, CreditCard } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { DollarSign, TrendingUp, Users, CreditCard, Calendar } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
 import { usePrestamosKPIs } from '../../hooks/usePrestamos'
 
+const MESES = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+]
+
 interface PrestamosKPIsProps {
-  // Props opcionales para filtros
   analista?: string
   concesionario?: string
   modelo?: string
@@ -18,31 +24,35 @@ export function PrestamosKPIs({
   fecha_inicio,
   fecha_fin,
 }: PrestamosKPIsProps) {
-  // Obtener KPIs desde el backend
+  const now = new Date()
+  const [mesSel, setMesSel] = useState<number>(now.getMonth() + 1)
+  const [anioSel, setAnioSel] = useState<number>(now.getFullYear())
+
+  const aniosDisponibles = useMemo(() => {
+    const y = new Date().getFullYear()
+    return Array.from({ length: 10 }, (_, i) => y - 5 + i)
+  }, [])
+
   const { data: kpiData, isLoading, error } = usePrestamosKPIs({
     analista,
     concesionario,
     modelo,
     fecha_inicio,
     fecha_fin,
+    mes: mesSel,
+    anio: anioSel,
   })
 
-  const meses = [
-    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-  ]
-  const now = new Date()
-  // Valores por defecto mientras carga
   const kpiDataFinal = kpiData || {
     totalFinanciamiento: 0,
     totalPrestamos: 0,
     promedioMonto: 0,
     totalCarteraVigente: 0,
-    mes: now.getMonth() + 1,
-    año: now.getFullYear(),
+    mes: mesSel,
+    anio: anioSel,
   }
-  const nombreMes = meses[(kpiDataFinal.mes ?? now.getMonth() + 1) - 1]
-  const añoLabel = kpiDataFinal.año ?? now.getFullYear()
+  const nombreMes = MESES[(kpiDataFinal.mes ?? mesSel) - 1]
+  const añoLabel = kpiDataFinal.anio ?? anioSel
 
   if (isLoading) {
     return (
@@ -88,10 +98,33 @@ export function PrestamosKPIs({
 
   return (
     <div className="space-y-6">
-      {/* Encabezado */}
-      <div className="flex justify-between items-center">
+      {/* Encabezado con selector de mes/año */}
+      <div className="flex flex-wrap justify-between items-center gap-4">
         <h2 className="text-2xl font-bold text-gray-900">KPIs de Préstamos (mensuales)</h2>
-        <span className="text-sm text-gray-500">{nombreMes} {añoLabel}</span>
+        <div className="flex items-center gap-2">
+          <Calendar className="h-4 w-4 text-gray-500" />
+          <Select value={String(mesSel)} onValueChange={(v) => setMesSel(Number(v))}>
+            <SelectTrigger className="w-[140px]">
+              <SelectValue placeholder="Mes" />
+            </SelectTrigger>
+            <SelectContent>
+              {MESES.map((nombre, i) => (
+                <SelectItem key={i} value={String(i + 1)}>{nombre}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={String(anioSel)} onValueChange={(v) => setAnioSel(Number(v))}>
+            <SelectTrigger className="w-[100px]">
+              <SelectValue placeholder="Año" />
+            </SelectTrigger>
+            <SelectContent>
+              {aniosDisponibles.map((y) => (
+                <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <span className="text-sm text-gray-500 tabular-nums">{nombreMes} {añoLabel}</span>
+        </div>
       </div>
 
       {/* Vista General con KPIs principales */}

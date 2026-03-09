@@ -254,13 +254,15 @@ export interface PrestamosKPIsData {
   anio?: number
 }
 
-// Hook para obtener KPIs de prÃ©stamos
+// Hook para obtener KPIs de préstamos
 export function usePrestamosKPIs(filters?: {
   analista?: string
   concesionario?: string
   modelo?: string
   fecha_inicio?: string
   fecha_fin?: string
+  mes?: number
+  anio?: number
 }) {
   return useQuery({
     queryKey: [...prestamoKeys.all, 'kpis', filters],
