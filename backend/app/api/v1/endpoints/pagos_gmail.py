@@ -314,10 +314,11 @@ def download_excel(fecha: Optional[str] = None, db: Session = Depends(get_db)):
     wb = Workbook()
     ws = wb.active
     ws.title = "Pagos"
-    ws.append(["Asunto", "Fecha Pago", "Cedula", "Monto", "Referencia", "Link"])
+    ws.append(["Asunto", "Correo Pagador", "Fecha Pago", "Cedula", "Monto", "Referencia", "Link"])
     for it in items:
         ws.append([
             (getattr(it, "asunto", None) or it.correo_origen) or "",
+            it.correo_origen or "",   # email del pagador real (forwarded sender para trazabilidad)
             it.fecha_pago or "",
             it.cedula or "",
             it.monto or "",
