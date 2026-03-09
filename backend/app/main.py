@@ -236,6 +236,17 @@ async def run_migration_auditoria_fk(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/health/gemini")
+async def health_check_gemini_root():
+    """Test indirecto de Gemini (API key y servicio). Disponible también en GET /api/v1/health/gemini."""
+    from fastapi import HTTPException
+    from app.services.pagos_gmail.gemini_service import check_gemini_available
+    result = check_gemini_available()
+    if not result.get("ok"):
+        raise HTTPException(status_code=503, detail=result)
+    return result
+
+
 @app.get("/health/db")
 async def health_check_db():
     """Verifica que la conexión a la BD responde (SELECT 1)."""

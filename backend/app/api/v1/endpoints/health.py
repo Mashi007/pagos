@@ -90,6 +90,16 @@ async def health_check_db(db: Session = Depends(get_db)):
         raise HTTPException(status_code=503, detail=result)
 
 
+@router.get("/gemini")
+async def health_check_gemini():
+    """Test indirecto de Gemini: prompt de texto simple para verificar API key y que el servicio responde."""
+    from app.services.pagos_gmail.gemini_service import check_gemini_available
+    result = check_gemini_available()
+    if not result.get("ok"):
+        raise HTTPException(status_code=503, detail=result)
+    return result
+
+
 @router.get("/detailed")
 async def health_check_detailed(db: Session = Depends(get_db)):
     """Reporte detallado (para desarrollo y debugging).

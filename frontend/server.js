@@ -137,9 +137,9 @@ if (API_URL) {
       // El path que llega ya NO tiene /api (Express lo eliminó cuando usamos app.use('/api', ...))
       // Ejemplo: /api/v1/modelos-vehiculos -> path recibido = /v1/modelos-vehiculos
       // Necesitamos agregar /api de vuelta: /v1/modelos-vehiculos -> /api/v1/modelos-vehiculos
-      // EXCEPCIÓN: /health y /health/db están en la raíz del backend (no bajo /api/v1)
-      if (path === '/health' || path === '/health/db') {
-        return path;
+      // EXCEPCIÓN: /health, /health/db y /health/gemini están en la raíz del backend (no bajo /api/v1)
+      if (path === '/health' || path === '/health/db' || path === '/v1/health/gemini') {
+        return path === '/v1/health/gemini' ? '/health/gemini' : path;
       }
       const rewritten = `/api${path}`;
       // Solo loggear en desarrollo

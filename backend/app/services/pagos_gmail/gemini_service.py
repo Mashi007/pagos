@@ -121,3 +121,27 @@ def _parse_gemini_json(text: str) -> Dict[str, str]:
 
 def _empty_result(reason: str) -> Dict[str, str]:
     return {"fecha_pago": "No encontrado", "cedula": "No encontrado", "monto": "No encontrado", "numero_referencia": reason}
+
+
+def check_gemini_available() -> Dict[str, Any]:
+    """
+    Test indirecto de Gemini: envía un prompt de texto simple (sin imagen) para verificar
+    que la API key es válida y el servicio responde. No modifica datos ni procesa comprobantes.
+    Returns: {"ok": True} o {"ok": False, "error": "mensaje"}.
+    """
+    key = getattr(settings, "GEMINI_API_KEY", None)
+    if not key or not str(key).strip():
+        return {"ok": False, "error": "GEMINI_API_KEY no configurado"}
+    model_name = getattr(settings, "GEMINI_MODEL", "gemini-1.5-flash")
+    try:
+        import google.generativeai as genai
+        genai.configure(api_key=key)
+        model = genai.GenerativeModel(model_name)
+        response = model.generate_content("Responde únicamente con la palabra OK, nada más.")
+        text = (response.text or "").strip()
+        if text:
+            return {"ok": True, "model": model_name, "response_preview": text[:50]}
+        return {"ok": False, "error": "Gemini no devolvió texto"}
+    except Exception as e:
+        logger.exception("Gemini check_gemini_available: %s", e)
+        return {"ok": False, "error": str(e)}
