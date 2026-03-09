@@ -5,7 +5,12 @@ import base64
 import json
 import logging
 import re
+import time
 from typing import Any, Dict, Optional
+
+# Reintento ante 429 (cuota/límite): esperar segundos sugeridos por la API o 45s por defecto
+GEMINI_RATE_LIMIT_RETRY_DELAY = 45
+GEMINI_RATE_LIMIT_MAX_RETRIES = 2
 
 from app.core.config import settings
 from app.services.pagos_gmail.helpers import get_mime_type
@@ -39,24 +44,34 @@ def extract_payment_data(file_content: bytes, filename: str, api_key: Optional[s
         genai.configure(api_key=key)
         model = genai.GenerativeModel(model_name)
         part = {"inline_data": {"mime_type": mime, "data": base64.b64encode(file_content).decode("utf-8")}}
-        # Reducir bloqueos por contenido "sensible" en comprobantes de pago
         safety = {
             "HARM_CATEGORY_HARASSMENT": "BLOCK_NONE",
             "HARM_CATEGORY_HATE_SPEECH": "BLOCK_NONE",
             "HARM_CATEGORY_SEXUALLY_EXPLICIT": "BLOCK_NONE",
             "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_NONE",
         }
-        try:
-            response = model.generate_content(
-                [GEMINI_PROMPT, part],
-                generation_config=genai.types.GenerationConfig(temperature=0.1),
-                safety_settings=list(safety.items()),
-            )
-        except TypeError:
-            # Versiones antiguas pueden no aceptar safety_settings como list
-            response = model.generate_content([GEMINI_PROMPT, part])
-        text = (response.text or "").strip()
-        return _parse_gemini_json(text)
+        last_error = None
+        for attempt in range(GEMINI_RATE_LIMIT_MAX_RETRIES + 1):
+            try:
+                try:
+                    response = model.generate_content(
+                        [GEMINI_PROMPT, part],
+                        generation_config=genai.types.GenerationConfig(temperature=0.1),
+                        safety_settings=list(safety.items()),
+                    )
+                except TypeError:
+                    response = model.generate_content([GEMINI_PROMPT, part])
+                text = (response.text or "").strip()
+                return _parse_gemini_json(text)
+            except Exception as e:
+                last_error = e
+                if _is_rate_limit_error(e) and attempt < GEMINI_RATE_LIMIT_MAX_RETRIES:
+                    delay = _extract_retry_seconds(e)
+                    logger.warning("[PAGOS_GMAIL] Gemini 429 (cuota), reintento en %ds (intento %d/%d)", delay, attempt + 1, GEMINI_RATE_LIMIT_MAX_RETRIES + 1)
+                    time.sleep(delay)
+                else:
+                    raise
+        return _empty_result(str(last_error))
     except Exception as e:
         logger.exception("Gemini extract_payment_data: %s", e)
         return _empty_result(str(e))
@@ -123,10 +138,24 @@ def _empty_result(reason: str) -> Dict[str, str]:
     return {"fecha_pago": "No encontrado", "cedula": "No encontrado", "monto": "No encontrado", "numero_referencia": reason}
 
 
+def _is_rate_limit_error(exc: Exception) -> bool:
+    msg = (getattr(exc, "message", "") or str(exc)) if exc else ""
+    return "429" in msg or "quota" in msg.lower() or "rate" in msg.lower()
+
+
+def _extract_retry_seconds(exc: Exception) -> int:
+    """Extrae 'retry in Xs' del mensaje de error de Gemini (429)."""
+    msg = (getattr(exc, "message", "") or str(exc)) if exc else ""
+    m = re.search(r"retry\s+in\s+([\d.]+)\s*s", msg, re.IGNORECASE)
+    if m:
+        return max(1, int(float(m.group(1))))
+    return GEMINI_RATE_LIMIT_RETRY_DELAY
+
+
 def check_gemini_available() -> Dict[str, Any]:
     """
     Test indirecto de Gemini: envía un prompt de texto simple (sin imagen) para verificar
-    que la API key es válida y el servicio responde. No modifica datos ni procesa comprobantes.
+    que la API key es válida y el servicio responde. Ante 429 (cuota) reintenta una vez tras esperar.
     Returns: {"ok": True} o {"ok": False, "error": "mensaje"}.
     """
     key = getattr(settings, "GEMINI_API_KEY", None)
@@ -137,11 +166,23 @@ def check_gemini_available() -> Dict[str, Any]:
         import google.generativeai as genai
         genai.configure(api_key=key)
         model = genai.GenerativeModel(model_name)
-        response = model.generate_content("Responde únicamente con la palabra OK, nada más.")
-        text = (response.text or "").strip()
-        if text:
-            return {"ok": True, "model": model_name, "response_preview": text[:50]}
-        return {"ok": False, "error": "Gemini no devolvió texto"}
+        last_error = None
+        for attempt in range(GEMINI_RATE_LIMIT_MAX_RETRIES + 1):
+            try:
+                response = model.generate_content("Responde únicamente con la palabra OK, nada más.")
+                text = (response.text or "").strip()
+                if text:
+                    return {"ok": True, "model": model_name, "response_preview": text[:50]}
+                return {"ok": False, "error": "Gemini no devolvió texto"}
+            except Exception as e:
+                last_error = e
+                if _is_rate_limit_error(e) and attempt < GEMINI_RATE_LIMIT_MAX_RETRIES:
+                    delay = _extract_retry_seconds(e)
+                    logger.warning("[PAGOS_GMAIL] Gemini 429 en health check, reintento en %ds", delay)
+                    time.sleep(delay)
+                else:
+                    raise
+        return {"ok": False, "error": str(last_error)}
     except Exception as e:
         logger.exception("Gemini check_gemini_available: %s", e)
         return {"ok": False, "error": str(e)}

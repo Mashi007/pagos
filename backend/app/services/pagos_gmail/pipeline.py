@@ -3,13 +3,16 @@ Orquestación: Gmail -> Drive -> Gemini -> Sheets; marcar correo leído; registr
 Solo se procesan correos NO LEÍDOS: si un email fue leído no se volverá a revisar para digitalizar información.
 Solo se procesan correos cuyo Asunto contiene una dirección de email; si no hay email en el Asunto se ignora el mensaje.
 La información a extraer puede estar en adjuntos al email o en imágenes en el cuerpo (MIME inline o HTML base64).
+Respeto de cuota Gemini: pausa entre llamadas (PAGOS_GMAIL_DELAY_BETWEEN_GEMINI_SECONDS) y opcional límite de correos por ejecución (PAGOS_GMAIL_MAX_EMAILS_PER_RUN).
 """
 import logging
+import time
 from datetime import datetime
 from typing import Any, Optional
 
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.models.pagos_gmail_sync import PagosGmailSync, PagosGmailSyncItem
 from app.services.pagos_gmail.credentials import get_pagos_gmail_credentials
 from app.services.pagos_gmail.drive_service import (
@@ -55,6 +58,12 @@ def run_pipeline(db: Session) -> tuple[Optional[int], str]:
     files_ok = 0
     try:
         messages = list_unread_with_attachments(gmail_svc)
+        max_emails = getattr(settings, "PAGOS_GMAIL_MAX_EMAILS_PER_RUN", 0)
+        total_unread = len(messages)
+        if max_emails and max_emails > 0 and total_unread > max_emails:
+            messages = messages[:max_emails]
+            logger.info("[PAGOS_GMAIL] Limité a %d correos por ejecución (había %d no leídos; resto en próxima pasada)", max_emails, total_unread)
+        delay_gemini = getattr(settings, "PAGOS_GMAIL_DELAY_BETWEEN_GEMINI_SECONDS", 0) or 0
         for msg_info in messages:
             msg_id = msg_info["id"]
             payload = msg_info["payload"]
@@ -83,6 +92,8 @@ def run_pipeline(db: Session) -> tuple[Optional[int], str]:
                     file_id, drive_link = up
                     logger.info("[PAGOS_GMAIL] Extrayendo datos con Gemini: %s", filename)
                     data = extract_payment_data(content, filename)
+                    if delay_gemini > 0:
+                        time.sleep(delay_gemini)
                     row = [
                         subject,
                         data.get("fecha_pago", "No encontrado"),

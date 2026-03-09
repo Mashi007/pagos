@@ -30,8 +30,10 @@ router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 def _is_pipeline_running(db: Session) -> bool:
-    """True si hay una sync en estado running iniciada en los últimos 12 minutos."""
-    cutoff = datetime.utcnow() - timedelta(minutes=12)
+    """True si hay una sync en estado running iniciada en los últimos N minutos (2× intervalo del cron)."""
+    from app.core.config import settings
+    cron_min = getattr(settings, "PAGOS_GMAIL_CRON_MINUTES", 30)
+    cutoff = datetime.utcnow() - timedelta(minutes=max(12, cron_min * 2))
     row = db.execute(
         select(PagosGmailSync).where(
             and_(
@@ -67,10 +69,10 @@ def run_now(db: Session = Depends(get_db)):
 
 @router.get("/status")
 def status(db: Session = Depends(get_db)):
-    """Última ejecución y próxima (cron cada 15 min)."""
+    """Última ejecución y próxima (intervalo configurable vía PAGOS_GMAIL_CRON_MINUTES)."""
     last = db.execute(select(PagosGmailSync).order_by(desc(PagosGmailSync.started_at)).limit(1)).scalars().first()
     from app.core.config import settings
-    cron_min = getattr(settings, "PAGOS_GMAIL_CRON_MINUTES", 15)
+    cron_min = getattr(settings, "PAGOS_GMAIL_CRON_MINUTES", 30)
     next_at = None
     if last and last.started_at:
         next_at = last.started_at + timedelta(minutes=cron_min)

@@ -18,7 +18,9 @@ from typing import Optional
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 
+from app.core.config import settings
 from app.core.database import SessionLocal
 from app.api.v1.endpoints import cobranzas, notificaciones
 
@@ -146,12 +148,13 @@ def start_scheduler() -> None:
         id="informe_pagos_4h30",
         name="Email informe pagos 16:30",
     )
-    # Pagos Gmail: pipeline cada 15 min
+    # Pagos Gmail: intervalo desde PAGOS_GMAIL_CRON_MINUTES (por defecto 30 min; cuota Gemini free ~15 RPM)
+    cron_min = getattr(settings, "PAGOS_GMAIL_CRON_MINUTES", 30)
     _scheduler.add_job(
         _job_pagos_gmail_pipeline,
-        CronTrigger(minute="*/15", timezone=SCHEDULER_TZ),
+        IntervalTrigger(minutes=cron_min),
         id="pagos_gmail_pipeline",
-        name="Pagos Gmail pipeline (cada 15 min)",
+        name=f"Pagos Gmail pipeline (cada {cron_min} min)",
     )
     # Pagos Gmail: crear hoja del dia siguiente a las 23:59
     _scheduler.add_job(

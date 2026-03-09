@@ -186,7 +186,18 @@ class Settings(BaseSettings):
         default="gemini-2.0-flash",
         description="Modelo Gemini para extracción de datos (ej. gemini-2.0-flash, gemini-1.5-flash-latest). Si 404 'model not found', use un modelo de https://ai.google.dev/gemini-api/docs/models",
     )
-    PAGOS_GMAIL_CRON_MINUTES: int = Field(default=15, description="Intervalo en minutos del cron (cada 15 min)")
+    PAGOS_GMAIL_CRON_MINUTES: int = Field(
+        default=30,
+        description="Intervalo en minutos del cron Gmail->Gemini. Con ~30 correos/15 min y cuota gratuita Gemini (~15 RPM), usar 30 o 60 min y PAGOS_GMAIL_DELAY_BETWEEN_GEMINI_SECONDS=4.",
+    )
+    PAGOS_GMAIL_DELAY_BETWEEN_GEMINI_SECONDS: float = Field(
+        default=4.0,
+        description="Segundos de espera entre cada llamada a Gemini (evita 429). Free tier ~15 RPM; 4s entre llamadas ≈ 15/min.",
+    )
+    PAGOS_GMAIL_MAX_EMAILS_PER_RUN: int = Field(
+        default=0,
+        description="Máximo de correos a procesar por ejecución (0 = sin límite). Útil para no saturar cuota en una sola pasada.",
+    )
 
     # Tasa USD/Bs Venezuela (reporte contable)
     # ============================================

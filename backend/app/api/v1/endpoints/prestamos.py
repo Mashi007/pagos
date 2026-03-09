@@ -1,4 +1,4 @@
-﻿"""
+"""
 Endpoints de préstamos. Datos reales desde BD (tabla prestamos).
 Todos los endpoints usan Depends(get_db). No hay stubs ni datos demo.
 """
@@ -300,11 +300,10 @@ def get_prestamos_stats(
             mes_u = inicio_mes.month
             anio_u = inicio_mes.year
 
-    # Fecha de referencia en Venezuela (fecha_* sin tz, asumimos UTC)
+    # Fecha de referencia: parte DATE de aprobación/registro (sin conversión TZ para evitar que cuente en mes equivocado)
     # Solo clientes ACTIVOS (consistente con dashboard, pagos, reportes)
     _cond_fecha = text(
-        "((COALESCE(prestamos.fecha_aprobacion, prestamos.fecha_registro) "
-        "AT TIME ZONE 'UTC') AT TIME ZONE 'America/Caracas')::date BETWEEN :inicio AND :fin"
+        "(COALESCE(prestamos.fecha_aprobacion, prestamos.fecha_registro))::date BETWEEN :inicio AND :fin"
     ).bindparams(inicio=inicio_mes, fin=fin_mes)
     q_base = (
         select(Prestamo)
@@ -324,8 +323,7 @@ def get_prestamos_stats(
     subq = q_base.subquery()
     total = db.scalar(select(func.count()).select_from(subq)) or 0
     _cond_fecha2 = text(
-        "((COALESCE(prestamos.fecha_aprobacion, prestamos.fecha_registro) "
-        "AT TIME ZONE 'UTC') AT TIME ZONE 'America/Caracas')::date BETWEEN :inicio AND :fin"
+        "(COALESCE(prestamos.fecha_aprobacion, prestamos.fecha_registro))::date BETWEEN :inicio AND :fin"
     ).bindparams(inicio=inicio_mes, fin=fin_mes)
     q_estado = (
         select(Prestamo.estado, func.count())
