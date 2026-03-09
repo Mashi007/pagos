@@ -33,7 +33,8 @@ def _is_pipeline_running(db: Session) -> bool:
     """True si hay una sync en estado running iniciada en los últimos N minutos (2× intervalo del cron)."""
     from app.core.config import settings
     cron_min = settings.PAGOS_GMAIL_CRON_MINUTES
-    cutoff = datetime.utcnow() - timedelta(minutes=max(12, cron_min * 2))
+    # 5 min: si el pipeline no termina en 5 min (SIGTERM/crash), se considera huérfano
+    cutoff = datetime.utcnow() - timedelta(minutes=5)
     row = db.execute(
         select(PagosGmailSync).where(
             and_(

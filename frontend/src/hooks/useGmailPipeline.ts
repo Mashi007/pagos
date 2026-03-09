@@ -54,8 +54,8 @@ export function useGmailPipeline({ onDone, onStatusUpdate }: UseGmailPipelineOpt
             const files = s.last_files ?? 0
             const hasData = !!(s.latest_data_date)
             if (s.last_status === 'error') {
-              toast.error('Error al procesar correos. Revise los logs del servidor.')
-              onDone?.(s)
+              toast.error('Error al procesar correos. Puede reintentarlo con «Generar Excel desde Gmail».')
+              // No abrir diálogo de descarga en caso de error
             } else if (emails === 0 && files === 0) {
               if (hasData) {
                 // Datos de una ejecución anterior disponibles para descargar

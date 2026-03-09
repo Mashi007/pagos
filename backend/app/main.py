@@ -4,6 +4,7 @@ Aplicación principal FastAPI
 import time
 import logging
 import warnings
+from datetime import datetime
 
 # Evitar ruido en logs por versiones de urllib3/chardet (dependencias de requests)
 warnings.filterwarnings("ignore", message=".*urllib3.*chardet.*", category=UserWarning, module="requests")
@@ -177,6 +178,34 @@ def on_startup():
         start_dashboard_cache_refresh()
     except Exception as e:
         logger.exception("No se pudo iniciar el worker de caché dashboard: %s", e)
+
+    # Limpiar syncs de Gmail que quedaron en estado "running" tras un reinicio inesperado (SIGTERM/deploy).
+    # Si no se limpian, _is_pipeline_running bloquea nuevas ejecuciones.
+    try:
+        from app.core.database import SessionLocal
+        from app.models.pagos_gmail_sync import PagosGmailSync
+        from sqlalchemy import update as sa_update
+        db_startup = SessionLocal()
+        try:
+            result = db_startup.execute(
+                sa_update(PagosGmailSync)
+                .where(PagosGmailSync.status == "running")
+                .values(
+                    status="error",
+                    finished_at=datetime.utcnow(),
+                    error_message="Reinicio del servidor (SIGTERM) mientras el pipeline estaba en curso.",
+                )
+            )
+            if result.rowcount:
+                logger.warning(
+                    "[PAGOS_GMAIL] %d sync(s) en estado 'running' marcadas como 'error' al reiniciar (SIGTERM durante despliegue).",
+                    result.rowcount,
+                )
+            db_startup.commit()
+        finally:
+            db_startup.close()
+    except Exception as e:
+        logger.warning("[PAGOS_GMAIL] No se pudieron limpiar syncs huérfanas al iniciar: %s", e)
 
 
 @app.on_event("shutdown")
