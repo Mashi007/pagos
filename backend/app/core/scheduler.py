@@ -98,13 +98,6 @@ def _job_pagos_gmail_pipeline() -> None:
         db.close()
 
 
-def _job_pagos_gmail_sheet_2359() -> None:
-    """Job 23:59: crear hoja del dia siguiente (Pagos_Cobros_DDMesAAAA)."""
-    try:
-        from app.services.pagos_gmail.cron_helpers import ensure_sheet_for_tomorrow
-        ensure_sheet_for_tomorrow()
-    except Exception as e:
-        logger.exception("Error en job pagos_gmail_sheet_2359: %s", e)
 
 def start_scheduler() -> None:
     """Inicia el scheduler: notificaciones 2:00; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30."""
@@ -161,13 +154,6 @@ def start_scheduler() -> None:
         name=f"Pagos Gmail pipeline (cada {cron_min} min)",
     )
     logger.info("Pagos Gmail sync programado cada %d minutos (PAGOS_GMAIL_CRON_MINUTES=%d)", cron_min, cron_min)
-    # Pagos Gmail: crear hoja del dia siguiente a las 23:59
-    _scheduler.add_job(
-        _job_pagos_gmail_sheet_2359,
-        CronTrigger(hour=23, minute=59, timezone=SCHEDULER_TZ),
-        id="pagos_gmail_sheet_2359",
-        name="Pagos Gmail hoja 23:59",
-    )
     
     _scheduler.start()
     logger.info(

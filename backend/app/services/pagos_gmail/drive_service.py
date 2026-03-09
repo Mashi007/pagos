@@ -1,13 +1,11 @@
 """
-Drive: carpeta por fecha (DDMesAAAA), subir archivo, evitar duplicados por nombre+tamaño; crear hoja por día.
+Drive: carpeta por fecha (DDMesAAAA), subir imagen/PDF evitando duplicados por nombre+tamaño.
 """
 import io
 import logging
-from datetime import datetime
 from typing import Any, Optional, Tuple
 
 from app.core.config import settings
-from app.services.pagos_gmail.helpers import get_folder_name_from_date, get_sheet_name_for_date
 
 logger = logging.getLogger(__name__)
 
@@ -59,46 +57,3 @@ def upload_file(service: Any, MediaIoBaseUpload, folder_id: str, filename: str, 
         return None
 
 
-def get_or_create_sheet_for_date(service_drive: Any, service_sheets: Any, date: datetime) -> Optional[str]:
-    """
-    Obtiene o crea la hoja "Pagos_Cobros_DDMesAAAA" dentro de ROOT. Crea el archivo en Drive y la hoja con headers A-F.
-    Returns spreadsheet_id para usar con Sheets API.
-    """
-    sheet_name = get_sheet_name_for_date(date)
-    try:
-        q = f"'{ROOT_FOLDER_ID}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and name='{sheet_name}' and trashed=false"
-        resp = service_drive.files().list(q=q, spaces="drive", fields="files(id)").execute()
-        files = resp.get("files", [])
-        if files:
-            return files[0]["id"]
-        body = {"properties": {"title": sheet_name}, "sheets": [{"data": [{"rowData": [{"values": [
-            {"userEnteredValue": {"stringValue": "Asunto"}},
-            {"userEnteredValue": {"stringValue": "Fecha Pago"}},
-            {"userEnteredValue": {"stringValue": "Cédula"}},
-            {"userEnteredValue": {"stringValue": "Monto"}},
-            {"userEnteredValue": {"stringValue": "Referencia"}},
-            {"userEnteredValue": {"stringValue": "Link"}},
-        ]}]}]}]}
-        create = service_sheets.spreadsheets().create(body=body).execute()
-        spreadsheet_id = create["spreadsheetId"]
-        try:
-            f = service_drive.files().get(fileId=spreadsheet_id, fields="parents").execute()
-            prev = f.get("parents") or []
-            prev_str = ",".join(prev) if prev else ""
-            if prev_str:
-                service_drive.files().update(
-                    fileId=spreadsheet_id,
-                    addParents=ROOT_FOLDER_ID,
-                    removeParents=prev_str,
-                ).execute()
-            else:
-                service_drive.files().update(
-                    fileId=spreadsheet_id,
-                    addParents=ROOT_FOLDER_ID,
-                ).execute()
-        except Exception as move_err:
-            logger.warning("Sheet creado pero no se pudo mover a carpeta: %s", move_err)
-        return spreadsheet_id
-    except Exception as e:
-        logger.exception("get_or_create_sheet_for_date %s: %s", sheet_name, e)
-        return None
