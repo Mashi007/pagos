@@ -304,19 +304,31 @@ def download_excel(fecha: Optional[str] = None, db: Session = Depends(get_db)):
             ),
         )
 
+    from openpyxl.styles import Font
+
     wb = Workbook()
     ws = wb.active
     ws.title = "Pagos"
     ws.append(["Correo Pagador", "Fecha Pago", "Cedula", "Monto", "Referencia", "Link"])
-    for it in items:
+    link_font = Font(color="0563C1", underline="single")
+    for row_idx, it in enumerate(items, start=2):  # fila 1 = cabecera
+        link_url = (it.drive_link or "").strip()
+        if link_url and not link_url.startswith("http"):
+            link_url = "https://drive.google.com/file/d/" + link_url + "/view"
+        link_text = "Ver imagen" if link_url else ""
         ws.append([
             it.correo_origen or "",
             it.fecha_pago or "",
-            _formatear_cedula(it.cedula or ""),
+            formatear_cedula(it.cedula or ""),
             it.monto or "",
             it.numero_referencia or "",
-            it.drive_link or "",
+            link_text,
         ])
+        if link_url:
+            cell = ws.cell(row=row_idx, column=6)
+            cell.hyperlink = link_url
+            cell.value = "Ver imagen"
+            cell.font = link_font
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
