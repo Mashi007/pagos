@@ -76,7 +76,7 @@ def _job_informe_pagos_email() -> None:
 
 
 def _job_pagos_gmail_pipeline() -> None:
-    """Job cada 15 min: Gmail -> Drive -> Gemini -> Sheets (modulo Pagos)."""
+    """Job cada 15 min en segundo plano: procesa correos (Gmail -> Drive -> Gemini -> Sheets)."""
     db = SessionLocal()
     try:
         from app.api.v1.endpoints.pagos_gmail import _is_pipeline_running

@@ -280,6 +280,15 @@ class PagoService {
     return await apiClient.get(`${this.baseUrl}/gmail/status`)
   }
 
+  /** Pagos Gmail: confirmar día (sí/no). Si confirmado=true, se borran los datos del día en el servidor. */
+  async confirmarDiaGmail(confirmado: boolean, fecha?: string): Promise<{ confirmado: boolean; mensaje: string; borrados?: number }> {
+    const res = await apiClient.post<{ confirmado: boolean; mensaje: string; borrados?: number }>(
+      `${this.baseUrl}/gmail/confirmar-dia`,
+      { confirmado, fecha }
+    )
+    return res
+  }
+
   /** Pagos Gmail: descargar Excel del día (datos del Sheet). */
   async downloadGmailExcel(): Promise<void> {
     const axiosInstance = apiClient.getAxiosInstance()

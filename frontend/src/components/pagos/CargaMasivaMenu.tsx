@@ -39,7 +39,18 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
     try {
       await pagoService.runGmailNow()
       await pagoService.downloadGmailExcel()
-      toast.success('Excel generado desde Gmail descargado.')
+      toast.success('Excel descargado.')
+      pagoService.getGmailStatus().then(setGmailStatus)
+      // Pregunta tras la descarga: ¿borrar información del día? Sí = se borra en BD. No = se mantiene en BD.
+      const quiereBorrar = window.confirm(
+        '¿Quiere borrar la información del día? Sí = se borra. No = se mantiene en BD.'
+      )
+      const result = await pagoService.confirmarDiaGmail(quiereBorrar)
+      if (result.confirmado) {
+        toast.success(result.mensaje || 'Información del día borrada.')
+      } else {
+        toast(result.mensaje || 'Información del día se mantiene en BD.')
+      }
       pagoService.getGmailStatus().then(setGmailStatus)
     } catch (e) {
       toast.error(getErrorMessage(e))

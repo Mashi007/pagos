@@ -4,16 +4,18 @@ La información a extraer puede estar en adjuntos al correo o en imágenes en el
 (partes MIME inline o imágenes embebidas en HTML como data:image/...;base64,...).
 - POST /pagos/gmail/run-now: ejecutar pipeline ahora
 - GET /pagos/gmail/download-excel: descargar Excel del día (datos del Sheet del día)
-- GET /pagos/gmail/status: última ejecución y próxima programada
+- GET /pagos/gmail/status: última ejecución y próxima programada (cron cada 15 min en segundo plano)
+- POST /pagos/gmail/confirmar-dia: confirmación sí/no; si sí, se borran los datos del día (el Excel quedará vacío para esa fecha).
 """
 import io
 import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from sqlalchemy import and_, desc, select
+from pydantic import BaseModel
+from sqlalchemy import and_, delete, desc, select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -90,6 +92,47 @@ def _get_sheet_date_for_download() -> datetime:
     if now.hour == 23 and now.minute >= 50:
         base += timedelta(days=1)
     return base.replace(tzinfo=None)
+
+
+def _sheet_date_from_fecha(fecha: Optional[str]) -> datetime:
+    """Convierte fecha opcional 'YYYY-MM-DD' a datetime (00:00:00); si no, usa lógica del día actual."""
+    if not fecha or not fecha.strip():
+        return _get_sheet_date_for_download()
+    try:
+        return datetime.strptime(fecha.strip()[:10], "%Y-%m-%d")
+    except ValueError:
+        return _get_sheet_date_for_download()
+
+
+class ConfirmarDiaBody(BaseModel):
+    """Respuesta simple sí/no: si confirmado=true se borran los datos del día."""
+    confirmado: bool
+    fecha: Optional[str] = None  # YYYY-MM-DD; si no se envía, se usa el día actual (misma lógica que download)
+
+
+@router.post("/confirmar-dia", response_model=dict)
+def confirmar_dia(body: ConfirmarDiaBody = Body(...), db: Session = Depends(get_db)):
+    """
+    Confirmación desde la interfaz (sí/no). Si confirmado=true, se borran los ítems del día
+    en la BD para esa fecha; el Excel de ese día quedará vacío en futuras descargas.
+    Si confirmado=false no se hace nada.
+    """
+    if not body.confirmado:
+        return {"confirmado": False, "mensaje": "Sin cambios. Los datos del día se mantienen."}
+    from app.services.pagos_gmail.helpers import get_sheet_name_for_date
+    sheet_date = _sheet_date_from_fecha(body.fecha)
+    sheet_name = get_sheet_name_for_date(sheet_date)
+    result = db.execute(delete(PagosGmailSyncItem).where(PagosGmailSyncItem.sheet_name == sheet_name))
+    db.commit()
+    deleted = result.rowcount if hasattr(result, "rowcount") else 0
+    logger.info("Pagos Gmail confirmar-dia: confirmado=True, fecha=%s, sheet_name=%s, borrados=%s", sheet_date.date(), sheet_name, deleted)
+    return {
+        "confirmado": True,
+        "fecha": sheet_date.strftime("%Y-%m-%d"),
+        "sheet_name": sheet_name,
+        "borrados": deleted,
+        "mensaje": f"Datos del día {sheet_date.strftime('%Y-%m-%d')} borrados." if deleted else f"No había datos para el día {sheet_date.strftime('%Y-%m-%d')}.",
+    }
 
 
 @router.get("/download-excel")
