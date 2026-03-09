@@ -260,6 +260,11 @@ def _get_images_from_rfc822_parts(
     return out
 
 
+# Imágenes menores a este umbral son casi siempre logos, íconos o decoraciones de plantilla
+# de correo, no comprobantes de pago. 10 KB es un límite conservador seguro.
+MIN_PAYMENT_IMAGE_BYTES = 10_240  # 10 KB
+
+
 def get_all_images_and_files_for_message(
     service: Any, message_id: str, payload: dict
 ) -> List[Tuple[str, bytes, str]]:
@@ -269,22 +274,30 @@ def get_all_images_and_files_for_message(
     2. Partes inline MIME (Content-Disposition: inline).
     3. Imágenes base64 embebidas en HTML del cuerpo.
     4. Mensajes reenviados (message/rfc822 / Fwd:) — el comprobante está dentro del .eml adjunto.
-    Devuelve (filename, content_bytes, mime_type) sin duplicados.
+    Filtra imágenes < 10 KB (logos/decoraciones). Devuelve (filename, content_bytes, mime_type) sin duplicados.
     """
     seen: set = set()
     out: List[Tuple[str, bytes, str]] = []
 
     def _add(items: List[Tuple[str, bytes, str]]) -> None:
         for filename, content, mime in items:
-            key = (filename, len(content))
+            size = len(content)
+            if size < MIN_PAYMENT_IMAGE_BYTES:
+                logger.debug("[PAGOS_GMAIL] Imagen descartada por tamaño pequeño: %s (%d bytes) — probable logo/ícono", filename, size)
+                continue
+            key = (filename, size)
             if key not in seen:
                 seen.add(key)
+                logger.info("[PAGOS_GMAIL] Imagen aceptada: %s (%d bytes, %s)", filename, size, mime)
                 out.append((filename, content, mime))
 
     _add(get_attachments_for_message(service, message_id, payload))
     _add(_get_inline_images_from_parts(service, message_id, payload.get("parts", [])))
     _add(_get_images_from_html_body(service, message_id, payload))
     _add(_get_images_from_rfc822_parts(service, message_id, payload.get("parts", [])))
+
+    if not out:
+        logger.info("[PAGOS_GMAIL] Ninguna imagen >= 10KB encontrada para msg %s — todas descartadas o no había", message_id)
     return out
 
 
