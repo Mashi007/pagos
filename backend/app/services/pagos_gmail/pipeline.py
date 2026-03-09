@@ -83,6 +83,7 @@ def run_pipeline(db: Session) -> tuple[Optional[int], str]:
             if not sheet_id:
                 continue
             sheet_name = get_sheet_name_for_date(msg_date)
+            mensaje_tiene_fila_valida = False  # Si al menos una fila tiene datos válidos (no todo NCIV), marcar correo como leído
             full_payload = get_message_full_payload(gmail_svc, msg_id)
             if not full_payload and payload.get("parts"):
                 full_payload = payload
@@ -147,6 +148,7 @@ def run_pipeline(db: Session) -> tuple[Optional[int], str]:
                         r = _v(data.get("numero_referencia"))
                         tiene_valido = bool(f or c or m or r)
                         if tiene_valido:
+                            mensaje_tiene_fila_valida = True
                             # Campos válidos se muestran; el resto NCIV
                             row = [subject, f or NCIV, c or NCIV, m or NCIV, r or NCIV, drive_link or ""]
                             item_vals = {"fecha_pago": f or NCIV, "cedula": c or NCIV, "monto": m or NCIV, "numero_referencia": r or NCIV}
@@ -187,8 +189,11 @@ def run_pipeline(db: Session) -> tuple[Optional[int], str]:
                             )
                             db.add(item)
                             files_ok += 1
-            # Marcar como leído para no volver a procesarlo en futuras ejecuciones (solo se listan UNREAD)
-            mark_as_read(gmail_svc, msg_id)
+            # Marcar como leído solo si al menos una fila tiene información válida (no todo NCIV); si no, dejar no leído para reintentar
+            if mensaje_tiene_fila_valida:
+                mark_as_read(gmail_svc, msg_id)
+            else:
+                logger.info("[PAGOS_GMAIL] Correo sin filas válidas (todo NCIV): se deja como no leído para próxima ejecución")
             emails_ok += 1
         sync.finished_at = datetime.utcnow()
         sync.status = "success"
