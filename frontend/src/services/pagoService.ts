@@ -264,9 +264,9 @@ class PagoService {
     return response.data as Blob
   }
 
-/** Pagos Gmail: ejecutar pipeline (Gmail -> Drive -> Gemini -> Sheets). */
-  async runGmailNow(): Promise<{ sync_id: number | null; status: string }> {
-    return await apiClient.post(`${this.baseUrl}/gmail/run-now`)
+/** Pagos Gmail: ejecutar pipeline (Gmail -> Drive -> Gemini -> Sheets). force=true permite ejecutar aunque la última sync fue hace poco. */
+  async runGmailNow(force = true): Promise<{ sync_id: number | null; status: string }> {
+    return await apiClient.post(`${this.baseUrl}/gmail/run-now?force=${force}`)
   }
 
   /** Pagos Gmail: estado última ejecución y próxima (cron cada 15 min). */

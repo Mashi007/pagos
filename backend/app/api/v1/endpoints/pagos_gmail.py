@@ -70,19 +70,20 @@ def _last_run_too_recent(db: Session) -> tuple[bool, Optional[int]]:
 
 
 @router.post("/run-now")
-def run_now(db: Session = Depends(get_db)):
-    """Ejecuta el pipeline una vez (Gmail -> Drive -> Gemini -> Sheets). No se ejecuta si aún no es tiempo (intervalo mínimo desde la última ejecución)."""
+def run_now(force: bool = True, db: Session = Depends(get_db)):
+    """Ejecuta el pipeline una vez (Gmail -> Drive -> Gemini -> Sheets). Por defecto force=True (ejecución manual desde la UI); con force=false se respeta el intervalo mínimo."""
     if _is_pipeline_running(db):
         raise HTTPException(
             status_code=409,
             detail="Ya hay una sincronización en curso. Espere unos minutos.",
         )
-    too_recent, wait_min = _last_run_too_recent(db)
-    if too_recent and wait_min is not None:
-        raise HTTPException(
-            status_code=429,
-            detail=f"Aún no es tiempo de procesar. La última ejecución fue hace poco. Espere {wait_min} min (intervalo: PAGOS_GMAIL_CRON_MINUTES).",
-        )
+    if force is False:
+        too_recent, wait_min = _last_run_too_recent(db)
+        if too_recent and wait_min is not None:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Aún no es tiempo de procesar. La última ejecución fue hace poco. Espere {wait_min} min (intervalo: PAGOS_GMAIL_CRON_MINUTES).",
+            )
     sync_id, status = run_pipeline(db)
     if status == "no_credentials":
         log_pagos_gmail_config_status()
