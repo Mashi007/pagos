@@ -127,7 +127,8 @@ def get_clientes(
             count_q = count_q.where(Cliente.estado == est)
 
         total = db.scalar(count_q) or 0
-        q = q.order_by(Cliente.id.desc()).offset((page - 1) * per_page).limit(per_page)
+        # Ordenar por fecha de registro (más recientes primero); si falta, por id desc
+        q = q.order_by(Cliente.fecha_registro.desc().nullslast(), Cliente.id.desc()).offset((page - 1) * per_page).limit(per_page)
         result = db.execute(q)
         rows = result.all()
 
