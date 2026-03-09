@@ -93,13 +93,13 @@ def get_pagos_gmail_credentials() -> Optional[Any]:
     client_secret = getattr(settings, "GOOGLE_CLIENT_SECRET", None)
     tokens_path = getattr(settings, "GMAIL_TOKENS_PATH", "gmail_tokens.json")
     if not client_id or not client_secret:
-        logger.warning(
-            "%s No se usa archivo de tokens: GOOGLE_CLIENT_ID o GOOGLE_CLIENT_SECRET no configurados (env).",
+        logger.debug(
+            "%s No se usa archivo de tokens: GOOGLE_CLIENT_ID o GOOGLE_CLIENT_SECRET no configurados (env). Se intentará credenciales desde BD (Informe de pagos).",
             CONFIG_LOG_PREFIX,
         )
     elif not tokens_path or not os.path.isfile(tokens_path):
-        logger.warning(
-            "%s No se usa archivo de tokens: GMAIL_TOKENS_PATH vacío o archivo no existe (%s).",
+        logger.debug(
+            "%s No se usa archivo de tokens: GMAIL_TOKENS_PATH vacío o archivo no existe (%s). Se intentará credenciales desde BD.",
             CONFIG_LOG_PREFIX, tokens_path or "(vacío)",
         )
     elif client_id and client_secret and tokens_path and os.path.isfile(tokens_path):
@@ -145,7 +145,10 @@ def _fallback_informe_pagos_creds() -> Optional[Any]:
     """
     try:
         from app.core.google_credentials import get_google_credentials
-        return get_google_credentials(SCOPES_INFORME_PAGOS_GMAIL)
+        creds = get_google_credentials(SCOPES_INFORME_PAGOS_GMAIL)
+        if creds is not None:
+            logger.info("%s Usando credenciales desde Configuración > Informe de pagos (BD).", CONFIG_LOG_PREFIX)
+        return creds
     except Exception as e:
         logger.debug("[PAGOS_GMAIL] Fallback informe_pagos no disponible: %s", e)
     return None

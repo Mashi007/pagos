@@ -3,6 +3,11 @@ Aplicación principal FastAPI
 """
 import time
 import logging
+import warnings
+
+# Evitar ruido en logs por versiones de urllib3/chardet (dependencias de requests)
+warnings.filterwarnings("ignore", message=".*urllib3.*chardet.*", category=UserWarning, module="requests")
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -27,8 +32,12 @@ class RequestLogMiddleware(BaseHTTPMiddleware):
         status = response.status_code
         path = request.url.path
         msg = "request method=%s path=%s status=%s elapsed_ms=%s"
-        if status >= 500 or elapsed_ms >= 5000:
-            logger.warning(msg + " (slow_or_error)", request.method, path, status, elapsed_ms)
+        # run-now puede tardar 20–120 s; no marcar como slow
+        is_run_now = "gmail/run-now" in path
+        if status >= 500:
+            logger.warning(msg + " (error)", request.method, path, status, elapsed_ms)
+        elif not is_run_now and elapsed_ms >= 5000:
+            logger.warning(msg + " (slow)", request.method, path, status, elapsed_ms)
         elif request.method == "POST" and path.rstrip("/").endswith("/api/v1/pagos") and status == 409:
             # 409 documento duplicado en carga masiva: muchos por lote; solo DEBUG para no saturar logs
             logger.debug(msg, request.method, path, status, elapsed_ms)
