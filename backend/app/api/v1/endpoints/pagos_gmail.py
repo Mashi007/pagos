@@ -208,67 +208,94 @@ def confirmar_dia(body: ConfirmarDiaBody = Body(...), db: Session = Depends(get_
     }
 
 
-def _find_sheet_date_with_data(db: Session, from_date: datetime, max_days_back: int = 30) -> tuple[Optional[datetime], list]:
+def _find_most_recent_data(db: Session) -> tuple[Optional[str], Optional[datetime], list]:
     """
-    Busca la fecha más reciente con datos, probando from_date y hasta max_days_back días anteriores.
-    El lookback amplio (30 días por defecto) cubre correos del backlog recibidos semanas atrás.
-    Devuelve (sheet_date, items) si hay datos; si no, (None, []).
+    Busca el sheet_name más reciente con datos (sin importar la fecha del correo).
+    Útil para descargar el último batch procesado aunque los correos sean de semanas atrás.
+    Devuelve (sheet_name, email_date, items) o (None, None, []).
     """
-    from app.services.pagos_gmail.helpers import get_sheet_name_for_date
-    for delta in range(max_days_back + 1):
-        d = from_date - timedelta(days=delta)
-        sheet_name = get_sheet_name_for_date(d)
-        items = db.execute(
-            select(PagosGmailSyncItem)
-            .join(PagosGmailSync, PagosGmailSyncItem.sync_id == PagosGmailSync.id)
-            .where(PagosGmailSyncItem.sheet_name == sheet_name)
-            .order_by(PagosGmailSyncItem.created_at)
-        ).scalars().all()
-        if items:
-            return d, items
-    return None, []
-
-
-def _get_latest_date_with_data(db: Session) -> Optional[str]:
-    """Devuelve la fecha (YYYY-MM-DD) del ítem más reciente, útil para guiar al usuario."""
-    from app.services.pagos_gmail.helpers import get_sheet_name_for_date
-    from datetime import datetime as dt
-    item = db.execute(
-        select(PagosGmailSyncItem)
+    from app.services.pagos_gmail.helpers import parse_date_from_sheet_name
+    row = db.execute(
+        select(PagosGmailSyncItem.sheet_name)
         .join(PagosGmailSync, PagosGmailSyncItem.sync_id == PagosGmailSync.id)
         .order_by(desc(PagosGmailSyncItem.created_at))
         .limit(1)
     ).scalars().first()
-    if not item or not item.created_at:
+    if not row:
+        return None, None, []
+    sheet_name = row
+    items = db.execute(
+        select(PagosGmailSyncItem)
+        .join(PagosGmailSync, PagosGmailSyncItem.sync_id == PagosGmailSync.id)
+        .where(PagosGmailSyncItem.sheet_name == sheet_name)
+        .order_by(PagosGmailSyncItem.created_at)
+    ).scalars().all()
+    email_date = parse_date_from_sheet_name(sheet_name)
+    return sheet_name, email_date, items
+
+
+def _find_sheet_by_fecha(db: Session, fecha_date: datetime) -> tuple[Optional[str], list]:
+    """Busca items para una fecha concreta (sheet_name exacto). Devuelve (sheet_name, items)."""
+    from app.services.pagos_gmail.helpers import get_sheet_name_for_date
+    sheet_name = get_sheet_name_for_date(fecha_date)
+    items = db.execute(
+        select(PagosGmailSyncItem)
+        .join(PagosGmailSync, PagosGmailSyncItem.sync_id == PagosGmailSync.id)
+        .where(PagosGmailSyncItem.sheet_name == sheet_name)
+        .order_by(PagosGmailSyncItem.created_at)
+    ).scalars().all()
+    return (sheet_name, list(items)) if items else (sheet_name, [])
+
+
+def _get_latest_date_with_data(db: Session) -> Optional[str]:
+    """Devuelve la fecha del correo (YYYY-MM-DD) del ítem más reciente en BD, para guiar al usuario."""
+    from app.services.pagos_gmail.helpers import parse_date_from_sheet_name
+    row = db.execute(
+        select(PagosGmailSyncItem.sheet_name)
+        .join(PagosGmailSync, PagosGmailSyncItem.sync_id == PagosGmailSync.id)
+        .order_by(desc(PagosGmailSyncItem.created_at))
+        .limit(1)
+    ).scalars().first()
+    if not row:
         return None
-    # sheet_name tiene formato Pagos_Cobros_9Marzo2026 → extraer fecha del created_at
-    return item.created_at.strftime("%Y-%m-%d")
+    d = parse_date_from_sheet_name(row)
+    return d.strftime("%Y-%m-%d") if d else None
 
 
 @router.get("/download-excel")
 def download_excel(fecha: Optional[str] = None, db: Session = Depends(get_db)):
     """
-    Genera y devuelve un Excel con los ítems del día. Por defecto usa la fecha actual (America/Caracas; después de 23:50 se considera el día siguiente).
-    Si no hay datos para esa fecha, busca en los 3 días anteriores (evita desajuste por zona horaria o fecha del correo).
-    Opcional: ?fecha=YYYY-MM-DD para descargar un día concreto.
-    Si no hay datos en ninguna fecha reciente, devuelve 404 con mensaje claro (no se descarga un Excel vacío).
+    Genera y devuelve un Excel con los ítems procesados.
+    - Sin ?fecha: descarga el lote más reciente en BD, sin importar la fecha del correo
+      (cubre backlog de cualquier antigüedad; los correos se procesan mientras estén no leídos).
+    - Con ?fecha=YYYY-MM-DD: descarga exactamente esa fecha.
+    Si no hay datos devuelve 404 (no se genera Excel vacío).
     Columnas: Asunto, Fecha Pago, Cédula, Monto, Referencia, Link.
     """
     from openpyxl import Workbook
-    from app.services.pagos_gmail.helpers import get_sheet_name_for_date
-    sheet_date = _sheet_date_from_fecha(fecha)
-    sheet_date_found, items = _find_sheet_date_with_data(db, sheet_date)
-    if not sheet_date_found or not items:
-        requested_str = sheet_date.strftime("%Y-%m-%d")
+    items: list = []
+    sheet_date: Optional[datetime] = None
+
+    if fecha and fecha.strip():
+        # Fecha explícita: buscar ese día concreto
+        fecha_date = _sheet_date_from_fecha(fecha)
+        _, items = _find_sheet_by_fecha(db, fecha_date)
+        sheet_date = fecha_date
+    else:
+        # Sin fecha: lote más reciente en BD (backlog de cualquier antigüedad)
+        _, sheet_date, items = _find_most_recent_data(db)
+
+    if not items:
         raise HTTPException(
             status_code=404,
             detail=(
-                f"Sin datos para {requested_str}. "
-                "Pulse «Generar Excel desde Gmail» (Cargar datos > Generar Excel desde Gmail), espere a que termine y vuelva a descargar. "
-                "Se procesan correos no leídos con adjuntos (imagen/PDF). Verifique que GEMINI_API_KEY esté configurado en el servidor."
+                "Sin datos disponibles. "
+                "Pulse «Generar Excel desde Gmail» para procesar correos no leídos con adjuntos (imagen/PDF) "
+                "y vuelva a descargar. Verifique que GEMINI_API_KEY esté configurado en el servidor."
+                + (f" (buscado: {fecha})" if fecha else "")
             ),
         )
-    sheet_date = sheet_date_found
+
     wb = Workbook()
     ws = wb.active
     ws.title = "Pagos"
@@ -285,5 +312,10 @@ def download_excel(fecha: Optional[str] = None, db: Session = Depends(get_db)):
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
-    filename = f"Pagos_Gmail_{sheet_date.strftime('%Y-%m-%d')}.xlsx"
-    return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename={filename}"})
+    date_str = sheet_date.strftime("%Y-%m-%d") if sheet_date else "sin-fecha"
+    filename = f"Pagos_Gmail_{date_str}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )

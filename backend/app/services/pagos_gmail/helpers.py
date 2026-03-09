@@ -48,6 +48,27 @@ def get_sheet_name_for_date(d: datetime) -> str:
     return f"Pagos_Cobros_{get_folder_name_from_date(d)}"
 
 
+def parse_date_from_sheet_name(sheet_name: str) -> Optional[datetime]:
+    """
+    Inversa de get_sheet_name_for_date: 'Pagos_Cobros_9Marzo2026' → datetime(2026, 3, 9).
+    Devuelve None si el formato no coincide.
+    """
+    prefix = "Pagos_Cobros_"
+    if not sheet_name or not sheet_name.startswith(prefix):
+        return None
+    rest = sheet_name[len(prefix):]  # ej. "9Marzo2026"
+    for i, mes in enumerate(MESES_ES, 1):
+        if mes in rest:
+            idx = rest.index(mes)
+            day_str = rest[:idx]
+            year_str = rest[idx + len(mes):]
+            try:
+                return datetime(int(year_str), i, int(day_str))
+            except (ValueError, TypeError):
+                return None
+    return None
+
+
 def get_mime_type(filename: str) -> str:
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
     return MIME_BY_EXT.get(ext, "application/octet-stream")
