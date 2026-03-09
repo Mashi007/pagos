@@ -72,7 +72,7 @@ def get_or_create_sheet_for_date(service_drive: Any, service_sheets: Any, date: 
         if files:
             return files[0]["id"]
         body = {"properties": {"title": sheet_name}, "sheets": [{"data": [{"rowData": [{"values": [
-            {"userEnteredValue": {"stringValue": "Correo Origen"}},
+            {"userEnteredValue": {"stringValue": "Asunto"}},
             {"userEnteredValue": {"stringValue": "Fecha Pago"}},
             {"userEnteredValue": {"stringValue": "Cédula"}},
             {"userEnteredValue": {"stringValue": "Monto"}},

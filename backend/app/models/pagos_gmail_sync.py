@@ -24,7 +24,8 @@ class PagosGmailSyncItem(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     sync_id = Column(Integer, ForeignKey("pagos_gmail_sync.id", ondelete="CASCADE"), nullable=False, index=True)
-    correo_origen = Column(String(255), nullable=False)
+    correo_origen = Column(String(255), nullable=False)  # remitente; se mantiene por compatibilidad
+    asunto = Column(String(500), nullable=True)  # Asunto del correo (columna A en Excel)
     fecha_pago = Column(String(100), nullable=True)
     cedula = Column(String(50), nullable=True)
     monto = Column(String(100), nullable=True)

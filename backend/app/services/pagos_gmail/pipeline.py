@@ -61,6 +61,7 @@ def run_pipeline(db: Session) -> tuple[Optional[int], str]:
             headers = msg_info["headers"]
             from_h = headers.get("from") or headers.get("From") or ""
             sender = extract_sender_email(from_h)
+            subject = (headers.get("subject") or headers.get("Subject") or "").strip() or sender
             msg_date = get_message_date(headers)
             folder_name = get_folder_name_from_date(msg_date)
             folder_id = get_or_create_folder(drive_svc, folder_name)
@@ -83,7 +84,7 @@ def run_pipeline(db: Session) -> tuple[Optional[int], str]:
                     logger.info("[PAGOS_GMAIL] Extrayendo datos con Gemini: %s", filename)
                     data = extract_payment_data(content, filename)
                     row = [
-                        sender,
+                        subject,
                         data.get("fecha_pago", "No encontrado"),
                         data.get("cedula", "No encontrado"),
                         data.get("monto", "No encontrado"),
@@ -94,6 +95,7 @@ def run_pipeline(db: Session) -> tuple[Optional[int], str]:
                         item = PagosGmailSyncItem(
                             sync_id=sync_id,
                             correo_origen=sender,
+                            asunto=subject,
                             fecha_pago=data.get("fecha_pago"),
                             cedula=data.get("cedula"),
                             monto=data.get("monto"),

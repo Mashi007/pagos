@@ -1,5 +1,5 @@
 """
-Sheets: añadir fila con columnas A=Correo Origen, B=Fecha Pago, C=Cédula, D=Monto, E=Referencia, F=Link.
+Sheets: añadir fila con columnas A=Asunto, B=Fecha Pago, C=Cédula, D=Monto, E=Referencia, F=Link.
 """
 import logging
 from typing import Any, List
@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 def append_row(service_sheets: Any, spreadsheet_id: str, row: List[Any]) -> bool:
-    """Añade una fila al sheet (hoja 0). row = [correo, fecha_pago, cedula, monto, referencia, link]."""
+    """Añade una fila al sheet (hoja 0). row = [asunto, fecha_pago, cedula, monto, referencia, link]."""
     try:
         body = {"values": [row]}
         service_sheets.spreadsheets().values().append(

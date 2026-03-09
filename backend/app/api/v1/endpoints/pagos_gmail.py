@@ -139,7 +139,7 @@ def confirmar_dia(body: ConfirmarDiaBody = Body(...), db: Session = Depends(get_
 def download_excel(db: Session = Depends(get_db)):
     """
     Genera y devuelve un Excel con los ítems del día (según lógica 23:50 America/Caracas).
-    Columnas: Correo Origen, Fecha Pago, Cédula, Monto, Referencia, Link (para carga masiva).
+    Columnas: Asunto, Fecha Pago, Cédula, Monto, Referencia, Link (para carga masiva).
     Los datos provienen del pipeline Gmail -> Drive -> Gemini -> Sheets: ejecute POST /run-now
     y tenga GEMINI_API_KEY configurado para que Gemini extraiga fecha, cédula, monto y referencia
     de cada adjunto (imagen/PDF). Si no hay ítems para la fecha, se añade una fila informativa.
@@ -157,7 +157,7 @@ def download_excel(db: Session = Depends(get_db)):
     wb = Workbook()
     ws = wb.active
     ws.title = "Pagos"
-    ws.append(["Correo Origen", "Fecha Pago", "Cedula", "Monto", "Referencia", "Link"])
+    ws.append(["Asunto", "Fecha Pago", "Cedula", "Monto", "Referencia", "Link"])
     if not items:
         # Sin ítems: el pipeline no ha procesado correos para esta fecha o no se ha ejecutado.
         # Añadir una fila informativa para que el Excel no llegue solo con cabeceras.
@@ -171,7 +171,7 @@ def download_excel(db: Session = Depends(get_db)):
         ])
     for it in items:
         ws.append([
-            it.correo_origen or "",
+            (getattr(it, "asunto", None) or it.correo_origen) or "",
             it.fecha_pago or "",
             it.cedula or "",
             it.monto or "",
