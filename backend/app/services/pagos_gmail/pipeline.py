@@ -127,27 +127,40 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
                     logger.info("[PAGOS_GMAIL] Asunto reemplazado por remitente reenviado: %s", fwd_sender)
             attachments = get_all_images_and_files_for_message(gmail_svc, msg_id, full_payload)
             mensaje_tiene_fila_valida = False
-            if len(attachments) == 0:
-                # Sin adjuntos ni imágenes en cuerpo: fila NA
-                row = [subject, PAGOS_NA, PAGOS_NA, PAGOS_NA, PAGOS_NA, ""]
-                if append_row(sheets_svc, sheet_id, row):
-                    item = PagosGmailSyncItem(
+            fila_guardada = False  # garantía: al menos 1 fila por correo
+
+            def _guardar_fila(row_vals: list, drive_file_id=None, drive_lnk="") -> bool:
+                """Escribe fila en Sheets y persiste en BD. Retorna True si tuvo éxito."""
+                nonlocal files_ok, fila_guardada
+                if append_row(sheets_svc, sheet_id, row_vals):
+                    db.add(PagosGmailSyncItem(
                         sync_id=sync_id,
                         correo_origen=sender,
                         asunto=subject,
-                        fecha_pago=PAGOS_NA,
-                        cedula=PAGOS_NA,
-                        monto=PAGOS_NA,
-                        numero_referencia=PAGOS_NA,
-                        drive_file_id=None,
-                        drive_link=None,
+                        fecha_pago=row_vals[1],
+                        cedula=row_vals[2],
+                        monto=row_vals[3],
+                        numero_referencia=row_vals[4],
+                        drive_file_id=drive_file_id,
+                        drive_link=drive_lnk or None,
                         sheet_name=sheet_name,
-                    )
-                    db.add(item)
+                    ))
                     files_ok += 1
+                    fila_guardada = True
+                    return True
+                return False
+
+            if len(attachments) == 0:
+                # Sin adjuntos ni imágenes en cuerpo: fila NA
+                _guardar_fila([subject, PAGOS_NA, PAGOS_NA, PAGOS_NA, PAGOS_NA, ""])
                 logger.info("[PAGOS_GMAIL] Correo sin adjuntos ni imágenes: fila NA")
             else:
                 # 1 o más imágenes/PDFs: procesar cada uno con Gemini (incluye imágenes dentro de Fwd:)
+
+                def _v(x: Optional[str]) -> str:
+                    v = (x or "").strip()
+                    return v if v and v.upper() != "NA" else ""
+
                 for filename, content, mime_type in attachments:
                     try:
                         up = upload_file(drive_svc, MediaIoBaseUpload, folder_id, filename, content, mime_type)
@@ -159,10 +172,6 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
                         data = extract_payment_data(content, filename)
                         if delay_gemini > 0:
                             time.sleep(delay_gemini)
-                        # ¿Información válida? Al menos un campo distinto de vacío o NA
-                        def _v(x: Optional[str]) -> str:
-                            v = (x or "").strip()
-                            return v if v and v.upper() != "NA" else ""
                         f = _v(data.get("fecha_pago"))
                         c = _v(data.get("cedula"))
                         m = _v(data.get("monto"))
@@ -170,49 +179,21 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
                         tiene_valido = bool(f or c or m or r)
                         if tiene_valido:
                             mensaje_tiene_fila_valida = True
-                            row = [subject, f or PAGOS_NA, c or PAGOS_NA, m or PAGOS_NA, r or PAGOS_NA, drive_link or ""]
-                            item_vals = {"fecha_pago": f or PAGOS_NA, "cedula": c or PAGOS_NA, "monto": m or PAGOS_NA, "numero_referencia": r or PAGOS_NA}
-                        else:
-                            row = [subject, PAGOS_NA, PAGOS_NA, PAGOS_NA, PAGOS_NA, drive_link or ""]
-                            item_vals = {"fecha_pago": PAGOS_NA, "cedula": PAGOS_NA, "monto": PAGOS_NA, "numero_referencia": PAGOS_NA}
-                        if append_row(sheets_svc, sheet_id, row):
-                            item = PagosGmailSyncItem(
-                                sync_id=sync_id,
-                                correo_origen=sender,
-                                asunto=subject,
-                                fecha_pago=item_vals["fecha_pago"],
-                                cedula=item_vals["cedula"],
-                                monto=item_vals["monto"],
-                                numero_referencia=item_vals["numero_referencia"],
-                                drive_file_id=file_id,
-                                drive_link=drive_link or None,
-                                sheet_name=sheet_name,
-                            )
-                            db.add(item)
-                            files_ok += 1
+                        row = [subject, f or PAGOS_NA, c or PAGOS_NA, m or PAGOS_NA, r or PAGOS_NA, drive_link or ""]
+                        _guardar_fila(row, drive_file_id=file_id, drive_lnk=drive_link or "")
                     except Exception as e:
                         logger.warning("Error procesando adjunto/cuerpo %s: %s", filename, e)
-                        row = [subject, PAGOS_NA, PAGOS_NA, PAGOS_NA, PAGOS_NA, ""]
-                        if append_row(sheets_svc, sheet_id, row):
-                            item = PagosGmailSyncItem(
-                                sync_id=sync_id,
-                                correo_origen=sender,
-                                asunto=subject,
-                                fecha_pago=PAGOS_NA,
-                                cedula=PAGOS_NA,
-                                monto=PAGOS_NA,
-                                numero_referencia=PAGOS_NA,
-                                drive_file_id=None,
-                                drive_link=None,
-                                sheet_name=sheet_name,
-                            )
-                            db.add(item)
-                            files_ok += 1
-            # Marcar siempre como leído una vez procesado (evita que el mismo correo se reprocese
-            # indefinidamente si Gemini no puede extraer datos — ej. notificaciones de vencimiento).
+                        _guardar_fila([subject, PAGOS_NA, PAGOS_NA, PAGOS_NA, PAGOS_NA, ""])
+
+            # Garantía 1 correo → ≥ 1 fila: si ninguna escritura tuvo éxito, intentar fila NA de respaldo
+            if not fila_guardada:
+                logger.warning("[PAGOS_GMAIL] Ninguna fila escrita para msg %s — fila NA de respaldo", msg_id)
+                _guardar_fila([subject, PAGOS_NA, PAGOS_NA, PAGOS_NA, PAGOS_NA, ""])
+
+            # Marcar siempre como leído una vez procesado
             mark_as_read(gmail_svc, msg_id)
             if not mensaje_tiene_fila_valida:
-                logger.info("[PAGOS_GMAIL] Correo procesado con todo NA: marcado como leído (no era comprobante de pago o imagen ilegible)")
+                logger.info("[PAGOS_GMAIL] Correo procesado con todo NA: marcado como leído")
             emails_ok += 1
             # Commit incremental: persiste cada correo procesado de inmediato.
             # Si el servidor se reinicia o cae a mitad del pipeline (Render free tier),
