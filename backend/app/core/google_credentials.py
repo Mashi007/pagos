@@ -75,6 +75,15 @@ def _credentials_oauth(scopes: List[str]) -> Optional[Any]:
                 "actualice 'Client ID' y 'Client secret' en la app (Configuración > Informe de pagos) para que coincidan exactamente con Google Cloud Console > APIs y servicios > Credenciales > OAuth 2.0. "
                 "Si regeneró el Client Secret en la consola, péguelo de nuevo en la configuración."
             )
+        elif "invalid_scope" in err_str:
+            logger.warning(
+                "[CONFIG] Google devolvió 'invalid_scope'. El refresh_token actual no tiene los permisos (scopes) que pide la app (p. ej. Gmail o Vision). "
+                "Solución: en Configuración > Google (Drive, Sheets, Gmail, OCR) pulse «Conectar con Google» de nuevo y autorice todos los accesos."
+            )
+        elif "reauthentication" in err_str or "reauth" in err_str:
+            logger.warning(
+                "[CONFIG] Google pide reautenticación. En Configuración > Google (Drive, Sheets, Gmail, OCR) pulse «Conectar con Google» de nuevo y vuelva a autorizar."
+            )
         return None
 
 
