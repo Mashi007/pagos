@@ -22,6 +22,7 @@ from app.core.database import SessionLocal, get_db
 from app.core.deps import get_current_user
 from app.models.pagos_gmail_sync import PagosGmailSync, PagosGmailSyncItem
 from app.services.pagos_gmail.credentials import get_pagos_gmail_credentials, log_pagos_gmail_config_status
+from app.services.pagos_gmail.helpers import formatear_cedula
 from app.services.pagos_gmail.pipeline import run_pipeline
 
 logger = logging.getLogger(__name__)
@@ -267,32 +268,6 @@ def _get_latest_date_with_data(db: Session) -> Optional[str]:
         return None
     d = parse_date_from_sheet_name(row)
     return d.strftime("%Y-%m-%d") if d else None
-
-
-def _formatear_cedula(cedula: str) -> str:
-    """
-    Aplica formato venezolano a la cédula:
-    - Si es NA o vacío → devuelve tal cual.
-    - Si ya tiene prefijo E o J (con o sin guion) → normaliza a E-XXXXXXX / J-XXXXXXX.
-    - En cualquier otro caso → quita ceros iniciales y antepone V-.
-    Ejemplos: '030145077' → 'V-30145077', 'E12345678' → 'E-12345678', 'NA' → 'NA'.
-    """
-    import re as _re
-    v = (cedula or "").strip()
-    if not v or v.upper() == "NA":
-        return v
-    # Si ya tiene prefijo explícito V/E/J (con o sin guion)
-    m = _re.match(r"^([VEJvej])-?(\d+)$", v)
-    if m:
-        prefix = m.group(1).upper()
-        digits = m.group(2).lstrip("0") or "0"
-        return f"{prefix}-{digits}"
-    # Solo dígitos (o con ceros iniciales): asumir venezolano → V-
-    if _re.match(r"^\d+$", v):
-        digits = v.lstrip("0") or "0"
-        return f"V-{digits}"
-    # Valor no reconocido (letras raras, etc.): devolver sin modificar
-    return v
 
 
 @router.get("/download-excel")

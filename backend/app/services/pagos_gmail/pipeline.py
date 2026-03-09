@@ -37,6 +37,7 @@ from app.services.pagos_gmail.gmail_service import (
 from app.services.pagos_gmail.gemini_service import extract_payment_data, PAGOS_NA
 from app.services.pagos_gmail.helpers import (
     extract_sender_email,
+    formatear_cedula,
     get_folder_name_from_date,
     get_sheet_name_for_date,
 )
@@ -200,10 +201,10 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
                             time.sleep(delay_gemini)
 
                         f = _v(data.get("fecha_pago"))
-                        c = _v(data.get("cedula"))
+                        c = formatear_cedula(_v(data.get("cedula")))
                         m = _v(data.get("monto"))
                         r = _v(data.get("numero_referencia"))
-                        tiene_valido = bool(f or c or m or r)
+                        tiene_valido = bool(f or (c and c != PAGOS_NA) or m or r)
                         if tiene_valido:
                             mensaje_tiene_fila_valida = True
 

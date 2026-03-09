@@ -105,6 +105,29 @@ def subject_acceptable_for_pipeline(subject: Optional[str], keywords_or: Optiona
     return False
 
 
+def formatear_cedula(cedula: Optional[str]) -> str:
+    """
+    Aplica formato venezolano a la cédula extraída por Gemini:
+    - Vacío / NA      → devuelve tal cual.
+    - Solo dígitos    → quita ceros iniciales y antepone V-  (ej. '030145077' → 'V-30145077').
+    - Prefijo E o J   → normaliza a E-XXXXXXX / J-XXXXXXX   (ej. 'E12345678' → 'E-12345678').
+    - Prefijo V       → normaliza quitando ceros             (ej. 'V-030145077' → 'V-30145077').
+    - Valor no reconocido → devuelve sin modificar.
+    """
+    v = (cedula or "").strip()
+    if not v or v.upper() == "NA":
+        return v
+    m = re.match(r"^([VEJvej])-?(\d+)$", v)
+    if m:
+        prefix = m.group(1).upper()
+        digits = m.group(2).lstrip("0") or "0"
+        return f"{prefix}-{digits}"
+    if re.match(r"^\d+$", v):
+        digits = v.lstrip("0") or "0"
+        return f"V-{digits}"
+    return v
+
+
 def extract_sender_email(from_header_value: Optional[str]) -> str:
     """Extrae solo la dirección de email del campo From (sin nombre mostrado)."""
     if not from_header_value or not from_header_value.strip():
