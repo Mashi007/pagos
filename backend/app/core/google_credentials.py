@@ -84,6 +84,10 @@ def _credentials_oauth(scopes: List[str]) -> Optional[Any]:
             logger.warning(
                 "[CONFIG] Google pide reautenticación. En Configuración > Google (Drive, Sheets, Gmail, OCR) pulse «Conectar con Google» de nuevo y vuelva a autorizar."
             )
+        elif "invalid_grant" in err_str or "expired" in err_str or "revoked" in err_str:
+            logger.warning(
+                "[CONFIG] Token OAuth expirado o revocado. En Configuración > Google (Drive, Sheets, Gmail, OCR) pulse «Conectar con Google» y complete la autorización para obtener un nuevo token."
+            )
         return None
 
 
