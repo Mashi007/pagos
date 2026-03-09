@@ -78,12 +78,27 @@ def extract_payment_data(file_content: bytes, filename: str, api_key: Optional[s
         import google.generativeai as genai
         genai.configure(api_key=key)
         model = genai.GenerativeModel(model_name)
-        part = {"inline_data": {"mime_type": mime, "data": base64.b64encode(file_content).decode("utf-8")}}
+
+        # Construir la parte de imagen: PIL.Image para imágenes (más fiable en 0.8+),
+        # inline_data con bytes crudos para PDFs.
+        is_pdf = mime == "application/pdf" or filename.lower().endswith(".pdf")
+        if is_pdf:
+            image_part = {"mime_type": mime, "data": file_content}
+        else:
+            try:
+                import io as _io
+                from PIL import Image as _PIL
+                image_part = _PIL.open(_io.BytesIO(file_content))
+                logger.warning("[PAGOS_GMAIL] Gemini usando PIL.Image para %s", filename)
+            except Exception as pil_err:
+                logger.warning("[PAGOS_GMAIL] PIL falló (%s), usando bytes crudos para %s", pil_err, filename)
+                image_part = {"mime_type": mime, "data": file_content}
+
         last_error = None
         for attempt in range(GEMINI_RATE_LIMIT_MAX_RETRIES + 1):
             try:
                 response = model.generate_content(
-                    [GEMINI_PROMPT, part],
+                    [GEMINI_PROMPT, image_part],
                     generation_config=genai.types.GenerationConfig(temperature=0.1),
                 )
                 # Verificar si la respuesta fue bloqueada por safety filters

@@ -121,3 +121,4 @@ gunicorn==23.0.0
 
 # Gemini (Pagos Gmail: extraer datos de comprobantes)
 google-generativeai>=0.8.0
+Pillow>=10.0.0
