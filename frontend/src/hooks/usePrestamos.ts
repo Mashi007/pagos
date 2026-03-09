@@ -1,4 +1,4 @@
-﻿import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { prestamoService } from '../services/prestamoService'
 import { Prestamo, PrestamoForm } from '../types'
@@ -265,7 +265,7 @@ export function usePrestamosKPIs(filters?: {
   return useQuery({
     queryKey: [...prestamoKeys.all, 'kpis', filters],
     queryFn: () => prestamoService.getKPIs(filters),
-    staleTime: 60 * 1000, // 1 min para actualizar KPIs
+    staleTime: 0, // Siempre refetch tras invalidar (al aprobar/asignar fecha)
     refetchOnMount: true,
     refetchOnWindowFocus: true,
     refetchInterval: 2 * 60 * 1000, // Refrescar cada 2 min

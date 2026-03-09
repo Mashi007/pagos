@@ -12,9 +12,10 @@ from typing import Optional
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel, field_validator
-from sqlalchemy import delete, func, or_, select, text
+from sqlalchemy import cast, delete, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from sqlalchemy.types import Date
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
@@ -300,18 +301,17 @@ def get_prestamos_stats(
             mes_u = inicio_mes.month
             anio_u = inicio_mes.year
 
-    # Fecha de referencia: parte DATE de aprobación/registro (sin conversión TZ para evitar que cuente en mes equivocado)
+    # Fecha de referencia: parte DATE de aprobación/registro (evita problemas de alias y TZ)
     # Solo clientes ACTIVOS (consistente con dashboard, pagos, reportes)
-    _cond_fecha = text(
-        "(COALESCE(prestamos.fecha_aprobacion, prestamos.fecha_registro))::date BETWEEN :inicio AND :fin"
-    ).bindparams(inicio=inicio_mes, fin=fin_mes)
+    fecha_ref = cast(func.coalesce(Prestamo.fecha_aprobacion, Prestamo.fecha_registro), Date)
     q_base = (
         select(Prestamo)
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
         .where(
             Cliente.estado == "ACTIVO",
             Prestamo.estado == "APROBADO",
-            _cond_fecha,
+            fecha_ref >= inicio_mes,
+            fecha_ref <= fin_mes,
         )
     )
     if analista and analista.strip():
@@ -322,16 +322,15 @@ def get_prestamos_stats(
         q_base = q_base.where(Prestamo.modelo_vehiculo == modelo.strip())
     subq = q_base.subquery()
     total = db.scalar(select(func.count()).select_from(subq)) or 0
-    _cond_fecha2 = text(
-        "(COALESCE(prestamos.fecha_aprobacion, prestamos.fecha_registro))::date BETWEEN :inicio AND :fin"
-    ).bindparams(inicio=inicio_mes, fin=fin_mes)
+    fecha_ref2 = cast(func.coalesce(Prestamo.fecha_aprobacion, Prestamo.fecha_registro), Date)
     q_estado = (
         select(Prestamo.estado, func.count())
         .select_from(Prestamo)
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
         .where(
             Cliente.estado == "ACTIVO",
-            _cond_fecha2,
+            fecha_ref2 >= inicio_mes,
+            fecha_ref2 <= fin_mes,
         )
     )
     if analista and analista.strip():

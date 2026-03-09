@@ -5,7 +5,6 @@ Endpoints de clientes: CONECTADOS A LA TABLA REAL `clientes` (public.clientes).
 - Todos los datos son REALES: listado, stats, get, create, update, delete y cambio de estado
   usan Depends(get_db) y consultas contra la tabla clientes. No hay stubs ni datos demo.
 """
-import calendar
 import logging
 import re
 from datetime import date, datetime
@@ -183,30 +182,15 @@ def get_clientes_stats(db: Session = Depends(get_db)):
     activos = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "ACTIVO")) or 0
     inactivos = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "INACTIVO")) or 0
     finalizados = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "FINALIZADO")) or 0
-    # Nuevos clientes en el mes actual según fecha_registro (zona Venezuela America/Caracas).
-    # fecha_registro en BD es sin tz; se asume UTC en servidores cloud.
+    # Nuevos clientes en el mes actual según fecha_registro.
+    # Usamos el mes actual de la BD (misma interpretación que CURRENT_TIMESTAMP al insertar).
     try:
-        tz_caracas = ZoneInfo("America/Caracas")
-        hoy_caracas = datetime.now(tz_caracas).date()
-        primer_dia = date(hoy_caracas.year, hoy_caracas.month, 1)
-        _, ultimo_dia_num = calendar.monthrange(hoy_caracas.year, hoy_caracas.month)
-        ultimo_dia = date(hoy_caracas.year, hoy_caracas.month, ultimo_dia_num)
-        # Rango del mes en Venezuela convertido a UTC (naive) para comparar con fecha_registro
-        inicio_caracas = datetime(primer_dia.year, primer_dia.month, primer_dia.day, 0, 0, 0, tzinfo=tz_caracas)
-        fin_caracas = datetime(ultimo_dia.year, ultimo_dia.month, ultimo_dia.day, 23, 59, 59, tzinfo=tz_caracas)
-        inicio_utc = inicio_caracas.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
-        fin_utc = fin_caracas.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
-        nuevos_este_mes = (
-            db.scalar(
-                select(func.count()).select_from(Cliente).where(
-                    Cliente.fecha_registro.isnot(None),
-                    Cliente.fecha_registro >= inicio_utc,
-                    Cliente.fecha_registro <= fin_utc,
-                )
-            )
-            or 0
-        )
-        nuevos_este_mes = int(nuevos_este_mes)
+        stmt = text("""
+            SELECT count(*)::int FROM clientes
+            WHERE fecha_registro IS NOT NULL
+              AND date_trunc('month', fecha_registro) = date_trunc('month', CURRENT_TIMESTAMP)
+        """)
+        nuevos_este_mes = db.execute(stmt).scalar() or 0
     except Exception as e:
         logger.warning("Error calculando nuevos_este_mes por fecha_registro: %s", e)
         nuevos_este_mes = 0

@@ -50,6 +50,7 @@ export function AsignarFechaAprobacionModal({ prestamo, onClose, onSuccess }: As
         `Tabla de amortización generada con ${resultado.cuotas_recalculadas || 0} cuotas.`
       )
       queryClient.invalidateQueries({ queryKey: ['revision-manual-prestamos'] })
+      queryClient.invalidateQueries({ queryKey: ['prestamos'] })
       onSuccess()
       onClose()
     } catch (error: any) {

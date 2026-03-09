@@ -106,6 +106,7 @@ export function AprobarPrestamoManualModal({ prestamo, onClose, onSuccess }: Apr
       })
       toast.success('Préstamo aprobado correctamente. Tabla de amortización generada.')
       queryClient.invalidateQueries({ queryKey: ['revision-manual-prestamos'] })
+      queryClient.invalidateQueries({ queryKey: ['prestamos'] })
       onSuccess()
       onClose()
     } catch (error: any) {
