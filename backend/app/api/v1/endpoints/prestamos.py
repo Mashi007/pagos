@@ -270,10 +270,11 @@ def get_prestamos_stats(
     db: Session = Depends(get_db),
 ):
     """Estadísticas de préstamos mensuales desde BD (solo clientes ACTIVOS).
-    a) total_financiamiento: suma de total_financiamiento de préstamos APROBADOS en el mes.
-    b) total: cantidad de préstamos APROBADOS en el mes.
+    a) total_financiamiento: suma de total_financiamiento de préstamos aprobados/desembolsados en el mes.
+    b) total: cantidad de préstamos aprobados o desembolsados en el mes.
     c) cartera_vigente: suma de monto de cuotas con vencimiento en el mes no cobradas.
-    d) Usa COALESCE(fecha_aprobacion, fecha_registro) para determinar 'aprobados en el mes'."""
+    d) Usa COALESCE(fecha_aprobacion, fecha_registro) para la fecha. Incluye estado APROBADO y DESEMBOLSADO
+       (al desembolsar el préstamo pasa a DESEMBOLSADO; antes solo se contaba APROBADO y los KPIs quedaban en 0)."""
     # Usar mes/anio de la BD cuando no se pasan, para coincidir con fechas de aprobacion/registro
     if mes is not None and 1 <= mes <= 12 and anio is not None and anio >= 2000:
         mes_u = mes
@@ -301,6 +302,8 @@ def get_prestamos_stats(
             mes_u = inicio_mes.month
             anio_u = inicio_mes.year
 
+    # Estados que cuentan como "aprobados en el mes" (después de desembolso el préstamo queda DESEMBOLSADO)
+    _estados_aprobados_kpi = ("APROBADO", "DESEMBOLSADO")
     # Fecha de referencia: parte DATE de aprobación/registro (evita problemas de alias y TZ)
     # Solo clientes ACTIVOS (consistente con dashboard, pagos, reportes)
     fecha_ref = cast(func.coalesce(Prestamo.fecha_aprobacion, Prestamo.fecha_registro), Date)
@@ -309,7 +312,7 @@ def get_prestamos_stats(
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
         .where(
             Cliente.estado == "ACTIVO",
-            Prestamo.estado == "APROBADO",
+            Prestamo.estado.in_(_estados_aprobados_kpi),
             fecha_ref >= inicio_mes,
             fecha_ref <= fin_mes,
         )
@@ -329,6 +332,7 @@ def get_prestamos_stats(
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
         .where(
             Cliente.estado == "ACTIVO",
+            Prestamo.estado.in_(_estados_aprobados_kpi),
             fecha_ref2 >= inicio_mes,
             fecha_ref2 <= fin_mes,
         )
@@ -348,7 +352,7 @@ def get_prestamos_stats(
     # Cartera por cobrar: suma monto de cuotas con vencimiento en el mes, no cobradas (solo clientes ACTIVOS)
     conds_cartera = [
         Cliente.estado == "ACTIVO",
-        Prestamo.estado == "APROBADO",
+        Prestamo.estado.in_(_estados_aprobados_kpi),
         Cuota.fecha_vencimiento >= inicio_mes,
         Cuota.fecha_vencimiento <= fin_mes,
         Cuota.fecha_pago.is_(None),

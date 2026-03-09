@@ -103,13 +103,12 @@ export function ClientesList() {
 
       console.log('? Cliente eliminado exitosamente')
 
-      // Refrescar la lista
       queryClient.invalidateQueries({ queryKey: ['clientes'] })
-      queryClient.invalidateQueries({ queryKey: ['clientes-stats'] }) // ? Actualizar estadísticas
+      queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       queryClient.invalidateQueries({ queryKey: ['kpis'] })
+      if (typeof refetchStats === 'function') await refetchStats()
 
-      // Cerrar modal
       setShowEliminarCliente(false)
       setClienteSeleccionado(null)
 
@@ -124,13 +123,6 @@ export function ClientesList() {
     }
   }
 
-  const handleSuccess = () => {
-    setShowCrearCliente(false)
-    setShowEditarCliente(false)
-    setClienteSeleccionado(null)
-    queryClient.invalidateQueries({ queryKey: ['clientes'] })
-    queryClient.invalidateQueries({ queryKey: ['clientes-stats'] }) // ? Actualizar estadísticas
-  }
   useSimpleAuth()
   const queryClient = useQueryClient()
 
@@ -154,6 +146,15 @@ export function ClientesList() {
     isLoading: statsLoading,
     refetch: refetchStats
   } = useClientesStats()
+
+  const handleSuccess = async () => {
+    setShowCrearCliente(false)
+    setShowEditarCliente(false)
+    setClienteSeleccionado(null)
+    queryClient.invalidateQueries({ queryKey: ['clientes'] })
+    queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
+    await refetchStats()
+  }
 
   const { data: revisarData, isLoading: revisarLoading, refetch: refetchRevisar } = useQuery({
     queryKey: ['clientes-con-errores', pageRevisar, perPageRevisar],
@@ -906,19 +907,19 @@ export function ClientesList() {
         {showCrearCliente && (
           <CrearClienteForm
             onClose={() => setShowCrearCliente(false)}
-            onSuccess={() => {
-              // ? CORRECCIN: Invalidar queries para actualizar datos
+            onSuccess={async () => {
               queryClient.invalidateQueries({ queryKey: ['clientes'] })
               queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
               queryClient.invalidateQueries({ queryKey: ['dashboard'] })
               queryClient.invalidateQueries({ queryKey: ['kpis'] })
+              await refetchStats()
             }}
-            onClienteCreated={() => {
-              // ? CORRECCIN: Invalidar queries para actualizar datos
+            onClienteCreated={async () => {
               queryClient.invalidateQueries({ queryKey: ['clientes'] })
               queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
               queryClient.invalidateQueries({ queryKey: ['dashboard'] })
               queryClient.invalidateQueries({ queryKey: ['kpis'] })
+              await refetchStats()
             }}
             onOpenEditExisting={async (clienteId: number) => {
               try {
@@ -1021,10 +1022,11 @@ export function ClientesList() {
         {showExcelUpload && (
           <ExcelUploaderUI
             onClose={() => setShowExcelUpload(false)}
-            onSuccess={() => {
+            onSuccess={async () => {
               setShowExcelUpload(false)
               queryClient.invalidateQueries({ queryKey: ['clientes'] })
               queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
+              await refetchStats()
               showNotification('success', 'Cliente(s) cargado(s) exitosamente')
             }}
           />

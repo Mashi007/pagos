@@ -191,16 +191,53 @@ def get_clientes_stats(db: Session = Depends(get_db)):
               AND date_trunc('month', fecha_registro) = date_trunc('month', CURRENT_TIMESTAMP)
         """)
         nuevos_este_mes = db.execute(stmt).scalar() or 0
+        nuevos_este_mes = int(nuevos_este_mes)
     except Exception as e:
         logger.warning("Error calculando nuevos_este_mes por fecha_registro: %s", e)
         nuevos_este_mes = 0
-    return {
-        "total": total,
-        "activos": activos,
-        "inactivos": inactivos,
-        "finalizados": finalizados,
+    result = {
+        "total": int(total),
+        "activos": int(activos),
+        "inactivos": int(inactivos),
+        "finalizados": int(finalizados),
         "nuevos_este_mes": nuevos_este_mes,
     }
+    logger.debug("GET /clientes/stats -> %s", result)
+    return result
+
+
+@router.get("/stats/diagnostico", summary="Diagnóstico KPIs (nuevos_este_mes)")
+def get_clientes_stats_diagnostico(db: Session = Depends(get_db)):
+    """
+    Devuelve datos para auditar por qué nuevos_este_mes puede estar en 0:
+    mes_actual_bd, total_con_fecha_registro, nuevos_este_mes, ejemplo_fecha_registro.
+    """
+    try:
+        mes_bd = db.execute(text("SELECT date_trunc('month', CURRENT_TIMESTAMP)")).scalar()
+        total_con_fecha = db.scalar(
+            text("SELECT count(*)::int FROM clientes WHERE fecha_registro IS NOT NULL")
+        ) or 0
+        nuevos = db.scalar(text("""
+            SELECT count(*)::int FROM clientes
+            WHERE fecha_registro IS NOT NULL
+              AND date_trunc('month', fecha_registro) = date_trunc('month', CURRENT_TIMESTAMP)
+        """)) or 0
+        ejemplo = db.execute(text("""
+            SELECT id, fecha_registro::text
+            FROM clientes
+            WHERE fecha_registro IS NOT NULL
+            ORDER BY fecha_registro DESC
+            LIMIT 1
+        """)).first()
+        return {
+            "mes_actual_bd": str(mes_bd) if mes_bd else None,
+            "total_con_fecha_registro": int(total_con_fecha),
+            "nuevos_este_mes": int(nuevos),
+            "ejemplo_ultimo_registro": {"id": ejemplo[0], "fecha_registro": ejemplo[1]} if ejemplo else None,
+        }
+    except Exception as e:
+        logger.exception("Error en stats/diagnostico: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 class EstadoPayload(BaseModel):
