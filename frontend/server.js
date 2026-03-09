@@ -125,6 +125,11 @@ if (API_URL) {
     changeOrigin: true,
     xfwd: true,
     logLevel: isDevelopment ? 'info' : 'warn', // Reducir verbosidad en producción
+    // CRÍTICO: No seguir redirects (302). Si el backend devuelve 302 (ej. OAuth callback),
+    // el navegador debe recibir el 302 y hacer el redirect para que la URL cambie.
+    // followRedirects: true haría que el proxy siguiera el redirect y devolviera 200 + HTML,
+    // dejando la URL del navegador en /api/.../callback y la SPA en blanco.
+    followRedirects: false,
     // IMPORTANTE: Cuando usamos app.use('/api', ...), Express elimina el /api del req.path
     // Ejemplo: /api/v1/clientes -> req.path = /v1/clientes
     // Necesitamos reconstruirlo: /v1/clientes -> /api/v1/clientes
@@ -143,8 +148,6 @@ if (API_URL) {
       }
       return rewritten;
     },
-    // Seguir redirects del backend (3xx)
-    followRedirects: true,
     // No cambiar el protocolo
     secure: true,
     onError: (err, req, res) => {
