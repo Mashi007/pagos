@@ -78,13 +78,17 @@ def _job_informe_pagos_email() -> None:
 
 
 def _job_pagos_gmail_pipeline() -> None:
-    """Job cada 15 min en segundo plano: procesa correos (Gmail -> Drive -> Gemini -> Sheets)."""
+    """Job cada N min (PAGOS_GMAIL_CRON_MINUTES): procesa correos (Gmail -> Drive -> Gemini -> Sheets). No procesa si aún no es tiempo desde la última ejecución."""
     db = SessionLocal()
     try:
-        from app.api.v1.endpoints.pagos_gmail import _is_pipeline_running
+        from app.api.v1.endpoints.pagos_gmail import _is_pipeline_running, _last_run_too_recent
         from app.services.pagos_gmail.pipeline import run_pipeline
         if _is_pipeline_running(db):
             logger.info("Pagos Gmail pipeline: omitido (ya hay una ejecucion en curso)")
+            return
+        too_recent, wait_min = _last_run_too_recent(db)
+        if too_recent and wait_min is not None:
+            logger.info("Pagos Gmail pipeline: omitido (aun no es tiempo, esperar %d min)", wait_min)
             return
         sync_id, status = run_pipeline(db)
         logger.info("Pagos Gmail pipeline: sync_id=%s status=%s", sync_id, status)

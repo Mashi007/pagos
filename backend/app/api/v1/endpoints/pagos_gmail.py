@@ -45,13 +45,43 @@ def _is_pipeline_running(db: Session) -> bool:
     return row is not None
 
 
+def _last_run_too_recent(db: Session) -> tuple[bool, Optional[int]]:
+    """
+    True si la última ejecución (terminada) fue hace menos del intervalo mínimo.
+    Evita procesar email cuando aún no es tiempo (respetar PAGOS_GMAIL_CRON_MINUTES).
+    Returns (too_recent, minutes_to_wait).
+    """
+    from app.core.config import settings
+    cron_min = getattr(settings, "PAGOS_GMAIL_CRON_MINUTES", 30)
+    min_gap = max(5, cron_min - 2)
+    last = db.execute(
+        select(PagosGmailSync)
+        .where(PagosGmailSync.finished_at.isnot(None))
+        .order_by(desc(PagosGmailSync.finished_at))
+        .limit(1)
+    ).scalars().first()
+    if not last or not last.finished_at:
+        return False, None
+    elapsed = (datetime.utcnow() - last.finished_at).total_seconds() / 60
+    if elapsed < min_gap:
+        wait = max(0, int(min_gap - elapsed))
+        return True, wait
+    return False, None
+
+
 @router.post("/run-now")
 def run_now(db: Session = Depends(get_db)):
-    """Ejecuta el pipeline una vez (Gmail -> Drive -> Gemini -> Sheets)."""
+    """Ejecuta el pipeline una vez (Gmail -> Drive -> Gemini -> Sheets). No se ejecuta si aún no es tiempo (intervalo mínimo desde la última ejecución)."""
     if _is_pipeline_running(db):
         raise HTTPException(
             status_code=409,
             detail="Ya hay una sincronización en curso. Espere unos minutos.",
+        )
+    too_recent, wait_min = _last_run_too_recent(db)
+    if too_recent and wait_min is not None:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Aún no es tiempo de procesar. La última ejecución fue hace poco. Espere {wait_min} min (intervalo: PAGOS_GMAIL_CRON_MINUTES).",
         )
     sync_id, status = run_pipeline(db)
     if status == "no_credentials":
