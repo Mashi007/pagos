@@ -183,8 +183,8 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: Optional[str] = Field(None, description="API Key de Google AI Studio para Gemini")
     DRIVE_ROOT_FOLDER_ID: str = Field(default="1uzFPzUo00urjiWmeql1F30xgwpjdhm2o", description="ID carpeta raiz Drive para adjuntos")
     GEMINI_MODEL: str = Field(
-        default="gemini-2.0-flash-001",
-        description="Modelo Gemini para extracción de datos. gemini-2.0-flash fue retirado; usar gemini-2.0-flash-001 o gemini-1.5-flash. Ver https://ai.google.dev/gemini-api/docs/models",
+        default="gemini-2.5-flash",
+        description="Modelo Gemini para extracción de datos. gemini-2.5-flash es la versión estable recomendada. Ver https://ai.google.dev/gemini-api/docs/models",
     )
     PAGOS_GMAIL_CRON_MINUTES: int = Field(
         default=30,
