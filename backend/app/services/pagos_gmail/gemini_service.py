@@ -86,12 +86,27 @@ def extract_payment_data(file_content: bytes, filename: str, api_key: Optional[s
                     [GEMINI_PROMPT, part],
                     generation_config=genai.types.GenerationConfig(temperature=0.1),
                 )
-                text = (response.text or "").strip()
+                # Verificar si la respuesta fue bloqueada por safety filters
+                text = ""
+                try:
+                    text = (response.text or "").strip()
+                except Exception as text_err:
+                    # response.text lanza ValueError si fue bloqueado o no tiene partes de texto
+                    candidates = getattr(response, "candidates", [])
+                    finish_reasons = [str(getattr(c, "finish_reason", "?")) for c in candidates]
+                    safety_ratings = []
+                    for c in candidates:
+                        for r in getattr(c, "safety_ratings", []):
+                            safety_ratings.append(f"{r.category}={r.probability}")
+                    logger.warning("[PAGOS_GMAIL] Gemini respuesta bloqueada/vacía para %s: %s | finish_reasons=%s | safety=%s",
+                        filename, text_err, finish_reasons, safety_ratings)
+                    return _empty_result(f"blocked: {text_err}")
+
                 logger.warning("[PAGOS_GMAIL] Gemini raw(%s): %s", filename, text[:400] if text else "(VACÍO)")
                 result = _parse_gemini_json(text)
                 all_na = all(v == PAGOS_NA for v in result.values())
                 if all_na:
-                    logger.warning("[PAGOS_GMAIL] Gemini TODO NA para %s", filename)
+                    logger.warning("[PAGOS_GMAIL] Gemini TODO NA para %s — respuesta completa: %s", filename, text[:300])
                 else:
                     logger.warning("[PAGOS_GMAIL] Gemini OK: fecha=%s cedula=%s monto=%s ref=%s",
                         result.get("fecha_pago"), result.get("cedula"),

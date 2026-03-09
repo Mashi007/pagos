@@ -326,3 +326,134 @@ def download_excel(fecha: Optional[str] = None, db: Session = Depends(get_db)):
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
+
+
+@router.get("/diagnostico")
+def diagnostico(db: Session = Depends(get_db)):
+    """
+    Diagnóstico integral del pipeline: verifica credenciales, Gmail, Drive, Sheets y Gemini
+    con 1 correo real. Devuelve JSON detallado con el resultado de cada paso.
+    """
+    from app.services.pagos_gmail.credentials import get_pagos_gmail_credentials
+    from app.services.pagos_gmail.gmail_service import (
+        build_gmail_service, list_unread_with_attachments,
+        get_message_full_payload, get_all_images_and_files_for_message,
+    )
+    from app.services.pagos_gmail.drive_service import build_drive_service
+    from app.services.pagos_gmail.gemini_service import extract_payment_data, check_gemini_available
+    from app.core.config import settings
+    import traceback
+
+    result: dict = {
+        "paso_1_credenciales": None,
+        "paso_2_gmail_list": None,
+        "paso_3_primer_correo": None,
+        "paso_4_imagenes": None,
+        "paso_5_gemini_health": None,
+        "paso_6_gemini_extraccion": None,
+        "config": {
+            "GEMINI_API_KEY_set": bool(getattr(settings, "GEMINI_API_KEY", None)),
+            "GEMINI_MODEL": getattr(settings, "GEMINI_MODEL", "gemini-2.0-flash"),
+            "MAX_EMAILS": getattr(settings, "PAGOS_GMAIL_MAX_EMAILS_PER_RUN", "no-set"),
+        }
+    }
+
+    # PASO 1: Credenciales
+    try:
+        creds = get_pagos_gmail_credentials()
+        if creds:
+            result["paso_1_credenciales"] = {"ok": True, "tipo": str(type(creds).__name__)}
+        else:
+            result["paso_1_credenciales"] = {"ok": False, "error": "get_pagos_gmail_credentials() devolvió None"}
+            return result
+    except Exception as e:
+        result["paso_1_credenciales"] = {"ok": False, "error": str(e), "trace": traceback.format_exc()[-500:]}
+        return result
+
+    # PASO 2: Listar correos no leídos
+    try:
+        gmail_svc = build_gmail_service(creds)
+        messages = list_unread_with_attachments(gmail_svc)
+        result["paso_2_gmail_list"] = {
+            "ok": True,
+            "total_no_leidos": len(messages),
+            "primeros_3": [
+                {"id": m["id"], "from": m["headers"].get("from", "")[:60],
+                 "subject": m["headers"].get("subject", "")[:60]}
+                for m in messages[:3]
+            ]
+        }
+        if not messages:
+            result["paso_2_gmail_list"]["advertencia"] = "No hay correos no leídos — nada que procesar"
+            return result
+    except Exception as e:
+        result["paso_2_gmail_list"] = {"ok": False, "error": str(e), "trace": traceback.format_exc()[-500:]}
+        return result
+
+    # PASO 3: Primer correo — payload completo
+    try:
+        msg = messages[0]
+        full_payload = get_message_full_payload(gmail_svc, msg["id"])
+        mime_top = full_payload.get("mimeType", "desconocido") if full_payload else "payload vacío"
+        parts_top = [p.get("mimeType", "?") for p in (full_payload or {}).get("parts", [])]
+        result["paso_3_primer_correo"] = {
+            "ok": True,
+            "msg_id": msg["id"],
+            "from": msg["headers"].get("from", "")[:80],
+            "subject": msg["headers"].get("subject", "")[:80],
+            "mimeType_top": mime_top,
+            "parts_top_level": parts_top,
+        }
+    except Exception as e:
+        result["paso_3_primer_correo"] = {"ok": False, "error": str(e), "trace": traceback.format_exc()[-500:]}
+        return result
+
+    # PASO 4: Extracción de imágenes del primer correo
+    try:
+        attachments = get_all_images_and_files_for_message(gmail_svc, msg["id"], full_payload)
+        result["paso_4_imagenes"] = {
+            "ok": True,
+            "total_imagenes": len(attachments),
+            "detalle": [
+                {"nombre": f, "bytes": len(c), "mime": m}
+                for f, c, m in attachments[:5]
+            ]
+        }
+    except Exception as e:
+        result["paso_4_imagenes"] = {"ok": False, "error": str(e), "trace": traceback.format_exc()[-500:]}
+        return result
+
+    # PASO 5: Health check de Gemini (prompt de texto simple)
+    try:
+        gemini_health = check_gemini_available()
+        result["paso_5_gemini_health"] = gemini_health
+    except Exception as e:
+        result["paso_5_gemini_health"] = {"ok": False, "error": str(e)}
+
+    # PASO 6: Extracción real con Gemini sobre la primera imagen (si existe)
+    if attachments:
+        fname, content, mime = attachments[0]
+        try:
+            data = extract_payment_data(content, fname)
+            result["paso_6_gemini_extraccion"] = {
+                "ok": True,
+                "archivo": fname,
+                "bytes": len(content),
+                "mime": mime,
+                "resultado": data,
+            }
+        except Exception as e:
+            result["paso_6_gemini_extraccion"] = {
+                "ok": False,
+                "archivo": fname,
+                "bytes": len(content),
+                "error": str(e),
+                "trace": traceback.format_exc()[-500:],
+            }
+    else:
+        result["paso_6_gemini_extraccion"] = {
+            "ok": False,
+            "motivo": "Sin imágenes >= 10KB en el primer correo — Gemini no fue llamado",
+        }
+
+    return result
