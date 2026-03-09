@@ -572,10 +572,14 @@ class ApiClient {
                             url.includes('/rag/generar-embeddings') ||
                             url.includes('/configuracion/ai/chat') ||
                             url.includes('/prestamos/cedula/batch') || // Batch carga masiva: muchas cédulas
-                            url.includes('/pagos/upload') // Carga masiva pagos: puede tardar con muchas filas
+                            url.includes('/pagos/upload') || // Carga masiva pagos: puede tardar con muchas filas
+                            url.includes('/pagos/gmail/run-now') // Pipeline Gmail: puede tardar si el backend es síncrono (credenciales OAuth)
 
       const defaultTimeout = isSlowEndpoint
-        ? (url.includes('/prestamos/cedula/batch') ? 60000 : url.includes('/pagos/upload') ? 120000 : 300000)
+        ? (url.includes('/prestamos/cedula/batch') ? 60000
+          : url.includes('/pagos/upload') ? 120000
+          : url.includes('/pagos/gmail/run-now') ? 90000  // 90s: cubre credenciales OAuth + margen para backend síncrono viejo
+          : 300000)
         : DEFAULT_TIMEOUT_MS
       // Priorizar timeout explícito si se proporciona, sino usar el calculado
       const timeout = config?.timeout ?? defaultTimeout
