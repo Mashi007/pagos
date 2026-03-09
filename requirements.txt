@@ -120,5 +120,6 @@ google-cloud-vision>=3.5.0
 gunicorn==23.0.0
 
 # Gemini (Pagos Gmail: extraer datos de comprobantes)
-google-generativeai>=0.8.0
+# google-generativeai deprecado — migrado a google-genai (google.genai)
+google-genai>=1.0.0
 Pillow>=10.0.0
