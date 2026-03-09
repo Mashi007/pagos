@@ -269,6 +269,32 @@ def _get_latest_date_with_data(db: Session) -> Optional[str]:
     return d.strftime("%Y-%m-%d") if d else None
 
 
+def _formatear_cedula(cedula: str) -> str:
+    """
+    Aplica formato venezolano a la cédula:
+    - Si es NA o vacío → devuelve tal cual.
+    - Si ya tiene prefijo E o J (con o sin guion) → normaliza a E-XXXXXXX / J-XXXXXXX.
+    - En cualquier otro caso → quita ceros iniciales y antepone V-.
+    Ejemplos: '030145077' → 'V-30145077', 'E12345678' → 'E-12345678', 'NA' → 'NA'.
+    """
+    import re as _re
+    v = (cedula or "").strip()
+    if not v or v.upper() == "NA":
+        return v
+    # Si ya tiene prefijo explícito V/E/J (con o sin guion)
+    m = _re.match(r"^([VEJvej])-?(\d+)$", v)
+    if m:
+        prefix = m.group(1).upper()
+        digits = m.group(2).lstrip("0") or "0"
+        return f"{prefix}-{digits}"
+    # Solo dígitos (o con ceros iniciales): asumir venezolano → V-
+    if _re.match(r"^\d+$", v):
+        digits = v.lstrip("0") or "0"
+        return f"V-{digits}"
+    # Valor no reconocido (letras raras, etc.): devolver sin modificar
+    return v
+
+
 @router.get("/download-excel")
 def download_excel(fecha: Optional[str] = None, db: Session = Depends(get_db)):
     """
@@ -311,7 +337,7 @@ def download_excel(fecha: Optional[str] = None, db: Session = Depends(get_db)):
         ws.append([
             it.correo_origen or "",
             it.fecha_pago or "",
-            it.cedula or "",
+            _formatear_cedula(it.cedula or ""),
             it.monto or "",
             it.numero_referencia or "",
             it.drive_link or "",
