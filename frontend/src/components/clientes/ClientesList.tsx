@@ -706,14 +706,15 @@ export function ClientesList() {
                   <TableHead className="font-semibold">Cliente</TableHead>
                   <TableHead className="font-semibold">Contacto</TableHead>
                   <TableHead className="font-semibold">Estado</TableHead>
-                  <TableHead className="font-semibold">Fecha Actualización</TableHead>
+                  <TableHead className="font-semibold">Fecha registro</TableHead>
+                  <TableHead className="font-semibold">Últ. actualización</TableHead>
                   <TableHead className="text-right font-semibold">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {clientes.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-gray-500">
+                    <TableCell colSpan={6} className="text-center py-8 text-gray-500">
                       {isLoading ? (
                         <div className="flex items-center justify-center">
                           <LoadingSpinner size="sm" />
@@ -784,11 +785,16 @@ export function ClientesList() {
                     </TableCell>
                     <TableCell>
                       <div className="text-sm text-gray-600">
+                        {cliente.fecha_registro
+                          ? formatDate(cliente.fecha_registro)
+                          : '—'}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm text-gray-600">
                         {cliente.fecha_actualizacion
                           ? formatDate(cliente.fecha_actualizacion)
-                          : cliente.fecha_registro
-                            ? formatDate(cliente.fecha_registro)
-                            : 'N/A'}
+                          : '—'}
                       </div>
                     </TableCell>
                     <TableCell className="text-right">

@@ -1,4 +1,4 @@
-﻿import { apiClient, ApiResponse, PaginatedResponse, buildUrl } from './api'
+import { apiClient, ApiResponse, PaginatedResponse, buildUrl } from './api'
 import { Prestamo, PrestamoForm } from '../types'
 import { logger } from '../utils/logger'
 
@@ -323,7 +323,8 @@ class PrestamoService {
         mes: body?.mes,
         anio: body?.anio,
       }
-    } catch {
+    } catch (err) {
+      logger.error('getKPIs prestamos/stats falló', { error: err, params: { mes: filters?.mes, anio: filters?.anio } })
       const now = new Date()
       return {
         totalFinanciamiento: 0,

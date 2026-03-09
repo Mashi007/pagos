@@ -919,7 +919,7 @@ export function PrestamosList() {
                         <TableCell>
                           <div className="flex items-center gap-1 text-sm text-gray-600">
                             <Calendar className="h-4 w-4" />
-                            {formatDate(prestamo.fecha_registro ?? prestamo.fecha_creacion)}
+                            {formatDate(prestamo.fecha_aprobacion ?? prestamo.fecha_registro ?? prestamo.fecha_creacion)}
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
