@@ -1,6 +1,6 @@
-﻿import { type ClassValue, clsx } from "clsx"
+import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
-import { format, parseISO, isValid } from "date-fns"
+import { format, parseISO, isValid, isToday, isYesterday } from "date-fns"
 import { es } from "date-fns/locale"
 
 // Constantes de formateo
@@ -37,10 +37,24 @@ export function formatPercentage(value: number): string {
 export function formatDate(date: string | Date, formatStr: string = DEFAULT_DATE_FORMAT): string {
   try {
     const dateObj = typeof date === 'string' ? parseISO(date) : date
-    if (!isValid(dateObj)) return 'Fecha invÃ¡lida'
+    if (!isValid(dateObj)) return 'Fecha inválida'
     return format(dateObj, formatStr, { locale: es })
   } catch {
-    return 'Fecha invÃ¡lida'
+    return 'Fecha inválida'
+  }
+}
+
+/** Formato amigable para "última sincronización": Hoy / Ayer / fecha, con hora */
+export function formatLastSyncDate(isoString: string): string {
+  try {
+    const date = parseISO(isoString)
+    if (!isValid(date)) return isoString
+    const hora = format(date, 'h:mm a', { locale: es })
+    if (isToday(date)) return `Hoy, ${hora}`
+    if (isYesterday(date)) return `Ayer, ${hora}`
+    return `${format(date, 'd/M', { locale: es })}, ${hora}`
+  } catch {
+    return isoString
   }
 }
 

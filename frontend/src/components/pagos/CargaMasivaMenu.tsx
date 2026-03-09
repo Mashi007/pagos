@@ -8,6 +8,7 @@ import { ConfirmarBorrarDiaDialog } from './ConfirmarBorrarDiaDialog'
 import toast from 'react-hot-toast'
 import { getErrorMessage } from '../../types/errors'
 import { pagoService } from '../../services/pagoService'
+import { formatLastSyncDate } from '../../utils'
 
 interface CargaMasivaMenuProps {
   onSuccess?: () => void
@@ -69,7 +70,7 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
               {gmailStatus.last_status === 'error' ? (
                 <span className="text-amber-600">Última sync falló</span>
               ) : gmailStatus.last_run ? (
-                <>Última sync: {new Date(gmailStatus.last_run).toLocaleString('es-VE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} – {gmailStatus.last_emails} correos, {gmailStatus.last_files} archivos</>
+                <>Última sync: {formatLastSyncDate(gmailStatus.last_run)} – {gmailStatus.last_emails} correos, {gmailStatus.last_files} archivos</>
               ) : (
                 <span className="text-gray-500">Sin sync aún</span>
               )}

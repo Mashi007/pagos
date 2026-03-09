@@ -1,5 +1,7 @@
 """
-Gemini: enviar imagen o PDF en base64, extraer fecha_pago, cedula, monto, numero_referencia.
+Gemini: enviar imagen o PDF en base64, extraer datos de comprobantes.
+- Pagos (Gmail): fecha_pago, cedula, monto, numero_referencia.
+- Cobranza (papeleta/informe): fecha_deposito, nombre_banco, numero_deposito, numero_documento, cantidad.
 """
 import base64
 import json
@@ -136,6 +138,116 @@ def _parse_gemini_json(text: str) -> Dict[str, str]:
 
 def _empty_result(reason: str) -> Dict[str, str]:
     return {"fecha_pago": "No encontrado", "cedula": "No encontrado", "monto": "No encontrado", "numero_referencia": reason}
+
+
+# --- Cobranza: papeleta de depósito / comprobante (mismo formato que ocr_service para poder sustituir Vision)
+COBRANZA_NA = "NA"
+GEMINI_COBRANZA_PROMPT = (
+    "Esta imagen es una papeleta de depósito, recibo de pago o comprobante bancario. "
+    "Extrae exactamente estos campos en formato JSON (usa 'NA' si no encuentras el dato): "
+    '"fecha_deposito" (fecha del depósito, formato dd/mm/yyyy o yyyy-mm-dd), '
+    '"nombre_banco" (nombre del banco o institución financiera), '
+    '"numero_deposito" (número de depósito, referencia o transacción, muchos dígitos), '
+    '"numero_documento" (número de documento, recibo o comprobante de venta), '
+    '"cantidad" (monto total en números, ej. 150.00 o 1.234,56), '
+    '"aceptable" (true si el documento es claramente un comprobante de pago legible; false si está ilegible o no es comprobante). '
+    "Responde SOLO con el JSON, sin texto adicional ni markdown."
+)
+
+
+def extract_cobranza_from_image(
+    image_bytes: bytes,
+    filename: str = "image.jpg",
+    api_key: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Toma la imagen (papeleta/comprobante) y extrae información de cobranza con Gemini.
+    Devuelve el mismo esquema que ocr_service.extract_from_image para poder usarse en el flujo de informe/cobranza:
+    fecha_deposito, nombre_banco, numero_deposito, numero_documento, cantidad, humano, confianza_media.
+    Si aceptable=false en la respuesta, se marca humano='HUMANO' para revisión.
+    """
+    key = api_key or getattr(settings, "GEMINI_API_KEY", None)
+    base_na = {
+        "fecha_deposito": COBRANZA_NA,
+        "nombre_banco": COBRANZA_NA,
+        "numero_deposito": COBRANZA_NA,
+        "numero_documento": COBRANZA_NA,
+        "cantidad": COBRANZA_NA,
+        "humano": "",
+        "confianza_media": 0.0,
+    }
+    if not key or not str(key).strip():
+        logger.warning("[COBRANZA] GEMINI_API_KEY no configurado; no se puede extraer información de cobranza desde imagen.")
+        return base_na
+    model_name = getattr(settings, "GEMINI_MODEL", "gemini-2.0-flash")
+    mime = get_mime_type(filename)
+    try:
+        import google.generativeai as genai
+        genai.configure(api_key=key)
+        model = genai.GenerativeModel(model_name)
+        part = {"inline_data": {"mime_type": mime, "data": base64.b64encode(image_bytes).decode("utf-8")}}
+        safety = {
+            "HARM_CATEGORY_HARASSMENT": "BLOCK_NONE",
+            "HARM_CATEGORY_HATE_SPEECH": "BLOCK_NONE",
+            "HARM_CATEGORY_SEXUALLY_EXPLICIT": "BLOCK_NONE",
+            "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_NONE",
+        }
+        last_error = None
+        for attempt in range(GEMINI_RATE_LIMIT_MAX_RETRIES + 1):
+            try:
+                try:
+                    response = model.generate_content(
+                        [GEMINI_COBRANZA_PROMPT, part],
+                        generation_config=genai.types.GenerationConfig(temperature=0.1),
+                        safety_settings=list(safety.items()),
+                    )
+                except TypeError:
+                    response = model.generate_content([GEMINI_COBRANZA_PROMPT, part])
+                text = (response.text or "").strip()
+                return _parse_cobranza_json(text)
+            except Exception as e:
+                last_error = e
+                if _is_rate_limit_error(e) and attempt < GEMINI_RATE_LIMIT_MAX_RETRIES:
+                    delay = _extract_retry_seconds(e)
+                    logger.warning("[COBRANZA] Gemini 429, reintento en %ds", delay)
+                    time.sleep(delay)
+                else:
+                    raise
+        return base_na
+    except Exception as e:
+        logger.exception("Gemini extract_cobranza_from_image: %s", e)
+        return base_na
+
+
+def _parse_cobranza_json(text: str) -> Dict[str, Any]:
+    """Parsea la respuesta JSON de Gemini para cobranza; devuelve formato compatible con ocr_service."""
+    base = {
+        "fecha_deposito": COBRANZA_NA,
+        "nombre_banco": COBRANZA_NA,
+        "numero_deposito": COBRANZA_NA,
+        "numero_documento": COBRANZA_NA,
+        "cantidad": COBRANZA_NA,
+        "humano": "",
+        "confianza_media": 0.9,
+    }
+    try:
+        json_str = _find_json_object(text)
+        if not json_str:
+            json_str = re.search(r"\{[^{}]*\}", text, re.DOTALL)
+            json_str = json_str.group(0) if json_str else None
+        if not json_str:
+            return base
+        data = json.loads(json_str)
+        for k in ("fecha_deposito", "nombre_banco", "numero_deposito", "numero_documento", "cantidad"):
+            v = data.get(k)
+            if v is not None and str(v).strip():
+                base[k] = str(v).strip()[:255] if k == "nombre_banco" else str(v).strip()[:100]
+        aceptable = data.get("aceptable", True)
+        if aceptable is False:
+            base["humano"] = "HUMANO"
+        return base
+    except (json.JSONDecodeError, TypeError):
+        return base
 
 
 def _is_rate_limit_error(exc: Exception) -> bool:

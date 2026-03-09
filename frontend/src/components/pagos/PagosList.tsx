@@ -28,7 +28,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
-import { formatDate } from '../../utils'
+import { formatDate, formatLastSyncDate } from '../../utils'
 import { pagoService, type Pago } from '../../services/pagoService'
 import { pagoConErrorService, type PagoConError } from '../../services/pagoConErrorService'
 import { RegistrarPagoForm } from './RegistrarPagoForm'
@@ -289,7 +289,7 @@ export function PagosList() {
                   {gmailStatus.last_status === 'error' ? (
                     <span className="text-amber-600">Última sync Gmail falló</span>
                   ) : gmailStatus.last_run ? (
-                    <>Última sync: {new Date(gmailStatus.last_run).toLocaleString('es-VE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} – {gmailStatus.last_emails} correos, {gmailStatus.last_files} archivos</>
+                    <>Última sync: {formatLastSyncDate(gmailStatus.last_run)} – {gmailStatus.last_emails} correos, {gmailStatus.last_files} archivos</>
                   ) : (
                     <span className="text-gray-500">Sin sync Gmail aún</span>
                   )}

@@ -186,8 +186,18 @@ def extract_from_image(image_bytes: bytes) -> Dict[str, Any]:
         return {**base_na, "humano": ""}
     client = _get_vision_client()
     if not client:
+        # Fallback: usar Gemini para extraer información de cobranza desde la imagen (mismo esquema que Vision)
+        try:
+            from app.core.config import settings
+            if getattr(settings, "GEMINI_API_KEY", None):
+                from app.services.pagos_gmail.gemini_service import extract_cobranza_from_image
+                logger.info("%s [OCR] Vision no configurado; usando Gemini para extraer datos de cobranza", LOG_TAG_INFORME)
+                result = extract_cobranza_from_image(image_bytes, "papeleta.jpg")
+                return {**base_na, **result}
+        except Exception as e:
+            logger.debug("%s Fallback Gemini cobranza: %s", LOG_TAG_INFORME, e)
         logger.warning(
-            "%s %s | credenciales Vision no configuradas; todos los campos NA.",
+            "%s %s | credenciales Vision no configuradas y Gemini no disponible; todos los campos NA.",
             LOG_TAG_FALLO, "ocr",
         )
         return {**base_na, "humano": ""}

@@ -153,13 +153,14 @@ def start_scheduler() -> None:
         name="Email informe pagos 16:30",
     )
     # Pagos Gmail: intervalo desde PAGOS_GMAIL_CRON_MINUTES (por defecto 30 min; cuota Gemini free ~15 RPM)
-    cron_min = getattr(settings, "PAGOS_GMAIL_CRON_MINUTES", 30)
+    cron_min = settings.PAGOS_GMAIL_CRON_MINUTES
     _scheduler.add_job(
         _job_pagos_gmail_pipeline,
         IntervalTrigger(minutes=cron_min),
         id="pagos_gmail_pipeline",
         name=f"Pagos Gmail pipeline (cada {cron_min} min)",
     )
+    logger.info("Pagos Gmail sync programado cada %d minutos (PAGOS_GMAIL_CRON_MINUTES=%d)", cron_min, cron_min)
     # Pagos Gmail: crear hoja del dia siguiente a las 23:59
     _scheduler.add_job(
         _job_pagos_gmail_sheet_2359,
