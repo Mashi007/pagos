@@ -63,13 +63,11 @@ export function DashboardPagos() {
       const params = construirFiltrosObject()
       return await pagoService.getStats(params, { signal })
     },
-    staleTime: 30 * 1000, // 30 s para que Monto cobrado (mes) y Pagos hoy se actualicen al volver
-    refetchOnWindowFocus: true,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
   })
 
-  // Cargar KPIs de pagos
-  // ✓ OPTIMIZACIÓN: Usar queryKey sin filtros para compartir datos con useSidebarCounts
-  // Si hay filtros activos, usar queryKey con filtros para datos específicos
+  // Cargar KPIs de pagos — queryKey compartida con useSidebarCounts para evitar llamadas duplicadas
   const { data: kpisPagos, isLoading: loadingKPIs } = useQuery({
     queryKey: tieneFiltrosActivos ? ['kpis-pagos', filtros] : ['kpis-pagos'],
     queryFn: async ({ signal }) => {
@@ -82,8 +80,10 @@ export function DashboardPagos() {
       }
       return response
     },
-    staleTime: 30 * 1000, // 30 s para que se actualicen los indicadores al volver a la ventana
-    refetchOnWindowFocus: true,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchInterval: 5 * 60 * 1000,
+    refetchIntervalInBackground: false,
     retry: 1,
   })
 
@@ -107,8 +107,8 @@ export function DashboardPagos() {
       }
       return response
     },
-    staleTime: 30 * 1000,
-    refetchOnWindowFocus: true,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
   })
 
   // Datos para gráfico de pagos por estado
@@ -135,8 +135,8 @@ export function DashboardPagos() {
       }
       return response.meses
     },
-    staleTime: 30 * 1000,
-    refetchOnWindowFocus: true,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
   })
 
   const [isRefreshing, setIsRefreshing] = useState(false)
