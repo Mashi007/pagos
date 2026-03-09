@@ -25,6 +25,7 @@ GEMINI_PROMPT = (
     "Este es un comprobante de pago (puede ser imagen o PDF, adjunto o imagen pegada en el cuerpo del correo). "
     "Extrae exactamente estos 4 datos en formato JSON: "
     "{ \"fecha_pago\": \"...\", \"cedula\": \"...\", \"monto\": \"...\", \"numero_referencia\": \"...\" } "
+    "Donde 'numero_referencia' es el serial, número de documento, código de operación o código de transferencia que identifica la transacción. "
     "Si no identificas claramente un dato, usa 'NA'. No adivines. NA = no hubo la información o no se puede identificar. "
     "Responde SOLO con el JSON, sin texto adicional."
 )

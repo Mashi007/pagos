@@ -134,21 +134,21 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
             mensaje_tiene_fila_valida = False
             fila_guardada = False  # garantía: al menos 1 fila por correo
 
-            # Columnas: A=Asunto, B=Correo Pagador, C=Fecha Pago, D=Cédula, E=Monto, F=Referencia, G=Link
+            # Columnas: A=Correo Pagador, B=Fecha Pago, C=Cédula, D=Monto, E=Referencia, F=Link
             def _guardar_fila(row_vals: list, drive_file_id=None, drive_lnk="") -> bool:
                 """Escribe fila en Sheets y persiste en BD. Retorna True si tuvo éxito.
-                row_vals = [asunto, correo_pagador, fecha_pago, cedula, monto, referencia, link]
+                row_vals = [correo_pagador, fecha_pago, cedula, monto, referencia, link]
                 """
                 nonlocal files_ok, fila_guardada
                 if append_row(sheets_svc, sheet_id, row_vals):
                     db.add(PagosGmailSyncItem(
                         sync_id=sync_id,
-                        correo_origen=sender,       # email del pagador real (forwarded o externo)
-                        asunto=row_vals[0],
-                        fecha_pago=row_vals[2],
-                        cedula=row_vals[3],
-                        monto=row_vals[4],
-                        numero_referencia=row_vals[5],
+                        correo_origen=row_vals[0],   # A: correo del pagador
+                        asunto=subject,              # guardado en BD para referencia interna
+                        fecha_pago=row_vals[1],      # B
+                        cedula=row_vals[2],          # C
+                        monto=row_vals[3],           # D
+                        numero_referencia=row_vals[4],  # E
                         drive_file_id=drive_file_id,
                         drive_link=drive_lnk or None,
                         sheet_name=sheet_name,
@@ -159,8 +159,8 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
                 return False
 
             def _fila_na(link="") -> list:
-                """Fila NA con 7 columnas: asunto, correo_pagador, y 4 campos NA + link."""
-                return [subject, sender, PAGOS_NA, PAGOS_NA, PAGOS_NA, PAGOS_NA, link]
+                """Fila NA con 6 columnas: correo_pagador + 4 campos NA + link."""
+                return [sender, PAGOS_NA, PAGOS_NA, PAGOS_NA, PAGOS_NA, link]
 
             if len(attachments) == 0:
                 # Sin adjuntos ni imágenes en cuerpo: fila NA
@@ -191,7 +191,7 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
                         tiene_valido = bool(f or c or m or r)
                         if tiene_valido:
                             mensaje_tiene_fila_valida = True
-                        row = [subject, sender, f or PAGOS_NA, c or PAGOS_NA, m or PAGOS_NA, r or PAGOS_NA, drive_link or ""]
+                        row = [sender, f or PAGOS_NA, c or PAGOS_NA, m or PAGOS_NA, r or PAGOS_NA, drive_link or ""]
                         _guardar_fila(row, drive_file_id=file_id, drive_lnk=drive_link or "")
                     except Exception as e:
                         logger.warning("Error procesando adjunto/cuerpo %s: %s", filename, e)
