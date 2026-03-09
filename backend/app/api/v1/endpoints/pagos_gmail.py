@@ -169,17 +169,16 @@ def confirmar_dia(body: ConfirmarDiaBody = Body(...), db: Session = Depends(get_
 
 
 @router.get("/download-excel")
-def download_excel(db: Session = Depends(get_db)):
+def download_excel(fecha: Optional[str] = None, db: Session = Depends(get_db)):
     """
-    Genera y devuelve un Excel con los ítems del día (según lógica 23:50 America/Caracas).
-    Columnas: Asunto, Fecha Pago, Cédula, Monto, Referencia, Link (para carga masiva).
-    Los datos provienen del pipeline Gmail -> Drive -> Gemini -> Sheets: ejecute POST /run-now
-    y tenga GEMINI_API_KEY configurado para que Gemini extraiga fecha, cédula, monto y referencia
-    de cada adjunto (imagen/PDF). Si no hay ítems para la fecha, se añade una fila informativa.
+    Genera y devuelve un Excel con los ítems del día. Por defecto usa la fecha actual (America/Caracas; después de 23:50 se considera el día siguiente).
+    Opcional: ?fecha=YYYY-MM-DD para descargar un día concreto.
+    Columnas: Asunto, Fecha Pago, Cédula, Monto, Referencia, Link.
+    Los datos se generan al ejecutar el pipeline: en la app pulse «Generar Excel desde Gmail», espere a que termine, y luego descargue.
     """
     from openpyxl import Workbook
     from app.services.pagos_gmail.helpers import get_sheet_name_for_date
-    sheet_date = _get_sheet_date_for_download()
+    sheet_date = _sheet_date_from_fecha(fecha)
     sheet_name = get_sheet_name_for_date(sheet_date)
     items = db.execute(
         select(PagosGmailSyncItem)
@@ -192,10 +191,12 @@ def download_excel(db: Session = Depends(get_db)):
     ws.title = "Pagos"
     ws.append(["Asunto", "Fecha Pago", "Cedula", "Monto", "Referencia", "Link"])
     if not items:
-        # Sin ítems: el pipeline no ha procesado correos para esta fecha o no se ha ejecutado.
-        # Añadir una fila informativa para que el Excel no llegue solo con cabeceras.
         ws.append([
-            f"Sin datos para {sheet_date.strftime('%Y-%m-%d')}. Ejecute el pipeline (Gmail -> Gemini -> Sheets) y asegúrese de tener GEMINI_API_KEY configurado.",
+            (
+                f"Sin datos para {sheet_date.strftime('%Y-%m-%d')}. "
+                "En la app: pulse «Generar Excel desde Gmail» (Cargar datos > Generar Excel desde Gmail), espere a que termine y vuelva a descargar. "
+                "Solo se procesan correos no leídos con adjuntos y con un email en el Asunto. GEMINI_API_KEY debe estar configurado en el servidor."
+            ),
             "",
             "",
             "",
