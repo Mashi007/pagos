@@ -41,8 +41,6 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
     toast('Puede tardar 1-2 minutos segun la cantidad de correos.', { duration: 3500 })
     try {
       await pagoService.runGmailNow()
-      await pagoService.downloadGmailExcel()
-      toast.success('Excel descargado.')
       pagoService.getGmailStatus().then(setGmailStatus)
       setShowConfirmarBorrar(true)
     } catch (e) {
@@ -135,6 +133,12 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
         open={showConfirmarBorrar}
         onOpenChange={setShowConfirmarBorrar}
         onElegir={async (borrar) => {
+          try {
+            await pagoService.downloadGmailExcel()
+            toast.success('Excel descargado.')
+          } catch (e) {
+            toast.error(getErrorMessage(e))
+          }
           const result = await pagoService.confirmarDiaGmail(borrar)
           if (result.confirmado) {
             toast.success(result.mensaje || 'Información del día borrada.')

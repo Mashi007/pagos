@@ -86,8 +86,6 @@ export function PagosList() {
     toast.info('Puede tardar 1-2 minutos según la cantidad de correos.')
     try {
       await pagoService.runGmailNow()
-      await pagoService.downloadGmailExcel()
-      toast.success('Excel descargado.')
       pagoService.getGmailStatus().then(setGmailStatus)
       setShowConfirmarBorrar(true)
     } catch (e) {
@@ -845,6 +843,12 @@ export function PagosList() {
         open={showConfirmarBorrar}
         onOpenChange={setShowConfirmarBorrar}
         onElegir={async (borrar) => {
+          try {
+            await pagoService.downloadGmailExcel()
+            toast.success('Excel descargado.')
+          } catch (e) {
+            toast.error(getErrorMessage(e))
+          }
           const result = await pagoService.confirmarDiaGmail(borrar)
           if (result.confirmado) {
             toast.success(result.mensaje || 'Información del día borrada.')
