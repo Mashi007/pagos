@@ -43,11 +43,29 @@ PAGOS_GMAIL_DELAY_BETWEEN_GEMINI_SECONDS=4
 PAGOS_GMAIL_MAX_EMAILS_PER_RUN=15
 ```
 
+### 3. Si tienes **Gemini de pago** (cuota mayor)
+
+Los valores anteriores están pensados para cuota **gratuita** (~15 RPM). Con Gemini de pago puedes subir rendimiento en Render:
+
+| Variable | Gratis (actual) | Gemini de pago (recomendado) |
+|----------|------------------|------------------------------|
+| `PAGOS_GMAIL_DELAY_BETWEEN_GEMINI_SECONDS` | 4 | **1** o **2** (menos espera entre correos) |
+| `PAGOS_GMAIL_MAX_EMAILS_PER_RUN` | 15 | **0** (procesar todos por ejecución) |
+| `PAGOS_GMAIL_CRON_MINUTES` | 30 | **15** (opcional: ejecutar cada 15 min) |
+
+Ejemplo para Render con Gemini de pago:
+
+```env
+PAGOS_GMAIL_DELAY_BETWEEN_GEMINI_SECONDS=1
+PAGOS_GMAIL_MAX_EMAILS_PER_RUN=0
+PAGOS_GMAIL_CRON_MINUTES=15
+```
+
 ---
 
 ## Recomendado
 
-### 3. CORS
+### 4. CORS
 
 - El backend usa solo **`CORS_ORIGINS`** (no usa `ALLOWED_ORIGINS`).
 - Si el frontend está en `https://rapicredit-frontend.onrender.com`, incluye ambos orígenes:
@@ -62,7 +80,7 @@ O en JSON:
 CORS_ORIGINS=["https://rapicredit.onrender.com","https://rapicredit-frontend.onrender.com"]
 ```
 
-### 4. `BACKEND_PUBLIC_URL` y OAuth
+### 5. `BACKEND_PUBLIC_URL` y OAuth
 
 - Si no está definida, el backend deduce la base desde `GOOGLE_REDIRECT_URI`.
 - Para evitar confusiones, conviene fijarla:

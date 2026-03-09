@@ -188,15 +188,15 @@ class Settings(BaseSettings):
     )
     PAGOS_GMAIL_CRON_MINUTES: int = Field(
         default=30,
-        description="Intervalo en minutos del cron Gmail->Gemini. Con ~30 correos/15 min y cuota gratuita Gemini (~15 RPM), usar 30 o 60 min y PAGOS_GMAIL_DELAY_BETWEEN_GEMINI_SECONDS=4.",
+        description="Intervalo en minutos del cron Gmail->Gemini. Gratis: 30–60 min. Gemini de pago: puede bajar a 15 min.",
     )
     PAGOS_GMAIL_DELAY_BETWEEN_GEMINI_SECONDS: float = Field(
         default=4.0,
-        description="Segundos de espera entre cada llamada a Gemini (evita 429). Free tier ~15 RPM; 4s entre llamadas ≈ 15/min.",
+        description="Segundos entre cada llamada a Gemini (evita 429). Gratis ~15 RPM: usar 4. Gemini de pago: puede bajar a 1–2.",
     )
     PAGOS_GMAIL_MAX_EMAILS_PER_RUN: int = Field(
         default=0,
-        description="Máximo de correos a procesar por ejecución (0 = sin límite). Útil para no saturar cuota en una sola pasada.",
+        description="Máximo de correos por ejecución (0 = sin límite). Gratis: ej. 15. Gemini de pago: 0 para procesar todos.",
     )
 
     # Tasa USD/Bs Venezuela (reporte contable)
