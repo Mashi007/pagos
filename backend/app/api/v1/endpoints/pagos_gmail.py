@@ -12,16 +12,16 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import and_, delete, desc, select
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db
+from app.core.database import SessionLocal, get_db
 from app.core.deps import get_current_user
 from app.models.pagos_gmail_sync import PagosGmailSync, PagosGmailSyncItem
-from app.services.pagos_gmail.credentials import log_pagos_gmail_config_status
+from app.services.pagos_gmail.credentials import get_pagos_gmail_credentials, log_pagos_gmail_config_status
 from app.services.pagos_gmail.pipeline import run_pipeline
 
 logger = logging.getLogger(__name__)
@@ -69,9 +69,33 @@ def _last_run_too_recent(db: Session) -> tuple[bool, Optional[int]]:
     return False, None
 
 
+def _run_pipeline_background(sync_id: int) -> None:
+    """Ejecuta el pipeline en background con su propia sesión de BD (evita el timeout de 30s de Render/Axios)."""
+    db = SessionLocal()
+    try:
+        run_pipeline(db, existing_sync_id=sync_id)
+    except Exception as e:
+        logger.exception("[PAGOS_GMAIL] Error en background pipeline (sync_id=%s): %s", sync_id, e)
+        try:
+            sync = db.execute(select(PagosGmailSync).where(PagosGmailSync.id == sync_id)).scalars().first()
+            if sync and sync.status == "running":
+                sync.status = "error"
+                sync.finished_at = datetime.utcnow()
+                sync.error_message = str(e)[:2000]
+                db.commit()
+        except Exception:
+            pass
+    finally:
+        db.close()
+
+
 @router.post("/run-now")
-def run_now(force: bool = True, db: Session = Depends(get_db)):
-    """Ejecuta el pipeline una vez (Gmail -> Drive -> Gemini -> Sheets). Por defecto force=True (ejecución manual desde la UI); con force=false se respeta el intervalo mínimo."""
+def run_now(background_tasks: BackgroundTasks, force: bool = True, db: Session = Depends(get_db)):
+    """
+    Inicia el pipeline en segundo plano (Gmail -> Drive -> Gemini -> Sheets) y devuelve inmediatamente.
+    El frontend debe hacer polling a GET /status hasta que last_status sea 'success' o 'error'.
+    Por defecto force=True (ejecución manual desde la UI); con force=false se respeta el intervalo mínimo.
+    """
     if _is_pipeline_running(db):
         raise HTTPException(
             status_code=409,
@@ -84,8 +108,9 @@ def run_now(force: bool = True, db: Session = Depends(get_db)):
                 status_code=429,
                 detail=f"Aún no es tiempo de procesar. La última ejecución fue hace poco. Espere {wait_min} min (intervalo: PAGOS_GMAIL_CRON_MINUTES).",
             )
-    sync_id, status = run_pipeline(db)
-    if status == "no_credentials":
+    # Verificar credenciales de forma síncrona (respuesta inmediata si fallan)
+    creds = get_pagos_gmail_credentials()
+    if not creds:
         log_pagos_gmail_config_status()
         raise HTTPException(
             status_code=503,
@@ -95,18 +120,19 @@ def run_now(force: bool = True, db: Session = Depends(get_db)):
                 "y luego pulse «Conectar con Google» para obtener un nuevo token. Sin reconectar, el token antiguo no funciona con el secret nuevo."
             ),
         )
-    emails_processed = 0
-    files_processed = 0
-    if sync_id:
-        sync_row = db.execute(select(PagosGmailSync).where(PagosGmailSync.id == sync_id)).scalars().first()
-        if sync_row:
-            emails_processed = sync_row.emails_processed or 0
-            files_processed = sync_row.files_processed or 0
+    # Crear registro de sync de inmediato (evita que un segundo click arranque otro pipeline)
+    sync = PagosGmailSync(status="running", emails_processed=0, files_processed=0)
+    db.add(sync)
+    db.commit()
+    db.refresh(sync)
+    sync_id = sync.id
+    # Lanzar pipeline en segundo plano; el cliente hace polling a /status
+    background_tasks.add_task(_run_pipeline_background, sync_id)
     return {
         "sync_id": sync_id,
-        "status": status,
-        "emails_processed": emails_processed,
-        "files_processed": files_processed,
+        "status": "running",
+        "emails_processed": 0,
+        "files_processed": 0,
     }
 
 

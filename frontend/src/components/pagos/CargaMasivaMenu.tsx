@@ -9,26 +9,22 @@ import toast from 'react-hot-toast'
 import { getErrorMessage } from '../../types/errors'
 import { pagoService } from '../../services/pagoService'
 import { formatLastSyncDate } from '../../utils'
+import { useGmailPipeline } from '../../hooks/useGmailPipeline'
 
 interface CargaMasivaMenuProps {
   onSuccess?: () => void
-}
-
-interface GmailStatus {
-  last_run: string | null
-  last_status: string | null
-  last_emails: number
-  last_files: number
-  next_run_approx: string | null
 }
 
 export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
   const [showPagos, setShowPagos] = useState(false)
   const [showConciliacion, setShowConciliacion] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
-  const [loadingGmail, setLoadingGmail] = useState(false)
-  const [gmailStatus, setGmailStatus] = useState<GmailStatus | null>(null)
   const [showConfirmarBorrar, setShowConfirmarBorrar] = useState(false)
+
+  const { loading: loadingGmail, gmailStatus, setGmailStatus, run: runGmail } = useGmailPipeline({
+    onStatusUpdate: (s) => setGmailStatus(s),
+    onDone: () => setShowConfirmarBorrar(true),
+  })
 
   useEffect(() => {
     if (!isOpen) return
@@ -37,24 +33,7 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
 
   async function handleGenerarExcelDesdeGmail() {
     setIsOpen(false)
-    setLoadingGmail(true)
-    toast('Puede tardar 1-2 minutos según la cantidad de correos.', { duration: 3500 })
-    try {
-      const res = await pagoService.runGmailNow()
-      pagoService.getGmailStatus().then(setGmailStatus)
-      const emails = res.emails_processed ?? 0
-      const files = res.files_processed ?? 0
-      if (emails === 0 && files === 0) {
-        toast('No se encontraron correos para procesar. Revise que haya correos no leídos con adjuntos (imagen/PDF).', { duration: 5000 })
-      } else {
-        toast.success(`Listo: ${emails} correo(s), ${files} archivo(s) procesados.`)
-      }
-      setShowConfirmarBorrar(true)
-    } catch (e) {
-      toast.error(getErrorMessage(e))
-    } finally {
-      setLoadingGmail(false)
-    }
+    runGmail()
   }
 
   return (

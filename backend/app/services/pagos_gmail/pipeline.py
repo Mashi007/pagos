@@ -44,22 +44,43 @@ logger = logging.getLogger(__name__)
 # NA = No aplica: no hubo la información o al ser manual no se identifica (mismas columnas en adjuntos y cuerpo)
 
 
-def run_pipeline(db: Session) -> tuple[Optional[int], str]:
+def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[Optional[int], str]:
     """
-    Ejecuta el pipeline completo. Crea registro en pagos_gmail_sync y items en pagos_gmail_sync_item.
+    Ejecuta el pipeline completo. Si se pasa existing_sync_id usa ese registro (pre-creado por el endpoint
+    para evitar timeout en la respuesta HTTP); si no, crea uno nuevo.
     Returns (sync_id, "success"|"error"|"no_credentials").
     """
     creds = get_pagos_gmail_credentials()
     if not creds:
-        return None, "no_credentials"
+        if existing_sync_id:
+            try:
+                from sqlalchemy import select as sa_select
+                sync_row = db.execute(sa_select(PagosGmailSync).where(PagosGmailSync.id == existing_sync_id)).scalars().first()
+                if sync_row:
+                    sync_row.status = "error"
+                    sync_row.finished_at = datetime.utcnow()
+                    sync_row.error_message = "no_credentials"
+                    db.commit()
+            except Exception:
+                pass
+        return existing_sync_id, "no_credentials"
     drive_svc, MediaIoBaseUpload = build_drive_service(creds)
     gmail_svc = build_gmail_service(creds)
     from googleapiclient.discovery import build
     sheets_svc = build("sheets", "v4", credentials=creds, cache_discovery=False)
-    sync = PagosGmailSync(status="running", emails_processed=0, files_processed=0)
-    db.add(sync)
-    db.commit()
-    db.refresh(sync)
+    if existing_sync_id:
+        from sqlalchemy import select as sa_select
+        sync = db.execute(sa_select(PagosGmailSync).where(PagosGmailSync.id == existing_sync_id)).scalars().first()
+        if not sync:
+            sync = PagosGmailSync(status="running", emails_processed=0, files_processed=0)
+            db.add(sync)
+            db.commit()
+            db.refresh(sync)
+    else:
+        sync = PagosGmailSync(status="running", emails_processed=0, files_processed=0)
+        db.add(sync)
+        db.commit()
+        db.refresh(sync)
     sync_id = sync.id
     emails_ok = 0
     files_ok = 0

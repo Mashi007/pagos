@@ -40,6 +40,7 @@ import { PagosKPIsNuevo } from './PagosKPIsNuevo'
 import { toast } from 'sonner'
 import { getErrorMessage } from '../../types/errors'
 import { useSearchParams } from 'react-router-dom'
+import { useGmailPipeline } from '../../hooks/useGmailPipeline'
 
 export function PagosList() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -64,42 +65,22 @@ export function PagosList() {
   const [accionesOpenId, setAccionesOpenId] = useState<number | null>(null)
   const [conciliandoId, setConciliandoId] = useState<number | null>(null)
   const [isExportingRevisar, setIsExportingRevisar] = useState(false)
-  const [loadingGmail, setLoadingGmail] = useState(false)
   const [showConfirmarBorrar, setShowConfirmarBorrar] = useState(false)
-  const [gmailStatus, setGmailStatus] = useState<{
-    last_run: string | null
-    last_status: string | null
-    last_emails: number
-    last_files: number
-    next_run_approx: string | null
-  } | null>(null)
   const queryClient = useQueryClient()
+
+  const { loading: loadingGmail, gmailStatus, setGmailStatus, run: runGmail } = useGmailPipeline({
+    onStatusUpdate: (s) => setGmailStatus(s),
+    onDone: () => setShowConfirmarBorrar(true),
+  })
 
   useEffect(() => {
     if (!agregarPagoOpen) return
     pagoService.getGmailStatus().then(setGmailStatus).catch(() => setGmailStatus(null))
   }, [agregarPagoOpen])
 
-  const handleGenerarExcelDesdeGmail = async () => {
+  const handleGenerarExcelDesdeGmail = () => {
     setAgregarPagoOpen(false)
-    setLoadingGmail(true)
-    toast.info('Puede tardar 1-2 minutos según la cantidad de correos.')
-    try {
-      const res = await pagoService.runGmailNow()
-      pagoService.getGmailStatus().then(setGmailStatus)
-      const emails = res.emails_processed ?? 0
-      const files = res.files_processed ?? 0
-      if (emails === 0 && files === 0) {
-        toast('No se encontraron correos para procesar. Revise que haya correos no leídos con adjuntos (imagen/PDF).', { duration: 5000 })
-      } else {
-        toast.success(`Listo: ${emails} correo(s), ${files} archivo(s) procesados.`)
-      }
-      setShowConfirmarBorrar(true)
-    } catch (e) {
-      toast.error(getErrorMessage(e))
-    } finally {
-      setLoadingGmail(false)
-    }
+    runGmail()
   }
   // Contar filtros activos (mismo criterio que Préstamos)
   const activeFiltersCount = [
