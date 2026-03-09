@@ -68,7 +68,14 @@ export function InformePagosConfig() {
       setVerificandoEstado(true)
       const data = await apiClient.get<EstadoConexiones>('/api/v1/configuracion/informe-pagos/estado')
       setEstado(data)
-    } catch (error) {
+    } catch (error: unknown) {
+      const msg = String((error as { message?: string })?.message ?? '')
+      const code = (error as { code?: string })?.code
+      const isAborted = code === 'ERR_CANCELED' || /aborted|canceled/i.test(msg)
+      if (isAborted) {
+        // Usuario redirigido a Google u otra pestaña; no mostrar error
+        return
+      }
       console.error('Error verificando estado:', error)
       toast.error('No se pudo verificar el estado de Drive, Sheets, OCR y Gmail')
       setEstado(null)
@@ -96,8 +103,9 @@ export function InformePagosConfig() {
         state_invalid: 'Sesión de autorización no encontrada. Cierra y vuelve a abrir esta pantalla, luego pulsa «Conectar con Google» de nuevo.',
         state_expired: 'La ventana de autorización tardó más de 10 minutos. Vuelve a hacer clic en «Conectar con Google».',
         no_credentials: 'Faltan Client ID o Client Secret en la configuración de Informe pagos.',
-        token_exchange: 'Error al intercambiar el código por tokens. En Google Cloud > Credenciales OAuth 2.0 añada exactamente la «URI de redirección autorizada» que usa su backend (ej. https://rapicredit.onrender.com/api/v1/configuracion/informe-pagos/google/callback, sin barra final). Client ID y Client secret deben coincidir con los de esta pantalla.',
+        token_exchange: 'Error al intercambiar el código por tokens. En Google Cloud > Credenciales OAuth 2.0 añada exactamente la «URI de redirección autorizada» que se muestra en esta pantalla (botón Copiar). Sin barra final.',
         no_refresh_token: 'Google no devolvió refresh_token. Vuelve a «Conectar con Google» y autoriza de nuevo.',
+        redirect_uri_mismatch: 'La URI de redirección no coincide. En Google Cloud Console → Credenciales → su cliente OAuth → URIs de redirección autorizados, añada exactamente la URL que se muestra aquí (use Copiar). Debe ser https y sin barra final.',
       }
       const msg = reason && mensajes[reason] ? mensajes[reason] : 'No se pudo conectar con Google. Comprueba Client ID, Client Secret y la URL de redirección en Google Cloud.'
       toast.error(msg)
@@ -354,9 +362,25 @@ export function InformePagosConfig() {
               <li>Pulse <strong>Conectar con Google</strong> y autorice con la cuenta que usará Drive, Sheets y Gmail.</li>
             </ol>
             {redirectUri && (
-              <div className="mb-3 p-2 bg-amber-50 border border-amber-200 rounded text-xs">
-                <span className="font-medium text-amber-800">En Google Cloud use esta URI de redirección:</span>
-                <code className="block mt-1 p-1.5 bg-white border border-amber-200 rounded break-all font-mono text-amber-900">{redirectUri}</code>
+              <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded text-xs space-y-2">
+                <span className="font-medium text-amber-800">En Google Cloud use esta URI de redirección (copie exactamente):</span>
+                <div className="flex gap-2 items-start">
+                  <code className="flex-1 min-w-0 p-1.5 bg-white border border-amber-200 rounded break-all font-mono text-amber-900" title={redirectUri}>{redirectUri}</code>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={() => {
+                      navigator.clipboard.writeText(redirectUri).then(() => toast.success('URI copiada')).catch(() => {})
+                    }}
+                  >
+                    Copiar
+                  </Button>
+                </div>
+                <p className="text-amber-800">
+                  Si Google muestra <strong>«redirect_uri_mismatch»</strong> o «Acceso bloqueado»: en Google Cloud Console → APIs y servicios → Credenciales → su cliente OAuth 2.0 → <strong>URIs de redirección autorizados</strong>, añada la URL de arriba tal cual (https, sin barra final).
+                </p>
               </div>
             )}
             <div className="space-y-3">
