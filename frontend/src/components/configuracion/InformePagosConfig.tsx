@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { FileText, Save, Eye, EyeOff, CheckCircle, AlertCircle, Link, RefreshCw, Database, FileSpreadsheet } from 'lucide-react'
+import { FileText, Save, Eye, EyeOff, CheckCircle, AlertCircle, Link, RefreshCw, Database, FileSpreadsheet, Mail } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -37,6 +37,7 @@ export interface EstadoConexiones {
   drive: EstadoConexion
   sheets: EstadoConexion
   ocr: EstadoConexion
+  gmail?: EstadoConexion
 }
 
 export function InformePagosConfig() {
@@ -49,6 +50,8 @@ export function InformePagosConfig() {
   const [estado, setEstado] = useState<EstadoConexiones | null>(null)
   const [verificandoEstado, setVerificandoEstado] = useState(false)
   const [redirectUri, setRedirectUri] = useState<string | null>(null)
+  /** True solo cuando la última respuesta del servidor incluyó Client ID (config guardada). Secuencia: guardar → luego conectar. */
+  const [oauthGuardadoEnServidor, setOauthGuardadoEnServidor] = useState(false)
 
   useEffect(() => {
     cargarConfiguracion()
@@ -67,7 +70,7 @@ export function InformePagosConfig() {
       setEstado(data)
     } catch (error) {
       console.error('Error verificando estado:', error)
-      toast.error('No se pudo verificar el estado de Drive, Sheets y OCR')
+      toast.error('No se pudo verificar el estado de Drive, Sheets, OCR y Gmail')
       setEstado(null)
     } finally {
       setVerificandoEstado(false)
@@ -111,6 +114,7 @@ export function InformePagosConfig() {
         '/api/v1/configuracion/informe-pagos/configuracion'
       )
       setConfig(data)
+      setOauthGuardadoEnServidor(!!(data.google_oauth_client_id && String(data.google_oauth_client_id).trim()))
       if (data.google_credentials_json && data.google_credentials_json !== '***') {
         setCredencialesEdit(data.google_credentials_json)
       } else if (data.google_credentials_json === '***') {
@@ -161,9 +165,8 @@ export function InformePagosConfig() {
   }
 
   const handleConectarGoogle = async () => {
-    const clientId = (config.google_oauth_client_id ?? '').trim()
-    if (!clientId) {
-      toast.error('Guarda primero el Client ID (y Client Secret) y luego pulsa Conectar con Google.')
+    if (!oauthGuardadoEnServidor) {
+      toast.error('Primero guarde la configuración (Client ID y Client Secret) con «Guardar configuración»; después pulse «Conectar con Google».')
       return
     }
     try {
@@ -211,26 +214,26 @@ export function InformePagosConfig() {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Se comprueba con llamadas reales a Drive, Sheets y Vision (OCR). Las mismas credenciales se usan también para el pipeline Gmail («Generar Excel desde Gmail»). Sin indicios aquí no hay conexión.
+              Se comprueba con llamadas reales a Drive, Sheets, Vision (OCR) y Gmail. Las mismas credenciales sirven para informe de pagos y para el pipeline «Generar Excel desde Gmail». Sin indicios aquí no hay conexión.
             </p>
             {/* Resumen: Conexión OK / no OK */}
             {estado ? (
               <div
                 className={`flex items-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold ${
-                  estado.drive.conectado && estado.sheets.conectado && estado.ocr.conectado
+                  estado.drive.conectado && estado.sheets.conectado && estado.ocr.conectado && (estado.gmail == null || estado.gmail.conectado)
                     ? 'bg-green-100 text-green-800 dark:bg-green-950/50 dark:text-green-300'
                     : 'bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-300'
                 }`}
               >
-                {estado.drive.conectado && estado.sheets.conectado && estado.ocr.conectado ? (
+                {estado.drive.conectado && estado.sheets.conectado && estado.ocr.conectado && (estado.gmail == null || estado.gmail.conectado) ? (
                   <>
                     <CheckCircle className="h-5 w-5 shrink-0" />
-                    Conexión OK — Drive, Sheets y OCR operativos.
+                    Conexión OK — Drive, Sheets, OCR y Gmail operativos.
                   </>
                 ) : (
                   <>
                     <AlertCircle className="h-5 w-5 shrink-0" />
-                    Conexión no OK — Revisa credenciales, ID de carpeta/hoja y comparte con la cuenta.
+                    Conexión no OK — Revisa credenciales, ID de carpeta/hoja, comparte con la cuenta o vuelve a «Conectar con Google».
                   </>
                 )}
               </div>
@@ -244,7 +247,7 @@ export function InformePagosConfig() {
                 Sin verificar. Guarda la configuración y pulsa &quot;Verificar ahora&quot; para ver si la conexión es OK.
               </div>
             )}
-            <div className="grid gap-2 sm:grid-cols-3">
+            <div className="grid gap-2 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
               {estado ? (
                 <>
                   <div className={`flex items-start gap-2 rounded-md p-3 ${estado.drive.conectado ? 'bg-green-50 dark:bg-green-950/30' : 'bg-red-50 dark:bg-red-950/30'}`}>
@@ -283,11 +286,23 @@ export function InformePagosConfig() {
                       <span className="text-xs block mt-0.5">{estado.ocr.detalle}</span>
                     </div>
                   </div>
+                  <div className={`flex items-start gap-2 rounded-md p-3 ${estado.gmail?.conectado ? 'bg-green-50 dark:bg-green-950/30' : 'bg-red-50 dark:bg-red-950/30'}`}>
+                    <Mail className={`h-5 w-5 shrink-0 mt-0.5 ${estado.gmail?.conectado ? 'text-green-600' : 'text-red-600'}`} />
+                    <div className="min-w-0">
+                      <span className="text-sm font-medium block">
+                        Gmail
+                        <span className={`ml-2 text-xs font-normal ${estado.gmail?.conectado ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
+                          {estado.gmail?.conectado ? 'Conectado' : 'No conectado'}
+                        </span>
+                      </span>
+                      <span className="text-xs block mt-0.5">{estado.gmail?.detalle ?? 'Pipeline «Generar Excel desde Gmail».'}</span>
+                    </div>
+                  </div>
                 </>
               ) : verificandoEstado ? (
-                <p className="text-sm text-muted-foreground col-span-3">Verificando Drive, Sheets y OCR…</p>
+                <p className="text-sm text-muted-foreground col-span-full">Verificando Drive, Sheets, OCR y Gmail…</p>
               ) : (
-                <p className="text-sm text-muted-foreground col-span-3">Guarda la configuración (carpeta, hoja, credenciales u OAuth) y pulsa &quot;Verificar ahora&quot; para comprobar las conexiones.</p>
+                <p className="text-sm text-muted-foreground col-span-full">Guarda la configuración (carpeta, hoja, credenciales u OAuth) y pulsa &quot;Verificar ahora&quot; para comprobar las conexiones.</p>
               )}
             </div>
           </div>
@@ -330,13 +345,13 @@ export function InformePagosConfig() {
           <div className="border-t pt-4 mt-4">
             <h4 className="text-sm font-semibold text-gray-700 mb-2">OAuth (alternativa a cuenta de servicio)</h4>
             <p className="text-xs text-gray-500 mb-2">
-              Credenciales para Drive, Sheets, Vision y pipeline Gmail. Todo se guarda aquí (no en Render).
+              Credenciales para Drive, Sheets, Vision y Gmail. <strong>Orden obligatorio:</strong> primero guardar, luego conectar.
             </p>
-            <ol className="text-xs text-gray-600 mb-3 list-decimal list-inside space-y-1">
-              <li>Pegue Client ID y Client secret desde Google Cloud (Credenciales OAuth 2.0).</li>
-              <li>Pulse <strong>Guardar configuración</strong>.</li>
+            <ol className="text-xs text-gray-600 mb-3 list-decimal list-inside space-y-1.5">
+              <li>Pegue <strong>Client ID</strong> y <strong>Client secret</strong> desde Google Cloud (Credenciales OAuth 2.0).</li>
+              <li><strong>Guarde la configuración</strong> con el botón «Guardar configuración» (al final de la página). Sin este paso, Conectar con Google fallará.</li>
               <li>En Google Cloud, en ese cliente OAuth, añada en <strong>URIs de redirección autorizados</strong> exactamente la URL de abajo (sin barra final).</li>
-              <li>Pulse <strong>Conectar con Google</strong> y autorice con la cuenta que usará Drive/Sheets.</li>
+              <li>Pulse <strong>Conectar con Google</strong> y autorice con la cuenta que usará Drive, Sheets y Gmail.</li>
             </ol>
             {redirectUri && (
               <div className="mb-3 p-2 bg-amber-50 border border-amber-200 rounded text-xs">
@@ -383,6 +398,11 @@ export function InformePagosConfig() {
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                {!oauthGuardadoEnServidor && (
+                  <span className="text-xs text-amber-700 bg-amber-50 px-2 py-1 rounded">
+                    Primero guarde Client ID y Client Secret con «Guardar configuración» para habilitar Conectar con Google.
+                  </span>
+                )}
                 {oauthConectado && (
                   <span className="inline-flex items-center gap-1 text-sm text-green-700 bg-green-50 px-2 py-1 rounded">
                     <CheckCircle className="h-4 w-4" />
@@ -394,7 +414,9 @@ export function InformePagosConfig() {
                   variant="outline"
                   size="sm"
                   onClick={handleConectarGoogle}
+                  disabled={!oauthGuardadoEnServidor}
                   className="inline-flex items-center gap-1"
+                  title={!oauthGuardadoEnServidor ? 'Guarde primero la configuración (Client ID y Client Secret)' : undefined}
                 >
                   <Link className="h-4 w-4" />
                   Conectar con Google (OAuth)

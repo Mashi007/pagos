@@ -57,6 +57,8 @@ GOOGLE_OAUTH_SCOPES = " ".join([
     "https://www.googleapis.com/auth/drive.file",
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/cloud-vision",  # OCR (Vision API)
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/gmail.modify",  # Pipeline «Generar Excel desde Gmail»
 ])
 GOOGLE_AUTH_URI = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URI = "https://oauth2.googleapis.com/token"
@@ -336,10 +338,41 @@ def _verificar_ocr() -> dict:
         return {"conectado": False, "detalle": f"Error: {msg[:200]}"}
 
 
+def _verificar_gmail() -> dict:
+    """Prueba real de conexión a Gmail (mismas credenciales que el pipeline «Generar Excel desde Gmail»)."""
+    try:
+        from app.services.pagos_gmail.credentials import get_pagos_gmail_credentials
+        from app.services.pagos_gmail.gmail_service import build_gmail_service
+    except ImportError as e:
+        logger.debug("[INFORME_PAGOS] _verificar_gmail: módulo pagos_gmail no disponible: %s", e)
+        return {"conectado": False, "detalle": "Módulo Gmail no disponible."}
+    creds = get_pagos_gmail_credentials()
+    if not creds:
+        return {
+            "conectado": False,
+            "detalle": "Sin credenciales con acceso a Gmail. Configura OAuth aquí y autoriza Gmail, o usa archivo de tokens del pipeline.",
+        }
+    try:
+        gmail_svc = build_gmail_service(creds)
+        gmail_svc.users().getProfile(userId="me").execute()
+        return {"conectado": True, "detalle": "Conexión correcta. Gmail accesible para el pipeline «Generar Excel desde Gmail»."}
+    except Exception as e:
+        msg = str(e).strip() or "Error desconocido"
+        logger.debug("Verificación Gmail fallida: %s", e, exc_info=True)
+        if "403" in msg or "permission" in msg.lower() or "forbidden" in msg.lower() or "insufficient" in msg.lower():
+            return {
+                "conectado": False,
+                "detalle": "Gmail no autorizado. El token actual no tiene scope Gmail. Usa «Conectar con Google» con una cuenta que tenga Gmail autorizado o configura el pipeline con tokens que incluyan Gmail.",
+            }
+        if "401" in msg or "invalid_grant" in msg.lower() or "token" in msg.lower() or "expired" in msg.lower():
+            return {"conectado": False, "detalle": "Token OAuth expirado o revocado. Haz clic en «Conectar con Google» de nuevo en esta sección."}
+        return {"conectado": False, "detalle": f"Error: {msg[:200]}"}
+
+
 @router.get("/estado")
 def get_estado_conexiones(db: Session = Depends(get_db)):
     """
-    Verifica con llamadas reales si Drive, Sheets y OCR (Vision) están conectados y operativos.
+    Verifica con llamadas reales si Drive, Sheets, OCR (Vision) y Gmail están conectados y operativos.
     Devuelve para cada uno: conectado (bool) y detalle (mensaje para el usuario).
     """
     sync_from_db()
@@ -347,6 +380,7 @@ def get_estado_conexiones(db: Session = Depends(get_db)):
         "drive": _verificar_drive(),
         "sheets": _verificar_sheets(),
         "ocr": _verificar_ocr(),
+        "gmail": _verificar_gmail(),
     }
 
 
