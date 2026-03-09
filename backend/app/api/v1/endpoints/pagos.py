@@ -1,4 +1,4 @@
-﻿"""
+"""
 Endpoints de pagos. Datos reales desde BD.
 - Tabla pagos: GET/POST/PUT/DELETE /pagos/ (listado y CRUD para /pagos/pagos).
 - GET /pagos/kpis, /stats, /ultimos; POST /upload, /conciliacion/upload, /{id}/aplicar-cuotas.
@@ -23,6 +23,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException, UploadFile, File, 
 from pydantic import BaseModel
 from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
@@ -1379,49 +1380,73 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
     # Normalizar cÃ©dula: uppercase para evitar FK mismatch
     cedula_normalizada = payload.cedula_cliente.strip().upper() if payload.cedula_cliente else ""
     
+    # Validar que el crédito (prestamo_id) existe en prestamos (evita IntegrityError FK)
+    if payload.prestamo_id:
+        prestamo = db.execute(select(Prestamo).where(Prestamo.id == payload.prestamo_id)).scalars().first()
+        if not prestamo:
+            raise HTTPException(
+                status_code=400,
+                detail=f"El crédito #{payload.prestamo_id} no existe. Elija un crédito de la lista (no use el número de documento como crédito).",
+            )
     # Validar que cedula existe en clientes si se proporciona y hay prestamo_id
     if cedula_normalizada and payload.prestamo_id:
         cliente = db.execute(
             select(Cliente).where(Cliente.cedula == cedula_normalizada)
-        ).first()
+        ).scalars().first()
         if not cliente:
             raise HTTPException(
                 status_code=404,
                 detail=f"No existe cliente con cedula {cedula_normalizada}"
             )
     
-    row = Pago(
-        cedula_cliente=cedula_normalizada,
-        prestamo_id=payload.prestamo_id,
-        fecha_pago=fecha_pago_ts,
-        monto_pagado=payload.monto_pagado,
-        numero_documento=num_doc,
-        institucion_bancaria=payload.institucion_bancaria.strip() if payload.institucion_bancaria else None,
-        estado="PENDIENTE",
-        notas=payload.notas.strip() if payload.notas else None,
-        referencia_pago=ref,
-        conciliado=conciliado,  # [B2] Usar solo conciliado, no verificado_concordancia
-        fecha_conciliacion=datetime.now(ZoneInfo(TZ_NEGOCIO)) if conciliado else None,
-        verificado_concordancia="SI" if conciliado else "",  # Legacy: sync con conciliado
-        usuario_registro=usuario_email,  # [MEJORADO] Usuario real desde JWT
-    )
-    db.add(row)
-    db.commit()
-    db.refresh(row)
-    # [C3] Aplicar FIFO a cuotas siempre que el pago tenga prestamo_id,
-    # independientemente de si conciliado=True. El flag conciliado es una
-    # confirmaciÃ³n bancaria separada; la distribuciÃ³n de cuotas debe ocurrir
-    # en cuanto el pago estÃ¡ asociado a un prÃ©stamo.
-    if row.prestamo_id and float(row.monto_pagado or 0) > 0:
-        try:
-            _aplicar_pago_a_cuotas_interno(row, db)
-            row.estado = "PAGADO"
-            db.commit()
-            db.refresh(row)
-        except Exception as e:
-            logger.warning("Al crear pago, no se pudo aplicar a cuotas (FIFO): %s", e)
-            db.rollback()
-    return _pago_to_response(row)
+    try:
+        row = Pago(
+            cedula_cliente=cedula_normalizada,
+            prestamo_id=payload.prestamo_id,
+            fecha_pago=fecha_pago_ts,
+            monto_pagado=payload.monto_pagado,
+            numero_documento=num_doc,
+            institucion_bancaria=payload.institucion_bancaria.strip() if payload.institucion_bancaria else None,
+            estado="PENDIENTE",
+            notas=payload.notas.strip() if payload.notas else None,
+            referencia_pago=ref,
+            conciliado=conciliado,  # [B2] Usar solo conciliado, no verificado_concordancia
+            fecha_conciliacion=datetime.now(ZoneInfo(TZ_NEGOCIO)) if conciliado else None,
+            verificado_concordancia="SI" if conciliado else "",  # Legacy: sync con conciliado
+            usuario_registro=usuario_email,  # [MEJORADO] Usuario real desde JWT
+        )
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+        # [C3] Aplicar FIFO a cuotas siempre que el pago tenga prestamo_id
+        if row.prestamo_id and float(row.monto_pagado or 0) > 0:
+            try:
+                _aplicar_pago_a_cuotas_interno(row, db)
+                row.estado = "PAGADO"
+                db.commit()
+                db.refresh(row)
+            except Exception as e:
+                logger.warning("Al crear pago, no se pudo aplicar a cuotas (FIFO): %s", e)
+                db.rollback()
+        return _pago_to_response(row)
+    except HTTPException:
+        raise
+    except IntegrityError as e:
+        db.rollback()
+        # Unique violation (p. ej. numero_documento duplicado) → 409
+        if getattr(getattr(e, "orig", None), "pgcode", None) == "23505":
+            raise HTTPException(
+                status_code=409,
+                detail="Ya existe un pago con ese Nº de documento. El documento debe ser único; no se permiten repetidos.",
+            )
+        raise HTTPException(status_code=500, detail="Error de integridad en la base de datos.")
+    except Exception as e:
+        logger.exception("Error en POST /pagos (crear_pago): %s", e)
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Error al crear el pago. Revise los datos (cédula, crédito, monto, fecha, Nº documento) o contacte soporte.",
+        )
 
 
 @router.put("/{pago_id}", response_model=dict)
@@ -1460,8 +1485,17 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
             row.verificado_concordancia = val if val in ("SI", "NO") else ("" if v == "" else str(v)[:10])
         else:
             setattr(row, k, v)
-    db.commit()
-    db.refresh(row)
+    try:
+        db.commit()
+        db.refresh(row)
+    except IntegrityError as e:
+        db.rollback()
+        if getattr(getattr(e, "orig", None), "pgcode", None) == "23505":
+            raise HTTPException(
+                status_code=409,
+                detail="Ya existe otro pago con ese Nº de documento. El documento debe ser único; no se permiten repetidos.",
+            )
+        raise HTTPException(status_code=500, detail="Error de integridad en la base de datos.")
     if aplicar_conciliado and row.prestamo_id and float(row.monto_pagado or 0) > 0:
         try:
             cuotas_completadas, cuotas_parciales = _aplicar_pago_a_cuotas_interno(row, db)

@@ -563,7 +563,6 @@ export function PagosList() {
                           <TableHead>Cédula</TableHead>
                           <TableHead>Crédito</TableHead>
                           <TableHead>Estado</TableHead>
-                          {!esRevisarPagos && <TableHead className="text-center">Cuotas Atrasadas</TableHead>}
                           {esRevisarPagos && <TableHead>Observaciones</TableHead>}
                           <TableHead>Monto</TableHead>
                           <TableHead>Fecha Pago</TableHead>
@@ -585,13 +584,6 @@ export function PagosList() {
                               )}
                             </TableCell>
                             <TableCell>{getEstadoBadge(pago.estado)}</TableCell>
-                            {!esRevisarPagos && (
-                              <TableCell className="text-center">
-                                <span className={pago.cuotas_atrasadas && pago.cuotas_atrasadas > 0 ? 'text-red-600 font-semibold' : ''}>
-                                  {pago.cuotas_atrasadas ?? 0}
-                                </span>
-                              </TableCell>
-                            )}
                             {esRevisarPagos && (
                               <TableCell className="text-xs text-amber-700">{(pago as PagoConError).observaciones ?? '-'}</TableCell>
                             )}
