@@ -2,6 +2,10 @@
 Holder de configuración para informe de pagos (Google Drive, Sheets, OCR, email).
 Usado por: subida de imágenes a Drive, OCR, digitalización en Sheet, envío de email 6:00/13:00/16:30.
 La config se guarda en tabla configuracion (clave informe_pagos_config).
+
+Persistencia: la configuración se mantiene hasta que el usuario cambie algún valor (Guardar
+o Conectar con Google). No hay expiración por tiempo ni borrado automático: el refresh_token
+y el resto de campos permanecen en BD hasta que se actualicen o se borre explícitamente la fila.
 """
 import json
 import logging

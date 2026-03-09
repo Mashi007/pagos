@@ -410,6 +410,7 @@ def put_informe_pagos_configuracion(
 ):
     """
     Actualizar configuración informe de pagos. Persiste en BD (clave informe_pagos_config).
+    La configuración se mantiene hasta que uno de los valores cambie (no se desconfigura por tiempo).
     - google_credentials_json: si envías "***" o no envías la clave, no se sobrescribe.
       Si envías "" (cadena vacía), se limpia el campo (para usar solo OAuth).
     """
