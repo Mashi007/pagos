@@ -99,6 +99,26 @@ def get_message_full_payload(service: Any, message_id: str) -> dict:
         return {}
 
 
+def get_message_raw_bytes(service: Any, message_id: str) -> Optional[bytes]:
+    """
+    Obtiene el correo completo en formato raw (RFC 2822) para guardarlo como .eml en Drive.
+    Returns bytes del mensaje .eml o None si falla.
+    """
+    try:
+        msg = service.users().messages().get(userId="me", id=message_id, format="raw").execute()
+        raw_b64 = msg.get("raw")
+        if not raw_b64:
+            return None
+        # Gmail devuelve base64url; añadir padding si hace falta
+        pad = 4 - len(raw_b64) % 4
+        if pad != 4:
+            raw_b64 += "=" * pad
+        return base64.urlsafe_b64decode(raw_b64)
+    except Exception as e:
+        logger.warning("Error obteniendo mensaje raw %s: %s", message_id, e)
+        return None
+
+
 def get_attachments_for_message(service: Any, message_id: str, payload: dict) -> List[Tuple[str, bytes, str]]:
     """(filename, content_bytes, mime_type) para cada adjunto permitido."""
     parts = payload.get("parts", [])

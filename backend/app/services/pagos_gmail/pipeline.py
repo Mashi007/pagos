@@ -31,6 +31,7 @@ from app.services.pagos_gmail.gmail_service import (
     get_all_images_and_files_for_message,
     get_message_date,
     get_message_full_payload,
+    get_message_raw_bytes,
     list_unread_with_attachments,
     mark_as_read,
 )
@@ -145,6 +146,19 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
                     subject = forwarded_raw
                 logger.warning("[PAGOS_GMAIL]   Fwd detectado → correo_origen=%s", sender[:60])
 
+            # Guardar correo completo como .eml en Drive para verificación desde Excel
+            drive_email_link: Optional[str] = None
+            raw_eml = get_message_raw_bytes(gmail_svc, msg_id)
+            if raw_eml:
+                eml_name = f"email_{msg_id}.eml"
+                up_eml = upload_file(
+                    drive_svc, MediaIoBaseUpload, folder_id, eml_name,
+                    raw_eml, "message/rfc822",
+                )
+                if up_eml:
+                    _, drive_email_link = up_eml
+                    logger.warning("[PAGOS_GMAIL]   Email guardado en Drive: %s", eml_name)
+
             # Extraer imágenes/PDFs del correo
             attachments = get_all_images_and_files_for_message(gmail_svc, msg_id, full_payload)
             logger.warning("[PAGOS_GMAIL]   imágenes encontradas: %d — %s",
@@ -155,7 +169,8 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
             fila_guardada = False
 
             def _guardar_en_bd(correo: str, fecha: str, cedula: str, monto: str,
-                               referencia: str, drive_file_id=None, drive_lnk="") -> bool:
+                               referencia: str, drive_file_id=None, drive_lnk="",
+                               email_lnk: Optional[str] = None) -> bool:
                 """Persiste fila directamente en BD (sin Sheets). Retorna True si tuvo éxito."""
                 nonlocal files_ok, fila_guardada
                 try:
@@ -169,6 +184,7 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
                         numero_referencia=referencia,
                         drive_file_id=drive_file_id,
                         drive_link=drive_lnk or None,
+                        drive_email_link=email_lnk or None,
                         sheet_name=sheet_name,
                     ))
                     files_ok += 1
@@ -184,7 +200,7 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
 
             if len(attachments) == 0:
                 # Sin imágenes: guardar fila NA para trazabilidad
-                _guardar_en_bd(sender, PAGOS_NA, PAGOS_NA, PAGOS_NA, PAGOS_NA)
+                _guardar_en_bd(sender, PAGOS_NA, PAGOS_NA, PAGOS_NA, PAGOS_NA, email_lnk=drive_email_link)
                 logger.warning("[PAGOS_GMAIL]   Sin imágenes → fila NA guardada")
             else:
                 for filename, content, mime_type in attachments:
@@ -214,15 +230,16 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
                             sender,
                             f or PAGOS_NA, c or PAGOS_NA, m or PAGOS_NA, r or PAGOS_NA,
                             drive_file_id=file_id, drive_lnk=drive_link or "",
+                            email_lnk=drive_email_link,
                         )
                     except Exception as e:
                         logger.warning("[PAGOS_GMAIL]   Error procesando %s: %s", filename, e)
-                        _guardar_en_bd(sender, PAGOS_NA, PAGOS_NA, PAGOS_NA, PAGOS_NA)
+                        _guardar_en_bd(sender, PAGOS_NA, PAGOS_NA, PAGOS_NA, PAGOS_NA, email_lnk=drive_email_link)
 
             # Garantía: al menos 1 fila por correo
             if not fila_guardada:
                 logger.warning("[PAGOS_GMAIL]   ✗ Sin fila guardada para %s — fila NA de respaldo", msg_id)
-                _guardar_en_bd(sender, PAGOS_NA, PAGOS_NA, PAGOS_NA, PAGOS_NA)
+                _guardar_en_bd(sender, PAGOS_NA, PAGOS_NA, PAGOS_NA, PAGOS_NA, email_lnk=drive_email_link)
 
             # Marcar correo como leído
             mark_as_read(gmail_svc, msg_id)

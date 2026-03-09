@@ -32,5 +32,6 @@ class PagosGmailSyncItem(Base):
     numero_referencia = Column(String(200), nullable=True)
     drive_file_id = Column(String(100), nullable=True)
     drive_link = Column(String(500), nullable=True)
+    drive_email_link = Column(String(500), nullable=True)  # link al .eml del correo en Drive (verificar contexto)
     sheet_name = Column(String(100), nullable=True)
     created_at = Column(DateTime(timezone=False), nullable=False, server_default=func.now())

@@ -309,13 +309,17 @@ def download_excel(fecha: Optional[str] = None, db: Session = Depends(get_db)):
     wb = Workbook()
     ws = wb.active
     ws.title = "Pagos"
-    ws.append(["Correo Pagador", "Fecha Pago", "Cedula", "Monto", "Referencia", "Link"])
+    ws.append(["Correo Pagador", "Fecha Pago", "Cedula", "Monto", "Referencia", "Link", "Ver email"])
     link_font = Font(color="0563C1", underline="single")
     for row_idx, it in enumerate(items, start=2):  # fila 1 = cabecera
         link_url = (it.drive_link or "").strip()
         if link_url and not link_url.startswith("http"):
             link_url = "https://drive.google.com/file/d/" + link_url + "/view"
         link_text = "Ver imagen" if link_url else ""
+        email_url = (it.drive_email_link or "").strip()
+        if email_url and not email_url.startswith("http"):
+            email_url = "https://drive.google.com/file/d/" + email_url + "/view"
+        email_text = "Ver email" if email_url else ""
         ws.append([
             it.correo_origen or "",
             it.fecha_pago or "",
@@ -323,12 +327,18 @@ def download_excel(fecha: Optional[str] = None, db: Session = Depends(get_db)):
             it.monto or "",
             it.numero_referencia or "",
             link_text,
+            email_text,
         ])
         if link_url:
-            cell = ws.cell(row=row_idx, column=6)
-            cell.hyperlink = link_url
-            cell.value = "Ver imagen"
-            cell.font = link_font
+            c6 = ws.cell(row=row_idx, column=6)
+            c6.hyperlink = link_url
+            c6.value = "Ver imagen"
+            c6.font = link_font
+        if email_url:
+            c7 = ws.cell(row=row_idx, column=7)
+            c7.hyperlink = email_url
+            c7.value = "Ver email"
+            c7.font = link_font
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
