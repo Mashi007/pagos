@@ -198,6 +198,10 @@ class Settings(BaseSettings):
         default=0,
         description="Máximo de correos por ejecución (0 = sin límite). Gratis: ej. 15. Gemini de pago: 0 para procesar todos.",
     )
+    PAGOS_GMAIL_SUBJECT_KEYWORDS_OR: str = Field(
+        default="Cobranza Rapicredit,Pago de crédito",
+        description="Si el Asunto no contiene un email, se acepta igual si contiene alguna de estas frases (separadas por coma). Ej: 'Cobranza Rapicredit,Pago de crédito'. Vacío = solo correos con email en el asunto.",
+    )
 
     # Tasa USD/Bs Venezuela (reporte contable)
     # ============================================

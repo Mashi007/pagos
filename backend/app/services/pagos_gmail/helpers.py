@@ -66,6 +66,24 @@ def subject_contains_email(subject: Optional[str]) -> bool:
     return bool(re.search(r"\S+@\S+\.\S+", subject.strip()))
 
 
+def subject_acceptable_for_pipeline(subject: Optional[str], keywords_or: Optional[list[str]] = None) -> bool:
+    """
+    True si el correo debe procesarse según el asunto.
+    Acepta si: (1) el asunto contiene un email, o (2) keywords_or está definido y el asunto contiene alguna de las frases (case-insensitive).
+    """
+    if not subject or not subject.strip():
+        return False
+    s = subject.strip()
+    if subject_contains_email(s):
+        return True
+    if keywords_or:
+        lower = s.lower()
+        for kw in keywords_or:
+            if kw and kw.strip().lower() in lower:
+                return True
+    return False
+
+
 def extract_sender_email(from_header_value: Optional[str]) -> str:
     """Extrae solo la dirección de email del campo From (sin nombre mostrado)."""
     if not from_header_value or not from_header_value.strip():

@@ -13,7 +13,6 @@ from app.services.pagos_gmail.helpers import (
     ext_for_mime,
     is_allowed_attachment,
     MIME_IMAGE_OR_PDF,
-    subject_contains_email,
 )
 
 logger = logging.getLogger(__name__)
@@ -49,11 +48,9 @@ def _message_has_extractable_content(payload: dict) -> bool:
 
 def list_unread_with_attachments(service: Any) -> List[dict]:
     """
-    Lista solo mensajes NO LEÍDOS (labelIds=["UNREAD"]).
-    Si un mensaje ya está leído, no se vuelve a listar ni a procesar; así se evita volver desde cero en cada ejecución.
+    Lista todos los mensajes NO LEÍDOS (labelIds=["UNREAD"]) que tengan contenido extraíble
+    (adjunto permitido o imagen/PDF en el cuerpo). No se filtra por asunto; se procesan todos.
     Tras procesar cada mensaje el pipeline lo marca como leído (mark_as_read).
-    Filtros: (1) al menos un adjunto permitido O imagen/PDF en el cuerpo;
-    (2) obligatorio: el Asunto debe contener una dirección de email; si no, no se procesa.
     """
     try:
         result = service.users().messages().list(userId="me", labelIds=["UNREAD"], maxResults=100).execute()
@@ -68,9 +65,6 @@ def list_unread_with_attachments(service: Any) -> List[dict]:
             if not _message_has_extractable_content(payload):
                 continue
             headers = {h["name"].lower(): h["value"] for h in payload.get("headers", [])}
-            subject = headers.get("subject", "")
-            if not subject_contains_email(subject):
-                continue
             out.append({"id": mid, "payload": payload, "headers": headers})
         return out
     except Exception as e:

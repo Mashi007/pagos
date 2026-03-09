@@ -36,6 +36,9 @@ from app.services.pagos_gmail.sheets_service import append_row
 
 logger = logging.getLogger(__name__)
 
+# Cuando no se puede extraer información válida del comprobante, se escribe en la fila del Excel/BD
+NCIV = "NCIV"  # No contiene información válida
+
 
 def run_pipeline(db: Session) -> tuple[Optional[int], str]:
     """
@@ -85,61 +88,105 @@ def run_pipeline(db: Session) -> tuple[Optional[int], str]:
                 full_payload = payload
             attachments = get_all_images_and_files_for_message(gmail_svc, msg_id, full_payload)
             if len(attachments) > 1:
-                # Más de 1 adjunto: una sola fila con asunto en A y "varios archivos" en el resto; no Gemini ni Drive por archivo
-                VARIOS = "varios archivos"
-                row = [subject, VARIOS, VARIOS, VARIOS, VARIOS, ""]
+                # Más de 1 adjunto: una fila con asunto y NCIV (no se extrae por archivo)
+                row = [subject, NCIV, NCIV, NCIV, NCIV, ""]
                 if append_row(sheets_svc, sheet_id, row):
                     item = PagosGmailSyncItem(
                         sync_id=sync_id,
                         correo_origen=sender,
                         asunto=subject,
-                        fecha_pago=VARIOS,
-                        cedula=VARIOS,
-                        monto=VARIOS,
-                        numero_referencia=VARIOS,
+                        fecha_pago=NCIV,
+                        cedula=NCIV,
+                        monto=NCIV,
+                        numero_referencia=NCIV,
                         drive_file_id=None,
                         drive_link=None,
                         sheet_name=sheet_name,
                     )
                     db.add(item)
                     files_ok += 1
-                logger.info("[PAGOS_GMAIL] Correo con %d adjuntos: fila única «varios archivos» (asunto en columna A)", len(attachments))
+                logger.info("[PAGOS_GMAIL] Correo con %d adjuntos: fila única NCIV (asunto en columna A)", len(attachments))
+            elif len(attachments) == 0:
+                # Sin adjuntos extraíbles: una fila con asunto y NCIV
+                row = [subject, NCIV, NCIV, NCIV, NCIV, ""]
+                if append_row(sheets_svc, sheet_id, row):
+                    item = PagosGmailSyncItem(
+                        sync_id=sync_id,
+                        correo_origen=sender,
+                        asunto=subject,
+                        fecha_pago=NCIV,
+                        cedula=NCIV,
+                        monto=NCIV,
+                        numero_referencia=NCIV,
+                        drive_file_id=None,
+                        drive_link=None,
+                        sheet_name=sheet_name,
+                    )
+                    db.add(item)
+                    files_ok += 1
+                logger.info("[PAGOS_GMAIL] Correo sin adjuntos extraíbles: fila NCIV")
             else:
                 for filename, content, mime_type in attachments:
                     try:
                         up = upload_file(drive_svc, MediaIoBaseUpload, folder_id, filename, content, mime_type)
-                        if not up:
-                            continue
-                        file_id, drive_link = up
+                        file_id = None
+                        drive_link = ""
+                        if up:
+                            file_id, drive_link = up
                         logger.info("[PAGOS_GMAIL] Extrayendo datos con Gemini: %s", filename)
                         data = extract_payment_data(content, filename)
                         if delay_gemini > 0:
                             time.sleep(delay_gemini)
-                        row = [
-                            subject,
-                            data.get("fecha_pago", "No encontrado"),
-                            data.get("cedula", "No encontrado"),
-                            data.get("monto", "No encontrado"),
-                            data.get("numero_referencia", "No encontrado"),
-                            drive_link,
-                        ]
+                        # ¿Información válida? Al menos un campo distinto de vacío o "No encontrado"
+                        def _v(x: Optional[str]) -> str:
+                            v = (x or "").strip()
+                            return v if v and v != "No encontrado" else ""
+                        f = _v(data.get("fecha_pago"))
+                        c = _v(data.get("cedula"))
+                        m = _v(data.get("monto"))
+                        r = _v(data.get("numero_referencia"))
+                        tiene_valido = bool(f or c or m or r)
+                        if tiene_valido:
+                            # Campos válidos se muestran; el resto NCIV
+                            row = [subject, f or NCIV, c or NCIV, m or NCIV, r or NCIV, drive_link or ""]
+                            item_vals = {"fecha_pago": f or NCIV, "cedula": c or NCIV, "monto": m or NCIV, "numero_referencia": r or NCIV}
+                        else:
+                            row = [subject, NCIV, NCIV, NCIV, NCIV, drive_link or ""]
+                            item_vals = {"fecha_pago": NCIV, "cedula": NCIV, "monto": NCIV, "numero_referencia": NCIV}
                         if append_row(sheets_svc, sheet_id, row):
                             item = PagosGmailSyncItem(
                                 sync_id=sync_id,
                                 correo_origen=sender,
                                 asunto=subject,
-                                fecha_pago=data.get("fecha_pago"),
-                                cedula=data.get("cedula"),
-                                monto=data.get("monto"),
-                                numero_referencia=data.get("numero_referencia"),
+                                fecha_pago=item_vals["fecha_pago"],
+                                cedula=item_vals["cedula"],
+                                monto=item_vals["monto"],
+                                numero_referencia=item_vals["numero_referencia"],
                                 drive_file_id=file_id,
-                                drive_link=drive_link,
+                                drive_link=drive_link or None,
                                 sheet_name=sheet_name,
                             )
                             db.add(item)
                             files_ok += 1
                     except Exception as e:
                         logger.warning("Error procesando adjunto %s: %s", filename, e)
+                        # Fila con NCIV para que quede registrado el correo
+                        row = [subject, NCIV, NCIV, NCIV, NCIV, ""]
+                        if append_row(sheets_svc, sheet_id, row):
+                            item = PagosGmailSyncItem(
+                                sync_id=sync_id,
+                                correo_origen=sender,
+                                asunto=subject,
+                                fecha_pago=NCIV,
+                                cedula=NCIV,
+                                monto=NCIV,
+                                numero_referencia=NCIV,
+                                drive_file_id=None,
+                                drive_link=None,
+                                sheet_name=sheet_name,
+                            )
+                            db.add(item)
+                            files_ok += 1
             # Marcar como leído para no volver a procesarlo en futuras ejecuciones (solo se listan UNREAD)
             mark_as_read(gmail_svc, msg_id)
             emails_ok += 1
