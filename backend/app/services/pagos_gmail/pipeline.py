@@ -84,41 +84,62 @@ def run_pipeline(db: Session) -> tuple[Optional[int], str]:
             if not full_payload and payload.get("parts"):
                 full_payload = payload
             attachments = get_all_images_and_files_for_message(gmail_svc, msg_id, full_payload)
-            for filename, content, mime_type in attachments:
-                try:
-                    up = upload_file(drive_svc, MediaIoBaseUpload, folder_id, filename, content, mime_type)
-                    if not up:
-                        continue
-                    file_id, drive_link = up
-                    logger.info("[PAGOS_GMAIL] Extrayendo datos con Gemini: %s", filename)
-                    data = extract_payment_data(content, filename)
-                    if delay_gemini > 0:
-                        time.sleep(delay_gemini)
-                    row = [
-                        subject,
-                        data.get("fecha_pago", "No encontrado"),
-                        data.get("cedula", "No encontrado"),
-                        data.get("monto", "No encontrado"),
-                        data.get("numero_referencia", "No encontrado"),
-                        drive_link,
-                    ]
-                    if append_row(sheets_svc, sheet_id, row):
-                        item = PagosGmailSyncItem(
-                            sync_id=sync_id,
-                            correo_origen=sender,
-                            asunto=subject,
-                            fecha_pago=data.get("fecha_pago"),
-                            cedula=data.get("cedula"),
-                            monto=data.get("monto"),
-                            numero_referencia=data.get("numero_referencia"),
-                            drive_file_id=file_id,
-                            drive_link=drive_link,
-                            sheet_name=sheet_name,
-                        )
-                        db.add(item)
-                        files_ok += 1
-                except Exception as e:
-                    logger.warning("Error procesando adjunto %s: %s", filename, e)
+            if len(attachments) > 1:
+                # Más de 1 adjunto: una sola fila con asunto en A y "varios archivos" en el resto; no Gemini ni Drive por archivo
+                VARIOS = "varios archivos"
+                row = [subject, VARIOS, VARIOS, VARIOS, VARIOS, ""]
+                if append_row(sheets_svc, sheet_id, row):
+                    item = PagosGmailSyncItem(
+                        sync_id=sync_id,
+                        correo_origen=sender,
+                        asunto=subject,
+                        fecha_pago=VARIOS,
+                        cedula=VARIOS,
+                        monto=VARIOS,
+                        numero_referencia=VARIOS,
+                        drive_file_id=None,
+                        drive_link=None,
+                        sheet_name=sheet_name,
+                    )
+                    db.add(item)
+                    files_ok += 1
+                logger.info("[PAGOS_GMAIL] Correo con %d adjuntos: fila única «varios archivos» (asunto en columna A)", len(attachments))
+            else:
+                for filename, content, mime_type in attachments:
+                    try:
+                        up = upload_file(drive_svc, MediaIoBaseUpload, folder_id, filename, content, mime_type)
+                        if not up:
+                            continue
+                        file_id, drive_link = up
+                        logger.info("[PAGOS_GMAIL] Extrayendo datos con Gemini: %s", filename)
+                        data = extract_payment_data(content, filename)
+                        if delay_gemini > 0:
+                            time.sleep(delay_gemini)
+                        row = [
+                            subject,
+                            data.get("fecha_pago", "No encontrado"),
+                            data.get("cedula", "No encontrado"),
+                            data.get("monto", "No encontrado"),
+                            data.get("numero_referencia", "No encontrado"),
+                            drive_link,
+                        ]
+                        if append_row(sheets_svc, sheet_id, row):
+                            item = PagosGmailSyncItem(
+                                sync_id=sync_id,
+                                correo_origen=sender,
+                                asunto=subject,
+                                fecha_pago=data.get("fecha_pago"),
+                                cedula=data.get("cedula"),
+                                monto=data.get("monto"),
+                                numero_referencia=data.get("numero_referencia"),
+                                drive_file_id=file_id,
+                                drive_link=drive_link,
+                                sheet_name=sheet_name,
+                            )
+                            db.add(item)
+                            files_ok += 1
+                    except Exception as e:
+                        logger.warning("Error procesando adjunto %s: %s", filename, e)
             # Marcar como leído para no volver a procesarlo en futuras ejecuciones (solo se listan UNREAD)
             mark_as_read(gmail_svc, msg_id)
             emails_ok += 1
