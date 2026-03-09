@@ -367,7 +367,6 @@ export function ClientesList() {
                 <Plus className="w-5 h-5 mr-2" />
                 Nuevo Cliente
               </span>
-              <span className="ml-2">?</span>
             </Button>
             {/* Puente invisible para que el hover no se pierda al bajar el cursor al men */}
             <div className="absolute left-0 right-0 top-full h-2 z-40" aria-hidden="true" />

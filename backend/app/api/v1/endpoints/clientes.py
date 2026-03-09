@@ -8,7 +8,8 @@ Endpoints de clientes: CONECTADOS A LA TABLA REAL `clientes` (public.clientes).
 import calendar
 import logging
 import re
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 from typing import Optional, Any
 
 from fastapi import APIRouter, Query, Depends, HTTPException, Body
@@ -182,25 +183,33 @@ def get_clientes_stats(db: Session = Depends(get_db)):
     activos = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "ACTIVO")) or 0
     inactivos = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "INACTIVO")) or 0
     finalizados = db.scalar(select(func.count()).select_from(Cliente).where(Cliente.estado == "FINALIZADO")) or 0
-    # Nuevos clientes registrados en el mes actual (zona Venezuela America/Caracas)
-    # fecha_registro se guarda sin tz; se asume UTC en servidores cloud
-    primer_dia_mes = db.scalar(text(
-        "SELECT date_trunc('month', (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas'))::date"
-    ))
-    ultimo_dia_mes = db.scalar(text(
-        "SELECT (date_trunc('month', (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas') + INTERVAL '1 month') - INTERVAL '1 day')::date"
-    ))
-    if primer_dia_mes is None or ultimo_dia_mes is None:
+    # Nuevos clientes en el mes actual según fecha_registro (zona Venezuela America/Caracas).
+    # fecha_registro en BD es sin tz; se asume UTC en servidores cloud.
+    try:
+        tz_caracas = ZoneInfo("America/Caracas")
+        hoy_caracas = datetime.now(tz_caracas).date()
+        primer_dia = date(hoy_caracas.year, hoy_caracas.month, 1)
+        _, ultimo_dia_num = calendar.monthrange(hoy_caracas.year, hoy_caracas.month)
+        ultimo_dia = date(hoy_caracas.year, hoy_caracas.month, ultimo_dia_num)
+        # Rango del mes en Venezuela convertido a UTC (naive) para comparar con fecha_registro
+        inicio_caracas = datetime(primer_dia.year, primer_dia.month, primer_dia.day, 0, 0, 0, tzinfo=tz_caracas)
+        fin_caracas = datetime(ultimo_dia.year, ultimo_dia.month, ultimo_dia.day, 23, 59, 59, tzinfo=tz_caracas)
+        inicio_utc = inicio_caracas.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+        fin_utc = fin_caracas.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+        nuevos_este_mes = (
+            db.scalar(
+                select(func.count()).select_from(Cliente).where(
+                    Cliente.fecha_registro.isnot(None),
+                    Cliente.fecha_registro >= inicio_utc,
+                    Cliente.fecha_registro <= fin_utc,
+                )
+            )
+            or 0
+        )
+        nuevos_este_mes = int(nuevos_este_mes)
+    except Exception as e:
+        logger.warning("Error calculando nuevos_este_mes por fecha_registro: %s", e)
         nuevos_este_mes = 0
-    else:
-        # Comparar fecha_registro en Venezuela: (ts AT TZ UTC) AT TZ America/Caracas
-        stmt = text("""
-            SELECT count(*) FROM clientes
-            WHERE fecha_registro IS NOT NULL
-            AND ((fecha_registro AT TIME ZONE 'UTC') AT TIME ZONE 'America/Caracas')::date >= :p1
-            AND ((fecha_registro AT TIME ZONE 'UTC') AT TIME ZONE 'America/Caracas')::date <= :p2
-        """)
-        nuevos_este_mes = db.execute(stmt, {"p1": primer_dia_mes, "p2": ultimo_dia_mes}).scalar() or 0
     return {
         "total": total,
         "activos": activos,
@@ -485,6 +494,11 @@ def _perform_update_cliente(cliente_id: int, payload: ClienteUpdate, db: Session
     if not row:
         raise HTTPException(status_code=404, detail="Cliente no encontrado")
     data = payload.model_dump(exclude_unset=True)
+    # No permitir sobrescribir id ni fecha_registro en actualizaciones
+    data.pop("id", None)
+    data.pop("fecha_registro", None)
+    # Actualizar siempre fecha_actualizacion al guardar (BD sin tz; asumimos UTC)
+    data["fecha_actualizacion"] = datetime.now(ZoneInfo("UTC")).replace(tzinfo=None)
 
     # Validar duplicados: no permitir cÃ©dula, nombre, email ni telÃ©fono igual a otro cliente
     # Z999999999 puede repetirse (clientes sin cÃ©dula)
