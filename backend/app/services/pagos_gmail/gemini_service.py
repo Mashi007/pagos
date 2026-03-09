@@ -59,14 +59,11 @@ def extract_payment_data(file_content: bytes, filename: str, api_key: Optional[s
         last_error = None
         for attempt in range(GEMINI_RATE_LIMIT_MAX_RETRIES + 1):
             try:
-                try:
-                    response = model.generate_content(
-                        [GEMINI_PROMPT, part],
-                        generation_config=genai.types.GenerationConfig(temperature=0.1),
-                        safety_settings=list(safety.items()),
-                    )
-                except TypeError:
-                    response = model.generate_content([GEMINI_PROMPT, part])
+                response = model.generate_content(
+                    [GEMINI_PROMPT, part],
+                    generation_config=genai.types.GenerationConfig(temperature=0.1),
+                    safety_settings=safety,
+                )
                 text = (response.text or "").strip()
                 return _parse_gemini_json(text)
             except Exception as e:
@@ -210,14 +207,11 @@ def extract_cobranza_from_image(
         last_error = None
         for attempt in range(GEMINI_RATE_LIMIT_MAX_RETRIES + 1):
             try:
-                try:
-                    response = model.generate_content(
-                        [GEMINI_COBRANZA_PROMPT, part],
-                        generation_config=genai.types.GenerationConfig(temperature=0.1),
-                        safety_settings=list(safety.items()),
-                    )
-                except TypeError:
-                    response = model.generate_content([GEMINI_COBRANZA_PROMPT, part])
+                response = model.generate_content(
+                    [GEMINI_COBRANZA_PROMPT, part],
+                    generation_config=genai.types.GenerationConfig(temperature=0.1),
+                    safety_settings=safety,
+                )
                 text = (response.text or "").strip()
                 return _parse_cobranza_json(text)
             except Exception as e:

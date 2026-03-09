@@ -13,7 +13,7 @@ def append_row(service_sheets: Any, spreadsheet_id: str, row: List[Any]) -> bool
         body = {"values": [row]}
         service_sheets.spreadsheets().values().append(
             spreadsheetId=spreadsheet_id,
-            range="Sheet1!A:F",
+            range="A:F",  # Sin nombre de hoja: usa la primera (compatible con cualquier locale)
             valueInputOption="USER_ENTERED",
             insertDataOption="INSERT_ROWS",
             body=body,
