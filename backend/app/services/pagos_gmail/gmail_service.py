@@ -288,6 +288,74 @@ def get_all_images_and_files_for_message(
     return out
 
 
+def extract_forwarded_sender(full_payload: dict) -> Optional[str]:
+    """
+    Extrae el remitente original de un mensaje reenviado buscando la línea
+    'De: NAME <email>' o 'From: NAME <email>' después del marcador
+    '---------- Forwarded message ----------' en el cuerpo de texto plano.
+    También busca en partes message/rfc822 el header From del mensaje incrustado.
+    Devuelve la cadena 'NAME <email>' o solo 'email' si se encuentra, None si no.
+    """
+    # 1. Intentar con message/rfc822: extraer From del .eml incrustado
+    import email as email_lib
+
+    def _find_rfc822_from(parts: list) -> Optional[str]:
+        for part in parts:
+            mime = (part.get("mimeType") or "").strip().lower()
+            if mime == "message/rfc822":
+                body = part.get("body") or {}
+                data_b64 = body.get("data")
+                if data_b64:
+                    try:
+                        raw = base64.urlsafe_b64decode(data_b64 + "==")
+                        msg = email_lib.message_from_bytes(raw)
+                        return msg.get("From") or msg.get("from")
+                    except Exception:
+                        pass
+            nested = part.get("parts") or []
+            if nested:
+                found = _find_rfc822_from(nested)
+                if found:
+                    return found
+        return None
+
+    rfc_from = _find_rfc822_from(full_payload.get("parts") or [])
+    if rfc_from:
+        return rfc_from.strip()
+
+    # 2. Fallback: parsear el texto plano buscando el marcador de reenvío
+    def _get_plain_text(p: dict) -> str:
+        mime = (p.get("mimeType") or "").lower()
+        if mime == "text/plain":
+            data = (p.get("body") or {}).get("data", "")
+            if data:
+                try:
+                    return base64.urlsafe_b64decode(data + "==").decode("utf-8", errors="ignore")
+                except Exception:
+                    pass
+        for sub in (p.get("parts") or []):
+            result = _get_plain_text(sub)
+            if result:
+                return result
+        return ""
+
+    text = _get_plain_text(full_payload)
+    if text:
+        # Buscar después del marcador de reenvío
+        marker = re.search(r"-{5,}\s*Forwarded message\s*-{5,}", text, re.IGNORECASE)
+        search_text = text[marker.end():] if marker else text
+        # "De: NOMBRE <email>" o "From: NOMBRE <email>"
+        m = re.search(r"(?:De|From):\s+(.*?<[^>]+@[^>]+>)", search_text, re.IGNORECASE)
+        if m:
+            return m.group(1).strip()
+        # Sin ángulos: "De: email@dominio.com"
+        m = re.search(r"(?:De|From):\s+([^\s<@,\n]+@[^\s,\n]+)", search_text, re.IGNORECASE)
+        if m:
+            return m.group(1).strip()
+
+    return None
+
+
 def mark_as_read(service: Any, message_id: str) -> None:
     """Marca el mensaje como leído en Gmail (quita UNREAD). No se volverá a leer ni a procesar; evita reprocesar desde cero."""
     try:

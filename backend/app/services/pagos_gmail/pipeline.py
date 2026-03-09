@@ -24,6 +24,7 @@ from app.services.pagos_gmail.drive_service import (
 )
 from app.services.pagos_gmail.gmail_service import (
     build_gmail_service,
+    extract_forwarded_sender,
     get_all_images_and_files_for_message,
     get_message_date,
     get_message_full_payload,
@@ -117,6 +118,13 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
             full_payload = get_message_full_payload(gmail_svc, msg_id)
             if not full_payload and payload.get("parts"):
                 full_payload = payload
+            # Si el asunto no contiene '@' (es genérico tipo "Cobranza Rapicredit"),
+            # intentar extraer el remitente original del mensaje reenviado para identificar quién pagó.
+            if "@" not in subject and full_payload:
+                fwd_sender = extract_forwarded_sender(full_payload)
+                if fwd_sender:
+                    subject = fwd_sender
+                    logger.info("[PAGOS_GMAIL] Asunto reemplazado por remitente reenviado: %s", fwd_sender)
             attachments = get_all_images_and_files_for_message(gmail_svc, msg_id, full_payload)
             mensaje_tiene_fila_valida = False
             if len(attachments) == 0:
