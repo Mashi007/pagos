@@ -95,7 +95,19 @@ def run_now(force: bool = True, db: Session = Depends(get_db)):
                 "y luego pulse «Conectar con Google» para obtener un nuevo token. Sin reconectar, el token antiguo no funciona con el secret nuevo."
             ),
         )
-    return {"sync_id": sync_id, "status": status}
+    emails_processed = 0
+    files_processed = 0
+    if sync_id:
+        sync_row = db.execute(select(PagosGmailSync).where(PagosGmailSync.id == sync_id)).scalars().first()
+        if sync_row:
+            emails_processed = sync_row.emails_processed or 0
+            files_processed = sync_row.files_processed or 0
+    return {
+        "sync_id": sync_id,
+        "status": status,
+        "emails_processed": emails_processed,
+        "files_processed": files_processed,
+    }
 
 
 @router.get("/status")

@@ -265,7 +265,7 @@ class PagoService {
   }
 
 /** Pagos Gmail: ejecutar pipeline (Gmail -> Drive -> Gemini -> Sheets). force=true permite ejecutar aunque la última sync fue hace poco. */
-  async runGmailNow(force = true): Promise<{ sync_id: number | null; status: string }> {
+  async runGmailNow(force = true): Promise<{ sync_id: number | null; status: string; emails_processed?: number; files_processed?: number }> {
     return await apiClient.post(`${this.baseUrl}/gmail/run-now?force=${force}`)
   }
 
@@ -289,7 +289,7 @@ class PagoService {
     return res
   }
 
-  /** Pagos Gmail: descargar Excel del día (datos del Sheet). Si no hay datos, lanza error con mensaje del backend. */
+  /** Pagos Gmail: descargar Excel del día (datos del Sheet). Solo descarga si status 200; si no, lanza error (evita guardar HTML/JSON como .xlsx). */
   async downloadGmailExcel(fecha?: string): Promise<void> {
     const axiosInstance = apiClient.getAxiosInstance()
     const url = fecha ? `${this.baseUrl}/gmail/download-excel?fecha=${encodeURIComponent(fecha)}` : `${this.baseUrl}/gmail/download-excel`
@@ -297,15 +297,15 @@ class PagoService {
       responseType: 'blob',
       timeout: 60000,
     })
-    if (response.status === 404) {
+    if (response.status !== 200) {
       const data = response.data as Blob
       try {
         const text = await data.text()
         const json = JSON.parse(text) as { detail?: string }
-        throw new Error(json.detail || 'Sin datos para esa fecha.')
+        throw new Error(json.detail || `Error al descargar (${response.status}).`)
       } catch (e) {
-        if (e instanceof Error && (e.message.includes('Sin datos') || e.message.includes('ejecutar'))) throw e
-        throw new Error('Sin datos para descargar. Ejecute «Generar Excel desde Gmail» primero.')
+        if (e instanceof Error && (e.message.includes('Sin datos') || e.message.includes('ejecutar') || e.message.includes('Error al descargar'))) throw e
+        throw new Error(response.status === 404 ? 'Sin datos para descargar. Ejecute «Generar Excel desde Gmail» primero.' : `No se pudo descargar el archivo (${response.status}).`)
       }
     }
     const blob = response.data as Blob
@@ -315,14 +315,14 @@ class PagoService {
       const m = disposition.match(/filename=(.+?)(?:;|$)/)
       if (m) filename = m[1].replace(/^["']|["']$/g, '').trim()
     }
-    const url = window.URL.createObjectURL(blob)
+    const blobUrl = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
-    link.href = url
+    link.href = blobUrl
     link.download = filename
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
-    window.URL.revokeObjectURL(url)
+    window.URL.revokeObjectURL(blobUrl)
   }
 }
 

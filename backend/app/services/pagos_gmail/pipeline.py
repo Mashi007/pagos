@@ -1,7 +1,7 @@
 """
 Orquestación: Gmail -> Drive -> Gemini -> Sheets; marcar correo leído; registrar en BD (pagos_gmail_sync, pagos_gmail_sync_item).
 Solo se procesan correos NO LEÍDOS: si un email fue leído no se volverá a revisar para digitalizar información.
-Solo se procesan correos cuyo Asunto contiene una dirección de email; si no hay email en el Asunto se ignora el mensaje.
+Solo se procesan correos cuyo Asunto es aceptable: contiene una dirección de email o alguna frase de PAGOS_GMAIL_SUBJECT_KEYWORDS_OR.
 La información a extraer puede estar en adjuntos al email o en imágenes en el cuerpo (MIME inline o HTML base64).
 Respeto de cuota Gemini: pausa entre llamadas (PAGOS_GMAIL_DELAY_BETWEEN_GEMINI_SECONDS) y opcional límite de correos por ejecución (PAGOS_GMAIL_MAX_EMAILS_PER_RUN).
 """
@@ -31,7 +31,12 @@ from app.services.pagos_gmail.gmail_service import (
     mark_as_read,
 )
 from app.services.pagos_gmail.gemini_service import extract_payment_data, PAGOS_NA
-from app.services.pagos_gmail.helpers import extract_sender_email, get_folder_name_from_date, get_sheet_name_for_date
+from app.services.pagos_gmail.helpers import (
+    extract_sender_email,
+    get_folder_name_from_date,
+    get_sheet_name_for_date,
+    subject_acceptable_for_pipeline,
+)
 from app.services.pagos_gmail.sheets_service import append_row
 
 logger = logging.getLogger(__name__)
@@ -66,6 +71,10 @@ def run_pipeline(db: Session) -> tuple[Optional[int], str]:
             messages = messages[:max_emails]
             logger.info("[PAGOS_GMAIL] Limité a %d correos por ejecución (había %d no leídos; resto en próxima pasada)", max_emails, total_unread)
         delay_gemini = getattr(settings, "PAGOS_GMAIL_DELAY_BETWEEN_GEMINI_SECONDS", 0) or 0
+        keywords_or = None
+        _kw = getattr(settings, "PAGOS_GMAIL_SUBJECT_KEYWORDS_OR", None) or ""
+        if _kw and isinstance(_kw, str):
+            keywords_or = [k.strip() for k in _kw.split(",") if k and k.strip()]
         for msg_info in messages:
             msg_id = msg_info["id"]
             payload = msg_info["payload"]
@@ -73,6 +82,9 @@ def run_pipeline(db: Session) -> tuple[Optional[int], str]:
             from_h = headers.get("from") or headers.get("From") or ""
             sender = extract_sender_email(from_h)
             subject = (headers.get("subject") or headers.get("Subject") or "").strip() or sender
+            if not subject_acceptable_for_pipeline(subject, keywords_or):
+                logger.info("[PAGOS_GMAIL] Correo omitido (asunto no aceptado): %s", subject[:80] if subject else "(vacío)")
+                continue
             msg_date = get_message_date(headers)
             folder_name = get_folder_name_from_date(msg_date)
             folder_id = get_or_create_folder(drive_svc, folder_name)

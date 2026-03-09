@@ -38,10 +38,17 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
   async function handleGenerarExcelDesdeGmail() {
     setIsOpen(false)
     setLoadingGmail(true)
-    toast('Puede tardar 1-2 minutos segun la cantidad de correos.', { duration: 3500 })
+    toast('Puede tardar 1-2 minutos según la cantidad de correos.', { duration: 3500 })
     try {
-      await pagoService.runGmailNow()
+      const res = await pagoService.runGmailNow()
       pagoService.getGmailStatus().then(setGmailStatus)
+      const emails = res.emails_processed ?? 0
+      const files = res.files_processed ?? 0
+      if (emails === 0 && files === 0) {
+        toast('No se encontraron correos para procesar. Revise que haya correos no leídos con adjuntos (imagen/PDF).', { duration: 5000 })
+      } else {
+        toast.success(`Listo: ${emails} correo(s), ${files} archivo(s) procesados.`)
+      }
       setShowConfirmarBorrar(true)
     } catch (e) {
       toast.error(getErrorMessage(e))

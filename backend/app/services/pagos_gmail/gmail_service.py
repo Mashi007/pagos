@@ -53,7 +53,7 @@ def list_unread_with_attachments(service: Any) -> List[dict]:
     Tras procesar cada mensaje el pipeline lo marca como leído (mark_as_read).
     """
     try:
-        result = service.users().messages().list(userId="me", labelIds=["UNREAD"], maxResults=100).execute()
+        result = service.users().messages().list(userId="me", labelIds=["UNREAD"], maxResults=500).execute()
         messages = result.get("messages", [])
         out = []
         for msg in messages:
