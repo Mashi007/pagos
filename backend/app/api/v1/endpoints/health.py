@@ -1,9 +1,10 @@
 """
 Endpoints de health check para monitoreo y debugging de la aplicación.
 
-GET /health/              - Health check básico
-GET /health/db            - Verifica conexión a BD y tablas críticas
-GET /health/detailed      - Reporte completo (solo dev)
+GET /health/                        - Health check básico
+GET /health/db                      - Verifica conexión a BD y tablas críticas
+GET /health/clientes-stats-diagnostico - Diagnóstico KPI nuevos_este_mes (público, sin auth)
+GET /health/detailed                - Reporte completo (solo dev)
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -98,6 +99,40 @@ async def health_check_gemini():
     if not result.get("ok"):
         raise HTTPException(status_code=503, detail=result)
     return result
+
+
+@router.get("/clientes-stats-diagnostico")
+async def health_clientes_stats_diagnostico(db: Session = Depends(get_db)):
+    """
+    Diagnóstico público (sin auth) del KPI nuevos_este_mes.
+    Para auditar por qué el KPI puede estar en 0.
+    """
+    try:
+        mes_bd = db.execute(text("SELECT date_trunc('month', CURRENT_TIMESTAMP)")).scalar()
+        total_con_fecha = db.scalar(
+            text("SELECT count(*)::int FROM clientes WHERE fecha_registro IS NOT NULL")
+        ) or 0
+        nuevos = db.scalar(text("""
+            SELECT count(*)::int FROM clientes
+            WHERE fecha_registro IS NOT NULL
+              AND date_trunc('month', fecha_registro) = date_trunc('month', CURRENT_TIMESTAMP)
+        """)) or 0
+        ejemplo = db.execute(text("""
+            SELECT id, fecha_registro::text
+            FROM clientes
+            WHERE fecha_registro IS NOT NULL
+            ORDER BY fecha_registro DESC
+            LIMIT 1
+        """)).first()
+        return {
+            "mes_actual_bd": str(mes_bd) if mes_bd else None,
+            "total_con_fecha_registro": int(total_con_fecha),
+            "nuevos_este_mes": int(nuevos),
+            "ejemplo_ultimo_registro": {"id": ejemplo[0], "fecha_registro": ejemplo[1]} if ejemplo else None,
+        }
+    except Exception as e:
+        logger.exception("Error en health/clientes-stats-diagnostico: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/detailed")
