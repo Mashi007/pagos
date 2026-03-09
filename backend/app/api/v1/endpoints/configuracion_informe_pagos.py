@@ -1,7 +1,8 @@
 """
-GET/PUT configuración informe de pagos (Google Drive, Sheets, OCR, destinatarios email, horarios).
-Usado por flujo cobranza WhatsApp: imágenes → Drive → OCR → digitalización → email 6:00, 13:00, 16:30.
-OAuth para Drive/Sheets cuando la organización no permite claves de cuenta de servicio.
+GET/PUT configuración Google compartida por varios servicios (Drive, Sheets, OCR, Gmail, destinatarios, horarios).
+- Informe de pagos / cobranza WhatsApp: imágenes → Drive → OCR → Sheets → email 6:00, 13:00, 16:30.
+- Pipeline Gmail («Generar Excel desde Gmail»): misma credencial OAuth/cuenta de servicio para Gmail + Drive + Sheets.
+OAuth cuando la organización no permite claves de cuenta de servicio.
 """
 import json
 import logging
@@ -75,7 +76,26 @@ def _backend_base_url() -> str:
                 return f"{parsed.scheme}://{parsed.netloc}"
         except Exception:
             pass
-    return "https://pagos-f2qf.onrender.com"
+    return "https://rapicredit.onrender.com"
+
+
+def _frontend_base_url() -> str:
+    """URL base del frontend para redirigir tras OAuth (sin barra final)."""
+    url = (getattr(settings, "FRONTEND_PUBLIC_URL", None) or "").strip()
+    if url:
+        return url.rstrip("/")
+    return _backend_base_url()
+
+
+@router.get("/redirect-uri")
+def get_oauth_redirect_uri():
+    """
+    Devuelve la URI de redirección que el backend usa para OAuth.
+    El usuario debe añadir exactamente esta URL en Google Cloud > Credenciales > URIs de redirección autorizados.
+    """
+    base = _backend_base_url()
+    redirect_uri = f"{base}{settings.API_V1_STR}/configuracion/informe-pagos/google/callback"
+    return {"redirect_uri": redirect_uri}
 
 
 @router.get("/google/authorize")
@@ -129,9 +149,10 @@ def google_oauth_callback(
     Callback de Google OAuth. Intercambia code por tokens y guarda refresh_token en informe_pagos_config.
     Redirige al frontend con ?google_oauth=ok o ?google_oauth=error.
     """
-    redirect_ok = "https://rapicredit.onrender.com/pagos/configuracion?tab=informe-pagos&google_oauth=ok"
+    frontend_base = _frontend_base_url()
+    redirect_ok = f"{frontend_base}/pagos/configuracion?tab=informe-pagos&google_oauth=ok"
     def _fail(reason: str) -> RedirectResponse:
-        u = f"https://rapicredit.onrender.com/pagos/configuracion?tab=informe-pagos&google_oauth=error&reason={reason}"
+        u = f"{frontend_base}/pagos/configuracion?tab=informe-pagos&google_oauth=error&reason={reason}"
         return RedirectResponse(url=u, status_code=302)
 
     if error or not code or not state:

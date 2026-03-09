@@ -48,9 +48,16 @@ export function InformePagosConfig() {
   const [oauthSecretEdit, setOauthSecretEdit] = useState('')
   const [estado, setEstado] = useState<EstadoConexiones | null>(null)
   const [verificandoEstado, setVerificandoEstado] = useState(false)
+  const [redirectUri, setRedirectUri] = useState<string | null>(null)
 
   useEffect(() => {
     cargarConfiguracion()
+  }, [])
+
+  useEffect(() => {
+    apiClient.get<{ redirect_uri: string }>('/api/v1/configuracion/informe-pagos/redirect-uri')
+      .then((r) => setRedirectUri(r?.redirect_uri ?? null))
+      .catch(() => setRedirectUri(null))
   }, [])
 
   const verificarEstadoConexiones = async () => {
@@ -75,7 +82,7 @@ export function InformePagosConfig() {
     const result = params.get('google_oauth')
     const reason = params.get('reason')
     if (result === 'ok') {
-      toast.success('Cuenta de Google conectada correctamente. Drive y Sheets usarán OAuth.')
+      toast.success('Cuenta de Google conectada. Drive, Sheets, OCR y pipeline Gmail usarán OAuth.')
       cargarConfiguracion()
       const url = new URL(window.location.href)
       url.searchParams.delete('google_oauth')
@@ -181,12 +188,10 @@ export function InformePagosConfig() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5 text-blue-600" />
-            Informe de pagos (Google Drive, Sheets, OCR)
+            Google (Drive, Sheets, OCR y Gmail) — varios servicios
           </CardTitle>
           <CardDescription>
-            Configuración para el flujo de cobranza por WhatsApp: imágenes de papeletas se suben a Google Drive,
-            se extraen datos con OCR (Google Vision) y se digitalizan en Google Sheets. A las 6:00, 13:00 y 16:30
-            (America/Caracas) se envía un email con el link a la hoja.
+            Una sola configuración para varios flujos: (1) <strong>Informe de pagos / cobranza WhatsApp</strong>: imágenes de papeletas → Drive → OCR (Vision) → digitalización en Sheets → email 6:00, 13:00 y 16:30 (America/Caracas). (2) <strong>Pipeline Gmail</strong>: «Generar Excel desde Gmail» usa estas mismas credenciales para leer correos, Drive y Sheets. Todo se guarda aquí (no en Render).
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -206,7 +211,7 @@ export function InformePagosConfig() {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Se comprueba con llamadas reales a Drive, Sheets y Vision (OCR). Sin indicios aquí no hay conexión.
+              Se comprueba con llamadas reales a Drive, Sheets y Vision (OCR). Las mismas credenciales se usan también para el pipeline Gmail («Generar Excel desde Gmail»). Sin indicios aquí no hay conexión.
             </p>
             {/* Resumen: Conexión OK / no OK */}
             {estado ? (
@@ -324,10 +329,21 @@ export function InformePagosConfig() {
 
           <div className="border-t pt-4 mt-4">
             <h4 className="text-sm font-semibold text-gray-700 mb-2">OAuth (alternativa a cuenta de servicio)</h4>
-            <p className="text-xs text-gray-500 mb-3">
-              Si tu organización no permite claves de cuenta de servicio, usa un cliente OAuth en Google Cloud.
-              Añade la URL de redirección del backend a tu cliente OAuth (ver documentación).
+            <p className="text-xs text-gray-500 mb-2">
+              Credenciales para Drive, Sheets, Vision y pipeline Gmail. Todo se guarda aquí (no en Render).
             </p>
+            <ol className="text-xs text-gray-600 mb-3 list-decimal list-inside space-y-1">
+              <li>Pegue Client ID y Client secret desde Google Cloud (Credenciales OAuth 2.0).</li>
+              <li>Pulse <strong>Guardar configuración</strong>.</li>
+              <li>En Google Cloud, en ese cliente OAuth, añada en <strong>URIs de redirección autorizados</strong> exactamente la URL de abajo (sin barra final).</li>
+              <li>Pulse <strong>Conectar con Google</strong> y autorice con la cuenta que usará Drive/Sheets.</li>
+            </ol>
+            {redirectUri && (
+              <div className="mb-3 p-2 bg-amber-50 border border-amber-200 rounded text-xs">
+                <span className="font-medium text-amber-800">En Google Cloud use esta URI de redirección:</span>
+                <code className="block mt-1 p-1.5 bg-white border border-amber-200 rounded break-all font-mono text-amber-900">{redirectUri}</code>
+              </div>
+            )}
             <div className="space-y-3">
               <div>
                 <label className="text-sm font-medium block mb-1">Client ID (OAuth)</label>
@@ -370,7 +386,7 @@ export function InformePagosConfig() {
                 {oauthConectado && (
                   <span className="inline-flex items-center gap-1 text-sm text-green-700 bg-green-50 px-2 py-1 rounded">
                     <CheckCircle className="h-4 w-4" />
-                    OAuth conectado (Drive y Sheets usarán esta cuenta)
+                    OAuth conectado (Drive, Sheets, OCR y pipeline Gmail usan esta cuenta)
                   </span>
                 )}
                 <Button

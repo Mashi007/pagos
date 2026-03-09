@@ -47,7 +47,7 @@ export const SECCIONES_CONFIGURACION: SeccionConfig[] = [
       { id: 'notificaciones', nombre: 'Notificaciones', icono: Bell },
       { id: 'emailConfig', nombre: 'Configuración Email', icono: Mail },
       { id: 'whatsappConfig', nombre: 'Configuración WhatsApp', icono: MessageSquare },
-      { id: 'informePagosConfig', nombre: 'Informe pagos (Drive, Sheets, OCR)', icono: FileText },
+      { id: 'informePagosConfig', nombre: 'Google (Drive, Sheets, Gmail, OCR)', icono: FileText },
       { id: 'plantillas', nombre: 'Plantillas', icono: FileText },
       // sin href: se muestra como sección dentro de Configuración (tab=plantillas)
       { id: 'scheduler', nombre: 'Programador', icono: Calendar, href: '/scheduler' },
@@ -69,7 +69,7 @@ export const NOMBRES_SECCION_ESPECIAL: Record<string, { nombre: string; icono: I
   emailConfig: { nombre: 'Configuración Email', icono: Mail },
   whatsappConfig: { nombre: 'Configuración WhatsApp', icono: MessageSquare },
   aiConfig: { nombre: 'Configuración AI', icono: Brain },
-  informePagosConfig: { nombre: 'Informe pagos (Drive, Sheets, OCR)', icono: FileText },
+  informePagosConfig: { nombre: 'Google (Drive, Sheets, Gmail, OCR)', icono: FileText },
 }
 
 export function findSeccionById(

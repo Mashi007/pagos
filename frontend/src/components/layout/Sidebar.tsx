@@ -143,7 +143,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
         { title: 'Configuración Email', href: '/configuracion?tab=email', icon: Mail },
         { title: 'Configuración WhatsApp', href: '/configuracion?tab=whatsapp', icon: MessageSquare },
         { title: 'Configuración AI', href: '/configuracion?tab=ai', icon: Brain },
-        { title: 'Informe pagos (Drive, Sheets)', href: '/configuracion?tab=informe-pagos', icon: FileText },
+        { title: 'Google (Drive, Sheets, Gmail, OCR)', href: '/configuracion?tab=informe-pagos', icon: FileText },
         { title: 'OCR', href: '/configuracion?tab=ocr', icon: FileText },
         { title: 'Analistas', href: '/analistas', icon: Users },
         { title: 'Concesionarios', href: '/concesionarios', icon: Building },

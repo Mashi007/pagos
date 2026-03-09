@@ -164,7 +164,11 @@ class Settings(BaseSettings):
     # ============================================
     BACKEND_PUBLIC_URL: Optional[str] = Field(
         None,
-        description="URL pública del backend para OAuth redirect_uri (ej. https://pagos-f2qf.onrender.com)"
+        description="URL pública del backend para OAuth redirect_uri (ej. https://rapicredit.onrender.com)"
+    )
+    FRONTEND_PUBLIC_URL: Optional[str] = Field(
+        None,
+        description="URL pública del frontend (SPA). Tras OAuth Google se redirige aquí/pagos/configuracion?tab=informe-pagos. Si no se define, se usa BACKEND_PUBLIC_URL (mismo origen)."
     )
 
     # ============================================
