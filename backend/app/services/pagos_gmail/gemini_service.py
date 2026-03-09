@@ -31,7 +31,7 @@ def extract_payment_data(file_content: bytes, filename: str, api_key: Optional[s
             "El pipeline seguirá guardando filas con 'No encontrado' en los campos extraídos."
         )
         return _empty_result("GEMINI_API_KEY no configurado")
-    model_name = getattr(settings, "GEMINI_MODEL", "gemini-1.5-flash")
+    model_name = getattr(settings, "GEMINI_MODEL", "gemini-2.0-flash")
     logger.debug("[PAGOS_GMAIL] Gemini extrayendo datos de comprobante: %s (modelo %s)", filename, model_name)
     mime = get_mime_type(filename)
     try:
@@ -132,7 +132,7 @@ def check_gemini_available() -> Dict[str, Any]:
     key = getattr(settings, "GEMINI_API_KEY", None)
     if not key or not str(key).strip():
         return {"ok": False, "error": "GEMINI_API_KEY no configurado"}
-    model_name = getattr(settings, "GEMINI_MODEL", "gemini-1.5-flash")
+    model_name = getattr(settings, "GEMINI_MODEL", "gemini-2.0-flash")
     try:
         import google.generativeai as genai
         genai.configure(api_key=key)

@@ -182,7 +182,10 @@ class Settings(BaseSettings):
     GMAIL_TOKENS_PATH: str = Field(default="gmail_tokens.json", description="Ruta al JSON con access/refresh tokens")
     GEMINI_API_KEY: Optional[str] = Field(None, description="API Key de Google AI Studio para Gemini")
     DRIVE_ROOT_FOLDER_ID: str = Field(default="1uzFPzUo00urjiWmeql1F30xgwpjdhm2o", description="ID carpeta raiz Drive para adjuntos")
-    GEMINI_MODEL: str = Field(default="gemini-1.5-flash", description="Modelo Gemini para extraccion de datos")
+    GEMINI_MODEL: str = Field(
+        default="gemini-2.0-flash",
+        description="Modelo Gemini para extracción de datos (ej. gemini-2.0-flash, gemini-1.5-flash-latest). Si 404 'model not found', use un modelo de https://ai.google.dev/gemini-api/docs/models",
+    )
     PAGOS_GMAIL_CRON_MINUTES: int = Field(default=15, description="Intervalo en minutos del cron (cada 15 min)")
 
     # Tasa USD/Bs Venezuela (reporte contable)
