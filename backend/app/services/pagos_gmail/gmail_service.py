@@ -24,7 +24,10 @@ def build_gmail_service(credentials: Any):
 
 
 def _message_has_extractable_content(payload: dict) -> bool:
-    """True si el mensaje tiene adjuntos permitidos o partes imagen/PDF (incl. inline en cuerpo)."""
+    """
+    True si el mensaje tiene adjuntos permitidos, imágenes/PDF en el cuerpo,
+    o un mensaje reenviado (message/rfc822) que puede contener comprobantes dentro.
+    """
     parts = payload.get("parts", [])
     if not parts:
         mime = (payload.get("mimeType") or "").lower()
@@ -39,6 +42,9 @@ def _message_has_extractable_content(payload: dict) -> bool:
             return True
         mime = (part.get("mimeType") or "").strip().lower()
         if mime in MIME_IMAGE_OR_PDF:
+            return True
+        # Correo reenviado (Fwd:): el comprobante está dentro del mensaje adjunto
+        if mime == "message/rfc822":
             return True
         nested = part.get("parts") or []
         if nested and _message_has_extractable_content({"parts": nested}):
@@ -203,33 +209,82 @@ def _get_images_from_html_body(service: Any, message_id: str, payload: dict) -> 
     return out
 
 
+def _get_images_from_rfc822_parts(
+    service: Any, message_id: str, parts: List[dict], prefix: str = ""
+) -> List[Tuple[str, bytes, str]]:
+    """
+    Extrae imágenes/PDFs de partes message/rfc822 (correos reenviados, "Fwd:").
+    Descarga el .eml adjunto y usa el módulo email de Python para recorrer sus partes.
+    """
+    import email as email_lib
+    out = []
+    for i, part in enumerate(parts):
+        mime = (part.get("mimeType") or "").strip().lower()
+        if mime != "message/rfc822":
+            continue
+        body = part.get("body") or {}
+        att_id = body.get("attachmentId")
+        data_b64 = body.get("data")
+        raw: bytes | None = None
+        if data_b64:
+            try:
+                raw = base64.urlsafe_b64decode(data_b64)
+            except Exception as e:
+                logger.debug("Decode rfc822 inline %s: %s", prefix, e)
+        elif att_id:
+            try:
+                att = service.users().messages().attachments().get(
+                    userId="me", messageId=message_id, id=att_id
+                ).execute()
+                if att.get("data"):
+                    raw = base64.urlsafe_b64decode(att["data"])
+            except Exception as e:
+                logger.warning("Error descargando rfc822 %s: %s", att_id, e)
+        if not raw:
+            continue
+        # Parsear el .eml y extraer imágenes/PDFs dentro
+        try:
+            embedded_msg = email_lib.message_from_bytes(raw)
+            for j, subpart in enumerate(embedded_msg.walk()):
+                ct = (subpart.get_content_type() or "").lower()
+                if ct not in MIME_IMAGE_OR_PDF:
+                    continue
+                payload_bytes = subpart.get_payload(decode=True)
+                if not payload_bytes:
+                    continue
+                fname = subpart.get_filename() or f"fwd_{prefix}{i}_{j}.{ext_for_mime(ct)}"
+                out.append((fname, payload_bytes, ct))
+                logger.debug("[PAGOS_GMAIL] rfc822: imagen extraída '%s' (%s, %d bytes)", fname, ct, len(payload_bytes))
+        except Exception as e:
+            logger.warning("Error parseando rfc822 %s: %s", prefix, e)
+    return out
+
+
 def get_all_images_and_files_for_message(
     service: Any, message_id: str, payload: dict
 ) -> List[Tuple[str, bytes, str]]:
     """
-    Revisa imágenes (y PDFs) como adjuntos y como parte del cuerpo del mensaje.
-    Origen 1: adjuntos al correo (get_attachments_for_message).
-    Origen 2: imágenes inline en partes MIME (Content-Disposition: inline) con body.data o attachmentId.
-    Origen 3: imágenes embebidas en el HTML del cuerpo (data:image/...;base64,...).
-    Returns (filename, content_bytes, mime_type). Sin duplicados por (filename, size).
+    Extrae imágenes/PDFs de todas las fuentes posibles del mensaje:
+    1. Adjuntos directos (imagen/PDF adjunto al email).
+    2. Partes inline MIME (Content-Disposition: inline).
+    3. Imágenes base64 embebidas en HTML del cuerpo.
+    4. Mensajes reenviados (message/rfc822 / Fwd:) — el comprobante está dentro del .eml adjunto.
+    Devuelve (filename, content_bytes, mime_type) sin duplicados.
     """
-    seen = set()
-    out = []
-    for filename, content, mime in get_attachments_for_message(service, message_id, payload):
-        key = (filename, len(content))
-        if key not in seen:
-            seen.add(key)
-            out.append((filename, content, mime))
-    for filename, content, mime in _get_inline_images_from_parts(service, message_id, payload.get("parts", [])):
-        key = (filename, len(content))
-        if key not in seen:
-            seen.add(key)
-            out.append((filename, content, mime))
-    for filename, content, mime in _get_images_from_html_body(service, message_id, payload):
-        key = (filename, len(content))
-        if key not in seen:
-            seen.add(key)
-            out.append((filename, content, mime))
+    seen: set = set()
+    out: List[Tuple[str, bytes, str]] = []
+
+    def _add(items: List[Tuple[str, bytes, str]]) -> None:
+        for filename, content, mime in items:
+            key = (filename, len(content))
+            if key not in seen:
+                seen.add(key)
+                out.append((filename, content, mime))
+
+    _add(get_attachments_for_message(service, message_id, payload))
+    _add(_get_inline_images_from_parts(service, message_id, payload.get("parts", [])))
+    _add(_get_images_from_html_body(service, message_id, payload))
+    _add(_get_images_from_rfc822_parts(service, message_id, payload.get("parts", [])))
     return out
 
 
