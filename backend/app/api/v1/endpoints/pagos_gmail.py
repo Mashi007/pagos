@@ -188,65 +188,57 @@ class ConfirmarDiaBody(BaseModel):
 @router.post("/confirmar-dia", response_model=dict)
 def confirmar_dia(body: ConfirmarDiaBody = Body(...), db: Session = Depends(get_db)):
     """
-    Confirmación desde la interfaz (sí/no). Si confirmado=true, se borran los ítems del día
-    en la BD para esa fecha; el Excel de ese día quedará vacío en futuras descargas.
+    Confirmación desde la interfaz (sí/no).
+    - Sin fecha: borra TODOS los ítems (limpiar el acumulado completo tras exportar).
+    - Con fecha específica: borra solo los ítems de esa fecha (sheet_name exacto).
     Si confirmado=false no se hace nada.
     """
     if not body.confirmado:
         return {"confirmado": False, "mensaje": "Sin cambios. Los datos del día se mantienen."}
-    from app.services.pagos_gmail.helpers import get_sheet_name_for_date
-    sheet_date = _sheet_date_from_fecha(body.fecha)
-    sheet_name = get_sheet_name_for_date(sheet_date)
-    result = db.execute(delete(PagosGmailSyncItem).where(PagosGmailSyncItem.sheet_name == sheet_name))
-    db.commit()
-    deleted = result.rowcount if hasattr(result, "rowcount") else 0
-    logger.info("Pagos Gmail confirmar-dia: confirmado=True, fecha=%s, sheet_name=%s, borrados=%s", sheet_date.date(), sheet_name, deleted)
-    return {
-        "confirmado": True,
-        "fecha": sheet_date.strftime("%Y-%m-%d"),
-        "sheet_name": sheet_name,
-        "borrados": deleted,
-        "mensaje": f"Datos del día {sheet_date.strftime('%Y-%m-%d')} borrados." if deleted else f"No había datos para el día {sheet_date.strftime('%Y-%m-%d')}.",
-    }
+    if body.fecha and body.fecha.strip():
+        from app.services.pagos_gmail.helpers import get_sheet_name_for_date
+        sheet_date = _sheet_date_from_fecha(body.fecha)
+        sheet_name = get_sheet_name_for_date(sheet_date)
+        result = db.execute(delete(PagosGmailSyncItem).where(PagosGmailSyncItem.sheet_name == sheet_name))
+        db.commit()
+        deleted = result.rowcount if hasattr(result, "rowcount") else 0
+        logger.info("Pagos Gmail confirmar-dia: borrados %d ítems de sheet_name=%s", deleted, sheet_name)
+        return {
+            "confirmado": True,
+            "borrados": deleted,
+            "mensaje": f"Datos de {sheet_date.strftime('%Y-%m-%d')} borrados ({deleted} filas)." if deleted else f"No había datos para {sheet_date.strftime('%Y-%m-%d')}.",
+        }
+    else:
+        # Sin fecha: borrar todo el acumulado
+        result = db.execute(delete(PagosGmailSyncItem))
+        db.commit()
+        deleted = result.rowcount if hasattr(result, "rowcount") else 0
+        logger.info("Pagos Gmail confirmar-dia: borrados TODOS los ítems (%d)", deleted)
+        return {
+            "confirmado": True,
+            "borrados": deleted,
+            "mensaje": f"Acumulado completo borrado ({deleted} filas). Listo para el próximo ciclo.",
+        }
 
 
 def _find_most_recent_data(db: Session) -> tuple[Optional[str], Optional[datetime], list]:
     """
-    Devuelve TODOS los ítems del sync más reciente que tiene ítems (independientemente de la fecha
-    del correo). Así el usuario descarga exactamente lo que se procesó en el último run, aunque
-    los correos sean de fechas distintas o de semanas atrás.
+    Devuelve TODOS los ítems de TODOS los syncs (acumulado completo), ordenados por fecha de creación.
+    Esto permite que múltiples runs (ej. 30 correos cada uno) se descarguen juntos en un solo Excel,
+    sin que un run nuevo sobreescriba lo procesado en runs anteriores.
     Devuelve (sheet_name_ref, email_date_ref, items) o (None, None, []).
-    sheet_name_ref y email_date_ref son del ítem más reciente del sync (solo para nombrar el archivo).
     """
     from app.services.pagos_gmail.helpers import parse_date_from_sheet_name
-    # Sync más reciente que tiene ítems
-    sync_row = db.execute(
-        select(PagosGmailSync)
-        .where(PagosGmailSync.files_processed > 0)
-        .order_by(desc(PagosGmailSync.started_at))
-        .limit(1)
-    ).scalars().first()
-    if not sync_row:
-        # Fallback: buscar cualquier ítem aunque files_processed sea 0
-        sync_row = db.execute(
-            select(PagosGmailSync)
-            .join(PagosGmailSyncItem, PagosGmailSyncItem.sync_id == PagosGmailSync.id)
-            .order_by(desc(PagosGmailSync.started_at))
-            .limit(1)
-        ).scalars().first()
-    if not sync_row:
-        return None, None, []
     items = db.execute(
         select(PagosGmailSyncItem)
-        .where(PagosGmailSyncItem.sync_id == sync_row.id)
         .order_by(PagosGmailSyncItem.created_at)
     ).scalars().all()
     if not items:
         return None, None, []
-    # Fecha del primer ítem del sync (para nombre del archivo)
-    first_sheet_name = items[0].sheet_name or ""
-    email_date = parse_date_from_sheet_name(first_sheet_name)
-    return first_sheet_name, email_date, list(items)
+    # Usar el ítem más reciente para la fecha del archivo
+    last_sheet_name = items[-1].sheet_name or ""
+    email_date = parse_date_from_sheet_name(last_sheet_name)
+    return last_sheet_name, email_date, list(items)
 
 
 def _find_sheet_by_fecha(db: Session, fecha_date: datetime) -> tuple[Optional[str], list]:
