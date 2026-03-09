@@ -14,6 +14,7 @@ interface GmailStatus {
   last_emails: number
   last_files: number
   next_run_approx: string | null
+  latest_data_date?: string | null  // fecha más reciente con datos disponibles para descargar
 }
 
 interface UseGmailPipelineOptions {
@@ -55,9 +56,14 @@ export function useGmailPipeline({ onDone, onStatusUpdate }: UseGmailPipelineOpt
             if (s.last_status === 'error') {
               toast.error('Error al procesar correos. Revise los logs del servidor.')
             } else if (emails === 0 && files === 0) {
-              toast('No se encontraron correos para procesar. Revise que haya correos no leídos con adjuntos (imagen/PDF).', { duration: 6000 })
+              if (s.latest_data_date) {
+                toast(`Sin correos nuevos. Hay datos del ${s.latest_data_date} disponibles para descargar.`, { duration: 7000 })
+              } else {
+                toast('No se encontraron correos para procesar. Revise que haya correos no leídos con adjuntos (imagen/PDF).', { duration: 6000 })
+              }
             } else {
-              toast.success(`Listo: ${emails} correo(s), ${files} archivo(s) procesados.`)
+              const dateHint = s.latest_data_date ? ` (fecha: ${s.latest_data_date})` : ''
+              toast.success(`Listo: ${emails} correo(s), ${files} archivo(s) procesados.${dateHint}`)
             }
             return
           }

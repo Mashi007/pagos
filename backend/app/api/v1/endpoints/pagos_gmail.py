@@ -138,19 +138,21 @@ def run_now(background_tasks: BackgroundTasks, force: bool = True, db: Session =
 
 @router.get("/status")
 def status(db: Session = Depends(get_db)):
-    """Última ejecución y próxima (intervalo configurable vía PAGOS_GMAIL_CRON_MINUTES)."""
+    """Última ejecución, próxima y última fecha con datos disponibles para descargar."""
     last = db.execute(select(PagosGmailSync).order_by(desc(PagosGmailSync.started_at)).limit(1)).scalars().first()
     from app.core.config import settings
     cron_min = settings.PAGOS_GMAIL_CRON_MINUTES
     next_at = None
     if last and last.started_at:
         next_at = last.started_at + timedelta(minutes=cron_min)
+    latest_data_date = _get_latest_date_with_data(db)
     return {
         "last_run": last.started_at.isoformat() if last and last.started_at else None,
         "last_status": last.status if last else None,
         "last_emails": last.emails_processed if last else 0,
         "last_files": last.files_processed if last else 0,
         "next_run_approx": next_at.isoformat() if next_at else None,
+        "latest_data_date": latest_data_date,  # fecha más reciente con datos para descargar
     }
 
 
@@ -206,13 +208,14 @@ def confirmar_dia(body: ConfirmarDiaBody = Body(...), db: Session = Depends(get_
     }
 
 
-def _find_sheet_date_with_data(db: Session, from_date: datetime) -> tuple[Optional[datetime], list]:
+def _find_sheet_date_with_data(db: Session, from_date: datetime, max_days_back: int = 30) -> tuple[Optional[datetime], list]:
     """
-    Busca la fecha más reciente que tenga datos, probando from_date y hasta 3 días anteriores.
+    Busca la fecha más reciente con datos, probando from_date y hasta max_days_back días anteriores.
+    El lookback amplio (30 días por defecto) cubre correos del backlog recibidos semanas atrás.
     Devuelve (sheet_date, items) si hay datos; si no, (None, []).
     """
     from app.services.pagos_gmail.helpers import get_sheet_name_for_date
-    for delta in range(4):
+    for delta in range(max_days_back + 1):
         d = from_date - timedelta(days=delta)
         sheet_name = get_sheet_name_for_date(d)
         items = db.execute(
@@ -224,6 +227,22 @@ def _find_sheet_date_with_data(db: Session, from_date: datetime) -> tuple[Option
         if items:
             return d, items
     return None, []
+
+
+def _get_latest_date_with_data(db: Session) -> Optional[str]:
+    """Devuelve la fecha (YYYY-MM-DD) del ítem más reciente, útil para guiar al usuario."""
+    from app.services.pagos_gmail.helpers import get_sheet_name_for_date
+    from datetime import datetime as dt
+    item = db.execute(
+        select(PagosGmailSyncItem)
+        .join(PagosGmailSync, PagosGmailSyncItem.sync_id == PagosGmailSync.id)
+        .order_by(desc(PagosGmailSyncItem.created_at))
+        .limit(1)
+    ).scalars().first()
+    if not item or not item.created_at:
+        return None
+    # sheet_name tiene formato Pagos_Cobros_9Marzo2026 → extraer fecha del created_at
+    return item.created_at.strftime("%Y-%m-%d")
 
 
 @router.get("/download-excel")

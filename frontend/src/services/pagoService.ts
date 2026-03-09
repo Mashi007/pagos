@@ -269,13 +269,14 @@ class PagoService {
     return await apiClient.post(`${this.baseUrl}/gmail/run-now?force=${force}`)
   }
 
-  /** Pagos Gmail: estado última ejecución y próxima (cron cada 15 min). */
+  /** Pagos Gmail: estado última ejecución, próxima y última fecha con datos disponibles. */
   async getGmailStatus(): Promise<{
     last_run: string | null
     last_status: string | null
     last_emails: number
     last_files: number
     next_run_approx: string | null
+    latest_data_date?: string | null
   }> {
     return await apiClient.get(`${this.baseUrl}/gmail/status`)
   }

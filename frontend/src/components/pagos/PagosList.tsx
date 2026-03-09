@@ -830,14 +830,16 @@ export function PagosList() {
       <ConfirmarBorrarDiaDialog
         open={showConfirmarBorrar}
         onOpenChange={setShowConfirmarBorrar}
+        fechaDatos={gmailStatus?.latest_data_date}
         onElegir={async (borrar) => {
+          const fecha = gmailStatus?.latest_data_date ?? undefined
           try {
-            await pagoService.downloadGmailExcel()
+            await pagoService.downloadGmailExcel(fecha)
             toast.success('Excel descargado.')
           } catch (e) {
             toast.error(getErrorMessage(e))
           }
-          const result = await pagoService.confirmarDiaGmail(borrar)
+          const result = await pagoService.confirmarDiaGmail(borrar, fecha)
           if (result.confirmado) {
             toast.success(result.mensaje || 'Información del día borrada.')
           } else {
