@@ -105,6 +105,55 @@ def subject_acceptable_for_pipeline(subject: Optional[str], keywords_or: Optiona
     return False
 
 
+def normalizar_fecha_pago(fecha: Optional[str]) -> str:
+    """
+    Normaliza cualquier formato de fecha a DD/MM/YYYY.
+    Soporta: DD/MM/YYYY, YYYY/MM/DD, DD-MM-YYYY, YYYY-MM-DD,
+             DD MMM YYYY (inglés/español, con o sin punto: '06 MAR. 2026', '05 MAY 2026').
+    Si no se puede parsear devuelve el valor original sin modificar.
+    """
+    from datetime import datetime as _dt
+    if not fecha:
+        return fecha or ""
+    v = fecha.strip()
+    if not v or v.upper() == "NA":
+        return v
+
+    # Formatos numéricos directos
+    for fmt in ("%d/%m/%Y", "%Y/%m/%d", "%d-%m-%Y", "%Y-%m-%d",
+                "%d/%m/%y", "%d-%m-%y", "%m/%d/%Y"):
+        try:
+            return _dt.strptime(v, fmt).strftime("%d/%m/%Y")
+        except ValueError:
+            pass
+
+    # Formatos con nombre de mes abreviado (inglés y español)
+    # Normalizar: quitar puntos, colapsar espacios, pasar a minúsculas
+    MESES_ABBR = {
+        # español
+        "ene": 1, "feb": 2, "mar": 3, "abr": 4, "may": 5, "jun": 6,
+        "jul": 7, "ago": 8, "sep": 9, "oct": 10, "nov": 11, "dic": 12,
+        # inglés
+        "jan": 1, "apr": 4, "aug": 8, "dec": 12,
+    }
+    clean = re.sub(r"\.", "", v).strip()
+    parts = re.split(r"[\s/\-]+", clean)
+    if len(parts) == 3:
+        # Intentar DD MMM YYYY o YYYY MMM DD
+        for i, j, k in [(0, 1, 2), (2, 1, 0)]:
+            mes_key = parts[j].lower()[:3]
+            if mes_key in MESES_ABBR:
+                try:
+                    day = int(parts[i])
+                    year = int(parts[k])
+                    month = MESES_ABBR[mes_key]
+                    return _dt(year, month, day).strftime("%d/%m/%Y")
+                except (ValueError, TypeError):
+                    pass
+
+    return v  # no reconocido: devolver sin modificar
+
+
 def formatear_cedula(cedula: Optional[str]) -> str:
     """
     Aplica formato venezolano a la cédula extraída por Gemini:

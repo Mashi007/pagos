@@ -40,6 +40,7 @@ from app.services.pagos_gmail.helpers import (
     formatear_cedula,
     get_folder_name_from_date,
     get_sheet_name_for_date,
+    normalizar_fecha_pago,
 )
 
 logger = logging.getLogger(__name__)
@@ -200,7 +201,7 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
                         if delay_gemini > 0:
                             time.sleep(delay_gemini)
 
-                        f = _v(data.get("fecha_pago"))
+                        f = normalizar_fecha_pago(_v(data.get("fecha_pago")))
                         c = formatear_cedula(_v(data.get("cedula")))
                         m = _v(data.get("monto"))
                         r = _v(data.get("numero_referencia"))
