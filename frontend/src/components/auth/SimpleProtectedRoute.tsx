@@ -15,7 +15,7 @@ interface SimpleProtectedRouteProps {
 export function SimpleProtectedRoute({
   children,
   requireAdmin = false,  // Cambio clave: requiredRoles â†’ requireAdmin
-  fallbackPath = '/rapicredit'
+  fallbackPath = '/login'
 }: SimpleProtectedRouteProps) {
   const { isAuthenticated, user, isLoading } = useSimpleAuth()
   const location = useLocation()

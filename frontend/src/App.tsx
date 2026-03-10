@@ -13,9 +13,8 @@ import { BASE_PATH } from './config/env'
 /** Rutas que no requieren login: solo formulario de reporte de pago y login. El resto usa Layout con sidebar (protegido). */
 const PUBLIC_PATHS = ['/', '/login', '/reporte-pago', '/rapicredit']
 
-/** En rutas públicas solo muestra el Outlet (sin Layout). En el resto, si no hay sesión, redirige a /rapicredit
- * para que un cliente nunca vea login ni app interna. Con basename="/pagos", pathname puede ser "/pagos/rapicredit";
- * normalizamos quitando el basename. */
+/** En rutas públicas solo muestra el Outlet (sin Layout). En el resto, si no hay token activo, redirige a /login
+ * para pedir usuario y clave. Con basename="/pagos", pathname puede ser "/pagos/rapicredit"; normalizamos. */
 function RootLayoutWrapper() {
   const location = useLocation()
   const { isAuthenticated, isLoading } = useSimpleAuth()
@@ -24,15 +23,10 @@ function RootLayoutWrapper() {
     pathname = pathname.slice(BASE_PATH.length) || '/'
   }
   const isPublic = PUBLIC_PATHS.some(p => pathname === p)
-  // Raíz (/ o /pagos/) sin sesión: redirigir al formulario público de inmediato (no mostrar login ni index)
-  const isRoot = pathname === '/' || pathname === ''
-  if (isRoot && !isLoading && !isAuthenticated) {
-    return <Navigate to="/rapicredit" replace />
-  }
   if (isPublic) return <Outlet />
-  // Ruta no pública y sin sesión → redirigir al formulario público (no mostrar Layout/dashboard)
+  // Sin token activo en ruta no pública → pedir usuario y clave (login)
   if (!isLoading && !isAuthenticated) {
-    return <Navigate to="/rapicredit" replace />
+    return <Navigate to="/login" replace state={{ from: location }} />
   }
   return (
     <SimpleProtectedRoute>
@@ -132,14 +126,14 @@ function App() {
         <Routes>
         {/* Una sola raíz path="/" para que Layout reciba correctamente las rutas hijas (dashboard, clientes, etc.) */}
         <Route path="/" element={<RootLayoutWrapper />}>
-          {/* Raíz /pagos/ sin auth → redirigir al formulario público (cliente no ve login ni resto de la app) */}
+          {/* Raíz /pagos/ sin token → pedir usuario y clave (login) */}
           <Route
             index
             element={
               isAuthenticated ? (
                 <Navigate to="/dashboard/menu" replace />
               ) : (
-                <Navigate to="/rapicredit" replace />
+                <Navigate to="/login" replace />
               )
             }
           />
