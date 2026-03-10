@@ -147,7 +147,7 @@ export default function CobrosPagosReportadosPage() {
           <Button onClick={load}>Buscar</Button>
         </CardContent>
         <p className="text-sm text-muted-foreground px-6 pb-4">
-          Los pagos en <strong>En revisión (manual)</strong> no coincidieron 100% con Gemini; use Aprobar (envía recibo) o Rechazar (se notifica con WhatsApp 424-4579934).
+          Los pagos en <strong>En revisión (manual)</strong> no coincidieron 100% con Gemini; use Aprobar (envía recibo) o Rechazar (se notifica al cliente por correo electrónico).
         </p>
       </Card>
 

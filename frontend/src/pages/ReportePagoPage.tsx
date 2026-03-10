@@ -4,12 +4,11 @@
  * fecha (obligatoria, no futura, desde calendario), institución y nº documento (longitud), archivo (JPG/PNG/PDF, máx 5 MB).
  * Notificaciones claras por cada error para guiar al cliente.
  */
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { validarCedulaPublico, enviarReportePublico } from '../services/cobrosService'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
-import toast from 'react-hot-toast'
 
 // Límites iguales al backend (cobros_publico)
 const MAX_MONTO = 999_999_999.99
@@ -91,6 +90,43 @@ const INSTITUCIONES = [
 
 const WHATSAPP_LINK = 'https://wa.me/584244579934'
 
+const NOTIFICATION_DURATION_MS = 10000
+
+type NotificationType = 'error' | 'success'
+type NotificationState = { type: NotificationType; message: string } | null
+
+function NotificationBanner({ notification, onDismiss }: { notification: NotificationState; onDismiss: () => void }) {
+  if (!notification) return null
+  const isError = notification.type === 'error'
+  return (
+    <div
+      role="alert"
+      className={`w-full max-w-md rounded-xl px-4 py-3.5 flex items-center gap-3 shadow-lg border-2 ${
+        isError
+          ? 'bg-red-600 border-red-700 text-white'
+          : 'bg-emerald-600 border-emerald-700 text-white'
+      }`}
+    >
+      <span className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-white/20" aria-hidden>
+        {isError ? (
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+        ) : (
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+        )}
+      </span>
+      <p className="flex-1 font-semibold text-base leading-snug">{notification.message}</p>
+      <button
+        type="button"
+        onClick={onDismiss}
+        className="flex-shrink-0 p-1 rounded-md hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/50"
+        aria-label="Cerrar notificación"
+      >
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+      </button>
+    </div>
+  )
+}
+
 export default function ReportePagoPage() {
   const honeypotRef = useRef<HTMLInputElement>(null)
   const [step, setStep] = useState(1)
@@ -108,6 +144,23 @@ export default function ReportePagoPage() {
   const [referencia, setReferencia] = useState('')
   const [enviado, setEnviado] = useState(false)
   const [messageForScreenReader, setMessageForScreenReader] = useState('')
+  const [notification, setNotification] = useState<NotificationState>(null)
+  const notificationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const showNotification = (type: NotificationType, message: string) => {
+    if (notificationTimeoutRef.current) clearTimeout(notificationTimeoutRef.current)
+    setNotification({ type, message })
+    notificationTimeoutRef.current = setTimeout(() => {
+      setNotification(null)
+      notificationTimeoutRef.current = null
+    }, NOTIFICATION_DURATION_MS)
+  }
+  const dismissNotification = () => {
+    if (notificationTimeoutRef.current) clearTimeout(notificationTimeoutRef.current)
+    notificationTimeoutRef.current = null
+    setNotification(null)
+  }
+  useEffect(() => () => { if (notificationTimeoutRef.current) clearTimeout(notificationTimeoutRef.current) }, [])
 
   const institucionFinal = institucion === 'Otros' ? institucionOtros : institucion
 
@@ -126,21 +179,21 @@ export default function ReportePagoPage() {
   const handleValidarCedula = async () => {
     const v = validarCedulaFormato(cedula)
     if (!v.valido) {
-      toast.error(v.error ?? 'Cédula inválida.')
+      showNotification('error', v.error ?? 'Cédula inválida.')
       return
     }
     setLoading(true)
     try {
       const res = await validarCedulaPublico(cedula.trim())
       if (!res.ok) {
-        toast.error(res.error || 'Cédula no válida.')
+        showNotification('error', res.error || 'Cédula no válida.')
         return
       }
       setNombre(res.nombre || '')
       setEmailEnmascarado(res.email_enmascarado || '')
       setStep(2)
     } catch (e: any) {
-      toast.error(e?.message || 'Error al validar cédula.')
+      showNotification('error', e?.message || 'Error al validar cédula.')
     } finally {
       setLoading(false)
     }
@@ -150,44 +203,44 @@ export default function ReportePagoPage() {
     // Validaciones iguales al backend; notificación específica por error
     const vCedula = validarCedulaFormato(cedula)
     if (!vCedula.valido) {
-      toast.error(vCedula.error ?? 'Cédula inválida.')
+      showNotification('error', vCedula.error ?? 'Cédula inválida.')
       return
     }
     if (!institucionFinal.trim()) {
-      toast.error('Seleccione la institución financiera.')
+      showNotification('error', 'Seleccione la institución financiera.')
       return
     }
     if (institucionFinal.length > MAX_LENGTH_INSTITUCION) {
-      toast.error('Nombre de institución demasiado largo. Redúzcalo.')
+      showNotification('error', 'Nombre de institución demasiado largo. Redúzcalo.')
       return
     }
     const vFecha = validarFechaPago(fechaPago)
     if (!vFecha.valido) {
-      toast.error(vFecha.error ?? 'Fecha inválida.')
+      showNotification('error', vFecha.error ?? 'Fecha inválida.')
       return
     }
     const vMonto = validarMonto(monto)
     if (!vMonto.valido) {
-      toast.error(vMonto.error ?? 'Monto inválido.')
+      showNotification('error', vMonto.error ?? 'Monto inválido.')
       return
     }
     if (!numeroDocumento.trim()) {
-      toast.error('Ingrese el número de documento u operación.')
+      showNotification('error', 'Ingrese el número de documento u operación.')
       return
     }
     if (numeroDocumento.length > MAX_LENGTH_NUMERO_OPERACION) {
-      toast.error('Número de documento u operación demasiado largo.')
+      showNotification('error', 'Número de documento u operación demasiado largo.')
       return
     }
     const vArchivo = validarArchivo(archivo)
     if (!vArchivo.valido) {
-      toast.error(vArchivo.error ?? 'Archivo inválido.')
+      showNotification('error', vArchivo.error ?? 'Archivo inválido.')
       return
     }
     // Honeypot: si un bot rellenó el campo oculto, no enviar
     const honeypotValue = honeypotRef.current?.value?.trim() ?? ''
     if (honeypotValue) {
-      toast.error('No se pudo procesar el envío. Intente de nuevo.')
+      showNotification('error', 'No se pudo procesar el envío. Intente de nuevo.')
       return
     }
     const tipoCedula = /^([VEJ])/i.exec(cedula)?.[1]?.toUpperCase() || 'V'
@@ -206,14 +259,14 @@ export default function ReportePagoPage() {
     try {
       const res = await enviarReportePublico(form)
       if (!res.ok) {
-        toast.error(res.error || 'Error al enviar.')
+        showNotification('error', res.error || 'Error al enviar.')
         return
       }
       setReferencia(res.referencia_interna || '')
       setEnviado(true)
       setStep(8)
     } catch (e: any) {
-      toast.error(e?.message || 'Error al enviar el reporte.')
+      showNotification('error', e?.message || 'Error al enviar el reporte.')
     } finally {
       setLoading(false)
     }
@@ -221,7 +274,7 @@ export default function ReportePagoPage() {
 
   if (step === 1) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
         {/* Zona de mensajes para lectores de pantalla (aria-live) */}
         <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
           {messageForScreenReader || stepAnnouncement}
@@ -236,7 +289,9 @@ export default function ReportePagoPage() {
           aria-hidden="true"
           style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', opacity: 0, pointerEvents: 'none' }}
         />
-        <Card className="w-full max-w-md">
+        <div className="w-full max-w-md flex flex-col items-center gap-3">
+          <NotificationBanner notification={notification} onDismiss={dismissNotification} />
+          <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle>Reporte de pago</CardTitle>
             <p className="text-sm text-gray-600">Ingrese su número de cédula (V, E, G o J + 6 a 11 dígitos)</p>
@@ -254,15 +309,18 @@ export default function ReportePagoPage() {
             </Button>
           </CardContent>
         </Card>
+        </div>
       </div>
     )
   }
 
   if (step === 2) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
         <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">{messageForScreenReader || stepAnnouncement}</div>
-        <Card className="w-full max-w-md">
+        <div className="w-full max-w-md flex flex-col items-center gap-3">
+          <NotificationBanner notification={notification} onDismiss={dismissNotification} />
+          <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle>Hola, {nombre || 'Cliente'}</CardTitle>
             <p className="text-sm text-gray-600 mt-2">
@@ -273,15 +331,18 @@ export default function ReportePagoPage() {
             <Button className="w-full" onClick={() => setStep(3)}>Continuar</Button>
           </CardContent>
         </Card>
+        </div>
       </div>
     )
   }
 
   if (step === 3) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
         <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">{messageForScreenReader || stepAnnouncement}</div>
-        <Card className="w-full max-w-md">
+        <div className="w-full max-w-md flex flex-col items-center gap-3">
+          <NotificationBanner notification={notification} onDismiss={dismissNotification} />
+          <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle>Institución financiera</CardTitle>
           </CardHeader>
@@ -310,11 +371,11 @@ export default function ReportePagoPage() {
                 className="flex-1"
                 onClick={() => {
                   if (!institucionFinal.trim()) {
-                    toast.error('Seleccione la institución financiera.')
+                    showNotification('error', 'Seleccione la institución financiera.')
                     return
                   }
                   if (institucionFinal.length > MAX_LENGTH_INSTITUCION) {
-                    toast.error('Nombre de institución demasiado largo. Redúzcalo.')
+                    showNotification('error', 'Nombre de institución demasiado largo. Redúzcalo.')
                     return
                   }
                   setStep(4)
@@ -325,15 +386,18 @@ export default function ReportePagoPage() {
             </div>
           </CardContent>
         </Card>
+        </div>
       </div>
     )
   }
 
   if (step === 4) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
         <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">{messageForScreenReader || stepAnnouncement}</div>
-        <Card className="w-full max-w-md">
+        <div className="w-full max-w-md flex flex-col items-center gap-3">
+          <NotificationBanner notification={notification} onDismiss={dismissNotification} />
+          <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle>Fecha y monto del pago</CardTitle>
           </CardHeader>
@@ -379,12 +443,12 @@ export default function ReportePagoPage() {
                 onClick={() => {
                   const vF = validarFechaPago(fechaPago)
                   if (!vF.valido) {
-                    toast.error(vF.error ?? 'Fecha inválida.')
+                    showNotification('error', vF.error ?? 'Fecha inválida.')
                     return
                   }
                   const vM = validarMonto(monto)
                   if (!vM.valido) {
-                    toast.error(vM.error ?? 'Monto inválido.')
+                    showNotification('error', vM.error ?? 'Monto inválido.')
                     return
                   }
                   setStep(5)
@@ -395,15 +459,18 @@ export default function ReportePagoPage() {
             </div>
           </CardContent>
         </Card>
+        </div>
       </div>
     )
   }
 
   if (step === 5) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
         <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">{messageForScreenReader || stepAnnouncement}</div>
-        <Card className="w-full max-w-md">
+        <div className="w-full max-w-md flex flex-col items-center gap-3">
+          <NotificationBanner notification={notification} onDismiss={dismissNotification} />
+          <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle>Número de documento / operación</CardTitle>
           </CardHeader>
@@ -421,11 +488,11 @@ export default function ReportePagoPage() {
                 className="flex-1"
                 onClick={() => {
                   if (!numeroDocumento.trim()) {
-                    toast.error('Ingrese el número de documento u operación.')
+                    showNotification('error', 'Ingrese el número de documento u operación.')
                     return
                   }
                   if (numeroDocumento.length > MAX_LENGTH_NUMERO_OPERACION) {
-                    toast.error('Número de documento demasiado largo.')
+                    showNotification('error', 'Número de documento demasiado largo.')
                     return
                   }
                   setStep(6)
@@ -436,15 +503,18 @@ export default function ReportePagoPage() {
             </div>
           </CardContent>
         </Card>
+        </div>
       </div>
     )
   }
 
   if (step === 6) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
         <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">{messageForScreenReader || stepAnnouncement}</div>
-        <Card className="w-full max-w-md">
+        <div className="w-full max-w-md flex flex-col items-center gap-3">
+          <NotificationBanner notification={notification} onDismiss={dismissNotification} />
+          <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle>Comprobante de pago</CardTitle>
             <p className="text-sm text-gray-600">Un solo archivo. JPG, PNG o PDF. Máximo 5 MB.</p>
@@ -468,7 +538,7 @@ export default function ReportePagoPage() {
                 onClick={() => {
                   const v = validarArchivo(archivo)
                   if (!v.valido) {
-                    toast.error(v.error ?? 'Archivo inválido.')
+                    showNotification('error', v.error ?? 'Archivo inválido.')
                     return
                   }
                   setStep(7)
@@ -479,15 +549,18 @@ export default function ReportePagoPage() {
             </div>
           </CardContent>
         </Card>
+        </div>
       </div>
     )
   }
 
   if (step === 7) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
         <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">{messageForScreenReader || stepAnnouncement}</div>
-        <Card className="w-full max-w-md">
+        <div className="w-full max-w-md flex flex-col items-center gap-3">
+          <NotificationBanner notification={notification} onDismiss={dismissNotification} />
+          <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle>Confirma los siguientes datos</CardTitle>
           </CardHeader>
@@ -513,6 +586,7 @@ export default function ReportePagoPage() {
             </div>
           </CardContent>
         </Card>
+        </div>
       </div>
     )
   }

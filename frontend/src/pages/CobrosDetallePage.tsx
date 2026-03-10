@@ -156,7 +156,7 @@ export default function CobrosDetallePage() {
             </CardTitle>
             {detalle.estado === 'en_revision' && (
               <p className="text-sm text-muted-foreground mt-1">
-                No coincidió 100% con la revisión automática (Gemini). Use los mismos botones: Aprobar (envía recibo) o Rechazar (se notifica al cliente con WhatsApp 424-4579934).
+                No coincidió 100% con la revisión automática (Gemini). Use los mismos botones: Aprobar (envía recibo) o Rechazar (se notifica al cliente por correo electrónico).
               </p>
             )}
           </CardHeader>
