@@ -13,18 +13,27 @@ import { BASE_PATH } from './config/env'
 /** Rutas que no requieren login: solo formulario de reporte de pago y login. El resto usa Layout con sidebar (protegido). */
 const PUBLIC_PATHS = ['/', '/login', '/reporte-pago', '/rapicredit']
 
-/** En rutas públicas solo muestra el Outlet (sin Layout). En el resto muestra Layout con sidebar (protegido).
- * Con basename="/pagos", location.pathname en el navegador puede ser "/pagos/rapicredit"; normalizamos quitando
- * el basename para que un usuario ajeno solo vea el formulario público y no el resto de la app. */
+/** En rutas públicas solo muestra el Outlet (sin Layout). En el resto, si no hay sesión, redirige a /rapicredit
+ * para que un cliente nunca vea login ni app interna. Con basename="/pagos", pathname puede ser "/pagos/rapicredit";
+ * normalizamos quitando el basename. */
 function RootLayoutWrapper() {
   const location = useLocation()
-  useSimpleAuth()
+  const { isAuthenticated, isLoading } = useSimpleAuth()
   let pathname = (location.pathname || '').replace(/\/$/, '') || '/'
   if (BASE_PATH && pathname.startsWith(BASE_PATH)) {
     pathname = pathname.slice(BASE_PATH.length) || '/'
   }
   const isPublic = PUBLIC_PATHS.some(p => pathname === p)
+  // Raíz (/ o /pagos/) sin sesión: redirigir al formulario público de inmediato (no mostrar login ni index)
+  const isRoot = pathname === '/' || pathname === ''
+  if (isRoot && !isLoading && !isAuthenticated) {
+    return <Navigate to="/rapicredit" replace />
+  }
   if (isPublic) return <Outlet />
+  // Ruta no pública y sin sesión → redirigir al formulario público (no mostrar Layout/dashboard)
+  if (!isLoading && !isAuthenticated) {
+    return <Navigate to="/rapicredit" replace />
+  }
   return (
     <SimpleProtectedRoute>
       <Layout />
