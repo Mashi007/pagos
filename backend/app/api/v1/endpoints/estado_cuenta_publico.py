@@ -1,7 +1,9 @@
 """
 Endpoints PÚBLICOS para consulta de estado de cuenta por cédula.
-Sin autenticación. Solo permite validar cédula y solicitar PDF (envío al email del cliente).
-Rate limiting por IP. No expone otros servicios.
+SEGURIDAD: Sin autenticación (router sin get_current_user). Solo datos del cliente
+identificado por la cédula consultada. Rate limiting por IP. No expone otros servicios
+ni datos de otros clientes. Solo expone: validar-cedula (nombre/email) y solicitar-estado-cuenta
+(PDF estado de cuenta de esa cédula + envío al email registrado).
 """
 import io
 import logging

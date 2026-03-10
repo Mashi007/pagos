@@ -29,6 +29,12 @@ export const BASE_PATH = getBasePath();
 /** Path del formulario público de reporte de pago (cobros). Link canónico: /rapicredit-cobros */
 export const PUBLIC_REPORTE_PAGO_PATH = 'rapicredit-cobros';
 
+/**
+ * Clave de sessionStorage que indica que el usuario está en un flujo público (cobros o estado de cuenta).
+ * Si intenta ir a /login, se muestra "Acceso prohibido" y botón Continuar para volver al flujo.
+ */
+export const PUBLIC_FLOW_SESSION_KEY = 'public_flow_active';
+
 interface EnvConfig {
   API_URL: string;
   NODE_ENV: string;

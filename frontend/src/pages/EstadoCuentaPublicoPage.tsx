@@ -2,9 +2,11 @@
  * Consulta PÚBLICA de estado de cuenta por cédula.
  * Flujo: bienvenida → ingresar cédula → bienvenida con nombre → PDF + envío al email.
  * Sin login. Misma lógica y seguridades que rapicredit-cobros (rate limit, validación).
+ * Marca sesión para que, si intentan ir a login/sistema, vean "Acceso prohibido" y puedan volver aquí.
  */
 import React, { useState, useEffect } from 'react'
 import { validarCedulaEstadoCuenta, solicitarEstadoCuenta } from '../services/estadoCuentaService'
+import { PUBLIC_FLOW_SESSION_KEY } from '../config/env'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
@@ -96,6 +98,12 @@ export default function EstadoCuentaPublicoPage() {
   }
   const stepAnnouncement = stepAnnouncements[step] ?? `Paso ${step}`
 
+  // Marcar flujo público para que, si intentan ir a login, vean "Acceso prohibido" y puedan volver aquí
+  useEffect(() => {
+    sessionStorage.setItem(PUBLIC_FLOW_SESSION_KEY, '1')
+    sessionStorage.setItem(PUBLIC_FLOW_SESSION_KEY + '_path', 'rapicredit-estadocuenta')
+  }, [])
+
   const handleValidarCedula = async () => {
     const v = validarCedulaFormato(cedula)
     if (!v.valido) {
@@ -165,6 +173,9 @@ export default function EstadoCuentaPublicoPage() {
             </ul>
             <p className="text-xs text-slate-500 text-center">
               Este servicio solo permite consultar su propio estado de cuenta. No da acceso a otros servicios.
+            </p>
+            <p className="text-xs text-slate-500 text-center">
+              Si toca por error un enlace al sistema o al login, verá «Acceso prohibido» y podrá volver aquí con el botón Continuar.
             </p>
             <Button className="w-full text-base py-6 font-semibold" size="lg" onClick={() => setStep(1)}>
               Iniciar

@@ -1,6 +1,9 @@
 """
 Endpoints PÚBLICOS del módulo Cobros (formulario de reporte de pago).
-Sin autenticación. Incluye: rate limiting por IP, honeypot anti-bot, validación de archivo por magic bytes.
+SEGURIDAD: Sin autenticación (router sin get_current_user). No permitir acceso a datos
+de otros clientes ni a rutas internas. Incluye: rate limiting por IP, honeypot anti-bot,
+validación de archivo por magic bytes. Solo expone: validar-cedula (nombre/email del cliente
+consultado) y enviar-reporte (crear PagoReportado para esa cédula).
 """
 import os
 import re

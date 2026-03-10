@@ -3,9 +3,11 @@
  * Validadores alineados con el backend: cédula (V/E/J/Z + 6-11 dígitos), monto (>0, máx 999.999.999,99),
  * fecha (obligatoria, no futura, desde calendario), institución y nº documento (longitud), archivo (JPG/PNG/PDF, máx 5 MB).
  * Notificaciones claras por cada error para guiar al cliente.
+ * Marca flujo público para que, si intentan ir a login, vean "Acceso prohibido" y puedan volver.
  */
 import React, { useState, useRef, useEffect } from 'react'
 import { validarCedulaPublico, enviarReportePublico } from '../services/cobrosService'
+import { PUBLIC_FLOW_SESSION_KEY } from '../config/env'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
@@ -161,6 +163,12 @@ export default function ReportePagoPage() {
     setNotification(null)
   }
   useEffect(() => () => { if (notificationTimeoutRef.current) clearTimeout(notificationTimeoutRef.current) }, [])
+
+  // Marcar flujo público para que, si intentan ir a login, vean "Acceso prohibido" y puedan volver
+  useEffect(() => {
+    sessionStorage.setItem(PUBLIC_FLOW_SESSION_KEY, '1')
+    sessionStorage.setItem(PUBLIC_FLOW_SESSION_KEY + '_path', 'rapicredit-cobros')
+  }, [])
 
   const institucionFinal = institucion === 'Otros' ? institucionOtros : institucion
 
@@ -322,6 +330,9 @@ export default function ReportePagoPage() {
             </ul>
             <p className="text-xs text-slate-500 text-center bg-slate-50 rounded-lg px-3 py-2 border border-slate-100">
               Los datos se comprobarán y almacenarán únicamente para validación del pago.
+            </p>
+            <p className="text-xs text-slate-500 text-center">
+              Si toca por error un enlace al sistema o al login, verá «Acceso prohibido» y podrá volver aquí con el botón Continuar.
             </p>
             <Button
               className="w-full text-base py-6 font-semibold bg-cyan-600 hover:bg-cyan-700 text-white shadow-md hover:shadow-lg transition-all"
