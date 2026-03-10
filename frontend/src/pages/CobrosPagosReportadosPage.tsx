@@ -15,7 +15,7 @@ import { Input } from '../components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import toast from 'react-hot-toast'
-import { Send, Loader2 } from 'lucide-react'
+import { Mail, Loader2 } from 'lucide-react'
 import { PUBLIC_REPORTE_PAGO_PATH } from '../config/env'
 
 const ESTADO_BADGE: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
@@ -226,7 +226,7 @@ export default function CobrosPagosReportadosPage() {
                             onClick={() => handleEnviarRecibo(row.id)}
                             disabled={sendingId === row.id}
                           >
-                            {sendingId === row.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                            {sendingId === row.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
                           </Button>
                         </div>
                       </td>

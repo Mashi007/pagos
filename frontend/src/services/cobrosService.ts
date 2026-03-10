@@ -108,7 +108,7 @@ export async function listPagosReportados(params: {
   if (params.institucion) q.set('institucion', params.institucion)
   if (params.page != null) q.set('page', String(params.page))
   if (params.per_page != null) q.set('per_page', String(params.per_page))
-  const { data } = await apiClient.get(`${BASE_COBROS}/pagos-reportados?${q}`)
+  const data = await apiClient.get<ListPagosReportadosResponse>(`${BASE_COBROS}/pagos-reportados?${q}`)
   return data
 }
 
@@ -139,17 +139,17 @@ export interface PagoReportadoDetalleResponse {
 }
 
 export async function getPagoReportadoDetalle(pagoId: number): Promise<PagoReportadoDetalleResponse> {
-  const { data } = await apiClient.get(`${BASE_COBROS}/pagos-reportados/${pagoId}`)
+  const data = await apiClient.get<PagoReportadoDetalleResponse>(`${BASE_COBROS}/pagos-reportados/${pagoId}`)
   return data
 }
 
 export async function aprobarPagoReportado(pagoId: number): Promise<{ ok: boolean; mensaje?: string }> {
-  const { data } = await apiClient.post(`${BASE_COBROS}/pagos-reportados/${pagoId}/aprobar`)
+  const data = await apiClient.post<{ ok: boolean; mensaje?: string }>(`${BASE_COBROS}/pagos-reportados/${pagoId}/aprobar`)
   return data
 }
 
 export async function rechazarPagoReportado(pagoId: number, motivo: string): Promise<{ ok: boolean; mensaje?: string }> {
-  const { data } = await apiClient.post(`${BASE_COBROS}/pagos-reportados/${pagoId}/rechazar`, { motivo })
+  const data = await apiClient.post<{ ok: boolean; mensaje?: string }>(`${BASE_COBROS}/pagos-reportados/${pagoId}/rechazar`, { motivo })
   return data
 }
 
@@ -165,27 +165,27 @@ export interface HistoricoClienteItem {
 }
 
 export async function historicoPorCliente(cedula: string): Promise<{ cedula: string; items: HistoricoClienteItem[] }> {
-  const { data } = await apiClient.get(`${BASE_COBROS}/historico-cliente?cedula=${encodeURIComponent(cedula)}`)
+  const data = await apiClient.get<{ cedula: string; items: HistoricoClienteItem[] }>(`${BASE_COBROS}/historico-cliente?cedula=${encodeURIComponent(cedula)}`)
   return data
 }
 
 /** Abre el comprobante (imagen/PDF) en nueva pestaña. Usa auth del apiClient. */
 export async function openComprobanteInNewTab(pagoId: number): Promise<void> {
-  const blob = await apiClient.get<Blob>(`${BASE_COBROS}/pagos-reportados/${pagoId}/comprobante`, { responseType: 'blob' })
-  const url = URL.createObjectURL(blob)
+  const data = await apiClient.get<Blob>(`${BASE_COBROS}/pagos-reportados/${pagoId}/comprobante`, { responseType: 'blob' })
+  const url = URL.createObjectURL(data)
   window.open(url, '_blank')
 }
 
 /** Abre o descarga el recibo PDF. Usa auth del apiClient. */
 export async function openReciboPdfInNewTab(pagoId: number): Promise<void> {
-  const blob = await apiClient.get<Blob>(`${BASE_COBROS}/pagos-reportados/${pagoId}/recibo.pdf`, { responseType: 'blob' })
-  const url = URL.createObjectURL(blob)
+  const data = await apiClient.get<Blob>(`${BASE_COBROS}/pagos-reportados/${pagoId}/recibo.pdf`, { responseType: 'blob' })
+  const url = URL.createObjectURL(data)
   window.open(url, '_blank')
 }
 
 /** Envía por correo el recibo PDF (manual). Genera PDF si no existe. */
 export async function enviarReciboManual(pagoId: number): Promise<{ ok: boolean; mensaje?: string }> {
-  const { data } = await apiClient.post(`${BASE_COBROS}/pagos-reportados/${pagoId}/enviar-recibo`)
+  const data = await apiClient.post<{ ok: boolean; mensaje?: string }>(`${BASE_COBROS}/pagos-reportados/${pagoId}/enviar-recibo`)
   return data
 }
 
@@ -195,6 +195,6 @@ export async function cambiarEstadoPago(
   estado: string,
   motivo?: string
 ): Promise<{ ok: boolean; mensaje?: string }> {
-  const { data } = await apiClient.patch(`${BASE_COBROS}/pagos-reportados/${pagoId}/estado`, { estado, motivo })
+  const data = await apiClient.patch<{ ok: boolean; mensaje?: string }>(`${BASE_COBROS}/pagos-reportados/${pagoId}/estado`, { estado, motivo })
   return data
 }

@@ -26,8 +26,8 @@ import {
   Menu,
   Briefcase,
   Target,
-  Banknote,
-  History,
+  DollarSign,
+  Clock,
 } from 'lucide-react'
 import { cn } from '../../utils'
 import { useSimpleAuth } from '../../store/simpleAuthStore'
@@ -125,11 +125,11 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     },
     {
       title: 'Cobros',
-      icon: Banknote,
+      icon: DollarSign,
       isSubmenu: true,
       children: [
         { title: 'Pagos Reportados', href: '/cobros/pagos-reportados', icon: FileText },
-        { title: 'Histórico por cliente', href: '/cobros/historico-cliente', icon: History },
+        { title: 'Histórico por cliente', href: '/cobros/historico-cliente', icon: Clock },
       ],
     },
     {

@@ -48,6 +48,8 @@ from app.services.pagos_gmail.helpers import (
     get_sheet_name_for_date,
     normalizar_fecha_pago,
     normalizar_referencia,
+    sender_acceptable_for_pipeline,
+    subject_acceptable_for_pipeline,
 )
 
 logger = logging.getLogger(__name__)
@@ -124,6 +126,11 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
 
         delay_gemini = getattr(settings, "PAGOS_GMAIL_DELAY_BETWEEN_GEMINI_SECONDS", 0) or 0
 
+        keywords_or_raw = getattr(settings, "PAGOS_GMAIL_SUBJECT_KEYWORDS_OR", "") or ""
+        keywords_or = [k.strip() for k in keywords_or_raw.split(",") if k.strip()]
+        sender_prefixes_raw = getattr(settings, "PAGOS_GMAIL_SENDER_PREFIXES_ALWAYS_INCLUDE", "") or ""
+        sender_prefixes = [p.strip() for p in sender_prefixes_raw.split(",") if p.strip()]
+
         def process_message_batch(batch: list[dict], label: str) -> None:
             nonlocal emails_ok, files_ok, drive_errors
             for msg_info in batch:
@@ -133,6 +140,10 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
                 from_h = headers.get("from") or headers.get("From") or ""
                 sender = extract_sender_email(from_h)
                 subject = (headers.get("subject") or headers.get("Subject") or "").strip() or sender
+                # Incluir siempre correos de remitentes tipo cobranza@... aunque el asunto no cumpla
+                if not subject_acceptable_for_pipeline(subject, keywords_or or None) and not sender_acceptable_for_pipeline(sender, sender_prefixes or None):
+                    logger.warning("[PAGOS_GMAIL]   Omitido (asunto/remitente no aceptados): id=%s | de=%s | asunto=%s", msg_id, sender[:40], subject[:50])
+                    continue
                 msg_date = get_message_date(headers)
                 sheet_name = get_sheet_name_for_date(msg_date)
                 folder_name = get_folder_name_from_date(msg_date)

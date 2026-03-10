@@ -105,6 +105,25 @@ def subject_acceptable_for_pipeline(subject: Optional[str], keywords_or: Optiona
     return False
 
 
+def sender_acceptable_for_pipeline(sender: Optional[str], allowed_prefixes: Optional[list[str]] = None) -> bool:
+    """
+    True si el correo debe procesarse por remitente (siempre incluir estos correos).
+    Útil para incluir correos de cobranza@... aunque el asunto no cumpla el filtro.
+    Acepta si el email del remitente (sender) empieza con alguno de allowed_prefixes (case-insensitive).
+    Ej.: sender "cobranza@rapicreditca.com" con allowed_prefixes ["cobranza"] -> True.
+    """
+    if not sender or not sender.strip():
+        return False
+    if not allowed_prefixes:
+        return False
+    email = sender.strip().lower()
+    for prefix in allowed_prefixes:
+        p = (prefix or "").strip().lower()
+        if p and email.startswith(p):
+            return True
+    return False
+
+
 def normalizar_fecha_pago(fecha: Optional[str]) -> str:
     """
     Normaliza cualquier formato de fecha a DD/MM/YYYY.

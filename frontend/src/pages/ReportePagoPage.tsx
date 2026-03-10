@@ -126,7 +126,7 @@ export default function ReportePagoPage() {
   const handleValidarCedula = async () => {
     const v = validarCedulaFormato(cedula)
     if (!v.valido) {
-      toast.error(v.error)
+      toast.error(v.error ?? 'Cédula inválida.')
       return
     }
     setLoading(true)
@@ -150,7 +150,7 @@ export default function ReportePagoPage() {
     // Validaciones iguales al backend; notificación específica por error
     const vCedula = validarCedulaFormato(cedula)
     if (!vCedula.valido) {
-      toast.error(vCedula.error)
+      toast.error(vCedula.error ?? 'Cédula inválida.')
       return
     }
     if (!institucionFinal.trim()) {
@@ -163,12 +163,12 @@ export default function ReportePagoPage() {
     }
     const vFecha = validarFechaPago(fechaPago)
     if (!vFecha.valido) {
-      toast.error(vFecha.error)
+      toast.error(vFecha.error ?? 'Fecha inválida.')
       return
     }
     const vMonto = validarMonto(monto)
     if (!vMonto.valido) {
-      toast.error(vMonto.error)
+      toast.error(vMonto.error ?? 'Monto inválido.')
       return
     }
     if (!numeroDocumento.trim()) {
@@ -181,7 +181,7 @@ export default function ReportePagoPage() {
     }
     const vArchivo = validarArchivo(archivo)
     if (!vArchivo.valido) {
-      toast.error(vArchivo.error)
+      toast.error(vArchivo.error ?? 'Archivo inválido.')
       return
     }
     // Honeypot: si un bot rellenó el campo oculto, no enviar
@@ -201,7 +201,7 @@ export default function ReportePagoPage() {
     form.append('numero_operacion', numeroDocumento)
     form.append('monto', String(monto))
     form.append('moneda', moneda)
-    form.append('comprobante', archivo)
+    if (archivo) form.append('comprobante', archivo)
     setLoading(true)
     try {
       const res = await enviarReportePublico(form)
@@ -379,12 +379,12 @@ export default function ReportePagoPage() {
                 onClick={() => {
                   const vF = validarFechaPago(fechaPago)
                   if (!vF.valido) {
-                    toast.error(vF.error)
+                    toast.error(vF.error ?? 'Fecha inválida.')
                     return
                   }
                   const vM = validarMonto(monto)
                   if (!vM.valido) {
-                    toast.error(vM.error)
+                    toast.error(vM.error ?? 'Monto inválido.')
                     return
                   }
                   setStep(5)
@@ -468,7 +468,7 @@ export default function ReportePagoPage() {
                 onClick={() => {
                   const v = validarArchivo(archivo)
                   if (!v.valido) {
-                    toast.error(v.error)
+                    toast.error(v.error ?? 'Archivo inválido.')
                     return
                   }
                   setStep(7)
