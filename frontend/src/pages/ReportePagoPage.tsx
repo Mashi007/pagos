@@ -129,11 +129,11 @@ function NotificationBanner({ notification, onDismiss }: { notification: Notific
 
 export default function ReportePagoPage() {
   const honeypotRef = useRef<HTMLInputElement>(null)
-  const [step, setStep] = useState(1)
+  const [step, setStep] = useState(0)
   const [loading, setLoading] = useState(false)
   const [cedula, setCedula] = useState('')
   const [nombre, setNombre] = useState('')
-  const [emailEnmascarado, setEmailEnmascarado] = useState('')
+  const [emailParaVerificacion, setEmailParaVerificacion] = useState('')
   const [institucion, setInstitucion] = useState('')
   const [institucionOtros, setInstitucionOtros] = useState('')
   const [fechaPago, setFechaPago] = useState('')
@@ -165,6 +165,7 @@ export default function ReportePagoPage() {
   const institucionFinal = institucion === 'Otros' ? institucionOtros : institucion
 
   const stepAnnouncements: Record<number, string> = {
+    0: 'Pantalla de bienvenida: reporte de pago',
     1: 'Paso 1: Ingrese su número de cédula',
     2: 'Paso 2: Datos del pago',
     3: 'Paso 3: Institución financiera',
@@ -190,7 +191,7 @@ export default function ReportePagoPage() {
         return
       }
       setNombre(res.nombre || '')
-      setEmailEnmascarado(res.email_enmascarado || '')
+      setEmailParaVerificacion(res.email ?? res.email_enmascarado ?? '')
       setStep(2)
     } catch (e: any) {
       showNotification('error', e?.message || 'Error al validar cédula.')
@@ -270,6 +271,44 @@ export default function ReportePagoPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  // Pantalla de bienvenida con instrucciones generales
+  if (step === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-slate-100 to-slate-200 flex flex-col items-center justify-center p-4">
+        <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+          {messageForScreenReader || stepAnnouncement}
+        </div>
+        <Card className="w-full max-w-lg shadow-xl border-2 border-slate-200">
+          <CardHeader className="text-center pb-2">
+            <CardTitle className="text-2xl text-slate-800">Bienvenido</CardTitle>
+            <p className="text-slate-600 mt-1">Reporte de pago — RapiCredit</p>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <p className="text-slate-700 text-center">
+              Desde aquí puede reportar su pago de forma segura para que sea verificado por cobranza.
+            </p>
+            <ul className="text-sm text-slate-600 space-y-2 list-disc list-inside">
+              <li>Ingrese su número de cédula (V, E, G o J + dígitos).</li>
+              <li>Indique institución financiera, fecha, monto y número de operación.</li>
+              <li>Adjunte el comprobante de pago (JPG, PNG o PDF, máx. 5 MB).</li>
+              <li>Revise los datos y envíe. Recibirá confirmación al correo registrado.</li>
+            </ul>
+            <p className="text-xs text-slate-500 text-center">
+              Los datos se comprobarán y almacenarán únicamente para validación del pago.
+            </p>
+            <Button
+              className="w-full text-base py-6 font-semibold"
+              size="lg"
+              onClick={() => setStep(1)}
+            >
+              Iniciar
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   if (step === 1) {
@@ -575,7 +614,7 @@ export default function ReportePagoPage() {
           </CardContent>
           <CardContent className="pt-0 space-y-3">
             <p className="text-sm text-gray-600">
-              Tu pago se procesará y se enviará al correo registrado en tu contrato de financiamiento ({emailEnmascarado}).
+              Tu pago se procesará y se enviará al correo registrado en tu contrato de financiamiento ({emailParaVerificacion || 'correo registrado'}).
               Si tienes algún problema con el correo, contacta a cobranza@rapicreditca.com o a tu asesor para actualización.
             </p>
             <div className="flex gap-2">

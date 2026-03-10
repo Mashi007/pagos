@@ -100,6 +100,8 @@ def _generar_referencia_interna(db: Session) -> str:
 class ValidarCedulaResponse(BaseModel):
     ok: bool
     nombre: Optional[str] = None
+    """Correo completo para que el cliente lo compruebe en pantalla (no enmascarado)."""
+    email: Optional[str] = None
     email_enmascarado: Optional[str] = None
     error: Optional[str] = None
 
@@ -152,10 +154,12 @@ def validar_cedula_publico(
     if not prestamo:
         return ValidarCedulaResponse(ok=False, error="La cédula no tiene un préstamo asociado en nuestro sistema.")
     nombre = (cliente.nombres or "").strip()
+    email = (cliente.email or "").strip()
     return ValidarCedulaResponse(
         ok=True,
         nombre=nombre,
-        email_enmascarado=_mask_email(cliente.email or ""),
+        email=email or None,
+        email_enmascarado=_mask_email(email),
     )
 
 
@@ -231,98 +235,105 @@ async def enviar_reporte_publico(
         return EnviarReporteResponse(ok=False, error="El archivo no corresponde a una imagen o PDF válido.")
     filename = _sanitize_filename(comprobante.filename or "comprobante")
 
-    referencia = _generar_referencia_interna(db)
-    nombres = (cliente.nombres or "").strip()
-    apellidos = ""  # clientes tiene solo nombres; si hay apellido en otro campo se puede mapear
-    if " " in nombres:
-        parts = nombres.split(None, 1)
-        nombres = parts[0]
-        apellidos = parts[1] if len(parts) > 1 else ""
+    try:
+        referencia = _generar_referencia_interna(db)
+        nombres = (cliente.nombres or "").strip()
+        apellidos = ""  # clientes tiene solo nombres; si hay apellido en otro campo se puede mapear
+        if " " in nombres:
+            parts = nombres.split(None, 1)
+            nombres = parts[0]
+            apellidos = parts[1] if len(parts) > 1 else ""
 
-    pr = PagoReportado(
-        referencia_interna=referencia,
-        nombres=nombres,
-        apellidos=apellidos,
-        tipo_cedula=tipo_cedula.strip().upper(),
-        numero_cedula=numero_cedula.strip(),
-        fecha_pago=fecha_pago,
-        institucion_financiera=institucion_financiera.strip()[:100],
-        numero_operacion=numero_operacion.strip()[:100],
-        monto=monto,
-        moneda=(moneda or "BS").strip()[:10],
-        comprobante=content,
-        comprobante_nombre=filename[:255],
-        comprobante_tipo=ctype,
-        ruta_comprobante=None,
-        observacion=observacion[:300] if observacion else None,
-        correo_enviado_a=cliente.email,
-        estado="pendiente",
-    )
-    db.add(pr)
-    db.commit()
-    db.refresh(pr)
-
-    # Gemini (servicio único del sistema): comparar formulario vs imagen del comprobante
-    form_data = {
-        "fecha_pago": str(fecha_pago),
-        "institucion_financiera": institucion_financiera,
-        "numero_operacion": numero_operacion,
-        "monto": str(monto),
-        "moneda": moneda,
-        "tipo_cedula": tipo_cedula,
-        "numero_cedula": numero_cedula,
-    }
-    from app.core.config import settings as _s
-    _gemini_configured = bool((getattr(_s, "GEMINI_API_KEY", None) or "").strip())
-    if _gemini_configured:
-        logger.info("[COBROS_PUBLIC] Usando servicio Gemini del sistema para validar comprobante ref=%s", referencia)
-    else:
-        logger.info("[COBROS_PUBLIC] GEMINI_API_KEY no configurado: reporte ref=%s irá a revisión manual", referencia)
-    gemini_result = compare_form_with_image(form_data, content, filename)
-    coincide = gemini_result.get("coincide_exacto", False)
-    pr.gemini_coincide_exacto = "true" if coincide else "false"
-    pr.gemini_comentario = gemini_result.get("comentario")
-
-    if coincide:
-        pr.estado = "aprobado"
-        # Generar PDF y guardar en BD + enviar por correo
-        pdf_bytes = generar_recibo_pago_reportado(
+        pr = PagoReportado(
             referencia_interna=referencia,
-            nombres=pr.nombres,
-            apellidos=pr.apellidos,
-            tipo_cedula=pr.tipo_cedula,
-            numero_cedula=pr.numero_cedula,
-            institucion_financiera=pr.institucion_financiera,
-            monto=f"{pr.monto} {pr.moneda}",
-            numero_operacion=pr.numero_operacion,
+            nombres=nombres,
+            apellidos=apellidos,
+            tipo_cedula=tipo_cedula.strip().upper(),
+            numero_cedula=numero_cedula.strip(),
+            fecha_pago=fecha_pago,
+            institucion_financiera=institucion_financiera.strip()[:100],
+            numero_operacion=numero_operacion.strip()[:100],
+            monto=monto,
+            moneda=(moneda or "BS").strip()[:10],
+            comprobante=content,
+            comprobante_nombre=filename[:255],
+            comprobante_tipo=ctype,
+            ruta_comprobante=None,
+            observacion=observacion[:300] if observacion else None,
+            correo_enviado_a=cliente.email,
+            estado="pendiente",
         )
-        pr.recibo_pdf = pdf_bytes
-        to_email = (cliente.email or "").strip()
-        if to_email:
-            body = (
-                f"Se ha recibido su reporte de pago.\n\n"
-                f"Número de referencia: {referencia}\n\n"
-                f"El recibo se adjunta. Si necesita información adicional, contáctenos por WhatsApp: {WHATSAPP_LINK}\n\n"
-                "RapiCredit C.A."
+        db.add(pr)
+        db.commit()
+        db.refresh(pr)
+
+        # Gemini: comparar formulario vs imagen del comprobante
+        form_data = {
+            "fecha_pago": str(fecha_pago),
+            "institucion_financiera": institucion_financiera,
+            "numero_operacion": numero_operacion,
+            "monto": str(monto),
+            "moneda": moneda,
+            "tipo_cedula": tipo_cedula,
+            "numero_cedula": numero_cedula,
+        }
+        from app.core.config import settings as _s
+        _gemini_configured = bool((getattr(_s, "GEMINI_API_KEY", None) or "").strip())
+        if _gemini_configured:
+            logger.info("[COBROS_PUBLIC] Usando servicio Gemini para validar comprobante ref=%s", referencia)
+        else:
+            logger.info("[COBROS_PUBLIC] GEMINI_API_KEY no configurado: ref=%s irá a revisión manual", referencia)
+        gemini_result = compare_form_with_image(form_data, content, filename)
+        coincide = gemini_result.get("coincide_exacto", False)
+        pr.gemini_coincide_exacto = "true" if coincide else "false"
+        pr.gemini_comentario = gemini_result.get("comentario")
+
+        if coincide:
+            pr.estado = "aprobado"
+            pdf_bytes = generar_recibo_pago_reportado(
+                referencia_interna=referencia,
+                nombres=pr.nombres,
+                apellidos=pr.apellidos,
+                tipo_cedula=pr.tipo_cedula,
+                numero_cedula=pr.numero_cedula,
+                institucion_financiera=pr.institucion_financiera,
+                monto=f"{pr.monto} {pr.moneda}",
+                numero_operacion=pr.numero_operacion,
             )
-            ok_mail, err_mail = send_email(
-                [to_email],
-                f"Recibo de reporte de pago #{referencia}",
-                body,
-                attachments=[(f"recibo_{referencia}.pdf", pdf_bytes)],
-            )
-            if not ok_mail:
-                logger.error(
-                    "[COBROS_PUBLIC] Recibo aprobado ref=%s: correo NO enviado a %s. Error: %s. Reenviar desde Cobros admin.",
-                    referencia, to_email, err_mail or "desconocido",
+            pr.recibo_pdf = pdf_bytes
+            to_email = (cliente.email or "").strip()
+            if to_email:
+                body = (
+                    f"Se ha recibido su reporte de pago.\n\n"
+                    f"Número de referencia: {referencia}\n\n"
+                    f"El recibo se adjunta. Si necesita información adicional, contáctenos por WhatsApp: {WHATSAPP_LINK}\n\n"
+                    "RapiCredit C.A."
                 )
-    else:
-        pr.estado = "en_revision"
+                ok_mail, err_mail = send_email(
+                    [to_email],
+                    f"Recibo de reporte de pago #{referencia}",
+                    body,
+                    attachments=[(f"recibo_{referencia}.pdf", pdf_bytes)],
+                )
+                if not ok_mail:
+                    logger.error(
+                        "[COBROS_PUBLIC] Recibo aprobado ref=%s: correo NO enviado a %s. Error: %s.",
+                        referencia, to_email, err_mail or "desconocido",
+                    )
+        else:
+            pr.estado = "en_revision"
 
-    db.commit()
+        db.commit()
 
-    return EnviarReporteResponse(
-        ok=True,
-        referencia_interna=referencia,
-        mensaje="Tu reporte de pago fue recibido exitosamente.",
-    )
+        return EnviarReporteResponse(
+            ok=True,
+            referencia_interna=referencia,
+            mensaje="Tu reporte de pago fue recibido exitosamente.",
+        )
+    except Exception as e:
+        logger.exception("[COBROS_PUBLIC] Error en enviar-reporte: %s", e)
+        db.rollback()
+        return EnviarReporteResponse(
+            ok=False,
+            error="No se pudo procesar el reporte. Intente de nuevo o contacte por WhatsApp 424-4579934.",
+        )

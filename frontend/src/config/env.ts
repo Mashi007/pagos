@@ -26,8 +26,8 @@ function getBasePath(): string {
 }
 export const BASE_PATH = getBasePath();
 
-/** Path del formulario público de reporte de pago (confiabilidad del cliente). El link generado termina en /rapicredit. */
-export const PUBLIC_REPORTE_PAGO_PATH = 'rapicredit';
+/** Path del formulario público de reporte de pago (cobros). Link canónico: /rapicredit-cobros */
+export const PUBLIC_REPORTE_PAGO_PATH = 'rapicredit-cobros';
 
 interface EnvConfig {
   API_URL: string;

@@ -29,12 +29,17 @@ class AuditMiddleware(BaseHTTPMiddleware):
         if request.method not in ["POST", "PUT", "DELETE", "PATCH"]:
             return await call_next(request)
 
-        # Capturar payload (body)
+        # Capturar payload (body). No parsear como JSON si es multipart (ej. enviar-reporte con archivo)
         body_bytes = await request.body()
-        try:
-            body_data = json.loads(body_bytes) if body_bytes else {}
-        except json.JSONDecodeError:
-            body_data = {}
+        content_type = (request.headers.get("content-type") or "").lower()
+        body_data = {}
+        if body_bytes and "application/json" in content_type:
+            try:
+                body_data = json.loads(body_bytes.decode("utf-8", errors="replace"))
+            except (json.JSONDecodeError, ValueError):
+                body_data = {}
+        elif body_bytes and ("multipart" in content_type or "application/octet-stream" in content_type):
+            body_data = {"_body": "[multipart/binary - no parseado]"}
 
         # Guardar body en request para que call_next pueda usarlo
         async def receive():

@@ -13,6 +13,8 @@ const BASE_COBROS = `${API}/api/v1/cobros`
 export interface ValidarCedulaResponse {
   ok: boolean
   nombre?: string
+  /** Correo completo para que el cliente lo compruebe (no enmascarado). */
+  email?: string
   email_enmascarado?: string
   error?: string
 }
@@ -52,11 +54,12 @@ export async function enviarReportePublico(formData: FormData): Promise<EnviarRe
       error: 'Servicio temporalmente no disponible. Intente más tarde o contacte por WhatsApp 424-4579934.',
     }
   }
+  // Leer el body una sola vez (evita "body stream already read" si el servidor devuelve 500/HTML)
+  const text = await res.text()
   let data: EnviarReporteResponse
   try {
-    data = await res.json()
+    data = text ? JSON.parse(text) : {}
   } catch {
-    const text = await res.text()
     return {
       ok: false,
       error: (text || `Error ${res.status}. Intente más tarde o contacte por WhatsApp 424-4579934.`).slice(0, 200),

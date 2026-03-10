@@ -11,10 +11,10 @@ import { useSimpleAuth } from './store/simpleAuthStore'
 import { BASE_PATH } from './config/env'
 
 /** Rutas que no requieren login: solo formulario de reporte de pago y login. El resto usa Layout con sidebar (protegido). */
-const PUBLIC_PATHS = ['/', '/login', '/reporte-pago', '/rapicredit']
+const PUBLIC_PATHS = ['/', '/login', '/reporte-pago', '/rapicredit-cobros']
 
 /** En rutas públicas solo muestra el Outlet (sin Layout). En el resto, si no hay token activo, redirige a /login
- * para pedir usuario y clave. Con basename="/pagos", pathname puede ser "/pagos/rapicredit"; normalizamos. */
+ * para pedir usuario y clave. Con basename="/pagos", pathname puede ser "/pagos/rapicredit-cobros"; normalizamos. */
 function RootLayoutWrapper() {
   const location = useLocation()
   const { isAuthenticated, isLoading } = useSimpleAuth()
@@ -138,9 +138,10 @@ function App() {
             }
           />
 
-          {/* Formulario público de reporte de pago (sin login). Link canónico termina en /rapicredit */}
+          {/* Formulario público de reporte de pago (sin login). Link canónico: /rapicredit-cobros */}
           <Route path="reporte-pago" element={<ReportePagoPage />} />
-          <Route path="rapicredit" element={<ReportePagoPage />} />
+          <Route path="rapicredit-cobros" element={<ReportePagoPage />} />
+          <Route path="rapicredit" element={<Navigate to="/rapicredit-cobros" replace />} />
 
           {/* Login: misma pantalla que index cuando no autenticado */}
           <Route
