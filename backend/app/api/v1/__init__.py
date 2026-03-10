@@ -2,7 +2,7 @@
 API v1
 """
 from fastapi import APIRouter
-from app.api.v1.endpoints import whatsapp, auth, configuracion, configuracion_informe_pagos, pagos, pagos_gmail, pagos_con_errores, prestamos, notificaciones, notificaciones_tabs, dashboard, auditoria, clientes, tickets, comunicaciones, validadores, usuarios, modelos_vehiculos, analistas, concesionarios, ai_training, revision_manual, health, cobros_publico, cobros
+from app.api.v1.endpoints import whatsapp, auth, configuracion, configuracion_informe_pagos, pagos, pagos_gmail, pagos_con_errores, prestamos, notificaciones, notificaciones_tabs, dashboard, auditoria, clientes, tickets, comunicaciones, validadores, usuarios, modelos_vehiculos, analistas, concesionarios, ai_training, revision_manual, health, cobros_publico, cobros, estado_cuenta_publico
 from app.api.v1.endpoints.dashboard import kpis
 from app.api.v1.endpoints.reportes import router as reportes_router
 
@@ -45,6 +45,12 @@ api_router.include_router(
     cobros_publico.router,
     prefix="/cobros/public",
     tags=["cobros-public"],
+)
+# Estado de cuenta público: consulta por cédula, PDF + envío al email (sin auth)
+api_router.include_router(
+    estado_cuenta_publico.router,
+    prefix="/estado-cuenta/public",
+    tags=["estado-cuenta-public"],
 )
 # Cobros: administración (con auth)
 api_router.include_router(

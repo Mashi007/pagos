@@ -16,8 +16,16 @@ VALIDAR_CEDULA_MAX = 30
 ENVIAR_REPORTE_WINDOW_SEC = 3600
 ENVIAR_REPORTE_MAX = 5
 
+# Estado de cuenta público: validar 30/min, solicitar PDF 5/hora por IP
+ESTADO_CUENTA_VALIDAR_WINDOW_SEC = 60
+ESTADO_CUENTA_VALIDAR_MAX = 30
+ESTADO_CUENTA_SOLICITAR_WINDOW_SEC = 3600
+ESTADO_CUENTA_SOLICITAR_MAX = 5
+
 _validar_attempts: dict[str, list[float]] = defaultdict(list)
 _enviar_attempts: dict[str, list[float]] = defaultdict(list)
+_estado_cuenta_validar_attempts: dict[str, list[float]] = defaultdict(list)
+_estado_cuenta_solicitar_attempts: dict[str, list[float]] = defaultdict(list)
 _lock = Lock()
 
 
@@ -55,5 +63,33 @@ def check_rate_limit_enviar_reporte(ip: str) -> None:
             raise HTTPException(
                 status_code=429,
                 detail="Ha alcanzado el límite de envíos por hora. Intente más tarde.",
+            )
+        attempts.append(now)
+
+
+def check_rate_limit_estado_cuenta_validar(ip: str) -> None:
+    """Lanza 429 si se supera el límite de validar cédula (estado de cuenta) por IP."""
+    with _lock:
+        now = time.time()
+        attempts = _estado_cuenta_validar_attempts[ip]
+        attempts[:] = [t for t in attempts if now - t < ESTADO_CUENTA_VALIDAR_WINDOW_SEC]
+        if len(attempts) >= ESTADO_CUENTA_VALIDAR_MAX:
+            raise HTTPException(
+                status_code=429,
+                detail="Demasiadas consultas. Espere un minuto e intente de nuevo.",
+            )
+        attempts.append(now)
+
+
+def check_rate_limit_estado_cuenta_solicitar(ip: str) -> None:
+    """Lanza 429 si se supera el límite de solicitar estado de cuenta (PDF) por IP."""
+    with _lock:
+        now = time.time()
+        attempts = _estado_cuenta_solicitar_attempts[ip]
+        attempts[:] = [t for t in attempts if now - t < ESTADO_CUENTA_SOLICITAR_WINDOW_SEC]
+        if len(attempts) >= ESTADO_CUENTA_SOLICITAR_MAX:
+            raise HTTPException(
+                status_code=429,
+                detail="Ha alcanzado el límite de consultas por hora. Intente más tarde.",
             )
         attempts.append(now)

@@ -11,7 +11,7 @@ import { useSimpleAuth } from './store/simpleAuthStore'
 import { BASE_PATH } from './config/env'
 
 /** Rutas que no requieren login: solo formulario de reporte de pago y login. El resto usa Layout con sidebar (protegido). */
-const PUBLIC_PATHS = ['/', '/login', '/reporte-pago', '/rapicredit-cobros']
+const PUBLIC_PATHS = ['/', '/login', '/reporte-pago', '/rapicredit-cobros', '/rapicredit-estadocuenta']
 
 /** En rutas públicas solo muestra el Outlet (sin Layout). En el resto, si no hay token activo, redirige a /login
  * para pedir usuario y clave. Con basename="/pagos", pathname puede ser "/pagos/rapicredit-cobros"; normalizamos. */
@@ -66,6 +66,7 @@ import EditarRevisionManual from './pages/EditarRevisionManual'
 import ConversacionesWhatsAppPage from './pages/ConversacionesWhatsApp'
 import ComunicacionesPage from './pages/Comunicaciones'
 import ReportePagoPage from './pages/ReportePagoPage'
+import EstadoCuentaPublicoPage from './pages/EstadoCuentaPublicoPage'
 import CobrosPagosReportadosPage from './pages/CobrosPagosReportadosPage'
 import CobrosDetallePage from './pages/CobrosDetallePage'
 import CobrosHistoricoPage from './pages/CobrosHistoricoPage'
@@ -142,6 +143,8 @@ function App() {
           <Route path="reporte-pago" element={<ReportePagoPage />} />
           <Route path="rapicredit-cobros" element={<ReportePagoPage />} />
           <Route path="rapicredit" element={<Navigate to="/rapicredit-cobros" replace />} />
+          {/* Consulta pública de estado de cuenta (sin login). Solo esta consulta, sin acceso a otros servicios. */}
+          <Route path="rapicredit-estadocuenta" element={<EstadoCuentaPublicoPage />} />
 
           {/* Login: misma pantalla que index cuando no autenticado */}
           <Route

@@ -275,35 +275,60 @@ export default function ReportePagoPage() {
 
   // Pantalla de bienvenida con instrucciones generales
   if (step === 0) {
+    const steps = [
+      { icon: 'id', text: 'Ingrese su número de cédula (V, E, G o J + dígitos).' },
+      { icon: 'bank', text: 'Indique institución financiera, fecha, monto y número de operación.' },
+      { icon: 'file', text: 'Adjunte el comprobante de pago (JPG, PNG o PDF, máx. 5 MB).' },
+      { icon: 'check', text: 'Revise los datos y envíe. Recibirá confirmación al correo registrado.' },
+    ]
     return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-100 to-slate-200 flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-cyan-50/30 to-slate-100 flex flex-col items-center justify-center p-4">
         <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
           {messageForScreenReader || stepAnnouncement}
         </div>
-        <Card className="w-full max-w-lg shadow-xl border-2 border-slate-200">
-          <CardHeader className="text-center pb-2">
-            <CardTitle className="text-2xl text-slate-800">Bienvenido</CardTitle>
-            <p className="text-slate-600 mt-1">Reporte de pago — RapiCredit</p>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            <p className="text-slate-700 text-center">
-              Desde aquí puede reportar su pago de forma segura para que sea verificado por cobranza.
-            </p>
-            <ul className="text-sm text-slate-600 space-y-2 list-disc list-inside">
-              <li>Ingrese su número de cédula (V, E, G o J + dígitos).</li>
-              <li>Indique institución financiera, fecha, monto y número de operación.</li>
-              <li>Adjunte el comprobante de pago (JPG, PNG o PDF, máx. 5 MB).</li>
-              <li>Revise los datos y envíe. Recibirá confirmación al correo registrado.</li>
+        <Card className="w-full max-w-lg shadow-2xl border border-slate-200/80 overflow-hidden">
+          {/* Header con marca */}
+          <div className="bg-gradient-to-r from-cyan-600 to-teal-600 px-6 py-5 text-center">
+            <h1 className="text-2xl font-bold text-white tracking-tight">RapiCredit</h1>
+            <p className="text-cyan-100 text-sm mt-0.5">Reporte de pago</p>
+          </div>
+          <CardContent className="p-6 sm:p-8 space-y-6">
+            <div className="text-center">
+              <h2 className="text-xl font-semibold text-slate-800">Bienvenido</h2>
+              <p className="text-slate-600 mt-2 text-sm leading-relaxed">
+                Reporte su pago de forma segura para que sea verificado por cobranza.
+              </p>
+            </div>
+            <ul className="space-y-3" role="list">
+              {steps.map((item, i) => (
+                <li key={i} className="flex gap-3 items-start text-sm text-slate-700">
+                  <span className="flex-shrink-0 w-8 h-8 rounded-full bg-cyan-100 text-cyan-700 flex items-center justify-center mt-0.5" aria-hidden>
+                    {item.icon === 'id' && (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" /></svg>
+                    )}
+                    {item.icon === 'bank' && (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                    )}
+                    {item.icon === 'file' && (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                    )}
+                    {item.icon === 'check' && (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    )}
+                  </span>
+                  <span className="pt-1">{item.text}</span>
+                </li>
+              ))}
             </ul>
-            <p className="text-xs text-slate-500 text-center">
+            <p className="text-xs text-slate-500 text-center bg-slate-50 rounded-lg px-3 py-2 border border-slate-100">
               Los datos se comprobarán y almacenarán únicamente para validación del pago.
             </p>
             <Button
-              className="w-full text-base py-6 font-semibold"
+              className="w-full text-base py-6 font-semibold bg-cyan-600 hover:bg-cyan-700 text-white shadow-md hover:shadow-lg transition-all"
               size="lg"
               onClick={() => setStep(1)}
             >
-              Iniciar
+              Iniciar reporte
             </Button>
           </CardContent>
         </Card>
