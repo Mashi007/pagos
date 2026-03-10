@@ -187,36 +187,54 @@ export default function CobrosPagosReportadosPage() {
           ) : !data?.items?.length ? (
             <p className="text-gray-500">No hay registros.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+            <div className="overflow-x-auto rounded-lg border">
+              <table className="w-full min-w-[1000px] text-sm table-fixed">
+                <colgroup>
+                  <col style={{ width: '14%' }} />
+                  <col style={{ width: '8%' }} />
+                  <col style={{ width: '10%' }} />
+                  <col style={{ width: '7%' }} />
+                  <col style={{ width: '8%' }} />
+                  <col style={{ width: '11%' }} />
+                  <col style={{ width: '7%' }} />
+                  <col style={{ width: '12%' }} />
+                  <col style={{ width: '8%' }} />
+                  <col style={{ width: '15%' }} />
+                </colgroup>
                 <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-2">Nombre</th>
-                    <th className="text-left py-2">Cédula</th>
-                    <th className="text-left py-2">Banco</th>
-                    <th className="text-right py-2">Monto</th>
-                    <th className="text-left py-2">Fecha pago</th>
-                    <th className="text-left py-2">Nº operación</th>
-                    <th className="text-left py-2">Fecha reporte</th>
-                    <th className="text-left py-2">Observación</th>
-                    <th className="text-left py-2">Estado</th>
-                    <th className="text-left py-2">Acciones</th>
+                  <tr className="border-b bg-muted/50">
+                    <th className="text-left py-3 px-3 font-semibold">Nombre</th>
+                    <th className="text-left py-3 px-3 font-semibold">Cédula</th>
+                    <th className="text-left py-3 px-3 font-semibold">Banco</th>
+                    <th className="text-right py-3 px-3 font-semibold">Monto</th>
+                    <th className="text-left py-3 px-3 font-semibold">Fecha pago</th>
+                    <th className="text-left py-3 px-3 font-semibold">Nº operación</th>
+                    <th className="text-left py-3 px-3 font-semibold">Fecha reporte</th>
+                    <th className="text-left py-3 px-3 font-semibold">Observación</th>
+                    <th className="text-left py-3 px-3 font-semibold">Estado</th>
+                    <th className="text-left py-3 px-3 font-semibold">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.items.map((row: PagoReportadoItem) => (
-                    <tr key={row.id} className="border-b">
-                      <td className="py-2">{row.nombres} {row.apellidos}</td>
-                      <td className="py-2">{row.cedula_display}</td>
-                      <td className="py-2">{row.institucion_financiera}</td>
-                      <td className="py-2 text-right">{row.monto} {row.moneda}</td>
-                      <td className="py-2">{row.fecha_pago}</td>
-                      <td className="py-2">{row.numero_operacion}</td>
-                      <td className="py-2">{new Date(row.fecha_reporte).toLocaleDateString()}</td>
-                      <td className="py-2 max-w-[220px]" title={row.observacion ?? ''}>
+                    <tr key={row.id} className="border-b hover:bg-muted/20 transition-colors">
+                      <td className="py-3 px-3 align-top min-w-0">
+                        <span className="block truncate" title={`${row.nombres} ${row.apellidos}`}>{row.nombres} {row.apellidos}</span>
+                      </td>
+                      <td className="py-3 px-3 align-top whitespace-nowrap">{row.cedula_display}</td>
+                      <td className="py-3 px-3 align-top min-w-0">
+                        <span className="block truncate" title={row.institucion_financiera}>{row.institucion_financiera}</span>
+                      </td>
+                      <td className="py-3 px-3 align-top text-right whitespace-nowrap">{row.monto} {row.moneda}</td>
+                      <td className="py-3 px-3 align-top whitespace-nowrap">{row.fecha_pago}</td>
+                      <td className="py-3 px-3 align-top min-w-0">
+                        <span className="block truncate font-mono text-xs" title={row.numero_operacion}>{row.numero_operacion}</span>
+                      </td>
+                      <td className="py-3 px-3 align-top whitespace-nowrap">{new Date(row.fecha_reporte).toLocaleDateString()}</td>
+                      <td className="py-3 px-3 align-top min-w-0" title={row.observacion ?? ''}>
                         {row.observacion ? <span className="text-amber-700 text-xs line-clamp-2">{row.observacion}</span> : '—'}
                       </td>
-                      <td className="py-2 whitespace-nowrap">
+                      <td className="py-3 px-3 align-top whitespace-nowrap">
                         {(() => {
                           const cfg = ESTADO_CONFIG[row.estado] ?? { label: row.estado, short: row.estado, variant: 'outline' as const, Icon: Clock }
                           const Icon = cfg.Icon
@@ -228,9 +246,9 @@ export default function CobrosPagosReportadosPage() {
                           )
                         })()}
                       </td>
-                      <td className="py-2">
-                        <div className="flex flex-wrap gap-0.5 items-center">
-                          <Button variant="ghost" size="icon" className="h-8 w-8" title="Ver comprobante (imagen)" onClick={() => handleVerComprobante(row.id)} disabled={viewingComprobanteId === row.id}>
+                      <td className="py-3 px-3 align-top">
+                        <div className="flex flex-wrap gap-1 items-center justify-start">
+                          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" title="Ver comprobante (imagen)" onClick={() => handleVerComprobante(row.id)} disabled={viewingComprobanteId === row.id}>
                             {viewingComprobanteId === row.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
                           </Button>
                           <Button variant="ghost" size="icon" className="h-8 w-8" title="Ver detalle" onClick={() => navigate(`/cobros/pagos-reportados/${row.id}`)}>

@@ -402,18 +402,18 @@ Paso 1 — Extraer de la imagen: Lee el comprobante y extrae con precisión esto
 - numero_operacion: número de referencia, serial, operación o comprobante (solo dígitos/código, sin etiquetas).
 - monto: cantidad pagada (número; puede estar en Bs, USD, USDT, etc.).
 - moneda: BS, USD, USDT, etc., según lo que indique el comprobante.
-- cedula_pagador: cédula o RIF del quien paga/deposita. Normaliza siempre a tipo (V, E o J) + solo dígitos, sin guiones ni espacios (ej. V-12345678 → V12345678).
+- cedula_pagador: cédula o RIF del quien paga/deposita. En el comprobante puede aparecer como "Cédula Dep.:", "Nro. de Cédula", "DP:", etc. Toma solo el número del depositante/pagador (no confundir con referencias largas que incluyan fecha). Normaliza a tipo (V, E o J) + dígitos sin guiones ni espacios; ignora ceros a la izquierda en el número (0025677920 = 25677920 → V25677920).
 
 Paso 2 — Comparar campo por campo: Para cada dato extraído de la imagen, compáralo con el valor que la persona ingresó en el formulario (listado abajo). Reglas:
 - Fecha pago (OBLIGATORIO comparar): La fecha ingresada manualmente en el formulario debe coincidir con la fecha de la operación que aparece en la imagen. Comparar día, mes y año; si alguno difiere, es divergencia (incluir "Fecha pago" en comentario). Ignorar solo el formato (ej. 10/03/2026 vs 2026-03-10 = misma fecha).
 - Institución: mismo banco o entidad (sinónimos o nombre abreviado = válido).
 - Número de operación: mismo número o código (ignorar espacios o guiones intermedios).
 - Monto: mismo valor numérico; misma moneda o equivalente (BS vs Bs, USD vs US$).
-- Cédula (IMPORTANTE): considerar COINCIDE si el tipo (V, E o J) y los dígitos del número son idénticos. El guión y los espacios NO son divergencia: V-25677920, V25677920 y V 25677920 son el mismo documento. Normaliza ambos lados (imagen y formulario) a "tipo + dígitos" sin guión antes de comparar. No marques false solo por diferencia de formato (con/sin guión).
+- Cédula (IMPORTANTE): considerar COINCIDE si el tipo (V, E o J) y el valor numérico del número son el mismo. NO son divergencia: (1) guión o espacios: V-25677920, V25677920, V 25677920; (2) ceros a la izquierda en el número: 0025677920 = 25677920 = V25677920. En comprobantes venezolanos la cédula suele aparecer con ceros a la izquierda (ej. "Cédula Dep.: 0025677920"); el formulario puede tener "V25677920": es el mismo documento. Comparar normalizando: tipo (V/E/J) + número sin ceros a la izquierda. No marques false por formato ni por ceros a la izquierda.
 
 Paso 3 — Decidir:
 - coincide_exacto = true SOLO si TODOS los campos que se pueden verificar en la imagen coinciden con lo ingresado en el formulario (para cédula: mismo tipo y mismos dígitos; el guión no cuenta). Si la cédula no aparece en el comprobante, no la uses para marcar false.
-- coincide_exacto = false si CUALQUIER campo extraído de la imagen NO coincide con el formulario (comparando valores normalizados), o si no puedes leer con claridad algún dato necesario. No marques false por cédula si solo difiere el guión (V-123 vs V123 = coinciden).
+- coincide_exacto = false si CUALQUIER campo extraído de la imagen NO coincide con el formulario (comparando valores normalizados), o si no puedes leer con claridad algún dato necesario. No marques false por cédula si solo difiere el guión (V-123 vs V123) ni por ceros a la izquierda (0025677920 en imagen vs V25677920 en formulario = coinciden).
 - comentario: si coincide_exacto = false, es OBLIGATORIO indicar SOLO los nombres de las columnas que no coinciden, separados por coma. Usa EXACTAMENTE estos nombres: Cédula, Banco, Fecha pago, Nº operación, Monto, Moneda. Sin explicaciones, sin "en imagen" ni "en formulario". Ejemplo: "Monto, Fecha pago". Si coincide_exacto = true, deja comentario vacío o "".
 
 Responde ÚNICAMENTE con un JSON válido, sin markdown ni texto antes o después:
