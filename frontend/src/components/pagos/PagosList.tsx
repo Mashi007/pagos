@@ -352,22 +352,6 @@ export function PagosList() {
                   <span>{loadingGmail ? 'Generando...' : 'Generar Excel desde Gmail'}</span>
                   <span className="text-xs text-gray-500 ml-auto">Gmail</span>
                 </button>
-                {gmailStatus?.latest_data_date && (
-                  <button
-                    type="button"
-                    className="w-full flex flex-col items-start gap-0.5 px-4 py-3 text-left rounded-md hover:bg-blue-50"
-                    onClick={() => {
-                      setShowConfirmarBorrar(true)
-                      setAgregarPagoOpen(false)
-                    }}
-                  >
-                    <span className="flex items-center gap-3">
-                      <Download className="w-5 h-5 text-gray-600 flex-shrink-0" />
-                      <span>Descargar Excel</span>
-                    </span>
-                    <span className="text-xs text-gray-500 pl-8">disponible: {gmailStatus.latest_data_date}</span>
-                  </button>
-                )}
               </div>
             </PopoverContent>
           </Popover>

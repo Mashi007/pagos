@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Upload, FileSpreadsheet, CheckCircle, ChevronDown, Mail, Download } from 'lucide-react'
+import { Upload, FileSpreadsheet, CheckCircle, ChevronDown, Mail } from 'lucide-react'
 import { Button } from '../../components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover'
 import { ExcelUploaderPagosUI } from './ExcelUploaderPagosUI'
@@ -124,22 +124,6 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
               <Mail className="w-4 h-4 mr-2" />
               {loadingGmail ? 'Generando...' : 'Generar Excel desde Gmail'}
             </button>
-            {gmailStatus?.latest_data_date && (
-              <div className="px-3 py-1">
-                <button
-                  type="button"
-                  className="w-full flex items-center px-3 py-2.5 text-sm rounded-md hover:bg-gray-100 transition-colors text-left"
-                  onClick={() => {
-                    setShowConfirmarBorrar(true)
-                    setIsOpen(false)
-                  }}
-                >
-                  <Download className="w-4 h-4 mr-2 flex-shrink-0" />
-                  <span>Descargar Excel</span>
-                </button>
-                <p className="text-xs text-gray-500 pl-6 mt-0.5">disponible: {gmailStatus.latest_data_date}</p>
-              </div>
-            )}
           </div>
         </PopoverContent>
       </Popover>
