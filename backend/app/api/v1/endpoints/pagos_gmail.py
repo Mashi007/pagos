@@ -318,7 +318,7 @@ def download_excel(fecha: Optional[str] = None, db: Session = Depends(get_db)):
         email_url = (it.drive_email_link or "").strip()
         if email_url and not email_url.startswith("http"):
             email_url = "https://drive.google.com/file/d/" + email_url + "/view"
-        email_text = "Ver email" if email_url else ""
+        email_text = "Ver email" if email_url else ("—" if link_url else "")
         ws.append([
             it.correo_origen or "",
             it.fecha_pago or "",

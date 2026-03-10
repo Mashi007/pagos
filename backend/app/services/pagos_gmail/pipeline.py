@@ -160,7 +160,9 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
             # Guardar correo completo como .eml en Drive para verificación desde Excel
             drive_email_link: Optional[str] = None
             raw_eml = get_message_raw_bytes(gmail_svc, msg_id)
-            if raw_eml:
+            if not raw_eml:
+                logger.warning("[PAGOS_GMAIL]   Email .eml no obtenido (msg_id=%s) — columna «Ver email» quedará vacía", msg_id)
+            else:
                 eml_name = f"email_{msg_id}.eml"
                 up_eml = upload_file(
                     drive_svc, MediaIoBaseUpload, folder_id, eml_name,
@@ -169,6 +171,8 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
                 if up_eml:
                     _, drive_email_link = up_eml
                     logger.warning("[PAGOS_GMAIL]   Email guardado en Drive: %s", eml_name)
+                else:
+                    logger.warning("[PAGOS_GMAIL]   Email .eml no subido a Drive (msg_id=%s) — columna «Ver email» quedará vacía", msg_id)
 
             # Extraer imágenes/PDFs del correo
             attachments = get_all_images_and_files_for_message(gmail_svc, msg_id, full_payload)
