@@ -281,7 +281,8 @@ export default function ReportePagoPage() {
     }
   }
 
-  // Pantalla de bienvenida con instrucciones generales
+  // Pantalla de bienvenida con instrucciones generales (logo y colores RapiCredit: azul oscuro, naranja/marrón)
+  const LOGO_PUBLIC_SRC = `${(import.meta.env.BASE_URL || '/').replace(/\/?$/, '')}/logos/rapicredit-public.png`
   if (step === 0) {
     const steps = [
       { icon: 'id', text: 'Ingrese su número de cédula (V, E, G o J + dígitos).' },
@@ -290,19 +291,19 @@ export default function ReportePagoPage() {
       { icon: 'check', text: 'Revise los datos y envíe. Recibirá confirmación al correo registrado.' },
     ]
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-cyan-50/30 to-slate-100 flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-[#e8eef5] to-slate-100 flex flex-col items-center justify-center p-4">
         <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
           {messageForScreenReader || stepAnnouncement}
         </div>
-        <Card className="w-full max-w-lg shadow-2xl border border-slate-200/80 overflow-hidden">
-          {/* Header con marca */}
-          <div className="bg-gradient-to-r from-cyan-600 to-teal-600 px-6 py-5 text-center">
-            <h1 className="text-2xl font-bold text-white tracking-tight">RapiCredit</h1>
-            <p className="text-cyan-100 text-sm mt-0.5">Reporte de pago</p>
+        <Card className="w-full max-w-lg shadow-2xl border border-[#c4a35a]/30 overflow-hidden">
+          {/* Header con logo RapiCredit (azul oscuro + acento naranja/marrón) */}
+          <div className="bg-[#1e3a5f] px-6 py-5 text-center">
+            <img src={LOGO_PUBLIC_SRC} alt="RapiCredit" className="h-14 mx-auto object-contain" />
+            <p className="text-[#c4a35a] text-sm mt-2 font-medium">Reporte de pago</p>
           </div>
           <CardContent className="p-6 sm:p-8 space-y-6">
             <div className="text-center">
-              <h2 className="text-xl font-semibold text-slate-800">Bienvenido</h2>
+              <h2 className="text-xl font-semibold text-[#1e3a5f]">Bienvenido</h2>
               <p className="text-slate-600 mt-2 text-sm leading-relaxed">
                 Reporte su pago de forma segura para que sea verificado por cobranza.
               </p>
@@ -310,7 +311,7 @@ export default function ReportePagoPage() {
             <ul className="space-y-3" role="list">
               {steps.map((item, i) => (
                 <li key={i} className="flex gap-3 items-start text-sm text-slate-700">
-                  <span className="flex-shrink-0 w-8 h-8 rounded-full bg-cyan-100 text-cyan-700 flex items-center justify-center mt-0.5" aria-hidden>
+                  <span className="flex-shrink-0 w-8 h-8 rounded-full bg-[#1e3a5f]/10 text-[#1e3a5f] flex items-center justify-center mt-0.5" aria-hidden>
                     {item.icon === 'id' && (
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" /></svg>
                     )}
@@ -335,7 +336,7 @@ export default function ReportePagoPage() {
               Si toca por error un enlace al sistema o al login, verá «Acceso prohibido» y podrá volver aquí con el botón Continuar.
             </p>
             <Button
-              className="w-full text-base py-6 font-semibold bg-cyan-600 hover:bg-cyan-700 text-white shadow-md hover:shadow-lg transition-all"
+              className="w-full text-base py-6 font-semibold bg-[#1e3a5f] hover:bg-[#152a47] text-white shadow-md hover:shadow-lg transition-all"
               size="lg"
               onClick={() => setStep(1)}
             >

@@ -1,6 +1,4 @@
-# Logo por defecto
+# Logos
 
-Coloca aquí el archivo **rAPI.png** para que el logo se muestre en login y en el sidebar.
-
-- Nombre del archivo: `rAPI.png` (r minúscula, API mayúscula)
-- Si el archivo no existe, la app mostrará un fallback (icono R en azul)
+- **rAPI.png**: Logo por defecto para login y sidebar (r minúscula, API mayúscula). Si no existe, la app muestra un fallback (icono R en azul).
+- **rapicredit-public.png**: Logo RapiCredit (marca con círculo azul y R blanco) usado en las pantallas públicas: reporte de pago (`/rapicredit-cobros`) y estado de cuenta (`/rapicredit-estadocuenta`). Colores del branding: azul oscuro `#1e3a5f`, naranja/marrón `#c4a35a`.

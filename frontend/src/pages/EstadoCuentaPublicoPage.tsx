@@ -150,17 +150,21 @@ export default function EstadoCuentaPublicoPage() {
       .finally(() => setLoadingPdf(false))
   }, [step, cedula, loadingPdf, pdfDataUrl])
 
-  // Paso 0: Bienvenida
+  // Paso 0: Bienvenida (logo y colores RapiCredit: azul oscuro, naranja/marrón)
+  const LOGO_PUBLIC_SRC = `${(import.meta.env.BASE_URL || '/').replace(/\/?$/, '')}/logos/rapicredit-public.png`
   if (step === 0) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-100 to-slate-200 flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-b from-slate-100 via-[#e8eef5] to-slate-200 flex flex-col items-center justify-center p-4">
         <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
           {stepAnnouncement}
         </div>
-        <Card className="w-full max-w-lg shadow-xl border-2 border-slate-200">
+        <Card className="w-full max-w-lg shadow-xl border-2 border-[#c4a35a]/30">
+          <div className="bg-[#1e3a5f] px-6 py-5 text-center rounded-t-lg">
+            <img src={LOGO_PUBLIC_SRC} alt="RapiCredit" className="h-14 mx-auto object-contain" />
+            <p className="text-[#c4a35a] text-sm mt-2 font-medium">Consulta de estado de cuenta</p>
+          </div>
           <CardHeader className="text-center pb-2">
-            <CardTitle className="text-2xl text-slate-800">Bienvenido</CardTitle>
-            <p className="text-slate-600 mt-1">Consulta de estado de cuenta — RapiCredit</p>
+            <CardTitle className="text-2xl text-[#1e3a5f]">Bienvenido</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
             <p className="text-slate-700 text-center">
@@ -177,7 +181,7 @@ export default function EstadoCuentaPublicoPage() {
             <p className="text-xs text-slate-500 text-center">
               Si toca por error un enlace al sistema o al login, verá «Acceso prohibido» y podrá volver aquí con el botón Continuar.
             </p>
-            <Button className="w-full text-base py-6 font-semibold" size="lg" onClick={() => setStep(1)}>
+            <Button className="w-full text-base py-6 font-semibold bg-[#1e3a5f] hover:bg-[#152a47] text-white" size="lg" onClick={() => setStep(1)}>
               Iniciar
             </Button>
           </CardContent>
