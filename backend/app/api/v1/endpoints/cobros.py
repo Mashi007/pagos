@@ -296,6 +296,22 @@ def rechazar_pago_reportado(
     return {"ok": True, "mensaje": "Pago rechazado y cliente notificado."}
 
 
+@router.delete("/pagos-reportados/{pago_id}")
+def eliminar_pago_reportado(
+    pago_id: int,
+    db: Session = Depends(get_db),
+):
+    """Elimina un pago reportado y su historial (CASCADE). Acción irreversible."""
+    pr = db.execute(select(PagoReportado).where(PagoReportado.id == pago_id)).scalars().first()
+    if not pr:
+        raise HTTPException(status_code=404, detail="Pago reportado no encontrado.")
+    ref = pr.referencia_interna
+    db.delete(pr)
+    db.commit()
+    logger.info("[COBROS] Pago reportado eliminado: id=%s ref=%s", pago_id, ref)
+    return {"ok": True, "mensaje": f"Pago reportado {ref} eliminado."}
+
+
 @router.get("/historico-cliente", response_model=dict)
 def historico_por_cliente(
     cedula: str = Query(..., min_length=6),

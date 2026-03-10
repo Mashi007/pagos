@@ -203,3 +203,8 @@ export async function cambiarEstadoPago(
   const data = await apiClient.patch<{ ok: boolean; mensaje?: string }>(`${BASE_COBROS}/pagos-reportados/${pagoId}/estado`, { estado, motivo })
   return data
 }
+
+export async function eliminarPagoReportado(pagoId: number): Promise<{ ok: boolean; mensaje?: string }> {
+  const data = await apiClient.delete<{ ok: boolean; mensaje?: string }>(`${BASE_COBROS}/pagos-reportados/${pagoId}`)
+  return data
+}

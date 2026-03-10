@@ -402,19 +402,19 @@ Paso 1 — Extraer de la imagen: Lee el comprobante y extrae con precisión esto
 - numero_operacion: número de referencia, serial, operación o comprobante (solo dígitos/código, sin etiquetas).
 - monto: cantidad pagada (número; puede estar en Bs, USD, USDT, etc.).
 - moneda: BS, USD, USDT, etc., según lo que indique el comprobante.
-- cedula_pagador: cédula o RIF del quien paga/deposita (V-, E- o J- + números), si aparece.
+- cedula_pagador: cédula o RIF del quien paga/deposita. Normaliza siempre a tipo (V, E o J) + solo dígitos, sin guiones ni espacios (ej. V-12345678 → V12345678).
 
-Paso 2 — Comparar campo por campo: Para cada uno de los datos anteriores que hayas extraído, compáralo con el valor que la persona ingresó en el formulario. Considera:
+Paso 2 — Comparar campo por campo: Para cada uno de los datos anteriores que hayas extraído, compáralo con el valor del formulario. Reglas:
 - Fecha: misma fecha (ignorar formato distinto si el día/mes/año coinciden).
 - Institución: mismo banco o entidad (sinónimos o nombre abreviado = válido).
 - Número de operación: mismo número o código (ignorar espacios o guiones intermedios).
 - Monto: mismo valor numérico; misma moneda o equivalente (BS vs Bs, USD vs US$).
-- Cédula: mismo tipo (V/E/J) y mismo número (ignorar guiones o espacios).
+- Cédula (IMPORTANTE): considerar COINCIDE si el tipo (V, E o J) y los dígitos del número son idénticos. El guión y los espacios NO son divergencia: V-25677920, V25677920 y V 25677920 son el mismo documento. Normaliza ambos lados (imagen y formulario) a "tipo + dígitos" sin guión antes de comparar. No marques false solo por diferencia de formato (con/sin guión).
 
 Paso 3 — Decidir:
-- coincide_exacto = true SOLO si TODOS los campos que se pueden verificar en la imagen coinciden con lo ingresado en el formulario. Si la cédula no aparece en el comprobante, no la uses para marcar false.
-- coincide_exacto = false si CUALQUIER campo extraído de la imagen NO coincide con el formulario, o si no puedes leer con claridad algún dato necesario.
-- comentario: si coincide_exacto = false, es OBLIGATORIO explicar qué campo(s) no coinciden. Indica "En imagen: X. En formulario: Y" para cada divergencia. Si coincide_exacto = true, puedes poner "Todos los campos coinciden".
+- coincide_exacto = true SOLO si TODOS los campos que se pueden verificar en la imagen coinciden con lo ingresado en el formulario (para cédula: mismo tipo y mismos dígitos; el guión no cuenta). Si la cédula no aparece en el comprobante, no la uses para marcar false.
+- coincide_exacto = false si CUALQUIER campo extraído de la imagen NO coincide con el formulario (comparando valores normalizados), o si no puedes leer con claridad algún dato necesario. No marques false por cédula si solo difiere el guión (V-123 vs V123 = coinciden).
+- comentario: si coincide_exacto = false, es OBLIGATORIO explicar qué campo(s) no coinciden. Indica "En imagen: X. En formulario: Y" para cada divergencia real. No menciones el guión como problema. Si coincide_exacto = true, puedes poner "Todos los campos coinciden".
 
 Responde ÚNICAMENTE con un JSON válido, sin markdown ni texto antes o después:
 {"coincide_exacto": true o false, "requiere_revision_humana": true o false, "comentario": "explicación breve indicando qué campos coinciden o cuáles divergen (en imagen vs formulario)"}
@@ -442,13 +442,17 @@ def compare_form_with_image(
     if not key or not str(key).strip():
         logger.warning("[COBROS] GEMINI_API_KEY no configurado para comparar formulario vs imagen.")
         return default_result
+    # Cédula: formato estándar sin guión (tipo + dígitos) para evitar falsas divergencias por guión
+    tipo_c = (form_data.get("tipo_cedula") or "").strip().upper()
+    num_c = (form_data.get("numero_cedula") or "").strip()
+    cedula_estandar = f"{tipo_c}{num_c}" if (tipo_c and num_c) else (form_data.get("tipo_cedula") or "") + (form_data.get("numero_cedula") or "")
     text_data = (
         "Valores ingresados manualmente en el formulario (compara cada uno con lo que leas en la imagen):\n"
         f"- fecha_pago: {form_data.get('fecha_pago')}\n"
         f"- institucion_financiera: {form_data.get('institucion_financiera')}\n"
         f"- numero_operacion: {form_data.get('numero_operacion')}\n"
         f"- monto: {form_data.get('monto')} {form_data.get('moneda', 'BS')}\n"
-        f"- cedula (tipo + número): {form_data.get('tipo_cedula')}-{form_data.get('numero_cedula')}\n"
+        f"- cedula (tipo + número, sin guión): {cedula_estandar}\n"
     )
     prompt = GEMINI_COMPARAR_PROMPT_PREFIX + "\n\n" + text_data
     model_name = getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash")

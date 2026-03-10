@@ -8,6 +8,7 @@ import {
   enviarReciboManual,
   cambiarEstadoPago,
   openComprobanteInNewTab,
+  eliminarPagoReportado,
   type PagoReportadoItem,
   type ListPagosReportadosResponse,
 } from '../services/cobrosService'
@@ -16,14 +17,14 @@ import { Input } from '../components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import toast from 'react-hot-toast'
-import { Mail, Loader2, Eye, FileText, Settings } from 'lucide-react'
+import { Mail, Loader2, Eye, FileText, Settings, Clock, Search, CheckCircle, XCircle, Trash2, type LucideIcon } from 'lucide-react'
 import { PUBLIC_REPORTE_PAGO_PATH } from '../config/env'
 
-const ESTADO_BADGE: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
-  pendiente: { label: 'Pendiente 🟡', variant: 'secondary' },
-  en_revision: { label: 'En revisión (manual) 🟠', variant: 'outline' },
-  aprobado: { label: 'Aprobado 🟢', variant: 'default' },
-  rechazado: { label: 'Rechazado 🔴', variant: 'destructive' },
+const ESTADO_CONFIG: Record<string, { label: string; short: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; Icon: LucideIcon }> = {
+  pendiente: { label: 'Pendiente', short: 'Pend.', variant: 'secondary', Icon: Clock },
+  en_revision: { label: 'En revisión (manual)', short: 'Revisión', variant: 'outline', Icon: Search },
+  aprobado: { label: 'Aprobado', short: 'Aprobado', variant: 'default', Icon: CheckCircle },
+  rechazado: { label: 'Rechazado', short: 'Rechazado', variant: 'destructive', Icon: XCircle },
 }
 
 export default function CobrosPagosReportadosPage() {
@@ -39,6 +40,7 @@ export default function CobrosPagosReportadosPage() {
   const [sendingId, setSendingId] = useState<number | null>(null)
   const [changingEstadoId, setChangingEstadoId] = useState<number | null>(null)
   const [viewingComprobanteId, setViewingComprobanteId] = useState<number | null>(null)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
 
   const load = async () => {
     setLoading(true)
@@ -87,6 +89,20 @@ export default function CobrosPagosReportadosPage() {
       toast.error(e?.message || 'Error al actualizar.')
     } finally {
       setChangingEstadoId(null)
+    }
+  }
+
+  const handleEliminar = async (id: number, ref: string) => {
+    if (!window.confirm(`¿Eliminar el pago reportado ${ref}? Esta acción no se puede deshacer.`)) return
+    setDeletingId(id)
+    try {
+      await eliminarPagoReportado(id)
+      toast.success('Pago reportado eliminado.')
+      load()
+    } catch (e: any) {
+      toast.error(e?.message || 'Error al eliminar.')
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -196,14 +212,21 @@ export default function CobrosPagosReportadosPage() {
                       <td className="py-2 text-right">{row.monto} {row.moneda}</td>
                       <td className="py-2">{row.fecha_pago}</td>
                       <td className="py-2">{row.numero_operacion}</td>
-                      <td className="py-2">{new Date(row.fecha_reporte).toLocaleString()}</td>
+                      <td className="py-2">{new Date(row.fecha_reporte).toLocaleDateString()}</td>
                       <td className="py-2 max-w-[220px]" title={row.observacion ?? ''}>
                         {row.observacion ? <span className="text-amber-700 text-xs line-clamp-2">{row.observacion}</span> : '—'}
                       </td>
-                      <td className="py-2">
-                        <Badge variant={ESTADO_BADGE[row.estado]?.variant ?? 'outline'}>
-                          {ESTADO_BADGE[row.estado]?.label ?? row.estado}
-                        </Badge>
+                      <td className="py-2 whitespace-nowrap">
+                        {(() => {
+                          const cfg = ESTADO_CONFIG[row.estado] ?? { label: row.estado, short: row.estado, variant: 'outline' as const, Icon: Clock }
+                          const Icon = cfg.Icon
+                          return (
+                            <Badge variant={cfg.variant} className="inline-flex items-center gap-1 font-normal" title={cfg.label}>
+                              <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                              <span>{cfg.short}</span>
+                            </Badge>
+                          )
+                        })()}
                       </td>
                       <td className="py-2">
                         <div className="flex flex-wrap gap-0.5 items-center">
@@ -243,6 +266,9 @@ export default function CobrosPagosReportadosPage() {
                           </div>
                           <Button variant="ghost" size="icon" className="h-8 w-8" title="Enviar recibo PDF por correo" onClick={() => handleEnviarRecibo(row.id)} disabled={sendingId === row.id}>
                             {sendingId === row.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" title="Eliminar" onClick={() => handleEliminar(row.id, row.referencia_interna)} disabled={deletingId === row.id}>
+                            {deletingId === row.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                           </Button>
                         </div>
                       </td>
