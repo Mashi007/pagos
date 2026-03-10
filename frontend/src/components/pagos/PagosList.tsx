@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   CreditCard,
@@ -67,12 +67,36 @@ export function PagosList() {
   const [isExportingRevisar, setIsExportingRevisar] = useState(false)
   const [showConfirmarBorrar, setShowConfirmarBorrar] = useState(false)
   const queryClient = useQueryClient()
+  const lastRunForWhichWeShowedDialogRef = useRef<string | null>(null)
 
   const { loading: loadingGmail, gmailStatus, setGmailStatus, run: runGmail } = useGmailPipeline({
-    onStatusUpdate: (s) => setGmailStatus(s),
-    onDone: () => setShowConfirmarBorrar(true),
+    onStatusUpdate: (s) => {
+      setGmailStatus(s)
+      if (s?.last_status === 'success' && s?.latest_data_date && s?.last_run) {
+        if (lastRunForWhichWeShowedDialogRef.current !== s.last_run) {
+          lastRunForWhichWeShowedDialogRef.current = s.last_run
+          setShowConfirmarBorrar(true)
+        }
+      }
+    },
+    onDone: (s) => {
+      if (s?.last_run) lastRunForWhichWeShowedDialogRef.current = s.last_run
+      setShowConfirmarBorrar(true)
+    },
   })
 
+  // Cargar estado Gmail al montar; si ya hay éxito con datos, mostrar diálogo Sí/No
+  useEffect(() => {
+    pagoService.getGmailStatus().then((s) => {
+      setGmailStatus(s)
+      if (s?.last_status === 'success' && s?.latest_data_date && s?.last_run) {
+        if (lastRunForWhichWeShowedDialogRef.current !== s.last_run) {
+          lastRunForWhichWeShowedDialogRef.current = s.last_run
+          setShowConfirmarBorrar(true)
+        }
+      }
+    }).catch(() => setGmailStatus(null))
+  }, [])
   useEffect(() => {
     if (!agregarPagoOpen) return
     pagoService.getGmailStatus().then(setGmailStatus).catch(() => setGmailStatus(null))
@@ -328,6 +352,19 @@ export function PagosList() {
                   <span>{loadingGmail ? 'Generando...' : 'Generar Excel desde Gmail'}</span>
                   <span className="text-xs text-gray-500 ml-auto">Gmail</span>
                 </button>
+                {gmailStatus?.latest_data_date && (
+                  <button
+                    type="button"
+                    className="w-full flex items-center gap-3 px-4 py-3 text-left rounded-md hover:bg-blue-50"
+                    onClick={() => {
+                      setShowConfirmarBorrar(true)
+                      setAgregarPagoOpen(false)
+                    }}
+                  >
+                    <Download className="w-5 h-5 text-gray-600" />
+                    <span>Descargar Excel (datos del {gmailStatus.latest_data_date})</span>
+                  </button>
+                )}
               </div>
             </PopoverContent>
           </Popover>

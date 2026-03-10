@@ -31,11 +31,10 @@ router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 def _is_pipeline_running(db: Session) -> bool:
-    """True si hay una sync en estado running iniciada en los últimos N minutos (2× intervalo del cron)."""
-    from app.core.config import settings
-    cron_min = settings.PAGOS_GMAIL_CRON_MINUTES
-    # 5 min: si el pipeline no termina en 5 min (SIGTERM/crash), se considera huérfano
-    cutoff = datetime.utcnow() - timedelta(minutes=5)
+    """True si hay una sync en estado running. Solo se ignora si lleva >2h (huérfano por crash)."""
+    # Ventana larga (2 h): evita que un pipeline legítimo deje de contar como "running"
+    # y permita lanzar otro (doble ejecución). Huérfanos por crash se ignoran tras 2 h.
+    cutoff = datetime.utcnow() - timedelta(hours=2)
     row = db.execute(
         select(PagosGmailSync).where(
             and_(

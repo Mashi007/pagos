@@ -23,14 +23,16 @@ interface UseGmailPipelineOptions {
   onStatusUpdate?: (status: GmailStatus) => void
 }
 
-const POLL_INTERVAL_MS = 4000
-const POLL_MAX_ATTEMPTS = 150 // 150 × 4s = 10 min máximo de espera
+const POLL_INTERVAL_MS = 5000
+const POLL_MAX_ATTEMPTS = 300 // 300 × 5s = 25 min máximo de espera (pipeline con muchos correos)
 
 export function useGmailPipeline({ onDone, onStatusUpdate }: UseGmailPipelineOptions = {}) {
   const [loading, setLoading] = useState(false)
   const [gmailStatus, setGmailStatus] = useState<GmailStatus | null>(null)
   const pollingRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const abortedRef = useRef(false)
+  const onDoneRef = useRef(onDone)
+  onDoneRef.current = onDone
 
   const stopPolling = useCallback(() => {
     if (pollingRef.current) {
@@ -62,7 +64,7 @@ export function useGmailPipeline({ onDone, onStatusUpdate }: UseGmailPipelineOpt
               if (hasData) {
                 // Datos de una ejecución anterior disponibles para descargar
                 toast(`Sin correos nuevos. Hay datos del ${s.latest_data_date} listos para descargar.`, { duration: 7000 })
-                onDone?.(s)
+                onDoneRef.current?.(s)
               } else {
                 toast('No se encontraron correos para procesar. Revise que haya correos no leídos con adjuntos (imagen/PDF).', { duration: 6000 })
                 // Sin datos: no abrir el diálogo de descarga
@@ -70,19 +72,26 @@ export function useGmailPipeline({ onDone, onStatusUpdate }: UseGmailPipelineOpt
             } else {
               const dateHint = s.latest_data_date ? ` (fecha correo: ${s.latest_data_date})` : ''
               toast.success(`Listo: ${emails} correo(s), ${files} archivo(s) procesados.${dateHint}`)
-              onDone?.(s)
+              onDoneRef.current?.(s)
             }
             return
           }
           if (attempt >= POLL_MAX_ATTEMPTS) {
             setLoading(false)
             const processed = s.last_emails ?? 0
-            toast(
-              `El procesamiento sigue en curso (${processed} correo(s) procesados hasta ahora). ` +
-              'Espere unos minutos y pulse «Generar Excel desde Gmail» de nuevo para descargar.',
-              { duration: 12000 }
-            )
-            // Pipeline aún en curso: no abrir diálogo de descarga para evitar 404
+            const hasData = !!(s.latest_data_date)
+            if (hasData) {
+              toast.success(
+                `Procesamiento en curso (${processed} correo(s) hasta ahora). Puede descargar ya los datos disponibles.`,
+                { duration: 8000 }
+              )
+              onDoneRef.current?.(s)
+            } else {
+              toast(
+                `El procesamiento sigue en curso (${processed} correo(s)). Espere y vuelva a intentar descargar.`,
+                { duration: 10000 }
+              )
+            }
             return
           }
           _pollStatus(attempt + 1)
@@ -95,7 +104,7 @@ export function useGmailPipeline({ onDone, onStatusUpdate }: UseGmailPipelineOpt
         }
       }, POLL_INTERVAL_MS)
     },
-    [onDone, onStatusUpdate]
+    [onStatusUpdate]
   )
 
   const run = useCallback(async () => {

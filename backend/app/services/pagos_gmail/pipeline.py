@@ -96,7 +96,18 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
 
     try:
         logger.warning("[PAGOS_GMAIL] → Listando correos no leídos en Gmail...")
-        messages = list_unread_with_attachments(gmail_svc)
+        raw_messages = list_unread_with_attachments(gmail_svc)
+        # Evitar procesar el mismo mensaje dos veces (Gmail API o listado puede devolver duplicados)
+        seen_ids: set[str] = set()
+        messages = []
+        for m in raw_messages:
+            mid = m["id"]
+            if mid in seen_ids:
+                continue
+            seen_ids.add(mid)
+            messages.append(m)
+        if len(messages) < len(raw_messages):
+            logger.warning("[PAGOS_GMAIL] ℹ Duplicados eliminados: %d → %d mensajes únicos", len(raw_messages), len(messages))
         max_emails = getattr(settings, "PAGOS_GMAIL_MAX_EMAILS_PER_RUN", 0)
         total_unread = len(messages)
         logger.warning("[PAGOS_GMAIL] ✓ Correos no leídos: %d (máx por ejecución: %s)", total_unread, max_emails or "sin límite")

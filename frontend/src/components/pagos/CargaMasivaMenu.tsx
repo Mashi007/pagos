@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { Upload, FileSpreadsheet, CheckCircle, ChevronDown, Mail } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Upload, FileSpreadsheet, CheckCircle, ChevronDown, Mail, Download } from 'lucide-react'
 import { Button } from '../../components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover'
 import { ExcelUploaderPagosUI } from './ExcelUploaderPagosUI'
@@ -20,12 +20,35 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
   const [showConciliacion, setShowConciliacion] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
   const [showConfirmarBorrar, setShowConfirmarBorrar] = useState(false)
+  const lastRunForWhichWeShowedDialogRef = useRef<string | null>(null)
 
   const { loading: loadingGmail, gmailStatus, setGmailStatus, run: runGmail } = useGmailPipeline({
-    onStatusUpdate: (s) => setGmailStatus(s),
-    onDone: () => setShowConfirmarBorrar(true),
+    onStatusUpdate: (s) => {
+      setGmailStatus(s)
+      if (s?.last_status === 'success' && s?.latest_data_date && s?.last_run) {
+        if (lastRunForWhichWeShowedDialogRef.current !== s.last_run) {
+          lastRunForWhichWeShowedDialogRef.current = s.last_run
+          setShowConfirmarBorrar(true)
+        }
+      }
+    },
+    onDone: (s) => {
+      if (s?.last_run) lastRunForWhichWeShowedDialogRef.current = s.last_run
+      setShowConfirmarBorrar(true)
+    },
   })
 
+  useEffect(() => {
+    pagoService.getGmailStatus().then((s) => {
+      setGmailStatus(s)
+      if (s?.last_status === 'success' && s?.latest_data_date && s?.last_run) {
+        if (lastRunForWhichWeShowedDialogRef.current !== s.last_run) {
+          lastRunForWhichWeShowedDialogRef.current = s.last_run
+          setShowConfirmarBorrar(true)
+        }
+      }
+    }).catch(() => setGmailStatus(null))
+  }, [])
   useEffect(() => {
     if (!isOpen) return
     pagoService.getGmailStatus().then(setGmailStatus).catch(() => setGmailStatus(null))
@@ -89,6 +112,19 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
               <Mail className="w-4 h-4 mr-2" />
               {loadingGmail ? 'Generando...' : 'Generar Excel desde Gmail'}
             </button>
+            {gmailStatus?.latest_data_date && (
+              <button
+                type="button"
+                className="w-full flex items-center px-3 py-2.5 text-sm rounded-md hover:bg-gray-100 transition-colors"
+                onClick={() => {
+                  setShowConfirmarBorrar(true)
+                  setIsOpen(false)
+                }}
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Descargar Excel ({gmailStatus.latest_data_date})
+              </button>
+            )}
           </div>
         </PopoverContent>
       </Popover>
