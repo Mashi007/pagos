@@ -117,9 +117,28 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
             messages = messages[:max_emails]
             logger.warning("[PAGOS_GMAIL] ℹ Limitado a %d correos (de %d no leídos)", max_emails, total_unread)
 
+        # Ronda 1 = lote inicial; ronda 2 = revisión final por si algún correo quedó no leído (p. ej. corrección)
+        rounds: list[list[dict]] = [messages]
+        raw_second = list_unread_with_attachments(gmail_svc)
+        seen_second: set[str] = set()
+        second_batch: list[dict] = []
+        for m in raw_second:
+            if m["id"] in seen_second:
+                continue
+            seen_second.add(m["id"])
+            second_batch.append(m)
+        if second_batch:
+            logger.warning("[PAGOS_GMAIL] Revisión final: %d correo(s) sin leer — procesando en esta ejecución", len(second_batch))
+            if max_emails and max_emails > 0 and len(second_batch) > max_emails:
+                second_batch = second_batch[:max_emails]
+            rounds.append(second_batch)
+
         delay_gemini = getattr(settings, "PAGOS_GMAIL_DELAY_BETWEEN_GEMINI_SECONDS", 0) or 0
 
-        for msg_info in messages:
+        for round_idx, message_batch in enumerate(rounds):
+            if round_idx == 1:
+                logger.warning("[PAGOS_GMAIL] ── Iniciando revisión final de no leídos")
+            for msg_info in message_batch:
             msg_id = msg_info["id"]
             payload = msg_info["payload"]
             headers = msg_info["headers"]
