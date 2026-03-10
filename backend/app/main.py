@@ -124,10 +124,27 @@ def _startup_db_with_retry(engine, max_attempts: int = 10, delay_sec: float = 3.
                 result = conn.execute(text("SELECT COUNT(*) FROM prestamos"))
                 count = result.scalar()
                 logger.info(f"[DB Startup] Tabla 'prestamos' contiene {count} registros.")
-            
+
             logger.info("[DB Startup] ✅ BASE DE DATOS INICIALIZADA CORRECTAMENTE")
+
+            # Migración en caliente: columna drive_email_link (link al .eml en Drive) si no existe
+            try:
+                with engine.connect() as conn:
+                    r = conn.execute(text("""
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_name = 'pagos_gmail_sync_item' AND column_name = 'drive_email_link'
+                    """))
+                    if r.fetchone() is None:
+                        conn.execute(text(
+                            "ALTER TABLE pagos_gmail_sync_item ADD COLUMN drive_email_link VARCHAR(500) NULL"
+                        ))
+                        conn.commit()
+                        logger.info("[DB Startup] Columna pagos_gmail_sync_item.drive_email_link añadida.")
+            except Exception as col_err:
+                logger.warning("[DB Startup] drive_email_link (no crítico): %s", col_err)
+
             return
-            
+
         except Exception as e:
             last_error = e
             logger.warning(
