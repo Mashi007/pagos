@@ -397,15 +397,15 @@ GEMINI_COMPARAR_PROMPT_PREFIX = """Eres un revisor de comprobantes de pago. Reci
 INSTRUCCIONES:
 
 Paso 1 — Extraer de la imagen: Lee el comprobante y extrae con precisión estos datos (los que aparezcan):
-- fecha_pago: fecha de la operación/transacción (dd/mm/yyyy o como figure).
+- fecha_pago: fecha de la operación/transacción que aparece en el comprobante (día, mes y año). Puede estar en cualquier formato (dd/mm/yyyy, yyyy-mm-dd, texto, etc.). Este valor se comparará con la fecha que la persona ingresó en el formulario.
 - institucion_financiera: nombre del banco o entidad (ej. Banesco, Mercantil, BNC, BDV, Pago Móvil).
 - numero_operacion: número de referencia, serial, operación o comprobante (solo dígitos/código, sin etiquetas).
 - monto: cantidad pagada (número; puede estar en Bs, USD, USDT, etc.).
 - moneda: BS, USD, USDT, etc., según lo que indique el comprobante.
 - cedula_pagador: cédula o RIF del quien paga/deposita. Normaliza siempre a tipo (V, E o J) + solo dígitos, sin guiones ni espacios (ej. V-12345678 → V12345678).
 
-Paso 2 — Comparar campo por campo: Para cada uno de los datos anteriores que hayas extraído, compáralo con el valor del formulario. Reglas:
-- Fecha: misma fecha (ignorar formato distinto si el día/mes/año coinciden).
+Paso 2 — Comparar campo por campo: Para cada dato extraído de la imagen, compáralo con el valor que la persona ingresó en el formulario (listado abajo). Reglas:
+- Fecha pago (OBLIGATORIO comparar): La fecha ingresada manualmente en el formulario debe coincidir con la fecha de la operación que aparece en la imagen. Comparar día, mes y año; si alguno difiere, es divergencia (incluir "Fecha pago" en comentario). Ignorar solo el formato (ej. 10/03/2026 vs 2026-03-10 = misma fecha).
 - Institución: mismo banco o entidad (sinónimos o nombre abreviado = válido).
 - Número de operación: mismo número o código (ignorar espacios o guiones intermedios).
 - Monto: mismo valor numérico; misma moneda o equivalente (BS vs Bs, USD vs US$).
@@ -414,10 +414,10 @@ Paso 2 — Comparar campo por campo: Para cada uno de los datos anteriores que h
 Paso 3 — Decidir:
 - coincide_exacto = true SOLO si TODOS los campos que se pueden verificar en la imagen coinciden con lo ingresado en el formulario (para cédula: mismo tipo y mismos dígitos; el guión no cuenta). Si la cédula no aparece en el comprobante, no la uses para marcar false.
 - coincide_exacto = false si CUALQUIER campo extraído de la imagen NO coincide con el formulario (comparando valores normalizados), o si no puedes leer con claridad algún dato necesario. No marques false por cédula si solo difiere el guión (V-123 vs V123 = coinciden).
-- comentario: si coincide_exacto = false, es OBLIGATORIO explicar qué campo(s) no coinciden. Indica "En imagen: X. En formulario: Y" para cada divergencia real. No menciones el guión como problema. Si coincide_exacto = true, puedes poner "Todos los campos coinciden".
+- comentario: si coincide_exacto = false, es OBLIGATORIO indicar SOLO los nombres de las columnas que no coinciden, separados por coma. Usa EXACTAMENTE estos nombres: Cédula, Banco, Fecha pago, Nº operación, Monto, Moneda. Sin explicaciones, sin "en imagen" ni "en formulario". Ejemplo: "Monto, Fecha pago". Si coincide_exacto = true, deja comentario vacío o "".
 
 Responde ÚNICAMENTE con un JSON válido, sin markdown ni texto antes o después:
-{"coincide_exacto": true o false, "requiere_revision_humana": true o false, "comentario": "explicación breve indicando qué campos coinciden o cuáles divergen (en imagen vs formulario)"}
+{"coincide_exacto": true o false, "requiere_revision_humana": true o false, "comentario": "solo nombres de columnas separados por coma: Cédula, Banco, Fecha pago, Nº operación, Monto, Moneda"}
 """
 
 
@@ -477,10 +477,24 @@ def compare_form_with_image(
                     json_str = m.group(0) if m else None
                 if json_str:
                     data = json.loads(json_str)
+                    comentario = str(data.get("comentario", ""))[:500]
+                    coincide = bool(data.get("coincide_exacto"))
+                    # Filtro: si Gemini reporta divergencia solo por guión/prefijo en cédula, ignorar (falsa alarma)
+                    if not coincide and comentario:
+                        lower = comentario.lower()
+                        solo_cedula_guion = (
+                            ("v-" in lower or "guión" in lower or "guion" in lower or "prefijo" in lower)
+                            and ("cédula" in lower or "cedula" in lower or "formulario" in lower)
+                            and not any(k in lower for k in ("monto", "fecha", "operación", "operacion", "banco", "institución", "numero"))
+                        )
+                        if solo_cedula_guion:
+                            coincide = True
+                            comentario = ""
+                            logger.info("[COBROS] Gemini: divergencia solo por formato cédula (guión); ignorada.")
                     return {
-                        "coincide_exacto": bool(data.get("coincide_exacto")),
-                        "requiere_revision_humana": bool(data.get("requiere_revision_humana", True)),
-                        "comentario": str(data.get("comentario", ""))[:500],
+                        "coincide_exacto": coincide,
+                        "requiere_revision_humana": not coincide,
+                        "comentario": comentario,
                     }
                 return default_result
             except Exception as e:

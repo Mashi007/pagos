@@ -83,6 +83,35 @@ class AprobarRechazarBody(BaseModel):
     motivo: Optional[str] = None  # Obligatorio si rechaza
 
 
+# Nombres de columnas para Observación (solo mostrar estos en el listado)
+OBSERVACION_COLUMNAS = ["Cédula", "Banco", "Fecha pago", "Nº operación", "Monto", "Moneda"]
+
+
+def _observacion_solo_columnas(raw: Optional[str]) -> Optional[str]:
+    """Devuelve la observación mostrando solo nombres de columnas. Si raw ya es una lista corta de columnas, la devuelve; si es texto largo, extrae columnas por palabras clave."""
+    if not raw or not (raw := raw.strip()):
+        return None
+    # Si ya parece lista de columnas (corta, sin frases largas)
+    if len(raw) <= 80 and not any(x in raw for x in ("en la imagen", "en el formulario", "mientras que", "incluye el", "no coincide")):
+        return raw
+    # Extraer columnas por palabras clave (registros antiguos con texto largo)
+    lower = raw.lower()
+    columnas = []
+    if "cédula" in lower or "cedula" in lower:
+        columnas.append("Cédula")
+    if "banco" in lower or "institución" in lower or "institucion" in lower or "financiera" in lower:
+        columnas.append("Banco")
+    if "fecha" in lower and ("pago" in lower or "operación" not in lower):
+        columnas.append("Fecha pago")
+    if "operación" in lower or "operacion" in lower or "referencia" in lower or "serial" in lower:
+        columnas.append("Nº operación")
+    if "monto" in lower or "cantidad" in lower:
+        columnas.append("Monto")
+    if "moneda" in lower:
+        columnas.append("Moneda")
+    return ", ".join(columnas) if columnas else raw[:100]
+
+
 @router.get("/pagos-reportados", response_model=dict)
 def list_pagos_reportados(
     db: Session = Depends(get_db),
@@ -147,7 +176,7 @@ def list_pagos_reportados(
             fecha_reporte=r.created_at,
             estado=r.estado,
             gemini_coincide_exacto=r.gemini_coincide_exacto,
-            observacion=r.gemini_comentario,
+            observacion=_observacion_solo_columnas(r.gemini_comentario),
         ))
     return {"items": items, "total": total, "page": page, "per_page": per_page}
 
