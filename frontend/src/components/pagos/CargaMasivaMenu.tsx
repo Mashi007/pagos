@@ -124,6 +124,9 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
               <Mail className="w-4 h-4 mr-2" />
               {loadingGmail ? 'Generando...' : 'Generar Excel desde Gmail'}
             </button>
+            <p className="text-xs text-gray-500 px-2 py-1 mt-1 border-t border-gray-100">
+              Solo no leídos (cualquier fecha). Al terminar se vuelve a revisar la bandeja por si hay más.
+            </p>
           </div>
         </PopoverContent>
       </Popover>

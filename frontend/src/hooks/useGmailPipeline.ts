@@ -63,10 +63,16 @@ export function useGmailPipeline({ onDone, onStatusUpdate }: UseGmailPipelineOpt
             } else if (emails === 0 && files === 0) {
               if (hasData) {
                 // Datos de una ejecución anterior disponibles para descargar
-                toast(`Sin correos nuevos. Hay datos del ${s.latest_data_date} listos para descargar.`, { duration: 7000 })
+                toast(
+                  `Sin correos nuevos (solo se procesan no leídos; al terminar se vuelve a revisar la bandeja). Hay datos del ${s.latest_data_date} listos para descargar.`,
+                  { duration: 8000 }
+                )
                 onDoneRef.current?.(s)
               } else {
-                toast('No se encontraron correos para procesar. Revise que haya correos no leídos con adjuntos (imagen/PDF).', { duration: 6000 })
+                toast(
+                  'No se encontraron correos para procesar. Regla: solo mensajes NO LEÍDOS con adjuntos (imagen/PDF). Cualquier fecha. Marque como no leído si quiere reprocesar.',
+                  { duration: 7000 }
+                )
                 // Sin datos: no abrir el diálogo de descarga
               }
             } else {
