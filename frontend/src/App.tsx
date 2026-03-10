@@ -8,14 +8,22 @@ import { Layout } from './components/layout/Layout'
 // Auth
 import { SimpleProtectedRoute } from './components/auth/SimpleProtectedRoute'
 import { useSimpleAuth } from './store/simpleAuthStore'
+import { BASE_PATH } from './config/env'
 
-/** En rutas públicas (/, /login) solo muestra el Outlet. En el resto muestra Layout con Outlet para que el dashboard y demás carguen.
- * Con basename="/pagos", location.pathname es relativo al basename: "/" para raíz, "/login" para login (no incluye /pagos). */
+/** Rutas que no requieren login: solo formulario de reporte de pago y login. El resto usa Layout con sidebar (protegido). */
+const PUBLIC_PATHS = ['/', '/login', '/reporte-pago', '/rapicredit']
+
+/** En rutas públicas solo muestra el Outlet (sin Layout). En el resto muestra Layout con sidebar (protegido).
+ * Con basename="/pagos", location.pathname en el navegador puede ser "/pagos/rapicredit"; normalizamos quitando
+ * el basename para que un usuario ajeno solo vea el formulario público y no el resto de la app. */
 function RootLayoutWrapper() {
   const location = useLocation()
   useSimpleAuth()
-  const pathname = location.pathname.replace(/\/$/, '') || '/'
-  const isPublic = pathname === '/' || pathname === '/login' || pathname === '/reporte-pago' || pathname === '/rapicredit'
+  let pathname = (location.pathname || '').replace(/\/$/, '') || '/'
+  if (BASE_PATH && pathname.startsWith(BASE_PATH)) {
+    pathname = pathname.slice(BASE_PATH.length) || '/'
+  }
+  const isPublic = PUBLIC_PATHS.some(p => pathname === p)
   if (isPublic) return <Outlet />
   return (
     <SimpleProtectedRoute>
