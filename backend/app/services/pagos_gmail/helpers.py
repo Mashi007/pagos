@@ -171,11 +171,11 @@ def normalizar_referencia(ref: Optional[str]) -> str:
 
 def formatear_cedula(cedula: Optional[str]) -> str:
     """
-    Aplica formato venezolano a la cédula extraída por Gemini:
+    Aplica formato venezolano a la cédula extraída por Gemini (sin guion entre letra y números):
     - Vacío / NA      → devuelve tal cual.
-    - Solo dígitos    → quita ceros iniciales y antepone V-  (ej. '030145077' → 'V-30145077').
-    - Prefijo E o J   → normaliza a E-XXXXXXX / J-XXXXXXX   (ej. 'E12345678' → 'E-12345678').
-    - Prefijo V       → normaliza quitando ceros             (ej. 'V-030145077' → 'V-30145077').
+    - Solo dígitos    → quita ceros iniciales y antepone V  (ej. '030145077' → 'V30145077').
+    - Prefijo E o J   → normaliza a EXXXXXXX / JXXXXXXX     (ej. 'E12345678' → 'E12345678').
+    - Prefijo V       → normaliza quitando ceros            (ej. 'V-030145077' → 'V30145077').
     - Valor no reconocido → devuelve sin modificar.
     """
     v = (cedula or "").strip()
@@ -185,10 +185,10 @@ def formatear_cedula(cedula: Optional[str]) -> str:
     if m:
         prefix = m.group(1).upper()
         digits = m.group(2).lstrip("0") or "0"
-        return f"{prefix}-{digits}"
+        return f"{prefix}{digits}"
     if re.match(r"^\d+$", v):
         digits = v.lstrip("0") or "0"
-        return f"V-{digits}"
+        return f"V{digits}"
     return v
 
 

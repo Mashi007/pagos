@@ -36,6 +36,7 @@ from app.services.pagos_gmail.gmail_service import (
     mark_as_read,
 )
 from app.services.pagos_gmail.gemini_service import extract_payment_data, PAGOS_NA
+from app.services.pagos_gmail.email_to_pdf import eml_bytes_to_pdf
 from app.services.pagos_gmail.helpers import (
     extract_sender_email,
     formatear_cedula,
@@ -157,22 +158,26 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
                     subject = forwarded_raw
                 logger.warning("[PAGOS_GMAIL]   Fwd detectado → correo_origen=%s", sender[:60])
 
-            # Guardar correo completo como .eml en Drive para verificación desde Excel
+            # Guardar correo como PDF en Drive para «Ver email»: abrir directo en navegador y corregir columnas
             drive_email_link: Optional[str] = None
             raw_eml = get_message_raw_bytes(gmail_svc, msg_id)
             if not raw_eml:
-                logger.warning("[PAGOS_GMAIL]   Email .eml no obtenido (msg_id=%s) — columna «Ver email» quedará vacía", msg_id)
+                logger.warning("[PAGOS_GMAIL]   Email no obtenido (msg_id=%s) — columna «Ver email» quedará vacía", msg_id)
             else:
-                eml_name = f"email_{msg_id}.eml"
-                up_eml = upload_file(
-                    drive_svc, MediaIoBaseUpload, folder_id, eml_name,
-                    raw_eml, "message/rfc822",
-                )
-                if up_eml:
-                    _, drive_email_link = up_eml
-                    logger.warning("[PAGOS_GMAIL]   Email guardado en Drive: %s", eml_name)
+                pdf_bytes = eml_bytes_to_pdf(raw_eml)
+                if pdf_bytes:
+                    pdf_name = f"email_{msg_id}.pdf"
+                    up_pdf = upload_file(
+                        drive_svc, MediaIoBaseUpload, folder_id, pdf_name,
+                        pdf_bytes, "application/pdf",
+                    )
+                    if up_pdf:
+                        _, drive_email_link = up_pdf
+                        logger.warning("[PAGOS_GMAIL]   Email guardado en Drive (PDF): %s", pdf_name)
+                    else:
+                        logger.warning("[PAGOS_GMAIL]   PDF no subido a Drive (msg_id=%s) — columna «Ver email» quedará vacía", msg_id)
                 else:
-                    logger.warning("[PAGOS_GMAIL]   Email .eml no subido a Drive (msg_id=%s) — columna «Ver email» quedará vacía", msg_id)
+                    logger.warning("[PAGOS_GMAIL]   PDF no generado (msg_id=%s) — columna «Ver email» quedará vacía", msg_id)
 
             # Extraer imágenes/PDFs del correo
             attachments = get_all_images_and_files_for_message(gmail_svc, msg_id, full_payload)
