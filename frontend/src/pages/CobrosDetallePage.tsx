@@ -16,7 +16,7 @@ import { Button } from '../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import toast from 'react-hot-toast'
-import { ImageIcon, FileText, Mail, Loader2 } from 'lucide-react'
+import { FileImage, FileText, Mail, Loader2 } from 'lucide-react'
 
 const ESTADO_BADGE: Record<string, string> = {
   pendiente: 'Pendiente 🟡',
@@ -127,7 +127,7 @@ export default function CobrosDetallePage() {
           <div className="flex flex-wrap gap-2 mt-2">
             {detalle.tiene_comprobante && (
               <Button variant="outline" size="sm" onClick={() => id && openComprobanteInNewTab(Number(id))}>
-                <ImageIcon className="h-4 w-4 mr-1" /> Ver comprobante
+                <FileImage className="h-4 w-4 mr-1" /> Ver comprobante
               </Button>
             )}
             {detalle.tiene_recibo_pdf && (
