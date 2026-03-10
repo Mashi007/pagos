@@ -547,19 +547,33 @@ async def upload_excel_pagos(
                     es_valido, monto, err_msg = _validar_monto(row[3]) if len(row) > 3 else (True, 0.0, '')
 
                     if not es_valido and monto != 0.0:
-
                         errores.append(f'Fila {i + 2} (Formato A): {err_msg}')
-
+                        pagos_con_error_list.append({
+                            "fila_idx": i + 2,
+                            "cedula": cedula,
+                            "prestamo_id": None,
+                            "fecha_val": row[2] if len(row) > 2 else None,
+                            "monto": monto,
+                            "numero_doc": numero_doc,
+                            "errores": [err_msg],
+                        })
                         continue
-                # Formato B: Fecha, CÃ©dula, Monto, Documento
+                # Formato B: Fecha, Cédula, Monto, Documento
                 elif len(row) >= 4 and _looks_like_date(row[0]) and _looks_like_cedula(row[1]):
                     cedula = str(row[1]).strip()
                     es_valido, monto, err_msg = _validar_monto(row[2])
 
                     if not es_valido and monto != 0.0:
-
                         errores.append(f'Fila {i + 2} (Formato B): {err_msg}')
-
+                        pagos_con_error_list.append({
+                            "fila_idx": i + 2,
+                            "cedula": cedula,
+                            "prestamo_id": None,
+                            "fecha_val": row[0],
+                            "monto": monto,
+                            "numero_doc": _celda_a_string_documento(row[3]) if len(row) > 3 else "",
+                            "errores": [err_msg],
+                        })
                         continue
                     fecha_val = row[0]
                     numero_doc = _celda_a_string_documento(row[3])
@@ -585,6 +599,15 @@ async def upload_excel_pagos(
                     es_valido, monto, err_msg = _validar_monto(_monto_raw)
                     if not es_valido and monto != 0.0:
                         errores.append(f'Fila {i + 2} (Formato C): {err_msg}')
+                        pagos_con_error_list.append({
+                            "fila_idx": i + 2,
+                            "cedula": cedula,
+                            "prestamo_id": prestamo_id,
+                            "fecha_val": fecha_val,
+                            "monto": monto,
+                            "numero_doc": _celda_a_string_documento(row[4]) if len(row) > 4 else "",
+                            "errores": [err_msg],
+                        })
                         continue
                     numero_doc = _celda_a_string_documento(row[4]) if len(row) > 4 else ""
                     col_doc = 4 if len(row) > 4 else None
