@@ -14,7 +14,6 @@ import {
   Lock,
   Calculator,
   CheckCircle2,
-  Copy,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { getErrorMessage, getErrorDetail } from '../types/errors'
@@ -247,31 +246,29 @@ return (
         </div>
       </div>
 
-      {/* Enlaces públicos: copiar link para compartir (Pagos y Estado de cuenta) */}
-      <div className="flex flex-wrap gap-3 mb-6">
+      {/* Iconos: copiar enlace para compartir. Click = copia el link. */}
+      <div className="flex items-center gap-2 mb-6">
         <Button
           type="button"
           variant="outline"
-          size="sm"
-          className="inline-flex items-center gap-2"
+          size="icon"
+          className="h-11 w-11 shrink-0"
           onClick={() => copiarEnlaceServicio(PUBLIC_REPORTE_PAGO_PATH, 'Reporte de pagos')}
-          title="Copiar enlace del servicio de reporte de pagos para compartir"
+          title="Copiar enlace: Reporte de pagos"
+          aria-label="Copiar enlace reporte de pagos"
         >
-          <DollarSign className="h-4 w-4" />
-          <span>Pagos</span>
-          <Copy className="h-3.5 w-3.5 opacity-70" />
+          <DollarSign className="h-5 w-5" />
         </Button>
         <Button
           type="button"
           variant="outline"
-          size="sm"
-          className="inline-flex items-center gap-2"
+          size="icon"
+          className="h-11 w-11 shrink-0"
           onClick={() => copiarEnlaceServicio(PUBLIC_ESTADO_CUENTA_PATH, 'Estado de cuenta')}
-          title="Copiar enlace del servicio de estado de cuenta para compartir"
+          title="Copiar enlace: Estado de cuenta"
+          aria-label="Copiar enlace estado de cuenta"
         >
-          <FileText className="h-4 w-4" />
-          <span>Estado de cuenta</span>
-          <Copy className="h-3.5 w-3.5 opacity-70" />
+          <FileText className="h-5 w-5" />
         </Button>
       </div>
 

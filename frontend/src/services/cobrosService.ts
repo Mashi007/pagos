@@ -87,6 +87,10 @@ export interface PagoReportadoItem {
   gemini_coincide_exacto?: string
   /** Divergencias de Gemini con lo ingresado (para columna Observación y revisión manual) */
   observacion?: string
+  /** Correo al que se envió (o se enviaría) el recibo; para icono estado en Acciones */
+  correo_enviado_a?: string
+  /** Si tiene recibo PDF generado (enviado o disponible) */
+  tiene_recibo_pdf?: boolean
 }
 
 export interface ListPagosReportadosResponse {

@@ -45,6 +45,8 @@ class PagoReportadoListItem(BaseModel):
     estado: str
     gemini_coincide_exacto: Optional[str] = None
     observacion: Optional[str] = None  # Divergencias Gemini (gemini_comentario) para facilidad de revisión
+    correo_enviado_a: Optional[str] = None  # Para icono estado envío recibo en Acciones
+    tiene_recibo_pdf: bool = False
 
     class Config:
         from_attributes = True
@@ -177,6 +179,8 @@ def list_pagos_reportados(
             estado=r.estado,
             gemini_coincide_exacto=r.gemini_coincide_exacto,
             observacion=_observacion_solo_columnas(r.gemini_comentario),
+            correo_enviado_a=r.correo_enviado_a,
+            tiene_recibo_pdf=bool(r.recibo_pdf),
         ))
     return {"items": items, "total": total, "page": page, "per_page": per_page}
 
@@ -449,7 +453,7 @@ def cambiar_estado_pago(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    """Cambia el estado del pago reportado (pendiente, en_revision, aprobado, rechazado)."""
+    """Cambia el estado del pago reportado (pendiente, en_revision, aprobado, rechazado). Si pasa a aprobado, genera recibo PDF y envía por correo al email del cliente (cédula)."""
     if body.estado not in ("pendiente", "en_revision", "aprobado", "rechazado"):
         raise HTTPException(status_code=400, detail="Estado no válido.")
     pr = db.execute(select(PagoReportado).where(PagoReportado.id == pago_id)).scalars().first()
@@ -457,11 +461,47 @@ def cambiar_estado_pago(
         raise HTTPException(status_code=404, detail="Pago reportado no encontrado.")
     if body.estado == "rechazado" and not (body.motivo or "").strip():
         raise HTTPException(status_code=400, detail="El motivo es obligatorio al rechazar.")
+    if body.estado == "aprobado" and pr.estado == "rechazado":
+        raise HTTPException(status_code=400, detail="No se puede aprobar un pago rechazado.")
     estado_anterior = pr.estado
     pr.estado = body.estado
     pr.motivo_rechazo = (body.motivo or "").strip()[:2000] if body.estado == "rechazado" else None
     pr.usuario_gestion_id = current_user.get("id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
     usuario_email = current_user.get("email") if isinstance(current_user, dict) else getattr(current_user, "email", None)
+
+    mensaje = f"Estado actualizado a {body.estado}."
+    if body.estado == "aprobado":
+        pdf_bytes = generar_recibo_pago_reportado(
+            referencia_interna=pr.referencia_interna,
+            nombres=pr.nombres,
+            apellidos=pr.apellidos,
+            tipo_cedula=pr.tipo_cedula,
+            numero_cedula=pr.numero_cedula,
+            institucion_financiera=pr.institucion_financiera,
+            monto=f"{pr.monto} {pr.moneda}",
+            numero_operacion=pr.numero_operacion,
+        )
+        pr.recibo_pdf = pdf_bytes
+        to_email = (pr.correo_enviado_a or "").strip()
+        if to_email:
+            body_mail = f"Su reporte de pago ha sido aprobado. Número de referencia: {pr.referencia_interna}. Adjunto encontrará el recibo.\n\nRapiCredit C.A."
+            ok_mail, err_mail = send_email(
+                [to_email],
+                f"Recibo de reporte de pago #{pr.referencia_interna}",
+                body_mail,
+                attachments=[(f"recibo_{pr.referencia_interna}.pdf", pdf_bytes)],
+            )
+            if ok_mail:
+                mensaje = "Estado actualizado a aprobado. Recibo enviado por correo."
+            else:
+                logger.error(
+                    "[COBROS] Cambiar a aprobado ref=%s: correo NO enviado a %s. Error: %s.",
+                    pr.referencia_interna, to_email, err_mail or "desconocido",
+                )
+                mensaje = "Estado actualizado a aprobado. El recibo no pudo enviarse por correo."
+        else:
+            mensaje = "Estado actualizado a aprobado. No hay correo registrado para este pago (no se envió recibo)."
+
     _registrar_historial(db, pago_id, estado_anterior, body.estado, usuario_email, body.motivo)
     db.commit()
-    return {"ok": True, "mensaje": f"Estado actualizado a {body.estado}."}
+    return {"ok": True, "mensaje": mensaje}

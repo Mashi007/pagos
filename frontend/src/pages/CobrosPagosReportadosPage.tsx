@@ -16,7 +16,7 @@ import { Input } from '../components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import toast from 'react-hot-toast'
-import { Loader2, Eye, FileText, Settings, Clock, Search, CheckCircle, XCircle, Trash2 } from 'lucide-react'
+import { Loader2, Eye, FileText, Settings, Clock, Search, CheckCircle, XCircle, Trash2, AlertCircle, AlertTriangle } from 'lucide-react'
 import { PUBLIC_REPORTE_PAGO_PATH } from '../config/env'
 
 const ESTADO_CONFIG: Record<string, { label: string; short: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; Icon: typeof Clock }> = {
@@ -206,7 +206,10 @@ export default function CobrosPagosReportadosPage() {
                       <td className="py-3 px-3 align-top min-w-0">
                         <span className="block truncate" title={`${row.nombres} ${row.apellidos}`}>{row.nombres} {row.apellidos}</span>
                       </td>
-                      <td className="py-3 px-3 align-top whitespace-nowrap">{row.cedula_display}</td>
+                      <td className={`py-3 px-3 align-top whitespace-nowrap ${/c[eé]dula/i.test(row.observacion || '') ? 'bg-destructive/10 text-destructive font-medium' : ''}`} title={/c[eé]dula/i.test(row.observacion || '') ? 'Observación: ' + (row.observacion || '') : undefined}>
+                        {/c[eé]dula/i.test(row.observacion || '') && <AlertCircle className="inline-block h-4 w-4 mr-1 align-middle" aria-hidden />}
+                        {row.cedula_display}
+                      </td>
                       <td className="py-3 px-3 align-top min-w-0">
                         <span className="block truncate" title={row.institucion_financiera}>{row.institucion_financiera}</span>
                       </td>
@@ -217,7 +220,9 @@ export default function CobrosPagosReportadosPage() {
                       </td>
                       <td className="py-3 px-3 align-top whitespace-nowrap">{new Date(row.fecha_reporte).toLocaleDateString()}</td>
                       <td className="py-3 px-3 align-top min-w-0" title={row.observacion ?? ''}>
-                        {row.observacion ? <span className="text-amber-700 text-xs line-clamp-2">{row.observacion}</span> : '—'}
+                        {row.observacion ? (
+                          <span className={`text-xs line-clamp-2 ${/c[eé]dula/i.test(row.observacion || '') ? 'text-destructive font-medium' : 'text-amber-700'}`}>{row.observacion}</span>
+                        ) : '—'}
                       </td>
                       <td className="py-3 px-3 align-top whitespace-nowrap">
                         {(() => {
@@ -233,6 +238,22 @@ export default function CobrosPagosReportadosPage() {
                       </td>
                       <td className="py-3 px-3 align-top">
                         <div className="flex flex-wrap gap-1 items-center justify-start">
+                          {/* Estado envío recibo: X = no enviado, visto = entregado, triángulo = en revisión */}
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center text-muted-foreground" title={
+                            row.estado === 'aprobado'
+                              ? (row.tiene_recibo_pdf && row.correo_enviado_a ? 'Recibo enviado por correo' : 'No se envió recibo por correo')
+                              : 'En revisión'
+                          }>
+                            {row.estado === 'aprobado' ? (
+                              row.tiene_recibo_pdf && row.correo_enviado_a ? (
+                                <CheckCircle className="h-4 w-4 text-green-600" aria-hidden />
+                              ) : (
+                                <XCircle className="h-4 w-4 text-muted-foreground" aria-hidden />
+                              )
+                            ) : (
+                              <AlertTriangle className="h-4 w-4 text-blue-600" aria-hidden />
+                            )}
+                          </span>
                           <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" title="Ver comprobante (imagen)" onClick={() => handleVerComprobante(row.id)} disabled={viewingComprobanteId === row.id}>
                             {viewingComprobanteId === row.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
                           </Button>
