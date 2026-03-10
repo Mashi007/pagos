@@ -311,11 +311,13 @@ export default function ReportePagoPage() {
         <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
           {messageForScreenReader || stepAnnouncement}
         </div>
-        <Card className="w-full max-w-lg shadow-2xl border border-[#c4a35a]/30 overflow-hidden">
-          {/* Header con logo RapiCredit (azul oscuro + acento naranja/marrón) */}
-          <div className="bg-[#1e3a5f] px-6 py-5 text-center">
-            <img src={LOGO_PUBLIC_SRC} alt="RapiCredit" className="h-14 mx-auto object-contain" />
-            <p className="text-[#c4a35a] text-sm mt-2 font-medium">Reporte de pago</p>
+        <Card className="w-full max-w-lg shadow-2xl border border-slate-200/80 overflow-hidden">
+          {/* Header con logo RapiCredit: fondo blanco para compatibilidad del logo */}
+          <div className="bg-white px-6 py-6 text-center rounded-t-lg border-b border-slate-100">
+            <div className="inline-flex flex-col items-center justify-center">
+              <img src={LOGO_PUBLIC_SRC} alt="RapiCredit" className="h-16 mx-auto object-contain" />
+              <p className="text-[#c4a35a] text-base mt-3 font-semibold">Reporte de pago</p>
+            </div>
           </div>
           <CardContent className="p-6 sm:p-8 space-y-6">
             <div className="text-center">
@@ -350,9 +352,6 @@ export default function ReportePagoPage() {
             </p>
             <p className="text-xs text-slate-500 text-center">
               Si desea reportar más de un pago, al finalizar cada envío use el botón «Ingresar otro pago» o reinicie el proceso.
-            </p>
-            <p className="text-xs text-slate-500 text-center">
-              Si toca por error un enlace al sistema o al login, verá «Acceso prohibido» y podrá volver aquí con el botón Continuar.
             </p>
             <Button
               className="w-full text-base py-6 font-semibold bg-[#1e3a5f] hover:bg-[#152a47] text-white shadow-md hover:shadow-lg transition-all"

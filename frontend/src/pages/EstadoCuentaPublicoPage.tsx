@@ -166,10 +166,12 @@ export default function EstadoCuentaPublicoPage() {
         <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
           {stepAnnouncement}
         </div>
-        <Card className="w-full max-w-lg shadow-xl border-2 border-[#c4a35a]/30">
-          <div className="bg-[#1e3a5f] px-6 py-5 text-center rounded-t-lg">
-            <img src={LOGO_PUBLIC_SRC} alt="RapiCredit" className="h-14 mx-auto object-contain" />
-            <p className="text-[#c4a35a] text-sm mt-2 font-medium">Consulta de estado de cuenta</p>
+        <Card className="w-full max-w-lg shadow-xl border border-slate-200/80 overflow-hidden">
+          <div className="bg-white px-6 py-6 text-center rounded-t-lg border-b border-slate-100">
+            <div className="inline-flex flex-col items-center justify-center">
+              <img src={LOGO_PUBLIC_SRC} alt="RapiCredit" className="h-16 mx-auto object-contain" />
+              <p className="text-[#c4a35a] text-base mt-3 font-semibold">Consulta de estado de cuenta</p>
+            </div>
           </div>
           <CardHeader className="text-center pb-2">
             <CardTitle className="text-2xl text-[#1e3a5f]">Bienvenido</CardTitle>
@@ -188,9 +190,6 @@ export default function EstadoCuentaPublicoPage() {
             </p>
             <p className="text-xs text-slate-500 text-center">
               Si desea consultar otra cédula, al finalizar use el botón «Consultar otra cédula» o reinicie el proceso.
-            </p>
-            <p className="text-xs text-slate-500 text-center">
-              Si toca por error un enlace al sistema o al login, verá «Acceso prohibido» y podrá volver aquí con el botón Continuar.
             </p>
             <Button className="w-full text-base py-6 font-semibold bg-[#1e3a5f] hover:bg-[#152a47] text-white" size="lg" onClick={() => setStep(1)}>
               Iniciar
