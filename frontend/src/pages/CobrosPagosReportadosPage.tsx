@@ -16,7 +16,7 @@ import { Input } from '../components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import toast from 'react-hot-toast'
-import { Loader2, Eye, FileText, Settings, Clock, Search, CheckCircle, XCircle, Trash2, AlertCircle, AlertTriangle } from 'lucide-react'
+import { Loader2, Eye, FileText, Settings, Clock, Search, CheckCircle, XCircle, Trash2, AlertCircle, AlertTriangle, Edit } from 'lucide-react'
 import { PUBLIC_REPORTE_PAGO_PATH } from '../config/env'
 
 const ESTADO_CONFIG: Record<string, { label: string; short: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; Icon: typeof Clock }> = {
@@ -260,6 +260,11 @@ export default function CobrosPagosReportadosPage() {
                           <Button variant="ghost" size="icon" className="h-8 w-8" title="Ver detalle" onClick={() => navigate(`/cobros/pagos-reportados/${row.id}`)}>
                             <FileText className="h-4 w-4" />
                           </Button>
+                          {(row.estado === 'pendiente' || row.estado === 'en_revision') && (
+                            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" title="Editar (modificar valores para cumplir validadores)" onClick={() => navigate(`/cobros/pagos-reportados/${row.id}/editar`)}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          )}
                           <div className="relative inline-block h-8 w-8">
                             <select
                               className="absolute inset-0 w-full h-full min-w-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"

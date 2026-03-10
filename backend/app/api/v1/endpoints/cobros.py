@@ -4,7 +4,7 @@ Listado de pagos reportados, detalle, aprobar, rechazar, histórico por cédula.
 """
 import logging
 from datetime import date, datetime
-from typing import Optional, List
+from typing import Optional, List, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
@@ -18,6 +18,7 @@ from app.models.pago_reportado import PagoReportado, PagoReportadoHistorial
 from app.models.cliente import Cliente
 from app.services.cobros.recibo_pdf import generar_recibo_pago_reportado, WHATSAPP_LINK, WHATSAPP_DISPLAY
 from app.core.email import send_email
+from app.api.v1.endpoints.validadores import validate_cedula
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -444,6 +445,96 @@ def enviar_recibo_manual(
 class CambiarEstadoBody(BaseModel):
     estado: str  # pendiente | en_revision | aprobado | rechazado
     motivo: Optional[str] = None
+
+
+class EditarPagoReportadoBody(BaseModel):
+    """Campos editables para que el pago cumpla con los validadores (cédula, fecha, monto, etc.)."""
+    nombres: Optional[str] = None
+    apellidos: Optional[str] = None
+    tipo_cedula: Optional[str] = None
+    numero_cedula: Optional[str] = None
+    fecha_pago: Optional[date] = None
+    institucion_financiera: Optional[str] = None
+    numero_operacion: Optional[str] = None
+    monto: Optional[float] = None
+    moneda: Optional[str] = None
+    correo_enviado_a: Optional[str] = None
+    observacion: Optional[str] = None
+
+
+def _normalizar_cedula_editar(tipo: Optional[str], numero: Optional[str]) -> Tuple[str, str]:
+    """Devuelve (tipo, numero) normalizados; si solo viene numero con 6-11 dígitos, antepone V."""
+    if tipo is None and numero is None:
+        return "", ""
+    t = (tipo or "").strip().upper()
+    n = (numero or "").strip().replace(" ", "").replace("-", "").replace(".", "")
+    if not n:
+        return t[:1] if t else "", ""
+    if t and t in ("V", "E", "J", "G") and n.isdigit() and 6 <= len(n) <= 11:
+        return t, n
+    if not t and n.isdigit() and 6 <= len(n) <= 11:
+        return "V", n
+    # Intentar validar como cédula completa
+    cedula_input = f"{t}{n}" if t else n
+    val = validate_cedula(cedula_input)
+    if val.get("valido"):
+        formateado = val.get("valor_formateado", "") or cedula_input
+        if "-" in formateado:
+            a, b = formateado.split("-", 1)
+            return a.strip(), b.strip()
+        return (formateado[0] if formateado else "V", formateado[1:] if len(formateado) > 1 else n)
+    return t[:1] if t else "V", n
+
+
+@router.patch("/pagos-reportados/{pago_id}")
+def editar_pago_reportado(
+    pago_id: int,
+    body: EditarPagoReportadoBody,
+    db: Session = Depends(get_db),
+):
+    """Edita los datos del pago reportado para que cumplan con los validadores (cédula, fecha, monto, etc.). Solo actualiza los campos enviados."""
+    pr = db.execute(select(PagoReportado).where(PagoReportado.id == pago_id)).scalars().first()
+    if not pr:
+        raise HTTPException(status_code=404, detail="Pago reportado no encontrado.")
+    if pr.estado == "aprobado":
+        raise HTTPException(status_code=400, detail="No se puede editar un pago ya aprobado.")
+    if pr.estado == "rechazado":
+        raise HTTPException(status_code=400, detail="No se puede editar un pago rechazado.")
+
+    if body.nombres is not None:
+        pr.nombres = (body.nombres or "").strip()[:200] or pr.nombres
+    if body.apellidos is not None:
+        pr.apellidos = (body.apellidos or "").strip()[:200] or pr.apellidos
+    if body.tipo_cedula is not None or body.numero_cedula is not None:
+        t_env = body.tipo_cedula if body.tipo_cedula is not None else pr.tipo_cedula
+        n_env = body.numero_cedula if body.numero_cedula is not None else pr.numero_cedula
+        tipo, numero = _normalizar_cedula_editar(t_env, n_env)
+        if tipo and numero:
+            val = validate_cedula(f"{tipo}{numero}")
+            if not val.get("valido"):
+                raise HTTPException(status_code=400, detail=val.get("error", "Cédula inválida."))
+            pr.tipo_cedula = tipo
+            pr.numero_cedula = numero[:13]
+    if body.fecha_pago is not None:
+        pr.fecha_pago = body.fecha_pago
+    if body.institucion_financiera is not None:
+        pr.institucion_financiera = (body.institucion_financiera or "").strip()[:100] or pr.institucion_financiera
+    if body.numero_operacion is not None:
+        pr.numero_operacion = (body.numero_operacion or "").strip()[:100] or pr.numero_operacion
+    if body.monto is not None:
+        if body.monto < 0:
+            raise HTTPException(status_code=400, detail="El monto no puede ser negativo.")
+        pr.monto = body.monto
+    if body.moneda is not None:
+        pr.moneda = (body.moneda or "BS").strip()[:10] or pr.moneda
+    if body.correo_enviado_a is not None:
+        pr.correo_enviado_a = (body.correo_enviado_a or "").strip()[:255] or None
+    if body.observacion is not None:
+        pr.observacion = (body.observacion or "").strip()[:500] or None
+
+    db.commit()
+    logger.info("[COBROS] Pago reportado editado: id=%s ref=%s", pago_id, pr.referencia_interna)
+    return {"ok": True, "mensaje": "Datos actualizados. Los cambios cumplen con los validadores."}
 
 
 @router.patch("/pagos-reportados/{pago_id}/estado")

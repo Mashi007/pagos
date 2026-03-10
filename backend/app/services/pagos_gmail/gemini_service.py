@@ -394,6 +394,13 @@ GEMINI_COMPARAR_PROMPT_PREFIX = """Eres un revisor de comprobantes de pago. Reci
 1) Los datos que una persona ingresó manualmente en un formulario (cada campo listado abajo).
 2) Una imagen o PDF del comprobante de pago (recibo bancario, transferencia, Pago Móvil, etc.).
 
+REGLAS DEL VALIDADOR DE CÉDULA (aplicar siempre; alineado con el sistema):
+- Tipos válidos: solo V, E, G o J (cédula venezolana). RIF puede verse como J o E + dígitos.
+- Formato: tipo (una letra) + entre 6 y 11 dígitos. Ejemplos válidos: V25677920, E12345678, J1234567.
+- Si en la imagen el número EMPIEZA POR CERO (ej. 0025677920, 0001234567): NO tomar en cuenta esos ceros a la izquierda. Normaliza a: tipo + número sin ceros a la izquierda. 0025677920 = 25677920; 0001234567 = 1234567. En Venezuela los comprobantes suelen mostrar la cédula con ceros a la izquierda; el formulario suele tenerla sin ceros: son el mismo documento.
+- Al comparar: ignora guión (V-25677920 = V25677920), espacios y ceros a la izquierda del número. Solo cuenta que el tipo (V/E/G/J) sea el mismo y que el valor numérico (sin ceros a la izquierda) sea el mismo.
+- NO incluyas "Cédula" en comentario si la única diferencia es: ceros a la izquierda en la imagen, guión, o espacios. Solo marca Cédula cuando tipo o número (normalizado) sean realmente distintos.
+
 INSTRUCCIONES:
 
 Paso 1 — Extraer de la imagen: Lee el comprobante y extrae con precisión estos datos (los que aparezcan):
@@ -402,19 +409,19 @@ Paso 1 — Extraer de la imagen: Lee el comprobante y extrae con precisión esto
 - numero_operacion: número de referencia, serial, operación o comprobante (solo dígitos/código, sin etiquetas).
 - monto: cantidad pagada (número; puede estar en Bs, USD, USDT, etc.).
 - moneda: BS, USD, USDT, etc., según lo que indique el comprobante.
-- cedula_pagador: cédula o RIF del quien paga/deposita. En el comprobante puede aparecer como "Cédula Dep.:", "Nro. de Cédula", "DP:", etc. Toma solo el número del depositante/pagador (no confundir con referencias largas que incluyan fecha). Normaliza a tipo (V, E o J) + dígitos sin guiones ni espacios; ignora ceros a la izquierda en el número (0025677920 = 25677920 → V25677920).
+- cedula_pagador: cédula del quien paga/deposita. En el comprobante puede aparecer como "Cédula Dep.:", "Nro. de Cédula", "DP:", "C.I.", etc. Toma solo el número del depositante/pagador (no confundir con referencias largas que incluyan fecha). IMPORTANTE: si el número en la imagen empieza por cero (0025677920, 0001234567), quita los ceros a la izquierda antes de comparar (25677920, 1234567). Normaliza a tipo (V, E, G o J) + dígitos sin guiones ni espacios; si solo ves dígitos (ej. 0025677920), antepón V. Resultado a usar para comparar: tipo + número sin ceros a la izquierda.
 
 Paso 2 — Comparar campo por campo: Para cada dato extraído de la imagen, compáralo con el valor que la persona ingresó en el formulario (listado abajo). Reglas:
 - Fecha pago (OBLIGATORIO comparar): La fecha ingresada manualmente en el formulario debe coincidir con la fecha de la operación que aparece en la imagen. Comparar día, mes y año; si alguno difiere, es divergencia (incluir "Fecha pago" en comentario). Ignorar solo el formato (ej. 10/03/2026 vs 2026-03-10 = misma fecha).
 - Institución: mismo banco o entidad (sinónimos o nombre abreviado = válido).
 - Número de operación: mismo número o código (ignorar espacios o guiones intermedios).
 - Monto: mismo valor numérico; misma moneda o equivalente (BS vs Bs, USD vs US$).
-- Cédula (IMPORTANTE): considerar COINCIDE si el tipo (V, E o J) y el valor numérico del número son el mismo. NO son divergencia: (1) guión o espacios: V-25677920, V25677920, V 25677920; (2) ceros a la izquierda en el número: 0025677920 = 25677920 = V25677920. En comprobantes venezolanos la cédula suele aparecer con ceros a la izquierda (ej. "Cédula Dep.: 0025677920"); el formulario puede tener "V25677920": es el mismo documento. Comparar normalizando: tipo (V/E/J) + número sin ceros a la izquierda. No marques false por formato ni por ceros a la izquierda.
+- Cédula: aplicar las REGLAS DEL VALIDADOR DE CÉDULA anteriores. Comparar tipo (V/E/G/J) y número ya normalizado (sin ceros a la izquierda). Si en imagen ves 0025677920 o V-0025677920 y en formulario V25677920 → COINCIDE. Si en imagen ves 0025677920 y en formulario V25677920 → COINCIDE. Solo es divergencia si el tipo es distinto o el número sin ceros a la izquierda es distinto. Antes de poner "Cédula" en comentario, verifica que hayas normalizado ambos lados (imagen y formulario) quitando ceros a la izquierda del número.
 
 Paso 3 — Decidir:
-- coincide_exacto = true SOLO si TODOS los campos que se pueden verificar en la imagen coinciden con lo ingresado en el formulario (para cédula: mismo tipo y mismos dígitos; el guión no cuenta). Si la cédula no aparece en el comprobante, no la uses para marcar false.
-- coincide_exacto = false si CUALQUIER campo extraído de la imagen NO coincide con el formulario (comparando valores normalizados), o si no puedes leer con claridad algún dato necesario. No marques false por cédula si solo difiere el guión (V-123 vs V123) ni por ceros a la izquierda (0025677920 en imagen vs V25677920 en formulario = coinciden).
-- comentario: si coincide_exacto = false, es OBLIGATORIO indicar SOLO los nombres de las columnas que no coinciden, separados por coma. Usa EXACTAMENTE estos nombres: Cédula, Banco, Fecha pago, Nº operación, Monto, Moneda. Sin explicaciones, sin "en imagen" ni "en formulario". Ejemplo: "Monto, Fecha pago". Si coincide_exacto = true, deja comentario vacío o "".
+- coincide_exacto = true SOLO si TODOS los campos que se pueden verificar en la imagen coinciden con lo ingresado en el formulario (para cédula: mismo tipo y mismo número normalizado sin ceros a la izquierda). Si la cédula no aparece en el comprobante, no la uses para marcar false.
+- coincide_exacto = false si CUALQUIER campo extraído de la imagen NO coincide con el formulario (comparando valores normalizados), o si no puedes leer con claridad algún dato necesario. No marques false por cédula si la única diferencia es guión, espacios o ceros a la izquierda en el número.
+- comentario: si coincide_exacto = false, es OBLIGATORIO indicar SOLO los nombres de las columnas que no coinciden, separados por coma. Usa EXACTAMENTE estos nombres: Cédula, Banco, Fecha pago, Nº operación, Monto, Moneda. Sin explicaciones. Ejemplo: "Monto, Fecha pago". Si coincide_exacto = true, deja comentario vacío o "".
 
 Responde ÚNICAMENTE con un JSON válido, sin markdown ni texto antes o después:
 {"coincide_exacto": true o false, "requiere_revision_humana": true o false, "comentario": "solo nombres de columnas separados por coma: Cédula, Banco, Fecha pago, Nº operación, Monto, Moneda"}
@@ -442,9 +449,10 @@ def compare_form_with_image(
     if not key or not str(key).strip():
         logger.warning("[COBROS] GEMINI_API_KEY no configurado para comparar formulario vs imagen.")
         return default_result
-    # Cédula: formato estándar sin guión (tipo + dígitos) para evitar falsas divergencias por guión
+    # Cédula: formato estándar sin guión (tipo + dígitos); normalizar número sin ceros a la izquierda para comparar
     tipo_c = (form_data.get("tipo_cedula") or "").strip().upper()
     num_c = (form_data.get("numero_cedula") or "").strip()
+    num_sin_ceros = num_c.lstrip("0") or "0"  # 0025677920 -> 25677920; 0 -> 0
     cedula_estandar = f"{tipo_c}{num_c}" if (tipo_c and num_c) else (form_data.get("tipo_cedula") or "") + (form_data.get("numero_cedula") or "")
     text_data = (
         "Valores ingresados manualmente en el formulario (compara cada uno con lo que leas en la imagen):\n"
@@ -452,7 +460,7 @@ def compare_form_with_image(
         f"- institucion_financiera: {form_data.get('institucion_financiera')}\n"
         f"- numero_operacion: {form_data.get('numero_operacion')}\n"
         f"- monto: {form_data.get('monto')} {form_data.get('moneda', 'BS')}\n"
-        f"- cedula (tipo + número, sin guión): {cedula_estandar}\n"
+        f"- cedula (tipo + número): {cedula_estandar}. Para comparar con la imagen: si en el comprobante la cédula empieza por cero (ej. 0025677920), ignora esos ceros; el número normalizado es {tipo_c or 'V'}{num_sin_ceros}. Si tipo y ese número coinciden, NO incluyas Cédula en comentario.\n"
     )
     prompt = GEMINI_COMPARAR_PROMPT_PREFIX + "\n\n" + text_data
     model_name = getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash")
@@ -479,18 +487,18 @@ def compare_form_with_image(
                     data = json.loads(json_str)
                     comentario = str(data.get("comentario", ""))[:500]
                     coincide = bool(data.get("coincide_exacto"))
-                    # Filtro: si Gemini reporta divergencia solo por guión/prefijo en cédula, ignorar (falsa alarma)
+                    # Filtro: si Gemini reporta divergencia solo por guión/formato en cédula, ignorar (falsa alarma)
                     if not coincide and comentario:
                         lower = comentario.lower()
-                        solo_cedula_guion = (
-                            ("v-" in lower or "guión" in lower or "guion" in lower or "prefijo" in lower)
-                            and ("cédula" in lower or "cedula" in lower or "formulario" in lower)
-                            and not any(k in lower for k in ("monto", "fecha", "operación", "operacion", "banco", "institución", "numero"))
+                        solo_cedula_formato = (
+                            ("cédula" in lower or "cedula" in lower)
+                            and ("v-" in lower or "guión" in lower or "guion" in lower or "prefijo" in lower or "ceros" in lower or "formato" in lower)
+                            and not any(k in lower for k in ("monto", "fecha", "operación", "operacion", "banco", "institución", "numero", "moneda"))
                         )
-                        if solo_cedula_guion:
+                        if solo_cedula_formato:
                             coincide = True
                             comentario = ""
-                            logger.info("[COBROS] Gemini: divergencia solo por formato cédula (guión); ignorada.")
+                            logger.info("[COBROS] Gemini: divergencia solo por formato cédula; ignorada.")
                     return {
                         "coincide_exacto": coincide,
                         "requiere_revision_humana": not coincide,

@@ -69,6 +69,7 @@ import ReportePagoPage from './pages/ReportePagoPage'
 import EstadoCuentaPublicoPage from './pages/EstadoCuentaPublicoPage'
 import CobrosPagosReportadosPage from './pages/CobrosPagosReportadosPage'
 import CobrosDetallePage from './pages/CobrosDetallePage'
+import CobrosEditarPage from './pages/CobrosEditarPage'
 import CobrosHistoricoPage from './pages/CobrosHistoricoPage'
 
 // Todas las páginas ahora están importadas desde archivos reales
@@ -194,6 +195,7 @@ function App() {
 
           {/* Cobros (Pagos Reportados, Detalle, Histórico) */}
           <Route path="cobros/pagos-reportados" element={<CobrosPagosReportadosPage />} />
+          <Route path="cobros/pagos-reportados/:id/editar" element={<CobrosEditarPage />} />
           <Route path="cobros/pagos-reportados/:id" element={<CobrosDetallePage />} />
           <Route path="cobros/historico-cliente" element={<CobrosHistoricoPage />} />
 

@@ -212,3 +212,25 @@ export async function eliminarPagoReportado(pagoId: number): Promise<{ ok: boole
   const data = await apiClient.delete<{ ok: boolean; mensaje?: string }>(`${BASE_COBROS}/pagos-reportados/${pagoId}`)
   return data
 }
+
+export interface EditarPagoReportadoPayload {
+  nombres?: string
+  apellidos?: string
+  tipo_cedula?: string
+  numero_cedula?: string
+  fecha_pago?: string
+  institucion_financiera?: string
+  numero_operacion?: string
+  monto?: number
+  moneda?: string
+  correo_enviado_a?: string
+  observacion?: string
+}
+
+export async function updatePagoReportado(
+  pagoId: number,
+  payload: EditarPagoReportadoPayload
+): Promise<{ ok: boolean; mensaje?: string }> {
+  const data = await apiClient.patch<{ ok: boolean; mensaje?: string }>(`${BASE_COBROS}/pagos-reportados/${pagoId}`, payload)
+  return data
+}
