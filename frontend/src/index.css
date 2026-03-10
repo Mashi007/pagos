@@ -219,3 +219,29 @@
 .toggle-input-peer:checked + .toggle-switch-track-lg {
   background-color: #2563eb;
 }
+
+/* Notificaciones (toasts) más grandes, centradas y visibles */
+/* Sonner */
+[data-sonner-toaster] {
+  inset: 24px 50% auto 50% !important;
+  transform: translateX(-50%) !important;
+  margin: 0 !important;
+  z-index: 9999;
+}
+[data-sonner-toast] {
+  min-width: 380px !important;
+  padding: 18px 22px !important;
+  font-size: 1.05rem !important;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15) !important;
+}
+/* react-hot-toast: contenedor centrado */
+.toast-container-center {
+  top: 24px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  right: auto !important;
+}
+.toast-container-center > div {
+  min-width: 360px !important;
+  max-width: 560px !important;
+}

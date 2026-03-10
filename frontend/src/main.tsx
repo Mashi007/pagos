@@ -56,15 +56,28 @@ if (!rootElement) {
         <QueryClientProvider client={queryClient}>
           <BrowserRouter basename={BASE_PATH || '/'}>
             <App />
-            <SonnerToaster position="bottom-right" richColors closeButton />
+            <SonnerToaster
+              position="top-center"
+              richColors
+              closeButton
+              toastOptions={{ style: { minWidth: 380, padding: '18px 22px', fontSize: '1.05rem' } }}
+              style={{ top: 24 }}
+            />
             <Toaster
-              position="top-right"
+              position="top-center"
+              containerClassName="toast-container-center"
+              containerStyle={{ zIndex: 9999 }}
               toastOptions={{
                 duration: TOAST_DURATION_MS,
                 style: {
                   background: 'hsl(var(--card))',
                   color: 'hsl(var(--card-foreground))',
                   border: '1px solid hsl(var(--border))',
+                  boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
+                  minWidth: 360,
+                  maxWidth: 560,
+                  padding: '18px 22px',
+                  fontSize: '1.05rem',
                 },
                 success: {
                   iconTheme: {
