@@ -172,6 +172,22 @@ export default function ReportePagoPage() {
 
   const institucionFinal = institucion === 'Otros' ? institucionOtros : institucion
 
+  const resetForm = (irAStep: number) => {
+    setCedula('')
+    setNombre('')
+    setEmailParaVerificacion('')
+    setInstitucion('')
+    setInstitucionOtros('')
+    setFechaPago('')
+    setMonto('')
+    setMoneda('BS')
+    setNumeroDocumento('')
+    setArchivo(null)
+    setReferencia('')
+    setEnviado(false)
+    setStep(irAStep)
+  }
+
   const stepAnnouncements: Record<number, string> = {
     0: 'Pantalla de bienvenida: reporte de pago',
     1: 'Paso 1: Ingrese su número de cédula',
@@ -331,6 +347,9 @@ export default function ReportePagoPage() {
             </ul>
             <p className="text-xs text-slate-500 text-center bg-slate-50 rounded-lg px-3 py-2 border border-slate-100">
               Los datos se comprobarán y almacenarán únicamente para validación del pago.
+            </p>
+            <p className="text-xs text-slate-500 text-center">
+              Si desea reportar más de un pago, al finalizar cada envío use el botón «Ingresar otro pago» o reinicie el proceso.
             </p>
             <p className="text-xs text-slate-500 text-center">
               Si toca por error un enlace al sistema o al login, verá «Acceso prohibido» y podrá volver aquí con el botón Continuar.
@@ -593,22 +612,27 @@ export default function ReportePagoPage() {
           <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle>Comprobante de pago</CardTitle>
-            <p className="text-sm text-gray-600">Un solo archivo. JPG, PNG o PDF. Máximo 5 MB.</p>
-            <p className="text-xs text-amber-700 mt-1">Si necesita ingresar otra imagen/pago, ingrese nuevamente al mismo enlace.</p>
+            <p className="text-sm text-gray-600">Un solo archivo por envío. JPG, PNG o PDF. Máximo 5 MB.</p>
+            <p className="text-xs text-amber-700 mt-1">Si desea reportar otro pago, al finalizar use «Ingresar otro pago» o reinicie el proceso.</p>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Input
-              type="file"
-              accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
-              onChange={(e) => setArchivo(e.target.files?.[0] || null)}
-            />
-            {archivo && (
-              <p className="text-sm text-gray-600">
-                {archivo.name} ({(archivo.size / 1024).toFixed(1)} KB)
-              </p>
+            {archivo ? (
+              <>
+                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-sm text-gray-700">
+                  <p className="font-medium">Comprobante seleccionado:</p>
+                  <p className="mt-1">{archivo.name} ({(archivo.size / 1024).toFixed(1)} KB)</p>
+                  <p className="text-xs text-amber-700 mt-2">No se puede agregar otra imagen en este envío. Para otro pago, finalice y use «Ingresar otro pago».</p>
+                </div>
+              </>
+            ) : (
+              <Input
+                type="file"
+                accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
+                onChange={(e) => setArchivo(e.target.files?.[0] || null)}
+              />
             )}
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setStep(5)}>Atrás</Button>
+              <Button variant="outline" onClick={() => { setArchivo(null); setStep(5); }}>Atrás</Button>
               <Button
                 className="flex-1"
                 onClick={() => {
@@ -694,7 +718,14 @@ export default function ReportePagoPage() {
               424-4579934
             </a>
           </p>
-          <p className="text-sm text-gray-500">Adiós.</p>
+          <div className="flex flex-col sm:flex-row gap-3 pt-4">
+            <Button variant="outline" className="flex-1" onClick={() => resetForm(0)}>
+              Termina
+            </Button>
+            <Button className="flex-1 bg-[#1e3a5f] hover:bg-[#152a47]" onClick={() => resetForm(1)}>
+              Ingresar otro pago
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>

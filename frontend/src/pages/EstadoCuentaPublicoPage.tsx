@@ -91,6 +91,14 @@ export default function EstadoCuentaPublicoPage() {
   }
   const dismissNotification = () => setNotification(null)
 
+  const resetForm = (irAStep: number) => {
+    setCedula('')
+    setNombre('')
+    setPdfDataUrl(null)
+    setMensajeEnvio('')
+    setStep(irAStep)
+  }
+
   const stepAnnouncements: Record<number, string> = {
     0: 'Pantalla de bienvenida: consulta de estado de cuenta',
     1: 'Ingrese su número de cédula',
@@ -179,6 +187,9 @@ export default function EstadoCuentaPublicoPage() {
               Este servicio solo permite consultar su propio estado de cuenta. No da acceso a otros servicios.
             </p>
             <p className="text-xs text-slate-500 text-center">
+              Si desea consultar otra cédula, al finalizar use el botón «Consultar otra cédula» o reinicie el proceso.
+            </p>
+            <p className="text-xs text-slate-500 text-center">
               Si toca por error un enlace al sistema o al login, verá «Acceso prohibido» y podrá volver aquí con el botón Continuar.
             </p>
             <Button className="w-full text-base py-6 font-semibold bg-[#1e3a5f] hover:bg-[#152a47] text-white" size="lg" onClick={() => setStep(1)}>
@@ -255,15 +266,18 @@ export default function EstadoCuentaPublicoPage() {
                 />
               </div>
             )}
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => { setStep(1); setPdfDataUrl(null); setMensajeEnvio(''); }}>
+            <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
+              <Button variant="outline" className="flex-1" onClick={() => resetForm(0)}>
+                Termina
+              </Button>
+              <Button className="flex-1 bg-[#1e3a5f] hover:bg-[#152a47]" onClick={() => resetForm(1)}>
                 Consultar otra cédula
               </Button>
               {pdfDataUrl && (
                 <a
                   href={pdfDataUrl}
                   download={`estado_cuenta_${cedula.replace(/\s/g, '_')}.pdf`}
-                  className="inline-flex items-center justify-center rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
+                  className="inline-flex items-center justify-center rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 flex-1 min-w-0"
                 >
                   Descargar PDF
                 </a>
