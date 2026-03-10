@@ -7,6 +7,7 @@ import {
   listPagosReportados,
   enviarReciboManual,
   cambiarEstadoPago,
+  openComprobanteInNewTab,
   type PagoReportadoItem,
   type ListPagosReportadosResponse,
 } from '../services/cobrosService'
@@ -15,7 +16,7 @@ import { Input } from '../components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import toast from 'react-hot-toast'
-import { Mail, Loader2 } from 'lucide-react'
+import { Mail, Loader2, Eye, FileText, SlidersHorizontal } from 'lucide-react'
 import { PUBLIC_REPORTE_PAGO_PATH } from '../config/env'
 
 const ESTADO_BADGE: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
@@ -37,6 +38,7 @@ export default function CobrosPagosReportadosPage() {
   const [institucion, setInstitucion] = useState('')
   const [sendingId, setSendingId] = useState<number | null>(null)
   const [changingEstadoId, setChangingEstadoId] = useState<number | null>(null)
+  const [viewingComprobanteId, setViewingComprobanteId] = useState<number | null>(null)
 
   const load = async () => {
     setLoading(true)
@@ -85,6 +87,17 @@ export default function CobrosPagosReportadosPage() {
       toast.error(e?.message || 'Error al actualizar.')
     } finally {
       setChangingEstadoId(null)
+    }
+  }
+
+  const handleVerComprobante = async (id: number) => {
+    setViewingComprobanteId(id)
+    try {
+      await openComprobanteInNewTab(id)
+    } catch (e: any) {
+      toast.error(e?.message || 'No se pudo abrir el comprobante.')
+    } finally {
+      setViewingComprobanteId(null)
     }
   }
 
@@ -169,6 +182,7 @@ export default function CobrosPagosReportadosPage() {
                     <th className="text-left py-2">Fecha pago</th>
                     <th className="text-left py-2">Nº operación</th>
                     <th className="text-left py-2">Fecha reporte</th>
+                    <th className="text-left py-2">Observación</th>
                     <th className="text-left py-2">Estado</th>
                     <th className="text-left py-2">Acciones</th>
                   </tr>
@@ -183,49 +197,51 @@ export default function CobrosPagosReportadosPage() {
                       <td className="py-2">{row.fecha_pago}</td>
                       <td className="py-2">{row.numero_operacion}</td>
                       <td className="py-2">{new Date(row.fecha_reporte).toLocaleString()}</td>
+                      <td className="py-2 max-w-[220px]" title={row.observacion ?? ''}>
+                        {row.observacion ? <span className="text-amber-700 text-xs line-clamp-2">{row.observacion}</span> : '—'}
+                      </td>
                       <td className="py-2">
                         <Badge variant={ESTADO_BADGE[row.estado]?.variant ?? 'outline'}>
                           {ESTADO_BADGE[row.estado]?.label ?? row.estado}
                         </Badge>
                       </td>
                       <td className="py-2">
-                        <div className="flex flex-wrap gap-1">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => navigate(`/cobros/pagos-reportados/${row.id}`)}
-                          >
-                            Ver detalle
+                        <div className="flex flex-wrap gap-0.5 items-center">
+                          <Button variant="ghost" size="icon" className="h-8 w-8" title="Ver comprobante (imagen)" onClick={() => handleVerComprobante(row.id)} disabled={viewingComprobanteId === row.id}>
+                            {viewingComprobanteId === row.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
                           </Button>
-                          <select
-                            className="border rounded text-xs px-2 py-1"
-                            value=""
-                            onChange={(e) => {
-                              const v = e.target.value
-                              e.target.value = ''
-                              if (!v) return
-                              if (v === 'rechazado') {
-                                const motivo = window.prompt('Motivo de rechazo (obligatorio):')
-                                if (motivo?.trim()) handleCambiarEstado(row.id, v, motivo.trim())
-                                return
-                              }
-                              handleCambiarEstado(row.id, v)
-                            }}
-                            disabled={changingEstadoId === row.id}
-                          >
-                            <option value="">Cambiar estado</option>
-                            <option value="pendiente">Pendiente</option>
-                            <option value="en_revision">En revisión</option>
-                            <option value="aprobado">Aprobar</option>
-                            <option value="rechazado">Rechazar</option>
-                          </select>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            title="Enviar recibo PDF por correo"
-                            onClick={() => handleEnviarRecibo(row.id)}
-                            disabled={sendingId === row.id}
-                          >
+                          <Button variant="ghost" size="icon" className="h-8 w-8" title="Ver detalle" onClick={() => navigate(`/cobros/pagos-reportados/${row.id}`)}>
+                            <FileText className="h-4 w-4" />
+                          </Button>
+                          <div className="relative inline-block h-8 w-8">
+                            <select
+                              className="absolute inset-0 w-full h-full min-w-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                              value=""
+                              title="Cambiar estado"
+                              onChange={(e) => {
+                                const v = e.target.value
+                                e.target.value = ''
+                                if (!v) return
+                                if (v === 'rechazado') {
+                                  const motivo = window.prompt('Motivo de rechazo (obligatorio):')
+                                  if (motivo?.trim()) handleCambiarEstado(row.id, v, motivo.trim())
+                                  return
+                                }
+                                handleCambiarEstado(row.id, v)
+                              }}
+                              disabled={changingEstadoId === row.id}
+                            >
+                              <option value="">Cambiar estado</option>
+                              <option value="pendiente">Pendiente</option>
+                              <option value="en_revision">En revisión</option>
+                              <option value="aprobado">Aprobar</option>
+                              <option value="rechazado">Rechazar</option>
+                            </select>
+                            <span className="pointer-events-none flex h-8 w-8 items-center justify-center rounded-md border border-input bg-background" title="Cambiar estado">
+                              {changingEstadoId === row.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <SlidersHorizontal className="h-4 w-4" />}
+                            </span>
+                          </div>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" title="Enviar recibo PDF por correo" onClick={() => handleEnviarRecibo(row.id)} disabled={sendingId === row.id}>
                             {sendingId === row.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
                           </Button>
                         </div>

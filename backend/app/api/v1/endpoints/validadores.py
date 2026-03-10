@@ -37,18 +37,31 @@ def validate_cedula(cedula: str) -> dict[str, Any]:
     """
     if not cedula:
         return {"valido": False, "error": "Cédula no puede estar vacía"}
-    
-    cedula_clean = cedula.strip().upper().replace("-", "").replace(" ", "")
-    
+
+    # Quitar espacios, guiones y puntos (no aceptar puntos ni signos intermedios)
+    cedula_clean = cedula.strip().upper().replace(" ", "").replace("-", "").replace(".", "")
+
+    # Solo permitir letra [VEGJ] opcional + dígitos
+    if not re.match(r"^[VEGJ]?\d+$", cedula_clean):
+        return {
+            "valido": False,
+            "valor_formateado": cedula_clean,
+            "error": "No use puntos ni signos intermedios. Solo letra (V, E, G o J) y dígitos."
+        }
+
+    # Si solo ingresaron 6-11 dígitos, anteponer V al procesar
+    if re.match(r"^\d{6,11}$", cedula_clean):
+        cedula_clean = "V" + cedula_clean
+
     # Patrón: [VEGJ] + 6-11 dígitos (ej: V12345678)
     pattern = r"^([VEGJ])(\d{6,11})$"
     match = re.match(pattern, cedula_clean)
-    
+
     if not match:
         return {
             "valido": False,
             "valor_formateado": cedula_clean,
-            "error": "Cédula inválida. Formato: [V|E|J|Z] + 6-11 dígitos (ej: V12345678)"
+            "error": "Cédula inválida. Formato: [V|E|G|J] + 6-11 dígitos (ej: V12345678)"
         }
     
     # Formatear: V-12345678

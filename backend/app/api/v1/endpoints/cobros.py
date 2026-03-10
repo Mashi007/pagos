@@ -44,6 +44,7 @@ class PagoReportadoListItem(BaseModel):
     fecha_reporte: datetime
     estado: str
     gemini_coincide_exacto: Optional[str] = None
+    observacion: Optional[str] = None  # Divergencias Gemini (gemini_comentario) para facilidad de revisión
 
     class Config:
         from_attributes = True
@@ -137,7 +138,7 @@ def list_pagos_reportados(
             referencia_interna=r.referencia_interna,
             nombres=r.nombres,
             apellidos=r.apellidos,
-            cedula_display=f"{r.tipo_cedula}-{r.numero_cedula}",
+            cedula_display=f"{r.tipo_cedula}{r.numero_cedula}",
             institucion_financiera=r.institucion_financiera,
             monto=float(r.monto),
             moneda=r.moneda or "BS",
@@ -146,6 +147,7 @@ def list_pagos_reportados(
             fecha_reporte=r.created_at,
             estado=r.estado,
             gemini_coincide_exacto=r.gemini_coincide_exacto,
+            observacion=r.gemini_comentario,
         ))
     return {"items": items, "total": total, "page": page, "per_page": per_page}
 

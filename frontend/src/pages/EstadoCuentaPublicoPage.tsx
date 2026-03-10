@@ -13,21 +13,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 
 const CEDULA_REGEX = /^[VEGJ]\d{6,11}$/i
 
-function normalizarCedulaInput(val: string): string {
-  return val.trim().toUpperCase().replace(/-/g, '').replace(/\s/g, '')
-}
-
-function validarCedulaFormato(cedula: string): { valido: boolean; error?: string } {
-  const s = cedula.trim()
+/** Normaliza para validar: quita espacios, guiones y puntos. Si solo 6-11 dígitos, al procesar se antepone V. No acepta puntos ni signos intermedios. */
+function normalizarCedulaParaProcesar(val: string): { valido: boolean; valorParaEnviar?: string; error?: string } {
+  const s = val.trim().toUpperCase().replace(/[\s.\-]/g, '')
   if (!s) return { valido: false, error: 'Ingrese el número de cédula.' }
-  const norm = normalizarCedulaInput(s)
-  if (!CEDULA_REGEX.test(norm)) {
-    return {
-      valido: false,
-      error: 'Cédula inválida. Use letra V, E, G o J seguida de 6 a 11 dígitos (ej: V12345678).',
-    }
+  if (!/^[VEGJ]?\d+$/.test(s)) {
+    return { valido: false, error: 'No use puntos ni signos intermedios. Solo letra (V, E, G o J) y dígitos.' }
   }
-  return { valido: true }
+  if (/^\d{6,11}$/.test(s)) return { valido: true, valorParaEnviar: 'V' + s }
+  if (CEDULA_REGEX.test(s)) return { valido: true, valorParaEnviar: s }
+  return { valido: false, error: 'Cédula inválida. Use letra V, E, G o J seguida de 6 a 11 dígitos.' }
 }
 
 type NotificationState = { type: 'error' | 'success'; message: string } | null
@@ -113,18 +108,20 @@ export default function EstadoCuentaPublicoPage() {
   }, [])
 
   const handleValidarCedula = async () => {
-    const v = validarCedulaFormato(cedula)
+    const v = normalizarCedulaParaProcesar(cedula)
     if (!v.valido) {
       showNotification('error', v.error ?? 'Cédula inválida.')
       return
     }
+    const cedulaEnviar = v.valorParaEnviar!
     setLoading(true)
     try {
-      const res = await validarCedulaEstadoCuenta(cedula.trim())
+      const res = await validarCedulaEstadoCuenta(cedulaEnviar)
       if (!res.ok) {
         showNotification('error', res.error || 'Cédula no válida.')
         return
       }
+      setCedula(cedulaEnviar)
       setNombre(res.nombre ?? '')
       setStep(2)
     } catch (e: unknown) {
@@ -134,14 +131,13 @@ export default function EstadoCuentaPublicoPage() {
     }
   }
 
-  // En step 2: al montar o al llegar, solicitar PDF y mostrarlo
+  // En step 2: al montar o al llegar, solicitar PDF y mostrarlo (cedula ya normalizada en step 1)
   useEffect(() => {
     if (step !== 2 || !cedula.trim() || loadingPdf || pdfDataUrl) return
-    const norm = normalizarCedulaInput(cedula)
-    if (!CEDULA_REGEX.test(norm)) return
+    if (!CEDULA_REGEX.test(cedula)) return
 
     setLoadingPdf(true)
-    solicitarEstadoCuenta(cedula.trim())
+    solicitarEstadoCuenta(cedula)
       .then((res) => {
         if (!res.ok) {
           showNotification('error', res.error || 'Error al generar estado de cuenta.')
@@ -212,11 +208,11 @@ export default function EstadoCuentaPublicoPage() {
           <Card className="w-full max-w-md">
             <CardHeader>
               <CardTitle>Estado de cuenta</CardTitle>
-              <p className="text-sm text-gray-600">Ingrese su número de cédula (V, E, G o J + 6 a 11 dígitos)</p>
+              <p className="text-sm text-gray-600">Solo letra (V, E, G o J) y 6 a 11 dígitos. No use puntos ni signos. Si solo ingresa números se procesará con V.</p>
             </CardHeader>
             <CardContent className="space-y-4">
               <Input
-                placeholder="Ej: V12345678 o V-12345678"
+                placeholder="Ej: V12345678, E12345678 o 12345678"
                 value={cedula}
                 onChange={(e) => setCedula(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleValidarCedula()}

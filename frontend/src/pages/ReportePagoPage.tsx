@@ -19,24 +19,23 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5 MB
 const ALLOWED_FILE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf']
 const MAX_LENGTH_INSTITUCION = 100
 const MAX_LENGTH_NUMERO_OPERACION = 100
-// Cédula: V|E|G|J + 6-11 dígitos (mismo patrón que backend validadores)
+// Cédula: solo letra (V|E|G|J) + 6-11 dígitos; no puntos ni signos intermedios. Si solo dígitos, al procesar se antepone V.
 const CEDULA_REGEX = /^[VEGJ]\d{6,11}$/i
 
-function normalizarCedulaInput(val: string): string {
-  return val.trim().toUpperCase().replace(/-/g, '').replace(/\s/g, '')
+/** Normaliza para validar: quita espacios, guiones y puntos. Rechaza si queda otro signo o punto. Si solo 6-11 dígitos, devuelve con V antepuesto. */
+function normalizarCedulaParaProcesar(val: string): { valido: boolean; valorParaEnviar?: string; error?: string } {
+  const s = val.trim().toUpperCase().replace(/[\s.\-]/g, '')
+  if (!s) return { valido: false, error: 'Ingrese el número de cédula.' }
+  if (!/^[VEGJ]?\d+$/.test(s)) {
+    return { valido: false, error: 'No use puntos ni signos intermedios. Solo letra (V, E, G o J) y dígitos.' }
+  }
+  if (/^\d{6,11}$/.test(s)) return { valido: true, valorParaEnviar: 'V' + s }
+  if (CEDULA_REGEX.test(s)) return { valido: true, valorParaEnviar: s }
+  return { valido: false, error: 'Cédula inválida. Use letra V, E, G o J seguida de 6 a 11 dígitos.' }
 }
 
-function validarCedulaFormato(cedula: string): { valido: boolean; error?: string } {
-  const s = cedula.trim()
-  if (!s) return { valido: false, error: 'Ingrese el número de cédula.' }
-  const norm = normalizarCedulaInput(s)
-  if (!CEDULA_REGEX.test(norm)) {
-    return {
-      valido: false,
-      error: 'Cédula inválida. Use letra V, E, G o J seguida de 6 a 11 dígitos (ej: V12345678 o V-12345678).',
-    }
-  }
-  return { valido: true }
+function normalizarCedulaInput(val: string): string {
+  return val.trim().toUpperCase().replace(/[\s.\-]/g, '')
 }
 
 function validarMonto(val: string): { valido: boolean; valor?: number; error?: string } {
@@ -202,18 +201,20 @@ export default function ReportePagoPage() {
   const stepAnnouncement = stepAnnouncements[step] || `Paso ${step}`
 
   const handleValidarCedula = async () => {
-    const v = validarCedulaFormato(cedula)
+    const v = normalizarCedulaParaProcesar(cedula)
     if (!v.valido) {
       showNotification('error', v.error ?? 'Cédula inválida.')
       return
     }
+    const cedulaEnviar = v.valorParaEnviar!
     setLoading(true)
     try {
-      const res = await validarCedulaPublico(cedula.trim())
+      const res = await validarCedulaPublico(cedulaEnviar)
       if (!res.ok) {
         showNotification('error', res.error || 'Cédula no válida.')
         return
       }
+      setCedula(cedulaEnviar)
       setNombre(res.nombre || '')
       setEmailParaVerificacion(res.email ?? res.email_enmascarado ?? '')
       setStep(2)
@@ -225,12 +226,12 @@ export default function ReportePagoPage() {
   }
 
   const handleEnviar = async () => {
-    // Validaciones iguales al backend; notificación específica por error
-    const vCedula = validarCedulaFormato(cedula)
+    const vCedula = normalizarCedulaParaProcesar(cedula)
     if (!vCedula.valido) {
       showNotification('error', vCedula.error ?? 'Cédula inválida.')
       return
     }
+    const cedulaEnviar = vCedula.valorParaEnviar!
     if (!institucionFinal.trim()) {
       showNotification('error', 'Seleccione la institución financiera.')
       return
@@ -268,8 +269,8 @@ export default function ReportePagoPage() {
       showNotification('error', 'No se pudo procesar el envío. Intente de nuevo.')
       return
     }
-    const tipoCedula = /^([VEJ])/i.exec(cedula)?.[1]?.toUpperCase() || 'V'
-    const numeroCedula = cedula.replace(/^[VEJ]\s*\-?\s*/i, '').replace(/\D/g, '')
+    const tipoCedula = cedulaEnviar.charAt(0).toUpperCase()
+    const numeroCedula = cedulaEnviar.slice(1).replace(/\D/g, '')
     const form = new FormData()
     form.append('tipo_cedula', tipoCedula)
     form.append('numero_cedula', numeroCedula)
@@ -388,11 +389,11 @@ export default function ReportePagoPage() {
           <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle>Reporte de pago</CardTitle>
-            <p className="text-sm text-gray-600">Ingrese su número de cédula (V, E, G o J + 6 a 11 dígitos)</p>
+            <p className="text-sm text-gray-600">Solo letra (V, E, G o J) y 6 a 11 dígitos. No use puntos ni signos. Si solo ingresa números se procesará con V.</p>
           </CardHeader>
           <CardContent className="space-y-4">
             <Input
-              placeholder="Ej: V12345678 o V-12345678"
+              placeholder="Ej: V12345678, E12345678 o 12345678"
               value={cedula}
               onChange={(e) => setCedula(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleValidarCedula()}
@@ -674,8 +675,15 @@ export default function ReportePagoPage() {
           </CardContent>
           <CardContent className="pt-0 space-y-3">
             <p className="text-sm text-gray-600">
-              Tu pago se procesará y se enviará al correo registrado en tu contrato de financiamiento ({emailParaVerificacion || 'correo registrado'}).
-              Si tienes algún problema con el correo, contacta a cobranza@rapicreditca.com o a tu asesor para actualización.
+              Tu pago se procesará y se enviará al correo registrado en tu contrato de financiamiento (
+              <span className="font-semibold text-[#1e3a5f] bg-blue-50 px-1.5 py-0.5 rounded">
+                {emailParaVerificacion || 'correo registrado'}
+              </span>
+              ). Si tienes algún problema con el correo, contacta a{' '}
+              <a href="mailto:cobranza@rapicreditca.com" className="font-semibold text-[#1e3a5f] underline hover:no-underline">
+                cobranza@rapicreditca.com
+              </a>{' '}
+              o a tu asesor para actualización.
             </p>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => setStep(6)}>No, editar</Button>

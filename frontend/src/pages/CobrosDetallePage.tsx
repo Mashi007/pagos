@@ -117,7 +117,7 @@ export default function CobrosDetallePage() {
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           <p><strong>Nombre:</strong> {detalle.nombres} {detalle.apellidos}</p>
-          <p><strong>Cédula:</strong> {detalle.tipo_cedula}-{detalle.numero_cedula}</p>
+          <p><strong>Cédula:</strong> {detalle.tipo_cedula}{detalle.numero_cedula}</p>
           <p><strong>Fecha de pago:</strong> {detalle.fecha_pago}</p>
           <p><strong>Institución:</strong> {detalle.institucion_financiera}</p>
           <p><strong>Número de operación:</strong> {detalle.numero_operacion}</p>

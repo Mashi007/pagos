@@ -85,6 +85,8 @@ export interface PagoReportadoItem {
   fecha_reporte: string
   estado: string
   gemini_coincide_exacto?: string
+  /** Divergencias de Gemini con lo ingresado (para columna Observación y revisión manual) */
+  observacion?: string
 }
 
 export interface ListPagosReportadosResponse {
