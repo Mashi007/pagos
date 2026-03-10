@@ -42,6 +42,9 @@ import { getErrorMessage } from '../../types/errors'
 import { useSearchParams } from 'react-router-dom'
 import { useGmailPipeline } from '../../hooks/useGmailPipeline'
 
+/** Si false, la opción "Descargar Excel" (Gmail) no se muestra en el submenú Agregar pago. */
+const SHOW_DESCARGA_EXCEL_EN_SUBMENU = false
+
 export function PagosList() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [activeTab, setActiveTab] = useState('todos')
@@ -73,6 +76,7 @@ export function PagosList() {
   } | null>(null)
   const [isImportingCobros, setIsImportingCobros] = useState(false)
   const [isExportingRevisionPagos, setIsExportingRevisionPagos] = useState(false)
+  const [isDescargandoGmailExcel, setIsDescargandoGmailExcel] = useState(false)
   const queryClient = useQueryClient()
   const lastRunForWhichWeShowedDialogRef = useRef<string | null>(null)
 
@@ -416,6 +420,32 @@ export function PagosList() {
                   <span>{loadingGmail ? 'Generando...' : 'Generar Excel desde Gmail'}</span>
                   <span className="text-xs text-gray-500 ml-auto">Gmail</span>
                 </button>
+                {SHOW_DESCARGA_EXCEL_EN_SUBMENU && (
+                  <button
+                    type="button"
+                    className="w-full flex items-center gap-3 px-4 py-3 text-left rounded-md hover:bg-blue-50 disabled:opacity-50"
+                    onClick={async () => {
+                      setAgregarPagoOpen(false)
+                      setIsDescargandoGmailExcel(true)
+                      try {
+                        await pagoService.downloadGmailExcel(gmailStatus?.latest_data_date ?? undefined)
+                        toast.success('Excel descargado.')
+                        pagoService.getGmailStatus().then(setGmailStatus)
+                      } catch (e) {
+                        toast.error(getErrorMessage(e))
+                      } finally {
+                        setIsDescargandoGmailExcel(false)
+                      }
+                    }}
+                    disabled={isDescargandoGmailExcel || !gmailStatus?.latest_data_date}
+                  >
+                    <Download className="w-5 h-5 text-gray-600" />
+                    <span>{isDescargandoGmailExcel ? 'Descargando...' : 'Descargar Excel'}</span>
+                    {gmailStatus?.latest_data_date && (
+                      <span className="text-xs text-gray-500 ml-auto">disponible: {gmailStatus.latest_data_date}</span>
+                    )}
+                  </button>
+                )}
                 <button
                   type="button"
                   className="w-full flex items-center gap-3 px-4 py-3 text-left rounded-md hover:bg-blue-50 disabled:opacity-50 border-t border-gray-100 mt-2 pt-3"

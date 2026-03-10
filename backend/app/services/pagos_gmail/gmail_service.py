@@ -5,7 +5,8 @@ descargar adjuntos e imágenes inline (MIME o HTML base64), marcar como leído.
 import base64
 import logging
 import re
-from datetime import datetime
+import time
+from datetime import datetime, timezone
 from typing import Any, List, Optional, Tuple
 
 from app.services.pagos_gmail.helpers import (
@@ -52,6 +53,35 @@ def _message_has_extractable_content(payload: dict) -> bool:
     return False
 
 
+# Máximo de segundos que esperamos en un reintento ante 429 (evita bloquear el worker ~15 min).
+_GMAIL_429_MAX_WAIT_SECONDS = 120
+
+
+def _parse_gmail_retry_after_seconds(exc: Exception) -> Optional[int]:
+    """
+    Parsea 'Retry after 2026-03-10T17:41:45.544Z' del mensaje de error 429 de Gmail.
+    Devuelve segundos hasta ese instante, o None si no se puede parsear.
+    """
+    msg = str(exc) if exc else ""
+    # Gmail: "User-rate limit exceeded.  Retry after 2026-03-10T17:41:45.544Z"
+    m = re.search(r"Retry\s+after\s+([\dTZ.:+-]+)", msg, re.IGNORECASE)
+    if not m:
+        return None
+    raw = m.group(1).strip()
+    try:
+        # ISO 8601 con Z -> reemplazar por +00:00 para fromisoformat
+        if raw.endswith("Z"):
+            raw = raw[:-1] + "+00:00"
+        retry_at = datetime.fromisoformat(raw)
+        if retry_at.tzinfo is None:
+            retry_at = retry_at.replace(tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
+        delta = (retry_at - now).total_seconds()
+        return max(0, int(delta))
+    except (ValueError, TypeError):
+        return None
+
+
 def list_unread_with_attachments(service: Any) -> List[dict]:
     """
     Lista TODOS los mensajes NO LEÍDOS. No filtra por contenido: el filtro de metadata
@@ -59,8 +89,13 @@ def list_unread_with_attachments(service: Any) -> List[dict]:
     dentro de message/rfc822 serían excluidos erróneamente. En cambio, el pipeline procesa
     cada correo (obteniendo el payload completo), extrae lo que encuentra y, si no hay
     imágenes, guarda una fila NA. Todos se marcan como leídos al finalizar.
+
+    Ante 429 (rate limit): se registra WARNING con retry-after; si la espera es <= 2 min
+    se espera y se reintenta una vez; si no, se devuelve [] para no bloquear el worker.
     """
-    try:
+    from googleapiclient.errors import HttpError
+
+    def _fetch() -> List[dict]:
         result = service.users().messages().list(userId="me", labelIds=["UNREAD"], maxResults=500).execute()
         messages = result.get("messages", [])
         out = []
@@ -73,6 +108,32 @@ def list_unread_with_attachments(service: Any) -> List[dict]:
             headers = {h["name"].lower(): h["value"] for h in payload.get("headers", [])}
             out.append({"id": mid, "payload": payload, "headers": headers})
         return out
+
+    try:
+        return _fetch()
+    except HttpError as e:
+        if e.resp.status != 429:
+            logger.exception("Gmail list_unread_with_attachments: %s", e)
+            return []
+        wait_sec = _parse_gmail_retry_after_seconds(e)
+        retry_after_str = f" (retry after {wait_sec}s)" if wait_sec is not None else ""
+        logger.warning(
+            "Gmail list_unread_with_attachments: rate limit 429%s — %s",
+            retry_after_str,
+            getattr(e, "uri", ""),
+        )
+        if wait_sec is not None and 0 < wait_sec <= _GMAIL_429_MAX_WAIT_SECONDS:
+            logger.warning("[PAGOS_GMAIL] Esperando %ds por rate limit Gmail, luego 1 reintento.", wait_sec)
+            time.sleep(wait_sec)
+            try:
+                return _fetch()
+            except HttpError as e2:
+                if e2.resp.status == 429:
+                    logger.warning("Gmail list_unread_with_attachments: 429 de nuevo tras espera — devolviendo []")
+                    return []
+                logger.exception("Gmail list_unread_with_attachments (reintento): %s", e2)
+                return []
+        return []
     except Exception as e:
         logger.exception("Gmail list_unread_with_attachments: %s", e)
         return []
