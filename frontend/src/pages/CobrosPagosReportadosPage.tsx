@@ -17,10 +17,10 @@ import { Input } from '../components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import toast from 'react-hot-toast'
-import { Mail, Loader2, Eye, FileText, Settings, Clock, Search, CheckCircle, XCircle, Trash2, type LucideIcon } from 'lucide-react'
+import { Mail, Loader2, Eye, FileText, Settings, Clock, Search, CheckCircle, XCircle, Trash2 } from 'lucide-react'
 import { PUBLIC_REPORTE_PAGO_PATH } from '../config/env'
 
-const ESTADO_CONFIG: Record<string, { label: string; short: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; Icon: LucideIcon }> = {
+const ESTADO_CONFIG: Record<string, { label: string; short: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; Icon: typeof Clock }> = {
   pendiente: { label: 'Pendiente', short: 'Pend.', variant: 'secondary', Icon: Clock },
   en_revision: { label: 'En revisión (manual)', short: 'Revisión', variant: 'outline', Icon: Search },
   aprobado: { label: 'Aprobado', short: 'Aprobado', variant: 'default', Icon: CheckCircle },
