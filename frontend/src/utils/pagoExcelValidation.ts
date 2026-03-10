@@ -9,7 +9,7 @@ import { validateExcelFile, validateExcelData, sanitizeFileName } from './excelV
 
 /** Texto de observación por columna; se muestra solo en la celda correspondiente del Excel. Especifican exactamente qué falla. */
 export const OBSERVACIONES_POR_CAMPO: Record<string, string> = {
-  numero_documento: 'Documento duplicado (en archivo o en BD). Única regla: no duplicados.',
+  numero_documento: 'Documento duplicado (en archivo o en BD). Se aceptan todos los formatos; única regla: no duplicados.',
   fecha_pago: 'Fecha inválida o formato incorrecto (use DD/MM/YYYY)',
   cedula: 'Cédula no existe en clientes',
   monto_pagado: 'Monto inválido o ≤ 0',
@@ -242,14 +242,15 @@ export function validatePagoField(
   }
 
   // ── NÚMERO DE DOCUMENTO ──────────────────────────────────────────────────
+  // Acepta CUALQUIER formato (BNC/, ZELLE, numérico, REF, etc.). ÚNICA REGLA: no duplicados.
   if (field === 'numero_documento') {
     const docNorm = (value === 'NaN' || value === 'nan' || value === 'undefined')
       ? ''
       : (normalizarNumeroDocumento(value) || String(value)).trim() || ''
-    if (!docNorm) return { isValid: true }  // Documento vacío es permitido
+    if (!docNorm) return { isValid: true }  // Documento vacío permitido (varias filas sin documento)
 
     if (options?.documentosDuplicadosBD?.has(docNorm))
-      return { isValid: false, message: 'Documento ya existe en la base de datos' }
+      return { isValid: false, message: 'Documento ya existe en la base de datos. Única regla: no duplicados.' }
     if (options?.documentosExistentes?.has(docNorm))
       return { isValid: false, message: 'Documento duplicado. No se aceptan duplicados.' }
     if (options?.documentosEnArchivo?.has(docNorm))

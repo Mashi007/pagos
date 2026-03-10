@@ -7,8 +7,7 @@ NÂº documento / referencia de pago:
 - Regla general: no se aceptan duplicados en documentos. En todo el sistema (carga masiva, crear,
   actualizar, BD) no puede existir dos pagos con el mismo NÂº documento. Misma clave canÃ³nica =
   duplicado â†’ rechazo.
-- Se acepta CUALQUIER formato (BNC/, BINANCE, VE/, ZELLE/, numÃ©rico, etc.). Documentos numÃ©ricos
-  de 10 a 25 dÃ­gitos sin problemas. Varias filas sin documento (vacÃ­o) se permiten.
+- Se aceptan TODOS los formatos (BNC/, BINANCE, VE/, ZELLE/, numérico, REF, etc.). Límite 100 caracteres. Varias filas sin documento (vacío) se permiten. Única regla: no duplicados.
 """
 import calendar
 import io
@@ -20,7 +19,7 @@ from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query, HTTPException, UploadFile, File, Body
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
@@ -58,6 +57,18 @@ class ValidarFilasBatchBody(BaseModel):
     """Batch de cÃ©dulas y documentos para validar contra BD."""
     cedulas: list[str] = []
     documentos: list[str] = []  # Solo los no vacÃ­os
+
+
+class PagoBatchBody(BaseModel):
+    """Array de pagos para crear en una sola peticiÃ³n (Guardar todos). MÃ¡ximo 500 ítems."""
+    pagos: list[PagoCreate]
+
+    @field_validator("pagos")
+    @classmethod
+    def pagos_limite(cls, v: list) -> list:
+        if len(v) > 500:
+            raise ValueError("MÃ¡ximo 500 pagos por lote. Divida en varios envíos.")
+        return v
 
 
 
@@ -398,8 +409,15 @@ async def upload_excel_pagos(
     current_user: UserResponse = Depends(get_current_user),
 ):
     """
-    Carga masiva de pagos desde Excel.
-    Formato esperado: columnas compatibles con Pago (cedula, prestamo_id, fecha_pago, monto_pagado, numero_documento, etc.).
+    Carga masiva de pagos desde Excel (subir y procesar todo en el servidor).
+    Formatos de columnas soportados (primera fila = cabecera; datos desde fila 2):
+    - Formato D (principal): Cédula | Monto | Fecha | Nº documento
+    - Formato A: Documento | Cédula | Fecha | Monto
+    - Formato B: Fecha | Cédula | Monto | Documento
+    - Formato C: Cédula | ID Préstamo | Fecha | Monto | Nº documento
+    Recomendado: hasta 2.500 filas para evitar timeouts; máximo 10.000.
+    Timeout: en producción, configurar timeout del servidor (uvicorn/gunicorn o proxy)
+    suficientemente alto para archivos grandes (p. ej. 120 s) para POST /pagos/upload.
     """
     if not file.filename or not file.filename.lower().endswith((".xlsx", ".xls")):
         raise HTTPException(status_code=400, detail="Debe subir un archivo Excel (.xlsx o .xls)")
@@ -438,27 +456,16 @@ async def upload_excel_pagos(
             return bool(re.match(r"^[VEJZ]\d{6,11}$", s, re.IGNORECASE))
 
         def _looks_like_documento(v: Any) -> bool:
-            """True si el valor puede ser NÂº documento (cualquier formato). Se acepta todo lo que no sea cÃ©dula."""
+            """True si el valor puede ser Nº documento. REGLA: aceptar TODOS los formatos; única restricción = no duplicados."""
             if v is None or (isinstance(v, str) and not v.strip()):
                 return False
             s = _celda_a_string_documento(v)
-            if not s or len(s) < 2:
+            if not s:
                 return False
             if _looks_like_cedula(v):
-                return False  # No confundir cÃ©dula con documento
-            # NumÃ©rico largo (ej. 740087467177192)
-            if re.match(r"^\d{10,}$", s):
-                return True
-            # Con / o prefijos tÃ­picos (BNC/, ZELLE/, VE/, etc.)
-            if "/" in s or re.search(r"^(BNC|ZELLE|BINANCE|VE|BS\.)", s, re.IGNORECASE):
-                return True
-            # AlfanumÃ©rico (ej. JPM99BMSWM4Y): cualquier combinaciÃ³n letras+nÃºmeros
-            if re.search(r"[A-Za-z]", s) and re.search(r"\d", s) and len(s) <= _MAX_LEN_NUMERO_DOCUMENTO:
-                return True
-            # Solo letras o solo nÃºmeros (6+ caracteres)
-            if len(s) >= 6:
-                return True
-            return False
+                return False  # No confundir cédula con documento
+            # Cualquier otro valor no vacío (1+ caracteres, hasta límite BD) se acepta como documento
+            return len(s) <= _MAX_LEN_NUMERO_DOCUMENTO
 
         def _looks_like_date(v: Any) -> bool:
             if v is None:
@@ -1384,6 +1391,87 @@ def _numero_documento_ya_existe(
     if exclude_pago_id is not None:
         q = q.where(Pago.id != exclude_pago_id)
     return db.scalar(q) is not None
+
+
+@router.post("/batch", response_model=dict)
+def crear_pagos_batch(
+    body: PagoBatchBody,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
+    """
+    Crea varios pagos en una sola peticiÃ³n (mÃ¡x. 500).
+    Devuelve Ã©xitos y errores por Ã­ndice para reducir rondas y timeouts en "Guardar todos".
+    """
+    usuario_email = current_user.email if current_user else "sistema@rapicredit.com"
+    results: list[dict] = []
+    ok_count = 0
+    fail_count = 0
+    for idx, payload in enumerate(body.pagos):
+        try:
+            num_doc = normalize_documento(payload.numero_documento)
+            if num_doc and _numero_documento_ya_existe(db, num_doc):
+                results.append({"index": idx, "success": False, "error": "Ya existe un pago con ese NÂº de documento.", "status_code": 409})
+                fail_count += 1
+                continue
+            ref = (num_doc or "N/A")[:_MAX_LEN_NUMERO_DOCUMENTO]
+            fecha_pago_ts = datetime.combine(payload.fecha_pago, dt_time.min)
+            conciliado = payload.conciliado if payload.conciliado is not None else False
+            cedula_normalizada = payload.cedula_cliente.strip().upper() if payload.cedula_cliente else ""
+            if payload.prestamo_id:
+                prestamo = db.execute(select(Prestamo).where(Prestamo.id == payload.prestamo_id)).scalars().first()
+                if not prestamo:
+                    results.append({"index": idx, "success": False, "error": f"CrÃ©dito #{payload.prestamo_id} no existe.", "status_code": 400})
+                    fail_count += 1
+                    continue
+            if cedula_normalizada and payload.prestamo_id:
+                cliente = db.execute(select(Cliente).where(Cliente.cedula == cedula_normalizada)).scalars().first()
+                if not cliente:
+                    results.append({"index": idx, "success": False, "error": f"No existe cliente con cÃ©dula {cedula_normalizada}", "status_code": 404})
+                    fail_count += 1
+                    continue
+            row = Pago(
+                cedula_cliente=cedula_normalizada,
+                prestamo_id=payload.prestamo_id,
+                fecha_pago=fecha_pago_ts,
+                monto_pagado=payload.monto_pagado,
+                numero_documento=num_doc,
+                institucion_bancaria=payload.institucion_bancaria.strip() if payload.institucion_bancaria else None,
+                estado="PENDIENTE",
+                notas=payload.notas.strip() if payload.notas else None,
+                referencia_pago=ref,
+                conciliado=conciliado,
+                fecha_conciliacion=datetime.now(ZoneInfo(TZ_NEGOCIO)) if conciliado else None,
+                verificado_concordancia="SI" if conciliado else "",
+                usuario_registro=usuario_email,
+            )
+            db.add(row)
+            db.commit()
+            db.refresh(row)
+            if row.prestamo_id and float(row.monto_pagado or 0) > 0:
+                try:
+                    _aplicar_pago_a_cuotas_interno(row, db)
+                    row.estado = "PAGADO"
+                    db.commit()
+                    db.refresh(row)
+                except Exception as e:
+                    logger.warning("Batch: no se pudo aplicar a cuotas (Ã­ndice %s): %s", idx, e)
+                    db.rollback()
+            results.append({"index": idx, "success": True, "pago": _pago_to_response(row)})
+            ok_count += 1
+        except IntegrityError as e:
+            db.rollback()
+            if getattr(getattr(e, "orig", None), "pgcode", None) == "23505":
+                results.append({"index": idx, "success": False, "error": "NÂº de documento duplicado.", "status_code": 409})
+            else:
+                results.append({"index": idx, "success": False, "error": str(e), "status_code": 500})
+            fail_count += 1
+        except Exception as e:
+            db.rollback()
+            logger.exception("Batch Ã­ndice %s: %s", idx, e)
+            results.append({"index": idx, "success": False, "error": str(e), "status_code": 500})
+            fail_count += 1
+    return {"results": results, "ok_count": ok_count, "fail_count": fail_count}
 
 
 @router.post("", response_model=dict, status_code=201)

@@ -100,6 +100,18 @@ class PagoService {
     return await apiClient.post(this.baseUrl, data)
   }
 
+  /**
+   * Crea varios pagos en una sola petición (Guardar todos). Máx. 500.
+   * Devuelve resultados por índice (éxito/error) para actualizar la tabla sin múltiples rondas.
+   */
+  async createPagosBatch(pagos: PagoCreate[]): Promise<{
+    results: Array<{ index: number; success: boolean; pago?: Pago; error?: string; status_code?: number }>
+    ok_count: number
+    fail_count: number
+  }> {
+    return await apiClient.post(`${this.baseUrl}/batch`, { pagos })
+  }
+
   async updatePago(id: number, data: Partial<PagoCreate>): Promise<Pago> {
     return await apiClient.put(`${this.baseUrl}/${id}`, data)
   }

@@ -138,7 +138,7 @@ La opción de la imagen **"Pagos (Excel)"** corresponde al flujo **ExcelUploader
 3. **Validar-filas-batch:** Ya protegido por dependencia global del router; no requiere cambio.
 4. **Batch de creación (opcional):** Para “Guardar todos”, valorar un endpoint tipo `POST /api/v1/pagos/batch` que reciba un array de pagos y devuelva éxitos/errores por índice, para reducir rondas y timeouts.
 5. **Documentar formatos de Excel:** En la UI (tooltip o ayuda) y en el código (docstrings), dejar explícitos los órdenes de columna soportados (D, A, B, C) y el recomendado (p. ej. Cédula | Fecha | Monto | Documento | ID Préstamo opcional | Conciliación).
-6. **Timeout de upload:** El proxy/frontend ya tiene timeouts mayores para `/pagos/upload`; asegurar que el backend no corte la request antes (p. ej. límite de tiempo en uvicorn/gunicorn).
+6. **Timeout de upload:** El proxy/frontend ya tiene timeouts mayores para `/pagos/upload`; asegurar que el backend no corte la request antes (p. ej. límite de tiempo en uvicorn/gunicorn). *Implementado:* docstring de `POST /pagos/upload` documenta que en producción debe configurarse timeout del servidor (uvicorn/gunicorn o proxy) suficientemente alto (p. ej. 120 s).
 
 ---
 

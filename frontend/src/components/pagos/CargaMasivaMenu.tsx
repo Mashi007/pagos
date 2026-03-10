@@ -3,6 +3,7 @@ import { Upload, FileSpreadsheet, CheckCircle, ChevronDown, Mail, Download } fro
 import { Button } from '../../components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover'
 import { ExcelUploaderPagosUI } from './ExcelUploaderPagosUI'
+import { ExcelUploader } from './ExcelUploader'
 import { ConciliacionExcelUploader } from './ConciliacionExcelUploader'
 import { ConfirmarBorrarDiaDialog } from './ConfirmarBorrarDiaDialog'
 import toast from 'react-hot-toast'
@@ -17,6 +18,7 @@ interface CargaMasivaMenuProps {
 
 export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
   const [showPagos, setShowPagos] = useState(false)
+  const [showUploadDirectPagos, setShowUploadDirectPagos] = useState(false)
   const [showConciliacion, setShowConciliacion] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
   const [showConfirmarBorrar, setShowConfirmarBorrar] = useState(false)
@@ -70,8 +72,28 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-56 p-2" align="end">
-          <p className="text-xs text-gray-500 px-2 py-1 mb-1">Cargar desde archivo</p>
-          
+          <p className="text-xs text-gray-500 px-2 py-1 mb-1">Pagos desde Excel</p>
+            <button
+              className="w-full flex items-center px-3 py-2.5 text-sm rounded-md hover:bg-gray-100 transition-colors"
+              onClick={() => {
+                setShowPagos(true)
+                setIsOpen(false)
+              }}
+            >
+              <FileSpreadsheet className="w-4 h-4 mr-2" />
+              Previsualizar y editar
+            </button>
+            <button
+              className="w-full flex items-center px-3 py-2.5 text-sm rounded-md hover:bg-gray-100 transition-colors"
+              onClick={() => {
+                setShowUploadDirectPagos(true)
+                setIsOpen(false)
+              }}
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              Subir y procesar todo
+            </button>
+          <p className="text-xs text-gray-500 px-2 py-1 mb-1 mt-2 border-t border-gray-100 pt-2">Otros</p>
           {gmailStatus && (
             <p className="text-xs text-gray-600 px-2 py-1 mb-1 border-b border-gray-100">
               {gmailStatus.last_status === 'error' ? (
@@ -84,16 +106,6 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
             </p>
           )}
 <div className="space-y-1">
-            <button
-              className="w-full flex items-center px-3 py-2.5 text-sm rounded-md hover:bg-gray-100 transition-colors"
-              onClick={() => {
-                setShowPagos(true)
-                setIsOpen(false)
-              }}
-            >
-              <FileSpreadsheet className="w-4 h-4 mr-2" />
-              Pagos (Excel)
-            </button>
             <button
               className="w-full flex items-center px-3 py-2.5 text-sm rounded-md hover:bg-gray-100 transition-colors"
               onClick={() => {
@@ -129,12 +141,23 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
         </PopoverContent>
       </Popover>
 
-      {/* Modal Carga Masiva Pagos */}
+      {/* Modal Previsualizar y editar (Pagos Excel) */}
       {showPagos && (
         <ExcelUploaderPagosUI
           onClose={() => setShowPagos(false)}
           onSuccess={() => {
             setShowPagos(false)
+            onSuccess?.()
+          }}
+        />
+      )}
+
+      {/* Modal Subir y procesar todo (Pagos Excel) */}
+      {showUploadDirectPagos && (
+        <ExcelUploader
+          onClose={() => setShowUploadDirectPagos(false)}
+          onSuccess={() => {
+            setShowUploadDirectPagos(false)
             onSuccess?.()
           }}
         />

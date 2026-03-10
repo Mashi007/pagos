@@ -1,6 +1,8 @@
 /**
- * UI para carga masiva de pagos desde Excel.
- * Columnas: Cédula, Fecha de pago, Monto, Documento, ID Préstamo (opcional).
+ * UI para carga masiva de pagos desde Excel (previsualizar y editar).
+ * Formatos de columnas soportados: D) Cédula | Monto | Fecha | Documento (recomendado);
+ * A) Documento | Cédula | Fecha | Monto; B) Fecha | Cédula | Monto | Documento;
+ * C) Cédula | ID Préstamo | Fecha | Monto | Documento.
  * Solo créditos activos (APROBADO, DESEMBOLSADO) en el selector.
  */
 
@@ -84,7 +86,10 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <FileSpreadsheet className="h-6 w-6" />
-              <h2 className="text-xl font-bold">CARGA MASIVA DE PAGOS</h2>
+              <div>
+                <h2 className="text-xl font-bold">CARGA MASIVA DE PAGOS</h2>
+                <p className="text-xs text-green-100 mt-0.5">Recomendado: Cédula | Fecha | Monto | Documento. Máx. 10 MB.</p>
+              </div>
               <div
                 className={`px-2 py-1 text-xs rounded-full flex items-center gap-1 ${
                   serviceStatus === 'online' ? 'bg-green-100 text-green-800' : serviceStatus === 'offline' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
@@ -176,11 +181,11 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
             </Card>
           )}
 
-          {/* TABLA EDITABLE - RENDERIZA SIEMPRE CUANDO HAY DATOS */}
+          {/* TABLA EDITABLE: solo filas pendientes (guardadas/enviadas a revisar se ocultan en cuanto se guardan) */}
           {excelData.length > 0 && (
             <div className="space-y-4">
               <TablaEditablePagos
-                rows={excelData}
+                rows={excelData.filter((r) => !savedRows.has(r._rowIndex) && !enviadosRevisar.has(r._rowIndex))}
                 prestamosPorCedula={prestamosPorCedula}
                 onUpdateCell={updateCellValue}
                 saveRowIfValid={saveRowIfValid}

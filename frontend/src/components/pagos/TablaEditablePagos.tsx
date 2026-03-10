@@ -1,9 +1,12 @@
 /**
  * Tabla editable para preview de carga masiva de pagos.
  * Muestra errores de validación por celda (cédula, fecha, monto, documento).
+ * La columna Crédito se rellena automáticamente cuando la cédula tiene un solo préstamo activo.
  */
 
+import { useEffect, useRef } from 'react'
 import type { PagoExcelRow } from '../../utils/pagoExcelValidation'
+import { cedulaLookupParaFila } from '../../utils/pagoExcelValidation'
 
 export interface FilaEditableProps {
   rows: PagoExcelRow[]
@@ -49,10 +52,70 @@ function CeldaEditable({
   )
 }
 
+function prestamoIdVacio(v: unknown): boolean {
+  return v == null || v === undefined || v === '' || v === 'none' || v === 0 || (typeof v === 'number' && Number.isNaN(v))
+}
+
+function CreditoCell({
+  row,
+  prestamosPorCedula,
+}: {
+  row: PagoExcelRow
+  prestamosPorCedula: Record<string, Array<{ id: number; estado: string }>>
+}) {
+  const lookup = cedulaLookupParaFila(row.cedula || '', row.numero_documento || '')
+  const sinGuion = lookup.replace(/-/g, '')
+  const prestamos =
+    prestamosPorCedula[lookup] ||
+    prestamosPorCedula[sinGuion] ||
+    prestamosPorCedula[lookup?.toUpperCase()] ||
+    prestamosPorCedula[lookup?.toLowerCase()] ||
+    []
+  const displayId =
+    !prestamoIdVacio(row.prestamo_id)
+      ? row.prestamo_id
+      : prestamos.length === 1
+        ? prestamos[0].id
+        : null
+  return (
+    <input
+      type="text"
+      value={displayId ?? ''}
+      readOnly
+      className="w-full p-1 border border-gray-200 rounded bg-gray-50 text-gray-600 text-sm"
+      placeholder="--"
+    />
+  )
+}
+
 export function TablaEditablePagos({
   rows,
+  prestamosPorCedula = {},
   onUpdateCell,
 }: FilaEditableProps) {
+  const autoFilledRef = useRef<Set<number>>(new Set())
+
+  // Auto-rellenar prestamo_id cuando la cédula tiene exactamente un préstamo (persiste en estado del padre)
+  useEffect(() => {
+    if (!rows?.length || Object.keys(prestamosPorCedula).length === 0) return
+    rows.forEach((row) => {
+      if (autoFilledRef.current.has(row._rowIndex)) return
+      if (!prestamoIdVacio(row.prestamo_id)) return
+      const lookup = cedulaLookupParaFila(row.cedula || '', row.numero_documento || '')
+      const sinGuion = lookup.replace(/-/g, '')
+      const prestamos =
+        prestamosPorCedula[lookup] ||
+        prestamosPorCedula[sinGuion] ||
+        prestamosPorCedula[lookup.toUpperCase()] ||
+        prestamosPorCedula[lookup.toLowerCase()] ||
+        []
+      if (prestamos.length === 1) {
+        autoFilledRef.current.add(row._rowIndex)
+        onUpdateCell(row, 'prestamo_id', prestamos[0].id)
+      }
+    })
+  }, [rows, prestamosPorCedula, onUpdateCell])
+
   if (!rows || rows.length === 0) {
     return (
       <div className="text-gray-500 p-4 border border-dashed border-gray-300 rounded">
@@ -149,14 +212,11 @@ export function TablaEditablePagos({
                   />
                 </td>
 
-                {/* Crédito (solo lectura por ahora) */}
+                {/* Crédito: auto-rellenado cuando la cédula tiene un solo préstamo */}
                 <td className="p-2">
-                  <input
-                    type="text"
-                    value={row.prestamo_id ?? ''}
-                    readOnly
-                    className="w-full p-1 border border-gray-200 rounded bg-gray-50 text-gray-600 text-sm"
-                    placeholder="--"
+                  <CreditoCell
+                    row={row}
+                    prestamosPorCedula={prestamosPorCedula}
                   />
                 </td>
               </tr>
