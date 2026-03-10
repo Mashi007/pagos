@@ -16,7 +16,7 @@ import { Input } from '../components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import toast from 'react-hot-toast'
-import { Mail, Loader2, Eye, FileText, SlidersHorizontal } from 'lucide-react'
+import { Mail, Loader2, Eye, FileText, Settings } from 'lucide-react'
 import { PUBLIC_REPORTE_PAGO_PATH } from '../config/env'
 
 const ESTADO_BADGE: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
@@ -238,7 +238,7 @@ export default function CobrosPagosReportadosPage() {
                               <option value="rechazado">Rechazar</option>
                             </select>
                             <span className="pointer-events-none flex h-8 w-8 items-center justify-center rounded-md border border-input bg-background" title="Cambiar estado">
-                              {changingEstadoId === row.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <SlidersHorizontal className="h-4 w-4" />}
+                              {changingEstadoId === row.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Settings className="h-4 w-4" />}
                             </span>
                           </div>
                           <Button variant="ghost" size="icon" className="h-8 w-8" title="Enviar recibo PDF por correo" onClick={() => handleEnviarRecibo(row.id)} disabled={sendingId === row.id}>

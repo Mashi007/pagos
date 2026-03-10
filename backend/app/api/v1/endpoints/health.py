@@ -160,29 +160,54 @@ async def health_check_cobros(db: Session = Depends(get_db)):
         "smtp_configured": False,
         "error": None,
     }
+
+    # Fase 1: BD
     try:
         db.execute(text("SELECT 1"))
         result["db_ok"] = True
+        logger.info("[Health/cobros] Fase BD: OK")
     except Exception as e:
         result["status"] = "error"
         result["error"] = f"BD: {type(e).__name__}: {str(e)[:200]}"
+        logger.warning("[Health/cobros] Fase BD: ERROR - %s", e)
         return result
 
+    # Fase 2: Gemini configurado (GEMINI_API_KEY)
     gemini_key = getattr(settings, "GEMINI_API_KEY", None) or ""
     result["gemini_configured"] = bool((gemini_key or "").strip())
+    if result["gemini_configured"]:
+        logger.info("[Health/cobros] Fase Gemini configurado: OK")
+    else:
+        logger.warning("[Health/cobros] Fase Gemini configurado: NO (GEMINI_API_KEY vacío o no configurado)")
 
+    # Fase 3: Servicio Gemini para Cobros (compare_form_with_image cargable)
     try:
         from app.services.pagos_gmail.gemini_service import compare_form_with_image
         result["cobros_gemini_service_connected"] = callable(compare_form_with_image)
+        if result["cobros_gemini_service_connected"]:
+            logger.info("[Health/cobros] Fase Gemini servicio Cobros: OK")
+        else:
+            logger.warning("[Health/cobros] Fase Gemini servicio Cobros: NO (compare_form_with_image no callable)")
     except Exception as e:
-        logger.warning("[Health/cobros] No se pudo cargar servicio Gemini para Cobros: %s", e)
+        logger.warning("[Health/cobros] Fase Gemini servicio Cobros: ERROR - %s", e)
 
+    # Fase 4: SMTP (host, usuario, contraseña)
     cfg = get_smtp_config()
-    result["smtp_configured"] = bool(
-        (cfg.get("smtp_host") or "").strip()
-        and (cfg.get("smtp_user") or "").strip()
-        and (cfg.get("smtp_password") or "").strip()
-    )
+    has_host = bool((cfg.get("smtp_host") or "").strip())
+    has_user = bool((cfg.get("smtp_user") or "").strip())
+    has_pass = bool((cfg.get("smtp_password") or "").strip())
+    result["smtp_configured"] = has_host and has_user and has_pass
+    if result["smtp_configured"]:
+        logger.info("[Health/cobros] Fase SMTP: OK")
+    else:
+        missing = []
+        if not has_host:
+            missing.append("host")
+        if not has_user:
+            missing.append("usuario")
+        if not has_pass:
+            missing.append("contraseña")
+        logger.warning("[Health/cobros] Fase SMTP: NO - faltan: %s", ", ".join(missing))
 
     if not result["gemini_configured"] or not result["smtp_configured"] or not result["cobros_gemini_service_connected"]:
         result["status"] = "degraded"
@@ -194,6 +219,9 @@ async def health_check_cobros(db: Session = Depends(get_db)):
         if not result["smtp_configured"]:
             parts.append("SMTP incompleto (host/usuario/contraseña)")
         result["error"] = "; ".join(parts) if parts else result.get("error")
+        logger.warning("[Health/cobros] Resultado: degraded - %s", result["error"])
+    else:
+        logger.info("[Health/cobros] Resultado: ok (todas las fases OK)")
 
     return result
 

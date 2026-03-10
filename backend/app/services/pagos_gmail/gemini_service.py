@@ -390,18 +390,34 @@ def _extract_retry_seconds(exc: Exception) -> int:
 
 # ── Cobros: comparar datos del formulario con la imagen del comprobante ─────
 
-GEMINI_COMPARAR_PROMPT_PREFIX = """Eres un revisor de comprobantes de pago. Te doy:
-1) Los datos que una persona ingresó en un formulario (reporte de pago).
-2) Una imagen/PDF del comprobante de pago (recibo bancario, transferencia, etc.).
+GEMINI_COMPARAR_PROMPT_PREFIX = """Eres un revisor de comprobantes de pago. Recibes:
+1) Los datos que una persona ingresó manualmente en un formulario (cada campo listado abajo).
+2) Una imagen o PDF del comprobante de pago (recibo bancario, transferencia, Pago Móvil, etc.).
 
-Tu tarea: comparar si los datos del formulario coinciden AL 100% con lo que se ve en el comprobante.
+INSTRUCCIONES:
 
-Criterio ESTRICTO:
-- Si TODOS los campos coinciden exactamente (fecha, banco/institución, monto, número de operación/referencia, y la cédula del pagador si aparece): responde con coincide_exacto = true.
-- Si hay CUALQUIER diferencia (monto distinto, número distinto, fecha distinta, banco distinto, o no puedes verificar): responde con coincide_exacto = false y requiere_revision_humana = true.
+Paso 1 — Extraer de la imagen: Lee el comprobante y extrae con precisión estos datos (los que aparezcan):
+- fecha_pago: fecha de la operación/transacción (dd/mm/yyyy o como figure).
+- institucion_financiera: nombre del banco o entidad (ej. Banesco, Mercantil, BNC, BDV, Pago Móvil).
+- numero_operacion: número de referencia, serial, operación o comprobante (solo dígitos/código, sin etiquetas).
+- monto: cantidad pagada (número; puede estar en Bs, USD, USDT, etc.).
+- moneda: BS, USD, USDT, etc., según lo que indique el comprobante.
+- cedula_pagador: cédula o RIF del quien paga/deposita (V-, E- o J- + números), si aparece.
 
-Responde ÚNICAMENTE con un JSON válido, sin markdown ni texto extra:
-{"coincide_exacto": true o false, "requiere_revision_humana": true o false, "comentario": "breve explicación"}
+Paso 2 — Comparar campo por campo: Para cada uno de los datos anteriores que hayas extraído, compáralo con el valor que la persona ingresó en el formulario. Considera:
+- Fecha: misma fecha (ignorar formato distinto si el día/mes/año coinciden).
+- Institución: mismo banco o entidad (sinónimos o nombre abreviado = válido).
+- Número de operación: mismo número o código (ignorar espacios o guiones intermedios).
+- Monto: mismo valor numérico; misma moneda o equivalente (BS vs Bs, USD vs US$).
+- Cédula: mismo tipo (V/E/J) y mismo número (ignorar guiones o espacios).
+
+Paso 3 — Decidir:
+- coincide_exacto = true SOLO si TODOS los campos que se pueden verificar en la imagen coinciden con lo ingresado en el formulario. Si la cédula no aparece en el comprobante, no la uses para marcar false.
+- coincide_exacto = false si CUALQUIER campo extraído de la imagen NO coincide con el formulario, o si no puedes leer con claridad algún dato necesario.
+- comentario: si coincide_exacto = false, es OBLIGATORIO explicar qué campo(s) no coinciden. Indica "En imagen: X. En formulario: Y" para cada divergencia. Si coincide_exacto = true, puedes poner "Todos los campos coinciden".
+
+Responde ÚNICAMENTE con un JSON válido, sin markdown ni texto antes o después:
+{"coincide_exacto": true o false, "requiere_revision_humana": true o false, "comentario": "explicación breve indicando qué campos coinciden o cuáles divergen (en imagen vs formulario)"}
 """
 
 
@@ -427,12 +443,12 @@ def compare_form_with_image(
         logger.warning("[COBROS] GEMINI_API_KEY no configurado para comparar formulario vs imagen.")
         return default_result
     text_data = (
-        "Datos ingresados en el formulario:\n"
-        f"- Fecha de pago: {form_data.get('fecha_pago')}\n"
-        f"- Institución financiera: {form_data.get('institucion_financiera')}\n"
-        f"- Número de operación/documento: {form_data.get('numero_operacion')}\n"
-        f"- Monto: {form_data.get('monto')} {form_data.get('moneda', 'BS')}\n"
-        f"- Cédula (tipo-número): {form_data.get('tipo_cedula')}-{form_data.get('numero_cedula')}\n"
+        "Valores ingresados manualmente en el formulario (compara cada uno con lo que leas en la imagen):\n"
+        f"- fecha_pago: {form_data.get('fecha_pago')}\n"
+        f"- institucion_financiera: {form_data.get('institucion_financiera')}\n"
+        f"- numero_operacion: {form_data.get('numero_operacion')}\n"
+        f"- monto: {form_data.get('monto')} {form_data.get('moneda', 'BS')}\n"
+        f"- cedula (tipo + número): {form_data.get('tipo_cedula')}-{form_data.get('numero_cedula')}\n"
     )
     prompt = GEMINI_COMPARAR_PROMPT_PREFIX + "\n\n" + text_data
     model_name = getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash")
