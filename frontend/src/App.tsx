@@ -123,22 +123,14 @@ function App() {
         <Routes>
         {/* Una sola raíz path="/" para que Layout reciba correctamente las rutas hijas (dashboard, clientes, etc.) */}
         <Route path="/" element={<RootLayoutWrapper />}>
-          {/* Raíz /pagos/ → mostrar Login directamente (sin Navigate) para evitar "operation is insecure" por historial */}
+          {/* Raíz /pagos/ sin auth → redirigir al formulario público (cliente no ve login ni resto de la app) */}
           <Route
             index
             element={
               isAuthenticated ? (
                 <Navigate to="/dashboard/menu" replace />
               ) : (
-                <motion.div
-                  key="login-index"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: ANIMATION_DURATION }}
-                >
-                  <Login />
-                </motion.div>
+                <Navigate to="/rapicredit" replace />
               )
             }
           />

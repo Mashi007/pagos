@@ -8,13 +8,14 @@ import { BASE_PATH } from '../../config/env'
 interface SimpleProtectedRouteProps {
   children: React.ReactNode
   requireAdmin?: boolean  // Cambio clave: requiredRoles â†’ requireAdmin
+  /** Si no autenticado, redirige aquí. Por defecto /rapicredit (formulario público). Empleados usan /login. */
   fallbackPath?: string
 }
 
 export function SimpleProtectedRoute({
   children,
   requireAdmin = false,  // Cambio clave: requiredRoles â†’ requireAdmin
-  fallbackPath = '/login'
+  fallbackPath = '/rapicredit'
 }: SimpleProtectedRouteProps) {
   const { isAuthenticated, user, isLoading } = useSimpleAuth()
   const location = useLocation()
@@ -64,7 +65,7 @@ export function SimpleProtectedRoute({
             onClick={() => window.location.href = BASE_PATH + fallbackPath}
             className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium"
           >
-            Ir al Login
+            {fallbackPath === '/login' ? 'Ir al Login' : 'Continuar'}
           </button>
         </div>
       </div>
