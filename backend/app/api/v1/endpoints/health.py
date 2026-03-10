@@ -3,6 +3,7 @@ Endpoints de health check para monitoreo y debugging de la aplicación.
 
 GET /health/                        - Health check básico
 GET /health/db                      - Verifica conexión a BD y tablas críticas
+GET /health/cobros                  - Módulo Cobros: BD, GEMINI_API_KEY y SMTP configurados (sin exponer secretos)
 GET /health/clientes-stats-diagnostico - Diagnóstico KPI nuevos_este_mes (público, sin auth)
 GET /health/detailed                - Reporte completo (solo dev)
 """
@@ -50,7 +51,7 @@ async def health_check_db(db: Session = Depends(get_db)):
         result["db_connected"] = True
         logger.debug("[Health] Conexión a BD verificada")
         
-        # Verificar tablas críticas
+        # Verificar tablas críticas (incluye módulos Cobros, auth, reportes)
         CRITICAL_TABLES = [
             "clientes",
             "prestamos",
@@ -61,6 +62,8 @@ async def health_check_db(db: Session = Depends(get_db)):
             "cuota_pagos",
             "pagos_whatsapp",
             "tickets",
+            "pagos_reportados",
+            "usuarios",
         ]
         
         inspector = inspect(engine)
@@ -135,6 +138,66 @@ async def health_clientes_stats_diagnostico(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
+@router.get("/cobros")
+async def health_check_cobros(db: Session = Depends(get_db)):
+    """
+    Verifica que el módulo Cobros tenga lo necesario para operar:
+    - BD accesible
+    - GEMINI_API_KEY configurado (sin llamar a la API, sin exponer el valor)
+    - Servicio Gemini de Cobros = servicio del sistema (app.services.pagos_gmail.gemini_service)
+    - SMTP con credenciales no vacías (desde Configuración > Email o .env)
+
+    No expone secretos. Útil para despliegue y alertas (ej. Uptime Robot).
+    """
+    from app.core.config import settings
+    from app.core.email_config_holder import get_smtp_config
+
+    result = {
+        "status": "ok",
+        "db_ok": False,
+        "gemini_configured": False,
+        "cobros_gemini_service_connected": False,
+        "smtp_configured": False,
+        "error": None,
+    }
+    try:
+        db.execute(text("SELECT 1"))
+        result["db_ok"] = True
+    except Exception as e:
+        result["status"] = "error"
+        result["error"] = f"BD: {type(e).__name__}: {str(e)[:200]}"
+        return result
+
+    gemini_key = getattr(settings, "GEMINI_API_KEY", None) or ""
+    result["gemini_configured"] = bool((gemini_key or "").strip())
+
+    try:
+        from app.services.pagos_gmail.gemini_service import compare_form_with_image
+        result["cobros_gemini_service_connected"] = callable(compare_form_with_image)
+    except Exception as e:
+        logger.warning("[Health/cobros] No se pudo cargar servicio Gemini para Cobros: %s", e)
+
+    cfg = get_smtp_config()
+    result["smtp_configured"] = bool(
+        (cfg.get("smtp_host") or "").strip()
+        and (cfg.get("smtp_user") or "").strip()
+        and (cfg.get("smtp_password") or "").strip()
+    )
+
+    if not result["gemini_configured"] or not result["smtp_configured"] or not result["cobros_gemini_service_connected"]:
+        result["status"] = "degraded"
+        parts = []
+        if not result["gemini_configured"]:
+            parts.append("GEMINI_API_KEY no configurado")
+        if result["gemini_configured"] and not result["cobros_gemini_service_connected"]:
+            parts.append("Servicio Gemini para Cobros no cargable")
+        if not result["smtp_configured"]:
+            parts.append("SMTP incompleto (host/usuario/contraseña)")
+        result["error"] = "; ".join(parts) if parts else result.get("error")
+
+    return result
+
+
 @router.get("/detailed")
 async def health_check_detailed(db: Session = Depends(get_db)):
     """Reporte detallado (para desarrollo y debugging).
@@ -154,9 +217,12 @@ async def health_check_detailed(db: Session = Depends(get_db)):
         inspector = inspect(engine)
         tables = inspector.get_table_names()
         
-        # Counts principales
+        # Counts principales (incluye tablas Cobros y usuarios)
         counts = {}
-        table_counts = ["clientes", "prestamos", "cuotas", "pagos", "pagos_con_errores", "pagos_whatsapp", "tickets"]
+        table_counts = [
+            "clientes", "prestamos", "cuotas", "pagos", "pagos_con_errores",
+            "pagos_whatsapp", "tickets", "pagos_reportados", "usuarios",
+        ]
         for table in table_counts:
             if table in tables:
                 try:
@@ -177,7 +243,7 @@ async def health_check_detailed(db: Session = Depends(get_db)):
             "table_counts": counts,
             "pool": pool_status,
             "database_url": settings.DATABASE_URL[:80] if settings.DATABASE_URL else None,
-            "environment": settings.ENVIRONMENT,
+            "environment": getattr(settings, "ENVIRONMENT", None),
         }
         
     except Exception as e:

@@ -15,7 +15,7 @@ function RootLayoutWrapper() {
   const location = useLocation()
   useSimpleAuth()
   const pathname = location.pathname.replace(/\/$/, '') || '/'
-  const isPublic = pathname === '/' || pathname === '/login'
+  const isPublic = pathname === '/' || pathname === '/login' || pathname === '/reporte-pago' || pathname === '/rapicredit'
   if (isPublic) return <Outlet />
   return (
     <SimpleProtectedRoute>
@@ -54,6 +54,10 @@ import EditarRevisionManual from './pages/EditarRevisionManual'
 // Ventas: en pausa (ruta redirige a /pagos)
 import ConversacionesWhatsAppPage from './pages/ConversacionesWhatsApp'
 import ComunicacionesPage from './pages/Comunicaciones'
+import ReportePagoPage from './pages/ReportePagoPage'
+import CobrosPagosReportadosPage from './pages/CobrosPagosReportadosPage'
+import CobrosDetallePage from './pages/CobrosDetallePage'
+import CobrosHistoricoPage from './pages/CobrosHistoricoPage'
 
 // Todas las páginas ahora están importadas desde archivos reales
 
@@ -131,6 +135,10 @@ function App() {
             }
           />
 
+          {/* Formulario público de reporte de pago (sin login). Link canónico termina en /rapicredit */}
+          <Route path="reporte-pago" element={<ReportePagoPage />} />
+          <Route path="rapicredit" element={<ReportePagoPage />} />
+
           {/* Login: misma pantalla que index cuando no autenticado */}
           <Route
             path="login"
@@ -176,6 +184,11 @@ function App() {
           <Route path="amortizacion" element={<AmortizacionPage />} />
 
           {/* Conciliación */}
+
+          {/* Cobros (Pagos Reportados, Detalle, Histórico) */}
+          <Route path="cobros/pagos-reportados" element={<CobrosPagosReportadosPage />} />
+          <Route path="cobros/pagos-reportados/:id" element={<CobrosDetallePage />} />
+          <Route path="cobros/historico-cliente" element={<CobrosHistoricoPage />} />
 
           {/* Reportes */}
           <Route

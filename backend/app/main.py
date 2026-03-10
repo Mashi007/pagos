@@ -85,12 +85,9 @@ def _startup_db_with_retry(engine, max_attempts: int = 10, delay_sec: float = 3.
     - Logging más detallado para debugging en Render
     """
     from sqlalchemy import text, inspect
-    from app.models import (  # noqa: F401
-        Base, Cliente, Prestamo, Ticket, Cuota, PagosWhatsapp, Configuracion, Auditoria,
-        User, DefinicionCampo, ConversacionAI, DiccionarioSemantico,
-        ConversacionCobranza, MensajeWhatsapp, PagosInforme,
-        PlantillaNotificacion, VariableNotificacion,
-    )
+    # Importar todos los modelos para que Base.metadata tenga todas las tablas (pagos_reportados, usuarios, etc.)
+    import app.models as _  # noqa: F401
+    from app.models import Base
     last_error = None
     current_delay = delay_sec
     

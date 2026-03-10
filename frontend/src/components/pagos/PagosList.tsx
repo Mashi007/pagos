@@ -66,6 +66,13 @@ export function PagosList() {
   const [conciliandoId, setConciliandoId] = useState<number | null>(null)
   const [isExportingRevisar, setIsExportingRevisar] = useState(false)
   const [showConfirmarBorrar, setShowConfirmarBorrar] = useState(false)
+  const [lastImportCobrosResult, setLastImportCobrosResult] = useState<{
+    registros_procesados: number
+    registros_con_error: number
+    mensaje: string
+  } | null>(null)
+  const [isImportingCobros, setIsImportingCobros] = useState(false)
+  const [isExportingRevisionPagos, setIsExportingRevisionPagos] = useState(false)
   const queryClient = useQueryClient()
   const lastRunForWhichWeShowedDialogRef = useRef<string | null>(null)
 
@@ -106,6 +113,63 @@ export function PagosList() {
     setAgregarPagoOpen(false)
     runGmail()
   }
+
+  const handleImportarDesdeCobros = async () => {
+    setAgregarPagoOpen(false)
+    setIsImportingCobros(true)
+    setLastImportCobrosResult(null)
+    try {
+      const res = await pagoService.importarDesdeCobros()
+      setLastImportCobrosResult({
+        registros_procesados: res.registros_procesados,
+        registros_con_error: res.registros_con_error,
+        mensaje: res.mensaje,
+      })
+      await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
+      await queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false })
+      await queryClient.invalidateQueries({ queryKey: ['pagos-con-errores'], exact: false })
+      toast.success(res.mensaje)
+      if (res.registros_con_error > 0) {
+        toast('Hay pagos en Revisar Pagos. Use el botón "Descargar Excel en revisión pagos" si desea exportarlos.', { duration: 5000 })
+      }
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || e?.message || 'Error al importar desde Cobros')
+    } finally {
+      setIsImportingCobros(false)
+    }
+  }
+
+  const handleDescargarExcelRevisionPagos = async () => {
+    setIsExportingRevisionPagos(true)
+    try {
+      const pagos = await pagoConErrorService.getAllForExport({})
+      if (pagos.length === 0) {
+        toast.info('No hay pagos en revisión para exportar')
+        return
+      }
+      const { createAndDownloadExcel } = await import('../../types/exceljs')
+      const datos = pagos.map((p) => ({
+        ID: p.id,
+        Cédula: p.cedula_cliente,
+        'ID Préstamo': p.prestamo_id ?? '',
+        'Fecha pago': typeof p.fecha_pago === 'string' ? p.fecha_pago : (p.fecha_pago as Date)?.toISOString?.()?.slice(0, 10) ?? '',
+        'Monto pagado': p.monto_pagado,
+        'Nº documento': p.numero_documento,
+        'Institución bancaria': p.institucion_bancaria ?? '',
+        Estado: p.estado,
+        Observaciones: (p as PagoConError).observaciones ?? '',
+      }))
+      const nombre = `Revision_Pagos_${new Date().toISOString().slice(0, 10)}.xlsx`
+      await createAndDownloadExcel(datos, 'Revisión pagos', nombre)
+      toast.success('Excel descargado')
+    } catch (err) {
+      console.error('Error exportando Revisión pagos:', err)
+      toast.error('Error al descargar Excel')
+    } finally {
+      setIsExportingRevisionPagos(false)
+    }
+  }
+
   // Contar filtros activos (mismo criterio que Préstamos)
   const activeFiltersCount = [
     filters.cedula,
@@ -352,10 +416,41 @@ export function PagosList() {
                   <span>{loadingGmail ? 'Generando...' : 'Generar Excel desde Gmail'}</span>
                   <span className="text-xs text-gray-500 ml-auto">Gmail</span>
                 </button>
+                <button
+                  type="button"
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left rounded-md hover:bg-blue-50 disabled:opacity-50 border-t border-gray-100 mt-2 pt-3"
+                  onClick={handleImportarDesdeCobros}
+                  disabled={isImportingCobros}
+                >
+                  <CreditCard className="w-5 h-5 text-gray-600" />
+                  <span>{isImportingCobros ? 'Importando...' : 'Importar reportados aprobados (Cobros)'}</span>
+                  <span className="text-xs text-gray-500 ml-auto">Cobros</span>
+                </button>
               </div>
             </PopoverContent>
           </Popover>
       </div>
+      {/* Después de importar desde Cobros: si hay errores, ofrecer descargar Excel en revisión */}
+      {lastImportCobrosResult && lastImportCobrosResult.registros_con_error > 0 && (
+        <Card className="border-amber-200 bg-amber-50">
+          <CardContent className="py-3 flex flex-wrap items-center gap-3">
+            <span className="text-sm text-amber-800">
+              {lastImportCobrosResult.registros_procesados} importados; {lastImportCobrosResult.registros_con_error} en Revisar Pagos (no cumplen reglas de carga masiva).
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-amber-400 text-amber-800 hover:bg-amber-100"
+              onClick={handleDescargarExcelRevisionPagos}
+              disabled={isExportingRevisionPagos}
+            >
+              {isExportingRevisionPagos ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Download className="h-4 w-4 mr-1" />}
+              Descargar Excel en revisión pagos
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setLastImportCobrosResult(null)}>Ocultar</Button>
+          </CardContent>
+        </Card>
+      )}
       {/* Pestañas: por defecto Resumen por Cliente (detalles por cliente, más reciente a más antiguo) */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="mb-4">

@@ -26,6 +26,8 @@ import {
   Menu,
   Briefcase,
   Target,
+  Banknote,
+  History,
 } from 'lucide-react'
 import { cn } from '../../utils'
 import { useSimpleAuth } from '../../store/simpleAuthStore'
@@ -120,6 +122,15 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       title: 'Pagos',
       href: '/pagos',
       icon: CreditCard,
+    },
+    {
+      title: 'Cobros',
+      icon: Banknote,
+      isSubmenu: true,
+      children: [
+        { title: 'Pagos Reportados', href: '/cobros/pagos-reportados', icon: FileText },
+        { title: 'Histórico por cliente', href: '/cobros/historico-cliente', icon: History },
+      ],
     },
     {
       title: 'Reportes',

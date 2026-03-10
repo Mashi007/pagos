@@ -1,8 +1,12 @@
 """
 Gemini: enviar imagen o PDF, extraer datos de comprobantes.
 Usa el paquete google-genai (google.genai) — sucesor de google-generativeai.
-- Pagos (Gmail): fecha_pago, cedula, monto, numero_referencia.
-- Cobranza (papeleta/informe): fecha_deposito, nombre_banco, numero_deposito, numero_documento, cantidad.
+Configuración única para todo el sistema: GEMINI_API_KEY y GEMINI_MODEL (app.core.config.settings).
+
+- Pagos (Gmail): fecha_pago, cedula, monto, numero_referencia (extract_payment_data).
+- Cobranza (papeleta/informe): fecha_deposito, nombre_banco, etc. (extract_cobranza_from_image).
+- Cobros (reporte público): comparar datos del formulario vs imagen del comprobante (compare_form_with_image).
+  Cobros usa la misma API key y modelo que el resto del sistema; sin clave, los reportes van a en_revision.
 """
 import io
 import json
@@ -382,3 +386,93 @@ def _extract_retry_seconds(exc: Exception) -> int:
     if m:
         return max(1, int(float(m.group(1))))
     return GEMINI_RATE_LIMIT_RETRY_DELAY
+
+
+# ── Cobros: comparar datos del formulario con la imagen del comprobante ─────
+
+GEMINI_COMPARAR_PROMPT_PREFIX = """Eres un revisor de comprobantes de pago. Te doy:
+1) Los datos que una persona ingresó en un formulario (reporte de pago).
+2) Una imagen/PDF del comprobante de pago (recibo bancario, transferencia, etc.).
+
+Tu tarea: comparar si los datos del formulario coinciden AL 100% con lo que se ve en el comprobante.
+
+Criterio ESTRICTO:
+- Si TODOS los campos coinciden exactamente (fecha, banco/institución, monto, número de operación/referencia, y la cédula del pagador si aparece): responde con coincide_exacto = true.
+- Si hay CUALQUIER diferencia (monto distinto, número distinto, fecha distinta, banco distinto, o no puedes verificar): responde con coincide_exacto = false y requiere_revision_humana = true.
+
+Responde ÚNICAMENTE con un JSON válido, sin markdown ni texto extra:
+{"coincide_exacto": true o false, "requiere_revision_humana": true o false, "comentario": "breve explicación"}
+"""
+
+
+def compare_form_with_image(
+    form_data: Dict[str, Any],
+    image_bytes: bytes,
+    filename: str = "comprobante.jpg",
+    api_key: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Compara los datos ingresados en el formulario con lo que muestra la imagen del comprobante.
+    Usa el mismo cliente Gemini del sistema (_gemini_client + GEMINI_API_KEY y GEMINI_MODEL).
+    Retorna: {"coincide_exacto": bool, "requiere_revision_humana": bool, "comentario": str}
+    Si coincide_exacto es True → se puede aprobar automáticamente. Si no → en_revision humana.
+    """
+    key = api_key or getattr(settings, "GEMINI_API_KEY", None)
+    default_result = {
+        "coincide_exacto": False,
+        "requiere_revision_humana": True,
+        "comentario": "No se pudo verificar (Gemini no configurado o error).",
+    }
+    if not key or not str(key).strip():
+        logger.warning("[COBROS] GEMINI_API_KEY no configurado para comparar formulario vs imagen.")
+        return default_result
+    text_data = (
+        "Datos ingresados en el formulario:\n"
+        f"- Fecha de pago: {form_data.get('fecha_pago')}\n"
+        f"- Institución financiera: {form_data.get('institucion_financiera')}\n"
+        f"- Número de operación/documento: {form_data.get('numero_operacion')}\n"
+        f"- Monto: {form_data.get('monto')} {form_data.get('moneda', 'BS')}\n"
+        f"- Cédula (tipo-número): {form_data.get('tipo_cedula')}-{form_data.get('numero_cedula')}\n"
+    )
+    prompt = GEMINI_COMPARAR_PROMPT_PREFIX + "\n\n" + text_data
+    model_name = getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash")
+    mime = get_mime_type(filename)
+    try:
+        from google import genai
+        from google.genai import types
+        client = _gemini_client(key)
+        image_part = _build_image_part(image_bytes, filename, mime)
+        last_error = None
+        for attempt in range(GEMINI_RATE_LIMIT_MAX_RETRIES + 1):
+            try:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=[prompt, image_part],
+                    config=types.GenerateContentConfig(temperature=0.1),
+                )
+                text = (response.text or "").strip()
+                json_str = _find_json_object(text)
+                if not json_str:
+                    m = re.search(r"\{[^{}]*\}", text, re.DOTALL)
+                    json_str = m.group(0) if m else None
+                if json_str:
+                    data = json.loads(json_str)
+                    return {
+                        "coincide_exacto": bool(data.get("coincide_exacto")),
+                        "requiere_revision_humana": bool(data.get("requiere_revision_humana", True)),
+                        "comentario": str(data.get("comentario", ""))[:500],
+                    }
+                return default_result
+            except Exception as e:
+                last_error = e
+                if _is_rate_limit_error(e) and attempt < GEMINI_RATE_LIMIT_MAX_RETRIES:
+                    delay = _extract_retry_seconds(e)
+                    logger.warning("[COBROS] Gemini 429 en comparar, reintento en %ds", delay)
+                    time.sleep(delay)
+                else:
+                    raise
+        return default_result
+    except Exception as e:
+        logger.exception("Gemini compare_form_with_image: %s", e)
+        default_result["comentario"] = str(e)[:500]
+        return default_result

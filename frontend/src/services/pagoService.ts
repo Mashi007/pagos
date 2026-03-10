@@ -137,6 +137,21 @@ class PagoService {
     })
   }
 
+  /**
+   * Importa pagos reportados aprobados (módulo Cobros) a la tabla pagos.
+   * Mismas reglas que carga masiva; los que no cumplen van a Revisar Pagos.
+   */
+  async importarDesdeCobros(): Promise<{
+    registros_procesados: number
+    registros_con_error: number
+    errores_detalle: Array<{ referencia: string; error: string }>
+    ids_pagos_con_errores: number[]
+    cuotas_aplicadas?: number
+    mensaje: string
+  }> {
+    return await apiClient.post(`${this.baseUrl}/importar-desde-cobros`)
+  }
+
   // Cargar Excel de conciliaciÃ³n (2 columnas: Fecha de DepÃ³sito, NÃºmero de Documento)
   async uploadConciliacion(file: File): Promise<{
     pagos_conciliados: number
