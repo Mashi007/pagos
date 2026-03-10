@@ -125,17 +125,20 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
               {loadingGmail ? 'Generando...' : 'Generar Excel desde Gmail'}
             </button>
             {gmailStatus?.latest_data_date && (
-              <button
-                type="button"
-                className="w-full flex items-center px-3 py-2.5 text-sm rounded-md hover:bg-gray-100 transition-colors"
-                onClick={() => {
-                  setShowConfirmarBorrar(true)
-                  setIsOpen(false)
-                }}
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Descargar Excel ({gmailStatus.latest_data_date})
-              </button>
+              <div className="px-3 py-1">
+                <button
+                  type="button"
+                  className="w-full flex items-center px-3 py-2.5 text-sm rounded-md hover:bg-gray-100 transition-colors text-left"
+                  onClick={() => {
+                    setShowConfirmarBorrar(true)
+                    setIsOpen(false)
+                  }}
+                >
+                  <Download className="w-4 h-4 mr-2 flex-shrink-0" />
+                  <span>Descargar Excel</span>
+                </button>
+                <p className="text-xs text-gray-500 pl-6 mt-0.5">disponible: {gmailStatus.latest_data_date}</p>
+              </div>
             )}
           </div>
         </PopoverContent>
