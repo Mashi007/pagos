@@ -5,7 +5,6 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   listPagosReportados,
-  enviarReciboManual,
   cambiarEstadoPago,
   openComprobanteInNewTab,
   eliminarPagoReportado,
@@ -17,7 +16,7 @@ import { Input } from '../components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import toast from 'react-hot-toast'
-import { Mail, Loader2, Eye, FileText, Settings, Clock, Search, CheckCircle, XCircle, Trash2 } from 'lucide-react'
+import { Loader2, Eye, FileText, Settings, Clock, Search, CheckCircle, XCircle, Trash2 } from 'lucide-react'
 import { PUBLIC_REPORTE_PAGO_PATH } from '../config/env'
 
 const ESTADO_CONFIG: Record<string, { label: string; short: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; Icon: typeof Clock }> = {
@@ -37,7 +36,6 @@ export default function CobrosPagosReportadosPage() {
   const [fechaHasta, setFechaHasta] = useState('')
   const [cedula, setCedula] = useState('')
   const [institucion, setInstitucion] = useState('')
-  const [sendingId, setSendingId] = useState<number | null>(null)
   const [changingEstadoId, setChangingEstadoId] = useState<number | null>(null)
   const [viewingComprobanteId, setViewingComprobanteId] = useState<number | null>(null)
   const [deletingId, setDeletingId] = useState<number | null>(null)
@@ -65,19 +63,6 @@ export default function CobrosPagosReportadosPage() {
   useEffect(() => {
     load()
   }, [page])
-
-  const handleEnviarRecibo = async (id: number) => {
-    setSendingId(id)
-    try {
-      await enviarReciboManual(id)
-      toast.success('Recibo enviado por correo.')
-      load()
-    } catch (e: any) {
-      toast.error(e?.message || 'Error al enviar.')
-    } finally {
-      setSendingId(null)
-    }
-  }
 
   const handleCambiarEstado = async (id: number, estado: string, motivo?: string) => {
     setChangingEstadoId(id)
@@ -282,9 +267,6 @@ export default function CobrosPagosReportadosPage() {
                               {changingEstadoId === row.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Settings className="h-4 w-4" />}
                             </span>
                           </div>
-                          <Button variant="ghost" size="icon" className="h-8 w-8" title="Enviar recibo PDF por correo" onClick={() => handleEnviarRecibo(row.id)} disabled={sendingId === row.id}>
-                            {sendingId === row.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
-                          </Button>
                           <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" title="Eliminar" onClick={() => handleEliminar(row.id, row.referencia_interna)} disabled={deletingId === row.id}>
                             {deletingId === row.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                           </Button>
