@@ -401,12 +401,15 @@ REGLAS DEL VALIDADOR DE CÉDULA (aplicar siempre; alineado con el sistema):
 - Al comparar: ignora guión (V-25677920 = V25677920), espacios y ceros a la izquierda del número. Solo cuenta que el tipo (V/E/G/J) sea el mismo y que el valor numérico (sin ceros a la izquierda) sea el mismo.
 - NO incluyas "Cédula" en comentario si la única diferencia es: ceros a la izquierda en la imagen, guión, o espacios. Solo marca Cédula cuando tipo o número (normalizado) sean realmente distintos.
 
+NÚMERO DE OPERACIÓN (igual que Serial / Referencia en el comprobante):
+- En el formulario el campo se llama "Número de operación". En el comprobante puede aparecer con OTRO nombre: "Serial", "Serial:", "Nº operación", "Número de operación", "Referencia", "Nº de referencia", "Código", "Número de transacción", etc. Todos son el mismo concepto: el número o código que identifica la transacción. Si en el recibo ves "Serial: 740087401612580", ese valor 740087401612580 ES el número de operación. Compáralo con lo que la persona ingresó en el formulario; si los dígitos coinciden (ignorando espacios o guiones), COINCIDE. No marques "Nº operación" como divergencia solo porque en el comprobante dice "Serial" en vez de "Número de operación".
+
 INSTRUCCIONES:
 
 Paso 1 — Extraer de la imagen: Lee el comprobante y extrae con precisión estos datos (los que aparezcan):
 - fecha_pago: fecha de la operación/transacción que aparece en el comprobante (día, mes y año). Puede estar en cualquier formato (dd/mm/yyyy, yyyy-mm-dd, texto, etc.). Este valor se comparará con la fecha que la persona ingresó en el formulario.
 - institucion_financiera: nombre del banco o entidad (ej. Banesco, Mercantil, BNC, BDV, Pago Móvil).
-- numero_operacion: número de referencia, serial, operación o comprobante (solo dígitos/código, sin etiquetas).
+- numero_operacion: es el número/código de la transacción. En el comprobante puede aparecer como "Serial", "Serial:", "Nº operación", "Referencia", "Número de referencia", "Código de operación", etc. Extrae los dígitos (y letras si los hay) de ese campo; ese valor es el numero_operacion para comparar con el formulario.
 - monto: cantidad pagada (número; puede estar en Bs, USD, USDT, etc.).
 - moneda: BS, USD, USDT, etc., según lo que indique el comprobante.
 - cedula_pagador: cédula del quien paga/deposita. En el comprobante puede aparecer como "Cédula Dep.:", "Nro. de Cédula", "DP:", "C.I.", etc. Toma solo el número del depositante/pagador (no confundir con referencias largas que incluyan fecha). IMPORTANTE: si el número en la imagen empieza por cero (0025677920, 0001234567), quita los ceros a la izquierda antes de comparar (25677920, 1234567). Normaliza a tipo (V, E, G o J) + dígitos sin guiones ni espacios; si solo ves dígitos (ej. 0025677920), antepón V. Resultado a usar para comparar: tipo + número sin ceros a la izquierda.
@@ -414,7 +417,7 @@ Paso 1 — Extraer de la imagen: Lee el comprobante y extrae con precisión esto
 Paso 2 — Comparar campo por campo: Para cada dato extraído de la imagen, compáralo con el valor que la persona ingresó en el formulario (listado abajo). Reglas:
 - Fecha pago (OBLIGATORIO comparar): La fecha ingresada manualmente en el formulario debe coincidir con la fecha de la operación que aparece en la imagen. Comparar día, mes y año; si alguno difiere, es divergencia (incluir "Fecha pago" en comentario). Ignorar solo el formato (ej. 10/03/2026 vs 2026-03-10 = misma fecha).
 - Institución: mismo banco o entidad (sinónimos o nombre abreviado = válido).
-- Número de operación: mismo número o código (ignorar espacios o guiones intermedios).
+- Número de operación: el formulario tiene "numero_operacion"; en el comprobante puede estar como "Serial", "Referencia", "Nº operación", etc. Es el mismo dato. Compara los dígitos/código; si coinciden (ignorar espacios o guiones intermedios), COINCIDE. No marques divergencia solo porque la etiqueta en el recibo diga "Serial" en vez de "Número de operación".
 - Monto: mismo valor numérico; misma moneda o equivalente (BS vs Bs, USD vs US$).
 - Cédula: aplicar las REGLAS DEL VALIDADOR DE CÉDULA anteriores. Comparar tipo (V/E/G/J) y número ya normalizado (sin ceros a la izquierda). Si en imagen ves 0025677920 o V-0025677920 y en formulario V25677920 → COINCIDE. Si en imagen ves 0025677920 y en formulario V25677920 → COINCIDE. Solo es divergencia si el tipo es distinto o el número sin ceros a la izquierda es distinto. Antes de poner "Cédula" en comentario, verifica que hayas normalizado ambos lados (imagen y formulario) quitando ceros a la izquierda del número.
 
