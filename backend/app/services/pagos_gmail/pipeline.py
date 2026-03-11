@@ -125,6 +125,9 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
 
         def process_message_batch(batch: list[dict], label: str) -> None:
             nonlocal emails_ok, files_ok, drive_errors
+            # Criterio unico: no leidos. No se filtra por asunto ni remitente; se procesan todos.
+            if batch:
+                logger.warning("[PAGOS_GMAIL] Procesando lote %s: %d correos (todos, sin filtro asunto/remitente)", label, len(batch))
             for msg_info in batch:
                 msg_id = msg_info["id"]
                 payload = msg_info["payload"]

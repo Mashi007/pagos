@@ -21,13 +21,26 @@ ESTADO_CUENTA_VALIDAR_WINDOW_SEC = 60
 ESTADO_CUENTA_VALIDAR_MAX = 30
 ESTADO_CUENTA_SOLICITAR_WINDOW_SEC = 3600
 ESTADO_CUENTA_SOLICITAR_MAX = 5
+ESTADO_CUENTA_VERIFICAR_WINDOW_SEC = 900
+ESTADO_CUENTA_VERIFICAR_MAX = 15
 
 _validar_attempts: dict[str, list[float]] = defaultdict(list)
 _enviar_attempts: dict[str, list[float]] = defaultdict(list)
 _estado_cuenta_validar_attempts: dict[str, list[float]] = defaultdict(list)
 _estado_cuenta_solicitar_attempts: dict[str, list[float]] = defaultdict(list)
+_estado_cuenta_verificar_attempts: dict[str, list[float]] = defaultdict(list)
 _lock = Lock()
 
+
+
+def check_rate_limit_estado_cuenta_verificar(ip: str) -> None:
+    with _lock:
+        now = time.time()
+        attempts = _estado_cuenta_verificar_attempts[ip]
+        attempts[:] = [t for t in attempts if now - t < ESTADO_CUENTA_VERIFICAR_WINDOW_SEC]
+        if len(attempts) >= ESTADO_CUENTA_VERIFICAR_MAX:
+            raise HTTPException(status_code=429, detail="Demasiados intentos. Espere 15 minutos e intente de nuevo.")
+        attempts.append(now)
 
 def get_client_ip(request: Request) -> str:
     """IP del cliente (respeta X-Forwarded-For si está detrás de proxy)."""

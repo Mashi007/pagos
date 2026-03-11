@@ -5,7 +5,7 @@
  * Marca sesión para que, si intentan ir a login/sistema, vean "Acceso prohibido" y puedan volver aquí.
  */
 import React, { useState, useEffect } from 'react'
-import { validarCedulaEstadoCuenta, solicitarEstadoCuenta } from '../services/estadoCuentaService'
+import { solicitarCodigo, verificarCodigo } from '../services/estadoCuentaService'
 import { PUBLIC_FLOW_SESSION_KEY } from '../config/env'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
@@ -72,7 +72,7 @@ function NotificationBanner({
 export default function EstadoCuentaPublicoPage() {
   const [step, setStep] = useState(0)
   const [cedula, setCedula] = useState('')
-  const [nombre, setNombre] = useState('')
+  const [codigo, setCodigo] = useState('')
   const [loading, setLoading] = useState(false)
   const [loadingPdf, setLoadingPdf] = useState(false)
   const [pdfDataUrl, setPdfDataUrl] = useState<string | null>(null)
@@ -88,7 +88,7 @@ export default function EstadoCuentaPublicoPage() {
 
   const resetForm = (irAStep: number) => {
     setCedula('')
-    setNombre('')
+    setCodigo('')
     setPdfDataUrl(null)
     setMensajeEnvio('')
     setStep(irAStep)
@@ -131,28 +131,7 @@ export default function EstadoCuentaPublicoPage() {
     }
   }
 
-  // En step 2: al montar o al llegar, solicitar PDF y mostrarlo (cedula ya normalizada en step 1)
-  useEffect(() => {
-    if (step !== 2 || !cedula.trim() || loadingPdf || pdfDataUrl) return
-    if (!CEDULA_REGEX.test(cedula)) return
 
-    setLoadingPdf(true)
-    solicitarEstadoCuenta(cedula)
-      .then((res) => {
-        if (!res.ok) {
-          showNotification('error', res.error || 'Error al generar estado de cuenta.')
-          return
-        }
-        setMensajeEnvio(res.mensaje ?? 'Se ha enviado una copia al correo registrado.')
-        if (res.pdf_base64) {
-          setPdfDataUrl(`data:application/pdf;base64,${res.pdf_base64}`)
-        }
-      })
-      .catch((e) => {
-        showNotification('error', (e as Error)?.message || 'Error al generar estado de cuenta.')
-      })
-      .finally(() => setLoadingPdf(false))
-  }, [step, cedula, loadingPdf, pdfDataUrl])
 
   // Paso 0: Bienvenida (logo y colores RapiCredit: azul oscuro, naranja/marrón)
   const LOGO_PUBLIC_SRC = `${(import.meta.env.BASE_URL || '/').replace(/\/?$/, '')}/logos/rapicredit-public.png`
@@ -222,8 +201,8 @@ export default function EstadoCuentaPublicoPage() {
                 <Button variant="outline" className="flex-1" onClick={() => setStep(0)}>
                   Atrás
                 </Button>
-                <Button className="flex-1" onClick={handleValidarCedula} disabled={loading}>
-                  {loading ? 'Verificando...' : 'Continuar'}
+                <Button className="flex-1" onClick={handleSolicitarCodigo} disabled={loading}>
+                  {loading ? 'Enviando código...' : 'Enviar código al correo'}
                 </Button>
               </div>
             </CardContent>
@@ -243,7 +222,7 @@ export default function EstadoCuentaPublicoPage() {
         <NotificationBanner notification={notification} onDismiss={dismissNotification} />
         <Card className="w-full max-w-3xl">
           <CardHeader>
-            <CardTitle>Bienvenido, {nombre || 'Cliente'}</CardTitle>
+            <CardTitle>Estado de cuenta</CardTitle>
             {mensajeEnvio && (
               <p className="text-sm text-emerald-700 font-medium">{mensajeEnvio}</p>
             )}
