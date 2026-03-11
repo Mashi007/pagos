@@ -22,6 +22,12 @@ AttachmentType = Tuple[str, bytes]
 def _sanitize_imap_error(exc: Exception) -> str:
     """Mensaje seguro para mostrar al usuario al fallar conexión IMAP (sin contraseñas ni rutas)."""
     msg = str(exc).strip()
+    # Si el mensaje es repr de bytes (b'...'), extraer texto para no mostrar b'...' en la UI
+    if msg.startswith("b'") and msg.endswith("'"):
+        try:
+            msg = msg[2:-1].encode().decode('unicode_escape')
+        except Exception:
+            msg = msg[2:-1]
     if not msg:
         return "Error de conexión IMAP."
     lower = msg.lower()
@@ -31,6 +37,8 @@ def _sanitize_imap_error(exc: Exception) -> str:
         return "La conexión al servidor IMAP tardó demasiado o fue rechazada. Revisa host, puerto (993 o 143) y que el servidor no esté en suspensión."
     if "ssl" in lower or "certificate" in lower:
         return "Error SSL/TLS. Prueba puerto 993 con SSL o 143 con STARTTLS."
+    if "authenticationfailed" in lower or "invalid credentials" in lower:
+        return "Usuario o contraseña no aceptados. Gmail personal: usa Contraseña de aplicación. Cuentas corporativas/Google Workspace: prueba con tu contraseña normal."
     return msg[:300] if len(msg) <= 300 else msg[:297] + "..."
 
 

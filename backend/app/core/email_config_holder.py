@@ -122,7 +122,8 @@ def init_from_settings() -> None:
 
 
 def get_smtp_config() -> dict[str, Any]:
-    """Devuelve la config SMTP actual (holder o settings)."""
+    """Devuelve la config SMTP actual. Siempre carga desde BD primero para usar el correo guardado en Configuración > Email (no el de .env)."""
+    sync_from_db()
     if _current.get("smtp_user"):
         return {
             "smtp_host": _current.get("smtp_host") or "",
