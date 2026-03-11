@@ -10,7 +10,7 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <!-- CSP: default-src 'self'; permitir inline script/style (index.html + React/Tailwind). frame-src para PDF en iframe. -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' 'unsafe-hashes'; frame-src 'self' data: blob:;" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' 'unsafe-hashes'; frame-src 'self' data: blob:;" />
     <title>RAPICREDIT - Sistema de Pr&#233;stamos y Cobranza</title>
     <!-- Suprimir warnings CSS "mal selector" (Tailwind/PostCSS) - debe ejecutarse antes de cargar estilos -->
     <script>
