@@ -1,4 +1,4 @@
-"""
+﻿"""
 Endpoints PÚBLICOS para consulta de estado de cuenta por cédula.
 SEGURIDAD: Sin autenticación (router sin get_current_user). Solo datos del cliente
 identificado por la cédula consultada. Rate limiting por IP. No expone otros servicios
@@ -61,6 +61,31 @@ def _cedula_lookup(cedula_input: str) -> str:
     valor = result.get("valor_formateado", "")
     return valor.replace("-", "") if valor else ""
 
+def _obtener_amortizacion_prestamo(db: Session, prestamo_id: int) -> List[dict]:
+    """Obtiene todas las cuotas del préstamo formateadas como tabla de amortización."""
+    cuotas_rows = db.execute(
+        select(Cuota).where(Cuota.prestamo_id == prestamo_id).order_by(Cuota.numero_cuota)
+    ).scalars().all()
+    resultado = []
+    for c in cuotas_rows:
+        cu = c[0] if hasattr(c, "__getitem__") else c
+        saldo_inicial = float(getattr(cu, "saldo_capital_inicial", None) or 0)
+        saldo_final = float(getattr(cu, "saldo_capital_final", None) or 0)
+        monto_cuota = float(getattr(cu, "monto", None) or 0)
+        monto_capital = max(0, saldo_inicial - saldo_final)
+        monto_interes = max(0, monto_cuota - monto_capital)
+        fecha_venc = getattr(cu, "fecha_vencimiento", None)
+        resultado.append({
+            "numero_cuota": getattr(cu, "numero_cuota", 0),
+            "fecha_vencimiento": fecha_venc.isoformat() if fecha_venc else "",
+            "monto_capital": monto_capital,
+            "monto_interes": monto_interes,
+            "monto_cuota": monto_cuota,
+            "saldo_capital_final": saldo_final,
+            "estado": getattr(cu, "estado", None) or "PENDIENTE",
+        })
+    return resultado
+
 
 def _generar_pdf_estado_cuenta(
     cedula: str,
@@ -69,6 +94,7 @@ def _generar_pdf_estado_cuenta(
     cuotas_pendientes: List[dict],
     total_pendiente: float,
     fecha_corte: date,
+    amortizaciones_por_prestamo: Optional[List[dict]] = None,
 ) -> bytes:
     """Genera PDF de estado de cuenta: cliente, préstamos, cuotas pendientes."""
     from reportlab.lib.pagesizes import letter
@@ -124,6 +150,43 @@ def _generar_pdf_estado_cuenta(
             ("GRID", (0, 0), (-1, -1), 0.5, "#ccc"),
         ]))
         story.append(t)
+
+    # Tablas de amortización (misma estructura que en Detalles del Préstamo)
+    if amortizaciones_por_prestamo:
+        story.append(Spacer(1, 16))
+        story.append(Paragraph("Tablas de amortización", styles["Heading2"]))
+        for item in amortizaciones_por_prestamo:
+            prestamo_id = item.get("prestamo_id", "")
+            producto = (item.get("producto") or "Préstamo")[:50]
+            cuotas = item.get("cuotas") or []
+            if not cuotas:
+                continue
+            story.append(Spacer(1, 8))
+            story.append(Paragraph(f"Préstamo #{prestamo_id} — {producto}", styles["Heading3"]))
+            rows = [["Cuota", "Fecha Venc.", "Capital", "Interés", "Total", "Saldo Pendiente", "Estado"]]
+            for c in cuotas:
+                rows.append([
+                    str(c.get("numero_cuota", "")),
+                    (c.get("fecha_vencimiento") or "")[:10],
+                    f"{c.get('monto_capital', 0):,.2f}",
+                    f"{c.get('monto_interes', 0):,.2f}",
+                    f"{c.get('monto_cuota', 0):,.2f}",
+                    f"{c.get('saldo_capital_final', 0):,.2f}",
+                    c.get("estado", ""),
+                ])
+            t = Table(rows)
+            t.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), "#3B82F6"),
+                ("TEXTCOLOR", (0, 0), (-1, 0), "white"),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, 0), 9),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("ALIGN", (2, 0), (5, -1), "RIGHT"),
+                ("GRID", (0, 0), (-1, -1), 0.5, "#ccc"),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [0xFFFFFF, 0xF5F7FA]),
+            ]))
+            story.append(t)
+            story.append(Spacer(1, 12))
 
     doc.build(story)
     return buf.getvalue()
@@ -245,6 +308,24 @@ def solicitar_estado_cuenta(
             })
 
     fecha_corte = date.today()
+    # Tablas de amortización para préstamos APROBADOS/DESEMBOLSADOS (misma estructura que en Detalles del Préstamo)
+    amortizaciones_por_prestamo = []
+    for p in prestamos_list:
+        estado = (p.get("estado") or "").strip().upper()
+        if estado not in ("APROBADO", "DESEMBOLSADO"):
+            continue
+        prestamo_id = p.get("id")
+        if not prestamo_id:
+            continue
+        cuotas = _obtener_amortizacion_prestamo(db, prestamo_id)
+        if not cuotas:
+            continue
+        amortizaciones_por_prestamo.append({
+            "prestamo_id": prestamo_id,
+            "producto": p.get("producto") or "Préstamo",
+            "cuotas": cuotas,
+        })
+
     pdf_bytes = _generar_pdf_estado_cuenta(
         cedula=cedula_display,
         nombre=nombre,
@@ -252,16 +333,14 @@ def solicitar_estado_cuenta(
         cuotas_pendientes=cuotas_pendientes,
         total_pendiente=total_pendiente,
         fecha_corte=fecha_corte,
+        amortizaciones_por_prestamo=amortizaciones_por_prestamo,
     )
 
     if email:
         try:
             filename = f"estado_cuenta_{cedula_display.replace('-', '_')}.pdf"
-            body = f"Estimado(a) {nombre},\n\nSe adjunta su estado de cuenta con fecha de corte {fecha_corte.isoformat()}.\n\nSaludos,\nRapiCredit"
-            send_email(
-                [email],
-                f"Estado de cuenta - {fecha_corte.isoformat()}",
-                body,
+            email_body = (f"Estimado(a) {nombre},\n\nSe adjunta su estado de cuenta con fecha de corte {fecha_corte.isoformat()}.\n\nSaludos,\nRapiCredit")
+            send_email([email], f"Estado de cuenta - {fecha_corte.isoformat()}", email_body,
                 attachments=[(filename, pdf_bytes)],
             )
         except Exception as e:

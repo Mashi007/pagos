@@ -1,4 +1,4 @@
-import React, { useEffect, Suspense } from 'react'
+﻿import React, { useEffect, Suspense } from 'react'
 import { Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -20,7 +20,7 @@ function RootLayoutWrapper() {
   const { isAuthenticated, isLoading } = useSimpleAuth()
   let pathname = (location.pathname || '').replace(/\/$/, '') || '/'
   if (BASE_PATH && pathname.startsWith(BASE_PATH)) {
-    pathname = pathname.slice(BASE_PATH.length) || '/'
+    const rest = pathname.slice(BASE_PATH.length); if (rest !== '' && rest !== '/') pathname = rest
   }
   const isPublic = PUBLIC_PATHS.some(p => pathname === p)
   if (isPublic) return <Outlet />

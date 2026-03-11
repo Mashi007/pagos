@@ -59,7 +59,7 @@ GEMINI_PROMPT = (
     "(no escribir 'Ref:', 'Serial:', 'Operación:', etc., solo el valor).\n\n"
     "FECHA_PAGO:\n"
     "- Busca la fecha de la operación/transacción en cualquier formato (dd/mm/yyyy, yyyy-mm-dd, 'DD MAR YYYY').\n\n"
-    "Si un dato genuinamente NO aparece en la imagen, usa 'NA'. Responde SOLO el JSON."
+    "Si un dato genuinamente NO aparece en la imagen, usa 'NA'. Si la imagen no es un comprobante de pago (solo logo, firma, publicidad o irrelevante), devuelve los cuatro campos con 'NA'. No inventes datos. FORMATO: Responde UNICAMENTE con un objeto JSON valido, sin texto antes ni despues, sin markdown (no uses ```json). Responde SOLO el JSON."
 )
 
 

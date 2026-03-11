@@ -11,8 +11,7 @@ Flujo por correo (en orden):
   4. Enviar imagen a Gemini → extraer fecha_pago, cedula, monto, numero_referencia
   5. Guardar fila en BD (PagosGmailSyncItem) — commit incremental por correo
   6. Marcar correo como leído
-  7. Al terminar el último del lote: volver a listar no leídos; si hay alguno
-     (re-marcado como no leído), procesarlo en la misma ejecución (revisión final).
+  7. Al terminar el lote: ciclo de revisión (hasta 10 pasadas): volver a listar no leídos; si hay alguno, procesarlos; repetir hasta que no quede ninguno o 10 pasadas.
 El Excel se descarga vía GET /pagos/gmail/download-excel (generado desde BD).
 """
 import logging
@@ -48,8 +47,6 @@ from app.services.pagos_gmail.helpers import (
     get_sheet_name_for_date,
     normalizar_fecha_pago,
     normalizar_referencia,
-    sender_acceptable_for_pipeline,
-    subject_acceptable_for_pipeline,
 )
 
 logger = logging.getLogger(__name__)
@@ -126,11 +123,6 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
 
         delay_gemini = getattr(settings, "PAGOS_GMAIL_DELAY_BETWEEN_GEMINI_SECONDS", 0) or 0
 
-        keywords_or_raw = getattr(settings, "PAGOS_GMAIL_SUBJECT_KEYWORDS_OR", "") or ""
-        keywords_or = [k.strip() for k in keywords_or_raw.split(",") if k.strip()]
-        sender_prefixes_raw = getattr(settings, "PAGOS_GMAIL_SENDER_PREFIXES_ALWAYS_INCLUDE", "") or ""
-        sender_prefixes = [p.strip() for p in sender_prefixes_raw.split(",") if p.strip()]
-
         def process_message_batch(batch: list[dict], label: str) -> None:
             nonlocal emails_ok, files_ok, drive_errors
             for msg_info in batch:
@@ -140,10 +132,7 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
                 from_h = headers.get("from") or headers.get("From") or ""
                 sender = extract_sender_email(from_h)
                 subject = (headers.get("subject") or headers.get("Subject") or "").strip() or sender
-                # Incluir siempre correos de remitentes tipo cobranza@... aunque el asunto no cumpla
-                if not subject_acceptable_for_pipeline(subject, keywords_or or None) and not sender_acceptable_for_pipeline(sender, sender_prefixes or None):
-                    logger.warning("[PAGOS_GMAIL]   Omitido (asunto/remitente no aceptados): id=%s | de=%s | asunto=%s", msg_id, sender[:40], subject[:50])
-                    continue
+                # Único criterio: correo no leído (se procesan todos; sin filtro por asunto/remitente)
                 msg_date = get_message_date(headers)
                 sheet_name = get_sheet_name_for_date(msg_date)
                 folder_name = get_folder_name_from_date(msg_date)
@@ -274,19 +263,25 @@ def run_pipeline(db: Session, existing_sync_id: Optional[int] = None) -> tuple[O
 
         process_message_batch(messages, "inicial")
 
-        raw_second = list_unread_with_attachments(gmail_svc)
-        seen_second: set[str] = set()
-        second_batch_list: list[dict] = []
-        for m in raw_second:
-            if m["id"] in seen_second:
-                continue
-            seen_second.add(m["id"])
-            second_batch_list.append(m)
-        if second_batch_list:
-            if max_emails and max_emails > 0 and len(second_batch_list) > max_emails:
-                second_batch_list = second_batch_list[:max_emails]
-            logger.warning("[PAGOS_GMAIL] Revisión final: %d correo(s) sin leer — procesando", len(second_batch_list))
-            process_message_batch(second_batch_list, "revisión final")
+        # Ciclo: al terminar el lote, volver a listar no leídos y procesar hasta que no quede ninguno (máx 10 pasadas)
+        max_revision_passes = 10
+        for pass_num in range(1, max_revision_passes + 1):
+            raw_again = list_unread_with_attachments(gmail_svc)
+            again_dedup = []
+            seen_again = set()
+            for m in raw_again:
+                if m["id"] in seen_again:
+                    continue
+                seen_again.add(m["id"])
+                again_dedup.append(m)
+            if not again_dedup:
+                if pass_num > 1:
+                    logger.warning("[PAGOS_GMAIL] Ciclo revisión: no quedan no leídos - fin")
+                break
+            if max_emails and max_emails > 0 and len(again_dedup) > max_emails:
+                again_dedup = again_dedup[:max_emails]
+            logger.warning("[PAGOS_GMAIL] Ciclo revisión (pasada %d): %d correo(s) sin leer - procesando", pass_num, len(again_dedup))
+            process_message_batch(again_dedup, "revisión pasada %d" % pass_num)
 
         # Fin del loop
         sync.finished_at = datetime.utcnow()

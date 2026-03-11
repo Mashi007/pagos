@@ -96,10 +96,21 @@ def list_unread_with_attachments(service: Any) -> List[dict]:
     from googleapiclient.errors import HttpError
 
     def _fetch() -> List[dict]:
-        result = service.users().messages().list(userId="me", labelIds=["UNREAD"], maxResults=500).execute()
-        messages = result.get("messages", [])
+        # Paginacion: obtener TODOS los no leidos (unico criterio = UNREAD)
+        all_msg_refs: List[dict] = []
+        page_token: Optional[str] = None
+        while True:
+            params: dict = {"userId": "me", "labelIds": ["UNREAD"], "maxResults": 500}
+            if page_token:
+                params["pageToken"] = page_token
+            result = service.users().messages().list(**params).execute()
+            batch = result.get("messages", [])
+            all_msg_refs.extend(batch)
+            page_token = result.get("nextPageToken")
+            if not page_token:
+                break
         out = []
-        for msg in messages:
+        for msg in all_msg_refs:
             mid = msg["id"]
             meta = service.users().messages().get(
                 userId="me", id=mid, format="metadata", metadataHeaders=["From", "Date", "Subject"]

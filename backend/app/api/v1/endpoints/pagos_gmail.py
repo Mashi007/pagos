@@ -95,7 +95,7 @@ def run_now(background_tasks: BackgroundTasks, force: bool = True, db: Session =
     """
     Inicia el pipeline en segundo plano (Gmail -> Drive -> Gemini -> Sheets) y devuelve inmediatamente.
     El frontend debe hacer polling a GET /status hasta que last_status sea 'success' o 'error'.
-    Por defecto force=True (ejecución manual desde la UI); con force=false se respeta el intervalo mínimo.
+    force=True (por defecto): ejecutar aunque la última ejecución fue hace poco (uso manual desde la UI). force=False: respetar intervalo mínimo (para cron).
     """
     if _is_pipeline_running(db):
         raise HTTPException(

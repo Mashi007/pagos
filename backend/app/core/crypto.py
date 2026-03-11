@@ -16,6 +16,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Evitar repetir el WARNING de ENCRYPTION_KEY en cada uso (ej. cada envio de email)
+_warned_no_key = False
+
 
 class EncryptionManager:
     """Manages encryption/decryption of sensitive values."""
@@ -33,7 +36,10 @@ class EncryptionManager:
         
         key_str = getattr(settings, 'ENCRYPTION_KEY', None)
         if not key_str:
-            logger.warning(
+            global _warned_no_key
+            if not _warned_no_key:
+                _warned_no_key = True
+                logger.warning(
                 "ENCRYPTION_KEY not set in environment. "
                 "Generate a key with: python -c \"from cryptography.fernet import Fernet; "
                 "print(Fernet.generate_key().decode())\" and set ENCRYPTION_KEY in .env"

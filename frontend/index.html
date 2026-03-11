@@ -9,6 +9,8 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
+    <!-- Permitir PDF en iframe (data:application/pdf;base64,...) para estado de cuenta y recibos -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; frame-src 'self' data: blob:;" />
     <title>RAPICREDIT - Sistema de Pr&#233;stamos y Cobranza</title>
     <!-- Suprimir warnings CSS "mal selector" (Tailwind/PostCSS) - debe ejecutarse antes de cargar estilos -->
     <script>
