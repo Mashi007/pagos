@@ -4,12 +4,16 @@ Logo RapiCredit, cuerpo del recibo, número de referencia, pie con contacto y Wh
 """
 import io
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
-# WhatsApp RapiCredit: 424-4579934 → https://wa.me/584244579934 (usado en recibo, rechazos y confirmaciones)
+# WhatsApp RapiCredit: 424-4579934 — https://wa.me/584244579934 (usado en recibo, rechazos y confirmaciones)
 WHATSAPP_LINK = "https://wa.me/584244579934"
 WHATSAPP_DISPLAY = "424-4579934"
 CONTACTO_COBRANZA = "cobranza@rapicreditca.com"
+
+# Ruta al logo: backend/static/logo.png (desde app/services/cobros/ subimos a backend)
+_LOGO_PATH = Path(__file__).resolve().parent.parent.parent.parent / "static" / "logo.png"
 
 
 def generar_recibo_pago_reportado(
@@ -25,12 +29,12 @@ def generar_recibo_pago_reportado(
 ) -> bytes:
     """
     Genera el PDF del recibo de reporte de pago.
-    Cabecera: logo (texto "RapiCredit C.A." si no hay imagen).
+    Cabecera: logo (imagen si existe) y texto "RapiCredit C.A.".
     Cuerpo: mensaje estándar con datos del reporte.
     Pie: datos de contacto y WhatsApp clickeable (en PDF como URL).
     """
     from reportlab.lib.pagesizes import letter
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.units import inch
 
@@ -44,7 +48,11 @@ def generar_recibo_pago_reportado(
     fecha_hora_str = fecha_recep.strftime("%d/%m/%Y %H:%M")
 
     story = []
-    # Cabecera: RapiCredit C.A. (logo sería una imagen si existe)
+    # Cabecera: logo RapiCredit si existe, luego texto
+    if _LOGO_PATH.exists():
+        logo_img = Image(str(_LOGO_PATH), width=2.0 * inch, height=2.0 * inch)
+        story.append(logo_img)
+        story.append(Spacer(1, 8))
     story.append(Paragraph("<b>RapiCredit C.A.</b>", styles["Title"]))
     story.append(Paragraph("Recibo de reporte de pago", styles["Heading2"]))
     story.append(Spacer(1, 12))
