@@ -114,6 +114,7 @@ function NotificationBanner({ notification, onDismiss }: { notification: Notific
         ) : (
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
         )}
+      </span>
       <p className="flex-1 font-semibold text-base leading-snug">{notification.message}</p>
       <button
         type="button"
@@ -343,6 +344,7 @@ export default function ReportePagoPage() {
                     {item.icon === 'check' && (
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                     )}
+                  </span>
                   <span className="pt-1">{item.text}</span>
                 </li>
               ))}
@@ -677,6 +679,7 @@ export default function ReportePagoPage() {
               Tu pago se procesará y se enviará al correo registrado en tu contrato de financiamiento (
               <span className="font-semibold text-[#1e3a5f] bg-blue-50 px-1.5 py-0.5 rounded">
                 {emailParaVerificacion || 'correo registrado'}
+              </span>
               ). Si tienes algún problema con el correo, contacta a{' '}
               <a href="mailto:cobranza@rapicreditca.com" className="font-semibold text-[#1e3a5f] underline hover:no-underline">
                 cobranza@rapicreditca.com

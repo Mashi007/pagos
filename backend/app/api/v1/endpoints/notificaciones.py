@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Body, Query
 from fastapi.responses import Response
 
 from app.core.deps import get_current_user
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -619,6 +619,29 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
     # Ordenar mora_90 por dias_atraso desc, luego por cliente
     mora_90_cuotas.sort(key=lambda x: (-x["dias_atraso"], x["cedula"], x["numero_cuota"]))
 
+    # Liquidados: préstamos donde Total financiamiento = total abonos (SUM total_pagado por préstamo)
+    subq = (
+        select(Cuota.prestamo_id, func.coalesce(func.sum(Cuota.total_pagado), 0).label("total_abonos"))
+        .group_by(Cuota.prestamo_id)
+    ).subquery()
+    q_liq = (
+        select(Prestamo, Cliente, subq.c.total_abonos)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .join(subq, Prestamo.id == subq.c.prestamo_id)
+        .where(Prestamo.total_financiamiento == subq.c.total_abonos)
+    )
+    rows_liq = db.execute(q_liq).all()
+    liquidados: List[dict] = []
+    for (prestamo, cliente, total_abonos) in rows_liq:
+        liquidados.append({
+            "cliente_id": cliente.id,
+            "nombre": cliente.nombres or "",
+            "cedula": cliente.cedula or "",
+            "prestamo_id": prestamo.id,
+            "total_financiamiento": float(prestamo.total_financiamiento) if prestamo.total_financiamiento is not None else 0,
+            "total_abonos": float(total_abonos) if total_abonos is not None else 0,
+        })
+
     return {
         "actualizado_en": hoy.isoformat(),
         "dias_5": dias_5,
@@ -629,6 +652,7 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
             "cuotas": mora_90_cuotas,
             "total_cuotas": len(mora_90_cuotas),
         },
+        "liquidados": liquidados,
     }
 
 
@@ -745,3 +769,5 @@ def get_notificaciones_tabs_data(db: Session):
         "mora_90": mora_90_cuotas,
         "prejudicial": prejudicial,
     }
+
+
