@@ -5,7 +5,7 @@ import { Input } from '../ui/input'
 import { Textarea } from '../ui/textarea'
 import { notificacionService } from '../../services/notificacionService'
 import { toast } from 'sonner'
-import { FileText, Save, Loader2, Paperclip, Eye, CheckCircle2, XCircle } from 'lucide-react'
+import { FileText, Save, Loader2, Link, Eye, CheckCircle2, XCircle } from 'lucide-react'
 import { Badge } from '../ui/badge'
 
 const DEFAULT_CUERPO =
@@ -213,7 +213,7 @@ export function PlantillaPdfCobranza() {
     <Card className="mt-6">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Paperclip className="h-5 w-5 text-violet-600" />
+          <Link className="h-5 w-5 text-violet-600" />
           Adjunto fijo (PDF estático)
         </CardTitle>
         <CardDescription>

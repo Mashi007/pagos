@@ -5,7 +5,7 @@ import { GestionVariables } from '../components/notificaciones/GestionVariables'
 import { PlantillaPdfCobranza } from '../components/notificaciones/PlantillaPdfCobranza'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Button } from '../components/ui/button'
-import { FileText, Database, ChevronLeft, FileDown, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react'
+import { FileText, Database, ChevronLeft, Download, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react'
 
 const SUBTAB_PLANTILLAS = 'plantillas'
 const SUBTAB_VARIABLES = 'variables'
@@ -93,7 +93,7 @@ export function Plantillas() {
             Plantillas
           </TabsTrigger>
           <TabsTrigger value={SUBTAB_PDF_COBRANZA}>
-            <FileDown className="h-4 w-4 mr-2" />
+            <Download className="h-4 w-4 mr-2" />
             PDF Cobranza
           </TabsTrigger>
           <TabsTrigger value={SUBTAB_VARIABLES}>
