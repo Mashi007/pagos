@@ -311,7 +311,7 @@ const [probando, setProbando] = useState(false)
     // Validaciones específicas para Gmail
     if (config.smtp_host?.toLowerCase().includes('gmail.com')) {
       if (!config.smtp_password?.trim()) {
-        faltantes.push('Contraseña de Aplicación')
+        faltantes.push('Contraseña')
       }
 
       // Gmail solo acepta puertos 587 o 465
@@ -670,7 +670,7 @@ const [probando, setProbando] = useState(false)
                       <div className="text-sm text-gray-600 space-y-1">
                         <p>1. Activa 2FA: <a href="https://myaccount.google.com/security" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">myaccount.google.com/security</a></p>
                         <p>2. Genera App Password: <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="underline text-blue-600">myaccount.google.com/apppasswords</a></p>
-                        <p>3. Pega la contraseña de 16 caracteres y guarda</p>
+                        <p>3. Pega la contraseña de 16 caracteres y guarda</p><p className="text-blue-700 font-medium mt-2">Cuentas corporativas / Google Workspace: puedes usar tu contraseña normal en el campo Contraseña.</p>
                       </div>
                       {mensajeVinculacion && (
                         <p className="text-xs text-gray-500 mt-2 italic">
@@ -695,7 +695,7 @@ const [probando, setProbando] = useState(false)
                     <div className="flex-1">
                       <p className="font-semibold text-gray-900">Datos completos</p>
                       <p className="text-sm text-gray-600">
-                        Usa &quot;Enviar Email de Prueba&quot; para verificar la conexión con Gmail. Si falla con &quot;usuario o contraseña no aceptados&quot;, usa una <strong>Contraseña de aplicación</strong> (no la contraseña normal).
+                        Usa &quot;Enviar Email de Prueba&quot; para verificar. Gmail personal: suele requerir Contraseña de aplicación. Cuentas corporativas / Google Workspace: puedes usar tu contraseña normal.
                       </p>
                     </div>
                   </div>
@@ -781,13 +781,13 @@ const [probando, setProbando] = useState(false)
               />
             </div>
             <div>
-              <label className="text-sm font-medium block mb-2">Contraseña de Aplicación</label>
+              <label className="text-sm font-medium block mb-2">Contraseña</label>
               <div className="relative">
                 <Input
                   type={mostrarPassword ? 'text' : 'password'}
                   value={config.smtp_password || ''}
                   onChange={(e) => handleChange('smtp_password', e.target.value)}
-                  placeholder="App Password de Gmail"
+                  placeholder="Contraseña normal o App Password (cuentas corporativas: contraseña normal)"
                   className="pr-10"
                 />
                 <button
@@ -799,8 +799,7 @@ const [probando, setProbando] = useState(false)
                 </button>
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                <strong>IMPORTANTE:</strong> Requiere 2FA activado. Genera una App Password (16 caracteres) en tu cuenta de Google.
-                <strong className="text-red-600"> NO uses tu contraseña normal.</strong> Funciona para Gmail y Google Workspace.
+                <strong>Gmail personal:</strong> con 2FA activado usa una App Password (16 caracteres). <strong>Cuentas corporativas / Google Workspace:</strong> puedes usar tu contraseña normal.
               </p>
             </div>
           </div>
@@ -843,7 +842,7 @@ const [probando, setProbando] = useState(false)
                 Políticas Gmail IMAP (recibir correo)
               </h3>
               <p className="text-sm text-slate-700 mb-2">
-                Configura IMAP para recibir correo (lectura de bandeja). Gmail: <strong>imap.gmail.com</strong>, puerto <strong>993</strong> (SSL) o <strong>143</strong> (STARTTLS). Requiere la misma <strong>Contraseña de Aplicación</strong> que SMTP.
+                Configura IMAP para recibir correo (lectura de bandeja). Gmail: <strong>imap.gmail.com</strong>, puerto <strong>993</strong> (SSL) o <strong>143</strong> (STARTTLS). Usa la misma contraseña que SMTP (normal o de aplicación).
               </p>
               <p className="text-xs text-slate-600">
                 Habilita IMAP en Gmail: Ajustes → Reenvío y POP/IMAP → Activar IMAP. Ref:{' '}
@@ -880,13 +879,13 @@ const [probando, setProbando] = useState(false)
                 />
               </div>
               <div>
-                <label className="text-sm font-medium block mb-2">Contraseña de Aplicación (IMAP)</label>
+                <label className="text-sm font-medium block mb-2">Contraseña (IMAP)</label>
                 <div className="relative">
                   <Input
                     type={mostrarPasswordImap ? 'text' : 'password'}
                     value={config.imap_password || ''}
                     onChange={(e) => handleChange('imap_password', e.target.value)}
-                    placeholder="Misma App Password que SMTP"
+                    placeholder="Misma contraseña que SMTP"
                     className="pr-10"
                   />
                   <button
