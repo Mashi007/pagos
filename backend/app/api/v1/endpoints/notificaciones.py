@@ -18,13 +18,19 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.services.notificacion_service import format_cuota_item, _item, _item_tab
+from app.services.notificacion_service import (
+    get_cuotas_pendientes_con_cliente,
+    format_cuota_item,
+    _item,
+    _item_tab,
+)
 from app.models.cuota import Cuota
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.configuracion import Configuracion
 from app.models.plantilla_notificacion import PlantillaNotificacion
 from app.models.variable_notificacion import VariableNotificacion
+from app.models.envio_notificacion import EnvioNotificacion
 
 logger = logging.getLogger(__name__)
 
@@ -368,6 +374,62 @@ def update_plantilla_pdf_cobranza(payload: dict = Body(...), db: Session = Depen
         raise HTTPException(status_code=500, detail="Error al guardar la plantilla PDF de cobranza")
 
 
+CLAVE_ESTADO_CUENTA_EMAIL = "estado_cuenta_codigo_email"
+_DEFAULT_ESTADO_CUENTA_ASUNTO = "Codigo para estado de cuenta - RapiCredit"
+_DEFAULT_ESTADO_CUENTA_CUERPO = (
+    "Estimado(a) {{nombre}},\n\n"
+    "Tu codigo de verificacion es: {{codigo}}\n\n"
+    "Valido por {{minutos_valido}} horas. No lo compartas.\n\n"
+    "Saludos,\nRapiCredit"
+)
+
+
+@router.get("/plantilla-estado-cuenta-codigo-email")
+def get_plantilla_estado_cuenta_codigo_email(db: Session = Depends(get_db)):
+    """
+    Obtiene la plantilla del email de código para consulta pública de estado de cuenta.
+    Almacenada en configuracion con clave 'estado_cuenta_codigo_email'.
+    JSON: asunto, cuerpo. Variables: {{nombre}}, {{codigo}}, {{minutos_valido}}.
+    """
+    row = db.get(Configuracion, CLAVE_ESTADO_CUENTA_EMAIL)
+    if not row or not row.valor:
+        return {"asunto": _DEFAULT_ESTADO_CUENTA_ASUNTO, "cuerpo": _DEFAULT_ESTADO_CUENTA_CUERPO}
+    try:
+        return json.loads(row.valor)
+    except json.JSONDecodeError:
+        return {"asunto": _DEFAULT_ESTADO_CUENTA_ASUNTO, "cuerpo": _DEFAULT_ESTADO_CUENTA_CUERPO}
+
+
+@router.put("/plantilla-estado-cuenta-codigo-email")
+def update_plantilla_estado_cuenta_codigo_email(payload: dict = Body(...), db: Session = Depends(get_db)):
+    """
+    Actualiza la plantilla del email de código (consulta pública estado de cuenta).
+    Campos: asunto, cuerpo (opcionales). Variables en cuerpo: {{nombre}}, {{codigo}}, {{minutos_valido}}.
+    """
+    try:
+        row = db.get(Configuracion, CLAVE_ESTADO_CUENTA_EMAIL)
+        data = {}
+        if row and row.valor:
+            try:
+                data = json.loads(row.valor)
+            except json.JSONDecodeError:
+                pass
+        data["asunto"] = payload.get("asunto", data.get("asunto", _DEFAULT_ESTADO_CUENTA_ASUNTO))
+        data["cuerpo"] = payload.get("cuerpo", data.get("cuerpo", _DEFAULT_ESTADO_CUENTA_CUERPO))
+        if not row:
+            row = Configuracion(clave=CLAVE_ESTADO_CUENTA_EMAIL, valor=json.dumps(data))
+            db.add(row)
+        else:
+            row.valor = json.dumps(data)
+        db.commit()
+        db.refresh(row)
+        return json.loads(row.valor)
+    except Exception as e:
+        db.rollback()
+        logger.exception("update_plantilla_estado_cuenta_codigo_email: %s", e)
+        raise HTTPException(status_code=500, detail="Error al guardar la plantilla de email de estado de cuenta")
+
+
 @router.get("/adjunto-fijo-cobranza")
 def get_adjunto_fijo_cobranza(db: Session = Depends(get_db)):
     """
@@ -689,15 +751,27 @@ def get_notificaciones_resumen(db: Session = Depends(get_db)):
 def get_estadisticas_por_tab(db: Session = Depends(get_db)):
     """
     KPIs por pestaña: correos enviados y rebotados (dias_5, dias_3, dias_1, hoy, mora_90).
-    Cuando exista persistencia de envíos por tipo, aquí se consultará la BD.
+    Datos desde tabla envios_notificacion (persistidos al enviar desde notificaciones_tabs).
     """
-    return {
-        "dias_5": {"enviados": 0, "rebotados": 0},
-        "dias_3": {"enviados": 0, "rebotados": 0},
-        "dias_1": {"enviados": 0, "rebotados": 0},
-        "hoy": {"enviados": 0, "rebotados": 0},
-        "mora_90": {"enviados": 0, "rebotados": 0},
-    }
+    result = {"dias_5": {"enviados": 0, "rebotados": 0}, "dias_3": {"enviados": 0, "rebotados": 0}, "dias_1": {"enviados": 0, "rebotados": 0}, "hoy": {"enviados": 0, "rebotados": 0}, "mora_90": {"enviados": 0, "rebotados": 0}}
+    try:
+        for tipo in ("dias_5", "dias_3", "dias_1", "hoy", "mora_90"):
+            env = db.scalar(
+                select(func.count(EnvioNotificacion.id)).where(
+                    EnvioNotificacion.tipo_tab == tipo,
+                    EnvioNotificacion.exito.is_(True),
+                )
+            ) or 0
+            reb = db.scalar(
+                select(func.count(EnvioNotificacion.id)).where(
+                    EnvioNotificacion.tipo_tab == tipo,
+                    EnvioNotificacion.exito.is_(False),
+                )
+            ) or 0
+            result[tipo] = {"enviados": int(env), "rebotados": int(reb)}
+    except Exception as e:
+        logger.warning("get_estadisticas_por_tab: %s", e)
+    return result
 
 
 TIPOS_TAB_NOTIFICACIONES = ("dias_5", "dias_3", "dias_1", "hoy", "mora_90")
@@ -706,13 +780,35 @@ TIPOS_TAB_NOTIFICACIONES = ("dias_5", "dias_3", "dias_1", "hoy", "mora_90")
 def _get_rebotados_por_tipo(db: Session, tipo: str) -> List[dict]:
     """
     Lista de correos no entregados (rebotados) para el tipo de pestaña.
-    Cuando exista persistencia de envíos/rebotes por tipo, aquí se consultará la BD.
-    Cada item: email, nombre, cedula, fecha_envio (opcional), error_mensaje (opcional).
+    Datos desde tabla envios_notificacion (exito=False).
     """
     if tipo not in TIPOS_TAB_NOTIFICACIONES:
         return []
-    # Sin tabla de historial de rebotes, devolver lista vacía
-    return []
+    try:
+        rows = (
+            db.execute(
+                select(EnvioNotificacion)
+                .where(
+                    EnvioNotificacion.tipo_tab == tipo,
+                    EnvioNotificacion.exito.is_(False),
+                )
+                .order_by(EnvioNotificacion.fecha_envio.desc())
+            )
+            .scalars().all()
+        )
+        return [
+            {
+                "email": r.email or "",
+                "nombre": r.nombre or "",
+                "cedula": r.cedula or "",
+                "fecha_envio": r.fecha_envio.isoformat() if r.fecha_envio else "",
+                "error_mensaje": r.error_mensaje or "",
+            }
+            for r in rows
+        ]
+    except Exception as e:
+        logger.warning("_get_rebotados_por_tipo: %s", e)
+        return []
 
 
 @router.get("/rebotados-por-tab", response_model=dict)
@@ -776,16 +872,10 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
     4. Hoy = fecha_vencimiento (no pagado)
     5. 90+ días de mora (moroso): informe de cada cuota atrasada una a una.
     Se usa la fecha del servidor; actualizar a las 2am con cron si se desea.
+    Datos desde get_cuotas_pendientes_con_cliente (fuente única).
     """
     hoy = date.today()
-    # Cuotas no pagadas (fecha_pago nula) con su cliente vía préstamo (cuotas pueden tener cliente_id NULL)
-    q = (
-        select(Cuota, Cliente)
-        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-        .join(Cliente, Prestamo.cliente_id == Cliente.id)
-        .where(Cuota.fecha_pago.is_(None))
-    )
-    rows = db.execute(q).all()
+    rows = get_cuotas_pendientes_con_cliente(db)
 
     dias_5: List[dict] = []
     dias_3: List[dict] = []
@@ -874,17 +964,12 @@ def get_notificaciones_tabs_data(db: Session):
     Datos para las pestañas de Notificaciones (previas, día pago, retrasadas, prejudicial).
     Cada item tiene forma para el frontend: nombre, cedula, correo, telefono, estado, etc.
     Incluye retraso 1/3/5 días y clientes con 3+ cuotas atrasadas (prejudicial).
+    Datos desde get_cuotas_pendientes_con_cliente (fuente única).
     """
     from sqlalchemy import func
 
     hoy = date.today()
-    q = (
-        select(Cuota, Cliente)
-        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
-        .join(Cliente, Prestamo.cliente_id == Cliente.id)
-        .where(Cuota.fecha_pago.is_(None))
-    )
-    rows = db.execute(q).all()
+    rows = get_cuotas_pendientes_con_cliente(db)
 
     dias_5: List[dict] = []
     dias_3: List[dict] = []

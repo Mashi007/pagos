@@ -4,7 +4,7 @@
  * Sin login. Misma lógica y seguridades que rapicredit-cobros (rate limit, validación).
  * Marca sesión para que, si intentan ir a login/sistema, vean "Acceso prohibido" y puedan volver aquí.
  */
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { solicitarCodigo, verificarCodigo } from '../services/estadoCuentaService'
 import { PUBLIC_FLOW_SESSION_KEY } from '../config/env'
 import { Button } from '../components/ui/button'
@@ -78,21 +78,39 @@ export default function EstadoCuentaPublicoPage() {
   const [pdfDataUrl, setPdfDataUrl] = useState<string | null>(null)
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null)
   const [mensajeEnvio, setMensajeEnvio] = useState('')
+  const [expiraEn, setExpiraEn] = useState<string | null>(null) // ISO 8601 para "Código válido hasta las HH:MM"
   const [notification, setNotification] = useState<NotificationState>(null)
-
+  const [reenviarCooldown, setReenviarCooldown] = useState(0)
+  const [reenviarLoading, setReenviarLoading] = useState(false)
+  const notificationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     return () => { if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl) }
   }, [pdfBlobUrl])
 
+  useEffect(() => {
+    return () => {
+      if (notificationTimeoutRef.current) clearTimeout(notificationTimeoutRef.current)
+    }
+  }, [])
+
   const showNotification = (type: 'error' | 'success', message: string) => {
+    if (notificationTimeoutRef.current) {
+      clearTimeout(notificationTimeoutRef.current)
+      notificationTimeoutRef.current = null
+    }
     setNotification({ type, message })
-    const t = setTimeout(() => setNotification(null), 10000)
-    return () => clearTimeout(t)
+    notificationTimeoutRef.current = setTimeout(() => {
+      notificationTimeoutRef.current = null
+      setNotification(null)
+    }, 10000)
   }
   const dismissNotification = () => setNotification(null)
 
   const resetForm = (irAStep: number) => {
+    setNotification(null)
+    setExpiraEn(null)
+    setReenviarCooldown(0)
     if (pdfBlobUrl) { URL.revokeObjectURL(pdfBlobUrl); setPdfBlobUrl(null) }
     setCedula('')
     setCodigo('')
@@ -101,10 +119,58 @@ export default function EstadoCuentaPublicoPage() {
     setStep(irAStep)
   }
 
+  /** Formatea expira_en ISO a "HH:MM" (hora local) para mostrar "Código válido hasta las HH:MM" */
+  const formatExpiraEn = (iso: string | null | undefined): string | null => {
+    if (!iso) return null
+    try {
+      const d = new Date(iso)
+      if (Number.isNaN(d.getTime())) return null
+      return d.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit', hour12: false })
+    } catch {
+      return null
+    }
+  }
+
+  const goToStep = (newStep: number) => {
+    setNotification(null)
+    setStep(newStep)
+  }
+
+  // Cooldown de reenviar código: baja 1 cada segundo cuando estamos en paso 2
+  const REENVIAR_COOLDOWN_SEC = 60
+  useEffect(() => {
+    if (step !== 2 || reenviarCooldown <= 0) return
+    const t = setInterval(() => {
+      setReenviarCooldown((s) => (s <= 1 ? 0 : s - 1))
+    }, 1000)
+    return () => clearInterval(t)
+  }, [step, reenviarCooldown])
+
+  const handleReenviarCodigo = async () => {
+    if (!cedula || reenviarCooldown > 0 || reenviarLoading) return
+    setReenviarLoading(true)
+    try {
+      const res = await solicitarCodigo(cedula)
+      if (!res.ok) {
+        showNotification('error', res.error || 'No se pudo reenviar el código.')
+        return
+      }
+      setReenviarCooldown(REENVIAR_COOLDOWN_SEC)
+      setExpiraEn(res.expira_en ?? null)
+      setMensajeEnvio(res.mensaje ?? 'Si la cédula está registrada, recibirás un nuevo código en tu correo.')
+      showNotification('success', 'Código reenviado. Revisa tu correo (y carpeta de spam).')
+    } catch (e: unknown) {
+      showNotification('error', (e as Error)?.message || 'Error al reenviar el código.')
+    } finally {
+      setReenviarLoading(false)
+    }
+  }
+
   const stepAnnouncements: Record<number, string> = {
     0: 'Pantalla de bienvenida: consulta de estado de cuenta',
     1: 'Ingrese su número de cédula',
-    2: 'Estado de cuenta',
+    2: 'Verificación por correo: ingrese el código de 6 dígitos',
+    3: 'Estado de cuenta generado',
   }
   const stepAnnouncement = stepAnnouncements[step] ?? `Paso ${step}`
 
@@ -130,6 +196,8 @@ export default function EstadoCuentaPublicoPage() {
       }
       setCedula(cedulaEnviar)
       setMensajeEnvio(res.mensaje ?? 'Si la cedula esta registrada, recibiras un codigo en tu correo.')
+      setExpiraEn(res.expira_en ?? null)
+      setReenviarCooldown(60)
       setStep(2)
     } catch (e: unknown) {
       showNotification('error', (e as Error)?.message || 'Error al validar cédula.')
@@ -205,7 +273,7 @@ export default function EstadoCuentaPublicoPage() {
             <p className="text-xs text-slate-500 text-center">
               Si desea consultar otra cédula, al finalizar use el botón «Consultar otra cédula» o reinicie el proceso.
             </p>
-            <Button className="w-full text-base py-5 sm:py-6 min-h-[48px] font-semibold bg-[#1e3a5f] hover:bg-[#152a47] text-white touch-manipulation" size="lg" onClick={() => setStep(1)}>
+            <Button className="w-full text-base py-5 sm:py-6 min-h-[48px] font-semibold bg-[#1e3a5f] hover:bg-[#152a47] text-white touch-manipulation" size="lg" onClick={() => goToStep(1)}>
               Iniciar
             </Button>
           </CardContent>
@@ -238,7 +306,7 @@ export default function EstadoCuentaPublicoPage() {
                 maxLength={20}
               />
               <div className="flex gap-2 flex-wrap sm:flex-nowrap">
-                <Button variant="outline" className="flex-1 min-h-[48px] min-w-[100px] touch-manipulation" onClick={() => setStep(0)}>
+                <Button variant="outline" className="flex-1 min-h-[48px] min-w-[100px] touch-manipulation" onClick={() => goToStep(0)}>
                   Atrás
                 </Button>
                 <Button className="flex-1 min-h-[48px] min-w-0 touch-manipulation" onClick={handleSolicitarCodigo} disabled={loading}>
@@ -261,13 +329,17 @@ export default function EstadoCuentaPublicoPage() {
           <NotificationBanner notification={notification} onDismiss={dismissNotification} />
           <Card className="w-full max-w-md min-w-0">
             <CardHeader className="px-4 sm:px-6">
-              <CardTitle className="text-lg sm:text-xl">Verificacion por correo</CardTitle>
-              <p className="text-sm text-gray-600">{mensajeEnvio || 'Revisa tu correo e ingresa el codigo de 6 digitos.'}</p>
+              <CardTitle className="text-lg sm:text-xl">Verificación por correo</CardTitle>
+              <p className="text-sm text-gray-600">{mensajeEnvio || 'Revisa tu correo e ingresa el código de 6 dígitos.'}</p>
+              {formatExpiraEn(expiraEn) && (
+                <p className="text-sm text-[#1e3a5f] font-medium mt-1">Código válido hasta las {formatExpiraEn(expiraEn)}</p>
+              )}
+              <p className="text-xs text-gray-500 mt-1">Si no lo recibes, revisa la carpeta de spam. Puedes solicitar otro código volviendo al paso anterior (límite 5 por hora).</p>
             </CardHeader>
             <CardContent className="px-4 sm:px-6 space-y-4">
               <Input
                 className="min-h-[44px] touch-manipulation text-center text-lg tracking-widest"
-                placeholder="Codigo de 6 digitos"
+                placeholder="Código de 6 dígitos"
                 value={codigo}
                 onChange={(e) => setCodigo(e.target.value.replace(/\D/g, '').slice(0, 6))}
                 onKeyDown={(e) => e.key === 'Enter' && handleVerificarCodigo()}
@@ -276,9 +348,25 @@ export default function EstadoCuentaPublicoPage() {
                 autoComplete="one-time-code"
               />
               <div className="flex gap-2 flex-wrap sm:flex-nowrap">
-                <Button variant="outline" className="flex-1 min-h-[48px] min-w-[100px] touch-manipulation" onClick={() => setStep(1)}>Atras</Button>
+                <Button variant="outline" className="flex-1 min-h-[48px] min-w-[100px] touch-manipulation" onClick={() => goToStep(1)}>Atrás</Button>
                 <Button className="flex-1 min-h-[48px] min-w-0 touch-manipulation" onClick={handleVerificarCodigo} disabled={loadingPdf}>
                   {loadingPdf ? 'Verificando...' : 'Ver estado de cuenta'}
+                </Button>
+              </div>
+              <div className="pt-2 border-t border-gray-100">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="w-full text-gray-600 hover:text-[#1e3a5f]"
+                  onClick={handleReenviarCodigo}
+                  disabled={reenviarCooldown > 0 || reenviarLoading || loadingPdf}
+                >
+                  {reenviarLoading
+                    ? 'Enviando...'
+                    : reenviarCooldown > 0
+                      ? `¿No llegó el correo? Reenviar código (${reenviarCooldown} s)`
+                      : '¿No llegó el correo? Reenviar código'}
                 </Button>
               </div>
             </CardContent>
@@ -325,7 +413,7 @@ export default function EstadoCuentaPublicoPage() {
               </Button>
               {pdfDataUrl && (
                 <a
-                  href={pdfDataUrl}
+                  href={pdfBlobUrl || pdfDataUrl}
                   download={`estado_cuenta_${cedula.replace(/\s/g, '_')}.pdf`}
                   className="inline-flex items-center justify-center rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 min-h-[48px] px-4 py-2 flex-1 min-w-0 touch-manipulation"
                 >

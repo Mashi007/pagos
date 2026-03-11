@@ -25,12 +25,16 @@ export interface SolicitarCodigoResponse {
   ok: boolean
   mensaje?: string
   error?: string
+  /** ISO 8601 (ej. "2025-03-11T16:30:00Z") para mostrar "Código válido hasta las HH:MM" */
+  expira_en?: string
 }
 
 export interface VerificarCodigoResponse {
   ok: boolean
   pdf_base64?: string
   error?: string
+  /** ISO 8601 del código verificado (informativo) */
+  expira_en?: string
 }
 
 /** Público: validar cédula (formato + existe en clientes). Sin auth. */

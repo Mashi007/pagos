@@ -5,14 +5,16 @@ identificado por la cédula consultada. Rate limiting por IP. No expone otros se
 ni datos de otros clientes. Solo expone: validar-cedula (nombre/email) y solicitar-estado-cuenta
 (PDF estado de cuenta de esa cédula + envío al email registrado).
 """
+import base64
 import io
+import json
 import logging
-from datetime import date, datetime, timedelta
 import random
 import string
+from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -28,12 +30,22 @@ from app.core.cobros_public_rate_limit import (
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.cuota import Cuota
+from app.models.configuracion import Configuracion
 from app.models.estado_cuenta_codigo import EstadoCuentaCodigo
 from app.api.v1.endpoints.validadores import validate_cedula
 from app.core.email import send_email
 
 from app.services.estado_cuenta_pdf import generar_pdf_estado_cuenta
 logger = logging.getLogger(__name__)
+
+CLAVE_ESTADO_CUENTA_EMAIL = "estado_cuenta_codigo_email"
+DEFAULT_ASUNTO = "Codigo para estado de cuenta - RapiCredit"
+DEFAULT_CUERPO = (
+    "Estimado(a) {{nombre}},\n\n"
+    "Tu codigo de verificacion es: {{codigo}}\n\n"
+    "Valido por {{minutos_valido}} horas. No lo compartas.\n\n"
+    "Saludos,\nRapiCredit"
+)
 
 router = APIRouter(dependencies=[])
 
@@ -66,6 +78,7 @@ class SolicitarCodigoResponse(BaseModel):
     ok: bool
     mensaje: Optional[str] = None
     error: Optional[str] = None
+    expira_en: Optional[str] = None  # ISO 8601 (ej. "2025-03-11T16:30:00Z") para mostrar "Código válido hasta las HH:MM"
 
 
 class VerificarCodigoRequest(BaseModel):
@@ -77,9 +90,11 @@ class VerificarCodigoResponse(BaseModel):
     ok: bool
     pdf_base64: Optional[str] = None
     error: Optional[str] = None
+    expira_en: Optional[str] = None  # ISO 8601 del código verificado (informativo)
 
 
 CODIGO_EXPIRA_MINUTES = 120  # 2 horas
+MAX_CODIGOS_ACTIVOS_POR_CEDULA = 3  # Máximo de códigos no usados y no expirados por cédula; los más viejos se eliminan
 
 
 def _cedula_lookup(cedula_input: str) -> str:
@@ -93,6 +108,38 @@ def _cedula_lookup(cedula_input: str) -> str:
 
 def _generar_codigo_6() -> str:
     return "".join(random.choices(string.digits, k=6))
+
+
+def _get_plantilla_email_codigo(
+    db: Session,
+    nombre: str = "Cliente",
+    codigo: str = "",
+) -> tuple:
+    """
+    Obtiene asunto y cuerpo del email del código desde configuracion (clave estado_cuenta_codigo_email).
+    JSON: {"asunto": "...", "cuerpo": "..."}. Variables: {{nombre}}, {{codigo}}, {{minutos_valido}}.
+    Si no hay config, devuelve valores por defecto.
+    """
+    try:
+        row = db.get(Configuracion, CLAVE_ESTADO_CUENTA_EMAIL)
+        if row and getattr(row, "valor", None):
+            data = json.loads(row.valor) if isinstance(row.valor, str) else row.valor
+            asunto = (data.get("asunto") or "").strip() or DEFAULT_ASUNTO
+            cuerpo = (data.get("cuerpo") or "").strip() or DEFAULT_CUERPO
+        else:
+            asunto = DEFAULT_ASUNTO
+            cuerpo = DEFAULT_CUERPO
+    except Exception as e:
+        logger.warning("No se pudo cargar plantilla estado_cuenta_codigo_email: %s", e)
+        asunto = DEFAULT_ASUNTO
+        cuerpo = DEFAULT_CUERPO
+    minutos = CODIGO_EXPIRA_MINUTES // 60
+    cuerpo = (
+        cuerpo.replace("{{nombre}}", nombre)
+        .replace("{{codigo}}", codigo)
+        .replace("{{minutos_valido}}", str(minutos))
+    )
+    return asunto, cuerpo
 
 
 def _obtener_datos_pdf(db: Session, cedula_lookup: str):
@@ -262,28 +309,59 @@ def solicitar_codigo_estado_cuenta(
     """
     cedula = (body.cedula or "").strip()
     ip = get_client_ip(request)
-    check_rate_limit_estado_cuenta_solicitar(ip)
+    try:
+        check_rate_limit_estado_cuenta_solicitar(ip)
+    except HTTPException as e:
+        if e.status_code == 429:
+            logger.info("estado_cuenta solicitar ip=%s outcome=fail reason=rate_limit", ip)
+        raise
     if not cedula:
+        logger.info("estado_cuenta solicitar ip=%s outcome=fail reason=cedula_vacia", ip)
         return SolicitarCodigoResponse(ok=False, error="Ingrese el numero de cedula.")
     if len(cedula) > MAX_CEDULA_LENGTH:
+        logger.info("estado_cuenta solicitar ip=%s outcome=fail reason=cedula_larga", ip)
         return SolicitarCodigoResponse(ok=False, error="Datos invalidos.")
     result = validate_cedula(cedula)
     if not result.get("valido"):
+        logger.info("estado_cuenta solicitar ip=%s outcome=fail reason=cedula_invalida", ip)
         return SolicitarCodigoResponse(ok=False, error=result.get("error", "Cedula invalida."))
     cedula_lookup = _cedula_lookup(cedula)
     if not cedula_lookup:
+        logger.info("estado_cuenta solicitar ip=%s outcome=fail reason=formato_cedula", ip)
         return SolicitarCodigoResponse(ok=False, error="Formato de cedula no reconocido.")
     datos = _obtener_datos_pdf(db, cedula_lookup)
     if not datos or not (datos.get("email") or "").strip():
+        logger.info("estado_cuenta solicitar ip=%s outcome=ok_sin_email (sin cliente/email)", ip)
         return SolicitarCodigoResponse(
             ok=True,
             mensaje="Si la cedula esta registrada, recibiras un codigo en tu correo en los proximos minutos.",
         )
     email = (datos.get("email") or "").strip()
     nombre = datos.get("nombre") or "Cliente"
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    from sqlalchemy import and_
+    activos = (
+        db.execute(
+            select(EstadoCuentaCodigo)
+            .where(
+                and_(
+                    EstadoCuentaCodigo.cedula_normalizada == cedula_lookup,
+                    EstadoCuentaCodigo.usado == False,
+                    EstadoCuentaCodigo.expira_en > now_utc,
+                )
+            )
+            .order_by(EstadoCuentaCodigo.creado_en.desc())
+        )
+        .scalars().all()
+    )
+    if len(activos) >= MAX_CODIGOS_ACTIVOS_POR_CEDULA:
+        for item in activos[MAX_CODIGOS_ACTIVOS_POR_CEDULA - 1:]:
+            rec = item[0] if hasattr(item, "__getitem__") else item
+            db.delete(rec)
+        db.flush()
     codigo = _generar_codigo_6()
-    expira_en = datetime.utcnow() + timedelta(minutes=CODIGO_EXPIRA_MINUTES)
-    creado_en = datetime.utcnow()
+    expira_en = now_utc + timedelta(minutes=CODIGO_EXPIRA_MINUTES)
+    creado_en = now_utc
     row = EstadoCuentaCodigo(
         cedula_normalizada=cedula_lookup,
         email=email,
@@ -294,17 +372,22 @@ def solicitar_codigo_estado_cuenta(
     )
     db.add(row)
     db.commit()
+    asunto, cuerpo = _get_plantilla_email_codigo(db, nombre=nombre, codigo=codigo)
     try:
-        send_email(
-            [email],
-            "Codigo para estado de cuenta - RapiCredit",
-            f"Estimado(a) {nombre},\n\nTu codigo de verificacion es: {codigo}\n\nValido por 2 horas. No lo compartas.\n\nSaludos,\nRapiCredit",
+        send_email([email], asunto, cuerpo)
+        logger.info(
+            "estado_cuenta solicitar ip=%s outcome=ok cedula_suffix=***%s",
+            ip,
+            cedula_lookup[-4:] if len(cedula_lookup) >= 4 else "****",
         )
     except Exception as e:
         logger.warning("No se pudo enviar codigo por email a %s: %s", email, e)
+        logger.info("estado_cuenta solicitar ip=%s outcome=ok_email_fail cedula_suffix=***%s", ip, cedula_lookup[-4:] if len(cedula_lookup) >= 4 else "****")
+    expira_en_iso = expira_en.isoformat() + "Z" if expira_en else None
     return SolicitarCodigoResponse(
         ok=True,
         mensaje="Si la cedula esta registrada, recibiras un codigo en tu correo en los proximos minutos.",
+        expira_en=expira_en_iso,
     )
 
 
@@ -322,14 +405,21 @@ def verificar_codigo_estado_cuenta(
     cedula = (body.cedula or "").strip()
     codigo = (body.codigo or "").strip()
     ip = get_client_ip(request)
-    check_rate_limit_estado_cuenta_verificar(ip)
+    try:
+        check_rate_limit_estado_cuenta_verificar(ip)
+    except HTTPException as e:
+        if e.status_code == 429:
+            logger.info("estado_cuenta verificar ip=%s outcome=fail reason=rate_limit", ip)
+        raise
     if not cedula or not codigo:
+        logger.info("estado_cuenta verificar ip=%s outcome=fail reason=cedula_o_codigo_vacio", ip)
         return VerificarCodigoResponse(ok=False, error="Ingrese cedula y codigo.")
     cedula_lookup = _cedula_lookup(cedula)
     if not cedula_lookup:
+        logger.info("estado_cuenta verificar ip=%s outcome=fail reason=formato_cedula", ip)
         return VerificarCodigoResponse(ok=False, error="Formato de cedula no reconocido.")
     from sqlalchemy import and_
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     fila = db.execute(
         select(EstadoCuentaCodigo).where(
             and_(
@@ -356,17 +446,18 @@ def verificar_codigo_estado_cuenta(
             fecha_corte=datos.get("fecha_corte") or date.today(),
             amortizaciones_por_prestamo=datos.get("amortizaciones_por_prestamo") or [],
         )
-        import base64
         pdf_b64 = base64.b64encode(pdf_bytes).decode("ascii")
     except Exception as e:
         logger.exception("Error generando PDF estado de cuenta: %s", e)
+        logger.info("estado_cuenta verificar ip=%s outcome=fail reason=error_pdf", ip)
         return VerificarCodigoResponse(
             ok=False,
             error="No se pudo generar el PDF. Intente de nuevo o solicite un nuevo codigo.",
         )
     rec.usado = True
     db.commit()
-    return VerificarCodigoResponse(ok=True, pdf_base64=pdf_b64)
+    logger.info("estado_cuenta verificar ip=%s outcome=ok cedula_suffix=***%s", ip, cedula_lookup[-4:] if len(cedula_lookup) >= 4 else "****")
+    return VerificarCodigoResponse(ok=True, pdf_base64=pdf_b64, expira_en=expira_en_iso)
 
 
 @router.post("/solicitar-estado-cuenta", response_model=SolicitarEstadoCuentaResponse)

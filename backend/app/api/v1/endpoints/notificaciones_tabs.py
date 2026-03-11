@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.email import send_email
+from app.core.email_config_holder import sync_from_db as sync_email_config_from_db
 from app.core.whatsapp_send import send_whatsapp_text
 from app.api.v1.endpoints.notificaciones import (
     get_notificaciones_tabs_data,
@@ -18,8 +19,23 @@ from app.api.v1.endpoints.notificaciones import (
     get_plantilla_asunto_cuerpo,
 )
 from app.models.plantilla_notificacion import PlantillaNotificacion
+from app.models.envio_notificacion import EnvioNotificacion
 from app.services.carta_cobranza_pdf import generar_carta_cobranza_pdf
 from app.services.adjunto_fijo_cobranza import get_adjunto_fijo_cobranza_bytes
+
+# Mapeo tipo config (PAGO_5_DIAS_ANTES, etc.) a tipo_tab para estadísticas/rebotados (solo los 5 que muestra la UI)
+_CONFIG_TIPO_TO_TAB = {
+    "PAGO_5_DIAS_ANTES": "dias_5",
+    "PAGO_3_DIAS_ANTES": "dias_3",
+    "PAGO_1_DIA_ANTES": "dias_1",
+    "PAGO_DIA_0": "hoy",
+    "MORA_90": "mora_90",
+}
+
+
+def _tipo_tab_para_persistencia(tipo_config: str) -> str | None:
+    """Devuelve tipo_tab (dias_5, hoy, etc.) si se debe persistir para estadísticas/rebotados."""
+    return _CONFIG_TIPO_TO_TAB.get(tipo_config)
 
 router_previas = APIRouter(dependencies=[Depends(get_current_user)])
 router_dia_pago = APIRouter(dependencies=[Depends(get_current_user)])
@@ -41,9 +57,10 @@ def _enviar_correos_items(
     - modo_pruebas (desde config): si True y email_pruebas válido, TODOS los emails van SOLO a ese correo (no a clientes).
     - config_envios (desde BD): si tipo tiene habilitado=false no se envía; CCO del tipo se envía como BCC (copia oculta).
     - Si tipo tiene plantilla_id en config, se usa asunto/cuerpo de esa plantilla (con variables sustituidas).
-    - Email desde Configuración > Email (sync_from_db en send_email).
+    - Email desde Configuración > Email (holder sincronizado con BD antes de enviar).
     - WhatsApp desde Configuración > WhatsApp (send_whatsapp_text) cuando el item tiene teléfono.
     """
+    sync_email_config_from_db()
     modo_pruebas = config_envios.get("modo_pruebas") is True
     email_pruebas = (config_envios.get("email_pruebas") or "").strip()
     usar_solo_pruebas = modo_pruebas and email_pruebas and "@" in email_pruebas
@@ -56,6 +73,7 @@ def _enviar_correos_items(
     omitidos_config = 0
     enviados_whatsapp = 0
     fallidos_whatsapp = 0
+    registros_envio: List[EnvioNotificacion] = []
     for item in items:
         tipo = get_tipo_for_item(item)
         tipo_cfg = config_envios.get(tipo) or {}
@@ -102,7 +120,7 @@ def _enviar_correos_items(
             bcc_list = [e.strip() for e in cco if e and isinstance(e, str) and "@" in e.strip()] if isinstance(cco, list) else []
 
         if to_email:
-            ok, _ = send_email(
+            ok, msg = send_email(
                 to_email,
                 asunto,
                 cuerpo,
@@ -114,6 +132,18 @@ def _enviar_correos_items(
                 enviados += 1
             else:
                 fallidos += 1
+            tipo_tab = _tipo_tab_para_persistencia(tipo)
+            if tipo_tab:
+                registros_envio.append(
+                    EnvioNotificacion(
+                        tipo_tab=tipo_tab,
+                        email=to_email[0],
+                        nombre=(item.get("nombre") or "")[:255],
+                        cedula=(item.get("cedula") or "")[:50],
+                        exito=ok,
+                        error_mensaje=None if ok else (msg or "")[:5000],
+                    )
+                )
         else:
             if not usar_solo_pruebas:
                 sin_email += 1
@@ -125,6 +155,13 @@ def _enviar_correos_items(
                 enviados_whatsapp += 1
             else:
                 fallidos_whatsapp += 1
+    if registros_envio:
+        try:
+            for r in registros_envio:
+                db.add(r)
+            db.commit()
+        except Exception:
+            db.rollback()
     return {
         "enviados": enviados,
         "sin_email": sin_email,

@@ -98,6 +98,19 @@ def _job_informe_pagos_email() -> None:
 
 
 
+def _job_limpiar_estado_cuenta_codigos() -> None:
+    """Job 4:00. Borra códigos de estado de cuenta expirados o usados hace más de 24 h."""
+    db = SessionLocal()
+    try:
+        from app.services.estado_cuenta_cleanup import limpiar_estado_cuenta_codigos
+        result = limpiar_estado_cuenta_codigos(db)
+        logger.info("Limpieza estado_cuenta_codigos: borrados=%s", result.get("borrados", 0))
+    except Exception as e:
+        logger.exception("Error en job limpiar_estado_cuenta_codigos: %s", e)
+    finally:
+        db.close()
+
+
 def _job_pagos_gmail_pipeline() -> None:
     """Job cada N min (PAGOS_GMAIL_CRON_MINUTES): procesa correos (Gmail -> Drive -> Gemini -> Sheets). No procesa si aún no es tiempo desde la última ejecución."""
     db = SessionLocal()
@@ -173,6 +186,13 @@ def start_scheduler() -> None:
         id="informe_pagos_4h30",
         name="Email informe pagos 16:30",
     )
+    # 4:00 - Limpieza de códigos de estado de cuenta (expirados o usados > 24 h)
+    _scheduler.add_job(
+        _job_limpiar_estado_cuenta_codigos,
+        CronTrigger(hour=4, minute=0, timezone=SCHEDULER_TZ),
+        id="limpiar_estado_cuenta_codigos",
+        name="Limpiar códigos estado de cuenta 4:00",
+    )
     # Pagos Gmail: intervalo desde PAGOS_GMAIL_CRON_MINUTES (por defecto 30 min; cuota Gemini free ~15 RPM)
     cron_min = settings.PAGOS_GMAIL_CRON_MINUTES
     _scheduler.add_job(
@@ -185,7 +205,7 @@ def start_scheduler() -> None:
     
     _scheduler.start()
     logger.info(
-        "Scheduler iniciado: notificaciones 2:00; envío notificaciones 23:00; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30 (%s).",
+        "Scheduler iniciado: notificaciones 2:00; envío notificaciones 23:00; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30; limpieza estado_cuenta_codigos 4:00 (%s).",
         SCHEDULER_TZ,
     )
 

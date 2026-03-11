@@ -1,12 +1,20 @@
 """
 Rate limiting para endpoints públicos del módulo Cobros (formulario reporte de pago).
 Evita abuso por IP sin requerir autenticación.
+Si REDIS_URL está configurada, usa Redis para límites distribuidos entre instancias;
+si no, usa memoria por proceso.
 """
 import time
 from collections import defaultdict
 from threading import Lock
 
 from fastapi import Request, HTTPException
+
+try:
+    from app.core.rate_limit_store import get_redis_client, check_rate_limit_redis
+except ImportError:
+    get_redis_client = None
+    check_rate_limit_redis = None
 
 # Validar cédula: 30 solicitudes por minuto por IP
 VALIDAR_CEDULA_WINDOW_SEC = 60
@@ -34,6 +42,20 @@ _lock = Lock()
 
 
 def check_rate_limit_estado_cuenta_verificar(ip: str) -> None:
+    if check_rate_limit_redis is not None:
+        try:
+            check_rate_limit_redis(
+                "ec_verificar",
+                ip,
+                ESTADO_CUENTA_VERIFICAR_WINDOW_SEC,
+                ESTADO_CUENTA_VERIFICAR_MAX,
+                "Demasiados intentos. Espere 15 minutos e intente de nuevo.",
+            )
+            return
+        except HTTPException:
+            raise
+        except Exception:
+            pass
     with _lock:
         now = time.time()
         attempts = _estado_cuenta_verificar_attempts[ip]
@@ -82,6 +104,20 @@ def check_rate_limit_enviar_reporte(ip: str) -> None:
 
 def check_rate_limit_estado_cuenta_validar(ip: str) -> None:
     """Lanza 429 si se supera el límite de validar cédula (estado de cuenta) por IP."""
+    if check_rate_limit_redis is not None:
+        try:
+            check_rate_limit_redis(
+                "ec_validar",
+                ip,
+                ESTADO_CUENTA_VALIDAR_WINDOW_SEC,
+                ESTADO_CUENTA_VALIDAR_MAX,
+                "Demasiadas consultas. Espere un minuto e intente de nuevo.",
+            )
+            return
+        except HTTPException:
+            raise
+        except Exception:
+            pass
     with _lock:
         now = time.time()
         attempts = _estado_cuenta_validar_attempts[ip]
@@ -96,6 +132,20 @@ def check_rate_limit_estado_cuenta_validar(ip: str) -> None:
 
 def check_rate_limit_estado_cuenta_solicitar(ip: str) -> None:
     """Lanza 429 si se supera el límite de solicitar estado de cuenta (PDF) por IP."""
+    if check_rate_limit_redis is not None:
+        try:
+            check_rate_limit_redis(
+                "ec_solicitar",
+                ip,
+                ESTADO_CUENTA_SOLICITAR_WINDOW_SEC,
+                ESTADO_CUENTA_SOLICITAR_MAX,
+                "Ha alcanzado el límite de consultas por hora. Intente más tarde.",
+            )
+            return
+        except HTTPException:
+            raise
+        except Exception:
+            pass
     with _lock:
         now = time.time()
         attempts = _estado_cuenta_solicitar_attempts[ip]

@@ -1,11 +1,31 @@
 """
 Servicios para notificaciones de cuotas vencidas y en mora.
 Centraliza la lógica de serialización y filtrado de cuotas.
+Una sola fuente de datos: get_cuotas_pendientes_con_cliente(db) para listado y envío.
 """
-from datetime import date
-from typing import Optional
+from typing import List, Optional, Tuple
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
 from app.models.cliente import Cliente
 from app.models.cuota import Cuota
+from app.models.prestamo import Prestamo
+
+
+def get_cuotas_pendientes_con_cliente(db: Session) -> List[Tuple[Cuota, Cliente]]:
+    """
+    Fuente única: cuotas no pagadas (fecha_pago nula) con su cliente vía préstamo.
+    Usado por get_clientes_retrasados y get_notificaciones_tabs_data para evitar duplicar consulta.
+    """
+    q = (
+        select(Cuota, Cliente)
+        .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
+        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+        .where(Cuota.fecha_pago.is_(None))
+    )
+    rows = db.execute(q).all()
+    return [(row[0], row[1]) for row in rows]
 
 
 def format_cuota_item(

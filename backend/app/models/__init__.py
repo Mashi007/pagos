@@ -1,4 +1,4 @@
-﻿from app.core.database import Base
+from app.core.database import Base
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.ticket import Ticket
@@ -27,6 +27,7 @@ from app.models.prestamo_con_error import PrestamoConError
 from app.models.pagos_gmail_sync import PagosGmailSync, PagosGmailSyncItem
 from app.models.pago_reportado import PagoReportado, PagoReportadoHistorial
 from app.models.estado_cuenta_codigo import EstadoCuentaCodigo
+from app.models.envio_notificacion import EnvioNotificacion
 
 __all__ = [
     "Base", "Cliente", "Prestamo", "Ticket", "Cuota", "CuotaPago", "Pago", "PagosWhatsapp",
@@ -43,5 +44,6 @@ __all__ = [
     "PagoReportado",
     "PagoReportadoHistorial",
     "EstadoCuentaCodigo",
+    "EnvioNotificacion",
 ]
 
