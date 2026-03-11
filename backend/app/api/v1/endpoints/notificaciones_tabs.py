@@ -317,3 +317,135 @@ def enviar_notificaciones_mora_90(db: Session = Depends(get_db)):
     )
     res = _enviar_correos_items(items, asunto, cuerpo, config_envios, _tipo_mora_90, db)
     return {"mensaje": "Envío de notificaciones mora 90+ finalizado.", **res}
+
+
+def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
+    """
+    Ejecuta el envío de todas las notificaciones (previas, día pago, retrasadas, prejudicial, mora 90).
+    Pensado para ser llamado por el scheduler (p. ej. diario a las 23:00).
+    Respeta configuración de envíos (habilitado/CCO por tipo) desde BD.
+    """
+    config_envios = get_notificaciones_envios_config(db)
+    data = get_notificaciones_tabs_data(db)
+    total_enviados = 0
+    total_fallidos = 0
+    total_sin_email = 0
+    total_omitidos_config = 0
+    total_whatsapp_ok = 0
+    total_whatsapp_fail = 0
+    detalles = {}
+
+    # Previas (5, 3, 1 días antes)
+    items_previas = data["dias_5"] + data["dias_3"] + data["dias_1"]
+    asunto_p = "Recordatorio: cuota por vencer - Rapicredit"
+    cuerpo_p = (
+        "Estimado/a {nombre} (cédula {cedula}),\n\n"
+        "Le recordamos que tiene una cuota por vencer.\n"
+        "Fecha de vencimiento: {fecha_vencimiento}\n"
+        "Número de cuota: {numero_cuota}\n"
+        "Monto: {monto}\n\n"
+        "Por favor realice el pago a tiempo.\n\n"
+        "Saludos,\nRapicredit"
+    )
+    r = _enviar_correos_items(items_previas, asunto_p, cuerpo_p, config_envios, _tipo_previas, db)
+    total_enviados += r.get("enviados", 0)
+    total_fallidos += r.get("fallidos", 0)
+    total_sin_email += r.get("sin_email", 0)
+    total_omitidos_config += r.get("omitidos_config", 0)
+    total_whatsapp_ok += r.get("enviados_whatsapp", 0)
+    total_whatsapp_fail += r.get("fallidos_whatsapp", 0)
+    detalles["previas"] = r
+
+    # Día de pago (vence hoy)
+    items_hoy = data["hoy"]
+    asunto_h = "Vencimiento hoy: cuota de pago - Rapicredit"
+    cuerpo_h = (
+        "Estimado/a {nombre} (cédula {cedula}),\n\n"
+        "Le informamos que su cuota vence HOY.\n"
+        "Fecha de vencimiento: {fecha_vencimiento}\n"
+        "Número de cuota: {numero_cuota}\n"
+        "Monto: {monto}\n\n"
+        "Por favor realice el pago hoy.\n\n"
+        "Saludos,\nRapicredit"
+    )
+    r = _enviar_correos_items(items_hoy, asunto_h, cuerpo_h, config_envios, _tipo_dia_pago, db)
+    total_enviados += r.get("enviados", 0)
+    total_fallidos += r.get("fallidos", 0)
+    total_sin_email += r.get("sin_email", 0)
+    total_omitidos_config += r.get("omitidos_config", 0)
+    total_whatsapp_ok += r.get("enviados_whatsapp", 0)
+    total_whatsapp_fail += r.get("fallidos_whatsapp", 0)
+    detalles["dia_pago"] = r
+
+    # Retrasadas (1, 3, 5 días atraso)
+    items_retrasadas = data["dias_1_retraso"] + data["dias_3_retraso"] + data["dias_5_retraso"]
+    asunto_r = "Cuenta con cuota atrasada - Rapicredit"
+    cuerpo_r = (
+        "Estimado/a {nombre} (cédula {cedula}),\n\n"
+        "Le recordamos que tiene una cuota en mora.\n"
+        "Fecha de vencimiento: {fecha_vencimiento}\n"
+        "Número de cuota: {numero_cuota}\n"
+        "Monto: {monto}\n\n"
+        "Por favor regularice su pago lo antes posible.\n\n"
+        "Saludos,\nRapicredit"
+    )
+    r = _enviar_correos_items(items_retrasadas, asunto_r, cuerpo_r, config_envios, _tipo_retrasadas, db)
+    total_enviados += r.get("enviados", 0)
+    total_fallidos += r.get("fallidos", 0)
+    total_sin_email += r.get("sin_email", 0)
+    total_omitidos_config += r.get("omitidos_config", 0)
+    total_whatsapp_ok += r.get("enviados_whatsapp", 0)
+    total_whatsapp_fail += r.get("fallidos_whatsapp", 0)
+    detalles["retrasadas"] = r
+
+    # Prejudicial
+    items_prejudicial = data["prejudicial"]
+    asunto_pre = "Aviso prejudicial - Rapicredit"
+    cuerpo_pre = (
+        "Estimado/a {nombre} (cédula {cedula}),\n\n"
+        "Le informamos que su cuenta presenta varias cuotas en mora.\n"
+        "Fecha de vencimiento de referencia: {fecha_vencimiento}\n"
+        "Cuota de referencia: {numero_cuota}\n"
+        "Monto de referencia: {monto}\n\n"
+        "Por favor contacte a la entidad para regularizar su situación.\n\n"
+        "Saludos,\nRapicredit"
+    )
+    r = _enviar_correos_items(items_prejudicial, asunto_pre, cuerpo_pre, config_envios, _tipo_prejudicial, db)
+    total_enviados += r.get("enviados", 0)
+    total_fallidos += r.get("fallidos", 0)
+    total_sin_email += r.get("sin_email", 0)
+    total_omitidos_config += r.get("omitidos_config", 0)
+    total_whatsapp_ok += r.get("enviados_whatsapp", 0)
+    total_whatsapp_fail += r.get("fallidos_whatsapp", 0)
+    detalles["prejudicial"] = r
+
+    # Mora 90+
+    items_mora90 = data["mora_90"]
+    asunto_m = "Aviso: cuota en mora 90+ días - Rapicredit"
+    cuerpo_m = (
+        "Estimado/a {nombre} (cédula {cedula}),\n\n"
+        "Le informamos que tiene una cuota con más de 90 días de atraso (estado moroso).\n"
+        "Fecha de vencimiento: {fecha_vencimiento}\n"
+        "Número de cuota: {numero_cuota}\n"
+        "Monto: {monto}\n\n"
+        "Por favor regularice su pago lo antes posible.\n\n"
+        "Saludos,\nRapicredit"
+    )
+    r = _enviar_correos_items(items_mora90, asunto_m, cuerpo_m, config_envios, _tipo_mora_90, db)
+    total_enviados += r.get("enviados", 0)
+    total_fallidos += r.get("fallidos", 0)
+    total_sin_email += r.get("sin_email", 0)
+    total_omitidos_config += r.get("omitidos_config", 0)
+    total_whatsapp_ok += r.get("enviados_whatsapp", 0)
+    total_whatsapp_fail += r.get("fallidos_whatsapp", 0)
+    detalles["mora_90"] = r
+
+    return {
+        "enviados": total_enviados,
+        "fallidos": total_fallidos,
+        "sin_email": total_sin_email,
+        "omitidos_config": total_omitidos_config,
+        "enviados_whatsapp": total_whatsapp_ok,
+        "fallidos_whatsapp": total_whatsapp_fail,
+        "detalles": detalles,
+    }

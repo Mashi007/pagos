@@ -9,6 +9,7 @@ Actualización periódica de informes y reportes:
 - 13:00  Informe de pagos por email.
 - 16:00  Caché dashboard (hilo aparte en main: 1:00, 13:00).
 - 16:30  Informe de pagos por email.
+- 23:00  Envío automático de notificaciones (previas, día pago, retrasadas, prejudicial, mora 90).
 
 Los informes de Cobranzas (clientes atrasados, rendimiento analista, montos por mes, etc.)
 se generan bajo demanda al solicitar JSON/PDF/Excel; no se precalculan.
@@ -22,7 +23,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from app.core.config import settings
 from app.core.database import SessionLocal
-from app.api.v1.endpoints import cobranzas, notificaciones
+from app.api.v1.endpoints import cobranzas, notificaciones, notificaciones_tabs
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,26 @@ def _job_actualizar_notificaciones() -> None:
         )
     except Exception as e:
         logger.exception("Error en job actualizar_notificaciones: %s", e)
+    finally:
+        db.close()
+
+
+def _job_envio_notificaciones_23() -> None:
+    """Job 23:00. Envío automático de todas las notificaciones (previas, día pago, retrasadas, prejudicial, mora 90)."""
+    db = SessionLocal()
+    try:
+        result = notificaciones_tabs.ejecutar_envio_todas_notificaciones(db)
+        logger.info(
+            "Envío notificaciones 23:00: enviados=%s fallidos=%s sin_email=%s omitidos_config=%s whatsapp_ok=%s whatsapp_fail=%s",
+            result.get("enviados", 0),
+            result.get("fallidos", 0),
+            result.get("sin_email", 0),
+            result.get("omitidos_config", 0),
+            result.get("enviados_whatsapp", 0),
+            result.get("fallidos_whatsapp", 0),
+        )
+    except Exception as e:
+        logger.exception("Error en job envio_notificaciones_23: %s", e)
     finally:
         db.close()
 
@@ -100,18 +121,25 @@ def _job_pagos_gmail_pipeline() -> None:
 
 
 def start_scheduler() -> None:
-    """Inicia el scheduler: notificaciones 2:00; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30."""
+    """Inicia el scheduler: notificaciones 2:00; envío notificaciones 23:00; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30."""
     global _scheduler
     if _scheduler is not None:
         logger.warning("Scheduler ya está iniciado.")
         return
     _scheduler = BackgroundScheduler(timezone=SCHEDULER_TZ)
-    # 2:00 - Notificaciones
+    # 2:00 - Actualizar datos de notificaciones (mora desde cuotas)
     _scheduler.add_job(
         _job_actualizar_notificaciones,
         CronTrigger(hour=2, minute=0, timezone=SCHEDULER_TZ),
         id="notificaciones_2am",
         name="Actualizar notificaciones 2:00",
+    )
+    # 23:00 - Envío automático de notificaciones (emails/WhatsApp por tipo)
+    _scheduler.add_job(
+        _job_envio_notificaciones_23,
+        CronTrigger(hour=23, minute=0, timezone=SCHEDULER_TZ),
+        id="envio_notificaciones_11pm",
+        name="Envío notificaciones 23:00",
     )
     # 1:00 y 13:00 - Reportes cobranzas (actualización automática de informes)
     _scheduler.add_job(
@@ -157,7 +185,7 @@ def start_scheduler() -> None:
     
     _scheduler.start()
     logger.info(
-        "Scheduler iniciado: notificaciones 2:00; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30 (%s).",
+        "Scheduler iniciado: notificaciones 2:00; envío notificaciones 23:00; cobranzas 1:00 y 13:00; informe pagos 6:00, 13:00 y 16:30 (%s).",
         SCHEDULER_TZ,
     )
 
