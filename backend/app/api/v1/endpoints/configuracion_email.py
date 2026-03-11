@@ -153,21 +153,27 @@ def put_email_configuracion(payload: EmailConfigUpdate = Body(...), db: Session 
     """Actualiza configuracion SMTP, IMAP y contactos para notificacion de tickets. Persiste en BD."""
     _load_email_config_from_db(db)
     data = payload.model_dump(exclude_none=True)
+    password_skipped = False
     for k, v in data.items():
         if k not in _email_config_stub:
             continue
         if k in ("smtp_password", "imap_password") and _is_password_masked(v):
+            password_skipped = True
             continue
         _email_config_stub[k] = v
     update_from_api(_email_config_stub)
     _persist_email_config(db)
     logger.info("Configuracion email actualizada y persistida en BD (campos: %s)", list(data.keys()))
-    return {
+    resp = {
         "message": "Configuracion guardada",
         "vinculacion_confirmada": False,
         "mensaje_vinculacion": "Guarda la configuracion y verifica la conexion.",
         "requiere_app_password": False,
     }
+    if password_skipped:
+        resp["password_not_updated"] = True
+        resp["mensaje_password"] = "La contraseña no se modificó (el campo tenía *** o vacío). Para cambiarla, reingrésala y guarda de nuevo."
+    return resp
 
 
 @router.get("/estado")

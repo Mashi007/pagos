@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+
 import { Mail, Save, TestTube, CheckCircle, AlertCircle, Eye, EyeOff, Clock, XCircle, RefreshCw } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
@@ -412,6 +413,11 @@ const [probando, setProbando] = useState(false)
         toast.success('Configuración guardada exitosamente')
       }
 
+
+      if (resultado?.password_not_updated || passwordLimpia === '***') {
+        toast.warning(resultado?.mensaje_password || 'La contraseña no se actualizó (el campo tenía ***). Para cambiarla, escríbela de nuevo y guarda.', { duration: 12000 })
+      }
+
       await cargarConfiguracion()
 
       // ✓ Verificar estado de Google después de guardar (prueba conexión SMTP real con Gmail)
@@ -801,6 +807,7 @@ const [probando, setProbando] = useState(false)
               <p className="text-xs text-gray-500 mt-1">
                 <strong>Gmail personal:</strong> con 2FA activado usa una App Password (16 caracteres). <strong>Cuentas corporativas / Google Workspace:</strong> puedes usar tu contraseña normal.
               </p>
+              <p className="text-amber-700 text-sm mt-1"><strong>Importante:</strong> Si cambiaste de cuenta o contraseña, escríbela aquí. El valor *** no actualiza la contraseña en el servidor.</p>
             </div>
           </div>
 
