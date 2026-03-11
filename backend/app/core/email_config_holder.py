@@ -10,6 +10,7 @@ Integración con encriptación:
 - Al devolver al API, se enmascaran (no se expone la contraseña)
 """
 import json
+import logging
 from typing import Any, List, Optional, Tuple
 
 from app.core.config import settings
