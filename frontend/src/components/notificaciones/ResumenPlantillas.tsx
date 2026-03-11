@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../..
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import { Badge } from '../../components/ui/badge'
 import { Edit2, Trash2, FileText, Calendar, AlertCircle } from 'lucide-react'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 
 interface ResumenPlantillasProps {
   onEditarPlantilla?: (plantilla: NotificacionPlantilla) => void

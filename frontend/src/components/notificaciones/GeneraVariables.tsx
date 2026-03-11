@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../..
 import { Badge } from '../../components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import { Search, Plus, Trash2, Edit2, Save, X, Database, Link } from 'lucide-react'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 import { notificacionService, NotificacionVariable } from '../../services/notificacionService'
 
 // Usar el tipo del servicio

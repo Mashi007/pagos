@@ -17,6 +17,9 @@ from app.api.v1.endpoints.notificaciones import (
     get_notificaciones_envios_config,
     get_plantilla_asunto_cuerpo,
 )
+from app.models.plantilla_notificacion import PlantillaNotificacion
+from app.services.carta_cobranza_pdf import generar_carta_cobranza_pdf
+from app.services.adjunto_fijo_cobranza import get_adjunto_fijo_cobranza_bytes
 
 router_previas = APIRouter(dependencies=[Depends(get_current_user)])
 router_dia_pago = APIRouter(dependencies=[Depends(get_current_user)])
@@ -65,6 +68,23 @@ def _enviar_correos_items(
         except (TypeError, ValueError):
             plantilla_id = None
         asunto, cuerpo = get_plantilla_asunto_cuerpo(db, plantilla_id, item, asunto_base, cuerpo_base)
+        # Adjunto PDF para plantilla tipo COBRANZA (carta de cobranza)
+        attachments = None
+        body_html = None
+        if plantilla_id and db:
+            plantilla = db.get(PlantillaNotificacion, plantilla_id)
+            if plantilla and getattr(plantilla, "tipo", None) == "COBRANZA" and item.get("contexto_cobranza"):
+                body_html = cuerpo  # el cuerpo de COBRANZA es HTML
+                try:
+                    pdf_bytes = generar_carta_cobranza_pdf(item["contexto_cobranza"], db=db)
+                    attachments = [("Carta_Cobranza.pdf", pdf_bytes)]
+                    # Adjunto fijo: PDF estático que se anexa siempre sin cambios
+                    adjunto_fijo = get_adjunto_fijo_cobranza_bytes(db)
+                    if adjunto_fijo:
+                        attachments.append(adjunto_fijo)
+                except Exception as e:
+                    import logging
+                    logging.getLogger(__name__).exception("Error generando PDF cobranza: %s", e)
         # Email: en modo prueba todos van solo a email_pruebas; en producción al correo del cliente (+ CCO si hay)
         if usar_solo_pruebas:
             to_email = [email_pruebas]
@@ -82,7 +102,14 @@ def _enviar_correos_items(
             bcc_list = [e.strip() for e in cco if e and isinstance(e, str) and "@" in e.strip()] if isinstance(cco, list) else []
 
         if to_email:
-            ok, _ = send_email(to_email, asunto, cuerpo, bcc_emails=bcc_list or None)
+            ok, _ = send_email(
+                to_email,
+                asunto,
+                cuerpo,
+                body_html=body_html,
+                bcc_emails=bcc_list or None,
+                attachments=attachments,
+            )
             if ok:
                 enviados += 1
             else:

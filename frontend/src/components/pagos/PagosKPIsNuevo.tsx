@@ -1,4 +1,4 @@
-﻿import { DollarSign, Calendar, TrendingUp } from 'lucide-react'
+import { DollarSign, Calendar, TrendingUp } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import { usePagosKPIs } from '../../hooks/usePagos'
 
@@ -90,7 +90,7 @@ export function PagosKPIsNuevo() {
               })}
             </div>
             <p className="text-xs text-gray-600 mt-1">
-              CuÃ¡nto deberÃ­a cobrarse en {nombreMes} (vencimientos del mes)
+              Cuánto debería cobrarse en {nombreMes} (vencimientos del mes)
             </p>
           </CardContent>
         </Card>

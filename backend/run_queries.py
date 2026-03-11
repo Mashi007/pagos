@@ -1,4 +1,4 @@
-﻿import os
+import os
 from dotenv import load_dotenv
 
 # Cargar .env
@@ -11,7 +11,7 @@ from sqlalchemy import text
 print('=' * 70)
 print('CONSULTAS: CLIENTES INACTIVOS Y PRÃ‰STAMOS APROBADOS')
 print('=' * 70)
-print(f'ConexiÃ³n a BD: {settings.DATABASE_URL[:50]}...')
+print(f'Conexión a BD: {settings.DATABASE_URL[:50]}...')
 print()
 
 db = SessionLocal()
@@ -24,7 +24,7 @@ try:
     print(f'   Total: {result1[0]}')
     print()
     
-    # Query 2: Clientes inactivos CON prÃ©stamos aprobados
+    # Query 2: Clientes inactivos CON préstamos aprobados
     query2 = text('SELECT COUNT(DISTINCT c.id) as clientes_inactivos_con_prestamos_aprobados FROM clientes c JOIN prestamos p ON c.id = p.cliente_id WHERE c.estado = ''INACTIVO'' AND p.estado = ''APROBADO''')
     result2 = db.execute(query2).fetchone()
     print('2. CLIENTES INACTIVOS CON PRÃ‰STAMOS APROBADOS')
@@ -32,7 +32,7 @@ try:
     print(f'   Total: {result2[0]}')
     print()
     
-    # Query 3: Clientes inactivos SIN prÃ©stamos aprobados
+    # Query 3: Clientes inactivos SIN préstamos aprobados
     query3 = text('SELECT COUNT(DISTINCT c.id) as clientes_inactivos_sin_prestamos_aprobados FROM clientes c WHERE c.estado = ''INACTIVO'' AND NOT EXISTS (SELECT 1 FROM prestamos p WHERE p.cliente_id = c.id AND p.estado = ''APROBADO'')')
     result3 = db.execute(query3).fetchone()
     print('3. CLIENTES INACTIVOS SIN PRÃ‰STAMOS APROBADOS')
@@ -48,14 +48,14 @@ try:
     sin_aprobados = result3[0]
     
     print(f'   Total clientes inactivos:                  {total_inactivos}')
-    print(f'   Con prÃ©stamos aprobados:                   {con_aprobados}')
-    print(f'   Sin prÃ©stamos aprobados:                   {sin_aprobados}')
-    print(f'   VerificaciÃ³n (con + sin = total):          {con_aprobados + sin_aprobados} = {total_inactivos}')
+    print(f'   Con préstamos aprobados:                   {con_aprobados}')
+    print(f'   Sin préstamos aprobados:                   {sin_aprobados}')
+    print(f'   Verificación (con + sin = total):          {con_aprobados + sin_aprobados} = {total_inactivos}')
     
     if con_aprobados + sin_aprobados == total_inactivos:
-        print('   âœ“ ValidaciÃ³n: OK')
+        print('   âœ“ Validación: OK')
     else:
-        print('   âœ— ValidaciÃ³n: ERROR - Las sumas no coinciden')
+        print('   ✗ Validación: ERROR - Las sumas no coinciden')
     
     print()
     print('=' * 70)

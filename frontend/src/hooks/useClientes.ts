@@ -1,9 +1,9 @@
-﻿import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { clienteService } from '../services/clienteService'
 import { Cliente, ClienteForm, ClienteFilters } from '../types'
 import toast from 'react-hot-toast'
 
-// Constantes de configuraciÃ³n
+// Constantes de configuraciión
 const DEFAULT_PER_PAGE = 20
 const STALE_TIME_SHORT = 2 * 60 * 1000 // 2 minutos
 const STALE_TIME_MEDIUM = 5 * 60 * 1000 // 5 minutos
@@ -30,14 +30,14 @@ export function useClientes(
   return useQuery({
     queryKey: clienteKeys.list({ ...filters, per_page: perPage }),
     queryFn: () => clienteService.getClientes(filters, page, perPage),
-    staleTime: STALE_TIME_SHORT, // Ã¢Å“â€¦ Reducido a 2 minutos para datos mÃ¡s frescos
+    staleTime: STALE_TIME_SHORT, // Ã¢Å“â€¦ Reducido a 2 minutos para datos más frescos
     refetchOnMount: true, // Ã¢Å“â€¦ Refrescar cuando el componente se monta
     refetchOnWindowFocus: true, // Ã¢Å“â€¦ Refrescar cuando el usuario vuelve a la ventana
     refetchInterval: 3 * 60 * 1000, // Ã¢Å“â€¦ Auto-refresh cada 3 minutos
   })
 }
 
-// Hook para obtener un cliente especÃ­fico
+// Hook para obtener un cliente específico
 export function useCliente(id: string) {
   return useQuery({
     queryKey: clienteKeys.detail(id),
@@ -47,8 +47,8 @@ export function useCliente(id: string) {
   })
 }
 
-// Hook para bÃºsqueda de clientes
-// Por defecto filtra solo clientes ACTIVOS (para formularios de prÃ©stamos)
+// Hook para búsqueda de clientes
+// Por defecto filtra solo clientes ACTIVOS (para formularios de préstamos)
 // Para buscar todos los estados, pasar incluirTodosEstados: true
 export function useSearchClientes(query: string, incluirTodosEstados: boolean = false) {
   return useQuery({
@@ -88,10 +88,10 @@ export function useCreateCliente() {
       // Invalidar y refetch queries relacionadas
       queryClient.invalidateQueries({ queryKey: clienteKeys.lists() })
       queryClient.invalidateQueries({ queryKey: ['clientes-stats'] })
-      // Ã¢Å“â€¦ Invalidar tambiÃ©n bÃºsquedas de clientes (usadas en formularios de prÃ©stamos)
+      // Ã¢Å“â€¦ Invalidar también búsquedas de clientes (usadas en formularios de préstamos)
       queryClient.invalidateQueries({
         queryKey: ['clientes', 'search'],
-        exact: false  // Invalida todas las bÃºsquedas: ['clientes', 'search', ...]
+        exact: false  // Invalida todas las búsquedas: ['clientes', 'search', ...]
       })
 
       const nombreCompleto = newCliente.nombres?.trim() || 'Sin nombre'
@@ -111,7 +111,7 @@ export function useUpdateCliente() {
     mutationFn: ({ id, data }: { id: string; data: Partial<ClienteForm> }) =>
       clienteService.updateCliente(id, data),
     onSuccess: (updatedCliente) => {
-      // Actualizar cache especÃ­fico del cliente
+      // Actualizar cache específico del cliente
       queryClient.setQueryData(
         clienteKeys.detail(String(updatedCliente.id)),
         updatedCliente
@@ -119,10 +119,10 @@ export function useUpdateCliente() {
 
       // Invalidar listas
       queryClient.invalidateQueries({ queryKey: clienteKeys.lists() })
-      // Ã¢Å“â€¦ Invalidar tambiÃ©n bÃºsquedas de clientes (usadas en formularios de prÃ©stamos)
+      // Ã¢Å“â€¦ Invalidar también búsquedas de clientes (usadas en formularios de préstamos)
       queryClient.invalidateQueries({
         queryKey: ['clientes', 'search'],
-        exact: false  // Invalida todas las bÃºsquedas: ['clientes', 'search', ...]
+        exact: false  // Invalida todas las búsquedas: ['clientes', 'search', ...]
       })
 
       const nombreCompleto = updatedCliente.nombres?.trim() || 'Sin nombre'
@@ -163,7 +163,7 @@ export function useCambiarEstadoCliente() {
     mutationFn: ({ id, estado }: { id: string; estado: Cliente['estado'] }) =>
       clienteService.cambiarEstado(id, estado),
     onSuccess: (updatedCliente) => {
-      // Actualizar cache especÃ­fico
+      // Actualizar cache específico
       queryClient.setQueryData(
         clienteKeys.detail(String(updatedCliente.id)),
         updatedCliente
@@ -189,7 +189,7 @@ export function useAsignarAsesor() {
     mutationFn: ({ clienteId, analistaId }: { clienteId: string; analistaId: string }) =>
       clienteService.asignarAsesor(clienteId, analistaId),
     onSuccess: (updatedCliente) => {
-      // Actualizar cache especÃ­fico
+      // Actualizar cache específico
       queryClient.setQueryData(
         clienteKeys.detail(String(updatedCliente.id)),
         updatedCliente
@@ -207,12 +207,12 @@ export function useAsignarAsesor() {
   })
 }
 
-// Hook para validar cÃ©dula
+// Hook para validar cédula
 export function useValidateCedula() {
   return useMutation({
     mutationFn: (cedula: string) => clienteService.validateCedula(cedula),
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || 'Error al validar cÃ©dula')
+      toast.error(error.response?.data?.message || 'Error al validar cédula')
     },
   })
 }
@@ -223,7 +223,7 @@ export function useExportClientes() {
     mutationFn: ({ filters, format }: { filters?: ClienteFilters; format?: 'excel' | 'pdf' }) =>
       clienteService.exportarClientes(filters, format),
     onSuccess: () => {
-      toast.success('ExportaciÃ³n iniciada. El archivo se descargarÃ¡ automÃ¡ticamente.')
+      toast.success('Exportaciión iniciada. El archivo se descargará automáticamente.')
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || 'Error al exportar clientes')
@@ -243,7 +243,7 @@ export function useImportClientes() {
 
       if (result.errors.length > 0) {
         toast.success(
-          `ImportaciÃ³n completada: ${result.success} exitosos, ${result.errors.length} errores`
+          `Importaciión completada: ${result.success} exitosos, ${result.errors.length} errores`
         )
       } else {
         toast.success(`${result.success} clientes importados exitosamente`)

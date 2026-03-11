@@ -102,24 +102,24 @@ function NotificationBanner({ notification, onDismiss }: { notification: Notific
   return (
     <div
       role="alert"
-      className={`w-full max-w-md rounded-xl px-4 py-3.5 flex items-center gap-3 shadow-lg border-2 ${
+      className={`w-full max-w-md min-w-0 rounded-xl px-3 sm:px-4 py-3 sm:py-3.5 flex items-center gap-2 sm:gap-3 shadow-lg border-2 ${
         isError
           ? 'bg-red-600 border-red-700 text-white'
           : 'bg-emerald-600 border-emerald-700 text-white'
       }`}
     >
-      <span className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-white/20" aria-hidden>
+      <span className="flex-shrink-0 w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center bg-white/20" aria-hidden>
         {isError ? (
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
         ) : (
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
         )}
       </span>
-      <p className="flex-1 font-semibold text-base leading-snug">{notification.message}</p>
+      <p className="flex-1 min-w-0 font-semibold text-sm sm:text-base leading-snug break-words">{notification.message}</p>
       <button
         type="button"
         onClick={onDismiss}
-        className="flex-shrink-0 p-1 rounded-md hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/50"
+        className="flex-shrink-0 p-2 rounded-md hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/50 touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center"
         aria-label="Cerrar notificación"
       >
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -309,21 +309,21 @@ export default function ReportePagoPage() {
       { icon: 'check', text: 'Revise los datos y envíe. Recibirá confirmación al correo registrado.' },
     ]
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-[#e8eef5] to-slate-100 flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen min-h-[100dvh] bg-gradient-to-br from-slate-50 via-[#e8eef5] to-slate-100 flex flex-col items-center justify-center p-3 sm:p-4 overflow-x-hidden">
         <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
           {messageForScreenReader || stepAnnouncement}
         </div>
-        <Card className="w-full max-w-lg shadow-2xl border border-slate-200/80 overflow-hidden">
+        <Card className="w-full max-w-lg min-w-0 shadow-2xl border border-slate-200/80 overflow-hidden mx-1 sm:mx-0">
           {/* Header con logo RapiCredit: fondo blanco para compatibilidad del logo */}
-          <div className="bg-white px-6 py-6 text-center rounded-t-lg border-b border-slate-100">
+          <div className="bg-white px-4 sm:px-6 py-5 sm:py-6 text-center rounded-t-lg border-b border-slate-100">
             <div className="inline-flex flex-col items-center justify-center">
-              <img src={LOGO_PUBLIC_SRC} alt="RapiCredit" className="h-16 mx-auto object-contain" />
-              <p className="text-[#c4a35a] text-base mt-3 font-semibold">Reporte de pago</p>
+              <img src={LOGO_PUBLIC_SRC} alt="RapiCredit" className="h-14 sm:h-16 mx-auto object-contain" />
+              <p className="text-[#c4a35a] text-sm sm:text-base mt-2 sm:mt-3 font-semibold">Reporte de pago</p>
             </div>
           </div>
-          <CardContent className="p-6 sm:p-8 space-y-6">
+          <CardContent className="p-4 sm:p-6 md:p-8 space-y-5 sm:space-y-6">
             <div className="text-center">
-              <h2 className="text-xl font-semibold text-[#1e3a5f]">Bienvenido</h2>
+              <h2 className="text-lg sm:text-xl font-semibold text-[#1e3a5f]">Bienvenido</h2>
               <p className="text-slate-600 mt-2 text-sm leading-relaxed">
                 Reporte su pago de forma segura para que sea verificado por cobranza.
               </p>
@@ -356,7 +356,7 @@ export default function ReportePagoPage() {
               Si desea reportar más de un pago, al finalizar cada envío use el botón «Ingresar otro pago» o reinicie el proceso.
             </p>
             <Button
-              className="w-full text-base py-6 font-semibold bg-[#1e3a5f] hover:bg-[#152a47] text-white shadow-md hover:shadow-lg transition-all"
+              className="w-full text-base py-5 sm:py-6 min-h-[48px] font-semibold bg-[#1e3a5f] hover:bg-[#152a47] text-white shadow-md hover:shadow-lg transition-all touch-manipulation"
               size="lg"
               onClick={() => setStep(1)}
             >
@@ -370,7 +370,7 @@ export default function ReportePagoPage() {
 
   if (step === 1) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-50 flex flex-col items-center justify-center p-3 sm:p-4 overflow-x-hidden">
         {/* Zona de mensajes para lectores de pantalla (aria-live) */}
         <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
           {messageForScreenReader || stepAnnouncement}
@@ -385,22 +385,23 @@ export default function ReportePagoPage() {
           aria-hidden="true"
           style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', opacity: 0, pointerEvents: 'none' }}
         />
-        <div className="w-full max-w-md flex flex-col items-center gap-3">
+        <div className="w-full max-w-md min-w-0 flex flex-col items-center gap-3 px-1 sm:px-0">
           <NotificationBanner notification={notification} onDismiss={dismissNotification} />
-          <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Reporte de pago</CardTitle>
-            <p className="text-sm text-gray-600">Solo letra (V, E, G o J) y 6 a 11 dígitos. No use puntos ni signos. Si solo ingresa números se procesará con V.</p>
+          <Card className="w-full max-w-md min-w-0">
+          <CardHeader className="px-4 sm:px-6 pb-2">
+            <CardTitle className="text-lg sm:text-xl">Reporte de pago</CardTitle>
+            <p className="text-sm text-gray-600 mt-1">Solo letra (V, E, G o J) y 6 a 11 dígitos. No use puntos ni signos. Si solo ingresa números se procesará con V.</p>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="px-4 sm:px-6 space-y-4">
             <Input
+              className="min-h-[44px] touch-manipulation"
               placeholder="Ej: V12345678, E12345678 o 12345678"
               value={cedula}
               onChange={(e) => setCedula(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleValidarCedula()}
               maxLength={20}
             />
-            <Button className="w-full" onClick={handleValidarCedula} disabled={loading}>
+            <Button className="w-full min-h-[48px] touch-manipulation" onClick={handleValidarCedula} disabled={loading}>
               {loading ? 'Verificando...' : 'Continuar'}
             </Button>
           </CardContent>
@@ -412,19 +413,19 @@ export default function ReportePagoPage() {
 
   if (step === 2) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-50 flex flex-col items-center justify-center p-3 sm:p-4 overflow-x-hidden">
         <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">{messageForScreenReader || stepAnnouncement}</div>
-        <div className="w-full max-w-md flex flex-col items-center gap-3">
+        <div className="w-full max-w-md min-w-0 flex flex-col items-center gap-3 px-1 sm:px-0">
           <NotificationBanner notification={notification} onDismiss={dismissNotification} />
-          <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Hola, {nombre || 'Cliente'}</CardTitle>
+          <Card className="w-full max-w-md min-w-0">
+          <CardHeader className="px-4 sm:px-6">
+            <CardTitle className="text-lg sm:text-xl">Hola, {nombre || 'Cliente'}</CardTitle>
             <p className="text-sm text-gray-600 mt-2">
               Recuerda ingresar únicamente datos de tu pago que se comprobarán y almacenarán para fines de validación de pago.
             </p>
           </CardHeader>
-          <CardContent>
-            <Button className="w-full" onClick={() => setStep(3)}>Continuar</Button>
+          <CardContent className="px-4 sm:px-6">
+            <Button className="w-full min-h-[48px] touch-manipulation" onClick={() => setStep(3)}>Continuar</Button>
           </CardContent>
         </Card>
         </div>
@@ -434,19 +435,20 @@ export default function ReportePagoPage() {
 
   if (step === 3) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-50 flex flex-col items-center justify-center p-3 sm:p-4 overflow-x-hidden">
         <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">{messageForScreenReader || stepAnnouncement}</div>
-        <div className="w-full max-w-md flex flex-col items-center gap-3">
+        <div className="w-full max-w-md min-w-0 flex flex-col items-center gap-3 px-1 sm:px-0">
           <NotificationBanner notification={notification} onDismiss={dismissNotification} />
-          <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Institución financiera</CardTitle>
+          <Card className="w-full max-w-md min-w-0">
+          <CardHeader className="px-4 sm:px-6">
+            <CardTitle className="text-lg sm:text-xl">Institución financiera</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="px-4 sm:px-6 space-y-4">
             <select
-              className="w-full border rounded-md px-3 py-2"
+              className="w-full min-w-0 border rounded-md px-3 py-2.5 min-h-[44px] text-base touch-manipulation bg-white"
               value={institucion}
               onChange={(e) => setInstitucion(e.target.value)}
+              aria-label="Seleccione la institución financiera"
             >
               <option value="">Seleccione...</option>
               {INSTITUCIONES.map((opt) => (
@@ -455,16 +457,17 @@ export default function ReportePagoPage() {
             </select>
             {institucion === 'Otros' && (
               <Input
+                className="min-h-[44px] touch-manipulation"
                 placeholder="Nombre del banco"
                 value={institucionOtros}
                 onChange={(e) => setInstitucionOtros(e.target.value)}
                 maxLength={MAX_LENGTH_INSTITUCION}
               />
             )}
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setStep(2)}>Atrás</Button>
+            <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+              <Button variant="outline" className="min-h-[48px] flex-1 min-w-[100px] touch-manipulation" onClick={() => setStep(2)}>Atrás</Button>
               <Button
-                className="flex-1"
+                className="flex-1 min-h-[48px] min-w-0 touch-manipulation"
                 onClick={() => {
                   if (!institucionFinal.trim()) {
                     showNotification('error', 'Seleccione la institución financiera.')
@@ -489,19 +492,20 @@ export default function ReportePagoPage() {
 
   if (step === 4) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-50 flex flex-col items-center justify-center p-3 sm:p-4 overflow-x-hidden">
         <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">{messageForScreenReader || stepAnnouncement}</div>
-        <div className="w-full max-w-md flex flex-col items-center gap-3">
+        <div className="w-full max-w-md min-w-0 flex flex-col items-center gap-3 px-1 sm:px-0">
           <NotificationBanner notification={notification} onDismiss={dismissNotification} />
-          <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Fecha y monto del pago</CardTitle>
+          <Card className="w-full max-w-md min-w-0">
+          <CardHeader className="px-4 sm:px-6">
+            <CardTitle className="text-lg sm:text-xl">Fecha y monto del pago</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="px-4 sm:px-6 space-y-4">
             <div>
               <label className="text-sm font-medium text-gray-700 block mb-1">Fecha de pago (obligatorio)</label>
               <Input
                 type="date"
+                className="min-h-[44px] touch-manipulation w-full"
                 value={fechaPago}
                 onChange={(e) => setFechaPago(e.target.value)}
                 max={new Date().toISOString().slice(0, 10)}
@@ -511,20 +515,22 @@ export default function ReportePagoPage() {
             </div>
             <div>
               <label className="text-sm font-medium text-gray-700 block mb-1">Monto (obligatorio)</label>
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <Input
                   type="number"
                   step="0.01"
                   min={MIN_MONTO}
                   max={MAX_MONTO}
                   placeholder="Ej: 150.50"
+                  className="flex-1 min-w-0 min-h-[44px] touch-manipulation"
                   value={monto}
                   onChange={(e) => setMonto(e.target.value)}
                 />
                 <select
-                  className="border rounded-md px-3 py-2 w-24"
+                  className="border rounded-md px-3 py-2.5 min-h-[44px] w-full sm:w-24 flex-shrink-0 touch-manipulation bg-white text-base"
                   value={moneda}
                   onChange={(e) => setMoneda(e.target.value as 'BS' | 'USD')}
+                  aria-label="Moneda"
                 >
                   <option value="BS">Bs.</option>
                   <option value="USD">USD</option>
@@ -532,10 +538,10 @@ export default function ReportePagoPage() {
               </div>
               <p className="text-xs text-gray-500 mt-1">Monto mayor a 0. Máximo permitido: 999.999.999,99</p>
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setStep(3)}>Atrás</Button>
+            <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+              <Button variant="outline" className="min-h-[48px] flex-1 min-w-[100px] touch-manipulation" onClick={() => setStep(3)}>Atrás</Button>
               <Button
-                className="flex-1"
+                className="flex-1 min-h-[48px] min-w-0 touch-manipulation"
                 onClick={() => {
                   const vF = validarFechaPago(fechaPago)
                   if (!vF.valido) {
@@ -562,26 +568,27 @@ export default function ReportePagoPage() {
 
   if (step === 5) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-50 flex flex-col items-center justify-center p-3 sm:p-4 overflow-x-hidden">
         <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">{messageForScreenReader || stepAnnouncement}</div>
-        <div className="w-full max-w-md flex flex-col items-center gap-3">
+        <div className="w-full max-w-md min-w-0 flex flex-col items-center gap-3 px-1 sm:px-0">
           <NotificationBanner notification={notification} onDismiss={dismissNotification} />
-          <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Número de documento / operación</CardTitle>
+          <Card className="w-full max-w-md min-w-0">
+          <CardHeader className="px-4 sm:px-6">
+            <CardTitle className="text-lg sm:text-xl">Número de documento / operación</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="px-4 sm:px-6 space-y-4">
             <Input
+              className="min-h-[44px] touch-manipulation"
               placeholder="Número de serie, operación o referencia"
               value={numeroDocumento}
               onChange={(e) => setNumeroDocumento(e.target.value)}
               maxLength={MAX_LENGTH_NUMERO_OPERACION}
             />
             <p className="text-xs text-gray-500">Máximo {MAX_LENGTH_NUMERO_OPERACION} caracteres.</p>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setStep(4)}>Atrás</Button>
+            <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+              <Button variant="outline" className="min-h-[48px] flex-1 min-w-[100px] touch-manipulation" onClick={() => setStep(4)}>Atrás</Button>
               <Button
-                className="flex-1"
+                className="flex-1 min-h-[48px] min-w-0 touch-manipulation"
                 onClick={() => {
                   if (!numeroDocumento.trim()) {
                     showNotification('error', 'Ingrese el número de documento u operación.')
@@ -606,36 +613,37 @@ export default function ReportePagoPage() {
 
   if (step === 6) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-50 flex flex-col items-center justify-center p-3 sm:p-4 overflow-x-hidden">
         <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">{messageForScreenReader || stepAnnouncement}</div>
-        <div className="w-full max-w-md flex flex-col items-center gap-3">
+        <div className="w-full max-w-md min-w-0 flex flex-col items-center gap-3 px-1 sm:px-0">
           <NotificationBanner notification={notification} onDismiss={dismissNotification} />
-          <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Comprobante de pago</CardTitle>
+          <Card className="w-full max-w-md min-w-0">
+          <CardHeader className="px-4 sm:px-6">
+            <CardTitle className="text-lg sm:text-xl">Comprobante de pago</CardTitle>
             <p className="text-sm text-gray-600">Un solo archivo por envío. JPG, PNG o PDF. Máximo 5 MB.</p>
             <p className="text-xs text-amber-700 mt-1">Si desea reportar otro pago, al finalizar use «Ingresar otro pago» o reinicie el proceso.</p>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="px-4 sm:px-6 space-y-4">
             {archivo ? (
               <>
-                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-sm text-gray-700">
+                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-sm text-gray-700 break-words">
                   <p className="font-medium">Comprobante seleccionado:</p>
-                  <p className="mt-1">{archivo.name} ({(archivo.size / 1024).toFixed(1)} KB)</p>
+                  <p className="mt-1 break-all">{archivo.name} ({(archivo.size / 1024).toFixed(1)} KB)</p>
                   <p className="text-xs text-amber-700 mt-2">No se puede agregar otra imagen en este envío. Para otro pago, finalice y use «Ingresar otro pago».</p>
                 </div>
               </>
             ) : (
               <Input
                 type="file"
+                className="min-h-[44px] file:mr-2 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-[#1e3a5f] file:text-white touch-manipulation"
                 accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
                 onChange={(e) => setArchivo(e.target.files?.[0] || null)}
               />
             )}
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => { setArchivo(null); setStep(5); }}>Atrás</Button>
+            <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+              <Button variant="outline" className="min-h-[48px] flex-1 min-w-[100px] touch-manipulation" onClick={() => { setArchivo(null); setStep(5); }}>Atrás</Button>
               <Button
-                className="flex-1"
+                className="flex-1 min-h-[48px] min-w-0 touch-manipulation"
                 onClick={() => {
                   const v = validarArchivo(archivo)
                   if (!v.valido) {
@@ -657,15 +665,15 @@ export default function ReportePagoPage() {
 
   if (step === 7) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-50 flex flex-col items-center justify-center p-3 sm:p-4 overflow-x-hidden">
         <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">{messageForScreenReader || stepAnnouncement}</div>
-        <div className="w-full max-w-md flex flex-col items-center gap-3">
+        <div className="w-full max-w-md min-w-0 flex flex-col items-center gap-3 px-1 sm:px-0">
           <NotificationBanner notification={notification} onDismiss={dismissNotification} />
-          <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Confirma los siguientes datos</CardTitle>
+          <Card className="w-full max-w-md min-w-0">
+          <CardHeader className="px-4 sm:px-6">
+            <CardTitle className="text-lg sm:text-xl">Confirma los siguientes datos</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm">
+          <CardContent className="px-4 sm:px-6 space-y-2 text-sm break-words">
             <p><strong>Cédula:</strong> {cedula}</p>
             <p><strong>Nombre:</strong> {nombre}</p>
             <p><strong>Institución:</strong> {institucionFinal}</p>
@@ -674,21 +682,21 @@ export default function ReportePagoPage() {
             <p><strong>Número de operación:</strong> {numeroDocumento}</p>
             <p><strong>Comprobante:</strong> {archivo?.name}</p>
           </CardContent>
-          <CardContent className="pt-0 space-y-3">
-            <p className="text-sm text-gray-600">
+          <CardContent className="px-4 sm:px-6 pt-0 space-y-3">
+            <p className="text-sm text-gray-600 break-words">
               Tu pago se procesará y se enviará al correo registrado en tu contrato de financiamiento (
-              <span className="font-semibold text-[#1e3a5f] bg-blue-50 px-1.5 py-0.5 rounded">
+              <span className="font-semibold text-[#1e3a5f] bg-blue-50 px-1.5 py-0.5 rounded break-all">
                 {emailParaVerificacion || 'correo registrado'}
               </span>
               ). Si tienes algún problema con el correo, contacta a{' '}
-              <a href="mailto:cobranza@rapicreditca.com" className="font-semibold text-[#1e3a5f] underline hover:no-underline">
+              <a href="mailto:cobranza@rapicreditca.com" className="font-semibold text-[#1e3a5f] underline hover:no-underline break-all">
                 cobranza@rapicreditca.com
               </a>{' '}
               o a tu asesor para actualización.
             </p>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setStep(6)}>No, editar</Button>
-              <Button className="flex-1" onClick={handleEnviar} disabled={loading}>
+            <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+              <Button variant="outline" className="min-h-[48px] flex-1 min-w-[100px] touch-manipulation" onClick={() => setStep(6)}>No, editar</Button>
+              <Button className="flex-1 min-h-[48px] min-w-0 touch-manipulation" onClick={handleEnviar} disabled={loading}>
                 {loading ? 'Enviando...' : 'Sí, enviar'}
               </Button>
             </div>
@@ -701,14 +709,14 @@ export default function ReportePagoPage() {
 
   // step === 8: confirmación final
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+    <div className="min-h-screen min-h-[100dvh] bg-slate-50 flex items-center justify-center p-3 sm:p-4 overflow-x-hidden">
       <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">{messageForScreenReader || stepAnnouncement}</div>
-      <Card className="w-full max-w-md text-center">
-        <CardHeader>
-          <CardTitle className="text-green-700">Tu reporte de pago fue recibido exitosamente.</CardTitle>
+      <Card className="w-full max-w-md min-w-0 text-center mx-1 sm:mx-0">
+        <CardHeader className="px-4 sm:px-6">
+          <CardTitle className="text-base sm:text-lg text-green-700">Tu reporte de pago fue recibido exitosamente.</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-<div className="text-lg">
+        <CardContent className="px-4 sm:px-6 space-y-4">
+          <div className="text-base sm:text-lg break-words">
             <p className="font-semibold">Número de referencia:</p>
             <p className="mt-1 select-all font-mono bg-gray-100 px-2 py-1 rounded inline-block break-all" title="Copiar">
               #{referencia}
@@ -717,17 +725,17 @@ export default function ReportePagoPage() {
           <p className="text-sm text-gray-600">
             El recibo (PDF) se enviará a tu correo registrado en un plazo de hasta 24 horas.
           </p>
-          <p className="text-sm">
+          <p className="text-sm break-words">
             Si necesitas información adicional, comunícate con nosotros por WhatsApp:{' '}
             <a href={WHATSAPP_LINK} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
               424-4579934
             </a>
           </p>
           <div className="flex flex-col sm:flex-row gap-3 pt-4">
-            <Button variant="outline" className="flex-1" onClick={() => resetForm(0)}>
+            <Button variant="outline" className="flex-1 min-h-[48px] touch-manipulation" onClick={() => resetForm(0)}>
               Termina
             </Button>
-            <Button className="flex-1 bg-[#1e3a5f] hover:bg-[#152a47]" onClick={() => resetForm(1)}>
+            <Button className="flex-1 min-h-[48px] bg-[#1e3a5f] hover:bg-[#152a47] touch-manipulation" onClick={() => resetForm(1)}>
               Ingresar otro pago
             </Button>
           </div>

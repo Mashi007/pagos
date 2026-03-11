@@ -2,23 +2,23 @@ import * as exceljsModule from 'exceljs'
 
 /**
  * Tipos y helpers para exceljs (alternativa segura a xlsx)
- * ExcelJS es una librerÃ­a moderna y segura para trabajar con archivos Excel
+ * ExcelJS es una librería moderna y segura para trabajar con archivos Excel
  *
- * âœ… OPTIMIZACIÃ“N: Todos los imports son dinÃ¡micos para reducir el bundle inicial
- * Las librerÃ­as se cargan solo cuando se necesitan (lazy loading)
+ * ✓ OPTIMIZACIÃ“N: Todos los imports son dinámicos para reducir el bundle inicial
+ * Las librerías se cargan solo cuando se necesitan (lazy loading)
  */
 
-// Tipo para el mÃ³dulo exceljs completo (sin import estÃ¡tico)
-// Usamos 'any' para evitar importar el tipo estÃ¡ticamente y mantener lazy loading
+// Tipo para el módulo exceljs completo (sin import estático)
+// Usamos 'any' para evitar importar el tipo estáticamente y mantener lazy loading
 export type ExcelJSModule = {
-  Workbook: any // El tipo real se infiere en tiempo de ejecuciÃ³n
+  Workbook: any // El tipo real se infiere en tiempo de ejecución
 }
 
 // Helper para importar exceljs de forma type-safe (LAZY LOADING)
-// âœ… CRÃTICO: Este import dinÃ¡mico asegura que exceljs NO se incluya en el bundle inicial
+// ✓ CRÍTICO: Este import dinámico asegura que exceljs NO se incluya en el bundle inicial
 export async function importExcelJS(): Promise<ExcelJSModule> {
   try {
-    // âœ… Proteger la carga dinÃ¡mica con try-catch para evitar errores NS_ERROR_FAILURE
+    // ✓ Proteger la carga dinámica con try-catch para evitar errores NS_ERROR_FAILURE
     const module = exceljsModule
     if (!module || !module.Workbook) {
       throw new Error('ExcelJS module loaded but Workbook is not available')
@@ -27,9 +27,9 @@ export async function importExcelJS(): Promise<ExcelJSModule> {
       Workbook: module.Workbook
     }
   } catch (error) {
-    // âœ… Capturar y manejar errores durante la carga del mÃ³dulo
+    // ✓ Capturar y manejar errores durante la carga del módulo
     console.error('Error cargando ExcelJS:', error)
-    // Re-lanzar el error con un mensaje mÃ¡s descriptivo
+    // Re-lanzar el error con un mensaje más descriptivo
     throw new Error(`No se pudo cargar ExcelJS: ${error instanceof Error ? error.message : 'Error desconocido'}`)
   }
 }
@@ -39,7 +39,7 @@ export async function readExcelToJSON(file: File | ArrayBuffer): Promise<any[][]
   try {
     const { Workbook } = await importExcelJS()
     if (!Workbook) {
-      throw new Error('Workbook no estÃ¡ disponible en ExcelJS')
+      throw new Error('Workbook no está disponible en ExcelJS')
     }
     const workbook = new Workbook()
 
@@ -54,7 +54,7 @@ export async function readExcelToJSON(file: File | ArrayBuffer): Promise<any[][]
     const worksheet = workbook.getWorksheet(1) || workbook.worksheets[0]
 
     if (!worksheet) {
-      throw new Error('El archivo Excel no contiene hojas de cÃ¡lculo')
+      throw new Error('El archivo Excel no contiene hojas de cálculo')
     }
 
     const data: any[][] = []
@@ -90,7 +90,7 @@ export async function readExcelToJSON(file: File | ArrayBuffer): Promise<any[][]
 
     return data
   } catch (error) {
-    // âœ… Capturar errores durante la lectura del archivo Excel
+    // ✓ Capturar errores durante la lectura del archivo Excel
     console.error('Error leyendo archivo Excel:', error)
     throw new Error(`Error procesando archivo Excel: ${error instanceof Error ? error.message : 'Error desconocido'}`)
   }
@@ -105,7 +105,7 @@ export async function createAndDownloadExcel(
   try {
     const { Workbook } = await importExcelJS()
     if (!Workbook) {
-      throw new Error('Workbook no estÃ¡ disponible en ExcelJS')
+      throw new Error('Workbook no está disponible en ExcelJS')
     }
     const workbook = new Workbook()
     const worksheet = workbook.addWorksheet(sheetName)
@@ -133,11 +133,11 @@ export async function createAndDownloadExcel(
       worksheet.addRow(values)
     })
 
-    // Ajustar ancho de columnas automÃ¡ticamente
+    // Ajustar ancho de columnas automáticamente
     worksheet.columns.forEach((column, index) => {
       if (column) {
         let maxLength = 10
-        // Iterar sobre todas las filas para encontrar el ancho mÃ¡ximo
+        // Iterar sobre todas las filas para encontrar el ancho máximo
         if (worksheet.eachRow) {
           worksheet.eachRow((row) => {
             const cell = row.getCell(index + 1)
@@ -167,13 +167,13 @@ export async function createAndDownloadExcel(
     document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
   } catch (error) {
-    // âœ… Capturar errores durante la creaciÃ³n/descarga del Excel
+    // ✓ Capturar errores durante la creación/descarga del Excel
     console.error('Error creando/descargando Excel:', error)
     throw new Error(`Error generando archivo Excel: ${error instanceof Error ? error.message : 'Error desconocido'}`)
   }
 }
 
-// Helper para crear mÃºltiples hojas en un workbook
+// Helper para crear múltiples hojas en un workbook
 export async function createMultiSheetExcel(
   sheets: Array<{ name: string; data: Record<string, any>[] }>,
   filename: string
@@ -181,7 +181,7 @@ export async function createMultiSheetExcel(
   try {
     const { Workbook } = await importExcelJS()
     if (!Workbook) {
-      throw new Error('Workbook no estÃ¡ disponible en ExcelJS')
+      throw new Error('Workbook no está disponible en ExcelJS')
     }
     const workbook = new Workbook()
 
@@ -213,7 +213,7 @@ export async function createMultiSheetExcel(
       worksheet.columns.forEach((column, index) => {
         if (column) {
           let maxLength = 10
-          // Iterar sobre todas las filas para encontrar el ancho mÃ¡ximo
+          // Iterar sobre todas las filas para encontrar el ancho máximo
           if (worksheet.eachRow) {
             worksheet.eachRow((row) => {
               const cell = row.getCell(index + 1)
@@ -244,7 +244,7 @@ export async function createMultiSheetExcel(
     document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
   } catch (error) {
-    // âœ… Capturar errores durante la creaciÃ³n/descarga del Excel multi-hoja
+    // ✓ Capturar errores durante la creación/descarga del Excel multi-hoja
     console.error('Error creando/descargando Excel multi-hoja:', error)
     throw new Error(`Error generando archivo Excel: ${error instanceof Error ? error.message : 'Error desconocido'}`)
   }

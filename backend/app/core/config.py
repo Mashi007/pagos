@@ -130,6 +130,21 @@ class Settings(BaseSettings):
         default="itmaster@rapicreditca.com",
         description="Email(s) para notificar cuando se crea o actualiza un ticket (separados por coma). Por defecto itmaster@rapicreditca.com."
     )
+    # URL pública del frontend (para enlaces y logo en emails de cobranza). Ej: https://rapicredit.onrender.com/pagos
+    FRONTEND_PUBLIC_URL: Optional[str] = Field(
+        default="https://rapicredit.onrender.com/pagos",
+        description="URL base del frontend para imágenes en emails (logo RapiCredit).",
+    )
+    # Ruta al logo PNG para generar el PDF de carta de cobranza (adjunto al email). Opcional; si no existe se omite el logo en el PDF.
+    LOGO_PDF_COBRANZA_PATH: Optional[str] = Field(
+        None,
+        description="Ruta absoluta al archivo PNG del logo para el PDF de carta de cobranza.",
+    )
+    # Directorio base para el PDF fijo de cobranza. Si está definido, la ruta guardada en configuracion se resuelve dentro de este directorio (evita path traversal).
+    ADJUNTO_FIJO_COBRANZA_BASE_DIR: Optional[str] = Field(
+        None,
+        description="Directorio base donde se buscan los PDFs fijos de cobranza. La ruta en BD se interpreta como relativa a este directorio. Ej: /var/app/adjuntos_cobranza",
+    )
     
     # ============================================
     # AI / OpenRouter (clave solo en backend, nunca en frontend)

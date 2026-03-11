@@ -51,23 +51,7 @@ def render_plantilla_cobranza(texto: str, contexto: dict) -> str:
 
     result = texto
 
-    # 1) Reemplazar variables simples {{TABLA.CAMPO}} o {{FECHA_CARTA}}
-    # Buscar todos los {{...}} que no son bloques # o /
-    pattern_simple = re.compile(r"\{\{([^#/].*?)\}\}")
-    for m in pattern_simple.finditer(result):
-        key = m.group(1).strip()
-        value = contexto.get(key)
-        if value is None and "." in key:
-            # Permitir clave con punto en contexto plano (ej. FECHA_CARTA)
-            value = contexto.get(key)
-        if value is not None:
-            if "FECHA" in key.upper() or "FECHA" in key:
-                value = _format_fecha(value)
-            result = result.replace(m.group(0), str(value))
-        else:
-            result = result.replace(m.group(0), "")
-
-    # 2) Bloque {{#CUOTAS.VENCIMIENTOS}} ... {{/CUOTAS.VENCIMIENTOS}}
+    # 1) Bloque {{#CUOTAS.VENCIMIENTOS}} ... {{/CUOTAS.VENCIMIENTOS}}
     block_start = "{{#CUOTAS.VENCIMIENTOS}}"
     block_end = "{{/CUOTAS.VENCIMIENTOS}}"
     if block_start in result and block_end in result:
@@ -95,15 +79,16 @@ def render_plantilla_cobranza(texto: str, contexto: dict) -> str:
                 parts.append(block_rendered)
             result = prefix + "\n".join(parts) + suffix
 
-    # 3) Pasar de nuevo por variables por si quedaron dentro de bloques ya expandidos
-    for key, value in contexto.items():
+    # 2) Reemplazar variables simples {{TABLA.CAMPO}} y {{FECHA_CARTA}} desde contexto
+    for key, value in list(contexto.items()):
         if key in ("CUOTAS.VENCIMIENTOS", "cuotas_vencidas") or isinstance(value, list):
             continue
         token = "{{" + key + "}}"
-        if token in result:
-            if "FECHA" in key.upper():
-                value = _format_fecha(value)
-            result = result.replace(token, str(value) if value is not None else "")
+        if token not in result:
+            continue
+        if "FECHA" in key.upper():
+            value = _format_fecha(value)
+        result = result.replace(token, str(value) if value is not None else "")
 
     return result
 
@@ -114,12 +99,22 @@ def construir_contexto_cobranza(
     cuotas_vencidas: list,
     tratamiento: str = "Sr/Sra.",
     fecha_carta: date | None = None,
+    logo_url: str | None = None,
+    cedula: str | None = None,
 ) -> dict:
     """
     Construye el diccionario de contexto para render_plantilla_cobranza.
     cuotas_vencidas: lista de dicts con numero_cuota, fecha_vencimiento, monto (o objetos Cuota).
+    logo_url: URL absoluta del logo para el email (por defecto desde settings FRONTEND_PUBLIC_URL).
     """
     from datetime import date as date_type
+    try:
+        from app.core.config import settings
+        base = (logo_url or (getattr(settings, "FRONTEND_PUBLIC_URL", None) or "https://rapicredit.onrender.com/pagos")).rstrip("/")
+    except Exception:
+        base = (logo_url or "https://rapicredit.onrender.com/pagos").rstrip("/")
+    url_logo = f"{base}/logos/rapicredit-public.png"
+
     f = fecha_carta or date_type.today()
     lista = []
     for c in cuotas_vencidas:
@@ -138,8 +133,10 @@ def construir_contexto_cobranza(
     return {
         "CLIENTES.TRATAMIENTO": tratamiento,
         "CLIENTES.NOMBRE_COMPLETO": cliente_nombres or "",
+        "CLIENTES.CEDULA": cedula or "",
         "PRESTAMOS.ID": prestamo_id,
         "FECHA_CARTA": f,
         "CUOTAS.VENCIMIENTOS": lista,
         "cuotas_vencidas": lista,
+        "LOGO_URL": url_logo,
     }

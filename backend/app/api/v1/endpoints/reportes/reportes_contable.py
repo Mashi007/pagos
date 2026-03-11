@@ -27,7 +27,7 @@ CONTABLE_CACHE_DIAS_ACTUALIZABLES = 7
 
 
 def _obtener_tasa_usd_bs(fecha: date) -> float:
-    """Obtiene tasa USD a BolÃ­vares (Venezuela) para la fecha."""
+    """Obtiene tasa USD a Bolívares (Venezuela) para la fecha."""
     from app.core.config import settings
     import urllib.request
     import json
@@ -242,7 +242,7 @@ def _query_cuotas_por_vencimiento(db: Session, fecha_inicio: date, fecha_fin: da
 
 
 def sync_reporte_contable_completo(db: Session) -> int:
-    """Sincroniza todo el histÃ³rico al cache. Retorna cantidad de filas insertadas."""
+    """Sincroniza todo el histórico al cache. Retorna cantidad de filas insertadas."""
     fi = date(2000, 1, 1)
     ff = date.today()
     rows = _query_cuotas_contable(db, fi, ff)
@@ -313,7 +313,7 @@ def get_reporte_contable_desde_cache(
     meses: List[int],
     cedulas: Optional[List[str]] = None,
 ) -> dict:
-    """Lee del cache filtrando por aÃ±os, meses y opcionalmente cÃ©dulas."""
+    """Lee del cache filtrando por años, meses y opcionalmente cédulas."""
     if not anos or not meses:
         return {"items": [], "fecha_inicio": "", "fecha_fin": ""}
 
@@ -387,10 +387,10 @@ def _generar_excel_contable(data: dict) -> bytes:
     ws.title = "Reporte Contable"
     items = data.get("items", [])
     ws.append(["Reporte Contable"])
-    ws.append([f"PerÃ­odo: {data.get('fecha_inicio', '')} a {data.get('fecha_fin', '')}"])
+    ws.append([f"Período: {data.get('fecha_inicio', '')} a {data.get('fecha_fin', '')}"])
     ws.append([])
     headers = [
-        "CÃ©dula", "Nombre", "Tipo de documento", "Fecha de vencimiento", "Fecha de pago",
+        "Cédula", "Nombre", "Tipo de documento", "Fecha de vencimiento", "Fecha de pago",
         "Importe MD", "Moneda documento", "Tasa", "Importe en ML", "Moneda Local",
     ]
     ws.append(headers)
@@ -406,7 +406,7 @@ def _generar_excel_contable(data: dict) -> bytes:
     else:
         ws.append(["(Sin datos)"])
         ws.append([
-            "No hay cuotas pagadas en el perÃ­odo seleccionado. "
+            "No hay cuotas pagadas en el período seleccionado. "
             "Verifique: 1) Que las fechas sean pasadas (no futuras). 2) Que existan cuotas con fecha de pago en ese mes.",
         ])
     buf = io.BytesIO()
@@ -417,10 +417,10 @@ def _generar_excel_contable(data: dict) -> bytes:
 @router.get("/contable/cedulas")
 def buscar_cedulas_contable(
     db: Session = Depends(get_db),
-    q: Optional[str] = Query(None, description="BÃºsqueda por cÃ©dula o nombre"),
+    q: Optional[str] = Query(None, description="Búsqueda por cédula o nombre"),
     limit: int = Query(50, ge=1, le=200),
 ):
-    """Busca cÃ©dulas para filtrar reporte contable."""
+    """Busca cédulas para filtrar reporte contable."""
     try:
         ReporteContableCache.__table__.create(db.get_bind(), checkfirst=True)
     except Exception:
@@ -466,13 +466,13 @@ def buscar_cedulas_contable(
 def exportar_contable(
     request: Request,
     db: Session = Depends(get_db),
-    anos: Optional[str] = Query(None, description="AÃ±os separados por coma, ej. 2024,2025"),
+    anos: Optional[str] = Query(None, description="Años separados por coma, ej. 2024,2025"),
     meses: Optional[str] = Query(None, description="Meses 1-12 separados por coma, ej. 1,6,12"),
-    cedulas: Optional[str] = Query(None, description="CÃ©dulas separadas por coma (vacÃ­o = todas)"),
+    cedulas: Optional[str] = Query(None, description="Cédulas separadas por coma (vacío = todas)"),
 ):
     """Exporta reporte contable en Excel desde cache."""
     if anos is None:
-        anos = request.query_params.get("anos") or request.query_params.get("aÃ±os")
+        anos = request.query_params.get("anos") or request.query_params.get("años")
     try:
         ReporteContableCache.__table__.create(db.get_bind(), checkfirst=True)
     except Exception:

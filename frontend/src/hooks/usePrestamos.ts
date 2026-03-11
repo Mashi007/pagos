@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { prestamoService } from '../services/prestamoService'
 import { Prestamo, PrestamoForm } from '../types'
 
-// Constantes de configuraciÃ³n
+// Constantes de configuraciión
 const DEFAULT_PER_PAGE = 20
 const STALE_TIME_SHORT = 2 * 60 * 1000 // 2 minutos
 const STALE_TIME_MEDIUM = 5 * 60 * 1000 // 5 minutos
@@ -21,7 +21,7 @@ export const prestamoKeys = {
   auditoria: (prestamoId: number) => [...prestamoKeys.all, 'auditoria', prestamoId] as const,
 }
 
-// Tipo para filtros de prÃ©stamos
+// Tipo para filtros de préstamos
 export interface PrestamoFilters {
   search?: string
   estado?: string
@@ -35,7 +35,7 @@ export interface PrestamoFilters {
   requiere_revision?: boolean
 }
 
-// Hook para obtener lista de prÃ©stamos
+// Hook para obtener lista de préstamos
 export function usePrestamos(
   filters?: PrestamoFilters,
   page: number = 1,
@@ -44,13 +44,13 @@ export function usePrestamos(
   return useQuery({
     queryKey: prestamoKeys.list(filters, page, perPage),
     queryFn: () => prestamoService.getPrestamos(filters, page, perPage),
-    staleTime: 0, // Siempre refetch cuando se invalida (mejor para actualizaciÃ³n inmediata de estado)
+    staleTime: 0, // Siempre refetch cuando se invalida (mejor para actualizaciión inmediata de estado)
     refetchOnMount: true, // Refetch cuando el componente se monta
     refetchOnWindowFocus: true, // Refetch cuando se enfoca la ventana (mantiene datos actualizados)
   })
 }
 
-// Hook para obtener un prÃ©stamo especÃ­fico
+// Hook para obtener un préstamo específico
 export function usePrestamo(id: number) {
   return useQuery({
     queryKey: prestamoKeys.detail(id),
@@ -60,7 +60,7 @@ export function usePrestamo(id: number) {
   })
 }
 
-// Hook para bÃºsqueda de prÃ©stamos
+// Hook para búsqueda de préstamos
 export function useSearchPrestamos(query: string) {
   return useQuery({
     queryKey: prestamoKeys.search(query),
@@ -70,7 +70,7 @@ export function useSearchPrestamos(query: string) {
   })
 }
 
-// Hook para obtener prÃ©stamos por cÃ©dula
+// Hook para obtener préstamos por cédula
 export function usePrestamosByCedula(cedula: string) {
   return useQuery({
     queryKey: prestamoKeys.byCedula(cedula),
@@ -80,7 +80,7 @@ export function usePrestamosByCedula(cedula: string) {
   })
 }
 
-// Hook para obtener auditorÃ­a de un prÃ©stamo
+// Hook para obtener auditoría de un préstamo
 export function useAuditoriaPrestamo(prestamoId: number) {
   return useQuery({
     queryKey: prestamoKeys.auditoria(prestamoId),
@@ -90,7 +90,7 @@ export function useAuditoriaPrestamo(prestamoId: number) {
   })
 }
 
-// Hook para crear un prÃ©stamo
+// Hook para crear un préstamo
 export function useCreatePrestamo() {
   const queryClient = useQueryClient()
 
@@ -102,16 +102,16 @@ export function useCreatePrestamo() {
       queryClient.invalidateQueries({ queryKey: ['revision-manual-prestamos'] })
       queryClient.invalidateQueries({ queryKey: ['kpis-principales-menu'], exact: false })
       queryClient.invalidateQueries({ queryKey: ['dashboard-menu'], exact: false })
-      toast.success('PrÃ©stamo creado exitosamente')
+      toast.success('Préstamo creado exitosamente')
     },
     onError: (error: any) => {
-      const errorMessage = error.response?.data?.detail || 'Error al crear prÃ©stamo'
+      const errorMessage = error.response?.data?.detail || 'Error al crear préstamo'
       toast.error(errorMessage)
     },
   })
 }
 
-// Hook para actualizar un prÃ©stamo
+// Hook para actualizar un préstamo
 export function useUpdatePrestamo() {
   const queryClient = useQueryClient()
 
@@ -122,7 +122,7 @@ export function useUpdatePrestamo() {
       // Actualizar datos del cache directamente con la respuesta del servidor
       queryClient.setQueryData(prestamoKeys.detail(variables.id), data)
 
-      // Si el estado cambiÃ³ a APROBADO, actualizar todas las listas
+      // Si el estado cambió a APROBADO, actualizar todas las listas
       if (data.estado === 'APROBADO') {
         // Remover cache stale para forzar refetch
         queryClient.removeQueries({ queryKey: prestamoKeys.lists() })
@@ -144,16 +144,16 @@ export function useUpdatePrestamo() {
         type: 'active'
       })
 
-      toast.success('PrÃ©stamo actualizado exitosamente. El dashboard se ha actualizado.')
+      toast.success('Préstamo actualizado exitosamente. El dashboard se ha actualizado.')
     },
     onError: (error: any) => {
-      const errorMessage = error.response?.data?.detail || 'Error al actualizar prÃ©stamo'
+      const errorMessage = error.response?.data?.detail || 'Error al actualizar préstamo'
       toast.error(errorMessage)
     },
   })
 }
 
-// Hook para eliminar un prÃ©stamo
+// Hook para eliminar un préstamo
 export function useDeletePrestamo() {
   const queryClient = useQueryClient()
 
@@ -165,16 +165,16 @@ export function useDeletePrestamo() {
       queryClient.invalidateQueries({ queryKey: ['revision-manual-prestamos'] })
       queryClient.invalidateQueries({ queryKey: ['kpis-principales-menu'], exact: false })
       queryClient.invalidateQueries({ queryKey: ['dashboard-menu'], exact: false })
-      toast.success('PrÃ©stamo eliminado exitosamente')
+      toast.success('Préstamo eliminado exitosamente')
     },
     onError: (error: any) => {
-      const errorMessage = error.response?.data?.detail || 'Error al eliminar prÃ©stamo'
+      const errorMessage = error.response?.data?.detail || 'Error al eliminar préstamo'
       toast.error(errorMessage)
     },
   })
 }
 
-// Hook para obtener cuotas de un prÃ©stamo (tabla de amortizaciÃ³n)
+// Hook para obtener cuotas de un préstamo (tabla de amortizaciión)
 export function useCuotasPrestamo(prestamoId: number) {
   return useQuery({
     queryKey: [...prestamoKeys.detail(prestamoId), 'cuotas'],
@@ -184,7 +184,7 @@ export function useCuotasPrestamo(prestamoId: number) {
   })
 }
 
-// Hook para generar tabla de amortizaciÃ³n
+// Hook para generar tabla de amortizaciión
 export function useGenerarAmortizacion() {
   const queryClient = useQueryClient()
 
@@ -196,16 +196,16 @@ export function useGenerarAmortizacion() {
       queryClient.invalidateQueries({ queryKey: ['revision-manual-prestamos'] })
       queryClient.invalidateQueries({ queryKey: ['kpis-principales-menu'], exact: false })
       queryClient.invalidateQueries({ queryKey: ['dashboard-menu'], exact: false })
-      toast.success('Tabla de amortizaciÃ³n generada exitosamente')
+      toast.success('Tabla de amortizaciión generada exitosamente')
     },
     onError: (error: any) => {
-      const errorMessage = error.response?.data?.detail || 'Error al generar tabla de amortizaciÃ³n'
+      const errorMessage = error.response?.data?.detail || 'Error al generar tabla de amortizaciión'
       toast.error(errorMessage)
     },
   })
 }
 
-// Hook para aplicar condiciones de aprobaciÃ³n
+// Hook para aplicar condiciones de aprobaciión
 export function useAplicarCondicionesAprobacion() {
   const queryClient = useQueryClient()
 
@@ -235,7 +235,7 @@ export function useAplicarCondicionesAprobacion() {
         type: 'active'
       })
 
-      toast.success('PrÃ©stamo aprobado exitosamente. La tabla de amortizaciÃ³n ha sido generada. El dashboard se ha actualizado.')
+      toast.success('Préstamo aprobado exitosamente. La tabla de amortizaciión ha sido generada. El dashboard se ha actualizado.')
     },
     onError: (error: any) => {
       const errorMessage = error.response?.data?.detail || 'Error al aplicar condiciones'
@@ -244,7 +244,7 @@ export function useAplicarCondicionesAprobacion() {
   })
 }
 
-// Tipo para los KPIs de prÃ©stamos
+// Tipo para los KPIs de préstamos
 export interface PrestamosKPIsData {
   totalFinanciamiento: number
   totalPrestamos: number

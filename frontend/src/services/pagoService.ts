@@ -12,7 +12,7 @@ export interface Pago {
   fecha_registro: string | Date | null
   fecha_conciliacion: string | Date | null
   conciliado: boolean
-  verificado_concordancia?: string | null  // SI/NO - VerificaciÃ³n de concordancia con mÃ³dulo de pagos
+  verificado_concordancia?: string | null  // SI/NO - Verificación de concordancia con módulo de pagos
   usuario_registro: string
   notas: string | null
   documento_nombre: string | null
@@ -73,7 +73,7 @@ class PagoService {
     return await apiClient.post(`${this.baseUrl}/revisar-pagos/mover`, { pago_ids: pagoIds })
   }
 
-  /** Obtiene el 100% de los pagos para exportar (paginaciÃ³n automÃ¡tica sin lÃ­mite) */
+  /** Obtiene el 100% de los pagos para exportar (paginación automática sin límite) */
   async getAllPagosForExport(filters: {
     cedula?: string
     estado?: string
@@ -116,7 +116,7 @@ class PagoService {
     return await apiClient.put(`${this.baseUrl}/${id}`, data)
   }
 
-  /** Actualiza solo el estado de conciliaciÃ³n (SÃ­/No) en BD */
+  /** Actualiza solo el estado de conciliación (Sí/No) en BD */
   async updateConciliado(id: number, conciliado: boolean): Promise<Pago> {
     return await apiClient.put(`${this.baseUrl}/${id}`, { conciliado })
   }
@@ -152,7 +152,7 @@ class PagoService {
     return await apiClient.post(`${this.baseUrl}/importar-desde-cobros`)
   }
 
-  // Cargar Excel de conciliaciÃ³n (2 columnas: Fecha de DepÃ³sito, NÃºmero de Documento)
+  // Cargar Excel de conciliación (2 columnas: Fecha de Depósito, Número de Documento)
   async uploadConciliacion(file: File): Promise<{
     pagos_conciliados: number
     pagos_no_encontrados: number
@@ -235,7 +235,7 @@ class PagoService {
     return await apiClient.get(`${this.baseUrl}/kpis${queryString ? '?' + queryString : ''}`, config)
   }
 
-  // Obtener Ãºltimos pagos por cÃ©dula (resumen)
+  // Obtener últimos pagos por cédula (resumen)
   async getUltimosPagos(
     page = 1,
     perPage = 20,
@@ -281,7 +281,7 @@ class PagoService {
     return response.data as Blob
   }
 
-  // Descargar PDF tabla de amortizaciÃ³n completa por cÃ©dula
+  // Descargar PDF tabla de amortización completa por cédula
   async descargarPDFAmortizacion(cedula: string): Promise<Blob> {
     const axiosInstance = apiClient.getAxiosInstance()
     const response = await axiosInstance.get(

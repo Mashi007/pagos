@@ -106,7 +106,7 @@ export interface EmailConfig {
   imap_user?: string
   imap_password?: string
   imap_use_ssl?: string
-  /** Contactos prestablecidos: emails separados por coma para notificaciÃ³n automÃ¡tica de tickets CRM */
+  /** Contactos prestablecidos: emails separados por coma para notificación automática de tickets CRM */
   tickets_notify_emails?: string
 }
 
@@ -121,7 +121,7 @@ export interface NotificacionVariable {
   fecha_actualizacion?: string
 }
 
-/** Prefijo API v1; pestaÃ±as de notificaciones usan rutas propias (notificaciones-previas, etc.). */
+/** Prefijo API v1; pestañas de notificaciones usan rutas propias (notificaciones-previas, etc.). */
 const API_V1 = '/api/v1'
 
 class NotificacionService {
@@ -188,7 +188,7 @@ class NotificacionService {
     return await apiClient.get<EstadisticasPorTab>(`${this.baseUrl}/estadisticas-por-tab`)
   }
 
-  /** Lista de correos no entregados (rebotados) por tipo de pestaÃ±a. */
+  /** Lista de correos no entregados (rebotados) por tipo de pestaña. */
   async getRebotadosPorTab(tipo: string): Promise<{ items: RebotadoItem[]; total: number }> {
     return await apiClient.get<{ items: RebotadoItem[]; total: number }>(
       `${this.baseUrl}/rebotados-por-tab`,
@@ -205,12 +205,43 @@ class NotificacionService {
     return blob as Blob
   }
 
-  /** Ejecutar actualizaciÃ³n de notificaciones (dias_mora en clientes). Llamar desde cron a las 2am. */
+  /** Ejecutar actualización de notificaciones (dias_mora en clientes). Llamar desde cron a las 2am. */
   async actualizarNotificaciones(): Promise<{ mensaje: string; clientes_actualizados: number }> {
     return await apiClient.post<{ mensaje: string; clientes_actualizados: number }>(`${this.baseUrl}/actualizar`)
   }
 
-  // Notificaciones automÃ¡ticas
+  /** Plantilla editable del PDF de carta de cobranza (adjunto al email). */
+  async getPlantillaPdfCobranza(): Promise<{ ciudad_default: string; cuerpo_principal: string | null; clausula_septima: string | null }> {
+    return await apiClient.get(`${this.baseUrl}/plantilla-pdf-cobranza`)
+  }
+
+  async updatePlantillaPdfCobranza(data: { ciudad_default?: string; cuerpo_principal?: string | null; clausula_septima?: string | null }): Promise<{ ciudad_default: string; cuerpo_principal: string | null; clausula_septima: string | null }> {
+    return await apiClient.put(`${this.baseUrl}/plantilla-pdf-cobranza`, data)
+  }
+
+  /** PDF fijo que se anexa siempre al email de cobranza (sin cambios). */
+  async getAdjuntoFijoCobranza(): Promise<{ nombre_archivo: string; ruta: string }> {
+    return await apiClient.get(`${this.baseUrl}/adjunto-fijo-cobranza`)
+  }
+
+  async updateAdjuntoFijoCobranza(data: { nombre_archivo?: string; ruta?: string }): Promise<{ nombre_archivo: string; ruta: string }> {
+    return await apiClient.put(`${this.baseUrl}/adjunto-fijo-cobranza`, data)
+  }
+
+  /** Comprueba si la ruta del adjunto fijo existe en el servidor. */
+  async verificarAdjuntoFijoCobranza(): Promise<{ existe: boolean; mensaje: string }> {
+    return await apiClient.get(`${this.baseUrl}/adjunto-fijo-cobranza/verificar`)
+  }
+
+  /** Vista previa del PDF de carta de cobranza (datos de ejemplo). Devuelve el blob del PDF. */
+  async getPlantillaPdfCobranzaPreview(): Promise<Blob> {
+    const response = await apiClient.get<Blob>(`${this.baseUrl}/plantilla-pdf-cobranza/preview`, {
+      responseType: 'blob',
+    })
+    return response as Blob
+  }
+
+  // Notificaciones automáticas
   async procesarAutomaticas(): Promise<{ mensaje: string, estadisticas: any }> {
     return await apiClient.post(`${this.baseUrl}/automaticas/procesar`)
   }
@@ -220,7 +251,7 @@ class NotificacionService {
     const params = new URLSearchParams()
     if (estado) params.append('estado', estado)
 
-    // Usar timeout extendido para este endpoint que puede tardar mÃ¡s
+    // Usar timeout extendido para este endpoint que puede tardar más
     return await apiClient.get<{ items: any[], total: number, dias_5: number, dias_3: number, dias_1: number }>(
       `${API_V1}/notificaciones-previas/?${params}`,
       { timeout: 120000 }
@@ -257,7 +288,7 @@ class NotificacionService {
     )
   }
 
-  /** EnvÃ­a correo a cada cliente en la clasificaciÃ³n indicada (email desde tabla clientes). */
+  /** Envía correo a cada cliente en la clasificación indicada (email desde tabla clientes). */
   async enviarNotificacionesPrevias(): Promise<{ mensaje: string; enviados: number; sin_email: number; fallidos: number }> {
     return await apiClient.post<{ mensaje: string; enviados: number; sin_email: number; fallidos: number }>(
       `${API_V1}/notificaciones-previas/enviar`,
@@ -340,11 +371,11 @@ class EmailConfigService {
   async actualizarConfiguracionEmail(config: Partial<EmailConfig>): Promise<any> {
 
     try {
-      // Usar timeout extendido para validaciÃ³n SMTP (puede tardar hasta 10-15 segundos)
+      // Usar timeout extendido para validación SMTP (puede tardar hasta 10-15 segundos)
       const resultado = await apiClient.put(
         `${this.baseUrl}/email/configuracion`,
         config,
-        { timeout: 60000 } // 60 segundos para permitir validaciÃ³n SMTP
+        { timeout: 60000 } // 60 segundos para permitir validación SMTP
       )
       return resultado
     } catch (error) {

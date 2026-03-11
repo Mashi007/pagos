@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../..
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs'
 import { Badge } from '../../components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
-import toast from 'react-hot-toast'
+import { toast } from 'sonner'
 import { Upload, Search, FileText, Database, ChevronDown, ChevronUp, Edit2, Trash2, Calendar, AlertCircle } from 'lucide-react'
 import { EditorPlantillaHTML } from './EditorPlantillaHTML'
 
@@ -85,11 +85,14 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
     mora61: [
       { valor: 'MORA_90', label: '90+ días de mora (moroso)' },
     ],
+    cobranza: [
+      { valor: 'COBRANZA', label: 'Carta de cobranza' },
+    ],
   }
 
   const tiposSugeridos = [
     'PAGO_5_DIAS_ANTES', 'PAGO_3_DIAS_ANTES', 'PAGO_1_DIA_ANTES', 'PAGO_DIA_0',
-    'PAGO_1_DIA_ATRASADO', 'PAGO_3_DIAS_ATRASADO', 'PAGO_5_DIAS_ATRASADO', 'PREJUDICIAL', 'MORA_90'
+    'PAGO_1_DIA_ATRASADO', 'PAGO_3_DIAS_ATRASADO', 'PAGO_5_DIAS_ATRASADO', 'PREJUDICIAL', 'MORA_90', 'COBRANZA'
   ]
 
   const todosLosTipos = [
@@ -98,7 +101,123 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
     ...tiposPorCategoria.retraso,
     ...tiposPorCategoria.prejudicial,
     ...tiposPorCategoria.mora61,
+    ...(tiposPorCategoria.cobranza || []),
   ]
+
+  /** Variables para plantilla de cobranza: {{TABLA.CAMPO}} y bloque {{#CUOTAS.VENCIMIENTOS}}. Ver docs/PLANTILLA_COBRANZA_ANALISIS_Y_MECANISMOS.md */
+  const VARIABLES_COBRANZA = [
+    { key: 'CLIENTES.TRATAMIENTO', label: 'Tratamiento' },
+    { key: 'CLIENTES.NOMBRE_COMPLETO', label: 'Nombre completo' },
+    { key: 'PRESTAMOS.ID', label: 'Nº crédito' },
+    { key: 'FECHA_CARTA', label: 'Fecha carta' },
+    { key: 'LOGO_URL', label: 'URL del logo (se rellena al enviar)' },
+  ]
+  const BLOQUE_CUOTAS_VENCIDAS = `{{#CUOTAS.VENCIMIENTOS}}
+  • Cuota N° {{CUOTA.NUMERO}} con vencimiento: {{CUOTA.FECHA_VENCIMIENTO}} — Monto: {{CUOTA.MONTO}}
+{{/CUOTAS.VENCIMIENTOS}}`
+
+  const PLANTILLA_COBRANZA_ASUNTO = 'Recordatorio de cuotas pendientes - Rapi-Credit, C.A.'
+  /** Al cargar la plantilla se usa una URL de ejemplo; al enviar el correo el backend sustituye {{LOGO_URL}} por la URL pública del logo. */
+  const PLANTILLA_COBRANZA_CUERPO = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Recordatorio de cobranza</title>
+</head>
+<body style="margin:0; padding:0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f8;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f4f6f8;">
+    <tr>
+      <td align="center" style="padding: 24px 16px;">
+        <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width: 600px; background: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow: hidden;">
+          <!-- Encabezado con logo -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); padding: 28px 32px; text-align: center;">
+              <img src="{{LOGO_URL}}" alt="RapiCredit" width="180" height="auto" style="display: inline-block; max-height: 56px; width: auto;" />
+            </td>
+          </tr>
+          <!-- Saludo -->
+          <tr>
+            <td style="padding: 28px 32px 24px 32px;">
+              <p style="margin: 0 0 16px 0; font-size: 16px; line-height: 1.6; color: #1a202c;">
+                Estimado {{CLIENTES.TRATAMIENTO}} <strong>{{CLIENTES.NOMBRE_COMPLETO}}</strong>,
+              </p>
+              <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #2d3748;">
+                Nos dirigimos a usted con el mayor respeto en nombre de <strong>Rapi-Credit, C.A.</strong>, con motivo del vencimiento de cuotas correspondientes a su crédito N° <strong>{{PRESTAMOS.ID}}</strong> vigente con nuestra empresa.
+              </p>
+              <p style="margin: 0 0 20px 0; font-size: 15px; line-height: 1.6; color: #2d3748;">
+                Según nuestros registros al <strong>{{FECHA_CARTA}}</strong>, se encuentran pendientes de pago las siguientes cuotas:
+              </p>
+              <!-- Bloque cuotas -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin: 0 0 20px 0; border: 1px solid #e2e8f0; border-radius: 6px;">
+                <tr>
+                  <td style="padding: 12px 16px; background-color: #1e3a5f; color: #fff; font-size: 13px; font-weight: 600;">Detalle de cuotas pendientes</td>
+                </tr>
+                <tr>
+                  <td style="padding: 16px;">
+{{#CUOTAS.VENCIMIENTOS}}
+                    <p style="margin: 0 0 8px 0; font-size: 14px; color: #2d3748;">• Cuota N° {{CUOTA.NUMERO}} — Vencimiento: {{CUOTA.FECHA_VENCIMIENTO}} — Monto: {{CUOTA.MONTO}}</p>
+{{/CUOTAS.VENCIMIENTOS}}
+                  </td>
+                </tr>
+              </table>
+              <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #2d3748;">
+                Le recordamos que dichas cuotas forman parte del compromiso adquirido al momento de la aprobación de su crédito, y su cancelación oportuna contribuye significativamente a mantener su historial financiero en condiciones favorables.
+              </p>
+              <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #c53030; font-weight: 600;">
+                LE REMITIMOS LAS CUENTAS DONDE PUEDE REALIZAR SUS PAGOS. NO CONTAMOS CON ZELLE.
+              </p>
+              <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #2d3748;">
+                En virtud de lo anterior, le invitamos cordialmente a regularizar su situación en un lapso no mayor a <strong>48 horas</strong>, realizando el pago de las cuotas adeudadas a través de nuestros canales habituales.
+              </p>
+              <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #2b6cb0; font-weight: 600;">
+                SI YA HA EFECTUADO EL PAGO, LE AGRADECEMOS HACER CASO OMISO A ESTA COMUNICACIÓN.
+              </p>
+              <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #2d3748;">
+                De lo contrario, le exhortamos a comunicarse con nosotros para coordinar una solución adecuada y evitar medidas adicionales.
+              </p>
+              <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #2d3748;">
+                Nuestro objetivo es brindarle siempre un servicio confiable y accesible, por lo cual quedamos atentos para atender cualquier duda o inconveniente que desee plantear.
+              </p>
+              <p style="margin: 0 0 24px 0; font-size: 15px; line-height: 1.6; color: #2d3748;">
+                Agradeciendo de antemano su pronta atención a esta solicitud, nos despedimos cordialmente.
+              </p>
+              <!-- Firma -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-top: 2px solid #e2e8f0; padding-top: 20px;">
+                <tr>
+                  <td>
+                    <p style="margin: 0 0 4px 0; font-size: 15px; font-weight: 600; color: #1e3a5f;">Atentamente,</p>
+                    <p style="margin: 0 0 4px 0; font-size: 14px; color: #2d3748;">Departamento de Cobranza</p>
+                    <p style="margin: 0 0 4px 0; font-size: 14px; font-weight: 600; color: #1e3a5f;">Rapi-Credit, C.A.</p>
+                    <p style="margin: 0; font-size: 12px; color: #718096;">Fecha de emisión: {{FECHA_CARTA}}</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <!-- Pie con color corporativo -->
+          <tr>
+            <td style="padding: 12px 32px; background-color: #1e3a5f; color: #a0aec0; font-size: 11px; text-align: center;">
+              Este correo es un recordatorio oficial de Rapi-Credit, C.A. Por favor no responda a este mensaje de forma automática.
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+
+  const cargarPlantillaCobranzaPorDefecto = () => {
+    setTipo('COBRANZA')
+    setTiposSeleccionados(['COBRANZA'])
+    setAsunto(PLANTILLA_COBRANZA_ASUNTO)
+    setEncabezado('')
+    setCuerpo(PLANTILLA_COBRANZA_CUERPO)
+    setFirma('')
+    setNombre('Carta de cobranza')
+    toast.success('Plantilla de cobranza cargada. Revise y guarde.')
+  }
 
   const cargar = async () => {
     setLoading(true)
@@ -464,6 +583,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
       'PAGO_5_DIAS_ATRASADO': ['nombre', 'monto', 'fecha_vencimiento', 'dias_atraso'],
       'PREJUDICIAL': ['nombre', 'monto', 'fecha_vencimiento', 'dias_atraso'],
       'MORA_90': ['nombre', 'monto', 'fecha_vencimiento', 'dias_atraso'],
+      'COBRANZA': ['CLIENTES.NOMBRE_COMPLETO', 'PRESTAMOS.ID', 'FECHA_CARTA'],
     }
     const requeridas = requeridasPorTipo[tipoAValidar] || []
     const faltantes = requeridas.filter(v => !(`${asunto} ${cuerpoFinal}`).includes(`{{${v}}}`))
@@ -693,6 +813,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
     'PAGO_5_DIAS_ATRASADO': { categoria: 'Notificación Retrasada', caso: '5 días de retraso' },
     'PREJUDICIAL': { categoria: 'Prejudicial', caso: 'Prejudicial' },
     'MORA_90': { categoria: 'Mora 90+', caso: '90+ días de mora (moroso)' },
+    'COBRANZA': { categoria: 'Cobranza', caso: 'Carta de cobranza' },
   }
 
   /** Orden de casos para el banco por caso (cada uno con su lista de plantillas) */
@@ -706,6 +827,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
     { tipo: 'PAGO_5_DIAS_ATRASADO', label: '5 días de retraso', borderColor: 'border-amber-600' },
     { tipo: 'PREJUDICIAL', label: 'Prejudicial', borderColor: 'border-red-500' },
     { tipo: 'MORA_90', label: '90+ días de mora (moroso)', borderColor: 'border-slate-500' },
+    { tipo: 'COBRANZA', label: 'Carta de cobranza', borderColor: 'border-violet-500' },
   ]
 
   /** Banco por caso: plantillas agrupadas por tipo */
@@ -777,12 +899,16 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
             <h2 className="text-lg font-semibold">Armar plantilla</h2>
             <p className="text-sm text-gray-500">Elige el caso, escribe asunto y cuerpo, inserta variables y guarda. Luego asígnala en Notificaciones â†’ Configuración.</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button onClick={importar} variant="outline" size="sm" title="Importar plantilla">
               <Upload className="h-4 w-4 mr-1" />
               Importar
             </Button>
             <input ref={fileInputRef} type="file" accept=".json" onChange={handleImportFile} className="hidden" />
+            <Button onClick={cargarPlantillaCobranzaPorDefecto} variant="outline" size="sm" title="Cargar plantilla de cobranza con variables {{TABLA.CAMPO}} y bloque de cuotas">
+              <FileText className="h-4 w-4 mr-1" />
+              Cargar plantilla cobranza
+            </Button>
             <Button onClick={limpiar} variant="secondary" size="sm">
               Nueva plantilla
             </Button>
@@ -943,27 +1069,79 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
             </div>
           </div>
 
-          {/* Variables listas para insertar: rápidas + personalizadas (desde pestaña Variables Personalizadas) */}
+          {/* Variables listas para insertar: por tipo de plantilla */}
           <div className="rounded-lg bg-blue-50 border border-blue-200 p-3">
             <p className="text-xs font-semibold text-blue-900 mb-1">Insertar variable en asunto o cuerpo (clic en la variable):</p>
-            <p className="text-xs text-blue-700 mb-2">Las variables de la pestaña <strong>Variables Personalizadas</strong> aparecen abajo en el Banco de Variables y se copian aquí al hacer clic.</p>
-            <div className="flex flex-wrap gap-2">
-              {VARIABLES_NOTIFICACION.map(({ key, label }) => (
-                <Button
-                  key={key}
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="bg-white border-blue-300 text-blue-800 hover:bg-blue-100 font-mono text-xs"
-                  onClick={() => {
-                    insertarVariable(key)
-                    toast.success(`{{${key}}} insertado`, { duration: 1200 })
-                  }}
-                >
-                  {`{{${key}}}`}
-                </Button>
-              ))}
-            </div>
+            {(tipo === 'COBRANZA' || tiposSeleccionados.includes('COBRANZA')) ? (
+              <>
+                <p className="text-xs text-blue-700 mb-2">Plantilla de cobranza: use <code className="bg-white px-1 rounded">{"{{TABLA.CAMPO}}"}</code> y el bloque de cuotas vencidas. Datos desde clientes, préstamos y cuotas según filtros de las pestañas de Notificaciones.</p>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {VARIABLES_COBRANZA.map(({ key, label }) => (
+                    <Button
+                      key={key}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="bg-white border-blue-300 text-blue-800 hover:bg-blue-100 font-mono text-xs"
+                      onClick={() => {
+                        insertarVariable(key)
+                        toast.success(`{{${key}}} insertado`, { duration: 1200 })
+                      }}
+                    >
+                      {`{{${key}}}`}
+                    </Button>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100 font-mono text-xs"
+                    onClick={() => {
+                      const insertInto = (el: HTMLTextAreaElement | HTMLInputElement | null, setter: (v: string) => void, current: string) => {
+                        if (!el && cuerpoRef.current) {
+                          setter(current + '\n' + BLOQUE_CUOTAS_VENCIDAS)
+                          return
+                        }
+                        const elTarget = (focus === 'cuerpo' ? cuerpoRef.current : focus === 'firma' ? firmaRef.current : focus === 'encabezado' ? encRef.current : null) as HTMLTextAreaElement | null
+                        const setterTarget = focus === 'cuerpo' ? setCuerpo : focus === 'firma' ? setFirma : setEncabezado
+                        const currentTarget = focus === 'cuerpo' ? cuerpo : focus === 'firma' ? firma : encabezado
+                        if (!elTarget) { setterTarget(currentTarget + '\n' + BLOQUE_CUOTAS_VENCIDAS); return }
+                        const start = elTarget.selectionStart ?? currentTarget.length
+                        const end = elTarget.selectionEnd ?? currentTarget.length
+                        const next = currentTarget.slice(0, start) + '\n' + BLOQUE_CUOTAS_VENCIDAS + currentTarget.slice(end)
+                        setterTarget(next)
+                      }
+                      insertInto(cuerpoRef.current, setCuerpo, cuerpo)
+                      setFocus('cuerpo')
+                      toast.success('Bloque de cuotas vencidas insertado', { duration: 2000 })
+                    }}
+                  >
+                    Insertar bloque: lista cuotas vencidas
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-blue-700 mb-2">Las variables de la pestaña <strong>Variables Personalizadas</strong> aparecen abajo en el Banco de Variables y se copian aquí al hacer clic.</p>
+                <div className="flex flex-wrap gap-2">
+                  {VARIABLES_NOTIFICACION.map(({ key, label }) => (
+                    <Button
+                      key={key}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="bg-white border-blue-300 text-blue-800 hover:bg-blue-100 font-mono text-xs"
+                      onClick={() => {
+                        insertarVariable(key)
+                        toast.success(`{{${key}}} insertado`, { duration: 1200 })
+                      }}
+                    >
+                      {`{{${key}}}`}
+                    </Button>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">

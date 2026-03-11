@@ -1,5 +1,5 @@
-﻿"""
-Endpoints para pagos_con_errores: pagos con errores de validaciÃ³n desde Carga Masiva.
+"""
+Endpoints para pagos_con_errores: pagos con errores de validación desde Carga Masiva.
 Revisar Pagos y front apuntan a esta tabla. No se mezclan con pagos que cumplen validadores.
 """
 import logging
@@ -84,7 +84,7 @@ def listar_pagos_con_errores(
     conciliado: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Listado paginado de pagos con errores (Revisar Pagos). Se vacÃ­a al descargar Excel."""
+    """Listado paginado de pagos con errores (Revisar Pagos). Se vacía al descargar Excel."""
     try:
         q = select(PagoConError)
         count_q = select(func.count()).select_from(PagoConError)

@@ -180,7 +180,7 @@ class AITrainingService {
   }
 
   /**
-   * Eliminar conversaciÃ³n
+   * Eliminar conversación
    */
   async eliminarConversacion(conversacionId: number): Promise<void> {
     await apiClient.delete(`${this.baseUrl}/conversaciones/${conversacionId}`)
