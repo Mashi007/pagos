@@ -21,7 +21,7 @@ CLAVE_EMAIL_CONFIG = "email_config"
 CLAVE_NOTIFICACIONES_ENVIOS = "notificaciones_envios"
 
 # Campos sensibles que deben encriptarse en BD
-SENSITIVE_FIELDS = {"smtp_password"}
+SENSITIVE_FIELDS = {"smtp_password", "imap_password"}
 
 
 def _mask_sensitive_value(value: Any) -> str:
@@ -52,17 +52,15 @@ def _decrypt_value_safe(encrypted: Any) -> Optional[str]:
     return None
 
 
-def _encrypt_value_safe(value: str) -> Optional[bytes]:
-    """Intenta encriptar un valor; devuelve None si falla."""
-    if not value or not _should_encrypt_field("smtp_password"):  # Solo si encryption está configurado
+def _encrypt_value_safe(value: str, field_name: str) -> Optional[bytes]:
+    """Intenta encriptar un valor; devuelve None si falla (ej. ENCRYPTION_KEY no definido)."""
+    if not value or not _should_encrypt_field(field_name):
         return None
     try:
         from app.core.crypto import encrypt_value
         return encrypt_value(value)
     except Exception:
-        # Si encryption no está configurado, retornar None (guardar sin encriptar)
         return None
-    return None
 
 
 def sync_from_db() -> None:
@@ -76,14 +74,17 @@ def sync_from_db() -> None:
             if row and row.valor:
                 data = json.loads(row.valor)
                 if isinstance(data, dict):
-                    # Desencriptar campos sensibles si es necesario
+                    # Desencriptar campos sensibles: primero _encriptado; si falla (ej. sin ENCRYPTION_KEY), usar valor en claro
                     decrypted_data = data.copy()
                     for field in SENSITIVE_FIELDS:
-                        if field in decrypted_data and decrypted_data[field]:
-                            # Si está encriptado, desencriptar; si no, dejar como está
-                            decrypted = _decrypt_value_safe(decrypted_data[field])
-                            if decrypted:
-                                decrypted_data[field] = decrypted
+                        enc_key = f"{field}_encriptado"
+                        if enc_key in data and data[enc_key]:
+                            raw = data[enc_key]
+                            enc_bytes = bytes.fromhex(raw) if isinstance(raw, str) else raw
+                            decrypted = _decrypt_value_safe(enc_bytes)
+                            decrypted_data[field] = decrypted if decrypted else data.get(field)
+                        elif field in data and data[field] is not None:
+                            decrypted_data[field] = data[field]
                     update_from_api(decrypted_data)
         finally:
             db.close()
@@ -151,7 +152,7 @@ def get_tickets_notify_emails() -> List[str]:
 
 def update_from_api(data: dict[str, Any]) -> None:
     """Actualiza el holder desde la API de configuración (PUT /configuracion/email/configuracion)."""
-    for k in ("smtp_host", "smtp_port", "smtp_user", "smtp_password", "from_email", "from_name", "tickets_notify_emails", "modo_pruebas", "email_pruebas", "emails_pruebas"):
+    for k in ("smtp_host", "smtp_port", "smtp_user", "smtp_password", "from_email", "from_name", "tickets_notify_emails", "modo_pruebas", "email_pruebas", "emails_pruebas", "imap_host", "imap_port", "imap_user", "imap_password", "imap_use_ssl"):
         if k in data and data[k] is not None:
             _current[k] = data[k]
     if "smtp_port" in data and data["smtp_port"] is not None:
@@ -173,7 +174,7 @@ def prepare_for_db_storage(data: dict[str, Any]) -> dict[str, Any]:
     # Para cada campo sensible, intentar encriptar
     for field in SENSITIVE_FIELDS:
         if field in result and result[field]:
-            encrypted = _encrypt_value_safe(result[field])
+            encrypted = _encrypt_value_safe(result[field], field)
             if encrypted:
                 # Guardar el valor encriptado en el dict con sufijo _encriptado
                 result[f"{field}_encriptado"] = encrypted.hex()  # Convertir bytes a hex string para JSON
@@ -240,3 +241,4 @@ def get_modo_pruebas_email() -> Tuple[bool, List[str]]:
         return (modo, emails)
 
     return (modo, [])
+
