@@ -1,4 +1,4 @@
-﻿"""
+"""
 Endpoints PÚBLICOS para consulta de estado de cuenta por cédula.
 SEGURIDAD: Sin autenticación (router sin get_current_user). Solo datos del cliente
 identificado por la cédula consultada. Rate limiting por IP. No expone otros servicios
@@ -32,6 +32,7 @@ from app.models.estado_cuenta_codigo import EstadoCuentaCodigo
 from app.api.v1.endpoints.validadores import validate_cedula
 from app.core.email import send_email
 
+from app.services.estado_cuenta_pdf import generar_pdf_estado_cuenta
 logger = logging.getLogger(__name__)
 
 router = APIRouter(dependencies=[])
@@ -206,113 +207,6 @@ def _obtener_amortizacion_prestamo(db: Session, prestamo_id: int) -> List[dict]:
     return resultado
 
 
-def _generar_pdf_estado_cuenta(
-    cedula: str,
-    nombre: str,
-    prestamos: List[dict],
-    cuotas_pendientes: List[dict],
-    total_pendiente: float,
-    fecha_corte: date,
-    amortizaciones_por_prestamo: Optional[List[dict]] = None,
-) -> bytes:
-    """Genera PDF de estado de cuenta: cliente, préstamos, cuotas pendientes."""
-    from reportlab.lib.pagesizes import letter
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-    from reportlab.lib.styles import getSampleStyleSheet
-
-    buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=letter)
-    styles = getSampleStyleSheet()
-    story = []
-
-    story.append(Paragraph("Estado de cuenta", styles["Title"]))
-    story.append(Paragraph(f"Fecha de corte: {fecha_corte.isoformat()}", styles["Normal"]))
-    story.append(Paragraph(f"Cédula: {cedula}", styles["Normal"]))
-    story.append(Paragraph(f"Cliente: {nombre or '-'}", styles["Normal"]))
-    story.append(Spacer(1, 12))
-
-    if prestamos:
-        story.append(Paragraph("Préstamos", styles["Heading2"]))
-        rows = [["Id", "Producto", "Total financiamiento", "Estado"]]
-        for p in prestamos:
-            rows.append([
-                str(p.get("id", "")),
-                (p.get("producto") or "-")[:40],
-                str(p.get("total_financiamiento", 0)),
-                p.get("estado", "-"),
-            ])
-        t = Table(rows)
-        t.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), "#e0e0e0"),
-            ("GRID", (0, 0), (-1, -1), 0.5, "#ccc"),
-        ]))
-        story.append(t)
-        story.append(Spacer(1, 12))
-
-    story.append(Paragraph("Cuotas pendientes", styles["Heading2"]))
-    story.append(Paragraph(f"Total pendiente: {float(total_pendiente or 0):.2f}", styles["Normal"]))
-    if not cuotas_pendientes:
-        story.append(Paragraph("No hay cuotas pendientes.", styles["Normal"]))
-    else:
-        rows = [["Préstamo", "Nº Cuota", "Vencimiento", "Monto", "Estado"]]
-        for c in cuotas_pendientes:
-            rows.append([
-                str(c.get("prestamo_id", "")),
-                str(c.get("numero_cuota", "")),
-                c.get("fecha_vencimiento", ""),
-                str(c.get("monto", 0)),
-                c.get("estado", ""),
-            ])
-        t = Table(rows)
-        t.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), "#e0e0e0"),
-            ("GRID", (0, 0), (-1, -1), 0.5, "#ccc"),
-        ]))
-        story.append(t)
-
-    # Tablas de amortización (misma estructura que en Detalles del Préstamo)
-    if amortizaciones_por_prestamo:
-        story.append(Spacer(1, 16))
-        story.append(Paragraph("Tablas de amortización", styles["Heading2"]))
-        for item in amortizaciones_por_prestamo:
-            prestamo_id = item.get("prestamo_id", "")
-            producto = (item.get("producto") or "Préstamo")[:50]
-            cuotas = item.get("cuotas") or []
-            if not cuotas:
-                continue
-            story.append(Spacer(1, 8))
-            story.append(Paragraph(f"Préstamo #{prestamo_id} — {producto}", styles["Heading3"]))
-            # Mismo orden que Detalles del Préstamo > Tabla de Amortización (TablaAmortizacionPrestamo.tsx)
-            rows = [["Cuota", "Fecha Vencimiento", "Capital", "Interés", "Total", "Saldo Pendiente", "Pago conciliado", "Estado"]]
-            for c in cuotas:
-                rows.append([
-                    str(c.get("numero_cuota", "")),
-                    (c.get("fecha_vencimiento") or ""),
-                    f"{c.get('monto_capital', 0):,.2f}",
-                    f"{c.get('monto_interes', 0):,.2f}",
-                    f"{c.get('monto_cuota', 0):,.2f}",
-                    f"{c.get('saldo_capital_final', 0):,.2f}",
-                    c.get("pago_conciliado_display", "-"),
-                    c.get("estado", ""),
-                ])
-            t = Table(rows)
-            t.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, 0), "#3B82F6"),
-                ("TEXTCOLOR", (0, 0), (-1, 0), "white"),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, 0), 9),
-                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                ("ALIGN", (2, 0), (6, -1), "RIGHT"),
-                ("GRID", (0, 0), (-1, -1), 0.5, "#ccc"),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [0xFFFFFF, 0xF5F7FA]),
-            ]))
-            story.append(t)
-            story.append(Spacer(1, 12))
-
-    doc.build(story)
-    return buf.getvalue()
-
-
 @router.get("/validar-cedula", response_model=ValidarCedulaEstadoCuentaResponse)
 def validar_cedula_estado_cuenta(
     request: Request,
@@ -453,7 +347,7 @@ def verificar_codigo_estado_cuenta(
         datos = _obtener_datos_pdf(db, cedula_lookup)
         if not datos:
             return VerificarCodigoResponse(ok=False, error="Error al generar el documento.")
-        pdf_bytes = _generar_pdf_estado_cuenta(
+        pdf_bytes = generar_pdf_estado_cuenta(
             cedula=datos.get("cedula_display") or "",
             nombre=datos.get("nombre") or "",
             prestamos=datos.get("prestamos_list") or [],
@@ -568,7 +462,7 @@ def solicitar_estado_cuenta(
             "cuotas": cuotas,
         })
 
-    pdf_bytes = _generar_pdf_estado_cuenta(
+    pdf_bytes = generar_pdf_estado_cuenta(
         cedula=cedula_display,
         nombre=nombre,
         prestamos=prestamos_list,

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Consulta PÚBLICA de estado de cuenta por cédula.
  * Flujo: bienvenida → ingresar cédula → bienvenida con nombre → PDF + envío al email.
  * Sin login. Misma lógica y seguridades que rapicredit-cobros (rate limit, validación).
@@ -76,8 +76,14 @@ export default function EstadoCuentaPublicoPage() {
   const [loading, setLoading] = useState(false)
   const [loadingPdf, setLoadingPdf] = useState(false)
   const [pdfDataUrl, setPdfDataUrl] = useState<string | null>(null)
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null)
   const [mensajeEnvio, setMensajeEnvio] = useState('')
   const [notification, setNotification] = useState<NotificationState>(null)
+
+
+  useEffect(() => {
+    return () => { if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl) }
+  }, [pdfBlobUrl])
 
   const showNotification = (type: 'error' | 'success', message: string) => {
     setNotification({ type, message })
@@ -87,6 +93,7 @@ export default function EstadoCuentaPublicoPage() {
   const dismissNotification = () => setNotification(null)
 
   const resetForm = (irAStep: number) => {
+    if (pdfBlobUrl) { URL.revokeObjectURL(pdfBlobUrl); setPdfBlobUrl(null) }
     setCedula('')
     setCodigo('')
     setPdfDataUrl(null)
@@ -148,6 +155,15 @@ export default function EstadoCuentaPublicoPage() {
       }
       if (res.pdf_base64) {
         setPdfDataUrl(`data:application/pdf;base64,${res.pdf_base64}`)
+        try {
+          const bin = atob(res.pdf_base64)
+          const bytes = new Uint8Array(bin.length)
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+          const blob = new Blob([bytes], { type: 'application/pdf' })
+          setPdfBlobUrl(URL.createObjectURL(blob))
+        } catch (_) {
+          setPdfBlobUrl(null)
+        }
         setStep(3)
       }
     } catch (e: unknown) {
@@ -291,7 +307,7 @@ export default function EstadoCuentaPublicoPage() {
               <div className="w-full border rounded-lg overflow-hidden bg-gray-100">
                 <iframe
                   title="Estado de cuenta PDF"
-                  src={pdfDataUrl}
+                  src={pdfBlobUrl || pdfDataUrl || ''}
                   className="w-full min-h-[60vh] aspect-[3/4] max-h-[80vh]"
                 />
               </div>

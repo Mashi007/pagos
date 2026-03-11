@@ -232,6 +232,9 @@ async def enviar_reporte_publico(
     if len(content) < 4:
         return EnviarReporteResponse(ok=False, error="El archivo está vacío o no es válido.")
     ctype = (comprobante.content_type or "").lower()
+    if "excel" in ctype or "spreadsheet" in ctype or "xls" in ctype:
+        return EnviarReporteResponse(ok=False, error="El comprobante debe ser PDF o imagen (JPG, PNG). No se permiten archivos Excel.")
+
     if ctype not in ALLOWED_COMPROBANTE_TYPES:
         return EnviarReporteResponse(ok=False, error="Solo se permiten archivos JPG, PNG o PDF.")
     if not _validate_file_magic(content, ctype):
