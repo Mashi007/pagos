@@ -171,6 +171,7 @@ const [probando, setProbando] = useState(false)
       if (data.imap_port === undefined) data.imap_port = '993'
       if (data.imap_user === undefined) data.imap_user = ''
       if (data.imap_password === undefined || data.imap_password === '***') data.imap_password = ''
+      if (data.smtp_password === undefined || data.smtp_password === '***') data.smtp_password = ''
       if (data.imap_use_ssl === undefined) data.imap_use_ssl = 'true'
       if (data.tickets_notify_emails === undefined) data.tickets_notify_emails = ''
 
