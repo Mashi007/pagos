@@ -1,4 +1,4 @@
-"""
+﻿"""
 Envío de correo para notificaciones (tickets, etc.).
 Usa SMTP desde email_config_holder (configuración del dashboard) o desde settings (.env).
 Soporta adjuntos (ej. informe PDF de ticket).

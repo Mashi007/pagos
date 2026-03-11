@@ -170,8 +170,8 @@ const [probando, setProbando] = useState(false)
       if (data.imap_host === undefined) data.imap_host = ''
       if (data.imap_port === undefined) data.imap_port = '993'
       if (data.imap_user === undefined) data.imap_user = ''
-      if (data.imap_password === undefined || data.imap_password === '***') data.imap_password = ''
-      if (data.smtp_password === undefined || data.smtp_password === '***') data.smtp_password = ''
+      const apiSmtpMasked = (data.smtp_password === undefined || data.smtp_password === '***'); const apiImapMasked = (data.imap_password === undefined || data.imap_password === '***');
+      if (apiImapMasked) data.imap_password = ''; if (apiSmtpMasked) data.smtp_password = ''
       if (data.imap_use_ssl === undefined) data.imap_use_ssl = 'true'
       if (data.tickets_notify_emails === undefined) data.tickets_notify_emails = ''
 
@@ -186,7 +186,13 @@ const [probando, setProbando] = useState(false)
         }
       }
 
-      setConfig(data as EmailConfigData)
+      setConfig(prev => {
+        const next = { ...data } as EmailConfigData
+        // Si el API devuelve ***, mantener el valor que el usuario tenia (no borrar la contraseña del campo)
+        if (apiSmtpMasked) next.smtp_password = (prev.smtp_password && prev.smtp_password !== '***') ? prev.smtp_password : '';
+        if (apiImapMasked) next.imap_password = (prev.imap_password && prev.imap_password !== '***') ? prev.imap_password : ''
+        return next
+      })
       setModoPruebas(data.modo_pruebas || 'true')
       setEmailPruebas(data.email_pruebas || '')
       // ✓ Cargar estado activo/inactivo
@@ -346,18 +352,21 @@ const [probando, setProbando] = useState(false)
       setGuardando(true)
 
       // Limpiar espacios de la contraseña
-      const passwordLimpia = config.smtp_password?.replace(/\s/g, '') || ''
+      const passwordLimpia = (config.smtp_password?.replace(/\s/g, '') || '').trim()
+      const smtpPasswordParaEnviar = (passwordLimpia && passwordLimpia !== '***') ? passwordLimpia : undefined
+      const imapVal = (config.imap_password?.replace(/\s/g, '') || '').trim()
+      const imapPasswordParaEnviar = (imapVal && imapVal !== '***') ? imapVal : undefined
 
           const configCompleta = {
             ...config,
-            smtp_password: passwordLimpia,
+            smtp_password: smtpPasswordParaEnviar,
             modo_pruebas: modoPruebas,
             email_pruebas: modoPruebas === 'true' ? emailPruebas : '',
             email_activo: emailActivo ? 'true' : 'false',
             imap_host: config.imap_host || '',
             imap_port: config.imap_port || '993',
             imap_user: config.imap_user || '',
-            imap_password: (config.imap_password?.replace(/\s/g, '') || '') || undefined,
+            imap_password: imapPasswordParaEnviar,
             imap_use_ssl: config.imap_use_ssl ?? 'true',
             tickets_notify_emails: config.tickets_notify_emails ?? '',
           }

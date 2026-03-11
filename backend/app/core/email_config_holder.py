@@ -1,4 +1,4 @@
-"""
+﻿"""
 Holder de configuración de email en tiempo de ejecución.
 Usado por core/email.py para enviar (SMTP) y por tickets para destinos de notificación.
 La API configuracion/email actualiza este holder al guardar; si no se ha guardado, se usan settings (.env).
@@ -16,6 +16,8 @@ from app.core.config import settings
 
 # Config actual: smtp_*, from_email, from_name, tickets_notify_emails (str, emails separados por coma)
 _current: dict[str, Any] = {}
+
+logger = logging.getLogger(__name__)
 
 CLAVE_EMAIL_CONFIG = "email_config"
 CLAVE_NOTIFICACIONES_ENVIOS = "notificaciones_envios"

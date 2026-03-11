@@ -1,4 +1,4 @@
-"""
+﻿"""
 Endpoints de configuracion de email (SMTP + IMAP).
 GET/PUT /configuracion/email/configuracion, GET /configuracion/email/estado,
 POST /configuracion/email/probar, POST /configuracion/email/probar-imap.

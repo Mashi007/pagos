@@ -328,11 +328,6 @@ class EmailConfigService {
   }
 
   async actualizarConfiguracionEmail(config: Partial<EmailConfig>): Promise<any> {
-    console.log('ðŸ“¤ [EmailConfigService] Enviando PUT a:', `${this.baseUrl}/email/configuracion`)
-    console.log('ðŸ“¤ [EmailConfigService] Datos a enviar:', {
-      ...config,
-      smtp_password: config.smtp_password ? '***' : '(vacÃ­o)'
-    })
 
     try {
       // Usar timeout extendido para validaciÃ³n SMTP (puede tardar hasta 10-15 segundos)
@@ -341,10 +336,8 @@ class EmailConfigService {
         config,
         { timeout: 60000 } // 60 segundos para permitir validaciÃ³n SMTP
       )
-      console.log('âœ… [EmailConfigService] Respuesta exitosa:', resultado)
       return resultado
     } catch (error) {
-      console.error('âŒ [EmailConfigService] Error en PUT:', error)
       throw error
     }
   }
@@ -411,18 +404,11 @@ class WhatsAppConfigService {
   }
 
   async actualizarConfiguracionWhatsApp(config: Partial<WhatsAppConfig>): Promise<any> {
-    console.log('ðŸ“¤ [WhatsAppConfigService] Enviando PUT a:', `${this.baseUrl}/whatsapp/configuracion`)
-    console.log('ðŸ“¤ [WhatsAppConfigService] Datos a enviar:', {
-      ...config,
-      access_token: config.access_token ? '***' : '(vacÃ­o)'
-    })
 
     try {
       const resultado = await apiClient.put(`${this.baseUrl}/whatsapp/configuracion`, config)
-      console.log('âœ… [WhatsAppConfigService] Respuesta exitosa:', resultado)
       return resultado
     } catch (error) {
-      console.error('âŒ [WhatsAppConfigService] Error en PUT:', error)
       throw error
     }
   }
