@@ -185,11 +185,11 @@ def get_email_estado(db: Session = Depends(get_db)):
     if not cfg.get("smtp_user"):
         problemas.append("Falta email de usuario")
     if not cfg.get("smtp_password") or cfg.get("smtp_password") == "***":
-        problemas.append("Falta contrasena de aplicacion (Gmail requiere App Password)")
+        problemas.append("Falta contraseña (normal o de aplicación; en cuentas corporativas usa la contraseña normal)")
     mensaje_estado = (
         "Datos completos. Usa 'Enviar Email de Prueba' para verificar la conexion con Gmail."
         if configurada
-        else "Completa SMTP y, si usas Gmail, contrasena de aplicacion."
+        else "Completa SMTP y contraseña (normal o de aplicación)."
     )
     return {
         "configurada": configurada,
@@ -242,7 +242,7 @@ def post_email_probar(payload: ProbarEmailRequest = Body(...), db: Session = Dep
     if not cfg.get("smtp_password") or (cfg.get("smtp_password") or "").strip() in ("", "***"):
         raise HTTPException(
             status_code=400,
-            detail="Falta contrasena SMTP (Gmail requiere Contrasena de aplicacion). Guardala en Configuracion y vuelve a probar.",
+            detail="Falta contraseña SMTP. En cuentas corporativas/Google Workspace usa tu contraseña normal; en Gmail personal puede requerir Contraseña de aplicación.",
         )
 
     destino = _destino_prueba(cfg, payload)
@@ -268,7 +268,7 @@ def post_email_probar(payload: ProbarEmailRequest = Body(...), db: Session = Dep
         logger.warning("Email de prueba fallo: %s", error_msg)
         return {
             "success": False,
-            "mensaje": error_msg or "No se pudo enviar el correo. Revisa servidor SMTP, puerto (587 o 465), TLS y contrasena de aplicacion.",
+            "mensaje": error_msg or "No se pudo enviar el correo. Revisa servidor SMTP, puerto (587 o 465), TLS y contraseña.",
             "email_destino": destino,
         }
     logger.info("Email de prueba enviado a %s", destino)
@@ -319,7 +319,7 @@ def post_email_probar_imap(payload: ProbarImapRequest = Body(...), db: Session =
     if not imap_ok:
         raise HTTPException(
             status_code=400,
-            detail="Configura imap_host, imap_user e imap_password (Contrasena de Aplicacion para Gmail) antes de probar IMAP.",
+            detail="Configura imap_host, imap_user e imap_password antes de probar IMAP (contraseña normal en cuentas corporativas).",
         )
 
     from app.core.email import test_imap_connection

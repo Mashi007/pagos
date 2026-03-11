@@ -217,7 +217,7 @@ export function validarConfiguracionGmail(config: {
   // Validaciones específicas para Gmail/Google (normas SMTP oficiales)
   if (esGmail) {
     if (!config.smtp_password?.trim()) {
-      errores.push('Contraseña de Aplicación es requerida para Gmail/Google Workspace')
+      errores.push('Contraseña es requerida (normal o de aplicación; en cuentas corporativas suele bastar la contraseña normal)')
     }
     const puerto = parseInt(config.smtp_port || '0')
     if (puerto !== 587 && puerto !== 465) {
@@ -267,7 +267,7 @@ export function validarConfiguracionImapGmail(config: {
 
   if (esGmailImap) {
     if (!config.imap_password?.trim()) {
-      errores.push('Contraseña de Aplicación es requerida para Gmail/Google Workspace (IMAP)')
+      errores.push('Contraseña es requerida para IMAP (normal o de aplicación; en cuentas corporativas usa la contraseña normal)')
     }
     const puerto = parseInt(config.imap_port || '0')
     if (puerto !== 993 && puerto !== 143) {

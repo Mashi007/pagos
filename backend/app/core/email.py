@@ -26,13 +26,28 @@ def _sanitize_imap_error(exc: Exception) -> str:
         return "Error de conexión IMAP."
     lower = msg.lower()
     if "username and password not accepted" in lower or "authentication failed" in lower or "login failed" in lower:
-        return "Usuario o contraseña no aceptados. Usa una Contraseña de aplicación (App Password) de Gmail."
+        return "Usuario o contraseña no aceptados. Gmail personal: usa Contraseña de aplicación. Cuentas corporativas/Google Workspace: prueba con tu contraseña normal."
     if "connection refused" in lower or "timed out" in lower or "timeout" in lower:
         return "La conexión al servidor IMAP tardó demasiado o fue rechazada. Revisa host, puerto (993 o 143) y que el servidor no esté en suspensión."
     if "ssl" in lower or "certificate" in lower:
         return "Error SSL/TLS. Prueba puerto 993 con SSL o 143 con STARTTLS."
     return msg[:300] if len(msg) <= 300 else msg[:297] + "..."
 
+
+
+def _sanitize_smtp_error(exc: Exception) -> str:
+    """Mensaje seguro para el usuario al fallar SMTP (sin contraseñas ni rutas)."""
+    msg = str(exc).strip()
+    if not msg:
+        return "Error de conexión SMTP."
+    lower = msg.lower()
+    if "username and password not accepted" in lower or "authentication failed" in lower or "login failed" in lower:
+        return "Usuario o contraseña no aceptados. Gmail personal: usa Contraseña de aplicación. Cuentas corporativas/Google Workspace: prueba con tu contraseña normal."
+    if "connection refused" in lower or "timed out" in lower or "timeout" in lower:
+        return "La conexión al servidor SMTP tardó demasiado o fue rechazada. Revisa host, puerto (587 o 465) y red."
+    if "ssl" in lower or "certificate" in lower:
+        return "Error SSL/TLS. Prueba puerto 587 con TLS o 465 con SSL."
+    return msg[:300] if len(msg) <= 300 else msg[:297] + "..."
 
 def test_imap_connection(
     imap_host: str,
