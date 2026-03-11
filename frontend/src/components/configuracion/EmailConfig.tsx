@@ -923,9 +923,12 @@ const [probando, setProbando] = useState(false)
                       imap_password: config.imap_password || undefined,
                       imap_use_ssl: config.imap_use_ssl ?? undefined,
                     })
-                    setResultadoImap(r)
+                    const mensajeImap = (r.mensaje && (r.mensaje.startsWith("b'") || /AUTHENTICATIONFAILED|Invalid credentials/i.test(r.mensaje)))
+                      ? "Usuario o contraseña no aceptados. Gmail personal: usa Contraseña de aplicación. Cuentas corporativas/Google Workspace: prueba con tu contraseña normal."
+                      : (r.mensaje || "")
+                    setResultadoImap({ ...r, mensaje: r.success ? r.mensaje : mensajeImap })
                     if (r.success) toast.success(r.mensaje || 'Conexión IMAP correcta')
-                    else toast.error(r.mensaje || 'Error probando IMAP')
+                    else toast.error(mensajeImap || 'Error probando IMAP')
                   } catch (err: any) {
                     const msg = err?.response?.data?.detail || err?.message || 'Error probando IMAP'
                     setResultadoImap({ success: false, mensaje: msg })
@@ -941,7 +944,7 @@ const [probando, setProbando] = useState(false)
               </Button>
               {resultadoImap && (
                 <span className={`text-sm ${resultadoImap.success ? 'text-green-600' : 'text-red-600'}`}>
-                  {resultadoImap.success ? 'OK' : resultadoImap.mensaje}
+                  {resultadoImap.success ? 'OK' : (resultadoImap.mensaje?.startsWith("b'") || /AUTHENTICATIONFAILED|Invalid credentials/i.test(resultadoImap.mensaje || '')) ? "Usuario o contraseña no aceptados. Gmail personal: usa Contraseña de aplicación. Cuentas corporativas/Google Workspace: prueba con tu contraseña normal." : resultadoImap.mensaje}
                 </span>
               )}
             </div>
