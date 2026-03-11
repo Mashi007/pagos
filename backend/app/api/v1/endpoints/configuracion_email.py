@@ -239,23 +239,23 @@ def post_email_probar(payload: ProbarEmailRequest = Body(...), db: Session = Dep
     """Envia un correo de prueba por SMTP (usa config persistida en BD). En modo pruebas redirige a email_pruebas."""
     _load_email_config_from_db(db)
     _sync_stub_from_settings()
-    from app.core.email_config_holder import sync_from_db
+    from app.core.email_config_holder import sync_from_db, get_smtp_config
     from app.core.email import send_email
 
     sync_from_db()
-    cfg = _email_config_stub
-    if not all([cfg.get("smtp_host"), (cfg.get("smtp_user") or "").strip()]):
+    cfg_send = get_smtp_config()
+    if not all([cfg_send.get("smtp_host"), (cfg_send.get("smtp_user") or "").strip()]):
         raise HTTPException(
             status_code=400,
             detail="Configura servidor SMTP y usuario antes de enviar la prueba.",
         )
-    if not cfg.get("smtp_password") or (cfg.get("smtp_password") or "").strip() in ("", "***"):
+    if not cfg_send.get("smtp_password") or (cfg_send.get("smtp_password") or "").strip() in ("", "***"):
         raise HTTPException(
             status_code=400,
             detail="Falta contraseña SMTP. En cuentas corporativas/Google Workspace usa tu contraseña normal; en Gmail personal puede requerir Contraseña de aplicación.",
         )
 
-    destino = _destino_prueba(cfg, payload)
+    destino = _destino_prueba(_email_config_stub, payload)
     if not destino or "@" not in destino:
         raise HTTPException(
             status_code=400,
