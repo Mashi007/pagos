@@ -47,6 +47,15 @@ export interface ClienteRetrasadoItem {
   dias_atraso?: number
 }
 
+/** Préstamo con total financiamiento = total abonos (liquidado). */
+export interface LiquidadoItem {
+  prestamo_id: number
+  nombre: string
+  cedula: string
+  total_financiamiento: number | string
+  total_abonos: number | string
+}
+
 export interface ClientesRetrasadosResponse {
   actualizado_en: string
   dias_5: ClienteRetrasadoItem[]
@@ -57,6 +66,7 @@ export interface ClientesRetrasadosResponse {
     cuotas: ClienteRetrasadoItem[]
     total_cuotas: number
   }
+  liquidados?: LiquidadoItem[]
 }
 
 export interface EstadisticasTabItem {
