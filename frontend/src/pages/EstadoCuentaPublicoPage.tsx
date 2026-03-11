@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Consulta PÚBLICA de estado de cuenta por cédula.
  * Flujo: bienvenida → ingresar cédula → bienvenida con nombre → PDF + envío al email.
  * Sin login. Misma lógica y seguridades que rapicredit-cobros (rate limit, validación).
@@ -107,7 +107,7 @@ export default function EstadoCuentaPublicoPage() {
     sessionStorage.setItem(PUBLIC_FLOW_SESSION_KEY + '_path', 'rapicredit-estadocuenta')
   }, [])
 
-  const handleValidarCedula = async () => {
+  const handleSolicitarCodigo = async () => {
     const v = normalizarCedulaParaProcesar(cedula)
     if (!v.valido) {
       showNotification('error', v.error ?? 'Cédula inválida.')
@@ -116,13 +116,13 @@ export default function EstadoCuentaPublicoPage() {
     const cedulaEnviar = v.valorParaEnviar!
     setLoading(true)
     try {
-      const res = await validarCedulaEstadoCuenta(cedulaEnviar)
+      const res = await solicitarCodigo(cedulaEnviar)
       if (!res.ok) {
         showNotification('error', res.error || 'Cédula no válida.')
         return
       }
       setCedula(cedulaEnviar)
-      setNombre(res.nombre ?? '')
+      setMensajeEnvio(res.mensaje ?? 'Si la cedula esta registrada, recibiras un codigo en tu correo.')
       setStep(2)
     } catch (e: unknown) {
       showNotification('error', (e as Error)?.message || 'Error al validar cédula.')
@@ -133,7 +133,30 @@ export default function EstadoCuentaPublicoPage() {
 
 
 
-  // Paso 0: Bienvenida (logo y colores RapiCredit: azul oscuro, naranja/marrón)
+  
+  const handleVerificarCodigo = async () => {
+    if (!codigo.trim()) {
+      showNotification('error', 'Ingrese el codigo recibido por correo.')
+      return
+    }
+    setLoadingPdf(true)
+    try {
+      const res = await verificarCodigo(cedula, codigo.trim())
+      if (!res.ok) {
+        showNotification('error', res.error || 'Codigo invalido o expirado.')
+        return
+      }
+      if (res.pdf_base64) {
+        setPdfDataUrl(`data:application/pdf;base64,${res.pdf_base64}`)
+        setStep(3)
+      }
+    } catch (e: unknown) {
+      showNotification('error', (e as Error)?.message || 'Error al verificar codigo.')
+    } finally {
+      setLoadingPdf(false)
+    }
+  }
+// Paso 0: Bienvenida (logo y colores RapiCredit: azul oscuro, naranja/marrón)
   const LOGO_PUBLIC_SRC = `${(import.meta.env.BASE_URL || '/').replace(/\/?$/, '')}/logos/rapicredit-public.png`
   if (step === 0) {
     return (
@@ -194,7 +217,7 @@ export default function EstadoCuentaPublicoPage() {
                 placeholder="Ej: V12345678, E12345678 o 12345678"
                 value={cedula}
                 onChange={(e) => setCedula(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleValidarCedula()}
+                onKeyDown={(e) => e.key === 'Enter' && handleSolicitarCodigo()}
                 maxLength={20}
               />
               <div className="flex gap-2">
@@ -212,7 +235,40 @@ export default function EstadoCuentaPublicoPage() {
     )
   }
 
-  // Paso 2: Bienvenida con nombre + PDF + mensaje de envío al email
+  // Paso 2: Ingresar codigo
+  if (step === 2) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+        <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">{stepAnnouncement}</div>
+        <div className="w-full max-w-md flex flex-col items-center gap-3">
+          <NotificationBanner notification={notification} onDismiss={dismissNotification} />
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle>Verificacion por correo</CardTitle>
+              <p className="text-sm text-gray-600">{mensajeEnvio || 'Revisa tu correo e ingresa el codigo de 6 digitos.'}</p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Input
+                placeholder="Codigo de 6 digitos"
+                value={codigo}
+                onChange={(e) => setCodigo(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                onKeyDown={(e) => e.key === 'Enter' && handleVerificarCodigo()}
+                maxLength={6}
+              />
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => setStep(1)}>Atras</Button>
+                <Button className="flex-1" onClick={handleVerificarCodigo} disabled={loadingPdf}>
+                  {loadingPdf ? 'Verificando...' : 'Ver estado de cuenta'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
+  // Paso 3: PDF
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center p-4">
       <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">

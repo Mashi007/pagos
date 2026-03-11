@@ -25,7 +25,10 @@ from app.models.conciliacion_temporal import ConciliacionTemporal
 from app.models.cliente_con_error import ClienteConError
 from app.models.prestamo_con_error import PrestamoConError
 from app.models.pagos_gmail_sync import PagosGmailSync, PagosGmailSyncItem
-from app.models.pago_reportado import PagoReportado, PagoReportadoHistorial\nfrom app.models.estado_cuenta_codigo import EstadoCuentaCodigo\n\n__all__ = [
+from app.models.pago_reportado import PagoReportado, PagoReportadoHistorial
+from app.models.estado_cuenta_codigo import EstadoCuentaCodigo
+
+__all__ = [
     "Base", "Cliente", "Prestamo", "Ticket", "Cuota", "CuotaPago", "Pago", "PagosWhatsapp",
     "PlantillaNotificacion", "VariableNotificacion",
     "ConversacionCobranza", "PagosInforme", "MensajeWhatsapp",
@@ -38,5 +41,7 @@ from app.models.pago_reportado import PagoReportado, PagoReportadoHistorial\nfro
     "ClienteConError",
     "ConciliacionTemporal",
     "PagoReportado",
-    "PagoReportadoHistorial",\n    "EstadoCuentaCodigo",\n]
+    "PagoReportadoHistorial",
+    "EstadoCuentaCodigo",
+]
 
