@@ -78,7 +78,7 @@ class VerificarCodigoResponse(BaseModel):
     error: Optional[str] = None
 
 
-CODIGO_EXPIRA_MINUTES = 15
+CODIGO_EXPIRA_MINUTES = 120  # 2 horas
 
 
 def _cedula_lookup(cedula_input: str) -> str:
@@ -250,7 +250,7 @@ def _generar_pdf_estado_cuenta(
         story.append(Spacer(1, 12))
 
     story.append(Paragraph("Cuotas pendientes", styles["Heading2"]))
-    story.append(Paragraph(f"Total pendiente: {total_pendiente:.2f}", styles["Normal"]))
+    story.append(Paragraph(f"Total pendiente: {float(total_pendiente or 0):.2f}", styles["Normal"]))
     if not cuotas_pendientes:
         story.append(Paragraph("No hay cuotas pendientes.", styles["Normal"]))
     else:
@@ -404,7 +404,7 @@ def solicitar_codigo_estado_cuenta(
         send_email(
             [email],
             "Codigo para estado de cuenta - RapiCredit",
-            f"Estimado(a) {nombre},\n\nTu codigo de verificacion es: {codigo}\n\nValido por {CODIGO_EXPIRA_MINUTES} minutos. No lo compartas.\n\nSaludos,\nRapiCredit",
+            f"Estimado(a) {nombre},\n\nTu codigo de verificacion es: {codigo}\n\nValido por 2 horas. No lo compartas.\n\nSaludos,\nRapiCredit",
         )
     except Exception as e:
         logger.warning("No se pudo enviar codigo por email a %s: %s", email, e)
@@ -449,22 +449,29 @@ def verificar_codigo_estado_cuenta(
     if not fila:
         return VerificarCodigoResponse(ok=False, error="Codigo invalido o expirado. Solicite uno nuevo.")
     rec = fila[0] if hasattr(fila, "__getitem__") else fila
+    try:
+        datos = _obtener_datos_pdf(db, cedula_lookup)
+        if not datos:
+            return VerificarCodigoResponse(ok=False, error="Error al generar el documento.")
+        pdf_bytes = _generar_pdf_estado_cuenta(
+            cedula=datos.get("cedula_display") or "",
+            nombre=datos.get("nombre") or "",
+            prestamos=datos.get("prestamos_list") or [],
+            cuotas_pendientes=datos.get("cuotas_pendientes") or [],
+            total_pendiente=float(datos.get("total_pendiente") or 0),
+            fecha_corte=datos.get("fecha_corte") or date.today(),
+            amortizaciones_por_prestamo=datos.get("amortizaciones_por_prestamo") or [],
+        )
+        import base64
+        pdf_b64 = base64.b64encode(pdf_bytes).decode("ascii")
+    except Exception as e:
+        logger.exception("Error generando PDF estado de cuenta: %s", e)
+        return VerificarCodigoResponse(
+            ok=False,
+            error="No se pudo generar el PDF. Intente de nuevo o solicite un nuevo codigo.",
+        )
     rec.usado = True
     db.commit()
-    datos = _obtener_datos_pdf(db, cedula_lookup)
-    if not datos:
-        return VerificarCodigoResponse(ok=False, error="Error al generar el documento.")
-    pdf_bytes = _generar_pdf_estado_cuenta(
-        cedula=datos["cedula_display"],
-        nombre=datos["nombre"],
-        prestamos=datos["prestamos_list"],
-        cuotas_pendientes=datos["cuotas_pendientes"],
-        total_pendiente=datos["total_pendiente"],
-        fecha_corte=datos["fecha_corte"],
-        amortizaciones_por_prestamo=datos["amortizaciones_por_prestamo"],
-    )
-    import base64
-    pdf_b64 = base64.b64encode(pdf_bytes).decode("ascii")
     return VerificarCodigoResponse(ok=True, pdf_base64=pdf_b64)
 
 
