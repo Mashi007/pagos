@@ -7,7 +7,7 @@ import { Input } from '../../components/ui/input'
 import { Textarea } from '../../components/ui/textarea'
 import { Badge } from '../../components/ui/badge'
 import { toast } from 'sonner'
-import { validarEmail, validarConfiguracionGmail, validarConfiguracionImapGmail } from '../../utils/validators'
+import { validarEmail } from '../../utils/validators'
 import { emailConfigService, notificacionService, type Notificacion } from '../../services/notificacionService'
 import { BASE_PATH } from '../../config/env'
 
@@ -337,39 +337,8 @@ const [probando, setProbando] = useState(false)
     return faltantes
   }
 
-  const validarConfiguracion = (): string | null => {
-    const validacion = validarConfiguracionGmail({
-      smtp_host: config.smtp_host,
-      smtp_port: config.smtp_port,
-      smtp_user: config.smtp_user,
-      smtp_password: config.smtp_password,
-      smtp_use_tls: config.smtp_use_tls,
-      from_email: config.from_email
-    })
-    if (!validacion.valido) return validacion.errores.join('. ')
-    const tieneImap = !!(config.imap_host?.trim() || config.imap_user?.trim() || config.imap_password?.trim())
-    if (tieneImap) {
-      const validacionImap = validarConfiguracionImapGmail({
-        imap_host: config.imap_host || 'imap.gmail.com',
-        imap_port: config.imap_port || '993',
-        imap_user: config.imap_user,
-        imap_password: config.imap_password,
-        imap_use_ssl: config.imap_use_ssl ?? 'true',
-      })
-      if (!validacionImap.valido) return `IMAP: ${validacionImap.errores.join('. ')}`
-    }
-    return null
-  }
-
-  // Guardar configuración
+  // Guardar: validación única en backend (PUT); errores 400 se muestran en toast.
   const handleGuardar = async () => {
-    const error = validarConfiguracion()
-    if (error) {
-      setErrorValidacion(error)
-      toast.error(error)
-      return
-    }
-
     setErrorValidacion(null)
 
     try {
