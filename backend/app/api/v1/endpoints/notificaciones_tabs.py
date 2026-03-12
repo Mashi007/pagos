@@ -1,7 +1,7 @@
 ﻿"""
-Endpoints para las pestañas de Notificaciones (previas, día pago, retrasadas, prejudicial, mora 90+).
-Datos reales desde BD (cuotas + clientes). Envío por Email (Configuración > Email) y respeto de
-configuración de envíos (habilitado/CCO por tipo) desde BD (notificaciones_envios). get_db en todos los procesos.
+Endpoints para las pesta�as de Notificaciones (previas, d�a pago, retrasadas, prejudicial, mora 90+).
+Datos reales desde BD (cuotas + clientes). Env�o por Email (Configuraci�n > Email) y respeto de
+configuraci�n de env�os (habilitado/CCO por tipo) desde BD (notificaciones_envios). get_db en todos los procesos.
 """
 from typing import Callable, List
 
@@ -18,13 +18,14 @@ from app.api.v1.endpoints.notificaciones import (
     get_notificaciones_envios_config,
     get_plantilla_asunto_cuerpo,
     build_contexto_cobranza_para_item,
+    _contexto_cobranza_placeholder,
 )
 from app.models.plantilla_notificacion import PlantillaNotificacion
 from app.models.envio_notificacion import EnvioNotificacion
 from app.services.carta_cobranza_pdf import generar_carta_cobranza_pdf
 from app.services.adjunto_fijo_cobranza import get_adjunto_fijo_cobranza_bytes
 
-# Mapeo tipo config (PAGO_5_DIAS_ANTES, etc.) a tipo_tab para estadísticas/rebotados (solo los 5 que muestra la UI)
+# Mapeo tipo config (PAGO_5_DIAS_ANTES, etc.) a tipo_tab para estad�sticas/rebotados (solo los 5 que muestra la UI)
 _CONFIG_TIPO_TO_TAB = {
     "PAGO_5_DIAS_ANTES": "dias_5",
     "PAGO_3_DIAS_ANTES": "dias_3",
@@ -35,7 +36,7 @@ _CONFIG_TIPO_TO_TAB = {
 
 
 def _tipo_tab_para_persistencia(tipo_config: str) -> str | None:
-    """Devuelve tipo_tab (dias_5, hoy, etc.) si se debe persistir para estadísticas/rebotados."""
+    """Devuelve tipo_tab (dias_5, hoy, etc.) si se debe persistir para estad�sticas/rebotados."""
     return _CONFIG_TIPO_TO_TAB.get(tipo_config)
 
 router_previas = APIRouter(dependencies=[Depends(get_current_user)])
@@ -54,18 +55,16 @@ def _enviar_correos_items(
     db,
 ) -> dict:
     """
-    Envía por Email y/o WhatsApp por cada item. Respeta reglas de negocio:
-    - modo_pruebas (desde config): si True y email_pruebas válido, TODOS los emails van SOLO a ese correo (no a clientes).
-    - config_envios (desde BD): si tipo tiene habilitado=false no se envía; CCO del tipo se envía como BCC (copia oculta).
-    - Si tipo tiene plantilla_id en config, se usa asunto/cuerpo de esa plantilla (con variables sustituidas).
-    - Email desde Configuración > Email (holder sincronizado con BD antes de enviar).
-    - WhatsApp desde Configuración > WhatsApp (send_whatsapp_text) cuando el item tiene teléfono.
+    Envia por Email y/o WhatsApp por cada item.
+
+    Modo pruebas: plantilla email + 2 adjuntos PDF para prueba test real; variables como placeholders; correo solo a email_pruebas.
+    Modo produccion: listas por pestana; variables sustituidas por datos reales; envio a clientes.
     """
     sync_email_config_from_db()
     modo_pruebas = config_envios.get("modo_pruebas") is True
     email_pruebas = (config_envios.get("email_pruebas") or "").strip()
     usar_solo_pruebas = modo_pruebas and email_pruebas and "@" in email_pruebas
-    # Si modo prueba activo pero sin correo válido: no enviar a clientes (evitar envío por error)
+    # Si modo prueba activo pero sin correo v�lido: no enviar a clientes (evitar env�o por error)
     bloqueo_pruebas_sin_email = modo_pruebas and not (email_pruebas and "@" in email_pruebas)
 
     enviados = 0
@@ -94,7 +93,7 @@ def _enviar_correos_items(
                 if ctx is not None:
                     item["contexto_cobranza"] = ctx
                     item["_correlativo_envio"] = corr
-        asunto, cuerpo = get_plantilla_asunto_cuerpo(db, plantilla_id, item, asunto_base, cuerpo_base)
+        asunto, cuerpo = get_plantilla_asunto_cuerpo(db, plantilla_id, item, asunto_base, cuerpo_base, modo_pruebas=usar_solo_pruebas)
         # Adjunto PDF para plantilla tipo COBRANZA (carta de cobranza)
         attachments = None
         body_html = None
@@ -107,7 +106,8 @@ def _enviar_correos_items(
                 try:
                     attachments = []
                     if incluir_pdf_anexo:
-                        pdf_bytes = generar_carta_cobranza_pdf(item["contexto_cobranza"], db=db)
+                        ctx_pdf = _contexto_cobranza_placeholder() if usar_solo_pruebas else item["contexto_cobranza"]
+                        pdf_bytes = generar_carta_cobranza_pdf(ctx_pdf, db=db)
                         attachments.append(("Carta_Cobranza.pdf", pdf_bytes))
                     if incluir_adjuntos_fijos:
                         adjunto_fijo = get_adjunto_fijo_cobranza_bytes(db)
@@ -118,7 +118,7 @@ def _enviar_correos_items(
                 except Exception as e:
                     import logging
                     logging.getLogger(__name__).exception("Error generando PDF cobranza: %s", e)
-        # Email: en modo prueba todos van solo a email_pruebas; en producción al correo del cliente (+ CCO si hay)
+        # Email: en modo prueba todos van solo a email_pruebas; en producci�n al correo del cliente (+ CCO si hay)
         if usar_solo_pruebas:
             to_email = [email_pruebas]
             bcc_list = None
@@ -164,7 +164,7 @@ def _enviar_correos_items(
         else:
             if not usar_solo_pruebas:
                 sin_email += 1
-        # WhatsApp (config desde Configuración > WhatsApp; mismo cuerpo que email). En modo prueba no se redirige WhatsApp.
+        # WhatsApp (config desde Configuraci�n > WhatsApp; mismo cuerpo que email). En modo prueba no se redirige WhatsApp.
         telefono = (item.get("telefono") or "").strip()
         if telefono:
             ok, _ = send_whatsapp_text(telefono, cuerpo)
@@ -189,11 +189,11 @@ def _enviar_correos_items(
     }
 
 
-# --- Notificaciones previas (5, 3, 1 días antes) ---
+# --- Notificaciones previas (5, 3, 1 d�as antes) ---
 
 @router_previas.get("")
 def get_notificaciones_previas(estado: str = None, db: Session = Depends(get_db)):
-    """Lista de notificaciones previas: cuotas que vencen en 5, 3 o 1 día. Verifica cédula y email en tabla clientes."""
+    """Lista de notificaciones previas: cuotas que vencen en 5, 3 o 1 d�a. Verifica c�dula y email en tabla clientes."""
     data = get_notificaciones_tabs_data(db)
     items = data["dias_5"] + data["dias_3"] + data["dias_1"]
     return {
@@ -212,29 +212,29 @@ def _tipo_previas(item: dict) -> str:
 
 @router_previas.post("/enviar")
 def enviar_notificaciones_previas(db: Session = Depends(get_db)):
-    """Envía correo a cada cliente en notificaciones previas. Respeta config envíos (habilitado/CCO) desde BD."""
+    """Env�a correo a cada cliente en notificaciones previas. Respeta config env�os (habilitado/CCO) desde BD."""
     config_envios = get_notificaciones_envios_config(db)
     data = get_notificaciones_tabs_data(db)
     items = data["dias_5"] + data["dias_3"] + data["dias_1"]
     asunto = "Recordatorio: cuota por vencer - Rapicredit"
     cuerpo = (
-        "Estimado/a {nombre} (cédula {cedula}),\n\n"
+        "Estimado/a {nombre} (c�dula {cedula}),\n\n"
         "Le recordamos que tiene una cuota por vencer.\n"
         "Fecha de vencimiento: {fecha_vencimiento}\n"
-        "Número de cuota: {numero_cuota}\n"
+        "N�mero de cuota: {numero_cuota}\n"
         "Monto: {monto}\n\n"
         "Por favor realice el pago a tiempo.\n\n"
         "Saludos,\nRapicredit"
     )
     res = _enviar_correos_items(items, asunto, cuerpo, config_envios, _tipo_previas, db)
-    return {"mensaje": "Envío de notificaciones previas finalizado.", **res}
+    return {"mensaje": "Env�o de notificaciones previas finalizado.", **res}
 
 
-# --- Día de pago (vence hoy) ---
+# --- D�a de pago (vence hoy) ---
 
 @router_dia_pago.get("")
 def get_notificaciones_dia_pago(estado: str = None, db: Session = Depends(get_db)):
-    """Lista de notificaciones del día de pago: cuotas que vencen hoy. Email desde tabla clientes."""
+    """Lista de notificaciones del d�a de pago: cuotas que vencen hoy. Email desde tabla clientes."""
     data = get_notificaciones_tabs_data(db)
     items = data["hoy"]
     return {"items": items, "total": len(items)}
@@ -246,29 +246,29 @@ def _tipo_dia_pago(_item: dict) -> str:
 
 @router_dia_pago.post("/enviar")
 def enviar_notificaciones_dia_pago(db: Session = Depends(get_db)):
-    """Envía correo a cada cliente con cuota que vence hoy. Respeta config envíos (habilitado/CCO) desde BD."""
+    """Env�a correo a cada cliente con cuota que vence hoy. Respeta config env�os (habilitado/CCO) desde BD."""
     config_envios = get_notificaciones_envios_config(db)
     data = get_notificaciones_tabs_data(db)
     items = data["hoy"]
     asunto = "Vencimiento hoy: cuota de pago - Rapicredit"
     cuerpo = (
-        "Estimado/a {nombre} (cédula {cedula}),\n\n"
+        "Estimado/a {nombre} (c�dula {cedula}),\n\n"
         "Le informamos que su cuota vence HOY.\n"
         "Fecha de vencimiento: {fecha_vencimiento}\n"
-        "Número de cuota: {numero_cuota}\n"
+        "N�mero de cuota: {numero_cuota}\n"
         "Monto: {monto}\n\n"
         "Por favor realice el pago hoy.\n\n"
         "Saludos,\nRapicredit"
     )
     res = _enviar_correos_items(items, asunto, cuerpo, config_envios, _tipo_dia_pago, db)
-    return {"mensaje": "Envío de notificaciones día de pago finalizado.", **res}
+    return {"mensaje": "Env�o de notificaciones d�a de pago finalizado.", **res}
 
 
-# --- Notificaciones retrasadas (1, 3, 5 días atrasado) ---
+# --- Notificaciones retrasadas (1, 3, 5 d�as atrasado) ---
 
 @router_retrasadas.get("")
 def get_notificaciones_retrasadas(estado: str = None, db: Session = Depends(get_db)):
-    """Lista de notificaciones retrasadas: cuotas con 1, 3 o 5 días de atraso. Email desde tabla clientes."""
+    """Lista de notificaciones retrasadas: cuotas con 1, 3 o 5 d�as de atraso. Email desde tabla clientes."""
     data = get_notificaciones_tabs_data(db)
     items = data["dias_1_retraso"] + data["dias_3_retraso"] + data["dias_5_retraso"]
     return {
@@ -287,29 +287,29 @@ def _tipo_retrasadas(item: dict) -> str:
 
 @router_retrasadas.post("/enviar")
 def enviar_notificaciones_retrasadas(db: Session = Depends(get_db)):
-    """Envía correo a cada cliente con cuota retrasada. Respeta config envíos (habilitado/CCO) desde BD."""
+    """Env�a correo a cada cliente con cuota retrasada. Respeta config env�os (habilitado/CCO) desde BD."""
     config_envios = get_notificaciones_envios_config(db)
     data = get_notificaciones_tabs_data(db)
     items = data["dias_1_retraso"] + data["dias_3_retraso"] + data["dias_5_retraso"]
     asunto = "Cuenta con cuota atrasada - Rapicredit"
     cuerpo = (
-        "Estimado/a {nombre} (cédula {cedula}),\n\n"
+        "Estimado/a {nombre} (c�dula {cedula}),\n\n"
         "Le recordamos que tiene una cuota en mora.\n"
         "Fecha de vencimiento: {fecha_vencimiento}\n"
-        "Número de cuota: {numero_cuota}\n"
+        "N�mero de cuota: {numero_cuota}\n"
         "Monto: {monto}\n\n"
         "Por favor regularice su pago lo antes posible.\n\n"
         "Saludos,\nRapicredit"
     )
     res = _enviar_correos_items(items, asunto, cuerpo, config_envios, _tipo_retrasadas, db)
-    return {"mensaje": "Envío de notificaciones retrasadas finalizado.", **res}
+    return {"mensaje": "Env�o de notificaciones retrasadas finalizado.", **res}
 
 
 # --- Notificaciones prejudiciales (3+ cuotas atrasadas) ---
 
 @router_prejudicial.get("")
 def get_notificaciones_prejudicial(estado: str = None, db: Session = Depends(get_db)):
-    """Lista de clientes con 3 o más cuotas atrasadas (prejudicial). Email desde tabla clientes."""
+    """Lista de clientes con 3 o m�s cuotas atrasadas (prejudicial). Email desde tabla clientes."""
     data = get_notificaciones_tabs_data(db)
     items = data["prejudicial"]
     return {"items": items, "total": len(items)}
@@ -321,29 +321,29 @@ def _tipo_prejudicial(_item: dict) -> str:
 
 @router_prejudicial.post("/enviar")
 def enviar_notificaciones_prejudicial(db: Session = Depends(get_db)):
-    """Envía correo a cada cliente en situación prejudicial. Respeta config envíos (habilitado/CCO) desde BD."""
+    """Env�a correo a cada cliente en situaci�n prejudicial. Respeta config env�os (habilitado/CCO) desde BD."""
     config_envios = get_notificaciones_envios_config(db)
     data = get_notificaciones_tabs_data(db)
     items = data["prejudicial"]
     asunto = "Aviso prejudicial - Rapicredit"
     cuerpo = (
-        "Estimado/a {nombre} (cédula {cedula}),\n\n"
+        "Estimado/a {nombre} (c�dula {cedula}),\n\n"
         "Le informamos que su cuenta presenta varias cuotas en mora.\n"
         "Fecha de vencimiento de referencia: {fecha_vencimiento}\n"
         "Cuota de referencia: {numero_cuota}\n"
         "Monto de referencia: {monto}\n\n"
-        "Por favor contacte a la entidad para regularizar su situación.\n\n"
+        "Por favor contacte a la entidad para regularizar su situaci�n.\n\n"
         "Saludos,\nRapicredit"
     )
     res = _enviar_correos_items(items, asunto, cuerpo, config_envios, _tipo_prejudicial, db)
-    return {"mensaje": "Envío de notificaciones prejudiciales finalizado.", **res}
+    return {"mensaje": "Env�o de notificaciones prejudiciales finalizado.", **res}
 
 
-# --- Mora 90+ días (moroso: cuotas con 90 o más días de atraso) ---
+# --- Mora 90+ d�as (moroso: cuotas con 90 o m�s d�as de atraso) ---
 
 @router_mora_90.get("")
 def get_notificaciones_mora_90(estado: str = None, db: Session = Depends(get_db)):
-    """Lista de cuotas con 90 o más días de atraso (moroso). Email desde tabla clientes."""
+    """Lista de cuotas con 90 o m�s d�as de atraso (moroso). Email desde tabla clientes."""
     data = get_notificaciones_tabs_data(db)
     items = data["mora_90"]
     return {"items": items, "total": len(items)}
@@ -355,29 +355,29 @@ def _tipo_mora_90(_item: dict) -> str:
 
 @router_mora_90.post("/enviar")
 def enviar_notificaciones_mora_90(db: Session = Depends(get_db)):
-    """Envía correo a cada cliente con cuota 90+ días en mora (moroso). Respeta config envíos (habilitado/CCO) desde BD."""
+    """Env�a correo a cada cliente con cuota 90+ d�as en mora (moroso). Respeta config env�os (habilitado/CCO) desde BD."""
     config_envios = get_notificaciones_envios_config(db)
     data = get_notificaciones_tabs_data(db)
     items = data["mora_90"]
-    asunto = "Aviso: cuota en mora 90+ días - Rapicredit"
+    asunto = "Aviso: cuota en mora 90+ d�as - Rapicredit"
     cuerpo = (
-        "Estimado/a {nombre} (cédula {cedula}),\n\n"
-        "Le informamos que tiene una cuota con más de 90 días de atraso (estado moroso).\n"
+        "Estimado/a {nombre} (c�dula {cedula}),\n\n"
+        "Le informamos que tiene una cuota con m�s de 90 d�as de atraso (estado moroso).\n"
         "Fecha de vencimiento: {fecha_vencimiento}\n"
-        "Número de cuota: {numero_cuota}\n"
+        "N�mero de cuota: {numero_cuota}\n"
         "Monto: {monto}\n\n"
         "Por favor regularice su pago lo antes posible.\n\n"
         "Saludos,\nRapicredit"
     )
     res = _enviar_correos_items(items, asunto, cuerpo, config_envios, _tipo_mora_90, db)
-    return {"mensaje": "Envío de notificaciones mora 90+ finalizado.", **res}
+    return {"mensaje": "Env�o de notificaciones mora 90+ finalizado.", **res}
 
 
 def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
     """
-    Ejecuta el envío de todas las notificaciones (previas, día pago, retrasadas, prejudicial, mora 90).
+    Ejecuta el env�o de todas las notificaciones (previas, d�a pago, retrasadas, prejudicial, mora 90).
     Pensado para ser llamado por el scheduler (p. ej. diario a las 23:00).
-    Respeta configuración de envíos (habilitado/CCO por tipo) desde BD.
+    Respeta configuraci�n de env�os (habilitado/CCO por tipo) desde BD.
     """
     config_envios = get_notificaciones_envios_config(db)
     data = get_notificaciones_tabs_data(db)
@@ -389,14 +389,14 @@ def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
     total_whatsapp_fail = 0
     detalles = {}
 
-    # Previas (5, 3, 1 días antes)
+    # Previas (5, 3, 1 d�as antes)
     items_previas = data["dias_5"] + data["dias_3"] + data["dias_1"]
     asunto_p = "Recordatorio: cuota por vencer - Rapicredit"
     cuerpo_p = (
-        "Estimado/a {nombre} (cédula {cedula}),\n\n"
+        "Estimado/a {nombre} (c�dula {cedula}),\n\n"
         "Le recordamos que tiene una cuota por vencer.\n"
         "Fecha de vencimiento: {fecha_vencimiento}\n"
-        "Número de cuota: {numero_cuota}\n"
+        "N�mero de cuota: {numero_cuota}\n"
         "Monto: {monto}\n\n"
         "Por favor realice el pago a tiempo.\n\n"
         "Saludos,\nRapicredit"
@@ -410,14 +410,14 @@ def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
     total_whatsapp_fail += r.get("fallidos_whatsapp", 0)
     detalles["previas"] = r
 
-    # Día de pago (vence hoy)
+    # D�a de pago (vence hoy)
     items_hoy = data["hoy"]
     asunto_h = "Vencimiento hoy: cuota de pago - Rapicredit"
     cuerpo_h = (
-        "Estimado/a {nombre} (cédula {cedula}),\n\n"
+        "Estimado/a {nombre} (c�dula {cedula}),\n\n"
         "Le informamos que su cuota vence HOY.\n"
         "Fecha de vencimiento: {fecha_vencimiento}\n"
-        "Número de cuota: {numero_cuota}\n"
+        "N�mero de cuota: {numero_cuota}\n"
         "Monto: {monto}\n\n"
         "Por favor realice el pago hoy.\n\n"
         "Saludos,\nRapicredit"
@@ -431,14 +431,14 @@ def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
     total_whatsapp_fail += r.get("fallidos_whatsapp", 0)
     detalles["dia_pago"] = r
 
-    # Retrasadas (1, 3, 5 días atraso)
+    # Retrasadas (1, 3, 5 d�as atraso)
     items_retrasadas = data["dias_1_retraso"] + data["dias_3_retraso"] + data["dias_5_retraso"]
     asunto_r = "Cuenta con cuota atrasada - Rapicredit"
     cuerpo_r = (
-        "Estimado/a {nombre} (cédula {cedula}),\n\n"
+        "Estimado/a {nombre} (c�dula {cedula}),\n\n"
         "Le recordamos que tiene una cuota en mora.\n"
         "Fecha de vencimiento: {fecha_vencimiento}\n"
-        "Número de cuota: {numero_cuota}\n"
+        "N�mero de cuota: {numero_cuota}\n"
         "Monto: {monto}\n\n"
         "Por favor regularice su pago lo antes posible.\n\n"
         "Saludos,\nRapicredit"
@@ -456,12 +456,12 @@ def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
     items_prejudicial = data["prejudicial"]
     asunto_pre = "Aviso prejudicial - Rapicredit"
     cuerpo_pre = (
-        "Estimado/a {nombre} (cédula {cedula}),\n\n"
+        "Estimado/a {nombre} (c�dula {cedula}),\n\n"
         "Le informamos que su cuenta presenta varias cuotas en mora.\n"
         "Fecha de vencimiento de referencia: {fecha_vencimiento}\n"
         "Cuota de referencia: {numero_cuota}\n"
         "Monto de referencia: {monto}\n\n"
-        "Por favor contacte a la entidad para regularizar su situación.\n\n"
+        "Por favor contacte a la entidad para regularizar su situaci�n.\n\n"
         "Saludos,\nRapicredit"
     )
     r = _enviar_correos_items(items_prejudicial, asunto_pre, cuerpo_pre, config_envios, _tipo_prejudicial, db)
@@ -475,12 +475,12 @@ def ejecutar_envio_todas_notificaciones(db: Session) -> dict:
 
     # Mora 90+
     items_mora90 = data["mora_90"]
-    asunto_m = "Aviso: cuota en mora 90+ días - Rapicredit"
+    asunto_m = "Aviso: cuota en mora 90+ d�as - Rapicredit"
     cuerpo_m = (
-        "Estimado/a {nombre} (cédula {cedula}),\n\n"
-        "Le informamos que tiene una cuota con más de 90 días de atraso (estado moroso).\n"
+        "Estimado/a {nombre} (c�dula {cedula}),\n\n"
+        "Le informamos que tiene una cuota con m�s de 90 d�as de atraso (estado moroso).\n"
         "Fecha de vencimiento: {fecha_vencimiento}\n"
-        "Número de cuota: {numero_cuota}\n"
+        "N�mero de cuota: {numero_cuota}\n"
         "Monto: {monto}\n\n"
         "Por favor regularice su pago lo antes posible.\n\n"
         "Saludos,\nRapicredit"

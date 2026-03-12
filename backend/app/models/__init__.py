@@ -28,6 +28,8 @@ from app.models.pagos_gmail_sync import PagosGmailSync, PagosGmailSyncItem
 from app.models.pago_reportado import PagoReportado, PagoReportadoHistorial
 from app.models.estado_cuenta_codigo import EstadoCuentaCodigo
 from app.models.envio_notificacion import EnvioNotificacion
+from app.models.crm_campana import CampanaCrm
+from app.models.crm_campana_envio import CampanaEnvioCrm
 
 __all__ = [
     "Base", "Cliente", "Prestamo", "Ticket", "Cuota", "CuotaPago", "Pago", "PagosWhatsapp",
@@ -45,5 +47,7 @@ __all__ = [
     "PagoReportadoHistorial",
     "EstadoCuentaCodigo",
     "EnvioNotificacion",
+    "CampanaCrm",
+    "CampanaEnvioCrm",
 ]
 

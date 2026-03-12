@@ -2,7 +2,7 @@
 API v1
 """
 from fastapi import APIRouter
-from app.api.v1.endpoints import whatsapp, auth, configuracion, configuracion_informe_pagos, pagos, pagos_gmail, pagos_con_errores, prestamos, notificaciones, notificaciones_tabs, dashboard, auditoria, clientes, tickets, comunicaciones, validadores, usuarios, modelos_vehiculos, analistas, concesionarios, ai_training, revision_manual, health, cobros_publico, cobros, estado_cuenta_publico
+from app.api.v1.endpoints import whatsapp, auth, configuracion, configuracion_informe_pagos, pagos, pagos_gmail, pagos_con_errores, prestamos, notificaciones, notificaciones_tabs, dashboard, auditoria, clientes, tickets, crm_campanas, comunicaciones, validadores, usuarios, modelos_vehiculos, analistas, concesionarios, ai_training, revision_manual, health, cobros_publico, cobros, estado_cuenta_publico
 from app.api.v1.endpoints.dashboard import kpis
 from app.api.v1.endpoints.reportes import router as reportes_router
 
@@ -167,6 +167,13 @@ api_router.include_router(
     tags=["tickets"],
 )
 
+
+# CRM Campañas (envío por lotes a correos de tabla clientes)
+api_router.include_router(
+    crm_campanas.router,
+    prefix="/crm/campanas",
+    tags=["crm-campanas"],
+)
 # Comunicaciones (WhatsApp/Email). Config en configuracion?tab=whatsapp. Imágenes WhatsApp → pagos_whatsapp.
 api_router.include_router(
     comunicaciones.router,
