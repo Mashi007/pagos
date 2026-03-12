@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { campanasService, type CampanaCrm, type ListCampanasResponse } from '../services/campanasService'
 import { Button } from '../components/ui/button'
-import { Mail, SendHorizontal, Eye, Plus, RefreshCw } from 'lucide-react'
+import { Mail, Play, Eye, Plus, RefreshCw } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export function CampanasPage() {
@@ -133,7 +133,7 @@ export function CampanasPage() {
                       )}
                       {c.estado === 'borrador' && c.total_destinatarios > 0 && (
                         <Button size="sm" onClick={() => handleIniciarEnvio(c)}>
-                          <SendHorizontal className="h-4 w-4 mr-1" /> Iniciar envÃ­o
+                          <Play className="h-4 w-4 mr-1" /> Iniciar envÃ­o
                       </Button>
                       )}
                     </td>
