@@ -1,4 +1,4 @@
-import { apiClient } from '../services/api'
+﻿import { apiClient } from '../services/api'
 
 export interface NotificacionPlantilla {
   id: number
@@ -229,9 +229,13 @@ class NotificacionService {
   }
 
   /** Comprueba si la ruta del adjunto fijo existe en el servidor. */
-  async verificarAdjuntoFijoCobranza(): Promise<{ existe: boolean; mensaje: string }> {
-    return await apiClient.get(`${this.baseUrl}/adjunto-fijo-cobranza/verificar`)
-  }
+  async verificarAdjuntoFijoCobranza(): Promise<{ existe: boolean; mensaje: string }> { return await apiClient.get(`${this.baseUrl}/adjunto-fijo-cobranza/verificar`) }
+
+  async getAdjuntosFijosCobranza(): Promise<Record<string, Array<{ id: string; nombre_archivo: string; ruta: string }>>> { return await apiClient.get(`${this.baseUrl}/adjuntos-fijos-cobranza`) }
+
+  async uploadAdjuntoFijoCobranza(file: File, tipoCaso: string): Promise<{ id: string; nombre_archivo: string; tipo_caso: string }> { const form = new FormData(); form.append('file', file); return await apiClient.post(`${this.baseUrl}/adjuntos-fijos-cobranza/upload?tipo_caso=${encodeURIComponent(tipoCaso)}`, form, { headers: { 'Content-Type': 'multipart/form-data' } }); }
+
+  async deleteAdjuntoFijoCobranza(id: string): Promise<void> { await apiClient.delete(`${this.baseUrl}/adjuntos-fijos-cobranza/${encodeURIComponent(id)}`); }
 
   /** Vista previa del PDF de carta de cobranza (datos de ejemplo). Devuelve el blob del PDF. */
   async getPlantillaPdfCobranzaPreview(): Promise<Blob> {

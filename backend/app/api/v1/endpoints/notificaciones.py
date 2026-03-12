@@ -1,4 +1,4 @@
-"""
+﻿"""
 Endpoints de notificaciones a clientes retrasados.
 Datos reales desde BD: cuotas (fecha_vencimiento, pagado) y clientes.
 Reglas: 5 pestañas por días hasta vencimiento y mora 61+.
@@ -6,11 +6,13 @@ Configuración de envíos (habilitado/CCO por tipo) desde tabla configuracion (n
 CRUD de plantillas en plantillas_notificacion; envío puede usar plantilla por tipo vía plantilla_id en config.
 """
 import json
+import os
+import uuid
 import logging
 from datetime import date
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Body, Query
+from fastapi import APIRouter, Depends, HTTPException, Body, Query, File, UploadFile
 from fastapi.responses import Response
 
 from app.core.deps import get_current_user
@@ -510,6 +512,123 @@ def update_adjunto_fijo_cobranza(payload: dict = Body(...), db: Session = Depend
         db.rollback()
         logger.exception("update_adjunto_fijo_cobranza: %s", e)
         raise HTTPException(status_code=500, detail="Error al guardar la configuración del adjunto fijo")
+
+
+@router.get("/adjuntos-fijos-cobranza")
+def get_adjuntos_fijos_cobranza(db: Session = Depends(get_db)):
+    """Lista de documentos PDF anexos por caso (dias_5, dias_3, dias_1, hoy, mora_90)."""
+    from app.services.adjunto_fijo_cobranza import _get_adjuntos_por_caso_raw
+    return _get_adjuntos_por_caso_raw(db)
+
+
+@router.post("/adjuntos-fijos-cobranza/upload")
+def upload_adjunto_fijo_cobranza(
+    tipo_caso: str = Query(..., description="Caso: dias_5, dias_3, dias_1, hoy, mora_90"),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    """Sube un PDF y lo asocia al caso indicado. Solo se aceptan archivos PDF."""
+    from app.services.adjunto_fijo_cobranza import (
+        TIPOS_CASO_VALIDOS,
+        CLAVE_ADJUNTOS_FIJOS_POR_CASO,
+        _get_adjuntos_por_caso_raw,
+        _get_base_dir_adjuntos,
+    )
+    if tipo_caso not in TIPOS_CASO_VALIDOS:
+        raise HTTPException(status_code=400, detail="tipo_caso debe ser uno de: dias_5, dias_3, dias_1, hoy, mora_90")
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Solo se permiten documentos PDF")
+    content_type = file.content_type or ""
+    if "pdf" not in content_type.lower():
+        raise HTTPException(status_code=400, detail="El archivo debe ser PDF (content-type application/pdf)")
+    try:
+        data = file.file.read()
+    except Exception as e:
+        logger.exception("Error leyendo archivo subido: %s", e)
+        raise HTTPException(status_code=500, detail="Error al leer el archivo")
+    if not data[:5] == b"%PDF-":
+        raise HTTPException(status_code=400, detail="El archivo no parece ser un PDF valido")
+    base_dir = _get_base_dir_adjuntos()
+    caso_dir = os.path.join(base_dir, tipo_caso)
+    os.makedirs(caso_dir, exist_ok=True)
+    doc_id = str(uuid.uuid4())
+    safe_name = "".join(c for c in file.filename if c.isalnum() or c in "._- ") or "documento"
+    ext = ".pdf"
+    rel_ruta = f"{tipo_caso}/{doc_id}{ext}"
+    abs_path = os.path.join(base_dir, rel_ruta)
+    try:
+        with open(abs_path, "wb") as f:
+            f.write(data)
+    except Exception as e:
+        logger.exception("Error guardando PDF: %s", e)
+        raise HTTPException(status_code=500, detail="Error al guardar el archivo")
+    nombre_archivo = (safe_name + ext) if not safe_name.endswith(".pdf") else safe_name
+    entry = {"id": doc_id, "nombre_archivo": nombre_archivo, "ruta": rel_ruta}
+    config = _get_adjuntos_por_caso_raw(db)
+    config.setdefault(tipo_caso, [])
+    config[tipo_caso].append(entry)
+    row = db.get(Configuracion, CLAVE_ADJUNTOS_FIJOS_POR_CASO)
+    if not row:
+        row = Configuracion(clave=CLAVE_ADJUNTOS_FIJOS_POR_CASO, valor=json.dumps(config))
+        db.add(row)
+    else:
+        row.valor = json.dumps(config)
+    try:
+        db.commit()
+        db.refresh(row)
+    except Exception as e:
+        db.rollback()
+        if os.path.isfile(abs_path):
+            try:
+                os.remove(abs_path)
+            except Exception:
+                pass
+        logger.exception("Error guardando config: %s", e)
+        raise HTTPException(status_code=500, detail="Error al guardar la configuracion")
+    return {"id": doc_id, "nombre_archivo": nombre_archivo, "tipo_caso": tipo_caso}
+
+
+@router.delete("/adjuntos-fijos-cobranza/{doc_id}")
+def delete_adjunto_fijo_cobranza(doc_id: str, db: Session = Depends(get_db)):
+    """Elimina un documento anexo por su id."""
+    from app.services.adjunto_fijo_cobranza import (
+        CLAVE_ADJUNTOS_FIJOS_POR_CASO,
+        _get_adjuntos_por_caso_raw,
+        _get_base_dir_adjuntos,
+    )
+    config = _get_adjuntos_por_caso_raw(db)
+    found = False
+    for caso, lista in list(config.items()):
+        for i, item in enumerate(lista):
+            if isinstance(item, dict) and item.get("id") == doc_id:
+                ruta_rel = (item.get("ruta") or "").strip()
+                lista.pop(i)
+                found = True
+                base_dir = _get_base_dir_adjuntos()
+                path = os.path.normpath(os.path.join(base_dir, ruta_rel))
+                if path.startswith(base_dir) and os.path.isfile(path):
+                    try:
+                        os.remove(path)
+                    except Exception as e:
+                        logger.warning("Error eliminando archivo %s: %s", path, e)
+                break
+        if found:
+            break
+    if not found:
+        raise HTTPException(status_code=404, detail="Documento no encontrado")
+    row = db.get(Configuracion, CLAVE_ADJUNTOS_FIJOS_POR_CASO)
+    if not row:
+        raise HTTPException(status_code=404, detail="Documento no encontrado")
+    row.valor = json.dumps(config)
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.exception("delete_adjunto_fijo_cobranza: %s", e)
+        raise HTTPException(status_code=500, detail="Error al eliminar")
+    return {"message": "Eliminado"}
+
+
 
 
 @router.get("/plantillas/{plantilla_id}/export")

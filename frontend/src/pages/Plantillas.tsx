@@ -49,7 +49,7 @@ export function Plantillas() {
       <div className="flex items-center justify-between">
         <div className="flex-1">
           <h1 className="text-xl font-bold">Plantillas de notificaciones</h1>
-          <p className="text-sm text-gray-500">Plantilla de email, plantilla PDF anexo y documentos PDF fijos que se env\u00edan con la notificaci\u00f3n</p>
+          <p className="text-sm text-gray-500">Plantilla de email, plantilla PDF anexo y documentos PDF fijos que se envían con la notificación</p>
           <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50/50 text-sm text-gray-700 overflow-hidden">
             <button
               type="button"
@@ -59,7 +59,7 @@ export function Plantillas() {
             >
               <span className="flex items-center gap-1.5">
                 <CheckCircle2 className="h-4 w-4 text-blue-600 shrink-0" />
-                Resumen de configuraci\u00f3n
+                Resumen de configuración
               </span>
               {resumenAbierto ? <ChevronUp className="h-4 w-4 shrink-0" /> : <ChevronDown className="h-4 w-4 shrink-0" />}
             </button>
@@ -67,9 +67,9 @@ export function Plantillas() {
               <div className="px-3 pb-3 pt-0 border-t border-blue-100">
                 <p className="text-gray-600 mt-2 md:hidden">Al enviar el correo se usa: 1) Cuerpo email. 2) PDF variable (carta cobranza). 3) PDF(s) fijos opcionales.</p>
                 <ol className="list-decimal list-inside space-y-0.5 text-gray-600 mt-2 hidden md:block">
-                  <li><strong>Plantilla cuerpo email</strong> â€” Asunto y cuerpo del correo con variables (nombre, c\u00e9dula, fecha_vencimiento, etc.).</li>
-                  <li><strong>Plantilla anexo PDF</strong> â€” Carta de cobranza en PDF generada con variables (monto_total_usd, num_cuotas, fechas_str). Se anexa al email.</li>
-                  <li><strong>Documentos PDF anexos</strong> â€” Hasta 2 PDFs fijos que se cargan aqu\u00ed y se anexan siempre a la notificaci\u00f3n (junto con el PDF variable).</li>
+                  <li><strong>Plantilla cuerpo email</strong> - Asunto y cuerpo del correo con variables (nombre, cédula, fecha_vencimiento, etc.).</li>
+                  <li><strong>Plantilla anexo PDF</strong> - Carta de cobranza en PDF generada con variables (monto_total_usd, num_cuotas, fechas_str). Se anexa al email.</li>
+                  <li><strong>Documentos PDF anexos</strong> - Hasta 2 PDFs fijos que se cargan aquí y se anexan siempre a la notificación (junto con el PDF variable).</li>
                 </ol>
               </div>
             )}
@@ -82,7 +82,7 @@ export function Plantillas() {
           className="flex items-center gap-2"
         >
           <ChevronLeft className="h-4 w-4" />
-          Otras secciones de Configuraci\u00f3n
+          Otras secciones de Configuración
         </Button>
       </div>
 

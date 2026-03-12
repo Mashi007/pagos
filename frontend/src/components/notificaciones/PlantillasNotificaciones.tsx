@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import { notificacionService, NotificacionPlantilla, NotificacionVariable } from '../../services/notificacionService'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/ta
 import { Badge } from '../../components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 import { toast } from 'sonner'
-import { Upload, Search, FileText, Database, ChevronDown, ChevronUp, Edit2, Trash2, Calendar, AlertCircle } from 'lucide-react'
+import { Upload, Search, FileText, Database, ChevronDown, ChevronUp, Edit2, Trash2, Calendar, AlertCircle, Eye } from 'lucide-react'
 import { EditorPlantillaHTML } from './EditorPlantillaHTML'
 
 type EditorFocus = 'asunto' | 'encabezado' | 'cuerpo' | 'firma'
@@ -880,6 +880,40 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
   }, [plantillasFiltradas])
 
 
+  const handleVistaPreviaHtml = () => {
+    const ejemplo: Record<string, string> = {
+      nombre: 'Juan Pérez',
+      cedula: 'V-12345678',
+      fecha_vencimiento: '15/03/2025',
+      numero_cuota: '3',
+      monto: '150.00',
+      dias_atraso: '2',
+      'CLIENTES.TRATAMIENTO': 'Sr.',
+      'CLIENTES.NOMBRE_COMPLETO': 'Juan Pérez',
+      'PRESTAMOS.ID': 'CR-2024-001',
+      FECHA_CARTA: new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+      LOGO_URL: (typeof window !== 'undefined' && window.location.origin) ? `${window.location.origin}/logos/rapicredit-public.png` : '',
+    }
+    let html = cuerpoFinal || ''
+    if (!html.trim()) {
+      html = cuerpo || encabezado || firma || '<p>Sin contenido para previsualizar.</p>'
+    }
+    Object.entries(ejemplo).forEach(([key, val]) => {
+      const token = `{{${key}}}`
+      html = html.split(token).join(val)
+    })
+    html = html.replace(/\{\{#CUOTAS\.VENCIMIENTOS\}\}[\s\S]*?\{\{\/CUOTAS\.VENCIMIENTOS\}\}/g, '<p>Cuota N° 1 - Vencimiento: 10/01/2025 - Monto: 150.00</p><p>Cuota N° 2 - Vencimiento: 10/02/2025 - Monto: 150.00</p>')
+    if (!html.trim().startsWith('<')) {
+      html = `<div style="white-space: pre-wrap; font-family: sans-serif; padding: 16px;">${html.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>`
+    }
+    const doc = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Vista previa</title></head><body style="margin:0; padding:12px; font-family: sans-serif;">${html}</body></html>`
+    const blob = new Blob([doc], { type: 'text/html;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank', 'noopener,noreferrer')
+    setTimeout(() => URL.revokeObjectURL(url), 60000)
+    toast.success('Vista previa abierta en nueva pestaña')
+  }
+
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
       <TabsList className="grid w-full grid-cols-3">
@@ -1351,6 +1385,17 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
                 </Button>
               </>
             )}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleVistaPreviaHtml}
+              title="Ver cómo quedará el cuerpo del email con datos de ejemplo"
+            >
+              <Eye className="h-4 w-4 mr-2" />
+              Vista previa (datos de ejemplo)
+            </Button>
+
+                      
           </div>
         </Card>
       </TabsContent>
