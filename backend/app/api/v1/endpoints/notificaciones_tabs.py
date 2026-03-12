@@ -161,6 +161,7 @@ def _enviar_correos_items(
                 registros_envio.append(
                     EnvioNotificacion(
                         tipo_tab=tipo_tab,
+                        asunto=(asunto or "")[:500] if asunto else None,
                         email=to_email[0],
                         nombre=(item.get("nombre") or "")[:255],
                         cedula=(item.get("cedula") or "")[:50],

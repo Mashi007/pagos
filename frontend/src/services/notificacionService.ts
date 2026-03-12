@@ -1,4 +1,4 @@
-﻿import { apiClient } from '../services/api'
+import { apiClient } from '../services/api'
 
 export interface NotificacionPlantilla {
   id: number
@@ -62,6 +62,8 @@ export interface ClientesRetrasadosResponse {
   dias_3: ClienteRetrasadoItem[]
   dias_1: ClienteRetrasadoItem[]
   hoy: ClienteRetrasadoItem[]
+  dias_5_atraso?: ClienteRetrasadoItem[]
+  dias_30_atraso?: ClienteRetrasadoItem[]
   mora_90: {
     cuotas: ClienteRetrasadoItem[]
     total_cuotas: number

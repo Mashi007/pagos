@@ -29,13 +29,13 @@ export type ConfigEnvioItem = {
 export type ConfigEnvioCompleta = Record<string, ConfigEnvioItem | boolean | string | string[]>
 
 const CRITERIOS: { tipo: string; label: string; categoria: string; color: 'blue' | 'green' | 'orange' | 'red' | 'slate' }[] = [
-  { tipo: 'PAGO_5_DIAS_ANTES', label: 'Faltan 5 días', categoria: 'Notificación previa', color: 'blue' },
-  { tipo: 'PAGO_3_DIAS_ANTES', label: 'Faltan 3 días', categoria: 'Notificación previa', color: 'blue' },
-  { tipo: 'PAGO_1_DIA_ANTES', label: 'Falta 1 día', categoria: 'Notificación previa', color: 'blue' },
+  { tipo: 'PAGO_5_DIAS_ANTES', label: 'Faltan 5', categoria: 'Notificación previa', color: 'blue' },
+  { tipo: 'PAGO_3_DIAS_ANTES', label: 'Faltan 3', categoria: 'Notificación previa', color: 'blue' },
+  { tipo: 'PAGO_1_DIA_ANTES', label: 'Falta 1', categoria: 'Notificación previa', color: 'blue' },
   { tipo: 'PAGO_DIA_0', label: 'Hoy vence', categoria: 'Día de pago', color: 'green' },
   { tipo: 'PAGO_1_DIA_ATRASADO', label: '1 día de retraso', categoria: 'Retrasada', color: 'orange' },
   { tipo: 'PAGO_3_DIAS_ATRASADO', label: '3 días de retraso', categoria: 'Retrasada', color: 'orange' },
-  { tipo: 'PAGO_5_DIAS_ATRASADO', label: '5 días de retraso', categoria: 'Retrasada', color: 'orange' },
+  { tipo: 'PAGO_5_DIAS_ATRASADO', label: '5 días atrasado', categoria: 'Retrasada', color: 'orange' },
   { tipo: 'PREJUDICIAL', label: 'Prejudicial', categoria: 'Prejudicial', color: 'red' },
   { tipo: 'MORA_90', label: '90+ días de mora (moroso)', categoria: 'Mora 90+', color: 'slate' },
   { tipo: 'COBRANZA', label: 'Carta de cobranza', categoria: 'Cobranza', color: 'red' },

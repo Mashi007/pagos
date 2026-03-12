@@ -935,12 +935,35 @@ def get_notificaciones_lista(
     db: Session = Depends(get_db),
 ):
     """
-    Listado paginado de notificaciones (envíos). El frontend Email/WhatsApp Config lo usa para 'envíos recientes'.
-    Sin tabla de notificaciones en BD se devuelve lista vacía para evitar 404. get_db inyectado para reglas de negocio.
+    Listado paginado de notificaciones (envíos) desde tabla envios_notificacion.
+    El frontend Configuración > Email lo usa para 'Verificación de Envíos Reales'.
     """
-    total = 0
-    total_pages = 0
+    per_page = max(1, min(per_page, 100))
+    page = max(1, page)
+    offset = (page - 1) * per_page
+
+    q_filter = select(EnvioNotificacion)
+    if estado:
+        if estado.upper() == "ENVIADA":
+            q_filter = q_filter.where(EnvioNotificacion.exito == True)
+        elif estado.upper() == "FALLIDA":
+            q_filter = q_filter.where(EnvioNotificacion.exito == False)
+    total = db.scalar(select(func.count()).select_from(q_filter.subquery()))
+    total = total or 0
+    total_pages = (total + per_page - 1) // per_page if total else 0
+
+    q = q_filter.order_by(EnvioNotificacion.fecha_envio.desc()).offset(offset).limit(per_page)
+    rows = db.scalars(q).all()
     items = []
+    for r in rows:
+        items.append({
+            "id": r.id,
+            "estado": "ENVIADA" if r.exito else "FALLIDA",
+            "asunto": f"Notificación {r.tipo_tab}" if r.tipo_tab else "Envío",
+            "fecha_envio": r.fecha_envio.isoformat() if r.fecha_envio else None,
+            "fecha_creacion": r.fecha_envio.isoformat() if r.fecha_envio else None,
+            "error_mensaje": r.error_mensaje,
+        })
     return {
         "items": items,
         "total": total,
@@ -1074,14 +1097,16 @@ def get_rebotados_por_tab_excel(
 @router.get("/clientes-retrasados", response_model=dict)
 def get_clientes_retrasados(db: Session = Depends(get_db)):
     """
-    Clientes a notificar por cuotas no pagadas, agrupados en 5 reglas:
+    Clientes a notificar por cuotas no pagadas, agrupados por reglas:
     1. Faltan 5 días para fecha_vencimiento (no pagado)
     2. Faltan 3 días para fecha_vencimiento (no pagado)
     3. Falta 1 día para fecha_vencimiento (no pagado)
     4. Hoy = fecha_vencimiento (no pagado)
-    5. 90+ días de mora (moroso): informe de cada cuota atrasada una a una.
-    Se usa la fecha del servidor; actualizar a las 2am con cron si se desea.
-    Datos desde get_cuotas_pendientes_con_cliente (fuente única).
+    5. 5 días atrasado (cuota vencida hace 5 días)
+    6. 30 días atrasado (cuota vencida hace 30 días)
+    7. 90+ días de mora (moroso): cada cuota atrasada una a una.
+    8. Crédito pagado (liquidados): prestamo.total_financiamiento = SUM(cuotas.total_pagado).
+    Datos desde BD: get_cuotas_pendientes_con_cliente y tabla prestamos/cuotas.
     """
     hoy = date.today()
     rows = get_cuotas_pendientes_con_cliente(db)
@@ -1090,6 +1115,8 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
     dias_3: List[dict] = []
     dias_1: List[dict] = []
     hoy_list: List[dict] = []
+    dias_5_atraso: List[dict] = []   # 5 días atrasado (cuota vencida hace 5 días)
+    dias_30_atraso: List[dict] = []  # 30 días atrasado (cuota vencida hace 30 días)
     mora_90_cuotas: List[dict] = []  # cada cuota 90+ días atrasada (moroso)
 
     for (cuota, cliente) in rows:
@@ -1108,7 +1135,11 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
             hoy_list.append(_item(cliente, cuota))
         elif delta < 0:
             dias_atraso = -delta
-            if dias_atraso >= 90:
+            if dias_atraso == 5:
+                dias_5_atraso.append(_item(cliente, cuota, dias_atraso=5))
+            elif dias_atraso == 30:
+                dias_30_atraso.append(_item(cliente, cuota, dias_atraso=30))
+            elif dias_atraso >= 90:
                 mora_90_cuotas.append(_item(cliente, cuota, dias_atraso=dias_atraso))
 
     # Ordenar mora_90 por dias_atraso desc, luego por cliente
@@ -1143,6 +1174,8 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
         "dias_3": dias_3,
         "dias_1": dias_1,
         "hoy": hoy_list,
+        "dias_5_atraso": dias_5_atraso,
+        "dias_30_atraso": dias_30_atraso,
         "mora_90": {
             "cuotas": mora_90_cuotas,
             "total_cuotas": len(mora_90_cuotas),

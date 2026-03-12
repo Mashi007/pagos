@@ -17,15 +17,17 @@ import { notificacionService, type ClientesRetrasadosResponse, type ClienteRetra
 import { toast } from 'sonner'
 import { ConfiguracionNotificaciones } from '../components/notificaciones/ConfiguracionNotificaciones'
 
-type TabId = 'dias_5' | 'dias_3' | 'dias_1' | 'hoy' | 'mora_90' | 'liquidados' | 'configuracion'
+type TabId = 'dias_5' | 'dias_3' | 'dias_1' | 'hoy' | 'dias_5_atraso' | 'dias_30_atraso' | 'mora_90' | 'liquidados' | 'configuracion'
 
 const TABS: { id: TabId; label: string; icon: typeof Calendar }[] = [
-  { id: 'dias_5', label: 'Faltan 5 días', icon: Calendar },
-  { id: 'dias_3', label: 'Faltan 3 días', icon: Calendar },
-  { id: 'dias_1', label: 'Falta 1 día', icon: Clock },
+  { id: 'dias_5', label: 'Faltan 5', icon: Calendar },
+  { id: 'dias_3', label: 'Faltan 3', icon: Calendar },
+  { id: 'dias_1', label: 'Falta 1', icon: Clock },
   { id: 'hoy', label: 'Hoy vence', icon: AlertTriangle },
+  { id: 'dias_5_atraso', label: '5 días atrasado', icon: Clock },
+  { id: 'dias_30_atraso', label: '30 días atrasado', icon: Clock },
   { id: 'mora_90', label: '90+ días de mora (moroso)', icon: FileText },
-  { id: 'liquidados', label: 'Total fin. = Total abonos', icon: FileText },
+  { id: 'liquidados', label: 'Crédito pagado', icon: FileText },
   { id: 'configuracion', label: 'Configuración', icon: Settings },
 ]
 
@@ -35,6 +37,8 @@ const PLACEHOLDER_NOTIFICACIONES: ClientesRetrasadosResponse = {
   dias_3: [],
   dias_1: [],
   hoy: [],
+  dias_5_atraso: [],
+  dias_30_atraso: [],
   mora_90: { cuotas: [], total_cuotas: 0 },
   liquidados: [],
 }
@@ -71,7 +75,7 @@ export function Notificaciones() {
   }
 
   const handleDescargarInformeRebotados = async () => {
-    if (activeTab === 'configuracion' || activeTab === 'liquidados') return
+    if (activeTab === 'configuracion' || activeTab === 'liquidados' || activeTab === 'dias_5_atraso' || activeTab === 'dias_30_atraso') return
     setDescargandoExcel(true)
     try {
       const { total } = await notificacionService.getRebotadosPorTab(activeTab)
@@ -105,6 +109,8 @@ export function Notificaciones() {
       case 'dias_3': return data.dias_3
       case 'dias_1': return data.dias_1
       case 'hoy': return data.hoy
+      case 'dias_5_atraso': return data.dias_5_atraso ?? []
+      case 'dias_30_atraso': return data.dias_30_atraso ?? []
       case 'mora_90': return data.mora_90?.cuotas ?? []
       case 'liquidados': return []
       default: return []
@@ -215,14 +221,20 @@ export function Notificaciones() {
               {activeTab === 'mora_90'
                 ? 'Informe: cuotas con 90 o más días de mora - moroso (una a una)'
                 : activeTab === 'liquidados'
-                ? 'Préstamos con Total financiamiento = Total abonos (liquidados)'
+                ? 'Crédito pagado (Total financiamiento = Total abonos)'
+                : activeTab === 'dias_5_atraso'
+                ? 'Cuotas con 5 días de atraso'
+                : activeTab === 'dias_30_atraso'
+                ? 'Cuotas con 30 días de atraso'
                 : `Clientes con cuota no pagada ${activeTab === 'dias_5' ? 'y faltan 5 días' : activeTab === 'dias_3' ? 'y faltan 3 días' : activeTab === 'dias_1' ? 'y falta 1 día' : 'y vence hoy'}`}
             </CardTitle>
             <CardDescription>
               {activeTab === 'mora_90'
                 ? 'Listado de cada cuota atrasada 90+ días (moroso) con nombre, cédula, número de cuota, fecha de vencimiento, días de atraso y monto.'
                 : activeTab === 'liquidados'
-                ? 'Listado de préstamos donde el total abonado coincide con el total financiamiento (nombre, cédula, total financiamiento, total abonos).'
+                ? 'Préstamos donde total financiamiento (tabla préstamo) menos total abonos (tabla cuotas) es cero. Por cédula/cliente.'
+                : activeTab === 'dias_5_atraso' || activeTab === 'dias_30_atraso'
+                ? 'Cuotas vencidas no pagadas con 5 o 30 días de atraso (nombre, cédula, nº cuota, fecha venc., días atraso, monto).'
                 : 'Nombre y cédula de clientes a notificar.'}
             </CardDescription>
           </CardHeader>
@@ -251,7 +263,7 @@ export function Notificaciones() {
               </div>
             )}
             {/* Botón descargar informe Excel de no entregados (rebotados) */}
-            {(activeTab as TabId) !== 'configuracion' && (activeTab as TabId) !== 'liquidados' && (
+            {(activeTab as TabId) !== 'configuracion' && (activeTab as TabId) !== 'liquidados' && (activeTab as TabId) !== 'dias_5_atraso' && (activeTab as TabId) !== 'dias_30_atraso' && (
               <div className="mb-4">
                 <Button
                   variant="outline"
@@ -293,7 +305,7 @@ export function Notificaciones() {
                   </thead>
                   <tbody>
                     {(data?.liquidados ?? []).length === 0 ? (
-                      <tr><td colSpan={5} className="py-8 text-center text-gray-500">No hay préstamos con Total financiamiento = Total abonos.</td></tr>
+                      <tr><td colSpan={5} className="py-8 text-center text-gray-500">No hay préstamos con crédito pagado (Total financiamiento = Total abonos).</td></tr>
                     ) : (
                       (data?.liquidados ?? []).map((row: LiquidadoItem, idx: number) => (
                         <tr key={`liquidado-${row.prestamo_id}-${idx}`} className="border-b hover:bg-gray-50">
@@ -324,7 +336,7 @@ export function Notificaciones() {
                   </thead>
                   <tbody>
                     {list.length === 0 ? (
-                      <tr><td colSpan={7} className="py-8 text-center text-gray-500">No hay cuotas con 90+ días de mora (moroso).</td></tr>
+                      <tr><td colSpan={7} className="py-8 text-center text-gray-500">{activeTab === 'mora_90' ? 'No hay cuotas con 90+ días de mora (moroso).' : 'Ningún registro en este criterio.'}</td></tr>
                     ) : (
                       list.map((row, idx) => (
                         <tr key={`${row.cliente_id}-${row.numero_cuota ?? idx}`} className="border-b hover:bg-gray-50">
