@@ -979,6 +979,17 @@ def get_notificaciones_lista(
     }
 
 
+@router.post("/enviar-todas")
+def enviar_todas_notificaciones(db: Session = Depends(get_db)):
+    """
+    Ejecuta el envío de todas las notificaciones (previas, día pago, retrasadas, prejudicial, mora 90).
+    Respeta la configuración guardada (modo_pruebas, email_pruebas, habilitado por tipo).
+    Si modo_pruebas está activo, todos los correos van al correo de pruebas.
+    """
+    from app.api.v1.endpoints import notificaciones_tabs
+    return notificaciones_tabs.ejecutar_envio_todas_notificaciones(db)
+
+
 @router.get("/estadisticas/resumen")
 def get_notificaciones_resumen(db: Session = Depends(get_db)):
     """Resumen para sidebar. El frontend espera: no_leidas, total. get_db inyectado para consistencia."""

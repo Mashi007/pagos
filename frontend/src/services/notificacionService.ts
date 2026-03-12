@@ -381,6 +381,27 @@ class NotificacionService {
     )
   }
 
+  /** Ejecuta el envío de todas las notificaciones (previas, día pago, retrasadas, prejudicial, mora 90). Respeta modo_pruebas: si está activo, todos los correos van al correo de pruebas. */
+  async enviarTodasNotificaciones(): Promise<{
+    enviados: number
+    fallidos: number
+    sin_email: number
+    omitidos_config: number
+    enviados_whatsapp: number
+    fallidos_whatsapp: number
+    detalles: Record<string, unknown>
+  }> {
+    return await apiClient.post<{
+      enviados: number
+      fallidos: number
+      sin_email: number
+      omitidos_config: number
+      enviados_whatsapp: number
+      fallidos_whatsapp: number
+      detalles: Record<string, unknown>
+    }>(`${this.baseUrl}/enviar-todas`, {}, { timeout: 300000 })
+  }
+
   // Variables de notificaciones
   async listarVariables(activa?: boolean): Promise<NotificacionVariable[]> {
     const params = new URLSearchParams()

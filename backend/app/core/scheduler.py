@@ -49,9 +49,13 @@ def _job_actualizar_notificaciones() -> None:
 
 
 def _job_envio_notificaciones_23() -> None:
-    """Job 23:00. Envío automático de todas las notificaciones (previas, día pago, retrasadas, prejudicial, mora 90)."""
+    """Job 23:00. Envío automático de todas las notificaciones solo en producción. En modo pruebas el envío es solo manual."""
     db = SessionLocal()
     try:
+        config = notificaciones.get_notificaciones_envios_config(db)
+        if config.get("modo_pruebas") is True:
+            logger.info("Envío notificaciones 23:00: omitido (modo pruebas activo; envío solo manual).")
+            return
         result = notificaciones_tabs.ejecutar_envio_todas_notificaciones(db)
         logger.info(
             "Envío notificaciones 23:00: enviados=%s fallidos=%s sin_email=%s omitidos_config=%s whatsapp_ok=%s whatsapp_fail=%s",

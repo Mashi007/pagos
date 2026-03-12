@@ -63,7 +63,7 @@ export function ConfiguracionNotificaciones() {
   const [cargando, setCargando] = useState(true)
   const [plantillas, setPlantillas] = useState<NotificacionPlantilla[]>([])
   const [enviandoPruebaIndice, setEnviandoPruebaIndice] = useState<number | null>(null)
-  const [plantillaSeleccionada, setPlantillaSeleccionada] = useState<number | null>(null)
+  const [enviandoMasivo, setEnviandoMasivo] = useState(false)
   const [smtpConfigurado, setSmtpConfigurado] = useState<boolean | null>(null)
 
   useEffect(() => {
@@ -173,18 +173,24 @@ export function ConfiguracionNotificaciones() {
 
   const esEmailValido = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test((e || '').trim())
 
-  const handleEnviarPrueba = async (indice: 0 | 1) => {
-    const email = emailsPruebas[indice]?.trim()
-    if (!modoPruebas || !email) {
-      toast.error('Configura el correo para enviar pruebas')
+  /** En modo prueba el envío usa solo plantilla predeterminada (ejemplo) y envía a correo de pruebas 1 y 2. */
+  const ASUNTO_PLANTILLA_PREDETERMINADA = 'Notificación de cobranza - RapiCredit (ejemplo)'
+  const MENSAJE_PLANTILLA_PREDETERMINADA =
+    'Este es un correo de ejemplo con la plantilla predeterminada. Se envía a los correos de pruebas 1 y 2 para verificar la configuración de notificaciones.'
+
+  const handleEnviarNotificacionesPrueba = async () => {
+    const destinos = [emailsPruebas[0]?.trim(), emailsPruebas[1]?.trim()].filter(Boolean) as string[]
+    if (!modoPruebas || destinos.length === 0) {
+      toast.error('Configura al menos un correo de pruebas para enviar.')
       return
     }
-    if (!esEmailValido(email)) {
-      toast.error(`El correo "${email}" no tiene formato válido (ej: usuario@dominio.com)`)
+    const invalidos = destinos.filter((e) => !esEmailValido(e))
+    if (invalidos.length > 0) {
+      toast.error(`Correo(s) no válido(s): ${invalidos.join(', ')}. Usa formato usuario@dominio.com`)
       return
     }
     try {
-      setEnviandoPruebaIndice(indice)
+      setEnviandoPruebaIndice(0)
       const estadoEmail = await emailConfigService.verificarEstadoConfiguracionEmail()
       if (!estadoEmail?.configurada) {
         const problemas = estadoEmail?.problemas?.join('. ') || 'servidor SMTP, usuario y contraseña'
@@ -195,20 +201,23 @@ export function ConfiguracionNotificaciones() {
         setEnviandoPruebaIndice(null)
         return
       }
-      let asunto = 'Prueba de Notificaciones - RapiCredit'
-      let mensaje = 'Este es un correo de prueba para verificar que las plantillas de notificación se envían correctamente.'
-      if (plantillaSeleccionada) {
-        const plantilla = plantillas.find(p => p.id === plantillaSeleccionada)
-        if (plantilla) {
-          asunto = plantilla.nombre || asunto
-          mensaje = plantilla.cuerpo || mensaje
-        }
+      let enviados = 0
+      for (let i = 0; i < destinos.length; i++) {
+        setEnviandoPruebaIndice(i + 1)
+        const resultado = await emailConfigService.probarConfiguracionEmail(
+          destinos[i],
+          ASUNTO_PLANTILLA_PREDETERMINADA,
+          MENSAJE_PLANTILLA_PREDETERMINADA,
+          undefined
+        )
+        if (resultado?.success || resultado?.mensaje?.includes('enviado')) enviados++
       }
-      const resultado = await emailConfigService.probarConfiguracionEmail(email, asunto, mensaje, undefined)
-      if (resultado.success || resultado.mensaje?.includes('enviado')) {
-        toast.success(`Correo de prueba enviado exitosamente a ${email}`)
+      if (enviados === destinos.length) {
+        toast.success(`Notificación de ejemplo enviada a ${destinos.length} correo(s) de pruebas.`)
+      } else if (enviados > 0) {
+        toast.warning(`Enviado a ${enviados} de ${destinos.length} correos de pruebas. Revisa los que fallaron.`)
       } else {
-        toast.error(resultado.mensaje || 'Error al enviar el correo de prueba')
+        toast.error('No se pudo enviar a ninguno de los correos de pruebas.')
       }
     } catch (error: unknown) {
       const detalle = getErrorDetail(error)
@@ -216,6 +225,22 @@ export function ConfiguracionNotificaciones() {
       toast.error(mensaje, { duration: 5000 })
     } finally {
       setEnviandoPruebaIndice(null)
+    }
+  }
+
+  /** Envío masivo manual: mismo flujo que las 11PM pero en este momento; si modo prueba está activo, todos los correos van al correo de pruebas. */
+  const handleEnviosMasivosPrueba = async () => {
+    if (!modoPruebas) return
+    try {
+      setEnviandoMasivo(true)
+      const res = await notificacionService.enviarTodasNotificaciones()
+      const { enviados, fallidos, sin_email } = res ?? {}
+      toast.success(`Envíos masivos prueba: ${enviados ?? 0} enviados, ${fallidos ?? 0} fallidos, ${sin_email ?? 0} sin email.`)
+    } catch (error: unknown) {
+      const detalle = getErrorDetail(error)
+      toast.error(detalle || 'Error al ejecutar envíos masivos.')
+    } finally {
+      setEnviandoMasivo(false)
     }
   }
 
@@ -262,7 +287,7 @@ export function ConfiguracionNotificaciones() {
           </CardTitle>
           <CardDescription>
             {enModoPrueba
-              ? 'Todos los emails de notificaciones se envían únicamente al correo de pruebas. Los clientes no reciben correo. El envío por caso queda desactivado en la tabla mientras esté activo modo prueba.'
+              ? 'Todos los envíos van al correo de pruebas. Puedes activar o desactivar cada caso (Envío) para elegir a qué pestañas enviar.'
               : 'Los emails se envían al correo de cada cliente según la opción Envío de cada caso.'}
           </CardDescription>
         </CardHeader>
@@ -322,54 +347,32 @@ export function ConfiguracionNotificaciones() {
             </div>
           </div>
 
-          {/* Selector de Plantilla para Prueba */}
+          {/* En modo prueba: envío manual plantilla predeterminada + envíos masivos prueba */}
           {modoPruebas && (emailsPruebas[0]?.trim() || emailsPruebas[1]?.trim()) && (
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <label className="text-sm font-medium text-gray-700 block mb-2">
-                Selecciona una plantilla (opcional)
-              </label>
-              <Select
-                value={plantillaSeleccionada?.toString() || ''}
-                onValueChange={(val) => setPlantillaSeleccionada(val === "__default__" ? null : parseInt(val))}
+            <div className="pt-4 border-t border-amber-200 space-y-3">
+              <p className="text-sm text-gray-600">
+                Envía un correo de ejemplo con la <strong>plantilla predeterminada</strong> a los correos de pruebas 1 y 2.
+              </p>
+              <Button
+                onClick={handleEnviarNotificacionesPrueba}
+                disabled={enviandoPruebaIndice !== null || smtpConfigurado === false}
+                className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:opacity-50 text-white font-semibold py-2 h-auto flex items-center justify-center gap-2 rounded-lg transition-all"
               >
-                <SelectTrigger className="w-full bg-white">
-                  <SelectValue placeholder="Plantilla predeterminada" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__default__">Plantilla predeterminada</SelectItem>
-                  {plantillas.map((p) => (
-                    <SelectItem key={p.id} value={String(p.id)}>
-                      {p.nombre || `Plantilla #${p.id}`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          {/* Botones Enviar Prueba - uno para cada correo (operación independiente) */}
-          {modoPruebas && (emailsPruebas[0]?.trim() || emailsPruebas[1]?.trim()) && (
-            <div className="pt-4 border-t border-amber-200 space-y-2">
-              {emailsPruebas[0]?.trim() && (
-                <Button
-                  onClick={() => handleEnviarPrueba(0)}
-                  disabled={enviandoPruebaIndice === 0 || smtpConfigurado === false}
-                  className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:opacity-50 text-white font-semibold py-2 h-auto flex items-center justify-center gap-2 rounded-lg transition-all"
-                >
-                  <Mail className="h-5 w-5" />
-                  {enviandoPruebaIndice === 0 ? 'Enviando...' : `Enviar a ${emailsPruebas[0]}`}
-                </Button>
-              )}
-              {emailsPruebas[1]?.trim() && (
-                <Button
-                  onClick={() => handleEnviarPrueba(1)}
-                  disabled={enviandoPruebaIndice === 1 || smtpConfigurado === false}
-                  className="w-full bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 disabled:opacity-50 text-white font-semibold py-2 h-auto flex items-center justify-center gap-2 rounded-lg transition-all"
-                >
-                  <Mail className="h-5 w-5" />
-                  {enviandoPruebaIndice === 1 ? 'Enviando...' : `Enviar a ${emailsPruebas[1]}`}
-                </Button>
-              )}
+                <Mail className="h-5 w-5" />
+                {enviandoPruebaIndice !== null ? 'Enviando...' : 'Enviar notificaciones'}
+              </Button>
+              <p className="text-sm text-gray-600 mt-2">
+                Envíos masivos: envía ahora un correo por cada cliente que requiera notificación; todos van al correo de pruebas (no a clientes).
+              </p>
+              <Button
+                onClick={handleEnviosMasivosPrueba}
+                disabled={enviandoMasivo || smtpConfigurado === false}
+                variant="outline"
+                className="w-full border-amber-400 text-amber-800 bg-amber-50 hover:bg-amber-100 disabled:opacity-50 font-semibold py-2 h-auto flex items-center justify-center gap-2 rounded-lg"
+              >
+                <Mail className="h-5 w-5" />
+                {enviandoMasivo ? 'Enviando...' : 'Envíos masivos prueba'}
+              </Button>
             </div>
           )}
         </CardContent>
@@ -402,7 +405,7 @@ export function ConfiguracionNotificaciones() {
                     <Select
                       value={config.plantilla_id ? String(config.plantilla_id) : '__ninguna__'}
                       onValueChange={(v) => setConfig(tipo, { plantilla_id: v === '__ninguna__' ? null : parseInt(v, 10) })}
-                      disabled={enModoPrueba || !config.habilitado}
+                      disabled={!config.habilitado}
                     >
                       <SelectTrigger className="w-full max-w-xs bg-white border-gray-200">
                         <SelectValue placeholder="Seleccionar" />
@@ -421,23 +424,21 @@ export function ConfiguracionNotificaciones() {
                   <td className="py-3 px-4 text-center">
                     <button
                       type="button"
-                      onClick={() => !enModoPrueba && toggleEnvio(tipo)}
-                      disabled={enModoPrueba}
-                      title={enModoPrueba ? 'Envío desactivado en modo prueba' : (config.habilitado ? 'Desactivar envío' : 'Activar envío')}
+                      onClick={() => toggleEnvio(tipo)}
+                      title={config.habilitado ? 'Desactivar envío' : 'Activar envío'}
                       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ${
-                        enModoPrueba ? 'bg-gray-300 cursor-not-allowed' : config.habilitado ? 'bg-blue-600' : 'bg-gray-300'
+                        config.habilitado ? 'bg-blue-600' : 'bg-gray-300'
                       }`}
                     >
-                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ${config.habilitado && !enModoPrueba ? 'translate-x-5' : 'translate-x-1'}`} />
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ${config.habilitado ? 'translate-x-5' : 'translate-x-1'}`} />
                     </button>
-                    {enModoPrueba && <span className="block text-xs text-gray-500 mt-0.5">Desactivado</span>}
                   </td>
                   <td className="py-3 px-4 text-center">
                     <input
                       type="checkbox"
                       checked={config.incluir_pdf_anexo !== false}
                       onChange={() => setConfig(tipo, { incluir_pdf_anexo: config.incluir_pdf_anexo === false })}
-                      disabled={enModoPrueba || !config.habilitado}
+                      disabled={!config.habilitado}
                       title="Incluir PDF anexo (carta cobranza)"
                       className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
@@ -447,7 +448,7 @@ export function ConfiguracionNotificaciones() {
                       type="checkbox"
                       checked={config.incluir_adjuntos_fijos !== false}
                       onChange={() => setConfig(tipo, { incluir_adjuntos_fijos: config.incluir_adjuntos_fijos === false })}
-                      disabled={enModoPrueba || !config.habilitado}
+                      disabled={!config.habilitado}
                       title="Incluir documentos PDF fijos"
                       className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
@@ -462,7 +463,7 @@ export function ConfiguracionNotificaciones() {
                           type="time"
                           value={config.programador || HORA_DEFAULT}
                           onChange={(e) => setConfig(tipo, { programador: e.target.value })}
-                          disabled={enModoPrueba || !config.habilitado}
+                          disabled={!config.habilitado}
                           className="h-8 text-xs bg-white w-28"
                         />
                         {[0, 1, 2].map((i) => (
@@ -473,7 +474,7 @@ export function ConfiguracionNotificaciones() {
                               value={config.cco[i] || ''}
                               onChange={(e) => actualizarCCO(tipo, i, e.target.value)}
                               className="h-8 text-xs flex-1 bg-white"
-                              disabled={enModoPrueba || !config.habilitado}
+                              disabled={!config.habilitado}
                             />
                             {config.cco[i] && (
                               <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => eliminarCCO(tipo, i)}>
