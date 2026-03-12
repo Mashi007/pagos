@@ -457,8 +457,12 @@ def _crear_ticket_informe_revisar(
         logger.info("%s Ticket informe REVISAR creado | ticket_id=%s informe_id=%s campo=%s", LOG_TAG_INFORME, ticket.id, informe.id, campo_corregido)
         # Destino: contactos de Configuración > Email (tickets_notify_emails); si no hay, fallback a email por defecto
         from app.core.email import send_email
+from app.core.email_config_holder import get_email_activo_servicio
         from app.core.email_config_holder import get_tickets_notify_emails
-        destinos = get_tickets_notify_emails()
+        if not get_email_activo_servicio("tickets"):
+            destinos = []
+        else:
+            destinos = get_tickets_notify_emails()
         if not destinos:
             destinos = [EMAIL_TICKET_REVISAR]
         asunto = f"[CRM] Informe pago requiere revisión - Ticket #{ticket.id} - Cédula {informe.cedula or 'N/A'}"

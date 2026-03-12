@@ -1,4 +1,4 @@
-Ôªøimport { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { notificacionService, type NotificacionPlantilla } from '../../services/notificacionService'
 import { emailConfigService } from '../../services/notificacionService'
 import { Button } from '../../components/ui/button'
@@ -9,6 +9,7 @@ import { Badge } from '../../components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
 import { toast } from 'sonner'
 import { Save, Mail, Eye } from 'lucide-react'
+import { replaceBase64ImagesWithLogoUrl } from '../../utils/plantillaHtmlLogo'
 
 interface EditorPlantillaHTMLProps {
   plantilla?: NotificacionPlantilla | null
@@ -21,7 +22,7 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
   const [descripcion, setDescripcion] = useState(plantilla?.descripcion ?? '')
   const [tipo, setTipo] = useState(plantilla?.tipo ?? '')
   const [asunto, setAsunto] = useState(plantilla?.asunto ?? '')
-  const [cuerpoHTML, setCuerpoHTML] = useState(plantilla?.cuerpo ?? '')
+  const [cuerpoHTML, setCuerpoHTML] = useState(replaceBase64ImagesWithLogoUrl(plantilla?.cuerpo ?? ''))
   const [guardando, setGuardando] = useState(false)
   const [enviandoPrueba, setEnviandoPrueba] = useState(false)
   const [emailPrueba, setEmailPrueba] = useState('')
@@ -30,17 +31,17 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
   // Tipos disponibles
   const tiposPorCategoria = {
     antes: [
-      { valor: 'PAGO_5_DIAS_ANTES', label: '5 d√≠as antes' },
-      { valor: 'PAGO_3_DIAS_ANTES', label: '3 d√≠as antes' },
-      { valor: 'PAGO_1_DIA_ANTES', label: '1 d√≠a antes' },
+      { valor: 'PAGO_5_DIAS_ANTES', label: '5 dÌas antes' },
+      { valor: 'PAGO_3_DIAS_ANTES', label: '3 dÌas antes' },
+      { valor: 'PAGO_1_DIA_ANTES', label: '1 dÌa antes' },
     ],
     diaPago: [
-      { valor: 'PAGO_DIA_0', label: 'D√≠a de pago' },
+      { valor: 'PAGO_DIA_0', label: 'DÌa de pago' },
     ],
     retraso: [
-      { valor: 'PAGO_1_DIA_ATRASADO', label: '1 d√≠a de retraso' },
-      { valor: 'PAGO_3_DIAS_ATRASADO', label: '3 d√≠as de retraso' },
-      { valor: 'PAGO_5_DIAS_ATRASADO', label: '5 d√≠as de retraso' },
+      { valor: 'PAGO_1_DIA_ATRASADO', label: '1 dÌa de retraso' },
+      { valor: 'PAGO_3_DIAS_ATRASADO', label: '3 dÌas de retraso' },
+      { valor: 'PAGO_5_DIAS_ATRASADO', label: '5 dÌas de retraso' },
     ],
   }
 
@@ -71,7 +72,7 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
         descripcion: descripcion.trim() || null,
         tipo,
         asunto: asunto.trim(),
-        cuerpo: cuerpoHTML.trim(),
+        cuerpo: replaceBase64ImagesWithLogoUrl(cuerpoHTML).trim(),
         activa: true,
         zona_horaria: 'America/Caracas',
       }
@@ -98,7 +99,7 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
 
   const handleEnviarPrueba = async () => {
     if (!emailPrueba.trim() || !emailPrueba.includes('@')) {
-      toast.error('Ingresa un email v√°lido')
+      toast.error('Ingresa un email v·lido')
       return
     }
 
@@ -107,7 +108,7 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
       await emailConfigService.probarConfiguracionEmail(
         emailPrueba.trim(),
         asunto.trim() || 'Prueba de plantilla',
-        cuerpoHTML.trim(),
+        replaceBase64ImagesWithLogoUrl(cuerpoHTML).trim(),
         undefined
       )
       toast.success(`Email de prueba enviado a ${emailPrueba}`)
@@ -121,12 +122,12 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
 
   return (
     <div className="space-y-4">
-      {/* Informaci√≥n General */}
+      {/* InformaciÛn General */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             {/* <FileText className="h-5 w-5" /> */}
-            Informaci√≥n de la Plantilla
+            InformaciÛn de la Plantilla
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -163,9 +164,9 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
           </div>
 
           <div>
-            <label className="text-sm font-medium text-gray-700">Descripci√≥n (opcional)</label>
+            <label className="text-sm font-medium text-gray-700">DescripciÛn (opcional)</label>
             <Textarea
-              placeholder="Describe el prop√≥sito de esta plantilla"
+              placeholder="Describe el propÛsito de esta plantilla"
               value={descripcion}
               onChange={(e) => setDescripcion(e.target.value)}
               className="mt-1 h-20"
@@ -175,7 +176,7 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
           <div>
             <label className="text-sm font-medium text-gray-700">Asunto del Email</label>
             <Input
-              placeholder="Ej: Tu pago vence en 5 d√≠as"
+              placeholder="Ej: Tu pago vence en 5 dÌas"
               value={asunto}
               onChange={(e) => setAsunto(e.target.value)}
               className="mt-1"
@@ -191,7 +192,7 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
             Contenido HTML
           </CardTitle>
           <CardDescription>
-            Ingresa el c√≥digo HTML del email. Puedes usar variables como {'{'} nombre {'}'}, {'{'} monto {'}'}, {'{'} dias_atraso {'}'}, etc.
+            Ingresa el cÛdigo HTML del email. Puedes usar variables como {'{'} nombre {'}'}, {'{'} monto {'}'}, {'{'} dias_atraso {'}'}, etc.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -219,9 +220,9 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
           {!mostrarPreview && (
             <div className="space-y-2">
               <Textarea
-                placeholder="<html>&#10;  <body>&#10;    <p>Hola {'{'}nombre{'}'},</p>&#10;    <p>Tu pago de ${'{'}monto{'}'} vence en {'{'}dias_atraso{'}'} d√≠as.</p>&#10;  </body>&#10;</html>"
+                placeholder="<html>&#10;  <body>&#10;    <p>Hola {'{'}nombre{'}'},</p>&#10;    <p>Tu pago de ${'{'}monto{'}'} vence en {'{'}dias_atraso{'}'} dÌas.</p>&#10;  </body>&#10;</html>"
                 value={cuerpoHTML}
-                onChange={(e) => setCuerpoHTML(e.target.value)}
+                onChange={(e) => setCuerpoHTML(replaceBase64ImagesWithLogoUrl(e.target.value))}
                 className="font-mono text-sm h-96 bg-slate-50"
               />
               <p className="text-xs text-gray-500">
@@ -236,7 +237,7 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
               <div
                 className="prose prose-sm max-w-none"
                 dangerouslySetInnerHTML={{
-                  __html: cuerpoHTML || '<p style="color: #999; text-align: center;">El preview aparecer√° aqu√≠...</p>',
+                  __html: cuerpoHTML || '<p style="color: #999; text-align: center;">El preview aparecer· aquÌ...</p>',
                 }}
               />
             </div>
@@ -270,12 +271,12 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
             </Button>
           </div>
           <p className="text-xs text-gray-500">
-            Se enviar√° un email con el asunto y contenido HTML que ingresaste. Las variables se mostrar√°n de forma literal.
+            Se enviar· un email con el asunto y contenido HTML que ingresaste. Las variables se mostrar·n de forma literal.
           </p>
         </CardContent>
       </Card>
 
-      {/* Botones de Acci√≥n */}
+      {/* Botones de AcciÛn */}
       <div className="flex gap-2 justify-end">
         <Button
           onClick={handleGuardar}

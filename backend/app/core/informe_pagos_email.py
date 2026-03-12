@@ -14,7 +14,7 @@ from app.core.informe_pagos_config_holder import (
     sync_from_db as informe_sync,
 )
 from app.core.email import send_email
-from app.core.email_config_holder import sync_from_db as email_sync
+from app.core.email_config_holder import sync_from_db as email_sync, get_email_activo_servicio
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +47,9 @@ def enviar_informe_pagos_email() -> bool:
     """
     informe_sync()
     email_sync()
+    if not get_email_activo_servicio("informe_pagos"):
+        logger.info("Informe pagos: envio de email desactivado para este servicio.")
+        return False
     destinatarios = get_destinatarios_informe_emails()
     if not destinatarios:
         logger.warning("Informe pagos: no hay destinatarios configurados.")

@@ -34,6 +34,7 @@ from app.models.configuracion import Configuracion
 from app.models.estado_cuenta_codigo import EstadoCuentaCodigo
 from app.api.v1.endpoints.validadores import validate_cedula
 from app.core.email import send_email
+from app.core.email_config_holder import get_email_activo_servicio
 
 from app.services.estado_cuenta_pdf import generar_pdf_estado_cuenta
 logger = logging.getLogger(__name__)
@@ -374,7 +375,8 @@ def solicitar_codigo_estado_cuenta(
     db.commit()
     asunto, cuerpo = _get_plantilla_email_codigo(db, nombre=nombre, codigo=codigo)
     try:
-        send_email([email], asunto, cuerpo)
+        if get_email_activo_servicio("estado_cuenta"):
+            send_email([email], asunto, cuerpo)
         logger.info(
             "estado_cuenta solicitar ip=%s outcome=ok cedula_suffix=***%s",
             ip,
@@ -567,7 +569,8 @@ def solicitar_estado_cuenta(
         try:
             filename = f"estado_cuenta_{cedula_display.replace('-', '_')}.pdf"
             email_body = (f"Estimado(a) {nombre},\n\nSe adjunta su estado de cuenta con fecha de corte {fecha_corte.isoformat()}.\n\nSaludos,\nRapiCredit")
-            send_email([email], f"Estado de cuenta - {fecha_corte.isoformat()}", email_body,
+            if get_email_activo_servicio("estado_cuenta"):
+                send_email([email], f"Estado de cuenta - {fecha_corte.isoformat()}", email_body,
                 attachments=[(filename, pdf_bytes)],
             )
         except Exception as e:

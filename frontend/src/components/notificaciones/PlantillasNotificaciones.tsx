@@ -1,4 +1,4 @@
-Ôªøimport { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { notificacionService, NotificacionPlantilla, NotificacionVariable } from '../../services/notificacionService'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -10,13 +10,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { toast } from 'sonner'
 import { Upload, Search, FileText, Database, ChevronDown, ChevronUp, Edit2, Trash2, Calendar, AlertCircle, Eye } from 'lucide-react'
 import { EditorPlantillaHTML } from './EditorPlantillaHTML'
+import { replaceBase64ImagesWithLogoUrl } from '../../utils/plantillaHtmlLogo'
 
 type EditorFocus = 'asunto' | 'encabezado' | 'cuerpo' | 'firma'
 
 interface PlantillasNotificacionesProps {
   plantillaInicial?: NotificacionPlantilla | null
   onPlantillaCargada?: () => void
-  /** Cuando el padre est√° en la pesta√±a "plantillas", se recargan las variables para integrar las creadas en Variables Personalizadas. */
+  /** Cuando el padre est· en la pestaÒa "plantillas", se recargan las variables para integrar las creadas en Variables Personalizadas. */
   tabSeccionActiva?: string
 }
 
@@ -31,8 +32,8 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
   const [activeTab, setActiveTab] = useState('armar')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [nombre, setNombre] = useState('')
-  const [tipo, setTipo] = useState('') // Mantener para compatibilidad con edici√≥n individual
-  const [tiposSeleccionados, setTiposSeleccionados] = useState<string[]>([]) // Para creaci√≥n m√∫ltiple
+  const [tipo, setTipo] = useState('') // Mantener para compatibilidad con ediciÛn individual
+  const [tiposSeleccionados, setTiposSeleccionados] = useState<string[]>([]) // Para creaciÛn m˙ltiple
   const [activa, setActiva] = useState(true)
   const [asunto, setAsunto] = useState('')
   const [encabezado, setEncabezado] = useState('')
@@ -51,39 +52,39 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
 
   const cuerpoFinal = useMemo(() => {
     const parts = [encabezado, cuerpo, firma].filter(Boolean)
-    return parts.join('\n\n')
+    return replaceBase64ImagesWithLogoUrl(parts.join('\n\n'))
   }, [encabezado, cuerpo, firma])
 
   /** Variables que el sistema sustituye al enviar (sin burocracia de tablas/BD). Insertar en asunto/cuerpo. */
   const VARIABLES_NOTIFICACION = [
     { key: 'nombre', label: 'Nombre' },
-    { key: 'cedula', label: 'C√©dula' },
+    { key: 'cedula', label: 'CÈdula' },
     { key: 'fecha_vencimiento', label: 'Fecha venc.' },
-    { key: 'numero_cuota', label: 'N¬∫ cuota' },
+    { key: 'numero_cuota', label: 'N∫ cuota' },
     { key: 'monto', label: 'Monto' },
-    { key: 'dias_atraso', label: 'D√≠as atraso' },
+    { key: 'dias_atraso', label: 'DÌas atraso' },
   ]
 
-  // Tipos organizados por categor√≠as
+  // Tipos organizados por categorÌas
   const tiposPorCategoria = {
     antes: [
-      { valor: 'PAGO_5_DIAS_ANTES', label: '5 d√≠as antes' },
-      { valor: 'PAGO_3_DIAS_ANTES', label: '3 d√≠as antes' },
-      { valor: 'PAGO_1_DIA_ANTES', label: '1 d√≠a antes' },
+      { valor: 'PAGO_5_DIAS_ANTES', label: '5 dÌas antes' },
+      { valor: 'PAGO_3_DIAS_ANTES', label: '3 dÌas antes' },
+      { valor: 'PAGO_1_DIA_ANTES', label: '1 dÌa antes' },
     ],
     diaPago: [
-      { valor: 'PAGO_DIA_0', label: 'D√≠a de pago' },
+      { valor: 'PAGO_DIA_0', label: 'DÌa de pago' },
     ],
     retraso: [
-      { valor: 'PAGO_1_DIA_ATRASADO', label: '1 d√≠a de retraso' },
-      { valor: 'PAGO_3_DIAS_ATRASADO', label: '3 d√≠as de retraso' },
-      { valor: 'PAGO_5_DIAS_ATRASADO', label: '5 d√≠as de retraso' },
+      { valor: 'PAGO_1_DIA_ATRASADO', label: '1 dÌa de retraso' },
+      { valor: 'PAGO_3_DIAS_ATRASADO', label: '3 dÌas de retraso' },
+      { valor: 'PAGO_5_DIAS_ATRASADO', label: '5 dÌas de retraso' },
     ],
     prejudicial: [
       { valor: 'PREJUDICIAL', label: 'Prejudicial' },
     ],
     mora61: [
-      { valor: 'MORA_90', label: '90+ d√≠as de mora (moroso)' },
+      { valor: 'MORA_90', label: '90+ dÌas de mora (moroso)' },
     ],
     cobranza: [
       { valor: 'COBRANZA', label: 'Carta de cobranza' },
@@ -108,16 +109,16 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
   const VARIABLES_COBRANZA = [
     { key: 'CLIENTES.TRATAMIENTO', label: 'Tratamiento' },
     { key: 'CLIENTES.NOMBRE_COMPLETO', label: 'Nombre completo' },
-    { key: 'PRESTAMOS.ID', label: 'N¬∫ cr√©dito' },
+    { key: 'PRESTAMOS.ID', label: 'N∫ crÈdito' },
     { key: 'FECHA_CARTA', label: 'Fecha carta' },
     { key: 'LOGO_URL', label: 'URL del logo (se rellena al enviar)' },
   ]
   const BLOQUE_CUOTAS_VENCIDAS = `{{#CUOTAS.VENCIMIENTOS}}
-  ‚Ä¢ Cuota N¬∞ {{CUOTA.NUMERO}} con vencimiento: {{CUOTA.FECHA_VENCIMIENTO}} ‚Äî Monto: {{CUOTA.MONTO}}
+  ï Cuota N∞ {{CUOTA.NUMERO}} con vencimiento: {{CUOTA.FECHA_VENCIMIENTO}} ó Monto: {{CUOTA.MONTO}}
 {{/CUOTAS.VENCIMIENTOS}}`
 
   const PLANTILLA_COBRANZA_ASUNTO = 'Recordatorio de cuotas pendientes - Rapi-Credit, C.A.'
-  /** Al cargar la plantilla se usa una URL de ejemplo; al enviar el correo el backend sustituye {{LOGO_URL}} por la URL p√∫blica del logo. */
+  /** Al cargar la plantilla se usa una URL de ejemplo; al enviar el correo el backend sustituye {{LOGO_URL}} por la URL p˙blica del logo. */
   const PLANTILLA_COBRANZA_CUERPO = `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -143,10 +144,10 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
                 Estimado {{CLIENTES.TRATAMIENTO}} <strong>{{CLIENTES.NOMBRE_COMPLETO}}</strong>,
               </p>
               <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #2d3748;">
-                Nos dirigimos a usted con el mayor respeto en nombre de <strong>Rapi-Credit, C.A.</strong>, con motivo del vencimiento de cuotas correspondientes a su cr√©dito N¬∞ <strong>{{PRESTAMOS.ID}}</strong> vigente con nuestra empresa.
+                Nos dirigimos a usted con el mayor respeto en nombre de <strong>Rapi-Credit, C.A.</strong>, con motivo del vencimiento de cuotas correspondientes a su crÈdito N∞ <strong>{{PRESTAMOS.ID}}</strong> vigente con nuestra empresa.
               </p>
               <p style="margin: 0 0 20px 0; font-size: 15px; line-height: 1.6; color: #2d3748;">
-                Seg√∫n nuestros registros al <strong>{{FECHA_CARTA}}</strong>, se encuentran pendientes de pago las siguientes cuotas:
+                Seg˙n nuestros registros al <strong>{{FECHA_CARTA}}</strong>, se encuentran pendientes de pago las siguientes cuotas:
               </p>
               <!-- Bloque cuotas -->
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin: 0 0 20px 0; border: 1px solid #e2e8f0; border-radius: 6px;">
@@ -156,31 +157,31 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
                 <tr>
                   <td style="padding: 16px;">
 {{#CUOTAS.VENCIMIENTOS}}
-                    <p style="margin: 0 0 8px 0; font-size: 14px; color: #2d3748;">‚Ä¢ Cuota N¬∞ {{CUOTA.NUMERO}} ‚Äî Vencimiento: {{CUOTA.FECHA_VENCIMIENTO}} ‚Äî Monto: {{CUOTA.MONTO}}</p>
+                    <p style="margin: 0 0 8px 0; font-size: 14px; color: #2d3748;">ï Cuota N∞ {{CUOTA.NUMERO}} ó Vencimiento: {{CUOTA.FECHA_VENCIMIENTO}} ó Monto: {{CUOTA.MONTO}}</p>
 {{/CUOTAS.VENCIMIENTOS}}
                   </td>
                 </tr>
               </table>
               <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #2d3748;">
-                Le recordamos que dichas cuotas forman parte del compromiso adquirido al momento de la aprobaci√≥n de su cr√©dito, y su cancelaci√≥n oportuna contribuye significativamente a mantener su historial financiero en condiciones favorables.
+                Le recordamos que dichas cuotas forman parte del compromiso adquirido al momento de la aprobaciÛn de su crÈdito, y su cancelaciÛn oportuna contribuye significativamente a mantener su historial financiero en condiciones favorables.
               </p>
               <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #c53030; font-weight: 600;">
                 LE REMITIMOS LAS CUENTAS DONDE PUEDE REALIZAR SUS PAGOS. NO CONTAMOS CON ZELLE.
               </p>
               <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #2d3748;">
-                En virtud de lo anterior, le invitamos cordialmente a regularizar su situaci√≥n en un lapso no mayor a <strong>48 horas</strong>, realizando el pago de las cuotas adeudadas a trav√©s de nuestros canales habituales.
+                En virtud de lo anterior, le invitamos cordialmente a regularizar su situaciÛn en un lapso no mayor a <strong>48 horas</strong>, realizando el pago de las cuotas adeudadas a travÈs de nuestros canales habituales.
               </p>
               <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #2b6cb0; font-weight: 600;">
-                SI YA HA EFECTUADO EL PAGO, LE AGRADECEMOS HACER CASO OMISO A ESTA COMUNICACI√ìN.
+                SI YA HA EFECTUADO EL PAGO, LE AGRADECEMOS HACER CASO OMISO A ESTA COMUNICACI”N.
               </p>
               <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #2d3748;">
-                De lo contrario, le exhortamos a comunicarse con nosotros para coordinar una soluci√≥n adecuada y evitar medidas adicionales.
+                De lo contrario, le exhortamos a comunicarse con nosotros para coordinar una soluciÛn adecuada y evitar medidas adicionales.
               </p>
               <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #2d3748;">
                 Nuestro objetivo es brindarle siempre un servicio confiable y accesible, por lo cual quedamos atentos para atender cualquier duda o inconveniente que desee plantear.
               </p>
               <p style="margin: 0 0 24px 0; font-size: 15px; line-height: 1.6; color: #2d3748;">
-                Agradeciendo de antemano su pronta atenci√≥n a esta solicitud, nos despedimos cordialmente.
+                Agradeciendo de antemano su pronta atenciÛn a esta solicitud, nos despedimos cordialmente.
               </p>
               <!-- Firma -->
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-top: 2px solid #e2e8f0; padding-top: 20px;">
@@ -189,7 +190,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
                     <p style="margin: 0 0 4px 0; font-size: 15px; font-weight: 600; color: #1e3a5f;">Atentamente,</p>
                     <p style="margin: 0 0 4px 0; font-size: 14px; color: #2d3748;">Departamento de Cobranza</p>
                     <p style="margin: 0 0 4px 0; font-size: 14px; font-weight: 600; color: #1e3a5f;">Rapi-Credit, C.A.</p>
-                    <p style="margin: 0; font-size: 12px; color: #718096;">Fecha de emisi√≥n: {{FECHA_CARTA}}</p>
+                    <p style="margin: 0; font-size: 12px; color: #718096;">Fecha de emisiÛn: {{FECHA_CARTA}}</p>
                   </td>
                 </tr>
               </table>
@@ -198,7 +199,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
           <!-- Pie con color corporativo -->
           <tr>
             <td style="padding: 12px 32px; background-color: #1e3a5f; color: #a0aec0; font-size: 11px; text-align: center;">
-              Este correo es un recordatorio oficial de Rapi-Credit, C.A. Por favor no responda a este mensaje de forma autom√°tica.
+              Este correo es un recordatorio oficial de Rapi-Credit, C.A. Por favor no responda a este mensaje de forma autom·tica.
             </td>
           </tr>
         </table>
@@ -236,81 +237,81 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
   const generarVariablesPrecargadas = (): NotificacionVariable[] => {
     const CAMPOS_DISPONIBLES = {
       clientes: [
-        { campo: 'id', descripcion: 'ID √∫nico del cliente' },
-        { campo: 'cedula', descripcion: 'C√©dula de identidad' },
+        { campo: 'id', descripcion: 'ID ˙nico del cliente' },
+        { campo: 'cedula', descripcion: 'CÈdula de identidad' },
         { campo: 'nombres', descripcion: 'Nombres completos' },
-        { campo: 'telefono', descripcion: 'Tel√©fono de contacto' },
-        { campo: 'email', descripcion: 'Correo electr√≥nico' },
-        { campo: 'direccion', descripcion: 'Direcci√≥n de residencia' },
+        { campo: 'telefono', descripcion: 'TelÈfono de contacto' },
+        { campo: 'email', descripcion: 'Correo electrÛnico' },
+        { campo: 'direccion', descripcion: 'DirecciÛn de residencia' },
         { campo: 'fecha_nacimiento', descripcion: 'Fecha de nacimiento' },
-        { campo: 'ocupacion', descripcion: 'Ocupaci√≥n del cliente' },
+        { campo: 'ocupacion', descripcion: 'OcupaciÛn del cliente' },
         { campo: 'estado', descripcion: 'Estado (ACTIVO, INACTIVO, FINALIZADO)' },
         { campo: 'activo', descripcion: 'Estado activo (true/false)' },
         { campo: 'fecha_registro', descripcion: 'Fecha de registro' },
-        { campo: 'fecha_actualizacion', descripcion: 'Fecha de √∫ltima actualizaci√≥n' },
-        { campo: 'usuario_registro', descripcion: 'Usuario que registr√≥' },
+        { campo: 'fecha_actualizacion', descripcion: 'Fecha de ˙ltima actualizaciÛn' },
+        { campo: 'usuario_registro', descripcion: 'Usuario que registrÛ' },
         { campo: 'notas', descripcion: 'Notas adicionales' },
       ],
       prestamos: [
-        { campo: 'id', descripcion: 'ID del pr√©stamo' },
+        { campo: 'id', descripcion: 'ID del prÈstamo' },
         { campo: 'cliente_id', descripcion: 'ID del cliente' },
-        { campo: 'cedula', descripcion: 'C√©dula del cliente' },
+        { campo: 'cedula', descripcion: 'CÈdula del cliente' },
         { campo: 'nombres', descripcion: 'Nombres del cliente' },
-        { campo: 'valor_activo', descripcion: 'Valor del activo (veh√≠culo)' },
+        { campo: 'valor_activo', descripcion: 'Valor del activo (vehÌculo)' },
         { campo: 'total_financiamiento', descripcion: 'Monto total financiado' },
-        { campo: 'fecha_requerimiento', descripcion: 'Fecha requerida del pr√©stamo' },
+        { campo: 'fecha_requerimiento', descripcion: 'Fecha requerida del prÈstamo' },
         { campo: 'modalidad_pago', descripcion: 'Modalidad (MENSUAL, QUINCENAL, SEMANAL)' },
-        { campo: 'numero_cuotas', descripcion: 'N√∫mero total de cuotas' },
-        { campo: 'cuota_periodo', descripcion: 'Monto de cuota por per√≠odo' },
-        { campo: 'tasa_interes', descripcion: 'Tasa de inter√©s (%)' },
-        { campo: 'fecha_base_calculo', descripcion: 'Fecha base para c√°lculo' },
+        { campo: 'numero_cuotas', descripcion: 'N˙mero total de cuotas' },
+        { campo: 'cuota_periodo', descripcion: 'Monto de cuota por perÌodo' },
+        { campo: 'tasa_interes', descripcion: 'Tasa de interÈs (%)' },
+        { campo: 'fecha_base_calculo', descripcion: 'Fecha base para c·lculo' },
         { campo: 'producto', descripcion: 'Producto financiero' },
         { campo: 'concesionario', descripcion: 'Concesionario' },
         { campo: 'analista', descripcion: 'Analista asignado' },
-        { campo: 'modelo_vehiculo', descripcion: 'Modelo del veh√≠culo' },
-        { campo: 'estado', descripcion: 'Estado del pr√©stamo' },
+        { campo: 'modelo_vehiculo', descripcion: 'Modelo del vehÌculo' },
+        { campo: 'estado', descripcion: 'Estado del prÈstamo' },
         { campo: 'usuario_proponente', descripcion: 'Usuario proponente' },
         { campo: 'usuario_aprobador', descripcion: 'Usuario aprobador' },
         { campo: 'fecha_registro', descripcion: 'Fecha de registro' },
-        { campo: 'fecha_aprobacion', descripcion: 'Fecha de aprobaci√≥n' },
+        { campo: 'fecha_aprobacion', descripcion: 'Fecha de aprobaciÛn' },
       ],
       cuotas: [
         { campo: 'id', descripcion: 'ID de la cuota' },
-        { campo: 'prestamo_id', descripcion: 'ID del pr√©stamo' },
-        { campo: 'numero_cuota', descripcion: 'N√∫mero de cuota' },
+        { campo: 'prestamo_id', descripcion: 'ID del prÈstamo' },
+        { campo: 'numero_cuota', descripcion: 'N˙mero de cuota' },
         { campo: 'fecha_vencimiento', descripcion: 'Fecha de vencimiento' },
         { campo: 'fecha_pago', descripcion: 'Fecha de pago' },
         { campo: 'monto_cuota', descripcion: 'Monto total de la cuota' },
         { campo: 'monto_capital', descripcion: 'Monto de capital' },
-        { campo: 'monto_interes', descripcion: 'Monto de inter√©s' },
+        { campo: 'monto_interes', descripcion: 'Monto de interÈs' },
         { campo: 'saldo_capital_inicial', descripcion: 'Saldo capital inicial' },
         { campo: 'saldo_capital_final', descripcion: 'Saldo capital final' },
         { campo: 'capital_pagado', descripcion: 'Capital pagado' },
-        { campo: 'interes_pagado', descripcion: 'Inter√©s pagado' },
+        { campo: 'interes_pagado', descripcion: 'InterÈs pagado' },
         { campo: 'mora_pagada', descripcion: 'Mora pagada' },
         { campo: 'total_pagado', descripcion: 'Total pagado' },
         { campo: 'capital_pendiente', descripcion: 'Capital pendiente' },
-        { campo: 'interes_pendiente', descripcion: 'Inter√©s pendiente' },
-        { campo: 'dias_mora', descripcion: 'D√≠as de mora' },
+        { campo: 'interes_pendiente', descripcion: 'InterÈs pendiente' },
+        { campo: 'dias_mora', descripcion: 'DÌas de mora' },
         { campo: 'monto_mora', descripcion: 'Monto de mora' },
         { campo: 'tasa_mora', descripcion: 'Tasa de mora (%)' },
-        { campo: 'dias_morosidad', descripcion: 'D√≠as de morosidad' },
+        { campo: 'dias_morosidad', descripcion: 'DÌas de morosidad' },
         { campo: 'monto_morosidad', descripcion: 'Monto de morosidad' },
         { campo: 'estado', descripcion: 'Estado de la cuota' },
       ],
       pagos: [
         { campo: 'id', descripcion: 'ID del pago' },
-        { campo: 'cedula', descripcion: 'C√©dula del cliente' },
-        { campo: 'prestamo_id', descripcion: 'ID del pr√©stamo' },
-        { campo: 'numero_cuota', descripcion: 'N√∫mero de cuota' },
+        { campo: 'cedula', descripcion: 'CÈdula del cliente' },
+        { campo: 'prestamo_id', descripcion: 'ID del prÈstamo' },
+        { campo: 'numero_cuota', descripcion: 'N˙mero de cuota' },
         { campo: 'fecha_pago', descripcion: 'Fecha de pago' },
         { campo: 'fecha_registro', descripcion: 'Fecha de registro' },
         { campo: 'monto_pagado', descripcion: 'Monto pagado' },
-        { campo: 'numero_documento', descripcion: 'N√∫mero de documento' },
-        { campo: 'institucion_bancaria', descripcion: 'Instituci√≥n bancaria' },
+        { campo: 'numero_documento', descripcion: 'N˙mero de documento' },
+        { campo: 'institucion_bancaria', descripcion: 'InstituciÛn bancaria' },
         { campo: 'estado', descripcion: 'Estado del pago' },
-        { campo: 'conciliado', descripcion: 'Si est√° conciliado' },
-        { campo: 'fecha_conciliacion', descripcion: 'Fecha de conciliaci√≥n' },
+        { campo: 'conciliado', descripcion: 'Si est· conciliado' },
+        { campo: 'fecha_conciliacion', descripcion: 'Fecha de conciliaciÛn' },
       ],
     }
 
@@ -364,17 +365,17 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
     cargarVariables()
   }, [])
 
-  // Recargar variables cuando el usuario vuelve a la pesta√±a Plantillas (tras crear/editar en Variables Personalizadas)
+  // Recargar variables cuando el usuario vuelve a la pestaÒa Plantillas (tras crear/editar en Variables Personalizadas)
   useEffect(() => {
     if (tabSeccionActiva === 'plantillas') {
       cargarVariables()
     }
   }, [tabSeccionActiva])
 
-  // Cargar plantilla inicial si se proporciona (para edici√≥n desde Resumen)
+  // Cargar plantilla inicial si se proporciona (para ediciÛn desde Resumen)
   useEffect(() => {
     if (plantillaInicial && plantillas.length > 0) {
-      // Buscar la plantilla en la lista cargada para asegurar que est√© actualizada
+      // Buscar la plantilla en la lista cargada para asegurar que estÈ actualizada
       const plantillaEncontrada = plantillas.find(p => p.id === plantillaInicial.id)
       const plantillaACargar = plantillaEncontrada || plantillaInicial
 
@@ -388,7 +389,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
       setCuerpo(plantillaACargar.cuerpo)
       setFirma('')
 
-      // Cambiar a la pesta√±a de armar plantilla
+      // Cambiar a la pestaÒa de armar plantilla
       setActiveTab('armar')
 
       // Notificar que la plantilla fue cargada
@@ -398,7 +399,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
     }
   }, [plantillaInicial, plantillas, onPlantillaCargada])
 
-  // Recargar plantillas cuando se cambia a la pesta√±a de resumen
+  // Recargar plantillas cuando se cambia a la pestaÒa de resumen
   useEffect(() => {
     if (activeTab === 'resumen') {
       cargar()
@@ -448,7 +449,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
     setActiva(Boolean(p.activa))
     setAsunto(p.asunto)
     setEncabezado('')
-    setCuerpo(p.cuerpo)
+    setCuerpo(replaceBase64ImagesWithLogoUrl(p.cuerpo || ''))
     setFirma('')
   }
 
@@ -505,7 +506,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
       filtradas = filtradas.filter(v => v.tabla === filtroTablaVariable)
     }
 
-    // Filtrar por b√∫squeda
+    // Filtrar por b˙squeda
     if (busquedaVariable) {
       filtradas = filtradas.filter(v =>
         v.nombre_variable.toLowerCase().includes(busquedaVariable.toLowerCase()) ||
@@ -530,7 +531,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
     return agrupadas
   }, [variablesFiltradas])
 
-  // Obtener tablas √∫nicas
+  // Obtener tablas ˙nicas
   const tablasUnicas = useMemo(() => {
     return Array.from(new Set(variablesConfiguradas.map(v => v.tabla))).sort()
   }, [variablesConfiguradas])
@@ -572,7 +573,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
     const tipoAValidar = tipoValidar || tipo
     if (!tipoAValidar) return null
 
-    // Reglas b√°sicas por tipo
+    // Reglas b·sicas por tipo
     const requeridasPorTipo: Record<string, string[]> = {
       'PAGO_5_DIAS_ANTES': ['nombre', 'monto', 'fecha_vencimiento'],
       'PAGO_3_DIAS_ANTES': ['nombre', 'monto', 'fecha_vencimiento'],
@@ -625,7 +626,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
         if (otrosTipos.length > 0) toast.success(`Se crearon ${otrosTipos.length} plantilla(s) para los otros casos`) 
         await cargar()
         limpiar()
-        // Cambiar a la pesta√±a de resumen despu√©s de guardar
+        // Cambiar a la pestaÒa de resumen despuÈs de guardar
         setActiveTab('resumen')
       } catch (error: any) {
         toast.error(error?.response?.data?.detail || 'Error al guardar plantilla')
@@ -635,7 +636,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
 
     // Si estamos creando nuevas plantillas, validar tipos seleccionados
     if (tiposSeleccionados.length === 0) {
-      toast.error('Seleccione al menos un tipo de notificaci√≥n')
+      toast.error('Seleccione al menos un tipo de notificaciÛn')
       return
     }
 
@@ -682,7 +683,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
 
       if (plantillasCreadas.length > 0) {
         toast.success(`Se crearon ${plantillasCreadas.length} plantilla(s) exitosamente`)
-        // Cambiar a la pesta√±a de resumen despu√©s de guardar
+        // Cambiar a la pestaÒa de resumen despuÈs de guardar
         setActiveTab('resumen')
       }
 
@@ -703,7 +704,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
       return
     }
 
-    if (!window.confirm(`¬øEliminar plantilla "${selected.nombre}"?`)) return
+    if (!window.confirm(`øEliminar plantilla "${selected.nombre}"?`)) return
 
     try {
       await notificacionService.eliminarPlantilla(selected.id)
@@ -749,7 +750,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
       const data = JSON.parse(text)
 
       if (!data.nombre || !data.tipo || !data.asunto || !data.cuerpo) {
-        toast.error('Archivo JSON inv√°lido: faltan campos obligatorios')
+        toast.error('Archivo JSON inv·lido: faltan campos obligatorios')
         return
       }
 
@@ -763,9 +764,9 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
       setSelected(null)
       setActiveTab('armar')
 
-      toast.success('Plantilla importada. Revise y guarde cuando est√© lista.')
+      toast.success('Plantilla importada. Revise y guarde cuando estÈ lista.')
     } catch (error: any) {
-      toast.error('Error al leer el archivo JSON: ' + (error.message || 'Formato inv√°lido'))
+      toast.error('Error al leer el archivo JSON: ' + (error.message || 'Formato inv·lido'))
     }
 
     if (fileInputRef.current) {
@@ -780,7 +781,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
   }
 
   const handleEliminarDesdeResumen = async (plantilla: NotificacionPlantilla) => {
-    if (!window.confirm(`¬øEst√° seguro de eliminar la plantilla "${plantilla.nombre}"?`)) {
+    if (!window.confirm(`øEst· seguro de eliminar la plantilla "${plantilla.nombre}"?`)) {
       return
     }
 
@@ -809,31 +810,31 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
     }
   }
 
-  // Mapeo de tipos a categor√≠as y casos (para el resumen)
+  // Mapeo de tipos a categorÌas y casos (para el resumen)
   const mapeoTipos = {
-    'PAGO_5_DIAS_ANTES': { categoria: 'Notificaci√≥n Previa', caso: '5 d√≠as antes' },
-    'PAGO_3_DIAS_ANTES': { categoria: 'Notificaci√≥n Previa', caso: '3 d√≠as antes' },
-    'PAGO_1_DIA_ANTES': { categoria: 'Notificaci√≥n Previa', caso: '1 d√≠a antes' },
-    'PAGO_DIA_0': { categoria: 'D√≠a de Pago', caso: 'D√≠a de pago' },
-    'PAGO_1_DIA_ATRASADO': { categoria: 'Notificaci√≥n Retrasada', caso: '1 d√≠a de retraso' },
-    'PAGO_3_DIAS_ATRASADO': { categoria: 'Notificaci√≥n Retrasada', caso: '3 d√≠as de retraso' },
-    'PAGO_5_DIAS_ATRASADO': { categoria: 'Notificaci√≥n Retrasada', caso: '5 d√≠as de retraso' },
+    'PAGO_5_DIAS_ANTES': { categoria: 'NotificaciÛn Previa', caso: '5 dÌas antes' },
+    'PAGO_3_DIAS_ANTES': { categoria: 'NotificaciÛn Previa', caso: '3 dÌas antes' },
+    'PAGO_1_DIA_ANTES': { categoria: 'NotificaciÛn Previa', caso: '1 dÌa antes' },
+    'PAGO_DIA_0': { categoria: 'DÌa de Pago', caso: 'DÌa de pago' },
+    'PAGO_1_DIA_ATRASADO': { categoria: 'NotificaciÛn Retrasada', caso: '1 dÌa de retraso' },
+    'PAGO_3_DIAS_ATRASADO': { categoria: 'NotificaciÛn Retrasada', caso: '3 dÌas de retraso' },
+    'PAGO_5_DIAS_ATRASADO': { categoria: 'NotificaciÛn Retrasada', caso: '5 dÌas de retraso' },
     'PREJUDICIAL': { categoria: 'Prejudicial', caso: 'Prejudicial' },
-    'MORA_90': { categoria: 'Mora 90+', caso: '90+ d√≠as de mora (moroso)' },
+    'MORA_90': { categoria: 'Mora 90+', caso: '90+ dÌas de mora (moroso)' },
     'COBRANZA': { categoria: 'Cobranza', caso: 'Carta de cobranza' },
   }
 
   /** Orden de casos para el banco por caso (cada uno con su lista de plantillas) */
   const ordenCasos: { tipo: string; label: string; borderColor: string }[] = [
-    { tipo: 'PAGO_5_DIAS_ANTES', label: 'Faltan 5 d√≠as', borderColor: 'border-blue-500' },
-    { tipo: 'PAGO_3_DIAS_ANTES', label: 'Faltan 3 d√≠as', borderColor: 'border-blue-400' },
-    { tipo: 'PAGO_1_DIA_ANTES', label: 'Falta 1 d√≠a', borderColor: 'border-blue-300' },
+    { tipo: 'PAGO_5_DIAS_ANTES', label: 'Faltan 5 dÌas', borderColor: 'border-blue-500' },
+    { tipo: 'PAGO_3_DIAS_ANTES', label: 'Faltan 3 dÌas', borderColor: 'border-blue-400' },
+    { tipo: 'PAGO_1_DIA_ANTES', label: 'Falta 1 dÌa', borderColor: 'border-blue-300' },
     { tipo: 'PAGO_DIA_0', label: 'Hoy vence', borderColor: 'border-green-500' },
-    { tipo: 'PAGO_1_DIA_ATRASADO', label: '1 d√≠a de retraso', borderColor: 'border-amber-400' },
-    { tipo: 'PAGO_3_DIAS_ATRASADO', label: '3 d√≠as de retraso', borderColor: 'border-amber-500' },
-    { tipo: 'PAGO_5_DIAS_ATRASADO', label: '5 d√≠as de retraso', borderColor: 'border-amber-600' },
+    { tipo: 'PAGO_1_DIA_ATRASADO', label: '1 dÌa de retraso', borderColor: 'border-amber-400' },
+    { tipo: 'PAGO_3_DIAS_ATRASADO', label: '3 dÌas de retraso', borderColor: 'border-amber-500' },
+    { tipo: 'PAGO_5_DIAS_ATRASADO', label: '5 dÌas de retraso', borderColor: 'border-amber-600' },
     { tipo: 'PREJUDICIAL', label: 'Prejudicial', borderColor: 'border-red-500' },
-    { tipo: 'MORA_90', label: '90+ d√≠as de mora (moroso)', borderColor: 'border-slate-500' },
+    { tipo: 'MORA_90', label: '90+ dÌas de mora (moroso)', borderColor: 'border-slate-500' },
     { tipo: 'COBRANZA', label: 'Carta de cobranza', borderColor: 'border-violet-500' },
   ]
 
@@ -852,14 +853,14 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
   }, [plantillasFiltradas])
 
   const categoriasOrden = [
-    { key: 'Notificaci√≥n Previa', color: 'blue', borderColor: 'border-blue-500', icon: '‚úì' },
-    { key: 'D√≠a de Pago', color: 'green', borderColor: 'border-green-500', icon: 'üí∞' },
-    { key: 'Notificaci√≥n Retrasada', color: 'orange', borderColor: 'border-orange-500', icon: '‚ö†¬è' },
-    { key: 'Prejudicial', color: 'red', borderColor: 'border-red-500', icon: '√∞≈∏≈°¬®' },
-    { key: 'Mora 90+', color: 'slate', borderColor: 'border-slate-500', icon: '√∞≈∏‚Äú‚Äπ' },
+    { key: 'NotificaciÛn Previa', color: 'blue', borderColor: 'border-blue-500', icon: '?' },
+    { key: 'DÌa de Pago', color: 'green', borderColor: 'border-green-500', icon: '??' },
+    { key: 'NotificaciÛn Retrasada', color: 'orange', borderColor: 'border-orange-500', icon: '?è' },
+    { key: 'Prejudicial', color: 'red', borderColor: 'border-red-500', icon: 'üö®' },
+    { key: 'Mora 90+', color: 'slate', borderColor: 'border-slate-500', icon: 'üìã' },
   ]
 
-  // Organizar plantillas por categor√≠a (para el resumen)
+  // Organizar plantillas por categorÌa (para el resumen)
   const plantillasPorCategoria = useMemo(() => {
     const organizadas: Record<string, NotificacionPlantilla[]> = {}
 
@@ -874,7 +875,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
       }
     })
 
-    // Ordenar plantillas dentro de cada categor√≠a por caso
+    // Ordenar plantillas dentro de cada categorÌa por caso
     Object.keys(organizadas).forEach(categoria => {
       organizadas[categoria].sort((a, b) => {
         const casoA = mapeoTipos[a.tipo as keyof typeof mapeoTipos]?.caso || ''
@@ -889,14 +890,14 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
 
   const handleVistaPreviaHtml = () => {
     const ejemplo: Record<string, string> = {
-      nombre: 'Juan P√©rez',
+      nombre: 'Juan PÈrez',
       cedula: 'V-12345678',
       fecha_vencimiento: '15/03/2025',
       numero_cuota: '3',
       monto: '150.00',
       dias_atraso: '2',
       'CLIENTES.TRATAMIENTO': 'Sr.',
-      'CLIENTES.NOMBRE_COMPLETO': 'Juan P√©rez',
+      'CLIENTES.NOMBRE_COMPLETO': 'Juan PÈrez',
       'PRESTAMOS.ID': 'CR-2024-001',
       FECHA_CARTA: new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }),
       LOGO_URL: (typeof window !== 'undefined' && window.location.origin) ? `${window.location.origin}/logos/rapicredit-public.png` : '',
@@ -909,14 +910,14 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
       const token = `{{${key}}}`
       html = html.split(token).join(val)
     })
-    html = html.replace(/\{\{#CUOTAS\.VENCIMIENTOS\}\}[\s\S]*?\{\{\/CUOTAS\.VENCIMIENTOS\}\}/g, '<p>Cuota N¬∞ 1 - Vencimiento: 10/01/2025 - Monto: 150.00</p><p>Cuota N¬∞ 2 - Vencimiento: 10/02/2025 - Monto: 150.00</p>')
-    // Siempre renderizar como HTML (encabezado, cuerpo y firma pueden contener c√≥digo HTML)
+    html = html.replace(/\{\{#CUOTAS\.VENCIMIENTOS\}\}[\s\S]*?\{\{\/CUOTAS\.VENCIMIENTOS\}\}/g, '<p>Cuota N∞ 1 - Vencimiento: 10/01/2025 - Monto: 150.00</p><p>Cuota N∞ 2 - Vencimiento: 10/02/2025 - Monto: 150.00</p>')
+    // Siempre renderizar como HTML (encabezado, cuerpo y firma pueden contener cÛdigo HTML)
     const doc = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Vista previa</title></head><body style="margin:0; padding:12px; font-family: sans-serif;">${html}</body></html>`
     const blob = new Blob([doc], { type: 'text/html;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     window.open(url, '_blank', 'noopener,noreferrer')
     setTimeout(() => URL.revokeObjectURL(url), 60000)
-    toast.success('Vista previa abierta en nueva pesta√±a')
+    toast.success('Vista previa abierta en nueva pestaÒa')
   }
 
   return (
@@ -936,7 +937,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-lg font-semibold">Armar plantilla</h2>
-            <p className="text-sm text-gray-500">Elige el caso, escribe asunto y cuerpo, inserta variables y guarda. Luego as√≠gnala en Notificaciones √¢‚Ä†‚Äô Configuraci√≥n.</p>
+            <p className="text-sm text-gray-500">Elige el caso, escribe asunto y cuerpo, inserta variables y guarda. Luego asÌgnala en Notificaciones ‚Üí ConfiguraciÛn.</p>
           </div>
           <div className="flex gap-2 flex-wrap">
             <Button onClick={importar} variant="outline" size="sm" title="Importar plantilla">
@@ -962,10 +963,10 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
             </div>
             <div className="border rounded-lg p-4 bg-gray-50 space-y-4">
               <label className="text-sm font-medium text-gray-700 block">
-                Usar esta plantilla para (seleccione uno o m√°s casos)
+                Usar esta plantilla para (seleccione uno o m·s casos)
               </label>
               <p className="text-xs text-gray-500 mb-2">
-                Marque los casos en los que se usar√° esta plantilla (ej. 1 d√≠a, 3 d√≠as y 5 d√≠as de retraso).
+                Marque los casos en los que se usar· esta plantilla (ej. 1 dÌa, 3 dÌas y 5 dÌas de retraso).
               </p>
               <div className="flex items-center justify-between">
                 <span className="text-xs text-gray-600">
@@ -995,7 +996,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
 
                   {/* Antes de vencimiento */}
                   <div>
-                    <h4 className="text-sm font-semibold mb-2 text-blue-700">‚úì Antes de Fecha de Vencimiento</h4>
+                    <h4 className="text-sm font-semibold mb-2 text-blue-700">? Antes de Fecha de Vencimiento</h4>
                     <div className="grid grid-cols-3 gap-2">
                       {tiposPorCategoria.antes.map(t => (
                         <label key={t.valor} className="flex items-center gap-2 p-2 border rounded hover:bg-white cursor-pointer">
@@ -1011,9 +1012,9 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
                     </div>
                   </div>
 
-                  {/* D√≠a de pago */}
+                  {/* DÌa de pago */}
                   <div>
-                    <h4 className="text-sm font-semibold mb-2 text-green-700">üí∞ D√≠a de Pago</h4>
+                    <h4 className="text-sm font-semibold mb-2 text-green-700">?? DÌa de Pago</h4>
                     <div className="grid grid-cols-3 gap-2">
                       {tiposPorCategoria.diaPago.map(t => (
                         <label key={t.valor} className="flex items-center gap-2 p-2 border rounded hover:bg-white cursor-pointer">
@@ -1031,7 +1032,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
 
                   {/* Retraso */}
                   <div>
-                    <h4 className="text-sm font-semibold mb-2 text-orange-700">‚ö†¬è D√≠as de Retraso</h4>
+                    <h4 className="text-sm font-semibold mb-2 text-orange-700">?è DÌas de Retraso</h4>
                     <div className="grid grid-cols-3 gap-2">
                       {tiposPorCategoria.retraso.map(t => (
                         <label key={t.valor} className="flex items-center gap-2 p-2 border rounded hover:bg-white cursor-pointer">
@@ -1068,7 +1069,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
                   {/* Mora 90+ */}
                   {tiposPorCategoria.mora61 && (
                     <div>
-                      <h4 className="text-sm font-semibold mb-2 text-slate-700">90+ d√≠as de mora (moroso)</h4>
+                      <h4 className="text-sm font-semibold mb-2 text-slate-700">90+ dÌas de mora (moroso)</h4>
                       <div className="grid grid-cols-3 gap-2">
                         {tiposPorCategoria.mora61.map(t => (
                           <label key={t.valor} className="flex items-center gap-2 p-2 border rounded hover:bg-white cursor-pointer">
@@ -1087,7 +1088,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
                 </div>
             <div className="flex items-center gap-2">
               <input id="activa" type="checkbox" checked={activa} onChange={e=>setActiva(e.target.checked)} />
-              <label htmlFor="activa" className="text-sm">Habilitar env√≠o autom√°tico a las 3:00 AM</label>
+              <label htmlFor="activa" className="text-sm">Habilitar envÌo autom·tico a las 3:00 AM</label>
             </div>
           </div>
 
@@ -1096,7 +1097,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
             <p className="text-xs font-semibold text-blue-900 mb-1">Insertar variable en asunto o cuerpo (clic en la variable):</p>
             {(tipo === 'COBRANZA' || tiposSeleccionados.includes('COBRANZA')) ? (
               <>
-                <p className="text-xs text-blue-700 mb-2">Plantilla de cobranza: use <code className="bg-white px-1 rounded">{"{{TABLA.CAMPO}}"}</code> y el bloque de cuotas vencidas. Datos desde clientes, pr√©stamos y cuotas seg√∫n filtros de las pesta√±as de Notificaciones.</p>
+                <p className="text-xs text-blue-700 mb-2">Plantilla de cobranza: use <code className="bg-white px-1 rounded">{"{{TABLA.CAMPO}}"}</code> y el bloque de cuotas vencidas. Datos desde clientes, prÈstamos y cuotas seg˙n filtros de las pestaÒas de Notificaciones.</p>
                 <div className="flex flex-wrap gap-2 mb-2">
                   {VARIABLES_COBRANZA.map(({ key, label }) => (
                     <Button
@@ -1144,7 +1145,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
               </>
             ) : (
               <>
-                <p className="text-xs text-blue-700 mb-2">Las variables de la pesta√±a <strong>Variables Personalizadas</strong> aparecen abajo en el Banco de Variables y se copian aqu√≠ al hacer clic.</p>
+                <p className="text-xs text-blue-700 mb-2">Las variables de la pestaÒa <strong>Variables Personalizadas</strong> aparecen abajo en el Banco de Variables y se copian aquÌ al hacer clic.</p>
                 <div className="flex flex-wrap gap-2">
                   {VARIABLES_NOTIFICACION.map(({ key, label }) => (
                     <Button
@@ -1172,8 +1173,8 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
               <Input ref={asuntoRef as any} value={asunto} onFocus={()=>setFocus('asunto')} onChange={e=>setAsunto(e.target.value)} placeholder="Asunto del correo" />
             </div>
             <div className="col-span-2">
-              <p className="text-xs text-gray-500 mb-1">Puede usar c√≥digo HTML en encabezado, cuerpo y firma. Use el bot√≥n ¬´Vista previa (datos de ejemplo)¬ª para ver c√≥mo queda el resultado.</p>
-              <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">Formato r√°pido (encabezado/cuerpo/firma):
+              <p className="text-xs text-gray-500 mb-1">Puede usar cÛdigo HTML en encabezado, cuerpo y firma. Use el botÛn ´Vista previa (datos de ejemplo)ª para ver cÛmo queda el resultado.</p>
+              <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">Formato r·pido (encabezado/cuerpo/firma):
                 <Button size="sm" variant="ghost" onClick={()=>aplicarFormato('b')}>B</Button>
                 <Button size="sm" variant="ghost" onClick={()=>aplicarFormato('i')}>I</Button>
                 <Button size="sm" variant="ghost" onClick={()=>aplicarFormato('u')}>U</Button>
@@ -1191,11 +1192,11 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
             </div>
             <div className="col-span-2">
               <label className="text-sm text-gray-600">Cuerpo (puede incluir HTML)</label>
-              <Textarea ref={cuerpoRef} value={cuerpo} onFocus={()=>setFocus('cuerpo')} onChange={e=>setCuerpo(e.target.value)} rows={10} placeholder="Contenido principal (ej. <p>Hola <b>{{nombre}}</b></p>)" />
+              <Textarea ref={cuerpoRef} value={cuerpo} onFocus={()=>setFocus('cuerpo')} onChange={e=>setCuerpo(replaceBase64ImagesWithLogoUrl(e.target.value))} rows={10} placeholder="Contenido principal (ej. <p>Hola <b>{{nombre}}</b></p>)" />
             </div>
           </div>
 
-          {/* Panel de Variables Configuradas: incluye Variables Personalizadas (pesta√±a hom√≥nima) */}
+          {/* Panel de Variables Configuradas: incluye Variables Personalizadas (pestaÒa homÛnima) */}
           <div className="border-2 border-blue-200 rounded-lg p-4 bg-gradient-to-br from-blue-50 to-white shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
@@ -1240,7 +1241,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
                     </select>
                   </div>
 
-                  {/* B√∫squeda de variables */}
+                  {/* B˙squeda de variables */}
                   <div className="relative">
                     <label className="text-xs font-semibold text-gray-700 mb-1 block">Buscar variable:</label>
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" style={{ top: '60%' }} />
@@ -1309,7 +1310,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
                                     </div>
                                   </div>
 
-                                  {/* Descripci√≥n si existe */}
+                                  {/* DescripciÛn si existe */}
                                   {v.descripcion && (
                                     <div className="text-xs text-gray-600 mt-2 italic border-l-2 border-blue-200 pl-2">
                                       {v.descripcion}
@@ -1317,7 +1318,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
                                   )}
                                 </div>
 
-                                {/* Bot√≥n de inserci√≥n mejorado */}
+                                {/* BotÛn de inserciÛn mejorado */}
                                 <Button
                                   size="sm"
                                   className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
@@ -1340,7 +1341,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
               </div>
             )}
 
-            {/* M√©todo alternativo: campo de texto para variables r√°pidas */}
+            {/* MÈtodo alternativo: campo de texto para variables r·pidas */}
             <div className="mt-3 pt-3 border-t flex items-center gap-2">
               <Input
                 value={variable}
@@ -1378,7 +1379,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
               type="button"
               variant="outline"
               onClick={handleVistaPreviaHtml}
-              title="Ver c√≥mo quedar√° el cuerpo del email con datos de ejemplo"
+              title="Ver cÛmo quedar· el cuerpo del email con datos de ejemplo"
             >
               <Eye className="h-4 w-4 mr-2" />
               Vista previa (datos de ejemplo)
@@ -1400,11 +1401,11 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
               Banco de plantillas por caso
             </CardTitle>
             <CardDescription>
-              Cada caso (1 d√≠a, 5 d√≠as, hoy vence, 61+ mora, etc.) tiene su banco. Estos nombres aparecen en Notificaciones √¢‚Ä†‚Äô Configuraci√≥n al elegir la plantilla a enviar.
+              Cada caso (1 dÌa, 5 dÌas, hoy vence, 61+ mora, etc.) tiene su banco. Estos nombres aparecen en Notificaciones ‚Üí ConfiguraciÛn al elegir la plantilla a enviar.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {/* B√∫squeda y filtros para el resumen */}
+            {/* B˙squeda y filtros para el resumen */}
             <div className="mb-6 space-y-2">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -1442,7 +1443,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
               <div className="text-center py-8 text-gray-500">
                 <AlertCircle className="h-12 w-12 mx-auto mb-4 text-gray-400" />
                 <p>No hay plantillas configuradas.</p>
-                <p className="text-sm mt-2">Vaya a la pesta√±a "Armar plantilla" para crear nuevas plantillas.</p>
+                <p className="text-sm mt-2">Vaya a la pestaÒa "Armar plantilla" para crear nuevas plantillas.</p>
               </div>
             ) : (
               <div className="space-y-6">
@@ -1467,7 +1468,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
                               <TableRow>
                                 <TableHead>Nombre</TableHead>
                                 <TableHead>Asunto</TableHead>
-                                <TableHead>Fecha actualizaci√≥n</TableHead>
+                                <TableHead>Fecha actualizaciÛn</TableHead>
                                 <TableHead>Estado</TableHead>
                                 <TableHead className="text-right">Acciones</TableHead>
                               </TableRow>

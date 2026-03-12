@@ -186,6 +186,7 @@ def _run_envio_lotes(campana_id: int) -> None:
 
         destinatarios = _get_destinatarios_clientes(db)
         from app.core.email import send_email
+from app.core.email_config_holder import get_email_activo_servicio
 
         batch_size = max(5, min(100, campana.batch_size))
         delay = max(1, min(60, campana.delay_entre_batches_seg))
@@ -194,6 +195,8 @@ def _run_envio_lotes(campana_id: int) -> None:
 
         for i in range(0, len(destinatarios), batch_size):
             lote = destinatarios[i : i + batch_size]
+            if not get_email_activo_servicio("campanas"):
+                continue
             for cliente_id, email, _ in lote:
                 ok, err = send_email(
                     [email],

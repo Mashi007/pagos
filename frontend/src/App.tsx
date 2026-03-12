@@ -1,4 +1,4 @@
-﻿import React, { useEffect, Suspense } from 'react'
+import React, { useEffect, Suspense } from 'react'
 import { Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -65,6 +65,7 @@ import EditarRevisionManual from './pages/EditarRevisionManual'
 // Ventas: en pausa (ruta redirige a /pagos)
 import ConversacionesWhatsAppPage from './pages/ConversacionesWhatsApp'
 import ComunicacionesPage from './pages/Comunicaciones'
+import CampanasPage from './pages/Campanas'
 import ReportePagoPage from './pages/ReportePagoPage'
 import EstadoCuentaPublicoPage from './pages/EstadoCuentaPublicoPage'
 import CobrosPagosReportadosPage from './pages/CobrosPagosReportadosPage'
@@ -324,6 +325,7 @@ function App() {
           {/* CRM */}
           <Route path="crm/embudo-clientes" element={<EmbudoClientes />} />
           <Route path="crm/tickets" element={<TicketsAtencion />} />
+          <Route path="crm/campanas" element={<CampanasPage />} />
           <Route path="crm/embudo-concesionarios" element={<EmbudoConcesionarios />} />
 
           {/* 404 para rutas no encontradas */}

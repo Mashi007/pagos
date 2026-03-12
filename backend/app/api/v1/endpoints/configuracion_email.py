@@ -44,6 +44,12 @@ _email_config_stub: dict[str, Any] = {
     "modo_pruebas": "true",
     "email_pruebas": "",
     "email_activo": "true",
+    "email_activo_notificaciones": "true",
+    "email_activo_informe_pagos": "true",
+    "email_activo_estado_cuenta": "true",
+    "email_activo_cobros": "true",
+    "email_activo_campanas": "true",
+    "email_activo_tickets": "true",
     "imap_host": "",
     "imap_port": "993",
     "imap_user": "",
@@ -133,6 +139,12 @@ class EmailConfigUpdate(BaseModel):
     modo_pruebas: Optional[str] = None
     email_pruebas: Optional[str] = None
     email_activo: Optional[str] = None
+    email_activo_notificaciones: Optional[str] = None
+    email_activo_informe_pagos: Optional[str] = None
+    email_activo_estado_cuenta: Optional[str] = None
+    email_activo_cobros: Optional[str] = None
+    email_activo_campanas: Optional[str] = None
+    email_activo_tickets: Optional[str] = None
     imap_host: Optional[str] = None
     imap_port: Optional[str] = None
     imap_user: Optional[str] = None
@@ -270,6 +282,12 @@ def post_email_probar(payload: ProbarEmailRequest = Body(...), db: Session = Dep
 
     subject = (payload.subject or "").strip() or "Prueba de email - RapiCredit"
     body = (payload.mensaje or "").strip() or "Este es un correo de prueba enviado desde la configuracion de email."
+    if "{{LOGO_URL}}" in body:
+        try:
+            from app.core.email import _logo_url_for_email
+            body = body.replace("{{LOGO_URL}}", _logo_url_for_email())
+        except Exception:
+            body = body.replace("{{LOGO_URL}}", "https://rapicredit.onrender.com/pagos/logos/rapicredit-public.png")
     recipients = [destino]
     if payload.email_cc and (payload.email_cc or "").strip():
         recipients.append(payload.email_cc.strip())

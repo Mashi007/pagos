@@ -174,6 +174,8 @@ const [probando, setProbando] = useState(false)
       if (apiImapMasked) data.imap_password = ''; if (apiSmtpMasked) data.smtp_password = ''
       if (data.imap_use_ssl === undefined) data.imap_use_ssl = 'true'
       if (data.tickets_notify_emails === undefined) data.tickets_notify_emails = ''
+      const serviceKeys = ['email_activo_notificaciones','email_activo_informe_pagos','email_activo_estado_cuenta','email_activo_cobros','email_activo_campanas','email_activo_tickets']
+      serviceKeys.forEach(k => { if (data[k] === undefined || data[k] === null) data[k] = 'true' })
 
       // Normalizar email_activo a string
       if (data.email_activo !== undefined && data.email_activo !== null) {
@@ -637,7 +639,32 @@ const [probando, setProbando] = useState(false)
             </div>
           </div>
 
-          {/* Banners de estado y monitoreo de Google */}
+          {/* Banners de estado
+
+          <div className="mt-4 space-y-3">
+            <p className="text-sm font-medium text-gray-700">Email por servicio</p>
+            <p className="text-xs text-gray-600">Activa o desactiva el envio de email para cada tipo de uso. Si apagas uno, los demas siguen funcionando.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {[
+                { key: 'email_activo_notificaciones', label: 'Notificaciones (plantillas a clientes)' },
+                { key: 'email_activo_informe_pagos', label: 'Informe de pagos (cron)' },
+                { key: 'email_activo_estado_cuenta', label: 'Estado de cuenta (codigo y PDF)' },
+                { key: 'email_activo_cobros', label: 'Cobros (recibos)' },
+                { key: 'email_activo_campanas', label: 'Campanas CRM' },
+                { key: 'email_activo_tickets', label: 'Tickets (aviso interno)' }
+              ].map(({ key, label }) => (
+                <label key={key} className="flex items-center justify-between gap-2 p-2 rounded border border-gray-200 bg-gray-50/50">
+                  <span className="text-sm text-gray-700">{label}</span>
+                  <input
+                    type="checkbox"
+                    checked={(config[key] ?? 'true') === 'true'}
+                    onChange={(e) => handleChange(key, e.target.checked ? 'true' : 'false')}
+                    className="rounded border-gray-300"
+                  />
+                </label>
+              ))}
+            </div>
+          </div> y monitoreo de Google */}
           {esGmail && (
             <>
               {/* ✓ Estado: Configurado y vinculado correctamente */}

@@ -1,13 +1,13 @@
-﻿"""
-Holder de configuración de email en tiempo de ejecución.
-Usado por core/email.py para enviar (SMTP) y por tickets para destinos de notificación.
+"""
+Holder de configuraci�n de email en tiempo de ejecuci�n.
+Usado por core/email.py para enviar (SMTP) y por tickets para destinos de notificaci�n.
 La API configuracion/email actualiza este holder al guardar; si no se ha guardado, se usan settings (.env).
 Para que Notificaciones/CRM usen la config guardada en BD, sync_from_db() carga desde la tabla configuracion antes de enviar.
 
-Integración con encriptación:
+Integraci�n con encriptaci�n:
 - Campos sensibles (smtp_password, etc.) se encriptan al guardar en BD
-- Se desencriptan automáticamente al cargar desde BD
-- Al devolver al API, se enmascaran (no se expone la contraseña)
+- Se desencriptan autom�ticamente al cargar desde BD
+- Al devolver al API, se enmascaran (no se expone la contrase�a)
 """
 import json
 import logging
@@ -28,7 +28,7 @@ SENSITIVE_FIELDS = {"smtp_password", "imap_password"}
 
 
 def _mask_sensitive_value(value: Any) -> str:
-    """Enmascara un valor sensible para devolver a la API (no exponer contraseña)."""
+    """Enmascara un valor sensible para devolver a la API (no exponer contrase�a)."""
     if not value:
         return ""
     return "***"
@@ -50,7 +50,7 @@ def _decrypt_value_safe(encrypted: Any) -> Optional[str]:
         elif isinstance(encrypted, str):
             return decrypt_value(encrypted.encode('utf-8'))
     except Exception:
-        # Si desencriptación falla, devolver None (posiblemente no estaba encriptado)
+        # Si desencriptaci�n falla, devolver None (posiblemente no estaba encriptado)
         return None
     return None
 
@@ -67,7 +67,7 @@ def _encrypt_value_safe(value: str, field_name: str) -> Optional[bytes]:
 
 
 def sync_from_db() -> None:
-    """Carga la configuración de email desde la tabla configuracion y actualiza el holder. Así Notificaciones/CRM usan la config guardada en Configuración > Email."""
+    """Carga la configuraci�n de email desde la tabla configuracion y actualiza el holder. As� Notificaciones/CRM usan la config guardada en Configuraci�n > Email."""
     try:
         from app.core.database import SessionLocal
         from app.models.configuracion import Configuracion
@@ -96,7 +96,7 @@ def sync_from_db() -> None:
 
 
 def _load_notificaciones_envios() -> dict:
-    """Carga la configuración de envíos de notificaciones desde la tabla configuracion (clave notificaciones_envios)."""
+    """Carga la configuraci�n de env�os de notificaciones desde la tabla configuracion (clave notificaciones_envios)."""
     try:
         from app.core.database import SessionLocal
         from app.models.configuracion import Configuracion
@@ -115,7 +115,7 @@ def _load_notificaciones_envios() -> dict:
 
 
 def init_from_settings() -> None:
-    """Inicializa el holder desde settings (.env) para que el envío funcione sin pasar por la UI."""
+    """Inicializa el holder desde settings (.env) para que el env�o funcione sin pasar por la UI."""
     _current["smtp_host"] = getattr(settings, "SMTP_HOST", None) or ""
     _current["smtp_port"] = str(getattr(settings, "SMTP_PORT", None) or 587)
     _current["smtp_user"] = getattr(settings, "SMTP_USER", None) or ""
@@ -126,7 +126,7 @@ def init_from_settings() -> None:
 
 
 def get_smtp_config() -> dict[str, Any]:
-    """Devuelve la config SMTP actual. Siempre carga desde BD primero para usar el correo guardado en Configuración > Email (no el de .env)."""
+    """Devuelve la config SMTP actual. Siempre carga desde BD primero para usar el correo guardado en Configuraci�n > Email (no el de .env)."""
     sync_from_db()
     if _current.get("smtp_user"):
         return {
@@ -153,9 +153,28 @@ def get_tickets_notify_emails() -> List[str]:
     return [e.strip() for e in raw.split(",") if e.strip()]
 
 
+
+# Servicios que envian email: flag email_activo_<servicio>
+EMAIL_SERVICES = ("notificaciones", "informe_pagos", "estado_cuenta", "cobros", "campanas", "tickets")
+
+def get_email_activo() -> bool:
+    """Master: si False, ningun servicio envia email."""
+    sync_from_db()
+    v = _current.get("email_activo") or getattr(settings, "EMAIL_ACTIVO", None) or "true"
+    return (str(v).lower() == "true" or v is True)
+
+def get_email_activo_servicio(servicio: str) -> bool:
+    """True si el servicio puede enviar email."""
+    if not get_email_activo():
+        return False
+    key = "email_activo_" + servicio
+    if key not in _current or _current[key] is None:
+        return True
+    return (str(_current[key]).lower() == "true" or _current[key] is True)
+
 def update_from_api(data: dict[str, Any]) -> None:
-    """Actualiza el holder desde la API de configuración (PUT /configuracion/email/configuracion)."""
-    for k in ("smtp_host", "smtp_port", "smtp_user", "smtp_password", "from_email", "from_name", "tickets_notify_emails", "modo_pruebas", "email_pruebas", "emails_pruebas", "imap_host", "imap_port", "imap_user", "imap_password", "imap_use_ssl"):
+    """Actualiza el holder desde la API de configuraci�n (PUT /configuracion/email/configuracion)."""
+    for k in ("smtp_host", "smtp_port", "smtp_user", "smtp_password", "from_email", "from_name", "tickets_notify_emails", "modo_pruebas", "email_pruebas", "emails_pruebas", "email_activo", "email_activo_notificaciones", "email_activo_informe_pagos", "email_activo_estado_cuenta", "email_activo_cobros", "email_activo_campanas", "email_activo_tickets", "imap_host", "imap_port", "imap_user", "imap_password", "imap_use_ssl"):
         if k in data and data[k] is not None:
             _current[k] = data[k]
     if "smtp_port" in data and data["smtp_port"] is not None:
@@ -167,7 +186,7 @@ def prepare_for_db_storage(data: dict[str, Any]) -> dict[str, Any]:
     Prepara datos para guardar en BD: encripta campos sensibles.
     
     Args:
-        data: Configuración a guardar
+        data: Configuraci�n a guardar
         
     Returns:
         Diccionario con campos sensibles encriptados (valores en valor_encriptado)
@@ -192,7 +211,7 @@ def prepare_for_api_response(data: dict[str, Any]) -> dict[str, Any]:
     Prepara datos para devolver a la API: enmascara campos sensibles.
     
     Args:
-        data: Configuración almacenada en BD o caché
+        data: Configuraci�n almacenada en BD o cach�
         
     Returns:
         Diccionario con campos sensibles enmascarados
@@ -210,16 +229,16 @@ def prepare_for_api_response(data: dict[str, Any]) -> dict[str, Any]:
 def get_modo_pruebas_email() -> Tuple[bool, List[str]]:
     """
     Devuelve (modo_pruebas, list_of_emails).
-    modo_pruebas True = redirigir todos los envíos al correo(s) de pruebas.
-    list_of_emails = direcciones a las que enviar en modo pruebas (puede ser 1 o más).
+    modo_pruebas True = redirigir todos los env�os al correo(s) de pruebas.
+    list_of_emails = direcciones a las que enviar en modo pruebas (puede ser 1 o m�s).
 
     Prioridad:
     1. notificaciones_envios (clave en configuracion): si modo_pruebas=true y tiene emails_pruebas (array) o email_pruebas (string), usar esos.
-    2. Fallback: email_config (email_pruebas como string único, convertido a lista de 1).
+    2. Fallback: email_config (email_pruebas como string �nico, convertido a lista de 1).
     """
     sync_from_db()
 
-    # 1. Primero verificar notificaciones_envios (config de Notificaciones > Envíos)
+    # 1. Primero verificar notificaciones_envios (config de Notificaciones > Env�os)
     envios = _load_notificaciones_envios()
     raw_modo = envios.get("modo_pruebas") or _current.get("modo_pruebas") or getattr(settings, "MODO_PRUEBAS_EMAIL", None) or "false"
     modo = (str(raw_modo).lower() == "true" or raw_modo is True)
@@ -230,7 +249,7 @@ def get_modo_pruebas_email() -> Tuple[bool, List[str]]:
         raw_emails = envios.get("emails_pruebas")
         if isinstance(raw_emails, list):
             emails = [e.strip() for e in raw_emails if e and isinstance(e, str) and e.strip() and "@" in e.strip()]
-        # Si no hay array o está vacío, usar email_pruebas (legacy string)
+        # Si no hay array o est� vac�o, usar email_pruebas (legacy string)
         if not emails:
             raw_single = envios.get("email_pruebas") or _current.get("email_pruebas") or ""
             single = (raw_single or "").strip() if isinstance(raw_single, str) else ""

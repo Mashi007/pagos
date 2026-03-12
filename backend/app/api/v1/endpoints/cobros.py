@@ -18,6 +18,7 @@ from app.models.pago_reportado import PagoReportado, PagoReportadoHistorial
 from app.models.cliente import Cliente
 from app.services.cobros.recibo_pdf import generar_recibo_pago_reportado, WHATSAPP_LINK, WHATSAPP_DISPLAY
 from app.core.email import send_email
+from app.core.email_config_holder import get_email_activo_servicio
 from app.api.v1.endpoints.validadores import validate_cedula
 
 logger = logging.getLogger(__name__)

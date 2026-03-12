@@ -739,6 +739,7 @@ def enviar_con_plantilla(
     Query: cliente_id. Body: dict opcional con nombre, cedula, fecha_vencimiento, numero_cuota, monto, dias_atraso.
     """
     from app.core.email import send_email
+from app.core.email_config_holder import get_email_activo_servicio
     p = db.get(PlantillaNotificacion, plantilla_id)
     if not p or not p.activa:
         raise HTTPException(status_code=404, detail="Plantilla no encontrada o inactiva")
@@ -758,6 +759,8 @@ def enviar_con_plantilla(
     correo = (cliente.email or "").strip()
     if not correo or "@" not in correo:
         raise HTTPException(status_code=400, detail="El cliente no tiene email válido")
+    if not get_email_activo_servicio("notificaciones"):
+        raise HTTPException(status_code=400, detail="El envio de email para notificaciones esta desactivado. Activalo en Configuracion > Email.")
     ok, msg = send_email([correo], asunto, cuerpo)
     if not ok:
         raise HTTPException(status_code=502, detail=msg or "Error al enviar el correo")
