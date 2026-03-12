@@ -1,4 +1,4 @@
-"""
+﻿"""
 Generación del recibo PDF para reportes de pago (módulo Cobros).
 Logo RapiCredit, cuerpo del recibo, número de referencia, pie con contacto y WhatsApp.
 """
@@ -54,7 +54,7 @@ def generar_recibo_pago_reportado(
         story.append(logo_img)
         story.append(Spacer(1, 8))
     story.append(Paragraph("<b>RapiCredit C.A.</b>", styles["Title"]))
-    story.append(Paragraph("Recibo de reporte de pago", styles["Heading2"]))
+    story.append(Paragraph(f"Recibo de reporte de pago — {referencia_interna}", styles["Heading2"]))
     story.append(Spacer(1, 12))
     story.append(Paragraph(f"<b>Fecha y hora de recepción:</b> {fecha_hora_str}", styles["Normal"]))
     story.append(Spacer(1, 12))
