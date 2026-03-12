@@ -85,6 +85,27 @@ def _plantilla_to_dict(p: PlantillaNotificacion) -> dict:
     }
 
 
+# Variables que indican que la plantilla es de cobranza y necesita contexto_cobranza para renderizar
+_VARS_COBRANZA = (
+    "{{FECHA_CARTA}}",
+    "{{PRESTAMOS.ID}}",
+    "{{IDPRESTAMO}}",
+    "{{NUMEROCORRELATIVO}}",
+    "{{CLIENTES.NOMBRE_COMPLETO}}",
+    "{{CLIENTES.CEDULA}}",
+    "{{TABLA_CUOTAS_PENDIENTES}}",
+    "{{#CUOTAS.VENCIMIENTOS}}",
+)
+
+
+def plantilla_usa_variables_cobranza(plantilla) -> bool:
+    """True si asunto o cuerpo contienen variables de plantilla COBRANZA (necesitan contexto_cobranza)."""
+    if not plantilla:
+        return False
+    texto = (getattr(plantilla, "asunto", None) or "") + " " + (getattr(plantilla, "cuerpo", None) or "")
+    return any(v in texto for v in _VARS_COBRANZA)
+
+
 def _sustituir_variables(texto: str, item: dict) -> str:
     """
     Reemplaza variables {{variable}} en texto.
@@ -167,12 +188,13 @@ def get_plantilla_asunto_cuerpo(db: Session, plantilla_id: Optional[int], item: 
         plantilla = db.get(PlantillaNotificacion, plantilla_id)
         if plantilla and plantilla.activa:
             contexto_cobranza = item.get("contexto_cobranza")
-            if getattr(plantilla, "tipo", None) == "COBRANZA":
+            usa_cobranza = getattr(plantilla, "tipo", None) == "COBRANZA" or plantilla_usa_variables_cobranza(plantilla)
+            if usa_cobranza:
                 if modo_pruebas:
                     contexto_cobranza = _contexto_cobranza_placeholder()
                 elif not isinstance(contexto_cobranza, dict):
                     contexto_cobranza = None
-            if getattr(plantilla, "tipo", None) == "COBRANZA" and isinstance(contexto_cobranza, dict):
+            if usa_cobranza and isinstance(contexto_cobranza, dict):
                 from app.services.plantilla_cobranza import render_plantilla_cobranza
                 if "LOGO_URL" not in contexto_cobranza:
                     try:

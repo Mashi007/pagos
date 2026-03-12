@@ -18,6 +18,7 @@ from app.api.v1.endpoints.notificaciones import (
     get_notificaciones_envios_config,
     get_plantilla_asunto_cuerpo,
     build_contexto_cobranza_para_item,
+    plantilla_usa_variables_cobranza,
 )
 from app.models.plantilla_notificacion import PlantillaNotificacion
 from app.models.envio_notificacion import EnvioNotificacion
@@ -107,7 +108,11 @@ def _enviar_correos_items(
         # Construir contexto_cobranza cuando haga falta: email COBRANZA o adjunto PDF con variables en cualquier pestaña
         if plantilla_id and db and item.get("prestamo_id") and not item.get("contexto_cobranza"):
             plantilla = db.get(PlantillaNotificacion, plantilla_id)
-            need_ctx = (plantilla and getattr(plantilla, "tipo", None) == "COBRANZA") or (tipo_cfg.get("incluir_pdf_anexo") is True)
+            need_ctx = (
+                (plantilla and getattr(plantilla, "tipo", None) == "COBRANZA")
+                or (tipo_cfg.get("incluir_pdf_anexo") is True)
+                or (plantilla and plantilla_usa_variables_cobranza(plantilla))
+            )
             if need_ctx:
                 ctx, corr = build_contexto_cobranza_para_item(db, item, correlativos_en_batch)
                 if ctx is not None:
@@ -123,8 +128,10 @@ def _enviar_correos_items(
         body_html = None
         if plantilla_id and db:
             plantilla = db.get(PlantillaNotificacion, plantilla_id)
-            if plantilla and getattr(plantilla, "tipo", None) == "COBRANZA":
-                body_html = cuerpo  # el cuerpo de COBRANZA es HTML
+            if plantilla and item.get("contexto_cobranza") and (
+                getattr(plantilla, "tipo", None) == "COBRANZA" or plantilla_usa_variables_cobranza(plantilla)
+            ):
+                body_html = cuerpo  # cuerpo renderizado con variables cobranza es HTML
         incluir_pdf_anexo = tipo_cfg.get("incluir_pdf_anexo") is True
         incluir_adjuntos_fijos = tipo_cfg.get("incluir_adjuntos_fijos") is True
         if incluir_pdf_anexo or incluir_adjuntos_fijos:
