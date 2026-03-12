@@ -49,40 +49,34 @@ export interface ListCampanasResponse {
 export const campanasService = {
   async list(params?: { page?: number; per_page?: number; estado?: string }): Promise<ListCampanasResponse> {
     const url = buildUrl(BASE, params)
-    const { data } = await apiClient.get<ListCampanasResponse>(url)
-    return data
+    return await apiClient.get<ListCampanasResponse>(url)
   },
 
   async get(id: number): Promise<CampanaCrm> {
-    const { data } = await apiClient.get<CampanaCrm>(`${BASE}/${id}`)
-    return data
+    return await apiClient.get<CampanaCrm>(`${BASE}/${id}`)
   },
 
   async previewDestinatarios(limit = 50): Promise<{ total: number; muestra: DestinatarioPreview[] }> {
-    const { data } = await apiClient.get<{ total: number; muestra: DestinatarioPreview[] }>(
+    return await apiClient.get<{ total: number; muestra: DestinatarioPreview[] }>(
       `${BASE}/preview-destinatarios`,
       { params: { limit } }
     )
-    return data
   },
 
   async create(payload: CampanaCreate): Promise<CampanaCrm> {
-    const { data } = await apiClient.post<CampanaCrm>(BASE, payload)
-    return data
+    return await apiClient.post<CampanaCrm>(BASE, payload)
   },
 
   async iniciarEnvio(id: number): Promise<{ success: boolean; mensaje: string; total_destinatarios: number }> {
-    const { data } = await apiClient.post<{ success: boolean; mensaje: string; total_destinatarios: number }>(
+    return await apiClient.post<{ success: boolean; mensaje: string; total_destinatarios: number }>(
       `${BASE}/${id}/iniciar-envio`
     )
-    return data
   },
 
   async getPreviewHtml(id: number): Promise<string> {
-    const { data } = await apiClient.get<string>(`${BASE}/${id}/preview-html`, {
+    return await apiClient.get<string>(`${BASE}/${id}/preview-html`, {
       responseType: 'text',
     })
-    return data
   },
 
     previewHtmlUrl(id: number): string {
