@@ -602,24 +602,24 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
       }
 
       if (!nombre.trim() || !asunto.trim() || !cuerpoFinal.trim()) {
-        toast.error(''Complete todos los campos obligatorios'')
+        toast.error('Complete todos los campos obligatorios')
         return
       }
       if (tiposSeleccionados.length === 0) {
-        toast.error(''Seleccione al menos un caso para esta plantilla'')
+        toast.error('Seleccione al menos un caso para esta plantilla')
         return
       }
       const tipoActual = selected.tipo
       try {
         await notificacionService.actualizarPlantilla(selected.id, { nombre, tipo: tipoActual, asunto, cuerpo: cuerpoFinal, activa })
-        toast.success(''Plantilla actualizada exitosamente'')
+        toast.success('Plantilla actualizada exitosamente')
         const otrosTipos = tiposSeleccionados.filter(t => t !== tipoActual)
         for (const tipoOtro of otrosTipos) {
           try {
             const nombrePlantilla = `${nombre} - ${todosLosTipos.find(t => t.valor === tipoOtro)?.label || tipoOtro}`
             await notificacionService.crearPlantilla({ nombre: nombrePlantilla, tipo: tipoOtro, asunto, cuerpo: cuerpoFinal, activa })
           } catch (err) {
-            toast.error(''Error al crear copia para otro caso'')
+            toast.error('Error al crear copia para otro caso')
           }
         }
         if (otrosTipos.length > 0) toast.success(`Se crearon ${otrosTipos.length} plantilla(s) para los otros casos`) 
@@ -1085,7 +1085,6 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
                     </div>
                   )}
                 </div>
-            </div>
             <div className="flex items-center gap-2">
               <input id="activa" type="checkbox" checked={activa} onChange={e=>setActiva(e.target.checked)} />
               <label htmlFor="activa" className="text-sm">Habilitar envío automático a las 3:00 AM</label>
