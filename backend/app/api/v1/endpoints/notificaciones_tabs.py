@@ -18,7 +18,6 @@ from app.api.v1.endpoints.notificaciones import (
     get_notificaciones_envios_config,
     get_plantilla_asunto_cuerpo,
     build_contexto_cobranza_para_item,
-    _contexto_cobranza_placeholder,
 )
 from app.models.plantilla_notificacion import PlantillaNotificacion
 from app.models.envio_notificacion import EnvioNotificacion
@@ -49,6 +48,7 @@ def _tipo_tab_para_persistencia(tipo_config: str) -> str | None:
     """Devuelve tipo_tab (dias_5, hoy, etc.) si se debe persistir para estad�sticas/rebotados."""
     return _CONFIG_TIPO_TO_TAB.get(tipo_config)
 
+
 router_previas = APIRouter(dependencies=[Depends(get_current_user)])
 router_dia_pago = APIRouter(dependencies=[Depends(get_current_user)])
 router_retrasadas = APIRouter(dependencies=[Depends(get_current_user)])
@@ -67,8 +67,8 @@ def _enviar_correos_items(
     """
     Envia por Email y/o WhatsApp por cada item.
 
-    Modo pruebas: plantilla email + 2 adjuntos PDF para prueba test real; variables como placeholders; correo solo a email_pruebas.
-    Modo produccion: listas por pestana; variables sustituidas por datos reales;     envio a clientes.
+    Modo pruebas: todos los envíos van al email de pruebas; plantillas y PDF usan datos reales.
+    Modo producción: envío al correo de cada cliente; plantillas y PDF con datos reales.
     """
     log_envio_inicio(len(items), "batch")
     sync_email_config_from_db()
@@ -112,7 +112,8 @@ def _enviar_correos_items(
                     log_envio_contexto_cobranza(item_id_log, True)
                 else:
                     log_envio_contexto_cobranza(item_id_log, False, motivo="build_contexto_cobranza devolvió None")
-        asunto, cuerpo = get_plantilla_asunto_cuerpo(db, plantilla_id, item, asunto_base, cuerpo_base, modo_pruebas=usar_solo_pruebas)
+        # Siempre datos reales en plantillas; en modo pruebas solo cambia el destinatario (email_pruebas)
+        asunto, cuerpo = get_plantilla_asunto_cuerpo(db, plantilla_id, item, asunto_base, cuerpo_base, modo_pruebas=False)
         # Adjuntos disponibles en todas las pestañas según config: PDF con variables (carta cobranza) y PDF(s) fijos
         attachments = None
         body_html = None
@@ -126,7 +127,7 @@ def _enviar_correos_items(
             try:
                 attachments = []
                 if incluir_pdf_anexo:
-                    ctx_pdf = _contexto_cobranza_placeholder() if usar_solo_pruebas else item.get("contexto_cobranza")
+                    ctx_pdf = item.get("contexto_cobranza")
                     if ctx_pdf:
                         pdf_bytes = generar_carta_cobranza_pdf(ctx_pdf, db=db)
                         attachments.append(("Carta_Cobranza.pdf", pdf_bytes))

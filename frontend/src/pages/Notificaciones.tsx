@@ -157,12 +157,12 @@ export function Notificaciones() {
     <div className="space-y-6">
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Notificaciones a clientes retrasados</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Notificaciones</h1>
           <p className="text-gray-600 mt-1">
-            Cuotas no pagadas por días hasta vencimiento y mora 90+ (moroso). Datos desde BD. Actualización recomendada a las 2am.
+            Recordatorios (Faltan 5, 3, 1), vence hoy, atrasos (5 y 30 días), mora 90+ y crédito pagado. Datos desde BD. Se recomienda actualizar a las 2:00.
           </p>
           {data?.actualizado_en && (
-            <p className="text-xs text-gray-500 mt-1">Última consulta: {new Date(data.actualizado_en).toLocaleString('es-ES')}</p>
+            <p className="text-xs text-gray-500 mt-1">Última actualización: {new Date(data.actualizado_en).toLocaleString('es-ES')}</p>
           )}
         </div>
         <div className="flex gap-2">
