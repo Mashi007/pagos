@@ -5,8 +5,10 @@ Soporta adjuntos (ej. informe PDF de ticket).
 Tambi�n soporta prueba de conexi�n IMAP para recibir correos.
 """
 import logging
+import re
 import time
 from typing import List, Optional, Tuple
+from email.utils import formatdate
 
 # Timeout para conexi�n y env�o SMTP/IMAP (evita 502 por proxy cuando Gmail/red tardan)
 SMTP_TIMEOUT_SECONDS = 25
@@ -24,12 +26,21 @@ def _strip_html_to_plain(html: str, max_len: int = 8000) -> str:
     '''Quita tags y data URLs para usar como parte text/plain cuando el cuerpo es HTML.'''
     if not html or not html.strip():
         return ""
-    import re
     s = re.sub(r'data:image/[^;]+;base64,[A-Za-z0-9+/=\s]+', '[Imagen]', html, flags=re.DOTALL)
     s = re.sub(r'<!--.*?-->', '', s, flags=re.DOTALL)
     s = re.sub(r'<[^>]+>', ' ', s)
     s = re.sub(r'\s+', ' ', s).strip()
     return (s[:max_len] + "...") if len(s) > max_len else (s or "Contenido en HTML. Abra en un cliente compatible.")
+
+
+def _logo_url_for_email():
+    """URL del logo para reemplazar base64 inline en HTML (evita mensaje enorme que Gmail no renderiza)."""
+    try:
+        from app.core.config import settings
+        base = (getattr(settings, "FRONTEND_PUBLIC_URL", None) or "https://rapicredit.onrender.com/pagos").rstrip("/")
+    except Exception:
+        base = "https://rapicredit.onrender.com/pagos"
+    return f"{base}/logos/rapicredit-public.png"
 
 
 def _sanitize_imap_error(exc: Exception) -> str:
@@ -210,11 +221,21 @@ def send_email(
                     body_html = body_html.encode("utf-8", errors="replace").decode("utf-8")
             if "base64/" in body_html:
                 body_html = body_html.replace("base64/", "base64,")
+            # Reemplazar imagenes inline base64 por URL del logo: HTML pequeno = Gmail renderiza bien
+            logo_url = _logo_url_for_email()
+            body_html = re.sub(
+                r'src="data:image/[^"]+"',
+                f'src="{logo_url}"',
+                body_html,
+                count=0,
+                flags=re.DOTALL,
+            )
 
-        # Si body_text es el mismo HTML que body_html, el cliente puede mostrar text/plain
-        # y se ve el codigo fuente + base64 como mensaje corrupto. Usar version solo texto.
+        # Gmail: si body_text es HTML, usar version solo texto para text/plain (evita ver codigo+base64)
         if body_html and body_text and ("<" in body_text and ">" in body_text):
             body_text = _strip_html_to_plain(body_text)
+        if body_html and (not body_text or not body_text.strip()):
+            body_text = "Contenido en HTML. Si no ve el formato correcto, abra el correo en Gmail o otro cliente compatible."
 
         if has_attachments:
             msg = MIMEMultipart("mixed")
@@ -231,6 +252,7 @@ def send_email(
 
         msg["Subject"] = subject
         msg["From"] = cfg.get("from_email") or cfg.get("smtp_user")
+        msg["Date"] = formatdate(localtime=True)
         msg["To"] = ", ".join(to_emails)
         if cc_list:
             msg["Cc"] = ", ".join(cc_list)
