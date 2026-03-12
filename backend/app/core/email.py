@@ -34,6 +34,8 @@ def _sanitize_imap_error(exc: Exception) -> str:
     lower = msg.lower()
     if "username and password not accepted" in lower or "authentication failed" in lower or "login failed" in lower:
         return "Usuario o contrase�a no aceptados. Gmail personal: usa Contrase�a de aplicaci�n. Cuentas corporativas/Google Workspace: prueba con tu contrase�a normal."
+    if "network is unreachable" in lower or "errno 101" in lower or "enetunreach" in lower:
+        return "La red del servidor no puede alcanzar IMAP (ej. en Render las conexiones salientes pueden estar bloqueadas). Prueba desde tu red local o verifica restricciones de red del proveedor."
     if "connection refused" in lower or "timed out" in lower or "timeout" in lower:
         return "La conexi�n al servidor IMAP tard� demasiado o fue rechazada. Revisa host, puerto (993 o 143) y que el servidor no est� en suspensi�n."
     if "ssl" in lower or "certificate" in lower:
@@ -77,16 +79,21 @@ def test_imap_connection(
     try:
         import imaplib
 
+        logger.info("IMAP fase 1/4: conectando a %s:%s (SSL=%s, timeout=%ss)", imap_host, imap_port, imap_use_ssl, IMAP_TIMEOUT_SECONDS)
         if imap_use_ssl:
             server = imaplib.IMAP4_SSL(imap_host, imap_port, timeout=IMAP_TIMEOUT_SECONDS)
         else:
             server = imaplib.IMAP4(imap_host, imap_port, timeout=IMAP_TIMEOUT_SECONDS)
             server.starttls()
+        logger.info("IMAP fase 2/4: conexion TCP establecida, enviando LOGIN para %s", imap_user)
 
         server.login(imap_user, imap_password)
         
+        logger.info("IMAP fase 3/4: LOGIN OK, listando carpetas")
+
         # Listar carpetas disponibles
         _, mailboxes = server.list()
+        logger.info("IMAP fase 4/4: LIST OK, %d entradas", len(mailboxes) if mailboxes else 0)
         folder_list = []
         for mailbox in mailboxes:
             try:
