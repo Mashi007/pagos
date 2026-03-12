@@ -269,7 +269,7 @@ export function Notificaciones() {
             )}
             {isError && (
               <div className="mb-4 px-4 py-2 bg-amber-50 border border-amber-200 rounded flex items-center justify-between gap-2 text-sm text-amber-800">
-                <span>Error al cargar. Comprueba que exista la tabla <code className="bg-gray-100 px-1">cuotas</code>.</span>
+                <span>Error al cargar.{error?.message ? ` ${String(error.message)}` : ''} Comprueba que exista la tabla <code className="bg-gray-100 px-1">cuotas</code>.</span>
                 <Button variant="outline" size="sm" onClick={() => refetch()}>Reintentar</Button>
               </div>
             )}

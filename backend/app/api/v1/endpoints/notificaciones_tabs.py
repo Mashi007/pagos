@@ -93,13 +93,19 @@ def _enviar_correos_items(
             plantilla = db.get(PlantillaNotificacion, plantilla_id)
             if plantilla and getattr(plantilla, "tipo", None) == "COBRANZA" and item.get("contexto_cobranza"):
                 body_html = cuerpo  # el cuerpo de COBRANZA es HTML
+                incluir_pdf_anexo = tipo_cfg.get("incluir_pdf_anexo") is not False
+                incluir_adjuntos_fijos = tipo_cfg.get("incluir_adjuntos_fijos") is not False
                 try:
-                    pdf_bytes = generar_carta_cobranza_pdf(item["contexto_cobranza"], db=db)
-                    attachments = [("Carta_Cobranza.pdf", pdf_bytes)]
-                    # Adjunto fijo: PDF estático que se anexa siempre sin cambios
-                    adjunto_fijo = get_adjunto_fijo_cobranza_bytes(db)
-                    if adjunto_fijo:
-                        attachments.append(adjunto_fijo)
+                    attachments = []
+                    if incluir_pdf_anexo:
+                        pdf_bytes = generar_carta_cobranza_pdf(item["contexto_cobranza"], db=db)
+                        attachments.append(("Carta_Cobranza.pdf", pdf_bytes))
+                    if incluir_adjuntos_fijos:
+                        adjunto_fijo = get_adjunto_fijo_cobranza_bytes(db)
+                        if adjunto_fijo:
+                            attachments.append(adjunto_fijo)
+                    if not attachments:
+                        attachments = None
                 except Exception as e:
                     import logging
                     logging.getLogger(__name__).exception("Error generando PDF cobranza: %s", e)

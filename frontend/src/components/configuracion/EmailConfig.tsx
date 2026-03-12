@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 
 import { Mail, Save, TestTube, CheckCircle, AlertCircle, Eye, EyeOff, Clock, XCircle, RefreshCw } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card'
@@ -195,6 +195,23 @@ const [probando, setProbando] = useState(false)
       })
       setModoPruebas(data.modo_pruebas || 'true')
       setEmailPruebas(data.email_pruebas || '')
+      // Integracion con Notificaciones: modo_pruebas y correos se comparten con notificaciones_envios
+      try {
+        const envios = await emailConfigService.obtenerConfiguracionEnvios() as Record<string, unknown>
+        if (envios && typeof envios === 'object') {
+          const modoEnvios = envios.modo_pruebas
+          if (modoEnvios === true || modoEnvios === false) {
+            setModoPruebas(modoEnvios ? 'true' : 'false')
+          }
+          const emailsArr = envios.emails_pruebas
+          const emailSingle = envios.email_pruebas
+          if (Array.isArray(emailsArr) && emailsArr.length > 0 && typeof emailsArr[0] === 'string') {
+            setEmailPruebas(emailsArr[0].trim())
+          } else if (typeof emailSingle === 'string' && emailSingle.trim()) {
+            setEmailPruebas(emailSingle.trim())
+          }
+        }
+      } catch (_) { }
       // ✓ Cargar estado activo/inactivo
       const emailActivoValue = data.email_activo === undefined || data.email_activo === null
         ? true
@@ -372,6 +389,13 @@ const [probando, setProbando] = useState(false)
           }
 
       const resultado = await emailConfigService.actualizarConfiguracionEmail(configCompleta)
+
+      // Sincronizar modo_pruebas y correos con notificaciones_envios (Notificaciones)
+      try {
+        const enviosActual = await emailConfigService.obtenerConfiguracionEnvios() as Record<string, unknown>
+        const merged = { ...(enviosActual && typeof enviosActual === 'object' ? enviosActual : {}), modo_pruebas: modoPruebas === 'true', email_pruebas: modoPruebas === 'true' ? emailPruebas.trim() : '', emails_pruebas: modoPruebas === 'true' && emailPruebas.trim() ? [emailPruebas.trim()] : [] }
+        await emailConfigService.actualizarConfiguracionEnvios(merged)
+      } catch (_) { }
 
       // ✓ Actualizar estado de vinculación INMEDIATAMENTE con la respuesta del guardado
       // Esto asegura que las banderas se actualicen de inmediato

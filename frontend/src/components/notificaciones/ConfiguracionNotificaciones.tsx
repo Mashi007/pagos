@@ -1,15 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
-import {
-  Settings,
-  Mail,
-  FileText,
-  Clock,
-  Link as LinkIcon,
-  X,
-  TestTube,
-} from 'lucide-react'
+import { Settings, Mail, FileText, Clock, X, TestTube } from 'lucide-react'
 import { emailConfigService } from '../../services/notificacionService'
 import { notificacionService, type NotificacionPlantilla } from '../../services/notificacionService'
 import { getErrorDetail } from '../../types/errors'
@@ -27,6 +19,10 @@ export type ConfigEnvioItem = {
   cco: string[]
   plantilla_id?: number | null
   programador?: string
+  /** Incluir PDF anexo para este tipo. Por defecto true. */
+  incluir_pdf_anexo?: boolean
+  /** Incluir documentos PDF fijos para este tipo. Por defecto true. */
+  incluir_adjuntos_fijos?: boolean
 }
 
 /** Respuesta de la API: config por tipo + modo_pruebas y email_pruebas (un solo objeto, sin duplicar) */
@@ -42,6 +38,7 @@ const CRITERIOS: { tipo: string; label: string; categoria: string; color: 'blue'
   { tipo: 'PAGO_5_DIAS_ATRASADO', label: '5 días de retraso', categoria: 'Retrasada', color: 'orange' },
   { tipo: 'PREJUDICIAL', label: 'Prejudicial', categoria: 'Prejudicial', color: 'red' },
   { tipo: 'MORA_90', label: '90+ días de mora (moroso)', categoria: 'Mora 90+', color: 'slate' },
+  { tipo: 'COBRANZA', label: 'Carta de cobranza', categoria: 'Cobranza', color: 'red' },
 ]
 
 const COLORES = {
@@ -119,6 +116,8 @@ export function ConfiguracionNotificaciones() {
       cco: Array.isArray(c.cco) ? c.cco : [],
       plantilla_id: c.plantilla_id ?? null,
       programador: c.programador ?? HORA_DEFAULT,
+      incluir_pdf_anexo: c.incluir_pdf_anexo !== false,
+      incluir_adjuntos_fijos: c.incluir_adjuntos_fijos !== false,
     }
   }
 
@@ -221,9 +220,7 @@ export function ConfiguracionNotificaciones() {
   }
 
   if (cargando) {
-  
-
-  return (
+    return (
       <div className="flex items-center justify-center py-16">
         <div className="text-center text-gray-500">
           <Clock className="h-8 w-8 mx-auto animate-pulse mb-2 text-blue-500" />
@@ -242,7 +239,7 @@ export function ConfiguracionNotificaciones() {
             Configuración por caso
           </CardTitle>
           <CardDescription>
-            Asigna una plantilla a cada caso, activa el envío y guarda. Las plantillas se crean en Configuración → Plantillas (texto + variables).
+            Asigna una plantilla a cada caso, activa el envío y define si incluir PDF anexo y documentos fijos. Las plantillas (cuerpo email, PDF variable, documentos fijos) se crean en Configuración → Plantillas.
           </CardDescription>
         </CardHeader>
       </Card>
@@ -384,7 +381,9 @@ export function ConfiguracionNotificaciones() {
             <tr className="bg-gray-50 border-b border-gray-200">
               <th className="text-left py-3 px-4 font-semibold text-gray-700">Caso</th>
               <th className="text-left py-3 px-4 font-semibold text-gray-700">Plantilla</th>
-              <th className="text-center py-3 px-4 font-semibold text-gray-700 w-24">Envío</th>
+              <th className="text-center py-3 px-4 font-semibold text-gray-700 w-20">Envío</th>
+              <th className="text-center py-3 px-4 font-semibold text-gray-700 w-20" title="Incluir PDF anexo (carta cobranza)" aria-label="Incluir PDF anexo (carta cobranza)">PDF</th>
+              <th className="text-center py-3 px-4 font-semibold text-gray-700 w-20" title="Incluir documentos PDF fijos" aria-label="Incluir documentos PDF fijos">Adj.</th>
               <th className="text-left py-3 px-4 font-semibold text-gray-700 w-32">Opciones</th>
             </tr>
           </thead>
@@ -393,9 +392,7 @@ export function ConfiguracionNotificaciones() {
               const config = getConfig(tipo)
               const col = COLORES[color]
               const listaPlantillas = plantillasPorTipo(tipo)
-            
-
-  return (
+              return (
                 <tr key={tipo} className={`border-b border-gray-100 ${col.bg}`}>
                   <td className="py-3 px-4">
                     <span className={`font-medium ${col.text}`}>{label}</span>
@@ -417,6 +414,9 @@ export function ConfiguracionNotificaciones() {
                         ))}
                       </SelectContent>
                     </Select>
+                    {listaPlantillas.length === 0 && (
+                      <p className="text-xs text-gray-500 mt-1">Crea plantillas en <Link to="/configuracion?tab=plantillas" className="text-blue-600 hover:underline">Configuración → Plantillas</Link></p>
+                    )}
                   </td>
                   <td className="py-3 px-4 text-center">
                     <button
@@ -431,6 +431,26 @@ export function ConfiguracionNotificaciones() {
                       <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow ${config.habilitado && !enModoPrueba ? 'translate-x-5' : 'translate-x-1'}`} />
                     </button>
                     {enModoPrueba && <span className="block text-xs text-gray-500 mt-0.5">Desactivado</span>}
+                  </td>
+                  <td className="py-3 px-4 text-center">
+                    <input
+                      type="checkbox"
+                      checked={config.incluir_pdf_anexo !== false}
+                      onChange={() => setConfig(tipo, { incluir_pdf_anexo: config.incluir_pdf_anexo === false })}
+                      disabled={enModoPrueba || !config.habilitado}
+                      title="Incluir PDF anexo (carta cobranza)"
+                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                  </td>
+                  <td className="py-3 px-4 text-center">
+                    <input
+                      type="checkbox"
+                      checked={config.incluir_adjuntos_fijos !== false}
+                      onChange={() => setConfig(tipo, { incluir_adjuntos_fijos: config.incluir_adjuntos_fijos === false })}
+                      disabled={enModoPrueba || !config.habilitado}
+                      title="Incluir documentos PDF fijos"
+                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
                   </td>
                   <td className="py-3 px-4">
                     <details className="group">
@@ -483,24 +503,8 @@ export function ConfiguracionNotificaciones() {
         </div>
         <Button onClick={guardarConfiguracionEnvios} disabled={guardandoEnvios} className="bg-blue-600 hover:bg-blue-700">
           {guardandoEnvios ? 'Guardando...' : 'Guardar'}
-        </Button>              
-              {/* Botón Envío Manual de Prueba */}
-              
+        </Button>
       </div>
     </div>
   )
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-

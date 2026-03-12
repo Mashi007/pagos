@@ -313,7 +313,7 @@ def get_notificaciones_envios(db: Session = Depends(get_db)):
 
 @router.put("/notificaciones/envios")
 def put_notificaciones_envios(payload: dict = Body(...), db: Session = Depends(get_db)):
-    """Actualizar configuración de envíos. Persiste en BD. Payload: dict con claves tipo (ej. PAGO_5_DIAS_ANTES) y valor {habilitado, cco[], plantilla_id?, programador?}."""
+    """Actualizar configuración de envíos. Persiste en BD. Payload: dict con claves tipo (ej. PAGO_5_DIAS_ANTES) y valor {habilitado, cco[], plantilla_id?, programador?, incluir_pdf_anexo?, incluir_adjuntos_fijos?}. Claves globales: modo_pruebas, email_pruebas, emails_pruebas.], plantilla_id?, programador?}."""
     if not isinstance(payload, dict):
         raise HTTPException(status_code=422, detail="El cuerpo debe ser un objeto JSON")
     try:
