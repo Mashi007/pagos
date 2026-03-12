@@ -569,39 +569,9 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
     if (focus === 'asunto') return // no aplicar html al asunto
   }
 
-  const validarObligatorias = (tipoValidar?: string): string | null => {
-    const tipoAValidar = tipoValidar || tipo
-    if (!tipoAValidar) return null
-
-    // Reglas b?sicas por tipo
-    const requeridasPorTipo: Record<string, string[]> = {
-      'PAGO_5_DIAS_ANTES': ['nombre', 'monto', 'fecha_vencimiento'],
-      'PAGO_3_DIAS_ANTES': ['nombre', 'monto', 'fecha_vencimiento'],
-      'PAGO_1_DIA_ANTES': ['nombre', 'monto', 'fecha_vencimiento'],
-      'PAGO_DIA_0': ['nombre', 'monto', 'fecha_vencimiento'],
-      'PAGO_1_DIA_ATRASADO': ['nombre', 'monto', 'fecha_vencimiento', 'dias_atraso'],
-      'PAGO_3_DIAS_ATRASADO': ['nombre', 'monto', 'fecha_vencimiento', 'dias_atraso'],
-      'PAGO_5_DIAS_ATRASADO': ['nombre', 'monto', 'fecha_vencimiento', 'dias_atraso'],
-      'PREJUDICIAL': ['nombre', 'monto', 'fecha_vencimiento', 'dias_atraso'],
-      'MORA_90': ['nombre', 'monto', 'fecha_vencimiento', 'dias_atraso'],
-      'COBRANZA': ['CLIENTES.NOMBRE_COMPLETO', 'PRESTAMOS.ID', 'FECHA_CARTA'],
-    }
-    // Variables opcionales: no se exige incluir variables en asunto/cuerpo; puedes redactar el mensaje directamente.
-    const requeridas = requeridasPorTipo[tipoAValidar] || []
-    const faltantes = requeridas.filter(v => !(`${asunto} ${cuerpoFinal}`).includes(`{{${v}}}`))
-    if (faltantes.length > 0) return `Para ${tipoAValidar} faltan variables obligatorias: ${faltantes.join(', ')}`
-    return null
-  }
-
   const guardar = async () => {
     // Si estamos editando una plantilla existente, guardar solo esa
     if (selected?.id) {
-      const error = validarObligatorias()
-      if (error) {
-        toast.error(error)
-        return
-      }
-
       if (!nombre.trim() || !asunto.trim() || !cuerpoFinal.trim()) {
         toast.error('Complete todos los campos obligatorios')
         return
@@ -642,18 +612,6 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
 
     if (!nombre.trim() || !asunto.trim() || !cuerpoFinal.trim()) {
       toast.error('Complete todos los campos obligatorios')
-      return
-    }
-
-    // Validar variables obligatorias para cada tipo
-    const errores: string[] = []
-    tiposSeleccionados.forEach(t => {
-      const error = validarObligatorias(t)
-      if (error) errores.push(error)
-    })
-
-    if (errores.length > 0) {
-      toast.error(errores[0]) // Mostrar solo el primer error
       return
     }
 
@@ -764,7 +722,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
       setSelected(null)
       setActiveTab('armar')
 
-      toast.success('Plantilla importada. Revise y guarde cuando esté lista.')
+      toast.success('Plantilla importada. Revise y guarde cuando est? lista.')
     } catch (error: any) {
       toast.error('Error al leer el archivo JSON: ' + (error.message || 'Formato inv?lido'))
     }
