@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import { notificacionService, NotificacionPlantilla, NotificacionVariable } from '../../services/notificacionService'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -585,9 +585,10 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
       'MORA_90': ['nombre', 'monto', 'fecha_vencimiento', 'dias_atraso'],
       'COBRANZA': ['CLIENTES.NOMBRE_COMPLETO', 'PRESTAMOS.ID', 'FECHA_CARTA'],
     }
+    // Variables opcionales: no se exige incluir variables en asunto/cuerpo; puedes redactar el mensaje directamente.
     const requeridas = requeridasPorTipo[tipoAValidar] || []
     const faltantes = requeridas.filter(v => !(`${asunto} ${cuerpoFinal}`).includes(`{{${v}}}`))
-    if (faltantes.length) return `Para ${tipoAValidar} faltan variables obligatorias: ${faltantes.join(', ')}`
+    if (false) return `Para ${tipoAValidar} faltan variables obligatorias: ${faltantes.join(', ')}`
     return null
   }
 
@@ -600,22 +601,28 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
         return
       }
 
-      if (!nombre.trim() || !tipo || !asunto.trim() || !cuerpoFinal.trim()) {
-        toast.error('Complete todos los campos obligatorios')
+      if (!nombre.trim() || !asunto.trim() || !cuerpoFinal.trim()) {
+        toast.error(''Complete todos los campos obligatorios'')
         return
       }
-
+      if (tiposSeleccionados.length === 0) {
+        toast.error(''Seleccione al menos un caso para esta plantilla'')
+        return
+      }
+      const tipoActual = selected.tipo
       try {
-        const payload = {
-          nombre,
-          tipo,
-          asunto,
-          cuerpo: cuerpoFinal,
-          activa,
+        await notificacionService.actualizarPlantilla(selected.id, { nombre, tipo: tipoActual, asunto, cuerpo: cuerpoFinal, activa })
+        toast.success(''Plantilla actualizada exitosamente'')
+        const otrosTipos = tiposSeleccionados.filter(t => t !== tipoActual)
+        for (const tipoOtro of otrosTipos) {
+          try {
+            const nombrePlantilla = `${nombre} - ${todosLosTipos.find(t => t.valor === tipoOtro)?.label || tipoOtro}`
+            await notificacionService.crearPlantilla({ nombre: nombrePlantilla, tipo: tipoOtro, asunto, cuerpo: cuerpoFinal, activa })
+          } catch (err) {
+            toast.error(''Error al crear copia para otro caso'')
+          }
         }
-
-        await notificacionService.actualizarPlantilla(selected.id, payload)
-        toast.success('Plantilla actualizada exitosamente')
+        if (otrosTipos.length > 0) toast.success(`Se crearon ${otrosTipos.length} plantilla(s) para los otros casos`) 
         await cargar()
         limpiar()
         // Cambiar a la pestaña de resumen después de guardar
@@ -953,33 +960,17 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
               <label className="text-sm text-gray-600">Nombre</label>
               <Input value={nombre} onChange={e=>setNombre(e.target.value)} placeholder="Recordatorio de pago" />
             </div>
-            <div>
-              <label className="text-sm text-gray-600 mb-2 block">
-                Aplicar al caso
+            <div className="border rounded-lg p-4 bg-gray-50 space-y-4">
+              <label className="text-sm font-medium text-gray-700 block">
+                Usar esta plantilla para (seleccione uno o más casos)
               </label>
-
-              {selected ? (
-                <select value={tipo} onChange={e=>setTipo(e.target.value)} className="w-full border rounded px-3 py-2 text-sm bg-white">
-                  <option value="">Seleccione...</option>
-                  {todosLosTipos.map(t => <option key={t.valor} value={t.valor}>{t.label}</option>)}
-                </select>
-              ) : (
-                <select
-                  value={tiposSeleccionados[0] || ''}
-                  onChange={e => setTiposSeleccionados(e.target.value ? [e.target.value] : [])}
-                  className="w-full border rounded px-3 py-2 text-sm bg-white"
-                >
-                  <option value="">Seleccione un caso...</option>
-                  {todosLosTipos.map(t => <option key={t.valor} value={t.valor}>{t.label}</option>)}
-                </select>
-              )}
-            </div>
-            <div className="sr-only">
-                <div className="border rounded-lg p-4 bg-gray-50 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-gray-600">
-                      {tiposSeleccionados.length} tipo(s) seleccionado(s)
-                    </span>
+              <p className="text-xs text-gray-500 mb-2">
+                Marque los casos en los que se usará esta plantilla (ej. 1 día, 3 días y 5 días de retraso).
+              </p>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-600">
+                  {tiposSeleccionados.length} caso(s) seleccionado(s)
+                </span>
                     <div className="flex gap-2">
                       <Button
                         type="button"

@@ -1,5 +1,5 @@
-"""
-Registro de envíos de notificaciones por email (éxito/fallo) para estadísticas y rebotados.
+﻿"""
+Registro de envÃ­os de notificaciones por email (Ã©xito/fallo) para estadÃ­sticas y rebotados.
 Tabla: envios_notificacion. Usado por GET estadisticas-por-tab y GET rebotados-por-tab.
 """
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, func
@@ -18,3 +18,5 @@ class EnvioNotificacion(Base):
     cedula = Column(String(50), nullable=True)
     exito = Column(Boolean, nullable=False)  # True = enviado, False = rebotado/fallo
     error_mensaje = Column(Text, nullable=True)
+    prestamo_id = Column(Integer, nullable=True, index=True)  # para COBRANZA
+    correlativo = Column(Integer, nullable=True)  # numero correlativo por prestamo

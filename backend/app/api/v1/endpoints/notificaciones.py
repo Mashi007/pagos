@@ -149,6 +149,51 @@ def get_plantilla_asunto_cuerpo(db: Session, plantilla_id: Optional[int], item: 
     return (asunto, cuerpo)
 
 
+
+def build_contexto_cobranza_para_item(
+    db: Session, item: dict, correlativos_en_batch: dict
+) -> tuple:
+    """
+    Construye contexto_cobranza para un item (plantilla COBRANZA).
+    Carga cuotas pendientes del prestamo, calcula siguiente numero correlativo
+    y devuelve (contexto, correlativo_used). Si no hay prestamo_id devuelve (None, None).
+    correlativos_en_batch: dict prestamo_id -> ultimo correlativo usado en este batch.
+    """
+    prestamo_id = item.get("prestamo_id")
+    if not prestamo_id:
+        return None, None
+    from app.services.plantilla_cobranza import construir_contexto_cobranza
+    cuotas = (
+        db.execute(
+            select(Cuota)
+            .where(Cuota.prestamo_id == prestamo_id, Cuota.fecha_pago.is_(None))
+            .order_by(Cuota.numero_cuota)
+        )
+        .scalars().all()
+    )
+    cuotas_list = [c for c in cuotas]
+    db_max = db.execute(
+        select(func.coalesce(func.max(EnvioNotificacion.correlativo), 0)).where(
+            EnvioNotificacion.prestamo_id == prestamo_id
+        )
+    ).scalar() or 0
+    try:
+        db_max = int(db_max)
+    except (TypeError, ValueError):
+        db_max = 0
+    next_correlativo = max(db_max, correlativos_en_batch.get(prestamo_id, 0)) + 1
+    correlativos_en_batch[prestamo_id] = next_correlativo
+    nombre = item.get("nombre") or ""
+    cedula = item.get("cedula") or ""
+    ctx = construir_contexto_cobranza(
+        cliente_nombres=nombre,
+        prestamo_id=prestamo_id,
+        cuotas_vencidas=cuotas_list,
+        cedula=cedula,
+        numero_correlativo=next_correlativo,
+    )
+    return ctx, next_correlativo
+
 @router.get("/plantillas")
 def get_plantillas(
     tipo: str = None,

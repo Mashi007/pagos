@@ -1,4 +1,4 @@
-"""
+﻿"""
 Endpoints para las pestañas de Notificaciones (previas, día pago, retrasadas, prejudicial, mora 90+).
 Datos reales desde BD (cuotas + clientes). Envío por Email (Configuración > Email) y respeto de
 configuración de envíos (habilitado/CCO por tipo) desde BD (notificaciones_envios). get_db en todos los procesos.
@@ -17,6 +17,7 @@ from app.api.v1.endpoints.notificaciones import (
     get_notificaciones_tabs_data,
     get_notificaciones_envios_config,
     get_plantilla_asunto_cuerpo,
+    build_contexto_cobranza_para_item,
 )
 from app.models.plantilla_notificacion import PlantillaNotificacion
 from app.models.envio_notificacion import EnvioNotificacion
@@ -74,6 +75,7 @@ def _enviar_correos_items(
     enviados_whatsapp = 0
     fallidos_whatsapp = 0
     registros_envio: List[EnvioNotificacion] = []
+    correlativos_en_batch = {}
     for item in items:
         tipo = get_tipo_for_item(item)
         tipo_cfg = config_envios.get(tipo) or {}
@@ -85,6 +87,13 @@ def _enviar_correos_items(
             plantilla_id = int(raw_id) if raw_id is not None else None
         except (TypeError, ValueError):
             plantilla_id = None
+        if plantilla_id and db and item.get("prestamo_id") and not item.get("contexto_cobranza"):
+            plantilla = db.get(PlantillaNotificacion, plantilla_id)
+            if plantilla and getattr(plantilla, "tipo", None) == "COBRANZA":
+                ctx, corr = build_contexto_cobranza_para_item(db, item, correlativos_en_batch)
+                if ctx is not None:
+                    item["contexto_cobranza"] = ctx
+                    item["_correlativo_envio"] = corr
         asunto, cuerpo = get_plantilla_asunto_cuerpo(db, plantilla_id, item, asunto_base, cuerpo_base)
         # Adjunto PDF para plantilla tipo COBRANZA (carta de cobranza)
         attachments = None
@@ -148,6 +157,8 @@ def _enviar_correos_items(
                         cedula=(item.get("cedula") or "")[:50],
                         exito=ok,
                         error_mensaje=None if ok else (msg or "")[:5000],
+                        prestamo_id=item.get("prestamo_id"),
+                        correlativo=item.get("_correlativo_envio"),
                     )
                 )
         else:
