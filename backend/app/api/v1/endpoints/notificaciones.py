@@ -739,7 +739,7 @@ def enviar_con_plantilla(
     Query: cliente_id. Body: dict opcional con nombre, cedula, fecha_vencimiento, numero_cuota, monto, dias_atraso.
     """
     from app.core.email import send_email
-from app.core.email_config_holder import get_email_activo_servicio
+    from app.core.email_config_holder import get_email_activo_servicio
     p = db.get(PlantillaNotificacion, plantilla_id)
     if not p or not p.activa:
         raise HTTPException(status_code=404, detail="Plantilla no encontrada o inactiva")
