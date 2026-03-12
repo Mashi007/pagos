@@ -40,6 +40,10 @@ _CONFIG_TIPO_TO_TAB = {
     "PAGO_3_DIAS_ANTES": "dias_3",
     "PAGO_1_DIA_ANTES": "dias_1",
     "PAGO_DIA_0": "hoy",
+    "PAGO_1_DIA_ATRASADO": "dias_1_retraso",
+    "PAGO_3_DIAS_ATRASADO": "dias_3_retraso",
+    "PAGO_5_DIAS_ATRASADO": "dias_5_retraso",
+    "PREJUDICIAL": "prejudicial",
     "MORA_90": "mora_90",
 }
 
@@ -70,9 +74,9 @@ def _enviar_correos_items(
     Modo pruebas: todos los envíos van al email de pruebas; plantillas y PDF usan datos reales.
     Modo producción: envío al correo de cada cliente; plantillas y PDF con datos reales.
     """
-    log_envio_inicio(len(items), "batch")
     sync_email_config_from_db()
     modo_pruebas = config_envios.get("modo_pruebas") is True
+    log_envio_inicio(len(items), "batch", modo_pruebas=modo_pruebas)
     email_pruebas = (config_envios.get("email_pruebas") or "").strip()
     usar_solo_pruebas = modo_pruebas and email_pruebas and "@" in email_pruebas
     # Si modo prueba activo pero sin correo v�lido: no enviar a clientes (evitar env�o por error)
@@ -219,6 +223,7 @@ def _enviar_correos_items(
         omitidos_config=omitidos_config,
         enviados_whatsapp=enviados_whatsapp,
         fallidos_whatsapp=fallidos_whatsapp,
+        modo_pruebas=modo_pruebas,
     )
     return {
         "enviados": enviados,

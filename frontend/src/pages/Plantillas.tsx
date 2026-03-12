@@ -50,7 +50,7 @@ export function Plantillas() {
       <div className="flex items-center justify-between">
         <div className="flex-1">
           <h1 className="text-xl font-bold">Plantillas de notificaciones</h1>
-          <p className="text-sm text-gray-500">Plantilla de email, plantilla PDF anexo y documentos PDF fijos que se envían con la notificación</p>
+          <p className="text-sm text-gray-500">Plantilla de email, plantilla PDF anexo y documentos PDF fijos asignables a cualquier pestaña de notificación.</p>
           <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50/50 text-sm text-gray-700 overflow-hidden">
             <button
               type="button"
@@ -70,7 +70,7 @@ export function Plantillas() {
                 <ol className="list-decimal list-inside space-y-0.5 text-gray-600 mt-2 hidden md:block">
                   <li><strong>Plantilla cuerpo email</strong> - Asunto y cuerpo del correo con variables (nombre, cédula, fecha_vencimiento, etc.).</li>
                   <li><strong>Plantilla anexo PDF</strong> - Carta de cobranza en PDF generada con variables (monto_total_usd, num_cuotas, fechas_str). Se anexa al email.</li>
-                  <li><strong>Documentos PDF anexos</strong> - Hasta 2 PDFs fijos que se cargan aquí y se anexan siempre a la notificación (junto con el PDF variable).</li>
+                  <li><strong>Documentos PDF anexos</strong> - PDFs fijos que se cargan aquí y se asignan a la pestaña que elijas (Faltan 5, Hoy vence, Retrasadas, Prejudicial, 90+ mora, etc.). Se envían con la notificación de esa pestaña.</li>
                 </ol>
               </div>
             )}

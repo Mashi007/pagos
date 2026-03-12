@@ -30,14 +30,15 @@ def _extra(phase: str, **kwargs: Any) -> dict:
     return {"fase": phase, **kwargs}
 
 
-def log_envio_inicio(total_items: int, origen: str) -> None:
-    """Indicador: inicio de envío por lote."""
+def log_envio_inicio(total_items: int, origen: str, modo_pruebas: bool = False) -> None:
+    """Indicador: inicio de envío por lote. modo_pruebas=True identifica envíos en prueba."""
     logger.info(
-        "[%s] Inicio envío notificaciones: items=%s origen=%s",
+        "[%s] Inicio envío notificaciones: items=%s origen=%s modo_pruebas=%s",
         FASE_ENVIO_INICIO,
         total_items,
         origen,
-        extra=_extra(FASE_ENVIO_INICIO, total_items=total_items, origen=origen),
+        modo_pruebas,
+        extra=_extra(FASE_ENVIO_INICIO, total_items=total_items, origen=origen, modo_pruebas=modo_pruebas),
     )
 
 
@@ -134,10 +135,11 @@ def log_envio_resumen(
     omitidos_config: int,
     enviados_whatsapp: int,
     fallidos_whatsapp: int,
+    modo_pruebas: bool = False,
 ) -> None:
-    """Indicador: resumen del lote (indicadores de funcionamiento)."""
+    """Indicador: resumen del lote (indicadores de funcionamiento). modo_pruebas para compaginar con envíos en prueba."""
     logger.info(
-        "[%s] Resumen: enviados=%s fallidos=%s sin_email=%s omitidos_config=%s whatsapp_ok=%s whatsapp_fallo=%s",
+        "[%s] Resumen: enviados=%s fallidos=%s sin_email=%s omitidos_config=%s whatsapp_ok=%s whatsapp_fallo=%s modo_pruebas=%s",
         FASE_ENVIO_RESUMEN,
         enviados,
         fallidos,
@@ -145,6 +147,7 @@ def log_envio_resumen(
         omitidos_config,
         enviados_whatsapp,
         fallidos_whatsapp,
+        modo_pruebas,
         extra=_extra(
             FASE_ENVIO_RESUMEN,
             enviados=enviados,
@@ -153,6 +156,7 @@ def log_envio_resumen(
             omitidos_config=omitidos_config,
             enviados_whatsapp=enviados_whatsapp,
             fallidos_whatsapp=fallidos_whatsapp,
+            modo_pruebas=modo_pruebas,
         ),
     )
 

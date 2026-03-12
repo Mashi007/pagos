@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card'
 import { Button } from '../ui/button'
 import { notificacionService } from '../../services/notificacionService'
@@ -13,18 +13,22 @@ import {
 } from '../ui/select'
 
 const TIPOS_CASO: { value: string; label: string }[] = [
-  { value: 'dias_5', label: '5 dias' },
-  { value: 'dias_3', label: '3 dias' },
-  { value: 'dias_1', label: '1 dia' },
-  { value: 'hoy', label: 'Hoy' },
-  { value: 'mora_90', label: 'Mora 90+' },
+  { value: 'dias_5', label: 'Faltan 5' },
+  { value: 'dias_3', label: 'Faltan 3' },
+  { value: 'dias_1', label: 'Falta 1' },
+  { value: 'hoy', label: 'Hoy vence' },
+  { value: 'dias_1_retraso', label: '1 día retraso' },
+  { value: 'dias_3_retraso', label: '3 días retraso' },
+  { value: 'dias_5_retraso', label: '5 días retraso' },
+  { value: 'prejudicial', label: 'Prejudicial' },
+  { value: 'mora_90', label: '90+ mora' },
 ]
 
 type AdjuntoItem = { id: string; nombre_archivo: string; ruta: string }
 
 export function DocumentosPdfAnexos() {
   const [porCaso, setPorCaso] = useState<Record<string, AdjuntoItem[]>>({})
-  const [tipoCasoSeleccionado, setTipoCasoSeleccionado] = useState<string>('dias_5')
+  const [tipoCasoSeleccionado, setTipoCasoSeleccionado] = useState<string>(TIPOS_CASO[0].value)
   const [archivo, setArchivo] = useState<File | null>(null)
   const [subiendo, setSubiendo] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -85,15 +89,15 @@ export function DocumentosPdfAnexos() {
             Documentos PDF anexos
           </CardTitle>
           <CardDescription>
-            Sube documentos PDF y asignalos a un caso (5 dias, 3 dias, 1 dia, hoy, mora 90). Solo PDF. Se almacenan y se envian con la notificacion.
+            Sube documentos PDF y asígnalos a la pestaña que quieras (Faltan 5, Hoy vence, Retrasadas, Prejudicial, 90+ mora). Solo PDF. Se envían con la notificación de esa pestaña.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-1">
-              <label htmlFor="tipo-caso" className="text-sm font-medium text-gray-700">Aplicar al caso</label>
+              <label htmlFor="tipo-caso" className="text-sm font-medium text-gray-700">Aplicar a la pestaña</label>
               <Select value={tipoCasoSeleccionado} onValueChange={setTipoCasoSeleccionado}>
-                <SelectTrigger id="tipo-caso" className="w-[180px]"><SelectValue placeholder="Selecciona caso" /></SelectTrigger>
+                <SelectTrigger id="tipo-caso" className="w-[180px]"><SelectValue placeholder="Selecciona pestaña" /></SelectTrigger>
                 <SelectContent>
                   {TIPOS_CASO.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                 </SelectContent>
@@ -109,7 +113,7 @@ export function DocumentosPdfAnexos() {
             </Button>
           </div>
           <div className="border-t pt-4">
-            <h4 className="text-sm font-medium text-gray-700 mb-2">Documentos almacenados por caso</h4>
+            <h4 className="text-sm font-medium text-gray-700 mb-2">Documentos almacenados por pestaña</h4>
             <div className="space-y-3">
               {TIPOS_CASO.map(({ value, label }) => {
                 const items = porCaso[value] || []
@@ -131,7 +135,7 @@ export function DocumentosPdfAnexos() {
                 )
               })}
               {TIPOS_CASO.every((t) => (porCaso[t.value]?.length ?? 0) === 0) && (
-                <p className="text-sm text-gray-500">Aun no hay documentos. Sube un PDF y elige el caso.</p>
+                <p className="text-sm text-gray-500">Aún no hay documentos. Sube un PDF y elige la pestaña.</p>
               )}
             </div>
           </div>

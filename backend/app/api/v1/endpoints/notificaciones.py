@@ -609,18 +609,18 @@ def update_adjunto_fijo_cobranza(payload: dict = Body(...), db: Session = Depend
 
 @router.get("/adjuntos-fijos-cobranza")
 def get_adjuntos_fijos_cobranza(db: Session = Depends(get_db)):
-    """Lista de documentos PDF anexos por caso (dias_5, dias_3, dias_1, hoy, mora_90)."""
+    """Lista de documentos PDF anexos por caso (todas las pestañas: previas, día pago, retrasadas, prejudicial, mora_90)."""
     from app.services.adjunto_fijo_cobranza import _get_adjuntos_por_caso_raw
     return _get_adjuntos_por_caso_raw(db)
 
 
 @router.post("/adjuntos-fijos-cobranza/upload")
 def upload_adjunto_fijo_cobranza(
-    tipo_caso: str = Query(..., description="Caso: dias_5, dias_3, dias_1, hoy, mora_90"),
+    tipo_caso: str = Query(..., description="Caso: dias_5, dias_3, dias_1, hoy, dias_1_retraso, dias_3_retraso, dias_5_retraso, prejudicial, mora_90"),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
-    """Sube un PDF y lo asocia al caso indicado. Solo se aceptan archivos PDF."""
+    """Sube un PDF y lo asocia al caso indicado. Solo se aceptan archivos PDF. Puede asignarse a cualquier pestaña."""
     from app.services.adjunto_fijo_cobranza import (
         TIPOS_CASO_VALIDOS,
         CLAVE_ADJUNTOS_FIJOS_POR_CASO,
@@ -628,7 +628,10 @@ def upload_adjunto_fijo_cobranza(
         _get_base_dir_adjuntos,
     )
     if tipo_caso not in TIPOS_CASO_VALIDOS:
-        raise HTTPException(status_code=400, detail="tipo_caso debe ser uno de: dias_5, dias_3, dias_1, hoy, mora_90")
+        raise HTTPException(
+            status_code=400,
+            detail="tipo_caso debe ser uno de: dias_5, dias_3, dias_1, hoy, dias_1_retraso, dias_3_retraso, dias_5_retraso, prejudicial, mora_90",
+        )
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Solo se permiten documentos PDF")
     content_type = file.content_type or ""

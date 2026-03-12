@@ -1,4 +1,4 @@
-﻿"""
+"""
 Adjunto PDF fijo para emails de cobranza.
 
 Se anexa siempre el mismo archivo PDF sin modificaciones (documento estÃ¡tico).
@@ -18,7 +18,12 @@ logger = logging.getLogger(__name__)
 CLAVE_ADJUNTO_FIJO_COBRANZA = "adjunto_fijo_cobranza"
 CLAVE_ADJUNTOS_FIJOS_POR_CASO = "adjuntos_fijos_por_caso"
 
-TIPOS_CASO_VALIDOS = frozenset(["dias_5", "dias_3", "dias_1", "hoy", "mora_90"])
+# Todas las pestañas de notificaciones: previas, día pago, retrasadas, prejudicial, mora 90
+TIPOS_CASO_VALIDOS = frozenset([
+    "dias_5", "dias_3", "dias_1", "hoy",
+    "dias_1_retraso", "dias_3_retraso", "dias_5_retraso",
+    "prejudicial", "mora_90",
+])
 
 
 def _resolve_path(ruta: str) -> Optional[str]:

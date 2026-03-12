@@ -228,14 +228,25 @@ export function ConfiguracionNotificaciones() {
     }
   }
 
-  /** Envío masivo manual: mismo flujo que las 11PM pero en este momento; si modo prueba está activo, todos los correos van al correo de pruebas. */
+  /** Envío masivo manual: mismo flujo que las 11PM pero en este momento; si modo prueba está activo, todos los correos van al correo de pruebas. Guarda la config antes de enviar para que el backend use los toggles actuales. */
   const handleEnviosMasivosPrueba = async () => {
     if (!modoPruebas) return
     try {
       setEnviandoMasivo(true)
+      const payload: ConfigEnvioCompleta = {
+        ...configEnvios,
+        modo_pruebas: true,
+        emails_pruebas: emailsPruebas.filter((e) => e?.trim()),
+        email_pruebas: emailsPruebas[0]?.trim() || '',
+      }
+      await emailConfigService.actualizarConfiguracionEnvios(payload)
       const res = await notificacionService.enviarTodasNotificaciones()
-      const { enviados, fallidos, sin_email } = res ?? {}
-      toast.success(`Envíos masivos prueba: ${enviados ?? 0} enviados, ${fallidos ?? 0} fallidos, ${sin_email ?? 0} sin email.`)
+      const { enviados, fallidos, sin_email, omitidos_config } = res ?? {}
+      if ((enviados ?? 0) + (fallidos ?? 0) + (sin_email ?? 0) === 0 && (omitidos_config ?? 0) > 0) {
+        toast.warning(`Ningún envío: ${omitidos_config} omitidos (activa Envío en al menos una pestaña y vuelve a intentar).`)
+      } else {
+        toast.success(`Envíos masivos prueba: ${enviados ?? 0} enviados, ${fallidos ?? 0} fallidos, ${sin_email ?? 0} sin email.`)
+      }
     } catch (error: unknown) {
       const detalle = getErrorDetail(error)
       toast.error(detalle || 'Error al ejecutar envíos masivos.')
@@ -264,7 +275,7 @@ export function ConfiguracionNotificaciones() {
             Configuración por caso
           </CardTitle>
           <CardDescription>
-            Asigna una plantilla a cada caso, activa el envío y define si incluir PDF anexo y documentos fijos. Las plantillas (cuerpo email, PDF variable, documentos fijos) se crean en Configuración → Plantillas.
+            Asigna una plantilla a cada pestaña, activa el envío y define si incluir PDF anexo (carta cobranza) y documentos PDF fijos. Los documentos fijos se asignan por pestaña en Configuración → Plantillas → Documentos PDF anexos.
           </CardDescription>
         </CardHeader>
       </Card>
@@ -386,7 +397,7 @@ export function ConfiguracionNotificaciones() {
               <th className="text-left py-3 px-4 font-semibold text-gray-700">Plantilla</th>
               <th className="text-center py-3 px-4 font-semibold text-gray-700 w-20">Envío</th>
               <th className="text-center py-3 px-4 font-semibold text-gray-700 w-20" title="Incluir PDF anexo (carta cobranza)" aria-label="Incluir PDF anexo (carta cobranza)">PDF</th>
-              <th className="text-center py-3 px-4 font-semibold text-gray-700 w-20" title="Incluir documentos PDF fijos" aria-label="Incluir documentos PDF fijos">Adj.</th>
+              <th className="text-center py-3 px-4 font-semibold text-gray-700 w-20" title="Incluir documentos PDF fijos asignados a esta pestaña (Configuración → Plantillas → Documentos PDF anexos)" aria-label="Incluir documentos PDF fijos de esta pestaña">Adj.</th>
               <th className="text-left py-3 px-4 font-semibold text-gray-700 w-32">Opciones</th>
             </tr>
           </thead>
@@ -449,7 +460,7 @@ export function ConfiguracionNotificaciones() {
                       checked={config.incluir_adjuntos_fijos !== false}
                       onChange={() => setConfig(tipo, { incluir_adjuntos_fijos: config.incluir_adjuntos_fijos === false })}
                       disabled={!config.habilitado}
-                      title="Incluir documentos PDF fijos"
+                      title="Incluir documentos PDF fijos asignados a esta pestaña"
                       className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
                   </td>
