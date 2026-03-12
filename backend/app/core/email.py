@@ -167,9 +167,20 @@ def send_email(
         from email.mime.base import MIMEBase
         from email import encoders
 
-        # Corregir data URLs mal formadas (base64/ -> base64,) para que el HTML se renderice
-        if body_html and "base64/" in body_html:
-            body_html = body_html.replace("base64/", "base64,")
+        # Asegurar body_html es str y UTF-8 valido (evita HTML corrupto por encoding BD/plantilla)
+        if body_html is not None:
+            if isinstance(body_html, bytes):
+                try:
+                    body_html = body_html.decode("utf-8")
+                except UnicodeDecodeError:
+                    body_html = body_html.decode("cp1252", errors="replace")
+            else:
+                try:
+                    body_html.encode("utf-8")
+                except (UnicodeEncodeError, UnicodeDecodeError):
+                    body_html = body_html.encode("utf-8", errors="replace").decode("utf-8")
+            if "base64/" in body_html:
+                body_html = body_html.replace("base64/", "base64,")
 
         if has_attachments:
             msg = MIMEMultipart("mixed")
@@ -208,13 +219,13 @@ def send_email(
         if port == 465:
             with smtplib.SMTP_SSL(cfg["smtp_host"], port, timeout=SMTP_TIMEOUT_SECONDS) as server:
                 server.login(cfg["smtp_user"], cfg["smtp_password"])
-                server.sendmail(msg["From"], all_recipients, msg.as_string())
+                server.sendmail(msg["From"], all_recipients, msg.as_string(policy=__import__("email").policy.SMTP))
         else:
             with smtplib.SMTP(cfg["smtp_host"], port, timeout=SMTP_TIMEOUT_SECONDS) as server:
                 if use_tls:
                     server.starttls()
                 server.login(cfg["smtp_user"], cfg["smtp_password"])
-                server.sendmail(msg["From"], all_recipients, msg.as_string())
+                server.sendmail(msg["From"], all_recipients, msg.as_string(policy=__import__("email").policy.SMTP))
         logger.info("Correo enviado a %s: %s", to_emails, subject)
         return True, None
     except Exception as e:
