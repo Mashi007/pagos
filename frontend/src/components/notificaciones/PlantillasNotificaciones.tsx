@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { notificacionService, NotificacionPlantilla, NotificacionVariable } from '../../services/notificacionService'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -903,9 +903,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
       html = html.split(token).join(val)
     })
     html = html.replace(/\{\{#CUOTAS\.VENCIMIENTOS\}\}[\s\S]*?\{\{\/CUOTAS\.VENCIMIENTOS\}\}/g, '<p>Cuota N° 1 - Vencimiento: 10/01/2025 - Monto: 150.00</p><p>Cuota N° 2 - Vencimiento: 10/02/2025 - Monto: 150.00</p>')
-    if (!html.trim().startsWith('<')) {
-      html = `<div style="white-space: pre-wrap; font-family: sans-serif; padding: 16px;">${html.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>`
-    }
+    // Siempre renderizar como HTML (encabezado, cuerpo y firma pueden contener código HTML)
     const doc = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Vista previa</title></head><body style="margin:0; padding:12px; font-family: sans-serif;">${html}</body></html>`
     const blob = new Blob([doc], { type: 'text/html;charset=utf-8' })
     const url = URL.createObjectURL(blob)
@@ -1184,6 +1182,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
               <Input ref={asuntoRef as any} value={asunto} onFocus={()=>setFocus('asunto')} onChange={e=>setAsunto(e.target.value)} placeholder="Asunto del correo" />
             </div>
             <div className="col-span-2">
+              <p className="text-xs text-gray-500 mb-1">Puede usar código HTML en encabezado, cuerpo y firma. Use el botón «Vista previa (datos de ejemplo)» para ver cómo queda el resultado.</p>
               <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">Formato rápido (encabezado/cuerpo/firma):
                 <Button size="sm" variant="ghost" onClick={()=>aplicarFormato('b')}>B</Button>
                 <Button size="sm" variant="ghost" onClick={()=>aplicarFormato('i')}>I</Button>
@@ -1193,16 +1192,16 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
               </div>
             </div>
             <div>
-              <label className="text-sm text-gray-600">Encabezado</label>
-              <Textarea ref={encRef} value={encabezado} onFocus={()=>setFocus('encabezado')} onChange={e=>setEncabezado(e.target.value)} rows={4} placeholder="Encabezado" />
+              <label className="text-sm text-gray-600">Encabezado (puede incluir HTML)</label>
+              <Textarea ref={encRef} value={encabezado} onFocus={()=>setFocus('encabezado')} onChange={e=>setEncabezado(e.target.value)} rows={4} placeholder="Encabezado (ej. <p>Texto</p>)" />
             </div>
             <div>
-              <label className="text-sm text-gray-600">Firma</label>
-              <Textarea ref={firmaRef} value={firma} onFocus={()=>setFocus('firma')} onChange={e=>setFirma(e.target.value)} rows={4} placeholder="Firma" />
+              <label className="text-sm text-gray-600">Firma (puede incluir HTML)</label>
+              <Textarea ref={firmaRef} value={firma} onFocus={()=>setFocus('firma')} onChange={e=>setFirma(e.target.value)} rows={4} placeholder="Firma (ej. <p>Atentamente,</p>)" />
             </div>
             <div className="col-span-2">
-              <label className="text-sm text-gray-600">Cuerpo</label>
-              <Textarea ref={cuerpoRef} value={cuerpo} onFocus={()=>setFocus('cuerpo')} onChange={e=>setCuerpo(e.target.value)} rows={10} placeholder="Contenido principal" />
+              <label className="text-sm text-gray-600">Cuerpo (puede incluir HTML)</label>
+              <Textarea ref={cuerpoRef} value={cuerpo} onFocus={()=>setFocus('cuerpo')} onChange={e=>setCuerpo(e.target.value)} rows={10} placeholder="Contenido principal (ej. <p>Hola <b>{{nombre}}</b></p>)" />
             </div>
           </div>
 
