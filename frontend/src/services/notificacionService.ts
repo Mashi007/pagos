@@ -422,7 +422,8 @@ class EmailConfigService {
   }): Promise<{ success: boolean; mensaje?: string }> {
     return await apiClient.post<{ success: boolean; mensaje?: string }>(
       `${this.baseUrl}/email/probar-imap`,
-      imapConfig ?? {}
+      imapConfig ?? {},
+      { timeout: 60000 }
     )
   }
 }

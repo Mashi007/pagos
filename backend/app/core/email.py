@@ -1,15 +1,15 @@
-ï»¿"""
-EnvÃ­o de correo para notificaciones (tickets, etc.).
-Usa SMTP desde email_config_holder (configuraciÃ³n del dashboard) o desde settings (.env).
+"""
+Envío de correo para notificaciones (tickets, etc.).
+Usa SMTP desde email_config_holder (configuración del dashboard) o desde settings (.env).
 Soporta adjuntos (ej. informe PDF de ticket).
-TambiÃ©n soporta prueba de conexiÃ³n IMAP para recibir correos.
+También soporta prueba de conexión IMAP para recibir correos.
 """
 import logging
 from typing import List, Optional, Tuple
 
-# Timeout para conexiÃ³n y envÃ­o SMTP/IMAP (evita 502 por proxy cuando Gmail/red tardan)
+# Timeout para conexión y envío SMTP/IMAP (evita 502 por proxy cuando Gmail/red tardan)
 SMTP_TIMEOUT_SECONDS = 25
-IMAP_TIMEOUT_SECONDS = 15
+IMAP_TIMEOUT_SECONDS = 25
 
 from app.core.email_config_holder import get_smtp_config, get_tickets_notify_emails, get_modo_pruebas_email, sync_from_db
 
@@ -20,7 +20,7 @@ AttachmentType = Tuple[str, bytes]
 
 
 def _sanitize_imap_error(exc: Exception) -> str:
-    """Mensaje seguro para mostrar al usuario al fallar conexiÃ³n IMAP (sin contraseÃ±as ni rutas)."""
+    """Mensaje seguro para mostrar al usuario al fallar conexión IMAP (sin contraseñas ni rutas)."""
     msg = str(exc).strip()
     # Si el mensaje es repr de bytes (b'...'), extraer texto para no mostrar b'...' en la UI
     if msg.startswith("b'") and msg.endswith("'"):
@@ -29,30 +29,30 @@ def _sanitize_imap_error(exc: Exception) -> str:
         except Exception:
             msg = msg[2:-1]
     if not msg:
-        return "Error de conexiÃ³n IMAP."
+        return "Error de conexión IMAP."
     lower = msg.lower()
     if "username and password not accepted" in lower or "authentication failed" in lower or "login failed" in lower:
-        return "Usuario o contraseÃ±a no aceptados. Gmail personal: usa ContraseÃ±a de aplicaciÃ³n. Cuentas corporativas/Google Workspace: prueba con tu contraseÃ±a normal."
+        return "Usuario o contraseña no aceptados. Gmail personal: usa Contraseña de aplicación. Cuentas corporativas/Google Workspace: prueba con tu contraseña normal."
     if "connection refused" in lower or "timed out" in lower or "timeout" in lower:
-        return "La conexiÃ³n al servidor IMAP tardÃ³ demasiado o fue rechazada. Revisa host, puerto (993 o 143) y que el servidor no estÃ© en suspensiÃ³n."
+        return "La conexión al servidor IMAP tardó demasiado o fue rechazada. Revisa host, puerto (993 o 143) y que el servidor no esté en suspensión."
     if "ssl" in lower or "certificate" in lower:
         return "Error SSL/TLS. Prueba puerto 993 con SSL o 143 con STARTTLS."
     if "authenticationfailed" in lower or "invalid credentials" in lower:
-        return "Usuario o contraseÃ±a no aceptados. Gmail personal: usa ContraseÃ±a de aplicaciÃ³n. Cuentas corporativas/Google Workspace: prueba con tu contraseÃ±a normal."
+        return "Usuario o contraseña no aceptados. Gmail personal: usa Contraseña de aplicación. Cuentas corporativas/Google Workspace: prueba con tu contraseña normal."
     return msg[:300] if len(msg) <= 300 else msg[:297] + "..."
 
 
 
 def _sanitize_smtp_error(exc: Exception) -> str:
-    """Mensaje seguro para el usuario al fallar SMTP (sin contraseÃ±as ni rutas)."""
+    """Mensaje seguro para el usuario al fallar SMTP (sin contraseñas ni rutas)."""
     msg = str(exc).strip()
     if not msg:
-        return "Error de conexiÃ³n SMTP."
+        return "Error de conexión SMTP."
     lower = msg.lower()
     if "username and password not accepted" in lower or "authentication failed" in lower or "login failed" in lower:
-        return "Usuario o contraseÃ±a no aceptados. Gmail personal: usa ContraseÃ±a de aplicaciÃ³n. Cuentas corporativas/Google Workspace: prueba con tu contraseÃ±a normal."
+        return "Usuario o contraseña no aceptados. Gmail personal: usa Contraseña de aplicación. Cuentas corporativas/Google Workspace: prueba con tu contraseña normal."
     if "connection refused" in lower or "timed out" in lower or "timeout" in lower:
-        return "La conexiÃ³n al servidor SMTP tardÃ³ demasiado o fue rechazada. Revisa host, puerto (587 o 465) y red."
+        return "La conexión al servidor SMTP tardó demasiado o fue rechazada. Revisa host, puerto (587 o 465) y red."
     if "ssl" in lower or "certificate" in lower:
         return "Error SSL/TLS. Prueba puerto 587 con TLS o 465 con SSL."
     return msg[:300] if len(msg) <= 300 else msg[:297] + "..."
@@ -65,11 +65,11 @@ def test_imap_connection(
     imap_use_ssl: bool = True,
 ) -> Tuple[bool, Optional[str], Optional[List[str]]]:
     """
-    Prueba la conexiÃ³n IMAP y devuelve informaciÃ³n sobre carpetas disponibles.
-    Retorna: (Ã©xito, mensaje_error, lista_de_carpetas)
-    - Ã©xito: True si la conexiÃ³n fue exitosa
-    - mensaje_error: DescripciÃ³n legible del error (None si no hay error)
-    - lista_de_carpetas: Lista de nombres de carpetas (None si fallÃ³)
+    Prueba la conexión IMAP y devuelve información sobre carpetas disponibles.
+    Retorna: (éxito, mensaje_error, lista_de_carpetas)
+    - éxito: True si la conexión fue exitosa
+    - mensaje_error: Descripción legible del error (None si no hay error)
+    - lista_de_carpetas: Lista de nombres de carpetas (None si falló)
     """
     try:
         import imaplib
@@ -98,9 +98,9 @@ def test_imap_connection(
         server.close()
         server.logout()
 
-        msg = f"ConexiÃ³n IMAP exitosa. Se encontraron {len(folder_list)} carpeta(s): {', '.join(folder_list[:5])}"
+        msg = f"Conexión IMAP exitosa. Se encontraron {len(folder_list)} carpeta(s): {', '.join(folder_list[:5])}"
         if len(folder_list) > 5:
-            msg += f" y {len(folder_list) - 5} mÃ¡s."
+            msg += f" y {len(folder_list) - 5} más."
         
         logger.info("Prueba IMAP exitosa para %s: %d carpetas", imap_user, len(folder_list))
         return True, None, folder_list
@@ -123,28 +123,28 @@ def send_email(
     respetar_destinos_manuales: bool = False,
 ) -> Tuple[bool, Optional[str]]:
     """
-    EnvÃ­a un correo vÃ­a SMTP (desde el email configurado en ConfiguraciÃ³n > Email o .env).
+    Envía un correo vía SMTP (desde el email configurado en Configuración > Email o .env).
     Antes de enviar sincroniza el holder con la BD.
     cc_emails: copia visible (CC). bcc_emails: copia oculta (CCO/BCC).
     attachments: lista de (nombre_archivo, contenido_bytes) para adjuntar (ej. PDF).
-    respetar_destinos_manuales: si True, NO redirige a email_pruebas; envÃ­a a los correos indicados (para "Enviar Email de Prueba").
-    Devuelve (True, None) si se enviÃ³; (False, mensaje_error) si no hay SMTP configurado o fallÃ³.
+    respetar_destinos_manuales: si True, NO redirige a email_pruebas; envía a los correos indicados (para "Enviar Email de Prueba").
+    Devuelve (True, None) si se envió; (False, mensaje_error) si no hay SMTP configurado o falló.
     """
     if not to_emails:
         return False, "No hay destinatarios."
     sync_from_db()
-    # Modo Pruebas: redirigir todos los envÃ­os al correo(s) de pruebas (desde notificaciones_envios o email_config)
-    # EXCEPCIÃ“N: si respetar_destinos_manuales=True (ej. usuario hizo clic en "Enviar Email de Prueba"), se envÃ­an a los correos indicados en la interfaz.
+    # Modo Pruebas: redirigir todos los envíos al correo(s) de pruebas (desde notificaciones_envios o email_config)
+    # EXCEPCIÓN: si respetar_destinos_manuales=True (ej. usuario hizo clic en "Enviar Email de Prueba"), se envían a los correos indicados en la interfaz.
     modo_pruebas, emails_pruebas_list = get_modo_pruebas_email()
     if modo_pruebas and emails_pruebas_list and not respetar_destinos_manuales:
         to_emails = emails_pruebas_list
         cc_list = []
         bcc_list = []
-        logger.info("Modo Pruebas: envÃ­o redirigido a %s", emails_pruebas_list)
+        logger.info("Modo Pruebas: envío redirigido a %s", emails_pruebas_list)
     else:
         if modo_pruebas and not emails_pruebas_list:
-            logger.warning("Modo Pruebas activo pero no hay correo de pruebas configurado. Configure en Notificaciones > ConfiguraciÃ³n o ConfiguraciÃ³n > Email.")
-            return False, "En modo Pruebas debe configurar el correo de pruebas en Notificaciones > ConfiguraciÃ³n o ConfiguraciÃ³n > Email."
+            logger.warning("Modo Pruebas activo pero no hay correo de pruebas configurado. Configure en Notificaciones > Configuración o Configuración > Email.")
+            return False, "En modo Pruebas debe configurar el correo de pruebas en Notificaciones > Configuración o Configuración > Email."
         cc_list = [e.strip() for e in (cc_emails or []) if e and isinstance(e, str) and "@" in e.strip()]
         bcc_list = [e.strip() for e in (bcc_emails or []) if e and isinstance(e, str) and "@" in e.strip()]
     has_attachments = bool(attachments)
@@ -211,23 +211,23 @@ def notify_ticket_created(
     fecha_creacion=None,
 ) -> bool:
     """
-    Notifica por correo que se creÃ³ un ticket y adjunta informe en PDF.
-    Destino: contactos configurados en ConfiguraciÃ³n > Email (Contactos para notificaciÃ³n de tickets).
+    Notifica por correo que se creó un ticket y adjunta informe en PDF.
+    Destino: contactos configurados en Configuración > Email (Contactos para notificación de tickets).
     Remitente: el email configurado por defecto (SMTP/remitente).
     """
     sync_from_db()
     to_list = get_tickets_notify_emails()
     if not to_list:
         logger.warning(
-            "No hay contactos para notificaciÃ³n de tickets. Configura 'Contactos para notificaciÃ³n de tickets' en ConfiguraciÃ³n > Email."
+            "No hay contactos para notificación de tickets. Configura 'Contactos para notificación de tickets' en Configuración > Email."
         )
         return False
     subject = f"[CRM] Nuevo ticket #{ticket_id}: {(titulo or '')[:50]}"
     body = "Se ha creado un nuevo ticket en el CRM.\n\n"
-    body += f"ID: {ticket_id}\nTÃ­tulo: {titulo}\nPrioridad: {prioridad}\n"
+    body += f"ID: {ticket_id}\nTítulo: {titulo}\nPrioridad: {prioridad}\n"
     if cliente_nombre:
         body += f"Cliente: {cliente_nombre}\n"
-    body += "\nDescripciÃ³n:\n" + (descripcion or "") + "\n\n"
+    body += "\nDescripción:\n" + (descripcion or "") + "\n\n"
     body += "Se adjunta el informe en PDF de este ticket.\n"
 
     attachments: List[AttachmentType] = []
@@ -254,7 +254,7 @@ def notify_ticket_created(
 
 
 def notify_ticket_updated(ticket_id: int, titulo: str, estado: str, prioridad: str) -> bool:
-    """Notifica por correo que se actualizÃ³ un ticket. Destino: contactos prestablecidos."""
+    """Notifica por correo que se actualizó un ticket. Destino: contactos prestablecidos."""
     to_list = get_tickets_notify_emails()
     if not to_list:
         return False
