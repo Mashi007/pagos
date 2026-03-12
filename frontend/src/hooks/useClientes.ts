@@ -181,52 +181,12 @@ export function useCambiarEstadoCliente() {
   })
 }
 
-// Hook para asignar analista
-export function useAsignarAsesor() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: ({ clienteId, analistaId }: { clienteId: string; analistaId: string }) =>
-      clienteService.asignarAsesor(clienteId, analistaId),
-    onSuccess: (updatedCliente) => {
-      // Actualizar cache específico
-      queryClient.setQueryData(
-        clienteKeys.detail(String(updatedCliente.id)),
-        updatedCliente
-      )
-
-      // Invalidar listas y clientes por analista
-      queryClient.invalidateQueries({ queryKey: clienteKeys.lists() })
-      queryClient.invalidateQueries({ queryKey: [...clienteKeys.all, 'analista'] })
-
-      toast.success('Asesor asignado exitosamente')
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || 'Error al asignar analista')
-    },
-  })
-}
-
 // Hook para validar cédula
 export function useValidateCedula() {
   return useMutation({
     mutationFn: (cedula: string) => clienteService.validateCedula(cedula),
     onError: (error: any) => {
       toast.error(error.response?.data?.message || 'Error al validar cédula')
-    },
-  })
-}
-
-// Hook para exportar clientes
-export function useExportClientes() {
-  return useMutation({
-    mutationFn: ({ filters, format }: { filters?: ClienteFilters; format?: 'excel' | 'pdf' }) =>
-      clienteService.exportarClientes(filters, format),
-    onSuccess: () => {
-      toast.success('Exportaciión iniciada. El archivo se descargará automáticamente.')
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || 'Error al exportar clientes')
     },
   })
 }

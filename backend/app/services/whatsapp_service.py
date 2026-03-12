@@ -467,7 +467,7 @@ def _crear_ticket_informe_revisar(
             destinos = [EMAIL_TICKET_REVISAR]
         asunto = f"[CRM] Informe pago requiere revisión - Ticket #{ticket.id} - Cédula {informe.cedula or 'N/A'}"
         cuerpo = f"Se ha creado un ticket porque el informe de pago tiene columna H = REVISAR (el cliente corrigió datos).\n\n{descripcion}\n\nRevisa el informe en Google Sheet y el ticket en el CRM."
-        ok, err = send_email(destinos, asunto, cuerpo)
+        ok, err = send_email(destinos, asunto, cuerpo, servicio="tickets")
         if not ok:
             logger.warning("%s No se pudo enviar correo por ticket REVISAR: %s", LOG_TAG_INFORME, err)
         return ticket.id

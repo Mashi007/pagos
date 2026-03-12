@@ -1,4 +1,4 @@
-﻿"""
+"""
 Endpoints para las pesta�as de Notificaciones (previas, d�a pago, retrasadas, prejudicial, mora 90+).
 Datos reales desde BD (cuotas + clientes). Env�o por Email (Configuraci�n > Email) y respeto de
 configuraci�n de env�os (habilitado/CCO por tipo) desde BD (notificaciones_envios). get_db en todos los procesos.
@@ -23,7 +23,7 @@ from app.api.v1.endpoints.notificaciones import (
 from app.models.plantilla_notificacion import PlantillaNotificacion
 from app.models.envio_notificacion import EnvioNotificacion
 from app.services.carta_cobranza_pdf import generar_carta_cobranza_pdf
-from app.services.adjunto_fijo_cobranza import get_adjunto_fijo_cobranza_bytes
+from app.services.adjunto_fijo_cobranza import get_adjunto_fijo_cobranza_bytes, get_adjuntos_fijos_por_caso
 
 # Mapeo tipo config (PAGO_5_DIAS_ANTES, etc.) a tipo_tab para estad�sticas/rebotados (solo los 5 que muestra la UI)
 _CONFIG_TIPO_TO_TAB = {
@@ -86,38 +86,46 @@ def _enviar_correos_items(
             plantilla_id = int(raw_id) if raw_id is not None else None
         except (TypeError, ValueError):
             plantilla_id = None
+        # Construir contexto_cobranza cuando haga falta: email COBRANZA o adjunto PDF con variables en cualquier pestaña
         if plantilla_id and db and item.get("prestamo_id") and not item.get("contexto_cobranza"):
             plantilla = db.get(PlantillaNotificacion, plantilla_id)
-            if plantilla and getattr(plantilla, "tipo", None) == "COBRANZA":
+            need_ctx = (plantilla and getattr(plantilla, "tipo", None) == "COBRANZA") or (tipo_cfg.get("incluir_pdf_anexo") is True)
+            if need_ctx:
                 ctx, corr = build_contexto_cobranza_para_item(db, item, correlativos_en_batch)
                 if ctx is not None:
                     item["contexto_cobranza"] = ctx
                     item["_correlativo_envio"] = corr
         asunto, cuerpo = get_plantilla_asunto_cuerpo(db, plantilla_id, item, asunto_base, cuerpo_base, modo_pruebas=usar_solo_pruebas)
-        # Adjunto PDF para plantilla tipo COBRANZA (carta de cobranza)
+        # Adjuntos disponibles en todas las pestañas según config: PDF con variables (carta cobranza) y PDF(s) fijos
         attachments = None
         body_html = None
         if plantilla_id and db:
             plantilla = db.get(PlantillaNotificacion, plantilla_id)
-            if plantilla and getattr(plantilla, "tipo", None) == "COBRANZA" and item.get("contexto_cobranza"):
+            if plantilla and getattr(plantilla, "tipo", None) == "COBRANZA":
                 body_html = cuerpo  # el cuerpo de COBRANZA es HTML
-                incluir_pdf_anexo = tipo_cfg.get("incluir_pdf_anexo") is not False
-                incluir_adjuntos_fijos = tipo_cfg.get("incluir_adjuntos_fijos") is not False
-                try:
-                    attachments = []
-                    if incluir_pdf_anexo:
-                        ctx_pdf = _contexto_cobranza_placeholder() if usar_solo_pruebas else item["contexto_cobranza"]
+        incluir_pdf_anexo = tipo_cfg.get("incluir_pdf_anexo") is True
+        incluir_adjuntos_fijos = tipo_cfg.get("incluir_adjuntos_fijos") is True
+        if incluir_pdf_anexo or incluir_adjuntos_fijos:
+            try:
+                attachments = []
+                if incluir_pdf_anexo:
+                    ctx_pdf = _contexto_cobranza_placeholder() if usar_solo_pruebas else item.get("contexto_cobranza")
+                    if ctx_pdf:
                         pdf_bytes = generar_carta_cobranza_pdf(ctx_pdf, db=db)
                         attachments.append(("Carta_Cobranza.pdf", pdf_bytes))
-                    if incluir_adjuntos_fijos:
-                        adjunto_fijo = get_adjunto_fijo_cobranza_bytes(db)
-                        if adjunto_fijo:
-                            attachments.append(adjunto_fijo)
-                    if not attachments:
-                        attachments = None
-                except Exception as e:
-                    import logging
-                    logging.getLogger(__name__).exception("Error generando PDF cobranza: %s", e)
+                if incluir_adjuntos_fijos and db:
+                    adjunto_fijo = get_adjunto_fijo_cobranza_bytes(db)
+                    if adjunto_fijo:
+                        attachments.append(adjunto_fijo)
+                    tipo_caso = _CONFIG_TIPO_TO_TAB.get(tipo)
+                    if tipo_caso:
+                        for nombre, contenido in get_adjuntos_fijos_por_caso(db, tipo_caso):
+                            attachments.append((nombre, contenido))
+                if not attachments:
+                    attachments = None
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).exception("Error generando adjuntos (PDF anexo / fijos): %s", e)
         # Email: en modo prueba todos van solo a email_pruebas; en producci�n al correo del cliente (+ CCO si hay)
         if usar_solo_pruebas:
             to_email = [email_pruebas]
@@ -142,6 +150,7 @@ def _enviar_correos_items(
                 body_html=body_html,
                 bcc_emails=bcc_list or None,
                 attachments=attachments,
+                servicio="notificaciones",
             )
             if ok:
                 enviados += 1

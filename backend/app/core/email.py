@@ -1,4 +1,4 @@
-﻿"""
+"""
 Env�o de correo para notificaciones (tickets, etc.).
 Usa SMTP desde email_config_holder (configuraci�n del dashboard) o desde settings (.env).
 Soporta adjuntos (ej. informe PDF de ticket).
@@ -41,6 +41,36 @@ def _logo_url_for_email():
     except Exception:
         base = "https://rapicredit.onrender.com/pagos"
     return f"{base}/logos/rapicredit-public.png"
+
+
+# Longitud mínima de data URL para reemplazar por logo (evita romper iconos SVG pequeños como WhatsApp).
+_MIN_BASE64_LENGTH_TO_REPLACE = 300
+
+
+def _sanitize_html_for_email(html: str, logo_url: str) -> str:
+    """
+    Asegura que el HTML del correo no esté corrupto al cargarse en el cliente:
+    - Reemplaza imágenes inline base64 largas por la URL del logo (evita payload enorme y fallos de render).
+    - Sustituye {{LOGO_URL}} por la URL real por si no se reemplazó en plantilla.
+    - Corrige typo base64/ -> base64,.
+    Soporta src con comillas dobles y simples.
+    """
+    if not html or not isinstance(html, str):
+        return html
+    # Corregir typo que rompe data URL
+    if "base64/" in html:
+        html = html.replace("base64/", "base64,")
+    # Reemplazar {{LOGO_URL}} por la URL real
+    html = html.replace("{{LOGO_URL}}", logo_url)
+    # Reemplazar src="data:image/..." o src='data:image/...' (solo si es largo = logo/foto, no icono SVG pequeño)
+    def replace_data_url(match):
+        quote, content = match.group(1), match.group(2)
+        if len(content) >= _MIN_BASE64_LENGTH_TO_REPLACE:
+            return f'src={quote}{logo_url}{quote}'
+        return match.group(0)
+    html = re.sub(r'src\s*=\s*(")(data:image/[^"]+)"', replace_data_url, html, flags=re.IGNORECASE)
+    html = re.sub(r"src\s*=\s*(')(data:image/[^']+)'", replace_data_url, html, flags=re.IGNORECASE)
+    return html
 
 
 def _sanitize_imap_error(exc: Exception) -> str:
@@ -154,6 +184,7 @@ def send_email(
     attachments: Optional[List[AttachmentType]] = None,
     *,
     respetar_destinos_manuales: bool = False,
+    servicio: Optional[str] = None,
 ) -> Tuple[bool, Optional[str]]:
     """
     Env�a un correo v�a SMTP (desde el email configurado en Configuraci�n > Email o .env).
@@ -168,7 +199,7 @@ def send_email(
     sync_from_db()
     # Modo Pruebas: redirigir todos los env�os al correo(s) de pruebas (desde notificaciones_envios o email_config)
     # EXCEPCI�N: si respetar_destinos_manuales=True (ej. usuario hizo clic en "Enviar Email de Prueba"), se env�an a los correos indicados en la interfaz.
-    modo_pruebas, emails_pruebas_list = get_modo_pruebas_email()
+    modo_pruebas, emails_pruebas_list = get_modo_pruebas_email(servicio=servicio)
     if modo_pruebas and emails_pruebas_list and not respetar_destinos_manuales:
         to_emails = emails_pruebas_list
         cc_list = []
@@ -223,17 +254,9 @@ def send_email(
                     body_html.encode("utf-8")
                 except (UnicodeEncodeError, UnicodeDecodeError):
                     body_html = body_html.encode("utf-8", errors="replace").decode("utf-8")
-            if "base64/" in body_html:
-                body_html = body_html.replace("base64/", "base64,")
-            # Reemplazar imagenes inline base64 por URL del logo: HTML pequeno = Gmail renderiza bien
+            # Evitar mensaje corrupto al cargar: base64 -> logo URL, {{LOGO_URL}} -> URL real, src con " o '
             logo_url = _logo_url_for_email()
-            body_html = re.sub(
-                r'src="data:image/[^"]+"',
-                f'src="{logo_url}"',
-                body_html,
-                count=0,
-                flags=re.DOTALL,
-            )
+            body_html = _sanitize_html_for_email(body_html, logo_url)
 
         # Gmail: si body_text es HTML, usar version solo texto para text/plain (evita ver codigo+base64)
         if body_html and body_text and ("<" in body_text and ">" in body_text):
@@ -344,7 +367,7 @@ def notify_ticket_created(
         logger.exception("Error generando PDF del ticket %s: %s", ticket_id, e)
         body += "\n(No se pudo adjuntar el informe PDF.)\n"
 
-    ok, _ = send_email(to_list, subject, body, attachments=attachments if attachments else None)
+    ok, _ = send_email(to_list, subject, body, attachments=attachments if attachments else None, servicio="tickets")
     return ok
 
 
@@ -355,5 +378,5 @@ def notify_ticket_updated(ticket_id: int, titulo: str, estado: str, prioridad: s
         return False
     subject = f"[CRM] Ticket #{ticket_id} actualizado: {estado}"
     body = f"Ticket #{ticket_id}: {titulo}\nEstado: {estado}\nPrioridad: {prioridad}\n"
-    ok, _ = send_email(to_list, subject, body)
+    ok, _ = send_email(to_list, subject, body, servicio="tickets")
     return ok

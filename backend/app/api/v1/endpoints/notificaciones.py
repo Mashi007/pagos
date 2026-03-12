@@ -761,7 +761,7 @@ def enviar_con_plantilla(
         raise HTTPException(status_code=400, detail="El cliente no tiene email válido")
     if not get_email_activo_servicio("notificaciones"):
         raise HTTPException(status_code=400, detail="El envio de email para notificaciones esta desactivado. Activalo en Configuracion > Email.")
-    ok, msg = send_email([correo], asunto, cuerpo)
+    ok, msg = send_email([correo], asunto, cuerpo, servicio="notificaciones")
     if not ok:
         raise HTTPException(status_code=502, detail=msg or "Error al enviar el correo")
     return {"message": "Correo enviado", "destinatario": correo}

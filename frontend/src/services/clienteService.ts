@@ -1,4 +1,4 @@
-﻿import { apiClient, ApiResponse, PaginatedResponse, buildUrl } from './api'
+import { apiClient, ApiResponse, PaginatedResponse, buildUrl } from './api'
 import { Cliente, ClienteForm, ClienteFilters } from '../types'
 import { logger } from '../utils/logger'
 
@@ -216,23 +216,6 @@ class ClienteService {
     return response
   }
 
-  // Asignar analista a cliente (FUNCIÓN OBSOLETA - eliminado)
-  async asignarAsesor(clienteId: string, analistaId: string): Promise<Cliente> {
-    // Función eliminada - ya no se asignan analistas a clientes
-    throw new Error('La asignación de analistas a clientes ha sido eliminada')
-  }
-
-  // Exportar clientes (usando endpoint de carga masiva)
-  async exportarClientes(filters?: ClienteFilters, format: 'excel' | 'pdf' = 'excel'): Promise<void> {
-    // TODO: Implementar cuando esté disponible el endpoint de exportación
-    logger.warn('Exportación de clientes no implementada aún', {
-      action: 'export_clientes',
-      service: 'ClienteService',
-      method: 'exportClientes'
-    })
-    throw new Error('Exportación de clientes no disponible')
-  }
-
   // Importar clientes desde Excel (usando endpoint de carga masiva)
   async importarClientes(file: File): Promise<{ success: number; errors: any[] }> {
     const response = await apiClient.uploadFile<ApiResponse<{ success: number; errors: any[] }>>(
@@ -262,14 +245,6 @@ class ClienteService {
     return this.getCasosARevisar(page, perPage)
   }
 
-  // Obtener clientes con valores por defecto (legacy - usar getCasosARevisar)
-  async getClientesValoresPorDefecto(
-    page: number = 1,
-    perPage: number = 20
-  ): Promise<PaginatedResponse<Cliente>> {
-    return this.getCasosARevisar(page, perPage)
-  }
-
   // Obtener casos a revisar (clientes con placeholders: Z999999999, Revisar Nombres, +589999999999, revisar@email.com)
   async getCasosARevisar(
     page: number = 1,
@@ -284,22 +259,6 @@ class ClienteService {
       per_page: response.per_page || perPage,
       total_pages: response.total_pages || Math.ceil((response.total || 0) / perPage)
     }
-  }
-
-  // Exportar clientes con valores por defecto (genera CSV desde casos-a-revisar)
-  async exportarValoresPorDefecto(formato: 'csv' | 'excel' = 'csv'): Promise<Blob> {
-    const res = await this.getCasosARevisar(1, 2000)
-    const clientes = res.data || []
-    const headers = ['id', 'cedula', 'nombres', 'telefono', 'email', 'direccion', 'ocupacion', 'estado', 'fecha_registro']
-    const rows = clientes.map((c: any) =>
-      headers.map((h) => {
-        const v = c[h]
-        const s = v == null ? '' : String(v)
-        return s.includes(',') || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s
-      }).join(',')
-    )
-    const csv = [headers.join(','), ...rows].join('\n')
-    return new Blob([csv], { type: 'text/csv;charset=utf-8' })
   }
 
   // Actualizar múltiples clientes en lote

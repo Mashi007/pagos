@@ -28,6 +28,20 @@ interface EmailConfigData {
   imap_password?: string
   imap_use_ssl?: string
   tickets_notify_emails?: string
+  /** On/Off por funcionalidad: si está en 'false', ese servicio no envía email (el resto sigue funcionando). */
+  email_activo_notificaciones?: string
+  email_activo_informe_pagos?: string
+  email_activo_estado_cuenta?: string
+  email_activo_cobros?: string
+  email_activo_campanas?: string
+  email_activo_tickets?: string
+  /** Modo prueba por funcionalidad: 'true' = redirigir envíos de este servicio al correo de pruebas; 'false' = producción (envío real). */
+  modo_pruebas_notificaciones?: string
+  modo_pruebas_informe_pagos?: string
+  modo_pruebas_estado_cuenta?: string
+  modo_pruebas_cobros?: string
+  modo_pruebas_campanas?: string
+  modo_pruebas_tickets?: string
 }
 
 export function EmailConfig() {
@@ -176,6 +190,8 @@ const [probando, setProbando] = useState(false)
       if (data.tickets_notify_emails === undefined) data.tickets_notify_emails = ''
       const serviceKeys = ['email_activo_notificaciones','email_activo_informe_pagos','email_activo_estado_cuenta','email_activo_cobros','email_activo_campanas','email_activo_tickets']
       serviceKeys.forEach(k => { if (data[k] === undefined || data[k] === null) data[k] = 'true' })
+      const modoPruebasKeys = ['modo_pruebas_notificaciones','modo_pruebas_informe_pagos','modo_pruebas_estado_cuenta','modo_pruebas_cobros','modo_pruebas_campanas','modo_pruebas_tickets']
+      modoPruebasKeys.forEach(k => { if (data[k] === undefined || data[k] === null) data[k] = 'false' })
 
       // Normalizar email_activo a string
       if (data.email_activo !== undefined && data.email_activo !== null) {
@@ -263,7 +279,7 @@ const [probando, setProbando] = useState(false)
 
   // Validar si se puede guardar
   const puedeGuardar = useMemo((): boolean => {
-    // ✓ CONDICIóN 1: Campos obligatorios básicos (siempre requeridos)
+    // ✓ CONDICIÓN 1: Campos obligatorios básicos (siempre requeridos)
     const tieneHost = config.smtp_host?.trim() || ''
     const tienePort = config.smtp_port?.trim() || ''
     const tieneUser = config.smtp_user?.trim() || ''
@@ -273,13 +289,13 @@ const [probando, setProbando] = useState(false)
       return false
     }
 
-    // ✓ CONDICIóN 2: Puerto válido (número entre 1 y 65535)
+    // ✓ CONDICIÓN 2: Puerto válido (número entre 1 y 65535)
     const puerto = parseInt(config.smtp_port || '0')
     if (isNaN(puerto) || puerto < 1 || puerto > 65535) {
       return false
     }
 
-    // ✓ CONDICIóN 3: Validaciones específicas para Gmail/Google Workspace
+    // ✓ CONDICIÓN 3: Validaciones específicas para Gmail/Google Workspace
     const esGmail = config.smtp_host?.toLowerCase().includes('gmail.com') || false
     if (esGmail) {
       // ✓ 3.1: Gmail requiere contraseña siempre
@@ -299,7 +315,7 @@ const [probando, setProbando] = useState(false)
       }
     }
 
-    // ✓ CONDICIóN 4: En modo Pruebas, el correo de pruebas es obligatorio y debe ser válido
+    // ✓ CONDICIÓN 4: En modo Pruebas, el correo de pruebas es obligatorio y debe ser válido
     if (modoPruebas === 'true') {
       const email = (emailPruebas ?? '').trim()
       if (!email || !email.includes('@')) {
@@ -618,7 +634,7 @@ const [probando, setProbando] = useState(false)
                 <p className="text-xs text-gray-600">
                   {emailActivo
                     ? '✓ El sistema está enviando emails automáticamente'
-                    : ' El sistema NO enviará emails. Activa el servicio para habilitar envíos.'}
+                    : 'El sistema NO enviará emails. Activa el servicio para habilitar envíos.'}
                 </p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
@@ -639,19 +655,18 @@ const [probando, setProbando] = useState(false)
             </div>
           </div>
 
-          {/* Banners de estado
-
+          {/* On/Off por funcionalidad: cada una tiene su interruptor; si apagas uno, los demás siguen funcionando. */}
           <div className="mt-4 space-y-3">
             <p className="text-sm font-medium text-gray-700">Email por servicio</p>
-            <p className="text-xs text-gray-600">Activa o desactiva el envio de email para cada tipo de uso. Si apagas uno, los demas siguen funcionando.</p>
+            <p className="text-xs text-gray-600">Activa o desactiva el envío de email para cada tipo de uso. Si apagas uno, los demás siguen funcionando.</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {[
-                { key: 'email_activo_notificaciones', label: 'Notificaciones (plantillas a clientes)' },
-                { key: 'email_activo_informe_pagos', label: 'Informe de pagos (cron)' },
-                { key: 'email_activo_estado_cuenta', label: 'Estado de cuenta (codigo y PDF)' },
-                { key: 'email_activo_cobros', label: 'Cobros (recibos)' },
-                { key: 'email_activo_campanas', label: 'Campanas CRM' },
-                { key: 'email_activo_tickets', label: 'Tickets (aviso interno)' }
+                { key: 'email_activo_notificaciones' as const, label: 'Notificaciones (plantillas a clientes)' },
+                { key: 'email_activo_informe_pagos' as const, label: 'Informe de pagos (cron)' },
+                { key: 'email_activo_estado_cuenta' as const, label: 'Estado de cuenta (código y PDF)' },
+                { key: 'email_activo_cobros' as const, label: 'Cobros (recibos)' },
+                { key: 'email_activo_campanas' as const, label: 'Campañas CRM' },
+                { key: 'email_activo_tickets' as const, label: 'Tickets (aviso interno)' }
               ].map(({ key, label }) => (
                 <label key={key} className="flex items-center justify-between gap-2 p-2 rounded border border-gray-200 bg-gray-50/50">
                   <span className="text-sm text-gray-700">{label}</span>
@@ -664,7 +679,38 @@ const [probando, setProbando] = useState(false)
                 </label>
               ))}
             </div>
-          </div> y monitoreo de Google */}
+          </div>
+
+          {/* Modo prueba por funcionalidad: cada una puede ir a producción o a correo de pruebas de forma independiente. */}
+          <div className="mt-4 space-y-3 border-t pt-4">
+            <p className="text-sm font-medium text-gray-700">Modo prueba por funcionalidad</p>
+            <p className="text-xs text-gray-600">Para cada tipo de envío puedes elegir Producción (correos reales a clientes) o Pruebas (todos los correos de ese tipo van al Email de Pruebas). Así puedes probar uno sin afectar al resto.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {[
+                { key: 'modo_pruebas_notificaciones' as const, label: 'Notificaciones (plantillas a clientes)' },
+                { key: 'modo_pruebas_informe_pagos' as const, label: 'Informe de pagos (cron)' },
+                { key: 'modo_pruebas_estado_cuenta' as const, label: 'Estado de cuenta (código y PDF)' },
+                { key: 'modo_pruebas_cobros' as const, label: 'Cobros (recibos)' },
+                { key: 'modo_pruebas_campanas' as const, label: 'Campañas CRM' },
+                { key: 'modo_pruebas_tickets' as const, label: 'Tickets (aviso interno)' }
+              ].map(({ key, label }) => (
+                <label key={key} className="flex items-center justify-between gap-2 p-2 rounded border border-amber-100 bg-amber-50/50">
+                  <span className="text-sm text-gray-700">{label}</span>
+                  <span className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500">{(config[key] ?? 'false') === 'true' ? 'Pruebas' : 'Producción'}</span>
+                    <input
+                      type="checkbox"
+                      checked={(config[key] ?? 'false') === 'true'}
+                      onChange={(e) => handleChange(key, e.target.checked ? 'true' : 'false')}
+                      className="rounded border-gray-300"
+                    />
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Banners de estado y monitoreo de Google */}
           {esGmail && (
             <>
               {/* ✓ Estado: Configurado y vinculado correctamente */}

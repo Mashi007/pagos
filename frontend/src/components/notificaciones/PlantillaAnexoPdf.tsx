@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent } from '../ui/card'
 import { Button } from '../ui/button'
+import { Input } from '../ui/input'
 import { Textarea } from '../ui/textarea'
 import { notificacionService } from '../../services/notificacionService'
 import { toast } from 'sonner'
@@ -178,6 +179,16 @@ export function PlantillaAnexoPdf() {
 
       <Card className="p-4 space-y-3">
         <div className="grid grid-cols-1 gap-3">
+          <div>
+            <label className="text-sm font-medium text-gray-700 block">Ciudad por defecto</label>
+            <p className="text-xs text-gray-500 mb-1">Ciudad que aparece en la carta de cobranza (ej. Guacara, Valencia).</p>
+            <Input
+              value={ciudadDefault}
+              onChange={(e) => setCiudadDefault(e.target.value)}
+              placeholder="Guacara"
+              className="max-w-xs mt-1"
+            />
+          </div>
           <div className="border rounded-lg p-4 bg-gray-50 space-y-4">
             <label className="text-sm font-medium text-gray-700 block">Variables del PDF (insertar en encabezado, cuerpo o firma)</label>
             <p className="text-xs text-gray-500 mb-2">

@@ -203,6 +203,7 @@ def _run_envio_lotes(campana_id: int) -> None:
                     campana.asunto,
                     campana.cuerpo_texto,
                     body_html=campana.cuerpo_html or None,
+                    servicio="campanas",
                 )
                 registro = CampanaEnvioCrm(
                     campana_id=campana_id,

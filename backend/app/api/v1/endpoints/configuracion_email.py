@@ -1,4 +1,4 @@
-﻿"""
+"""
 Endpoints de configuracion de email (SMTP + IMAP).
 GET/PUT /configuracion/email/configuracion, GET /configuracion/email/estado,
 POST /configuracion/email/probar, POST /configuracion/email/probar-imap.
@@ -50,6 +50,12 @@ _email_config_stub: dict[str, Any] = {
     "email_activo_cobros": "true",
     "email_activo_campanas": "true",
     "email_activo_tickets": "true",
+    "modo_pruebas_notificaciones": "false",
+    "modo_pruebas_informe_pagos": "false",
+    "modo_pruebas_estado_cuenta": "false",
+    "modo_pruebas_cobros": "false",
+    "modo_pruebas_campanas": "false",
+    "modo_pruebas_tickets": "false",
     "imap_host": "",
     "imap_port": "993",
     "imap_user": "",
@@ -145,6 +151,12 @@ class EmailConfigUpdate(BaseModel):
     email_activo_cobros: Optional[str] = None
     email_activo_campanas: Optional[str] = None
     email_activo_tickets: Optional[str] = None
+    modo_pruebas_notificaciones: Optional[str] = None
+    modo_pruebas_informe_pagos: Optional[str] = None
+    modo_pruebas_estado_cuenta: Optional[str] = None
+    modo_pruebas_cobros: Optional[str] = None
+    modo_pruebas_campanas: Optional[str] = None
+    modo_pruebas_tickets: Optional[str] = None
     imap_host: Optional[str] = None
     imap_port: Optional[str] = None
     imap_user: Optional[str] = None

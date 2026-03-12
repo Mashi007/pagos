@@ -154,8 +154,9 @@ def get_tickets_notify_emails() -> List[str]:
 
 
 
-# Servicios que envian email: flag email_activo_<servicio>
+# Servicios que envian email: flag email_activo_<servicio> y modo_pruebas_<servicio>
 EMAIL_SERVICES = ("notificaciones", "informe_pagos", "estado_cuenta", "cobros", "campanas", "tickets")
+MODO_PRUEBAS_SERVICES = tuple("modo_pruebas_" + s for s in EMAIL_SERVICES)
 
 def get_email_activo() -> bool:
     """Master: si False, ningun servicio envia email."""
@@ -174,7 +175,16 @@ def get_email_activo_servicio(servicio: str) -> bool:
 
 def update_from_api(data: dict[str, Any]) -> None:
     """Actualiza el holder desde la API de configuraci�n (PUT /configuracion/email/configuracion)."""
-    for k in ("smtp_host", "smtp_port", "smtp_user", "smtp_password", "from_email", "from_name", "tickets_notify_emails", "modo_pruebas", "email_pruebas", "emails_pruebas", "email_activo", "email_activo_notificaciones", "email_activo_informe_pagos", "email_activo_estado_cuenta", "email_activo_cobros", "email_activo_campanas", "email_activo_tickets", "imap_host", "imap_port", "imap_user", "imap_password", "imap_use_ssl"):
+    keys = (
+        "smtp_host", "smtp_port", "smtp_user", "smtp_password", "from_email", "from_name",
+        "tickets_notify_emails", "modo_pruebas", "email_pruebas", "emails_pruebas", "email_activo",
+        "email_activo_notificaciones", "email_activo_informe_pagos", "email_activo_estado_cuenta",
+        "email_activo_cobros", "email_activo_campanas", "email_activo_tickets",
+        "modo_pruebas_notificaciones", "modo_pruebas_informe_pagos", "modo_pruebas_estado_cuenta",
+        "modo_pruebas_cobros", "modo_pruebas_campanas", "modo_pruebas_tickets",
+        "imap_host", "imap_port", "imap_user", "imap_password", "imap_use_ssl",
+    )
+    for k in keys:
         if k in data and data[k] is not None:
             _current[k] = data[k]
     if "smtp_port" in data and data["smtp_port"] is not None:
@@ -226,7 +236,7 @@ def prepare_for_api_response(data: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def get_modo_pruebas_email() -> Tuple[bool, List[str]]:
+def get_modo_pruebas_email(servicio: Optional[str] = None) -> Tuple[bool, List[str]]:
     """
     Devuelve (modo_pruebas, list_of_emails).
     modo_pruebas True = redirigir todos los env�os al correo(s) de pruebas.
@@ -237,30 +247,49 @@ def get_modo_pruebas_email() -> Tuple[bool, List[str]]:
     2. Fallback: email_config (email_pruebas como string �nico, convertido a lista de 1).
     """
     sync_from_db()
-
-    # 1. Primero verificar notificaciones_envios (config de Notificaciones > Env�os)
+    if servicio:
+        use_modo = get_modo_pruebas_servicio(servicio)
+        if not use_modo:
+            return (False, [])
+        return (True, _get_emails_pruebas_list())
+    # Modo global (legacy)
     envios = _load_notificaciones_envios()
     raw_modo = envios.get("modo_pruebas") or _current.get("modo_pruebas") or getattr(settings, "MODO_PRUEBAS_EMAIL", None) or "false"
     modo = (str(raw_modo).lower() == "true" or raw_modo is True)
-
     if modo:
-        emails: List[str] = []
-        # emails_pruebas (array) tiene prioridad
-        raw_emails = envios.get("emails_pruebas")
-        if isinstance(raw_emails, list):
-            emails = [e.strip() for e in raw_emails if e and isinstance(e, str) and e.strip() and "@" in e.strip()]
-        # Si no hay array o est� vac�o, usar email_pruebas (legacy string)
-        if not emails:
-            raw_single = envios.get("email_pruebas") or _current.get("email_pruebas") or ""
-            single = (raw_single or "").strip() if isinstance(raw_single, str) else ""
-            if single and "@" in single:
-                emails = [single]
-        # Fallback: email_config (email_pruebas)
-        if not emails:
-            single = (_current.get("email_pruebas") or "").strip()
-            if single and "@" in single:
-                emails = [single]
-        return (modo, emails)
+        return (modo, _get_emails_pruebas_list())
+    return (modo, [])
 
     return (modo, [])
+
+
+def get_modo_pruebas_servicio(servicio: str) -> bool:
+    """True si este servicio debe redirigir envios al correo de pruebas."""
+    sync_from_db()
+    key = "modo_pruebas_" + servicio
+    if key in _current and _current[key] is not None:
+        v = _current[key]
+        return (str(v).lower() == "true" or v is True)
+    envios = _load_notificaciones_envios()
+    raw = envios.get("modo_pruebas") or _current.get("modo_pruebas") or getattr(settings, "MODO_PRUEBAS_EMAIL", None) or "false"
+    return (str(raw).lower() == "true" or raw is True)
+
+
+def _get_emails_pruebas_list() -> List[str]:
+    """Lista de correos de pruebas (desde notificaciones_envios o email_config)."""
+    envios = _load_notificaciones_envios()
+    emails: List[str] = []
+    raw_emails = envios.get("emails_pruebas")
+    if isinstance(raw_emails, list):
+        emails = [e.strip() for e in raw_emails if e and isinstance(e, str) and e.strip() and "@" in e.strip()]
+    if not emails:
+        raw_single = envios.get("email_pruebas") or _current.get("email_pruebas") or ""
+        single = (raw_single or "").strip() if isinstance(raw_single, str) else ""
+        if single and "@" in single:
+            emails = [single]
+    if not emails:
+        single = (_current.get("email_pruebas") or "").strip()
+        if single and "@" in single:
+            emails = [single]
+    return emails
 

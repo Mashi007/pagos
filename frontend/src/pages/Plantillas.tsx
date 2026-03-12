@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { PlantillasNotificaciones } from '../components/notificaciones/PlantillasNotificaciones'
 import { PlantillaAnexoPdf } from '../components/notificaciones/PlantillaAnexoPdf'
@@ -6,6 +6,7 @@ import { DocumentosPdfAnexos } from '../components/notificaciones/DocumentosPdfA
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Button } from '../components/ui/button'
 import { FileText, Link, ChevronLeft, Download, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react'
+import type { NotificacionPlantilla } from '../services/notificacionService'
 
 const SUBTAB_CUERPO_EMAIL = 'cuerpo-email'
 const SUBTAB_ANEXO_PDF = 'anexo-pdf'
@@ -15,7 +16,7 @@ export function Plantillas() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const subtabFromUrl = searchParams.get('subtab')
-  const [plantillaAEditar, setPlantillaAEditar] = useState<any>(null)
+  const [plantillaAEditar, setPlantillaAEditar] = useState<NotificacionPlantilla | null>(null)
   const [resumenAbierto, setResumenAbierto] = useState(false)
   const [activeTab, setActiveTab] = useState(() => {
     if (subtabFromUrl === SUBTAB_ANEXO_PDF) return SUBTAB_ANEXO_PDF

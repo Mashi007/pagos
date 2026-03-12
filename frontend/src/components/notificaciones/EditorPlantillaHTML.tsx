@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../..
 import { Badge } from '../../components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
 import { toast } from 'sonner'
-import { Save, Mail, Eye } from 'lucide-react'
+import { Save, Mail, Eye, FileText } from 'lucide-react'
 import { replaceBase64ImagesWithLogoUrl } from '../../utils/plantillaHtmlLogo'
 
 interface EditorPlantillaHTMLProps {
@@ -31,17 +31,17 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
   // Tipos disponibles
   const tiposPorCategoria = {
     antes: [
-      { valor: 'PAGO_5_DIAS_ANTES', label: '5 dÌas antes' },
-      { valor: 'PAGO_3_DIAS_ANTES', label: '3 dÌas antes' },
-      { valor: 'PAGO_1_DIA_ANTES', label: '1 dÌa antes' },
+      { valor: 'PAGO_5_DIAS_ANTES', label: '5 dùas antes' },
+      { valor: 'PAGO_3_DIAS_ANTES', label: '3 dùas antes' },
+      { valor: 'PAGO_1_DIA_ANTES', label: '1 dùa antes' },
     ],
     diaPago: [
-      { valor: 'PAGO_DIA_0', label: 'DÌa de pago' },
+      { valor: 'PAGO_DIA_0', label: 'Dùa de pago' },
     ],
     retraso: [
-      { valor: 'PAGO_1_DIA_ATRASADO', label: '1 dÌa de retraso' },
-      { valor: 'PAGO_3_DIAS_ATRASADO', label: '3 dÌas de retraso' },
-      { valor: 'PAGO_5_DIAS_ATRASADO', label: '5 dÌas de retraso' },
+      { valor: 'PAGO_1_DIA_ATRASADO', label: '1 dùa de retraso' },
+      { valor: 'PAGO_3_DIAS_ATRASADO', label: '3 dùas de retraso' },
+      { valor: 'PAGO_5_DIAS_ATRASADO', label: '5 dùas de retraso' },
     ],
   }
 
@@ -99,7 +99,7 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
 
   const handleEnviarPrueba = async () => {
     if (!emailPrueba.trim() || !emailPrueba.includes('@')) {
-      toast.error('Ingresa un email v·lido')
+      toast.error('Ingresa un email vùlido')
       return
     }
 
@@ -122,12 +122,12 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
 
   return (
     <div className="space-y-4">
-      {/* InformaciÛn General */}
+      {/* Informaciùn General */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            {/* <FileText className="h-5 w-5" /> */}
-            InformaciÛn de la Plantilla
+            <FileText className="h-5 w-5" />
+            Informaciùn de la Plantilla
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -164,9 +164,9 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
           </div>
 
           <div>
-            <label className="text-sm font-medium text-gray-700">DescripciÛn (opcional)</label>
+            <label className="text-sm font-medium text-gray-700">Descripciùn (opcional)</label>
             <Textarea
-              placeholder="Describe el propÛsito de esta plantilla"
+              placeholder="Describe el propùsito de esta plantilla"
               value={descripcion}
               onChange={(e) => setDescripcion(e.target.value)}
               className="mt-1 h-20"
@@ -176,7 +176,7 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
           <div>
             <label className="text-sm font-medium text-gray-700">Asunto del Email</label>
             <Input
-              placeholder="Ej: Tu pago vence en 5 dÌas"
+              placeholder="Ej: Tu pago vence en 5 dùas"
               value={asunto}
               onChange={(e) => setAsunto(e.target.value)}
               className="mt-1"
@@ -192,7 +192,7 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
             Contenido HTML
           </CardTitle>
           <CardDescription>
-            Ingresa el cÛdigo HTML del email. Puedes usar variables como {'{'} nombre {'}'}, {'{'} monto {'}'}, {'{'} dias_atraso {'}'}, etc.
+            Ingresa el cùdigo HTML del email. Puedes usar variables como {'{'} nombre {'}'}, {'{'} monto {'}'}, {'{'} dias_atraso {'}'}, etc.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -220,7 +220,7 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
           {!mostrarPreview && (
             <div className="space-y-2">
               <Textarea
-                placeholder="<html>&#10;  <body>&#10;    <p>Hola {'{'}nombre{'}'},</p>&#10;    <p>Tu pago de ${'{'}monto{'}'} vence en {'{'}dias_atraso{'}'} dÌas.</p>&#10;  </body>&#10;</html>"
+                placeholder="<html>&#10;  <body>&#10;    <p>Hola {'{'}nombre{'}'},</p>&#10;    <p>Tu pago de ${'{'}monto{'}'} vence en {'{'}dias_atraso{'}'} dùas.</p>&#10;  </body>&#10;</html>"
                 value={cuerpoHTML}
                 onChange={(e) => setCuerpoHTML(replaceBase64ImagesWithLogoUrl(e.target.value))}
                 className="font-mono text-sm h-96 bg-slate-50"
@@ -237,7 +237,7 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
               <div
                 className="prose prose-sm max-w-none"
                 dangerouslySetInnerHTML={{
-                  __html: cuerpoHTML || '<p style="color: #999; text-align: center;">El preview aparecer· aquÌ...</p>',
+                  __html: cuerpoHTML || '<p style="color: #999; text-align: center;">El preview aparecerù aquù...</p>',
                 }}
               />
             </div>
@@ -271,12 +271,12 @@ export function EditorPlantillaHTML({ plantilla, onGuardado }: EditorPlantillaHT
             </Button>
           </div>
           <p className="text-xs text-gray-500">
-            Se enviar· un email con el asunto y contenido HTML que ingresaste. Las variables se mostrar·n de forma literal.
+            Se enviarù un email con el asunto y contenido HTML que ingresaste. Las variables se mostrarùn de forma literal.
           </p>
         </CardContent>
       </Card>
 
-      {/* Botones de AcciÛn */}
+      {/* Botones de Acciùn */}
       <div className="flex gap-2 justify-end">
         <Button
           onClick={handleGuardar}

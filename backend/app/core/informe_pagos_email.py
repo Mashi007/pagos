@@ -69,7 +69,7 @@ def enviar_informe_pagos_email() -> bool:
         f"Envío informe de pagos del {fecha_str} - {hora_label}. "
         f"Ver detalle en la hoja: {link}"
     )
-    ok, err = send_email(to_emails=destinatarios, subject=asunto, body_text=cuerpo)
+    ok, err = send_email(to_emails=destinatarios, subject=asunto, body_text=cuerpo, servicio="informe_pagos")
     if ok:
         logger.info("Informe pagos enviado a %s destinatarios (%s).", len(destinatarios), hora_label)
     else:

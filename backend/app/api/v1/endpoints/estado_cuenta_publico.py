@@ -376,7 +376,7 @@ def solicitar_codigo_estado_cuenta(
     asunto, cuerpo = _get_plantilla_email_codigo(db, nombre=nombre, codigo=codigo)
     try:
         if get_email_activo_servicio("estado_cuenta"):
-            send_email([email], asunto, cuerpo)
+            send_email([email], asunto, cuerpo, servicio="estado_cuenta")
         logger.info(
             "estado_cuenta solicitar ip=%s outcome=ok cedula_suffix=***%s",
             ip,
@@ -571,8 +571,9 @@ def solicitar_estado_cuenta(
             email_body = (f"Estimado(a) {nombre},\n\nSe adjunta su estado de cuenta con fecha de corte {fecha_corte.isoformat()}.\n\nSaludos,\nRapiCredit")
             if get_email_activo_servicio("estado_cuenta"):
                 send_email([email], f"Estado de cuenta - {fecha_corte.isoformat()}", email_body,
-                attachments=[(filename, pdf_bytes)],
-            )
+                    attachments=[(filename, pdf_bytes)],
+                    servicio="estado_cuenta",
+                )
         except Exception as e:
             logger.warning("No se pudo enviar estado de cuenta por email a %s: %s", email, e)
             # No fallar la petición: el PDF se devuelve igual

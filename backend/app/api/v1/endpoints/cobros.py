@@ -281,7 +281,7 @@ def aprobar_pago_reportado(
     mensaje_final = "Pago aprobado y recibo enviado por correo."
     if to_email:
         body = f"Su reporte de pago ha sido aprobado. Número de referencia: {pr.referencia_interna}. Adjunto encontrará el recibo.\n\nRapiCredit C.A."
-        ok_mail, err_mail = send_email([to_email], f"Recibo de reporte de pago #{pr.referencia_interna}", body, attachments=[(f"recibo_{pr.referencia_interna}.pdf", pdf_bytes)])
+        ok_mail, err_mail = send_email([to_email], f"Recibo de reporte de pago #{pr.referencia_interna}", body, attachments=[(f"recibo_{pr.referencia_interna}.pdf", pdf_bytes)], servicio="cobros")
         if not ok_mail:
             logger.error(
                 "[COBROS] Aprobar ref=%s: correo NO enviado a %s. Error: %s.",
@@ -439,7 +439,7 @@ def enviar_recibo_manual(
         f"Recibo de reporte de pago. Número de referencia: {pr.referencia_interna}.\n\n"
         "Adjunto encontrará el recibo.\n\nRapiCredit C.A."
     )
-    send_email([to_email], f"Recibo de reporte de pago #{pr.referencia_interna}", body, attachments=[(f"recibo_{pr.referencia_interna}.pdf", bytes(pdf_bytes))])
+    send_email([to_email], f"Recibo de reporte de pago #{pr.referencia_interna}", body, attachments=[(f"recibo_{pr.referencia_interna}.pdf", bytes(pdf_bytes))], servicio="cobros")
     return {"ok": True, "mensaje": "Recibo enviado por correo."}
 
 
@@ -582,6 +582,7 @@ def cambiar_estado_pago(
                 f"Recibo de reporte de pago #{pr.referencia_interna}",
                 body_mail,
                 attachments=[(f"recibo_{pr.referencia_interna}.pdf", pdf_bytes)],
+                servicio="cobros",
             )
             if ok_mail:
                 mensaje = "Estado actualizado a aprobado. Recibo enviado por correo."
