@@ -159,6 +159,10 @@ def send_email(
         bcc_list = [e.strip() for e in (bcc_emails or []) if e and isinstance(e, str) and "@" in e.strip()]
     has_attachments = bool(attachments)
     cfg = get_smtp_config()
+    if not cfg.get("smtp_host") or not cfg.get("smtp_user"):
+        return False, "No hay servidor SMTP configurado. Configura en Configuracion > Email."
+    if not (cfg.get("smtp_password") or "").strip() or (cfg.get("smtp_password") or "").strip() == "***":
+        return False, "Falta contrasena SMTP. Configura en Configuracion > Email."
 
     try:
         import smtplib
@@ -167,6 +171,19 @@ def send_email(
         from email.mime.base import MIMEBase
         from email import encoders
 
+        # Asegurar body_text y body_html son str y UTF-8 validos
+        if body_text is None:
+            body_text = ""
+        if isinstance(body_text, bytes):
+            try:
+                body_text = body_text.decode("utf-8")
+            except UnicodeDecodeError:
+                body_text = body_text.decode("cp1252", errors="replace")
+        else:
+            try:
+                body_text.encode("utf-8")
+            except (UnicodeEncodeError, UnicodeDecodeError):
+                body_text = body_text.encode("utf-8", errors="replace").decode("utf-8")
         # Asegurar body_html es str y UTF-8 valido (evita HTML corrupto por encoding BD/plantilla)
         if body_html is not None:
             if isinstance(body_html, bytes):
@@ -216,16 +233,18 @@ def send_email(
         port = int(cfg.get("smtp_port") or 587)
         all_recipients = to_emails + cc_list + bcc_list
         use_tls = (cfg.get("smtp_use_tls") or "true").lower() == "true"
+        msg_str = msg.as_string(policy=__import__("email").policy.SMTP)
+        msg_bytes = msg_str.replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-8")
         if port == 465:
             with smtplib.SMTP_SSL(cfg["smtp_host"], port, timeout=SMTP_TIMEOUT_SECONDS) as server:
                 server.login(cfg["smtp_user"], cfg["smtp_password"])
-                server.sendmail(msg["From"], all_recipients, msg.as_string(policy=__import__("email").policy.SMTP))
+                server.sendmail(msg["From"], all_recipients, msg_bytes)
         else:
             with smtplib.SMTP(cfg["smtp_host"], port, timeout=SMTP_TIMEOUT_SECONDS) as server:
                 if use_tls:
                     server.starttls()
                 server.login(cfg["smtp_user"], cfg["smtp_password"])
-                server.sendmail(msg["From"], all_recipients, msg.as_string(policy=__import__("email").policy.SMTP))
+                server.sendmail(msg["From"], all_recipients, msg_bytes)
         logger.info("Correo enviado a %s: %s", to_emails, subject)
         return True, None
     except Exception as e:
