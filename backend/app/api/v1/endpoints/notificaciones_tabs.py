@@ -82,7 +82,8 @@ def _enviar_correos_items(
     usar_solo_pruebas = modo_pruebas and email_pruebas and "@" in email_pruebas
     # Si modo prueba activo pero sin correo v�lido: no enviar a clientes (evitar env�o por error)
     bloqueo_pruebas_sin_email = modo_pruebas and not (email_pruebas and "@" in email_pruebas)
-    habilitados = sum(1 for v in config_envios.values() if isinstance(v, dict) and v.get("habilitado") is True)
+    # Incluir caso cuando Envío está activo; solo excluir si habilitado está explícitamente en False
+    habilitados = sum(1 for v in config_envios.values() if isinstance(v, dict) and v.get("habilitado", True) is not False)
     log_envio_config(modo_pruebas, bool(email_pruebas and "@" in email_pruebas), habilitados)
 
     enviados = 0
@@ -97,7 +98,8 @@ def _enviar_correos_items(
         item_id_log = item.get("cedula") or str(item.get("prestamo_id") or idx)
         tipo = get_tipo_for_item(item)
         tipo_cfg = config_envios.get(tipo) or {}
-        if tipo_cfg.get("habilitado") is False:
+        # Omitir solo cuando "Envío" está explícitamente desactivado (habilitado=False)
+        if tipo_cfg.get("habilitado", True) is False:
             omitidos_config += 1
             continue
         raw_id = tipo_cfg.get("plantilla_id")
@@ -110,7 +112,7 @@ def _enviar_correos_items(
             plantilla = db.get(PlantillaNotificacion, plantilla_id)
             need_ctx = (
                 (plantilla and getattr(plantilla, "tipo", None) == "COBRANZA")
-                or (tipo_cfg.get("incluir_pdf_anexo") is True)
+                or (tipo_cfg.get("incluir_pdf_anexo", True) is not False)
                 or (plantilla and plantilla_usa_variables_cobranza(plantilla))
             )
             if need_ctx:
@@ -132,8 +134,9 @@ def _enviar_correos_items(
                 getattr(plantilla, "tipo", None) == "COBRANZA" or plantilla_usa_variables_cobranza(plantilla)
             ):
                 body_html = cuerpo  # cuerpo renderizado con variables cobranza es HTML
-        incluir_pdf_anexo = tipo_cfg.get("incluir_pdf_anexo") is True
-        incluir_adjuntos_fijos = tipo_cfg.get("incluir_adjuntos_fijos") is True
+        # Por defecto incluir PDF y adjuntos fijos si no está explícitamente en False (compatibilidad con config antigua)
+        incluir_pdf_anexo = tipo_cfg.get("incluir_pdf_anexo", True) is not False
+        incluir_adjuntos_fijos = tipo_cfg.get("incluir_adjuntos_fijos", True) is not False
         if incluir_pdf_anexo or incluir_adjuntos_fijos:
             try:
                 attachments = []

@@ -155,6 +155,14 @@ export function ConfiguracionNotificaciones() {
         emails_pruebas: emailsPruebas.filter((e) => e?.trim()),
         email_pruebas: emailsPruebas[0]?.trim() || '',
       }
+      CRITERIOS.forEach(({ tipo }) => {
+        const c = getConfig(tipo)
+        ;(payload as Record<string, ConfigEnvioItem>)[tipo] = {
+          ...c,
+          incluir_pdf_anexo: c.incluir_pdf_anexo !== false,
+          incluir_adjuntos_fijos: c.incluir_adjuntos_fijos !== false,
+        }
+      })
       await emailConfigService.actualizarConfiguracionEnvios(payload)
       toast.success('Configuración de envíos guardada')
     } catch (error) {
@@ -241,11 +249,15 @@ export function ConfiguracionNotificaciones() {
       }
       await emailConfigService.actualizarConfiguracionEnvios(payload)
       const res = await notificacionService.enviarTodasNotificaciones()
-      const { enviados, fallidos, sin_email, omitidos_config } = res ?? {}
-      if ((enviados ?? 0) + (fallidos ?? 0) + (sin_email ?? 0) === 0 && (omitidos_config ?? 0) > 0) {
-        toast.warning(`Ningún envío: ${omitidos_config} omitidos (activa Envío en al menos una pestaña y vuelve a intentar).`)
+      if (res?.en_proceso && res?.mensaje) {
+        toast.success(res.mensaje, { duration: 8000 })
       } else {
-        toast.success(`Envíos masivos prueba: ${enviados ?? 0} enviados, ${fallidos ?? 0} fallidos, ${sin_email ?? 0} sin email.`)
+        const { enviados, fallidos, sin_email, omitidos_config } = res ?? {}
+        if ((enviados ?? 0) + (fallidos ?? 0) + (sin_email ?? 0) === 0 && (omitidos_config ?? 0) > 0) {
+          toast.warning(`Ningún envío: ${omitidos_config} omitidos (activa Envío en al menos una pestaña y vuelve a intentar).`)
+        } else {
+          toast.success(`Envíos masivos prueba: ${enviados ?? 0} enviados, ${fallidos ?? 0} fallidos, ${sin_email ?? 0} sin email.`)
+        }
       }
     } catch (error: unknown) {
       const detalle = getErrorDetail(error)

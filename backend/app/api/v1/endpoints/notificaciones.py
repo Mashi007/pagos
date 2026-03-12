@@ -12,8 +12,8 @@ import logging
 from datetime import date
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Body, Query, File, UploadFile
-from fastapi.responses import Response
+from fastapi import APIRouter, Depends, HTTPException, Body, Query, File, UploadFile, BackgroundTasks
+from fastapi.responses import Response, JSONResponse
 
 from app.core.deps import get_current_user
 from sqlalchemy import func, select
@@ -1004,15 +1004,34 @@ def get_notificaciones_lista(
     }
 
 
-@router.post("/enviar-todas")
-def enviar_todas_notificaciones(db: Session = Depends(get_db)):
-    """
-    Ejecuta el envío de todas las notificaciones (previas, día pago, retrasadas, prejudicial, mora 90).
-    Respeta la configuración guardada (modo_pruebas, email_pruebas, habilitado por tipo).
-    Si modo_pruebas está activo, todos los correos van al correo de pruebas.
-    """
+def _tarea_envio_todas_notificaciones():
+    """Ejecuta el envío masivo en segundo plano con su propia sesión de BD (evita timeout HTTP)."""
+    from app.core.database import SessionLocal
     from app.api.v1.endpoints import notificaciones_tabs
-    return notificaciones_tabs.ejecutar_envio_todas_notificaciones(db)
+    db = SessionLocal()
+    try:
+        notificaciones_tabs.ejecutar_envio_todas_notificaciones(db)
+    except Exception as e:
+        logger.exception("Envío masivo en background: %s", e)
+    finally:
+        db.close()
+
+
+@router.post("/enviar-todas")
+def enviar_todas_notificaciones(background_tasks: BackgroundTasks):
+    """
+    Inicia el envío de todas las notificaciones en segundo plano.
+    Responde 202 de inmediato para evitar timeout (el envío puede tardar muchos minutos).
+    Respeta la configuración guardada (modo_pruebas, email_pruebas, habilitado por tipo).
+    """
+    background_tasks.add_task(_tarea_envio_todas_notificaciones)
+    return JSONResponse(
+        status_code=202,
+        content={
+            "mensaje": "Envío iniciado en segundo plano. Los correos se enviarán en los próximos minutos. Puedes cerrar esta ventana.",
+            "en_proceso": True,
+        },
+    )
 
 
 @router.get("/estadisticas/resumen")
