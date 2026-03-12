@@ -1,6 +1,6 @@
-"""
-Motor de sustitución para plantillas de cobranza.
-Soporta variables {{TABLA.CAMPO}} y bloque de iteración {{#CUOTAS.VENCIMIENTOS}}...{{/CUOTAS.VENCIMIENTOS}}.
+﻿"""
+Motor de sustitucion para plantillas de cobranza.
+Soporta variables {{TABLA.CAMPO}}, bloque {{#CUOTAS.VENCIMIENTOS}} y variable unica {{TABLA_CUOTAS_PENDIENTES}}.
 """
 import re
 from datetime import date
@@ -23,7 +23,7 @@ def _format_fecha(value: Any) -> str:
 
 
 def _format_monto(value: Any) -> str:
-    """Formatea monto numérico (2 decimales, separador de miles)."""
+    """Formatea monto numerico (2 decimales, separador de miles)."""
     if value is None:
         return "0.00"
     try:
@@ -33,23 +33,69 @@ def _format_monto(value: Any) -> str:
         return str(value)
 
 
+# Estilo HTML por defecto para tabla de cuotas (variable unica en el cuerpo).
+_TABLA_CUOTAS_HTML_HEADER = """<table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse; font-family:Arial, sans-serif; font-size:13px;">
+  <tr style="background-color:#1a2744;">
+    <th width="40" style="padding:10px 14px; text-align:left; color:#ffffff; font-size:11px; letter-spacing:1px; text-transform:uppercase; font-weight:bold;">#</th>
+    <th style="padding:10px 14px; text-align:left; color:#ffffff; font-size:11px; letter-spacing:1px; text-transform:uppercase; font-weight:bold;">Vencimiento</th>
+    <th style="padding:10px 14px; text-align:right; color:#e87722; font-size:11px; letter-spacing:1px; text-transform:uppercase; font-weight:bold;">Monto</th>
+  </tr>
+"""
+_TABLA_CUOTAS_HTML_ROW_ODD = "  <tr style=\"background-color:#f7f9fc;\"><td style=\"padding:9px 14px; color:#888888; border-bottom:1px solid #e8ecf0;\">{numero}</td><td style=\"padding:9px 14px; color:#1a2744; border-bottom:1px solid #e8ecf0;\">{fecha}</td><td style=\"padding:9px 14px; text-align:right; color:#1a2744; font-weight:bold; border-bottom:1px solid #e8ecf0;\">$ {monto}</td></tr>\n"
+_TABLA_CUOTAS_HTML_ROW_EVEN = "  <tr style=\"background-color:#ffffff;\"><td style=\"padding:9px 14px; color:#888888; border-bottom:1px solid #e8ecf0;\">{numero}</td><td style=\"padding:9px 14px; color:#1a2744; border-bottom:1px solid #e8ecf0;\">{fecha}</td><td style=\"padding:9px 14px; text-align:right; color:#1a2744; font-weight:bold; border-bottom:1px solid #e8ecf0;\">$ {monto}</td></tr>\n"
+_TABLA_CUOTAS_HTML_FOOTER = """  <tr style="background-color:#1a2744;">
+    <td colspan="2" style="padding:11px 14px; color:#ffffff; font-size:12px; font-weight:bold; text-transform:uppercase; letter-spacing:1px;">Total Adeudado</td>
+    <td style="padding:11px 14px; text-align:right; color:#e87722; font-size:15px; font-weight:bold;">$ {total}</td>
+  </tr>
+</table>"""
+
+
+def _build_tabla_cuotas_pendientes_html(contexto: dict) -> str:
+    """Genera la tabla HTML completa de cuotas pendientes con formato por defecto."""
+    cuotas = contexto.get("CUOTAS.VENCIMIENTOS") or contexto.get("cuotas_vencidas") or []
+    total = contexto.get("TOTAL_ADEUDADO")
+    if total is None:
+        total_num = 0
+        for c in cuotas:
+            m = c.get("monto") if isinstance(c, dict) else getattr(c, "monto", None) or getattr(c, "monto_cuota", 0)
+            try:
+                total_num += float(m)
+            except (TypeError, ValueError):
+                pass
+        total = _format_monto(total_num)
+    else:
+        total = _format_monto(total) if not isinstance(total, str) else total
+    parts = [_TABLA_CUOTAS_HTML_HEADER]
+    for i, c in enumerate(cuotas):
+        if isinstance(c, dict):
+            num = c.get("numero") or c.get("numero_cuota") or ""
+            fv = _format_fecha(c.get("fecha_vencimiento"))
+            monto = _format_monto(c.get("monto") or c.get("monto_cuota"))
+        else:
+            num = getattr(c, "numero_cuota", "") or getattr(c, "numero", "")
+            fv = _format_fecha(getattr(c, "fecha_vencimiento", None))
+            monto = _format_monto(getattr(c, "monto", None) or getattr(c, "monto_cuota", None))
+        row_tpl = _TABLA_CUOTAS_HTML_ROW_ODD if i % 2 == 0 else _TABLA_CUOTAS_HTML_ROW_EVEN
+        parts.append(row_tpl.format(numero=num, fecha=fv, monto=monto))
+    parts.append(_TABLA_CUOTAS_HTML_FOOTER.format(total=total))
+    return "".join(parts)
+
+
 def render_plantilla_cobranza(texto: str, contexto: dict) -> str:
     """
     Renderiza una plantilla de cobranza con:
-    - Variables {{TABLA.CAMPO}} (ej. {{CLIENTES.NOMBRE_COMPLETO}}, {{PRESTAMOS.ID}}, {{FECHA_CARTA}}).
-    - Bloque {{#CUOTAS.VENCIMIENTOS}} ... {{/CUOTAS.VENCIMIENTOS}} que se repite por cada cuota vencida.
-      Dentro del bloque: {{CUOTA.NUMERO}}, {{CUOTA.FECHA_VENCIMIENTO}}, {{CUOTA.MONTO}}.
-
-    contexto esperado:
-      - CLIENTES.TRATAMIENTO, CLIENTES.NOMBRE_COMPLETO
-      - PRESTAMOS.ID
-      - FECHA_CARTA (date o str iso)
-      - CUOTAS.VENCIMIENTOS: lista de dicts con keys numero (o numero_cuota), fecha_vencimiento, monto
+    - Variables {{TABLA.CAMPO}}, {{IDPRESTAMO}}, {{NUMEROCORRELATIVO}}, {{TOTAL_ADEUDADO}}.
+    - Variable unica {{TABLA_CUOTAS_PENDIENTES}}: reemplazo por tabla HTML completa (cuotas + total).
+    - Bloque {{#CUOTAS.VENCIMIENTOS}} ... {{/CUOTAS.VENCIMIENTOS}} (opcional).
     """
     if not texto:
         return ""
 
     result = texto
+
+    # 0) Variable unica: tabla HTML completa de cuotas pendientes
+    if "{{TABLA_CUOTAS_PENDIENTES}}" in result:
+        result = result.replace("{{TABLA_CUOTAS_PENDIENTES}}", _build_tabla_cuotas_pendientes_html(contexto))
 
     # 1) Bloque {{#CUOTAS.VENCIMIENTOS}} ... {{/CUOTAS.VENCIMIENTOS}}
     block_start = "{{#CUOTAS.VENCIMIENTOS}}"
@@ -79,7 +125,7 @@ def render_plantilla_cobranza(texto: str, contexto: dict) -> str:
                 parts.append(block_rendered)
             result = prefix + "\n".join(parts) + suffix
 
-    # 2) Reemplazar variables simples {{TABLA.CAMPO}} y {{FECHA_CARTA}} desde contexto
+    # 2) Reemplazar variables simples desde contexto
     for key, value in list(contexto.items()):
         if key in ("CUOTAS.VENCIMIENTOS", "cuotas_vencidas") or isinstance(value, list):
             continue
@@ -101,11 +147,11 @@ def construir_contexto_cobranza(
     fecha_carta: date | None = None,
     logo_url: str | None = None,
     cedula: str | None = None,
+    numero_correlativo: int = 1,
 ) -> dict:
     """
     Construye el diccionario de contexto para render_plantilla_cobranza.
-    cuotas_vencidas: lista de dicts con numero_cuota, fecha_vencimiento, monto (o objetos Cuota).
-    logo_url: URL absoluta del logo para el email (por defecto desde settings FRONTEND_PUBLIC_URL).
+    Incluye IDPRESTAMO, NUMEROCORRELATIVO, TOTAL_ADEUDADO y CUOTAS.VENCIMIENTOS.
     """
     from datetime import date as date_type
     try:
@@ -117,24 +163,36 @@ def construir_contexto_cobranza(
 
     f = fecha_carta or date_type.today()
     lista = []
+    total_adeudado = 0
     for c in cuotas_vencidas:
         if isinstance(c, dict):
+            m = c.get("monto") or c.get("monto_cuota") or 0
             lista.append({
                 "numero": c.get("numero_cuota") or c.get("numero"),
                 "fecha_vencimiento": c.get("fecha_vencimiento"),
-                "monto": c.get("monto") or c.get("monto_cuota"),
+                "monto": m,
             })
+            try:
+                total_adeudado += float(m)
+            except (TypeError, ValueError):
+                pass
         else:
+            m = float(getattr(c, "monto", 0) or getattr(c, "monto_cuota", 0)) if (hasattr(c, "monto") or hasattr(c, "monto_cuota")) else 0
             lista.append({
                 "numero": getattr(c, "numero_cuota", None),
                 "fecha_vencimiento": getattr(c, "fecha_vencimiento", None),
-                "monto": float(getattr(c, "monto", 0) or getattr(c, "monto_cuota", 0)) if hasattr(c, "monto") or hasattr(c, "monto_cuota") else None,
+                "monto": m,
             })
+            total_adeudado += m
+
     return {
         "CLIENTES.TRATAMIENTO": tratamiento,
         "CLIENTES.NOMBRE_COMPLETO": cliente_nombres or "",
         "CLIENTES.CEDULA": cedula or "",
         "PRESTAMOS.ID": prestamo_id,
+        "IDPRESTAMO": prestamo_id,
+        "NUMEROCORRELATIVO": numero_correlativo,
+        "TOTAL_ADEUDADO": _format_monto(total_adeudado),
         "FECHA_CARTA": f,
         "CUOTAS.VENCIMIENTOS": lista,
         "cuotas_vencidas": lista,
