@@ -14,13 +14,17 @@ import {
   Lock,
   Calculator,
   CheckCircle2,
+  Mail,
+  Search,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { getErrorMessage, getErrorDetail } from '../types/errors'
 import { Button } from '../components/ui/button'
 import { formatCurrency } from '../utils'
 import { reporteService } from '../services/reporteService'
+import { notificacionService, type HistorialEnvioItem } from '../services/notificacionService'
 import { toast } from 'sonner'
+import { Input } from '../components/ui/input'
 import { DialogReporteFiltros, type FiltrosReporte } from '../components/reportes/DialogReporteFiltros'
 import { DialogReporteContableFiltros, type FiltrosReporteContable } from '../components/reportes/DialogReporteContableFiltros'
 import { DialogConciliacion } from '../components/reportes/DialogConciliacion'
@@ -57,6 +61,14 @@ export function Reportes() {
   const queryClient = useQueryClient()
   const { canViewReports, canDownloadReports, canAccessReport } = usePermissions()
   const puedeVerReportes = canViewReports()
+
+  // Historial de notificaciones por cédula (reportes / legales)
+  const [cedulaHistorial, setCedulaHistorial] = useState('')
+  const [historialItems, setHistorialItems] = useState<HistorialEnvioItem[]>([])
+  const [historialCedulaLabel, setHistorialCedulaLabel] = useState('')
+  const [loadingHistorial, setLoadingHistorial] = useState(false)
+  const [loadingExcelHistorial, setLoadingExcelHistorial] = useState(false)
+  const [loadingComprobanteId, setLoadingComprobanteId] = useState<number | null>(null)
 
 // Bloque mostrado si canViewReports() restringe por rol (ej. solo admin). Restriccion por tipo de reporte: canAccessReport().
   if (!puedeVerReportes) {
@@ -151,6 +163,64 @@ export function Reportes() {
       toast.error(detail || errorMessage || 'No se pudo generar el reporte')
     } finally {
       setGenerandoReporte(null)
+    }
+  }
+
+  const buscarHistorialNotificaciones = async () => {
+    const ced = cedulaHistorial.trim()
+    if (!ced) {
+      toast.error('Ingrese una cédula para consultar el historial.')
+      return
+    }
+    setLoadingHistorial(true)
+    try {
+      const res = await notificacionService.getHistorialNotificacionesPorCedula(ced)
+      setHistorialItems(res.items || [])
+      setHistorialCedulaLabel(res.cedula || ced)
+      if ((res.items?.length ?? 0) === 0) {
+        toast.info('No hay notificaciones registradas para esta cédula.')
+      }
+    } catch (e) {
+      console.error(e)
+      toast.error(getErrorMessage(e) || 'Error al cargar historial.')
+      setHistorialItems([])
+    } finally {
+      setLoadingHistorial(false)
+    }
+  }
+
+  const descargarHistorialExcel = async () => {
+    const ced = historialCedulaLabel || cedulaHistorial.trim()
+    if (!ced) return
+    setLoadingExcelHistorial(true)
+    try {
+      const blob = await notificacionService.descargarHistorialNotificacionesExcel(ced)
+      descargarBlob(blob, `historial_notificaciones_${ced.replace(/\s/g, '_')}.xlsx`)
+      toast.success('Excel descargado.')
+    } catch (e) {
+      console.error(e)
+      toast.error(getErrorMessage(e) || 'Error al descargar Excel.')
+    } finally {
+      setLoadingExcelHistorial(false)
+    }
+  }
+
+  const abrirComprobante = async (envioId: number) => {
+    setLoadingComprobanteId(envioId)
+    try {
+      const html = await notificacionService.getComprobanteEnvioHtml(envioId)
+      const w = window.open('', '_blank')
+      if (w) {
+        w.document.write(html)
+        w.document.close()
+      } else {
+        toast.error('Permita ventanas emergentes para ver el comprobante.')
+      }
+    } catch (e) {
+      console.error(e)
+      toast.error(getErrorMessage(e) || 'Error al abrir comprobante.')
+    } finally {
+      setLoadingComprobanteId(null)
     }
   }
 
@@ -317,6 +387,105 @@ return (
               )
             })}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Historial de notificaciones por cédula (detalles del préstamo / fines administrativos y legales) */}
+      <Card className="shadow-sm">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Mail className="h-5 w-5 text-blue-600" />
+            Historial de notificaciones por cédula
+          </CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Consulte por cédula el historial de notificaciones enviadas. Descargue un Excel con todo el historial o abra cada comprobante de envío (para fines administrativos y legales).
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              type="text"
+              placeholder="Cédula del cliente"
+              value={cedulaHistorial}
+              onChange={(e) => setCedulaHistorial(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && buscarHistorialNotificaciones()}
+              className="max-w-xs"
+            />
+            <Button
+              type="button"
+              onClick={buscarHistorialNotificaciones}
+              disabled={loadingHistorial || !cedulaHistorial.trim()}
+            >
+              {loadingHistorial ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+              <span className="ml-2">Buscar</span>
+            </Button>
+            {historialItems.length > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={descargarHistorialExcel}
+                disabled={loadingExcelHistorial}
+              >
+                {loadingExcelHistorial ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                <span className="ml-2">Descargar Excel (histórico)</span>
+              </Button>
+            )}
+          </div>
+          {historialCedulaLabel && (
+            <div className="overflow-x-auto rounded-md border">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-gray-50">
+                    <th className="text-left py-2 px-3 font-semibold">Fecha</th>
+                    <th className="text-left py-2 px-3 font-semibold">Tipo</th>
+                    <th className="text-left py-2 px-3 font-semibold">Asunto</th>
+                    <th className="text-left py-2 px-3 font-semibold">Email</th>
+                    <th className="text-left py-2 px-3 font-semibold">Estado</th>
+                    <th className="text-left py-2 px-3 font-semibold">Acción</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {historialItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-6 text-center text-gray-500">
+                        No hay notificaciones para la cédula consultada.
+                      </td>
+                    </tr>
+                  ) : (
+                    historialItems.map((row) => (
+                      <tr key={row.id} className="border-b hover:bg-gray-50">
+                        <td className="py-2 px-3">{row.fecha_envio ? new Date(row.fecha_envio).toLocaleString('es') : '-'}</td>
+                        <td className="py-2 px-3">{row.tipo_tab || '-'}</td>
+                        <td className="py-2 px-3 max-w-[200px] truncate" title={row.asunto}>{row.asunto || '-'}</td>
+                        <td className="py-2 px-3">{row.email || '-'}</td>
+                        <td className="py-2 px-3">
+                          <span className={row.exito ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
+                            {row.exito ? 'Enviada' : 'Fallida'}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => abrirComprobante(row.id)}
+                            disabled={loadingComprobanteId === row.id}
+                          >
+                            {loadingComprobanteId === row.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <FileText className="h-4 w-4" />
+                            )}
+                            <span className="ml-1">Ver comprobante</span>
+                          </Button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
 

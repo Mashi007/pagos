@@ -11,9 +11,11 @@ Integraci�n con encriptaci�n:
 """
 import json
 import logging
+import time
 from typing import Any, List, Optional, Tuple
 
 from app.core.config import settings
+from app.core.email_phases import FASE_CONFIG_CARGA, log_phase
 
 # Config actual: smtp_*, from_email, from_name, tickets_notify_emails (str, emails separados por coma)
 _current: dict[str, Any] = {}
@@ -68,6 +70,7 @@ def _encrypt_value_safe(value: str, field_name: str) -> Optional[bytes]:
 
 def sync_from_db() -> None:
     """Carga la configuraci�n de email desde la tabla configuracion y actualiza el holder. As� Notificaciones/CRM usan la config guardada en Configuraci�n > Email."""
+    t0 = time.time()
     try:
         from app.core.database import SessionLocal
         from app.models.configuracion import Configuracion
@@ -77,7 +80,6 @@ def sync_from_db() -> None:
             if row and row.valor:
                 data = json.loads(row.valor)
                 if isinstance(data, dict):
-                    # Desencriptar campos sensibles: primero _encriptado; si falla (ej. sin ENCRYPTION_KEY), usar valor en claro
                     decrypted_data = data.copy()
                     for field in SENSITIVE_FIELDS:
                         enc_key = f"{field}_encriptado"
@@ -89,10 +91,12 @@ def sync_from_db() -> None:
                         elif field in data and data[field] is not None:
                             decrypted_data[field] = data[field]
                     update_from_api(decrypted_data)
+            log_phase(logger, FASE_CONFIG_CARGA, True, "config cargada desde BD", duration_ms=(time.time() - t0) * 1000)
         finally:
             db.close()
-    except Exception:
-        pass
+    except Exception as e:
+        log_phase(logger, FASE_CONFIG_CARGA, False, str(e), duration_ms=(time.time() - t0) * 1000)
+        logger.debug("sync_from_db fallo (se usara config en memoria/.env): %s", e)
 
 
 def _load_notificaciones_envios() -> dict:

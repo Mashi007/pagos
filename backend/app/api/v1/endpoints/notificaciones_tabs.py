@@ -24,6 +24,16 @@ from app.models.plantilla_notificacion import PlantillaNotificacion
 from app.models.envio_notificacion import EnvioNotificacion
 from app.services.carta_cobranza_pdf import generar_carta_cobranza_pdf
 from app.services.adjunto_fijo_cobranza import get_adjunto_fijo_cobranza_bytes, get_adjuntos_fijos_por_caso
+from app.services.notificacion_logging import (
+    log_envio_inicio,
+    log_envio_config,
+    log_envio_contexto_cobranza,
+    log_envio_adjuntos,
+    log_envio_email,
+    log_envio_persistencia,
+    log_envio_resumen,
+    log_envio_fallo,
+)
 
 # Mapeo tipo config (PAGO_5_DIAS_ANTES, etc.) a tipo_tab para estad�sticas/rebotados (solo los 5 que muestra la UI)
 _CONFIG_TIPO_TO_TAB = {
@@ -58,14 +68,17 @@ def _enviar_correos_items(
     Envia por Email y/o WhatsApp por cada item.
 
     Modo pruebas: plantilla email + 2 adjuntos PDF para prueba test real; variables como placeholders; correo solo a email_pruebas.
-    Modo produccion: listas por pestana; variables sustituidas por datos reales; envio a clientes.
+    Modo produccion: listas por pestana; variables sustituidas por datos reales;     envio a clientes.
     """
+    log_envio_inicio(len(items), "batch")
     sync_email_config_from_db()
     modo_pruebas = config_envios.get("modo_pruebas") is True
     email_pruebas = (config_envios.get("email_pruebas") or "").strip()
     usar_solo_pruebas = modo_pruebas and email_pruebas and "@" in email_pruebas
     # Si modo prueba activo pero sin correo v�lido: no enviar a clientes (evitar env�o por error)
     bloqueo_pruebas_sin_email = modo_pruebas and not (email_pruebas and "@" in email_pruebas)
+    habilitados = sum(1 for v in config_envios.values() if isinstance(v, dict) and v.get("habilitado") is True)
+    log_envio_config(modo_pruebas, bool(email_pruebas and "@" in email_pruebas), habilitados)
 
     enviados = 0
     sin_email = 0
@@ -75,7 +88,8 @@ def _enviar_correos_items(
     fallidos_whatsapp = 0
     registros_envio: List[EnvioNotificacion] = []
     correlativos_en_batch = {}
-    for item in items:
+    for idx, item in enumerate(items):
+        item_id_log = item.get("cedula") or str(item.get("prestamo_id") or idx)
         tipo = get_tipo_for_item(item)
         tipo_cfg = config_envios.get(tipo) or {}
         if tipo_cfg.get("habilitado") is False:
@@ -95,6 +109,9 @@ def _enviar_correos_items(
                 if ctx is not None:
                     item["contexto_cobranza"] = ctx
                     item["_correlativo_envio"] = corr
+                    log_envio_contexto_cobranza(item_id_log, True)
+                else:
+                    log_envio_contexto_cobranza(item_id_log, False, motivo="build_contexto_cobranza devolvió None")
         asunto, cuerpo = get_plantilla_asunto_cuerpo(db, plantilla_id, item, asunto_base, cuerpo_base, modo_pruebas=usar_solo_pruebas)
         # Adjuntos disponibles en todas las pestañas según config: PDF con variables (carta cobranza) y PDF(s) fijos
         attachments = None
@@ -123,9 +140,10 @@ def _enviar_correos_items(
                             attachments.append((nombre, contenido))
                 if not attachments:
                     attachments = None
+                log_envio_adjuntos(item_id_log, len(attachments) if attachments else 0)
             except Exception as e:
-                import logging
-                logging.getLogger(__name__).exception("Error generando adjuntos (PDF anexo / fijos): %s", e)
+                log_envio_adjuntos(item_id_log, 0, error=str(e))
+                log_envio_fallo("adjuntos", str(e), exc=e)
         # Email: en modo prueba todos van solo a email_pruebas; en producci�n al correo del cliente (+ CCO si hay)
         if usar_solo_pruebas:
             to_email = [email_pruebas]
@@ -152,6 +170,7 @@ def _enviar_correos_items(
                 attachments=attachments,
                 servicio="notificaciones",
             )
+            log_envio_email(item_id_log, to_email[0], ok, None if ok else msg)
             if ok:
                 enviados += 1
             else:
@@ -187,8 +206,19 @@ def _enviar_correos_items(
             for r in registros_envio:
                 db.add(r)
             db.commit()
-        except Exception:
+            log_envio_persistencia(len(registros_envio), True)
+        except Exception as e:
             db.rollback()
+            log_envio_persistencia(len(registros_envio), False, error=str(e))
+            log_envio_fallo("persistencia", str(e), exc=e)
+    log_envio_resumen(
+        enviados=enviados,
+        fallidos=fallidos,
+        sin_email=sin_email,
+        omitidos_config=omitidos_config,
+        enviados_whatsapp=enviados_whatsapp,
+        fallidos_whatsapp=fallidos_whatsapp,
+    )
     return {
         "enviados": enviados,
         "sin_email": sin_email,

@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.email_config_holder import update_from_api
+from app.core.email_phases import FASE_CONFIG_GUARDADO, log_phase
 from app.models.configuracion import Configuracion
 from app.api.v1.endpoints.email_config_validacion import validar_config_email_para_guardar
 
@@ -191,6 +192,7 @@ def put_email_configuracion(payload: EmailConfigUpdate = Body(...), db: Session 
         raise HTTPException(status_code=400, detail="; ".join(errores))
     update_from_api(_email_config_stub)
     _persist_email_config(db)
+    log_phase(logger, FASE_CONFIG_GUARDADO, True, "config email guardada en BD", extra={"campos": list(data.keys())})
     logger.info("Configuracion email actualizada y persistida en BD (campos: %s)", list(data.keys()))
     resp = {
         "message": "Configuracion guardada",

@@ -15,6 +15,17 @@ SMTP_TIMEOUT_SECONDS = 25
 IMAP_TIMEOUT_SECONDS = 25
 
 from app.core.email_config_holder import get_smtp_config, get_tickets_notify_emails, get_modo_pruebas_email, sync_from_db
+from app.core.email_phases import (
+    FASE_IMAP_COMPLETA,
+    FASE_IMAP_CONEXION,
+    FASE_IMAP_LIST,
+    FASE_IMAP_LOGIN,
+    FASE_MODO_PRUEBAS,
+    FASE_SMTP_CONFIG,
+    FASE_SMTP_CONEXION,
+    FASE_SMTP_ENVIO,
+    log_phase,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -129,24 +140,21 @@ def test_imap_connection(
     - mensaje_error: Descripci�n legible del error (None si no hay error)
     - lista_de_carpetas: Lista de nombres de carpetas (None si fall�)
     """
+    t0_imap = time.time()
     try:
         import imaplib
-
-        logger.info("IMAP fase 1/4: conectando a %s:%s (SSL=%s, timeout=%ss)", imap_host, imap_port, imap_use_ssl, IMAP_TIMEOUT_SECONDS)
+        log_phase(logger, FASE_IMAP_CONEXION, True, f"conectando {imap_host}:{imap_port} SSL={imap_use_ssl}")
         if imap_use_ssl:
             server = imaplib.IMAP4_SSL(imap_host, imap_port, timeout=IMAP_TIMEOUT_SECONDS)
         else:
             server = imaplib.IMAP4(imap_host, imap_port, timeout=IMAP_TIMEOUT_SECONDS)
             server.starttls()
-        logger.info("IMAP fase 2/4: conexion TCP establecida, enviando LOGIN para %s", imap_user)
+        log_phase(logger, FASE_IMAP_LOGIN, True, f"LOGIN para {imap_user}")
 
         server.login(imap_user, imap_password)
-        
-        logger.info("IMAP fase 3/4: LOGIN OK, listando carpetas")
 
-        # Listar carpetas disponibles
         _, mailboxes = server.list()
-        logger.info("IMAP fase 4/4: LIST OK, %d entradas", len(mailboxes) if mailboxes else 0)
+        log_phase(logger, FASE_IMAP_LIST, True, f"{len(mailboxes) if mailboxes else 0} carpetas", duration_ms=(time.time() - t0_imap) * 1000)
         folder_list = []
         for mailbox in mailboxes:
             try:
@@ -165,10 +173,11 @@ def test_imap_connection(
         if len(folder_list) > 5:
             msg += f" y {len(folder_list) - 5} m�s."
         
-        logger.info("Prueba IMAP exitosa para %s: %d carpetas", imap_user, len(folder_list))
+        log_phase(logger, FASE_IMAP_COMPLETA, True, f"{len(folder_list)} carpetas", duration_ms=(time.time() - t0_imap) * 1000)
         return True, None, folder_list
 
     except Exception as e:
+        log_phase(logger, FASE_IMAP_COMPLETA, False, str(e))
         logger.exception("Error probando IMAP %s:%s para usuario %s", imap_host, imap_port, imap_user)
         error_msg = _sanitize_imap_error(e)
         return False, error_msg, None
@@ -200,6 +209,7 @@ def send_email(
     # Modo Pruebas: redirigir todos los env�os al correo(s) de pruebas (desde notificaciones_envios o email_config)
     # EXCEPCI�N: si respetar_destinos_manuales=True (ej. usuario hizo clic en "Enviar Email de Prueba"), se env�an a los correos indicados en la interfaz.
     modo_pruebas, emails_pruebas_list = get_modo_pruebas_email(servicio=servicio)
+    log_phase(logger, FASE_MODO_PRUEBAS, True, "modo_pruebas=%s servicio=%s" % (modo_pruebas, servicio or "global"))
     if modo_pruebas and emails_pruebas_list and not respetar_destinos_manuales:
         to_emails = emails_pruebas_list
         cc_list = []
@@ -207,6 +217,7 @@ def send_email(
         logger.info("Modo Pruebas: env�o redirigido a %s", emails_pruebas_list)
     else:
         if modo_pruebas and not emails_pruebas_list:
+            log_phase(logger, FASE_SMTP_CONFIG, False, "modo pruebas sin email de pruebas configurado")
             logger.warning("Modo Pruebas activo pero no hay correo de pruebas configurado. Configure en Notificaciones > Configuraci�n o Configuraci�n > Email.")
             return False, "En modo Pruebas debe configurar el correo de pruebas en Notificaciones > Configuraci�n o Configuraci�n > Email."
         cc_list = [e.strip() for e in (cc_emails or []) if e and isinstance(e, str) and "@" in e.strip()]
@@ -214,9 +225,12 @@ def send_email(
     has_attachments = bool(attachments)
     cfg = get_smtp_config()
     if not cfg.get("smtp_host") or not cfg.get("smtp_user"):
+        log_phase(logger, FASE_SMTP_CONFIG, False, "falta smtp_host o smtp_user")
         return False, "No hay servidor SMTP configurado. Configura en Configuracion > Email."
     if not (cfg.get("smtp_password") or "").strip() or (cfg.get("smtp_password") or "").strip() == "***":
+        log_phase(logger, FASE_SMTP_CONFIG, False, "falta contrasena SMTP")
         return False, "Falta contrasena SMTP. Configura en Configuracion > Email."
+    log_phase(logger, FASE_SMTP_CONFIG, True, "host=%s port=%s" % (cfg.get("smtp_host"), cfg.get("smtp_port")))
 
     try:
         import smtplib
@@ -301,19 +315,24 @@ def send_email(
         use_tls = (cfg.get("smtp_use_tls") or "true").lower() == "true"
         msg_str = msg.as_string(policy=__import__("email").policy.SMTP)
         msg_bytes = msg_str.replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-8")
+        t0_smtp = time.time()
         if port == 465:
             with smtplib.SMTP_SSL(cfg["smtp_host"], port, timeout=SMTP_TIMEOUT_SECONDS) as server:
+                log_phase(logger, FASE_SMTP_CONEXION, True, f"SMTP_SSL {cfg['smtp_host']}:{port}", duration_ms=(time.time() - t0_smtp) * 1000)
                 server.login(cfg["smtp_user"], cfg["smtp_password"])
                 server.sendmail(msg["From"], all_recipients, msg_bytes)
         else:
             with smtplib.SMTP(cfg["smtp_host"], port, timeout=SMTP_TIMEOUT_SECONDS) as server:
                 if use_tls:
                     server.starttls()
+                log_phase(logger, FASE_SMTP_CONEXION, True, f"SMTP {cfg['smtp_host']}:{port} TLS={use_tls}", duration_ms=(time.time() - t0_smtp) * 1000)
                 server.login(cfg["smtp_user"], cfg["smtp_password"])
                 server.sendmail(msg["From"], all_recipients, msg_bytes)
+        log_phase(logger, FASE_SMTP_ENVIO, True, f"destinos={len(all_recipients)}", duration_ms=(time.time() - t0_smtp) * 1000)
         logger.info("Correo enviado a %s: %s", to_emails, subject)
         return True, None
     except Exception as e:
+        log_phase(logger, FASE_SMTP_ENVIO, False, str(e))
         logger.exception("Error enviando correo: %s", e)
         return False, _sanitize_smtp_error(e)
 

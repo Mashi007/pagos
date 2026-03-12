@@ -92,6 +92,27 @@ export interface RebotadoItem {
   error_mensaje?: string
 }
 
+/** Un registro del historial de envíos por cédula (para reportes/legales). */
+export interface HistorialEnvioItem {
+  id: number
+  fecha_envio: string | null
+  tipo_tab: string
+  asunto: string
+  email: string
+  nombre: string
+  cedula: string
+  exito: boolean
+  error_mensaje: string | null
+  prestamo_id: number | null
+  correlativo: number | null
+}
+
+export interface HistorialEnvioResponse {
+  items: HistorialEnvioItem[]
+  total: number
+  cedula: string
+}
+
 export interface EmailConfig {
   smtp_host: string
   smtp_port: string
@@ -205,6 +226,30 @@ class NotificacionService {
       responseType: 'blob',
     })
     return blob as Blob
+  }
+
+  /** Historial de notificaciones enviadas/fallidas por cédula (reportes y fines legales). */
+  async getHistorialNotificacionesPorCedula(cedula: string): Promise<HistorialEnvioResponse> {
+    return await apiClient.get<HistorialEnvioResponse>(`${this.baseUrl}/historial-por-cedula`, {
+      params: { cedula: cedula.trim() },
+    })
+  }
+
+  /** Descarga Excel con historial de notificaciones para una cédula. */
+  async descargarHistorialNotificacionesExcel(cedula: string): Promise<Blob> {
+    const blob = await apiClient.get<Blob>(`${this.baseUrl}/historial-por-cedula/excel`, {
+      params: { cedula: cedula.trim() },
+      responseType: 'blob',
+    })
+    return blob as Blob
+  }
+
+  /** Obtiene el HTML del comprobante de un envío (abrir en nueva ventana o guardar como PDF). */
+  async getComprobanteEnvioHtml(envioId: number): Promise<string> {
+    const text = await apiClient.get<string>(`${this.baseUrl}/historial-por-cedula/${envioId}/comprobante`, {
+      responseType: 'text',
+    })
+    return text as string
   }
 
   /** Ejecutar actualización de notificaciones (dias_mora en clientes). Llamar desde cron a las 2am. */

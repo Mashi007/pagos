@@ -33,6 +33,12 @@ from app.models.configuracion import Configuracion
 from app.models.plantilla_notificacion import PlantillaNotificacion
 from app.models.variable_notificacion import VariableNotificacion
 from app.models.envio_notificacion import EnvioNotificacion
+from app.services.notificacion_logging import (
+    log_historial_consulta,
+    log_historial_excel,
+    log_historial_comprobante,
+    log_historial_fallo,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1092,6 +1098,159 @@ def get_rebotados_por_tab_excel(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
+
+
+def _normalizar_cedula(cedula: str) -> str:
+    """Quita espacios y guiones para comparar cédulas."""
+    if not cedula:
+        return ""
+    return (cedula or "").strip().replace(" ", "").replace("-", "").upper()
+
+
+@router.get("/historial-por-cedula", response_model=dict)
+def get_historial_notificaciones_por_cedula(
+    cedula: str = Query(..., min_length=1, description="Cédula del cliente"),
+    db: Session = Depends(get_db),
+):
+    """
+    Historial de notificaciones enviadas (o fallidas) para un cliente por cédula.
+    Para reportes y fines administrativos/legales. Datos desde tabla envios_notificacion.
+    """
+    import time
+    t0 = time.perf_counter()
+    norm = _normalizar_cedula(cedula)
+    if not norm:
+        log_historial_consulta("", 0, None)
+        return {"items": [], "total": 0, "cedula": cedula.strip()}
+    try:
+        q = select(EnvioNotificacion).where(EnvioNotificacion.cedula.isnot(None))
+        raw = db.execute(q).scalars().all()
+        rows = [r for r in raw if _normalizar_cedula(r.cedula or "") == norm]
+        rows = sorted(rows, key=lambda r: (r.fecha_envio or r.id or 0), reverse=True)
+    except Exception as e:
+        log_historial_fallo("consulta", str(e), exc=e)
+        raise
+    tiempo_ms = (time.perf_counter() - t0) * 1000
+    log_historial_consulta(norm, len(rows), round(tiempo_ms, 2))
+    items = [
+        {
+            "id": r.id,
+            "fecha_envio": r.fecha_envio.isoformat() if r.fecha_envio else None,
+            "tipo_tab": r.tipo_tab or "",
+            "asunto": getattr(r, "asunto", None) or (f"Notificación {r.tipo_tab}" if r.tipo_tab else "Envío"),
+            "email": r.email or "",
+            "nombre": r.nombre or "",
+            "cedula": r.cedula or "",
+            "exito": bool(r.exito),
+            "error_mensaje": r.error_mensaje,
+            "prestamo_id": r.prestamo_id,
+            "correlativo": r.correlativo,
+        }
+        for r in rows
+    ]
+    return {"items": items, "total": len(items), "cedula": cedula.strip()}
+
+
+def _generar_excel_historial_cedula(items: List[dict], cedula: str) -> bytes:
+    """Genera Excel con historial de notificaciones por cédula."""
+    import io
+    import openpyxl
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Historial notificaciones"
+    ws.append(["Fecha envío", "Tipo", "Asunto", "Email", "Nombre", "Cédula", "Estado", "Error", "ID Préstamo", "Correlativo"])
+    for r in items:
+        ws.append([
+            r.get("fecha_envio") or "",
+            r.get("tipo_tab") or "",
+            r.get("asunto") or "",
+            r.get("email") or "",
+            r.get("nombre") or "",
+            r.get("cedula") or "",
+            "Enviada" if r.get("exito") else "Fallida",
+            r.get("error_mensaje") or "",
+            r.get("prestamo_id") or "",
+            r.get("correlativo") or "",
+        ])
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+@router.get("/historial-por-cedula/excel")
+def get_historial_por_cedula_excel(
+    cedula: str = Query(..., min_length=1, description="Cédula del cliente"),
+    db: Session = Depends(get_db),
+):
+    """Descarga Excel con historial de notificaciones para la cédula indicada."""
+    try:
+        data = get_historial_notificaciones_por_cedula(cedula=cedula, db=db)
+        items = data.get("items") or []
+        content = _generar_excel_historial_cedula(items, data.get("cedula") or cedula)
+        log_historial_excel(data.get("cedula") or cedula, len(items), True)
+    except Exception as e:
+        log_historial_excel(cedula, 0, False, error=str(e))
+        raise
+    filename = f"historial_notificaciones_{(data.get('cedula') or cedula).replace(' ', '_')[:30]}.xlsx"
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@router.get("/historial-por-cedula/{envio_id}/comprobante")
+def get_comprobante_envio(
+    envio_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Comprobante de envío de una notificación (un registro). Para descarga individual y fines legales.
+    Devuelve HTML imprimible (el usuario puede guardar como PDF desde el navegador).
+    """
+    row = db.get(EnvioNotificacion, envio_id)
+    if not row:
+        log_historial_comprobante(envio_id, False, error="no_encontrado")
+        raise HTTPException(status_code=404, detail="Registro de envío no encontrado")
+    log_historial_comprobante(envio_id, True)
+    asunto = getattr(row, "asunto", None) or (f"Notificación {row.tipo_tab}" if row.tipo_tab else "Envío")
+    html = f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Comprobante de notificación #{row.id}</title>
+  <style>
+    body {{ font-family: system-ui, sans-serif; margin: 2rem; max-width: 640px; }}
+    h1 {{ font-size: 1.25rem; }}
+    table {{ border-collapse: collapse; width: 100%; margin-top: 1rem; }}
+    th, td {{ border: 1px solid #ddd; padding: 0.5rem 0.75rem; text-align: left; }}
+    th {{ background: #f5f5f5; }}
+    .estado {{ font-weight: bold; }}
+    .estado.ok {{ color: green; }}
+    .estado.fallo {{ color: red; }}
+    @media print {{ body {{ margin: 1rem; }} }}
+  </style>
+</head>
+<body>
+  <h1>Comprobante de envío de notificación</h1>
+  <p><strong>ID registro:</strong> {row.id}</p>
+  <table>
+    <tr><th>Fecha envío</th><td>{row.fecha_envio.isoformat() if row.fecha_envio else ""}</td></tr>
+    <tr><th>Tipo</th><td>{row.tipo_tab or ""}</td></tr>
+    <tr><th>Asunto</th><td>{asunto}</td></tr>
+    <tr><th>Destinatario (email)</th><td>{row.email or ""}</td></tr>
+    <tr><th>Nombre</th><td>{row.nombre or ""}</td></tr>
+    <tr><th>Cédula</th><td>{row.cedula or ""}</td></tr>
+    <tr><th>Estado</th><td class="estado {'ok' if row.exito else 'fallo'}">{'Enviada' if row.exito else 'Fallida'}</td></tr>
+    <tr><th>Error (si aplica)</th><td>{row.error_mensaje or ""}</td></tr>
+    <tr><th>ID Préstamo</th><td>{row.prestamo_id or ""}</td></tr>
+    <tr><th>Correlativo</th><td>{row.correlativo or ""}</td></tr>
+  </table>
+  <p style="margin-top: 1.5rem; font-size: 0.875rem; color: #666;">Documento generado para fines administrativos y legales. RapiCredit.</p>
+</body>
+</html>"""
+    return Response(content=html, media_type="text/html; charset=utf-8",
+                    headers={"Content-Disposition": f"inline; filename=comprobante_notificacion_{row.id}.html"})
 
 
 @router.get("/clientes-retrasados", response_model=dict)
