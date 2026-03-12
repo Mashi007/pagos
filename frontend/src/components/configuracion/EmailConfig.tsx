@@ -687,7 +687,7 @@ const [probando, setProbando] = useState(false)
                 </div>
               )}
 
-              {!vinculacionConfirmada && !requiereAppPassword && estadoConfiguracion && !estadoConfiguracion.configurada && (
+              {!vinculacionConfirmada && !requiereAppPassword && estadoConfiguracion && !estadoConfiguracion.configurada && !resultadoPrueba?.success && (
                 <div className="bg-white border-2 border-red-500 rounded-lg p-4">
                   <div className="flex items-center gap-3">
                     {/* Semáforo Rojo */}

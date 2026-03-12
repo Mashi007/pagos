@@ -73,18 +73,18 @@ def _load_email_config_from_db(db: Session) -> None:
             data = json.loads(row.valor)
             if isinstance(data, dict):
                 for k, v in data.items():
+                    if k.endswith("_encriptado") and v is not None:
+                        base_field = k.replace("_encriptado", "")
+                        if base_field in _email_config_stub and base_field in SENSITIVE_FIELDS:
+                            try:
+                                encrypted_bytes = bytes.fromhex(v) if isinstance(v, str) else v
+                                decrypted = _decrypt_value_safe(encrypted_bytes)
+                                if decrypted:
+                                    _email_config_stub[base_field] = decrypted
+                            except Exception:
+                                pass
+                        continue
                     if k in _email_config_stub and v is not None:
-                        if k.endswith("_encriptado"):
-                            base_field = k.replace("_encriptado", "")
-                            if base_field in SENSITIVE_FIELDS:
-                                try:
-                                    encrypted_bytes = bytes.fromhex(v) if isinstance(v, str) else v
-                                    decrypted = _decrypt_value_safe(encrypted_bytes)
-                                    if decrypted:
-                                        _email_config_stub[base_field] = decrypted
-                                        continue
-                                except Exception:
-                                    pass
                         _email_config_stub[k] = v
     except Exception as e:
         logger.warning("No se pudo cargar config email desde BD: %s", e)
