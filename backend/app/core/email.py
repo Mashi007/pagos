@@ -20,6 +20,18 @@ logger = logging.getLogger(__name__)
 AttachmentType = Tuple[str, bytes]
 
 
+def _strip_html_to_plain(html: str, max_len: int = 8000) -> str:
+    '''Quita tags y data URLs para usar como parte text/plain cuando el cuerpo es HTML.'''
+    if not html or not html.strip():
+        return ""
+    import re
+    s = re.sub(r'data:image/[^;]+;base64,[A-Za-z0-9+/=\s]+', '[Imagen]', html, flags=re.DOTALL)
+    s = re.sub(r'<!--.*?-->', '', s, flags=re.DOTALL)
+    s = re.sub(r'<[^>]+>', ' ', s)
+    s = re.sub(r'\s+', ' ', s).strip()
+    return (s[:max_len] + "...") if len(s) > max_len else (s or "Contenido en HTML. Abra en un cliente compatible.")
+
+
 def _sanitize_imap_error(exc: Exception) -> str:
     """Mensaje seguro para mostrar al usuario al fallar conexi�n IMAP (sin contrase�as ni rutas)."""
     msg = str(exc).strip()
@@ -198,6 +210,11 @@ def send_email(
                     body_html = body_html.encode("utf-8", errors="replace").decode("utf-8")
             if "base64/" in body_html:
                 body_html = body_html.replace("base64/", "base64,")
+
+        # Si body_text es el mismo HTML que body_html, el cliente puede mostrar text/plain
+        # y se ve el codigo fuente + base64 como mensaje corrupto. Usar version solo texto.
+        if body_html and body_text and ("<" in body_text and ">" in body_text):
+            body_text = _strip_html_to_plain(body_text)
 
         if has_attachments:
             msg = MIMEMultipart("mixed")
