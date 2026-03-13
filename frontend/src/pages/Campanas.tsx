@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { campanasService, type CampanaCrm, type ListCampanasResponse } from '../services/campanasService'
 import { Button } from '../components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog'
-import { Mail, Play, Eye, Plus, RefreshCw, Paperclip } from 'lucide-react'
+import { Mail, Play, Eye, Plus, RefreshCw, FileText } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 function fileToBase64(file: File): Promise<string> {
@@ -255,7 +255,7 @@ export function CampanasPage() {
                 />
                 {form.adjunto && (
                   <span className="text-sm text-slate-600 flex items-center gap-1">
-                    <Paperclip className="h-4 w-4" />
+                    <FileText className="h-4 w-4" />
                     {form.adjunto.name}
                   </span>
                 )}
