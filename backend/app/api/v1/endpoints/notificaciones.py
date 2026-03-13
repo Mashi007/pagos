@@ -441,8 +441,8 @@ def preview_plantilla_pdf_cobranza(db: Session = Depends(get_db)):
 
 
 # Límites de longitud para plantilla PDF cobranza (evitar payloads excesivos)
-_PLANTILLA_PDF_CUERPO_MAX = 50_000
-_PLANTILLA_PDF_CLAUSULA_MAX = 50_000
+_PLANTILLA_PDF_CUERPO_MAX = 100_000
+_PLANTILLA_PDF_CLAUSULA_MAX = 100_000
 
 
 @router.put("/plantilla-pdf-cobranza")
@@ -450,7 +450,7 @@ def update_plantilla_pdf_cobranza(payload: dict = Body(...), db: Session = Depen
     """
     Actualiza la plantilla editable del PDF de carta de cobranza.
     Campos opcionales: ciudad_default, cuerpo_principal (HTML con {monto_total_usd}, {num_cuotas}, {fechas_str}), clausula_septima (HTML).
-    Límites: cuerpo_principal y clausula_septima no pueden superar 50.000 caracteres cada uno.
+    Límites: cuerpo_principal y clausula_septima no pueden superar 100.000 caracteres cada uno.
     """
     cuerpo = payload.get("cuerpo_principal")
     if cuerpo is not None and len(cuerpo) > _PLANTILLA_PDF_CUERPO_MAX:
