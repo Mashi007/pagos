@@ -74,6 +74,46 @@ def _get_plantilla_pdf_config(db=None) -> dict:
     return {}
 
 
+def _dict_reemplazo_pdf(contexto: dict, datos: dict) -> dict:
+    """
+    Construye un diccionario plano para reemplazar variables en la plantilla PDF.
+    Incluye claves de datos (monto_total_usd, num_cuotas, fechas_str, etc.) y de contexto
+    (CLIENTES.NOMBRE_COMPLETO, FECHA_CARTA, PRESTAMOS.ID, NUMEROCORRELATIVO, TOTAL_ADEUDADO, etc.).
+    Todas las variables se sustituyen con datos reales al enviar.
+    """
+    out = dict(datos)
+    fechas_cuotas = datos.get("fechas_cuotas") or []
+    out["fechas_str"] = ", ".join(fechas_cuotas)
+    # Claves desde contexto (mismo que email cobranza)
+    out["CLIENTES.TRATAMIENTO"] = datos.get("tratamiento", "") or contexto.get("CLIENTES.TRATAMIENTO") or "Sr(a)."
+    out["CLIENTES.NOMBRE_COMPLETO"] = datos.get("nombre_completo", "") or contexto.get("CLIENTES.NOMBRE_COMPLETO") or ""
+    out["CLIENTES.CEDULA"] = datos.get("cedula", "") or contexto.get("CLIENTES.CEDULA") or ""
+    out["PRESTAMOS.ID"] = datos.get("notificacion_num", "") or str(contexto.get("PRESTAMOS.ID", ""))
+    out["IDPRESTAMO"] = out["PRESTAMOS.ID"]
+    out["FECHA_CARTA"] = datos.get("fecha_carta", "") or _format_fecha(contexto.get("FECHA_CARTA"))
+    out["NUMEROCORRELATIVO"] = str(contexto.get("NUMEROCORRELATIVO", ""))
+    out["TOTAL_ADEUDADO"] = str(contexto.get("TOTAL_ADEUDADO", ""))
+    out["LOGO_URL"] = str(contexto.get("LOGO_URL", ""))
+    return out
+
+
+def _reemplazar_variables_plantilla_pdf(texto: Optional[str], contexto: dict, datos: dict) -> str:
+    """
+    Reemplaza en texto todas las variables {{KEY}} y {KEY} con datos reales del contexto/BD.
+    """
+    if not texto:
+        return ""
+    reemplazo = _dict_reemplazo_pdf(contexto, datos)
+    result = texto
+    for key, value in reemplazo.items():
+        if value is None:
+            value = ""
+        elif not isinstance(value, str):
+            value = str(value)
+        result = result.replace("{{" + key + "}}", value).replace("{" + key + "}", value)
+    return result
+
+
 def build_pdf_bytes(
     datos: dict,
     logo_path: Optional[str] = None,
@@ -143,8 +183,6 @@ def build_pdf_bytes(
     story.append(Paragraph(datos.get("cedula", ""), s_cedula))
     story.append(Spacer(1, 0.6 * cm))
 
-    _monto = datos.get("monto_total_usd", "0.00")
-    _num = datos.get("num_cuotas", "0")
     _default = (
         "Ante todo, queremos extenderle un cordial saludo, por medio del presente instrumento "
         "queremos recordarle que, a la presente fecha, usted mantiene un saldo pendiente correspondiente a "
@@ -152,13 +190,14 @@ def build_pdf_bytes(
         "por cancelación, de fechas: <b>({fechas_str})</b>"
     )
     if cuerpo_principal:
-        monto_cuotas_html = (
-            cuerpo_principal.replace("{monto_total_usd}", _monto)
-            .replace("{num_cuotas}", _num)
-            .replace("{fechas_str}", fechas_str)
-        )
+        monto_cuotas_html = cuerpo_principal
     else:
-        monto_cuotas_html = _default.format(monto_total_usd=_monto, num_cuotas=_num, fechas_str=fechas_str)
+        fechas_str = ", ".join(datos.get("fechas_cuotas") or [])
+        monto_cuotas_html = _default.format(
+            monto_total_usd=datos.get("monto_total_usd", "0.00"),
+            num_cuotas=datos.get("num_cuotas", "0"),
+            fechas_str=fechas_str,
+        )
     story.append(Paragraph(monto_cuotas_html, s_body))
 
     p2 = (
@@ -251,7 +290,8 @@ def build_pdf_bytes(
 def generar_carta_cobranza_pdf(contexto_cobranza: dict, db=None, logo_path: Optional[str] = None) -> bytes:
     """
     Genera el PDF de la carta de cobranza a partir del contexto (mismo que el email).
-    contexto_cobranza: dict con CLIENTES.*, PRESTAMOS.ID, FECHA_CARTA, CUOTAS.VENCIMIENTOS.
+    contexto_cobranza: dict con CLIENTES.*, PRESTAMOS.ID, FECHA_CARTA, CUOTAS.VENCIMIENTOS, etc.
+    Todas las variables {{KEY}} y {KEY} en la plantilla se sustituyen por datos reales de BD.
     db: sesión opcional para cargar plantilla editable (config plantilla_pdf_cobranza).
     logo_path: ruta al logo PNG (opcional; si no se pasa se intenta desde settings).
     """
@@ -263,6 +303,10 @@ def generar_carta_cobranza_pdf(contexto_cobranza: dict, db=None, logo_path: Opti
             logo_path = getattr(settings, "LOGO_PDF_COBRANZA_PATH", None)
         except Exception:
             logo_path = None
-    cuerpo = plantilla.get("cuerpo_principal")
-    clausula = plantilla.get("clausula_septima")
-    return build_pdf_bytes(datos, logo_path=logo_path, cuerpo_principal=cuerpo, clausula_septima=clausula)
+    cuerpo = _reemplazar_variables_plantilla_pdf(
+        plantilla.get("cuerpo_principal"), contexto_cobranza, datos
+    )
+    clausula = _reemplazar_variables_plantilla_pdf(
+        plantilla.get("clausula_septima"), contexto_cobranza, datos
+    )
+    return build_pdf_bytes(datos, logo_path=logo_path, cuerpo_principal=cuerpo or None, clausula_septima=clausula or None)

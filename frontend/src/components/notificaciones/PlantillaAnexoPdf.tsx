@@ -18,10 +18,18 @@ const DEFAULT_CLAUSULA =
 
 type PdfEditorFocus = 'encabezado' | 'cuerpo' | 'firma'
 
+/** Variables sustituidas con datos reales de BD al generar el PDF (mismo contexto que Pestaña 1 cobranza). */
 const VARIABLES_PDF = [
-  { key: 'monto_total_usd', label: 'Monto total USD' },
-  { key: 'num_cuotas', label: 'Nº cuotas' },
-  { key: 'fechas_str', label: 'Fechas (texto)' },
+  { key: 'CLIENTES.TRATAMIENTO', label: 'Tratamiento' },
+  { key: 'CLIENTES.NOMBRE_COMPLETO', label: 'Nombre completo' },
+  { key: 'CLIENTES.CEDULA', label: 'Cédula' },
+  { key: 'PRESTAMOS.ID', label: 'Nº crédito' },
+  { key: 'FECHA_CARTA', label: 'Fecha carta' },
+  { key: 'NUMEROCORRELATIVO', label: 'Nº correlativo' },
+  { key: 'TOTAL_ADEUDADO', label: 'Total adeudado' },
+  { key: 'monto_total_usd', label: 'Monto total USD (cuotas)' },
+  { key: 'num_cuotas', label: 'Nº cuotas pendientes' },
+  { key: 'fechas_str', label: 'Fechas vencimiento (texto)' },
 ]
 
 /**
@@ -172,7 +180,7 @@ export function PlantillaAnexoPdf() {
         <div>
           <h2 className="text-lg font-semibold">Armar plantilla</h2>
           <p className="text-sm text-gray-500">
-            Contenido del documento PDF que se anexa al correo de cobranza. Al guardar se persiste la plantilla.
+            Contenido del documento PDF que se anexa al correo de cobranza cuando en Notificaciones → Configuración por caso está marcado «PDF». Al enviar, cada variable se sustituye con datos reales de la BD.
           </p>
         </div>
       </div>

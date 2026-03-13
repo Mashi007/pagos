@@ -52,6 +52,9 @@ const tiposReporte = [
   { value: 'CONCILIACION', label: 'Conciliación', icon: CheckCircle2 },
 ]
 
+const REPORTES_COBRANZA = ['CARTERA', 'MOROSIDAD', 'VENCIMIENTO', 'PAGOS', 'ASESORES']
+const REPORTES_CONTABLE = ['CONTABLE', 'CEDULA', 'CONCILIACION']
+
 export function Reportes() {
   const [generandoReporte, setGenerandoReporte] = useState<string | null>(null)
   const [dialogAbierto, setDialogAbierto] = useState(false)
@@ -306,96 +309,158 @@ return (
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className="space-y-8"
+      className="space-y-10 max-w-5xl mx-auto"
     >
-      {/* Header con título */}
-      <div className="flex items-center justify-between mb-6">
+      {/* ——— Encabezado de página ——— */}
+      <header className="border-b border-gray-200 pb-6">
         <div className="flex items-center gap-3">
-          <FileText className="h-8 w-8 text-blue-600" />
-          <h1 className="text-3xl font-bold text-gray-900">Centro de Reportes</h1>
-        </div>
-      </div>
-
-      {/* Iconos: copiar enlace para compartir. Click = copia el link. */}
-      <div className="flex items-center gap-2 mb-6">
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className="h-11 w-11 shrink-0"
-          onClick={() => copiarEnlaceServicio(PUBLIC_REPORTE_PAGO_PATH, 'Reporte de pagos')}
-          title="Copiar enlace: Reporte de pagos"
-          aria-label="Copiar enlace reporte de pagos"
-        >
-          <DollarSign className="h-5 w-5" />
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className="h-11 w-11 shrink-0"
-          onClick={() => copiarEnlaceServicio(PUBLIC_ESTADO_CUENTA_PATH, 'Estado de cuenta')}
-          title="Copiar enlace: Estado de cuenta"
-          aria-label="Copiar enlace estado de cuenta"
-        >
-          <FileText className="h-5 w-5" />
-        </Button>
-      </div>
-
-      {/* Reportes: solo iconos. Click = descarga Excel con distribución segÃºn backend. */}
-      <Card className="shadow-sm">
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 sm:gap-6">
-            {tiposReporte.map((tipo) => {
-              const IconComponent = tipo.icon
-              const isGenerando = generandoReporte === tipo.value
-              const isDisponible = ['CARTERA', 'PAGOS', 'MOROSIDAD', 'VENCIMIENTO', 'ASESORES', 'CONTABLE', 'CEDULA', 'CONCILIACION'].includes(tipo.value)
-              const tieneAcceso = canAccessReport(tipo.value)
-
-              return (
-                <button
-                  key={tipo.value}
-                  type="button"
-                  disabled={!isDisponible || !tieneAcceso || isGenerando}
-                  onClick={(e) => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    if (!tieneAcceso) {
-                      toast.error('No tienes permisos para acceder a este reporte')
-                      return
-                    }
-                    abrirDialogoReporte(tipo.value)
-                  }}
-                  title={!tieneAcceso ? 'No tienes permisos para este reporte' : `Descargar ${tipo.label} en Excel`}
-                  className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border-2 transition-all min-h-[100px] select-none ${
-                    isDisponible && tieneAcceso
-                      ? 'hover:bg-blue-50 hover:border-blue-200 cursor-pointer hover:scale-105 active:scale-100'
-                      : 'opacity-50 cursor-not-allowed'
-                  }`}
-                  aria-label={`Descargar reporte ${tipo.label} en Excel`}
-                >
-                  {isGenerando ? (
-                    <Loader2 className="h-12 w-12 animate-spin text-blue-600" aria-hidden />
-                  ) : !tieneAcceso ? (
-                    <Lock className="h-12 w-12 text-gray-400" aria-hidden />
-                  ) : (
-                    <IconComponent className="h-12 w-12 text-blue-600" aria-hidden />
-                  )}
-                  <span className="text-xs font-medium text-center text-gray-600">{tipo.label}</span>
-                  {!tieneAcceso && <span className="text-xs text-red-600">Restringido</span>}
-                </button>
-              )
-            })}
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100">
+            <FileText className="h-7 w-7 text-blue-600" />
           </div>
-        </CardContent>
-      </Card>
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Centro de Reportes</h1>
+            <p className="text-sm sm:text-base text-gray-500 mt-1">
+              Descargue reportes en Excel, comparta enlaces y consulte el historial de notificaciones.
+            </p>
+          </div>
+        </div>
+      </header>
 
-      {/* Historial de notificaciones por cédula (detalles del préstamo / fines administrativos y legales) */}
-      <Card className="shadow-sm">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+      {/* ——— Sección: Enlaces para compartir ——— */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+          <span className="flex h-1 w-1 rounded-full bg-blue-500" aria-hidden />
+          Enlaces para compartir
+        </h2>
+        <Card className="shadow-sm border-gray-200/80">
+          <CardContent className="py-4">
+            <p className="text-sm text-gray-500 mb-4">
+              Copie el enlace y compártalo con clientes o equipos para consulta de reporte de pagos o estado de cuenta.
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-11 gap-2"
+                onClick={() => copiarEnlaceServicio(PUBLIC_REPORTE_PAGO_PATH, 'Reporte de pagos')}
+                title="Copiar enlace: Reporte de pagos"
+                aria-label="Copiar enlace reporte de pagos"
+              >
+                <DollarSign className="h-5 w-5" />
+                Reporte de pagos
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-11 gap-2"
+                onClick={() => copiarEnlaceServicio(PUBLIC_ESTADO_CUENTA_PATH, 'Estado de cuenta')}
+                title="Copiar enlace: Estado de cuenta"
+                aria-label="Copiar enlace estado de cuenta"
+              >
+                <FileText className="h-5 w-5" />
+                Estado de cuenta
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </section>
+
+      {/* ——— Sección: Reportes para descargar ——— */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+          <span className="flex h-1 w-1 rounded-full bg-blue-500" aria-hidden />
+          Reportes para descargar
+        </h2>
+        <p className="text-sm text-gray-500">
+          Seleccione un reporte para elegir período (año/mes) y descargar en Excel.
+        </p>
+        <Card className="shadow-sm border-gray-200/80">
+          <CardContent className="pt-6 pb-6 space-y-8">
+            {/* Cobranza y operativos */}
+            <div>
+              <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-4">Cobranza y operativos</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+                {tiposReporte.filter((t) => REPORTES_COBRANZA.includes(t.value)).map((tipo) => {
+                  const IconComponent = tipo.icon
+                  const isGenerando = generandoReporte === tipo.value
+                  const isDisponible = ['CARTERA', 'PAGOS', 'MOROSIDAD', 'VENCIMIENTO', 'ASESORES', 'CONTABLE', 'CEDULA', 'CONCILIACION'].includes(tipo.value)
+                  const tieneAcceso = canAccessReport(tipo.value)
+                  return (
+                    <button
+                      key={tipo.value}
+                      type="button"
+                      disabled={!isDisponible || !tieneAcceso || isGenerando}
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        if (!tieneAcceso) { toast.error('No tienes permisos para acceder a este reporte'); return }
+                        abrirDialogoReporte(tipo.value)
+                      }}
+                      title={!tieneAcceso ? 'No tienes permisos para este reporte' : `Descargar ${tipo.label} en Excel`}
+                      className={`flex flex-col items-center justify-center gap-2 p-5 rounded-xl border-2 transition-all min-h-[110px] select-none bg-white ${
+                        isDisponible && tieneAcceso ? 'hover:bg-blue-50 hover:border-blue-200 cursor-pointer hover:scale-[1.02] active:scale-100' : 'opacity-50 cursor-not-allowed'
+                      }`}
+                      aria-label={`Descargar reporte ${tipo.label} en Excel`}
+                    >
+                      {isGenerando ? <Loader2 className="h-12 w-12 animate-spin text-blue-600" aria-hidden /> : !tieneAcceso ? <Lock className="h-12 w-12 text-gray-400" aria-hidden /> : <IconComponent className="h-12 w-12 text-blue-600" aria-hidden />}
+                      <span className="text-xs font-medium text-center text-gray-600">{tipo.label}</span>
+                      {!tieneAcceso && <span className="text-xs text-red-600">Restringido</span>}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+            {/* Contable y por cliente */}
+            <div className="pt-4 border-t border-gray-100">
+              <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-4">Contable y por cliente</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                {tiposReporte.filter((t) => REPORTES_CONTABLE.includes(t.value)).map((tipo) => {
+                  const IconComponent = tipo.icon
+                  const isGenerando = generandoReporte === tipo.value
+                  const isDisponible = ['CARTERA', 'PAGOS', 'MOROSIDAD', 'VENCIMIENTO', 'ASESORES', 'CONTABLE', 'CEDULA', 'CONCILIACION'].includes(tipo.value)
+                  const tieneAcceso = canAccessReport(tipo.value)
+                  return (
+                    <button
+                      key={tipo.value}
+                      type="button"
+                      disabled={!isDisponible || !tieneAcceso || isGenerando}
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        if (!tieneAcceso) { toast.error('No tienes permisos para acceder a este reporte'); return }
+                        abrirDialogoReporte(tipo.value)
+                      }}
+                      title={!tieneAcceso ? 'No tienes permisos para este reporte' : `Descargar ${tipo.label} en Excel`}
+                      className={`flex flex-col items-center justify-center gap-2 p-5 rounded-xl border-2 transition-all min-h-[110px] select-none bg-white ${
+                        isDisponible && tieneAcceso ? 'hover:bg-blue-50 hover:border-blue-200 cursor-pointer hover:scale-[1.02] active:scale-100' : 'opacity-50 cursor-not-allowed'
+                      }`}
+                      aria-label={`Descargar reporte ${tipo.label} en Excel`}
+                    >
+                      {isGenerando ? <Loader2 className="h-12 w-12 animate-spin text-blue-600" aria-hidden /> : !tieneAcceso ? <Lock className="h-12 w-12 text-gray-400" aria-hidden /> : <IconComponent className="h-12 w-12 text-blue-600" aria-hidden />}
+                      <span className="text-xs font-medium text-center text-gray-600">{tipo.label}</span>
+                      {!tieneAcceso && <span className="text-xs text-red-600">Restringido</span>}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </section>
+
+      {/* ——— Sección: Historial de notificaciones ——— */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+          <span className="flex h-1 w-1 rounded-full bg-blue-500" aria-hidden />
+          Historial de notificaciones por cédula
+        </h2>
+        <Card className="shadow-sm border-gray-200/80">
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-base font-medium">
             <Mail className="h-5 w-5 text-blue-600" />
-            Historial de notificaciones por cédula
+            Consultar y descargar historial
           </CardTitle>
           <p className="text-sm text-muted-foreground">
             Consulte por cédula el historial de notificaciones enviadas. Descargue un Excel con todo el historial o abra cada comprobante de envío (para fines administrativos y legales).
@@ -460,7 +525,7 @@ return (
                         <td className="py-2 px-3">{row.email || '-'}</td>
                         <td className="py-2 px-3">
                           <span className={row.exito ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
-                            {row.exito ? 'Enviada' : 'Fallida'}
+                            {row.estado_envio === 'entregado' ? 'Entregado' : 'Rebotado'}
                           </span>
                         </td>
                         <td className="py-2 px-3">
@@ -487,7 +552,8 @@ return (
             </div>
           )}
         </CardContent>
-      </Card>
+        </Card>
+      </section>
 
       <DialogReporteFiltros
         key={reporteSeleccionado ?? 'filtros'}

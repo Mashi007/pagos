@@ -417,6 +417,8 @@ _CONTEXTO_PREVIEW_COBRANZA = {
     "CLIENTES.NOMBRE_COMPLETO": "Juan Pérez (ejemplo)",
     "CLIENTES.CEDULA": "V-12345678",
     "PRESTAMOS.ID": "1001",
+    "NUMEROCORRELATIVO": "2025-001",
+    "TOTAL_ADEUDADO": "300,00",
     "FECHA_CARTA": date.today().isoformat(),
     "CUOTAS.VENCIMIENTOS": [
         {"fecha_vencimiento": "2025-01-15", "monto": 150.00, "numero_cuota": 1},
@@ -1197,6 +1199,7 @@ def get_historial_notificaciones_por_cedula(
             "nombre": r.nombre or "",
             "cedula": r.cedula or "",
             "exito": bool(r.exito),
+            "estado_envio": "entregado" if r.exito else "rebotado",
             "error_mensaje": r.error_mensaje,
             "prestamo_id": r.prestamo_id,
             "correlativo": r.correlativo,
@@ -1222,7 +1225,7 @@ def _generar_excel_historial_cedula(items: List[dict], cedula: str) -> bytes:
             r.get("email") or "",
             r.get("nombre") or "",
             r.get("cedula") or "",
-            "Enviada" if r.get("exito") else "Fallida",
+            r.get("estado_envio") == "entregado" and "Entregado" or "Rebotado",
             r.get("error_mensaje") or "",
             r.get("prestamo_id") or "",
             r.get("correlativo") or "",
@@ -1296,7 +1299,7 @@ def get_comprobante_envio(
     <tr><th>Destinatario (email)</th><td>{row.email or ""}</td></tr>
     <tr><th>Nombre</th><td>{row.nombre or ""}</td></tr>
     <tr><th>Cédula</th><td>{row.cedula or ""}</td></tr>
-    <tr><th>Estado</th><td class="estado {'ok' if row.exito else 'fallo'}">{'Enviada' if row.exito else 'Fallida'}</td></tr>
+    <tr><th>Estado</th><td class="estado {'ok' if row.exito else 'fallo'}">{'Entregado' if row.exito else 'Rebotado'}</td></tr>
     <tr><th>Error (si aplica)</th><td>{row.error_mensaje or ""}</td></tr>
     <tr><th>ID Préstamo</th><td>{row.prestamo_id or ""}</td></tr>
     <tr><th>Correlativo</th><td>{row.correlativo or ""}</td></tr>

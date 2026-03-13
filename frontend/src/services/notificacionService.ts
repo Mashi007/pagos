@@ -102,6 +102,8 @@ export interface HistorialEnvioItem {
   nombre: string
   cedula: string
   exito: boolean
+  /** Indicador de entrega: "entregado" (enviado correctamente) o "rebotado" (fallo en envío). */
+  estado_envio: 'entregado' | 'rebotado'
   error_mensaje: string | null
   prestamo_id: number | null
   correlativo: number | null
