@@ -226,9 +226,9 @@ export function TablaEditablePagos({
       </div>
 
       {/* Leyenda de errores */}
-      {conError > 0 && (
+      {invalidas > 0 && (
         <div className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-800">
-          <strong>⚠ {conError} fila(s) con errores detectados.</strong>
+          <strong>⚠ {invalidas} fila(s) con errores detectados.</strong>
           {' '}Corrígelas directamente en la tabla antes de guardar.
           <ul className="mt-1.5 list-disc list-inside space-y-0.5 text-xs text-red-700">
             <li><strong>Cédula</strong>: debe existir en la base de datos de clientes (formato V/E/J + dígitos).</li>
