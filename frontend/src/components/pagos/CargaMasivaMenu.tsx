@@ -106,7 +106,7 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
                 <SelectContent>
                   <SelectItem value="unread">No leídos</SelectItem>
                   <SelectItem value="read">Leídos</SelectItem>
-                  <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="all">Todos (leídos y no leídos)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -119,7 +119,7 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
               {loadingGmail ? 'Generando...' : 'Generar Excel desde Gmail'}
             </button>
             <p className="text-xs text-gray-500 px-2 py-1 mt-1 border-t border-gray-100">
-              {scanFilter === 'unread' ? 'Solo no leídos. Al terminar se vuelve a revisar la bandeja.' : scanFilter === 'read' ? 'Solo correos leídos.' : 'Todos los correos de la bandeja.'}
+              {scanFilter === 'unread' ? 'Solo no leídos. Al terminar se vuelve a revisar la bandeja.' : scanFilter === 'read' ? 'Solo correos leídos.' : 'Con «Todos»: leídos y no leídos de toda la bandeja.'}
             </p>
           </div>
         </PopoverContent>
@@ -158,6 +158,8 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
         open={showConfirmarBorrar}
         onOpenChange={setShowConfirmarBorrar}
         fechaDatos={gmailStatus?.latest_data_date}
+        correosRevisados={gmailStatus?.last_emails}
+        archivosProcesados={gmailStatus?.last_files}
         onElegir={async (borrar) => {
           const fecha = gmailStatus?.latest_data_date ?? undefined
           try {

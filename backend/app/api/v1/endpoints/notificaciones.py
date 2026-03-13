@@ -443,7 +443,10 @@ def preview_plantilla_pdf_cobranza(db: Session = Depends(get_db)):
         return Response(content=pdf_bytes, media_type="application/pdf")
     except Exception as e:
         logger.exception("preview_plantilla_pdf_cobranza: %s", e)
-        raise HTTPException(status_code=500, detail="Error al generar la vista previa del PDF")
+        detail = "Error al generar la vista previa del PDF"
+        if getattr(e, "args", None):
+            detail = f"{detail}: {str(e.args[0])[:200]}"
+        raise HTTPException(status_code=500, detail=detail)
 
 
 # Límites de longitud para plantilla PDF cobranza (evitar payloads excesivos)

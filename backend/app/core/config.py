@@ -214,7 +214,7 @@ class Settings(BaseSettings):
         description="Máximo de correos por ejecución (0 = sin límite). Gratis: ej. 15. Gemini de pago: 0 para procesar todos.",
     )
     PAGOS_GMAIL_DOWNLOAD_EXCEL_MAX_ITEMS: int = Field(
-        default=5000,
+        default=0,
         description="Máximo de filas al descargar Excel sin fecha (evita memoria/timeout). Con ?fecha= no aplica límite por día.",
     )
     PAGOS_GMAIL_MIN_IMAGE_BYTES: int = Field(

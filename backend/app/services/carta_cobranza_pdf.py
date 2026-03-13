@@ -22,6 +22,32 @@ NARANJA = "#E84C0E"
 GRIS_TEXTO = "#444444"
 
 
+def _sanitize_for_reportlab(text: Optional[str]) -> str:
+    """
+    Asegura que el texto sea renderizable por ReportLab con Helvetica (Latin-1).
+    Reemplaza emoji y caracteres que no tiene la fuente por equivalentes ASCII.
+    """
+    if not text or not isinstance(text, str):
+        return ""
+    replacements = [
+        ("\u2709", " "),   # envelope
+        ("\u2706", " "),   # telephone
+        ("\U0001f4cd", " "),  # round pushpin
+        ("\U0001f4de", " "),  # telephone
+        ("\U0001f4e7", " "),  # e-mail
+        ("\u260e", " "),   # black phone
+        ("\u2708", " "),   # airplane
+    ]
+    result = text
+    for old, new in replacements:
+        result = result.replace(old, new)
+    result = "".join(
+        c for c in result
+        if ord(c) < 0x100 or c in "ÀÁÂÃÈÉÊÌÍÑÒÓÙÚàáâãèéêìíñòóùú¿¡"
+    )
+    return result
+
+
 def _format_fecha(value: Any) -> str:
     if value is None:
         return ""
@@ -127,6 +153,36 @@ _IMG_BASE64_PATTERN = re.compile(
 )
 
 
+def _extraer_cuerpo_si_html_completo(texto: str) -> str:
+    """
+    Si el texto es un documento HTML completo (DOCTYPE/html/head/body),
+    devuelve solo el contenido del body para que ReportLab no falle.
+    ReportLab paraparser no acepta <!DOCTYPE>, <html>, <head>, <style>, etc.
+    """
+    if not texto or not texto.strip():
+        return texto
+    t = texto.strip()
+    if re.search(r"<!DOCTYPE\s+html", t, re.IGNORECASE) or re.search(r"<html[\s>]", t, re.IGNORECASE):
+        body_match = re.search(
+            r"<body\s[^>]*>(.*)</body\s*>",
+            t,
+            re.IGNORECASE | re.DOTALL,
+        )
+        if body_match:
+            t = body_match.group(1)
+        else:
+            body_match = re.search(r"<body>(.*)</body>", t, re.IGNORECASE | re.DOTALL)
+            if body_match:
+                t = body_match.group(1)
+            else:
+                t = re.sub(r"<head\s[^>]*>.*?</head\s*>", "", t, flags=re.IGNORECASE | re.DOTALL)
+                t = re.sub(r"<head>.*?</head>", "", t, flags=re.IGNORECASE | re.DOTALL)
+                t = re.sub(r"<!DOCTYPE[^>]*>", "", t, flags=re.IGNORECASE)
+                t = re.sub(r"<html\s[^>]*>", "", t, flags=re.IGNORECASE)
+                t = re.sub(r"</html\s*>", "", t, flags=re.IGNORECASE)
+    return t
+
+
 def _html_para_reportlab(texto: str) -> str:
     """
     Convierte HTML con div/p/span/clases a un formato que ReportLab Paragraph acepta.
@@ -135,7 +191,9 @@ def _html_para_reportlab(texto: str) -> str:
     """
     if not texto or not texto.strip():
         return texto
-    t = texto
+    t = _extraer_cuerpo_si_html_completo(texto)
+    # Normalizar <br> a <br/> (ReportLab: "No content allowed in br tag" si no es self-closing)
+    t = re.sub(r"<br\s*/?\s*>", "<br/>", t, flags=re.IGNORECASE)
     # Quitar comentarios HTML
     t = re.sub(r"<!--.*?-->", "", t, flags=re.DOTALL)
     # Cerrar bloques como saltos de línea para mantener estructura
@@ -269,7 +327,7 @@ def build_pdf_bytes(
             num_cuotas=datos.get("num_cuotas", "0"),
             fechas_str=fechas_str,
         )
-    story.append(Paragraph(monto_cuotas_html, s_body))
+    story.append(Paragraph(_sanitize_for_reportlab(monto_cuotas_html), s_body))
 
     p2 = (
         "Recuerde que el pago a tiempo le permite acceder a nuevos beneficios, es por ello, que le "
@@ -296,13 +354,13 @@ def build_pdf_bytes(
         "<b>EL COMPRADOR (A),</b> renuncia toda acción que pudiera corresponderle por la recuperación del bien "
         "vehículo, salvo la que la propia ley le acuerde."
     )
-    story.append(Paragraph(clausula, s_clausula_texto))
+    story.append(Paragraph(_sanitize_for_reportlab(clausula), s_clausula_texto))
     story.append(Spacer(1, 0.6 * cm))
 
     story.append(Paragraph("Agradecemos su pronta atención a este asunto y esperamos su respuesta.", s_body))
     story.append(Spacer(1, 0.4 * cm))
     if firma_plantilla and firma_plantilla.strip():
-        story.append(Paragraph(firma_plantilla.strip(), s_body))
+        story.append(Paragraph(_sanitize_for_reportlab(firma_plantilla.strip()), s_body))
     else:
         story.append(Paragraph("Atentamente,", s_body))
         story.append(Spacer(1, 0.8 * cm))
@@ -341,8 +399,9 @@ def build_pdf_bytes(
 
     footer_dir = Table([[
         Paragraph(
-            "📍 C.C Profesional Guacara Plaza, Nivel PB, Local PB-12. Guacara, Carabobo.  "
-            "✉ info@rapicreditca.com  🌐 rapicreditca.com  📷 rapicreditca  📞 0412 314 66 89",
+            _sanitize_for_reportlab("📍 C.C Profesional Guacara Plaza, Nivel PB, Local PB-12. Guacara, Carabobo.  "
+            "✉ info@rapicreditca.com  🌐 rapicreditca.com  📷 rapicreditca  📞 0412 314 66 89"
+            ),
             s_footer_dir,
         )
     ]], colWidths=[16 * cm])
@@ -383,9 +442,9 @@ def generar_carta_cobranza_pdf(contexto_cobranza: dict, db=None, logo_path: Opti
     # Logo: si la plantilla trae un img base64, usarlo como logo y quitar la etiqueta del texto (ReportLab no la dibuja)
     logo_path_plantilla, cuerpo = _extraer_logo_base64_de_plantilla(cuerpo or "")
     # Convertir HTML con div/p/class a formato que ReportLab Paragraph acepta (cuerpo, cláusula y firma)
-    cuerpo = _html_para_reportlab(cuerpo or "")
-    clausula = _html_para_reportlab(clausula or "")
-    firma_plantilla = _html_para_reportlab(firma_raw or "")
+    cuerpo = _sanitize_for_reportlab(_html_para_reportlab(cuerpo or ""))
+    clausula = _sanitize_for_reportlab(_html_para_reportlab(clausula or ""))
+    firma_plantilla = _sanitize_for_reportlab(_html_para_reportlab(firma_raw or ""))
     if logo_path_plantilla:
         logo_path = logo_path_plantilla
     if not logo_path:

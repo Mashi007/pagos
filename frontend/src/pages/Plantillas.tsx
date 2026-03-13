@@ -4,6 +4,7 @@ import { PlantillasNotificaciones } from '../components/notificaciones/Plantilla
 import { PlantillaAnexoPdf } from '../components/notificaciones/PlantillaAnexoPdf'
 import { VinculacionPlantillaAnexoPdf } from '../components/notificaciones/VinculacionPlantillaAnexoPdf'
 import { DocumentosPdfAnexos } from '../components/notificaciones/DocumentosPdfAnexos'
+import { DocumentosAlmacenadosPorPestana } from '../components/notificaciones/DocumentosAlmacenadosPorPestana'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Button } from '../components/ui/button'
 import { FileText, Link as LinkIcon, ChevronLeft, Download, CheckCircle2, ChevronDown, ChevronUp, Bell } from 'lucide-react'
@@ -129,6 +130,13 @@ export function Plantillas() {
         <TabsContent value={SUBTAB_ANEXO_PDF} className="mt-6 min-h-[400px]">
           <VinculacionPlantillaAnexoPdf />
           <PlantillaAnexoPdf />
+          <div className="mt-6">
+            <DocumentosAlmacenadosPorPestana
+              permitirEliminar={true}
+              titulo="Documentos almacenados por pestaña (confirmar vinculación)"
+              className="border-violet-200 bg-violet-50/30"
+            />
+          </div>
         </TabsContent>
 
         <TabsContent value={SUBTAB_DOCUMENTOS_PDF} className="mt-6 min-h-[400px]">

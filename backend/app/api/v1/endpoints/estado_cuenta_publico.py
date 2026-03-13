@@ -458,6 +458,7 @@ def verificar_codigo_estado_cuenta(
         )
     rec.usado = True
     db.commit()
+    expira_en_iso = (rec.expira_en.isoformat() + "Z") if getattr(rec, "expira_en", None) else None
     logger.info("estado_cuenta verificar ip=%s outcome=ok cedula_suffix=***%s", ip, cedula_lookup[-4:] if len(cedula_lookup) >= 4 else "****")
     return VerificarCodigoResponse(ok=True, pdf_base64=pdf_b64, expira_en=expira_en_iso)
 

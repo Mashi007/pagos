@@ -54,7 +54,7 @@ export function VinculacionPlantillaAnexoPdf() {
             <h2 className="text-base font-semibold text-gray-900">Plantilla anexo PDF</h2>
           </div>
           <Link
-            to="/notificaciones"
+            to="/notificaciones?tab=configuracion"
             className="text-sm text-blue-600 hover:underline flex items-center gap-1"
           >
             <Settings className="h-4 w-4" />
@@ -78,7 +78,7 @@ export function VinculacionPlantillaAnexoPdf() {
         ) : pestanasConPdf.length === 0 ? (
           <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
             Ninguna pestaña tiene el PDF activo. Activa la opción &quot;PDF&quot; en{' '}
-            <Link to="/notificaciones" className="text-blue-600 hover:underline font-medium">
+            <Link to="/notificaciones?tab=configuracion" className="text-blue-600 hover:underline font-medium">
               Notificaciones → Configuración
             </Link>{' '}
             para cada tipo que deba llevar la carta de cobranza.

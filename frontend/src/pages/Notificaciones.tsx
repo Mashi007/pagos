@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   RefreshCw,
@@ -44,7 +45,25 @@ const PLACEHOLDER_NOTIFICACIONES: ClientesRetrasadosResponse = {
 }
 
 export function Notificaciones() {
-  const [activeTab, setActiveTab] = useState<TabId>('dias_5')
+    const [searchParams, setSearchParams] = useSearchParams()
+  const tabParam = searchParams.get('tab') as TabId | null
+  const [activeTab, setActiveTab] = useState<TabId>(() =>
+    tabParam && TABS.some((t) => t.id === tabParam) ? tabParam : 'dias_5'
+  )
+  useEffect(() => {
+    if (tabParam && TABS.some((t) => t.id === tabParam) && activeTab !== tabParam) {
+      setActiveTab(tabParam)
+    }
+  }, [tabParam])
+  const setActiveTabAndUrl = (tab: TabId) => {
+    setActiveTab(tab)
+    setSearchParams((p) => {
+      const next = new URLSearchParams(p)
+      if (tab === 'dias_5') next.delete('tab')
+      else next.set('tab', tab)
+      return next
+    })
+  }
 
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['notificaciones-clientes-retrasados'],
@@ -137,7 +156,7 @@ export function Notificaciones() {
             {TABS.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => setActiveTabAndUrl(tab.id)}
                 className={`flex items-center gap-2 py-2 px-3 rounded-t font-medium text-sm ${
                   activeTab === tab.id ? 'bg-white border border-b-0 border-gray-200 text-blue-600' : 'text-gray-500 hover:text-gray-700'
                 }`}
@@ -187,7 +206,7 @@ export function Notificaciones() {
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => setActiveTabAndUrl(tab.id)}
                 className={`flex items-center gap-2 py-3 px-4 border-b-2 font-medium text-sm ${
                   activeTab === tab.id ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
@@ -201,7 +220,7 @@ export function Notificaciones() {
             )
           })}
           <button
-            onClick={() => setActiveTab('configuracion')}
+            onClick={() => setActiveTabAndUrl('configuracion')}
             className="flex items-center gap-2 py-3 px-4 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700"
           >
             <Settings className="w-4 h-4" />

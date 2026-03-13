@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Hook para ejecutar el pipeline Gmail y hacer polling hasta que termine.
  * El endpoint run-now devuelve inmediatamente (status="running"); este hook
  * hace polling a /status cada 4s hasta que last_status sea "success" o "error".
@@ -77,7 +77,7 @@ export function useGmailPipeline({ onDone, onStatusUpdate }: UseGmailPipelineOpt
               }
             } else {
               const dateHint = s.latest_data_date ? ` (fecha correo: ${s.latest_data_date})` : ''
-              toast.success(`Listo: ${emails} correo(s), ${files} archivo(s) procesados.${dateHint}`)
+              toast.success(`Listo: se revisaron ${emails} correo(s) y ${files} archivo(s) procesados.${dateHint}`, { duration: 8000 })
               onDoneRef.current?.(s)
             }
             return

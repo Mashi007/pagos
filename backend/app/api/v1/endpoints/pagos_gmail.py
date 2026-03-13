@@ -71,12 +71,14 @@ def _last_run_too_recent(db: Session) -> tuple[bool, Optional[int]]:
 
 
 def _run_pipeline_background(sync_id: int, scan_filter: str = "unread") -> None:
-    """Ejecuta el pipeline en background con su propia sesión de BD (evita el timeout de 30s de Render/Axios)."""
+    """Ejecuta el pipeline en background con su propia sesion de BD. ón de BD (evita el timeout de 30s de Render/Axios)."""
     db = SessionLocal()
+    logger.info("[PAGOS_GMAIL] [ETAPA] Inicio pipeline background sync_id=%s scan_filter=%s", sync_id, scan_filter)
     try:
         run_pipeline(db, existing_sync_id=sync_id, scan_filter=scan_filter)
     except Exception as e:
-        logger.exception("[PAGOS_GMAIL] Error en background pipeline (sync_id=%s): %s", sync_id, e)
+        logger.info("[PAGOS_GMAIL] [ETAPA] Pipeline finalizado sync_id=%s", sync_id)
+        logger.exception("[PAGOS_GMAIL] [ETAPA] Error en background pipeline (sync_id=%s): %s", sync_id, e)
         try:
             sync = db.execute(select(PagosGmailSync).where(PagosGmailSync.id == sync_id)).scalars().first()
             if sync and sync.status == "running":
@@ -233,20 +235,22 @@ def confirmar_dia(body: ConfirmarDiaBody = Body(...), db: Session = Depends(get_
 def _find_most_recent_data(db: Session) -> tuple[Optional[str], Optional[datetime], list]:
     """
     Devuelve los ítems más recientes (acumulado), ordenados por fecha de creación ascendente.
-    Limitado a PAGOS_GMAIL_DOWNLOAD_EXCEL_MAX_ITEMS para evitar memoria/timeout con muchos datos.
+    Por defecto incluye toda la bandeja (hasta 500k items). Opcional: PAGOS_GMAIL_DOWNLOAD_EXCEL_MAX_ITEMS.
     Devuelve (sheet_name_ref, email_date_ref, items) o (None, None, []).
     """
     from app.core.config import settings
     from app.services.pagos_gmail.helpers import parse_date_from_sheet_name
-    max_items = getattr(settings, "PAGOS_GMAIL_DOWNLOAD_EXCEL_MAX_ITEMS", 5000) or 0
+    max_items = getattr(settings, "PAGOS_GMAIL_DOWNLOAD_EXCEL_MAX_ITEMS", 0) or 0
     if max_items <= 0:
-        max_items = 50000  # tope razonable si se desactiva
+        max_items = 500000  # toda la bandeja en un solo archivo
+    logger.info("[PAGOS_GMAIL] [ETAPA] _find_most_recent_data max_items=%s", max_items)
     rows = db.execute(
         select(PagosGmailSyncItem)
         .order_by(desc(PagosGmailSyncItem.created_at))
         .limit(max_items)
     ).scalars().all()
-    items = list(reversed(rows))  # más recientes primero en el límite, pero orden ascendente en Excel
+    items = list(reversed(rows))
+    logger.info("[PAGOS_GMAIL] [ETAPA] _find_most_recent_data items_en_bd=%s devueltos=%s", len(rows), len(items))  # más recientes primero en el límite, pero orden ascendente en Excel
     if not items:
         return None, None, []
     last_sheet_name = items[-1].sheet_name or ""
@@ -293,14 +297,17 @@ def download_excel(fecha: Optional[str] = None, db: Session = Depends(get_db)):
     from openpyxl import Workbook
     items: list = []
     sheet_date: Optional[datetime] = None
+    logger.info("[PAGOS_GMAIL] [ETAPA] download-excel inicio fecha=%s", fecha or "(sin fecha = toda la bandeja)")
 
     if fecha and fecha.strip():
         # Fecha explícita: buscar ese día concreto
         fecha_date = _sheet_date_from_fecha(fecha)
         _, items = _find_sheet_by_fecha(db, fecha_date)
+        logger.info("[PAGOS_GMAIL] [ETAPA] download-excel por fecha items=%s", len(items))
         sheet_date = fecha_date
     else:
         # Sin fecha: lote más reciente en BD (backlog de cualquier antigüedad)
+        logger.info("[PAGOS_GMAIL] [ETAPA] download-excel sin fecha items=%s", len(items))
         _, sheet_date, items = _find_most_recent_data(db)
 
     if not items:
@@ -362,6 +369,7 @@ def download_excel(fecha: Optional[str] = None, db: Session = Depends(get_db)):
 
     date_str = sheet_date.strftime("%Y-%m-%d") if sheet_date else "sin-fecha"
     filename = f"Pagos_Gmail_{date_str}.xlsx"
+    logger.info("[PAGOS_GMAIL] [ETAPA] download-excel OK filas=%s filename=%s", len(items), filename)
     return StreamingResponse(
         buf,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
