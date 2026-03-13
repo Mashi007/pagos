@@ -1,4 +1,4 @@
-"""
+﻿"""
 Aplicación principal FastAPI
 """
 import time
@@ -9,9 +9,10 @@ from datetime import datetime
 # Evitar ruido en logs por versiones de urllib3/chardet (dependencias de requests)
 warnings.filterwarnings("ignore", message=".*urllib3.*chardet.*", category=UserWarning, module="requests")
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.api.v1 import api_router
 from app.middleware.audit_middleware import AuditMiddleware
@@ -53,6 +54,16 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc"
 )
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Respuesta de error unificada: detail + code para el frontend."""
+    from app.core.exceptions import error_response_body
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=error_response_body(exc.detail, exc.status_code),
+    )
+
 
 # Log de cada request (método, ruta, status, tiempo) para depuración en Render
 app.add_middleware(RequestLogMiddleware)

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tipos comunes para manejo de errores
  * Evita el uso de 'any' en bloques catch
  */
@@ -38,13 +38,13 @@ export function getErrorMessage(error: unknown): string {
     return error.message
   }
   if (isAxiosError(error)) {
-    const responseData = error.response?.data as { detail?: string; message?: string } | undefined
-    return (
-      responseData?.detail ||
-      responseData?.message ||
-      error.message ||
-      'Error de red'
-    )
+    const responseData = error.response?.data as { detail?: string | unknown; message?: string; code?: string } | undefined
+    const d = responseData?.detail
+    let detail: string | undefined
+    if (typeof d === 'string') detail = d
+    else if (Array.isArray(d)) detail = d.map((e: { msg?: string }) => e?.msg).filter(Boolean).join('; ') || undefined
+    else detail = responseData?.message
+    return detail || error.message || 'Error de red'
   }
   if (typeof error === 'string') {
     return error
@@ -59,6 +59,17 @@ export function getErrorDetail(error: unknown): string | undefined {
   if (isAxiosError(error)) {
     const data = error.response?.data as { detail?: string } | undefined
     return typeof data?.detail === 'string' ? data.detail : undefined
+  }
+  return undefined
+}
+
+/**
+ * Obtiene el codigo de error del backend (formato unificado: UNAUTHORIZED, NOT_FOUND, etc.)
+ */
+export function getErrorCode(error: unknown): string | undefined {
+  if (isAxiosError(error)) {
+    const data = error.response?.data as { code?: string } | undefined
+    return typeof data?.code === 'string' ? data.code : undefined
   }
   return undefined
 }
