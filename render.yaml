@@ -23,7 +23,7 @@ services:
     buildCommand: pip install -r ../requirements.txt
     # graceful-timeout: tiempo para que los workers terminen peticiones al recibir SIGTERM
     # (reduce "Error while closing socket [Errno 9] Bad file descriptor" en shutdown)
-    startCommand: gunicorn app.main:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --graceful-timeout 30 --worker-class uvicorn.workers.UvicornWorker
+    startCommand: alembic upgrade head && gunicorn app.main:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --graceful-timeout 30 --worker-class uvicorn.workers.UvicornWorker
     rootDir: backend
     healthCheckPath: /health/db
     envVars:
