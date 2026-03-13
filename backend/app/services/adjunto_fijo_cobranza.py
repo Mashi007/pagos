@@ -1,4 +1,4 @@
-"""
+﻿"""
 Adjunto PDF fijo para emails de cobranza.
 
 Se anexa siempre el mismo archivo PDF sin modificaciones (documento estÃ¡tico).
@@ -157,13 +157,17 @@ def get_adjuntos_fijos_por_caso(db, tipo_caso: str):
         if not path.startswith(base_dir) or ".." in ruta_rel:
             continue
         if not os.path.isfile(path):
-            logger.warning("Adjunto por caso %s no encontrado: %s", tipo_caso, path[:200])
+            logger.warning("Adjunto por caso %s no encontrado (en Render usar disco persistente). base_dir=%s path=%s", tipo_caso, base_dir[:120], path[:200])
             continue
         try:
             with open(path, "rb") as f:
                 result.append((nombre, f.read()))
         except Exception as e:
             logger.warning("Error leyendo adjunto %s: %s", path[:200], e)
+    if lista and not result:
+        logger.warning("Adjuntos fijos caso %s: config tiene entradas pero ningun archivo encontrado. base_dir=%s (Render: usar disco persistente)", tipo_caso, base_dir[:150])
+    elif result:
+        logger.info("Adjuntos fijos caso %s: %d archivo(s) anexados", tipo_caso, len(result))
     return result
 
 def verificar_ruta_adjunto_fijo(db) -> Tuple[bool, Optional[str]]:
