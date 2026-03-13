@@ -185,6 +185,11 @@ def construir_contexto_cobranza(
             })
             total_adeudado += m
 
+    cuotas_vencidas_count = len(lista)
+    fechas_cuotas_pendientes_str = ", ".join(
+        _format_fecha(c.get("fecha_vencimiento")) for c in lista
+    )
+
     return {
         "CLIENTES.TRATAMIENTO": tratamiento,
         "CLIENTES.NOMBRE_COMPLETO": cliente_nombres or "",
@@ -196,5 +201,7 @@ def construir_contexto_cobranza(
         "FECHA_CARTA": f,
         "CUOTAS.VENCIMIENTOS": lista,
         "cuotas_vencidas": lista,
+        "CUOTAS_VENCIDAS": cuotas_vencidas_count,
+        "FECHAS_CUOTAS_PENDIENTES": fechas_cuotas_pendientes_str,
         "LOGO_URL": url_logo,
     }

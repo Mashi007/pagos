@@ -5,6 +5,7 @@ import { PlantillaAnexoPdf } from '../components/notificaciones/PlantillaAnexoPd
 import { VinculacionPlantillaAnexoPdf } from '../components/notificaciones/VinculacionPlantillaAnexoPdf'
 import { DocumentosPdfAnexos } from '../components/notificaciones/DocumentosPdfAnexos'
 import { DocumentosAlmacenadosPorPestana } from '../components/notificaciones/DocumentosAlmacenadosPorPestana'
+import { PlantillasGuardadasLista } from '../components/notificaciones/PlantillasGuardadasLista'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Button } from '../components/ui/button'
 import { FileText, Link as LinkIcon, ChevronLeft, Download, CheckCircle2, ChevronDown, ChevronUp, Bell } from 'lucide-react'
@@ -128,6 +129,9 @@ export function Plantillas() {
         </TabsContent>
 
         <TabsContent value={SUBTAB_ANEXO_PDF} className="mt-6 min-h-[400px]">
+          <div className="mb-6">
+            <PlantillasGuardadasLista className="border-blue-200 bg-blue-50/30" />
+          </div>
           <VinculacionPlantillaAnexoPdf />
           <PlantillaAnexoPdf />
           <div className="mt-6">
@@ -140,6 +144,9 @@ export function Plantillas() {
         </TabsContent>
 
         <TabsContent value={SUBTAB_DOCUMENTOS_PDF} className="mt-6 min-h-[400px]">
+          <div className="mb-6">
+            <PlantillasGuardadasLista className="border-blue-200 bg-blue-50/30" />
+          </div>
           <DocumentosPdfAnexos />
         </TabsContent>
       </Tabs>

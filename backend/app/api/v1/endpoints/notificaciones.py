@@ -95,6 +95,8 @@ _VARS_COBRANZA = (
     "{{CLIENTES.CEDULA}}",
     "{{TABLA_CUOTAS_PENDIENTES}}",
     "{{#CUOTAS.VENCIMIENTOS}}",
+    "{{CUOTAS_VENCIDAS}}",
+    "{{FECHAS_CUOTAS_PENDIENTES}}",
 )
 
 
@@ -172,6 +174,8 @@ def _contexto_cobranza_placeholder() -> dict:
         "cuotas_vencidas": [
             {"numero": "{{CUOTA.NUMERO}}", "fecha_vencimiento": "{{CUOTA.FECHA_VENCIMIENTO}}", "monto": "{{CUOTA.MONTO}}"}
         ],
+        "CUOTAS_VENCIDAS": "{{CUOTAS_VENCIDAS}}",
+        "FECHAS_CUOTAS_PENDIENTES": "{{FECHAS_CUOTAS_PENDIENTES}}",
     }
 
 
