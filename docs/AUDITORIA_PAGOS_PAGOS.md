@@ -1,258 +1,226 @@
-# Auditoría Completa: https://rapicredit.onrender.com/pagos/pagos
+# Auditoría completa: https://rapicredit.onrender.com/pagos/pagos
 
-**Fecha:** 18 de febrero de 2025  
-**URL objetivo:** https://rapicredit.onrender.com/pagos/pagos  
-**Alcance:** Endpoints, conexión BD, código backend/frontend, seguridad y calidad.
-
----
-
-## 1. Resumen Ejecutivo
-
-| Área | Estado | Observaciones |
-|------|--------|---------------|
-| **Conexión BD** | ✅ OK | `get_db`, `pool_pre_ping`, health `/health/db` |
-| **Endpoints pagos** | ✅ OK | CRUD real, KPIs, stats, upload, conciliación, aplicar-cuotas |
-| **Datos reales** | ✅ Cumple | Todos los endpoints usan `Depends(get_db)` y tabla `pagos` |
-| **Autenticación** | ✅ Protegido | `APIRouter(dependencies=[Depends(get_current_user)])` |
-| **Frontend-backend** | ✅ Alineado | pagoService mapea correctamente a la API |
-| **Calidad código** | ⚠️ Mejorable | Logs de depuración en producción, validación PagoCreate |
+**Alcance:** Pantalla Pagos (ruta interna `/pagos`, URL completa `/pagos/pagos` con base path `/pagos`).  
+**Revisión:** Línea a línea de frontend (rutas, página, listado, servicios) y backend (endpoints de pagos y pagos con errores).  
+**Fecha:** 2025-03-12.
 
 ---
 
-## 2. Conexión a Base de Datos
+## 1. Resumen ejecutivo
 
-### 2.1 Configuración
+| Área | Estado | Hallazgos críticos | Hallazgos menores |
+|-----|--------|-------------------|-------------------|
+| Rutas y acceso | ✅ | 0 | 0 |
+| Frontend PagosPage / PagosList | ✅ | 0 | 2 (logs, encoding) |
+| Servicios (pagoService, pagoConErrorService) | ✅ | 0 | 0 |
+| Backend GET/POST/PUT/DELETE pagos | ✅ | 0 | 1 (validación monto en POST) |
+| Backend pagos_con_errores | ✅ | 0 | 0 |
+| Seguridad (auth, inyección, duplicados) | ✅ | 0 | 0 |
 
-| Archivo | Variable | Descripción |
-|---------|----------|-------------|
-| `backend/app/core/config.py` | `DATABASE_URL` | Obligatoria, sin valor por defecto. Carga desde `.env` o variables de entorno (Render). |
-| `backend/app/core/database.py` | `_db_url` | Normaliza `postgres://` → `postgresql://` (compatibilidad Render). |
-
-### 2.2 Engine y sesión
-
-```python
-# backend/app/core/database.py
-engine = create_engine(
-    _db_url,
-    pool_pre_ping=True,   # Verifica conexión antes de usar
-    pool_size=5,
-    max_overflow=10,
-)
-SessionLocal = sessionmaker(
-    autocommit=False,
-    autoflush=False,
-    bind=engine,
-    expire_on_commit=False,  # Evita F405 en serialización
-)
-```
-
-### 2.3 Health check BD
-
-| Endpoint | Método | Auth | Descripción |
-|----------|--------|------|-------------|
-| `/health` | GET | No | Estado general |
-| `/health/db` | GET | No | `SELECT 1` contra BD; 503 si falla |
-
-**Recomendación:** Usar `GET /health/db` para validar conexión en Render o monitoreo.
-
-### 2.4 Startup con reintentos
-
-- `_startup_db_with_retry()` en `main.py`: hasta 5 intentos con 2 s de espera.
-- Evita fallos por BD aún no lista en Render al despertar el servicio.
+**Conclusión:** La funcionalidad está bien implementada, con datos reales desde BD, autenticación en todos los endpoints de pagos y reglas de negocio (no duplicados en Nº documento, conciliación, aplicar a cuotas). Se recomiendan correcciones menores (validación de monto en POST, limpieza de logs y encoding).
 
 ---
 
-## 3. Endpoints de Pagos (`/api/v1/pagos`)
+## 2. URL y flujo de acceso
 
-### 3.1 Inventario completo
+- **URL pública:** `https://rapicredit.onrender.com/pagos/pagos`
+- **Base path SPA:** `/pagos` (Vite `base: '/pagos/'`, `server.js` FRONTEND_BASE).
+- **Ruta interna React:** `path="pagos"` con `<Route index element={<PagosPage />} />` y `path=":id"` también a `PagosPage`.
+- **Autenticación:** Sin token, el usuario es redirigido a `/login`; con token puede acceder a `/pagos` (índice = lista de pagos).
 
-| Método | Ruta | BD | Descripción |
-|--------|------|-----|-------------|
-| GET | `/` o `` | ✅ | Listado paginado (cedula, estado, fecha_desde, fecha_hasta, analista) |
-| GET | `/ultimos` | ✅ | Resumen últimos pagos por cédula (PagosListResumen) |
-| GET | `/kpis` | ✅ | KPIs mes: montoACobrarMes, montoCobradoMes, morosidadMensualPorcentaje, clientesEnMora, clientesAlDia |
-| GET | `/stats` | ✅ | total_pagos, total_pagado, pagos_por_estado, cuotas_pagadas/pendientes/atrasadas, pagos_hoy |
-| GET | `/{pago_id}` | ✅ | Detalle de pago por ID |
-| POST | `/` | ✅ | Crear pago (validación Nº documento único) |
-| POST | `/upload` | ✅ | Carga masiva Excel (.xlsx, .xls) |
-| POST | `/conciliacion/upload` | ✅ | Conciliación Excel (Fecha Depósito, Nº Documento) |
-| POST | `/{pago_id}/aplicar-cuotas` | ✅ | Aplicar monto del pago a cuotas del préstamo |
-| PUT | `/{pago_id}` | ✅ | Actualizar pago |
-| DELETE | `/{pago_id}` | ✅ | Eliminar pago |
+**Verificación línea a línea (App.tsx):**
 
-### 3.2 Filtros soportados (GET /pagos)
-
-| Parámetro | Tipo | Descripción |
-|-----------|------|-------------|
-| `page` | int | Página (default 1) |
-| `per_page` | int | Por página (1-100, default 20) |
-| `cedula` | string | Búsqueda en cédula_cliente (ILIKE) |
-| `estado` | string | PENDIENTE, ATRASADO, REVISAR, etc. |
-| `fecha_desde` | string | ISO date (YYYY-MM-DD) |
-| `fecha_hasta` | string | ISO date (YYYY-MM-DD) |
-| `analista` | string | Filtro vía join con Prestamo |
-
-### 3.3 Reglas de negocio implementadas
-
-- **Nº documento único:** No se permite repetir `numero_documento` en BD ni en carga masiva.
-- **Clientes ACTIVOS:** KPIs y stats filtran por `Cliente.estado == "ACTIVO"` y `Prestamo.estado == "APROBADO"`.
-- **Zona horaria:** `TZ_NEGOCIO = "America/Caracas"` para fechas de hoy e inicio de mes.
-- **Aplicar pago a cuotas:** Orden por `numero_cuota`; cubre parcial o total; estados PAGADO, PAGO_ADELANTADO, PENDIENTE.
+- Líneas 132–140: índice `/` → si no autenticado `Navigate to="/login"`, si autenticado `Navigate to="/dashboard/menu"`.
+- Líneas 186–189: `<Route path="pagos">` con `index` → `PagosPage`, `path=":id"` → `PagosPage` (permite futura vista detalle por id).
+- Comportamiento correcto: la URL `/pagos/pagos` muestra la lista de pagos solo si hay sesión.
 
 ---
 
-## 4. Modelo y esquemas
+## 3. Frontend – PagosPage.tsx
 
-### 4.1 Modelo (`backend/app/models/pago.py`)
+- **Líneas 1–4:** Imports (CreditCard, Card, PagosList). Correcto.
+- **Líneas 5–11:** Título "Pagos" y estructura. Correcto.
+- **Líneas 13–23:** Card informativa "Gestión de pagos". Correcto.
+- **Línea 25:** `<PagosList />` — componente principal que contiene KPIs, filtros, tabla, modales. Correcto.
 
-| Columna | Tipo | Notas |
-|---------|------|-------|
-| id | Integer | PK, autoincrement |
-| prestamo_id | Integer | FK prestamos.id, nullable |
-| cedula_cliente | String(20) | Mapeado en BD como `cedula` |
-| fecha_pago | DateTime | Obligatorio |
-| monto_pagado | Numeric(14,2) | Obligatorio |
-| numero_documento | String(100) | UNIQUE |
-| institucion_bancaria | String(255) | Nullable |
-| estado | String(30) | Nullable |
-| fecha_registro | DateTime | server_default=func.now() |
-| fecha_conciliacion | DateTime | Nullable |
-| conciliado | Boolean | Nullable |
-| referencia_pago | String(100) | NOT NULL, server_default |
-
-### 4.2 Schemas Pydantic
-
-- `PagoCreate`: cedula_cliente, prestamo_id, fecha_pago, monto_pagado, numero_documento, institucion_bancaria, notas.
-- `PagoUpdate`: Todos los campos opcionales.
-- `PagoResponse`: Respuesta completa para GET y listado.
-
-### 4.3 Observación
-
-- `PagoCreate.numero_documento` en schema es `str` sin `Optional`; puede ser vacío. El backend valida duplicados antes de insertar.
+**Hallazgos:** Ninguno crítico.
 
 ---
 
-## 5. Frontend
+## 4. Frontend – PagosList.tsx (línea a línea)
 
-### 5.1 Servicio (`frontend/src/services/pagoService.ts`)
+### 4.1 Estado y configuración (líneas 44–79)
 
-| Método frontend | Endpoint backend | Estado |
-|-----------------|-----------------|--------|
-| `getAllPagos` | GET /pagos | ✅ |
-| `createPago` | POST /pagos/ | ✅ |
-| `updatePago` | PUT /pagos/{id} | ✅ |
-| `deletePago` | DELETE /pagos/{id} | ✅ |
-| `aplicarPagoACuotas` | POST /pagos/{id}/aplicar-cuotas | ✅ |
-| `uploadExcel` | POST /pagos/upload | ✅ |
-| `uploadConciliacion` | POST /pagos/conciliacion/upload | ✅ |
-| `getStats` | GET /pagos/stats | ✅ |
-| `getKPIs` | GET /pagos/kpis | ✅ |
-| `getUltimosPagos` | GET /pagos/ultimos | ✅ |
-| `descargarPDFPendientes` | GET /reportes/cliente/{cedula}/pendientes.pdf | ✅ |
-| `descargarPDFAmortizacion` | GET /reportes/cliente/{cedula}/amortizacion.pdf | ✅ |
+- **44:** `SHOW_DESCARGA_EXCEL_EN_SUBMENU = false` — opción "Descargar Excel" (Gmail) oculta en submenú. Correcto.
+- **47–60:** `searchParams`, `activeTab`, `page`, `perPage`, `filters` (conciliado por defecto `'si'`). Coherente con backend.
+- **61–78:** Estados de modales, edición, acciones, Gmail, importación Cobros. Correcto.
+- **81–94:** `useGmailPipeline` con callback para mostrar diálogo de confirmar día. Correcto.
 
-### 5.2 Componentes que usan pagoService
+### 4.2 Efectos y handlers (líneas 96–259)
 
-- `PagosList.tsx` – Listado principal, paginación, filtros, KPIs.
-- `PagosListResumen.tsx` – Últimos pagos por cédula, PDF pendientes.
-- `PagosKPIsNuevo.tsx` – KPIs (usePagosKPIs).
-- `DashboardPagos.tsx` – Stats (getStats).
-- `RegistrarPagoForm.tsx` – Crear/editar pago.
-- `ExcelUploader.tsx` – Carga masiva.
-- `ConciliacionExcelUploader.tsx` – Conciliación.
-- `TablaAmortizacionCompleta.tsx` – getAllPagos, updatePago, deletePago, aplicarPagoACuotas.
-- `PagosBuscadorAmortizacion.tsx` – PDF amortización.
+- **96–106:** `useEffect` que carga estado Gmail y muestra diálogo si hay datos; segundo `useEffect` al abrir popover. Correcto.
+- **115–138:** `handleImportarDesdeCobros` — invalida queries y muestra toast. Correcto.
+- **140–168:** `handleDescargarExcelRevisionPagos` — exporta pagos con error a Excel. Uso de `createAndDownloadExcel` y mapeo de fechas correcto.
+- **171–196:** Conteo de filtros activos, `handleClearFilters`, `handleRevisarPagos` (sin_prestamo + conciliado all). Correcto.
+- **199–246:** `handleExportRevisarExcel` — exporta y luego llama a `eliminarPorDescarga(ids)`. **Nota:** borra de la lista tras exportar; es comportamiento esperado según diseño.
+- **249–256:** `useEffect` para `?revisar=1` — aplica filtros y limpia query. Correcto.
 
-### 5.3 Rutas de la app
+### 4.3 Query principal (líneas 258–272)
 
-- **URL producción:** `/pagos/pagos` (basename `/pagos`, ruta `pagos`).
-- **App.tsx:** `path="pagos"` → `PagosPage` → `PagosList`.
+- **258:** `esRevisarPagos = filters.sin_prestamo === 'si'`.
+- **259–269:** `useQuery` con clave según `esRevisarPagos` (`pagos-con-errores` vs `pagos`), `queryFn` que llama a `pagoConErrorService.getAll` o `pagoService.getAllPagos`. `staleTime: 15_000`, `refetchOnWindowFocus: false` para no interrumpir carga masiva. Correcto.
+- **270–272:** `handleFilterChange` convierte `"all"` a cadena vacía. Correcto.
 
----
+### 4.4 Tabla y acciones (líneas 461–600)
 
-## 6. Seguridad
+- **469:** `data.pagos.map((pago: Pago)` — en modo "Revisar Pagos" los ítems son `PagoConError`; la estructura de respuesta es la misma (`pagos`, `total`, etc.). Correcto.
+- **484:** Monto formateado con `toFixed(2)` y fallback a `parseFloat`. Correcto.
+- **506:** Eliminar: usa `window.confirm` y según `esRevisarPagos` llama a `pagoConErrorService.delete` o `pagoService.deletePago`. Invalidaciones de queries correctas.
+- **534–563:** Conciliar: Sí/No con `updateConciliado` y opcionalmente `aplicarPagoACuotas`. Invalidaciones correctas.
 
-### 6.1 Autenticación
+### 4.5 Hallazgos en PagosList
 
-- Todos los endpoints de pagos usan `router = APIRouter(dependencies=[Depends(get_current_user)])`.
-- Requiere `Authorization: Bearer <token>` válido.
+1. **Líneas 614–639 (onSuccess de RegistrarPagoForm):** Varios `console.log` con emojis que pueden verse mal por encoding (ej. `ðŸ"„`, `âœ…`, `âŒ`) y no aportan en producción.  
+   **Recomendación:** Eliminar o reemplazar por un logger condicional (solo en desarrollo).
 
-### 6.2 Variables de entorno
-
-| Variable | Uso |
-|----------|-----|
-| `DATABASE_URL` | Conexión PostgreSQL (obligatoria) |
-| `SECRET_KEY` | JWT (obligatoria, ≥32 caracteres) |
-| `CORS_ORIGINS` | Incluye `https://rapicredit.onrender.com` |
-
-### 6.3 Proxy y API
-
-- Frontend en producción usa `API_URL = ''` (rutas relativas).
-- `server.js` hace proxy de `/api/*` hacia `API_BASE_URL` (backend).
-- En Render: `API_BASE_URL` debe apuntar al backend (ej. `https://pagos-backend.onrender.com` o mismo dominio si está unificado).
+2. **Mismo bloque:** Lógica de invalidación/refetch es correcta; el comentario "Iniciando actualización de dashboard" y los logs son redundantes para el usuario.
 
 ---
 
-## 7. Hallazgos y recomendaciones
+## 5. Frontend – pagoService.ts
 
-### 7.1 Prioridad alta
+- **40:** `baseUrl = '/api/v1/pagos'`. Correcto (rutas relativas con proxy en producción).
+- **42–67:** `getAllPagos`: parámetros `page`, `per_page`, filtros (`cedula`, `estado`, `fecha_desde`, `fecha_hasta`, `analista`, `conciliado`, `sin_prestamo`). Coinciden con backend. Correcto.
+- **69–72:** `moverARevisarPagos`. Correcto.
+- **75–95:** `getAllPagosForExport`: paginación interna de 100 por página. Correcto.
+- **97–98:** `createPago`. Correcto.
+- **105–110:** `createPagosBatch` (máx. 500). Correcto.
+- **112–120:** `updatePago`, `updateConciliado`, `deletePago`, `aplicarPagoACuotas`. Correcto.
+- **130–136:** `uploadExcel` con FormData. Correcto.
+- **143–152:** `importarDesdeCobros`. Correcto.
+- **154–167:** `uploadConciliacion`. Correcto.
+- **169–174:** `validarFilasBatch`. Correcto.
+- **176–193:** `guardarFilaEditable`. Correcto.
+- **195–218:** `getStats`, `getKPIs` con query params. Correcto.
+- **220–266:** `getUltimosPagos`, `descargarPDFPendientes`, `descargarPDFAmortizacion`. Correcto.
+- **294–353:** Gmail: `runGmailNow`, `getGmailStatus`, `confirmarDiaGmail`, `downloadGmailExcel` (validación de status 200 y blob). Correcto.
 
-1. ~~**Logs de depuración en producción**~~ ✅ Implementado
-   - `pagoService.ts`: eliminados `console.log` en `getAllPagos`.
-
-2. **Validación PagoCreate.numero_documento**
-   - El schema permite `numero_documento` vacío; el backend valida duplicados.
-   - **Acción:** Considerar `Optional[str]` en `PagoCreate` si el documento puede ser opcional.
-
-### 7.2 Prioridad media
-
-3. **Timeout extendido para pagos**
-   - `api.ts` ya incluye `/pagos/kpis` y `/pagos/stats` en `isSlowEndpoint` (60 s).
-   - **Estado:** OK.
-
-4. ~~**Manejo de errores en upload**~~ ✅ Implementado
-   - Backend devuelve `errores_total`, `errores_detalle_total`, `errores_truncados`.
-   - ExcelUploader muestra aviso cuando hay truncamiento (primeros 50 errores, 100 detalles).
-
-### 7.3 Prioridad baja
-
-5. **CORS:** Verificar que `https://rapicredit.onrender.com` esté en `CORS_ORIGINS` (config por defecto lo incluye).
-
-6. ~~**Health check**~~ ✅ Implementado
-   - `render.yaml`: `healthCheckPath: /health/db` para el servicio pagos-backend.
+**Hallazgos:** Ninguno.
 
 ---
 
-## 8. Checklist de verificación
+## 6. Frontend – pagoConErrorService.ts
 
-- [ ] `GET /health/db` responde 200 con `"database": "connected"`.
-- [ ] `GET /api/v1/pagos` devuelve datos reales (requiere auth).
-- [ ] La página `/pagos/pagos` carga sin errores 404 en consola.
-- [ ] Crear, editar y eliminar pago funcionan correctamente.
-- [ ] Filtros (cedula, estado, fechas, analista) funcionan.
-- [ ] KPIs y stats se actualizan correctamente.
-- [ ] Carga masiva Excel y conciliación funcionan.
-- [ ] Aplicar pago a cuotas actualiza correctamente las cuotas.
-- [ ] PDF pendientes y amortización por cédula funcionan.
+- **40:** `baseUrl = '/api/v1/pagos/con-errores'`. Correcto.
+- **42–68:** `getAll` con paginación y filtros. Correcto.
+- **71–80:** `getAllForExport` con query params. Correcto.
+- **83–107:** CRUD, `moverAPagosNormales`, `eliminarPorDescarga`, `moveToReviewPagos`. Correcto.
+
+**Hallazgos:** Ninguno.
 
 ---
 
-## 9. Referencias
+## 7. Backend – Orden de routers (api/v1/__init__.py)
 
-| Archivo | Descripción |
-|---------|-------------|
-| `backend/app/core/config.py` | Configuración |
-| `backend/app/core/database.py` | Conexión BD |
-| `backend/app/api/v1/endpoints/pagos.py` | Endpoints pagos |
-| `backend/app/models/pago.py` | Modelo Pago |
-| `backend/app/schemas/pago.py` | Schemas Pydantic |
-| `frontend/src/services/pagoService.ts` | Servicio frontend |
-| `frontend/src/hooks/usePagos.ts` | Hook usePagosKPIs |
-| `frontend/src/components/pagos/PagosList.tsx` | Listado UI |
-| Regla de workspace: `.cursor/rules/datos-reales-bd.mdc` | Datos reales |
+- **68–73:** Router `pagos_con_errores` con prefijo `/pagos/con-errores` está registrado **antes** que el router `pagos` (prefijo `/pagos`). Así, `GET /api/v1/pagos/con-errores` no se interpreta como `GET /api/v1/pagos/{pago_id}`. Correcto.
 
 ---
 
-## 10. Conclusión
+## 8. Backend – pagos.py (endpoints usados por /pagos/pagos)
 
-La ruta **https://rapicredit.onrender.com/pagos/pagos** cumple con la regla de datos reales: todos los endpoints usan `Depends(get_db)` y consultas reales a la tabla `pagos` y tablas relacionadas (cuotas, préstamos, clientes). La conexión a BD está configurada correctamente con pool, pre-ping y health check. El frontend está alineado con la API. Las mejoras sugeridas son eliminar logs de depuración en producción y revisar la validación de `numero_documento` en el schema.
+### 8.1 GET "" (listar_pagos) — líneas 238–306
+
+- **239–252:** Parámetros: `page`, `per_page` (1–100), `cedula`, `estado`, `fecha_desde`, `fecha_hasta`, `analista`, `conciliado`, `sin_prestamo`, `db`.
+- **254–258:** `sin_prestamo == "si"`: filtra `prestamo_id.is_(None)` y excluye IDs en `RevisarPago`. Correcto.
+- **259–263:** Filtro `conciliado` (si/no). Correcto.
+- **264–266:** `cedula` con `ilike(f"%{cedula.strip()}%")` — SQLAlchemy usa parámetros vinculados; no hay concatenación de SQL crudo. Seguro frente a SQL injection.
+- **267–269:** `estado` comparación por igualdad. Seguro.
+- **271–283:** `fecha_desde`/`fecha_hasta` con `date.fromisoformat` y `datetime.combine`. Manejo de `ValueError` con `pass` (ignora filtro si fecha inválida). Aceptable.
+- **288–289:** Con filtro `analista` se hace `join(Prestamo)`; `count_q` replica los mismos filtros. Correcto.
+- **290–292:** Orden `fecha_registro.desc(), id.desc()`, offset/limit. Respuesta con `pagos`, `total`, `page`, `per_page`, `total_pages`. Correcto.
+- **301–305:** En excepción se hace `db.rollback()` y se re-lanza HTTP 500. Correcto.
+
+**Hallazgos:** Ninguno crítico.
+
+### 8.2 POST "" (crear_pago) — líneas 1689–1773
+
+- **1692–1697:** Normalización de documento y comprobación de duplicado con `_numero_documento_ya_existe`; 409 si existe. Correcto.
+- **1704–1723:** Normalización de cédula, validación de `prestamo_id` en tabla `prestamos`, validación de cédula en `clientes` cuando hay préstamo. Correcto.
+- **1725–1744:** Creación de `Pago`, commit, aplicación a cuotas si `prestamo_id` y monto > 0. Correcto.
+- **1756–1765:** Manejo de `IntegrityError` (código 23505) → 409. Correcto.
+
+**Hallazgo menor:** No se valida el rango de `monto_pagado` (mínimo > 0, máximo según NUMERIC(14,2)). En `guardar_fila_editable` y en la carga por Excel se usa `_validar_monto`; en `crear_pago` y `actualizar_pago` no. Si se envía `monto_pagado=0` o negativo, Pydantic/Decimal puede aceptarlo y la BD podría almacenar 0 (o fallar según restricciones).  
+**Recomendación:** Añadir en `crear_pago` (y en `actualizar_pago` si se permite cambiar monto) una validación equivalente a `_validar_monto` (p. ej. 0.01 ≤ monto ≤ _MAX_MONTO_PAGADO).
+
+### 8.3 PUT "/{pago_id}" (actualizar_pago) — líneas 1776–1834
+
+- **1778–1781:** 404 si no existe.
+- **1783–1789:** Si se actualiza `numero_documento`, se comprueba duplicado con `exclude_pago_id`. Correcto.
+- **1791–1824:** Aplicación de campos (notas, institucion_bancaria, numero_documento, cedula_cliente, fecha_pago, conciliado, verificado_concordancia). Commit y manejo de IntegrityError. Correcto.
+- **1823–1832:** Si `aplicar_conciliado` y hay préstamo y monto > 0, se aplica a cuotas. Correcto.
+
+**Hallazgo:** Misma recomendación que en POST: validar monto si en el futuro se permite actualizar `monto_pagado`.
+
+### 8.4 DELETE "/{pago_id}" — líneas 1835–1843
+
+- **1837–1841:** Obtiene pago, 404 si no existe, `db.delete(row)`, commit. Correcto. No se revisan dependencias en `cuota_pagos`; el modelo debe definir ON DELETE adecuado (p. ej. SET NULL o CASCADE según diseño).
+
+### 8.5 Duplicados y helper
+
+- **1596–1606:** `_numero_documento_ya_existe`: usa `normalize_documento` y `select(Pago.id).where(Pago.numero_documento == num)`. Consulta parametrizada. Correcto.
+
+---
+
+## 9. Backend – pagos_con_errores.py
+
+- **74–131:** `listar_pagos_con_errores`: filtros y paginación análogos a pagos; `ilike` con parámetros. Correcto.
+- **134–165:** `crear_pago_con_error`: parseo de fecha, creación de `PagoConError`. Correcto.
+
+**Hallazgos:** Ninguno.
+
+---
+
+## 10. Esquemas y modelos
+
+- **schemas/pago.py:** `PagoCreate` con validadores de `numero_documento` (string) y `prestamo_id` (rango 1..PRESTAMO_ID_MAX). No hay validador de rango para `monto_pagado`. Coherente con el hallazgo de validación en backend.
+- **models/pago.py:** `monto_pagado = Column(Numeric(14, 2), nullable=False)`. Acepta 0; la regla de negocio "monto > 0" debería aplicarse en endpoint o schema.
+
+---
+
+## 11. Seguridad
+
+- **Autenticación:** Router de pagos y pagos_con_errores usan `dependencies=[Depends(get_current_user)]`. Correcto.
+- **SQL:** Filtros con SQLAlchemy (expresiones con columnas y parámetros). No hay concatenación de strings para SQL. Correcto.
+- **Duplicados:** Nº documento único en BD y comprobación en crear/actualizar. Correcto.
+- **Cédula:** Normalización (strip, uppercase) y existencia de cliente cuando hay préstamo. Correcto.
+
+---
+
+## 12. Checklist de verificación post-auditoría
+
+- [x] Ruta `/pagos/pagos` requiere autenticación.
+- [x] GET /api/v1/pagos devuelve datos reales desde tabla `pagos`.
+- [x] Filtros (cédula, estado, fechas, analista, conciliado, sin_prestamo) aplicados correctamente.
+- [x] POST /pagos valida duplicado por Nº documento (409).
+- [x] Orden de routers evita que `/pagos/con-errores` se confunda con `/{pago_id}`.
+- [ ] **Opcional:** Añadir validación de monto (min/max) en POST/PUT de pagos.
+- [ ] **Opcional:** Quitar o condicionar `console.log` en onSuccess de RegistrarPagoForm (PagosList).
+
+---
+
+## 13. Referencias de código
+
+| Archivo | Líneas relevantes |
+|---------|--------------------|
+| frontend/src/App.tsx | 132–140, 186–189 |
+| frontend/src/pages/PagosPage.tsx | 1–31 |
+| frontend/src/components/pagos/PagosList.tsx | 44–639 (estado, query, tabla, onSuccess) |
+| frontend/src/services/pagoService.ts | 39–353 |
+| frontend/src/services/pagoConErrorService.ts | 39–109 |
+| backend/app/api/v1/__init__.py | 68–78 |
+| backend/app/api/v1/endpoints/pagos.py | 238–306, 1689–1843, 1596–1606 |
+| backend/app/api/v1/endpoints/pagos_con_errores.py | 74–165 |
+| backend/app/schemas/pago.py | PagoCreate, PagoUpdate |
+| backend/app/models/pago.py | 1–35 |
+
+Esta auditoría verifica línea a línea la pantalla y los endpoints que sirven a **https://rapicredit.onrender.com/pagos/pagos**. La implementación es sólida; las mejoras sugeridas son menores y opcionales.

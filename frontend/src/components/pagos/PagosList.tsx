@@ -167,7 +167,7 @@ export function PagosList() {
       await createAndDownloadExcel(datos, 'Revisión pagos', nombre)
       toast.success('Excel descargado')
     } catch (err) {
-      console.error('Error exportando Revisión pagos:', err)
+      if (import.meta.env.DEV) console.error('Error al descargar Excel', err)
       toast.error('Error al descargar Excel')
     } finally {
       setIsExportingRevisionPagos(false)
@@ -242,7 +242,7 @@ export function PagosList() {
       queryClient.invalidateQueries({ queryKey: ['pagos-con-errores'], exact: false })
       toast.success(`${pagos.length} pagos exportados y eliminados de la lista`)
     } catch (err) {
-      console.error('Error exportando Revisar Pagos:', err)
+      if (import.meta.env.DEV) console.error('Error al exportar', err)
       toast.error('Error al exportar. Intenta de nuevo.')
     } finally {
       setIsExportingRevisar(false)
@@ -780,7 +780,7 @@ export function PagosList() {
                                             await queryClient.invalidateQueries({ queryKey: ['prestamos'], exact: false })
                                           } catch (error) {
                                             toast.error('Error al eliminar el pago')
-                                            console.error(error)
+                                            if (import.meta.env.DEV) console.error('Error al eliminar el pago', error)
                                           }
                                         }
                                       }}
@@ -803,7 +803,7 @@ export function PagosList() {
                                             await queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false })
                                           } catch (error) {
                                             toast.error('Error al actualizar conciliación')
-                                            console.error(error)
+                                            if (import.meta.env.DEV) console.error('Error al actualizar conciliación', error)
                                           } finally {
                                             setConciliandoId(null)
                                           }
@@ -843,7 +843,7 @@ export function PagosList() {
                                             await queryClient.invalidateQueries({ queryKey: ['prestamos'], exact: false })
                                           } catch (error) {
                                             toast.error('Error al actualizar conciliación')
-                                            console.error(error)
+                                            if (import.meta.env.DEV) console.error('Error al actualizar conciliación', error)
                                           } finally {
                                             setConciliandoId(null)
                                           }
@@ -916,16 +916,12 @@ export function PagosList() {
             setPagoEditando(null)
           }}
           onSuccess={async () => {
-            console.log('ðŸ”„ onSuccess llamado - Iniciando actualización de dashboard...')
             setShowRegistrarPago(false)
             setPagoEditando(null)
             try {
               // Invalidar todas las queries relacionadas con pagos primero
-              console.log('ðŸ”€ Invalidando queries de pagos...')
               await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
-              // Invalidar queries de KPIs y dashboard que puedan depender de pagos
-              console.log('ðŸ”€ Invalidando queries de KPIs y dashboard...')
-              await queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false }) // âœ… Invalidar específicamente pagos-kpis
+              await queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false })
               await queryClient.invalidateQueries({ queryKey: ['kpis'], exact: false })
               await queryClient.invalidateQueries({ queryKey: ['dashboard'], exact: false })
               await queryClient.invalidateQueries({ queryKey: ['kpis-principales-menu'], exact: false })
@@ -940,7 +936,6 @@ export function PagosList() {
               await queryClient.refetchQueries({ queryKey: ['pagos-kpis'], exact: false })
               // Refetch de todas las queries relacionadas con pagos (no solo activas)
               // Esto asegura que las queries se actualicen incluso si no están montadas
-              console.log('ðŸ” Ejecutando refetch de queries de pagos...')
               const refetchResult = await queryClient.refetchQueries({
                 queryKey: ['pagos'],
                 exact: false
@@ -951,10 +946,9 @@ export function PagosList() {
                 exact: false,
                 type: 'active'
               })
-              console.log('âœ… Refetch completado:', { refetchResult, activeRefetchResult })
               toast.success('Pago registrado exitosamente. El dashboard se ha actualizado.')
             } catch (error) {
-              console.error('âŒ Error actualizando dashboard:', error)
+              if (import.meta.env.DEV) console.error('Error actualizando dashboard:', error)
               toast.error('Pago registrado, pero hubo un error al actualizar el dashboard')
             }
           }}

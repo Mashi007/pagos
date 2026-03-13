@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader } from '../ui/card'
 import { Badge } from '../ui/badge'
 import { Link } from 'react-router-dom'
-import { FileText, Link2, Loader2, Settings } from 'lucide-react'
+import { FileText, Link as LinkIcon, Loader2, Settings } from 'lucide-react'
 import { emailConfigService } from '../../services/notificacionService'
 import { CRITERIOS } from './ConfiguracionNotificaciones'
 import type { ConfigEnvioItem } from './ConfiguracionNotificaciones'
@@ -67,7 +67,7 @@ export function VinculacionPlantillaAnexoPdf() {
       </CardHeader>
       <CardContent className="pt-0">
         <div className="flex items-center gap-2 text-sm text-gray-700 mb-2">
-          <Link2 className="h-4 w-4 text-blue-600 shrink-0" />
+          <LinkIcon className="h-4 w-4 text-blue-600 shrink-0" />
           <span className="font-medium">Vinculada a las siguientes pestañas:</span>
         </div>
         {cargando ? (

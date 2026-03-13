@@ -1722,13 +1722,19 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
                 status_code=404,
                 detail=f"No existe cliente con cedula {cedula_normalizada}"
             )
-    
+
+    # Validar monto (mismo criterio que carga Excel y guardar-fila-editable)
+    monto_raw = payload.monto_pagado
+    es_valido, monto_val, err_msg = _validar_monto(monto_raw)
+    if not es_valido:
+        raise HTTPException(status_code=400, detail=err_msg)
+
     try:
         row = Pago(
             cedula_cliente=cedula_normalizada,
             prestamo_id=payload.prestamo_id,
             fecha_pago=fecha_pago_ts,
-            monto_pagado=payload.monto_pagado,
+            monto_pagado=Decimal(str(round(monto_val, 2))),
             numero_documento=num_doc,
             institucion_bancaria=payload.institucion_bancaria.strip() if payload.institucion_bancaria else None,
             estado="PENDIENTE",
@@ -1797,6 +1803,11 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
             setattr(row, k, normalize_documento(v))
         elif k == "cedula_cliente" and v is not None:
             setattr(row, k, v.strip())
+        elif k == "monto_pagado" and v is not None:
+            es_valido, monto_val, err_msg = _validar_monto(v)
+            if not es_valido:
+                raise HTTPException(status_code=400, detail=err_msg)
+            setattr(row, k, Decimal(str(round(monto_val, 2))))
         elif k == "fecha_pago" and v is not None:
             setattr(row, k, datetime.combine(v, dt_time.min) if isinstance(v, date) and not isinstance(v, datetime) else v)
         elif k == "conciliado" and v is not None:
