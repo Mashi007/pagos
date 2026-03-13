@@ -5,7 +5,8 @@ import { PlantillaAnexoPdf } from '../components/notificaciones/PlantillaAnexoPd
 import { DocumentosPdfAnexos } from '../components/notificaciones/DocumentosPdfAnexos'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Button } from '../components/ui/button'
-import { FileText, Link, ChevronLeft, Download, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react'
+import { FileText, Link as LinkIcon, ChevronLeft, Download, CheckCircle2, ChevronDown, ChevronUp, Bell } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import type { NotificacionPlantilla } from '../services/notificacionService'
 
 const SUBTAB_CUERPO_EMAIL = 'cuerpo-email'
@@ -76,15 +77,28 @@ export function Plantillas() {
             )}
           </div>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleVolver}
-          className="flex items-center gap-2"
-        >
-          <ChevronLeft className="h-4 w-4" />
-          Otras secciones de Configuración
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="default"
+            size="sm"
+            asChild
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700"
+          >
+            <Link to="/notificaciones">
+              <Bell className="h-4 w-4" />
+              Ir a Notificaciones
+            </Link>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleVolver}
+            className="flex items-center gap-2"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Otras secciones de Configuración
+          </Button>
+        </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
@@ -98,7 +112,7 @@ export function Plantillas() {
             Plantilla anexo PDF
           </TabsTrigger>
           <TabsTrigger value={SUBTAB_DOCUMENTOS_PDF}>
-            <Link className="h-4 w-4 mr-2" />
+            <LinkIcon className="h-4 w-4 mr-2" />
             Documentos PDF anexos
           </TabsTrigger>
         </TabsList>

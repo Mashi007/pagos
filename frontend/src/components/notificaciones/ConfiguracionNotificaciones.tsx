@@ -116,7 +116,8 @@ export function ConfiguracionNotificaciones() {
       cco: Array.isArray(c.cco) ? c.cco : [],
       plantilla_id: c.plantilla_id ?? null,
       programador: c.programador ?? HORA_DEFAULT,
-      incluir_pdf_anexo: c.incluir_pdf_anexo !== false,
+      // PDF = Carta_Cobranza (pestaña 2). Por defecto no; marcar para incluir. Adj. = documentos subidos (pestaña 3).
+      incluir_pdf_anexo: c.incluir_pdf_anexo === true,
       incluir_adjuntos_fijos: c.incluir_adjuntos_fijos !== false,
     }
   }
@@ -159,7 +160,7 @@ export function ConfiguracionNotificaciones() {
         const c = getConfig(tipo)
         ;(payload as Record<string, ConfigEnvioItem>)[tipo] = {
           ...c,
-          incluir_pdf_anexo: c.incluir_pdf_anexo !== false,
+          incluir_pdf_anexo: c.incluir_pdf_anexo === true,
           incluir_adjuntos_fijos: c.incluir_adjuntos_fijos !== false,
         }
       })
@@ -408,7 +409,7 @@ export function ConfiguracionNotificaciones() {
               <th className="text-left py-3 px-4 font-semibold text-gray-700">Caso</th>
               <th className="text-left py-3 px-4 font-semibold text-gray-700">Plantilla</th>
               <th className="text-center py-3 px-4 font-semibold text-gray-700 w-20">Envío</th>
-              <th className="text-center py-3 px-4 font-semibold text-gray-700 w-20" title="Incluir PDF anexo (carta cobranza)" aria-label="Incluir PDF anexo (carta cobranza)">PDF</th>
+              <th className="text-center py-3 px-4 font-semibold text-gray-700 w-20" title="Incluir Carta_Cobranza.pdf (generada desde Configuración → Plantillas → Plantilla anexo PDF). Desmarca para usar solo tus PDFs subidos en Documentos PDF anexos." aria-label="Incluir carta cobranza PDF">PDF</th>
               <th className="text-center py-3 px-4 font-semibold text-gray-700 w-20" title="Incluir documentos PDF fijos asignados a esta pestaña (Configuración → Plantillas → Documentos PDF anexos)" aria-label="Incluir documentos PDF fijos de esta pestaña">Adj.</th>
               <th className="text-left py-3 px-4 font-semibold text-gray-700 w-32">Opciones</th>
             </tr>
@@ -459,10 +460,10 @@ export function ConfiguracionNotificaciones() {
                   <td className="py-3 px-4 text-center">
                     <input
                       type="checkbox"
-                      checked={config.incluir_pdf_anexo !== false}
-                      onChange={() => setConfig(tipo, { incluir_pdf_anexo: config.incluir_pdf_anexo === false })}
+                      checked={config.incluir_pdf_anexo === true}
+                      onChange={() => setConfig(tipo, { incluir_pdf_anexo: !config.incluir_pdf_anexo })}
                       disabled={!config.habilitado}
-                      title="Incluir PDF anexo (carta cobranza)"
+                      title="Incluir Carta_Cobranza.pdf (Plantilla anexo PDF). Desmarca para enviar solo tus PDFs de Documentos PDF anexos."
                       className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
                   </td>

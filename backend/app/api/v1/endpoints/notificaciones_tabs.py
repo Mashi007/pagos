@@ -112,7 +112,7 @@ def _enviar_correos_items(
             plantilla = db.get(PlantillaNotificacion, plantilla_id)
             need_ctx = (
                 (plantilla and getattr(plantilla, "tipo", None) == "COBRANZA")
-                or (tipo_cfg.get("incluir_pdf_anexo", True) is not False)
+                or (tipo_cfg.get("incluir_pdf_anexo", False) is True)
                 or (plantilla and plantilla_usa_variables_cobranza(plantilla))
             )
             if need_ctx:
@@ -134,8 +134,9 @@ def _enviar_correos_items(
                 getattr(plantilla, "tipo", None) == "COBRANZA" or plantilla_usa_variables_cobranza(plantilla)
             ):
                 body_html = cuerpo  # cuerpo renderizado con variables cobranza es HTML
-        # Por defecto incluir PDF y adjuntos fijos si no está explícitamente en False (compatibilidad con config antigua)
-        incluir_pdf_anexo = tipo_cfg.get("incluir_pdf_anexo", True) is not False
+        # PDF = Carta_Cobranza.pdf (generada desde Plantilla anexo PDF, pestaña 2). Por defecto no se adjunta; marcar "PDF" para incluirla.
+        # Adj. = documentos subidos en Documentos PDF anexos (pestaña 3). Por defecto sí se incluyen si están asignados.
+        incluir_pdf_anexo = tipo_cfg.get("incluir_pdf_anexo", False) is True
         incluir_adjuntos_fijos = tipo_cfg.get("incluir_adjuntos_fijos", True) is not False
         if incluir_pdf_anexo or incluir_adjuntos_fijos:
             try:
