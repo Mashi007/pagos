@@ -65,8 +65,9 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
     batchProgress,
   } = useExcelUploadPagos(props)
 
+  const totalCargadas = excelData.length
   const validCount = getValidRows().length
-  const errorCount = excelData.filter((r) => r._hasErrors).length
+  const invalidCount = excelData.filter((r) => r._hasErrors).length
 
   return (
     <motion.div
@@ -102,6 +103,34 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
             <Button onClick={onClose} variant="ghost" size="sm" className="text-white hover:bg-white/20 p-2">
               <X className="h-5 w-5" />
             </Button>
+          </div>
+          {/* Indicadores: filas cargadas, válidas, inválidas (varían al editar y validar) */}
+          <div className="mt-4 flex flex-wrap items-center gap-4 rounded-lg bg-white/15 px-4 py-2 text-sm">
+            <span className="font-medium text-green-100">Indicadores:</span>
+            <span className="flex items-center gap-1.5">
+              <span className="text-green-100">Filas cargadas:</span>
+              <strong className="text-white tabular-nums">{totalCargadas}</strong>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="text-green-100">Válidas:</span>
+              <strong className="text-white tabular-nums">{validCount}</strong>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="text-green-100">Inválidas:</span>
+              <strong className="text-white tabular-nums">{invalidCount}</strong>
+            </span>
+            {savedRows.size > 0 && (
+              <span className="flex items-center gap-1.5">
+                <span className="text-green-100">Guardadas:</span>
+                <strong className="text-white tabular-nums">{savedRows.size}</strong>
+              </span>
+            )}
+            {enviadosRevisar.size > 0 && (
+              <span className="flex items-center gap-1.5">
+                <span className="text-green-100">En Revisar Pagos:</span>
+                <strong className="text-white tabular-nums">{enviadosRevisar.size}</strong>
+              </span>
+            )}
           </div>
         </div>
 
@@ -151,17 +180,16 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
               <CardContent className="pt-8 pb-8 text-center space-y-4">
                 <CheckCircle className="h-16 w-16 mx-auto text-green-500" />
                 <h3 className="text-xl font-bold text-green-800">¡Procesamiento completado!</h3>
-                <div className="flex justify-center gap-6 text-sm mt-2">
-                  {savedRows.size > 0 && (
-                    <span className="bg-green-100 text-green-800 px-4 py-2 rounded-full font-semibold">
-                      ✓ {savedRows.size} guardado(s)
-                    </span>
-                  )}
-                  {enviadosRevisar.size > 0 && (
-                    <span className="bg-amber-100 text-amber-800 px-4 py-2 rounded-full font-semibold">
-                      ⚠ {enviadosRevisar.size} enviado(s) a Revisar Pagos
-                    </span>
-                  )}
+                <div className="flex flex-wrap justify-center gap-4 text-sm mt-2 text-gray-700">
+                  <span className="bg-white/80 px-4 py-2 rounded-full border border-gray-200">
+                    Filas cargadas: <strong>{savedRows.size + enviadosRevisar.size}</strong>
+                  </span>
+                  <span className="bg-green-100 text-green-800 px-4 py-2 rounded-full font-semibold">
+                    ✓ Guardadas: {savedRows.size}
+                  </span>
+                  <span className="bg-amber-100 text-amber-800 px-4 py-2 rounded-full font-semibold">
+                    ⚠ En Revisar Pagos: {enviadosRevisar.size}
+                  </span>
                 </div>
                 <div className="flex justify-center gap-3 pt-2">
                   <Button
@@ -210,9 +238,10 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                 <CardContent className="pt-4">
                   <div className="flex flex-wrap items-center justify-between gap-4">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <Badge variant="outline">Total: {excelData.length}</Badge>
-                      <Badge variant="outline" className="text-green-700">Válidos: {validCount}</Badge>
-                      <Badge variant="outline">Guardados: {savedRows.size}</Badge>
+                      <Badge variant="outline" className="font-medium">Filas cargadas: {totalCargadas}</Badge>
+                      <Badge variant="outline" className="text-green-700 border-green-400">Válidas: {validCount}</Badge>
+                      <Badge variant="outline" className={invalidCount > 0 ? 'text-red-700 border-red-400' : ''}>Inválidas: {invalidCount}</Badge>
+                      <Badge variant="outline">Guardadas: {savedRows.size}</Badge>
                       {duplicadosPendientesRevisar.size > 0 && (
                         <Badge variant="outline" className="text-amber-700 border-amber-300">
                           Duplicados: {duplicadosPendientesRevisar.size}
@@ -302,7 +331,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                     </Button>
                     <Button
                       onClick={sendAllErrorsToRevisarPagos}
-                      disabled={errorCount === 0 || isSavingIndividual || serviceStatus === 'offline'}
+                      disabled={invalidCount === 0 || isSavingIndividual || serviceStatus === 'offline'}
                       className="bg-yellow-600 hover:bg-yellow-700"
                     >
                       {isSavingIndividual ? (
@@ -313,7 +342,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                       ) : (
                         <>
                           <AlertTriangle className="mr-2 h-4 w-4" />
-                          Revisar Pagos ({errorCount})
+                          Revisar Pagos ({invalidCount})
                         </>
                       )}
                     </Button>

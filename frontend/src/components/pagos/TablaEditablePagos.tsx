@@ -126,23 +126,23 @@ export function TablaEditablePagos({
 
   const total = rows.length
   const validos = rows.filter((r) => !r._hasErrors).length
-  const conError = total - validos
+  const invalidas = total - validos
 
   return (
     <div className="space-y-4">
-      {/* Encabezado con resumen */}
-      <div className="bg-blue-50 border border-blue-400 rounded p-4">
-        <h2 className="text-lg font-bold text-blue-800 mb-2">Pagos cargados</h2>
-        <div className="flex flex-wrap gap-4 text-sm">
-          <span className="font-medium text-gray-700">Total: <strong className="text-gray-900">{total}</strong></span>
-          <span className="font-medium text-green-700">
-            Válidos: <strong>{validos}</strong>
+      {/* Indicadores: filas cargadas, válidas, inválidas (varían al editar y validar) */}
+      <div className="bg-blue-50 border border-blue-400 rounded-lg p-4">
+        <h2 className="text-lg font-bold text-blue-800 mb-2">Indicadores (se actualizan al editar)</h2>
+        <div className="flex flex-wrap gap-6 text-sm">
+          <span className="font-medium text-gray-700">
+            Filas cargadas: <strong className="text-gray-900 tabular-nums">{total}</strong>
           </span>
-          {conError > 0 && (
-            <span className="font-medium text-red-700">
-              Con errores: <strong>{conError}</strong>
-            </span>
-          )}
+          <span className="font-medium text-green-700">
+            Válidas: <strong className="tabular-nums">{validos}</strong>
+          </span>
+          <span className="font-medium text-red-700">
+            Inválidas: <strong className="tabular-nums">{invalidas}</strong>
+          </span>
         </div>
       </div>
 
