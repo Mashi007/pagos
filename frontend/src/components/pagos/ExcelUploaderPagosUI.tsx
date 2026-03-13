@@ -281,18 +281,6 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                         <Eye className="mr-2 h-4 w-4" />
                         Ir a Pagos
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          navigate('/pagos?revisar=1'); onClose()
-                        }}
-                        className="bg-amber-50 border-amber-300"
-                        title="Ver pagos sin crédito asignado"
-                      >
-                        <Search className="mr-2 h-4 w-4" />
-                        Revisar Pagos
-                      </Button>
                       {getRowsToRevisarPagos().length > 0 && (
                         <Button
                           variant="outline"
