@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
 import { Settings, Mail, FileText, Clock, X, TestTube, CheckCircle } from 'lucide-react'
 import { emailConfigService } from '../../services/notificacionService'
@@ -9,6 +10,9 @@ import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
 import { toast } from 'sonner'
+
+const QUERY_KEY_ENVIOS = ['configuracion-notificaciones-envios'] as const
+const QUERY_KEY_PLANTILLAS = ['notificaciones-plantillas', { solo_activas: false }] as const
 
 /** Claves reservadas en la config (no son tipos de caso) */
 const CLAVES_GLOBALES = ['modo_pruebas', 'email_pruebas', 'emails_pruebas'] as const
@@ -86,10 +90,37 @@ export function ConfiguracionNotificaciones() {
   const [enviandoPruebaIndice, setEnviandoPruebaIndice] = useState<number | null>(null)
   const [enviandoMasivo, setEnviandoMasivo] = useState(false)
   const [smtpConfigurado, setSmtpConfigurado] = useState<boolean | null>(null)
+  const guardandoRef = useRef(false)
+  const queryClient = useQueryClient()
+
+  const { data: dataEnvios, isLoading: loadingEnvios, isError: errorEnvios } = useQuery({
+    queryKey: QUERY_KEY_ENVIOS,
+    queryFn: () => emailConfigService.obtenerConfiguracionEnvios() as Promise<ConfigEnvioCompleta>,
+    staleTime: 1 * 60 * 1000,
+  })
+  const { data: plantillasList, isLoading: loadingPlantillas } = useQuery({
+    queryKey: QUERY_KEY_PLANTILLAS,
+    queryFn: () => notificacionService.listarPlantillas(undefined, false),
+    staleTime: 1 * 60 * 1000,
+    placeholderData: [] as NotificacionPlantilla[],
+  })
+
+  const cargando = loadingEnvios || loadingPlantillas
 
   useEffect(() => {
-    cargarDatos()
-  }, [])
+    if (dataEnvios != null) {
+      const { modoPruebas: mp, emailsPruebas: ep, configEnvios: ce } = normalizeConfigFromApi(dataEnvios)
+      setModoPruebas(mp)
+      setEmailsPruebas(ep)
+      setConfigEnvios(ce)
+    }
+  }, [dataEnvios])
+  useEffect(() => {
+    if (plantillasList != null) setPlantillas(plantillasList)
+  }, [plantillasList])
+  useEffect(() => {
+    if (errorEnvios) toast.error('Error al cargar la configuración de envíos')
+  }, [errorEnvios])
 
   useEffect(() => {
     if (modoPruebas) {
@@ -100,26 +131,6 @@ export function ConfiguracionNotificaciones() {
       setSmtpConfigurado(null)
     }
   }, [modoPruebas])
-
-  /** Carga: una sola llamada que obtiene config + plantillas y normaliza el estado. */
-  const cargarDatos = async () => {
-    setCargando(true)
-    try {
-      const [data, plantillasList] = await Promise.all([
-        emailConfigService.obtenerConfiguracionEnvios() as Promise<ConfigEnvioCompleta>,
-        notificacionService.listarPlantillas(undefined, false).catch(() => [] as NotificacionPlantilla[]),
-      ])
-      const { modoPruebas, emailsPruebas, configEnvios } = normalizeConfigFromApi(data)
-      setModoPruebas(modoPruebas)
-      setEmailsPruebas(emailsPruebas)
-      setConfigEnvios(configEnvios)
-      setPlantillas(plantillasList ?? [])
-    } catch {
-      toast.error('Error al cargar la configuración de envíos')
-    } finally {
-      setCargando(false)
-    }
-  }
 
   const getConfig = (tipo: string): ConfigEnvioItem => {
     const c = configEnvios[tipo]
@@ -161,8 +172,10 @@ export function ConfiguracionNotificaciones() {
   }
 
   const guardarConfiguracionEnvios = async () => {
+    if (guardandoRef.current) return
+    guardandoRef.current = true
+    setGuardandoEnvios(true)
     try {
-      setGuardandoEnvios(true)
       const payload: ConfigEnvioCompleta = {
         ...configEnvios,
         modo_pruebas: modoPruebas,
@@ -178,12 +191,14 @@ export function ConfiguracionNotificaciones() {
         }
       })
       await emailConfigService.actualizarConfiguracionEnvios(payload)
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEY_ENVIOS })
       setUltimoGuardado(new Date())
       toast.success('Configuración de envíos guardada')
     } catch {
       toast.error('Error al guardar la configuración de envíos')
     } finally {
       setGuardandoEnvios(false)
+      guardandoRef.current = false
     }
   }
 
@@ -263,6 +278,7 @@ export function ConfiguracionNotificaciones() {
         email_pruebas: emailsPruebas[0]?.trim() || '',
       }
       await emailConfigService.actualizarConfiguracionEnvios(payload)
+      await queryClient.invalidateQueries({ queryKey: QUERY_KEY_ENVIOS })
       const res = await notificacionService.enviarTodasNotificaciones()
       if (res?.en_proceso && res?.mensaje) {
         toast.success(res.mensaje, { duration: 8000 })
@@ -486,9 +502,9 @@ export function ConfiguracionNotificaciones() {
                     <input
                       type="checkbox"
                       checked={config.incluir_adjuntos_fijos !== false}
-                      onChange={() => setConfig(tipo, { incluir_adjuntos_fijos: config.incluir_adjuntos_fijos === false })}
+                      onChange={() => setConfig(tipo, { incluir_adjuntos_fijos: !(config.incluir_adjuntos_fijos !== false) })}
                       disabled={!config.habilitado}
-                      title="Incluir documentos PDF fijos asignados a esta pestaña"
+                      title="Incluir documentos PDF fijos (pestaña 3: Documentos PDF anexos)"
                       className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
                   </td>

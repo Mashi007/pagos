@@ -149,9 +149,9 @@ def _enviar_correos_items(
             if any(tag in _c for tag in ("<table", "</table>", "<div", "<p ", "<span", "<html", "<body", "<br", "<h1", "<h2", "<h3")):
                 body_html = cuerpo
         # PDF = Carta_Cobranza.pdf (generada desde Plantilla anexo PDF, pestaña 2). Por defecto no se adjunta; marcar "PDF" para incluirla.
-        # Adj. = documentos subidos en Documentos PDF anexos (pestaña 3). Por defecto sí se incluyen si están asignados.
+        # Adj. = documentos subidos en Documentos PDF anexos (pestaña 3). Por defecto sí; solo se omiten si incluir_adjuntos_fijos=False.
         incluir_pdf_anexo = tipo_cfg.get("incluir_pdf_anexo", False) is True
-        incluir_adjuntos_fijos = tipo_cfg.get("incluir_adjuntos_fijos", True) is not False
+        incluir_adjuntos_fijos = tipo_cfg.get("incluir_adjuntos_fijos", True) is not False  # True si falta la clave (compatibilidad)
         if incluir_pdf_anexo or incluir_adjuntos_fijos:
             try:
                 attachments = []

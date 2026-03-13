@@ -270,11 +270,19 @@ def get_modo_pruebas_email(servicio: Optional[str] = None) -> Tuple[bool, List[s
 def get_modo_pruebas_servicio(servicio: str) -> bool:
     """True si este servicio debe redirigir envios al correo de pruebas."""
     sync_from_db()
+    envios = _load_notificaciones_envios()
+    # Para notificaciones: priorizar el toggle de Configuración > Notificaciones > Envíos (notificaciones_envios)
+    # sobre modo_pruebas_notificaciones del tab Email, para que el batch use el valor que el usuario acaba de guardar.
+    if servicio == "notificaciones":
+        raw = envios.get("modo_pruebas")
+        if raw is not None:
+            if raw is True or (isinstance(raw, str) and raw.lower() == "true"):
+                return True
+            return False
     key = "modo_pruebas_" + servicio
     if key in _current and _current[key] is not None:
         v = _current[key]
         return (str(v).lower() == "true" or v is True)
-    envios = _load_notificaciones_envios()
     raw = envios.get("modo_pruebas") or _current.get("modo_pruebas") or getattr(settings, "MODO_PRUEBAS_EMAIL", None) or "false"
     return (str(raw).lower() == "true" or raw is True)
 

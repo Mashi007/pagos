@@ -316,3 +316,78 @@ def test_envio_cobranza_con_ambos_flags_true_adjunta_pdf_y_fijo(
     names = [a[0] for a in attachments if isinstance(a, tuple)]
     assert "Carta_Cobranza.pdf" in names
     assert "Documento.pdf" in names
+
+
+@patch("app.api.v1.endpoints.notificaciones_tabs.send_email")
+@patch("app.api.v1.endpoints.notificaciones_tabs.generar_carta_cobranza_pdf")
+@patch("app.api.v1.endpoints.notificaciones_tabs.get_adjunto_fijo_cobranza_bytes")
+@patch("app.api.v1.endpoints.notificaciones_tabs.get_adjuntos_fijos_por_caso")
+@patch("app.api.v1.endpoints.notificaciones_tabs.sync_email_config_from_db")
+def test_notificacion_llega_a_rapicreditca_con_dos_anexos(
+    mock_sync,
+    mock_adjuntos_por_caso,
+    mock_adjunto_fijo,
+    mock_pdf,
+    mock_send_email,
+    db: Session,
+):
+    """
+    Una notificación en modo pruebas debe llegar a notificaciones@rapicreditca.com
+    con exactamente 2 anexos: Carta_Cobranza.pdf y el adjunto fijo (pestaña 3).
+    """
+    from app.api.v1.endpoints.notificaciones_tabs import _enviar_correos_items
+
+    mock_send_email.return_value = (True, None)
+    mock_pdf.return_value = b"fake-carta-cobranza-pdf"
+    mock_adjunto_fijo.return_value = ("Documento_Anexo.pdf", b"fake-adjunto-fijo")
+    mock_adjuntos_por_caso.return_value = []  # sin PDFs por caso extra
+
+    items = [
+        {
+            "correo": "cliente@ejemplo.com",
+            "nombre": "Cliente",
+            "cedula": "V12345678",
+            "contexto_cobranza": {"CLIENTES.NOMBRE_COMPLETO": "Cliente", "PRESTAMOS.ID": 1},
+        }
+    ]
+    config_envios = {
+        "modo_pruebas": True,
+        "email_pruebas": "notificaciones@rapicreditca.com",
+        "emails_pruebas": ["notificaciones@rapicreditca.com"],
+        "PAGO_1_DIA_ATRASADO": {
+            "habilitado": True,
+            "plantilla_id": 1,
+            "incluir_pdf_anexo": True,
+            "incluir_adjuntos_fijos": True,
+        },
+    }
+
+    def get_tipo(_item):
+        return "PAGO_1_DIA_ATRASADO"
+
+    with patch(
+        "app.api.v1.endpoints.notificaciones_tabs.get_plantilla_asunto_cuerpo",
+        return_value=("Asunto prueba", "<p>Cuerpo</p>"),
+    ):
+        plantilla = MagicMock()
+        plantilla.tipo = "COBRANZA"
+        with patch.object(db, "get", return_value=plantilla):
+            _enviar_correos_items(
+                items,
+                "Asunto",
+                "Cuerpo",
+                config_envios,
+                get_tipo,
+                db,
+            )
+
+    mock_send_email.assert_called_once()
+    call_args = mock_send_email.call_args
+    to_email = call_args[0][0] if call_args[0] else call_args[1].get("to_email")
+    assert to_email == ["notificaciones@rapicreditca.com"], "El correo debe ir a notificaciones@rapicreditca.com"
+    attachments = call_args[1].get("attachments")
+    assert attachments is not None, "Debe haber adjuntos"
+    assert len(attachments) == 2, "Debe haber exactamente 2 anexos (Carta_Cobranza.pdf + adjunto fijo pestaña 3)"
+    names = [a[0] for a in attachments if isinstance(a, tuple)]
+    assert "Carta_Cobranza.pdf" in names
+    assert "Documento_Anexo.pdf" in names
