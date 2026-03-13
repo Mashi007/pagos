@@ -47,6 +47,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
     updateCellValue,
     setShowPreview,
     setExcelData,
+    clearAndShowFileSelect,
     getValidRows,
     saveIndividualPago,
     saveRowIfValid,
@@ -279,7 +280,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                         size="sm"
                         onClick={() => {
                           addToast('warning', 'Se borrará todo y se cargará otro archivo.')
-                          setShowPreview(false)
+                          clearAndShowFileSelect()
                         }}
                       >
                         <X className="mr-2 h-4 w-4" />

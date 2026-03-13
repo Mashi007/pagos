@@ -1196,6 +1196,16 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     setIsSavingIndividual(false)
   }, [excelData, serviceStatus, sendToRevisarPagos, addToast, refreshPagos])
 
+  /** Borra todo el estado y deja la pantalla lista para cargar otro archivo. */
+  const clearAndShowFileSelect = useCallback(() => {
+    setExcelData([])
+    setSavedRows(new Set())
+    setEnviadosRevisar(new Set())
+    setDuplicadosPendientesRevisar(new Set())
+    setUploadedFile(null)
+    setShowPreview(false)
+  }, [])
+
   return {
     isDragging,
     uploadedFile,
@@ -1218,6 +1228,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     updateCellValue,
     setShowPreview,
     setExcelData,
+    clearAndShowFileSelect,
     getValidRows,
     saveIndividualPago,
     saveRowIfValid,
