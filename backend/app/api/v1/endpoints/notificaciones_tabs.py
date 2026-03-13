@@ -1,8 +1,9 @@
 """
-Endpoints para las pesta�as de Notificaciones (previas, d�a pago, retrasadas, prejudicial, mora 90+).
-Datos reales desde BD (cuotas + clientes). Env�o por Email (Configuraci�n > Email) y respeto de
-configuraci�n de env�os (habilitado/CCO por tipo) desde BD (notificaciones_envios). get_db en todos los procesos.
+Endpoints para las pestañas de Notificaciones (previas, día pago, retrasadas, prejudicial, mora 90+).
+Datos reales desde BD (cuotas + clientes). Envío por Email (Configuración > Email) y respeto de
+configuración de envíos (habilitado/CCO por tipo) desde BD (notificaciones_envios). get_db en todos los procesos.
 """
+import logging
 from typing import Callable, List
 
 from fastapi import APIRouter, Depends
@@ -85,6 +86,13 @@ def _enviar_correos_items(
     # Incluir caso cuando Envío está activo; solo excluir si habilitado está explícitamente en False
     habilitados = sum(1 for v in config_envios.values() if isinstance(v, dict) and v.get("habilitado", True) is not False)
     log_envio_config(modo_pruebas, bool(email_pruebas and "@" in email_pruebas), habilitados)
+    if habilitados == 0:
+        logger = logging.getLogger(__name__)
+        logger.warning(
+            "[notif_envio_config] Ningún tipo de notificación está habilitado. "
+            "Habilite al menos uno en Configuración > Notificaciones > Envíos (por caso: Faltan 5 días, Hoy vence, etc.) "
+            "para que se envíen correos; si no, todos los ítems se omiten (omitidos_config)."
+        )
 
     enviados = 0
     sin_email = 0

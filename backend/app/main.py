@@ -1,4 +1,4 @@
-﻿"""
+"""
 Aplicación principal FastAPI
 """
 import time
@@ -17,10 +17,15 @@ from app.core.config import settings
 from app.api.v1 import api_router
 from app.middleware.audit_middleware import AuditMiddleware
 
-# Configurar logging
+# Configurar logging con UTF-8 para tildes/caracteres en Render
+import sys
+import io
+_log_stream = io.TextIOWrapper(getattr(sys.stderr, "buffer", sys.stderr), encoding="utf-8", errors="replace")
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    stream=_log_stream,
+    force=True,
 )
 logger = logging.getLogger(__name__)
 
@@ -191,9 +196,20 @@ def on_startup():
         logger.exception("Startup BD falló tras reintentos: %s", e)
         raise
 
-    # Scheduler: reportes de cobranzas a las 6:00 y 13:00 (America/Caracas)
+    # Scheduler: solo un worker (leader) inicia los jobs para evitar duplicados con --workers 2
     try:
-        start_scheduler()
+        from app.core.database import SessionLocal
+        from app.core.scheduler_leader import try_claim_scheduler_leader, start_scheduler_leader_heartbeat
+        db = SessionLocal()
+        try:
+            if try_claim_scheduler_leader(db):
+                start_scheduler()
+                start_scheduler_leader_heartbeat()
+                app.state._scheduler_leader = True
+            else:
+                app.state._scheduler_leader = False
+        finally:
+            db.close()
     except Exception as e:
         logger.exception("No se pudo iniciar el scheduler de reportes cobranzas: %s", e)
 
@@ -235,8 +251,11 @@ def on_startup():
 
 @app.on_event("shutdown")
 def on_shutdown():
-    """Detener scheduler al cerrar la aplicación."""
+    """Detener scheduler y heartbeat de leader al cerrar la aplicación."""
     try:
+        if getattr(app.state, "_scheduler_leader", False):
+            from app.core.scheduler_leader import stop_scheduler_leader_heartbeat
+            stop_scheduler_leader_heartbeat()
         from app.core.scheduler import stop_scheduler
         stop_scheduler()
     except Exception as e:

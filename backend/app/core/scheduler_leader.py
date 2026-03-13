@@ -52,8 +52,8 @@ def try_claim_scheduler_leader(db) -> bool:
         UPDATE scheduler_leader
         SET instance_id = :instance_id, heartbeat = now()
         WHERE id = 1
-          AND (heartbeat IS NULL OR heartbeat < now() - :stale_interval)
-    """), {"instance_id": instance, "stale_interval": f"{SCHEDULER_LEADER_STALE_SEC} seconds"})
+          AND (heartbeat IS NULL OR heartbeat < now() - :stale_sec * interval '1 second')
+    """), {"instance_id": instance, "stale_sec": SCHEDULER_LEADER_STALE_SEC})
     db.commit()
     if r.rowcount == 1:
         logger.info("Scheduler leader claimed by %s", instance)
