@@ -278,7 +278,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                         variant="outline"
                         size="sm"
                         onClick={() => {
-                          addToast('warning', 'Se reiniciará el proceso. El avance actual se perderá.')
+                          addToast('warning', 'Se borrará todo y se cargará otro archivo.')
                           setShowPreview(false)
                         }}
                       >
