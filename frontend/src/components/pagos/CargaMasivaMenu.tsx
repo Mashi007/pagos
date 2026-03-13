@@ -5,6 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/pop
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
 import { ExcelUploaderPagosUI } from './ExcelUploaderPagosUI'
 import { ExcelUploader } from './ExcelUploader'
+import { ExcelModoSelectorDialog } from './ExcelModoSelectorDialog'
 import { ConfirmarBorrarDiaDialog } from './ConfirmarBorrarDiaDialog'
 import toast from 'react-hot-toast'
 import { getErrorMessage } from '../../types/errors'
@@ -19,6 +20,7 @@ interface CargaMasivaMenuProps {
 export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
   const [showPagos, setShowPagos] = useState(false)
   const [showUploadDirectPagos, setShowUploadDirectPagos] = useState(false)
+  const [showExcelModoSelector, setShowExcelModoSelector] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
   const [showConfirmarBorrar, setShowConfirmarBorrar] = useState(false)
   const [scanFilter, setScanFilter] = useState<'unread' | 'read' | 'all'>('unread')
@@ -72,26 +74,15 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-56 p-2" align="end">
-          <p className="text-xs text-gray-500 px-2 py-1 mb-1">Pagos desde Excel</p>
-            <button
+          <button
               className="w-full flex items-center px-3 py-2.5 text-sm rounded-md hover:bg-gray-100 transition-colors"
               onClick={() => {
-                setShowPagos(true)
                 setIsOpen(false)
+                setShowExcelModoSelector(true)
               }}
             >
               <FileSpreadsheet className="w-4 h-4 mr-2" />
-              Previsualizar y editar
-            </button>
-            <button
-              className="w-full flex items-center px-3 py-2.5 text-sm rounded-md hover:bg-gray-100 transition-colors"
-              onClick={() => {
-                setShowUploadDirectPagos(true)
-                setIsOpen(false)
-              }}
-            >
-              <Upload className="w-4 h-4 mr-2" />
-              Subir y procesar todo
+              Pagos desde Excel
             </button>
           <p className="text-xs text-gray-500 px-2 py-1 mb-1 mt-2 border-t border-gray-100 pt-2">Otros</p>
           {gmailStatus && (
@@ -133,6 +124,13 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
           </div>
         </PopoverContent>
       </Popover>
+
+      <ExcelModoSelectorDialog
+        open={showExcelModoSelector}
+        onOpenChange={setShowExcelModoSelector}
+        onPrevisualizar={() => setShowPagos(true)}
+        onSubirTodo={() => setShowUploadDirectPagos(true)}
+      />
 
       {/* Modal Previsualizar y editar (Pagos Excel) */}
       {showPagos && (

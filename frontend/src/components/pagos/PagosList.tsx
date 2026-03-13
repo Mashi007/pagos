@@ -35,6 +35,7 @@ import { pagoConErrorService, type PagoConError } from '../../services/pagoConEr
 import { RegistrarPagoForm } from './RegistrarPagoForm'
 import { ExcelUploaderPagosUI } from './ExcelUploaderPagosUI'
 import { ExcelUploader } from './ExcelUploader'
+import { ExcelModoSelectorDialog } from './ExcelModoSelectorDialog'
 import {
   Dialog,
   DialogContent,
@@ -71,6 +72,7 @@ export function PagosList() {
   const [showRegistrarPago, setShowRegistrarPago] = useState(false)
   const [showCargaMasivaPagos, setShowCargaMasivaPagos] = useState(false)
   const [showUploadDirectPagos, setShowUploadDirectPagos] = useState(false)
+  const [showExcelModoSelector, setShowExcelModoSelector] = useState(false)
   const [agregarPagoOpen, setAgregarPagoOpen] = useState(false)
   const [pagoEditando, setPagoEditando] = useState<Pago | PagoConError | null>(null)
   const [accionesOpenId, setAccionesOpenId] = useState<number | null>(null)
@@ -421,25 +423,13 @@ export function PagosList() {
                   type="button"
                   className="w-full flex items-center gap-3 px-4 py-3 text-left rounded-md hover:bg-blue-50"
                   onClick={() => {
-                    setShowCargaMasivaPagos(true)
                     setAgregarPagoOpen(false)
+                    setShowExcelModoSelector(true)
                   }}
                 >
                   <FileSpreadsheet className="w-5 h-5 text-gray-600" />
-                  <span>Previsualizar y editar (Excel)</span>
-                  <span className="text-xs text-gray-500 ml-auto">Excel</span>
-                </button>
-                <button
-                  type="button"
-                  className="w-full flex items-center gap-3 px-4 py-3 text-left rounded-md hover:bg-blue-50"
-                  onClick={() => {
-                    setShowUploadDirectPagos(true)
-                    setAgregarPagoOpen(false)
-                  }}
-                >
-                  <Upload className="w-5 h-5 text-gray-600" />
-                  <span>Subir y procesar todo (Excel)</span>
-                  <span className="text-xs text-gray-500 ml-auto">Excel</span>
+                  <span>Pagos desde Excel</span>
+                  <span className="text-xs text-gray-500 ml-auto">Revisar o procesar todo</span>
                 </button>
                 <div className="w-full px-4 py-2 border-t border-gray-100">
                   <label className="text-xs text-gray-600 block mb-1">Correos a escanear (Gmail)</label>
@@ -516,6 +506,13 @@ export function PagosList() {
               </div>
             </PopoverContent>
           </Popover>
+
+      <ExcelModoSelectorDialog
+        open={showExcelModoSelector}
+        onOpenChange={setShowExcelModoSelector}
+        onPrevisualizar={() => setShowCargaMasivaPagos(true)}
+        onSubirTodo={() => setShowUploadDirectPagos(true)}
+      />
       </div>
       {/* Después de importar desde Cobros: si hay errores, ofrecer descargar Excel en revisión */}
       {lastImportCobrosResult && lastImportCobrosResult.registros_con_error > 0 && (
