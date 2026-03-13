@@ -4,8 +4,6 @@ import { Button } from '../../components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
 import { ExcelUploaderPagosUI } from './ExcelUploaderPagosUI'
-import { ExcelUploader } from './ExcelUploader'
-import { ExcelModoSelectorDialog } from './ExcelModoSelectorDialog'
 import { ConfirmarBorrarDiaDialog } from './ConfirmarBorrarDiaDialog'
 import toast from 'react-hot-toast'
 import { getErrorMessage } from '../../types/errors'
@@ -19,8 +17,6 @@ interface CargaMasivaMenuProps {
 
 export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
   const [showPagos, setShowPagos] = useState(false)
-  const [showUploadDirectPagos, setShowUploadDirectPagos] = useState(false)
-  const [showExcelModoSelector, setShowExcelModoSelector] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
   const [showConfirmarBorrar, setShowConfirmarBorrar] = useState(false)
   const [scanFilter, setScanFilter] = useState<'unread' | 'read' | 'all'>('unread')
@@ -78,7 +74,7 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
               className="w-full flex items-center px-3 py-2.5 text-sm rounded-md hover:bg-gray-100 transition-colors"
               onClick={() => {
                 setIsOpen(false)
-                setShowExcelModoSelector(true)
+                setShowPagos(true)
               }}
             >
               <FileSpreadsheet className="w-4 h-4 mr-2" />
@@ -125,30 +121,12 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
         </PopoverContent>
       </Popover>
 
-      <ExcelModoSelectorDialog
-        open={showExcelModoSelector}
-        onOpenChange={setShowExcelModoSelector}
-        onPrevisualizar={() => setShowPagos(true)}
-        onSubirTodo={() => setShowUploadDirectPagos(true)}
-      />
-
-      {/* Modal Previsualizar y editar (Pagos Excel) */}
+      {/* Revisar y editar antes de guardar (Pagos Excel) */}
       {showPagos && (
         <ExcelUploaderPagosUI
           onClose={() => setShowPagos(false)}
           onSuccess={() => {
             setShowPagos(false)
-            onSuccess?.()
-          }}
-        />
-      )}
-
-      {/* Modal Subir y procesar todo (Pagos Excel) */}
-      {showUploadDirectPagos && (
-        <ExcelUploader
-          onClose={() => setShowUploadDirectPagos(false)}
-          onSuccess={() => {
-            setShowUploadDirectPagos(false)
             onSuccess?.()
           }}
         />

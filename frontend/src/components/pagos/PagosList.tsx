@@ -13,6 +13,7 @@ import {
   MoreHorizontal,
   FileSpreadsheet,
   ChevronDown,
+  ChevronRight,
   CheckCircle,
   XCircle,
   Search,
@@ -29,13 +30,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
-import { formatDate, formatLastSyncDate } from '../../utils'
+import { formatDate, formatLastSyncDate, cn } from '../../utils'
 import { pagoService, type Pago } from '../../services/pagoService'
 import { pagoConErrorService, type PagoConError } from '../../services/pagoConErrorService'
 import { RegistrarPagoForm } from './RegistrarPagoForm'
 import { ExcelUploaderPagosUI } from './ExcelUploaderPagosUI'
-import { ExcelUploader } from './ExcelUploader'
-import { ExcelModoSelectorDialog } from './ExcelModoSelectorDialog'
 import {
   Dialog,
   DialogContent,
@@ -71,8 +70,6 @@ export function PagosList() {
   })
   const [showRegistrarPago, setShowRegistrarPago] = useState(false)
   const [showCargaMasivaPagos, setShowCargaMasivaPagos] = useState(false)
-  const [showUploadDirectPagos, setShowUploadDirectPagos] = useState(false)
-  const [showExcelModoSelector, setShowExcelModoSelector] = useState(false)
   const [agregarPagoOpen, setAgregarPagoOpen] = useState(false)
   const [pagoEditando, setPagoEditando] = useState<Pago | PagoConError | null>(null)
   const [accionesOpenId, setAccionesOpenId] = useState<number | null>(null)
@@ -90,6 +87,7 @@ export function PagosList() {
   const [showVaciarTablaGmail, setShowVaciarTablaGmail] = useState(false)
   const [isVaciarTablaGmail, setIsVaciarTablaGmail] = useState(false)
   const [gmailScanFilter, setGmailScanFilter] = useState<'unread' | 'read' | 'all'>('unread')
+  const [submenuGmailOpen, setSubmenuGmailOpen] = useState(false)
   const queryClient = useQueryClient()
   const lastRunForWhichWeShowedDialogRef = useRef<string | null>(null)
 
@@ -422,40 +420,71 @@ export function PagosList() {
                   className="w-full flex items-center gap-3 px-4 py-3 text-left rounded-md hover:bg-blue-50"
                   onClick={() => {
                     setAgregarPagoOpen(false)
-                    setShowExcelModoSelector(true)
+                    setShowCargaMasivaPagos(true)
                   }}
                 >
                   <FileSpreadsheet className="w-5 h-5 text-gray-600" />
                   <span>Pagos desde Excel</span>
-                  <span className="text-xs text-gray-500 ml-auto">Revisar o procesar todo</span>
+                  <span className="text-xs text-gray-500 ml-auto">Revisar y editar</span>
                 </button>
-                <div className="w-full px-4 py-2 border-t border-gray-100">
-                  <label className="text-xs text-gray-600 block mb-1">Correos a escanear (Gmail)</label>
-                  <Select value={gmailScanFilter} onValueChange={(v: 'unread' | 'read' | 'all') => setGmailScanFilter(v)}>
-                    <SelectTrigger className="h-9 text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="unread">No leídos</SelectItem>
-                      <SelectItem value="read">Leídos</SelectItem>
-                      <SelectItem value="all">Todos</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <button
-                  type="button"
-                  className="w-full flex items-center gap-3 px-4 py-3 text-left rounded-md hover:bg-blue-50 disabled:opacity-50"
-                  onClick={handleGenerarExcelDesdeGmail}
-                  disabled={loadingGmail}
-                >
-                  <Mail className="w-5 h-5 text-gray-600" />
-                  <span>{loadingGmail ? 'Generando...' : 'Generar Excel desde Gmail'}</span>
-                  <span className="text-xs text-gray-500 ml-auto">Gmail</span>
-                </button>
-                {SHOW_DESCARGA_EXCEL_EN_SUBMENU && (
+
+                {/* Submenú: Generar Excel desde email */}
+                <div className="border-t border-gray-100 pt-2 mt-2">
                   <button
                     type="button"
-                    className="w-full flex items-center gap-3 px-4 py-3 text-left rounded-md hover:bg-blue-50 disabled:opacity-50"
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left rounded-md hover:bg-gray-50"
+                    onClick={() => setSubmenuGmailOpen((v) => !v)}
+                  >
+                    <Mail className="w-5 h-5 text-gray-600" />
+                    <span className="font-medium text-gray-800">Generar Excel desde email</span>
+                    <ChevronRight className={cn('w-4 h-4 ml-auto text-gray-400 transition-transform', submenuGmailOpen && 'rotate-90')} />
+                  </button>
+                  {submenuGmailOpen && (
+                    <div className="mt-2 ml-2 pl-3 border-l-2 border-gray-200 space-y-2 bg-gray-50/80 rounded-r-md py-2 pr-2">
+                      <div>
+                        <label className="text-xs text-gray-600 block mb-1">Correos a escanear (Gmail)</label>
+                        <Select value={gmailScanFilter} onValueChange={(v: 'unread' | 'read' | 'all') => setGmailScanFilter(v)}>
+                          <SelectTrigger className="h-9 text-sm">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="unread">No leídos</SelectItem>
+                            <SelectItem value="read">Leídos</SelectItem>
+                            <SelectItem value="all">Todos</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <button
+                        type="button"
+                        className="w-full flex items-center gap-3 px-3 py-2.5 text-left rounded-md hover:bg-blue-50 disabled:opacity-50 text-sm"
+                        onClick={handleGenerarExcelDesdeGmail}
+                        disabled={loadingGmail}
+                      >
+                        <Mail className="w-4 h-4 text-gray-600" />
+                        <span>{loadingGmail ? 'Generando...' : 'Generar Excel desde Gmail'}</span>
+                        <span className="text-xs text-gray-500 ml-auto">Gmail</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="w-full flex items-center gap-3 px-3 py-2.5 text-left rounded-md hover:bg-red-50 disabled:opacity-50 text-red-700 text-sm"
+                        onClick={() => {
+                          setAgregarPagoOpen(false)
+                          setShowVaciarTablaGmail(true)
+                        }}
+                        disabled={isVaciarTablaGmail}
+                      >
+                        <Trash2 className="w-4 h-4 text-red-600" />
+                        <span>{isVaciarTablaGmail ? 'Vaciando...' : 'Vaciar tabla (Generar Excel desde Gmail)'}</span>
+                        <span className="text-xs text-gray-500 ml-auto">Gmail</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {SHOW_DESCARGA_EXCEL_EN_SUBMENU && submenuGmailOpen && (
+                  <button
+                    type="button"
+                    className="w-full flex items-center gap-3 px-4 py-3 text-left rounded-md hover:bg-blue-50 disabled:opacity-50 ml-2 pl-5 border-l-2 border-gray-200"
                     onClick={async () => {
                       setAgregarPagoOpen(false)
                       setIsDescargandoGmailExcel(true)
@@ -480,19 +509,6 @@ export function PagosList() {
                 )}
                 <button
                   type="button"
-                  className="w-full flex items-center gap-3 px-4 py-3 text-left rounded-md hover:bg-red-50 disabled:opacity-50 text-red-700"
-                  onClick={() => {
-                    setAgregarPagoOpen(false)
-                    setShowVaciarTablaGmail(true)
-                  }}
-                  disabled={isVaciarTablaGmail}
-                >
-                  <Trash2 className="w-5 h-5 text-red-600" />
-                  <span>{isVaciarTablaGmail ? 'Vaciando...' : 'Vaciar tabla (Generar Excel desde Gmail)'}</span>
-                  <span className="text-xs text-gray-500 ml-auto">Gmail</span>
-                </button>
-                <button
-                  type="button"
                   className="w-full flex items-center gap-3 px-4 py-3 text-left rounded-md hover:bg-blue-50 disabled:opacity-50 border-t border-gray-100 mt-2 pt-3"
                   onClick={handleImportarDesdeCobros}
                   disabled={isImportingCobros}
@@ -505,12 +521,6 @@ export function PagosList() {
             </PopoverContent>
           </Popover>
 
-      <ExcelModoSelectorDialog
-        open={showExcelModoSelector}
-        onOpenChange={setShowExcelModoSelector}
-        onPrevisualizar={() => setShowCargaMasivaPagos(true)}
-        onSubirTodo={() => setShowUploadDirectPagos(true)}
-      />
       </div>
       {/* Después de importar desde Cobros: si hay errores, ofrecer descargar Excel en revisión */}
       {lastImportCobrosResult && lastImportCobrosResult.registros_con_error > 0 && (
@@ -1021,23 +1031,6 @@ export function PagosList() {
           }}
         />
       )}
-      {/* Subir y procesar todo (Excel): envía archivo al servidor y muestra resultado; si hay errores, enlace a Revisar Pagos */}
-      {showUploadDirectPagos && (
-        <ExcelUploader
-          onClose={() => setShowUploadDirectPagos(false)}
-          onSuccess={async () => {
-            setShowUploadDirectPagos(false)
-            await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
-            await queryClient.invalidateQueries({ queryKey: ['pagos-con-errores'], exact: false })
-            await queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false })
-          }}
-          onGoToRevisarPagos={() => {
-            setShowUploadDirectPagos(false)
-            handleRevisarPagos()
-          }}
-        />
-      )}
-
       <ConfirmarBorrarDiaDialog
         open={showConfirmarBorrar}
         onOpenChange={setShowConfirmarBorrar}
