@@ -1233,6 +1233,7 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     duplicadosPendientesRevisar,
     onClose,
     removeToast,
+    addToast,
     pagosConErrores,
     registrosConError,
     moveErrorToReviewPagos,

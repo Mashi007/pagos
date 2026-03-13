@@ -61,6 +61,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
     duplicadosPendientesRevisar,
     onClose,
     removeToast,
+    addToast,
     batchProgress,
   } = useExcelUploadPagos(props)
 
@@ -273,7 +274,14 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                           )}
                         </Button>
                       )}
-                      <Button variant="outline" size="sm" onClick={() => setShowPreview(false)}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          addToast('warning', 'Se reiniciará el proceso. El avance actual se perderá.')
+                          setShowPreview(false)
+                        }}
+                      >
                         <X className="mr-2 h-4 w-4" />
                         Cambiar archivo
                       </Button>
