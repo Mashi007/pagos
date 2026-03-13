@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { PlantillasNotificaciones } from '../components/notificaciones/PlantillasNotificaciones'
 import { PlantillaAnexoPdf } from '../components/notificaciones/PlantillaAnexoPdf'
+import { VinculacionPlantillaAnexoPdf } from '../components/notificaciones/VinculacionPlantillaAnexoPdf'
 import { DocumentosPdfAnexos } from '../components/notificaciones/DocumentosPdfAnexos'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Button } from '../components/ui/button'
@@ -126,6 +127,7 @@ export function Plantillas() {
         </TabsContent>
 
         <TabsContent value={SUBTAB_ANEXO_PDF} className="mt-6 min-h-[400px]">
+          <VinculacionPlantillaAnexoPdf />
           <PlantillaAnexoPdf />
         </TabsContent>
 

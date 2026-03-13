@@ -113,14 +113,15 @@ export function DocumentosPdfAnexos() {
             </Button>
           </div>
           <div className="border-t pt-4">
-            <h4 className="text-sm font-medium text-gray-700 mb-2">Documentos almacenados por pestaña</h4>
+            <h4 className="text-sm font-medium text-gray-700 mb-1">Documentos almacenados por pestaña</h4>
+            <p className="text-xs text-muted-foreground mb-2">Cada documento se adjunta solo a la notificación de la pestaña indicada (ej. los de «1 día retraso» van con ese tipo de aviso).</p>
             <div className="space-y-3">
               {TIPOS_CASO.map(({ value, label }) => {
                 const items = porCaso[value] || []
                 if (items.length === 0) return null
                 return (
                   <div key={value} className="rounded-md border bg-gray-50/50 p-3">
-                    <span className="text-sm font-medium text-gray-600">{label}</span>
+                    <span className="text-sm font-medium text-gray-600" title={`Se envían con la notificación: ${label}`}>{label}</span>
                     <ul className="mt-2 space-y-1">
                       {items.map((doc) => (
                         <li key={doc.id} className="flex items-center justify-between gap-2 text-sm">

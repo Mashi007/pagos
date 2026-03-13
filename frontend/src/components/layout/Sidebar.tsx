@@ -107,6 +107,7 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
       children: [
         { title: 'Clientes', href: '/clientes', icon: Users },
         { title: 'Comunicaciones', href: '/comunicaciones', icon: MessageSquare },
+        { title: 'Campañas', href: '/crm/campanas', icon: Mail },
         { title: 'Tickets Atención', href: '/crm/tickets', icon: FileText },
         { title: 'Notificaciones', href: '/notificaciones', icon: Bell },
       ],

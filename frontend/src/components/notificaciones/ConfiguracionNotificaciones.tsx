@@ -28,7 +28,8 @@ export type ConfigEnvioItem = {
 /** Respuesta de la API: config por tipo + modo_pruebas y email_pruebas (un solo objeto, sin duplicar) */
 export type ConfigEnvioCompleta = Record<string, ConfigEnvioItem | boolean | string | string[]>
 
-const CRITERIOS: { tipo: string; label: string; categoria: string; color: 'blue' | 'green' | 'orange' | 'red' | 'slate' }[] = [
+/** Criterios de notificación (tipo → label). Exportado para uso en Plantillas / vinculación PDF. */
+export const CRITERIOS: { tipo: string; label: string; categoria: string; color: 'blue' | 'green' | 'orange' | 'red' | 'slate' }[] = [
   { tipo: 'PAGO_5_DIAS_ANTES', label: 'Faltan 5', categoria: 'Notificación previa', color: 'blue' },
   { tipo: 'PAGO_3_DIAS_ANTES', label: 'Faltan 3', categoria: 'Notificación previa', color: 'blue' },
   { tipo: 'PAGO_1_DIA_ANTES', label: 'Falta 1', categoria: 'Notificación previa', color: 'blue' },
