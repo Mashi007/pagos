@@ -450,9 +450,17 @@ export function PagosList() {
                           <SelectContent>
                             <SelectItem value="unread">No leídos</SelectItem>
                             <SelectItem value="read">Leídos</SelectItem>
-                            <SelectItem value="all">Todos</SelectItem>
+                            <SelectItem value="all">Todos (leídos y no leídos)</SelectItem>
                           </SelectContent>
                         </Select>
+                        {gmailScanFilter === 'all' && (
+                          <p className="text-xs text-gray-600 mt-1.5">
+                            Se descargarán todos los correos (leídos y no leídos) del buzón principal.
+                          </p>
+                        )}
+                        <p className="text-xs text-gray-500 mt-1.5">
+                          Al finalizar verá un reporte con la cantidad de correos y archivos procesados.
+                        </p>
                       </div>
                       <button
                         type="button"
