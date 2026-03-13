@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
-import { Settings, Mail, FileText, Clock, X, TestTube } from 'lucide-react'
+import { Settings, Mail, FileText, Clock, X, TestTube, CheckCircle } from 'lucide-react'
 import { emailConfigService } from '../../services/notificacionService'
 import { notificacionService, type NotificacionPlantilla } from '../../services/notificacionService'
 import { getErrorDetail } from '../../types/errors'
@@ -56,11 +56,31 @@ function defaultEnvio(): ConfigEnvioItem {
   return { habilitado: true, cco: [], programador: HORA_DEFAULT }
 }
 
+/** Normaliza la respuesta de la API en estado listo para el componente (carga única y clara). */
+function normalizeConfigFromApi(raw: ConfigEnvioCompleta | null): {
+  modoPruebas: boolean
+  emailsPruebas: [string, string]
+  configEnvios: Record<string, ConfigEnvioItem>
+} {
+  const data = raw || {}
+  const modoPruebas = data.modo_pruebas === true
+  let emailsPruebas: [string, string] = ['', '']
+  if (Array.isArray(data.emails_pruebas)) {
+    emailsPruebas = [data.emails_pruebas[0] ?? '', data.emails_pruebas[1] ?? '']
+  } else if (typeof data.email_pruebas === 'string') {
+    emailsPruebas = [data.email_pruebas, '']
+  }
+  const sinGlobales = { ...data }
+  CLAVES_GLOBALES.forEach((k) => delete sinGlobales[k])
+  return { modoPruebas, emailsPruebas, configEnvios: sinGlobales as Record<string, ConfigEnvioItem> }
+}
+
 export function ConfiguracionNotificaciones() {
   const [configEnvios, setConfigEnvios] = useState<Record<string, ConfigEnvioItem>>({})
   const [modoPruebas, setModoPruebas] = useState(false)
   const [emailsPruebas, setEmailsPruebas] = useState<[string, string]>(['', ''])
   const [guardandoEnvios, setGuardandoEnvios] = useState(false)
+  const [ultimoGuardado, setUltimoGuardado] = useState<Date | null>(null)
   const [cargando, setCargando] = useState(true)
   const [plantillas, setPlantillas] = useState<NotificacionPlantilla[]>([])
   const [enviandoPruebaIndice, setEnviandoPruebaIndice] = useState<number | null>(null)
@@ -81,6 +101,7 @@ export function ConfiguracionNotificaciones() {
     }
   }, [modoPruebas])
 
+  /** Carga: una sola llamada que obtiene config + plantillas y normaliza el estado. */
   const cargarDatos = async () => {
     setCargando(true)
     try {
@@ -88,21 +109,12 @@ export function ConfiguracionNotificaciones() {
         emailConfigService.obtenerConfiguracionEnvios() as Promise<ConfigEnvioCompleta>,
         notificacionService.listarPlantillas(undefined, false).catch(() => [] as NotificacionPlantilla[]),
       ])
-      const raw = data || {}
-      setModoPruebas(raw.modo_pruebas === true)
-      if (Array.isArray(raw.emails_pruebas)) {
-        const arr = raw.emails_pruebas
-        setEmailsPruebas([arr[0] ?? '', arr[1] ?? ''])
-      } else if (typeof raw.email_pruebas === 'string') {
-        setEmailsPruebas([raw.email_pruebas, ''])
-      } else {
-        setEmailsPruebas(['', ''])
-      }
-      const sinGlobales = { ...raw }
-      CLAVES_GLOBALES.forEach((k) => delete sinGlobales[k])
-      setConfigEnvios(sinGlobales as Record<string, ConfigEnvioItem>)
-      setPlantillas(plantillasList || [])
-    } catch (error) {
+      const { modoPruebas, emailsPruebas, configEnvios } = normalizeConfigFromApi(data)
+      setModoPruebas(modoPruebas)
+      setEmailsPruebas(emailsPruebas)
+      setConfigEnvios(configEnvios)
+      setPlantillas(plantillasList ?? [])
+    } catch {
       toast.error('Error al cargar la configuración de envíos')
     } finally {
       setCargando(false)
@@ -166,8 +178,9 @@ export function ConfiguracionNotificaciones() {
         }
       })
       await emailConfigService.actualizarConfiguracionEnvios(payload)
+      setUltimoGuardado(new Date())
       toast.success('Configuración de envíos guardada')
-    } catch (error) {
+    } catch {
       toast.error('Error al guardar la configuración de envíos')
     } finally {
       setGuardandoEnvios(false)
@@ -346,10 +359,11 @@ export function ConfiguracionNotificaciones() {
             <span className="text-sm text-gray-600">{modoPruebas ? 'Activado (solo correo de pruebas)' : 'Desactivado (envío a clientes)'}</span>
           </div>
 
-          {/* Correos de Prueba */}
+          {/* Correos de Prueba: hasta 2 que reciben notificaciones en modo prueba */}
           <div className="space-y-3">
+            <p className="text-xs text-gray-500">Hasta 2 correos que recibirán las notificaciones en modo prueba.</p>
             <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-gray-700 whitespace-nowrap w-40">Correo para pruebas 1</label>
+              <label className="text-sm font-medium text-gray-700 whitespace-nowrap w-40">Correo pruebas 1</label>
               <Input
                 type="email"
                 placeholder="ejemplo@correo.com"
@@ -360,7 +374,7 @@ export function ConfiguracionNotificaciones() {
               />
             </div>
             <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-gray-700 whitespace-nowrap w-40">Correo para pruebas 2</label>
+              <label className="text-sm font-medium text-gray-700 whitespace-nowrap w-40">Correo pruebas 2</label>
               <Input
                 type="email"
                 placeholder="ejemplo2@correo.com"
@@ -481,9 +495,10 @@ export function ConfiguracionNotificaciones() {
                   <td className="py-3 px-4">
                     <details className="group">
                       <summary className="cursor-pointer text-blue-600 hover:text-blue-800 text-xs font-medium list-none">
-                        CCO / hora
+                        Hora y CCO (1–3)
                       </summary>
                       <div className="mt-2 space-y-2 pl-0">
+                        <label className="text-xs text-gray-500 block">Hora envío</label>
                         <Input
                           type="time"
                           value={config.programador || HORA_DEFAULT}
@@ -491,11 +506,13 @@ export function ConfiguracionNotificaciones() {
                           disabled={!config.habilitado}
                           className="h-8 text-xs bg-white w-28"
                         />
+                        <label className="text-xs text-gray-500 block pt-1">CCO (copia oculta)</label>
                         {[0, 1, 2].map((i) => (
-                          <div key={i} className="flex gap-1">
+                          <div key={i} className="flex gap-1 items-center">
+                            <span className="text-xs text-gray-500 w-8">CCO {i + 1}</span>
                             <Input
                               type="email"
-                              placeholder="CCO"
+                              placeholder={`CCO ${i + 1}`}
                               value={config.cco[i] || ''}
                               onChange={(e) => actualizarCCO(tipo, i, e.target.value)}
                               className="h-8 text-xs flex-1 bg-white"
@@ -518,7 +535,7 @@ export function ConfiguracionNotificaciones() {
         </table>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
+        <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
         <div className="flex items-center gap-3 text-sm text-gray-600">
           <Link to="/configuracion?tab=email" className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800">
             <Mail className="h-4 w-4" /> Email (SMTP)
@@ -526,6 +543,11 @@ export function ConfiguracionNotificaciones() {
           <Link to="/configuracion?tab=plantillas" className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800">
             <FileText className="h-4 w-4" /> Crear/editar plantillas
           </Link>
+          {ultimoGuardado && (
+            <span className="inline-flex items-center gap-1 text-emerald-600" title={`Guardado a las ${ultimoGuardado.toLocaleTimeString()}`}>
+              <CheckCircle className="h-4 w-4" /> Guardado
+            </span>
+          )}
         </div>
         <Button onClick={guardarConfiguracionEnvios} disabled={guardandoEnvios} className="bg-blue-600 hover:bg-blue-700">
           {guardandoEnvios ? 'Guardando...' : 'Guardar'}

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Motor de sustitucion para plantillas de cobranza.
 Soporta variables {{TABLA.CAMPO}}, bloque {{#CUOTAS.VENCIMIENTOS}} y variable unica {{TABLA_CUOTAS_PENDIENTES}}.
 """
@@ -125,14 +125,23 @@ def render_plantilla_cobranza(texto: str, contexto: dict) -> str:
                 parts.append(block_rendered)
             result = prefix + "\n".join(parts) + suffix
 
-    # 2) Reemplazar variables simples desde contexto
+    # 2) Reemplazar variables simples desde contexto (si el valor es placeholder {{...}}, usar valor calculado)
+    def _es_placeholder(s):
+        return isinstance(s, str) and "{{" in s and "}}" in s
+    cuotas_list = contexto.get("CUOTAS.VENCIMIENTOS") or contexto.get("cuotas_vencidas") or []
+    num_cuotas_fallback = str(len(cuotas_list))
+    fechas_fallback = ", ".join(_format_fecha(c.get("fecha_vencimiento") if isinstance(c, dict) else getattr(c, "fecha_vencimiento", None)) for c in cuotas_list)
     for key, value in list(contexto.items()):
         if key in ("CUOTAS.VENCIMIENTOS", "cuotas_vencidas") or isinstance(value, list):
             continue
         token = "{{" + key + "}}"
         if token not in result:
             continue
-        if "FECHA" in key.upper():
+        if key == "CUOTAS_VENCIDAS" and _es_placeholder(str(value) if value is not None else ""):
+            value = num_cuotas_fallback
+        elif key == "FECHAS_CUOTAS_PENDIENTES" and _es_placeholder(str(value) if value is not None else ""):
+            value = fechas_fallback
+        if "FECHA" in key.upper() and value is not None and not _es_placeholder(str(value)):
             value = _format_fecha(value)
         result = result.replace(token, str(value) if value is not None else "")
 

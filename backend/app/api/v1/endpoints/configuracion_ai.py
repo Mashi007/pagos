@@ -45,7 +45,7 @@ from sqlalchemy import inspect as sa_inspect
 CONTEXTO_AI_STATEMENT_TIMEOUT_MS = 10_000  # 10 segundos
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 CLAVE_AI = "configuracion_ai"
 # Clave opcional en tabla configuracion: JSON array de {"pregunta": "...", "campo": "..."} para

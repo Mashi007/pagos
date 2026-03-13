@@ -126,9 +126,19 @@ def _dict_reemplazo_pdf(contexto: dict, datos: dict) -> dict:
     out["TOTAL_ADEUDADO"] = str(contexto.get("TOTAL_ADEUDADO", ""))
     out["LOGO_URL"] = str(contexto.get("LOGO_URL", ""))
     out["CIUDAD"] = datos.get("ciudad", "") or out.get("ciudad", "")
-    # Número de cuotas vencidas y fechas (usadas en plantilla PDF variable)
-    out["CUOTAS_VENCIDAS"] = str(contexto.get("CUOTAS_VENCIDAS", "")) if contexto.get("CUOTAS_VENCIDAS") is not None else (out.get("num_cuotas", "") or str(len(fechas_cuotas)))
-    out["FECHAS_CUOTAS_PENDIENTES"] = str(contexto.get("FECHAS_CUOTAS_PENDIENTES", "")) if contexto.get("FECHAS_CUOTAS_PENDIENTES") is not None else out["fechas_str"]
+    # Número de cuotas vencidas y fechas: si el contexto trae placeholder literal ({{...}}) usar valor calculado
+    def _es_placeholder(s):
+        return isinstance(s, str) and "{{" in s and "}}" in s
+    val_cuotas = contexto.get("CUOTAS_VENCIDAS")
+    val_fechas = contexto.get("FECHAS_CUOTAS_PENDIENTES")
+    if val_cuotas is not None and not _es_placeholder(str(val_cuotas)):
+        out["CUOTAS_VENCIDAS"] = str(val_cuotas)
+    else:
+        out["CUOTAS_VENCIDAS"] = out.get("num_cuotas", "") or str(len(fechas_cuotas))
+    if val_fechas is not None and not _es_placeholder(str(val_fechas)):
+        out["FECHAS_CUOTAS_PENDIENTES"] = str(val_fechas)
+    else:
+        out["FECHAS_CUOTAS_PENDIENTES"] = out["fechas_str"]
     # Placeholder estructural: fin de encabezado (se sustituye por vacío para que no quede literal en el PDF)
     out["ENCABEZADO_END"] = ""
     return out
