@@ -109,8 +109,8 @@ def _dict_reemplazo_pdf(contexto: dict, datos: dict) -> dict:
     """
     Construye un diccionario plano para reemplazar variables en la plantilla PDF.
     Incluye claves de datos (monto_total_usd, num_cuotas, fechas_str, etc.) y de contexto
-    (CLIENTES.NOMBRE_COMPLETO, FECHA_CARTA, PRESTAMOS.ID, NUMEROCORRELATIVO, TOTAL_ADEUDADO, etc.).
-    Todas las variables se sustituyen con datos reales al enviar.
+    (CLIENTES.NOMBRE_COMPLETO, FECHA_CARTA, PRESTAMOS.ID, NUMEROCORRELATIVO, TOTAL_ADEUDADO,
+    CUOTAS_VENCIDAS, FECHAS_CUOTAS_PENDIENTES, etc.). Todas las variables se sustituyen con datos reales al enviar.
     """
     out = dict(datos)
     fechas_cuotas = datos.get("fechas_cuotas") or []
@@ -126,6 +126,11 @@ def _dict_reemplazo_pdf(contexto: dict, datos: dict) -> dict:
     out["TOTAL_ADEUDADO"] = str(contexto.get("TOTAL_ADEUDADO", ""))
     out["LOGO_URL"] = str(contexto.get("LOGO_URL", ""))
     out["CIUDAD"] = datos.get("ciudad", "") or out.get("ciudad", "")
+    # Número de cuotas vencidas y fechas (usadas en plantilla PDF variable)
+    out["CUOTAS_VENCIDAS"] = str(contexto.get("CUOTAS_VENCIDAS", "")) if contexto.get("CUOTAS_VENCIDAS") is not None else (out.get("num_cuotas", "") or str(len(fechas_cuotas)))
+    out["FECHAS_CUOTAS_PENDIENTES"] = str(contexto.get("FECHAS_CUOTAS_PENDIENTES", "")) if contexto.get("FECHAS_CUOTAS_PENDIENTES") is not None else out["fechas_str"]
+    # Placeholder estructural: fin de encabezado (se sustituye por vacío para que no quede literal en el PDF)
+    out["ENCABEZADO_END"] = ""
     return out
 
 

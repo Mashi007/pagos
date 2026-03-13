@@ -1,4 +1,4 @@
-﻿"""
+"""
 Adjunto PDF fijo para emails de cobranza.
 
 Se anexa siempre el mismo archivo PDF sin modificaciones (documento estÃ¡tico).
@@ -24,6 +24,10 @@ TIPOS_CASO_VALIDOS = frozenset([
     "dias_1_retraso", "dias_3_retraso", "dias_5_retraso",
     "prejudicial", "mora_90",
 ])
+
+# Evitar repetir el mismo WARNING por cada ítem del batch (Render: disco efímero, archivos no existen)
+_warned_adjuntos_caso_vacio: set = set()
+_warned_adjunto_path: set = set()
 
 
 def _resolve_path(ruta: str) -> Optional[str]:
@@ -157,7 +161,10 @@ def get_adjuntos_fijos_por_caso(db, tipo_caso: str):
         if not path.startswith(base_dir) or ".." in ruta_rel:
             continue
         if not os.path.isfile(path):
-            logger.warning("Adjunto por caso %s no encontrado (en Render usar disco persistente). base_dir=%s path=%s", tipo_caso, base_dir[:120], path[:200])
+            key = (tipo_caso, path)
+            if key not in _warned_adjunto_path:
+                _warned_adjunto_path.add(key)
+                logger.warning("Adjunto por caso %s no encontrado (en Render usar disco persistente). base_dir=%s path=%s", tipo_caso, base_dir[:120], path[:200])
             continue
         try:
             with open(path, "rb") as f:
@@ -165,7 +172,9 @@ def get_adjuntos_fijos_por_caso(db, tipo_caso: str):
         except Exception as e:
             logger.warning("Error leyendo adjunto %s: %s", path[:200], e)
     if lista and not result:
-        logger.warning("Adjuntos fijos caso %s: config tiene entradas pero ningun archivo encontrado. base_dir=%s (Render: usar disco persistente)", tipo_caso, base_dir[:150])
+        if tipo_caso not in _warned_adjuntos_caso_vacio:
+            _warned_adjuntos_caso_vacio.add(tipo_caso)
+            logger.warning("Adjuntos fijos caso %s: config tiene entradas pero ningun archivo encontrado. base_dir=%s (Render: usar disco persistente)", tipo_caso, base_dir[:150])
     elif result:
         logger.info("Adjuntos fijos caso %s: %d archivo(s) anexados", tipo_caso, len(result))
     return result

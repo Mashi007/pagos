@@ -115,9 +115,10 @@ def _enviar_correos_items(
             plantilla_id = int(raw_id) if raw_id is not None else None
         except (TypeError, ValueError):
             plantilla_id = None
-        # Construir contexto_cobranza cuando haga falta: email COBRANZA o adjunto PDF con variables en cualquier pestaña
-        if plantilla_id and db and item.get("prestamo_id") and not item.get("contexto_cobranza"):
-            plantilla = db.get(PlantillaNotificacion, plantilla_id)
+        # Construir contexto_cobranza cuando haga falta: email COBRANZA, adjunto PDF (Carta_Cobranza) o plantilla con variables cobranza
+        # Si "Incluir PDF" está marcado pero no hay plantilla (Texto por defecto), igual se construye contexto para adjuntar Carta_Cobranza.pdf
+        if db and item.get("prestamo_id") and not item.get("contexto_cobranza"):
+            plantilla = db.get(PlantillaNotificacion, plantilla_id) if plantilla_id else None
             need_ctx = (
                 (plantilla and getattr(plantilla, "tipo", None) == "COBRANZA")
                 or (tipo_cfg.get("incluir_pdf_anexo", False) is True)

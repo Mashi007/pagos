@@ -19,7 +19,7 @@ from app.models.cuota import Cuota
 from app.models.pago import Pago
 from app.models.revision_manual_prestamo import RevisionManualPrestamo
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 # ===== SCHEMAS VALIDACION =====
 

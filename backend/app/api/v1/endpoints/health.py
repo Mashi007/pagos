@@ -265,12 +265,14 @@ async def health_check_detailed(db: Session = Depends(get_db)):
             "checked_out_count": engine.pool.checkedout(),
         }
         
+        # No exponer database_url en producción (evita filtrar parte de la cadena de conexión)
+        show_db_url = getattr(settings, "DEBUG", False) is True
         return {
             "status": "ok",
             "tables": tables,
             "table_counts": counts,
             "pool": pool_status,
-            "database_url": settings.DATABASE_URL[:80] if settings.DATABASE_URL else None,
+            "database_url": (settings.DATABASE_URL[:80] if settings.DATABASE_URL else None) if show_db_url else "[oculto en producción]",
             "environment": getattr(settings, "ENVIRONMENT", None),
         }
         
