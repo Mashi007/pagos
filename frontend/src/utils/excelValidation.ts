@@ -229,6 +229,16 @@ export interface ValidationResult { isValid: boolean; message?: string; normaliz
 export interface ExcelRow extends ExcelData { _rowIndex: number; _validation: Record<string, ValidationResult>; _hasErrors: boolean }
 export interface ValidateFieldOptions { estadoOpciones?: string[] }
 export function blankIfNN(v: string | null | undefined): string { if (v == null) return ''; const t = v.toString().trim(); return t.toLowerCase() === 'nn' ? '' : t }
+
+/** Normaliza teléfono al subir archivo: quita guiones/espacios, 0 inicial y prefijo 58. Devuelve 10 dígitos para Venezuela. */
+export function normalizeTelefonoFromExcel(raw: string | null | undefined): string {
+  if (raw == null || String(raw).trim() === '') return ''
+  let d = String(raw).replace(/\D/g, '')
+  if (d.startsWith('58') && d.length >= 11) d = d.slice(2)
+  d = d.replace(/^0+/, '')
+  if (d.length > 10) d = d.slice(-10)
+  return d.slice(0, 10)
+}
 export function formatNombres(n: string): string { if (!n?.trim()) return n; return n.split(/\s+/).filter(w=>w.length).map(w=>w[0].toUpperCase()+w.slice(1).toLowerCase()).join(' ') }
 export function convertirFechaExcel(val: unknown): string {
   if (val == null || val === '') return ''

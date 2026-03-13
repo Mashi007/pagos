@@ -21,6 +21,7 @@ import {
   validateExcelFile,
   validateExcelData,
   sanitizeFileName,
+  normalizeTelefonoFromExcel,
 } from '../utils/excelValidation'
 
 export interface ExcelUploaderProps {
@@ -357,8 +358,8 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
           direccion: blankIfNN(row.direccion),
           fecha_nacimiento: convertirFechaParaBackend(blankIfNN(row.fecha_nacimiento)),
           ocupacion: blankIfNN(row.ocupacion),
-          estado: blankIfNN(row.estado).toUpperCase(),
-          activo: row.activo === 'true' || row.activo === 'TRUE' || row.activo === '1',
+          estado: (blankIfNN(row.estado) || 'ACTIVO').toUpperCase(),
+          activo: !blankIfNN(row.activo) ? true : (row.activo === 'true' || row.activo === 'TRUE' || row.activo === '1'),
           notas: blankIfNN(row.notas) || 'NA',
           usuario_registro: usuarioRegistro,
         }
@@ -769,7 +770,7 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
             _hasErrors: false,
             cedula: (row[0]?.toString() || '').trim() || 'Z999999999',
             nombres: row[1]?.toString() || '',
-            telefono: row[2]?.toString() || '',
+            telefono: normalizeTelefonoFromExcel(row[2]?.toString()) || '',
             email: row[3]?.toString() || '',
             direccion: row[4]?.toString() || '',
             fecha_nacimiento: convertirFechaExcel(row[5]),
@@ -886,6 +887,22 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
   const validRows = excelData.filter((r) => !r._hasErrors).length
   const totalRows = excelData.length
 
+  /** Limpia todo y vuelve a la zona de carga para elegir otro archivo */
+  const handleCambiarArchivo = useCallback(() => {
+    setExcelData([])
+    setUploadedFile(null)
+    setShowPreview(false)
+    setSavedClients(new Set())
+    setEnviadosRevisar(new Set())
+    setToasts([])
+    setShowModalCedulasExistentes(false)
+    setCedulasExistentesEnBD([])
+    setPendingSaveFilteredByCedulas(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }, [])
+
   return {
     // State
     isDragging,
@@ -920,6 +937,7 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
     handleFileSelect,
     updateCellValue,
     setShowPreview,
+    handleCambiarArchivo,
     removeToast,
     getValidClients,
     getDisplayData,
