@@ -10,9 +10,7 @@ import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
 import { toast } from 'sonner'
-
-const QUERY_KEY_ENVIOS = ['configuracion-notificaciones-envios'] as const
-const QUERY_KEY_PLANTILLAS = ['notificaciones-plantillas', { solo_activas: false }] as const
+import { NOTIFICACIONES_QUERY_KEYS } from '../../queries/notificaciones'
 
 /** Claves reservadas en la config (no son tipos de caso) */
 const CLAVES_GLOBALES = ['modo_pruebas', 'email_pruebas', 'emails_pruebas'] as const
@@ -23,9 +21,9 @@ export type ConfigEnvioItem = {
   cco: string[]
   plantilla_id?: number | null
   programador?: string
-  /** Incluir PDF anexo para este tipo. Por defecto true. */
+  /** Incluir PDF anexo (pestaña 2: Plantilla anexo PDF). Si true, Carta_Cobranza.pdf se agrega OBLIGATORIAMENTE al email. */
   incluir_pdf_anexo?: boolean
-  /** Incluir documentos PDF fijos para este tipo. Por defecto true. */
+  /** Incluir documentos PDF fijos (pestaña 3: Documentos PDF anexos). Si true, se agregan OBLIGATORIAMENTE al email. */
   incluir_adjuntos_fijos?: boolean
 }
 
@@ -93,12 +91,12 @@ export function ConfiguracionNotificaciones() {
   const queryClient = useQueryClient()
 
   const { data: dataEnvios, isLoading: loadingEnvios, isError: errorEnvios } = useQuery({
-    queryKey: QUERY_KEY_ENVIOS,
+    queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
     queryFn: () => emailConfigService.obtenerConfiguracionEnvios() as Promise<ConfigEnvioCompleta>,
     staleTime: 1 * 60 * 1000,
   })
   const { data: plantillasList, isLoading: loadingPlantillas } = useQuery({
-    queryKey: QUERY_KEY_PLANTILLAS,
+    queryKey: NOTIFICACIONES_QUERY_KEYS.plantillas,
     queryFn: () => notificacionService.listarPlantillas(undefined, false),
     staleTime: 1 * 60 * 1000,
     placeholderData: [] as NotificacionPlantilla[],
@@ -190,7 +188,7 @@ export function ConfiguracionNotificaciones() {
         }
       })
       await emailConfigService.actualizarConfiguracionEnvios(payload)
-      await queryClient.invalidateQueries({ queryKey: QUERY_KEY_ENVIOS })
+      await queryClient.invalidateQueries({ queryKey: NOTIFICACIONES_QUERY_KEYS.envios })
       setUltimoGuardado(new Date())
       toast.success('Configuración de envíos guardada')
     } catch {
@@ -277,7 +275,7 @@ export function ConfiguracionNotificaciones() {
         email_pruebas: emailsPruebas[0]?.trim() || '',
       }
       await emailConfigService.actualizarConfiguracionEnvios(payload)
-      await queryClient.invalidateQueries({ queryKey: QUERY_KEY_ENVIOS })
+      await queryClient.invalidateQueries({ queryKey: NOTIFICACIONES_QUERY_KEYS.envios })
       const res = await notificacionService.enviarTodasNotificaciones()
       if (res?.en_proceso && res?.mensaje) {
         toast.success(res.mensaje, { duration: 8000 })
@@ -317,7 +315,7 @@ export function ConfiguracionNotificaciones() {
             Configuración por caso
           </CardTitle>
           <CardDescription>
-            Asigna una plantilla a cada pestaña, activa el envío y define si incluir PDF anexo (carta cobranza) y documentos PDF fijos. Los documentos fijos se asignan por pestaña en Configuración → Plantillas → Documentos PDF anexos.
+            Asigna una plantilla a cada pestaña, activa el envío y define si incluir PDF anexo (carta cobranza) y documentos PDF fijos. Cuando marques «PDF» (pestaña 2) o «Adj.» (pestaña 3), esos adjuntos se agregan OBLIGATORIAMENTE al email. Los documentos fijos se asignan en Configuración → Plantillas → Documentos PDF anexos.
           </CardDescription>
         </CardHeader>
       </Card>
@@ -493,7 +491,7 @@ export function ConfiguracionNotificaciones() {
                       checked={config.incluir_pdf_anexo === true}
                       onChange={() => setConfig(tipo, { incluir_pdf_anexo: !config.incluir_pdf_anexo })}
                       disabled={!config.habilitado}
-                      title="Incluir Carta_Cobranza.pdf (Plantilla anexo PDF). Desmarca para enviar solo tus PDFs de Documentos PDF anexos."
+                      title="Pestaña 2: agregar OBLIGATORIAMENTE Carta_Cobranza.pdf al email. Desmarca para no incluirla."
                       className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
                   </td>
@@ -503,7 +501,7 @@ export function ConfiguracionNotificaciones() {
                       checked={config.incluir_adjuntos_fijos !== false}
                       onChange={() => setConfig(tipo, { incluir_adjuntos_fijos: !(config.incluir_adjuntos_fijos !== false) })}
                       disabled={!config.habilitado}
-                      title="Incluir documentos PDF fijos (pestaña 3: Documentos PDF anexos)"
+                      title="Pestaña 3: agregar OBLIGATORIAMENTE los documentos PDF fijos (Documentos PDF anexos) al email."
                       className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
                   </td>

@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent } from '../ui/card'
 import { notificacionService, type NotificacionPlantilla } from '../../services/notificacionService'
 import { FileText, Loader2, ChevronRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { NOTIFICACIONES_QUERY_KEYS } from '../../queries/notificaciones'
 
 const TIPO_LABEL: Record<string, string> = {
   PAGO_5_DIAS_ANTES: 'Faltan 5',
@@ -27,31 +28,12 @@ interface PlantillasGuardadasListaProps {
 }
 
 export function PlantillasGuardadasLista({ className = '', maxItems = 20, tabActivo = true }: PlantillasGuardadasListaProps) {
-  const [plantillas, setPlantillas] = useState<NotificacionPlantilla[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    notificacionService
-      .listarPlantillas(undefined, false)
-      .then((data) => {
-        if (!cancelled) setPlantillas(data || [])
-      })
-      .catch(() => {
-        if (!cancelled) setPlantillas([])
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => { cancelled = true }
-  }, [])
-
-  const cargar = () => {
-    setLoading(true)
-    notificacionService.listarPlantillas(undefined, false).then((data) => setPlantillas(data || [])).catch(() => setPlantillas([])).finally(() => setLoading(false))
-  }
-  useEffect(() => { if (tabActivo) cargar() }, [tabActivo])
+  const { data: plantillas = [], isLoading: loading } = useQuery({
+    queryKey: NOTIFICACIONES_QUERY_KEYS.plantillas,
+    queryFn: () => notificacionService.listarPlantillas(undefined, false),
+    staleTime: 1 * 60 * 1000,
+    placeholderData: [] as NotificacionPlantilla[],
+  })
 
   if (loading) {
     return (

@@ -18,6 +18,7 @@ from app.services.carta_cobranza_pdf import (
     _sanitize_for_reportlab,
     _format_fecha,
     _datos_desde_contexto,
+    _html_para_reportlab,
     generar_carta_cobranza_pdf,
 )
 
@@ -35,6 +36,19 @@ def test_sanitize_for_reportlab_removes_emoji():
     t = "Hola \u2709 mundo"
     assert "\u2709" not in _sanitize_for_reportlab(t)
     assert "Hola" in _sanitize_for_reportlab(t) and "mundo" in _sanitize_for_reportlab(t)
+
+
+def test_html_para_reportlab_strips_anchor_class_and_data_attrs():
+    """ReportLab no acepta class/data-cfemail en <a>; _html_para_reportlab los elimina."""
+    raw = (
+        'Contacto: <a href="/cdn-cgi/l/email-protection" class="__cf_email__" '
+        'data-cfemail="54373b36">[email&#160;protected]</a> o al 424-4579934.'
+    )
+    out = _html_para_reportlab(raw)
+    assert "class=" not in out
+    assert "data-cfemail=" not in out
+    assert 'href="/cdn-cgi/l/email-protection"' in out
+    assert "[email" in out or "protected" in out or "rapicredit" in out.lower()
 
 
 def test_format_fecha_date():

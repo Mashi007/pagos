@@ -198,11 +198,36 @@ def _extraer_cuerpo_si_html_completo(texto: str) -> str:
     return t
 
 
+def _sanitize_anchor_tags_for_reportlab(html: str) -> str:
+    """
+    ReportLab paraparser solo acepta en <a>: href, name, target y atributos de fuente/color.
+    No acepta 'class', 'data-cfemail', etc. (p. ej. Cloudflare email protection).
+    Reemplaza cada <a ...> por <a href="..."> (y opcionalmente target="...") para evitar ValueError.
+    """
+    if not html or "<a " not in html.lower():
+        return html
+
+    def repl(match: re.Match) -> str:
+        attrs_str = match.group(1)
+        href_m = re.search(r'href\s*=\s*["\']([^"\']*)["\']', attrs_str, re.IGNORECASE)
+        target_m = re.search(r'target\s*=\s*["\']([^"\']*)["\']', attrs_str, re.IGNORECASE)
+        href = (href_m.group(1) if href_m else "").strip()
+        target = target_m.group(1).strip() if target_m else None
+        if href and target is not None:
+            return f'<a href="{href}" target="{target}">'
+        if href:
+            return f'<a href="{href}">'
+        return "<a>"
+
+    return re.sub(r"<a\s+([^>]*)>", repl, html, flags=re.IGNORECASE)
+
+
 def _html_para_reportlab(texto: str) -> str:
     """
     Convierte HTML con div/p/span/clases a un formato que ReportLab Paragraph acepta.
     ReportLab solo soporta <b>, <i>, <u>, <br/>, <font>, etc. No soporta <div>, <p>, class, style.
     Se convierten bloques a saltos de línea y se eliminan atributos no soportados.
+    En <a> solo se dejan href y target (ReportLab no acepta class, data-cfemail, etc.).
     """
     if not texto or not texto.strip():
         return texto
@@ -220,6 +245,8 @@ def _html_para_reportlab(texto: str) -> str:
         t = re.sub(rf"<{tag}\s*>", "", t, flags=re.IGNORECASE)
     # <strong> -> <b> para ReportLab
     t = t.replace("<strong>", "<b>").replace("</strong>", "</b>")
+    # En <a> dejar solo href y target (ReportLab no acepta class, data-cfemail, etc.)
+    t = _sanitize_anchor_tags_for_reportlab(t)
     # Eliminar líneas vacías de <br/> repetidos (opcional: dejar solo uno)
     t = re.sub(r"(<br/\s*>\s*){3,}", "<br/><br/>", t, flags=re.IGNORECASE)
     return t.strip()

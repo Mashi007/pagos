@@ -148,8 +148,9 @@ def _enviar_correos_items(
             _c = cuerpo.lower()
             if any(tag in _c for tag in ("<table", "</table>", "<div", "<p ", "<span", "<html", "<body", "<br", "<h1", "<h2", "<h3")):
                 body_html = cuerpo
-        # PDF = Carta_Cobranza.pdf (generada desde Plantilla anexo PDF, pestaña 2). Por defecto no se adjunta; marcar "PDF" para incluirla.
-        # Adj. = documentos subidos en Documentos PDF anexos (pestaña 3). Por defecto sí; solo se omiten si incluir_adjuntos_fijos=False.
+        # Adjuntos obligatorios cuando están seleccionados en Config (Notificaciones → Envíos):
+        # - PDF (pestaña 2): Carta_Cobranza.pdf generada desde Plantilla anexo PDF. Se agrega OBLIGATORIAMENTE si incluir_pdf_anexo=True.
+        # - Adj. (pestaña 3): Documentos PDF fijos subidos en Documentos PDF anexos. Se agregan OBLIGATORIAMENTE si incluir_adjuntos_fijos no es False.
         incluir_pdf_anexo = tipo_cfg.get("incluir_pdf_anexo", False) is True
         incluir_adjuntos_fijos = tipo_cfg.get("incluir_adjuntos_fijos", True) is not False  # True si falta la clave (compatibilidad)
         if incluir_pdf_anexo or incluir_adjuntos_fijos:
@@ -172,9 +173,12 @@ def _enviar_correos_items(
                     attachments = None
                 log_envio_adjuntos(item_id_log, len(attachments) if attachments else 0)
             except Exception as e:
-                log_envio_adjuntos(item_id_log, 0, error=str(e))
+                log_envio_adjuntos(item_id_log, len(attachments) if attachments else 0, error=str(e))
                 log_envio_fallo("adjuntos", str(e), exc=e)
-        # Email: en modo prueba todos van solo a email_pruebas; en producci�n al correo del cliente (+ CCO si hay)
+                if not attachments:
+                    attachments = None
+        # Los adjuntos construidos se pasan SIEMPRE a send_email (attachments=None o lista no vacía).
+        # Destinatario: en modo prueba todos van solo a email_pruebas; en producci�n al correo del cliente (+ CCO si hay)
         if usar_solo_pruebas:
             to_email = [email_pruebas]
             bcc_list = None

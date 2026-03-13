@@ -1,5 +1,7 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useMemo } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { notificacionService, NotificacionPlantilla } from '../../services/notificacionService'
+import { NOTIFICACIONES_QUERY_KEYS } from '../../queries/notificaciones'
 import { Button } from '../../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
@@ -33,32 +35,13 @@ const categoriasOrden = [
 ]
 
 export function ResumenPlantillas({ onEditarPlantilla, onCambiarPestaña, activeTab }: ResumenPlantillasProps) {
-  const [plantillas, setPlantillas] = useState<NotificacionPlantilla[]>([])
-  const [loading, setLoading] = useState(false)
-
-  const cargarPlantillas = async () => {
-    setLoading(true)
-    try {
-      const data = await notificacionService.listarPlantillas(undefined, false)
-      setPlantillas(data || [])
-    } catch (error: any) {
-      toast.error(error?.response?.data?.detail || 'Error al cargar plantillas')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    cargarPlantillas()
-  }, [])
-
-  // Recargar plantillas cuando se cambia a la pestaña de resumen
-  // Esto asegura que las plantillas recién guardadas aparezcan
-  useEffect(() => {
-    if (activeTab === 'resumen') {
-      cargarPlantillas()
-    }
-  }, [activeTab])
+  const queryClient = useQueryClient()
+  const { data: plantillas = [], isLoading: loading } = useQuery({
+    queryKey: NOTIFICACIONES_QUERY_KEYS.plantillas,
+    queryFn: () => notificacionService.listarPlantillas(undefined, false),
+    staleTime: 1 * 60 * 1000,
+    placeholderData: [] as NotificacionPlantilla[],
+  })
 
   // Organizar plantillas por categoría
   const plantillasPorCategoria = useMemo(() => {
@@ -120,7 +103,7 @@ export function ResumenPlantillas({ onEditarPlantilla, onCambiarPestaña, active
     try {
       await notificacionService.eliminarPlantilla(plantilla.id)
       toast.success('Plantilla eliminada exitosamente')
-      await cargarPlantillas()
+      await queryClient.invalidateQueries({ queryKey: NOTIFICACIONES_QUERY_KEYS.plantillas })
     } catch (error: any) {
       toast.error(error?.response?.data?.detail || 'Error al eliminar plantilla')
     }

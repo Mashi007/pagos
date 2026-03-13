@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { notificacionService, NotificacionPlantilla, NotificacionVariable } from '../../services/notificacionService'
+import { NOTIFICACIONES_QUERY_KEYS } from '../../queries/notificaciones'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { Textarea } from '../../components/ui/textarea'
@@ -22,9 +24,14 @@ interface PlantillasNotificacionesProps {
 }
 
 export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada, tabSeccionActiva }: PlantillasNotificacionesProps = {}) {
-  const [plantillas, setPlantillas] = useState<NotificacionPlantilla[]>([])
+  const queryClient = useQueryClient()
+  const { data: plantillas = [], isLoading: loading } = useQuery({
+    queryKey: NOTIFICACIONES_QUERY_KEYS.plantillas,
+    queryFn: () => notificacionService.listarPlantillas(undefined, false),
+    staleTime: 1 * 60 * 1000,
+    placeholderData: [] as NotificacionPlantilla[],
+  })
   const [plantillasFiltradas, setPlantillasFiltradas] = useState<NotificacionPlantilla[]>([])
-  const [loading, setLoading] = useState(false)
   const [selected, setSelected] = useState<NotificacionPlantilla | null>(null)
   const [busqueda, setBusqueda] = useState('')
   const [filtroTipo, setFiltroTipo] = useState('')
@@ -220,19 +227,6 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
     toast.success('Plantilla de cobranza cargada. Revise y guarde.')
   }
 
-  const cargar = async () => {
-    setLoading(true)
-    try {
-      const data = await notificacionService.listarPlantillas(undefined, false)
-      setPlantillas(data)
-      setPlantillasFiltradas(data)
-    } catch (error: any) {
-      toast.error(error?.response?.data?.detail || 'Error al cargar plantillas')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   // Generar variables precargadas desde los campos de las tablas
   const generarVariablesPrecargadas = (): NotificacionVariable[] => {
     const CAMPOS_DISPONIBLES = {
@@ -361,7 +355,6 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
   }
 
   useEffect(() => {
-    cargar()
     cargarVariables()
   }, [])
 
@@ -398,13 +391,6 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
       }
     }
   }, [plantillaInicial, plantillas, onPlantillaCargada])
-
-  // Recargar plantillas cuando se cambia a la pesta?a de resumen
-  useEffect(() => {
-    if (activeTab === 'resumen') {
-      cargar()
-    }
-  }, [activeTab])
 
   // Filtrar plantillas
   useEffect(() => {
@@ -594,7 +580,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
           }
         }
         if (otrosTipos.length > 0) toast.success(`Se crearon ${otrosTipos.length} plantilla(s) para los otros casos`) 
-        await cargar()
+        await queryClient.invalidateQueries({ queryKey: NOTIFICACIONES_QUERY_KEYS.plantillas })
         limpiar()
         // Cambiar a la pesta?a de resumen despu?s de guardar
         setActiveTab('resumen')
@@ -649,7 +635,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
         toast.error(`Errores al crear algunas plantillas: ${erroresCreacion.join(', ')}`)
       }
 
-      await cargar()
+      await queryClient.invalidateQueries({ queryKey: NOTIFICACIONES_QUERY_KEYS.plantillas })
       limpiar()
     } catch (error: any) {
       toast.error(error?.response?.data?.detail || 'Error al guardar plantillas')
@@ -668,7 +654,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
       await notificacionService.eliminarPlantilla(selected.id)
       toast.success('Plantilla eliminada exitosamente')
       limpiar()
-      await cargar()
+      await queryClient.invalidateQueries({ queryKey: NOTIFICACIONES_QUERY_KEYS.plantillas })
     } catch (error: any) {
       toast.error(error?.response?.data?.detail || 'Error al eliminar plantilla')
     }
@@ -746,7 +732,7 @@ export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada,
     try {
       await notificacionService.eliminarPlantilla(plantilla.id)
       toast.success('Plantilla eliminada exitosamente')
-      await cargar()
+      await queryClient.invalidateQueries({ queryKey: NOTIFICACIONES_QUERY_KEYS.plantillas })
     } catch (error: any) {
       toast.error(error?.response?.data?.detail || 'Error al eliminar plantilla')
     }

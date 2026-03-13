@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card'
 import { Button } from '../ui/button'
 import { notificacionService } from '../../services/notificacionService'
 import { toast } from 'sonner'
 import { Link, Upload, Loader2, Trash2, FileText } from 'lucide-react'
+import { NOTIFICACIONES_QUERY_KEYS } from '../../queries/notificaciones'
 import {
   Select,
   SelectContent,
@@ -27,22 +29,16 @@ const TIPOS_CASO: { value: string; label: string }[] = [
 type AdjuntoItem = { id: string; nombre_archivo: string; ruta: string }
 
 export function DocumentosPdfAnexos() {
-  const [porCaso, setPorCaso] = useState<Record<string, AdjuntoItem[]>>({})
+  const queryClient = useQueryClient()
+  const { data: porCaso = {}, isLoading: loading } = useQuery({
+    queryKey: NOTIFICACIONES_QUERY_KEYS.adjuntosFijos,
+    queryFn: () => notificacionService.getAdjuntosFijosCobranza(),
+    staleTime: 1 * 60 * 1000,
+  })
   const [selectedTipos, setSelectedTipos] = useState<string[]>([TIPOS_CASO[0].value])
   const [archivo, setArchivo] = useState<File | null>(null)
   const [subiendo, setSubiendo] = useState(false)
-  const [loading, setLoading] = useState(true)
   const [eliminandoId, setEliminandoId] = useState<string | null>(null)
-
-  const cargar = () => {
-    setLoading(true)
-    notificacionService.getAdjuntosFijosCobranza()
-      .then((data) => { setPorCaso(data || {}) })
-      .catch(() => { toast.error('Error al cargar documentos anexos.') })
-      .finally(() => setLoading(false))
-  }
-
-  useEffect(() => { cargar() }, [])
 
   const toggleTipo = (value: string) => {
     setSelectedTipos((prev) => (prev.includes(value) ? prev.filter((t) => t !== value) : [...prev, value]))
@@ -65,7 +61,7 @@ export function DocumentosPdfAnexos() {
       }
       toast.success('Documento guardado.')
       setArchivo(null)
-      cargar()
+      await queryClient.invalidateQueries({ queryKey: NOTIFICACIONES_QUERY_KEYS.adjuntosFijos })
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       toast.error(msg || 'Error al subir.')
@@ -77,7 +73,7 @@ export function DocumentosPdfAnexos() {
     try {
       await notificacionService.deleteAdjuntoFijoCobranza(id)
       toast.success('Documento eliminado.')
-      cargar()
+      await queryClient.invalidateQueries({ queryKey: NOTIFICACIONES_QUERY_KEYS.adjuntosFijos })
     } catch (e: unknown) {
       toast.error((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Error al eliminar.')
     } finally { setEliminandoId(null) }

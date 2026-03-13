@@ -385,8 +385,9 @@ def test_notificacion_llega_a_rapicreditca_con_dos_anexos(
     call_args = mock_send_email.call_args
     to_email = call_args[0][0] if call_args[0] else call_args[1].get("to_email")
     assert to_email == ["notificaciones@rapicreditca.com"], "El correo debe ir a notificaciones@rapicreditca.com"
+    # Confirmar que los adjuntos se pasan SIEMPRE al email cuando están configurados
     attachments = call_args[1].get("attachments")
-    assert attachments is not None, "Debe haber adjuntos"
+    assert attachments is not None, "Debe haber adjuntos (se anexan SIEMPRE cuando la config lo pide)"
     assert len(attachments) == 2, "Debe haber exactamente 2 anexos (Carta_Cobranza.pdf + adjunto fijo pestaña 3)"
     names = [a[0] for a in attachments if isinstance(a, tuple)]
     assert "Carta_Cobranza.pdf" in names

@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader } from '../ui/card'
 import { Badge } from '../ui/badge'
 import { Link } from 'react-router-dom'
@@ -6,6 +7,7 @@ import { FileText, Link as LinkIcon, Loader2, Settings } from 'lucide-react'
 import { emailConfigService } from '../../services/notificacionService'
 import { CRITERIOS } from './ConfiguracionNotificaciones'
 import type { ConfigEnvioItem } from './ConfiguracionNotificaciones'
+import { NOTIFICACIONES_QUERY_KEYS } from '../../queries/notificaciones'
 
 const CLAVES_GLOBALES = ['modo_pruebas', 'email_pruebas', 'emails_pruebas'] as const
 
@@ -14,36 +16,26 @@ const CLAVES_GLOBALES = ['modo_pruebas', 'email_pruebas', 'emails_pruebas'] as c
  * (tipos con incluir_pdf_anexo === true en la configuración de envíos).
  */
 export function VinculacionPlantillaAnexoPdf() {
-  const [cargando, setCargando] = useState(true)
-  const [pestanasConPdf, setPestanasConPdf] = useState<{ tipo: string; label: string }[]>([])
-
-  useEffect(() => {
-    let cancelled = false
-    emailConfigService
-      .obtenerConfiguracionEnvios()
-      .then((data) => {
-        if (cancelled || !data) return
-        const raw = data as Record<string, unknown>
-        const tipoToLabel = new Map(CRITERIOS.map((c) => [c.tipo, c.label]))
-        const conPdf: { tipo: string; label: string }[] = []
-        for (const key of Object.keys(raw)) {
-          if (CLAVES_GLOBALES.includes(key as (typeof CLAVES_GLOBALES)[number])) continue
-          const item = raw[key] as ConfigEnvioItem | undefined
-          if (item && typeof item === 'object' && item.incluir_pdf_anexo === true) {
-            const label = tipoToLabel.get(key) ?? key
-            conPdf.push({ tipo: key, label })
-          }
-        }
-        setPestanasConPdf(conPdf)
-      })
-      .catch(() => setPestanasConPdf([]))
-      .finally(() => {
-        if (!cancelled) setCargando(false)
-      })
-    return () => {
-      cancelled = true
+  const { data: rawEnvios, isLoading: cargando } = useQuery({
+    queryKey: NOTIFICACIONES_QUERY_KEYS.envios,
+    queryFn: () => emailConfigService.obtenerConfiguracionEnvios(),
+    staleTime: 1 * 60 * 1000,
+  })
+  const pestanasConPdf = useMemo(() => {
+    if (!rawEnvios || typeof rawEnvios !== 'object') return []
+    const raw = rawEnvios as Record<string, unknown>
+    const tipoToLabel = new Map(CRITERIOS.map((c) => [c.tipo, c.label]))
+    const conPdf: { tipo: string; label: string }[] = []
+    for (const key of Object.keys(raw)) {
+      if (CLAVES_GLOBALES.includes(key as (typeof CLAVES_GLOBALES)[number])) continue
+      const item = raw[key] as ConfigEnvioItem | undefined
+      if (item && typeof item === 'object' && item.incluir_pdf_anexo === true) {
+        const label = tipoToLabel.get(key) ?? key
+        conPdf.push({ tipo: key, label })
+      }
     }
-  }, [])
+    return conPdf
+  }, [rawEnvios])
 
   return (
     <Card className="mb-6 border-blue-100 bg-blue-50/30">
