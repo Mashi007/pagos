@@ -225,18 +225,23 @@ def build_contexto_cobranza_para_item(
 ) -> tuple:
     """
     Construye contexto_cobranza para un item (plantilla COBRANZA).
-    Carga cuotas pendientes del prestamo, calcula siguiente numero correlativo
-    y devuelve (contexto, correlativo_used). Si no hay prestamo_id devuelve (None, None).
+    Carga solo cuotas ATRASADAS (no pagadas y fecha_vencimiento < hoy). Calcula siguiente numero
+    correlativo y devuelve (contexto, correlativo_used). Si no hay prestamo_id devuelve (None, None).
     correlativos_en_batch: dict prestamo_id -> ultimo correlativo usado en este batch.
     """
     prestamo_id = item.get("prestamo_id")
     if not prestamo_id:
         return None, None
     from app.services.plantilla_cobranza import construir_contexto_cobranza
+    hoy = date.today()
     cuotas = (
         db.execute(
             select(Cuota)
-            .where(Cuota.prestamo_id == prestamo_id, Cuota.fecha_pago.is_(None))
+            .where(
+                Cuota.prestamo_id == prestamo_id,
+                Cuota.fecha_pago.is_(None),
+                Cuota.fecha_vencimiento < hoy,
+            )
             .order_by(Cuota.numero_cuota)
         )
         .scalars().all()
