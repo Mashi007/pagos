@@ -1,7 +1,8 @@
 """
-CRM CampaÃ±as: envÃ­o de correo masivo por lotes a todos los correos registrados en tabla clientes.
-Evita congestiÃ³n y polÃ­ticas Gmail enviando en lotes con delay configurable.
+CRM Campañas: envío de correo masivo por lotes a todos los correos registrados en tabla clientes.
+Evita congestión y políticas Gmail enviando en lotes con delay configurable.
 """
+import base64
 import logging
 import time
 from datetime import datetime
@@ -38,7 +39,7 @@ def _valid_email(s: str) -> bool:
 
 def _get_destinatarios_clientes(db: Session) -> List[Tuple[int, str, Optional[str]]]:
     """
-    Devuelve lista (cliente_id, email, nombres) de clientes con email vÃ¡lido.
+    Devuelve lista (cliente_id, email, nombres) de clientes con email válido.
     Un solo registro por email (primer cliente que tenga ese email).
     """
     rows = (
@@ -68,8 +69,8 @@ def preview_destinatarios(
     db: Session = Depends(get_db),
 ):
     """
-    Vista previa: total de correos Ãºnicos en clientes y una muestra.
-    Ãštil antes de crear una campaÃ±a.
+    Vista previa: total de correos únicos en clientes y una muestra.
+    Útil antes de crear una campaña.
     """
     destinatarios = _get_destinatarios_clientes(db)
     total = len(destinatarios)
@@ -90,7 +91,7 @@ def listar_campanas(
     estado: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Listado paginado de campaÃ±as CRM."""
+    """Listado paginado de campañas CRM."""
     q = select(CampanaCrm).order_by(CampanaCrm.fecha_creacion.desc())
     count_q = select(func.count()).select_from(CampanaCrm)
     if estado and estado.strip():
@@ -114,14 +115,24 @@ def crear_campana(
     current_user: UserResponse = Depends(get_current_user),
 ):
     """
-    Crea una campaÃ±a en estado borrador.
-    total_destinatarios se calcula con los correos Ãºnicos de la tabla clientes.
+    Crea una campaña en estado borrador.
+    total_destinatarios se calcula con los correos únicos de la tabla clientes.
     """
     total = len(_get_destinatarios_clientes(db))
+    cc_str = ",".join(e.strip() for e in (payload.cc_emails or []) if e and isinstance(e, str) and "@" in (e.strip() or "")) or None
+    adjunto_bytes = None
+    adjunto_nombre = None
+    if payload.adjunto_base64 and payload.adjunto_base64.strip():
+        try:
+            adjunto_bytes = base64.b64decode(payload.adjunto_base64)
+            adjunto_nombre = (payload.adjunto_nombre or "adjunto").strip()[:255]
+        except Exception:
+            adjunto_bytes = None
+            adjunto_nombre = None
     row = CampanaCrm(
         nombre=payload.nombre,
         asunto=payload.asunto,
-        cuerpo_texto=payload.cuerpo_texto,
+        cuerpo_texto=payload.cuerpo_texto or "",
         cuerpo_html=payload.cuerpo_html,
         estado="borrador",
         total_destinatarios=total,
@@ -129,6 +140,9 @@ def crear_campana(
         fallidos=0,
         batch_size=payload.batch_size,
         delay_entre_batches_seg=payload.delay_entre_batches_seg,
+        cc_emails=cc_str,
+        adjunto_nombre=adjunto_nombre,
+        adjunto_contenido=adjunto_bytes,
         usuario_creacion=current_user.email,
     )
     db.add(row)
@@ -139,10 +153,10 @@ def crear_campana(
 
 @router.get("/{campana_id}", response_model=CampanaCrmResponse)
 def get_campana(campana_id: int, db: Session = Depends(get_db)):
-    """Detalle de una campaÃ±a."""
+    """Detalle de una campaña."""
     row = db.get(CampanaCrm, campana_id)
     if not row:
-        raise HTTPException(status_code=404, detail="CampaÃ±a no encontrada")
+        raise HTTPException(status_code=404, detail="Campaña no encontrada")
     return CampanaCrmResponse.model_validate(row)
 
 
@@ -152,17 +166,32 @@ def actualizar_campana(
     payload: CampanaCrmUpdate,
     db: Session = Depends(get_db),
 ):
-    """Actualiza campaÃ±a solo si estÃ¡ en borrador."""
+    """Actualiza campaña solo si está en borrador."""
     row = db.get(CampanaCrm, campana_id)
     if not row:
-        raise HTTPException(status_code=404, detail="CampaÃ±a no encontrada")
+        raise HTTPException(status_code=404, detail="Campaña no encontrada")
     if row.estado != "borrador":
         raise HTTPException(
             status_code=400,
-            detail="Solo se puede editar una campaÃ±a en estado borrador",
+            detail="Solo se puede editar una campaña en estado borrador",
         )
-    for k, v in payload.model_dump(exclude_unset=True).items():
+    data = payload.model_dump(exclude_unset=True)
+    cc_emails = data.pop("cc_emails", None)
+    adjunto_nombre = data.pop("adjunto_nombre", None)
+    adjunto_base64 = data.pop("adjunto_base64", None)
+    for k, v in data.items():
         setattr(row, k, v)
+    if cc_emails is not None:
+        row.cc_emails = ",".join(e.strip() for e in cc_emails if e and isinstance(e, str) and "@" in (e.strip() or "")) or None
+    if adjunto_base64 is not None and adjunto_base64.strip():
+        try:
+            row.adjunto_contenido = base64.b64decode(adjunto_base64)
+            row.adjunto_nombre = (adjunto_nombre or "adjunto").strip()[:255] if adjunto_nombre else "adjunto"
+        except Exception:
+            pass
+    elif adjunto_base64 is not None and not adjunto_base64.strip():
+        row.adjunto_contenido = None
+        row.adjunto_nombre = None
     db.commit()
     db.refresh(row)
     return CampanaCrmResponse.model_validate(row)
@@ -170,14 +199,14 @@ def actualizar_campana(
 
 def _run_envio_lotes(campana_id: int) -> None:
     """
-    Tarea en segundo plano: envÃ­a por lotes a todos los correos de clientes.
-    Usa SessionLocal propia para no depender de la sesiÃ³n del request.
+    Tarea en segundo plano: envía por lotes a todos los correos de clientes.
+    Usa SessionLocal propia para no depender de la sesión del request.
     """
     db = SessionLocal()
     try:
         campana = db.get(CampanaCrm, campana_id)
         if not campana or campana.estado not in ("borrador", "enviando"):
-            logger.warning("CampaÃ±a %s no existe o no estÃ¡ en borrador/enviando", campana_id)
+            logger.warning("Campaña %s no existe o no está en borrador/enviando", campana_id)
             return
         if campana.estado == "borrador":
             campana.estado = "enviando"
@@ -187,6 +216,13 @@ def _run_envio_lotes(campana_id: int) -> None:
         destinatarios = _get_destinatarios_clientes(db)
         from app.core.email import send_email
         from app.core.email_config_holder import get_email_activo_servicio
+
+        cc_list: List[str] = []
+        if campana.cc_emails and campana.cc_emails.strip():
+            cc_list = [e.strip() for e in campana.cc_emails.split(",") if e and _valid_email(e.strip())]
+        attachments: Optional[List[Tuple[str, bytes]]] = None
+        if campana.adjunto_contenido and campana.adjunto_nombre:
+            attachments = [(campana.adjunto_nombre, bytes(campana.adjunto_contenido))]
 
         batch_size = max(5, min(100, campana.batch_size))
         delay = max(1, min(60, campana.delay_entre_batches_seg))
@@ -201,8 +237,10 @@ def _run_envio_lotes(campana_id: int) -> None:
                 ok, err = send_email(
                     [email],
                     campana.asunto,
-                    campana.cuerpo_texto,
+                    campana.cuerpo_texto or "",
                     body_html=campana.cuerpo_html or None,
+                    cc_emails=cc_list if cc_list else None,
+                    attachments=attachments,
                     servicio="campanas",
                 )
                 registro = CampanaEnvioCrm(
@@ -236,9 +274,9 @@ def _run_envio_lotes(campana_id: int) -> None:
             campana.enviados = enviados
             campana.fallidos = fallidos
             db.commit()
-        logger.info("CampaÃ±a %s completada: enviados=%s fallidos=%s", campana_id, enviados, fallidos)
+        logger.info("Campaña %s completada: enviados=%s fallidos=%s", campana_id, enviados, fallidos)
     except Exception as e:
-        logger.exception("Error en envÃ­o campaÃ±a %s: %s", campana_id, e)
+        logger.exception("Error en envío campaña %s: %s", campana_id, e)
         try:
             campana = db.get(CampanaCrm, campana_id)
             if campana:
@@ -258,27 +296,27 @@ def iniciar_envio(
     db: Session = Depends(get_db),
 ):
     """
-    Inicia el envÃ­o por lotes en segundo plano.
-    Responde de inmediato; el envÃ­o continÃºa en background.
-    Solo permitido si la campaÃ±a estÃ¡ en borrador.
+    Inicia el envío por lotes en segundo plano.
+    Responde de inmediato; el envío continúa en background.
+    Solo permitido si la campaña está en borrador.
     """
     row = db.get(CampanaCrm, campana_id)
     if not row:
-        raise HTTPException(status_code=404, detail="CampaÃ±a no encontrada")
+        raise HTTPException(status_code=404, detail="Campaña no encontrada")
     if row.estado != "borrador":
         raise HTTPException(
             status_code=400,
-            detail="Solo se puede iniciar una campaÃ±a en estado borrador",
+            detail="Solo se puede iniciar una campaña en estado borrador",
         )
     if row.total_destinatarios == 0:
         raise HTTPException(
             status_code=400,
-            detail="No hay destinatarios (ningÃºn correo vÃ¡lido en tabla clientes)",
+            detail="No hay destinatarios (ningún correo válido en tabla clientes)",
         )
     background_tasks.add_task(_run_envio_lotes, campana_id)
     return {
         "success": True,
-        "mensaje": "EnvÃ­o iniciado en segundo plano. Los correos se enviarÃ¡n por lotes.",
+        "mensaje": "Envío iniciado en segundo plano. Los correos se enviarán por lotes.",
         "total_destinatarios": row.total_destinatarios,
         "batch_size": row.batch_size,
         "delay_entre_batches_seg": row.delay_entre_batches_seg,
@@ -293,10 +331,10 @@ def listar_envios_campana(
     estado: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Listado paginado de envÃ­os (destinatarios) de una campaÃ±a."""
+    """Listado paginado de envíos (destinatarios) de una campaña."""
     campana = db.get(CampanaCrm, campana_id)
     if not campana:
-        raise HTTPException(status_code=404, detail="CampaÃ±a no encontrada")
+        raise HTTPException(status_code=404, detail="Campaña no encontrada")
     q = (
         select(CampanaEnvioCrm)
         .where(CampanaEnvioCrm.campana_id == campana_id)

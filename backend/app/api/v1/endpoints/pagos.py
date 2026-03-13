@@ -451,10 +451,11 @@ async def upload_excel_pagos(
             )
 
         def _looks_like_cedula(v: Any) -> bool:
+            """Cédula válida: solo V, E o J + 6-11 dígitos (no se admite Z)."""
             if v is None:
                 return False
             s = str(v).strip()
-            return bool(re.match(r"^[VEJZ]\d{6,11}$", s, re.IGNORECASE))
+            return bool(re.match(r"^[VEJ]\d{6,11}$", s, re.IGNORECASE))
 
         def _looks_like_documento(v: Any) -> bool:
             """True si el valor puede ser Nº documento. REGLA: aceptar TODOS los formatos; única restricción = no duplicados."""
@@ -683,35 +684,72 @@ async def upload_excel_pagos(
             numero_doc_norm = normalize_documento(numero_doc)
             key_doc = (numero_doc_norm or "").strip()
 
-            # Validación post-documentos: duplicado en archivo
+            # Validación post-documentos: duplicado en archivo → enviar a pagos_con_errores
             if key_doc and key_doc in numeros_doc_en_lote:
-                datos_fila = {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}
+                err_msg = "Nº documento duplicado en este archivo. Regla general: no se aceptan duplicados en documentos."
                 errores.append(f"Fila {i}: Nº documento duplicado en este archivo")
-                errores_detalle.append({"fila": i, "cedula": cedula, "error": "Nº documento duplicado en este archivo. Regla general: no se aceptan duplicados en documentos.", "datos": datos_fila})
+                errores_detalle.append({"fila": i, "cedula": cedula, "error": err_msg, "datos": {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}})
+                pagos_con_error_list.append({
+                    "fila_idx": i,
+                    "cedula": cedula or "",
+                    "prestamo_id": prestamo_id,
+                    "fecha_val": fecha_val,
+                    "monto": monto,
+                    "numero_doc": numero_doc or "",
+                    "errores": [err_msg],
+                })
                 continue
 
-            # Validación post-documentos: duplicado en BD (documentos_ya_en_bd precargado en lote)
+            # Validación post-documentos: duplicado en BD → enviar a pagos_con_errores
             if key_doc:
                 if key_doc in documentos_ya_en_bd:
-                    datos_fila = {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}
+                    err_msg = "Ya existe un pago con ese Nº de documento. Regla general: no se aceptan duplicados en documentos."
                     errores.append(f"Fila {i}: Ya existe un pago con ese Nº de documento")
-                    errores_detalle.append({"fila": i, "cedula": cedula, "error": "Ya existe un pago con ese Nº de documento. Regla general: no se aceptan duplicados en documentos.", "datos": datos_fila})
+                    errores_detalle.append({"fila": i, "cedula": cedula, "error": err_msg, "datos": {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}})
+                    pagos_con_error_list.append({
+                        "fila_idx": i,
+                        "cedula": cedula or "",
+                        "prestamo_id": prestamo_id,
+                        "fecha_val": fecha_val,
+                        "monto": monto,
+                        "numero_doc": numero_doc or "",
+                        "errores": [err_msg],
+                    })
                     continue
                 numeros_doc_en_lote.add(key_doc)
 
-            # Préstamo obligatorio si la cédula tiene más de un préstamo
+            # Identificación automática de préstamo: si la cédula tiene exactamente 1 crédito activo, asignarlo
             if prestamo_id is None and cedula.strip():
-                count_prestamos = db.scalar(
-                    select(func.count())
-                    .select_from(Prestamo)
-                    .join(Cliente, Prestamo.cliente_id == Cliente.id)
-                    .where(Cliente.cedula == cedula.strip())
-                ) or 0
+                cedula_norm = cedula.strip().upper()
+                prestamos_activos = (
+                    db.execute(
+                        select(Prestamo.id)
+                        .select_from(Prestamo)
+                        .join(Cliente, Prestamo.cliente_id == Cliente.id)
+                        .where(
+                            Cliente.cedula == cedula_norm,
+                            Prestamo.estado.in_(["APROBADO", "DESEMBOLSADO"]),
+                        )
+                        .order_by(Prestamo.id)
+                    )
+                ).scalars().all()
+                count_prestamos = len(prestamos_activos)
                 if count_prestamos > 1:
-                    datos_fila = {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}
+                    err_msg = f"Esta persona tiene {count_prestamos} préstamos. Debe indicar el ID del préstamo."
                     errores.append(f"Fila {i}: La cédula {cedula} tiene {count_prestamos} préstamos. Debe indicar el ID del préstamo.")
-                    errores_detalle.append({"fila": i, "cedula": cedula, "error": f"Esta persona tiene {count_prestamos} préstamos. Debe indicar el ID del préstamo.", "datos": datos_fila})
+                    errores_detalle.append({"fila": i, "cedula": cedula, "error": err_msg, "datos": {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}})
+                    pagos_con_error_list.append({
+                        "fila_idx": i,
+                        "cedula": cedula or "",
+                        "prestamo_id": prestamo_id,
+                        "fecha_val": fecha_val,
+                        "monto": monto,
+                        "numero_doc": numero_doc or "",
+                        "errores": [err_msg],
+                    })
                     continue
+                if count_prestamos == 1:
+                    prestamo_id = prestamos_activos[0][0]
 
             try:
                 fecha_pago = _parse_fecha(fecha_val)
@@ -732,9 +770,18 @@ async def upload_excel_pagos(
                 if prestamo_id and monto > 0:
                     pagos_con_prestamo.append(p)
             except Exception as e:
+                err_msg = str(e)
                 errores.append(f"Fila {i}: {e}")
-                datos_fila = {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}
-                errores_detalle.append({"fila": i, "cedula": cedula, "error": str(e), "datos": datos_fila})
+                errores_detalle.append({"fila": i, "cedula": cedula, "error": err_msg, "datos": {"cedula": cedula, "prestamo_id": prestamo_id, "fecha_pago": fecha_val, "monto_pagado": monto, "numero_documento": numero_doc or ""}})
+                pagos_con_error_list.append({
+                    "fila_idx": i,
+                    "cedula": cedula or "",
+                    "prestamo_id": prestamo_id,
+                    "fecha_val": fecha_val,
+                    "monto": monto,
+                    "numero_doc": numero_doc or "",
+                    "errores": [err_msg],
+                })
         db.flush()  # Asigna IDs a los pagos insertados
         # --- GUARDAR PAGOS CON ERRORES EN BD ---
         for pce_data in pagos_con_error_list:
@@ -1187,8 +1234,8 @@ def guardar_fila_editable(
 
 
 def _looks_like_cedula_inline(cedula: str) -> bool:
-    """Validar cédula inline (helper)."""
-    return bool(re.match(r"^[VEJZ]\d{6,11}$", cedula.strip(), re.IGNORECASE))
+    """Validar cédula inline: solo V, E o J + 6-11 dígitos (no se admite Z)."""
+    return bool(re.match(r"^[VEJ]\d{6,11}$", cedula.strip(), re.IGNORECASE))
 
 
 @router.post("/conciliacion/upload", response_model=dict)

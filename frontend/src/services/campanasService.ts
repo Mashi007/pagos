@@ -33,6 +33,8 @@ export interface CampanaCreate {
   delay_entre_batches_seg?: number
   cc_emails?: string[] | null
   destinatarios_cliente_ids?: number[] | null
+  adjunto_nombre?: string | null
+  adjunto_base64?: string | null
 }
 
 export interface DestinatarioPreview {

@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
-import { Upload, FileSpreadsheet, CheckCircle, ChevronDown, Mail } from 'lucide-react'
+import { Upload, FileSpreadsheet, ChevronDown, Mail } from 'lucide-react'
 import { Button } from '../../components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover'
 import { ExcelUploaderPagosUI } from './ExcelUploaderPagosUI'
 import { ExcelUploader } from './ExcelUploader'
-import { ConciliacionExcelUploader } from './ConciliacionExcelUploader'
 import { ConfirmarBorrarDiaDialog } from './ConfirmarBorrarDiaDialog'
 import toast from 'react-hot-toast'
 import { getErrorMessage } from '../../types/errors'
@@ -19,7 +18,6 @@ interface CargaMasivaMenuProps {
 export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
   const [showPagos, setShowPagos] = useState(false)
   const [showUploadDirectPagos, setShowUploadDirectPagos] = useState(false)
-  const [showConciliacion, setShowConciliacion] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
   const [showConfirmarBorrar, setShowConfirmarBorrar] = useState(false)
   const lastRunForWhichWeShowedDialogRef = useRef<string | null>(null)
@@ -107,16 +105,6 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
           )}
 <div className="space-y-1">
             <button
-              className="w-full flex items-center px-3 py-2.5 text-sm rounded-md hover:bg-gray-100 transition-colors"
-              onClick={() => {
-                setShowConciliacion(true)
-                setIsOpen(false)
-              }}
-            >
-              <CheckCircle className="w-4 h-4 mr-2" />
-              Conciliación
-            </button>
-            <button
               className="w-full flex items-center px-3 py-2.5 text-sm rounded-md hover:bg-gray-100 transition-colors disabled:opacity-50"
               onClick={handleGenerarExcelDesdeGmail}
               disabled={loadingGmail}
@@ -148,17 +136,6 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
           onClose={() => setShowUploadDirectPagos(false)}
           onSuccess={() => {
             setShowUploadDirectPagos(false)
-            onSuccess?.()
-          }}
-        />
-      )}
-
-      {/* Modal Conciliación */}
-      {showConciliacion && (
-        <ConciliacionExcelUploader
-          onClose={() => setShowConciliacion(false)}
-          onSuccess={() => {
-            setShowConciliacion(false)
             onSuccess?.()
           }}
         />

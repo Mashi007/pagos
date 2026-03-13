@@ -1,4 +1,4 @@
-﻿"""
+"""
 Schemas Pydantic para CRM Campañas (envío por lotes a correos de clientes).
 HTML, To/CC, adjunto (1 archivo jpg/png/pdf), destinatarios: todos o seleccionados.
 """
@@ -23,7 +23,8 @@ class CampanaCrmBase(BaseModel):
 
 
 class CampanaCrmCreate(CampanaCrmBase):
-    pass
+    adjunto_nombre: Optional[str] = Field(None, max_length=255, description="Nombre del archivo adjunto (1 solo)")
+    adjunto_base64: Optional[str] = Field(None, description="Contenido del adjunto en base64")
 
 
 class CampanaCrmUpdate(BaseModel):
@@ -35,6 +36,8 @@ class CampanaCrmUpdate(BaseModel):
     delay_entre_batches_seg: Optional[int] = Field(None, ge=1, le=60)
     cc_emails: Optional[List[str]] = None
     destinatarios_cliente_ids: Optional[List[int]] = None
+    adjunto_nombre: Optional[str] = Field(None, max_length=255)
+    adjunto_base64: Optional[str] = None
 
 
 class CampanaCrmResponse(BaseModel):

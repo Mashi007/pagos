@@ -89,7 +89,8 @@ export function parsePrestamoIdFromNumeroCredito(raw: unknown): number | null {
   return Number.isNaN(n) || n < 1 ? null : n
 }
 
-const LOOKS_LIKE_CEDULA = /^[VEJZ]\d{6,11}$/i
+/** Cédula válida: solo V, E o J + 6-11 dígitos (no se admite Z). */
+const LOOKS_LIKE_CEDULA = /^[VEJ]\d{6,11}$/i
 
 export function cedulaParaLookup(val: unknown): string {
   if (val == null || val === '') return ''
@@ -97,7 +98,7 @@ export function cedulaParaLookup(val: unknown): string {
   if (!s) return ''
   const sinGuion = s.replace(/-/g, '').replace(/\s+/g, '')
   if (LOOKS_LIKE_CEDULA.test(sinGuion)) return sinGuion
-  const match = s.match(/[VEJZ]\d{6,11}/i)
+  const match = s.match(/[VEJ]\d{6,11}/i)
   if (match) return match[0].replace(/-/g, '')
   if (/^\d{8}$/.test(sinGuion)) return 'V' + sinGuion
   return s
@@ -191,8 +192,8 @@ export function validatePagoField(
   if (field === 'cedula') {
     const s = String(value ?? '').trim().replace(/-/g, '').toUpperCase()
     if (!s) return { isValid: false, message: 'Cédula requerida' }
-    if (!/^[VEJZ]\d{6,11}$/.test(s))
-      return { isValid: false, message: 'Formato inválido (ej: V12345678)' }
+    if (!/^[VEJ]\d{6,11}$/.test(s))
+      return { isValid: false, message: 'Formato inválido (solo V, E o J + 6-11 dígitos; no se admite Z)' }
     if (options?.cedulasInvalidas?.has(s))
       return { isValid: false, message: 'Cédula no existe en clientes' }
     return { isValid: true }

@@ -29,3 +29,7 @@ class CampanaCrm(Base):
     fecha_envio_inicio = Column(DateTime(timezone=False), nullable=True)
     fecha_envio_fin = Column(DateTime(timezone=False), nullable=True)
     usuario_creacion = Column(String(255), nullable=True)
+
+    @property
+    def tiene_adjunto(self) -> bool:
+        return self.adjunto_contenido is not None

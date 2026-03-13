@@ -33,7 +33,6 @@ import { pagoService, type Pago } from '../../services/pagoService'
 import { pagoConErrorService, type PagoConError } from '../../services/pagoConErrorService'
 import { RegistrarPagoForm } from './RegistrarPagoForm'
 import { ExcelUploaderPagosUI } from './ExcelUploaderPagosUI'
-import { ConciliacionExcelUploader } from './ConciliacionExcelUploader'
 import { ConfirmarBorrarDiaDialog } from './ConfirmarBorrarDiaDialog'
 import { PagosListResumen } from './PagosListResumen'
 import { PagosKPIsNuevo } from './PagosKPIsNuevo'
@@ -62,7 +61,6 @@ export function PagosList() {
   })
   const [showRegistrarPago, setShowRegistrarPago] = useState(false)
   const [showCargaMasivaPagos, setShowCargaMasivaPagos] = useState(false)
-  const [showConciliacion, setShowConciliacion] = useState(false)
   const [agregarPagoOpen, setAgregarPagoOpen] = useState(false)
   const [pagoEditando, setPagoEditando] = useState<Pago | PagoConError | null>(null)
   const [accionesOpenId, setAccionesOpenId] = useState<number | null>(null)
@@ -397,18 +395,6 @@ export function PagosList() {
                   <FileSpreadsheet className="w-5 h-5 text-gray-600" />
                   <span>Pagos (Excel)</span>
                   <span className="text-xs text-gray-500 ml-auto">Excel</span>
-                </button>
-                <button
-                  type="button"
-                  className="w-full flex items-center gap-3 px-4 py-3 text-left rounded-md hover:bg-blue-50"
-                  onClick={() => {
-                    setShowConciliacion(true)
-                    setAgregarPagoOpen(false)
-                  }}
-                >
-                  <CheckCircle className="w-5 h-5 text-gray-600" />
-                  <span>Conciliación</span>
-                  <span className="text-xs text-gray-500 ml-auto">Carga</span>
                 </button>
                 <button
                   type="button"
