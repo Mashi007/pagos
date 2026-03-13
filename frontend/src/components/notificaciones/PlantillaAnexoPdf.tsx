@@ -315,10 +315,13 @@ export function PlantillaAnexoPdf() {
               {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
               Guardar plantilla PDF
             </Button>
-            <Button type="button" variant="outline" onClick={handleVistaPreviaPdf} disabled={generandoPreview}>
-              {generandoPreview ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Eye className="h-4 w-4 mr-2" />}
-              Vista previa (datos de ejemplo)
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" variant="outline" onClick={handleVistaPreviaPdf} disabled={generandoPreview}>
+                {generandoPreview ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Eye className="h-4 w-4 mr-2" />}
+                Vista previa (datos de ejemplo)
+              </Button>
+              <span className="text-xs text-muted-foreground">Solo para revisar diseño; al enviar se usan datos reales.</span>
+            </div>
           </div>
         </div>
       </Card>
