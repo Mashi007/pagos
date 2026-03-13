@@ -4,6 +4,9 @@ Revision ID: 014_crm_campana_programado
 Revises: 013_envios_notificacion_asunto
 Create Date: 2026-03
 
+En Render el startCommand ejecuta 'alembic upgrade head' antes de gunicorn;
+si la columna programado_proxima_ejecucion no existe, hacer redeploy o ejecutar
+manual: backend/sql/crm_campanas_programar_columnas.sql
 """
 from alembic import op
 import sqlalchemy as sa

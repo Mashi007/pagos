@@ -11,6 +11,7 @@ from typing import List, Optional, Tuple
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 
 from sqlalchemy import select, func, distinct
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db, SessionLocal
@@ -528,16 +529,25 @@ def ejecutar_campanas_programadas() -> None:
     db = SessionLocal()
     try:
         now = datetime.utcnow()
-        rows = (
-            db.execute(
-                select(CampanaCrm.id).where(
-                    CampanaCrm.estado == "programada",
-                    CampanaCrm.programado_proxima_ejecucion.isnot(None),
-                    CampanaCrm.programado_proxima_ejecucion <= now,
-                    CampanaCrm.total_destinatarios > 0,
+        try:
+            rows = (
+                db.execute(
+                    select(CampanaCrm.id).where(
+                        CampanaCrm.estado == "programada",
+                        CampanaCrm.programado_proxima_ejecucion.isnot(None),
+                        CampanaCrm.programado_proxima_ejecucion <= now,
+                        CampanaCrm.total_destinatarios > 0,
+                    )
                 )
-            )
-        ).all()
+            ).all()
+        except ProgrammingError as e:
+            if "programado_proxima_ejecucion" in str(e):
+                logger.warning(
+                    "Columna programado_proxima_ejecucion no existe en crm_campana. "
+                    "Ejecutar migración: alembic upgrade head (o backend/sql/crm_campanas_programar_columnas.sql)"
+                )
+                return
+            raise
         for (campana_id,) in rows:
             try:
                 _run_envio_lotes(campana_id)
