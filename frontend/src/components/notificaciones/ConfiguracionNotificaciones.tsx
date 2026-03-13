@@ -85,7 +85,6 @@ export function ConfiguracionNotificaciones() {
   const [emailsPruebas, setEmailsPruebas] = useState<[string, string]>(['', ''])
   const [guardandoEnvios, setGuardandoEnvios] = useState(false)
   const [ultimoGuardado, setUltimoGuardado] = useState<Date | null>(null)
-  const [cargando, setCargando] = useState(true)
   const [plantillas, setPlantillas] = useState<NotificacionPlantilla[]>([])
   const [enviandoPruebaIndice, setEnviandoPruebaIndice] = useState<number | null>(null)
   const [enviandoMasivo, setEnviandoMasivo] = useState(false)
