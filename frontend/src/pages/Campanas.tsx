@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { campanasService, type CampanaCrm, type ListCampanasResponse } from '../services/campanasService'
 import { Button } from '../components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog'
-import { Mail, Play, Eye, Plus, RefreshCw, FileText, StopCircle, Trash2, CalendarClock } from 'lucide-react'
+import { Mail, Play, Eye, Plus, RefreshCw, FileText, Pause, Trash2, Calendar } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 function fileToBase64(file: File): Promise<string> {
@@ -490,7 +490,7 @@ export function CampanasPage() {
                         )}
                         {c.estado === 'enviando' && (
                           <Button variant="outline" size="sm" onClick={() => handleParar(c)} title="Parar envío">
-                            <StopCircle className="h-4 w-4" /> Parar
+                            <Pause className="h-4 w-4" /> Parar
                           </Button>
                         )}
                         {(c.estado === 'borrador' || c.estado === 'cancelada') && (
@@ -504,7 +504,7 @@ export function CampanasPage() {
                               <Play className="h-4 w-4" /> Play
                             </Button>
                             <Button variant="outline" size="sm" onClick={() => { setProgramarCampana(c); setProgramarForm({ cada_dias: 0, cada_horas: 0 }) }} title="Programar envíos recurrentes">
-                              <CalendarClock className="h-4 w-4" /> Programar
+                              <Calendar className="h-4 w-4" /> Programar
                             </Button>
                           </>
                         )}
