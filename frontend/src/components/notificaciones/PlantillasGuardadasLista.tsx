@@ -22,9 +22,11 @@ interface PlantillasGuardadasListaProps {
   className?: string
   /** Máximo de plantillas a mostrar (0 = todas) */
   maxItems?: number
+  /** Si true, al mostrarse la pestaña se vuelve a cargar la lista. */
+  tabActivo?: boolean
 }
 
-export function PlantillasGuardadasLista({ className = '', maxItems = 20 }: PlantillasGuardadasListaProps) {
+export function PlantillasGuardadasLista({ className = '', maxItems = 20, tabActivo = true }: PlantillasGuardadasListaProps) {
   const [plantillas, setPlantillas] = useState<NotificacionPlantilla[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -44,6 +46,12 @@ export function PlantillasGuardadasLista({ className = '', maxItems = 20 }: Plan
       })
     return () => { cancelled = true }
   }, [])
+
+  const cargar = () => {
+    setLoading(true)
+    notificacionService.listarPlantillas(undefined, false).then((data) => setPlantillas(data || [])).catch(() => setPlantillas([])).finally(() => setLoading(false))
+  }
+  useEffect(() => { if (tabActivo) cargar() }, [tabActivo])
 
   if (loading) {
     return (

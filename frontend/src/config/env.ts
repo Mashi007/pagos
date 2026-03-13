@@ -51,7 +51,7 @@ function validateEnv(): EnvConfig {
   // ✅ DESARROLLO: Usar URL absoluta si está configurada
   let API_URL = import.meta.env.VITE_API_URL || '';
 
-  if (NODE_ENV === 'production') {
+  if (import.meta.env.PROD || NODE_ENV === 'production') {
     // En producción, usar rutas relativas para que el proxy funcione
     API_URL = '';
   } else {

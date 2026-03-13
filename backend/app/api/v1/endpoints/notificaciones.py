@@ -1,4 +1,4 @@
-"""
+﻿"""
 Endpoints de notificaciones a clientes retrasados.
 Datos reales desde BD: cuotas (fecha_vencimiento, pagado) y clientes.
 Reglas: 5 pestañas por días hasta vencimiento y mora 61+.
@@ -118,6 +118,7 @@ def _sustituir_variables(texto: str, item: dict) -> str:
         return ""
     nombre = item.get("nombre") or "Cliente"
     cedula = item.get("cedula") or ""
+    tratamiento = item.get("tratamiento") or "Sr/Sra."
     fecha_v = item.get("fecha_vencimiento") or ""
     numero_cuota = item.get("numero_cuota")
     monto = item.get("monto_cuota")
@@ -264,10 +265,12 @@ def build_contexto_cobranza_para_item(
     correlativos_en_batch[prestamo_id] = next_correlativo
     nombre = item.get("nombre") or ""
     cedula = item.get("cedula") or ""
+    tratamiento = item.get("tratamiento") or "Sr/Sra."
     ctx = construir_contexto_cobranza(
         cliente_nombres=nombre,
         prestamo_id=prestamo_id,
         cuotas_vencidas=cuotas_list,
+        tratamiento=tratamiento,
         cedula=cedula,
         numero_correlativo=next_correlativo,
     )
@@ -730,7 +733,7 @@ def upload_adjunto_fijo_cobranza(
                 pass
         logger.exception("Error guardando config: %s", e)
         raise HTTPException(status_code=500, detail="Error al guardar la configuracion")
-    return {"id": doc_id, "nombre_archivo": nombre_archivo, "tipo_caso": tipo_caso}
+    return {"id": doc_id, "nombre_archivo": nombre_archivo, "tipo_caso": tipos_list[0] if len(tipos_list) == 1 else None, "tipo_casos": tipos_list}
 
 
 @router.delete("/adjuntos-fijos-cobranza/{doc_id}")

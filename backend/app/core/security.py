@@ -1,4 +1,4 @@
-"""
+﻿"""
 Seguridad: JWT y contraseñas (auth)
 """
 from datetime import datetime, timedelta
@@ -20,8 +20,6 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 
-def create_access_token(subject: str | int, extra: Optional[dict] = None) -> str:
-    expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
 def create_access_token(
     subject: str | int,
     extra: Optional[dict] = None,
@@ -48,6 +46,7 @@ def create_refresh_token(subject: str | int, expire_days: Optional[int] = None) 
     expire = datetime.utcnow() + timedelta(days=days)
     to_encode = {"sub": str(subject), "exp": expire, "type": "refresh"}
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
 def decode_token(token: str) -> Optional[dict]:
     try:
         return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])

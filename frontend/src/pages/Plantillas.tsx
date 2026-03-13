@@ -130,7 +130,7 @@ export function Plantillas() {
 
         <TabsContent value={SUBTAB_ANEXO_PDF} className="mt-6 min-h-[400px]">
           <div className="mb-6">
-            <PlantillasGuardadasLista className="border-blue-200 bg-blue-50/30" />
+            <PlantillasGuardadasLista className="border-blue-200 bg-blue-50/30" tabActivo={activeTab === SUBTAB_ANEXO_PDF} />
           </div>
           <VinculacionPlantillaAnexoPdf />
           <PlantillaAnexoPdf />
@@ -139,13 +139,14 @@ export function Plantillas() {
               permitirEliminar={true}
               titulo="Documentos almacenados por pestaña (confirmar vinculación)"
               className="border-violet-200 bg-violet-50/30"
+              tabActivo={activeTab === SUBTAB_ANEXO_PDF}
             />
           </div>
         </TabsContent>
 
         <TabsContent value={SUBTAB_DOCUMENTOS_PDF} className="mt-6 min-h-[400px]">
           <div className="mb-6">
-            <PlantillasGuardadasLista className="border-blue-200 bg-blue-50/30" />
+            <PlantillasGuardadasLista className="border-blue-200 bg-blue-50/30" tabActivo={activeTab === SUBTAB_DOCUMENTOS_PDF} />
           </div>
           <DocumentosPdfAnexos />
         </TabsContent>

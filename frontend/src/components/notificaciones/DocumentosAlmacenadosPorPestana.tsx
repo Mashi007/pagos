@@ -26,12 +26,15 @@ interface DocumentosAlmacenadosPorPestanaProps {
   titulo?: string
   /** Clase CSS adicional para el contenedor. */
   className?: string
+  /** Si true, al mostrarse la pestaña se vuelve a cargar la lista. */
+  tabActivo?: boolean
 }
 
 export function DocumentosAlmacenadosPorPestana({
   permitirEliminar = true,
   titulo = 'Documentos almacenados por pestaña',
   className = '',
+  tabActivo = true,
 }: DocumentosAlmacenadosPorPestanaProps) {
   const [porCaso, setPorCaso] = useState<Record<string, AdjuntoItem[]>>({})
   const [loading, setLoading] = useState(true)
@@ -49,6 +52,10 @@ export function DocumentosAlmacenadosPorPestana({
   useEffect(() => {
     cargar()
   }, [])
+
+  useEffect(() => {
+    if (tabActivo) cargar()
+  }, [tabActivo])
 
   const handleEliminar = async (id: string) => {
     setEliminandoId(id)
@@ -122,7 +129,7 @@ export function DocumentosAlmacenadosPorPestana({
             )
           })}
           {!tieneAlguno && (
-            <p className="text-sm text-gray-500">Aún no hay documentos. Sube un PDF en la pestaña «Documentos PDF anexos» y elige la pestaña.</p>
+            <p className="text-sm text-gray-500">No hay documentos vinculados a pestañas. Sube un PDF en la pestaña «Documentos PDF anexos», elige la pestaña de notificación y pulsa Subir; se guardarán y aparecerán aquí.</p>
           )}
         </div>
       </CardContent>

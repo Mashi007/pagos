@@ -28,7 +28,7 @@ type AdjuntoItem = { id: string; nombre_archivo: string; ruta: string }
 
 export function DocumentosPdfAnexos() {
   const [porCaso, setPorCaso] = useState<Record<string, AdjuntoItem[]>>({})
-  const [tipoCasoSeleccionado, setTipoCasoSeleccionado] = useState<string>(TIPOS_CASO[0].value)
+  const [selectedTipos, setSelectedTipos] = useState<string[]>([TIPOS_CASO[0].value])
   const [archivo, setArchivo] = useState<File | null>(null)
   const [subiendo, setSubiendo] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -44,14 +44,20 @@ export function DocumentosPdfAnexos() {
 
   useEffect(() => { cargar() }, [])
 
+  const toggleTipo = (value: string) => {
+    setSelectedTipos((prev) => (prev.includes(value) ? prev.filter((t) => t !== value) : [...prev, value]))
+  }
+  const selectTodos = () => { setSelectedTipos(TIPOS_CASO.map((t) => t.value)) }
   const handleSubir = async () => {
     if (!archivo) { toast.error('Selecciona un archivo PDF.'); return }
     if (!(archivo.name || '').toLowerCase().endsWith('.pdf')) {
       toast.error('Solo se permiten documentos PDF.'); return
     }
+    if (selectedTipos.length === 0) { toast.error('Elige al menos un caso (pestaña).'); return }
     setSubiendo(true)
     try {
-      await notificacionService.uploadAdjuntoFijoCobranza(archivo, tipoCasoSeleccionado)
+      const param = selectedTipos.length === TIPOS_CASO.length ? 'todos' : selectedTipos
+      await notificacionService.uploadAdjuntoFijoCobranza(archivo, param)
       toast.success('Documento guardado.')
       setArchivo(null)
       cargar()
@@ -89,19 +95,22 @@ export function DocumentosPdfAnexos() {
             Documentos PDF anexos
           </CardTitle>
           <CardDescription>
-            Sube documentos PDF y asígnalos a la pestaña que quieras (Faltan 5, Hoy vence, Retrasadas, Prejudicial, 90+ mora). Solo PDF. Se envían con la notificación de esa pestaña.
+            Sube documentos PDF y asígnalos a una, varias o todas las pestañas (Faltan 5, Hoy vence, Retrasadas, Prejudicial, 90+ mora). Marca los casos que quieras o «Todos los casos». Solo PDF.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-1">
-              <label htmlFor="tipo-caso" className="text-sm font-medium text-gray-700">Aplicar a la pestaña</label>
-              <Select value={tipoCasoSeleccionado} onValueChange={setTipoCasoSeleccionado}>
-                <SelectTrigger id="tipo-caso" className="w-[180px]"><SelectValue placeholder="Selecciona pestaña" /></SelectTrigger>
-                <SelectContent>
-                  {TIPOS_CASO.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <label className="text-sm font-medium text-gray-700 block">Aplicar a la pestaña(s)</label>
+              <div className="flex flex-wrap gap-2 mt-1">
+                {TIPOS_CASO.map((t) => (
+                  <label key={t.value} className="inline-flex items-center gap-1.5 cursor-pointer text-sm">
+                    <input type="checkbox" checked={selectedTipos.includes(t.value)} onChange={() => toggleTipo(t.value)} className="rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
+                    <span>{t.label}</span>
+                  </label>
+                ))}
+                <Button type="button" variant="outline" size="sm" onClick={selectTodos} className="text-xs">Todos los casos</Button>
+              </div>
             </div>
             <div className="space-y-1">
               <label htmlFor="archivo-pdf" className="text-sm font-medium text-gray-700">Archivo PDF</label>

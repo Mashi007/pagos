@@ -35,8 +35,20 @@ const safeClearSession = () => {
 const DEFAULT_TIMEOUT_MS = 30000
 const SLOW_ENDPOINT_TIMEOUT_MS = 60000 // Para endpoints que pueden tardar más
 
-// Configuración base de Axios
-const API_BASE_URL = env.API_URL
+// Base URL de la API. En runtime, si la config apunta a otro origen, usar '' (same-origin) para evitar CSP.
+function getEffectiveApiBaseUrl(): string {
+  const url = env.API_URL
+  if (typeof window === 'undefined') return url
+  if (!url) return ''
+  try {
+    const u = new URL(url)
+    if (u.origin !== window.location.origin) return ''
+  } catch {
+    return url
+  }
+  return url
+}
+const API_BASE_URL = getEffectiveApiBaseUrl()
 
 // Ruta de login con base path (ej. /pagos/login cuando BASE_PATH es /pagos)
 const LOGIN_PATH = `${BASE_PATH}/login`.replace(/\/+/g, '/')
