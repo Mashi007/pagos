@@ -5,7 +5,7 @@
  * Mantiene ambas funcionalidades sin duplicar entradas en el menú.
  */
 
-import { FileSpreadsheet, Upload, Edit3 } from 'lucide-react'
+import { FileSpreadsheet, Upload, Edit } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -58,7 +58,7 @@ export function ExcelModoSelectorDialog({
             className="h-auto flex items-start gap-3 px-4 py-3 text-left"
             onClick={handlePrevisualizar}
           >
-            <Edit3 className="h-5 w-5 text-green-600 mt-0.5 shrink-0" />
+            <Edit className="h-5 w-5 text-green-600 mt-0.5 shrink-0" />
             <div>
               <span className="font-medium block">Revisar y editar antes de guardar</span>
               <span className="text-sm text-muted-foreground">
