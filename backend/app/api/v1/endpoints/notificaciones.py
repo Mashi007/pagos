@@ -1,9 +1,9 @@
 """
 Endpoints de notificaciones a clientes retrasados.
 Datos reales desde BD: cuotas (fecha_vencimiento, pagado) y clientes.
-Reglas: 5 pesta�as por d�as hasta vencimiento y mora 61+.
-Configuraci�n de env�os (habilitado/CCO por tipo) desde tabla configuracion (notificaciones_envios).
-CRUD de plantillas en plantillas_notificacion; env�o puede usar plantilla por tipo v�a plantilla_id en config.
+Reglas: 5 pestaÃ±as por dÃ­as hasta vencimiento y mora 61+.
+ConfiguraciÃ³n de envÃ­os (habilitado/CCO por tipo) desde tabla configuracion (notificaciones_envios).
+CRUD de plantillas en plantillas_notificacion; envÃ­o puede usar plantilla por tipo vÃ­a plantilla_id en config.
 """
 import json
 import os
@@ -48,7 +48,7 @@ router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 def get_notificaciones_envios_config(db: Session) -> dict:
-    """Carga la configuraci�n de env�os por tipo (habilitado, cco, plantilla_id, programador) desde BD."""
+    """Carga la configuraciÃ³n de envÃ­os por tipo (habilitado, cco, plantilla_id, programador) desde BD."""
     try:
         row = db.get(Configuracion, CLAVE_NOTIFICACIONES_ENVIOS)
         if row and row.valor:
@@ -56,14 +56,14 @@ def get_notificaciones_envios_config(db: Session) -> dict:
             if isinstance(data, dict):
                 return data
     except json.JSONDecodeError as e:
-        logger.warning("notificaciones_envios: valor en BD no es JSON v�lido: %s", e)
+        logger.warning("notificaciones_envios: valor en BD no es JSON vÃ¡lido: %s", e)
     except Exception as e:
         logger.exception("get_notificaciones_envios_config: %s", e)
     return {}
 
 
-# Las funciones _item e _item_tab est�n ahora en app.services.notificacion_service
-# para evitar duplicaci�n y facilitar mantenimiento. Se importan desde all�.
+# Las funciones _item e _item_tab estÃ¡n ahora en app.services.notificacion_service
+# para evitar duplicaciÃ³n y facilitar mantenimiento. Se importan desde allÃ­.
 
 
 # --- Helpers plantillas ---
@@ -112,7 +112,7 @@ def _sustituir_variables(texto: str, item: dict) -> str:
     """
     Reemplaza variables {{variable}} en texto.
     Fijas: nombre, cedula, fecha_vencimiento, numero_cuota, monto (desde monto_cuota), dias_atraso.
-    Cualquier otra clave presente en item (ej. telefono, correo) se sustituye tambi�n para variables personalizadas.
+    Cualquier otra clave presente en item (ej. telefono, correo) se sustituye tambiÃ©n para variables personalizadas.
     """
     if not texto:
         return ""
@@ -182,7 +182,7 @@ def _contexto_cobranza_placeholder() -> dict:
 
 def get_plantilla_asunto_cuerpo(db: Session, plantilla_id: Optional[int], item: dict, asunto_default: str, cuerpo_default: str, modo_pruebas: bool = False) -> tuple:
     """
-    Si plantilla_id es v�lido y la plantilla existe, devuelve (asunto, cuerpo) con variables sustituidas.
+    Si plantilla_id es vÃ¡lido y la plantilla existe, devuelve (asunto, cuerpo) con variables sustituidas.
     Para plantillas tipo COBRANZA, si item tiene 'contexto_cobranza', se usa el motor de cobranza
     ({{TABLA.CAMPO}} y bloque {{#CUOTAS.VENCIMIENTOS}}). Si no, se usa _sustituir_variables.
     Si modo_pruebas=True, se usan placeholders para que las variables se vean (no datos reales).
@@ -282,7 +282,7 @@ def get_plantillas(
     solo_activas: bool = True,
     db: Session = Depends(get_db),
 ):
-    """Lista de plantillas de notificaci�n. Filtro por tipo y solo activas."""
+    """Lista de plantillas de notificaciÃ³n. Filtro por tipo y solo activas."""
     try:
         q = select(PlantillaNotificacion)
         if solo_activas:
@@ -310,14 +310,14 @@ TIPOS_PLANTILLA_PERMITIDOS = frozenset([
     "PAGO_5_DIAS_ANTES", "PAGO_3_DIAS_ANTES", "PAGO_1_DIA_ANTES",
     "PAGO_DIA_0",
     "PAGO_1_DIA_ATRASADO", "PAGO_3_DIAS_ATRASADO", "PAGO_5_DIAS_ATRASADO",
-    "PREJUDICIAL", "MORA_61", "MORA_90",  # MORA_61 legacy; MORA_90 = moroso 90+ d�as
+    "PREJUDICIAL", "MORA_61", "MORA_90",  # MORA_61 legacy; MORA_90 = moroso 90+ dÃ­as
     "COBRANZA",  # Carta de cobranza con {{TABLA.CAMPO}} y bloque {{#CUOTAS.VENCIMIENTOS}}
 ])
 
 
 @router.post("/plantillas")
 def create_plantilla(payload: dict = Body(...), db: Session = Depends(get_db)):
-    """Crea una plantilla. Campos: nombre, tipo, asunto, cuerpo; opcionales: descripcion, variables_disponibles, activa, zona_horaria. tipo debe ser uno de los tipos de notificaci�n permitidos."""
+    """Crea una plantilla. Campos: nombre, tipo, asunto, cuerpo; opcionales: descripcion, variables_disponibles, activa, zona_horaria. tipo debe ser uno de los tipos de notificaciÃ³n permitidos."""
     nombre = (payload.get("nombre") or "").strip()
     tipo = (payload.get("tipo") or "").strip()
     asunto = (payload.get("asunto") or "").strip()
@@ -430,7 +430,7 @@ def get_plantilla_pdf_cobranza(db: Session = Depends(get_db)):
 # Contexto de ejemplo para vista previa del PDF de cobranza (sin datos reales)
 _CONTEXTO_PREVIEW_COBRANZA = {
     "CLIENTES.TRATAMIENTO": "Sr.",
-    "CLIENTES.NOMBRE_COMPLETO": "Juan P�rez (ejemplo)",
+    "CLIENTES.NOMBRE_COMPLETO": "Juan PÃ©rez (ejemplo)",
     "CLIENTES.CEDULA": "V-12345678",
     "PRESTAMOS.ID": "1001",
     "NUMEROCORRELATIVO": "2025-001",
@@ -447,7 +447,7 @@ _CONTEXTO_PREVIEW_COBRANZA = {
 def preview_plantilla_pdf_cobranza(db: Session = Depends(get_db)):
     """
     Genera una vista previa del PDF de carta de cobranza con datos de ejemplo.
-    �til para verificar la plantilla sin enviar un correo real.
+    Ãtil para verificar la plantilla sin enviar un correo real.
     """
     from app.services.carta_cobranza_pdf import generar_carta_cobranza_pdf
     try:
@@ -461,7 +461,7 @@ def preview_plantilla_pdf_cobranza(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=detail)
 
 
-# L�mites de longitud para plantilla PDF cobranza (evitar payloads excesivos)
+# LÃ­mites de longitud para plantilla PDF cobranza (evitar payloads excesivos)
 _PLANTILLA_PDF_CUERPO_MAX = 100_000
 _PLANTILLA_PDF_CLAUSULA_MAX = 100_000
 _PLANTILLA_PDF_FIRMA_MAX = 50_000
@@ -472,7 +472,7 @@ def update_plantilla_pdf_cobranza(payload: dict = Body(...), db: Session = Depen
     """
     Actualiza la plantilla editable del PDF de carta de cobranza.
     Campos opcionales: ciudad_default, cuerpo_principal, clausula_septima (texto legal), firma (bloque final: Atentamente, sello, etc.).
-    L�mites: cuerpo_principal y clausula_septima 100.000 caracteres; firma 50.000.
+    LÃ­mites: cuerpo_principal y clausula_septima 100.000 caracteres; firma 50.000.
     """
     cuerpo = payload.get("cuerpo_principal")
     if cuerpo is not None and len(cuerpo) > _PLANTILLA_PDF_CUERPO_MAX:
@@ -484,7 +484,7 @@ def update_plantilla_pdf_cobranza(payload: dict = Body(...), db: Session = Depen
     if clausula is not None and len(clausula) > _PLANTILLA_PDF_CLAUSULA_MAX:
         raise HTTPException(
             status_code=400,
-            detail=f"La cl�usula s�ptima no puede superar {_PLANTILLA_PDF_CLAUSULA_MAX} caracteres (actual: {len(clausula)}).",
+            detail=f"La clÃ¡usula sÃ©ptima no puede superar {_PLANTILLA_PDF_CLAUSULA_MAX} caracteres (actual: {len(clausula)}).",
         )
     firma = payload.get("firma")
     if firma is not None and len(firma) > _PLANTILLA_PDF_FIRMA_MAX:
@@ -534,7 +534,7 @@ _DEFAULT_ESTADO_CUENTA_CUERPO = (
 @router.get("/plantilla-estado-cuenta-codigo-email")
 def get_plantilla_estado_cuenta_codigo_email(db: Session = Depends(get_db)):
     """
-    Obtiene la plantilla del email de c�digo para consulta p�blica de estado de cuenta.
+    Obtiene la plantilla del email de cÃ³digo para consulta pÃºblica de estado de cuenta.
     Almacenada en configuracion con clave 'estado_cuenta_codigo_email'.
     JSON: asunto, cuerpo. Variables: {{nombre}}, {{codigo}}, {{minutos_valido}}.
     """
@@ -550,7 +550,7 @@ def get_plantilla_estado_cuenta_codigo_email(db: Session = Depends(get_db)):
 @router.put("/plantilla-estado-cuenta-codigo-email")
 def update_plantilla_estado_cuenta_codigo_email(payload: dict = Body(...), db: Session = Depends(get_db)):
     """
-    Actualiza la plantilla del email de c�digo (consulta p�blica estado de cuenta).
+    Actualiza la plantilla del email de cÃ³digo (consulta pÃºblica estado de cuenta).
     Campos: asunto, cuerpo (opcionales). Variables en cuerpo: {{nombre}}, {{codigo}}, {{minutos_valido}}.
     """
     try:
@@ -580,7 +580,7 @@ def update_plantilla_estado_cuenta_codigo_email(payload: dict = Body(...), db: S
 @router.get("/adjunto-fijo-cobranza")
 def get_adjunto_fijo_cobranza(db: Session = Depends(get_db)):
     """
-    Obtiene la configuraci�n del PDF fijo que se anexa siempre al email de cobranza (sin cambios).
+    Obtiene la configuraciÃ³n del PDF fijo que se anexa siempre al email de cobranza (sin cambios).
     Almacenada en configuracion con clave 'adjunto_fijo_cobranza'. JSON: nombre_archivo, ruta.
     """
     row = db.get(Configuracion, "adjunto_fijo_cobranza")
@@ -603,7 +603,7 @@ def verificar_adjunto_fijo_cobranza(db: Session = Depends(get_db)):
     return {"existe": existe, "mensaje": mensaje or ("Archivo encontrado" if existe else "No configurado")}
 
 
-# L�mites para adjunto fijo cobranza (evitar abusos)
+# LÃ­mites para adjunto fijo cobranza (evitar abusos)
 _ADJUNTO_FIJO_NOMBRE_MAX = 255
 _ADJUNTO_FIJO_RUTA_MAX = 2048
 
@@ -611,9 +611,9 @@ _ADJUNTO_FIJO_RUTA_MAX = 2048
 @router.put("/adjunto-fijo-cobranza")
 def update_adjunto_fijo_cobranza(payload: dict = Body(...), db: Session = Depends(get_db)):
     """
-    Actualiza la configuraci�n del PDF fijo para cobranza.
+    Actualiza la configuraciÃ³n del PDF fijo para cobranza.
     Campos: nombre_archivo (ej. Documento.pdf), ruta (ruta absoluta o relativa al proceso al archivo PDF).
-    Si ruta est� vac�a, no se anexa ning�n PDF fijo.
+    Si ruta estÃ¡ vacÃ­a, no se anexa ningÃºn PDF fijo.
     """
     try:
         nombre = (payload.get("nombre_archivo") or "").strip() or "Adjunto_Cobranza.pdf"
@@ -631,7 +631,7 @@ def update_adjunto_fijo_cobranza(payload: dict = Body(...), db: Session = Depend
         # Evitar path traversal en nombre (solo nombre de archivo, sin barras)
         if "/" in nombre or "\\" in nombre:
             raise HTTPException(status_code=400, detail="El nombre del archivo no debe contener rutas (use solo el nombre del PDF).")
-        # Si est� configurado directorio base, la ruta debe ser relativa (sin .. ni absoluta)
+        # Si estÃ¡ configurado directorio base, la ruta debe ser relativa (sin .. ni absoluta)
         from app.core.config import settings
         base_dir = getattr(settings, "ADJUNTO_FIJO_COBRANZA_BASE_DIR", None)
         if base_dir and (base_dir or "").strip():
@@ -656,12 +656,12 @@ def update_adjunto_fijo_cobranza(payload: dict = Body(...), db: Session = Depend
     except Exception as e:
         db.rollback()
         logger.exception("update_adjunto_fijo_cobranza: %s", e)
-        raise HTTPException(status_code=500, detail="Error al guardar la configuraci�n del adjunto fijo")
+        raise HTTPException(status_code=500, detail="Error al guardar la configuraciÃ³n del adjunto fijo")
 
 
 @router.get("/adjuntos-fijos-cobranza")
 def get_adjuntos_fijos_cobranza(db: Session = Depends(get_db)):
-    """Lista de documentos PDF anexos por caso (todas las pesta�as: previas, d�a pago, retrasadas, prejudicial, mora_90)."""
+    """Lista de documentos PDF anexos por caso (todas las pestaÃ±as: previas, dÃ­a pago, retrasadas, prejudicial, mora_90)."""
     from app.services.adjunto_fijo_cobranza import _get_adjuntos_por_caso_raw
     return _get_adjuntos_por_caso_raw(db)
 
@@ -672,7 +672,7 @@ def upload_adjunto_fijo_cobranza(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
-    """Sube un PDF y lo asocia al caso indicado. Solo se aceptan archivos PDF. Puede asignarse a cualquier pesta�a."""
+    """Sube un PDF y lo asocia al caso indicado. Solo se aceptan archivos PDF. Puede asignarse a cualquier pestaÃ±a."""
     from app.services.adjunto_fijo_cobranza import (
         TIPOS_CASO_VALIDOS,
         CLAVE_ADJUNTOS_FIJOS_POR_CASO,
@@ -796,7 +796,7 @@ def enviar_con_plantilla(
     variables: dict = Body(default=None),
 ):
     """
-    Env�a un correo de prueba al cliente usando la plantilla. variables (body) sustituyen en asunto/cuerpo.
+    EnvÃ­a un correo de prueba al cliente usando la plantilla. variables (body) sustituyen en asunto/cuerpo.
     Query: cliente_id. Body: dict opcional con nombre, cedula, fecha_vencimiento, numero_cuota, monto, dias_atraso.
     """
     from app.core.email import send_email
@@ -819,7 +819,7 @@ def enviar_con_plantilla(
     cuerpo = _sustituir_variables(p.cuerpo, item)
     correo = (cliente.email or "").strip()
     if not correo or "@" not in correo:
-        raise HTTPException(status_code=400, detail="El cliente no tiene email v�lido")
+        raise HTTPException(status_code=400, detail="El cliente no tiene email vÃ¡lido")
     if not get_email_activo_servicio("notificaciones"):
         raise HTTPException(status_code=400, detail="El envio de email para notificaciones esta desactivado. Activalo en Configuracion > Email.")
     ok, msg = send_email([correo], asunto, cuerpo, servicio="notificaciones")
@@ -943,13 +943,13 @@ def delete_variable(variable_id: int, db: Session = Depends(get_db)):
 
 VARIABLES_PRECARGADAS = [
     {"nombre_variable": "nombre_cliente", "tabla": "clientes", "campo_bd": "nombres", "descripcion": "Nombres del cliente"},
-    {"nombre_variable": "cedula", "tabla": "clientes", "campo_bd": "cedula", "descripcion": "C�dula de identidad"},
-    {"nombre_variable": "telefono", "tabla": "clientes", "campo_bd": "telefono", "descripcion": "Tel�fono de contacto"},
-    {"nombre_variable": "email", "tabla": "clientes", "campo_bd": "email", "descripcion": "Correo electr�nico"},
-    {"nombre_variable": "numero_cuota", "tabla": "cuotas", "campo_bd": "numero_cuota", "descripcion": "N�mero de cuota"},
+    {"nombre_variable": "cedula", "tabla": "clientes", "campo_bd": "cedula", "descripcion": "CÃ©dula de identidad"},
+    {"nombre_variable": "telefono", "tabla": "clientes", "campo_bd": "telefono", "descripcion": "TelÃ©fono de contacto"},
+    {"nombre_variable": "email", "tabla": "clientes", "campo_bd": "email", "descripcion": "Correo electrÃ³nico"},
+    {"nombre_variable": "numero_cuota", "tabla": "cuotas", "campo_bd": "numero_cuota", "descripcion": "NÃºmero de cuota"},
     {"nombre_variable": "fecha_vencimiento", "tabla": "cuotas", "campo_bd": "fecha_vencimiento", "descripcion": "Fecha de vencimiento"},
     {"nombre_variable": "monto_cuota", "tabla": "cuotas", "campo_bd": "monto", "descripcion": "Monto de la cuota"},
-    {"nombre_variable": "dias_atraso", "tabla": "cuotas", "campo_bd": "dias_mora", "descripcion": "D�as de atraso"},
+    {"nombre_variable": "dias_atraso", "tabla": "cuotas", "campo_bd": "dias_mora", "descripcion": "DÃ­as de atraso"},
 ]
 
 
@@ -980,7 +980,7 @@ def inicializar_variables_precargadas(db: Session = Depends(get_db)):
             logger.warning("inicializar_variables_precargadas: %s para %s", e, nombre)
     total = creadas + existentes
     return {
-        "mensaje": f"Variables precargadas: {creadas} creadas, {existentes} ya exist�an.",
+        "mensaje": f"Variables precargadas: {creadas} creadas, {existentes} ya existÃ­an.",
         "variables_creadas": creadas,
         "variables_existentes": existentes,
         "total": total,
@@ -996,8 +996,8 @@ def get_notificaciones_lista(
     db: Session = Depends(get_db),
 ):
     """
-    Listado paginado de notificaciones (env�os) desde tabla envios_notificacion.
-    El frontend Configuraci�n > Email lo usa para 'Verificaci�n de Env�os Reales'.
+    Listado paginado de notificaciones (envÃ­os) desde tabla envios_notificacion.
+    El frontend ConfiguraciÃ³n > Email lo usa para 'VerificaciÃ³n de EnvÃ­os Reales'.
     """
     per_page = max(1, min(per_page, 100))
     page = max(1, page)
@@ -1020,7 +1020,7 @@ def get_notificaciones_lista(
         items.append({
             "id": r.id,
             "estado": "ENVIADA" if r.exito else "FALLIDA",
-            "asunto": f"Notificaci�n {r.tipo_tab}" if r.tipo_tab else "Env�o",
+            "asunto": f"NotificaciÃ³n {r.tipo_tab}" if r.tipo_tab else "EnvÃ­o",
             "fecha_envio": r.fecha_envio.isoformat() if r.fecha_envio else None,
             "fecha_creacion": r.fecha_envio.isoformat() if r.fecha_envio else None,
             "error_mensaje": r.error_mensaje,
@@ -1035,14 +1035,14 @@ def get_notificaciones_lista(
 
 
 def _tarea_envio_todas_notificaciones():
-    """Ejecuta el env�o masivo en segundo plano con su propia sesi�n de BD (evita timeout HTTP)."""
+    """Ejecuta el envÃ­o masivo en segundo plano con su propia sesiÃ³n de BD (evita timeout HTTP)."""
     from app.core.database import SessionLocal
     from app.api.v1.endpoints import notificaciones_tabs
     db = SessionLocal()
     try:
         notificaciones_tabs.ejecutar_envio_todas_notificaciones(db)
     except Exception as e:
-        logger.exception("Env�o masivo en background: %s", e)
+        logger.exception("EnvÃ­o masivo en background: %s", e)
     finally:
         db.close()
 
@@ -1050,15 +1050,15 @@ def _tarea_envio_todas_notificaciones():
 @router.post("/enviar-todas")
 def enviar_todas_notificaciones(background_tasks: BackgroundTasks):
     """
-    Inicia el env�o de todas las notificaciones en segundo plano.
-    Responde 202 de inmediato para evitar timeout (el env�o puede tardar muchos minutos).
-    Respeta la configuraci�n guardada (modo_pruebas, email_pruebas, habilitado por tipo).
+    Inicia el envÃ­o de todas las notificaciones en segundo plano.
+    Responde 202 de inmediato para evitar timeout (el envÃ­o puede tardar muchos minutos).
+    Respeta la configuraciÃ³n guardada (modo_pruebas, email_pruebas, habilitado por tipo).
     """
     background_tasks.add_task(_tarea_envio_todas_notificaciones)
     return JSONResponse(
         status_code=202,
         content={
-            "mensaje": "Env�o iniciado en segundo plano. Los correos se enviar�n en los pr�ximos minutos. Puedes cerrar esta ventana.",
+            "mensaje": "EnvÃ­o iniciado en segundo plano. Los correos se enviarÃ¡n en los prÃ³ximos minutos. Puedes cerrar esta ventana.",
             "en_proceso": True,
         },
     )
@@ -1073,7 +1073,7 @@ def get_notificaciones_resumen(db: Session = Depends(get_db)):
 @router.get("/estadisticas-por-tab", response_model=dict)
 def get_estadisticas_por_tab(db: Session = Depends(get_db)):
     """
-    KPIs por pesta�a: correos enviados y rebotados (dias_5, dias_3, dias_1, hoy, mora_90).
+    KPIs por pestaÃ±a: correos enviados y rebotados (dias_5, dias_3, dias_1, hoy, mora_90).
     Datos desde tabla envios_notificacion (persistidos al enviar desde notificaciones_tabs).
     """
     result = {"dias_5": {"enviados": 0, "rebotados": 0}, "dias_3": {"enviados": 0, "rebotados": 0}, "dias_1": {"enviados": 0, "rebotados": 0}, "hoy": {"enviados": 0, "rebotados": 0}, "mora_90": {"enviados": 0, "rebotados": 0}}
@@ -1102,7 +1102,7 @@ TIPOS_TAB_NOTIFICACIONES = ("dias_5", "dias_3", "dias_1", "hoy", "mora_90")
 
 def _get_rebotados_por_tipo(db: Session, tipo: str) -> List[dict]:
     """
-    Lista de correos no entregados (rebotados) para el tipo de pesta�a.
+    Lista de correos no entregados (rebotados) para el tipo de pestaÃ±a.
     Datos desde tabla envios_notificacion (exito=False).
     """
     if tipo not in TIPOS_TAB_NOTIFICACIONES:
@@ -1136,10 +1136,10 @@ def _get_rebotados_por_tipo(db: Session, tipo: str) -> List[dict]:
 
 @router.get("/rebotados-por-tab", response_model=dict)
 def get_rebotados_por_tab(
-    tipo: str = Query(..., description="Tipo de pesta�a: dias_5, dias_3, dias_1, hoy, mora_90"),
+    tipo: str = Query(..., description="Tipo de pestaÃ±a: dias_5, dias_3, dias_1, hoy, mora_90"),
     db: Session = Depends(get_db),
 ):
-    """Lista de correos no entregados (rebotados) para la pesta�a. Para generar informe Excel en frontend o descargar Excel."""
+    """Lista de correos no entregados (rebotados) para la pestaÃ±a. Para generar informe Excel en frontend o descargar Excel."""
     if tipo not in TIPOS_TAB_NOTIFICACIONES:
         raise HTTPException(status_code=400, detail=f"tipo debe ser uno de: {', '.join(TIPOS_TAB_NOTIFICACIONES)}")
     items = _get_rebotados_por_tipo(db, tipo)
@@ -1153,7 +1153,7 @@ def _generar_excel_rebotados(items: List[dict], tipo: str) -> bytes:
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Correos no entregados"
-    ws.append(["Email", "Nombre", "C�dula", "Fecha env�o", "Motivo rebote"])
+    ws.append(["Email", "Nombre", "CÃ©dula", "Fecha envÃ­o", "Motivo rebote"])
     for r in items:
         ws.append([
             r.get("email") or "",
@@ -1169,10 +1169,10 @@ def _generar_excel_rebotados(items: List[dict], tipo: str) -> bytes:
 
 @router.get("/rebotados-por-tab/excel")
 def get_rebotados_por_tab_excel(
-    tipo: str = Query(..., description="Tipo de pesta�a: dias_5, dias_3, dias_1, hoy, mora_90"),
+    tipo: str = Query(..., description="Tipo de pestaÃ±a: dias_5, dias_3, dias_1, hoy, mora_90"),
     db: Session = Depends(get_db),
 ):
-    """Descarga informe Excel de correos no entregados (rebotados) para la pesta�a."""
+    """Descarga informe Excel de correos no entregados (rebotados) para la pestaÃ±a."""
     if tipo not in TIPOS_TAB_NOTIFICACIONES:
         raise HTTPException(status_code=400, detail=f"tipo debe ser uno de: {', '.join(TIPOS_TAB_NOTIFICACIONES)}")
     items = _get_rebotados_por_tipo(db, tipo)
@@ -1186,7 +1186,7 @@ def get_rebotados_por_tab_excel(
 
 
 def _normalizar_cedula(cedula: str) -> str:
-    """Quita espacios y guiones para comparar c�dulas."""
+    """Quita espacios y guiones para comparar cÃ©dulas."""
     if not cedula:
         return ""
     return (cedula or "").strip().replace(" ", "").replace("-", "").upper()
@@ -1194,11 +1194,11 @@ def _normalizar_cedula(cedula: str) -> str:
 
 @router.get("/historial-por-cedula", response_model=dict)
 def get_historial_notificaciones_por_cedula(
-    cedula: str = Query(..., min_length=1, description="C�dula del cliente"),
+    cedula: str = Query(..., min_length=1, description="CÃ©dula del cliente"),
     db: Session = Depends(get_db),
 ):
     """
-    Historial de notificaciones enviadas (o fallidas) para un cliente por c�dula.
+    Historial de notificaciones enviadas (o fallidas) para un cliente por cÃ©dula.
     Para reportes y fines administrativos/legales. Datos desde tabla envios_notificacion.
     """
     import time
@@ -1222,7 +1222,7 @@ def get_historial_notificaciones_por_cedula(
             "id": r.id,
             "fecha_envio": r.fecha_envio.isoformat() if r.fecha_envio else None,
             "tipo_tab": r.tipo_tab or "",
-            "asunto": getattr(r, "asunto", None) or (f"Notificaci�n {r.tipo_tab}" if r.tipo_tab else "Env�o"),
+            "asunto": getattr(r, "asunto", None) or (f"NotificaciÃ³n {r.tipo_tab}" if r.tipo_tab else "EnvÃ­o"),
             "email": r.email or "",
             "nombre": r.nombre or "",
             "cedula": r.cedula or "",
@@ -1238,13 +1238,13 @@ def get_historial_notificaciones_por_cedula(
 
 
 def _generar_excel_historial_cedula(items: List[dict], cedula: str) -> bytes:
-    """Genera Excel con historial de notificaciones por c�dula."""
+    """Genera Excel con historial de notificaciones por cÃ©dula."""
     import io
     import openpyxl
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Historial notificaciones"
-    ws.append(["Fecha env�o", "Tipo", "Asunto", "Email", "Nombre", "C�dula", "Estado", "Error", "ID Pr�stamo", "Correlativo"])
+    ws.append(["Fecha envÃ­o", "Tipo", "Asunto", "Email", "Nombre", "CÃ©dula", "Estado", "Error", "ID PrÃ©stamo", "Correlativo"])
     for r in items:
         ws.append([
             r.get("fecha_envio") or "",
@@ -1265,10 +1265,10 @@ def _generar_excel_historial_cedula(items: List[dict], cedula: str) -> bytes:
 
 @router.get("/historial-por-cedula/excel")
 def get_historial_por_cedula_excel(
-    cedula: str = Query(..., min_length=1, description="C�dula del cliente"),
+    cedula: str = Query(..., min_length=1, description="CÃ©dula del cliente"),
     db: Session = Depends(get_db),
 ):
-    """Descarga Excel con historial de notificaciones para la c�dula indicada."""
+    """Descarga Excel con historial de notificaciones para la cÃ©dula indicada."""
     try:
         data = get_historial_notificaciones_por_cedula(cedula=cedula, db=db)
         items = data.get("items") or []
@@ -1291,20 +1291,20 @@ def get_comprobante_envio(
     db: Session = Depends(get_db),
 ):
     """
-    Comprobante de env�o de una notificaci�n (un registro). Para descarga individual y fines legales.
+    Comprobante de envÃ­o de una notificaciÃ³n (un registro). Para descarga individual y fines legales.
     Devuelve HTML imprimible (el usuario puede guardar como PDF desde el navegador).
     """
     row = db.get(EnvioNotificacion, envio_id)
     if not row:
         log_historial_comprobante(envio_id, False, error="no_encontrado")
-        raise HTTPException(status_code=404, detail="Registro de env�o no encontrado")
+        raise HTTPException(status_code=404, detail="Registro de envÃ­o no encontrado")
     log_historial_comprobante(envio_id, True)
-    asunto = getattr(row, "asunto", None) or (f"Notificaci�n {row.tipo_tab}" if row.tipo_tab else "Env�o")
+    asunto = getattr(row, "asunto", None) or (f"NotificaciÃ³n {row.tipo_tab}" if row.tipo_tab else "EnvÃ­o")
     html = f"""<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>Comprobante de notificaci�n #{row.id}</title>
+  <title>Comprobante de notificaciÃ³n #{row.id}</title>
   <style>
     body {{ font-family: system-ui, sans-serif; margin: 2rem; max-width: 640px; }}
     h1 {{ font-size: 1.25rem; }}
@@ -1318,18 +1318,18 @@ def get_comprobante_envio(
   </style>
 </head>
 <body>
-  <h1>Comprobante de env�o de notificaci�n</h1>
+  <h1>Comprobante de envÃ­o de notificaciÃ³n</h1>
   <p><strong>ID registro:</strong> {row.id}</p>
   <table>
-    <tr><th>Fecha env�o</th><td>{row.fecha_envio.isoformat() if row.fecha_envio else ""}</td></tr>
+    <tr><th>Fecha envÃ­o</th><td>{row.fecha_envio.isoformat() if row.fecha_envio else ""}</td></tr>
     <tr><th>Tipo</th><td>{row.tipo_tab or ""}</td></tr>
     <tr><th>Asunto</th><td>{asunto}</td></tr>
     <tr><th>Destinatario (email)</th><td>{row.email or ""}</td></tr>
     <tr><th>Nombre</th><td>{row.nombre or ""}</td></tr>
-    <tr><th>C�dula</th><td>{row.cedula or ""}</td></tr>
+    <tr><th>CÃ©dula</th><td>{row.cedula or ""}</td></tr>
     <tr><th>Estado</th><td class="estado {'ok' if row.exito else 'fallo'}">{'Entregado' if row.exito else 'Rebotado'}</td></tr>
     <tr><th>Error (si aplica)</th><td>{row.error_mensaje or ""}</td></tr>
-    <tr><th>ID Pr�stamo</th><td>{row.prestamo_id or ""}</td></tr>
+    <tr><th>ID PrÃ©stamo</th><td>{row.prestamo_id or ""}</td></tr>
     <tr><th>Correlativo</th><td>{row.correlativo or ""}</td></tr>
   </table>
   <p style="margin-top: 1.5rem; font-size: 0.875rem; color: #666;">Documento generado para fines administrativos y legales. RapiCredit.</p>
@@ -1343,14 +1343,14 @@ def get_comprobante_envio(
 def get_clientes_retrasados(db: Session = Depends(get_db)):
     """
     Clientes a notificar por cuotas no pagadas, agrupados por reglas:
-    1. Faltan 5 d�as para fecha_vencimiento (no pagado)
-    2. Faltan 3 d�as para fecha_vencimiento (no pagado)
-    3. Falta 1 d�a para fecha_vencimiento (no pagado)
+    1. Faltan 5 dÃ­as para fecha_vencimiento (no pagado)
+    2. Faltan 3 dÃ­as para fecha_vencimiento (no pagado)
+    3. Falta 1 dÃ­a para fecha_vencimiento (no pagado)
     4. Hoy = fecha_vencimiento (no pagado)
-    5. 5 d�as atrasado (cuota vencida hace 5 d�as)
-    6. 30 d�as atrasado (cuota vencida hace 30 d�as)
-    7. 90+ d�as de mora (moroso): cada cuota atrasada una a una.
-    8. Cr�dito pagado (liquidados): prestamo.total_financiamiento = SUM(cuotas.total_pagado).
+    5. 5 dÃ­as atrasado (cuota vencida hace 5 dÃ­as)
+    6. 30 dÃ­as atrasado (cuota vencida hace 30 dÃ­as)
+    7. 90+ dÃ­as de mora (moroso): cada cuota atrasada una a una.
+    8. CrÃ©dito pagado (liquidados): prestamo.total_financiamiento = SUM(cuotas.total_pagado).
     Datos desde BD: get_cuotas_pendientes_con_cliente y tabla prestamos/cuotas.
     """
     hoy = date.today()
@@ -1360,9 +1360,9 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
     dias_3: List[dict] = []
     dias_1: List[dict] = []
     hoy_list: List[dict] = []
-    dias_5_atraso: List[dict] = []   # 5 d�as atrasado (cuota vencida hace 5 d�as)
-    dias_30_atraso: List[dict] = []  # 30 d�as atrasado (cuota vencida hace 30 d�as)
-    mora_90_cuotas: List[dict] = []  # cada cuota 90+ d�as atrasada (moroso)
+    dias_5_atraso: List[dict] = []   # 5 dÃ­as atrasado (cuota vencida hace 5 dÃ­as)
+    dias_30_atraso: List[dict] = []  # 30 dÃ­as atrasado (cuota vencida hace 30 dÃ­as)
+    mora_90_cuotas: List[dict] = []  # cada cuota 90+ dÃ­as atrasada (moroso)
 
     for (cuota, cliente) in rows:
         fv = cuota.fecha_vencimiento
@@ -1390,7 +1390,7 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
     # Ordenar mora_90 por dias_atraso desc, luego por cliente
     mora_90_cuotas.sort(key=lambda x: (-x["dias_atraso"], x["cedula"], x["numero_cuota"]))
 
-    # Liquidados: pr�stamos donde Total financiamiento = total abonos (SUM total_pagado por pr�stamo)
+    # Liquidados: prÃ©stamos donde Total financiamiento = total abonos (SUM total_pagado por prÃ©stamo)
     subq = (
         select(Cuota.prestamo_id, func.coalesce(func.sum(Cuota.total_pagado), 0).label("total_abonos"))
         .group_by(Cuota.prestamo_id)
@@ -1431,27 +1431,27 @@ def get_clientes_retrasados(db: Session = Depends(get_db)):
 
 def ejecutar_actualizacion_notificaciones(db: Session) -> dict:
     """
-    L�gica de actualizaci�n de notificaciones (mora desde cuotas no pagadas).
+    LÃ³gica de actualizaciÃ³n de notificaciones (mora desde cuotas no pagadas).
     Usado por el endpoint POST /actualizar y por el scheduler a las 2:00.
     """
     hoy = date.today()
     q = select(Cuota).where(Cuota.fecha_pago.is_(None), Cuota.fecha_vencimiento <= hoy)
     db.execute(q).scalars().all()
-    return {"mensaje": "Actualizaci�n ejecutada.", "clientes_actualizados": 0}
+    return {"mensaje": "ActualizaciÃ³n ejecutada.", "clientes_actualizados": 0}
 
 
 @router.post("/actualizar")
 def actualizar_notificaciones(db: Session = Depends(get_db)):
-    """Recalcular mora desde cuotas no pagadas. Tambi�n se ejecuta por scheduler a las 2:00."""
+    """Recalcular mora desde cuotas no pagadas. TambiÃ©n se ejecuta por scheduler a las 2:00."""
     return ejecutar_actualizacion_notificaciones(db)
 
 
 def get_notificaciones_tabs_data(db: Session):
     """
-    Datos para las pesta�as de Notificaciones (previas, d�a pago, retrasadas, prejudicial).
+    Datos para las pestaÃ±as de Notificaciones (previas, dÃ­a pago, retrasadas, prejudicial).
     Cada item tiene forma para el frontend: nombre, cedula, correo, telefono, estado, etc.
-    Incluye retraso 1/3/5 d�as y clientes con 3+ cuotas atrasadas (prejudicial).
-    Datos desde get_cuotas_pendientes_con_cliente (fuente �nica).
+    Incluye retraso 1/3/5 dÃ­as y clientes con 3+ cuotas atrasadas (prejudicial).
+    Datos desde get_cuotas_pendientes_con_cliente (fuente Ãºnica).
     """
     from sqlalchemy import func
 
@@ -1494,7 +1494,7 @@ def get_notificaciones_tabs_data(db: Session):
 
     mora_90_cuotas.sort(key=lambda x: (-x["dias_atraso"], x["cedula"], x["numero_cuota"]))
 
-    # Prejudicial: clientes con 3 o m�s cuotas atrasadas (fecha_vencimiento < hoy, no pagado)
+    # Prejudicial: clientes con 3 o mÃ¡s cuotas atrasadas (fecha_vencimiento < hoy, no pagado)
     # Solo cuotas con cliente_id no nulo para poder resolver Cliente
     prejudicial: List[dict] = []
     subq = (
