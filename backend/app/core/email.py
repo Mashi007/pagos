@@ -124,6 +124,8 @@ def _sanitize_smtp_error(exc: Exception) -> str:
         return "Error SSL/TLS. Prueba puerto 587 con TLS o 465 con SSL."
     if "connection unexpectedly closed" in lower or "connection closed" in lower or "serverdisconnected" in lower:
         return "El servidor SMTP cerro la conexion durante el inicio de sesion. En entornos cloud (Render, etc.) suele deberse a restricciones de red o a que Gmail exige Contrasena de aplicacion; revisa puerto (587 o 465) y vuelve a intentar."
+    if "daily user sending limit exceeded" in lower or "5.4.5" in msg:
+        return "Límite diario de envío de Gmail alcanzado (550 5.4.5). Gmail personal: ~100-500/día. Espera 24h o usa Google Workspace / otro SMTP para más envíos."
     return msg[:300] if len(msg) <= 300 else msg[:297] + "..."
 
 def test_imap_connection(

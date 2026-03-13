@@ -75,18 +75,11 @@ function validarArchivo(file: File | null): { valido: boolean; error?: string } 
 }
 
 const INSTITUCIONES = [
-  'Banco de Venezuela (BDV)',
-  'Banesco',
-  'Mercantil',
-  'BBVA Provincial',
-  'Banco Exterior',
-  'Banplus',
-  'Bancamiga',
+  'BINANCE',
   'BNC',
-  'Bicentenario',
-  'Sofitasa',
-  'Banco del Tesoro',
-  'Otros',
+  'Banco de Venezuela',
+  'Mercantil',
+  'Recibos',
 ]
 
 const WHATSAPP_LINK = 'https://wa.me/584244579934'
