@@ -115,6 +115,15 @@ def _job_limpiar_estado_cuenta_codigos() -> None:
         db.close()
 
 
+def _job_campanas_programadas() -> None:
+    """Job cada minuto. Ejecuta campañas CRM en estado programada cuya próxima ejecución ya llegó."""
+    try:
+        from app.api.v1.endpoints import crm_campanas
+        crm_campanas.ejecutar_campanas_programadas()
+    except Exception as e:
+        logger.exception("Error en job campanas_programadas: %s", e)
+
+
 def _job_pagos_gmail_pipeline() -> None:
     """Job cada N min (PAGOS_GMAIL_CRON_MINUTES): procesa correos (Gmail -> Drive -> Gemini -> Sheets). No procesa si aún no es tiempo desde la última ejecución."""
     db = SessionLocal()
@@ -196,6 +205,13 @@ def start_scheduler() -> None:
         CronTrigger(hour=4, minute=0, timezone=SCHEDULER_TZ),
         id="limpiar_estado_cuenta_codigos",
         name="Limpiar códigos estado de cuenta 4:00",
+    )
+    # Campañas CRM programadas: cada 1 minuto revisar si hay que enviar
+    _scheduler.add_job(
+        _job_campanas_programadas,
+        IntervalTrigger(minutes=1),
+        id="campanas_crm_programadas",
+        name="Campañas CRM programadas (cada 1 min)",
     )
     # Pagos Gmail: intervalo desde PAGOS_GMAIL_CRON_MINUTES (por defecto 30 min; cuota Gemini free ~15 RPM)
     cron_min = settings.PAGOS_GMAIL_CRON_MINUTES

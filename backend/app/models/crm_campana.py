@@ -29,6 +29,9 @@ class CampanaCrm(Base):
     fecha_envio_inicio = Column(DateTime(timezone=False), nullable=True)
     fecha_envio_fin = Column(DateTime(timezone=False), nullable=True)
     usuario_creacion = Column(String(255), nullable=True)
+    programado_cada_dias = Column(Integer, nullable=True)
+    programado_cada_horas = Column(Integer, nullable=True)
+    programado_proxima_ejecucion = Column(DateTime(timezone=False), nullable=True)
 
     @property
     def tiene_adjunto(self) -> bool:

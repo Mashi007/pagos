@@ -18,10 +18,15 @@ def build_drive_service(credentials: Any):
     return build("drive", "v3", credentials=credentials, cache_discovery=False), MediaIoBaseUpload
 
 
+def _escape_drive_query_string(s: str) -> str:
+    """Escapa comillas simples en nombres para la query de Drive (evita rotura de query)."""
+    return (s or "").replace("\\", "\\\\").replace("'", "\\'")
+
 def get_or_create_folder(service: Any, folder_name: str) -> Optional[str]:
     """Busca en root una carpeta con name=folder_name; si no existe, la crea. Devuelve folder_id."""
     try:
-        q = f"'{ROOT_FOLDER_ID}' in parents and mimeType='application/vnd.google-apps.folder' and name='{folder_name}' and trashed=false"
+        safe_name = _escape_drive_query_string(folder_name)
+        q = f"'{ROOT_FOLDER_ID}' in parents and mimeType='application/vnd.google-apps.folder' and name='{safe_name}' and trashed=false"
         resp = service.files().list(q=q, spaces="drive", fields="files(id,name)").execute()
         files = resp.get("files", [])
         if files:
@@ -41,7 +46,8 @@ def upload_file(service: Any, MediaIoBaseUpload, folder_id: str, filename: str, 
     """
     try:
         size = len(content)
-        q = f"'{folder_id}' in parents and name='{filename}' and trashed=false"
+        safe_filename = _escape_drive_query_string(filename)
+        q = f"'{folder_id}' in parents and name='{safe_filename}' and trashed=false"
         resp = service.files().list(q=q, spaces="drive", fields="files(id,size)").execute()
         for f in resp.get("files", []):
             if str(f.get("size")) == str(size):

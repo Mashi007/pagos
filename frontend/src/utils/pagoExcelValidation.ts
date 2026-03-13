@@ -127,8 +127,12 @@ function limpiarDocumento(s: string): string {
   return s.replace(/[\u200B-\u200D\uFEFF\r\n\t]/g, '').trim()
 }
 
+/** Límite de la columna numero_documento en BD (alineado con backend app/core/documento.py). */
+export const MAX_LEN_NUMERO_DOCUMENTO = 100
+
 /**
  * Normaliza el valor a string para usar como clave de documento.
+ * Reglas alineadas con backend normalize_documento: trim, colapsar espacios, notación científica → dígitos, truncar 100.
  * Acepta CUALQUIER formato: numérico, con € $ Bs, BNC/, ZELLE/, etc. No se quitan símbolos de moneda.
  * Misma clave = mismo documento (para detectar duplicados). Única regla: no duplicados.
  */
@@ -170,6 +174,7 @@ export function normalizarNumeroDocumento(val: unknown): string {
     }
   }
   s = s.replace(/\s+/g, ' ').trim()
+  if (s.length > MAX_LEN_NUMERO_DOCUMENTO) s = s.slice(0, MAX_LEN_NUMERO_DOCUMENTO)
   return s
 }
 

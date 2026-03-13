@@ -5,7 +5,7 @@ Evita congestión y políticas Gmail enviando en lotes con delay configurable.
 import base64
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
@@ -17,11 +17,13 @@ from app.core.database import get_db, SessionLocal
 from app.core.deps import get_current_user
 from app.models.cliente import Cliente
 from app.models.crm_campana import CampanaCrm
+from app.models.crm_campana_destinatario import CampanaDestinatarioCrm
 from app.models.crm_campana_envio import CampanaEnvioCrm
 from app.schemas.crm_campana import (
     CampanaCrmCreate,
     CampanaCrmUpdate,
     CampanaCrmResponse,
+    CampanaProgramarBody,
     DestinatarioPreview,
     CampanaDestinatarioResponse,
 )
@@ -63,16 +65,87 @@ def _get_destinatarios_clientes(db: Session) -> List[Tuple[int, str, Optional[st
     return out
 
 
+def _get_destinatarios_para_campana(
+    db: Session, campana: CampanaCrm
+) -> List[Tuple[int, str, Optional[str]]]:
+    """
+    Si la campaña tiene filas en crm_campana_destinatario: solo esos clientes (con email válido).
+    Si no tiene: todos los de tabla clientes (comportamiento anterior).
+    """
+    rows_dest = db.execute(
+        select(CampanaDestinatarioCrm.cliente_id).where(
+            CampanaDestinatarioCrm.campana_id == campana.id
+        )
+    ).all()
+    dest_ids = [r[0] for r in rows_dest]
+    if not dest_ids:
+        return _get_destinatarios_clientes(db)
+    rows = (
+        db.execute(
+            select(Cliente.id, Cliente.email, Cliente.nombres)
+            .where(Cliente.id.in_(dest_ids))
+            .where(Cliente.email.isnot(None))
+            .order_by(Cliente.id)
+        )
+        .all()
+    )
+    out: List[Tuple[int, str, Optional[str]]] = []
+    seen: set = set()
+    for cliente_id, email, nombres in rows:
+        if not email or not _valid_email(email):
+            continue
+        e = email.strip().lower()
+        if e in seen:
+            continue
+        seen.add(e)
+        out.append((cliente_id, email.strip(), (nombres or "").strip() or None))
+    return out
+
+
+def _get_destinatarios_by_ids(
+    db: Session, ids: List[int]
+) -> List[Tuple[int, str, Optional[str]]]:
+    """Devuelve (cliente_id, email, nombres) solo para los IDs indicados (con email válido)."""
+    if not ids:
+        return []
+    ids_unicos = list(dict.fromkeys(ids))
+    rows = (
+        db.execute(
+            select(Cliente.id, Cliente.email, Cliente.nombres)
+            .where(Cliente.id.in_(ids_unicos))
+            .where(Cliente.email.isnot(None))
+            .order_by(Cliente.id)
+        )
+        .all()
+    )
+    out: List[Tuple[int, str, Optional[str]]] = []
+    seen: set = set()
+    for cliente_id, email, nombres in rows:
+        if not email or not _valid_email(email):
+            continue
+        e = email.strip().lower()
+        if e in seen:
+            continue
+        seen.add(e)
+        out.append((cliente_id, email.strip(), (nombres or "").strip() or None))
+    return out
+
+
 @router.get("/preview-destinatarios", response_model=dict)
 def preview_destinatarios(
     limit: int = Query(50, ge=1, le=500),
+    ids: Optional[str] = Query(None, description="IDs de cliente separados por coma; si se envían, solo se devuelven esos contactos"),
     db: Session = Depends(get_db),
 ):
     """
-    Vista previa: total de correos únicos en clientes y una muestra.
-    Útil antes de crear una campaña.
+    Vista previa: si `ids` viene informado, solo los contactos seleccionados (esos IDs).
+    Si no, total de correos únicos en clientes y una muestra.
     """
-    destinatarios = _get_destinatarios_clientes(db)
+    if ids and ids.strip():
+        id_list = [int(x.strip()) for x in ids.split(",") if x.strip().isdigit()]
+        destinatarios = _get_destinatarios_by_ids(db, id_list)
+    else:
+        destinatarios = _get_destinatarios_clientes(db)
     total = len(destinatarios)
     muestra = [
         DestinatarioPreview(email=e, cliente_id=cid, nombres=nombres)
@@ -116,9 +189,30 @@ def crear_campana(
 ):
     """
     Crea una campaña en estado borrador.
-    total_destinatarios se calcula con los correos únicos de la tabla clientes.
+    Si destinatarios_cliente_ids viene con IDs: solo se envía a esos clientes.
+    Si viene vacío o null: se envía a todos los correos de tabla clientes.
     """
-    total = len(_get_destinatarios_clientes(db))
+    ids_a_guardar: List[int] = []
+    if payload.destinatarios_cliente_ids and len(payload.destinatarios_cliente_ids) > 0:
+        ids_unicos = list(dict.fromkeys(payload.destinatarios_cliente_ids))
+        clientes_con_email = (
+            db.execute(
+                select(Cliente.id, Cliente.email)
+                .where(Cliente.id.in_(ids_unicos))
+                .where(Cliente.email.isnot(None))
+            )
+        ).all()
+        validos = [(r[0], r[1]) for r in clientes_con_email if r[1] and _valid_email((r[1] or "").strip())]
+        seen_emails: set = set()
+        for cid, email in validos:
+            e = (email or "").strip().lower()
+            if e not in seen_emails:
+                seen_emails.add(e)
+                ids_a_guardar.append(cid)
+        total = len(ids_a_guardar)
+    else:
+        total = len(_get_destinatarios_clientes(db))
+
     cc_str = ",".join(e.strip() for e in (payload.cc_emails or []) if e and isinstance(e, str) and "@" in (e.strip() or "")) or None
     adjunto_bytes = None
     adjunto_nombre = None
@@ -148,6 +242,10 @@ def crear_campana(
     db.add(row)
     db.commit()
     db.refresh(row)
+    if ids_a_guardar:
+        for cid in ids_a_guardar:
+            db.add(CampanaDestinatarioCrm(campana_id=row.id, cliente_id=cid))
+        db.commit()
     return CampanaCrmResponse.model_validate(row)
 
 
@@ -205,15 +303,18 @@ def _run_envio_lotes(campana_id: int) -> None:
     db = SessionLocal()
     try:
         campana = db.get(CampanaCrm, campana_id)
-        if not campana or campana.estado not in ("borrador", "enviando"):
-            logger.warning("Campaña %s no existe o no está en borrador/enviando", campana_id)
+        if not campana or campana.estado not in ("borrador", "enviando", "programada"):
+            logger.warning("Campaña %s no existe o no está en borrador/enviando/programada", campana_id)
             return
-        if campana.estado == "borrador":
+        era_programada = bool(
+            (getattr(campana, "programado_cada_dias", None) or 0) or (getattr(campana, "programado_cada_horas", None) or 0)
+        )
+        if campana.estado == "borrador" or campana.estado == "programada":
             campana.estado = "enviando"
             campana.fecha_envio_inicio = datetime.utcnow()
             db.commit()
 
-        destinatarios = _get_destinatarios_clientes(db)
+        destinatarios = _get_destinatarios_para_campana(db, campana)
         from app.core.email import send_email
         from app.core.email_config_holder import get_email_activo_servicio
 
@@ -230,6 +331,10 @@ def _run_envio_lotes(campana_id: int) -> None:
         fallidos = campana.fallidos
 
         for i in range(0, len(destinatarios), batch_size):
+            campana = db.get(CampanaCrm, campana_id)
+            if campana and campana.estado == "cancelada":
+                logger.info("Campaña %s detenida por el usuario (cancelada)", campana_id)
+                break
             lote = destinatarios[i : i + batch_size]
             if not get_email_activo_servicio("campanas"):
                 continue
@@ -269,10 +374,21 @@ def _run_envio_lotes(campana_id: int) -> None:
 
         campana = db.get(CampanaCrm, campana_id)
         if campana:
-            campana.estado = "completada"
-            campana.fecha_envio_fin = datetime.utcnow()
+            now = datetime.utcnow()
+            campana.fecha_envio_fin = now
             campana.enviados = enviados
             campana.fallidos = fallidos
+            if era_programada and campana.estado != "cancelada":
+                dias = getattr(campana, "programado_cada_dias", None) or 0
+                horas = getattr(campana, "programado_cada_horas", None) or 0
+                if dias or horas:
+                    delta = timedelta(days=dias, hours=horas)
+                    campana.programado_proxima_ejecucion = now + delta
+                    campana.estado = "programada"
+                    db.commit()
+                    logger.info("Campaña %s programada: próxima ejecución %s", campana_id, campana.programado_proxima_ejecucion)
+                    return
+            campana.estado = "completada"
             db.commit()
         logger.info("Campaña %s completada: enviados=%s fallidos=%s", campana_id, enviados, fallidos)
     except Exception as e:
@@ -287,6 +403,87 @@ def _run_envio_lotes(campana_id: int) -> None:
             pass
     finally:
         db.close()
+
+
+@router.post("/{campana_id}/parar", response_model=dict)
+def parar_campana(campana_id: int, db: Session = Depends(get_db)):
+    """Detiene un envío en curso. Solo permitido si la campaña está en estado enviando."""
+    row = db.get(CampanaCrm, campana_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Campaña no encontrada")
+    if row.estado != "enviando":
+        raise HTTPException(
+            status_code=400,
+            detail="Solo se puede parar una campaña que está enviando",
+        )
+    row.estado = "cancelada"
+    row.fecha_envio_fin = datetime.utcnow()
+    db.commit()
+    return {"success": True, "mensaje": "Envío detenido. La campaña quedó en estado cancelada."}
+
+
+@router.delete("/{campana_id}", status_code=204)
+def eliminar_campana(campana_id: int, db: Session = Depends(get_db)):
+    """Elimina una campaña. Solo permitido si está en borrador o cancelada."""
+    row = db.get(CampanaCrm, campana_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Campaña no encontrada")
+    if row.estado not in ("borrador", "cancelada"):
+        raise HTTPException(
+            status_code=400,
+            detail="Solo se puede eliminar una campaña en borrador o cancelada",
+        )
+    db.delete(row)
+    db.commit()
+    return None
+
+
+@router.post("/{campana_id}/programar", response_model=dict)
+def programar_campana(
+    campana_id: int,
+    payload: CampanaProgramarBody,
+    db: Session = Depends(get_db),
+):
+    """
+    Programa envíos recurrentes: cada X días y/o cada X horas.
+    Solo permitido si la campaña está en borrador. La primera ejecución la dispara el scheduler.
+    """
+    row = db.get(CampanaCrm, campana_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Campaña no encontrada")
+    if row.estado != "borrador":
+        raise HTTPException(
+            status_code=400,
+            detail="Solo se puede programar una campaña en borrador",
+        )
+    if row.total_destinatarios == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="No hay destinatarios. Añade destinatarios antes de programar.",
+        )
+    dias = (payload.cada_dias or 0) if payload.cada_dias is not None else 0
+    horas = (payload.cada_horas or 0) if payload.cada_horas is not None else 0
+    if not dias and not horas:
+        raise HTTPException(
+            status_code=400,
+            detail="Indica al menos cada cuántos días o cada cuántas horas se enviará",
+        )
+    row.programado_cada_dias = dias if dias else None
+    row.programado_cada_horas = horas if horas else None
+    delta = timedelta(days=dias, hours=horas)
+    row.programado_proxima_ejecucion = datetime.utcnow() + delta
+    row.estado = "programada"
+    db.commit()
+    desc = []
+    if dias:
+        desc.append(f"cada {dias} día(s)")
+    if horas:
+        desc.append(f"cada {horas} hora(s)")
+    return {
+        "success": True,
+        "mensaje": f"Campaña programada para enviar {' y '.join(desc)}. La próxima ejecución será en el momento indicado.",
+        "programado_proxima_ejecucion": row.programado_proxima_ejecucion.isoformat() if row.programado_proxima_ejecucion else None,
+    }
 
 
 @router.post("/{campana_id}/iniciar-envio", response_model=dict)
@@ -321,6 +518,33 @@ def iniciar_envio(
         "batch_size": row.batch_size,
         "delay_entre_batches_seg": row.delay_entre_batches_seg,
     }
+
+
+def ejecutar_campanas_programadas() -> None:
+    """
+    Llamado por el scheduler cada minuto. Ejecuta campañas en estado programada
+    cuya programado_proxima_ejecucion ya llegó.
+    """
+    db = SessionLocal()
+    try:
+        now = datetime.utcnow()
+        rows = (
+            db.execute(
+                select(CampanaCrm.id).where(
+                    CampanaCrm.estado == "programada",
+                    CampanaCrm.programado_proxima_ejecucion.isnot(None),
+                    CampanaCrm.programado_proxima_ejecucion <= now,
+                    CampanaCrm.total_destinatarios > 0,
+                )
+            )
+        ).all()
+        for (campana_id,) in rows:
+            try:
+                _run_envio_lotes(campana_id)
+            except Exception as e:
+                logger.exception("Error ejecutando campaña programada %s: %s", campana_id, e)
+    finally:
+        db.close()
 
 
 @router.get("/{campana_id}/envios", response_model=dict)

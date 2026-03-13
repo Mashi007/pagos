@@ -291,9 +291,13 @@ class PagoService {
     return response.data as Blob
   }
 
-/** Pagos Gmail: ejecutar pipeline (Gmail -> Drive -> Gemini -> Sheets). force=true permite ejecutar aunque la última sync fue hace poco. */
-  async runGmailNow(force = true): Promise<{ sync_id: number | null; status: string; emails_processed?: number; files_processed?: number }> {
-    return await apiClient.post(`${this.baseUrl}/gmail/run-now?force=${force}`)
+/** Pagos Gmail: ejecutar pipeline (Gmail -> Drive -> Gemini -> BD). force=true permite ejecutar aunque la última sync fue hace poco. scan_filter: "unread" | "read" | "all". */
+  async runGmailNow(force = true, scanFilter?: 'unread' | 'read' | 'all'): Promise<{ sync_id: number | null; status: string; emails_processed?: number; files_processed?: number }> {
+    const params = new URLSearchParams({ force: String(force) })
+    if (scanFilter && ['unread', 'read', 'all'].includes(scanFilter)) {
+      params.set('scan_filter', scanFilter)
+    }
+    return await apiClient.post(`${this.baseUrl}/gmail/run-now?${params.toString()}`)
   }
 
   /** Pagos Gmail: estado última ejecución, próxima y última fecha con datos disponibles. */

@@ -88,7 +88,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
               <FileSpreadsheet className="h-6 w-6" />
               <div>
                 <h2 className="text-xl font-bold">CARGA MASIVA DE PAGOS</h2>
-                <p className="text-xs text-green-100 mt-0.5">Recomendado: Cédula | Fecha | Monto | Documento. Máx. 10 MB.</p>
+                <p className="text-xs text-green-100 mt-0.5">Recomendado: Cédula | Fecha | Monto | Documento. Máx. 10 MB. Hasta 2.500 filas recomendado; máx. 10.000.</p>
               </div>
               <div
                 className={`px-2 py-1 text-xs rounded-full flex items-center gap-1 ${

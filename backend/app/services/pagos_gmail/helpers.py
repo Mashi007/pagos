@@ -91,6 +91,7 @@ def subject_acceptable_for_pipeline(subject: Optional[str], keywords_or: Optiona
     """
     True si el correo debe procesarse según el asunto.
     Acepta si: (1) el asunto contiene un email, o (2) keywords_or está definido y el asunto contiene alguna de las frases (case-insensitive).
+    NOTA: El pipeline actual NO usa esta función; la regla es únicamente correo NO LEÍDO.
     """
     if not subject or not subject.strip():
         return False
@@ -108,9 +109,8 @@ def subject_acceptable_for_pipeline(subject: Optional[str], keywords_or: Optiona
 def sender_acceptable_for_pipeline(sender: Optional[str], allowed_prefixes: Optional[list[str]] = None) -> bool:
     """
     True si el correo debe procesarse por remitente (siempre incluir estos correos).
-    Útil para incluir correos de cobranza@... aunque el asunto no cumpla el filtro.
     Acepta si el email del remitente (sender) empieza con alguno de allowed_prefixes (case-insensitive).
-    Ej.: sender "cobranza@rapicreditca.com" con allowed_prefixes ["cobranza"] -> True.
+    NOTA: El pipeline actual NO usa esta función; la regla es únicamente correo NO LEÍDO.
     """
     if not sender or not sender.strip():
         return False

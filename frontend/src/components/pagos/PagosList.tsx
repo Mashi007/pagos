@@ -19,6 +19,7 @@ import {
   Download,
   Loader2,
   Mail,
+  Upload,
 } from 'lucide-react'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -33,6 +34,7 @@ import { pagoService, type Pago } from '../../services/pagoService'
 import { pagoConErrorService, type PagoConError } from '../../services/pagoConErrorService'
 import { RegistrarPagoForm } from './RegistrarPagoForm'
 import { ExcelUploaderPagosUI } from './ExcelUploaderPagosUI'
+import { ExcelUploader } from './ExcelUploader'
 import { ConfirmarBorrarDiaDialog } from './ConfirmarBorrarDiaDialog'
 import { PagosListResumen } from './PagosListResumen'
 import { PagosKPIsNuevo } from './PagosKPIsNuevo'
@@ -61,6 +63,7 @@ export function PagosList() {
   })
   const [showRegistrarPago, setShowRegistrarPago] = useState(false)
   const [showCargaMasivaPagos, setShowCargaMasivaPagos] = useState(false)
+  const [showUploadDirectPagos, setShowUploadDirectPagos] = useState(false)
   const [agregarPagoOpen, setAgregarPagoOpen] = useState(false)
   const [pagoEditando, setPagoEditando] = useState<Pago | PagoConError | null>(null)
   const [accionesOpenId, setAccionesOpenId] = useState<number | null>(null)
@@ -75,6 +78,7 @@ export function PagosList() {
   const [isImportingCobros, setIsImportingCobros] = useState(false)
   const [isExportingRevisionPagos, setIsExportingRevisionPagos] = useState(false)
   const [isDescargandoGmailExcel, setIsDescargandoGmailExcel] = useState(false)
+  const [gmailScanFilter, setGmailScanFilter] = useState<'unread' | 'read' | 'all'>('unread')
   const queryClient = useQueryClient()
   const lastRunForWhichWeShowedDialogRef = useRef<string | null>(null)
 
@@ -113,7 +117,7 @@ export function PagosList() {
 
   const handleGenerarExcelDesdeGmail = () => {
     setAgregarPagoOpen(false)
-    runGmail()
+    runGmail(gmailScanFilter)
   }
 
   const handleImportarDesdeCobros = async () => {
@@ -163,7 +167,11 @@ export function PagosList() {
       }))
       const nombre = `Revision_Pagos_${new Date().toISOString().slice(0, 10)}.xlsx`
       await createAndDownloadExcel(datos, 'Revisión pagos', nombre)
-      toast.success('Excel descargado')
+      const ids = pagos.map((p) => p.id)
+      await pagoConErrorService.eliminarPorDescarga(ids)
+      await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
+      await queryClient.invalidateQueries({ queryKey: ['pagos-con-errores'], exact: false })
+      toast.success(`${pagos.length} pagos exportados y eliminados de la lista`)
     } catch (err) {
       if (import.meta.env.DEV) console.error('Error al descargar Excel', err)
       toast.error('Error al descargar Excel')
@@ -393,9 +401,34 @@ export function PagosList() {
                   }}
                 >
                   <FileSpreadsheet className="w-5 h-5 text-gray-600" />
-                  <span>Pagos (Excel)</span>
+                  <span>Previsualizar y editar (Excel)</span>
                   <span className="text-xs text-gray-500 ml-auto">Excel</span>
                 </button>
+                <button
+                  type="button"
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left rounded-md hover:bg-blue-50"
+                  onClick={() => {
+                    setShowUploadDirectPagos(true)
+                    setAgregarPagoOpen(false)
+                  }}
+                >
+                  <Upload className="w-5 h-5 text-gray-600" />
+                  <span>Subir y procesar todo (Excel)</span>
+                  <span className="text-xs text-gray-500 ml-auto">Excel</span>
+                </button>
+                <div className="w-full px-4 py-2 border-t border-gray-100">
+                  <label className="text-xs text-gray-600 block mb-1">Correos a escanear (Gmail)</label>
+                  <Select value={gmailScanFilter} onValueChange={(v: 'unread' | 'read' | 'all') => setGmailScanFilter(v)}>
+                    <SelectTrigger className="h-9 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unread">No leídos</SelectItem>
+                      <SelectItem value="read">Leídos</SelectItem>
+                      <SelectItem value="all">Todos</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <button
                   type="button"
                   className="w-full flex items-center gap-3 px-4 py-3 text-left rounded-md hover:bg-blue-50 disabled:opacity-50"
@@ -940,7 +973,7 @@ export function PagosList() {
           }}
         />
       )}
-      {/* Carga masiva de pagos (Excel) desde Agregar pago */}
+      {/* Carga masiva de pagos (Excel) desde Agregar pago: Previsualizar y editar */}
       {showCargaMasivaPagos && (
         <ExcelUploaderPagosUI
           onClose={() => setShowCargaMasivaPagos(false)}
@@ -952,6 +985,22 @@ export function PagosList() {
             await queryClient.refetchQueries({ queryKey: ['pagos'], exact: false })
             await queryClient.refetchQueries({ queryKey: ['pagos-kpis'], exact: false })
             toast.success('Datos actualizados correctamente')
+          }}
+        />
+      )}
+      {/* Subir y procesar todo (Excel): envía archivo al servidor y muestra resultado; si hay errores, enlace a Revisar Pagos */}
+      {showUploadDirectPagos && (
+        <ExcelUploader
+          onClose={() => setShowUploadDirectPagos(false)}
+          onSuccess={async () => {
+            setShowUploadDirectPagos(false)
+            await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
+            await queryClient.invalidateQueries({ queryKey: ['pagos-con-errores'], exact: false })
+            await queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false })
+          }}
+          onGoToRevisarPagos={() => {
+            setShowUploadDirectPagos(false)
+            handleRevisarPagos()
           }}
         />
       )}
@@ -967,6 +1016,8 @@ export function PagosList() {
             toast.success('Excel descargado.')
           } catch (e) {
             toast.error(getErrorMessage(e))
+            pagoService.getGmailStatus().then(setGmailStatus)
+            return
           }
           const result = await pagoService.confirmarDiaGmail(borrar, fecha)
           if (result.confirmado) {

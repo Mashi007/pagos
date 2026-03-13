@@ -26,40 +26,40 @@ logger = logging.getLogger(__name__)
 PAGOS_NA = "NA"
 
 GEMINI_PROMPT = (
-    "Eres un asistente especializado en leer comprobantes de pago venezolanos. "
-    "La imagen puede ser un recibo bancario físico (BNC, Mercantil, Banesco, BDV, Bicentenario, Bancamiga, BOD), "
-    "una captura de app bancaria, un comprobante de Pago Móvil, transferencia interbancaria, "
-    "o pago en criptomoneda (USDT, Binance, etc.). "
-    "Extrae estos 4 datos y responde ÚNICAMENTE con el JSON sin texto adicional:\n"
+    "Eres un asistente especializado en extraer datos de pagos venezolanos. "
+    "Puedes recibir UNA O MÁS de estas fuentes:\n"
+    "1) El ASUNTO del correo electrónico (subject; a veces incluye referencia, monto o datos del pagador).\n"
+    "2) El CUERPO del correo (texto plano o HTML convertido a texto).\n"
+    "3) Una o más imágenes o PDFs (comprobantes: recibo bancario, captura de app, Pago Móvil, transferencia, USDT, etc.).\n\n"
+    "Extrae estos 4 datos de CUALQUIERA de las fuentes (asunto, cuerpo, imágenes o combinación). "
+    "El asunto a menudo contiene número de referencia, monto o identificación; úsalo si el cuerpo o la imagen no lo tienen. "
+    "Si el mismo dato aparece en varias fuentes, puedes usar cualquiera (prefiere la imagen cuando sea claramente un comprobante). "
+    "Responde ÚNICAMENTE con el JSON sin texto adicional:\n"
     "{\n"
     "  \"fecha_pago\": \"...\",\n"
     "  \"cedula\": \"...\",\n"
     "  \"monto\": \"...\",\n"
     "  \"numero_referencia\": \"...\"\n"
     "}\n\n"
-    "REGLAS ESTRICTAS POR CAMPO:\n\n"
-    "CEDULA:\n"
-    "- Siempre empieza con V, E o J seguido de guion y números. Ejemplos: V-024691606, E-12345678, J-309841327.\n"
-    "- Busca etiquetas: 'DP:V-', 'DP:E-', 'Cédula Dep.', 'C.I.', 'RIF', 'V-', 'E-', 'J-'.\n"
-    "- Devuelve SOLO los dígitos sin prefijo (ej: si ves 'V-024691606' devuelve '024691606').\n"
-    "- Si hay varias cédulas en la imagen, tomar la del PAGADOR/DEPOSITANTE (no la del beneficiario).\n\n"
+    "REGLAS POR CAMPO (aplican tanto al leer texto como imágenes):\n\n"
+    "CEDULA (puede extraerse del ASUNTO, del CUERPO o de la IMAGEN):\n"
+    "- Formato: V, E o J (y opcionalmente G) seguido de guion y números. Ejemplos: V-024691606, E-12345678, J-309841327.\n"
+    "- En asunto/cuerpo busca: 'cédula', 'C.I.', 'RIF', 'DP:', 'V-', 'E-', 'J-', 'identificación', 'depositante'.\n"
+    "- En imagen busca etiquetas: 'DP:V-', 'Cédula Dep.', 'C.I.', 'RIF'.\n"
+    "- Devuelve SOLO los dígitos sin prefijo (ej: 'V-024691606' → '024691606'). Si hay varias cédulas, la del PAGADOR/DEPOSITANTE.\n\n"
     "MONTO:\n"
-    "- Puede estar en bolívares (Bs, Bs., BsS) o dólares/divisas (Us$, USD, $, USDT).\n"
-    "- Formato Bs venezolano usa punto como separador de miles y coma como decimal: '80.000,00 Bs' → devolver '80000.00 Bs'.\n"
-    "- Incluir la moneda en el valor: '142.00 USD', '80000.00 Bs', '135 USDT', '260.00 USD'.\n"
-    "- Busca: 'Deposito Us$', 'Monto', 'Monto (Bs.)', importe principal destacado visualmente.\n\n"
-    "NUMERO_REFERENCIA (usar en este orden de prioridad según banco):\n"
-    "- BNC: campo 'Ref:' (ej: Ref: 130611935 → devolver solo '130611935'). Si no está, usar 'Serial:'.\n"
-    "- Mercantil: campo 'Serial:' (número largo, ej: Serial: 740087405431516 → devolver solo '740087405431516').\n"
-    "- Banesco: campo 'Operación:' (ej: Operación: 3701189898485 → devolver solo '3701189898485').\n"
-    "- Cualquier banco: 'ID de orden', 'Nro. de referencia', 'N° de referencia', 'NÚMERO DE REFERENCIA', "
-    "'Número de operación', 'Código de operación', 'Nro. comprobante'.\n"
-    "- Si hay varios números, preferir el más largo o el más prominente en el comprobante.\n"
-    "- IMPORTANTE: devolver SOLO el número o código alfanumérico, SIN incluir la etiqueta "
-    "(no escribir 'Ref:', 'Serial:', 'Operación:', etc., solo el valor).\n\n"
+    "- Bolívares (Bs, Bs., BsS) o dólares/divisas (Us$, USD, $, USDT). Incluir la moneda: '142.00 USD', '80000.00 Bs'.\n"
+    "- En texto busca: 'monto', 'depósito', 'cantidad', 'total', 'importe', 'pagado', 'abono'.\n"
+    "- Formato Bs: punto miles, coma decimal; normalizar a '80000.00 Bs'.\n\n"
+    "NUMERO_REFERENCIA:\n"
+    "- BNC: 'Ref:'; Mercantil: 'Serial:'; Banesco: 'Operación:'; genérico: 'referencia', 'operación', 'código', 'comprobante'.\n"
+    "- Devuelve SOLO el número o código, sin la etiqueta. En texto busca frases como 'ref:', 'referencia nro', 'número de operación'.\n\n"
     "FECHA_PAGO:\n"
-    "- Busca la fecha de la operación/transacción en cualquier formato (dd/mm/yyyy, yyyy-mm-dd, 'DD MAR YYYY').\n\n"
-    "Si un dato genuinamente NO aparece en la imagen, usa 'NA'. Si la imagen no es un comprobante de pago (solo logo, firma, publicidad o irrelevante), devuelve los cuatro campos con 'NA'. No inventes datos. FORMATO: Responde UNICAMENTE con un objeto JSON valido, sin texto antes ni despues, sin markdown (no uses ```json). Responde SOLO el JSON."
+    "- Fecha de la operación/transacción en cualquier formato (dd/mm/yyyy, yyyy-mm-dd, 'DD MAR YYYY'). En asunto/cuerpo busca 'fecha', 'día', 'transacción'.\n\n"
+    "Usa 'NA' solo cuando el dato NO aparezca en ninguna de las fuentes (asunto, cuerpo, imágenes). "
+    "Si solo recibes asunto y/o cuerpo (sin imagen), extrae del texto. Si solo recibes imagen(es), extrae de la(s) imagen(es). "
+    "No inventes datos. Si el contenido no es un comprobante ni un mensaje de pago (solo logo, firma, publicidad), devuelve los cuatro campos con 'NA'. "
+    "FORMATO: Responde ÚNICAMENTE con un objeto JSON válido, sin texto antes ni después, sin markdown (no uses ```json). Responde SOLO el JSON."
 )
 
 
@@ -89,9 +89,19 @@ def _gemini_client(key: str):
     return genai.Client(api_key=key)
 
 
-def extract_payment_data(file_content: bytes, filename: str, api_key: Optional[str] = None) -> Dict[str, str]:
+def extract_payment_data(
+    file_content: Optional[bytes] = None,
+    filename: Optional[str] = None,
+    body_text: Optional[str] = None,
+    subject: Optional[str] = None,
+    api_key: Optional[str] = None,
+) -> Dict[str, str]:
     """
-    Envía el archivo a Gemini y devuelve dict con fecha_pago, cedula, monto, numero_referencia.
+    Extrae fecha_pago, cedula, monto, numero_referencia de asunto, cuerpo, imagen/PDF o combinación.
+    - subject: asunto del correo (opcional; a menudo trae referencia, monto o identificación).
+    - body_text: cuerpo del correo en texto plano (opcional).
+    - file_content + filename: imagen o PDF (comprobante).
+    - Si solo hay texto (asunto/cuerpo), extrae del texto. Si hay imagen(es), puede combinar todas las fuentes.
     """
     key = api_key or getattr(settings, "GEMINI_API_KEY", None)
     if not key:
@@ -101,19 +111,42 @@ def extract_payment_data(file_content: bytes, filename: str, api_key: Optional[s
             "El pipeline seguirá guardando filas con 'NA' en los campos extraídos."
         )
         return _empty_result(PAGOS_NA)
+    has_text = bool((subject and subject.strip()) or (body_text and body_text.strip()))
+    if not file_content and not has_text:
+        return _empty_result(PAGOS_NA)
     model_name = getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash")
-    logger.warning("[PAGOS_GMAIL] Gemini → archivo=%s modelo=%s tamaño=%d bytes", filename, model_name, len(file_content))
-    mime = get_mime_type(filename)
+    contents: list = [GEMINI_PROMPT]
+    text_parts: list = []
+    if subject and subject.strip():
+        text_parts.append("--- Asunto del correo ---\n" + subject.strip()[:2000])
+    if body_text and body_text.strip():
+        text_parts.append("--- Cuerpo del correo ---\n\n" + body_text.strip()[:12000])
+    if text_parts:
+        contents.append("\n\n".join(text_parts))
+    image_part = None
+    if file_content and filename:
+        mime = get_mime_type(filename)
+        image_part = _build_image_part(file_content, filename, mime)
+        contents.append(image_part)
+        logger.warning(
+            "[PAGOS_GMAIL] Gemini → archivo=%s modelo=%s tamaño=%d bytes%s",
+            filename, model_name, len(file_content),
+            " + asunto/cuerpo" if has_text else "",
+        )
+    else:
+        logger.warning(
+            "[PAGOS_GMAIL] Gemini → solo asunto/cuerpo (sin imagen) modelo=%s%s",
+            model_name, " asunto+cuerpo" if (subject and body_text) else "",
+        )
     try:
         from google.genai import types
         client = _gemini_client(key)
-        image_part = _build_image_part(file_content, filename, mime)
         last_error = None
         for attempt in range(GEMINI_RATE_LIMIT_MAX_RETRIES + 1):
             try:
                 response = client.models.generate_content(
                     model=model_name,
-                    contents=[GEMINI_PROMPT, image_part],
+                    contents=contents,
                     config=types.GenerateContentConfig(temperature=0.1),
                 )
                 text = ""
@@ -128,15 +161,15 @@ def extract_payment_data(file_content: bytes, filename: str, api_key: Optional[s
                             safety_ratings.append(f"{r.category}={r.probability}")
                     logger.warning(
                         "[PAGOS_GMAIL] Gemini respuesta bloqueada/vacía para %s: %s | finish_reasons=%s | safety=%s",
-                        filename, text_err, finish_reasons, safety_ratings,
+                        filename or "cuerpo", text_err, finish_reasons, safety_ratings,
                     )
                     return _empty_result(f"blocked: {text_err}")
 
-                logger.warning("[PAGOS_GMAIL] Gemini raw(%s): %s", filename, text[:400] if text else "(VACÍO)")
+                logger.warning("[PAGOS_GMAIL] Gemini raw(%s): %s", filename or "cuerpo", text[:400] if text else "(VACÍO)")
                 result = _parse_gemini_json(text)
                 all_na = all(v == PAGOS_NA for v in result.values())
                 if all_na:
-                    logger.warning("[PAGOS_GMAIL] Gemini TODO NA para %s — respuesta: %s", filename, text[:300])
+                    logger.warning("[PAGOS_GMAIL] Gemini TODO NA para %s — respuesta: %s", filename or "cuerpo", text[:300])
                 else:
                     logger.warning(
                         "[PAGOS_GMAIL] Gemini OK: fecha=%s cedula=%s monto=%s ref=%s",

@@ -82,25 +82,27 @@ def _parse_gmail_retry_after_seconds(exc: Exception) -> Optional[int]:
         return None
 
 
-def list_unread_with_attachments(service: Any) -> List[dict]:
+def list_messages_by_filter(service: Any, filter_type: str = "unread") -> List[dict]:
     """
-    Lista TODOS los mensajes NO LEÍDOS. No filtra por contenido: el filtro de metadata
-    (format="metadata") no devuelve partes anidadas, por lo que correos Fwd: con imágenes
-    dentro de message/rfc822 serían excluidos erróneamente. En cambio, el pipeline procesa
-    cada correo (obteniendo el payload completo), extrae lo que encuentra y, si no hay
-    imágenes, guarda una fila NA. Todos se marcan como leídos al finalizar.
-
-    Ante 429 (rate limit): se registra WARNING con retry-after; si la espera es <= 2 min
-    se espera y se reintenta una vez; si no, se devuelve [] para no bloquear el worker.
+    Lista mensajes según el filtro: "unread" (no leídos), "read" (leídos), "all" (todos en bandeja).
+    Devuelve la misma estructura que list_unread_with_attachments para que el pipeline procese.
+    filter_type in ("unread", "read", "all").
     """
     from googleapiclient.errors import HttpError
 
     def _fetch() -> List[dict]:
-        # Paginacion: obtener TODOS los no leidos (unico criterio = UNREAD)
         all_msg_refs: List[dict] = []
         page_token: Optional[str] = None
+        params_base: dict = {"userId": "me", "maxResults": 500}
+        if filter_type == "unread":
+            params_base["labelIds"] = ["UNREAD"]
+        elif filter_type == "read":
+            params_base["q"] = "is:read"
+        else:
+            params_base["q"] = "in:inbox"
+
         while True:
-            params: dict = {"userId": "me", "labelIds": ["UNREAD"], "maxResults": 500}
+            params = dict(params_base)
             if page_token:
                 params["pageToken"] = page_token
             result = service.users().messages().list(**params).execute()
@@ -124,30 +126,31 @@ def list_unread_with_attachments(service: Any) -> List[dict]:
         return _fetch()
     except HttpError as e:
         if e.resp.status != 429:
-            logger.exception("Gmail list_unread_with_attachments: %s", e)
+            logger.exception("Gmail list_messages_by_filter(%s): %s", filter_type, e)
             return []
         wait_sec = _parse_gmail_retry_after_seconds(e)
-        retry_after_str = f" (retry after {wait_sec}s)" if wait_sec is not None else ""
-        logger.warning(
-            "Gmail list_unread_with_attachments: rate limit 429%s — %s",
-            retry_after_str,
-            getattr(e, "uri", ""),
-        )
+        logger.warning("[PAGOS_GMAIL] Gmail 429 (filtro=%s), esperando %ds, 1 reintento.", filter_type, wait_sec or 0)
         if wait_sec is not None and 0 < wait_sec <= _GMAIL_429_MAX_WAIT_SECONDS:
-            logger.warning("[PAGOS_GMAIL] Esperando %ds por rate limit Gmail, luego 1 reintento.", wait_sec)
             time.sleep(wait_sec)
             try:
                 return _fetch()
             except HttpError as e2:
                 if e2.resp.status == 429:
-                    logger.warning("Gmail list_unread_with_attachments: 429 de nuevo tras espera — devolviendo []")
                     return []
-                logger.exception("Gmail list_unread_with_attachments (reintento): %s", e2)
+                logger.exception("Gmail list_messages_by_filter (reintento): %s", e2)
                 return []
         return []
     except Exception as e:
-        logger.exception("Gmail list_unread_with_attachments: %s", e)
+        logger.exception("Gmail list_messages_by_filter(%s): %s", filter_type, e)
         return []
+
+
+def list_unread_with_attachments(service: Any) -> List[dict]:
+    """
+    Lista TODOS los mensajes NO LEÍDOS (equivalente a list_messages_by_filter(service, "unread")).
+    Mantenido por compatibilidad; el pipeline puede usar list_messages_by_filter con scan_filter.
+    """
+    return list_messages_by_filter(service, "unread")
 
 
 def get_message_date(headers: dict) -> datetime:
@@ -169,6 +172,59 @@ def get_message_full_payload(service: Any, message_id: str) -> dict:
     except Exception as e:
         logger.warning("Error obteniendo mensaje completo %s: %s", message_id, e)
         return {}
+
+
+def _html_to_plain(html: str) -> str:
+    """Convierte HTML a texto plano para uso en extracción (cuerpo del correo)."""
+    if not html:
+        return ""
+    text = re.sub(r"<br\s*/?>", "\n", html, flags=re.IGNORECASE)
+    text = re.sub(r"</p>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", "", text)
+    text = re.sub(r"&nbsp;", " ", text, flags=re.IGNORECASE)
+    text = re.sub(r"&amp;", "&", text, flags=re.IGNORECASE)
+    text = re.sub(r"&lt;", "<", text, flags=re.IGNORECASE)
+    text = re.sub(r"&gt;", ">", text, flags=re.IGNORECASE)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def get_message_body_text(payload: dict) -> str:
+    """
+    Extrae el cuerpo del correo en texto plano desde el payload de Gmail API.
+    Prefiere text/plain; si no hay, usa text/html convirtiendo a texto.
+    Útil para que Gemini extraiga datos del cuerpo cuando no hay adjuntos o como contexto.
+    """
+    plain = ""
+    html = ""
+
+    def _collect(part: dict) -> None:
+        nonlocal plain, html
+        mime = (part.get("mimeType") or "").strip().lower()
+        body = part.get("body") or {}
+        data_b64 = body.get("data")
+        if not data_b64:
+            for sub in (part.get("parts") or []):
+                _collect(sub)
+            return
+        try:
+            raw = base64.urlsafe_b64decode(data_b64 + "==")
+            text = raw.decode("utf-8", errors="replace")
+            if mime == "text/plain":
+                plain = text
+            elif mime == "text/html" and not plain:
+                html = text
+        except Exception:
+            pass
+        for sub in (part.get("parts") or []):
+            _collect(sub)
+
+    _collect(payload)
+    if plain:
+        return plain.strip()[:15000]  # límite razonable para contexto Gemini
+    if html:
+        return _html_to_plain(html).strip()[:15000]
+    return ""
 
 
 def get_message_raw_bytes(service: Any, message_id: str) -> Optional[bytes]:
@@ -352,9 +408,10 @@ def _get_images_from_rfc822_parts(
     return out
 
 
-# Imágenes menores a este umbral son casi siempre logos, íconos o decoraciones de plantilla
-# de correo, no comprobantes de pago. 10 KB es un límite conservador seguro.
-MIN_PAYMENT_IMAGE_BYTES = 10_240  # 10 KB
+def _min_payment_image_bytes() -> int:
+    """Umbral mínimo de bytes para aceptar imagen como comprobante (configurable)."""
+    from app.core.config import settings
+    return getattr(settings, "PAGOS_GMAIL_MIN_IMAGE_BYTES", 10240) or 10240
 
 
 def get_all_images_and_files_for_message(
@@ -366,16 +423,17 @@ def get_all_images_and_files_for_message(
     2. Partes inline MIME (Content-Disposition: inline).
     3. Imágenes base64 embebidas en HTML del cuerpo.
     4. Mensajes reenviados (message/rfc822 / Fwd:) — el comprobante está dentro del .eml adjunto.
-    Filtra imágenes < 10 KB (logos/decoraciones). Devuelve (filename, content_bytes, mime_type) sin duplicados.
+    Filtra imágenes por PAGOS_GMAIL_MIN_IMAGE_BYTES (default 10 KB). Devuelve (filename, content_bytes, mime_type) sin duplicados.
     """
+    min_bytes = _min_payment_image_bytes()
     seen: set = set()
     out: List[Tuple[str, bytes, str]] = []
 
     def _add(items: List[Tuple[str, bytes, str]]) -> None:
         for filename, content, mime in items:
             size = len(content)
-            if size < MIN_PAYMENT_IMAGE_BYTES:
-                logger.warning("[PAGOS_GMAIL] Descartada (< 10KB): %s (%d bytes)", filename, size)
+            if size < min_bytes:
+                logger.warning("[PAGOS_GMAIL] Descartada (< %d bytes): %s (%d bytes)", min_bytes, filename, size)
                 continue
             key = (filename, size)
             if key not in seen:
@@ -389,7 +447,7 @@ def get_all_images_and_files_for_message(
     _add(_get_images_from_rfc822_parts(service, message_id, payload.get("parts", [])))
 
     if not out:
-        logger.warning("[PAGOS_GMAIL] CERO imágenes >= 10KB para msg %s — todo descartado o correo sin imágenes", message_id)
+        logger.warning("[PAGOS_GMAIL] CERO imágenes >= %d bytes para msg %s — todo descartado o correo sin imágenes", min_bytes, message_id)
     return out
 
 

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Upload, FileSpreadsheet, ChevronDown, Mail } from 'lucide-react'
 import { Button } from '../../components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
 import { ExcelUploaderPagosUI } from './ExcelUploaderPagosUI'
 import { ExcelUploader } from './ExcelUploader'
 import { ConfirmarBorrarDiaDialog } from './ConfirmarBorrarDiaDialog'
@@ -20,6 +21,7 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
   const [showUploadDirectPagos, setShowUploadDirectPagos] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
   const [showConfirmarBorrar, setShowConfirmarBorrar] = useState(false)
+  const [scanFilter, setScanFilter] = useState<'unread' | 'read' | 'all'>('unread')
   const lastRunForWhichWeShowedDialogRef = useRef<string | null>(null)
 
   const { loading: loadingGmail, gmailStatus, setGmailStatus, run: runGmail } = useGmailPipeline({
@@ -56,7 +58,7 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
 
   async function handleGenerarExcelDesdeGmail() {
     setIsOpen(false)
-    runGmail()
+    runGmail(scanFilter)
   }
 
   return (
@@ -104,6 +106,19 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
             </p>
           )}
 <div className="space-y-1">
+            <div className="px-2 py-1">
+              <label className="text-xs text-gray-600 block mb-1">Correos a escanear</label>
+              <Select value={scanFilter} onValueChange={(v: 'unread' | 'read' | 'all') => setScanFilter(v)}>
+                <SelectTrigger className="h-8 text-sm w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unread">No leídos</SelectItem>
+                  <SelectItem value="read">Leídos</SelectItem>
+                  <SelectItem value="all">Todos</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <button
               className="w-full flex items-center px-3 py-2.5 text-sm rounded-md hover:bg-gray-100 transition-colors disabled:opacity-50"
               onClick={handleGenerarExcelDesdeGmail}
@@ -113,7 +128,7 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
               {loadingGmail ? 'Generando...' : 'Generar Excel desde Gmail'}
             </button>
             <p className="text-xs text-gray-500 px-2 py-1 mt-1 border-t border-gray-100">
-              Solo no leídos (cualquier fecha). Al terminar se vuelve a revisar la bandeja por si hay más.
+              {scanFilter === 'unread' ? 'Solo no leídos. Al terminar se vuelve a revisar la bandeja.' : scanFilter === 'read' ? 'Solo correos leídos.' : 'Todos los correos de la bandeja.'}
             </p>
           </div>
         </PopoverContent>
@@ -152,6 +167,8 @@ export function CargaMasivaMenu({ onSuccess }: CargaMasivaMenuProps) {
             toast.success('Excel descargado.')
           } catch (e) {
             toast.error(getErrorMessage(e))
+            pagoService.getGmailStatus().then(setGmailStatus)
+            return
           }
           const result = await pagoService.confirmarDiaGmail(borrar, fecha)
           if (result.confirmado) {

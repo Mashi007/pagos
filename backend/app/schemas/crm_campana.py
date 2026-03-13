@@ -60,6 +60,9 @@ class CampanaCrmResponse(BaseModel):
     fecha_envio_inicio: Optional[datetime] = None
     fecha_envio_fin: Optional[datetime] = None
     usuario_creacion: Optional[str] = None
+    programado_cada_dias: Optional[int] = None
+    programado_cada_horas: Optional[int] = None
+    programado_proxima_ejecucion: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -69,6 +72,12 @@ class DestinatarioPreview(BaseModel):
     email: str
     cliente_id: Optional[int] = None
     nombres: Optional[str] = None
+
+
+class CampanaProgramarBody(BaseModel):
+    """Cada cuántos días y/o horas se enviará la campaña (recurrente)."""
+    cada_dias: Optional[int] = Field(None, ge=0, le=365, description="Repetir cada N días (0 = no usar días)")
+    cada_horas: Optional[int] = Field(None, ge=0, le=8760, description="Repetir cada N horas (0 = no usar horas)")
 
 
 class CampanaDestinatarioResponse(BaseModel):

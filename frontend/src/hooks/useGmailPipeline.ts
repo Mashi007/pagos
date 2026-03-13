@@ -70,7 +70,7 @@ export function useGmailPipeline({ onDone, onStatusUpdate }: UseGmailPipelineOpt
                 onDoneRef.current?.(s)
               } else {
                 toast(
-                  'No se encontraron correos para procesar. Regla: solo mensajes NO LEÍDOS con adjuntos (imagen/PDF). Cualquier fecha. Marque como no leído si quiere reprocesar.',
+                  'No se encontraron correos para procesar. Regla: solo mensajes NO LEÍDOS (con o sin adjuntos). Marque como no leído si quiere reprocesar.',
                   { duration: 7000 }
                 )
                 // Sin datos: no abrir el diálogo de descarga
@@ -113,13 +113,13 @@ export function useGmailPipeline({ onDone, onStatusUpdate }: UseGmailPipelineOpt
     [onStatusUpdate]
   )
 
-  const run = useCallback(async () => {
+  const run = useCallback(async (scanFilter?: 'unread' | 'read' | 'all') => {
     if (loading) return
     abortedRef.current = false
     setLoading(true)
     toast('Procesando correos en segundo plano...', { duration: 4000 })
     try {
-      await pagoService.runGmailNow()
+      await pagoService.runGmailNow(true, scanFilter)
       // El endpoint devuelve inmediatamente (status="running"); hacer polling
       _pollStatus(0)
     } catch (e) {

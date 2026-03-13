@@ -213,13 +213,21 @@ class Settings(BaseSettings):
         default=0,
         description="Máximo de correos por ejecución (0 = sin límite). Gratis: ej. 15. Gemini de pago: 0 para procesar todos.",
     )
+    PAGOS_GMAIL_DOWNLOAD_EXCEL_MAX_ITEMS: int = Field(
+        default=5000,
+        description="Máximo de filas al descargar Excel sin fecha (evita memoria/timeout). Con ?fecha= no aplica límite por día.",
+    )
+    PAGOS_GMAIL_MIN_IMAGE_BYTES: int = Field(
+        default=10240,
+        description="Mínimo tamaño en bytes para aceptar una imagen como comprobante (evita logos/iconos). Default 10 KB.",
+    )
     PAGOS_GMAIL_SUBJECT_KEYWORDS_OR: str = Field(
         default="Cobranza Rapicredit,Pago de crédito,Pago de cuota,Recibo de Pago,comprobante de pago,Reporte de pago,Abono,Vencimiento de Cuotas,Notificación de Vencimiento,DEPOSITO,deposito,Pagos,Envio de comprobante",
-        description="Si el Asunto no contiene un email, se acepta igual si contiene alguna de estas frases (separadas por coma). Ej: 'Cobranza Rapicredit,Pago de crédito'. Vacío = solo correos con email en el asunto.",
+        description="(NO USADO) La regla del pipeline es únicamente: correo NO LEÍDO. Todos los no leídos se procesan. Este valor no se aplica.",
     )
     PAGOS_GMAIL_SENDER_PREFIXES_ALWAYS_INCLUDE: str = Field(
         default="cobranza",
-        description="Remitentes cuyo email empiece con alguno de estos prefijos (separados por coma) siempre se procesan, aunque el asunto no cumpla. Ej: 'cobranza' incluye cobranza@rapicreditca.com.",
+        description="(NO USADO) La regla del pipeline es únicamente: correo NO LEÍDO. No se filtra por remitente. Este valor no se aplica.",
     )
 
     # Tasa USD/Bs Venezuela (reporte contable)

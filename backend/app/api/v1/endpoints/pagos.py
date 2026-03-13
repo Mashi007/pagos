@@ -588,8 +588,24 @@ async def upload_excel_pagos(
                     numero_doc = _celda_a_string_documento(row[3])
                     col_doc = 3
                 else:
+                    # Fila con datos pero no matchea D, A ni B. Si primera columna no es cédula → formato no reconocido.
+                    row_has_content = any(cell is not None and str(cell).strip() for cell in row)
+                    first_cell = str(row[0]).strip() if row[0] is not None else ""
+                    if row_has_content and first_cell and not _looks_like_cedula(row[0]):
+                        err_formato = "Formato de fila no reconocido. Use Cédula | Monto | Fecha | Documento (o los formatos soportados)."
+                        errores.append(f"Fila {i + 2}: {err_formato}")
+                        pagos_con_error_list.append({
+                            "fila_idx": i + 2,
+                            "cedula": first_cell[:100] or "",
+                            "prestamo_id": None,
+                            "fecha_val": row[2] if len(row) > 2 else None,
+                            "monto": 0.0,
+                            "numero_doc": _celda_a_string_documento(row[4]) if len(row) > 4 else "",
+                            "errores": [err_formato],
+                        })
+                        continue
                     # Formato C (Alternativo): Cédula, ID Préstamo, Fecha, Monto, Nº documento
-                    cedula = str(row[0]).strip() if row[0] is not None else ""
+                    cedula = first_cell or (str(row[0]).strip() if row[0] is not None else "")
                     _val_prestamo = row[1] if len(row) > 1 else None
                     if _val_prestamo is None:
                         prestamo_id = None

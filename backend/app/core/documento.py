@@ -37,7 +37,12 @@ def normalize_documento(val: Any) -> Optional[str]:
         return None
     
     s = (str(val) or "").strip()
-    
+    # Quitar caracteres invisibles y BOM (alineado con frontend limpiarDocumento)
+    s = re.sub(r"[\u200B-\u200D\uFEFF\r\n\t]", "", s).strip()
+    # Excel a veces antepone comilla simple para forzar texto
+    if s.startswith("'"):
+        s = s.lstrip("'").strip()
+
     # Eliminar valores especiales que representan "vacío"
     if not s or s.upper() in ("NAN", "NONE", "UNDEFINED", "NA", "N/A"):
         return None

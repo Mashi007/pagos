@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { campanasService, type CampanaCrm, type ListCampanasResponse } from '../services/campanasService'
 import { Button } from '../components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog'
-import { Mail, Play, Eye, Plus, RefreshCw, FileText } from 'lucide-react'
+import { Mail, Play, Eye, Plus, RefreshCw, FileText, StopCircle, Trash2, CalendarClock } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 function fileToBase64(file: File): Promise<string> {
@@ -34,7 +34,15 @@ export function CampanasPage() {
     modoHtml: false,
     cc: '',
     adjunto: null as File | null,
+    destinatariosClienteIds: '',
   })
+  const [programarCampana, setProgramarCampana] = useState<CampanaCrm | null>(null)
+  const [programarForm, setProgramarForm] = useState({ cada_dias: 0, cada_horas: 0 })
+  const [programarLoading, setProgramarLoading] = useState(false)
+  const [seleccionadosPreview, setSeleccionadosPreview] = useState<{
+    total: number
+    muestra: { email: string; cliente_id: number | null; nombres: string | null }[]
+  } | null>(null)
 
   const load = async () => {
     setLoading(true)
@@ -65,9 +73,27 @@ export function CampanasPage() {
   useEffect(() => {
     if (showCreate) {
       loadPreview()
-      setForm({ nombre: '', asunto: '', cuerpoTexto: '', cuerpoHtml: '', modoHtml: false, cc: '', adjunto: null })
+      setForm({ nombre: '', asunto: '', cuerpoTexto: '', cuerpoHtml: '', modoHtml: false, cc: '', adjunto: null, destinatariosClienteIds: '' })
+      setSeleccionadosPreview(null)
     }
   }, [showCreate, loadPreview])
+
+  useEffect(() => {
+    const ids = (form.destinatariosClienteIds || '').trim()
+    if (!ids) {
+      setSeleccionadosPreview(null)
+      return
+    }
+    const t = setTimeout(async () => {
+      try {
+        const res = await campanasService.previewDestinatarios(500, ids)
+        setSeleccionadosPreview({ total: res.total, muestra: res.muestra })
+      } catch {
+        setSeleccionadosPreview({ total: 0, muestra: [] })
+      }
+    }, 400)
+    return () => clearTimeout(t)
+  }, [form.destinatariosClienteIds])
 
   const handleCreateSubmit = async () => {
     const nombre = (form.nombre || '').trim()
@@ -94,6 +120,14 @@ export function CampanasPage() {
         adjunto_nombre = form.adjunto.name
         adjunto_base64 = await fileToBase64(form.adjunto)
       }
+      const idsStr = (form.destinatariosClienteIds || '').trim()
+      const destinatarios_cliente_ids =
+        idsStr === ''
+          ? undefined
+          : idsStr
+              .split(/[\s,;]+/)
+              .map((s) => parseInt(s, 10))
+              .filter((n) => !Number.isNaN(n) && n > 0)
       await campanasService.create({
         nombre,
         asunto,
@@ -102,6 +136,7 @@ export function CampanasPage() {
         cc_emails: ccList.length ? ccList : null,
         adjunto_nombre: adjunto_nombre || undefined,
         adjunto_base64: adjunto_base64 || undefined,
+        destinatarios_cliente_ids: destinatarios_cliente_ids?.length ? destinatarios_cliente_ids : undefined,
       })
       toast.success('Campaña creada en borrador.')
       setShowCreate(false)
@@ -121,6 +156,53 @@ export function CampanasPage() {
       load()
     } catch (e: unknown) {
       toast.error((e as Error)?.message || 'Error al iniciar envío')
+    }
+  }
+
+  const handleParar = async (c: CampanaCrm) => {
+    if (c.estado !== 'enviando') return
+    try {
+      await campanasService.parar(c.id)
+      toast.success('Envío detenido.')
+      load()
+    } catch (e: unknown) {
+      toast.error((e as Error)?.message || 'Error al parar')
+    }
+  }
+
+  const handleEliminar = async (c: CampanaCrm) => {
+    if (c.estado !== 'borrador' && c.estado !== 'cancelada') return
+    if (!window.confirm(`¿Eliminar la campaña «${c.nombre}»?`)) return
+    try {
+      await campanasService.eliminar(c.id)
+      toast.success('Campaña eliminada.')
+      load()
+    } catch (e: unknown) {
+      toast.error((e as Error)?.message || 'Error al eliminar')
+    }
+  }
+
+  const handleProgramarSubmit = async () => {
+    if (!programarCampana) return
+    const dias = programarForm.cada_dias || 0
+    const horas = programarForm.cada_horas || 0
+    if (!dias && !horas) {
+      toast.error('Indica cada cuántos días o cada cuántas horas.')
+      return
+    }
+    setProgramarLoading(true)
+    try {
+      await campanasService.programar(programarCampana.id, {
+        cada_dias: dias || undefined,
+        cada_horas: horas || undefined,
+      })
+      toast.success('Campaña programada. Se enviará en el intervalo indicado.')
+      setProgramarCampana(null)
+      load()
+    } catch (e: unknown) {
+      toast.error((e as Error)?.message || 'Error al programar')
+    } finally {
+      setProgramarLoading(false)
     }
   }
 
@@ -165,6 +247,7 @@ export function CampanasPage() {
         >
           <option value="">Todos los estados</option>
           <option value="borrador">Borrador</option>
+          <option value="programada">Programada</option>
           <option value="enviando">Enviando</option>
           <option value="completada">Completada</option>
           <option value="cancelada">Cancelada</option>
@@ -176,7 +259,7 @@ export function CampanasPage() {
           <DialogHeader>
             <DialogTitle>Nueva campaña (correo masivo)</DialogTitle>
             <p className="text-sm text-slate-600 mt-1">
-              De: correo predeterminado del sistema. Para: todos los correos de la tabla Clientes.
+              De: correo predeterminado del sistema.
             </p>
           </DialogHeader>
           <div className="space-y-4">
@@ -190,14 +273,50 @@ export function CampanasPage() {
                 className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
               />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-              <div>
-                <span className="text-slate-500">De:</span>
-                <span className="ml-2 text-slate-700">Correo del sistema (Configuración &gt; Email)</span>
-              </div>
-              <div>
-                <span className="text-slate-500">Para:</span>
-                <span className="ml-2 text-slate-700">Todos los correos de tabla Clientes ({previewTotal} destinatarios)</span>
+            <div>
+              <span className="text-slate-500 text-sm">De:</span>
+              <span className="ml-2 text-slate-700 text-sm">Correo del sistema (Configuración &gt; Email)</span>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Para (destinatarios)
+              </label>
+              <input
+                type="text"
+                value={form.destinatariosClienteIds}
+                onChange={(e) => setForm((f) => ({ ...f, destinatariosClienteIds: e.target.value }))}
+                placeholder="Vacío = todos. O escribe IDs de cliente separados por coma (ej. 123 o 123, 456)"
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              />
+              <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50/80 p-3">
+                <div className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">
+                  Destinatarios
+                </div>
+                {form.destinatariosClienteIds.trim() === '' ? (
+                  <p className="text-sm text-slate-600">
+                    Todos los correos de tabla Clientes ({previewTotal} contactos)
+                  </p>
+                ) : seleccionadosPreview ? (
+                  <>
+                    <p className="text-sm text-slate-600 mb-2">
+                      {seleccionadosPreview.total} contacto(s) seleccionado(s):
+                    </p>
+                    <ul className="max-h-40 overflow-y-auto space-y-1 text-sm text-slate-700">
+                      {seleccionadosPreview.muestra.length === 0 ? (
+                        <li className="text-amber-700">Ningún contacto con email válido para los IDs indicados.</li>
+                      ) : (
+                        seleccionadosPreview.muestra.map((d, i) => (
+                          <li key={d.cliente_id ?? i} className="flex items-center gap-2">
+                            <span className="font-medium text-slate-800">{d.email}</span>
+                            {d.nombres && <span className="text-slate-500">— {d.nombres}</span>}
+                          </li>
+                        ))
+                      )}
+                    </ul>
+                  </>
+                ) : (
+                  <p className="text-sm text-slate-500">Cargando contactos seleccionados…</p>
+                )}
               </div>
             </div>
             <div>
@@ -273,6 +392,49 @@ export function CampanasPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={!!programarCampana} onOpenChange={(open) => !open && setProgramarCampana(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Programar envíos recurrentes</DialogTitle>
+            <p className="text-sm text-slate-600 mt-1">
+              {programarCampana?.nombre}. Indica cada cuántos días y/o horas se enviará la campaña.
+            </p>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Cada cuántos días (0 = no usar)</label>
+              <input
+                type="number"
+                min={0}
+                max={365}
+                value={programarForm.cada_dias || ''}
+                onChange={(e) => setProgramarForm((f) => ({ ...f, cada_dias: parseInt(e.target.value, 10) || 0 }))}
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Cada cuántas horas (0 = no usar)</label>
+              <input
+                type="number"
+                min={0}
+                max={8760}
+                value={programarForm.cada_horas || ''}
+                onChange={(e) => setProgramarForm((f) => ({ ...f, cada_horas: parseInt(e.target.value, 10) || 0 }))}
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setProgramarCampana(null)} disabled={programarLoading}>
+              Cancelar
+            </Button>
+            <Button onClick={handleProgramarSubmit} disabled={programarLoading || (!programarForm.cada_dias && !programarForm.cada_horas)}>
+              {programarLoading ? 'Programando…' : 'Programar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {loading ? (
         <div className="flex justify-center py-12">
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
@@ -305,24 +467,48 @@ export function CampanasPage() {
                       <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
                         c.estado === 'borrador' ? 'bg-amber-100 text-amber-800' :
                         c.estado === 'enviando' ? 'bg-blue-100 text-blue-800' :
-                        c.estado === 'completada' ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-700'
+                        c.estado === 'programada' ? 'bg-violet-100 text-violet-800' :
+                        c.estado === 'completada' ? 'bg-green-100 text-green-800' :
+                        c.estado === 'cancelada' ? 'bg-red-100 text-red-800' : 'bg-slate-100 text-slate-700'
                       }`}>
                         {c.estado}
                       </span>
+                      {c.estado === 'programada' && (c.programado_cada_dias || c.programado_cada_horas) && (
+                        <div className="text-xs text-slate-500 mt-0.5">
+                          {[c.programado_cada_dias && `cada ${c.programado_cada_dias} día(s)`, c.programado_cada_horas && `cada ${c.programado_cada_horas} h`].filter(Boolean).join(' · ')}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right text-slate-600">{c.total_destinatarios}</td>
                     <td className="px-4 py-3 text-right text-slate-600">{c.enviados} / {c.fallidos}</td>
                     <td className="px-4 py-3 text-right">
-                      {c.cuerpo_html && (
-                        <Button variant="ghost" size="sm" className="mr-1" onClick={() => openPreview(c.id)}>
-                          <Eye className="h-4 w-4" /> Vista previa HTML
-                      </Button>
-                      )}
-                      {c.estado === 'borrador' && c.total_destinatarios > 0 && (
-                        <Button size="sm" onClick={() => handleIniciarEnvio(c)}>
-                          <Play className="h-4 w-4 mr-1" /> Iniciar envío
-                      </Button>
-                      )}
+                      <div className="flex flex-wrap items-center justify-end gap-1">
+                        {c.cuerpo_html && (
+                          <Button variant="ghost" size="sm" onClick={() => openPreview(c.id)} title="Vista previa HTML">
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {c.estado === 'enviando' && (
+                          <Button variant="outline" size="sm" onClick={() => handleParar(c)} title="Parar envío">
+                            <StopCircle className="h-4 w-4" /> Parar
+                          </Button>
+                        )}
+                        {(c.estado === 'borrador' || c.estado === 'cancelada') && (
+                          <Button variant="outline" size="sm" onClick={() => handleEliminar(c)} title="Eliminar campaña" className="text-red-600 hover:text-red-700">
+                            <Trash2 className="h-4 w-4" /> Eliminar
+                          </Button>
+                        )}
+                        {c.estado === 'borrador' && c.total_destinatarios > 0 && (
+                          <>
+                            <Button size="sm" onClick={() => handleIniciarEnvio(c)} title="Enviar ahora (una vez)">
+                              <Play className="h-4 w-4" /> Play
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={() => { setProgramarCampana(c); setProgramarForm({ cada_dias: 0, cada_horas: 0 }) }} title="Programar envíos recurrentes">
+                              <CalendarClock className="h-4 w-4" /> Programar
+                            </Button>
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

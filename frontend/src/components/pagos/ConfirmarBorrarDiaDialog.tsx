@@ -21,8 +21,8 @@ export function ConfirmarBorrarDiaDialog({
   fechaDatos,
 }: ConfirmarBorrarDiaDialogProps) {
   const MENSAJE = fechaDatos
-    ? `Se descargará el Excel de pagos del ${fechaDatos}. ¿Quiere borrar esa información de la BD? Sí = se borra. No = se mantiene.`
-    : '¿Quiere borrar la información del día? Sí = se borra. No = se mantiene en BD.'
+    ? `Se descargará el Excel de pagos del ${fechaDatos}. ¿Vaciar la BD después de descargar? Sí = descarga y vacía BD. No = descarga y mantiene los datos en BD.`
+    : 'Se descargará el Excel. ¿Vaciar la BD después de descargar? Sí = descarga y vacía BD. No = descarga y mantiene los datos en BD.'
   const handleSí = async () => {
     await onElegir(true)
     onOpenChange(false)

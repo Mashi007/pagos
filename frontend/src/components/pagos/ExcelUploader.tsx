@@ -17,13 +17,16 @@ interface ErrorDetalleBackend {
 interface ExcelUploaderProps {
   onClose: () => void
   onSuccess: () => void
+  /** Si se proporciona, cuando hay registros_con_error > 0 se muestra botón "Ver X en Revisar Pagos" que cierra el modal y ejecuta este callback. */
+  onGoToRevisarPagos?: () => void
 }
 
-export function ExcelUploader({ onClose, onSuccess }: ExcelUploaderProps) {
+export function ExcelUploader({ onClose, onSuccess, onGoToRevisarPagos }: ExcelUploaderProps) {
   const [file, setFile] = useState<File | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [results, setResults] = useState<{
     registros_procesados?: number
+    registros_con_error?: number
     filas_omitidas?: number
     errores?: string[]
     errores_detalle?: ErrorDetalleBackend[]
@@ -152,19 +155,18 @@ export function ExcelUploader({ onClose, onSuccess }: ExcelUploaderProps) {
               <CardContent className="pt-6">
                 <div className="space-y-3">
                   <h3 className="font-semibold text-lg">Formato del archivo Excel</h3>
-                  <p className="text-sm text-gray-600">Primera fila: encabezados. Desde la segunda fila, una columna por campo (en este orden):</p>
-                  <ol className="list-decimal list-inside space-y-1 text-sm text-gray-600">
-                    <li><strong>Cédula</strong> (obligatorio)</li>
-                    <li><strong>ID Préstamo</strong> (obligatorio si la persona tiene más de un préstamo; número)</li>
-                    <li><strong>Fecha de pago</strong> (fecha)</li>
-                    <li><strong>Monto pagado</strong> (número, mayor a 0)</li>
-                    <li><strong>Número de documento</strong> (referencia del pago; cualquier formato. Regla general: no se aceptan duplicados en documentos)</li>
-                  </ol>
+                  <p className="text-sm text-gray-600">Primera fila: encabezados. Desde la segunda fila, datos. El sistema detecta automáticamente el orden de columnas. Formatos soportados:</p>
+                  <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
+                    <li><strong>D (recomendado):</strong> Cédula | Monto | Fecha | Nº documento</li>
+                    <li><strong>A:</strong> Documento | Cédula | Fecha | Monto</li>
+                    <li><strong>B:</strong> Fecha | Cédula | Monto | Documento</li>
+                    <li><strong>C:</strong> Cédula | ID Préstamo | Fecha | Monto | Nº documento</li>
+                  </ul>
                   <p className="text-xs text-amber-600 mt-2 font-medium">
-                    Si una persona tiene varios préstamos, debe indicar el ID del préstamo al que aplica cada pago.
+                    Si una persona tiene varios préstamos, debe indicar el ID del préstamo (formato C). Cédula: solo V, E o J + 6-11 dígitos. Nº documento: cualquier formato; no se aceptan duplicados.
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
-                    Formatos aceptados: .xlsx o .xls. Las filas con cédula vacía o monto ≤ 0 se omiten.
+                    Formatos aceptados: .xlsx o .xls. Las filas con cédula vacía o monto ≤ 0 se envían a Revisar Pagos.
                   </p>
                   <p className="text-xs text-amber-600 mt-1 font-medium">
                     Recomendado: hasta 2.500 filas para evitar sobrecarga y timeouts. Máximo permitido: 10.000 filas.
@@ -213,10 +215,26 @@ export function ExcelUploader({ onClose, onSuccess }: ExcelUploaderProps) {
                         {(results.errores_total ?? results.errores?.length ?? 0)} fila(s) con error. Revisa la tabla inferior para ver fila, cédula y descripción.
                         {results.errores_truncados && (
                           <span className="block text-amber-600 mt-0.5">
-                            Se muestran los primeros 50 errores y 100 detalles. Descarga el archivo para exportar los detalles mostrados.
+                            Se muestran los primeros 50 errores y 100 detalles. El listado completo está en Revisar Pagos; puede descargar el Excel desde allí.
                           </span>
                         )}
                       </p>
+                    )}
+                    {(results.registros_con_error ?? 0) > 0 && onGoToRevisarPagos && (
+                      <div className="mt-3 pt-3 border-t border-gray-200">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="border-amber-400 text-amber-800 hover:bg-amber-50"
+                          onClick={() => {
+                            onClose()
+                            onGoToRevisarPagos()
+                          }}
+                        >
+                          Ver {results.registros_con_error} en Revisar Pagos
+                        </Button>
+                      </div>
                     )}
                   </CardContent>
                 </Card>

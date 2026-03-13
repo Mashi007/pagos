@@ -70,11 +70,11 @@ def _last_run_too_recent(db: Session) -> tuple[bool, Optional[int]]:
     return False, None
 
 
-def _run_pipeline_background(sync_id: int) -> None:
+def _run_pipeline_background(sync_id: int, scan_filter: str = "unread") -> None:
     """Ejecuta el pipeline en background con su propia sesión de BD (evita el timeout de 30s de Render/Axios)."""
     db = SessionLocal()
     try:
-        run_pipeline(db, existing_sync_id=sync_id)
+        run_pipeline(db, existing_sync_id=sync_id, scan_filter=scan_filter)
     except Exception as e:
         logger.exception("[PAGOS_GMAIL] Error en background pipeline (sync_id=%s): %s", sync_id, e)
         try:
@@ -91,11 +91,17 @@ def _run_pipeline_background(sync_id: int) -> None:
 
 
 @router.post("/run-now")
-def run_now(background_tasks: BackgroundTasks, force: bool = True, db: Session = Depends(get_db)):
+def run_now(
+    background_tasks: BackgroundTasks,
+    force: bool = True,
+    scan_filter: str = "unread",
+    db: Session = Depends(get_db),
+):
     """
-    Inicia el pipeline en segundo plano (Gmail -> Drive -> Gemini -> Sheets) y devuelve inmediatamente.
+    Inicia el pipeline en segundo plano (Gmail -> Drive -> Gemini -> BD) y devuelve inmediatamente.
+    scan_filter: "unread" | "read" | "all" — correos a escanear (por defecto "unread").
     El frontend debe hacer polling a GET /status hasta que last_status sea 'success' o 'error'.
-    force=True (por defecto): ejecutar aunque la última ejecución fue hace poco (uso manual desde la UI). force=False: respetar intervalo mínimo (para cron).
+    force=True (por defecto): ejecutar aunque la última ejecución fue hace poco (uso manual desde la UI).
     """
     if _is_pipeline_running(db):
         raise HTTPException(
@@ -127,8 +133,11 @@ def run_now(background_tasks: BackgroundTasks, force: bool = True, db: Session =
     db.commit()
     db.refresh(sync)
     sync_id = sync.id
+    # Validar scan_filter
+    if scan_filter not in ("unread", "read", "all"):
+        scan_filter = "unread"
     # Lanzar pipeline en segundo plano; el cliente hace polling a /status
-    background_tasks.add_task(_run_pipeline_background, sync_id)
+    background_tasks.add_task(_run_pipeline_background, sync_id, scan_filter)
     return {
         "sync_id": sync_id,
         "status": "running",
@@ -223,22 +232,26 @@ def confirmar_dia(body: ConfirmarDiaBody = Body(...), db: Session = Depends(get_
 
 def _find_most_recent_data(db: Session) -> tuple[Optional[str], Optional[datetime], list]:
     """
-    Devuelve TODOS los ítems de TODOS los syncs (acumulado completo), ordenados por fecha de creación.
-    Esto permite que múltiples runs (ej. 30 correos cada uno) se descarguen juntos en un solo Excel,
-    sin que un run nuevo sobreescriba lo procesado en runs anteriores.
+    Devuelve los ítems más recientes (acumulado), ordenados por fecha de creación ascendente.
+    Limitado a PAGOS_GMAIL_DOWNLOAD_EXCEL_MAX_ITEMS para evitar memoria/timeout con muchos datos.
     Devuelve (sheet_name_ref, email_date_ref, items) o (None, None, []).
     """
+    from app.core.config import settings
     from app.services.pagos_gmail.helpers import parse_date_from_sheet_name
-    items = db.execute(
+    max_items = getattr(settings, "PAGOS_GMAIL_DOWNLOAD_EXCEL_MAX_ITEMS", 5000) or 0
+    if max_items <= 0:
+        max_items = 50000  # tope razonable si se desactiva
+    rows = db.execute(
         select(PagosGmailSyncItem)
-        .order_by(PagosGmailSyncItem.created_at)
+        .order_by(desc(PagosGmailSyncItem.created_at))
+        .limit(max_items)
     ).scalars().all()
+    items = list(reversed(rows))  # más recientes primero en el límite, pero orden ascendente en Excel
     if not items:
         return None, None, []
-    # Usar el ítem más reciente para la fecha del archivo
     last_sheet_name = items[-1].sheet_name or ""
     email_date = parse_date_from_sheet_name(last_sheet_name)
-    return last_sheet_name, email_date, list(items)
+    return last_sheet_name, email_date, items
 
 
 def _find_sheet_by_fecha(db: Session, fecha_date: datetime) -> tuple[Optional[str], list]:
@@ -247,7 +260,6 @@ def _find_sheet_by_fecha(db: Session, fecha_date: datetime) -> tuple[Optional[st
     sheet_name = get_sheet_name_for_date(fecha_date)
     items = db.execute(
         select(PagosGmailSyncItem)
-        .join(PagosGmailSync, PagosGmailSyncItem.sync_id == PagosGmailSync.id)
         .where(PagosGmailSyncItem.sheet_name == sheet_name)
         .order_by(PagosGmailSyncItem.created_at)
     ).scalars().all()
@@ -259,7 +271,6 @@ def _get_latest_date_with_data(db: Session) -> Optional[str]:
     from app.services.pagos_gmail.helpers import parse_date_from_sheet_name
     row = db.execute(
         select(PagosGmailSyncItem.sheet_name)
-        .join(PagosGmailSync, PagosGmailSyncItem.sync_id == PagosGmailSync.id)
         .order_by(desc(PagosGmailSyncItem.created_at))
         .limit(1)
     ).scalars().first()
@@ -277,7 +288,7 @@ def download_excel(fecha: Optional[str] = None, db: Session = Depends(get_db)):
       (cubre backlog de cualquier antigüedad; los correos se procesan mientras estén no leídos).
     - Con ?fecha=YYYY-MM-DD: descarga exactamente esa fecha.
     Si no hay datos devuelve 404 (no se genera Excel vacío).
-    Columnas: Asunto, Fecha Pago, Cédula, Monto, Referencia, Link.
+    Columnas: Correo Pagador, Fecha Pago, Cédula, Monto, Referencia, Link, Ver email.
     """
     from openpyxl import Workbook
     items: list = []
@@ -305,42 +316,50 @@ def download_excel(fecha: Optional[str] = None, db: Session = Depends(get_db)):
 
     from openpyxl.styles import Font
 
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Pagos"
-    ws.append(["Correo Pagador", "Fecha Pago", "Cedula", "Monto", "Referencia", "Link", "Ver email"])
-    link_font = Font(color="0563C1", underline="single")
-    for row_idx, it in enumerate(items, start=2):  # fila 1 = cabecera
-        link_url = (it.drive_link or "").strip()
-        if link_url and not link_url.startswith("http"):
-            link_url = "https://drive.google.com/file/d/" + link_url + "/view"
-        link_text = "Ver imagen" if link_url else ""
-        email_url = (it.drive_email_link or "").strip()
-        if email_url and not email_url.startswith("http"):
-            email_url = "https://drive.google.com/file/d/" + email_url + "/view"
-        email_text = "Ver email" if email_url else ("—" if link_url else "")
-        ws.append([
-            it.correo_origen or "",
-            it.fecha_pago or "",
-            formatear_cedula(it.cedula or ""),
-            it.monto or "",
-            it.numero_referencia or "",
-            link_text,
-            email_text,
-        ])
-        if link_url:
-            c6 = ws.cell(row=row_idx, column=6)
-            c6.hyperlink = link_url
-            c6.value = "Ver imagen"
-            c6.font = link_font
-        if email_url:
-            c7 = ws.cell(row=row_idx, column=7)
-            c7.hyperlink = email_url
-            c7.value = "Ver email"
-            c7.font = link_font
-    buf = io.BytesIO()
-    wb.save(buf)
-    buf.seek(0)
+    try:
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Pagos"
+        ws.append(["Correo Pagador", "Fecha Pago", "Cedula", "Monto", "Referencia", "Link", "Ver email"])
+        link_font = Font(color="0563C1", underline="single")
+        for row_idx, it in enumerate(items, start=2):  # fila 1 = cabecera
+            link_url = (it.drive_link or "").strip()
+            if link_url and not link_url.startswith("http"):
+                link_url = "https://drive.google.com/file/d/" + link_url + "/view"
+            link_text = "Ver imagen" if link_url else ""
+            email_url = (it.drive_email_link or "").strip()
+            if email_url and not email_url.startswith("http"):
+                email_url = "https://drive.google.com/file/d/" + email_url + "/view"
+            email_text = "Ver email" if email_url else ("—" if link_url else "")
+            ws.append([
+                it.correo_origen or "",
+                it.fecha_pago or "",
+                formatear_cedula(it.cedula or ""),
+                it.monto or "",
+                it.numero_referencia or "",
+                link_text,
+                email_text,
+            ])
+            if link_url:
+                c6 = ws.cell(row=row_idx, column=6)
+                c6.hyperlink = link_url
+                c6.value = "Ver imagen"
+                c6.font = link_font
+            if email_url:
+                c7 = ws.cell(row=row_idx, column=7)
+                c7.hyperlink = email_url
+                c7.value = "Ver email"
+                c7.font = link_font
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+    except Exception as e:
+        logger.exception("[PAGOS_GMAIL] Error generando Excel: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail="Error al generar el archivo Excel. Intente de nuevo o contacte soporte.",
+        ) from e
+
     date_str = sheet_date.strftime("%Y-%m-%d") if sheet_date else "sin-fecha"
     filename = f"Pagos_Gmail_{date_str}.xlsx"
     return StreamingResponse(
@@ -375,7 +394,7 @@ def diagnostico(db: Session = Depends(get_db)):
         "paso_6_gemini_extraccion": None,
         "config": {
             "GEMINI_API_KEY_set": bool(getattr(settings, "GEMINI_API_KEY", None)),
-            "GEMINI_MODEL": getattr(settings, "GEMINI_MODEL", "gemini-2.0-flash"),
+            "GEMINI_MODEL": getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash"),
             "MAX_EMAILS": getattr(settings, "PAGOS_GMAIL_MAX_EMAILS_PER_RUN", "no-set"),
         }
     }
