@@ -374,17 +374,33 @@ def solicitar_codigo_estado_cuenta(
     db.add(row)
     db.commit()
     asunto, cuerpo = _get_plantilla_email_codigo(db, nombre=nombre, codigo=codigo)
-    try:
-        if get_email_activo_servicio("estado_cuenta"):
-            send_email([email], asunto, cuerpo, servicio="estado_cuenta")
-        logger.info(
-            "estado_cuenta solicitar ip=%s outcome=ok cedula_suffix=***%s",
-            ip,
-            cedula_lookup[-4:] if len(cedula_lookup) >= 4 else "****",
+    email_enviado = False
+    if not get_email_activo_servicio("estado_cuenta"):
+        logger.warning(
+            "estado_cuenta solicitar: codigo NO enviado por correo (servicio estado_cuenta desactivado). "
+            "Active 'Estado de cuenta' en Configuracion > Email para que llegue el codigo."
         )
-    except Exception as e:
-        logger.warning("No se pudo enviar codigo por email a %s: %s", email, e)
-        logger.info("estado_cuenta solicitar ip=%s outcome=ok_email_fail cedula_suffix=***%s", ip, cedula_lookup[-4:] if len(cedula_lookup) >= 4 else "****")
+        logger.info("estado_cuenta solicitar ip=%s outcome=ok_email_skip (servicio desactivado) cedula_suffix=***%s", ip, cedula_lookup[-4:] if len(cedula_lookup) >= 4 else "****")
+    else:
+        try:
+            ok_send, err_send = send_email([email], asunto, cuerpo, servicio="estado_cuenta")
+            if ok_send:
+                email_enviado = True
+                logger.info(
+                    "estado_cuenta solicitar ip=%s outcome=ok cedula_suffix=***%s",
+                    ip,
+                    cedula_lookup[-4:] if len(cedula_lookup) >= 4 else "****",
+                )
+            else:
+                logger.warning(
+                    "estado_cuenta solicitar: codigo NO enviado por correo a %s: %s",
+                    email,
+                    err_send or "send_email devolvio False",
+                )
+                logger.info("estado_cuenta solicitar ip=%s outcome=ok_email_fail cedula_suffix=***%s", ip, cedula_lookup[-4:] if len(cedula_lookup) >= 4 else "****")
+        except Exception as e:
+            logger.warning("No se pudo enviar codigo por email a %s: %s", email, e)
+            logger.info("estado_cuenta solicitar ip=%s outcome=ok_email_fail cedula_suffix=***%s", ip, cedula_lookup[-4:] if len(cedula_lookup) >= 4 else "****")
     expira_en_iso = expira_en.isoformat() + "Z" if expira_en else None
     return SolicitarCodigoResponse(
         ok=True,

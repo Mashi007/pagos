@@ -336,8 +336,15 @@ def send_email(
         return True, None
     except Exception as e:
         log_phase(logger, FASE_SMTP_ENVIO, False, str(e))
+        err_msg = _sanitize_smtp_error(e)
+        if "límite diario" in err_msg.lower() or "daily" in str(e).lower() and "sending limit" in str(e).lower():
+            logger.warning(
+                "LIMITE DIARIO GMAIL ALCANZADO: Gmail rechaza mas envios hasta mañana. "
+                "Opciones: 1) Esperar 24h 2) Usar SMTP de proveedor transaccional (SendGrid, Mailgun, SES, Resend) en Configuracion > Email. "
+                "Ver docs/LIMITE_EMAIL_GMAIL.md"
+            )
         logger.exception("Error enviando correo: %s", e)
-        return False, _sanitize_smtp_error(e)
+        return False, err_msg
 
 
 def notify_ticket_created(

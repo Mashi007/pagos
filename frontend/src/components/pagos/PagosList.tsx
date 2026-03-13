@@ -342,10 +342,8 @@ export function PagosList() {
   }
   return (
     <div className="space-y-6">
-      {/* Estructura: KPIs primero, luego botones (igual que Clientes y Préstamos) */}
       <PagosKPIsNuevo />
-      {/* Título de sección en PagosPage; aquí solo acciones */}
-      <div className="flex justify-end items-center gap-3 flex-wrap">
+      <div className="flex flex-wrap justify-end items-center gap-3 rounded-xl border border-gray-200/80 bg-gray-50/50 px-4 py-3 sm:px-5 sm:py-4">
           <Button
             variant="outline"
             size="lg"

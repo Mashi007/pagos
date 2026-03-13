@@ -15,13 +15,13 @@ export function PagosKPIsNuevo() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-5">
         <div className="flex justify-between items-center">
-          <h2 className="text-2xl font-bold text-gray-900">KPIs de Pagos</h2>
+          <h2 className="text-lg font-semibold text-gray-800">Mensual</h2>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => (
-            <Card key={i}>
+            <Card key={i} className="rounded-xl border border-gray-200/80">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
                   <div className="h-4 w-24 bg-gray-200 rounded animate-pulse" />
@@ -41,13 +41,11 @@ export function PagosKPIsNuevo() {
   const isCancelled = (error as any)?.code === 'ERR_CANCELED' || (error as any)?.message?.includes?.('Request aborted')
   if (error && !isCancelled) {
     return (
-      <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <h2 className="text-2xl font-bold text-gray-900">KPIs de Pagos</h2>
-        </div>
-        <Card>
+      <div className="space-y-5">
+        <h2 className="text-lg font-semibold text-gray-800">Mensual</h2>
+        <Card className="rounded-xl border-red-100 bg-red-50/50">
           <CardContent className="pt-6">
-            <p className="text-red-600 text-center">
+            <p className="text-red-600 text-center text-sm">
               Error al cargar los KPIs. Por favor, intenta nuevamente.
             </p>
           </CardContent>
@@ -68,62 +66,68 @@ export function PagosKPIsNuevo() {
   const nombreMes = meses[kpiDataFinal.mes - 1]
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900">KPIs de Pagos (mensuales)</h2>
-        <span className="text-sm text-gray-500">
+    <div className="space-y-5">
+      <div className="flex flex-wrap justify-between items-center gap-2">
+        <h2 className="text-lg font-semibold text-gray-800">Mensual</h2>
+        <span className="text-sm font-medium text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">
           {nombreMes} {kpiDataFinal.anio ?? (kpiDataFinal as any)?.["año"] ?? new Date().getFullYear()}
         </span>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="rounded-xl border border-gray-200/80 bg-white shadow-sm hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Mensual: A cobrar en el mes</CardTitle>
-            <Calendar className="h-5 w-5 text-blue-600" />
+            <CardTitle className="text-sm font-medium text-gray-700">A cobrar en el mes</CardTitle>
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-100">
+              <Calendar className="h-4 w-4 text-blue-600" />
+            </span>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
+            <div className="text-2xl font-bold text-blue-600 tabular-nums">
               ${kpiDataFinal.montoACobrarMes.toLocaleString('es-US', {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
               })}
             </div>
-            <p className="text-xs text-gray-600 mt-1">
-              Cuánto debería cobrarse en {nombreMes} (vencimientos del mes)
+            <p className="text-xs text-gray-500 mt-1.5">
+              Vencimientos del mes
             </p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="rounded-xl border border-gray-200/80 bg-white shadow-sm hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Mensual: Cobrado / Pagado</CardTitle>
-            <DollarSign className="h-5 w-5 text-green-600" />
+            <CardTitle className="text-sm font-medium text-gray-700">Cobrado / Pagado</CardTitle>
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-green-100">
+              <DollarSign className="h-4 w-4 text-green-600" />
+            </span>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">
+            <div className="text-2xl font-bold text-green-600 tabular-nums">
               ${kpiDataFinal.montoCobradoMes.toLocaleString('es-US', {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
               })}
             </div>
-            <p className="text-xs text-gray-600 mt-1">
-              Cobrado en {nombreMes} (pagos registrados en el mes)
+            <p className="text-xs text-gray-500 mt-1.5">
+              Pagos registrados en {nombreMes}
             </p>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="rounded-xl border border-gray-200/80 bg-white shadow-sm hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Mensual: % cobrado</CardTitle>
-            <TrendingUp className="h-5 w-5 text-green-600" />
+            <CardTitle className="text-sm font-medium text-gray-700">% cobrado</CardTitle>
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-100">
+              <TrendingUp className="h-4 w-4 text-emerald-600" />
+            </span>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">
+            <div className="text-2xl font-bold text-emerald-600 tabular-nums">
               {porcentajeCobrado.toFixed(1)}%
             </div>
-            <p className="text-xs text-gray-600 mt-1">
-              Del mes: cobrado en el mes / a cobrar en el mes
+            <p className="text-xs text-gray-500 mt-1.5">
+              Cobrado / a cobrar en el mes
             </p>
           </CardContent>
         </Card>
