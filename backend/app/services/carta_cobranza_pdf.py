@@ -2,12 +2,17 @@
 Generador de Carta de Cobranza en PDF - Rapi-Credit, C.A.
 Adjunto automático al email de cobranza. Usa datos del contexto (clientes, préstamos, cuotas).
 La plantilla editable se almacena en configuracion con clave 'plantilla_pdf_cobranza' (JSON).
+ReportLab no soporta <img> dentro de Paragraph; si la plantilla incluye un img con src data:image;base64,...,
+se extrae y se usa como logo al inicio del PDF y se elimina la etiqueta del texto.
 """
+import base64
 import io
 import json
 import logging
+import re
+import tempfile
 from datetime import date
-from typing import Any, Optional
+from typing import Any, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +99,7 @@ def _dict_reemplazo_pdf(contexto: dict, datos: dict) -> dict:
     out["NUMEROCORRELATIVO"] = str(contexto.get("NUMEROCORRELATIVO", ""))
     out["TOTAL_ADEUDADO"] = str(contexto.get("TOTAL_ADEUDADO", ""))
     out["LOGO_URL"] = str(contexto.get("LOGO_URL", ""))
+    out["CIUDAD"] = datos.get("ciudad", "") or out.get("ciudad", "")
     return out
 
 
@@ -114,11 +120,75 @@ def _reemplazar_variables_plantilla_pdf(texto: Optional[str], contexto: dict, da
     return result
 
 
+# Patrón para <img ... src="data:image/...;base64,..." ...> (captura el base64; orden flexible de atributos)
+_IMG_BASE64_PATTERN = re.compile(
+    r'<img\s+[^>]*?src\s*=\s*["\']data:image/(?:png|jpeg|gif);base64,([A-Za-z0-9+/=]+)["\'][^>]*>',
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _html_para_reportlab(texto: str) -> str:
+    """
+    Convierte HTML con div/p/span/clases a un formato que ReportLab Paragraph acepta.
+    ReportLab solo soporta <b>, <i>, <u>, <br/>, <font>, etc. No soporta <div>, <p>, class, style.
+    Se convierten bloques a saltos de línea y se eliminan atributos no soportados.
+    """
+    if not texto or not texto.strip():
+        return texto
+    t = texto
+    # Quitar comentarios HTML
+    t = re.sub(r"<!--.*?-->", "", t, flags=re.DOTALL)
+    # Cerrar bloques como saltos de línea para mantener estructura
+    for tag in ("div", "p", "span", "h1", "h2", "h3", "li"):
+        t = re.sub(rf"</{tag}\s*>", "<br/>", t, flags=re.IGNORECASE)
+    # Quitar etiquetas de apertura con posibles atributos (class, style, etc.)
+    for tag in ("div", "p", "span", "h1", "h2", "h3", "li", "ul", "ol"):
+        t = re.sub(rf"<{tag}\s[^>]*>", "", t, flags=re.IGNORECASE)
+        t = re.sub(rf"<{tag}\s*>", "", t, flags=re.IGNORECASE)
+    # <strong> -> <b> para ReportLab
+    t = t.replace("<strong>", "<b>").replace("</strong>", "</b>")
+    # Eliminar líneas vacías de <br/> repetidos (opcional: dejar solo uno)
+    t = re.sub(r"(<br/\s*>\s*){3,}", "<br/><br/>", t, flags=re.IGNORECASE)
+    return t.strip()
+
+
+def _extraer_logo_base64_de_plantilla(texto: str) -> Tuple[Optional[str], str]:
+    """
+    Si el texto contiene un <img src="data:image/...;base64,...">, extrae el base64,
+    lo guarda en un archivo temporal PNG y devuelve (ruta_temporal, texto_sin_esa_etiqueta_img).
+    ReportLab no renderiza img dentro de Paragraph; usar la ruta como logo al inicio del PDF.
+    """
+    if not texto:
+        return None, texto
+    match = _IMG_BASE64_PATTERN.search(texto)
+    if not match:
+        return None, texto
+    b64 = match.group(1)
+    try:
+        raw = base64.b64decode(b64, validate=True)
+    except Exception as e:
+        logger.warning("Logo base64 en plantilla PDF no válido: %s", e)
+        texto_sin_img = _IMG_BASE64_PATTERN.sub("", texto, count=1)
+        return None, texto_sin_img
+    try:
+        f = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+        f.write(raw)
+        f.close()
+        path = f.name
+    except Exception as e:
+        logger.warning("No se pudo escribir logo temporal para PDF: %s", e)
+        texto_sin_img = _IMG_BASE64_PATTERN.sub("", texto, count=1)
+        return None, texto_sin_img
+    texto_sin_img = _IMG_BASE64_PATTERN.sub("", texto, count=1)
+    return path, texto_sin_img
+
+
 def build_pdf_bytes(
     datos: dict,
     logo_path: Optional[str] = None,
     cuerpo_principal: Optional[str] = None,
     clausula_septima: Optional[str] = None,
+    firma_plantilla: Optional[str] = None,
 ) -> bytes:
     """
     Genera el PDF de la carta de cobranza (ReportLab).
@@ -126,6 +196,7 @@ def build_pdf_bytes(
            monto_total_usd, num_cuotas, fechas_cuotas (list).
     logo_path: ruta al PNG del logo (opcional).
     cuerpo_principal / clausula_septima: textos opcionales (si no se pasan se usan los por defecto).
+    firma_plantilla: si se indica, se usa en lugar del bloque fijo "Atentamente," + tabla (debe ser HTML compatible con Paragraph).
     """
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import letter
@@ -230,19 +301,21 @@ def build_pdf_bytes(
 
     story.append(Paragraph("Agradecemos su pronta atención a este asunto y esperamos su respuesta.", s_body))
     story.append(Spacer(1, 0.4 * cm))
-    story.append(Paragraph("Atentamente,", s_body))
-    story.append(Spacer(1, 0.8 * cm))
-
-    firma_data = [[
-        Paragraph("<b>Departamento Cobranza</b>", s_firma),
-        Paragraph("<b>RAPI-CREDIT, C.A.</b><br/>RIF. J-505363506", s_firma),
-    ]]
-    firma_table = Table(firma_data, colWidths=[8 * cm, 8 * cm])
-    firma_table.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("ALIGN", (1, 0), (1, 0), "RIGHT"),
-    ]))
-    story.append(firma_table)
+    if firma_plantilla and firma_plantilla.strip():
+        story.append(Paragraph(firma_plantilla.strip(), s_body))
+    else:
+        story.append(Paragraph("Atentamente,", s_body))
+        story.append(Spacer(1, 0.8 * cm))
+        firma_data = [[
+            Paragraph("<b>Departamento Cobranza</b>", s_firma),
+            Paragraph("<b>RAPI-CREDIT, C.A.</b><br/>RIF. J-505363506", s_firma),
+        ]]
+        firma_table = Table(firma_data, colWidths=[8 * cm, 8 * cm])
+        firma_table.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+        ]))
+        story.append(firma_table)
 
     slogan_table = Table([[Paragraph("¡Rapidez financiera!", s_slogan), ""]], colWidths=[8 * cm, 8 * cm])
     slogan_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
@@ -292,21 +365,47 @@ def generar_carta_cobranza_pdf(contexto_cobranza: dict, db=None, logo_path: Opti
     Genera el PDF de la carta de cobranza a partir del contexto (mismo que el email).
     contexto_cobranza: dict con CLIENTES.*, PRESTAMOS.ID, FECHA_CARTA, CUOTAS.VENCIMIENTOS, etc.
     Todas las variables {{KEY}} y {KEY} en la plantilla se sustituyen por datos reales de BD.
+    Si la plantilla incluye <img src="data:image/...;base64,...">, se extrae y se usa como logo al inicio.
     db: sesión opcional para cargar plantilla editable (config plantilla_pdf_cobranza).
-    logo_path: ruta al logo PNG (opcional; si no se pasa se intenta desde settings).
+    logo_path: ruta al logo PNG (opcional; si no se pasa se usa logo de plantilla o settings).
     """
     plantilla = _get_plantilla_pdf_config(db)
     datos = _datos_desde_contexto(contexto_cobranza, plantilla)
-    if not logo_path:
-        try:
-            from app.core.config import settings
-            logo_path = getattr(settings, "LOGO_PDF_COBRANZA_PATH", None)
-        except Exception:
-            logo_path = None
     cuerpo = _reemplazar_variables_plantilla_pdf(
         plantilla.get("cuerpo_principal"), contexto_cobranza, datos
     )
     clausula = _reemplazar_variables_plantilla_pdf(
         plantilla.get("clausula_septima"), contexto_cobranza, datos
     )
-    return build_pdf_bytes(datos, logo_path=logo_path, cuerpo_principal=cuerpo or None, clausula_septima=clausula or None)
+    firma_raw = _reemplazar_variables_plantilla_pdf(
+        plantilla.get("firma"), contexto_cobranza, datos
+    )
+    # Logo: si la plantilla trae un img base64, usarlo como logo y quitar la etiqueta del texto (ReportLab no la dibuja)
+    logo_path_plantilla, cuerpo = _extraer_logo_base64_de_plantilla(cuerpo or "")
+    # Convertir HTML con div/p/class a formato que ReportLab Paragraph acepta (cuerpo, cláusula y firma)
+    cuerpo = _html_para_reportlab(cuerpo or "")
+    clausula = _html_para_reportlab(clausula or "")
+    firma_plantilla = _html_para_reportlab(firma_raw or "")
+    if logo_path_plantilla:
+        logo_path = logo_path_plantilla
+    if not logo_path:
+        try:
+            from app.core.config import settings
+            logo_path = getattr(settings, "LOGO_PDF_COBRANZA_PATH", None)
+        except Exception:
+            logo_path = None
+    try:
+        return build_pdf_bytes(
+            datos,
+            logo_path=logo_path,
+            cuerpo_principal=cuerpo or None,
+            clausula_septima=clausula or None,
+            firma_plantilla=firma_plantilla or None,
+        )
+    finally:
+        if logo_path_plantilla:
+            try:
+                import os
+                os.unlink(logo_path_plantilla)
+            except Exception:
+                pass

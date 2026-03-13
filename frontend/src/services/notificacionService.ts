@@ -260,11 +260,11 @@ class NotificacionService {
   }
 
   /** Plantilla editable del PDF de carta de cobranza (adjunto al email). */
-  async getPlantillaPdfCobranza(): Promise<{ ciudad_default: string; cuerpo_principal: string | null; clausula_septima: string | null }> {
+  async getPlantillaPdfCobranza(): Promise<{ ciudad_default: string; cuerpo_principal: string | null; clausula_septima: string | null; firma?: string | null }> {
     return await apiClient.get(`${this.baseUrl}/plantilla-pdf-cobranza`)
   }
 
-  async updatePlantillaPdfCobranza(data: { ciudad_default?: string; cuerpo_principal?: string | null; clausula_septima?: string | null }): Promise<{ ciudad_default: string; cuerpo_principal: string | null; clausula_septima: string | null }> {
+  async updatePlantillaPdfCobranza(data: { ciudad_default?: string; cuerpo_principal?: string | null; clausula_septima?: string | null; firma?: string | null }): Promise<{ ciudad_default: string; cuerpo_principal: string | null; clausula_septima: string | null; firma?: string | null }> {
     return await apiClient.put(`${this.baseUrl}/plantilla-pdf-cobranza`, data)
   }
 

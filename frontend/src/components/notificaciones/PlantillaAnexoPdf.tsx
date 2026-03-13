@@ -20,6 +20,7 @@ type PdfEditorFocus = 'encabezado' | 'cuerpo' | 'firma'
 
 /** Variables sustituidas con datos reales de BD al generar el PDF (mismo contexto que Pestaña 1 cobranza). */
 const VARIABLES_PDF = [
+  { key: 'CIUDAD', label: 'Ciudad' },
   { key: 'CLIENTES.TRATAMIENTO', label: 'Tratamiento' },
   { key: 'CLIENTES.NOMBRE_COMPLETO', label: 'Nombre completo' },
   { key: 'CLIENTES.CEDULA', label: 'Cédula' },
@@ -64,7 +65,7 @@ export function PlantillaAnexoPdf() {
           setEncabezado('')
           setCuerpo(cuerpoPrincipal || DEFAULT_CUERPO)
         }
-        setFirma(pdfData.clausula_septima ?? DEFAULT_CLAUSULA)
+        setFirma(pdfData.firma ?? pdfData.clausula_septima ?? DEFAULT_CLAUSULA)
       }
     }).catch(() => {
       if (!cancelled) {
@@ -139,7 +140,8 @@ export function PlantillaAnexoPdf() {
       await notificacionService.updatePlantillaPdfCobranza({
         ciudad_default: ciudadDefault,
         cuerpo_principal: cuerpoPrincipal || null,
-        clausula_septima: firma || null,
+        clausula_septima: DEFAULT_CLAUSULA,
+        firma: firma || null,
       })
       toast.success('Plantilla PDF de cobranza guardada. Se usará como anexo al email.')
     } catch (e: any) {
@@ -224,7 +226,7 @@ export function PlantillaAnexoPdf() {
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
               <p className="text-xs text-gray-500 mb-1">
-                Puede usar código HTML en encabezado, cuerpo y firma. Use el botón «Vista previa (datos de ejemplo)» para ver cómo queda el resultado.
+                Puede usar HTML en encabezado, cuerpo y firma. Si incluye un <code className="text-xs bg-gray-100 px-1 rounded">&lt;img src=&quot;data:image/png;base64,...&quot;&gt;</code>, el logo se colocará automáticamente al inicio del PDF. Use «Vista previa» para ver el resultado.
               </p>
               <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
                 Formato rápido (encabezado/cuerpo/firma):

@@ -404,11 +404,15 @@ def get_plantilla_pdf_cobranza(db: Session = Depends(get_db)):
             "ciudad_default": "Guacara",
             "cuerpo_principal": None,
             "clausula_septima": None,
+            "firma": None,
         }
     try:
-        return json.loads(row.valor)
+        data = json.loads(row.valor)
+        if "firma" not in data:
+            data["firma"] = None
+        return data
     except json.JSONDecodeError:
-        return {"ciudad_default": "Guacara", "cuerpo_principal": None, "clausula_septima": None}
+        return {"ciudad_default": "Guacara", "cuerpo_principal": None, "clausula_septima": None, "firma": None}
 
 
 # Contexto de ejemplo para vista previa del PDF de cobranza (sin datos reales)
@@ -445,14 +449,15 @@ def preview_plantilla_pdf_cobranza(db: Session = Depends(get_db)):
 # Límites de longitud para plantilla PDF cobranza (evitar payloads excesivos)
 _PLANTILLA_PDF_CUERPO_MAX = 100_000
 _PLANTILLA_PDF_CLAUSULA_MAX = 100_000
+_PLANTILLA_PDF_FIRMA_MAX = 50_000
 
 
 @router.put("/plantilla-pdf-cobranza")
 def update_plantilla_pdf_cobranza(payload: dict = Body(...), db: Session = Depends(get_db)):
     """
     Actualiza la plantilla editable del PDF de carta de cobranza.
-    Campos opcionales: ciudad_default, cuerpo_principal (HTML con {monto_total_usd}, {num_cuotas}, {fechas_str}), clausula_septima (HTML).
-    Límites: cuerpo_principal y clausula_septima no pueden superar 100.000 caracteres cada uno.
+    Campos opcionales: ciudad_default, cuerpo_principal, clausula_septima (texto legal), firma (bloque final: Atentamente, sello, etc.).
+    Límites: cuerpo_principal y clausula_septima 100.000 caracteres; firma 50.000.
     """
     cuerpo = payload.get("cuerpo_principal")
     if cuerpo is not None and len(cuerpo) > _PLANTILLA_PDF_CUERPO_MAX:
@@ -465,6 +470,12 @@ def update_plantilla_pdf_cobranza(payload: dict = Body(...), db: Session = Depen
         raise HTTPException(
             status_code=400,
             detail=f"La cláusula séptima no puede superar {_PLANTILLA_PDF_CLAUSULA_MAX} caracteres (actual: {len(clausula)}).",
+        )
+    firma = payload.get("firma")
+    if firma is not None and len(firma) > _PLANTILLA_PDF_FIRMA_MAX:
+        raise HTTPException(
+            status_code=400,
+            detail=f"La firma no puede superar {_PLANTILLA_PDF_FIRMA_MAX} caracteres (actual: {len(firma)}).",
         )
     try:
         row = db.get(Configuracion, "plantilla_pdf_cobranza")
@@ -479,6 +490,8 @@ def update_plantilla_pdf_cobranza(payload: dict = Body(...), db: Session = Depen
             data["cuerpo_principal"] = payload["cuerpo_principal"]
         if "clausula_septima" in payload:
             data["clausula_septima"] = payload["clausula_septima"]
+        if "firma" in payload:
+            data["firma"] = payload["firma"]
         if not row:
             row = Configuracion(clave="plantilla_pdf_cobranza", valor=json.dumps(data))
             db.add(row)
