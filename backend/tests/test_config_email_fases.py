@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """
 Tests para flujo de configuracion de email y verificacion de fases (logs/indicadores).
 - GET/PUT configuracion email
@@ -134,11 +134,11 @@ def test_post_probar_email_sin_smtp_devuelve_400(client: TestClient):
     assert r.status_code == 400
 
 
-@patch("app.api.v1.endpoints.configuracion_email.send_email")
+@patch("app.core.email.send_email")
 def test_post_probar_email_con_smtp_mock_ok(send_email_mock, client: TestClient, db: Session):
     """POST probar con SMTP mockeado: send_email devuelve True; respuesta success."""
     send_email_mock.return_value = (True, None)
-    # Necesitamos config guardada con user/password para que no devuelva 400 por "falta contraseña"
+    # Necesitamos config guardada con user/password para que no devuelva 400 por "falta contraseÃ±a"
     payload = {
         "smtp_host": "smtp.gmail.com",
         "smtp_port": "587",
@@ -153,7 +153,7 @@ def test_post_probar_email_con_smtp_mock_ok(send_email_mock, client: TestClient,
         "/api/v1/configuracion/email/probar",
         json={"email_destino": "destino@test.com", "subject": "Prueba", "mensaje": "Cuerpo"},
     )
-    if r.status_code == 400 and "contraseña" in (r.json().get("detail") or ""):
+    if r.status_code == 400 and "contraseÃ±a" in (r.json().get("detail") or ""):
         pytest.skip("Config no persiste password en test; probar con env SMTP")
     assert r.status_code == 200
     assert r.json().get("success") is True
@@ -166,7 +166,7 @@ def test_post_probar_imap_sin_credenciales_400(client: TestClient):
     assert r.status_code == 400
 
 
-@patch("app.api.v1.endpoints.configuracion_email.test_imap_connection")
+@patch("app.core.email.test_imap_connection")
 def test_post_probar_imap_mock_ok(test_imap_mock, client: TestClient):
     """POST probar-imap con test_imap_connection mockeado: success True y carpetas."""
     test_imap_mock.return_value = (True, None, ["INBOX", "Sent"])
@@ -185,10 +185,10 @@ def test_post_probar_imap_mock_ok(test_imap_mock, client: TestClient):
     assert "carpetas_encontradas" in r.json()
 
 
-@patch("app.api.v1.endpoints.configuracion_email.test_imap_connection")
+@patch("app.core.email.test_imap_connection")
 def test_post_probar_imap_mock_fallo(test_imap_mock, client: TestClient):
     """POST probar-imap cuando IMAP falla: success False y mensaje de error."""
-    test_imap_mock.return_value = (False, "Usuario o contraseña no aceptados", None)
+    test_imap_mock.return_value = (False, "Usuario o contraseÃ±a no aceptados", None)
     r = client.post(
         "/api/v1/configuracion/email/probar-imap",
         json={
@@ -229,3 +229,5 @@ def test_log_phase_emite_formato_esperado(caplog):
     assert "[FASE]" in caplog.text
     assert "phase=test_fase" in caplog.text
     assert "success=True" in caplog.text
+
+

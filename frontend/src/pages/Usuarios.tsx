@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+﻿﻿import { useState, useEffect, useCallback } from 'react'
 import { Users, Plus, Search, Edit, Trash2, Shield, Mail, UserCheck, UserX, Loader2, RefreshCw, X, Save } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
@@ -396,7 +396,7 @@ export function Usuarios() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">Ãšltimo Mes</p>
+                <p className="text-sm text-gray-500">Último Mes</p>
                 <p className="text-2xl font-bold text-blue-600">
                   {usuarios.filter(u => {
                     const fechaCreacion = new Date(u.created_at)
@@ -440,7 +440,7 @@ export function Usuarios() {
                 <TableHead>Email</TableHead>
                 <TableHead>Rol</TableHead>
                 <TableHead>Cargo</TableHead>
-                <TableHead>Ãšltimo Acceso</TableHead>
+                <TableHead>Último Acceso</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
