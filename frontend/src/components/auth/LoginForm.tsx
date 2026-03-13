@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -20,7 +20,7 @@ import {
 } from '../../components/ui/dialog'
 import { Logo } from '../../components/ui/Logo'
 import { useSimpleAuth } from '../../store/simpleAuthStore'
-import { isAxiosError } from '../../types/errors'
+import { getErrorMessage, isAxiosError } from '../../types/errors'
 import { authService } from '../../services/authService'
 
 // Constantes de configuración
@@ -315,8 +315,8 @@ export function LoginForm() {
                           try {
                             await authService.forgotPassword(email)
                             setForgotSuccess(true)
-                          } catch (e: any) {
-                            setForgotError(e?.response?.data?.detail || e?.message || 'Error al enviar la solicitud.')
+                          } catch (e: unknown) {
+                            setForgotError(getErrorMessage(e))
                           } finally {
                             setForgotLoading(false)
                           }

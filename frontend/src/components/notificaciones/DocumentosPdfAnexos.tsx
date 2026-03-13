@@ -56,8 +56,13 @@ export function DocumentosPdfAnexos() {
     if (selectedTipos.length === 0) { toast.error('Elige al menos un caso (pestaña).'); return }
     setSubiendo(true)
     try {
-      const param = selectedTipos.length === TIPOS_CASO.length ? 'todos' : selectedTipos
-      await notificacionService.uploadAdjuntoFijoCobranza(archivo, param)
+      const tiposToUpload: string[] =
+        selectedTipos.length === TIPOS_CASO.length
+          ? TIPOS_CASO.map((t) => t.value)
+          : selectedTipos
+      for (const tipoCaso of tiposToUpload) {
+        await notificacionService.uploadAdjuntoFijoCobranza(archivo, tipoCaso)
+      }
       toast.success('Documento guardado.')
       setArchivo(null)
       cargar()

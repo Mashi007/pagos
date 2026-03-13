@@ -1,6 +1,6 @@
-import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, AxiosProgressEvent, AxiosResponse } from 'axios'
+﻿import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, AxiosProgressEvent, AxiosResponse } from 'axios'
 import toast from 'react-hot-toast'
-import { getErrorMessage, isAxiosError } from '../types/errors'
+import { getErrorMessage, getErrorCode, isAxiosError } from '../types/errors'
 import { env, BASE_PATH } from '../config/env'
 import {
   safeGetItem,
@@ -397,7 +397,7 @@ class ApiClient {
         case 400:
           // Error de validación o cliente duplicado (misma cédula y mismo nombre)
           if (typeof responseData?.detail === 'string') {
-            toast.error(responseData.detail)
+            toast.error(messageByCode || responseData.detail)
           } else {
             toast.error(responseData?.message || 'Error de validación')
           }
@@ -412,7 +412,7 @@ class ApiClient {
           toast.error('Sin permisos para esta acción')
           break
         case 404:
-          toast.error('Recurso no encontrado')
+          toast.error(messageByCode || 'Recurso no encontrado')
           break
         case 409:
           toast.error(responseData?.message || 'Conflicto de datos. Verifica la información.')
@@ -444,7 +444,7 @@ class ApiClient {
           })
 
           // Mostrar toast con el mensaje del backend (ahora más específico)
-          toast.error(errorDetail, { duration: 10000 })
+          toast.error(messageByCode || errorDetail, { duration: 10000 })
           break
         case 503:
           // NO mostrar toast genérico para errores 503 de duplicados
@@ -457,7 +457,7 @@ class ApiClient {
             // No mostrar toast, dejar que el componente maneje el popup
             return Promise.reject(error) // ✅ CORRECCIÓN: Asegurar que se propague el error
           } else {
-            toast.error('Servicio temporalmente no disponible. Intenta nuevamente.')
+            toast.error(messageByCode || 'Servicio temporalmente no disponible. Intenta nuevamente.')
           }
           break
         default:
@@ -466,7 +466,7 @@ class ApiClient {
           } else if (error.message?.includes('Network Error') || error.code === 'ERR_NETWORK') {
             toast.error('Error de conexión. Verifica que el servidor esté funcionando.')
           } else {
-            toast.error(responseData?.message || 'Error desconocido')
+            toast.error(messageByCode || responseData?.message || 'Error desconocido')
           }
       }
     } else if (error.request) {
