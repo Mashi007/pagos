@@ -35,6 +35,13 @@ import { pagoConErrorService, type PagoConError } from '../../services/pagoConEr
 import { RegistrarPagoForm } from './RegistrarPagoForm'
 import { ExcelUploaderPagosUI } from './ExcelUploaderPagosUI'
 import { ExcelUploader } from './ExcelUploader'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '../../components/ui/dialog'
 import { ConfirmarBorrarDiaDialog } from './ConfirmarBorrarDiaDialog'
 import { PagosListResumen } from './PagosListResumen'
 import { PagosKPIsNuevo } from './PagosKPIsNuevo'
@@ -78,6 +85,8 @@ export function PagosList() {
   const [isImportingCobros, setIsImportingCobros] = useState(false)
   const [isExportingRevisionPagos, setIsExportingRevisionPagos] = useState(false)
   const [isDescargandoGmailExcel, setIsDescargandoGmailExcel] = useState(false)
+  const [showVaciarTablaGmail, setShowVaciarTablaGmail] = useState(false)
+  const [isVaciarTablaGmail, setIsVaciarTablaGmail] = useState(false)
   const [gmailScanFilter, setGmailScanFilter] = useState<'unread' | 'read' | 'all'>('unread')
   const queryClient = useQueryClient()
   const lastRunForWhichWeShowedDialogRef = useRef<string | null>(null)
@@ -118,6 +127,22 @@ export function PagosList() {
   const handleGenerarExcelDesdeGmail = () => {
     setAgregarPagoOpen(false)
     runGmail(gmailScanFilter)
+  }
+
+  const handleVaciarTablaGmail = async () => {
+    setAgregarPagoOpen(false)
+    setIsVaciarTablaGmail(true)
+    try {
+      const result = await pagoService.confirmarDiaGmail(true)
+      toast.success(result.mensaje ?? 'Tabla vaciada.')
+      setGmailStatus(null)
+      await pagoService.getGmailStatus().then(setGmailStatus)
+      setShowVaciarTablaGmail(false)
+    } catch (e) {
+      toast.error(getErrorMessage(e))
+    } finally {
+      setIsVaciarTablaGmail(false)
+    }
   }
 
   const handleImportarDesdeCobros = async () => {
@@ -465,6 +490,19 @@ export function PagosList() {
                     )}
                   </button>
                 )}
+                <button
+                  type="button"
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left rounded-md hover:bg-red-50 disabled:opacity-50 text-red-700"
+                  onClick={() => {
+                    setAgregarPagoOpen(false)
+                    setShowVaciarTablaGmail(true)
+                  }}
+                  disabled={isVaciarTablaGmail}
+                >
+                  <Trash2 className="w-5 h-5 text-red-600" />
+                  <span>{isVaciarTablaGmail ? 'Vaciando...' : 'Vaciar tabla (Generar Excel desde Gmail)'}</span>
+                  <span className="text-xs text-gray-500 ml-auto">Gmail</span>
+                </button>
                 <button
                   type="button"
                   className="w-full flex items-center gap-3 px-4 py-3 text-left rounded-md hover:bg-blue-50 disabled:opacity-50 border-t border-gray-100 mt-2 pt-3"
@@ -1028,6 +1066,37 @@ export function PagosList() {
           pagoService.getGmailStatus().then(setGmailStatus)
         }}
       />
+
+      <Dialog open={showVaciarTablaGmail} onOpenChange={setShowVaciarTablaGmail}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Vaciar tabla (Generar Excel desde Gmail)</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-600">
+            Se borrarán todos los datos de la tabla usada por «Generar Excel desde Gmail» (pagos_gmail_sync_item).
+            Esta acción no se puede deshacer. ¿Continuar?
+          </p>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowVaciarTablaGmail(false)}
+              disabled={isVaciarTablaGmail}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleVaciarTablaGmail}
+              disabled={isVaciarTablaGmail}
+            >
+              {isVaciarTablaGmail ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
+              Vaciar tabla
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
