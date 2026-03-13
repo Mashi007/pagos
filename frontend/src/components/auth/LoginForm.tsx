@@ -44,6 +44,10 @@ const loginSchema = z.object({
 
 type LoginFormData = z.infer<typeof loginSchema>
 
+const forgotSchema = z.object({
+  email: z.string().min(1, 'Indique su correo').email('Correo inválido'),
+})
+
 const FORGOT_EMAIL_DESTINO = 'itmaster@rapicreditca.com'
 
 export function LoginForm() {
@@ -305,12 +309,14 @@ export function LoginForm() {
                       </Button>
                       <Button
                         onClick={async () => {
-                          const email = forgotEmail.trim()
-                          if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-                            setForgotError('Indique un correo válido.')
+                          const result = forgotSchema.safeParse({ email: forgotEmail.trim() })
+                          if (!result.success) {
+                            const first = result.error.flatten().fieldErrors?.email?.[0] ?? result.error.message
+                            setForgotError(first)
                             return
                           }
                           setForgotError(null)
+                          const email = result.data.email
                           setForgotLoading(true)
                           try {
                             await authService.forgotPassword(email)
