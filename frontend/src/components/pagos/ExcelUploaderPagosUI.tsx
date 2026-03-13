@@ -53,7 +53,6 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
     saveAllValid,
     sendToRevisarPagos,
     sendAllToRevisarPagos,
-    sendAllErrorsToRevisarPagos,
     sendDuplicadosToRevisarPagos,
     getRowsToRevisarPagos,
     getDuplicadosRows,
@@ -118,6 +117,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
             <span className="flex items-center gap-1.5">
               <span className="text-green-100">Inválidas:</span>
               <strong className="text-white tabular-nums">{invalidCount}</strong>
+              <span className="text-green-200 text-xs">(van a Revisar Pagos)</span>
             </span>
             {savedRows.size > 0 && (
               <span className="flex items-center gap-1.5">
@@ -217,6 +217,10 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                 prestamosPorCedula={prestamosPorCedula}
                 onUpdateCell={updateCellValue}
                 saveRowIfValid={saveRowIfValid}
+                savingProgress={savingProgress}
+                serviceStatus={serviceStatus}
+                onSendToRevisarPagos={sendToRevisarPagos ? (row) => sendToRevisarPagos(row, () => navigate('/pagos?revisar=1')) : undefined}
+                isSendingRevisar={isSendingAllRevisar}
               />
 
               {batchProgress && (
@@ -296,7 +300,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                           onClick={() => sendAllToRevisarPagos()}
                           disabled={isSendingAllRevisar || serviceStatus === 'offline'}
                           className="bg-amber-100 border-amber-400 text-amber-800 hover:bg-amber-200"
-                          title="Enviar todas las filas pendientes (duplicados, errores, sin crédito) a Revisar Pagos"
+                          title="Enviar TODAS las pendientes a Revisar Pagos: inválidas + duplicados + sin crédito / varios créditos sin elegir"
                         >
                           {isSendingAllRevisar ? (
                             <>
@@ -306,7 +310,7 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                           ) : (
                             <>
                               <Search className="mr-2 h-4 w-4" />
-                              ENVIAR REVISAR PAGOS ({getRowsToRevisarPagos().length})
+                              Enviar todas → Revisar Pagos ({getRowsToRevisarPagos().length})
                             </>
                           )}
                         </Button>
@@ -326,23 +330,6 @@ export function ExcelUploaderPagosUI(props: ExcelUploaderPagosProps) {
                         <>
                           <Save className="mr-2 h-4 w-4" />
                           Guardar Todos ({validCount})
-                        </>
-                      )}
-                    </Button>
-                    <Button
-                      onClick={sendAllErrorsToRevisarPagos}
-                      disabled={invalidCount === 0 || isSavingIndividual || serviceStatus === 'offline'}
-                      className="bg-yellow-600 hover:bg-yellow-700"
-                    >
-                      {isSavingIndividual ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                          Enviando...
-                        </>
-                      ) : (
-                        <>
-                          <AlertTriangle className="mr-2 h-4 w-4" />
-                          Revisar Pagos ({invalidCount})
                         </>
                       )}
                     </Button>
