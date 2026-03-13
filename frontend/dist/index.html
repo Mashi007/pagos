@@ -10,7 +10,7 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <!-- CSP: permitir PDF en iframe (estado de cuenta) con data: y blob:. frame-src explicito evita bloqueo. -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' 'unsafe-hashes'; frame-src 'self' data: blob:;" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob:; connect-src 'self' https://pagos-f2qf.onrender.com https://rapicredit.onrender.com; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' 'unsafe-hashes'; frame-src 'self' data: blob:;" />
     <title>RAPICREDIT - Sistema de Pr&#233;stamos y Cobranza</title>
     <!-- Suprimir warnings CSS "mal selector" (Tailwind/PostCSS) - debe ejecutarse antes de cargar estilos -->
     <script>
@@ -48,7 +48,7 @@
         font-size: 1.125rem;
       }
     </style>
-    <script type="module" crossorigin src="/pagos/assets/index-D041W5mB.js"></script>
+    <script type="module" crossorigin src="/pagos/assets/index-CSrx4Hfe.js"></script>
     <link rel="stylesheet" crossorigin href="/pagos/assets/index-CYfS-hGs.css">
   </head>
   <body>

@@ -52,8 +52,18 @@ function validateEnv(): EnvConfig {
   let API_URL = import.meta.env.VITE_API_URL || '';
 
   if (import.meta.env.PROD || NODE_ENV === 'production') {
-    // En producci√≥n, usar rutas relativas para que el proxy funcione
-    API_URL = '';
+    // Mismo servicio (proxy): rutas relativas. Servicios distintos (ej. Render): usar VITE_API_URL si est· definida (CSP permite ambos orÌgenes).
+    const prodApiUrl = (import.meta.env.VITE_API_URL || '').trim();
+    if (prodApiUrl) {
+      try {
+        new URL(prodApiUrl);
+        API_URL = prodApiUrl.replace(/\/$/, '');
+      } catch {
+        API_URL = '';
+      }
+    } else {
+      API_URL = '';
+    }
   } else {
     // En desarrollo, validar URL si est√° configurada
     if (API_URL) {
