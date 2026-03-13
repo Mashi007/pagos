@@ -18,7 +18,7 @@ export interface FilaEditableProps {
   saveRowIfValid?: (row: PagoExcelRow) => Promise<boolean>
   /** Si se pasa, el botón Guardar muestra estado de carga y se deshabilita mientras guarda. */
   savingProgress?: Record<number, boolean>
-  serviceStatus?: 'online' | 'offline' | 'checking'
+  serviceStatus?: 'online' | 'offline' | 'checking' | 'unknown'
   /** Envía esta fila a Revisar Pagos (para filas que no cumplen validadores). */
   onSendToRevisarPagos?: (row: PagoExcelRow) => void
   isSendingRevisar?: boolean
