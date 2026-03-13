@@ -142,6 +142,11 @@ def _enviar_correos_items(
                 getattr(plantilla, "tipo", None) == "COBRANZA" or plantilla_usa_variables_cobranza(plantilla)
             ):
                 body_html = cuerpo  # cuerpo renderizado con variables cobranza es HTML
+        # Si el cuerpo parece HTML (cualquier plantilla con tabla/div/p/html), enviar como HTML para que el cliente lo renderice
+        if body_html is None and cuerpo and "<" in cuerpo and ">" in cuerpo:
+            _c = cuerpo.lower()
+            if any(tag in _c for tag in ("<table", "</table>", "<div", "<p ", "<span", "<html", "<body", "<br", "<h1", "<h2", "<h3")):
+                body_html = cuerpo
         # PDF = Carta_Cobranza.pdf (generada desde Plantilla anexo PDF, pestaña 2). Por defecto no se adjunta; marcar "PDF" para incluirla.
         # Adj. = documentos subidos en Documentos PDF anexos (pestaña 3). Por defecto sí se incluyen si están asignados.
         incluir_pdf_anexo = tipo_cfg.get("incluir_pdf_anexo", False) is True
