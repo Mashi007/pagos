@@ -205,7 +205,7 @@ def listar_prestamos(
             pass
 
     total = db.scalar(count_q) or 0
-    q = q.order_by(Prestamo.id.desc()).offset((page - 1) * per_page).limit(per_page)
+    q = q.order_by(Prestamo.fecha_registro.desc()).offset((page - 1) * per_page).limit(per_page)
     rows = db.execute(q).all()
     prestamo_ids = [row[0].id for row in rows]
     # Conteo de cuotas por préstamo (para mostrar en columna Cuotas)
