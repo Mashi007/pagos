@@ -1,4 +1,4 @@
-﻿import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, AxiosProgressEvent, AxiosResponse } from 'axios'
+import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, AxiosProgressEvent, AxiosResponse } from 'axios'
 import toast from 'react-hot-toast'
 import { getErrorMessage, getErrorCode, isAxiosError } from '../types/errors'
 import { env, BASE_PATH } from '../config/env'
@@ -584,11 +584,13 @@ class ApiClient {
                             url.includes('/configuracion/ai/chat') ||
                             url.includes('/prestamos/cedula/batch') || // Batch carga masiva: muchas c�dulas
                             url.includes('/pagos/upload') || // Carga masiva pagos: puede tardar con muchas filas
+                            url.includes('/pagos/batch') || // POST batch pagos: muchas filas + validaciones
                             url.includes('/pagos/gmail/run-now') // Pipeline Gmail: puede tardar si el backend es s�ncrono (credenciales OAuth)
 
       const defaultTimeout = isSlowEndpoint
         ? (url.includes('/prestamos/cedula/batch') ? 60000
           : url.includes('/pagos/upload') ? 120000
+          : url.includes('/pagos/batch') ? 120000
           : url.includes('/pagos/gmail/run-now') ? 90000  // 90s: cubre credenciales OAuth + margen para backend s�ncrono viejo
           : 300000)
         : DEFAULT_TIMEOUT_MS
