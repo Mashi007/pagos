@@ -81,6 +81,16 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
     emailDuplicadosEnArchivo.size > 0 ||
     telefonoDuplicadosEnArchivo.size > 0
 
+  /** Convierte motivos de duplicado a nombres de columna para el mensaje */
+  const columnasDuplicadas = (motivos: string[]) =>
+    [...new Set(motivos.map((m) => {
+      if (m.includes('cédula')) return 'Cédula'
+      if (m.includes('email')) return 'Email'
+      if (m.includes('nombres')) return 'Nombres'
+      if (m.includes('teléfono')) return 'Teléfono'
+      return m
+    }))].join(', ')
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -515,7 +525,9 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                                     ) : esDuplicado ? (
                                       <div className="flex flex-col items-center text-red-700 text-xs">
                                         <span>No se puede guardar</span>
-                                        <span className="text-[10px]">(duplicado en archivo)</span>
+                                        <span className="text-[10px]" title={motivosDuplicado.join('; ')}>
+                                          (duplicado: {columnasDuplicadas(motivosDuplicado)})
+                                        </span>
                                       </div>
                                     ) : isClientValid(row) ? (
                                       <Button
@@ -582,7 +594,7 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                                         Duplicado
                                       </span>
                                     </div>
-                                    <span className="text-xs">({motivosDuplicado.join(', ')})</span>
+                                    <span className="text-xs" title={motivosDuplicado.join('; ')}>(duplicado: {columnasDuplicadas(motivosDuplicado)})</span>
                                   </div>
                                 ) : (
                                   <span className="text-gray-400 text-xs">—</span>
