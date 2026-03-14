@@ -37,10 +37,10 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
     }
   })
 
-  // Cargar predicción de impago si el préstamo está aprobado o desembolsado
+  // Cargar predicción de impago si el préstamo está aprobado
   useEffect(() => {
     const prestamoData = prestamo || prestamoInitial
-    if (prestamoData?.estado === 'APROBADO' || prestamoData?.estado === 'DESEMBOLSADO') {
+    if (prestamoData?.estado === 'APROBADO') {
       cargarPrediccionImpago(prestamoData.id)
     }
   }, [prestamo, prestamoInitial])
@@ -95,7 +95,6 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
       DRAFT: 'bg-gray-100 text-gray-800 border-gray-300',
       EN_REVISION: 'bg-yellow-100 text-yellow-800 border-yellow-300',
       APROBADO: 'bg-green-100 text-green-800 border-green-300',
-      DESEMBOLSADO: 'bg-blue-100 text-blue-800 border-blue-300',
       RECHAZADO: 'bg-red-100 text-red-800 border-red-300',
     }
     return badges[estado as keyof typeof badges] || badges.DRAFT
@@ -106,7 +105,6 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
       DRAFT: 'Borrador',
       EN_REVISION: 'En Revisión',
       APROBADO: 'Aprobado',
-      DESEMBOLSADO: 'Desembolsado',
       RECHAZADO: 'Rechazado',
     }
     return labels[estado] || estado
@@ -322,7 +320,7 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                 )}
 
                 {/* Predicción de Impago de Cuotas */}
-                {(prestamoData.estado === 'APROBADO' || prestamoData.estado === 'DESEMBOLSADO') && (
+                {prestamoData.estado === 'APROBADO' && (
                   <Card className={prediccionImpago ? getRiesgoColor(prediccionImpago.nivel_riesgo) : ''}>
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">

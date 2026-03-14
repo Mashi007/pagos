@@ -98,7 +98,7 @@ export interface Prestamo {
   concesionario?: string
   analista: string
   modelo_vehiculo?: string
-  estado: 'DRAFT' | 'EN_REVISION' | 'EVALUADO' | 'APROBADO' | 'DESEMBOLSADO' | 'RECHAZADO'
+  estado: 'DRAFT' | 'EN_REVISION' | 'EVALUADO' | 'APROBADO' | 'RECHAZADO'
   usuario_proponente: string
   usuario_aprobador?: string
   usuario_autoriza?: string

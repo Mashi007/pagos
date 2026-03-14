@@ -85,7 +85,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
   const { data: cuotas, isLoading, error } = useQuery({
     queryKey: ['cuotas-prestamo', prestamo.id],
     queryFn: () => prestamoService.getCuotasPrestamo(prestamo.id),
-    enabled: prestamo.estado === 'APROBADO' || prestamo.estado === 'DESEMBOLSADO',
+    enabled: prestamo.estado === 'APROBADO',
     staleTime: 0, // Siempre refetch para obtener datos actualizados
     refetchOnMount: true, // Refetch al montar el componente
     refetchOnWindowFocus: true, // Refetch al enfocar la ventana
@@ -208,7 +208,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
           <div className="flex items-center gap-3">
             <AlertCircle className="h-5 w-5 text-yellow-600" />
             <p className="text-sm text-yellow-800">
-              La tabla de amortización solo se puede ver para préstamos APROBADOS o DESEMBOLSADOS.
+              La tabla de amortización solo se puede ver para préstamos APROBADOS.
               Estado actual: <strong>{prestamo.estado}</strong>
             </p>
           </div>

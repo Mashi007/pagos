@@ -184,7 +184,7 @@ export const PrestamosPage: React.FC = () => {
                         <td className="px-6 py-3">
                           <span
                             className={`px-2 py-1 rounded text-xs font-medium ${
-                              prestamo.estado === 'DESEMBOLSADO'
+                              prestamo.estado === 'APROBADO'
                                 ? 'bg-green-100 text-green-800'
                                 : prestamo.estado === 'DRAFT'
                                 ? 'bg-gray-100 text-gray-800'

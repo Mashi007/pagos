@@ -15,7 +15,6 @@ import { useAnalistasActivos } from '../../hooks/useAnalistas'
 import { useModelosVehiculosActivos } from '../../hooks/useModelosVehiculos'
 import { CrearPrestamoForm } from './CrearPrestamoForm'
 import { ExcelUploaderPrestamos } from './ExcelUploaderPrestamos'
-import { PrestamosKPIs } from './PrestamosKPIs'
 import { PrestamoDetalleModal } from './PrestamoDetalleModal'
 import { AprobarPrestamoManualModal } from './AprobarPrestamoManualModal'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog'
@@ -38,7 +37,7 @@ export function PrestamosList() {
   const clienteIdFromUrl = clienteIdParam ? parseInt(clienteIdParam, 10) : undefined
   const clienteIdValid = clienteIdFromUrl && !Number.isNaN(clienteIdFromUrl) ? clienteIdFromUrl : undefined
   const estadoFromUrl = searchParams.get('estado')
-  const estadoValidInit = estadoFromUrl && ['DRAFT', 'EN_REVISION', 'EVALUADO', 'APROBADO', 'DESEMBOLSADO', 'RECHAZADO'].includes(estadoFromUrl) ? estadoFromUrl : undefined
+  const estadoValidInit = estadoFromUrl && ['DRAFT', 'EN_REVISION', 'EVALUADO', 'APROBADO', 'RECHAZADO'].includes(estadoFromUrl) ? estadoFromUrl : undefined
 
   const [filters, setFilters] = useState<PrestamoFilters>({
     search: '',
@@ -60,7 +59,7 @@ export function PrestamosList() {
     const cidNum = cid ? parseInt(cid, 10) : undefined
     const cidValid = cidNum && !Number.isNaN(cidNum) ? cidNum : undefined
     const estadoParam = searchParams.get('estado')
-    const estadoValid = estadoParam && ['DRAFT', 'EN_REVISION', 'EVALUADO', 'APROBADO', 'DESEMBOLSADO', 'RECHAZADO'].includes(estadoParam) ? estadoParam : undefined
+    const estadoValid = estadoParam && ['DRAFT', 'EN_REVISION', 'EVALUADO', 'APROBADO', 'RECHAZADO'].includes(estadoParam) ? estadoParam : undefined
     setFilters(prev => ({
       ...prev,
       requiere_revision: reqRev,
@@ -208,7 +207,6 @@ export function PrestamosList() {
       EN_REVISION: 'bg-yellow-100 text-yellow-800 border-yellow-300',
       EVALUADO: 'bg-blue-100 text-blue-800 border-blue-300',
       APROBADO: 'bg-green-100 text-green-800 border-green-300',
-      DESEMBOLSADO: 'bg-blue-100 text-blue-800 border-blue-300',
       RECHAZADO: 'bg-red-100 text-red-800 border-red-300',
     }
     return badges[estado as keyof typeof badges] || badges.DRAFT
@@ -220,7 +218,6 @@ export function PrestamosList() {
       EN_REVISION: 'En Revisión',
       EVALUADO: 'Evaluado',
       APROBADO: 'Aprobado',
-      DESEMBOLSADO: 'Desembolsado',
       RECHAZADO: 'Rechazado',
     }
     return labels[estado] || estado
@@ -361,15 +358,6 @@ export function PrestamosList() {
           }}
         />
       )}
-
-      {/* KPIs primero (mismo orden que Pagos: KPIs → botones) */}
-      <PrestamosKPIs
-        analista={filters.analista}
-        concesionario={filters.concesionario}
-        modelo={filters.modelo}
-        fecha_inicio={filters.fecha_inicio}
-        fecha_fin={filters.fecha_fin}
-      />
 
       {/* Título y botones */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -687,7 +675,6 @@ export function PrestamosList() {
                       <SelectItem value="EN_REVISION">En Revisión</SelectItem>
                       <SelectItem value="EVALUADO">Evaluado</SelectItem>
                       <SelectItem value="APROBADO">Aprobado</SelectItem>
-                      <SelectItem value="DESEMBOLSADO">Desembolsado</SelectItem>
                       <SelectItem value="RECHAZADO">Rechazado</SelectItem>
                     </SelectContent>
                   </Select>
@@ -925,7 +912,7 @@ export function PrestamosList() {
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
                             {/* ICONO REVISIÓN MANUAL: ⚠ no revisado | ? en revisión | ausencia = ya revisado */}
-                            {(prestamo.estado === 'APROBADO' || prestamo.estado === 'DESEMBOLSADO' || prestamo.fecha_aprobacion) &&
+                            {(prestamo.estado === 'APROBADO' || prestamo.fecha_aprobacion) &&
                              prestamo.revision_manual_estado !== 'revisado' && (
                               prestamo.revision_manual_estado === 'revisando' ? (
                                 <Button
@@ -950,8 +937,8 @@ export function PrestamosList() {
                               )
                             )}
 
-                            {/* Botón Ver Detalles - Visible cuando APROBADO, DESEMBOLSADO o tiene fecha_aprobacion */}
-                            {(prestamo.estado === 'APROBADO' || prestamo.estado === 'DESEMBOLSADO' || prestamo.fecha_aprobacion) && (
+                            {/* Botón Ver Detalles - Visible cuando APROBADO o tiene fecha_aprobacion */}
+                            {(prestamo.estado === 'APROBADO' || prestamo.fecha_aprobacion) && (
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -962,8 +949,8 @@ export function PrestamosList() {
                               </Button>
                             )}
 
-                            {/* Botón Editar - Solo si tiene permisos Y está DESEMBOLSADO o tiene fecha_aprobacion */}
-                            {canEditPrestamo(prestamo.estado) && (prestamo.estado === 'DESEMBOLSADO' || prestamo.fecha_aprobacion) && (
+                            {/* Botón Editar - Solo si tiene permisos Y está APROBADO con fecha_aprobacion */}
+                            {canEditPrestamo(prestamo.estado) && (prestamo.estado === 'APROBADO' && prestamo.fecha_aprobacion) && (
                               <Button
                                 variant="ghost"
                                 size="sm"

@@ -3,7 +3,7 @@
  * Formatos de columnas soportados: D) Cédula | Monto | Fecha | Documento (recomendado);
  * A) Documento | Cédula | Fecha | Monto; B) Fecha | Cédula | Monto | Documento;
  * C) Cédula | ID Préstamo | Fecha | Monto | Documento.
- * Solo créditos activos (APROBADO, DESEMBOLSADO) en el selector.
+ * Solo créditos activos (APROBADO) en el selector.
  */
 
 import { motion, AnimatePresence } from 'framer-motion'

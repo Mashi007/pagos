@@ -270,11 +270,10 @@ def get_prestamos_stats(
     db: Session = Depends(get_db),
 ):
     """Estadísticas de préstamos mensuales desde BD (solo clientes ACTIVOS).
-    a) total_financiamiento: suma de total_financiamiento de préstamos aprobados/desembolsados en el mes.
-    b) total: cantidad de préstamos aprobados o desembolsados en el mes.
+    a) total_financiamiento: suma de total_financiamiento de préstamos aprobados en el mes.
+    b) total: cantidad de préstamos aprobados en el mes.
     c) cartera_vigente: suma de monto de cuotas con vencimiento en el mes no cobradas.
-    d) Cuenta por fecha_aprobacion por mes (solo préstamos con fecha_aprobacion en el mes). Incluye estado APROBADO y DESEMBOLSADO
-       (al desembolsar el préstamo pasa a DESEMBOLSADO)."""
+    d) Cuenta por fecha_aprobacion por mes (solo préstamos con fecha_aprobacion en el mes). Estado APROBADO."""
     # Usar mes/anio de la BD cuando no se pasan, para coincidir con fechas de aprobacion/registro
     if mes is not None and 1 <= mes <= 12 and anio is not None and anio >= 2000:
         mes_u = mes
@@ -302,8 +301,8 @@ def get_prestamos_stats(
             mes_u = inicio_mes.month
             anio_u = inicio_mes.year
 
-    # Estados que cuentan como "aprobados en el mes" (después de desembolso el préstamo queda DESEMBOLSADO)
-    _estados_aprobados_kpi = ("APROBADO", "DESEMBOLSADO")
+    # Estados que cuentan como "aprobados en el mes"
+    _estados_aprobados_kpi = ("APROBADO",)
     # Fecha de referencia: solo fecha_aprobacion (cuenta por fecha de aprobación por mes)
     # Solo clientes ACTIVOS (consistente con dashboard, pagos, reportes)
     fecha_ref = cast(Prestamo.fecha_aprobacion, Date)
@@ -1016,7 +1015,7 @@ def aplicar_condiciones_aprobacion(prestamo_id: int, payload: AplicarCondiciones
     p = db.get(Prestamo, prestamo_id)
     if not p:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
-    # [A3] Solo se pueden aplicar condiciones en estados previos a DESEMBOLSADO
+    # [A3] Solo se pueden aplicar condiciones en estados permitidos
     _ESTADOS_APROBABLES = ("DRAFT", "EN_REVISION", "APROBADO", "EVALUADO")
     if p.estado not in _ESTADOS_APROBABLES:
         raise HTTPException(
@@ -1092,21 +1091,21 @@ def marcar_revision(
 
 @router.post("/{prestamo_id}/asignar-fecha-aprobacion", response_model=dict)
 def asignar_fecha_aprobacion(prestamo_id: int, payload: AsignarFechaAprobacionBody, db: Session = Depends(get_db)):
-    """Asigna fecha de aprobación/desembolso (misma fecha), cambia estado a DESEMBOLSADO y genera cuotas si no existen.
-    Útil si el préstamo quedó en APROBADO sin fecha; en flujo normal, aprobar-manual ya desembolsa con la misma fecha."""
+    """Asigna fecha de aprobación/desembolso (misma fecha), mantiene estado APROBADO y genera cuotas si no existen.
+    Útil si el préstamo quedó en APROBADO sin fecha; en flujo normal, aprobar-manual también deja estado APROBADO."""
     p = db.get(Prestamo, prestamo_id)
     if not p:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
-    # [A3] Solo se puede desembolsar un préstamo aprobado, no uno ya desembolsado o rechazado
-    _ESTADOS_DESEMBOLSABLES = ("DRAFT", "EN_REVISION", "APROBADO", "EVALUADO")
-    if p.estado not in _ESTADOS_DESEMBOLSABLES:
+    # [A3] Solo se puede asignar fecha a un préstamo en estados previos a rechazo
+    _ESTADOS_PERMITIDOS = ("DRAFT", "EN_REVISION", "APROBADO", "EVALUADO")
+    if p.estado not in _ESTADOS_PERMITIDOS:
         raise HTTPException(
             status_code=400,
-            detail=f"No se puede asignar fecha de desembolso a un préstamo en estado '{p.estado}'. "
-                   f"Estados permitidos: {', '.join(_ESTADOS_DESEMBOLSABLES)}.",
+            detail=f"No se puede asignar fecha de aprobación a un préstamo en estado '{p.estado}'. "
+                   f"Estados permitidos: {', '.join(_ESTADOS_PERMITIDOS)}.",
         )
     p.fecha_aprobacion = datetime.combine(payload.fecha_aprobacion, datetime.min.time()) if isinstance(payload.fecha_aprobacion, date) else payload.fecha_aprobacion
-    p.estado = "DESEMBOLSADO"
+    p.estado = "APROBADO"
     _registrar_en_revision_manual(db, prestamo_id)
     existentes = db.scalar(select(func.count()).select_from(Cuota).where(Cuota.prestamo_id == prestamo_id)) or 0
     cuotas_recalculadas = 0
@@ -1131,8 +1130,8 @@ def aprobar_manual(
     """
     Aprobación manual de riesgo: una fecha (aprobación = desembolso, misma fecha). Confirmación de documentos
     y declaración de políticas. Actualiza datos editables del préstamo, genera tabla de amortización
-    y registra en auditoría. Solo préstamos en DRAFT o EN_REVISION. Al aprobar se desembolsa automáticamente:
-    estado resultante DESEMBOLSADO, fecha_aprobación = fecha de aprobación y desembolso.
+    y registra en auditoría. Solo préstamos en DRAFT o EN_REVISION. Al aprobar queda estado APROBADO
+    con fecha_aprobación = fecha de aprobación/desembolso.
     """
     if (getattr(current_user, "rol", None) or "").lower() != "administrador":
         raise HTTPException(
@@ -1173,7 +1172,7 @@ def aprobar_manual(
         p.fecha_aprobacion = datetime.combine(fecha_ap, datetime.min.time())
         p.fecha_base_calculo = fecha_ap
         p.usuario_aprobador = current_user.email
-        p.estado = "DESEMBOLSADO"
+        p.estado = "APROBADO"
 
         db.execute(delete(Cuota).where(Cuota.prestamo_id == prestamo_id))
         numero_cuotas = p.numero_cuotas or 12

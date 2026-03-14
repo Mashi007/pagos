@@ -735,7 +735,7 @@ export function EditarRevisionManual() {
                     setCambios({ ...cambios, prestamo: true })
                   }}
                   className="w-full border rounded px-3 py-2 mt-1"
-                  placeholder="DRAFT, APROBADO, DESEMBOLSADO, etc."
+                  placeholder="DRAFT, APROBADO, RECHAZADO, etc."
                 />
               </div>
               <div>

@@ -116,7 +116,7 @@ def _obtener_datos_pdf(db: Session, cedula_lookup: str):
     amortizaciones_por_prestamo = []
     for p in prestamos_list:
         estado = (p.get("estado") or "").strip().upper()
-        if estado not in ("APROBADO", "DESEMBOLSADO"):
+        if estado != "APROBADO":
             continue
         prestamo_id = p.get("id")
         if not prestamo_id:

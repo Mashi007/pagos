@@ -32,7 +32,7 @@ export function AsignarFechaAprobacionModal({ prestamo, onClose, onSuccess }: As
     const mensajeConfirmacion =
       `¿Desea desembolsar el préstamo con fecha ${new Date(fechaAprobacion).toLocaleDateString()}?\n\n` +
       `Esta acción:\n` +
-      `• Cambiará el estado a DESEMBOLSADO\n` +
+      `• Mantendrá el estado en APROBADO (con fecha de aprobación)\n` +
       `• Generará la tabla de amortización\n` +
       `• Creará todas las cuotas\n` +
       `• Requiere calificación mínima de 70 puntos`
@@ -46,7 +46,7 @@ export function AsignarFechaAprobacionModal({ prestamo, onClose, onSuccess }: As
     try {
       const resultado = await prestamoService.asignarFechaAprobacion(prestamo.id, fechaAprobacion)
       toast.success(
-        `Préstamo desembolsado exitosamente. Estado: DESEMBOLSADO. ` +
+        `Fecha de aprobación asignada. Estado: APROBADO. ` +
         `Tabla de amortización generada con ${resultado.cuotas_recalculadas || 0} cuotas.`
       )
       queryClient.invalidateQueries({ queryKey: ['revision-manual-prestamos'] })
@@ -107,7 +107,7 @@ export function AsignarFechaAprobacionModal({ prestamo, onClose, onSuccess }: As
                     <li>El préstamo debe estar en estado APROBADO</li>
                     <li>Se generará la tabla de amortización automáticamente</li>
                     <li>Se crearán todas las cuotas en la tabla de cuotas</li>
-                    <li>El estado cambiará a DESEMBOLSADO (dinero entregado)</li>
+                    <li>El estado quedará en APROBADO (con fecha de aprobación)</li>
                   </ul>
                 </div>
                 <p className="text-sm text-gray-700 mb-4">

@@ -744,7 +744,7 @@ async def upload_excel_pagos(
                         .join(Cliente, Prestamo.cliente_id == Cliente.id)
                         .where(
                             Cliente.cedula == cedula_norm,
-                            Prestamo.estado.in_(["APROBADO", "DESEMBOLSADO"]),
+                            Prestamo.estado == "APROBADO",
                         )
                         .order_by(Prestamo.id)
                     )
@@ -978,7 +978,7 @@ def importar_reportados_aprobados_a_pagos(
 
         prestamos = db.execute(
             select(Prestamo)
-            .where(Prestamo.cliente_id == cliente.id, Prestamo.estado.in_(["APROBADO", "DESEMBOLSADO"]))
+            .where(Prestamo.cliente_id == cliente.id, Prestamo.estado == "APROBADO")
             .order_by(Prestamo.id)
         ).scalars().all()
         prestamos = [p for p in prestamos if p is not None]
@@ -991,7 +991,7 @@ def importar_reportados_aprobados_a_pagos(
                 numero_documento=numero_doc_raw,
                 estado="PENDIENTE",
                 referencia_pago=numero_doc_raw or "N/A",
-                errores_descripcion=["Sin crédito activo (APROBADO/DESEMBOLSADO)"],
+                errores_descripcion=["Sin crédito activo (APROBADO)"],
                 observaciones=ORIGEN_COBROS_REPORTADOS,
                 fila_origen=pr.id,
             )
