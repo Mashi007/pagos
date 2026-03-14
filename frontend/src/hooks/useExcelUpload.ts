@@ -785,6 +785,7 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
           const row = jsonData[i] as unknown[]
           if (!row || row.every((cell) => !cell)) continue
 
+          // Columnas Estado y Activo ocultas en UI: siempre ACTIVO y TRUE para cumplir validadores
           const rowData: ExcelRow = {
             _rowIndex: i + 1,
             _validation: {},
@@ -796,8 +797,8 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
             direccion: row[4]?.toString() || '',
             fecha_nacimiento: convertirFechaExcel(row[5]),
             ocupacion: row[6]?.toString() || '',
-            estado: row[7]?.toString() || 'ACTIVO',
-            activo: row[8]?.toString() || 'TRUE',
+            estado: 'ACTIVO',
+            activo: 'TRUE',
             notas: row[9]?.toString() || '',
           }
 
