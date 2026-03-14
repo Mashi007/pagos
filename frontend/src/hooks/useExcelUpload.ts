@@ -986,7 +986,7 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
   const validRows = excelData.filter((r) => !r._hasErrors).length
   const totalRows = excelData.length
 
-  /** Limpia todo y vuelve a la zona de carga para elegir otro archivo */
+  /** Limpia todo, vuelve a la zona de carga y abre el selector para cargar nuevo archivo */
   const handleCambiarArchivo = useCallback(() => {
     setExcelData([])
     setUploadedFile(null)
@@ -1001,6 +1001,7 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
+    setTimeout(() => fileInputRef.current?.click(), 100)
   }, [])
 
   return {

@@ -42,7 +42,6 @@ export function ExcelUploaderPrestamosUI(props: ExcelUploaderPrestamosProps) {
     saveAllValid,
     sendToRevisarPrestamos,
     sendAllToRevisarPrestamos,
-    sendAllErrorsToRevisarPrestamos,
     enviadosRevisar,
     isSendingAllRevisar,
     batchProgress,
@@ -368,16 +367,6 @@ export function ExcelUploaderPrestamosUI(props: ExcelUploaderPrestamosProps) {
                         <Eye className="mr-2 h-4 w-4" />
                         Ir a Préstamos
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => { navigate('/prestamos?revisar=1'); onClose(); }}
-                        className="bg-amber-50 border-amber-300"
-                        title="Ver préstamos enviados a revisión"
-                      >
-                        <Search className="mr-2 h-4 w-4" />
-                        Revisar Préstamos
-                      </Button>
                       {getRowsToRevisarPrestamos().length > 0 && (
                         <Button
                           variant="outline"
@@ -415,23 +404,6 @@ export function ExcelUploaderPrestamosUI(props: ExcelUploaderPrestamosProps) {
                         <>
                           <Save className="mr-2 h-4 w-4" />
                           Guardar Todos ({validCount})
-                        </>
-                      )}
-                    </Button>
-                    <Button
-                      onClick={sendAllErrorsToRevisarPrestamos}
-                      disabled={errorCount === 0 || isSavingIndividual || serviceStatus === 'offline'}
-                      className="bg-yellow-600 hover:bg-yellow-700"
-                    >
-                      {isSavingIndividual ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                          Enviando...
-                        </>
-                      ) : (
-                        <>
-                          <AlertTriangle className="mr-2 h-4 w-4" />
-                          Revisar Préstamos ({errorCount})
                         </>
                       )}
                     </Button>
