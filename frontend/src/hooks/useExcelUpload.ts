@@ -245,10 +245,14 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
     return excelData.filter((row) => isClientValid(row) && !savedClients.has(row._rowIndex))
   }, [excelData, isClientValid, savedClients])
 
-  // Siempre excluir filas ya guardadas: al guardar cada fila debe eliminarse de la tabla
+  // Excluir filas guardadas. Si "Solo pendientes": solo filas no guardadas y no enviadas a Revisar
   const getDisplayData = useCallback((): ExcelRow[] => {
-    return excelData.filter((row) => !savedClients.has(row._rowIndex))
-  }, [excelData, savedClients])
+    return excelData.filter((row) => {
+      if (savedClients.has(row._rowIndex)) return false
+      if (showOnlyPending && enviadosRevisar.has(row._rowIndex)) return false
+      return true
+    })
+  }, [excelData, savedClients, showOnlyPending, enviadosRevisar])
 
   const getSavedClientsCount = useCallback(() => savedClients.size, [savedClients])
 

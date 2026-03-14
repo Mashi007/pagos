@@ -266,12 +266,6 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-32">
                             Ocupación
                           </th>
-                          <th className="border p-2 text-left text-xs font-medium text-gray-500 w-24">
-                            Estado
-                          </th>
-                          <th className="border p-2 text-left text-xs font-medium text-gray-500 w-20">
-                            Activo
-                          </th>
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-48">
                             Notas
                           </th>
@@ -463,49 +457,6 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                               </td>
 
                               <td className="border p-2">
-                                <select
-                                  value={row.estado || 'ACTIVO'}
-                                  onChange={(e) =>
-                                    updateCellValue(row, 'estado', e.target.value)
-                                  }
-                                  className={`w-full text-sm p-2 border rounded min-w-[80px] ${
-                                    row._validation.estado?.isValid
-                                      ? 'border-gray-300 bg-white text-black'
-                                      : 'border-red-800 bg-red-800 text-white'
-                                  }`}
-                                >
-                                  {(opcionesEstado.length > 0
-                                    ? opcionesEstado
-                                    : [
-                                        { valor: 'ACTIVO', etiqueta: 'Activo' },
-                                        { valor: 'INACTIVO', etiqueta: 'Inactivo' },
-                                        { valor: 'FINALIZADO', etiqueta: 'Finalizado' },
-                                        { valor: 'LEGACY', etiqueta: 'Legacy' },
-                                      ]
-                                  ).map((opt) => (
-                                    <option key={opt.valor} value={opt.valor}>
-                                      {opt.etiqueta}
-                                    </option>
-                                  ))}
-                                </select>
-                              </td>
-
-                              <td className="border p-2">
-                                <input
-                                  type="text"
-                                  value={row.activo || 'true'}
-                                  onChange={(e) =>
-                                    updateCellValue(row, 'activo', e.target.value)
-                                  }
-                                  className={`w-full text-sm p-2 border rounded min-w-[80px] ${
-                                    row._validation.activo?.isValid
-                                      ? 'border-gray-300 bg-white text-black'
-                                      : 'border-red-800 bg-red-800 text-white'
-                                  }`}
-                                />
-                              </td>
-
-                              <td className="border p-2">
                                 <input
                                   type="text"
                                   value={row.notas}
@@ -659,16 +610,6 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                       <Button variant="outline" size="sm" onClick={() => { navigate('/clientes'); onClose(); }} className="bg-green-50 border-green-300" title="Ir al listado de clientes">
                         <Eye className="mr-2 h-4 w-4" />
                         Ir a clientes
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => { navigate('/clientes?revisar=1'); onClose(); }}
-                        className="bg-amber-50 border-amber-300"
-                        title="Ver clientes enviados a revisión"
-                      >
-                        <Search className="mr-2 h-4 w-4" />
-                        Revisar clientes
                       </Button>
                       {getRowsToRevisarClientes().length > 0 && (
                         <Button
