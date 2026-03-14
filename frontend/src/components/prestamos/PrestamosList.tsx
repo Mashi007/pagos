@@ -885,7 +885,7 @@ export function PrestamosList() {
                         <TableHead>Modalidad</TableHead>
                         <TableHead>Cuotas</TableHead>
                         <TableHead>Estado</TableHead>
-                        <TableHead title="Fecha de registro (subida)">Fecha</TableHead>
+                        <TableHead title="Fecha de aprobación">Fecha</TableHead>
                         <TableHead className="text-right">Acciones</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -917,9 +917,9 @@ export function PrestamosList() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-1 text-sm text-gray-600" title="Fecha de registro (subida)">
+                          <div className="flex items-center gap-1 text-sm text-gray-600" title="Fecha de aprobación">
                             <Calendar className="h-4 w-4" />
-                            {formatDate(prestamo.fecha_registro ?? prestamo.fecha_creacion)}
+                            {prestamo.fecha_aprobacion ? formatDate(prestamo.fecha_aprobacion) : '—'}
                           </div>
                         </TableCell>
                         <TableCell className="text-right">

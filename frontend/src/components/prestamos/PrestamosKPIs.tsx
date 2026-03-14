@@ -186,7 +186,7 @@ export function PrestamosKPIs({
                 maximumFractionDigits: 2,
               })}
             </div>
-            <p className="text-xs text-gray-600 mt-1">Cuotas con vencimiento en {nombreMes} no cobradas</p>
+            <p className="text-xs text-gray-600 mt-1">Por cobrar de préstamos aprobados en {nombreMes}</p>
           </CardContent>
         </Card>
       </div>
