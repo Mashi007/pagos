@@ -941,6 +941,9 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
       if (field === 'cedula') {
         formattedValue = normalizeCedulaInput(formattedValue) || 'Z999999999'
       }
+      if (field === 'activo' && !formattedValue.trim()) {
+        formattedValue = 'true'
+      }
       if (field === 'email' && formattedValue) {
         formattedValue = formattedValue.trim().toLowerCase()
       }
