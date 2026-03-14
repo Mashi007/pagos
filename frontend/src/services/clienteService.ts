@@ -58,6 +58,16 @@ class ClienteService {
     return response
   }
 
+  // Comprobar qué emails ya existen en la tabla clientes (carga masiva: nunca repetido)
+  async checkEmails(emails: string[]): Promise<{ existing_emails: string[] }> {
+    if (!emails.length) return { existing_emails: [] }
+    const response = await apiClient.post<{ existing_emails: string[] }>(
+      `${this.baseUrl}/check-emails`,
+      { emails }
+    )
+    return response
+  }
+
   // Crear nuevo cliente
   async createCliente(data: ClienteForm): Promise<Cliente> {
     // El endpoint devuelve ClienteResponse directamente

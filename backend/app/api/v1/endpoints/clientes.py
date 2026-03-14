@@ -255,6 +255,16 @@ class CheckCedulasResponse(BaseModel):
     existing_cedulas: list[str] = []
 
 
+class CheckEmailsRequest(BaseModel):
+    """Lista de emails a comprobar (p. ej. desde carga masiva)."""
+    emails: list[str] = []
+
+
+class CheckEmailsResponse(BaseModel):
+    """Emails que ya existen en la tabla clientes (normalizados a minúsculas)."""
+    existing_emails: list[str] = []
+
+
 @router.get("/casos-a-revisar", response_model=dict)
 def get_casos_a_revisar(
     page: int = Query(1, ge=1),
@@ -392,6 +402,27 @@ def check_cedulas(payload: CheckCedulasRequest, db: Session = Depends(get_db)):
         if row:
             existing.append(ced)
     return CheckCedulasResponse(existing_cedulas=existing)
+
+
+@router.post("/check-emails", response_model=CheckEmailsResponse)
+def check_emails(payload: CheckEmailsRequest, db: Session = Depends(get_db)):
+    """
+    Comprobar qué emails ya están registrados en la tabla clientes (carga masiva).
+    Recibe una lista de emails y devuelve los que ya existen en la BD (comparación sin distinguir mayúsculas).
+    """
+    if not payload.emails:
+        return CheckEmailsResponse(existing_emails=[])
+    emails_norm = list({(e or "").strip().lower() for e in payload.emails if (e or "").strip()})
+    if not emails_norm:
+        return CheckEmailsResponse(existing_emails=[])
+    existing: list[str] = []
+    for em in emails_norm:
+        row = db.execute(
+            select(Cliente.id).where(func.lower(Cliente.email) == em)
+        ).first()
+        if row:
+            existing.append(em)
+    return CheckEmailsResponse(existing_emails=existing)
 
 
 @router.patch("/{cliente_id}/estado", response_model=ClienteResponse)

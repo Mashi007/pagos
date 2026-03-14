@@ -76,6 +76,7 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
   const [showOnlyPending, setShowOnlyPending] = useState(false)
   const [showModalCedulasExistentes, setShowModalCedulasExistentes] = useState(false)
   const [cedulasExistentesEnBD, setCedulasExistentesEnBD] = useState<string[]>([])
+  const [emailsExistentesEnBD, setEmailsExistentesEnBD] = useState<string[]>([])
   const [pendingSaveFilteredByCedulas, setPendingSaveFilteredByCedulas] = useState<ExcelRow[] | null>(null)
 
   const estadoOpciones = useMemo(
@@ -146,7 +147,7 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
   const cedulasDuplicadasEnArchivo = useMemo(() => {
     const counts: Record<string, number> = {}
     excelData.forEach((row) => {
-      const c = (row.cedula || '').trim() || 'Z999999999'
+      const c = (row.cedula || '').trim().toUpperCase() || 'Z999999999'
       if (c !== 'Z999999999') counts[c] = (counts[c] || 0) + 1
     })
     return new Set(Object.keys(counts).filter((ced) => (counts[ced] || 0) > 1))
@@ -185,12 +186,14 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
   const isClientValid = useCallback(
     (row: ExcelRow): boolean => {
       if (row._hasErrors) return false
-      const ced = (row.cedula || '').trim() || 'Z999999999'
+      const ced = (row.cedula || '').trim().toUpperCase() || 'Z999999999'
       if (ced !== 'Z999999999' && cedulasDuplicadasEnArchivo.has(ced)) return false
+      if (ced !== 'Z999999999' && cedulasExistentesEnBD.includes(ced)) return false
       const nom = (row.nombres || '').trim()
       if (nom && nombresDuplicadosEnArchivo.has(nom)) return false
       const em = (row.email || '').trim().toLowerCase()
       if (em && emailDuplicadosEnArchivo.has(em)) return false
+      if (em && emailsExistentesEnBD.includes(em)) return false
       let telDig = (row.telefono || '').replace(/\D/g, '')
       if (telDig.startsWith('58') && telDig.length > 10) telDig = telDig.slice(2)
       if (telDig.length > 10) telDig = '9999999999'
@@ -199,6 +202,7 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
     },
     [
       cedulasDuplicadasEnArchivo,
+      cedulasExistentesEnBD,
       nombresDuplicadosEnArchivo,
       emailDuplicadosEnArchivo,
       telefonoDuplicadosEnArchivo,
@@ -208,8 +212,11 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
   const getDuplicadoMotivo = useCallback(
     (row: ExcelRow): string[] => {
       const motivos: string[] = []
-      const ced = (row.cedula || '').trim() || 'Z999999999'
-      if (ced !== 'Z999999999' && cedulasDuplicadasEnArchivo.has(ced)) motivos.push('cédula')
+      const ced = (row.cedula || '').trim().toUpperCase() || 'Z999999999'
+      if (ced !== 'Z999999999' && cedulasDuplicadasEnArchivo.has(ced)) motivos.push('cédula en archivo')
+      if (ced !== 'Z999999999' && cedulasExistentesEnBD.includes(ced)) motivos.push('cédula ya existe en sistema')
+      const em = (row.email || '').trim().toLowerCase()
+      if (em && emailsExistentesEnBD.includes(em)) motivos.push('email ya existe en sistema')
       if ((row.nombres || '').trim() && nombresDuplicadosEnArchivo.has((row.nombres || '').trim()))
         motivos.push('nombres')
       if (
@@ -225,6 +232,8 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
     },
     [
       cedulasDuplicadasEnArchivo,
+      cedulasExistentesEnBD,
+      emailsExistentesEnBD,
       nombresDuplicadosEnArchivo,
       emailDuplicadosEnArchivo,
       telefonoDuplicadosEnArchivo,
@@ -795,6 +804,66 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
         }
 
         if (!isMounted()) return
+
+        // Verificar cédulas contra tabla clientes: no puede haber duplicadas NUNCA
+        const uniqueCedulas = [
+          ...new Set(
+            processedData
+              .map((r) => (r.cedula || '').trim().toUpperCase())
+              .filter((c) => c && c !== 'Z999999999')
+          ),
+        ]
+        if (uniqueCedulas.length > 0) {
+          try {
+            const { existing_cedulas } = await clienteService.checkCedulas(uniqueCedulas)
+            if (existing_cedulas.length > 0) {
+              setCedulasExistentesEnBD(existing_cedulas)
+              for (const row of processedData) {
+                const ced = (row.cedula || '').trim().toUpperCase()
+                if (ced !== 'Z999999999' && existing_cedulas.includes(ced)) {
+                  row._validation.cedula = {
+                    isValid: false,
+                    message: 'Cédula ya existe en el sistema',
+                  }
+                  row._hasErrors = true
+                }
+              }
+            }
+          } catch {
+            // Si falla la verificación (red/backend), no bloquear; el backend rechazará 409 al guardar
+          }
+        }
+
+        // Verificar emails contra tabla clientes: nunca repetido
+        const uniqueEmails = [
+          ...new Set(
+            processedData
+              .map((r) => (r.email || '').trim().toLowerCase())
+              .filter((e) => e && e.includes('@'))
+          ),
+        ]
+        if (uniqueEmails.length > 0) {
+          try {
+            const { existing_emails } = await clienteService.checkEmails(uniqueEmails)
+            if (existing_emails.length > 0) {
+              setEmailsExistentesEnBD(existing_emails)
+              for (const row of processedData) {
+                const em = (row.email || '').trim().toLowerCase()
+                if (em && existing_emails.includes(em)) {
+                  row._validation.email = {
+                    isValid: false,
+                    message: 'Email ya existe en el sistema',
+                  }
+                  row._hasErrors = true
+                }
+              }
+            }
+          } catch {
+            // Si falla la verificación, el backend rechazará 409 al guardar
+          }
+        }
+
+        if (!isMounted()) return
         setExcelData(processedData)
         setShowPreview(true)
       } catch (err) {
@@ -897,6 +966,7 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
     setToasts([])
     setShowModalCedulasExistentes(false)
     setCedulasExistentesEnBD([])
+    setEmailsExistentesEnBD([])
     setPendingSaveFilteredByCedulas(null)
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
