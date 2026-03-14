@@ -201,7 +201,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
     }
   }
 
-  if (prestamo.estado !== 'APROBADO' && prestamo.estado !== 'DESEMBOLSADO') {
+  if (prestamo.estado !== 'APROBADO') {
     return (
       <Card className="border-yellow-200 bg-yellow-50">
         <CardContent className="pt-6">

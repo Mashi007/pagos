@@ -6,6 +6,7 @@ GET /health/db                      - Verifica conexión a BD y tablas críticas
 GET /health/cobros                  - Módulo Cobros: BD, GEMINI_API_KEY y SMTP configurados (sin exponer secretos)
 GET /health/clientes-stats-diagnostico - Diagnóstico KPI nuevos_este_mes (público, sin auth)
 GET /health/detailed                - Reporte completo (solo dev)
+GET /health/integrity               - Integridad préstamos/cuotas/pagos (cédula en clientes, cuotas con prestamo_id, pagos con prestamo_id, préstamos sin cuotas)
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -224,6 +225,106 @@ async def health_check_cobros(db: Session = Depends(get_db)):
         logger.info("[Health/cobros] Resultado: ok (todas las fases OK)")
 
     return result
+
+
+@router.get("/integrity")
+async def health_integrity_prestamos(db: Session = Depends(get_db)):
+    """
+    Verifica integridad referencial y reglas de negocio analizadas por SQL:
+    - Préstamos: todos con cliente existente y con cédula
+    - Cuotas: todas con prestamo_id válido (no huérfanas)
+    - Pagos: los que tienen prestamo_id apuntan a un préstamo existente
+    - Préstamos APROBADO sin cuotas (informativo; pueden generarse desde Revisión Manual / asignar fecha)
+    Útil para monitoreo (cron, Uptime Robot) o revisión manual.
+    """
+    result = {
+        "status": "ok",
+        "total_prestamos": 0,
+        "prestamos_sin_cliente_o_sin_cedula": 0,
+        "cuotas_sin_prestamo_id": 0,
+        "cuotas_con_prestamo_id_invalido": 0,
+        "pagos_con_prestamo_id": 0,
+        "pagos_con_prestamo_id_invalido": 0,
+        "prestamos_sin_cuotas": 0,
+        "prestamos_aprobado_sin_cuotas": 0,
+        "error": None,
+    }
+    try:
+        # Total préstamos
+        r = db.execute(text("SELECT COUNT(*) FROM prestamos"))
+        result["total_prestamos"] = r.scalar() or 0
+
+        # Préstamos sin cliente o con cliente sin cédula
+        r = db.execute(text("""
+            SELECT COUNT(*) FROM prestamos p
+            LEFT JOIN clientes c ON c.id = p.cliente_id
+            WHERE c.id IS NULL OR TRIM(COALESCE(c.cedula, '')) = ''
+        """))
+        result["prestamos_sin_cliente_o_sin_cedula"] = r.scalar() or 0
+
+        # Cuotas sin prestamo_id
+        r = db.execute(text("SELECT COUNT(*) FROM cuotas WHERE prestamo_id IS NULL"))
+        result["cuotas_sin_prestamo_id"] = r.scalar() or 0
+
+        # Cuotas con prestamo_id que no existe
+        r = db.execute(text("""
+            SELECT COUNT(*) FROM cuotas c
+            LEFT JOIN prestamos p ON p.id = c.prestamo_id
+            WHERE p.id IS NULL
+        """))
+        result["cuotas_con_prestamo_id_invalido"] = r.scalar() or 0
+
+        # Pagos con prestamo_id (informativo)
+        r = db.execute(text("SELECT COUNT(*) FROM pagos WHERE prestamo_id IS NOT NULL"))
+        result["pagos_con_prestamo_id"] = r.scalar() or 0
+
+        # Pagos con prestamo_id que no existe
+        r = db.execute(text("""
+            SELECT COUNT(*) FROM pagos pg
+            LEFT JOIN prestamos p ON p.id = pg.prestamo_id
+            WHERE pg.prestamo_id IS NOT NULL AND p.id IS NULL
+        """))
+        result["pagos_con_prestamo_id_invalido"] = r.scalar() or 0
+
+        # Préstamos sin ninguna cuota
+        r = db.execute(text("""
+            SELECT COUNT(*) FROM prestamos p
+            WHERE NOT EXISTS (SELECT 1 FROM cuotas c WHERE c.prestamo_id = p.id)
+        """))
+        result["prestamos_sin_cuotas"] = r.scalar() or 0
+
+        # Préstamos APROBADO sin cuotas (candidatos a generar cuotas)
+        r = db.execute(text("""
+            SELECT COUNT(*) FROM prestamos p
+            WHERE p.estado = 'APROBADO'
+              AND NOT EXISTS (SELECT 1 FROM cuotas c WHERE c.prestamo_id = p.id)
+        """))
+        result["prestamos_aprobado_sin_cuotas"] = r.scalar() or 0
+
+        # Status: error si hay integridad rota
+        if (
+            result["prestamos_sin_cliente_o_sin_cedula"] > 0
+            or result["cuotas_sin_prestamo_id"] > 0
+            or result["cuotas_con_prestamo_id_invalido"] > 0
+            or result["pagos_con_prestamo_id_invalido"] > 0
+        ):
+            result["status"] = "error"
+            result["error"] = (
+                "Integridad rota: préstamos sin cliente/cédula, cuotas huérfanas o pagos con prestamo_id inválido."
+            )
+        elif result["prestamos_aprobado_sin_cuotas"] > 0:
+            result["status"] = "degraded"
+            result["error"] = (
+                f"{result['prestamos_aprobado_sin_cuotas']} préstamo(s) APROBADO sin cuotas. "
+                "Pueden generarse desde Revisión Manual o Asignar fecha."
+            )
+
+        return result
+    except Exception as e:
+        result["status"] = "error"
+        result["error"] = f"{type(e).__name__}: {str(e)}"
+        logger.exception("Error en health/integrity: %s", e)
+        raise HTTPException(status_code=503, detail=result)
 
 
 @router.get("/detailed")

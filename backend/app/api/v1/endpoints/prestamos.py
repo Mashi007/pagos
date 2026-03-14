@@ -12,7 +12,7 @@ from typing import Optional
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel, field_validator
-from sqlalchemy import cast, delete, func, or_, select, text
+from sqlalchemy import cast, delete, exists, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.types import Date
@@ -1316,6 +1316,74 @@ def get_auditoria_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
         }
         for r in registros
     ]
+
+
+@router.post("/generar-cuotas-aprobados-sin-cuotas", response_model=dict)
+def generar_cuotas_aprobados_sin_cuotas(
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
+    """
+    Genera cuotas para todos los préstamos en estado APROBADO que no tienen cuotas.
+    Usa fecha_aprobacion como fecha base para vencimientos; si no existe, fecha_registro; si no, hoy.
+    Solo administrador. Útil para regularizar datos legacy o préstamos que quedaron sin tabla de amortización.
+    """
+    if (getattr(current_user, "rol", None) or "").lower() != "administrador":
+        raise HTTPException(
+            status_code=403,
+            detail="Solo administración puede ejecutar generación masiva de cuotas.",
+        )
+    # Préstamos APROBADO sin ninguna cuota
+    q = select(Prestamo).where(
+        Prestamo.estado == "APROBADO",
+        ~exists(select(1).select_from(Cuota).where(Cuota.prestamo_id == Prestamo.id)),
+    )
+    rows = db.execute(q).scalars().all()
+    prestamos_sin_cuotas = list(rows) if rows else []
+    if not prestamos_sin_cuotas:
+        return {
+            "procesados": 0,
+            "cuotas_creadas": 0,
+            "errores": [],
+            "mensaje": "No hay préstamos APROBADO sin cuotas.",
+        }
+    total_cuotas = 0
+    errores = []
+    for p in prestamos_sin_cuotas:
+        try:
+            # Fecha base: fecha_aprobacion > fecha_registro > hoy
+            fecha_base = None
+            if getattr(p, "fecha_aprobacion", None):
+                fa = p.fecha_aprobacion
+                fecha_base = fa.date() if hasattr(fa, "date") and callable(getattr(fa, "date")) else fa
+            if fecha_base is None and getattr(p, "fecha_registro", None):
+                fr = p.fecha_registro
+                fecha_base = fr.date() if hasattr(fr, "date") and callable(getattr(fr, "date")) else fr
+            if fecha_base is None:
+                fecha_base = date.today()
+            if hasattr(fecha_base, "date") and callable(getattr(fecha_base, "date")):
+                fecha_base = fecha_base.date()
+            numero_cuotas = p.numero_cuotas or 12
+            total = float(p.total_financiamiento or 0)
+            if numero_cuotas <= 0 or total <= 0:
+                errores.append({"prestamo_id": p.id, "error": "numero_cuotas o total_financiamiento inválido"})
+                continue
+            monto_cuota = _resolver_monto_cuota(p, total, numero_cuotas)
+            creadas = _generar_cuotas_amortizacion(db, p, fecha_base, numero_cuotas, monto_cuota)
+            db.commit()
+            total_cuotas += creadas
+            logger.info("Préstamo %s: %s cuotas generadas (fecha_base=%s)", p.id, creadas, fecha_base)
+        except Exception as e:
+            db.rollback()
+            logger.exception("Error generando cuotas para préstamo %s: %s", p.id, e)
+            errores.append({"prestamo_id": p.id, "error": str(e)})
+    return {
+        "procesados": len(prestamos_sin_cuotas) - len(errores),
+        "cuotas_creadas": total_cuotas,
+        "errores": errores,
+        "mensaje": f"Procesados {len(prestamos_sin_cuotas) - len(errores)} préstamos, {total_cuotas} cuotas creadas."
+        + (f" {len(errores)} error(es)." if errores else ""),
+    }
 
 
 @router.post("", response_model=PrestamoResponse, status_code=201)
