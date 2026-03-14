@@ -155,9 +155,11 @@ def _validar_transicion_estado_cuota(estado_anterior: str, estado_nuevo: str) ->
     PAGADO â†’ PAGADO (idempotente)
     """
     transiciones_permitidas = {
-        "PENDIENTE": ["PAGADO", "PAGO_ADELANTADO", "PENDIENTE"],
+        "PENDIENTE": ["PAGADO", "PAGO_ADELANTADO", "VENCIDO", "MORA", "PENDIENTE"],
+        "VENCIDO": ["PAGADO", "PAGO_ADELANTADO", "VENCIDO", "MORA"],
+        "MORA": ["PAGADO", "PAGO_ADELANTADO", "VENCIDO", "MORA"],
         "PAGO_ADELANTADO": ["PAGADO", "PAGO_ADELANTADO"],
-        "PAGADO": ["PAGADO"],  # Idempotente
+        "PAGADO": ["PAGADO"],
     }
     return estado_nuevo in transiciones_permitidas.get(estado_anterior, [])
 
@@ -1678,15 +1680,37 @@ def crear_pagos_batch(
     """
     Crea varios pagos en una sola petición (máx. 500).
     Devuelve éxitos y errores por índice para reducir rondas y timeouts en "Guardar todos".
+    Optimizado: una sola consulta para docs existentes, préstamos y clientes en lugar de N por fila.
     """
     usuario_email = current_user.email if current_user else "sistema@rapicredit.com"
+    pagos_list = body.pagos
+    # Preload: documentos ya existentes en BD (una sola consulta)
+    docs_en_payload = [normalize_documento(p.numero_documento) for p in pagos_list]
+    docs_no_vacios = [d for d in docs_en_payload if d]
+    existing_docs: set[str] = set()
+    if docs_no_vacios:
+        rows = db.execute(select(Pago.numero_documento).where(Pago.numero_documento.in_(docs_no_vacios))).scalars().all()
+        existing_docs = {r[0] for r in rows}
+    # Preload: ids de préstamos válidos (una sola consulta)
+    prestamo_ids = [p.prestamo_id for p in pagos_list if p.prestamo_id]
+    valid_prestamo_ids: set[int] = set()
+    if prestamo_ids:
+        ids_rows = db.execute(select(Prestamo.id).where(Prestamo.id.in_(prestamo_ids))).scalars().all()
+        valid_prestamo_ids = {r[0] for r in ids_rows}
+    # Preload: cédulas de clientes que existen (una sola consulta)
+    cedulas_con_prestamo = list({p.cedula_cliente.strip().upper() for p in pagos_list if p.cedula_cliente and p.prestamo_id})
+    valid_cedulas: set[str] = set()
+    if cedulas_con_prestamo:
+        ced_rows = db.execute(select(Cliente.cedula).where(Cliente.cedula.in_(cedulas_con_prestamo))).scalars().all()
+        valid_cedulas = {r[0] for r in ced_rows}
+    docs_added_in_batch: set[str] = set()
     results: list[dict] = []
     ok_count = 0
     fail_count = 0
-    for idx, payload in enumerate(body.pagos):
+    for idx, payload in enumerate(pagos_list):
         try:
-            num_doc = normalize_documento(payload.numero_documento)
-            if num_doc and _numero_documento_ya_existe(db, num_doc):
+            num_doc = docs_en_payload[idx] if idx < len(docs_en_payload) else normalize_documento(payload.numero_documento)
+            if num_doc and (num_doc in existing_docs or num_doc in docs_added_in_batch):
                 results.append({"index": idx, "success": False, "error": "Ya existe un pago con ese Nº de documento.", "status_code": 409})
                 fail_count += 1
                 continue
@@ -1694,18 +1718,14 @@ def crear_pagos_batch(
             fecha_pago_ts = datetime.combine(payload.fecha_pago, dt_time.min)
             conciliado = payload.conciliado if payload.conciliado is not None else False
             cedula_normalizada = payload.cedula_cliente.strip().upper() if payload.cedula_cliente else ""
-            if payload.prestamo_id:
-                prestamo = db.execute(select(Prestamo).where(Prestamo.id == payload.prestamo_id)).scalars().first()
-                if not prestamo:
-                    results.append({"index": idx, "success": False, "error": f"Crédito #{payload.prestamo_id} no existe.", "status_code": 400})
-                    fail_count += 1
-                    continue
-            if cedula_normalizada and payload.prestamo_id:
-                cliente = db.execute(select(Cliente).where(Cliente.cedula == cedula_normalizada)).scalars().first()
-                if not cliente:
-                    results.append({"index": idx, "success": False, "error": f"No existe cliente con cédula {cedula_normalizada}", "status_code": 404})
-                    fail_count += 1
-                    continue
+            if payload.prestamo_id and payload.prestamo_id not in valid_prestamo_ids:
+                results.append({"index": idx, "success": False, "error": f"Crédito #{payload.prestamo_id} no existe.", "status_code": 400})
+                fail_count += 1
+                continue
+            if cedula_normalizada and payload.prestamo_id and cedula_normalizada not in valid_cedulas:
+                results.append({"index": idx, "success": False, "error": f"No existe cliente con cédula {cedula_normalizada}", "status_code": 404})
+                fail_count += 1
+                continue
             row = Pago(
                 cedula_cliente=cedula_normalizada,
                 prestamo_id=payload.prestamo_id,
@@ -1735,6 +1755,8 @@ def crear_pagos_batch(
                     db.rollback()
             results.append({"index": idx, "success": True, "pago": _pago_to_response(row)})
             ok_count += 1
+            if num_doc:
+                docs_added_in_batch.add(num_doc)
         except IntegrityError as e:
             db.rollback()
             if getattr(getattr(e, "orig", None), "pgcode", None) == "23505":

@@ -188,9 +188,9 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     const cedulasKey = cedulasUnicas.join(',')
     if (batchRequestedForCedulasRef.current === cedulasKey) return
     batchRequestedForCedulasRef.current = cedulasKey
+    setCedulasBuscando((prev) => new Set([...prev, ...cedulasUnicas]))
     let cancelled = false
     const timer = setTimeout(() => {
-      setCedulasBuscando((prev) => new Set([...prev, ...cedulasUnicas]))
       prestamoService
         .getPrestamosByCedulasBatch(cedulasUnicas)
         .then((batch) => {

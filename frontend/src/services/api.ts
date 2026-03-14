@@ -590,7 +590,7 @@ class ApiClient {
       const defaultTimeout = isSlowEndpoint
         ? (url.includes('/prestamos/cedula/batch') ? 60000
           : url.includes('/pagos/upload') ? 120000
-          : url.includes('/pagos/batch') ? 120000
+          : url.includes('/pagos/batch') ? 180000  // 3 min: Render frío + muchas filas
           : url.includes('/pagos/gmail/run-now') ? 90000  // 90s: cubre credenciales OAuth + margen para backend s�ncrono viejo
           : 300000)
         : DEFAULT_TIMEOUT_MS
