@@ -22,6 +22,7 @@ import {
   validateExcelData,
   sanitizeFileName,
   normalizeTelefonoFromExcel,
+  normalizeCedulaInput,
 } from '../utils/excelValidation'
 
 export interface ExcelUploaderProps {
@@ -784,7 +785,7 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
             _rowIndex: i + 1,
             _validation: {},
             _hasErrors: false,
-            cedula: (row[0]?.toString() || '').trim() || 'Z999999999',
+            cedula: normalizeCedulaInput(row[0]?.toString()) || 'Z999999999',
             nombres: row[1]?.toString() || '',
             telefono: normalizeTelefonoFromExcel(row[2]?.toString()) || '',
             email: row[3]?.toString() || '',
@@ -937,8 +938,11 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
       if (!row) return
 
       let formattedValue = value || ''
-      if (field === 'cedula' && !formattedValue.trim()) {
-        formattedValue = 'Z999999999'
+      if (field === 'cedula') {
+        formattedValue = normalizeCedulaInput(formattedValue) || 'Z999999999'
+      }
+      if (field === 'email' && formattedValue) {
+        formattedValue = formattedValue.trim().toLowerCase()
       }
       if (field in row && !['_rowIndex', '_validation', '_hasErrors'].includes(field)) {
         ;(row as unknown as Record<string, string>)[field] = formattedValue
@@ -952,12 +956,23 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
 
       const validation = validateFieldWithOptions(field, formattedValue)
       row._validation[field] = validation
+
+      // Re-aplicar regla: si cédula/email ya están en tabla clientes, no se puede guardar (no se borra al editar)
+      const cedNorm = (row.cedula || '').trim().toUpperCase()
+      if (field === 'cedula' && cedNorm !== 'Z999999999' && cedulasExistentesEnBD.includes(cedNorm)) {
+        row._validation.cedula = { isValid: false, message: 'Cédula ya existe en tabla clientes (no se puede guardar)' }
+      }
+      const emNorm = (row.email || '').trim().toLowerCase()
+      if (field === 'email' && emNorm && emailsExistentesEnBD.includes(emNorm)) {
+        row._validation.email = { isValid: false, message: 'Email ya existe en el sistema' }
+      }
+
       const fieldsToCheck = Object.keys(row._validation).filter((f) => f !== 'notas')
       row._hasErrors = fieldsToCheck.some((f) => !row._validation[f]?.isValid)
       setExcelData(newData)
       handleRowValidationNotification(rowIndex, row)
     },
-    [excelData, validateFieldWithOptions, handleRowValidationNotification]
+    [excelData, validateFieldWithOptions, handleRowValidationNotification, cedulasExistentesEnBD, emailsExistentesEnBD]
   )
 
   const validRows = excelData.filter((r) => !r._hasErrors).length

@@ -230,6 +230,20 @@ export interface ExcelRow extends ExcelData { _rowIndex: number; _validation: Re
 export interface ValidateFieldOptions { estadoOpciones?: string[] }
 export function blankIfNN(v: string | null | undefined): string { if (v == null) return ''; const t = v.toString().trim(); return t.toLowerCase() === 'nn' ? '' : t }
 
+/** Normaliza cédula para validación y comparación: quita espacios, dos puntos, caracteres de ancho completo (０-９→0-9) y caracteres de ancho cero. Evita que reescribir el mismo valor cambie el resultado. */
+export function normalizeCedulaInput(value: string | null | undefined): string {
+  if (value == null) return ''
+  let s = String(value).replace(/\s/g, '').replace(/:$/g, '').replace(/:/g, '')
+  s = s.replace(/[\u200B-\u200D\uFEFF\u00AD]/g, '')
+  const fullwidthToHalf = (c: string) => {
+    const code = c.codePointAt(0) ?? 0
+    if (code >= 0xff10 && code <= 0xff19) return String(code - 0xff10 + 0x30)
+    return c
+  }
+  s = [...s].map(fullwidthToHalf).join('')
+  return s.toUpperCase()
+}
+
 /** Normaliza teléfono al subir archivo: quita guiones/espacios, 0 inicial y prefijo 58. Devuelve 10 dígitos para Venezuela. */
 export function normalizeTelefonoFromExcel(raw: string | null | undefined): string {
   if (raw == null || String(raw).trim() === '') return ''
@@ -255,7 +269,7 @@ export function validateField(field: string, value: string, options?: ValidateFi
   if (typeof value==='string'&&value.trim().toLowerCase()==='nn') return { isValid: true, message: 'Valor omitido por NN' }
   const opts = options?.estadoOpciones ?? []
   switch (field) {
-    case 'cedula': if (!value.trim()) return { isValid: true }; const c = value.trim().replace(/:$/, '').replace(/:/g, ''); return /^[VEJ]\d{6,11}$/.test(c.toUpperCase()) ? { isValid: true } : { isValid: false, message: 'Formato V/E/J + 6-11 dígitos (no se admite Z)' }
+    case 'cedula': if (!value.trim()) return { isValid: true }; const c = normalizeCedulaInput(value); return /^[VEJ]\d{6,11}$/.test(c) ? { isValid: true } : { isValid: false, message: 'Formato V/E/J + 6-11 dígitos (no se admite Z)' }
     case 'nombres': if (!value.trim()) return { isValid: false, message: 'Nombres requeridos' }; const w = value.trim().split(/\s+/).filter(x=>x.length); return w.length>=2&&w.length<=7 ? { isValid: true } : { isValid: false, message: 'Entre 2 y 7 palabras' }
     case 'telefono': if (!value?.trim()) return { isValid: false, message: 'Teléfono requerido' }; let d=(value||'').replace(/\D/g,''); if (d.startsWith('58')&&d.length>=11) d=d.slice(2); if (d.length>10) return { isValid: true }; if (d.length!==10) return { isValid: false, message: '10 dígitos' }; return /^[1-9]\d{9}$/.test(d) ? { isValid: true } : { isValid: false, message: '10 dígitos sin 0 inicial' }
     case 'email': if (!value.trim()) return { isValid: false, message: 'Email requerido' }; const t=value.trim(); if (t.includes(' ')) return { isValid: false, message: 'Sin espacios' }; if (t.includes(',')) return { isValid: false, message: 'Sin comas' }; if (!t.includes('@')) return { isValid: false, message: 'Debe tener @' }; return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(t.toLowerCase()) ? { isValid: true } : { isValid: false, message: 'Extensión válida' }
