@@ -382,16 +382,14 @@ def actualizar_clientes_lote(
 @router.post("/check-cedulas", response_model=CheckCedulasResponse)
 def check_cedulas(payload: CheckCedulasRequest, db: Session = Depends(get_db)):
     """
-    Comprobar qué cédulas ya están registradas (para advertir en carga masiva antes de guardar).
-    Recibe una lista de cédulas y devuelve las que ya existen en la BD.
+    Comprobar qué cédulas ya están registradas en tabla clientes (carga masiva).
+    Duplicado = 100% igual (comparación exacta con BD). Las que ya existen no se pueden guardar.
     """
     if not payload.cedulas:
         return CheckCedulasResponse(existing_cedulas=[])
-    cedulas_norm = [c.strip() for c in payload.cedulas if (c or "").strip()]
+    cedulas_norm = [(c or "").strip().upper() for c in payload.cedulas if (c or "").strip()]
     if not cedulas_norm:
         return CheckCedulasResponse(existing_cedulas=[])
-    # Consultar solo las que existen (sin duplicar en respuesta)
-    # Z999999999 no se considera "existente" para bloquear: puede repetirse (clientes sin cédula)
     seen: set[str] = set()
     existing: list[str] = []
     for ced in cedulas_norm:

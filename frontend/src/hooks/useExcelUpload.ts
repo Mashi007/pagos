@@ -354,6 +354,12 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
           )
           return false
         }
+        // Cédula: comparar con tabla clientes — NUNCA permitir guardar si ya está en BD (100% igual)
+        const cedNorm = (blankIfNN(row.cedula) || 'Z999999999').trim().toUpperCase()
+        if (cedNorm !== 'Z999999999' && cedulasExistentesEnBD.includes(cedNorm)) {
+          addToast('error', 'Cédula ya existe en tabla clientes. No se puede guardar.')
+          return false
+        }
         setSavingProgress((prev) => ({ ...prev, [row._rowIndex]: true }))
         const rawTel = blankIfNN(row.telefono)
         const digits = rawTel.replace(/\D/g, '')
@@ -438,6 +444,7 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
       }
     },
     [
+      cedulasExistentesEnBD,
       usuarioRegistro,
       addToast,
       refreshDashboardClients,
@@ -805,7 +812,7 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
 
         if (!isMounted()) return
 
-        // Verificar cédulas contra tabla clientes: no puede haber duplicadas NUNCA
+        // Cédula: comparar con tabla clientes (100% igual = duplicado). NUNCA permitir guardar si ya está en BD.
         const uniqueCedulas = [
           ...new Set(
             processedData
@@ -823,7 +830,7 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
                 if (ced !== 'Z999999999' && existing_cedulas.includes(ced)) {
                   row._validation.cedula = {
                     isValid: false,
-                    message: 'Cédula ya existe en el sistema',
+                    message: 'Cédula ya existe en tabla clientes (no se puede guardar)',
                   }
                   row._hasErrors = true
                 }

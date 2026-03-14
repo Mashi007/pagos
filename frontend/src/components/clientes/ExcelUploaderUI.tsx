@@ -81,7 +81,7 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
     emailDuplicadosEnArchivo.size > 0 ||
     telefonoDuplicadosEnArchivo.size > 0
 
-  /** Convierte motivos de duplicado a nombres de columna para el mensaje */
+  /** Regla: observación 100% solo nombre(s) de columna — sin "duplicado" ni texto extra */
   const columnasDuplicadas = (motivos: string[]) =>
     [...new Set(motivos.map((m) => {
       if (m.includes('cédula')) return 'Cédula'
@@ -159,7 +159,7 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                     {isDragging ? 'Suelta el archivo aquí' : 'Sube tu archivo Excel'}
                   </h3>
                   <p className="text-gray-600 mb-4 text-sm">
-                    Columnas: Cédula | Nombres | Apellidos | Email | Teléfono | Estado (opcional). Cédula no duplicada en sistema ni en el archivo.
+                    Columnas: Cédula | Nombres | Apellidos | Email | Teléfono | Estado (opcional). Duplicado = 100% igual. Cédula se compara con tabla clientes: si ya existe no se puede guardar.
                   </p>
                   <Button
                     onClick={() => fileInputRef.current?.click()}
@@ -525,8 +525,8 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                                     ) : esDuplicado ? (
                                       <div className="flex flex-col items-center text-red-700 text-xs">
                                         <span>No se puede guardar</span>
-                                        <span className="text-[10px]" title={motivosDuplicado.join('; ')}>
-                                          (duplicado: {columnasDuplicadas(motivosDuplicado)})
+                                        <span className="text-[10px] font-medium" title={motivosDuplicado.join('; ')}>
+                                          {columnasDuplicadas(motivosDuplicado)}
                                         </span>
                                       </div>
                                     ) : isClientValid(row) ? (
@@ -590,11 +590,10 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                                   <div className="flex flex-col items-center justify-center gap-1 text-red-800">
                                     <div className="flex items-center gap-2">
                                       <AlertTriangle className="h-5 w-5 flex-shrink-0" />
-                                      <span className="text-sm uppercase tracking-wide">
-                                        Duplicado
+                                      <span className="text-sm font-semibold" title={motivosDuplicado.join('; ')}>
+                                        {columnasDuplicadas(motivosDuplicado)}
                                       </span>
                                     </div>
-                                    <span className="text-xs" title={motivosDuplicado.join('; ')}>(duplicado: {columnasDuplicadas(motivosDuplicado)})</span>
                                   </div>
                                 ) : (
                                   <span className="text-gray-400 text-xs">—</span>
