@@ -204,8 +204,8 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess, onAprobarManua
     }
 
     // Validar Número de Cuotas
-    if (numeroCuotas < 1 || numeroCuotas > 12) {
-      errors.push('El número de cuotas debe estar entre 1 y 12')
+    if (numeroCuotas < 1 || numeroCuotas > 50 || !Number.isInteger(numeroCuotas)) {
+      errors.push('El número de cuotas debe ser un entero entre 1 y 50')
     }
 
     // Validar Total de Financiamiento
@@ -631,18 +631,19 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess, onAprobarManua
                     <label className="block text-sm font-medium mb-1">Número de Cuotas <span className="text-red-500">*</span></label>
                     <Input
                       type="number"
-                      min="1"
-                      max="12"
+                      min={1}
+                      max={50}
+                      step={1}
                       value={numeroCuotas}
                       onChange={(e) => {
-                        const value = parseInt(e.target.value) || 12
-                        // Validar que esté entre 1 y 12
-                        const validValue = Math.max(1, Math.min(12, value))
+                        const value = parseInt(e.target.value, 10)
+                        if (Number.isNaN(value)) return
+                        const validValue = Math.max(1, Math.min(50, value))
                         setNumeroCuotas(validValue)
                       }}
                       disabled={isReadOnly}
                     />
-                    <p className="text-xs text-gray-500 mt-1">Mínimo: 1, Máximo: 12</p>
+                    <p className="text-xs text-gray-500 mt-1">Entero entre 1 y 50</p>
                   </div>
 
                   <div>

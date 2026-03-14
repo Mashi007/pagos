@@ -35,7 +35,7 @@ class ClienteUpdateData(BaseModel):
 
 class PrestamoUpdateData(BaseModel):
     total_financiamiento: Optional[float] = Field(None, ge=0)
-    numero_cuotas: Optional[int] = Field(None, ge=1)
+    numero_cuotas: Optional[int] = Field(None, ge=1, le=50)
     tasa_interes: Optional[float] = Field(None, ge=0)
     producto: Optional[str] = None
     observaciones: Optional[str] = None

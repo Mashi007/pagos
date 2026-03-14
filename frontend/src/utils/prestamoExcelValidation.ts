@@ -106,7 +106,7 @@ export function validatePrestamoField(
 
     case 'numero_cuotas': {
       const nc = parseInt(strVal, 10)
-      if (Number.isNaN(nc) || nc < 1 || nc > 12) return { isValid: false, message: 'Entre 1 y 12' }
+      if (Number.isNaN(nc) || nc < 1 || nc > 50 || nc !== Number(strVal)) return { isValid: false, message: 'Entero entre 1 y 50' }
       return { isValid: true }
     }
 

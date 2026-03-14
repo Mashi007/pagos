@@ -1,6 +1,6 @@
 /**
  * Hook para carga masiva de préstamos desde Excel.
- * Si el cliente no existe, lo crea primero con datos placeholder.
+ * La cédula debe existir en la tabla clientes; si no existe, la fila se marca como error y no se puede guardar.
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react'
@@ -8,7 +8,6 @@ import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { clienteService } from '../services/clienteService'
 import { prestamoService } from '../services/prestamoService'
-import { useSimpleAuth } from '../store/simpleAuthStore'
 import { useIsMounted } from './useIsMounted'
 import {
   type PrestamoExcelRow,
@@ -29,9 +28,6 @@ export function useExcelUploadPrestamos({ onClose, onSuccess }: ExcelUploaderPre
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const isMounted = useIsMounted()
-  const { user } = useSimpleAuth()
-  const usuarioRegistro = user?.email ?? 'carga-masiva'
-
   const [isDragging, setIsDragging] = useState(false)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [excelData, setExcelData] = useState<PrestamoExcelRow[]>([])
@@ -211,27 +207,14 @@ export function useExcelUploadPrestamos({ onClose, onSuccess }: ExcelUploaderPre
       setSavingProgress((prev) => ({ ...prev, [row._rowIndex]: true }))
       try {
         const cedulaNorm = (row.cedula || '').trim() || 'Z999999999'
-        let cliente = await clienteService.getClienteByCedula(cedulaNorm)
-
+        const cliente = await clienteService.getClienteByCedula(cedulaNorm)
         if (!cliente) {
-          const clienteData = {
-            cedula: cedulaNorm,
-            nombres: 'Revisar - Carga masiva',
-            telefono: '+589999999999',
-            email: 'revisar@email.com',
-            direccion: 'Revisar',
-            fecha_nacimiento: '1990-01-01',
-            ocupacion: 'Revisar',
-            estado: 'ACTIVO',
-            activo: true,
-            notas: 'Cliente creado por carga masiva de préstamos',
-            usuario_registro: usuarioRegistro,
-          }
-          cliente = await clienteService.createCliente(clienteData)
+          addToast('error', `Cédula ${cedulaNorm} no existe en tabla clientes. Registre al cliente primero.`)
+          return false
         }
 
         const total = Number(row.total_financiamiento) || 0
-        const numCuotas = Math.min(12, Math.max(1, Math.round(Number(row.numero_cuotas) || 12)))
+        const numCuotas = Math.min(50, Math.max(1, Math.round(Number(row.numero_cuotas) || 12)))
         const cuotaPeriodo = row.cuota_periodo != null && Number(row.cuota_periodo) > 0
           ? Number(row.cuota_periodo)
           : total / numCuotas
@@ -271,7 +254,7 @@ export function useExcelUploadPrestamos({ onClose, onSuccess }: ExcelUploaderPre
         setSavingProgress((prev) => ({ ...prev, [row._rowIndex]: false }))
       }
     },
-    [usuarioRegistro, addToast, refreshPrestamos, onSuccess, onClose, getValidRows]
+    [addToast, refreshPrestamos, onSuccess, onClose, getValidRows]
   )
 
   const saveAllValid = useCallback(async () => {
@@ -377,6 +360,25 @@ export function useExcelUploadPrestamos({ onClose, onSuccess }: ExcelUploaderPre
         }
 
         if (!isMounted()) return
+
+        // Validar que cada cédula exista en tabla clientes (solo aceptar si está en BD)
+        const uniqueCedulas = [...new Set(processed.map((r) => (r.cedula || '').trim().toUpperCase()).filter(Boolean))]
+        if (uniqueCedulas.length > 0) {
+          try {
+            const { existing_cedulas } = await clienteService.checkCedulas(uniqueCedulas)
+            const setExistentes = new Set(existing_cedulas || [])
+            for (const row of processed) {
+              const cedNorm = (row.cedula || '').trim().toUpperCase()
+              if (cedNorm && !setExistentes.has(cedNorm)) {
+                row._validation.cedula = { isValid: false, message: 'Cédula no existe en tabla clientes' }
+                row._hasErrors = true
+              }
+            }
+          } catch (_e) {
+            // Si falla la API, no marcar todas como error; el guardado individual validará
+          }
+        }
+
         setExcelData(processed)
         setShowPreview(true)
       } catch (err) {

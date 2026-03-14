@@ -135,8 +135,8 @@ class AprobarManualBody(BaseModel):
     @field_validator("numero_cuotas")
     @classmethod
     def numero_cuotas_rango(cls, v: Optional[int]) -> Optional[int]:
-        if v is not None and (v < 1 or v > 12):
-            raise ValueError("numero_cuotas debe estar entre 1 y 12")
+        if v is not None and (v < 1 or v > 50):
+            raise ValueError("numero_cuotas debe ser un entero entre 1 y 50")
         return v
 
 
