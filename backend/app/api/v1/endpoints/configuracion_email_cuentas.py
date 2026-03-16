@@ -288,58 +288,48 @@ def post_email_enviar_prueba(db: Session = Depends(get_db)):
         )
 
     sync_from_db()
-    servicios_intento = [
-        ("cobros", None),
-        ("estado_cuenta", None),
-        ("notificaciones", "dias_5"),
-    ]
-    cfg = {}
-    servicio_uso: Optional[str] = None
-    tipo_tab_uso: Optional[str] = None
-    for svc, tab in servicios_intento:
-        c = get_smtp_config(servicio=svc, tipo_tab=tab)
-        if (c.get("smtp_host") and (c.get("smtp_user") or "").strip()):
-            pwd = (c.get("smtp_password") or "").strip()
-            if pwd and pwd != "***":
-                cfg = c
-                servicio_uso = svc
-                tipo_tab_uso = tab
-                break
-    if not cfg or not (cfg.get("smtp_host") and (cfg.get("smtp_user") or "").strip()):
-        raise HTTPException(
-            status_code=400,
-            detail="Configure al menos una cuenta (1 Cobros, 2 Estado de cuenta o 3/4 Notificaciones) con servidor SMTP, usuario y contrasena antes de enviar la prueba. Si ya ingreso las claves y guardo: verifique que ENCRYPTION_KEY este definido en el servidor (Render) y vuelva a guardar las cuentas.",
-        )
-    if not (cfg.get("smtp_password") or "").strip() or (cfg.get("smtp_password") or "").strip() in ("", "***"):
-        raise HTTPException(
-            status_code=400,
-            detail="Falta contrasena SMTP en la cuenta que usara el envio. Configurela antes de enviar la prueba.",
-        )
+    asignacion = migrated.get("asignacion") or ASIGNACION_DEFAULT
+    tab_map = asignacion.get("notificaciones_tab") or {}
+    tab_para_3 = next((t for t, c in tab_map.items() if c == 3), "dias_5")
+    tab_para_4 = next((t for t, c in tab_map.items() if c == 4), None)
+    pares_cuentas = [(1, "cobros", None), (2, "estado_cuenta", None), (3, "notificaciones", tab_para_3)]
+    if tab_para_4:
+        pares_cuentas.append((4, "notificaciones", tab_para_4))
 
-    subject = "Prueba de email - RapiCredit"
-    body = "Este es un correo de prueba enviado a todos los correos registrados en Modo pruebas."
-    enviados: List[str] = []
+    subject_base = "Prueba Cuenta {} - RapiCredit"
+    body_base = "Prueba enviada con la Cuenta {}. Si recibes este correo, la cuenta esta operativa."
+    enviados: List[dict] = []
     errores: List[dict] = []
 
-    for to in destinatarios:
-        ok, err_msg = send_email(
-            to_emails=[to],
-            subject=subject,
-            body_text=body,
-            respetar_destinos_manuales=True,
-            servicio=servicio_uso,
-            tipo_tab=tipo_tab_uso,
-        )
-        if ok:
-            enviados.append(to)
-            logger.info("Email de prueba enviado a %s", to)
-        else:
-            errores.append({"email": to, "mensaje": err_msg or "Error al enviar"})
-            logger.warning("Email de prueba fallo para %s: %s", to, err_msg)
+    for num_cuenta, svc, tab in pares_cuentas:
+        cfg = get_smtp_config(servicio=svc, tipo_tab=tab)
+        if not (cfg.get("smtp_host") and (cfg.get("smtp_user") or "").strip()):
+            continue
+        pwd = (cfg.get("smtp_password") or "").strip()
+        if not pwd or pwd == "***":
+            errores.append({"cuenta": num_cuenta, "email": destinatarios[0] if destinatarios else "", "mensaje": "Falta contrasena en la cuenta"})
+            continue
+        for to in destinatarios:
+            ok, err_msg = send_email(
+                to_emails=[to],
+                subject=subject_base.format(num_cuenta),
+                body_text=body_base.format(num_cuenta),
+                respetar_destinos_manuales=True,
+                servicio=svc,
+                tipo_tab=tab,
+            )
+            if ok:
+                enviados.append({"cuenta": num_cuenta, "email": to})
+                logger.info("Email de prueba Cuenta %d enviado a %s", num_cuenta, to)
+            else:
+                errores.append({"cuenta": num_cuenta, "email": to, "mensaje": err_msg or "Error al enviar"})
+                logger.warning("Email de prueba Cuenta %d fallo para %s: %s", num_cuenta, to, err_msg)
 
+    total_ok = len(enviados)
+    total_err = len(errores)
     return {
-        "success": len(errores) == 0,
+        "success": total_err == 0,
         "enviados": enviados,
         "errores": errores,
-        "mensaje": "Enviado a %d de %d correos." % (len(enviados), len(destinatarios)),
+        "mensaje": "Enviados: %d. Errores: %d (por cuenta/destino)." % (total_ok, total_err),
     }

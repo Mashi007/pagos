@@ -125,9 +125,10 @@ export function EmailCuentasConfig() {
     try {
       const res = await emailCuentasApi.enviarPrueba()
       if (res.success) {
-        toast.success(res.mensaje || 'Correo de prueba enviado a todos los correos registrados.')
+        const cuentasOk = [...new Set((res.enviados || []).map(e => e.cuenta))].sort((a, b) => a - b)
+        toast.success(cuentasOk.length ? `Pruebas OK: Cuentas ${cuentasOk.join(', ')}. ${res.mensaje}` : res.mensaje)
       } else {
-        const errMsg = res.errores?.length ? res.errores.map(e => `${e.email}: ${e.mensaje}`).join('; ') : res.mensaje
+        const errMsg = res.errores?.length ? res.errores.map(e => `Cuenta ${e.cuenta}: ${e.mensaje}`).join('; ') : res.mensaje
         toast.warning(errMsg || res.mensaje)
       }
     } catch (e: unknown) {

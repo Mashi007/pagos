@@ -56,7 +56,7 @@ export const emailCuentasApi = {
     return apiClient.put(`${BASE}/email/cuentas`, payload, { timeout: 60000 })
   },
   /** Envia un correo de prueba a todos los correos de pruebas registrados. */
-  async enviarPrueba(): Promise<{ success: boolean; enviados: string[]; errores: { email: string; mensaje: string }[]; mensaje: string }> {
+  async enviarPrueba(): Promise<{ success: boolean; enviados: { cuenta: number; email: string }[]; errores: { cuenta: number; email: string; mensaje: string }[]; mensaje: string }> {
     return apiClient.post(`${BASE}/email/enviar-prueba`, {}, { timeout: 30000 })
   },
 }
