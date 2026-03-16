@@ -3,7 +3,7 @@
  * Cuenta 1 = Cobros, 2 = Estado de cuenta, 3 y 4 = Notificaciones (por pestaña).
  */
 import { useState, useEffect } from 'react'
-import { Mail, Save, AlertCircle, CircleDot } from 'lucide-react'
+import { Mail, Save, AlertCircle, CheckCircle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
@@ -135,7 +135,7 @@ export function EmailCuentasConfig() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
-            <CircleDot className="h-4 w-4" />
+            <CheckCircle className="h-4 w-4" />
             Servicios disponibles
           </CardTitle>
           <CardDescription>
