@@ -396,6 +396,8 @@ export function PagosList() {
                 <p className="text-xs text-gray-600 px-2 py-1.5 mb-2 border-b border-gray-100">
                   {gmailStatus.last_status === 'error' ? (
                     <span className="text-amber-600">Última sync Gmail falló</span>
+                  ) : gmailStatus.last_status === 'running' ? (
+                    <>Procesando: {gmailStatus.last_emails} correos, {gmailStatus.last_files} archivos</>
                   ) : gmailStatus.last_run ? (
                     <>Última sync: {formatLastSyncDate(gmailStatus.last_run)} – {gmailStatus.last_emails} correos, {gmailStatus.last_files} archivos</>
                   ) : (
@@ -467,7 +469,7 @@ export function PagosList() {
                         disabled={loadingGmail}
                       >
                         <Mail className="w-4 h-4 text-gray-600" />
-                        <span>{loadingGmail ? 'Procesando...' : 'Procesar correos'}</span>
+                        <span>{loadingGmail ? `Procesando... (${gmailStatus?.last_emails ?? 0} correos, ${gmailStatus?.last_files ?? 0} archivos)` : 'Procesar correos'}</span>
                         <span className="text-xs text-gray-500 ml-auto">Gmail</span>
                       </button>
                       <button
