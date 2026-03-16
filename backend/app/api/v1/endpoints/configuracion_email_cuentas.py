@@ -180,13 +180,13 @@ def put_email_cuentas(payload: EmailCuentasUpdate = Body(...), db: Session = Dep
             if k in base and v is not None:
                 if k in ("smtp_password", "imap_password") and _is_password_masked(v):
                     continue
+                base[k] = v
         for field in SENSITIVE_FIELDS:
             if (not base.get(field) or _is_password_masked(base.get(field) or "")) and existing_data:
                 existing_val = _get_existing_decrypted_password(existing_data, i, field)
                 if existing_val:
                     base[field] = existing_val
 
-                base[k] = v
         cuentas_dict.append(base)
 
     for i, c in enumerate(cuentas_dict):
@@ -199,8 +199,18 @@ def put_email_cuentas(payload: EmailCuentasUpdate = Body(...), db: Session = Dep
                 )
 
     cuentas_para_bd = []
-    for c in cuentas_dict:
-        cuentas_para_bd.append(prepare_for_db_storage(dict(c)))
+    for idx, c in enumerate(cuentas_dict):
+        stored = prepare_for_db_storage(dict(c))
+        if existing_data and idx < len(existing_data.get("cuentas") or []):
+            existing_cuenta = existing_data["cuentas"][idx]
+            if isinstance(existing_cuenta, dict):
+                for field in SENSITIVE_FIELDS:
+                    enc_key = f"{field}_encriptado"
+                    if enc_key not in stored or not stored.get(enc_key):
+                        if existing_cuenta.get(enc_key):
+                            stored[enc_key] = existing_cuenta.get(enc_key)
+        cuentas_para_bd.append(stored)
+
 
     payload_data = {
         "version": 2,
@@ -298,7 +308,7 @@ def post_email_enviar_prueba(db: Session = Depends(get_db)):
     if not cfg or not (cfg.get("smtp_host") and (cfg.get("smtp_user") or "").strip()):
         raise HTTPException(
             status_code=400,
-            detail="Configure al menos una cuenta (1 Cobros, 2 Estado de cuenta o 3/4 Notificaciones) con servidor SMTP, usuario y contrasena antes de enviar la prueba.",
+            detail="Configure al menos una cuenta (1 Cobros, 2 Estado de cuenta o 3/4 Notificaciones) con servidor SMTP, usuario y contrasena antes de enviar la prueba. Si ya ingreso las claves y guardo: verifique que ENCRYPTION_KEY este definido en el servidor (Render) y vuelva a guardar las cuentas.",
         )
     if not (cfg.get("smtp_password") or "").strip() or (cfg.get("smtp_password") or "").strip() in ("", "***"):
         raise HTTPException(
