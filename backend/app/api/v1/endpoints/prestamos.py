@@ -1,4 +1,4 @@
-"""
+﻿"""
 Endpoints de préstamos. Datos reales desde BD (tabla prestamos).
 Todos los endpoints usan Depends(get_db). No hay stubs ni datos demo.
 """
@@ -29,6 +29,7 @@ from app.models.user import User
 from app.models.revision_manual_prestamo import RevisionManualPrestamo
 from app.schemas.prestamo import PrestamoCreate, PrestamoResponse, PrestamoUpdate, PrestamoListResponse
 from app.services.cobros.recibo_cuota_amortizacion import generar_recibo_cuota_amortizacion
+from app.services.cuota_estado import estado_cuota_para_mostrar
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -789,7 +790,15 @@ def get_cuotas_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
                     if pago.conciliado or (str(pago.verificado_concordancia or "").strip().upper() == "SI"):
                         pago_conciliado_flag = True
                         break  # un pago conciliado en rango es suficiente para marcar el flag
-        
+
+        monto_cuota_f = float(c.monto or 0)
+        total_pagado_f = float(c.total_pagado or 0)
+        if total_pagado_f < monto_cuota_f - 0.01:
+            fv = c.fecha_vencimiento
+            fv_date = fv.date() if fv and hasattr(fv, "date") else fv
+            estado_mostrar = estado_cuota_para_mostrar(total_pagado_f, monto_cuota_f, fv_date, date.today())
+        else:
+            estado_mostrar = "PAGADO"
         # Construir respuesta de cuota
         resultado.append({
             "id": c.id,
@@ -807,7 +816,7 @@ def get_cuotas_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
             "interes_pagado": None,
             "total_pagado": float(c.total_pagado) if c.total_pagado is not None else 0,
             "fecha_pago": c.fecha_pago.isoformat() if c.fecha_pago else None,
-            "estado": c.estado or "PENDIENTE",
+            "estado": estado_mostrar,
             "dias_mora": c.dias_mora if c.dias_mora is not None else 0,
             "dias_morosidad": c.dias_morosidad if c.dias_morosidad is not None else 0,
             # pago_conciliado: True si existe pago conciliado O verificado_concordancia='SI'
@@ -883,7 +892,7 @@ def _obtener_cuotas_para_export(db: Session, prestamo_id: int, prestamo: Prestam
             "monto_interes": monto_interes,
             "monto_cuota": monto_cuota,
             "saldo_capital_final": saldo_final,
-            "estado": c.estado or "PENDIENTE",
+            "estado": estado_mostrar,
         })
     return resultado
 
