@@ -1,7 +1,7 @@
-"""
+﻿"""
 Endpoints para configuracion de 4 cuentas de email.
 GET/PUT /configuracion/email/cuentas devuelven/aceptan { version: 2, cuentas: [c1,c2,c3,c4], asignacion }.
-Cuenta 1 = Cobros, 2 = Estado de cuenta, 3 y 4 = Notificaciones (por pestaña).
+Cuenta 1 = Cobros, 2 = Estado de cuenta, 3 y 4 = Notificaciones (por pestaÃ±a).
 """
 import json
 import logging
@@ -32,7 +32,7 @@ router = APIRouter()
 
 
 def _mask_cuenta(c: dict) -> dict:
-    """Copia la cuenta enmascarando contraseñas y sin exponer campos _encriptado."""
+    """Copia la cuenta enmascarando contraseÃ±as y sin exponer campos _encriptado."""
     out = {k: v for k, v in c.items() if not k.endswith("_encriptado")}
     for f in SENSITIVE_FIELDS:
         if out.get(f):
@@ -158,7 +158,7 @@ def put_email_cuentas(payload: EmailCuentasUpdate = Body(...), db: Session = Dep
 
     for i, c in enumerate(cuentas_dict):
         if (c.get("smtp_user") or "").strip():
-            valido, errores = validar_config_email_para_guardar(c)
+            valido, errores = validar_config_email_para_guardar({**c, "modo_pruebas": payload.modo_pruebas or "true", "email_pruebas": payload.email_pruebas or ""})
             if not valido:
                 raise HTTPException(
                     status_code=400,

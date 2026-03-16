@@ -1,6 +1,6 @@
-/**
- * Configuración de 4 cuentas de correo con asignación por servicio.
- * Cuenta 1 = Cobros, 2 = Estado de cuenta, 3 y 4 = Notificaciones (por pestaña).
+﻿/**
+ * ConfiguraciÃ³n de 4 cuentas de correo con asignaciÃ³n por servicio.
+ * Cuenta 1 = Cobros, 2 = Estado de cuenta, 3 y 4 = Notificaciones (por pestaÃ±a).
  */
 import { useState, useEffect } from 'react'
 import { Mail, Save, AlertCircle, CheckCircle } from 'lucide-react'
@@ -53,7 +53,7 @@ export function EmailCuentasConfig() {
       setAsignacion({ ...tab })
     } catch (e) {
       console.error(e)
-      toast.error('Error cargando configuración de cuentas')
+      toast.error('Error cargando configuraciÃ³n de cuentas')
       setData({
         version: 2,
         cuentas: Array.from({ length: CUENTAS_COUNT }, emptyCuenta),
@@ -84,8 +84,8 @@ export function EmailCuentasConfig() {
   }
 
   const SERVICIOS_DISPONIBLES: { key: keyof EmailCuentasResponse; label: string; cuenta: number }[] = [
-    { key: 'email_activo_cobros', label: 'Cobros (formulario público, recibos)', cuenta: 1 },
-    { key: 'email_activo_estado_cuenta', label: 'Estado de cuenta (código y envío PDF)', cuenta: 2 },
+    { key: 'email_activo_cobros', label: 'Cobros (formulario pÃºblico, recibos)', cuenta: 1 },
+    { key: 'email_activo_estado_cuenta', label: 'Estado de cuenta (cÃ³digo y envÃ­o PDF)', cuenta: 2 },
     { key: 'email_activo_notificaciones', label: 'Notificaciones (plantillas a clientes)', cuenta: 3 },
   ]
 
@@ -110,7 +110,7 @@ export function EmailCuentasConfig() {
         email_activo_cobros: data.email_activo_cobros,
         tickets_notify_emails: data.tickets_notify_emails,
       })
-      toast.success('Configuración de 4 cuentas guardada')
+      toast.success('ConfiguraciÃ³n de 4 cuentas guardada')
       await load()
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? (e as Error)?.message ?? 'Error al guardar'
@@ -123,7 +123,7 @@ export function EmailCuentasConfig() {
   if (loading) {
     return (
       <Card>
-        <CardContent className="pt-6">Cargando configuración de cuentas...</CardContent>
+        <CardContent className="pt-6">Cargando configuraciÃ³n de cuentas...</CardContent>
       </Card>
     )
   }
@@ -139,7 +139,7 @@ export function EmailCuentasConfig() {
             Servicios disponibles
           </CardTitle>
           <CardDescription>
-            Active o desactive el envío de correo por servicio. Cada uno usa la cuenta indicada (Cuenta 1, 2 o 3/4).
+            Active o desactive el envÃ­o de correo por servicio. Cada uno usa la cuenta indicada (Cuenta 1, 2 o 3/4).
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -167,15 +167,50 @@ export function EmailCuentasConfig() {
       </Card>
 
       
-      <Card className="border-blue-200 bg-blue-50/50 dark:bg-blue-950/20">
+
+      <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/20">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">Modo pruebas y correo de pruebas</CardTitle>
+          <CardDescription>
+            Si "Modo pruebas" está activo, todos los envíos se redirigen al correo indicado. El correo de pruebas es obligatorio cuando el modo pruebas está activado.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between rounded border p-3">
+            <span className="text-sm font-medium">Modo pruebas (redirigir envíos al correo de pruebas)</span>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={(data?.modo_pruebas ?? 'true') === 'true'}
+                onChange={e => setData(data ? { ...data, modo_pruebas: e.target.checked ? 'true' : 'false' } : data)}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-amber-600" />
+              <span className="ml-2 text-sm">{(data?.modo_pruebas ?? 'true') === 'true' ? 'Activo' : 'Inactivo'}</span>
+            </label>
+          </div>
+          <div>
+            <Label>Correo de pruebas (obligatorio si modo pruebas está activo)</Label>
+            <Input
+              type="email"
+              value={data?.email_pruebas ?? ''}
+              onChange={e => setData(data ? { ...data, email_pruebas: e.target.value } : data)}
+              placeholder="ejemplo@correo.com"
+              className="mt-1"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+            <Card className="border-blue-200 bg-blue-50/50 dark:bg-blue-950/20">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <Mail className="h-5 w-5" />
             Cuentas de correo por servicio
           </CardTitle>
           <CardDescription>
-            Configure hasta 4 cuentas. Cada servicio usa una cuenta: <strong>Cuenta 1</strong> = Cobros (formulario público),
-            <strong> Cuenta 2</strong> = Estado de cuenta, <strong>Cuentas 3 y 4</strong> = Notificaciones (puede elegir por pestaña).
+            Configure hasta 4 cuentas. Cada servicio usa una cuenta: <strong>Cuenta 1</strong> = Cobros (formulario pÃºblico),
+            <strong> Cuenta 2</strong> = Estado de cuenta, <strong>Cuentas 3 y 4</strong> = Notificaciones (puede elegir por pestaÃ±a).
           </CardDescription>
         </CardHeader>
       </Card>
@@ -184,12 +219,12 @@ export function EmailCuentasConfig() {
         <Card key={i}>
           <CardHeader className="pb-2">
             <CardTitle className="text-base">
-              Cuenta {i + 1} — {SERVICIO_POR_CUENTA[i + 1] ?? `Cuenta ${i + 1}`}
+              Cuenta {i + 1} â€” {SERVICIO_POR_CUENTA[i + 1] ?? `Cuenta ${i + 1}`}
             </CardTitle>
             <CardDescription>
               {i === 0 && 'Usada en: rapicredit-cobros (reporte de pago).'}
-              {i === 1 && 'Usada en: rapicredit-estadocuenta (consulta y envío de PDF).'}
-              {(i === 2 || i === 3) && `Usada en: Notificaciones (pestañas que elija como "Cuenta ${i + 1}" abajo).`}
+              {i === 1 && 'Usada en: rapicredit-estadocuenta (consulta y envÃ­o de PDF).'}
+              {(i === 2 || i === 3) && `Usada en: Notificaciones (pestaÃ±as que elija como "Cuenta ${i + 1}" abajo).`}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -221,7 +256,7 @@ export function EmailCuentasConfig() {
                 />
               </div>
               <div>
-                <Label>Contraseña</Label>
+                <Label>ContraseÃ±a</Label>
                 <Input
                   type="password"
                   value={cuentas[i]?.smtp_password && (cuentas[i].smtp_password as string) !== '***' ? (cuentas[i].smtp_password as string) : ''}
@@ -255,10 +290,10 @@ export function EmailCuentasConfig() {
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <AlertCircle className="h-4 w-4" />
-            Asignación Notificaciones: qué cuenta usa cada pestaña
+            AsignaciÃ³n Notificaciones: quÃ© cuenta usa cada pestaÃ±a
           </CardTitle>
           <CardDescription>
-            Elija para cada pestaña de Notificaciones si usa <strong>Cuenta 3</strong> o <strong>Cuenta 4</strong>.
+            Elija para cada pestaÃ±a de Notificaciones si usa <strong>Cuenta 3</strong> o <strong>Cuenta 4</strong>.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -283,7 +318,7 @@ export function EmailCuentasConfig() {
       <div className="flex justify-end">
         <Button onClick={handleSave} disabled={saving}>
           <Save className="mr-2 h-4 w-4" />
-          {saving ? 'Guardando…' : 'Guardar configuración de 4 cuentas'}
+          {saving ? 'Guardandoâ€¦' : 'Guardar configuraciÃ³n de 4 cuentas'}
         </Button>
       </div>
     </div>
