@@ -145,6 +145,55 @@ def list_messages_by_filter(service: Any, filter_type: str = "unread") -> List[d
         return []
 
 
+
+def count_messages_by_filter(service: Any, filter_type: str = "unread") -> int:
+    """
+    Cuenta mensajes segun el filtro sin obtener metadata (solo list paginado).
+    Mismo criterio que list_messages_by_filter. Util para mostrar N correos a procesar antes de iniciar.
+    """
+    from googleapiclient.errors import HttpError
+
+    def _count() -> int:
+        total = 0
+        page_token: Optional[str] = None
+        params_base: dict = {"userId": "me", "maxResults": 500}
+        if filter_type == "unread":
+            params_base["labelIds"] = ["UNREAD"]
+        elif filter_type == "read":
+            params_base["q"] = "is:read"
+        else:
+            params_base["q"] = "in:inbox"
+        while True:
+            params = dict(params_base)
+            if page_token:
+                params["pageToken"] = page_token
+            result = service.users().messages().list(**params).execute()
+            batch = result.get("messages", [])
+            total += len(batch)
+            page_token = result.get("nextPageToken")
+            if not page_token:
+                break
+        return total
+
+    try:
+        return _count()
+    except HttpError as e:
+        if e.resp.status == 429:
+            wait_sec = _parse_gmail_retry_after_seconds(e)
+            logger.warning("[PAGOS_GMAIL] Gmail 429 (count, filtro=%s), esperando %ds", filter_type, wait_sec or 0)
+            if wait_sec and 0 < wait_sec <= _GMAIL_429_MAX_WAIT_SECONDS:
+                time.sleep(wait_sec)
+                try:
+                    return _count()
+                except HttpError:
+                    return 0
+        logger.warning("Gmail count_messages_by_filter(%s): %s", filter_type, e)
+        return 0
+    except Exception as e:
+        logger.warning("Gmail count_messages_by_filter(%s): %s", filter_type, e)
+        return 0
+
+
 def list_unread_with_attachments(service: Any) -> List[dict]:
     """
     Lista TODOS los mensajes NO LEÍDOS (equivalente a list_messages_by_filter(service, "unread")).

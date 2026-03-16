@@ -26,7 +26,9 @@ logger = logging.getLogger(__name__)
 PAGOS_NA = "NA"
 
 GEMINI_PROMPT = (
+    "[EN] You MUST review ALL available information: email SUBJECT, message BODY, and ATTACHMENTS (images/PDFs). Extract the 4 fields from any source or combination. Respond ONLY with valid JSON. [ES] DEBES revisar TODA la informacion: ASUNTO, CUERPO y ADJUNTOS. Extrae los 4 campos de cualquier fuente o combinacion. Responde UNICAMENTE con JSON. "
     "Eres un asistente especializado en extraer datos de pagos venezolanos. "
+    "DEBES revisar TODA la informacion disponible: ASUNTO del mensaje, CUERPO del mensaje y ADJUNTOS (imagenes/PDFs); extrae los datos de cualquiera de estas fuentes o de su combinacion. "
     "Puedes recibir UNA O MÁS de estas fuentes:\n"
     "1) El ASUNTO del correo electrónico (subject; a veces incluye referencia, monto o datos del pagador).\n"
     "2) El CUERPO del correo (texto plano o HTML convertido a texto).\n"

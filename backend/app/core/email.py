@@ -196,6 +196,7 @@ def send_email(
     *,
     respetar_destinos_manuales: bool = False,
     servicio: Optional[str] = None,
+    tipo_tab: Optional[str] = None,
 ) -> Tuple[bool, Optional[str]]:
     """
     Env�a un correo v�a SMTP (desde el email configurado en Configuraci�n > Email o .env).
@@ -225,7 +226,7 @@ def send_email(
         cc_list = [e.strip() for e in (cc_emails or []) if e and isinstance(e, str) and "@" in e.strip()]
         bcc_list = [e.strip() for e in (bcc_emails or []) if e and isinstance(e, str) and "@" in e.strip()]
     has_attachments = bool(attachments)
-    cfg = get_smtp_config()
+    cfg = get_smtp_config(servicio=servicio, tipo_tab=tipo_tab)
     if not cfg.get("smtp_host") or not cfg.get("smtp_user"):
         log_phase(logger, FASE_SMTP_CONFIG, False, "falta smtp_host o smtp_user")
         return False, "No hay servidor SMTP configurado. Configura en Configuracion > Email."

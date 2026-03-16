@@ -195,6 +195,7 @@ def _enviar_correos_items(
             bcc_list = [e.strip() for e in cco if e and isinstance(e, str) and "@" in e.strip()] if isinstance(cco, list) else []
 
         if to_email:
+            tipo_tab_envio = _tipo_tab_para_persistencia(tipo)
             ok, msg = send_email(
                 to_email,
                 asunto,
@@ -203,6 +204,7 @@ def _enviar_correos_items(
                 bcc_emails=bcc_list or None,
                 attachments=attachments,
                 servicio="notificaciones",
+                tipo_tab=tipo_tab_envio,
             )
             log_envio_email(item_id_log, to_email[0], ok, None if ok else msg)
             if ok:

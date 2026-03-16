@@ -26,7 +26,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models.pagos_gmail_sync import PagosGmailSync, PagosGmailSyncItem
+from app.models.pagos_gmail_sync import PagosGmailSync, PagosGmailSyncItem, GmailTemporal
 from app.services.pagos_gmail.credentials import get_pagos_gmail_credentials
 from app.services.pagos_gmail.drive_service import (
     build_drive_service,
@@ -124,7 +124,8 @@ def run_pipeline(
             logger.warning("[PAGOS_GMAIL] â„¹ Duplicados eliminados: %d â†’ %d mensajes Ãºnicos", len(raw_messages), len(messages))
         max_emails = getattr(settings, "PAGOS_GMAIL_MAX_EMAILS_PER_RUN", 0)
         total = len(messages)
-        if scan_filter == "all":
+        # Con "unread" o "all" procesamos todos (sin límite); "unread" además hace vueltas hasta completar.
+        if scan_filter in ("all", "unread"):
             max_emails = 0
         logger.warning("[PAGOS_GMAIL] âœ“ Correos (filtro=%s): %d (mÃ¡x por ejecuciÃ³n: %s)", scan_filter, total, max_emails or "sin lÃ­mite")
         if total == 0:
@@ -221,6 +222,18 @@ def run_pipeline(
                             drive_email_link=email_lnk or None,
                             sheet_name=sheet_name,
                         ))
+                        db.add(GmailTemporal(
+                            correo_origen=correo,
+                            asunto=subject,
+                            fecha_pago=fecha,
+                            cedula=cedula,
+                            monto=monto,
+                            numero_referencia=referencia,
+                            drive_file_id=drive_file_id,
+                            drive_link=drive_lnk or None,
+                            drive_email_link=email_lnk or None,
+                            sheet_name=sheet_name,
+                        ))
                         files_ok += 1
                         fila_guardada = True
                         return True
@@ -296,30 +309,35 @@ def run_pipeline(
                 sync.files_processed = files_ok
                 db.commit()
 
-        process_message_batch(messages, "inicial")
-
-        # Ciclo de revisiÃ³n solo para "unread": volver a listar no leÃ­dos y procesar hasta que no quede ninguno (mÃ¡x 10 pasadas)
+        # Con "unread": bucle que llega al final de la bandeja y vuelve al inicio hasta vuelta completa (0 sin leer).
         if scan_filter == "unread":
-            max_revision_passes = 10
-            for pass_num in range(1, max_revision_passes + 1):
-                raw_again = list_messages_by_filter(gmail_svc, "unread")
-                again_dedup = []
-                seen_again = set()
-                for m in raw_again:
-                    if m["id"] in seen_again:
+            vuelta_num = 0
+            max_vueltas = 20
+            while True:
+                vuelta_num += 1
+                logger.warning("[PAGOS_GMAIL] Listando no leidos desde inicio de bandeja (vuelta %d)...", vuelta_num)
+                raw_messages = list_messages_by_filter(gmail_svc, "unread")
+                seen_ids = set()
+                messages = []
+                for m in raw_messages:
+                    mid = m["id"]
+                    if mid in seen_ids:
                         continue
-                    seen_again.add(m["id"])
-                    again_dedup.append(m)
-                if not again_dedup:
-                    if pass_num > 1:
-                        logger.warning("[PAGOS_GMAIL] Ciclo revisiÃ³n: no quedan no leÃ­dos - fin")
+                    seen_ids.add(mid)
+                    messages.append(m)
+                if not messages:
+                    logger.warning("[PAGOS_GMAIL] Vuelta completa: no quedan correos sin leer.")
                     break
-                if max_emails and max_emails > 0 and len(again_dedup) > max_emails:
-                    again_dedup = again_dedup[:max_emails]
-                logger.warning("[PAGOS_GMAIL] Ciclo revisiÃ³n (pasada %d): %d correo(s) sin leer - procesando", pass_num, len(again_dedup))
-                process_message_batch(again_dedup, "revisiÃ³n pasada %d" % pass_num)
+                logger.warning("[PAGOS_GMAIL] Correos en esta vuelta: %d (procesando hasta el final de bandeja)", len(messages))
+                process_message_batch(messages, "vuelta %d" % vuelta_num)
+                if vuelta_num >= max_vueltas:
+                    logger.warning("[PAGOS_GMAIL] Maximo de vueltas (%d) alcanzado.", max_vueltas)
+                    break
+        else:
+            process_message_batch(messages, "inicial")
 
         # Fin del loop
+
         sync.finished_at = datetime.utcnow()
         sync.emails_processed = emails_ok
         sync.files_processed = files_ok

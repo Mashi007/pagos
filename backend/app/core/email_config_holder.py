@@ -16,9 +16,12 @@ from typing import Any, List, Optional, Tuple
 
 from app.core.config import settings
 from app.core.email_phases import FASE_CONFIG_CARGA, log_phase
+from app.core.email_cuentas import migrar_config_v1_a_v2, obtener_indice_cuenta, NUM_CUENTAS
 
 # Config actual: smtp_*, from_email, from_name, tickets_notify_emails (str, emails separados por coma)
 _current: dict[str, Any] = {}
+# Version 2: 4 cuentas + asignacion (cobros=1, estado_cuenta=2, notificaciones por tab=3|4)
+_cuentas_data: dict = {}
 
 logger = logging.getLogger(__name__)
 
@@ -81,15 +84,29 @@ def sync_from_db() -> None:
                 data = json.loads(row.valor)
                 if isinstance(data, dict):
                     decrypted_data = data.copy()
-                    for field in SENSITIVE_FIELDS:
-                        enc_key = f"{field}_encriptado"
-                        if enc_key in data and data[enc_key]:
-                            raw = data[enc_key]
-                            enc_bytes = bytes.fromhex(raw) if isinstance(raw, str) else raw
-                            decrypted = _decrypt_value_safe(enc_bytes)
-                            decrypted_data[field] = decrypted if decrypted else data.get(field)
-                        elif field in data and data[field] is not None:
-                            decrypted_data[field] = data[field]
+                    if decrypted_data.get("version") == 2 and "cuentas" in decrypted_data:
+                        for i, cuenta in enumerate(decrypted_data["cuentas"]):
+                            if not isinstance(cuenta, dict):
+                                continue
+                            decrypted_data["cuentas"][i] = dict(cuenta)
+                            for field in SENSITIVE_FIELDS:
+                                enc_key = f"{field}_encriptado"
+                                if enc_key in cuenta and cuenta[enc_key]:
+                                    raw = cuenta[enc_key]
+                                    enc_bytes = bytes.fromhex(raw) if isinstance(raw, str) else raw
+                                    decrypted = _decrypt_value_safe(enc_bytes)
+                                    if decrypted:
+                                        decrypted_data["cuentas"][i][field] = decrypted
+                    else:
+                        for field in SENSITIVE_FIELDS:
+                            enc_key = f"{field}_encriptado"
+                            if enc_key in data and data[enc_key]:
+                                raw = data[enc_key]
+                                enc_bytes = bytes.fromhex(raw) if isinstance(raw, str) else raw
+                                decrypted = _decrypt_value_safe(enc_bytes)
+                                decrypted_data[field] = decrypted if decrypted else data.get(field)
+                            elif field in data and data[field] is not None:
+                                decrypted_data[field] = data[field]
                     update_from_api(decrypted_data)
             log_phase(logger, FASE_CONFIG_CARGA, True, "config cargada desde BD", duration_ms=(time.time() - t0) * 1000)
         finally:
@@ -129,9 +146,24 @@ def init_from_settings() -> None:
     _current["tickets_notify_emails"] = getattr(settings, "TICKETS_NOTIFY_EMAIL", None) or ""
 
 
-def get_smtp_config() -> dict[str, Any]:
-    """Devuelve la config SMTP actual. Siempre carga desde BD primero para usar el correo guardado en Configuraci�n > Email (no el de .env)."""
+def get_smtp_config(servicio: Optional[str] = None, tipo_tab: Optional[str] = None) -> dict[str, Any]:
+    """Devuelve la config SMTP para el servicio/tab. Cobros=cuenta 1, Estado cuenta=2, Notificaciones=cuenta por tab (3 o 4)."""
     sync_from_db()
+    if servicio and _cuentas_data.get("cuentas"):
+        asignacion = _cuentas_data.get("asignacion") or {}
+        idx = obtener_indice_cuenta(servicio, tipo_tab, asignacion)
+        idx = max(1, min(idx, NUM_CUENTAS))
+        cu = _cuentas_data["cuentas"][idx - 1]
+        if isinstance(cu, dict) and (cu.get("smtp_user") or "").strip():
+            return {
+                "smtp_host": cu.get("smtp_host") or "",
+                "smtp_port": int(cu.get("smtp_port") or 587),
+                "smtp_user": cu.get("smtp_user") or "",
+                "smtp_password": cu.get("smtp_password") or "",
+                "from_email": cu.get("from_email") or cu.get("smtp_user") or "",
+                "from_name": cu.get("from_name") or "RapiCredit",
+                "smtp_use_tls": cu.get("smtp_use_tls", "true"),
+            }
     if _current.get("smtp_user"):
         return {
             "smtp_host": _current.get("smtp_host") or "",
@@ -178,6 +210,24 @@ def get_email_activo_servicio(servicio: str) -> bool:
     return (str(_current[key]).lower() == "true" or _current[key] is True)
 
 def update_from_api(data: dict[str, Any]) -> None:
+    """Actualiza el holder desde la API de configuracion (PUT /configuracion/email/configuracion). Soporta version 2 (4 cuentas)."""
+    global _cuentas_data
+    if data.get("version") == 2 and "cuentas" in data:
+        _cuentas_data.clear()
+        _cuentas_data["version"] = 2
+        _cuentas_data["cuentas"] = [dict(c) for c in data["cuentas"]]
+        _cuentas_data["asignacion"] = dict(data.get("asignacion") or {})
+        # _current = primera cuenta + flags globales
+        if data["cuentas"]:
+            for k, v in data["cuentas"][0].items():
+                if k in ("smtp_host", "smtp_port", "smtp_user", "smtp_password", "from_email", "from_name", "imap_host", "imap_port", "imap_user", "imap_password", "imap_use_ssl", "smtp_use_tls"):
+                    _current[k] = v
+        for k in ("modo_pruebas", "email_pruebas", "emails_pruebas", "email_activo", "tickets_notify_emails", "email_activo_notificaciones", "email_activo_informe_pagos", "email_activo_estado_cuenta", "email_activo_cobros", "email_activo_campanas", "email_activo_tickets", "modo_pruebas_notificaciones", "modo_pruebas_informe_pagos", "modo_pruebas_estado_cuenta", "modo_pruebas_cobros", "modo_pruebas_campanas", "modo_pruebas_tickets"):
+            if k in data and data[k] is not None:
+                _current[k] = data[k]
+        if _current.get("smtp_port") is not None:
+            _current["smtp_port"] = str(_current["smtp_port"])
+        return
     """Actualiza el holder desde la API de configuraci�n (PUT /configuracion/email/configuracion)."""
     keys = (
         "smtp_host", "smtp_port", "smtp_user", "smtp_password", "from_email", "from_name",
@@ -262,8 +312,6 @@ def get_modo_pruebas_email(servicio: Optional[str] = None) -> Tuple[bool, List[s
     modo = (str(raw_modo).lower() == "true" or raw_modo is True)
     if modo:
         return (modo, _get_emails_pruebas_list())
-    return (modo, [])
-
     return (modo, [])
 
 
