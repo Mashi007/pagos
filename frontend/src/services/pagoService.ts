@@ -12,7 +12,7 @@ export interface Pago {
   fecha_registro: string | Date | null
   fecha_conciliacion: string | Date | null
   conciliado: boolean
-  verificado_concordancia?: string | null  // SI/NO - Verificación de concordancia con módulo de pagos
+  verificado_concordancia?: string | null  // SI/NO - Verificaciï¿½n de concordancia con mï¿½dulo de pagos
   usuario_registro: string
   notas: string | null
   documento_nombre: string | null
@@ -73,7 +73,7 @@ class PagoService {
     return await apiClient.post(`${this.baseUrl}/revisar-pagos/mover`, { pago_ids: pagoIds })
   }
 
-  /** Obtiene el 100% de los pagos para exportar (paginación automática sin límite) */
+  /** Obtiene el 100% de los pagos para exportar (paginaciï¿½n automï¿½tica sin lï¿½mite) */
   async getAllPagosForExport(filters: {
     cedula?: string
     estado?: string
@@ -101,8 +101,8 @@ class PagoService {
   }
 
   /**
-   * Crea varios pagos en una sola petición (Guardar todos). Máx. 500.
-   * Devuelve resultados por índice (éxito/error) para actualizar la tabla sin múltiples rondas.
+   * Crea varios pagos en una sola peticiï¿½n (Guardar todos). Mï¿½x. 500.
+   * Devuelve resultados por ï¿½ndice (ï¿½xito/error) para actualizar la tabla sin mï¿½ltiples rondas.
    */
   async createPagosBatch(pagos: PagoCreate[]): Promise<{
     results: Array<{ index: number; success: boolean; pago?: Pago; error?: string; status_code?: number }>
@@ -116,7 +116,7 @@ class PagoService {
     return await apiClient.put(`${this.baseUrl}/${id}`, data)
   }
 
-  /** Actualiza solo el estado de conciliación (Sí/No) en BD */
+  /** Actualiza solo el estado de conciliaciï¿½n (Sï¿½/No) en BD */
   async updateConciliado(id: number, conciliado: boolean): Promise<Pago> {
     return await apiClient.put(`${this.baseUrl}/${id}`, { conciliado })
   }
@@ -138,7 +138,7 @@ class PagoService {
   }
 
   /**
-   * Importa pagos reportados aprobados (módulo Cobros) a la tabla pagos.
+   * Importa pagos reportados aprobados (mï¿½dulo Cobros) a la tabla pagos.
    * Mismas reglas que carga masiva; los que no cumplen van a Revisar Pagos.
    */
   async importarDesdeCobros(): Promise<{
@@ -152,7 +152,7 @@ class PagoService {
     return await apiClient.post(`${this.baseUrl}/importar-desde-cobros`)
   }
 
-  // Cargar Excel de conciliación (2 columnas: Fecha de Depósito, Número de Documento)
+  // Cargar Excel de conciliaciï¿½n (2 columnas: Fecha de Depï¿½sito, Nï¿½mero de Documento)
   async uploadConciliacion(file: File): Promise<{
     pagos_conciliados: number
     pagos_no_encontrados: number
@@ -235,7 +235,7 @@ class PagoService {
     return await apiClient.get(`${this.baseUrl}/kpis${queryString ? '?' + queryString : ''}`, config)
   }
 
-  // Obtener últimos pagos por cédula (resumen)
+  // Obtener ï¿½ltimos pagos por cï¿½dula (resumen)
   async getUltimosPagos(
     page = 1,
     perPage = 20,
@@ -281,7 +281,7 @@ class PagoService {
     return response.data as Blob
   }
 
-  // Descargar PDF tabla de amortización completa por cédula
+  // Descargar PDF tabla de amortizaciï¿½n completa por cï¿½dula
   async descargarPDFAmortizacion(cedula: string): Promise<Blob> {
     const axiosInstance = apiClient.getAxiosInstance()
     const response = await axiosInstance.get(
@@ -291,7 +291,7 @@ class PagoService {
     return response.data as Blob
   }
 
-/** Pagos Gmail: ejecutar pipeline (Gmail -> Drive -> Gemini -> BD). force=true permite ejecutar aunque la última sync fue hace poco. scan_filter: "unread" | "read" | "all". */
+/** Pagos Gmail: ejecutar pipeline (Gmail -> Drive -> Gemini -> BD). force=true permite ejecutar aunque la ï¿½ltima sync fue hace poco. scan_filter: "unread" | "read" | "all". */
   async runGmailNow(force = true, scanFilter?: 'unread' | 'read' | 'all'): Promise<{ sync_id: number | null; status: string; emails_processed?: number; files_processed?: number }> {
     const params = new URLSearchParams({ force: String(force) })
     if (scanFilter && ['unread', 'read', 'all'].includes(scanFilter)) {
@@ -300,7 +300,7 @@ class PagoService {
     return await apiClient.post(`${this.baseUrl}/gmail/run-now?${params.toString()}`)
   }
 
-  /** Pagos Gmail: estado última ejecución, próxima y última fecha con datos disponibles. */
+  /** Pagos Gmail: estado ï¿½ltima ejecuciï¿½n, prï¿½xima y ï¿½ltima fecha con datos disponibles. */
   async getGmailStatus(): Promise<{
     last_run: string | null
     last_status: string | null
@@ -313,7 +313,7 @@ class PagoService {
     return await apiClient.get(`${this.baseUrl}/gmail/status`)
   }
 
-  /** Pagos Gmail: confirmar día (sí/no). Si confirmado=true, se borran los datos del día en el servidor. */
+  /** Pagos Gmail: confirmar dï¿½a (sï¿½/no). Si confirmado=true, se borran los datos del dï¿½a en el servidor. */
   async confirmarDiaGmail(confirmado: boolean, fecha?: string): Promise<{ confirmado: boolean; mensaje: string; borrados?: number }> {
     const res = await apiClient.post<{ confirmado: boolean; mensaje: string; borrados?: number }>(
       `${this.baseUrl}/gmail/confirmar-dia`,
@@ -322,7 +322,7 @@ class PagoService {
     return res
   }
 
-  /** Pagos Gmail: descargar Excel del día (datos del Sheet). Solo descarga si status 200; si no, lanza error (evita guardar HTML/JSON como .xlsx). */
+  /** Pagos Gmail: descargar Excel del dï¿½a (datos del Sheet). Solo descarga si status 200; si no, lanza error (evita guardar HTML/JSON como .xlsx). */
   async downloadGmailExcel(fecha?: string): Promise<void> {
     const axiosInstance = apiClient.getAxiosInstance()
     const url = fecha ? `${this.baseUrl}/gmail/download-excel?fecha=${encodeURIComponent(fecha)}` : `${this.baseUrl}/gmail/download-excel`
@@ -338,7 +338,7 @@ class PagoService {
         throw new Error(json.detail || `Error al descargar (${response.status}).`)
       } catch (e) {
         if (e instanceof Error && (e.message.includes('Sin datos') || e.message.includes('ejecutar') || e.message.includes('Error al descargar'))) throw e
-        throw new Error(response.status === 404 ? 'Sin datos para descargar. Ejecute «Generar Excel desde Gmail» primero.' : `No se pudo descargar el archivo (${response.status}).`)
+        throw new Error(response.status === 404 ? 'Sin datos para descargar. Ejecute ï¿½Generar Excel desde Gmailï¿½ primero.' : `No se pudo descargar el archivo (${response.status}).`)
       }
     }
     const blob = response.data as Blob
@@ -358,372 +358,11 @@ class PagoService {
     window.URL.revokeObjectURL(blobUrl)
   }
 
-  /** Pagos Gmail: descargar Excel desde la tabla temporal (lo ya procesado). Puede usarse mientras el pipeline sigue corriendo. Al descargar se vacía la tabla temporal. */
+  /** Pagos Gmail: descargar Excel desde la tabla temporal (lo ya procesado). Puede usarse mientras el pipeline sigue. */
   async downloadGmailExcelTemporal(): Promise<void> {
     const axiosInstance = apiClient.getAxiosInstance()
-    const url = `import { apiClient } from './api'
-
-export interface Pago {
-  id: number
-  cedula_cliente: string
-  prestamo_id: number | null
-  fecha_pago: string | Date
-  monto_pagado: number
-  numero_documento: string
-  institucion_bancaria: string | null
-  estado: string
-  fecha_registro: string | Date | null
-  fecha_conciliacion: string | Date | null
-  conciliado: boolean
-  verificado_concordancia?: string | null  // SI/NO - Verificación de concordancia con módulo de pagos
-  usuario_registro: string
-  notas: string | null
-  documento_nombre: string | null
-  documento_tipo: string | null
-  documento_ruta: string | null
-  cuotas_atrasadas?: number  // âœ… Campo calculado: cuotas vencidas con pago incompleto
-}
-
-export interface PagoCreate {
-  cedula_cliente: string
-  prestamo_id: number | null
-  fecha_pago: string
-  monto_pagado: number
-  numero_documento: string
-  institucion_bancaria: string | null
-  notas?: string | null
-  conciliado?: boolean
-}
-
-export interface ApiResponse<T> {
-  data: T
-  message?: string
-}
-
-class PagoService {
-  private baseUrl = '/api/v1/pagos'
-
-  async getAllPagos(
-    page = 1,
-    perPage = 20,
-    filters?: {
-      cedula?: string
-      estado?: string
-      fechaDesde?: string
-      fechaHasta?: string
-      analista?: string
-      conciliado?: string
-      sin_prestamo?: string
-    }
-  ): Promise<{ pagos: Pago[]; total: number; page: number; per_page: number; total_pages: number }> {
-    const params = new URLSearchParams({
-      page: page.toString(),
-      per_page: perPage.toString(),
-      ...(filters?.cedula && { cedula: filters.cedula }),
-      ...(filters?.estado && { estado: filters.estado }),
-      ...(filters?.fechaDesde && { fecha_desde: filters.fechaDesde }),
-      ...(filters?.fechaHasta && { fecha_hasta: filters.fechaHasta }),
-      ...(filters?.analista && { analista: filters.analista }),
-      ...(filters?.conciliado && filters.conciliado !== 'all' && { conciliado: filters.conciliado }),
-      ...(filters?.sin_prestamo === 'si' && { sin_prestamo: 'si' }),
-    })
-    const url = `${this.baseUrl}?${params.toString()}`
-    return await apiClient.get<{ pagos: Pago[]; total: number; page: number; per_page: number; total_pages: number }>(url)
-  }
-
-  /** Mueve pagos exportados a revisar_pagos (dejan de mostrarse en Revisar Pagos) */
-  async moverARevisarPagos(pagoIds: number[]): Promise<{ movidos: number; mensaje: string }> {
-    return await apiClient.post(`${this.baseUrl}/revisar-pagos/mover`, { pago_ids: pagoIds })
-  }
-
-  /** Obtiene el 100% de los pagos para exportar (paginación automática sin límite) */
-  async getAllPagosForExport(filters: {
-    cedula?: string
-    estado?: string
-    fechaDesde?: string
-    fechaHasta?: string
-    analista?: string
-    conciliado?: string
-    sin_prestamo?: string
-  }): Promise<Pago[]> {
-    const all: Pago[] = []
-    const perPage = 100
-    let page = 1
-    let totalPages = 1
-    do {
-      const res = await this.getAllPagos(page, perPage, filters)
-      all.push(...res.pagos)
-      totalPages = res.total_pages
-      page++
-    } while (page <= totalPages)
-    return all
-  }
-
-  async createPago(data: PagoCreate): Promise<Pago> {
-    return await apiClient.post(this.baseUrl, data)
-  }
-
-  /**
-   * Crea varios pagos en una sola petición (Guardar todos). Máx. 500.
-   * Devuelve resultados por índice (éxito/error) para actualizar la tabla sin múltiples rondas.
-   */
-  async createPagosBatch(pagos: PagoCreate[]): Promise<{
-    results: Array<{ index: number; success: boolean; pago?: Pago; error?: string; status_code?: number }>
-    ok_count: number
-    fail_count: number
-  }> {
-    return await apiClient.post(`${this.baseUrl}/batch`, { pagos })
-  }
-
-  async updatePago(id: number, data: Partial<PagoCreate>): Promise<Pago> {
-    return await apiClient.put(`${this.baseUrl}/${id}`, data)
-  }
-
-  /** Actualiza solo el estado de conciliación (Sí/No) en BD */
-  async updateConciliado(id: number, conciliado: boolean): Promise<Pago> {
-    return await apiClient.put(`${this.baseUrl}/${id}`, { conciliado })
-  }
-
-  async deletePago(id: number): Promise<void> {
-    return await apiClient.delete(`${this.baseUrl}/${id}`)
-  }
-
-  async aplicarPagoACuotas(pagoId: number): Promise<{ success: boolean; cuotas_completadas: number; cuotas_parciales: number; message: string }> {
-    return await apiClient.post(`${this.baseUrl}/${pagoId}/aplicar-cuotas`)
-  }
-
-  async uploadExcel(file: File): Promise<any> {
-    const formData = new FormData()
-    formData.append('file', file)
-    return await apiClient.post(`${this.baseUrl}/upload`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
-  }
-
-  /**
-   * Importa pagos reportados aprobados (módulo Cobros) a la tabla pagos.
-   * Mismas reglas que carga masiva; los que no cumplen van a Revisar Pagos.
-   */
-  async importarDesdeCobros(): Promise<{
-    registros_procesados: number
-    registros_con_error: number
-    errores_detalle: Array<{ referencia: string; error: string }>
-    ids_pagos_con_errores: number[]
-    cuotas_aplicadas?: number
-    mensaje: string
-  }> {
-    return await apiClient.post(`${this.baseUrl}/importar-desde-cobros`)
-  }
-
-  // Cargar Excel de conciliación (2 columnas: Fecha de Depósito, Número de Documento)
-  async uploadConciliacion(file: File): Promise<{
-    pagos_conciliados: number
-    pagos_no_encontrados: number
-    documentos_no_encontrados: string[]
-    errores: number
-    errores_detalle: string[]
-  }> {
-    const formData = new FormData()
-    formData.append('file', file)
-    return await apiClient.post(`${this.baseUrl}/conciliacion/upload`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
-  }
-
-  async validarFilasBatch(data: {
-    cedulas: string[]
-    documentos: string[]
-  }): Promise<{
-    cedulas_existentes: string[]
-    documentos_duplicados: Array<any>
-  }> {
-    return await apiClient.post(`${this.baseUrl}/validar-filas-batch`, data)
-  }
-
-  async guardarFilaEditable(data: {
-    cedula: string
-    prestamo_id: number | null
-    monto_pagado: number
-    fecha_pago: string // formato "DD-MM-YYYY"
-    numero_documento: string | null
-  }): Promise<{
-    success: boolean
-    pago_id: number
-    message: string
-    cuotas_completadas: number
-    cuotas_parciales: number
-  }> {
-    return await apiClient.post(`${this.baseUrl}/guardar-fila-editable`, data)
-  }
-
-  async getStats(filters?: {
-    analista?: string
-    concesionario?: string
-    modelo?: string
-    fecha_inicio?: string
-    fecha_fin?: string
-  }, config?: { signal?: AbortSignal }): Promise<{
-    total_pagos: number
-    pagos_por_estado: Record<string, number>
-    total_pagado: number
-    pagos_hoy: number
-    cuotas_pagadas: number
-    cuotas_pendientes: number
-    cuotas_atrasadas: number
-  }> {
-    const params = new URLSearchParams()
-    if (filters?.analista) params.append('analista', filters.analista)
-    if (filters?.concesionario) params.append('concesionario', filters.concesionario)
-    if (filters?.modelo) params.append('modelo', filters.modelo)
-    if (filters?.fecha_inicio) params.append('fecha_inicio', filters.fecha_inicio)
-    if (filters?.fecha_fin) params.append('fecha_fin', filters.fecha_fin)
-
-    const queryString = params.toString()
-    return await apiClient.get(`${this.baseUrl}/stats${queryString ? '?' + queryString : ''}`, config)
-  }
-
-  // Obtener KPIs de pagos: 1) a cobrar en el mes, 2) cobrado en el mes, 3) morosidad %
-  async getKPIs(mes?: number, anio?: number, config?: { signal?: AbortSignal }): Promise<{
-    montoACobrarMes: number
-    montoCobradoMes: number
-    morosidadMensualPorcentaje: number
-    mes: number
-    anio: number
-  }> {
-    const params = new URLSearchParams()
-    if (mes !== undefined) params.append('mes', mes.toString())
-    if (anio !== undefined) params.append('anio', anio.toString())
-
-    const queryString = params.toString()
-    return await apiClient.get(`${this.baseUrl}/kpis${queryString ? '?' + queryString : ''}`, config)
-  }
-
-  // Obtener últimos pagos por cédula (resumen)
-  async getUltimosPagos(
-    page = 1,
-    perPage = 20,
-    filters?: {
-      cedula?: string
-      estado?: string
-    }
-  ): Promise<{
-    items: Array<{
-      cedula: string
-      pago_id: number
-      prestamo_id: number | null
-      estado_pago: string
-      monto_ultimo_pago: number
-      fecha_ultimo_pago: string | null
-      cuotas_atrasadas: number
-      saldo_vencido: number
-      total_prestamos: number
-    }>,
-    total: number
-    page: number
-    per_page: number
-    total_pages: number
-  }> {
-    const params = new URLSearchParams({
-      page: page.toString(),
-      per_page: perPage.toString(),
-      ...(filters?.cedula && { cedula: filters.cedula }),
-      ...(filters?.estado && { estado: filters.estado }),
-    })
-    return await apiClient.get(`${this.baseUrl}/ultimos?${params.toString()}`)
-  }
-
-  // Descargar PDF de pendientes por cliente
-  async descargarPDFPendientes(cedula: string): Promise<Blob> {
-    const axiosInstance = apiClient.getAxiosInstance()
-    const response = await axiosInstance.get(
-      `/api/v1/reportes/cliente/${cedula}/pendientes.pdf`,
-      {
-        responseType: 'blob',
-      }
-    )
-    return response.data as Blob
-  }
-
-  // Descargar PDF tabla de amortización completa por cédula
-  async descargarPDFAmortizacion(cedula: string): Promise<Blob> {
-    const axiosInstance = apiClient.getAxiosInstance()
-    const response = await axiosInstance.get(
-      `/api/v1/reportes/cliente/${encodeURIComponent(cedula)}/amortizacion.pdf`,
-      { responseType: 'blob' }
-    )
-    return response.data as Blob
-  }
-
-/** Pagos Gmail: ejecutar pipeline (Gmail -> Drive -> Gemini -> BD). force=true permite ejecutar aunque la última sync fue hace poco. scan_filter: "unread" | "read" | "all". */
-  async runGmailNow(force = true, scanFilter?: 'unread' | 'read' | 'all'): Promise<{ sync_id: number | null; status: string; emails_processed?: number; files_processed?: number }> {
-    const params = new URLSearchParams({ force: String(force) })
-    if (scanFilter && ['unread', 'read', 'all'].includes(scanFilter)) {
-      params.set('scan_filter', scanFilter)
-    }
-    return await apiClient.post(`${this.baseUrl}/gmail/run-now?${params.toString()}`)
-  }
-
-  /** Pagos Gmail: estado última ejecución, próxima y última fecha con datos disponibles. */
-  async getGmailStatus(): Promise<{
-    last_run: string | null
-    last_status: string | null
-    last_emails: number
-    last_files: number
-    last_error?: string | null
-    next_run_approx: string | null
-    latest_data_date?: string | null
-  }> {
-    return await apiClient.get(`${this.baseUrl}/gmail/status`)
-  }
-
-  /** Pagos Gmail: confirmar día (sí/no). Si confirmado=true, se borran los datos del día en el servidor. */
-  async confirmarDiaGmail(confirmado: boolean, fecha?: string): Promise<{ confirmado: boolean; mensaje: string; borrados?: number }> {
-    const res = await apiClient.post<{ confirmado: boolean; mensaje: string; borrados?: number }>(
-      `${this.baseUrl}/gmail/confirmar-dia`,
-      { confirmado, fecha }
-    )
-    return res
-  }
-
-  /** Pagos Gmail: descargar Excel del día (datos del Sheet). Solo descarga si status 200; si no, lanza error (evita guardar HTML/JSON como .xlsx). */
-  async downloadGmailExcel(fecha?: string): Promise<void> {
-    const axiosInstance = apiClient.getAxiosInstance()
-    const url = fecha ? `${this.baseUrl}/gmail/download-excel?fecha=${encodeURIComponent(fecha)}` : `${this.baseUrl}/gmail/download-excel`
-    const response = await axiosInstance.get(url, {
-      responseType: 'blob',
-      timeout: 60000,
-    })
-    if (response.status !== 200) {
-      const data = response.data as Blob
-      try {
-        const text = await data.text()
-        const json = JSON.parse(text) as { detail?: string }
-        throw new Error(json.detail || `Error al descargar (${response.status}).`)
-      } catch (e) {
-        if (e instanceof Error && (e.message.includes('Sin datos') || e.message.includes('ejecutar') || e.message.includes('Error al descargar'))) throw e
-        throw new Error(response.status === 404 ? 'Sin datos para descargar. Ejecute «Generar Excel desde Gmail» primero.' : `No se pudo descargar el archivo (${response.status}).`)
-      }
-    }
-    const blob = response.data as Blob
-    const disposition = response.headers?.['content-disposition']
-    let filename = 'Pagos_Gmail.xlsx'
-    if (typeof disposition === 'string' && disposition.includes('filename=')) {
-      const m = disposition.match(/filename=(.+?)(?:;|$)/)
-      if (m) filename = m[1].replace(/^["']|["']$/g, '').trim()
-    }
-    const blobUrl = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = blobUrl
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.URL.revokeObjectURL(blobUrl)
-  }
-
-  async downloadGmailExcelTemporal(): Promise<void> {
-    const axiosInstance = apiClient.getAxiosInstance()
-    const url = `/gmail/download-excel-temporal`n    const response = await axiosInstance.get(url, { responseType: 'blob', timeout: 60000 })
+    const url = `${this.baseUrl}/gmail/download-excel-temporal`
+    const response = await axiosInstance.get(url, { responseType: 'blob', timeout: 60000 })
     if (response.status !== 200) {
       try {
         const text = await (response.data as Blob).text()
@@ -749,7 +388,7 @@ class PagoService {
     link.click()
     document.body.removeChild(link)
     window.URL.revokeObjectURL(blobUrl)
-  }}
-
+  }
+}
 export const pagoService = new PagoService()
 
