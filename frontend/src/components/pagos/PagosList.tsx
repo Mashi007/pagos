@@ -47,7 +47,7 @@ import { PagosListResumen } from './PagosListResumen'
 import { PagosKPIsNuevo } from './PagosKPIsNuevo'
 import { toast } from 'sonner'
 import { getErrorMessage } from '../../types/errors'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, Link } from 'react-router-dom'
 import { useGmailPipeline } from '../../hooks/useGmailPipeline'
 
 /** Si false, la opción "Descargar Excel" (Gmail) no se muestra en el submenú Agregar pago. */

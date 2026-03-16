@@ -383,7 +383,7 @@ def solicitar_codigo_estado_cuenta(
         logger.info("estado_cuenta solicitar ip=%s outcome=ok_email_skip (servicio desactivado) cedula_suffix=***%s", ip, cedula_lookup[-4:] if len(cedula_lookup) >= 4 else "****")
     else:
         try:
-            ok_send, err_send = send_email([email], asunto, cuerpo, servicio="estado_cuenta")
+            ok_send, err_send = send_email([email], asunto, cuerpo, servicio="estado_cuenta", respetar_destinos_manuales=True)
             if ok_send:
                 email_enviado = True
                 logger.info(
@@ -587,9 +587,13 @@ def solicitar_estado_cuenta(
             filename = f"estado_cuenta_{cedula_display.replace('-', '_')}.pdf"
             email_body = (f"Estimado(a) {nombre},\n\nSe adjunta su estado de cuenta con fecha de corte {fecha_corte.isoformat()}.\n\nSaludos,\nRapiCredit")
             if get_email_activo_servicio("estado_cuenta"):
-                send_email([email], f"Estado de cuenta - {fecha_corte.isoformat()}", email_body,
+                send_email(
+                    [email],
+                    f"Estado de cuenta - {fecha_corte.isoformat()}",
+                    email_body,
                     attachments=[(filename, pdf_bytes)],
                     servicio="estado_cuenta",
+                    respetar_destinos_manuales=True,
                 )
         except Exception as e:
             logger.warning("No se pudo enviar estado de cuenta por email a %s: %s", email, e)
