@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { FileText, Save, Eye, EyeOff, CheckCircle, AlertCircle, Link, RefreshCw, Database, FileSpreadsheet, Mail } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
@@ -7,6 +7,7 @@ import { Textarea } from '../../components/ui/textarea'
 import { toast } from 'sonner'
 import { apiClient } from '../../services/api'
 import { env } from '../../config/env'
+import { GmailPipelineCard } from './GmailPipelineCard'
 
 export interface InformePagosConfigData {
   google_drive_folder_id?: string
@@ -23,7 +24,7 @@ export interface InformePagosConfigData {
   ocr_keywords_numero_deposito?: string
 }
 
-function getBackendBaseUrl(): string {
+export function getBackendBaseUrl(): string {
   const base = (env.API_URL || (typeof window !== 'undefined' ? window.location.origin : '')).trim()
   return base ? base.replace(/\/$/, '') : (typeof window !== 'undefined' ? window.location.origin : '')
 }
@@ -533,6 +534,7 @@ export function InformePagosConfig() {
           </Button>
         </CardContent>
       </Card>
+      <GmailPipelineCard />
     </div>
   )
 }
