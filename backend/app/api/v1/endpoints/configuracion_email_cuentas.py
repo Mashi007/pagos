@@ -1,7 +1,7 @@
-﻿"""
+"""
 Endpoints para configuracion de 4 cuentas de email.
 GET/PUT /configuracion/email/cuentas devuelven/aceptan { version: 2, cuentas: [c1,c2,c3,c4], asignacion }.
-Cuenta 1 = Cobros, 2 = Estado de cuenta, 3 y 4 = Notificaciones (por pestaña).
+Cuenta 1 = Cobros, 2 = Estado de cuenta, 3 y 4 = Notificaciones (por pestana).
 """
 import json
 import logging
@@ -24,7 +24,7 @@ from app.core.email_cuentas import (
     cuenta_vacia,
     migrar_config_v1_a_v2,
 )
-from app.models.configuracion import Configuracion
+from app.models.configuracion import configuracion
 from app.api.v1.endpoints.email_config_validacion import validar_config_email_para_guardar
 
 logger = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ router = APIRouter()
 
 
 def _mask_cuenta(c: dict) -> dict:
-    """Copia la cuenta enmascarando contraseñas y sin exponer campos _encriptado."""
+    """Copia la cuenta enmascarando contrasenas y sin exponer campos _encriptado."""
     out = {k: v for k, v in c.items() if not k.endswith("_encriptado")}
     for f in SENSITIVE_FIELDS:
         if out.get(f):
@@ -41,7 +41,7 @@ def _mask_cuenta(c: dict) -> dict:
 
 
 def _load_raw_from_db(db) -> Optional[dict]:
-    row = db.get(Configuracion, CLAVE_EMAIL_CONFIG)
+    row = db.get(configuracion, CLAVE_EMAIL_CONFIG)
     if not row or not row.valor:
         return None
     try:
@@ -52,7 +52,7 @@ def _load_raw_from_db(db) -> Optional[dict]:
 
 @router.get("/cuentas")
 def get_email_cuentas(db: Session = Depends(get_db)):
-    """Devuelve la configuracion de 4 cuentas y asignacion. Contrasenas enmascaradas."""
+    """Devuelve la configuracion de 4 cuentas y asignacion. contrasenas enmascaradas."""
     data = _load_raw_from_db(db)
     if not data:
         out = {
@@ -221,18 +221,18 @@ def put_email_cuentas(payload: EmailCuentasUpdate = Body(...), db: Session = Dep
         **{k: v for k, v in payload_data.items() if k not in ("cuentas", "version")},
     })
     try:
-        row = db.get(Configuracion, CLAVE_EMAIL_CONFIG)
+        row = db.get(configuracion, CLAVE_EMAIL_CONFIG)
         payload_str = json.dumps(payload_data)
         if row:
             row.valor = payload_str
         else:
-            db.add(Configuracion(clave=CLAVE_EMAIL_CONFIG, valor=payload_str))
+            db.add(configuracion(clave=CLAVE_EMAIL_CONFIG, valor=payload_str))
         db.commit()
     except Exception as e:
         logger.exception("Error guardando cuentas email: %s", e)
         db.rollback()
         raise HTTPException(status_code=500, detail="Error al guardar en BD")
-    return {"message": "Configuracion de 4 cuentas guardada", "version": 2}
+    return {"message": "configuracion de 4 cuentas guardada", "version": 2}
 
 
 
@@ -278,16 +278,32 @@ def post_email_enviar_prueba(db: Session = Depends(get_db)):
         )
 
     sync_from_db()
-    cfg = get_smtp_config(servicio="cobros")
-    if not (cfg.get("smtp_host") and (cfg.get("smtp_user") or "").strip()):
+    servicios_intento = [
+        ("cobros", None),
+        ("estado_cuenta", None),
+        ("notificaciones", "dias_5"),
+    ]
+    cfg = {}
+    servicio_uso: Optional[str] = None
+    tipo_tab_uso: Optional[str] = None
+    for svc, tab in servicios_intento:
+        c = get_smtp_config(servicio=svc, tipo_tab=tab)
+        if (c.get("smtp_host") and (c.get("smtp_user") or "").strip()):
+            pwd = (c.get("smtp_password") or "").strip()
+            if pwd and pwd != "***":
+                cfg = c
+                servicio_uso = svc
+                tipo_tab_uso = tab
+                break
+    if not cfg or not (cfg.get("smtp_host") and (cfg.get("smtp_user") or "").strip()):
         raise HTTPException(
             status_code=400,
-            detail="Configure la Cuenta 1 (Cobros) con servidor SMTP y usuario antes de enviar la prueba.",
+            detail="Configure al menos una cuenta (1 Cobros, 2 Estado de cuenta o 3/4 Notificaciones) con servidor SMTP, usuario y contrasena antes de enviar la prueba.",
         )
     if not (cfg.get("smtp_password") or "").strip() or (cfg.get("smtp_password") or "").strip() in ("", "***"):
         raise HTTPException(
             status_code=400,
-            detail="Falta contrasena SMTP en la Cuenta 1. Configurela antes de enviar la prueba.",
+            detail="Falta contrasena SMTP en la cuenta que usara el envio. Configurela antes de enviar la prueba.",
         )
 
     subject = "Prueba de email - RapiCredit"
@@ -301,7 +317,8 @@ def post_email_enviar_prueba(db: Session = Depends(get_db)):
             subject=subject,
             body_text=body,
             respetar_destinos_manuales=True,
-            servicio="cobros",
+            servicio=servicio_uso,
+            tipo_tab=tipo_tab_uso,
         )
         if ok:
             enviados.append(to)
