@@ -99,7 +99,8 @@ def _generar_referencia_interna(db: Session) -> str:
             )
         """))
     except Exception:
-        pass
+        db.rollback()
+        raise
     # Sincronizar con referencias ya existentes hoy (p. ej. tras migrar de COUNT a tabla)
     try:
         db.execute(text("""
@@ -112,7 +113,8 @@ def _generar_referencia_interna(db: Session) -> str:
             ON CONFLICT (fecha) DO NOTHING
         """))
     except Exception:
-        pass
+        db.rollback()
+        raise
     row = db.execute(text("""
         INSERT INTO secuencia_referencia_cobros (fecha, siguiente)
         VALUES (CURRENT_DATE, 1)
@@ -277,7 +279,7 @@ async def enviar_reporte_publico(
                     hoy_int = int(date.today().strftime("%Y%m%d"))
                     db.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": hoy_int})
                 except Exception:
-                    pass  # BD no PostgreSQL o lock no disponible
+                    db.rollback()  # Dejar transacción limpia; continuar sin lock
                 referencia = _generar_referencia_interna(db)
                 nombres = (cliente.nombres or "").strip()
                 apellidos = ""  # clientes tiene solo nombres; si hay apellido en otro campo se puede mapear

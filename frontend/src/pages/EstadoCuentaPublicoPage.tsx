@@ -39,8 +39,8 @@ function NotificationBanner({
   return (
     <div
       role="alert"
-      className={`w-full max-w-md min-w-0 rounded-xl px-3 sm:px-4 py-3 sm:py-3.5 flex items-center gap-2 sm:gap-3 shadow-lg border-2 ${
-        isError ? 'bg-red-600 border-red-700 text-white' : 'bg-emerald-600 border-emerald-700 text-white'
+      className={`w-full max-w-md min-w-0 rounded-2xl px-4 sm:px-5 py-4 flex items-center gap-3 shadow-xl border-2 backdrop-blur-sm ${
+        isError ? 'bg-red-600/95 border-red-700 text-white' : 'bg-emerald-600/95 border-emerald-700 text-white'
       }`}
     >
       <span className="flex-shrink-0 w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center bg-white/20" aria-hidden>
@@ -249,19 +249,19 @@ export default function EstadoCuentaPublicoPage() {
   const LOGO_PUBLIC_SRC = `${(import.meta.env.BASE_URL || '/').replace(/\/?$/, '')}/logos/rapicredit-public.png`
   if (step === 0) {
     return (
-      <div className="min-h-screen min-h-[100dvh] bg-gradient-to-b from-slate-100 via-[#e8eef5] to-slate-200 flex flex-col items-center justify-center p-3 sm:p-4 overflow-x-hidden">
+      <div className="min-h-screen min-h-[100dvh] bg-gradient-to-br from-slate-100 via-[#e0eaf2] to-[#c9d6e8] flex flex-col items-center justify-center p-4 sm:p-6 overflow-x-hidden">
         <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
           {stepAnnouncement}
         </div>
-        <Card className="w-full max-w-lg min-w-0 shadow-xl border border-slate-200/80 overflow-hidden mx-1 sm:mx-0">
-          <div className="bg-white px-4 sm:px-6 py-5 sm:py-6 text-center rounded-t-lg border-b border-slate-100">
+        <Card className="w-full max-w-lg min-w-0 shadow-2xl shadow-slate-300/40 border border-slate-200/90 overflow-hidden rounded-2xl ring-1 ring-slate-200/50 mx-1 sm:mx-0">
+          <div className="bg-gradient-to-b from-white to-slate-50/80 px-6 sm:px-8 py-6 sm:py-8 text-center border-b border-slate-100">
             <div className="inline-flex flex-col items-center justify-center">
-              <img src={LOGO_PUBLIC_SRC} alt="RapiCredit" className="h-14 sm:h-16 mx-auto object-contain" />
-              <p className="text-[#c4a35a] text-sm sm:text-base mt-2 sm:mt-3 font-semibold">Consulta de estado de cuenta</p>
+              <img src={LOGO_PUBLIC_SRC} alt="RapiCredit" className="h-16 sm:h-20 mx-auto object-contain drop-shadow-sm" />
+              <p className="text-[#b8954a] text-sm sm:text-base mt-3 font-semibold tracking-wide">Consulta de estado de cuenta</p>
             </div>
           </div>
           <CardHeader className="text-center pb-2 px-4 sm:px-6">
-            <CardTitle className="text-xl sm:text-2xl text-[#1e3a5f]">Bienvenido</CardTitle>
+            <CardTitle className="text-2xl sm:text-3xl text-[#1e3a5f] font-bold tracking-tight">Bienvenido</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 sm:space-y-5 px-4 sm:px-6 pb-6">
             <p className="text-slate-700 text-center text-sm sm:text-base">
@@ -278,7 +278,7 @@ export default function EstadoCuentaPublicoPage() {
             <p className="text-xs text-slate-500 text-center">
               Si desea consultar otra cédula, al finalizar use el botón «Consultar otra cédula» o reinicie el proceso.
             </p>
-            <Button className="w-full text-base py-5 sm:py-6 min-h-[48px] font-semibold bg-[#1e3a5f] hover:bg-[#152a47] text-white touch-manipulation" size="lg" onClick={() => goToStep(1)}>
+            <Button className="w-full text-base py-6 min-h-[52px] font-semibold bg-[#1e3a5f] hover:bg-[#152a47] text-white touch-manipulation rounded-xl shadow-lg shadow-[#1e3a5f]/25 hover:shadow-xl transition-all duration-200 active:scale-[0.98]" size="lg" onClick={() => goToStep(1)}>
               Iniciar
             </Button>
           </CardContent>
@@ -290,20 +290,20 @@ export default function EstadoCuentaPublicoPage() {
   // Paso 1: Ingresar cédula
   if (step === 1) {
     return (
-      <div className="min-h-screen min-h-[100dvh] bg-slate-50 flex flex-col items-center justify-center p-3 sm:p-4 overflow-x-hidden">
+      <div className="min-h-screen min-h-[100dvh] bg-gradient-to-b from-slate-50 to-slate-100 flex flex-col items-center justify-center p-4 sm:p-6 overflow-x-hidden">
         <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
           {stepAnnouncement}
         </div>
-        <div className="w-full max-w-md min-w-0 flex flex-col items-center gap-3 px-1 sm:px-0">
+        <div className="w-full max-w-md min-w-0 flex flex-col items-center gap-4 px-1 sm:px-0">
           <NotificationBanner notification={notification} onDismiss={dismissNotification} />
-          <Card className="w-full max-w-md min-w-0">
-            <CardHeader className="px-4 sm:px-6">
-              <CardTitle className="text-lg sm:text-xl">Estado de cuenta</CardTitle>
+          <Card className="w-full max-w-md min-w-0 shadow-xl border border-slate-200/80 rounded-2xl overflow-hidden">
+            <CardHeader className="px-5 sm:px-6 pb-2">
+              <CardTitle className="text-xl sm:text-2xl text-[#1e3a5f] font-bold">Estado de cuenta</CardTitle>
               <p className="text-sm text-gray-600">Solo letra (V, E, G o J) y 6 a 11 dígitos. No use puntos ni signos. Si solo ingresa números se procesará con V.</p>
             </CardHeader>
             <CardContent className="px-4 sm:px-6 space-y-4">
               <Input
-                className="min-h-[44px] touch-manipulation"
+                className="min-h-[44px] touch-manipulation rounded-xl border-slate-200 focus:ring-2 focus:ring-[#1e3a5f]/30 focus:border-[#1e3a5f]"
                 placeholder="Ej: V12345678, E12345678 o 12345678"
                 value={cedula}
                 onChange={(e) => setCedula(e.target.value)}
@@ -311,10 +311,10 @@ export default function EstadoCuentaPublicoPage() {
                 maxLength={20}
               />
               <div className="flex gap-2 flex-wrap sm:flex-nowrap">
-                <Button variant="outline" className="flex-1 min-h-[48px] min-w-[100px] touch-manipulation" onClick={() => goToStep(0)}>
+                <Button variant="outline" className="flex-1 min-h-[48px] min-w-[100px] touch-manipulation rounded-xl border-2" onClick={() => goToStep(0)}>
                   Atrás
                 </Button>
-                <Button className="flex-1 min-h-[48px] min-w-0 touch-manipulation" onClick={handleSolicitarCodigo} disabled={loading}>
+                <Button className="flex-1 min-h-[48px] min-w-0 touch-manipulation rounded-xl bg-[#1e3a5f] hover:bg-[#152a47] text-white shadow-md" onClick={handleSolicitarCodigo} disabled={loading}>
                   {loading ? 'Enviando código...' : 'Enviar código al correo'}
                 </Button>
               </div>
@@ -328,13 +328,13 @@ export default function EstadoCuentaPublicoPage() {
   // Paso 2: Ingresar codigo
   if (step === 2) {
     return (
-      <div className="min-h-screen min-h-[100dvh] bg-slate-50 flex flex-col items-center justify-center p-3 sm:p-4 overflow-x-hidden">
+      <div className="min-h-screen min-h-[100dvh] bg-gradient-to-b from-slate-50 to-slate-100 flex flex-col items-center justify-center p-4 sm:p-6 overflow-x-hidden">
         <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">{stepAnnouncement}</div>
         <div className="w-full max-w-md min-w-0 flex flex-col items-center gap-3 px-1 sm:px-0">
           <NotificationBanner notification={notification} onDismiss={dismissNotification} />
-          <Card className="w-full max-w-md min-w-0">
-            <CardHeader className="px-4 sm:px-6">
-              <CardTitle className="text-lg sm:text-xl">Verificación por correo</CardTitle>
+          <Card className="w-full max-w-md min-w-0 shadow-xl border border-slate-200/80 rounded-2xl overflow-hidden">
+            <CardHeader className="px-5 sm:px-6 pb-2">
+              <CardTitle className="text-xl sm:text-2xl text-[#1e3a5f] font-bold">Verificación por correo</CardTitle>
               <p className="text-sm text-gray-600">{mensajeEnvio || 'Revisa tu correo e ingresa el código de 6 dígitos.'}</p>
               {formatExpiraEn(expiraEn) && (
                 <p className="text-sm text-[#1e3a5f] font-medium mt-1">Código válido hasta las {formatExpiraEn(expiraEn)}</p>
@@ -343,7 +343,7 @@ export default function EstadoCuentaPublicoPage() {
             </CardHeader>
             <CardContent className="px-4 sm:px-6 space-y-4">
               <Input
-                className="min-h-[44px] touch-manipulation text-center text-lg tracking-widest"
+                className="min-h-[44px] touch-manipulation text-center text-lg tracking-widest rounded-xl border-2 border-slate-200 focus:ring-2 focus:ring-[#1e3a5f]/30 focus:border-[#1e3a5f]"
                 placeholder="Código de 6 dígitos"
                 value={codigo}
                 onChange={(e) => setCodigo(e.target.value.replace(/\D/g, '').slice(0, 6))}
@@ -353,8 +353,8 @@ export default function EstadoCuentaPublicoPage() {
                 autoComplete="one-time-code"
               />
               <div className="flex gap-2 flex-wrap sm:flex-nowrap">
-                <Button variant="outline" className="flex-1 min-h-[48px] min-w-[100px] touch-manipulation" onClick={() => goToStep(1)}>Atrás</Button>
-                <Button className="flex-1 min-h-[48px] min-w-0 touch-manipulation" onClick={handleVerificarCodigo} disabled={loadingPdf}>
+                <Button variant="outline" className="flex-1 min-h-[48px] min-w-[100px] touch-manipulation rounded-xl border-2" onClick={() => goToStep(1)}>Atrás</Button>
+                <Button className="flex-1 min-h-[48px] min-w-0 touch-manipulation rounded-xl bg-[#1e3a5f] hover:bg-[#152a47] text-white shadow-md" onClick={handleVerificarCodigo} disabled={loadingPdf}>
                   {loadingPdf ? 'Verificando...' : 'Ver estado de cuenta'}
                 </Button>
               </div>
@@ -383,40 +383,58 @@ export default function EstadoCuentaPublicoPage() {
 
   // Paso 3: PDF
   return (
-    <div className="min-h-screen min-h-[100dvh] bg-slate-50 flex flex-col items-center p-3 sm:p-4 overflow-x-hidden">
+    <div className="min-h-screen min-h-[100dvh] bg-gradient-to-b from-slate-50 to-slate-100 flex flex-col items-center justify-center p-4 sm:p-6 overflow-x-hidden">
       <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
         {stepAnnouncement}
       </div>
-      <div className="w-full max-w-3xl min-w-0 flex flex-col items-center gap-3 px-1 sm:px-0">
+      <div className="w-full max-w-3xl min-w-0 flex flex-col items-center gap-4 px-1 sm:px-0">
         <NotificationBanner notification={notification} onDismiss={dismissNotification} />
-        <Card className="w-full max-w-3xl min-w-0">
-          <CardHeader className="px-4 sm:px-6">
-            <CardTitle className="text-lg sm:text-xl">Estado de cuenta</CardTitle>
-            {mensajeEnvio && (
-              <p className="text-sm text-emerald-700 font-medium break-words">{mensajeEnvio}</p>
-            )}
+        <Card className="w-full max-w-3xl min-w-0 shadow-xl border border-slate-200/80 rounded-2xl overflow-hidden ring-2 ring-emerald-500/20">
+          <CardHeader className="px-5 sm:px-6 pb-2">
+            <CardTitle className="text-xl sm:text-2xl text-[#1e3a5f] font-bold">Estado de cuenta</CardTitle>
+            <p className="text-sm text-slate-600 font-medium break-words mt-2">
+              Agradecemos que revises tu estado de cuenta. Si encuentras algún problema, repórtalo por{' '}
+              <a
+                href="https://wa.me/584244579934"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-emerald-600 hover:text-emerald-700 underline font-semibold transition-colors decoration-2 underline-offset-2"
+              >
+                WhatsApp
+              </a>
+              {' '}o ingresa a{' '}
+              <a
+                href="https://rapicredit.onrender.com/pagos/rapicredit-cobros"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#1e3a5f] hover:text-[#152a47] underline font-semibold transition-colors decoration-2 underline-offset-2"
+              >
+                rapicredit-cobros
+              </a>
+              {' '}para actualizar tu estado de cuenta en 1 hora.
+            </p>
           </CardHeader>
           <CardContent className="px-4 sm:px-6 space-y-4">
             {loadingPdf && (
               <p className="text-gray-600">Generando estado de cuenta...</p>
             )}
             {pdfDataUrl && !loadingPdf && (
-              <p className="text-center text-lg sm:text-xl text-slate-700 font-medium py-6">
+              <p className="text-center text-xl sm:text-2xl text-slate-800 font-bold py-6">
                 Descarga tu estado de cuenta
               </p>
             )}
             <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
-              <Button variant="outline" className="flex-1 min-h-[48px] touch-manipulation min-w-0" onClick={() => resetForm(0)}>
+              <Button variant="outline" className="flex-1 min-h-[48px] touch-manipulation min-w-0 rounded-xl border-2" onClick={() => resetForm(0)}>
                 Termina
               </Button>
-              <Button className="flex-1 min-h-[48px] bg-[#1e3a5f] hover:bg-[#152a47] touch-manipulation min-w-0" onClick={() => resetForm(1)}>
+              <Button className="flex-1 min-h-[48px] bg-[#1e3a5f] hover:bg-[#152a47] touch-manipulation min-w-0 rounded-xl shadow-md" onClick={() => resetForm(1)}>
                 Consultar otra cédula
               </Button>
               {pdfDataUrl && (
                 <a
                   href={pdfBlobUrl || pdfDataUrl}
                   download={`estado_cuenta_${cedula.replace(/\s/g, '_')}.pdf`}
-                  className="inline-flex items-center justify-center rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 min-h-[48px] px-4 py-2 flex-1 min-w-0 touch-manipulation"
+                  className="inline-flex items-center justify-center rounded-xl text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700 min-h-[48px] px-4 py-2 flex-1 min-w-0 touch-manipulation shadow-lg shadow-emerald-600/25 hover:shadow-xl transition-all duration-200"
                 >
                   Descargar PDF
                 </a>
