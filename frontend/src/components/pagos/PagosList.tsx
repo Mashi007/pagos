@@ -459,15 +459,6 @@ export function PagosList() {
                             Se descargarán todos los correos (leídos y no leídos) del buzón principal.
                           </p>
                         )}
-                        <p className="text-xs text-gray-500 mt-1.5">
-                          Al finalizar verá un reporte con la cantidad de correos y archivos procesados.
-                        </p>
-                        <p className="text-xs text-gray-600 font-medium mt-2 mb-1">Proceso:</p>
-                        <ol className="text-xs text-gray-600 list-decimal list-inside space-y-0.5 mb-2">
-                          <li>Procesar correos (descarga y guarda en tabla)</li>
-                          <li>Descargar Excel con todas las filas; después se pregunta si quieres vaciar la tabla</li>
-                          <li>Vaciar tabla solo cuando tú lo pidas (no se vacía al descargar)</li>
-                        </ol>
                       </div>
                       <button
                         disabled={loadingGmail}
@@ -496,7 +487,7 @@ export function PagosList() {
                         disabled={isDescargandoGmailExcel}
                       >
                         <Download className="w-4 h-4 text-gray-600" />
-                        <span>{isDescargandoGmailExcel ? 'Descargando...' : '2. Descargar Excel (todas las filas guardadas)'}</span>
+                        <span>{isDescargandoGmailExcel ? 'Descargando...' : 'Descargar Excel (todas las filas guardadas)'}</span>
                         <span className="text-xs text-gray-500 ml-auto">Gmail</span>
                       </button>
                       <button
@@ -509,7 +500,7 @@ export function PagosList() {
                         disabled={isVaciarTablaGmail}
                       >
                         <Trash2 className="w-4 h-4 text-red-600" />
-                        <span>{isVaciarTablaGmail ? 'Vaciando...' : '3. Vaciar tabla (solo cuando tú lo pidas)'}</span>
+                        <span>{isVaciarTablaGmail ? 'Vaciando...' : 'Vaciar tabla (solo cuando tú lo pidas)'}</span>
                         <span className="text-xs text-gray-500 ml-auto">Gmail</span>
                       </button>
                     </div>
