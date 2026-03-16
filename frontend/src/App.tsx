@@ -1,4 +1,4 @@
-import React, { useEffect, Suspense } from 'react'
+﻿import React, { useEffect, Suspense } from 'react'
 import { Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -110,6 +110,7 @@ const PageLoader = () => (
 let _authInitDone = false
 
 function App() {
+  const location = useLocation()
   const { isAuthenticated, isLoading, initializeAuth } = useSimpleAuth()
 
   useEffect(() => {
@@ -119,9 +120,10 @@ function App() {
   }, [initializeAuth])
 
   // Mostrar loader solo si está cargando Y hay datos de auth (para evitar flash)
-  if (isLoading) {
-    return <PageLoader />
-  }
+  let pathname = (location.pathname || '').replace(/\/$/, '') || '/'
+  if (BASE_PATH && pathname.startsWith(BASE_PATH)) { const r = pathname.slice(BASE_PATH.length); pathname = r === '' ? '/' : r }
+  const isPublicPath = PUBLIC_PATHS.some((p: string) => pathname === p)
+  if (isLoading && !isPublicPath) { return <PageLoader /> }
 
   return (
     <AnimatePresence mode="wait">

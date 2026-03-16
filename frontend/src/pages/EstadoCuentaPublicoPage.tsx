@@ -5,7 +5,7 @@
  * Marca sesión para que, si intentan ir a login/sistema, vean "Acceso prohibido" y puedan volver aquí.
  */
 import React, { useState, useEffect, useRef } from 'react'
-import { solicitarCodigo, verificarCodigo } from '../services/estadoCuentaService'
+import { validarCedulaEstadoCuenta, solicitarCodigo, verificarCodigo } from '../services/estadoCuentaService'
 import { PUBLIC_FLOW_SESSION_KEY } from '../config/env'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
@@ -189,6 +189,11 @@ export default function EstadoCuentaPublicoPage() {
     const cedulaEnviar = v.valorParaEnviar!
     setLoading(true)
     try {
+      const validacion = await validarCedulaEstadoCuenta(cedulaEnviar)
+      if (!validacion.ok) {
+        showNotification('error', validacion.error || 'Cédula no válida.')
+        return
+      }
       const res = await solicitarCodigo(cedulaEnviar)
       if (!res.ok) {
         showNotification('error', res.error || 'Cédula no válida.')
