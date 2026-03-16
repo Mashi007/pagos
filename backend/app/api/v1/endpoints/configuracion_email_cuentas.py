@@ -24,7 +24,7 @@ from app.core.email_cuentas import (
     cuenta_vacia,
     migrar_config_v1_a_v2,
 )
-from app.models.configuracion import configuracion
+from app.models.configuracion import Configuracion
 from app.api.v1.endpoints.email_config_validacion import validar_config_email_para_guardar
 
 logger = logging.getLogger(__name__)
@@ -41,7 +41,7 @@ def _mask_cuenta(c: dict) -> dict:
 
 
 def _load_raw_from_db(db) -> Optional[dict]:
-    row = db.get(configuracion, CLAVE_EMAIL_CONFIG)
+    row = db.get(Configuracion, CLAVE_EMAIL_CONFIG)
     if not row or not row.valor:
         return None
     try:
@@ -221,12 +221,12 @@ def put_email_cuentas(payload: EmailCuentasUpdate = Body(...), db: Session = Dep
         **{k: v for k, v in payload_data.items() if k not in ("cuentas", "version")},
     })
     try:
-        row = db.get(configuracion, CLAVE_EMAIL_CONFIG)
+        row = db.get(Configuracion, CLAVE_EMAIL_CONFIG)
         payload_str = json.dumps(payload_data)
         if row:
             row.valor = payload_str
         else:
-            db.add(configuracion(clave=CLAVE_EMAIL_CONFIG, valor=payload_str))
+            db.add(Configuracion(clave=CLAVE_EMAIL_CONFIG, valor=payload_str))
         db.commit()
     except Exception as e:
         logger.exception("Error guardando cuentas email: %s", e)
