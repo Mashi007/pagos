@@ -401,13 +401,9 @@ export default function EstadoCuentaPublicoPage() {
               <p className="text-gray-600">Generando estado de cuenta...</p>
             )}
             {pdfDataUrl && !loadingPdf && (
-              <div className="w-full min-w-0 border rounded-lg overflow-hidden bg-gray-100">
-                <iframe
-                  title="Estado de cuenta PDF"
-                  src={pdfBlobUrl || pdfDataUrl || ''}
-                  className="w-full min-h-[50vh] sm:min-h-[60vh] aspect-[3/4] max-h-[70vh] sm:max-h-[80vh] border-0"
-                />
-              </div>
+              <p className="text-center text-lg sm:text-xl text-slate-700 font-medium py-6">
+                Descarga tu estado de cuenta
+              </p>
             )}
             <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
               <Button variant="outline" className="flex-1 min-h-[48px] touch-manipulation min-w-0" onClick={() => resetForm(0)}>

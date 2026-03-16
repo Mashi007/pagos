@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Download, Eye, FileText, CheckCircle, Clock, AlertCircle } from 'lucide-react'
-import { generarReciboPagoPDF } from '../../utils/reciboPagoPDF'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
 import { Badge } from '../../components/ui/badge'
@@ -46,32 +45,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
   const descargarRecibo = async (cuota: Cuota) => {
     setDescargandoRecibo(cuota.id)
     try {
-      await generarReciboPagoPDF(
-        {
-          id: prestamo.id,
-          cedula: prestamo.cedula,
-          nombres: prestamo.nombres,
-          numero_cuotas: prestamo.numero_cuotas,
-          total_financiamiento: prestamo.total_financiamiento,
-          modalidad_pago: prestamo.modalidad_pago,
-        },
-        {
-          id: cuota.id,
-          numero_cuota: cuota.numero_cuota,
-          fecha_vencimiento: cuota.fecha_vencimiento,
-          fecha_pago: cuota.fecha_pago,
-          monto_cuota: cuota.monto_cuota,
-          monto_capital: cuota.monto_capital,
-          monto_interes: cuota.monto_interes,
-          saldo_capital_final: cuota.saldo_capital_final,
-          total_pagado: cuota.total_pagado,
-          pago_monto_conciliado: cuota.pago_monto_conciliado,
-          pago_id: cuota.pago_id,
-          pago_conciliado: cuota.pago_conciliado,
-          estado: cuota.estado,
-          numero_documento: null,
-        }
-      )
+      await prestamoService.getReciboCuotaPdf(prestamo.id, cuota.id)
       toast.success(`Recibo cuota ${cuota.numero_cuota} descargado`)
     } catch (err) {
       console.error('Error generando recibo:', err)

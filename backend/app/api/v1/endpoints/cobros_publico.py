@@ -1,4 +1,4 @@
-"""
+﻿"""
 Endpoints PÚBLICOS del módulo Cobros (formulario de reporte de pago).
 SEGURIDAD: Sin autenticación (router sin get_current_user). No permitir acceso a datos
 de otros clientes ni a rutas internas. Incluye: rate limiting por IP, honeypot anti-bot,
@@ -14,7 +14,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func
+from sqlalchemy import select, func, text
 from sqlalchemy.exc import IntegrityError
 
 from app.core.database import get_db
@@ -242,11 +242,20 @@ async def enviar_reporte_publico(
         return EnviarReporteResponse(ok=False, error="El archivo no corresponde a una imagen o PDF válido.")
     filename = _sanitize_filename(comprobante.filename or "comprobante")
 
+
+    # Cada envio genera su propia referencia (RPC-YYYYMMDD-XXXXX). La misma persona puede subir varios
+    # pagos; si un envio no completa el proceso (recibo/email), puede reintentar y obtiene nueva referencia.
+
     try:
         pr = None
         referencia = None
         for _attempt in range(2):
             try:
+                try:
+                    hoy_int = int(date.today().strftime("%Y%m%d"))
+                    db.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": hoy_int})
+                except Exception:
+                    pass  # BD no PostgreSQL o lock no disponible
                 referencia = _generar_referencia_interna(db)
                 nombres = (cliente.nombres or "").strip()
                 apellidos = ""  # clientes tiene solo nombres; si hay apellido en otro campo se puede mapear
@@ -361,3 +370,4 @@ async def enviar_reporte_publico(
             ok=False,
             error="No se pudo procesar el reporte. Intente de nuevo o contacte por WhatsApp 424-4579934.",
         )
+

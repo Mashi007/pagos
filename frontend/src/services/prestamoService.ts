@@ -236,29 +236,24 @@ class PrestamoService {
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
-    window.URL.revokeObjectURL(urlBlob)
+        window.URL.revokeObjectURL(urlBlob)
   }
 
   /**
-   * Descarga la tabla de amortización en PDF (vía API, sin depender de jspdf en el frontend).
+   * Recibo PDF de una cuota (mismo formato que cobros). Abre en nueva pestana.
    */
-  async descargarAmortizacionPDF(prestamoId: number, cedula: string): Promise<void> {
+  async getReciboCuotaPdf(prestamoId: number, cuotaId: number): Promise<void> {
     const axiosInstance = apiClient.getAxiosInstance()
     const response = await axiosInstance.get(
-      `${this.baseUrl}/${prestamoId}/amortizacion/pdf`,
+      `${this.baseUrl}/${prestamoId}/cuotas/${cuotaId}/recibo.pdf`,
       { responseType: 'blob' }
     )
     const blob = new Blob([response.data], { type: 'application/pdf' })
-    const urlBlob = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = urlBlob
-    link.download = `Tabla_Amortizacion_${cedula}_${prestamoId}.pdf`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.URL.revokeObjectURL(urlBlob)
+    const url = window.URL.createObjectURL(blob)
+    window.open(url, '_blank')
   }
 
+  // Generar tabla de amortizaci
   // Generar tabla de amortización
   async generarAmortizacion(prestamoId: number): Promise<any> {
     const response = await apiClient.post<any>(
