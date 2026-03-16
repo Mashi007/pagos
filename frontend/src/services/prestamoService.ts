@@ -1,4 +1,4 @@
-import { apiClient, ApiResponse, PaginatedResponse, buildUrl } from './api'
+﻿import { apiClient, ApiResponse, PaginatedResponse, buildUrl } from './api'
 import { Prestamo, PrestamoForm } from '../types'
 import { logger } from '../utils/logger'
 
@@ -379,3 +379,4 @@ class PrestamoService {
 
 export const prestamoService = new PrestamoService()
 logger.info('Servicio de préstamos inicializado')
+

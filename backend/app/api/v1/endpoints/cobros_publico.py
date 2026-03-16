@@ -1,4 +1,4 @@
-﻿"""
+"""
 Endpoints PÚBLICOS del módulo Cobros (formulario de reporte de pago).
 SEGURIDAD: Sin autenticación (router sin get_current_user). No permitir acceso a datos
 de otros clientes ni a rutas internas. Incluye: rate limiting por IP, honeypot anti-bot,
@@ -90,15 +90,37 @@ def _mask_email(email: str) -> str:
 
 
 def _generar_referencia_interna(db: Session) -> str:
-    """Formato RPC-YYYYMMDD-XXXXX con XXXXX secuencial del día."""
+    """Formato RPC-YYYYMMDD-XXXXX con XXXXX secuencial del dia (atomico por tabla)."""
+    try:
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS secuencia_referencia_cobros (
+                fecha DATE PRIMARY KEY,
+                siguiente INTEGER NOT NULL DEFAULT 1
+            )
+        """))
+    except Exception:
+        pass
+    # Sincronizar con referencias ya existentes hoy (p. ej. tras migrar de COUNT a tabla)
+    try:
+        db.execute(text("""
+            INSERT INTO secuencia_referencia_cobros (fecha, siguiente)
+            SELECT CURRENT_DATE, COALESCE((
+                SELECT MAX(CAST(SUBSTRING(referencia_interna FROM 10 FOR 5) AS INTEGER))
+                FROM pagos_reportados
+                WHERE referencia_interna LIKE 'RPC-' || TO_CHAR(CURRENT_DATE, 'YYYYMMDD') || '-%'
+            ), 0)
+            ON CONFLICT (fecha) DO NOTHING
+        """))
+    except Exception:
+        pass
+    row = db.execute(text("""
+        INSERT INTO secuencia_referencia_cobros (fecha, siguiente)
+        VALUES (CURRENT_DATE, 1)
+        ON CONFLICT (fecha) DO UPDATE SET siguiente = secuencia_referencia_cobros.siguiente + 1
+        RETURNING siguiente
+    """)).scalar_one()
     hoy = date.today().strftime("%Y%m%d")
-    prefix = f"RPC-{hoy}-"
-    row = db.execute(
-        select(func.count(PagoReportado.id)).where(PagoReportado.referencia_interna.like(f"{prefix}%"))
-    ).scalar()
-    row = row or 0
-    seq = row + 1
-    return f"{prefix}{seq:05d}"
+    return f"RPC-{hoy}-{row:05d}"
 
 
 class ValidarCedulaResponse(BaseModel):
