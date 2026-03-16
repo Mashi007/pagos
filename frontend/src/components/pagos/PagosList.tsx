@@ -461,10 +461,13 @@ export function PagosList() {
                         )}
                       </div>
                       <button
+                        type="button"
+                        className="w-full flex items-center gap-3 px-3 py-2.5 text-left rounded-md hover:bg-blue-50 disabled:opacity-50 text-sm"
+                        onClick={handleGenerarExcelDesdeGmail}
                         disabled={loadingGmail}
                       >
                         <Mail className="w-4 h-4 text-gray-600" />
-                        <span>{loadingGmail ? 'Generando...' : 'Generar Excel desde Gmail'}</span>
+                        <span>{loadingGmail ? 'Procesando...' : 'Procesar correos'}</span>
                         <span className="text-xs text-gray-500 ml-auto">Gmail</span>
                       </button>
                       <button
