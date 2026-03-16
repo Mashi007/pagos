@@ -167,7 +167,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
 
   const exportarPDF = async () => {
     try {
-      await prestamoService.descargarAmortizacionPDF(prestamo.id, prestamo.cedula)
+      await prestamoService.descargarAmortizacionExcel(prestamo.id, prestamo.cedula)
       toast.success('PDF descargado exitosamente')
     } catch (error) {
       console.error('Error al exportar a PDF:', error)
