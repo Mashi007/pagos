@@ -1,4 +1,4 @@
-"""
+﻿"""
 Scheduler para tareas programadas (zona America/Caracas).
 
 Actualización periódica de informes y reportes:
@@ -15,6 +15,7 @@ Los informes de Cobranzas (clientes atrasados, rendimiento analista, montos por 
 se generan bajo demanda al solicitar JSON/PDF/Excel; no se precalculan.
 """
 import logging
+import threading
 from typing import Optional
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -24,6 +25,8 @@ from apscheduler.triggers.interval import IntervalTrigger
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.api.v1.endpoints import cobranzas, notificaciones, notificaciones_tabs
+from app.api.v1.endpoints.pagos_gmail import _is_pipeline_running, _last_run_too_recent, _run_pipeline_background
+from app.models.pagos_gmail_sync import PagosGmailSync
 
 logger = logging.getLogger(__name__)
 
@@ -128,8 +131,6 @@ def _job_pagos_gmail_pipeline() -> None:
     """Job cada N min (PAGOS_GMAIL_CRON_MINUTES): procesa correos (Gmail -> Drive -> Gemini -> Sheets). No procesa si aún no es tiempo desde la última ejecución."""
     db = SessionLocal()
     try:
-        from app.api.v1.endpoints.pagos_gmail import _is_pipeline_running, _last_run_too_recent
-        from app.services.pagos_gmail.pipeline import run_pipeline
         if _is_pipeline_running(db):
             logger.info("Pagos Gmail pipeline: omitido (ya hay una ejecucion en curso)")
             return
@@ -137,8 +138,14 @@ def _job_pagos_gmail_pipeline() -> None:
         if too_recent and wait_min is not None:
             logger.info("Pagos Gmail pipeline: omitido (aun no es tiempo, esperar %d min)", wait_min)
             return
-        sync_id, status = run_pipeline(db)
-        logger.info("Pagos Gmail pipeline: sync_id=%s status=%s", sync_id, status)
+        sync = PagosGmailSync(status="running", emails_processed=0, files_processed=0)
+        db.add(sync)
+        db.commit()
+        db.refresh(sync)
+        sync_id = sync.id
+        thread = threading.Thread(target=_run_pipeline_background, args=(sync_id, "unread"), daemon=True)
+        thread.start()
+        logger.info("Pagos Gmail pipeline: lanzado en segundo plano sync_id=%s (solo no leidos)", sync_id)
     except Exception as e:
         logger.exception("Error en job pagos_gmail_pipeline: %s", e)
     finally:

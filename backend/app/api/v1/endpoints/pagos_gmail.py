@@ -248,6 +248,7 @@ def confirmar_dia(body: ConfirmarDiaBody = Body(...), db: Session = Depends(get_
     else:
         # Sin fecha: borrar todo el acumulado
         result = db.execute(delete(PagosGmailSyncItem))
+        db.execute(delete(GmailTemporal))
         db.commit()
         deleted = result.rowcount if hasattr(result, "rowcount") else 0
         logger.info("Pagos Gmail confirmar-dia: borrados TODOS los ítems (%d)", deleted)
@@ -408,7 +409,7 @@ def download_excel(fecha: Optional[str] = None, db: Session = Depends(get_db)):
 def download_excel_temporal(db: Session = Depends(get_db)):
     """
     Genera Excel desde la tabla temporal gmail_temporal (cada procesamiento Gmail inserta a continuacion).
-    Tras enviar el archivo se vacia gmail_temporal (TRUNCATE). Si no hay datos devuelve 404.
+    NO vacia la tabla: los datos solo se borran al usar el boton "Vaciar tabla (Generar Excel desde Gmail)". Si no hay datos devuelve 404.
     """
     from openpyxl import Workbook
     from openpyxl.styles import Font
@@ -462,14 +463,11 @@ def download_excel_temporal(db: Session = Depends(get_db)):
         logger.exception("[PAGOS_GMAIL] Error generando Excel temporal: %s", e)
         raise HTTPException(status_code=500, detail="Error al generar Excel.") from e
 
-    # Vaciar tabla temporal despues de generar el Excel
-    db.execute(delete(GmailTemporal))
-    db.commit()
-
+    # No se vacia la BD aqui: solo el boton Vaciar tabla puede borrar.
     from datetime import datetime as dt
     date_str = dt.utcnow().strftime("%Y-%m-%d")
     filename = f"Pagos_Gmail_temporal_{date_str}.xlsx"
-    logger.info("[PAGOS_GMAIL] download-excel-temporal OK filas=%s tabla vaciada", len(items))
+    logger.info("[PAGOS_GMAIL] download-excel-temporal OK filas=%s (tabla no se vacia)", len(items))
     return StreamingResponse(
         buf,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
