@@ -86,6 +86,7 @@ export function PagosList() {
   const [isDescargandoGmailExcel, setIsDescargandoGmailExcel] = useState(false)
   const [showVaciarTablaGmail, setShowVaciarTablaGmail] = useState(false)
   const [isVaciarTablaGmail, setIsVaciarTablaGmail] = useState(false)
+  const [showVaciarTrasDescarga, setShowVaciarTrasDescarga] = useState(false)
   const [gmailScanFilter, setGmailScanFilter] = useState<'unread' | 'read' | 'all'>('unread')
   const [submenuGmailOpen, setSubmenuGmailOpen] = useState(false)
   const queryClient = useQueryClient()
@@ -461,15 +462,41 @@ export function PagosList() {
                         <p className="text-xs text-gray-500 mt-1.5">
                           Al finalizar verá un reporte con la cantidad de correos y archivos procesados.
                         </p>
+                        <p className="text-xs text-gray-600 font-medium mt-2 mb-1">Proceso:</p>
+                        <ol className="text-xs text-gray-600 list-decimal list-inside space-y-0.5 mb-2">
+                          <li>Procesar correos (descarga y guarda en tabla)</li>
+                          <li>Descargar Excel con todas las filas; después se pregunta si quieres vaciar la tabla</li>
+                          <li>Vaciar tabla solo cuando tú lo pidas (no se vacía al descargar)</li>
+                        </ol>
                       </div>
                       <button
-                        type="button"
-                        className="w-full flex items-center gap-3 px-3 py-2.5 text-left rounded-md hover:bg-blue-50 disabled:opacity-50 text-sm"
-                        onClick={handleGenerarExcelDesdeGmail}
                         disabled={loadingGmail}
                       >
                         <Mail className="w-4 h-4 text-gray-600" />
                         <span>{loadingGmail ? 'Generando...' : 'Generar Excel desde Gmail'}</span>
+                        <span className="text-xs text-gray-500 ml-auto">Gmail</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="w-full flex items-center gap-3 px-3 py-2.5 text-left rounded-md hover:bg-blue-50 disabled:opacity-50 text-sm"
+                        onClick={async () => {
+                          setAgregarPagoOpen(false)
+                          setIsDescargandoGmailExcel(true)
+                          try {
+                            await pagoService.downloadGmailExcelTemporal()
+                            toast.success('Excel descargado (todas las filas guardadas).')
+                            setShowVaciarTrasDescarga(true)
+                            pagoService.getGmailStatus().then(setGmailStatus)
+                          } catch (e) {
+                            toast.error(getErrorMessage(e))
+                          } finally {
+                            setIsDescargandoGmailExcel(false)
+                          }
+                        }}
+                        disabled={isDescargandoGmailExcel}
+                      >
+                        <Download className="w-4 h-4 text-gray-600" />
+                        <span>{isDescargandoGmailExcel ? 'Descargando...' : '2. Descargar Excel (todas las filas guardadas)'}</span>
                         <span className="text-xs text-gray-500 ml-auto">Gmail</span>
                       </button>
                       <button
@@ -482,7 +509,7 @@ export function PagosList() {
                         disabled={isVaciarTablaGmail}
                       >
                         <Trash2 className="w-4 h-4 text-red-600" />
-                        <span>{isVaciarTablaGmail ? 'Vaciando...' : 'Vaciar tabla (Generar Excel desde Gmail)'}</span>
+                        <span>{isVaciarTablaGmail ? 'Vaciando...' : '3. Vaciar tabla (solo cuando tú lo pidas)'}</span>
                         <span className="text-xs text-gray-500 ml-auto">Gmail</span>
                       </button>
                     </div>
@@ -1089,6 +1116,51 @@ export function PagosList() {
             >
               {isVaciarTablaGmail ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
               Vaciar tabla
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showVaciarTrasDescarga} onOpenChange={setShowVaciarTrasDescarga}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>¿Quieres vaciar la tabla?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-600">
+            Si eliges <strong>Sí</strong>, se vacía la tabla (se borran los datos descargados).
+            Si eliges <strong>No</strong>, los datos se mantienen y las nuevas filas se seguirán guardando a continuación.
+          </p>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowVaciarTrasDescarga(false)
+                toast.success('Datos mantenidos. Las nuevas filas se guardarán a continuación.')
+              }}
+            >
+              No, seguir guardando
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={isVaciarTablaGmail}
+              onClick={async () => {
+                setShowVaciarTrasDescarga(false)
+                setIsVaciarTablaGmail(true)
+                try {
+                  const result = await pagoService.confirmarDiaGmail(true)
+                  toast.success(result.mensaje ?? 'Tabla vaciada.')
+                  pagoService.getGmailStatus().then(setGmailStatus)
+                } catch (e) {
+                  toast.error(getErrorMessage(e))
+                } finally {
+                  setIsVaciarTablaGmail(false)
+                }
+              }}
+            >
+              {isVaciarTablaGmail ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Sí, vaciar tabla
             </Button>
           </DialogFooter>
         </DialogContent>
