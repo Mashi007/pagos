@@ -106,7 +106,7 @@ def _generar_referencia_interna(db: Session) -> str:
         db.execute(text("""
             INSERT INTO secuencia_referencia_cobros (fecha, siguiente)
             SELECT CURRENT_DATE, COALESCE((
-                SELECT MAX(CAST(SUBSTRING(referencia_interna FROM 10 FOR 5) AS INTEGER))
+                SELECT MAX(CAST(SUBSTRING(referencia_interna FROM 14 FOR 5) AS INTEGER))
                 FROM pagos_reportados
                 WHERE referencia_interna LIKE 'RPC-' || TO_CHAR(CURRENT_DATE, 'YYYYMMDD') || '-%'
             ), 0)

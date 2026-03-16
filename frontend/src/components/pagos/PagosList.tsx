@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+﻿import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   CreditCard,
@@ -42,7 +42,6 @@ import {
   DialogTitle,
   DialogFooter,
 } from '../../components/ui/dialog'
-import { ConfirmarBorrarDiaDialog } from './ConfirmarBorrarDiaDialog'
 import { PagosListResumen } from './PagosListResumen'
 import { PagosKPIsNuevo } from './PagosKPIsNuevo'
 import { toast } from 'sonner'
@@ -75,7 +74,6 @@ export function PagosList() {
   const [accionesOpenId, setAccionesOpenId] = useState<number | null>(null)
   const [conciliandoId, setConciliandoId] = useState<number | null>(null)
   const [isExportingRevisar, setIsExportingRevisar] = useState(false)
-  const [showConfirmarBorrar, setShowConfirmarBorrar] = useState(false)
   const [lastImportCobrosResult, setLastImportCobrosResult] = useState<{
     registros_procesados: number
     registros_con_error: number
@@ -86,39 +84,17 @@ export function PagosList() {
   const [isDescargandoGmailExcel, setIsDescargandoGmailExcel] = useState(false)
   const [showVaciarTablaGmail, setShowVaciarTablaGmail] = useState(false)
   const [isVaciarTablaGmail, setIsVaciarTablaGmail] = useState(false)
-  const [showVaciarTrasDescarga, setShowVaciarTrasDescarga] = useState(false)
   const [gmailScanFilter, setGmailScanFilter] = useState<'unread' | 'read' | 'all'>('unread')
   const [submenuGmailOpen, setSubmenuGmailOpen] = useState(false)
   const queryClient = useQueryClient()
-  const lastRunForWhichWeShowedDialogRef = useRef<string | null>(null)
 
   const { loading: loadingGmail, gmailStatus, setGmailStatus, run: runGmail } = useGmailPipeline({
-    onStatusUpdate: (s) => {
-      setGmailStatus(s)
-      if (s?.last_status === 'success' && s?.latest_data_date && s?.last_run) {
-        if (lastRunForWhichWeShowedDialogRef.current !== s.last_run) {
-          lastRunForWhichWeShowedDialogRef.current = s.last_run
-          setShowConfirmarBorrar(true)
-        }
-      }
-    },
-    onDone: (s) => {
-      if (s?.last_run) lastRunForWhichWeShowedDialogRef.current = s.last_run
-      setShowConfirmarBorrar(true)
-    },
+    onStatusUpdate: (s) => setGmailStatus(s),
   })
 
-  // Cargar estado Gmail al montar; si ya hay éxito con datos, mostrar diálogo Sí/No
+  // Cargar estado Gmail al montar
   useEffect(() => {
-    pagoService.getGmailStatus().then((s) => {
-      setGmailStatus(s)
-      if (s?.last_status === 'success' && s?.latest_data_date && s?.last_run) {
-        if (lastRunForWhichWeShowedDialogRef.current !== s.last_run) {
-          lastRunForWhichWeShowedDialogRef.current = s.last_run
-          setShowConfirmarBorrar(true)
-        }
-      }
-    }).catch(() => setGmailStatus(null))
+    pagoService.getGmailStatus().then(setGmailStatus).catch(() => setGmailStatus(null))
   }, [])
   useEffect(() => {
     if (!agregarPagoOpen) return
@@ -481,7 +457,6 @@ export function PagosList() {
                           try {
                             await pagoService.downloadGmailExcelTemporal()
                             toast.success('Excel descargado (todas las filas guardadas).')
-                            setShowVaciarTrasDescarga(true)
                             pagoService.getGmailStatus().then(setGmailStatus)
                           } catch (e) {
                             toast.error(getErrorMessage(e))
@@ -1062,30 +1037,6 @@ export function PagosList() {
           }}
         />
       )}
-      <ConfirmarBorrarDiaDialog
-        open={showConfirmarBorrar}
-        onOpenChange={setShowConfirmarBorrar}
-        fechaDatos={gmailStatus?.latest_data_date}
-        onElegir={async (borrar) => {
-          const fecha = gmailStatus?.latest_data_date ?? undefined
-          try {
-            await pagoService.downloadGmailExcel(fecha)
-            toast.success('Excel descargado.')
-          } catch (e) {
-            toast.error(getErrorMessage(e))
-            pagoService.getGmailStatus().then(setGmailStatus)
-            return
-          }
-          const result = await pagoService.confirmarDiaGmail(borrar, fecha)
-          if (result.confirmado) {
-            toast.success(result.mensaje || 'Información del día borrada.')
-          } else {
-            toast(result.mensaje || 'Información del día se mantiene en BD.')
-          }
-          pagoService.getGmailStatus().then(setGmailStatus)
-        }}
-      />
-
       <Dialog open={showVaciarTablaGmail} onOpenChange={setShowVaciarTablaGmail}>
         <DialogContent>
           <DialogHeader>
@@ -1116,52 +1067,7 @@ export function PagosList() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <Dialog open={showVaciarTrasDescarga} onOpenChange={setShowVaciarTrasDescarga}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>¿Quieres vaciar la tabla?</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-gray-600">
-            Si eliges <strong>Sí</strong>, se vacía la tabla (se borran los datos descargados).
-            Si eliges <strong>No</strong>, los datos se mantienen y las nuevas filas se seguirán guardando a continuación.
-          </p>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setShowVaciarTrasDescarga(false)
-                toast.success('Datos mantenidos. Las nuevas filas se guardarán a continuación.')
-              }}
-            >
-              No, seguir guardando
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={isVaciarTablaGmail}
-              onClick={async () => {
-                setShowVaciarTrasDescarga(false)
-                setIsVaciarTablaGmail(true)
-                try {
-                  const result = await pagoService.confirmarDiaGmail(true)
-                  toast.success(result.mensaje ?? 'Tabla vaciada.')
-                  pagoService.getGmailStatus().then(setGmailStatus)
-                } catch (e) {
-                  toast.error(getErrorMessage(e))
-                } finally {
-                  setIsVaciarTablaGmail(false)
-                }
-              }}
-            >
-              {isVaciarTablaGmail ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-              Sí, vaciar tabla
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+</div>
   )
 }
 
