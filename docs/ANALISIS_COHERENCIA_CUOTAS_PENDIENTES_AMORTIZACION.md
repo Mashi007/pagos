@@ -1,4 +1,4 @@
-# Análisis integral: coherencia entre Cuotas pendientes y Tabla de amortización
+﻿# Análisis integral: coherencia entre Cuotas pendientes y Tabla de amortización
 
 ## 1. Análisis de tablas y reglas de negocio
 
@@ -24,9 +24,10 @@
 
 ### 1.3 Reglas de negocio ya implementadas (pagos.py)
 
-- **Aplicación FIFO**: al aplicar un pago se toma `fecha_pago is None` y `total_pagado < monto`, orden por `numero_cuota`.
-- **Estado al aplicar**: si cuota queda cubierta → PAGADO y `fecha_pago`; si no → `_estado_cuota_por_cobertura(total_pagado, monto_cuota, fecha_vencimiento)` → VENCIDO/MORA/PENDIENTE según días de mora.
-- **Mora**: `_calcular_dias_mora(fecha_vencimiento)` con zona America/Caracas; VENCIDO (1–90 días), MORA (>90).
+- **Orden de aplicación de pagos (regla prioritaria)**: Al realizar un pago, **independientemente de la fecha del pago**, el monto se carga **de atrás hacia delante**: se cubre al 100% la **última** cuota que aún no está cubierta al 100%, luego la anterior, y así sucesivamente. Orden: `numero_cuota` **DESC** (ej. cuota 12, 11, 10, …). Lógica: **monto inicial (del pago) menos lo aplicado a cada cuota = saldo a la fecha**; las cuotas se cubren **en orden** (última primero), sin saltar al azar. *(Actualmente el código usa `order_by(Cuota.numero_cuota)` = ascendente = 1, 2, 3…; debe corregirse a DESC.)*
+- **Criterio de cuotas a aplicar**: `fecha_pago is None` y `(total_pagado is None or total_pagado < monto)`.
+- **Estado al aplicar**: si cuota queda cubierta → PAGADO y `fecha_pago`; si no → `_estado_cuota_por_cobertura(...)` → VENCIDO/MORA/PENDIENTE.
+- **Mora**: `_calcular_dias_mora(fecha_vencimiento)`; VENCIDO (1–90 días), MORA (>90).
 
 ---
 
@@ -72,7 +73,19 @@
 - **Monto pendiente por cuota**: `max(0, monto - (total_pagado or 0))`.
 - **Total pendiente**: suma de “monto pendiente” de todas las cuotas que cumplan la definición (por el/los préstamos del contexto: cliente, estado de cuenta, etc.).
 
+
+### 3.0 Orden de aplicación de pagos (prioridad)
+
+- **Regla**: Al realizar un pago, **independientemente de la fecha**, el monto se aplica **de atrás hacia delante**: primero se cubre al 100% la **última** cuota que no esté cubierta al 100%, luego la anterior, etc. **Lógica**: monto inicial (del pago) menos lo aplicado a cada cuota = saldo a la fecha; las cuotas se cubren **en orden** (última primero), sin saltar al azar.
+- **Implementación**: En `_aplicar_pago_a_cuotas_interno` (pagos.py) usar **orden DESC** por `numero_cuota`: `.order_by(Cuota.numero_cuota.desc())`. Así la primera cuota procesada es la de mayor número (ej. 12), luego 11, 10, …
+- **Verificación**: Confirmar que el bucle aplica `a_aplicar = min(monto_restante, monto_necesario)` y reduce `monto_restante`; que no se filtra ni salta ninguna cuota con saldo pendiente; y que el orden de la consulta (DESC) es el que determina la secuencia.
+
 ### 3.2 Cambios en backend
+
+0. **pagos.py - _aplicar_pago_a_cuotas_interno**
+   - Cambiar orden de cuotas pendientes a **descendente**: `.order_by(Cuota.numero_cuota.desc())` (de atrás hacia delante).
+   - Actualizar docstring/comentarios: aplicación "de atrás hacia delante"; `monto_restante` = saldo a la fecha.
+   - (Opcional) Test que verifique que las cuotas se cubren en orden DESC.
 
 1. **estado_cuenta_publico.py**  
    - En `_obtener_datos_pdf()` y en el flujo de **solicitar-estado-cuenta** (donde se arma `cuotas_pendientes`):
@@ -111,8 +124,10 @@
 
 ## 4. Resumen ejecutivo
 
+- **Orden de aplicación**: El pago se debe aplicar **de atrás hacia delante** (última cuota no cubierta al 100% primero; `numero_cuota DESC`). Monto inicial menos lo aplicado = saldo a la fecha; cubrir cuotas en orden, sin saltos. Hoy el código usa orden ascendente; corregir a DESC.
 - **Cuotas pendientes**: hoy se usa monto completo y no saldo pendiente → total pendiente incorrecto con pagos parciales. **Solución**: monto pendiente = `monto - total_pagado`, total = suma de esos.
 - **Estado**: se actualiza solo al aplicar pago → cuotas vencidas siguen como PENDIENTE. **Solución**: recalcular estado al leer (fecha_vencimiento vs hoy y total_pagado vs monto) en estado_cuenta y en get_cuotas_prestamo, reutilizando la misma regla (p. ej. `_estado_cuota_por_cobertura`).
 - **Tabla de amortización**: saldo teórico es correcto como diseño; la coherencia con “cuotas pendientes” se logra corrigiendo monto/total y estado en el bloque “Cuotas pendientes” y, opcionalmente, añadiendo “Pendiente” por cuota en la tabla.
 
 Tras tu OK se implementan los puntos 3.1, 3.2 (1–4) y, si lo apruebas, 3.4 (columna Pendiente). Opcionalmente 3.3 y 3.5 según dónde se muestren cuotas pendientes y notificaciones.
+

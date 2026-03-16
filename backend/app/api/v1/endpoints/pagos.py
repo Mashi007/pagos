@@ -1,4 +1,4 @@
-"""
+﻿"""
 Endpoints de pagos. Datos reales desde BD.
 - Tabla pagos: GET/POST/PUT/DELETE /pagos/ (listado y CRUD para /pagos/pagos).
 - GET /pagos/kpis, /stats, /ultimos; POST /upload, /conciliacion/upload, /{id}/aplicar-cuotas.
@@ -1974,12 +1974,11 @@ def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
                 Cuota.fecha_pago.is_(None),
                 or_(Cuota.total_pagado.is_(None), Cuota.total_pagado < Cuota.monto),
             )
-            .order_by(Cuota.numero_cuota)
-        )
+            .order_by(Cuota.numero_cuota.desc())  # De atrás hacia delante: última cuota no cubierta al 100% primero`n        )
     ).scalars().all()
     cuotas_completadas = 0
     cuotas_parciales = 0
-    orden_aplicacion = 0  # Para rastrear secuencia FIFO en cuota_pagos
+    orden_aplicacion = 0  # Secuencia de aplicación (de atrás hacia delante) en cuota_pagos
     
     for c in cuotas_pendientes:
         monto_cuota = float(c.monto) if c.monto is not None else 0

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Endpoints PÚBLICOS para consulta de estado de cuenta por cédula.
 SEGURIDAD: Sin autenticación (router sin get_current_user). Solo datos del cliente
 identificado por la cédula consultada. Rate limiting por IP. No expone otros servicios
@@ -37,6 +37,8 @@ from app.core.email import send_email
 from app.core.email_config_holder import get_email_activo_servicio
 
 from app.services.estado_cuenta_pdf import generar_pdf_estado_cuenta
+from app.services.cuota_estado import estado_cuota_para_mostrar
+
 logger = logging.getLogger(__name__)
 
 CLAVE_ESTADO_CUENTA_EMAIL = "estado_cuenta_codigo_email"
@@ -171,24 +173,31 @@ def _obtener_datos_pdf(db: Session, cedula_lookup: str):
         })
     cuotas_pendientes = []
     total_pendiente = 0.0
+    fecha_corte = date.today()
     if prestamo_ids:
         cuotas_rows = db.execute(
             select(Cuota)
-            .where(Cuota.prestamo_id.in_(prestamo_ids), Cuota.fecha_pago.is_(None))
+            .where(Cuota.prestamo_id.in_(prestamo_ids))
             .order_by(Cuota.prestamo_id, Cuota.numero_cuota)
         ).scalars().all()
         for cu in cuotas_rows:
             c = cu[0] if hasattr(cu, "__getitem__") else cu
-            m = float(getattr(c, "monto", 0) or 0)
-            total_pendiente += m
+            monto_cuota = float(getattr(c, "monto", 0) or 0)
+            total_pagado = float(getattr(c, "total_pagado", 0) or 0)
+            monto_pendiente = max(0.0, monto_cuota - total_pagado)
+            if monto_pendiente <= 0:
+                continue
+            total_pendiente += monto_pendiente
+            fv = getattr(c, "fecha_vencimiento", None)
+            fv_date = fv.date() if fv and hasattr(fv, "date") else fv
+            estado_mostrar = estado_cuota_para_mostrar(total_pagado, monto_cuota, fv_date, fecha_corte)
             cuotas_pendientes.append({
                 "prestamo_id": getattr(c, "prestamo_id", ""),
                 "numero_cuota": getattr(c, "numero_cuota", ""),
-                "fecha_vencimiento": (getattr(c, "fecha_vencimiento", None) or "").isoformat() if getattr(c, "fecha_vencimiento", None) else "",
-                "monto": m,
-                "estado": getattr(c, "estado", None) or "PENDIENTE",
+                "fecha_vencimiento": fv.isoformat() if fv else "",
+                "monto": monto_pendiente,
+                "estado": estado_mostrar,
             })
-    fecha_corte = date.today()
     amortizaciones_por_prestamo = []
     for p in prestamos_list:
         estado = (p.get("estado") or "").strip().upper()
@@ -242,6 +251,12 @@ def _obtener_amortizacion_prestamo(db: Session, prestamo_id: int) -> List[dict]:
             fecha_ddmm = _dt.strptime(fecha_iso[:10], "%Y-%m-%d").strftime("%d/%m/%Y") if len(fecha_iso) >= 10 else (fecha_iso or "")
         except Exception:
             fecha_ddmm = fecha_iso[:10] if fecha_iso else ""
+        total_pagado_float = float(total_pagado_val or 0)
+        if total_pagado_float < monto_cuota - 0.01:
+            fv_date = fecha_venc.date() if fecha_venc and hasattr(fecha_venc, "date") else fecha_venc
+            estado_mostrar = estado_cuota_para_mostrar(total_pagado_float, monto_cuota, fv_date, date.today())
+        else:
+            estado_mostrar = "PAGADO"
         resultado.append({
             "numero_cuota": getattr(cu, "numero_cuota", 0),
             "fecha_vencimiento": fecha_ddmm,
@@ -250,7 +265,7 @@ def _obtener_amortizacion_prestamo(db: Session, prestamo_id: int) -> List[dict]:
             "monto_cuota": monto_cuota,
             "saldo_capital_final": saldo_final,
             "pago_conciliado_display": pago_conciliado_display,
-            "estado": getattr(cu, "estado", None) or "PENDIENTE",
+            "estado": estado_mostrar,
         })
     return resultado
 
@@ -535,25 +550,32 @@ def solicitar_estado_cuenta(
 
     cuotas_pendientes = []
     total_pendiente = 0.0
+    fecha_corte = date.today()
     if prestamo_ids:
         cuotas_rows = db.execute(
             select(Cuota)
-            .where(Cuota.prestamo_id.in_(prestamo_ids), Cuota.fecha_pago.is_(None))
+            .where(Cuota.prestamo_id.in_(prestamo_ids))
             .order_by(Cuota.prestamo_id, Cuota.numero_cuota)
         ).scalars().all()
         for c in cuotas_rows:
             cu = c[0] if hasattr(c, "__getitem__") else c
-            m = float(getattr(cu, "monto", 0) or 0)
-            total_pendiente += m
+            monto_cuota = float(getattr(cu, "monto", 0) or 0)
+            total_pagado = float(getattr(cu, "total_pagado", 0) or 0)
+            monto_pendiente = max(0.0, monto_cuota - total_pagado)
+            if monto_pendiente <= 0:
+                continue
+            total_pendiente += monto_pendiente
+            fv = getattr(cu, "fecha_vencimiento", None)
+            fv_date = fv.date() if fv and hasattr(fv, "date") else fv
+            estado_mostrar = estado_cuota_para_mostrar(total_pagado, monto_cuota, fv_date, fecha_corte)
             cuotas_pendientes.append({
                 "prestamo_id": getattr(cu, "prestamo_id", ""),
                 "numero_cuota": getattr(cu, "numero_cuota", ""),
-                "fecha_vencimiento": (getattr(cu, "fecha_vencimiento", None) or "").isoformat() if getattr(cu, "fecha_vencimiento", None) else "",
-                "monto": m,
-                "estado": getattr(cu, "estado", None) or "PENDIENTE",
+                "fecha_vencimiento": fv.isoformat() if fv else "",
+                "monto": monto_pendiente,
+                "estado": estado_mostrar,
             })
 
-    fecha_corte = date.today()
     # Tablas de amortización para préstamos APROBADOS (misma estructura que en Detalles del Préstamo)
     amortizaciones_por_prestamo = []
     for p in prestamos_list:
