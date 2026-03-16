@@ -97,6 +97,8 @@ def sync_from_db() -> None:
                                     decrypted = _decrypt_value_safe(enc_bytes)
                                     if decrypted:
                                         decrypted_data["cuentas"][i][field] = decrypted
+                                    elif cuenta.get(field) and isinstance(cuenta.get(field), str) and (cuenta.get(field) or "").strip():
+                                        decrypted_data["cuentas"][i][field] = (cuenta.get(field) or "").strip()  # legacy en claro
                     else:
                         for field in SENSITIVE_FIELDS:
                             enc_key = f"{field}_encriptado"
@@ -265,6 +267,9 @@ def prepare_for_db_storage(data: dict[str, Any]) -> dict[str, Any]:
                 # Guardar el valor encriptado en el dict con sufijo _encriptado
                 result[f"{field}_encriptado"] = encrypted.hex()  # Convertir bytes a hex string para JSON
                 # Limpiar el valor original para no guardarlo en texto plano
+                result[field] = None
+            else:
+                # Encriptación falló: no persistir en claro; el PUT preserva _encriptado existente.
                 result[field] = None
     
     return result

@@ -235,6 +235,22 @@ def get_pago_reportado_detalle(pago_id: int, db: Session = Depends(get_db)):
     )
 
 
+def _email_cliente_pago_reportado(db: Session, pr: PagoReportado) -> str:
+    """Email del cliente para enviar recibo: pr.correo_enviado_a o, si falta, busqueda por cedula en clientes."""
+    to = (pr.correo_enviado_a or "").strip()
+    if to and "@" in to:
+        return to
+    cedula_norm = (f"{pr.tipo_cedula or ''}{pr.numero_cedula or ''}").replace("-", "").strip()
+    if not cedula_norm:
+        return ""
+    cliente = db.execute(
+        select(Cliente).where(func.replace(Cliente.cedula, "-", "") == cedula_norm)
+    ).scalars().first()
+    if cliente and (cliente.email or "").strip():
+        return (cliente.email or "").strip()
+    return ""
+
+
 def _registrar_historial(db: Session, pago_id: int, estado_anterior: str, estado_nuevo: str, usuario_email: Optional[str], motivo: Optional[str]):
     h = PagoReportadoHistorial(
         pago_reportado_id=pago_id,
@@ -277,11 +293,13 @@ def aprobar_pago_reportado(
         numero_operacion=pr.numero_operacion,
     )
     pr.recibo_pdf = pdf_bytes
-    to_email = (pr.correo_enviado_a or "").strip()
+    to_email = _email_cliente_pago_reportado(db, pr)
+    if not pr.correo_enviado_a and to_email:
+        pr.correo_enviado_a = to_email
     mensaje_final = "Pago aprobado y recibo enviado por correo."
     if to_email:
         body = f"Su reporte de pago ha sido aprobado. Número de referencia: {pr.referencia_interna}. Adjunto encontrará el recibo.\n\nRapiCredit C.A."
-        ok_mail, err_mail = send_email([to_email], f"Recibo de reporte de pago #{pr.referencia_interna}", body, attachments=[(f"recibo_{pr.referencia_interna}.pdf", pdf_bytes)], servicio="cobros")
+        ok_mail, err_mail = send_email([to_email], f"Recibo de reporte de pago #{pr.referencia_interna}", body, attachments=[(f"recibo_{pr.referencia_interna}.pdf", pdf_bytes)], servicio="cobros", respetar_destinos_manuales=True)
         if not ok_mail:
             logger.error(
                 "[COBROS] Aprobar ref=%s: correo NO enviado a %s. Error: %s.",
@@ -314,13 +332,13 @@ def rechazar_pago_reportado(
     usuario_email = current_user.get("email") if isinstance(current_user, dict) else getattr(current_user, "email", None)
     pr.usuario_gestion_id = current_user.get("id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
-    to_email = (pr.correo_enviado_a or "").strip()
+    to_email = _email_cliente_pago_reportado(db, pr)
     if to_email:
         body_text = (
             f"Referencia: {pr.referencia_interna}\n\n"
             f"{MENSAJE_RECHAZO_GENERICO}"
         )
-        ok_mail, err_mail = send_email([to_email], f"Reporte de pago no aprobado #{pr.referencia_interna}", body_text)
+        ok_mail, err_mail = send_email([to_email], f"Reporte de pago no aprobado #{pr.referencia_interna}", body_text, servicio="cobros", respetar_destinos_manuales=True)
         if not ok_mail:
             logger.error(
                 "[COBROS] Rechazar ref=%s: correo NO enviado a %s. Error: %s.",
@@ -418,9 +436,9 @@ def enviar_recibo_manual(
     pr = db.execute(select(PagoReportado).where(PagoReportado.id == pago_id)).scalars().first()
     if not pr:
         raise HTTPException(status_code=404, detail="Pago reportado no encontrado.")
-    to_email = (pr.correo_enviado_a or "").strip()
+    to_email = _email_cliente_pago_reportado(db, pr)
     if not to_email:
-        raise HTTPException(status_code=400, detail="No hay correo registrado para este pago.")
+        raise HTTPException(status_code=400, detail="No hay correo del cliente para este pago. Registre el correo en el detalle del pago o en la ficha del cliente.")
     pdf_bytes = pr.recibo_pdf
     if not pdf_bytes:
         pdf_bytes = generar_recibo_pago_reportado(
@@ -439,7 +457,7 @@ def enviar_recibo_manual(
         f"Recibo de reporte de pago. Número de referencia: {pr.referencia_interna}.\n\n"
         "Adjunto encontrará el recibo.\n\nRapiCredit C.A."
     )
-    send_email([to_email], f"Recibo de reporte de pago #{pr.referencia_interna}", body, attachments=[(f"recibo_{pr.referencia_interna}.pdf", bytes(pdf_bytes))], servicio="cobros")
+    send_email([to_email], f"Recibo de reporte de pago #{pr.referencia_interna}", body, attachments=[(f"recibo_{pr.referencia_interna}.pdf", bytes(pdf_bytes))], servicio="cobros", respetar_destinos_manuales=True)
     return {"ok": True, "mensaje": "Recibo enviado por correo."}
 
 
@@ -574,7 +592,9 @@ def cambiar_estado_pago(
             numero_operacion=pr.numero_operacion,
         )
         pr.recibo_pdf = pdf_bytes
-        to_email = (pr.correo_enviado_a or "").strip()
+        to_email = _email_cliente_pago_reportado(db, pr)
+        if not pr.correo_enviado_a and to_email:
+            pr.correo_enviado_a = to_email
         if to_email:
             body_mail = f"Su reporte de pago ha sido aprobado. Número de referencia: {pr.referencia_interna}. Adjunto encontrará el recibo.\n\nRapiCredit C.A."
             ok_mail, err_mail = send_email(
@@ -583,6 +603,7 @@ def cambiar_estado_pago(
                 body_mail,
                 attachments=[(f"recibo_{pr.referencia_interna}.pdf", pdf_bytes)],
                 servicio="cobros",
+                respetar_destinos_manuales=True,
             )
             if ok_mail:
                 mensaje = "Estado actualizado a aprobado. Recibo enviado por correo."

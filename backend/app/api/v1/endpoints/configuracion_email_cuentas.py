@@ -223,6 +223,8 @@ def put_email_cuentas(payload: EmailCuentasUpdate = Body(...), db: Session = Dep
         "email_activo_estado_cuenta": payload.email_activo_estado_cuenta or "true",
         "email_activo_cobros": payload.email_activo_cobros or "true",
         "tickets_notify_emails": payload.tickets_notify_emails or "",
+        "modo_pruebas_cobros": payload.modo_pruebas or "true",
+        "modo_pruebas_estado_cuenta": payload.modo_pruebas or "true",
     }
     update_from_api({
         "version": 2,

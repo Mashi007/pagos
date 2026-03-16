@@ -321,6 +321,7 @@ async def enviar_reporte_publico(
                     body,
                     attachments=[(f"recibo_{referencia}.pdf", pdf_bytes)],
                     servicio="cobros",
+                    respetar_destinos_manuales=True,
                 )
                 if not ok_mail:
                     logger.error(

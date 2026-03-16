@@ -103,14 +103,37 @@ def _load_email_config_from_db(db: Session) -> None:
         logger.warning("No se pudo cargar config email desde BD: %s", e)
 
 
+
+# Claves globales que comparten stub y config version 2. Al guardar desde legacy, solo se fusionan estas.
+_STUB_GLOBAL_KEYS = (
+    "modo_pruebas", "email_pruebas", "emails_pruebas",
+    "email_activo", "email_activo_notificaciones", "email_activo_informe_pagos",
+    "email_activo_estado_cuenta", "email_activo_cobros", "email_activo_campanas", "email_activo_tickets",
+    "modo_pruebas_notificaciones", "modo_pruebas_informe_pagos", "modo_pruebas_estado_cuenta",
+    "modo_pruebas_cobros", "modo_pruebas_campanas", "modo_pruebas_tickets",
+    "tickets_notify_emails",
+)
+
 def _persist_email_config(db: Session) -> None:
     """Guarda el stub actual en la tabla configuracion para que persista entre reinicios y workers."""
     from app.core.email_config_holder import prepare_for_db_storage
     
     try:
+        row = db.get(Configuracion, CLAVE_EMAIL_CONFIG)
+        if row and row.valor:
+            try:
+                data = json.loads(row.valor)
+                if isinstance(data, dict) and data.get("version") == 2 and "cuentas" in data:
+                    for key in _STUB_GLOBAL_KEYS:
+                        if key in _email_config_stub:
+                            data[key] = _email_config_stub[key]
+                    row.valor = json.dumps(data)
+                    db.commit()
+                    return
+            except (json.JSONDecodeError, TypeError):
+                pass
         payload_data = prepare_for_db_storage(_email_config_stub)
         payload = json.dumps(payload_data)
-        row = db.get(Configuracion, CLAVE_EMAIL_CONFIG)
         if row:
             row.valor = payload
         else:
