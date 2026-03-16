@@ -3,7 +3,7 @@
  * Cuenta 1 = Cobros, 2 = Estado de cuenta, 3 y 4 = Notificaciones (por pestaña).
  */
 import { useState, useEffect } from 'react'
-import { Mail, Save, AlertCircle, CheckCircle, Send } from 'lucide-react'
+import { Mail, Save, AlertCircle, CheckCircle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
@@ -217,7 +217,7 @@ if (loading) {
             />
           </div>        <div className="flex justify-end pt-2">
           <Button type="button" variant="outline" onClick={handleEnviarPrueba} disabled={sendingTest || !(data?.email_pruebas ?? '').trim()}>
-            <Send className="mr-2 h-4 w-4" />
+            <Mail className="mr-2 h-4 w-4" />
             {sendingTest ? 'Enviando...' : 'Enviar prueba a todos los correos registrados'}
           </Button>
         </div>
