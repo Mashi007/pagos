@@ -926,7 +926,7 @@ def importar_reportados_aprobados_a_pagos(
                 referencia_pago=ref,
                 errores_descripcion=["Cédula vacía"],
                 observaciones=ORIGEN_COBROS_REPORTADOS,
-                referencia_interna=(pr.referencia_interna or \"\")[:100] or None,
+                referencia_interna=(pr.referencia_interna or "")[:100] or None,
                                 fila_origen=pr.id,
             )
             db.add(pce)
@@ -948,7 +948,7 @@ def importar_reportados_aprobados_a_pagos(
                 referencia_pago=ref,
                 errores_descripcion=["Cédula inválida. Formato: V, E o J + 6-11 dígitos (igual que Pagos desde Excel)."],
                 observaciones=ORIGEN_COBROS_REPORTADOS,
-                referencia_interna=(pr.referencia_interna or \"\")[:100] or None,
+                referencia_interna=(pr.referencia_interna or "")[:100] or None,
                                 fila_origen=pr.id,
             )
             db.add(pce)
@@ -973,7 +973,7 @@ def importar_reportados_aprobados_a_pagos(
                 referencia_pago=numero_doc_raw or "N/A",
                 errores_descripcion=["Nº documento duplicado en este lote"],
                 observaciones=ORIGEN_COBROS_REPORTADOS,
-                referencia_interna=(pr.referencia_interna or \"\")[:100] or None,
+                referencia_interna=(pr.referencia_interna or "")[:100] or None,
                                 fila_origen=pr.id,
             )
             db.add(pce)
@@ -997,7 +997,7 @@ def importar_reportados_aprobados_a_pagos(
                 referencia_pago=numero_doc_raw or "N/A",
                 errores_descripcion=["Cédula no encontrada en clientes"],
                 observaciones=ORIGEN_COBROS_REPORTADOS,
-                referencia_interna=(pr.referencia_interna or \"\")[:100] or None,
+                referencia_interna=(pr.referencia_interna or "")[:100] or None,
                                 fila_origen=pr.id,
             )
             db.add(pce)
@@ -1023,7 +1023,7 @@ def importar_reportados_aprobados_a_pagos(
                 referencia_pago=numero_doc_raw or "N/A",
                 errores_descripcion=["Sin crédito activo (APROBADO)"],
                 observaciones=ORIGEN_COBROS_REPORTADOS,
-                referencia_interna=(pr.referencia_interna or \"\")[:100] or None,
+                referencia_interna=(pr.referencia_interna or "")[:100] or None,
                                 fila_origen=pr.id,
             )
             db.add(pce)
@@ -1042,7 +1042,7 @@ def importar_reportados_aprobados_a_pagos(
                 referencia_pago=numero_doc_raw or "N/A",
                 errores_descripcion=[f"Cédula con {len(prestamos)} préstamos; indique ID del crédito"],
                 observaciones=ORIGEN_COBROS_REPORTADOS,
-                referencia_interna=(pr.referencia_interna or \"\")[:100] or None,
+                referencia_interna=(pr.referencia_interna or "")[:100] or None,
                                 fila_origen=pr.id,
             )
             db.add(pce)
@@ -1064,7 +1064,7 @@ def importar_reportados_aprobados_a_pagos(
                 referencia_pago=numero_doc_raw or "N/A",
                 errores_descripcion=[f"Monto debe ser mayor a {_MIN_MONTO_PAGADO}"],
                 observaciones=ORIGEN_COBROS_REPORTADOS,
-                referencia_interna=(pr.referencia_interna or \"\")[:100] or None,
+                referencia_interna=(pr.referencia_interna or "")[:100] or None,
                                 fila_origen=pr.id,
             )
             db.add(pce)
