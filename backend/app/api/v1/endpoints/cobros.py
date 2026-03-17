@@ -127,12 +127,16 @@ def list_pagos_reportados(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
 ):
-    """Lista paginada de pagos reportados con filtros."""
+    """Lista paginada de pagos reportados con filtros. Por defecto excluye aprobados para mostrar solo casos pendientes."""
     q = select(PagoReportado)
     count_q = select(func.count(PagoReportado.id))
     if estado:
         q = q.where(PagoReportado.estado == estado)
         count_q = count_q.where(PagoReportado.estado == estado)
+    else:
+        # Por defecto ocultar aprobados: solo casos pendientes (revisión, pendiente, rechazado)
+        q = q.where(PagoReportado.estado != "aprobado")
+        count_q = count_q.where(PagoReportado.estado != "aprobado")
     if fecha_desde:
         q = q.where(PagoReportado.created_at >= datetime.combine(fecha_desde, datetime.min.time()))
         count_q = count_q.where(PagoReportado.created_at >= datetime.combine(fecha_desde, datetime.min.time()))

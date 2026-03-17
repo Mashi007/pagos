@@ -19,6 +19,7 @@ from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query, HTTPException, UploadFile, File, Body
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, field_validator
 from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session
@@ -36,6 +37,7 @@ from app.models.pago_con_error import PagoConError
 from app.models.revisar_pago import RevisarPago
 from app.models.cuota_pago import CuotaPago
 from app.models.pago_reportado import PagoReportado
+from app.models.datos_importados_conerrores import DatosImportadosConErrores
 from app.schemas.pago import PagoCreate, PagoUpdate, PagoResponse
 from app.schemas.auth import UserResponse
 
@@ -893,6 +895,7 @@ def importar_reportados_aprobados_a_pagos(
             "registros_con_error": 0,
             "errores_detalle": [],
             "ids_pagos_con_errores": [],
+            "total_datos_revisar": 0,
             "mensaje": "No hay pagos reportados aprobados para importar.",
         }
 
@@ -913,7 +916,7 @@ def importar_reportados_aprobados_a_pagos(
         cedula_raw = f"{pr.tipo_cedula or ''}{pr.numero_cedula or ''}".replace("-", "").strip().upper()
         if not cedula_raw:
             ref = (pr.referencia_interna or "").strip()[:100] or "N/A"
-            pce = PagoConError(
+            pce = DatosImportadosConErrores(
                 cedula_cliente="",
                 prestamo_id=None,
                 fecha_pago=datetime.combine(pr.fecha_pago, dt_time.min) if pr.fecha_pago else datetime.now(),
@@ -923,12 +926,35 @@ def importar_reportados_aprobados_a_pagos(
                 referencia_pago=ref,
                 errores_descripcion=["Cédula vacía"],
                 observaciones=ORIGEN_COBROS_REPORTADOS,
-                fila_origen=pr.id,
+                referencia_interna=(pr.referencia_interna or \"\")[:100] or None,
+                                fila_origen=pr.id,
             )
             db.add(pce)
             db.flush()
             ids_pagos_con_errores.append(pce.id)
             errores_detalle.append({"referencia": pr.referencia_interna, "error": "Cédula vacía"})
+            continue
+
+        # Mismo validador que Pagos desde Excel: cédula V/E/J + 6-11 dígitos
+        if not _looks_like_cedula_inline(cedula_raw):
+            ref = (pr.referencia_interna or "").strip()[:100] or "N/A"
+            pce = DatosImportadosConErrores(
+                cedula_cliente=cedula_raw,
+                prestamo_id=None,
+                fecha_pago=datetime.combine(pr.fecha_pago, dt_time.min) if pr.fecha_pago else datetime.now(),
+                monto_pagado=float(pr.monto or 0),
+                numero_documento=(pr.referencia_interna or "")[:100],
+                estado="PENDIENTE",
+                referencia_pago=ref,
+                errores_descripcion=["Cédula inválida. Formato: V, E o J + 6-11 dígitos (igual que Pagos desde Excel)."],
+                observaciones=ORIGEN_COBROS_REPORTADOS,
+                referencia_interna=(pr.referencia_interna or \"\")[:100] or None,
+                                fila_origen=pr.id,
+            )
+            db.add(pce)
+            db.flush()
+            ids_pagos_con_errores.append(pce.id)
+            errores_detalle.append({"referencia": pr.referencia_interna, "error": "Cédula inválida (V/E/J + 6-11 dígitos)"})
             continue
 
         numero_doc_raw = (pr.referencia_interna or "").strip()[:100]
@@ -937,7 +963,7 @@ def importar_reportados_aprobados_a_pagos(
             errores_detalle.append({"referencia": pr.referencia_interna, "error": "Ya existe un pago con ese Nº documento (duplicado)"})
             continue
         if numero_doc_norm and numero_doc_norm in docs_en_lote:
-            pce = PagoConError(
+            pce = DatosImportadosConErrores(
                 cedula_cliente=cedula_raw,
                 prestamo_id=None,
                 fecha_pago=datetime.combine(pr.fecha_pago, dt_time.min) if pr.fecha_pago else datetime.now(),
@@ -947,7 +973,8 @@ def importar_reportados_aprobados_a_pagos(
                 referencia_pago=numero_doc_raw or "N/A",
                 errores_descripcion=["Nº documento duplicado en este lote"],
                 observaciones=ORIGEN_COBROS_REPORTADOS,
-                fila_origen=pr.id,
+                referencia_interna=(pr.referencia_interna or \"\")[:100] or None,
+                                fila_origen=pr.id,
             )
             db.add(pce)
             db.flush()
@@ -960,7 +987,7 @@ def importar_reportados_aprobados_a_pagos(
             select(Cliente).where(func.replace(Cliente.cedula, "-", "") == cedula_raw)
         ).scalars().first()
         if not cliente:
-            pce = PagoConError(
+            pce = DatosImportadosConErrores(
                 cedula_cliente=cedula_raw,
                 prestamo_id=None,
                 fecha_pago=datetime.combine(pr.fecha_pago, dt_time.min) if pr.fecha_pago else datetime.now(),
@@ -970,7 +997,8 @@ def importar_reportados_aprobados_a_pagos(
                 referencia_pago=numero_doc_raw or "N/A",
                 errores_descripcion=["Cédula no encontrada en clientes"],
                 observaciones=ORIGEN_COBROS_REPORTADOS,
-                fila_origen=pr.id,
+                referencia_interna=(pr.referencia_interna or \"\")[:100] or None,
+                                fila_origen=pr.id,
             )
             db.add(pce)
             db.flush()
@@ -985,7 +1013,7 @@ def importar_reportados_aprobados_a_pagos(
         ).scalars().all()
         prestamos = [p for p in prestamos if p is not None]
         if len(prestamos) == 0:
-            pce = PagoConError(
+            pce = DatosImportadosConErrores(
                 cedula_cliente=cedula_raw,
                 prestamo_id=None,
                 fecha_pago=datetime.combine(pr.fecha_pago, dt_time.min) if pr.fecha_pago else datetime.now(),
@@ -995,7 +1023,8 @@ def importar_reportados_aprobados_a_pagos(
                 referencia_pago=numero_doc_raw or "N/A",
                 errores_descripcion=["Sin crédito activo (APROBADO)"],
                 observaciones=ORIGEN_COBROS_REPORTADOS,
-                fila_origen=pr.id,
+                referencia_interna=(pr.referencia_interna or \"\")[:100] or None,
+                                fila_origen=pr.id,
             )
             db.add(pce)
             db.flush()
@@ -1003,7 +1032,7 @@ def importar_reportados_aprobados_a_pagos(
             errores_detalle.append({"referencia": pr.referencia_interna, "error": "Sin crédito activo"})
             continue
         if len(prestamos) > 1:
-            pce = PagoConError(
+            pce = DatosImportadosConErrores(
                 cedula_cliente=cedula_raw,
                 prestamo_id=None,
                 fecha_pago=datetime.combine(pr.fecha_pago, dt_time.min) if pr.fecha_pago else datetime.now(),
@@ -1013,7 +1042,8 @@ def importar_reportados_aprobados_a_pagos(
                 referencia_pago=numero_doc_raw or "N/A",
                 errores_descripcion=[f"Cédula con {len(prestamos)} préstamos; indique ID del crédito"],
                 observaciones=ORIGEN_COBROS_REPORTADOS,
-                fila_origen=pr.id,
+                referencia_interna=(pr.referencia_interna or \"\")[:100] or None,
+                                fila_origen=pr.id,
             )
             db.add(pce)
             db.flush()
@@ -1024,7 +1054,7 @@ def importar_reportados_aprobados_a_pagos(
         prestamo_id = prestamos[0].id
         monto = float(pr.monto or 0)
         if monto < _MIN_MONTO_PAGADO:
-            pce = PagoConError(
+            pce = DatosImportadosConErrores(
                 cedula_cliente=cedula_raw,
                 prestamo_id=prestamo_id,
                 fecha_pago=datetime.combine(pr.fecha_pago, dt_time.min) if pr.fecha_pago else datetime.now(),
@@ -1034,7 +1064,8 @@ def importar_reportados_aprobados_a_pagos(
                 referencia_pago=numero_doc_raw or "N/A",
                 errores_descripcion=[f"Monto debe ser mayor a {_MIN_MONTO_PAGADO}"],
                 observaciones=ORIGEN_COBROS_REPORTADOS,
-                fila_origen=pr.id,
+                referencia_interna=(pr.referencia_interna or \"\")[:100] or None,
+                                fila_origen=pr.id,
             )
             db.add(pce)
             db.flush()
@@ -1071,14 +1102,78 @@ def importar_reportados_aprobados_a_pagos(
         except Exception as e:
             logger.warning("Importar Cobros: no se pudo aplicar pago id=%s a cuotas: %s", getattr(p, "id", "?"), e)
     db.commit()
+    total_datos_revisar = db.execute(select(func.count()).select_from(DatosImportadosConErrores)).scalar() or 0
     return {
         "registros_procesados": registros_procesados,
         "registros_con_error": len(ids_pagos_con_errores),
         "errores_detalle": errores_detalle[:100],
         "ids_pagos_con_errores": ids_pagos_con_errores,
         "cuotas_aplicadas": cuotas_aplicadas,
-        "mensaje": f"Importados {registros_procesados} pagos desde Cobros; {len(ids_pagos_con_errores)} con error (Revisar Pagos).",
+        "total_datos_revisar": total_datos_revisar,
+        "mensaje": f"Importados {registros_procesados} pagos desde Cobros; {len(ids_pagos_con_errores)} con error (revisar: descargar Excel).",
     }
+
+
+@router.get("/importar-desde-cobros/datos-revisar", response_model=dict)
+def get_datos_revisar_importados(
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
+    """Devuelve si hay datos que revisar (tabla datos_importados_conerrores) y el total. Para mostrar dialogo tras importar."""
+    total = db.execute(select(func.count()).select_from(DatosImportadosConErrores)).scalar() or 0
+    return {"tiene_datos": total > 0, "total": total}
+
+
+@router.get("/importar-desde-cobros/descargar-excel-errores")
+def descargar_excel_errores_importados(
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
+    """Genera Excel con registros de datos_importados_conerrores (mismas columnas que Revisar Pagos). Tras generar, vacia la tabla."""
+    rows = db.execute(
+        select(DatosImportadosConErrores).order_by(DatosImportadosConErrores.id)
+    ).scalars().all()
+    rows = [r for r in rows if r is not None]
+    import openpyxl
+    from openpyxl.utils import get_column_letter
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Datos con errores"
+    headers = [
+        "id", "cedula_cliente", "prestamo_id", "fecha_pago", "monto_pagado", "numero_documento",
+        "estado", "referencia_pago", "errores_descripcion", "observaciones", "fila_origen", "referencia_interna", "created_at"
+    ]
+    for col, h in enumerate(headers, 1):
+        ws.cell(row=1, column=col, value=h)
+    for row_idx, r in enumerate(rows, 2):
+        fp = r.fecha_pago
+        fecha_str = fp.strftime("%Y-%m-%d") if fp else ""
+        err_str = "; ".join(r.errores_descripcion) if isinstance(r.errores_descripcion, list) else str(r.errores_descripcion or "")
+        created_str = r.created_at.strftime("%Y-%m-%d %H:%M") if getattr(r, "created_at", None) else ""
+        ws.cell(row=row_idx, column=1, value=r.id)
+        ws.cell(row=row_idx, column=2, value=r.cedula_cliente or "")
+        ws.cell(row=row_idx, column=3, value=r.prestamo_id)
+        ws.cell(row=row_idx, column=4, value=fecha_str)
+        ws.cell(row=row_idx, column=5, value=float(r.monto_pagado) if r.monto_pagado is not None else 0)
+        ws.cell(row=row_idx, column=6, value=r.numero_documento or "")
+        ws.cell(row=row_idx, column=7, value=r.estado or "")
+        ws.cell(row=row_idx, column=8, value=r.referencia_pago or "")
+        ws.cell(row=row_idx, column=9, value=err_str)
+        ws.cell(row=row_idx, column=10, value=r.observaciones or "")
+        ws.cell(row=row_idx, column=11, value=r.fila_origen)
+        ws.cell(row=row_idx, column=12, value=getattr(r, "referencia_interna", None) or "")
+        ws.cell(row=row_idx, column=13, value=created_str)
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    db.execute(delete(DatosImportadosConErrores))
+    db.commit()
+    filename = f"datos_importados_con_errores_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 @router.post("/validar-filas-batch", response_model=dict)
