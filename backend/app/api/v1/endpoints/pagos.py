@@ -23,7 +23,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, field_validator
 from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
@@ -1777,95 +1777,102 @@ def crear_pagos_batch(
     Devuelve éxitos y errores por índice para reducir rondas y timeouts en "Guardar todos".
     Optimizado: una sola consulta para docs existentes, préstamos y clientes en lugar de N por fila.
     """
-    usuario_email = current_user.email if current_user else "sistema@rapicredit.com"
-    pagos_list = body.pagos
-    # Preload: documentos ya existentes en BD (una sola consulta)
-    docs_en_payload = [normalize_documento(p.numero_documento) for p in pagos_list]
-    docs_no_vacios = [d for d in docs_en_payload if d]
-    existing_docs: set[str] = set()
-    if docs_no_vacios:
-        rows = db.execute(select(Pago.numero_documento).where(Pago.numero_documento.in_(docs_no_vacios))).scalars().all()
-        existing_docs = {r[0] for r in rows}
-    # Preload: ids de préstamos válidos (una sola consulta)
-    prestamo_ids = [p.prestamo_id for p in pagos_list if p.prestamo_id]
-    valid_prestamo_ids: set[int] = set()
-    if prestamo_ids:
-        ids_rows = db.execute(select(Prestamo.id).where(Prestamo.id.in_(prestamo_ids))).scalars().all()
-        valid_prestamo_ids = {r[0] for r in ids_rows}
-    # Preload: cédulas de clientes que existen (una sola consulta)
-    cedulas_con_prestamo = list({p.cedula_cliente.strip().upper() for p in pagos_list if p.cedula_cliente and p.prestamo_id})
-    valid_cedulas: set[str] = set()
-    if cedulas_con_prestamo:
-        ced_rows = db.execute(select(Cliente.cedula).where(Cliente.cedula.in_(cedulas_con_prestamo))).scalars().all()
-        valid_cedulas = {r[0] for r in ced_rows}
-    docs_added_in_batch: set[str] = set()
-    results: list[dict] = []
-    ok_count = 0
-    fail_count = 0
-    for idx, payload in enumerate(pagos_list):
-        try:
-            num_doc = docs_en_payload[idx] if idx < len(docs_en_payload) else normalize_documento(payload.numero_documento)
-            if num_doc and (num_doc in existing_docs or num_doc in docs_added_in_batch):
-                results.append({"index": idx, "success": False, "error": "Ya existe un pago con ese Nº de documento.", "status_code": 409})
+    try:
+        usuario_email = current_user.email if current_user else "sistema@rapicredit.com"
+        pagos_list = body.pagos
+        # Preload: documentos ya existentes en BD (una sola consulta)
+        docs_en_payload = [normalize_documento(p.numero_documento) for p in pagos_list]
+        docs_no_vacios = [d for d in docs_en_payload if d]
+        existing_docs: set[str] = set()
+        if docs_no_vacios:
+            rows = db.execute(select(Pago.numero_documento).where(Pago.numero_documento.in_(docs_no_vacios))).scalars().all()
+            existing_docs = {r[0] for r in rows}
+        # Preload: ids de préstamos válidos (una sola consulta)
+        prestamo_ids = [p.prestamo_id for p in pagos_list if p.prestamo_id]
+        valid_prestamo_ids: set[int] = set()
+        if prestamo_ids:
+            ids_rows = db.execute(select(Prestamo.id).where(Prestamo.id.in_(prestamo_ids))).scalars().all()
+            valid_prestamo_ids = {r[0] for r in ids_rows}
+        # Preload: cédulas de clientes que existen (una sola consulta)
+        cedulas_con_prestamo = list({p.cedula_cliente.strip().upper() for p in pagos_list if p.cedula_cliente and p.prestamo_id})
+        valid_cedulas: set[str] = set()
+        if cedulas_con_prestamo:
+            ced_rows = db.execute(select(Cliente.cedula).where(Cliente.cedula.in_(cedulas_con_prestamo))).scalars().all()
+            valid_cedulas = {r[0] for r in ced_rows}
+        docs_added_in_batch: set[str] = set()
+        results: list[dict] = []
+        ok_count = 0
+        fail_count = 0
+        for idx, payload in enumerate(pagos_list):
+            try:
+                num_doc = docs_en_payload[idx] if idx < len(docs_en_payload) else normalize_documento(payload.numero_documento)
+                if num_doc and (num_doc in existing_docs or num_doc in docs_added_in_batch):
+                    results.append({"index": idx, "success": False, "error": "Ya existe un pago con ese Nº de documento.", "status_code": 409})
+                    fail_count += 1
+                    continue
+                ref = (num_doc or "N/A")[:_MAX_LEN_NUMERO_DOCUMENTO]
+                fecha_pago_ts = datetime.combine(payload.fecha_pago, dt_time.min)
+                conciliado = payload.conciliado if payload.conciliado is not None else False
+                cedula_normalizada = payload.cedula_cliente.strip().upper() if payload.cedula_cliente else ""
+                if payload.prestamo_id and payload.prestamo_id not in valid_prestamo_ids:
+                    results.append({"index": idx, "success": False, "error": f"Crédito #{payload.prestamo_id} no existe.", "status_code": 400})
+                    fail_count += 1
+                    continue
+                if cedula_normalizada and payload.prestamo_id and cedula_normalizada not in valid_cedulas:
+                    results.append({"index": idx, "success": False, "error": f"No existe cliente con cédula {cedula_normalizada}", "status_code": 404})
+                    fail_count += 1
+                    continue
+                row = Pago(
+                    cedula_cliente=cedula_normalizada,
+                    prestamo_id=payload.prestamo_id,
+                    fecha_pago=fecha_pago_ts,
+                    monto_pagado=payload.monto_pagado,
+                    numero_documento=num_doc,
+                    institucion_bancaria=payload.institucion_bancaria.strip() if payload.institucion_bancaria else None,
+                    estado="PENDIENTE",
+                    notas=payload.notas.strip() if payload.notas else None,
+                    referencia_pago=ref,
+                    conciliado=conciliado,
+                    fecha_conciliacion=datetime.now(ZoneInfo(TZ_NEGOCIO)) if conciliado else None,
+                    verificado_concordancia="SI" if conciliado else "",
+                    usuario_registro=usuario_email,
+                )
+                db.add(row)
+                db.commit()
+                db.refresh(row)
+                if row.prestamo_id and float(row.monto_pagado or 0) > 0:
+                    try:
+                        _aplicar_pago_a_cuotas_interno(row, db)
+                        row.estado = "PAGADO"
+                        db.commit()
+                        db.refresh(row)
+                    except Exception as e:
+                        logger.warning("Batch: no se pudo aplicar a cuotas (índice %s): %s", idx, e)
+                        db.rollback()
+                results.append({"index": idx, "success": True, "pago": _pago_to_response(row)})
+                ok_count += 1
+                if num_doc:
+                    docs_added_in_batch.add(num_doc)
+            except IntegrityError as e:
+                db.rollback()
+                if getattr(getattr(e, "orig", None), "pgcode", None) == "23505":
+                    results.append({"index": idx, "success": False, "error": "Nº de documento duplicado.", "status_code": 409})
+                else:
+                    results.append({"index": idx, "success": False, "error": str(e), "status_code": 500})
                 fail_count += 1
-                continue
-            ref = (num_doc or "N/A")[:_MAX_LEN_NUMERO_DOCUMENTO]
-            fecha_pago_ts = datetime.combine(payload.fecha_pago, dt_time.min)
-            conciliado = payload.conciliado if payload.conciliado is not None else False
-            cedula_normalizada = payload.cedula_cliente.strip().upper() if payload.cedula_cliente else ""
-            if payload.prestamo_id and payload.prestamo_id not in valid_prestamo_ids:
-                results.append({"index": idx, "success": False, "error": f"Crédito #{payload.prestamo_id} no existe.", "status_code": 400})
-                fail_count += 1
-                continue
-            if cedula_normalizada and payload.prestamo_id and cedula_normalizada not in valid_cedulas:
-                results.append({"index": idx, "success": False, "error": f"No existe cliente con cédula {cedula_normalizada}", "status_code": 404})
-                fail_count += 1
-                continue
-            row = Pago(
-                cedula_cliente=cedula_normalizada,
-                prestamo_id=payload.prestamo_id,
-                fecha_pago=fecha_pago_ts,
-                monto_pagado=payload.monto_pagado,
-                numero_documento=num_doc,
-                institucion_bancaria=payload.institucion_bancaria.strip() if payload.institucion_bancaria else None,
-                estado="PENDIENTE",
-                notas=payload.notas.strip() if payload.notas else None,
-                referencia_pago=ref,
-                conciliado=conciliado,
-                fecha_conciliacion=datetime.now(ZoneInfo(TZ_NEGOCIO)) if conciliado else None,
-                verificado_concordancia="SI" if conciliado else "",
-                usuario_registro=usuario_email,
-            )
-            db.add(row)
-            db.commit()
-            db.refresh(row)
-            if row.prestamo_id and float(row.monto_pagado or 0) > 0:
-                try:
-                    _aplicar_pago_a_cuotas_interno(row, db)
-                    row.estado = "PAGADO"
-                    db.commit()
-                    db.refresh(row)
-                except Exception as e:
-                    logger.warning("Batch: no se pudo aplicar a cuotas (índice %s): %s", idx, e)
-                    db.rollback()
-            results.append({"index": idx, "success": True, "pago": _pago_to_response(row)})
-            ok_count += 1
-            if num_doc:
-                docs_added_in_batch.add(num_doc)
-        except IntegrityError as e:
-            db.rollback()
-            if getattr(getattr(e, "orig", None), "pgcode", None) == "23505":
-                results.append({"index": idx, "success": False, "error": "Nº de documento duplicado.", "status_code": 409})
-            else:
+            except Exception as e:
+                db.rollback()
+                logger.exception("Batch índice %s: %s", idx, e)
                 results.append({"index": idx, "success": False, "error": str(e), "status_code": 500})
-            fail_count += 1
-        except Exception as e:
-            db.rollback()
-            logger.exception("Batch índice %s: %s", idx, e)
-            results.append({"index": idx, "success": False, "error": str(e), "status_code": 500})
-            fail_count += 1
-    return {"results": results, "ok_count": ok_count, "fail_count": fail_count}
+                fail_count += 1
+        return {"results": results, "ok_count": ok_count, "fail_count": fail_count}
 
+
+except OperationalError:
+        raise HTTPException(
+            status_code=503,
+            detail="Servicio no disponible. Reintente en unos segundos.",
+        )
 
 @router.post("", response_model=dict, status_code=201)
 def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user: UserResponse = Depends(get_current_user)):

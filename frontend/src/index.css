@@ -89,21 +89,23 @@
   animation: slideIn 0.3s ease-out;
 }
 
-/* Scrollbar personalizado */
-::-webkit-scrollbar {
-  width: 8px;
-}
+/* Scrollbar personalizado (solo WebKit/Blink; evita "mal selector" en Firefox) */
+@supports selector(::-webkit-scrollbar) {
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
 
-::-webkit-scrollbar-track {
-  @apply bg-secondary;
-}
+  ::-webkit-scrollbar-track {
+    @apply bg-secondary;
+  }
 
-::-webkit-scrollbar-thumb {
-  @apply bg-muted-foreground rounded-full;
-}
+  ::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground rounded-full;
+  }
 
-::-webkit-scrollbar-thumb:hover {
-  @apply bg-primary;
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-primary;
+  }
 }
 
 /* Clases utilitarias personalizadas */

@@ -7,6 +7,7 @@ from typing import Optional
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -60,7 +61,13 @@ def get_current_user(
             detail="Token inválido",
         )
     email = sub if "@" in sub else f"{sub}@admin.local"
-    u = db.query(User).filter(User.email == email).first()
+    try:
+        u = db.query(User).filter(User.email == email).first()
+    except OperationalError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Servicio no disponible. Reintente en unos segundos.",
+        )
     if u and u.is_active:
         return user_to_response(u)
     return _fake_user_response(email)
@@ -84,7 +91,13 @@ def get_current_user_optional(
     if not sub:
         return None
     email = sub if "@" in sub else f"{sub}@admin.local"
-    u = db.query(User).filter(User.email == email).first()
+    try:
+        u = db.query(User).filter(User.email == email).first()
+    except OperationalError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Servicio no disponible. Reintente en unos segundos.",
+        )
     if u and u.is_active:
         return user_to_response(u)
     return _fake_user_response(email)
