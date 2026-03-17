@@ -1,13 +1,13 @@
 """
-Holder de configuraci�n de email en tiempo de ejecuci�n.
-Usado por core/email.py para enviar (SMTP) y por tickets para destinos de notificaci�n.
+Holder de configuraciï¿½n de email en tiempo de ejecuciï¿½n.
+Usado por core/email.py para enviar (SMTP) y por tickets para destinos de notificaciï¿½n.
 La API configuracion/email actualiza este holder al guardar; si no se ha guardado, se usan settings (.env).
 Para que Notificaciones/CRM usen la config guardada en BD, sync_from_db() carga desde la tabla configuracion antes de enviar.
 
-Integraci�n con encriptaci�n:
+Integraciï¿½n con encriptaciï¿½n:
 - Campos sensibles (smtp_password, etc.) se encriptan al guardar en BD
-- Se desencriptan autom�ticamente al cargar desde BD
-- Al devolver al API, se enmascaran (no se expone la contrase�a)
+- Se desencriptan automï¿½ticamente al cargar desde BD
+- Al devolver al API, se enmascaran (no se expone la contraseï¿½a)
 """
 import json
 import logging
@@ -25,6 +25,10 @@ _cuentas_data: dict = {}
 
 logger = logging.getLogger(__name__)
 
+# Cache: evitar sync_from_db en cada get_smtp_config (tarda 0.4-4s)
+_sync_ttl_seconds = 60
+_last_sync_time = 0.0
+
 CLAVE_EMAIL_CONFIG = "email_config"
 CLAVE_NOTIFICACIONES_ENVIOS = "notificaciones_envios"
 
@@ -33,7 +37,7 @@ SENSITIVE_FIELDS = {"smtp_password", "imap_password"}
 
 
 def _mask_sensitive_value(value: Any) -> str:
-    """Enmascara un valor sensible para devolver a la API (no exponer contrase�a)."""
+    """Enmascara un valor sensible para devolver a la API (no exponer contraseï¿½a)."""
     if not value:
         return ""
     return "***"
@@ -55,7 +59,7 @@ def _decrypt_value_safe(encrypted: Any) -> Optional[str]:
         elif isinstance(encrypted, str):
             return decrypt_value(encrypted.encode('utf-8'))
     except Exception:
-        # Si desencriptaci�n falla, devolver None (posiblemente no estaba encriptado)
+        # Si desencriptaciï¿½n falla, devolver None (posiblemente no estaba encriptado)
         return None
     return None
 
@@ -72,8 +76,12 @@ def _encrypt_value_safe(value: str, field_name: str) -> Optional[bytes]:
 
 
 def sync_from_db() -> None:
-    """Carga la configuraci�n de email desde la tabla configuracion y actualiza el holder. As� Notificaciones/CRM usan la config guardada en Configuraci�n > Email."""
+    """Carga la configuraciï¿½n de email desde la tabla configuracion y actualiza el holder. Asï¿½ Notificaciones/CRM usan la config guardada en Configuraciï¿½n > Email."""
     t0 = time.time()
+
+    global _last_sync_time
+    if (time.time() - _last_sync_time) < _sync_ttl_seconds:
+        return
     try:
         from app.core.database import SessionLocal
         from app.models.configuracion import Configuracion
@@ -111,6 +119,7 @@ def sync_from_db() -> None:
                                 decrypted_data[field] = data[field]
                     update_from_api(decrypted_data)
             log_phase(logger, FASE_CONFIG_CARGA, True, "config cargada desde BD", duration_ms=(time.time() - t0) * 1000)
+            _last_sync_time = time.time()
         finally:
             db.close()
     except Exception as e:
@@ -119,7 +128,7 @@ def sync_from_db() -> None:
 
 
 def _load_notificaciones_envios() -> dict:
-    """Carga la configuraci�n de env�os de notificaciones desde la tabla configuracion (clave notificaciones_envios)."""
+    """Carga la configuraciï¿½n de envï¿½os de notificaciones desde la tabla configuracion (clave notificaciones_envios)."""
     try:
         from app.core.database import SessionLocal
         from app.models.configuracion import Configuracion
@@ -138,7 +147,7 @@ def _load_notificaciones_envios() -> dict:
 
 
 def init_from_settings() -> None:
-    """Inicializa el holder desde settings (.env) para que el env�o funcione sin pasar por la UI."""
+    """Inicializa el holder desde settings (.env) para que el envï¿½o funcione sin pasar por la UI."""
     _current["smtp_host"] = getattr(settings, "SMTP_HOST", None) or ""
     _current["smtp_port"] = str(getattr(settings, "SMTP_PORT", None) or 587)
     _current["smtp_user"] = getattr(settings, "SMTP_USER", None) or ""
@@ -212,6 +221,8 @@ def get_email_activo_servicio(servicio: str) -> bool:
     return (str(_current[key]).lower() == "true" or _current[key] is True)
 
 def update_from_api(data: dict[str, Any]) -> None:
+    global _last_sync_time
+    _last_sync_time = 0.0  # invalidar cache
     """Actualiza el holder desde la API de configuracion (PUT /configuracion/email/configuracion). Soporta version 2 (4 cuentas)."""
     global _cuentas_data
     if data.get("version") == 2 and "cuentas" in data:
@@ -230,7 +241,7 @@ def update_from_api(data: dict[str, Any]) -> None:
         if _current.get("smtp_port") is not None:
             _current["smtp_port"] = str(_current["smtp_port"])
         return
-    """Actualiza el holder desde la API de configuraci�n (PUT /configuracion/email/configuracion)."""
+    """Actualiza el holder desde la API de configuraciï¿½n (PUT /configuracion/email/configuracion)."""
     keys = (
         "smtp_host", "smtp_port", "smtp_user", "smtp_password", "from_email", "from_name",
         "tickets_notify_emails", "modo_pruebas", "email_pruebas", "emails_pruebas", "email_activo",
@@ -252,7 +263,7 @@ def prepare_for_db_storage(data: dict[str, Any]) -> dict[str, Any]:
     Prepara datos para guardar en BD: encripta campos sensibles.
     
     Args:
-        data: Configuraci�n a guardar
+        data: Configuraciï¿½n a guardar
         
     Returns:
         Diccionario con campos sensibles encriptados (valores en valor_encriptado)
@@ -269,7 +280,7 @@ def prepare_for_db_storage(data: dict[str, Any]) -> dict[str, Any]:
                 # Limpiar el valor original para no guardarlo en texto plano
                 result[field] = None
             else:
-                # Encriptaci�n fall�: no persistir en claro; el PUT preserva _encriptado existente.
+                # Encriptación falló: no persistir en claro; el PUT preserva _encriptado existente.
                 result[field] = None
     
     return result
@@ -280,7 +291,7 @@ def prepare_for_api_response(data: dict[str, Any]) -> dict[str, Any]:
     Prepara datos para devolver a la API: enmascara campos sensibles.
     
     Args:
-        data: Configuraci�n almacenada en BD o cach�
+        data: Configuraciï¿½n almacenada en BD o cachï¿½
         
     Returns:
         Diccionario con campos sensibles enmascarados
@@ -298,12 +309,12 @@ def prepare_for_api_response(data: dict[str, Any]) -> dict[str, Any]:
 def get_modo_pruebas_email(servicio: Optional[str] = None) -> Tuple[bool, List[str]]:
     """
     Devuelve (modo_pruebas, list_of_emails).
-    modo_pruebas True = redirigir todos los env�os al correo(s) de pruebas.
-    list_of_emails = direcciones a las que enviar en modo pruebas (puede ser 1 o m�s).
+    modo_pruebas True = redirigir todos los envï¿½os al correo(s) de pruebas.
+    list_of_emails = direcciones a las que enviar en modo pruebas (puede ser 1 o mï¿½s).
 
     Prioridad:
     1. notificaciones_envios (clave en configuracion): si modo_pruebas=true y tiene emails_pruebas (array) o email_pruebas (string), usar esos.
-    2. Fallback: email_config (email_pruebas como string �nico, convertido a lista de 1).
+    2. Fallback: email_config (email_pruebas como string ï¿½nico, convertido a lista de 1).
     """
     sync_from_db()
     if servicio:
@@ -324,7 +335,7 @@ def get_modo_pruebas_servicio(servicio: str) -> bool:
     """True si este servicio debe redirigir envios al correo de pruebas."""
     sync_from_db()
     envios = _load_notificaciones_envios()
-    # Para notificaciones: priorizar el toggle de Configuración > Notificaciones > Envíos (notificaciones_envios)
+    # Para notificaciones: priorizar el toggle de ConfiguraciÃ³n > Notificaciones > EnvÃ­os (notificaciones_envios)
     # sobre modo_pruebas_notificaciones del tab Email, para que el batch use el valor que el usuario acaba de guardar.
     if servicio == "notificaciones":
         raw = envios.get("modo_pruebas")
