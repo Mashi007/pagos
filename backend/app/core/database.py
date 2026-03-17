@@ -17,15 +17,15 @@ if _db_url.startswith("postgres://"):
 engine = create_engine(
     _db_url,
     pool_pre_ping=True,   # Verifica que la conexión esté viva antes de usarla (reconexión automática)
-    pool_size=10,          # Conexiones mantenidas en pool
-    max_overflow=20,       # Conexiones adicionales permitidas bajo carga
-    pool_recycle=1800,     # Recicla conexiones cada 30 min (evita SSL stale)
+    pool_size=5,           # Menos conexiones persistentes (Render free tier; evita SSL closed)
+    max_overflow=10,       # Conexiones adicionales permitidas bajo carga
+    pool_recycle=300,     # Recicla cada 5 min (Render cierra SSL antes; evita SSL connection closed unexpectedly)
     pool_timeout=30,       # Tiempo max esperando conexión disponible
     connect_args={
         "connect_timeout": 15,        # Timeout de conexión inicial (psycopg2)
         "application_name": "rapicredit_backend",
         "keepalives": 1,              # Habilitar TCP keepalives (psycopg2 nativo)
-        "keepalives_idle": 60,        # Inicia keepalive tras 60s de inactividad
+        "keepalives_idle": 30,        # Inicia keepalive tras 30s de inactividad
         "keepalives_interval": 10,    # Envía keepalive cada 10s
         "keepalives_count": 5,        # Máximo 5 keepalives sin respuesta antes de cerrar
     },

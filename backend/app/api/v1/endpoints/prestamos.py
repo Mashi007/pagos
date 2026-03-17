@@ -497,64 +497,69 @@ def listar_prestamos_por_cedula(cedula: str, db: Session = Depends(get_db)):
     """Listado de préstamos por cédula del cliente (integrado con frontend).
     Acepta coincidencia exacta o normalizada (sin guiones, mayúsculas) para Cliente.cedula y Prestamo.cedula.
     """
-    cedula_clean = (cedula or "").strip()
-    if not cedula_clean:
-        return {"prestamos": [], "total": 0}
-    cedula_norm = _normalizar_cedula_para_busqueda(cedula_clean)
-    # Coincidencia: exacta o normalizada (V17709701 = V-17709701 = v17709701)
-    cond_cliente = or_(
-        Cliente.cedula == cedula_clean,
-        func.upper(func.replace(func.replace(Cliente.cedula, "-", ""), " ", "")) == cedula_norm,
-    )
-    cond_prestamo = or_(
-        Prestamo.cedula == cedula_clean,
-        func.upper(func.replace(func.replace(Prestamo.cedula, "-", ""), " ", "")) == cedula_norm,
-    )
-    q = (
-        select(Prestamo, Cliente.nombres, Cliente.cedula)
-        .select_from(Prestamo)
-        .join(Cliente, Prestamo.cliente_id == Cliente.id)
-        .where(or_(cond_cliente, cond_prestamo))
-        .order_by(Prestamo.id.desc())
-    )
-    rows = db.execute(q).all()
-    prestamo_ids = [row[0].id for row in rows]
-    cuotas_por_prestamo = {}
-    if prestamo_ids:
-        cuenta = (
-            select(Cuota.prestamo_id, func.count())
-            .select_from(Cuota)
-            .where(Cuota.prestamo_id.in_(prestamo_ids))
-            .group_by(Cuota.prestamo_id)
+    try:
+        cedula_clean = (cedula or "").strip()
+        if not cedula_clean:
+            return {"prestamos": [], "total": 0}
+        cedula_norm = _normalizar_cedula_para_busqueda(cedula_clean)
+        # Coincidencia: exacta o normalizada (V17709701 = V-17709701 = v17709701)
+        cond_cliente = or_(
+            Cliente.cedula == cedula_clean,
+            func.upper(func.replace(func.replace(Cliente.cedula, "-", ""), " ", "")) == cedula_norm,
         )
-        for pid, cnt in db.execute(cuenta).all():
-            cuotas_por_prestamo[pid] = cnt
-    items = []
-    for row in rows:
-        p, nombres_cliente, cedula_cliente = row[0], row[1], row[2]
-        numero_cuotas = cuotas_por_prestamo.get(p.id) if cuotas_por_prestamo.get(p.id) is not None else p.numero_cuotas
-        items.append(
-            PrestamoListResponse(
-                id=p.id,
-                cliente_id=p.cliente_id,
-                total_financiamiento=p.total_financiamiento,
-                estado=p.estado,
-                concesionario=p.concesionario,
-                modelo=p.modelo,
-                analista=p.analista,
-                fecha_creacion=p.fecha_creacion,
-                fecha_actualizacion=p.fecha_actualizacion,
-                fecha_registro=p.fecha_registro,
-                fecha_aprobacion=p.fecha_aprobacion,
-                nombres=nombres_cliente or p.nombres,
-                cedula=cedula_cliente or p.cedula,
-                numero_cuotas=numero_cuotas,
-                modalidad_pago=p.modalidad_pago,
+        cond_prestamo = or_(
+            Prestamo.cedula == cedula_clean,
+            func.upper(func.replace(func.replace(Prestamo.cedula, "-", ""), " ", "")) == cedula_norm,
+        )
+        q = (
+            select(Prestamo, Cliente.nombres, Cliente.cedula)
+            .select_from(Prestamo)
+            .join(Cliente, Prestamo.cliente_id == Cliente.id)
+            .where(or_(cond_cliente, cond_prestamo))
+            .order_by(Prestamo.id.desc())
+        )
+        rows = db.execute(q).all()
+        prestamo_ids = [row[0].id for row in rows]
+        cuotas_por_prestamo = {}
+        if prestamo_ids:
+            cuenta = (
+                select(Cuota.prestamo_id, func.count())
+                .select_from(Cuota)
+                .where(Cuota.prestamo_id.in_(prestamo_ids))
+                .group_by(Cuota.prestamo_id)
             )
-        )
-    return {"prestamos": [i.model_dump() for i in items], "total": len(items)}
+            for pid, cnt in db.execute(cuenta).all():
+                cuotas_por_prestamo[pid] = cnt
+        items = []
+        for row in rows:
+            p, nombres_cliente, cedula_cliente = row[0], row[1], row[2]
+            numero_cuotas = cuotas_por_prestamo.get(p.id) if cuotas_por_prestamo.get(p.id) is not None else p.numero_cuotas
+            items.append(
+                PrestamoListResponse(
+                    id=p.id,
+                    cliente_id=p.cliente_id,
+                    total_financiamiento=p.total_financiamiento,
+                    estado=p.estado,
+                    concesionario=p.concesionario,
+                    modelo=p.modelo,
+                    analista=p.analista,
+                    fecha_creacion=p.fecha_creacion,
+                    fecha_actualizacion=p.fecha_actualizacion,
+                    fecha_registro=p.fecha_registro,
+                    fecha_aprobacion=p.fecha_aprobacion,
+                    nombres=nombres_cliente or p.nombres,
+                    cedula=cedula_cliente or p.cedula,
+                    numero_cuotas=numero_cuotas,
+                    modalidad_pago=p.modalidad_pago,
+                )
+            )
+        return {"prestamos": [i.model_dump() for i in items], "total": len(items)}
 
 
+
+    except Exception as e:
+        logger.exception("listar_prestamos_por_cedula error: %s", e)
+        return {"prestamos": [], "total": 0}
 @router.get("/cedula/{cedula}/resumen", response_model=dict)
 def resumen_prestamos_por_cedula(cedula: str, db: Session = Depends(get_db)):
     """Resumen de préstamos por cédula: total, saldo pendiente, cuotas en mora (integrado con frontend)."""
