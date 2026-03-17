@@ -2069,7 +2069,7 @@ def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
                 Cuota.fecha_pago.is_(None),
                 or_(Cuota.total_pagado.is_(None), Cuota.total_pagado < Cuota.monto),
             )
-            .order_by(Cuota.numero_cuota.desc())  # De atras hacia delante: ultima cuota no cubierta al 100% primero
+            .order_by(Cuota.numero_cuota.asc())  # FIFO: primero las cuotas más antiguas (numero_cuota menor), luego las siguientes
         )
     ).scalars().all()
     cuotas_completadas = 0
