@@ -98,14 +98,13 @@ def main():
             p = db.get(Prestamo, prestamo_id)
             if not p:
                 continue
+            # Regla obligatoria: tabla de amortización solo con fecha de aprobación
             fecha_base = None
             if getattr(p, "fecha_aprobacion", None):
                 fa = p.fecha_aprobacion
                 fecha_base = fa.date() if hasattr(fa, "date") else fa
-            if fecha_base is None and getattr(p, "fecha_base_calculo", None):
-                fecha_base = p.fecha_base_calculo
             if fecha_base is None:
-                print(f"  Prestamo {prestamo_id}: sin fecha_aprobacion ni fecha_base_calculo, se omite.")
+                print(f"  Prestamo {prestamo_id}: sin fecha_aprobacion, se omite (obligatoria para amortización).")
                 continue
 
             numero_cuotas = p.numero_cuotas or 12

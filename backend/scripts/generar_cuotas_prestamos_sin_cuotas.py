@@ -63,13 +63,14 @@ def main(dry_run: bool = False):
                 continue
             try:
                 monto_cuota = _resolver_monto_cuota(p, total_fin, numero_cuotas)
+                # Regla obligatoria: tabla de amortización solo con fecha de aprobación
                 fecha_base = None
                 if getattr(p, "fecha_aprobacion", None):
                     fecha_base = getattr(p.fecha_aprobacion, "date", lambda: p.fecha_aprobacion)()
-                elif getattr(p, "fecha_registro", None):
-                    fecha_base = getattr(p.fecha_registro, "date", lambda: p.fecha_registro)()
                 if fecha_base is None:
-                    fecha_base = date.today()
+                    print(f"  Préstamo {pid}: sin fecha_aprobacion, se omite (obligatoria para amortización).")
+                    err += 1
+                    continue
                 if hasattr(fecha_base, "date") and callable(getattr(fecha_base, "date", None)):
                     fecha_base = fecha_base.date()
                 n_creadas = _generar_cuotas_amortizacion(db, p, fecha_base, numero_cuotas, monto_cuota)

@@ -881,6 +881,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess, onAprobarManua
               </DialogHeader>
               <p className="text-sm text-gray-600">
                 El préstamo se registrará con los datos ingresados. Podrá editarlo mientras esté en estado Borrador o En Revisión.
+                La tabla de amortización se generará al aprobar el préstamo, usando únicamente la fecha de aprobación.
                 ¿Desea continuar?
               </p>
               <DialogFooter>

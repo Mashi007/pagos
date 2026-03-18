@@ -82,6 +82,10 @@ export function AprobarPrestamoManualModal({ prestamo, onClose, onSuccess }: Apr
     setCuotaPeriodo(cuotaCalculada)
   }, [cuotaCalculada])
 
+  const fechaRequerimientoStr = prestamo.fecha_requerimiento
+    ? new Date(prestamo.fecha_requerimiento).toISOString().split('T')[0]
+    : null
+
   const canSubmit =
     fechaAprobacion &&
     documentosAnalizados &&
@@ -91,6 +95,10 @@ export function AprobarPrestamoManualModal({ prestamo, onClose, onSuccess }: Apr
 
   const handleAprobar = async () => {
     if (!canSubmit) return
+    if (fechaRequerimientoStr && fechaAprobacion < fechaRequerimientoStr) {
+      toast.error(`La fecha de aprobación debe ser igual o posterior a la fecha de requerimiento (${new Date(fechaRequerimientoStr).toLocaleDateString()})`)
+      return
+    }
     setIsLoading(true)
     try {
       await prestamoService.aprobarManual(prestamo.id, {
@@ -222,6 +230,7 @@ export function AprobarPrestamoManualModal({ prestamo, onClose, onSuccess }: Apr
                     value={fechaAprobacion}
                     onChange={(e) => setFechaAprobacion(e.target.value)}
                     className="pl-10"
+                    min={fechaRequerimientoStr || undefined}
                   />
                 </div>
                 <p className="text-xs text-gray-500 mt-1">Base para la tabla de amortización.</p>

@@ -23,9 +23,17 @@ export function AsignarFechaAprobacionModal({ prestamo, onClose, onSuccess }: As
   )
   const [isLoading, setIsLoading] = useState(false)
 
+  const fechaRequerimientoStr = prestamo.fecha_requerimiento
+    ? new Date(prestamo.fecha_requerimiento).toISOString().split('T')[0]
+    : null
+
   const handleAsignarFecha = async () => {
     if (!fechaAprobacion) {
       toast.error('Debe seleccionar una fecha de aprobación')
+      return
+    }
+    if (fechaRequerimientoStr && fechaAprobacion < fechaRequerimientoStr) {
+      toast.error(`La fecha de aprobación debe ser igual o posterior a la fecha de requerimiento (${new Date(fechaRequerimientoStr).toLocaleDateString()})`)
       return
     }
 
@@ -126,7 +134,7 @@ export function AsignarFechaAprobacionModal({ prestamo, onClose, onSuccess }: As
                       value={fechaAprobacion}
                       onChange={(e) => setFechaAprobacion(e.target.value)}
                       className="pl-10"
-                      min={prestamo.fecha_registro ? new Date(prestamo.fecha_registro).toISOString().split('T')[0] : undefined}
+                      min={fechaRequerimientoStr || (prestamo.fecha_registro ? new Date(prestamo.fecha_registro).toISOString().split('T')[0] : undefined)}
                     />
                   </div>
                   <p className="text-xs text-gray-500">

@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   CreditCard,
@@ -80,6 +80,7 @@ export function PagosList() {
     mensaje: string
   } | null>(null)
   const [isImportingCobros, setIsImportingCobros] = useState(false)
+  const [isDescargandoExcelCobrosErrores, setIsDescargandoExcelCobrosErrores] = useState(false)
   const [isExportingRevisionPagos, setIsExportingRevisionPagos] = useState(false)
   const [isDescargandoGmailExcel, setIsDescargandoGmailExcel] = useState(false)
   const [showVaciarTablaGmail, setShowVaciarTablaGmail] = useState(false)
@@ -144,6 +145,19 @@ export function PagosList() {
       toast.error(e?.response?.data?.detail || e?.message || 'Error al importar desde Cobros')
     } finally {
       setIsImportingCobros(false)
+    }
+  }
+
+  const handleDescargarExcelErroresCobros = async () => {
+    setIsDescargandoExcelCobrosErrores(true)
+    try {
+      await pagoService.descargarExcelErroresImportacionCobros()
+      toast.success('Excel descargado. Los registros con error se han vaciado del servidor.')
+      setLastImportCobrosResult(null)
+    } catch (e) {
+      toast.error(getErrorMessage(e))
+    } finally {
+      setIsDescargandoExcelCobrosErrores(false)
     }
   }
 

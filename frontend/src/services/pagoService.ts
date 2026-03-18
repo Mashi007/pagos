@@ -152,6 +152,41 @@ class PagoService {
     return await apiClient.post(`${this.baseUrl}/importar-desde-cobros`)
   }
 
+  /**
+   * Descarga el Excel de registros que fallaron al "Importar reportados aprobados (Cobros)".
+   * Los datos están en datos_importados_conerrores; el backend vacía la tabla tras generar el archivo.
+   */
+  async descargarExcelErroresImportacionCobros(): Promise<void> {
+    const axiosInstance = apiClient.getAxiosInstance()
+    const url = `${this.baseUrl}/importar-desde-cobros/descargar-excel-errores`
+    const response = await axiosInstance.get(url, { responseType: 'blob', timeout: 60000 })
+    if (response.status !== 200) {
+      try {
+        const text = await (response.data as Blob).text()
+        const json = JSON.parse(text) as { detail?: string }
+        throw new Error(json.detail || `Error al descargar (${response.status}).`)
+      } catch (e) {
+        if (e instanceof Error) throw e
+        throw new Error('No se pudo descargar el Excel de errores.')
+      }
+    }
+    const blob = response.data as Blob
+    const disposition = response.headers?.['content-disposition']
+    let filename = `datos_importados_con_errores_${new Date().toISOString().slice(0, 10)}.xlsx`
+    if (typeof disposition === 'string' && disposition.includes('filename=')) {
+      const m = disposition.match(/filename=(.+?)(?:;|$)/)
+      if (m) filename = m[1].replace(/^["']|["']$/g, '').trim()
+    }
+    const blobUrl = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = blobUrl
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(blobUrl)
+  }
+
   // Cargar Excel de conciliaci�n (2 columnas: Fecha de Dep�sito, N�mero de Documento)
   async uploadConciliacion(file: File): Promise<{
     pagos_conciliados: number

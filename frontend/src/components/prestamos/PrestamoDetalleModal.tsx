@@ -206,8 +206,8 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                       Información del Préstamo
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="grid grid-cols-2 gap-4">
-                    <div>
+                  <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="min-w-0">
                       <label className="text-sm text-gray-600">Total de Financiamiento</label>
                       <p className="text-2xl font-bold text-green-600">
                         ${(typeof prestamoData.total_financiamiento === 'number'
@@ -215,7 +215,7 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                           : Number(prestamoData.total_financiamiento) || 0).toFixed(2)}
                       </p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <label className="text-sm text-gray-600">Modalidad de Pago</label>
                       <p className="font-medium">
                         {prestamoData.modalidad_pago === 'MENSUAL' ? 'Mensual' :
@@ -224,11 +224,11 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                          prestamoData.modalidad_pago}
                       </p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <label className="text-sm text-gray-600">Número de Cuotas</label>
                       <p className="text-xl font-semibold">{prestamoData.numero_cuotas}</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <label className="text-sm text-gray-600">Cuota por Período</label>
                       <p className="text-xl font-semibold">
                         ${(typeof prestamoData.cuota_periodo === 'number'
@@ -238,7 +238,7 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                             : 0)).toFixed(2)}
                       </p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <label className="text-sm text-gray-600">Tasa de Interés</label>
                       <p className="font-medium">
                         {((typeof prestamoData.tasa_interes === 'number'
@@ -247,26 +247,25 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                       </p>
                     </div>
                     {/* Orden lógico: Requerimiento (solicitud) → Aprobación. La tabla de amortización usa fecha de aprobación (o fecha_base_calculo) como base. */}
-                    {prestamoData.fecha_requerimiento && (
-                      <div>
-                        <label className="text-sm text-gray-600">Fecha de Requerimiento</label>
-                        <p className="font-medium">{formatDate(prestamoData.fecha_requerimiento)}</p>
-                      </div>
-                    )}
+                    <div className="min-w-0">
+                      <label className="text-sm text-gray-600">Fecha de Requerimiento</label>
+                      <p className="font-medium">{prestamoData.fecha_requerimiento ? formatDate(prestamoData.fecha_requerimiento) : '—'}</p>
+                    </div>
                     {prestamoData.fecha_aprobacion && (
-                      <div>
+                      <div className="min-w-0">
                         <label className="text-sm text-gray-600">Fecha de Aprobación</label>
                         <p className="font-medium">{formatDate(prestamoData.fecha_aprobacion)}</p>
                         <p className="text-xs text-gray-500 mt-0.5">Base para vencimientos de la tabla de amortización</p>
                       </div>
                     )}
                     {prestamoData.fecha_base_calculo && (
-                      <div>
+                      <div className="min-w-0">
                         <label className="text-sm text-gray-600">Fecha Base de Cálculo</label>
                         <p className="font-medium">{formatDate(prestamoData.fecha_base_calculo)}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">Solo informativa; la tabla de amortización usa únicamente la Fecha de Aprobación.</p>
                       </div>
                     )}
-                    {/* Aviso si las fechas son incoherentes (aprobación antes de requerimiento) */}
+                    {/* Aviso solo para datos legacy: aprobación anterior a requerimiento (desde ahora el sistema exige coherencia) */}
                     {prestamoData.fecha_requerimiento && prestamoData.fecha_aprobacion && (() => {
                       const req = new Date(prestamoData.fecha_requerimiento).getTime()
                       const apr = new Date(prestamoData.fecha_aprobacion).getTime()
@@ -274,9 +273,9 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                         return (
                           <div className="col-span-2 mt-2 p-3 rounded-md bg-amber-50 border border-amber-200 flex items-start gap-2">
                             <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-                            <div className="text-sm text-amber-800">
-                              Las fechas no coinciden con el flujo habitual: la fecha de aprobación es anterior a la fecha de requerimiento. Revise los datos en Revisión Manual o edición si es un error de carga.
-                            </div>
+                            <p className="text-sm text-amber-800">
+                              La fecha de aprobación es anterior a la de requerimiento. Corrija en Revisión Manual o edición del préstamo.
+                            </p>
                           </div>
                         )
                       }
