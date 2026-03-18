@@ -793,23 +793,27 @@ def _generar_cuotas_amortizacion(db: Session, p: Prestamo, fecha_base: date, num
 def get_cuotas_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
     """
     Lista las cuotas (tabla de amortización) de un préstamo, con info de pago conciliado.
-    
-    Estrategia mejorada:
-    1. Obtiene todas las cuotas del préstamo.
-    2. Para cada cuota, busca pagos coincidentes por fecha_vencimiento + rango de días.
-    3. Consolida información: si hay pagos conciliados, los retorna.
-    4. Calcula pago_conciliado=True si existe al menos un pago conciliado o verificado.
-    5. Retorna pago_monto_conciliado como suma de montos conciliados en el rango de fechas.
+
+    CAUSA RAÍZ del "—" en Pago conciliado/Recibo: pagos en BD con prestamo_id y conciliado
+    pero nunca aplicados a cuotas (sin filas en cuota_pagos; cuotas.total_pagado vacío).
+    Antes de devolver, se aplican automáticamente los pagos pendientes de este préstamo.
     """
     row = db.get(Prestamo, prestamo_id)
     if not row:
         raise HTTPException(status_code=404, detail="Préstamo no encontrado")
-    
-    # Obtener todas las cuotas del préstamo
+
+    # Aplicar a cuotas cualquier pago conciliado del préstamo que aún no tenga enlaces (cuota_pagos).
+    # Corrige el caso donde el pago existía pero nunca se ejecutó "aplicar a cuotas".
+    n_aplicados = aplicar_pagos_pendientes_prestamo(prestamo_id, db)
+    if n_aplicados > 0:
+        db.commit()
+        logger.info("get_cuotas_prestamo: aplicados %s pago(s) pendientes al préstamo %s", n_aplicados, prestamo_id)
+
+    # Obtener todas las cuotas del préstamo (tras posible aplicación, para devolver datos actualizados)
     cuotas = db.execute(
         select(Cuota).where(Cuota.prestamo_id == prestamo_id).order_by(Cuota.numero_cuota)
     ).scalars().all()
-    
+
     resultado = []
     for c in cuotas:
         # Estrategia de búsqueda de pagos:
