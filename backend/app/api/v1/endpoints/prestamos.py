@@ -23,6 +23,7 @@ from app.schemas.auth import UserResponse
 from app.models.auditoria import Auditoria
 from app.models.cliente import Cliente
 from app.models.cuota import Cuota
+from app.models.cuota_pago import CuotaPago
 from app.models.pago import Pago
 from app.models.prestamo import Prestamo
 from app.models.user import User
@@ -822,7 +823,21 @@ def get_cuotas_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
         # no el monto total del pago (que puede cubrir múltiples cuotas).
         pago_monto_conciliado = float(c.total_pagado or 0)
 
-        if c.pago_id:
+        # Caso 0: Tabla cuota_pagos — vínculo explícito pago↔cuota (prioritario; no depende de fecha_vencimiento).
+        # Tras actualizar vencimientos, el rango ±15 días ya no coincide; cuota_pagos sí sigue correcto.
+        cp_links = db.execute(
+            select(Pago).join(CuotaPago, CuotaPago.pago_id == Pago.id).where(
+                CuotaPago.cuota_id == c.id,
+                or_(
+                    Pago.conciliado.is_(True),
+                    func.coalesce(func.upper(func.trim(Pago.verificado_concordancia)), "") == "SI",
+                ),
+            )
+        ).scalars().all()
+        if cp_links:
+            pago_conciliado_flag = True
+
+        if not pago_conciliado_flag and c.pago_id:
             # Caso 1: La cuota tiene un pago_id vinculado directamente
             pago = db.get(Pago, c.pago_id)
             if pago:
@@ -830,9 +845,8 @@ def get_cuotas_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
                 pago_verificado_concordancia = str(pago.verificado_concordancia or "").strip().upper()
                 if pago_verificado_concordancia == "SI":
                     pago_conciliado_flag = True
-        else:
-            # Caso 2: Sin pago_id directo — buscar pagos conciliados por rango de fechas
-            # Solo necesitamos el flag de conciliación; el monto ya viene de cuota.total_pagado.
+        if not pago_conciliado_flag:
+            # Caso 2: Sin vínculo en cuota_pagos ni pago_id — buscar pagos conciliados por rango de fechas
             if c.fecha_vencimiento:
                 fecha_inicio = c.fecha_vencimiento - timedelta(days=15)
                 fecha_fin = c.fecha_vencimiento + timedelta(days=15)
@@ -850,7 +864,7 @@ def get_cuotas_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
                 for pago in pagos_en_rango:
                     if pago.conciliado or (str(pago.verificado_concordancia or "").strip().upper() == "SI"):
                         pago_conciliado_flag = True
-                        break  # un pago conciliado en rango es suficiente para marcar el flag
+                        break
 
         monto_cuota_f = float(c.monto or 0)
         total_pagado_f = float(c.total_pagado or 0)
