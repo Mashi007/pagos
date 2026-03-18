@@ -16,8 +16,16 @@ import { Input } from '../components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import toast from 'react-hot-toast'
-import { Loader2, Eye, FileText, Settings, Clock, Search, CheckCircle, XCircle, Trash2, AlertCircle, AlertTriangle, Edit } from 'lucide-react'
+import { Loader2, Eye, FileText, Settings, Clock, Search, CheckCircle, XCircle, Trash2, AlertCircle, AlertTriangle, Edit, Mail } from 'lucide-react'
 import { PUBLIC_REPORTE_PAGO_PATH } from '../config/env'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '../components/ui/dialog'
 
 const ESTADO_CONFIG: Record<string, { label: string; short: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; Icon: typeof Clock }> = {
   pendiente: { label: 'Pendiente', short: 'Pend.', variant: 'secondary', Icon: Clock },
@@ -39,6 +47,8 @@ export default function CobrosPagosReportadosPage() {
   const [changingEstadoId, setChangingEstadoId] = useState<number | null>(null)
   const [viewingComprobanteId, setViewingComprobanteId] = useState<number | null>(null)
   const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [rechazarModal, setRechazarModal] = useState<{ open: boolean; row: PagoReportadoItem | null }>({ open: false, row: null })
+  const [motivoRechazo, setMotivoRechazo] = useState('')
 
   const load = async () => {
     setLoading(true)
@@ -68,13 +78,30 @@ export default function CobrosPagosReportadosPage() {
     setChangingEstadoId(id)
     try {
       await cambiarEstadoPago(id, estado, motivo)
-      toast.success('Estado actualizado.')
+      toast.success(estado === 'rechazado' ? 'Pago rechazado. Correo enviado al cliente desde notificaciones@rapicreditca.com.' : 'Estado actualizado.')
       load()
+      if (estado === 'rechazado') {
+        setRechazarModal({ open: false, row: null })
+        setMotivoRechazo('')
+      }
     } catch (e: any) {
       toast.error(e?.message || 'Error al actualizar.')
     } finally {
       setChangingEstadoId(null)
     }
+  }
+
+  const handleAbrirModalRechazo = (row: PagoReportadoItem) => {
+    setRechazarModal({ open: true, row })
+    setMotivoRechazo('')
+  }
+
+  const handleConfirmarRechazo = () => {
+    if (!rechazarModal.row || !motivoRechazo.trim()) {
+      toast.error('El motivo de rechazo es obligatorio.')
+      return
+    }
+    handleCambiarEstado(rechazarModal.row.id, 'rechazado', motivoRechazo.trim())
   }
 
   const handleEliminar = async (id: number, ref: string) => {
@@ -278,8 +305,7 @@ export default function CobrosPagosReportadosPage() {
                                 e.target.value = ''
                                 if (!v) return
                                 if (v === 'rechazado') {
-                                  const motivo = window.prompt('Motivo de rechazo (obligatorio):')
-                                  if (motivo?.trim()) handleCambiarEstado(row.id, v, motivo.trim())
+                                  handleAbrirModalRechazo(row)
                                   return
                                 }
                                 handleCambiarEstado(row.id, v)
@@ -326,6 +352,70 @@ export default function CobrosPagosReportadosPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Modal: interfaz rápida para escribir mensaje de rechazo y enviar correo al cliente */}
+      <Dialog
+        open={rechazarModal.open}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRechazarModal({ open: false, row: null })
+            setMotivoRechazo('')
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <XCircle className="h-5 w-5" /> Rechazar pago reportado
+            </DialogTitle>
+            <DialogDescription>
+              {rechazarModal.row && (
+                <>
+                  Referencia: <strong>{rechazarModal.row.referencia_interna}</strong>
+                  {rechazarModal.row.correo_enviado_a && (
+                    <span className="block mt-1">
+                      Se enviará un correo automáticamente a <strong>{rechazarModal.row.correo_enviado_a}</strong> desde <strong>notificaciones@rapicreditca.com</strong> con el mensaje y el comprobante adjunto.
+                    </span>
+                  )}
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <label className="block text-sm font-medium">Mensaje para el cliente (obligatorio)</label>
+            <textarea
+              className="w-full border rounded-md px-3 py-2 min-h-[100px] text-sm resize-y"
+              placeholder="Indique el motivo del rechazo. Este texto se enviará por correo al cliente."
+              value={motivoRechazo}
+              onChange={(e) => setMotivoRechazo(e.target.value)}
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setRechazarModal({ open: false, row: null })
+                setMotivoRechazo('')
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmarRechazo}
+              disabled={!motivoRechazo.trim() || changingEstadoId === rechazarModal.row?.id}
+            >
+              {changingEstadoId === rechazarModal.row?.id ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <Mail className="h-4 w-4 mr-2" />
+              )}
+              Rechazar y enviar correo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

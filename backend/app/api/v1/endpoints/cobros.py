@@ -709,6 +709,11 @@ def cambiar_estado_pago(
                 mensaje = "Estado actualizado a aprobado. El recibo no pudo enviarse por correo."
         else:
             mensaje = "Estado actualizado a aprobado. No hay correo registrado para este pago (no se envió recibo)."
+        # Crear pago en tabla pagos y aplicar a cuotas (igual que POST /aprobar) para que estado de cuenta y préstamos se actualicen
+        try:
+            _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)
+        except HTTPException:
+            raise
 
     _registrar_historial(db, pago_id, estado_anterior, body.estado, usuario_email, body.motivo)
     db.commit()
