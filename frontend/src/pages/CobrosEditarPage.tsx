@@ -11,12 +11,21 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import toast from 'react-hot-toast'
 import { Loader2 } from 'lucide-react'
 
+const INSTITUCIONES_FINANCIERAS = [
+  'BINANCE',
+  'BNC',
+  'Banco de Venezuela',
+  'Mercantil',
+  'Recibos',
+]
+
 export default function CobrosEditarPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [detalle, setDetalle] = useState<PagoReportadoDetalleResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [otroInstitucion, setOtroInstitucion] = useState('')
   const [form, setForm] = useState({
     nombres: '',
     apellidos: '',
@@ -37,6 +46,7 @@ export default function CobrosEditarPage() {
     try {
       const res = await getPagoReportadoDetalle(Number(id))
       setDetalle(res)
+      const montoRaw = res.monto != null ? String(res.monto) : ''
       setForm({
         nombres: res.nombres || '',
         apellidos: res.apellidos || '',
@@ -45,11 +55,13 @@ export default function CobrosEditarPage() {
         fecha_pago: (res.fecha_pago || '').toString().slice(0, 10),
         institucion_financiera: res.institucion_financiera || '',
         numero_operacion: res.numero_operacion || '',
-        monto: String(res.monto ?? ''),
+        monto: montoRaw,
         moneda: res.moneda || 'BS',
         correo_enviado_a: res.correo_enviado_a || '',
         observacion: res.observacion || res.gemini_comentario || '',
       })
+      const inst = res.institucion_financiera || ''
+      setOtroInstitucion(INSTITUCIONES_FINANCIERAS.includes(inst) ? '' : inst)
     } catch (e: any) {
       toast.error(e?.message || 'Error al cargar.')
       navigate('/cobros/pagos-reportados')
@@ -101,6 +113,20 @@ export default function CobrosEditarPage() {
         <Loader2 className="h-5 w-5 animate-spin" /> Cargando...
       </div>
     )
+  }
+
+  const formatMontoDisplay = (val: string) => {
+    const num = parseFloat(val.replace(/,/g, '.').replace(/\s/g, ''))
+    if (Number.isNaN(num)) return ''
+    return num.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  }
+  const parseMontoInput = (val: string) => {
+    const cleaned = val.replace(/[^\d.,]/g, '')
+    const lastSep = Math.max(cleaned.lastIndexOf('.'), cleaned.lastIndexOf(','))
+    if (lastSep === -1) return cleaned
+    const before = cleaned.slice(0, lastSep).replace(/[.,]/g, '')
+    const after = cleaned.slice(lastSep + 1).replace(/\D/g, '').slice(0, 2)
+    return after ? `${before || '0'}.${after}` : (before || '0')
   }
 
   if (detalle.estado === 'aprobado' || detalle.estado === 'rechazado') {
@@ -186,11 +212,37 @@ export default function CobrosEditarPage() {
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Institución financiera</label>
-              <Input
-                value={form.institucion_financiera}
-                onChange={(e) => setForm((f) => ({ ...f, institucion_financiera: e.target.value }))}
-                placeholder="Ej: BNC (Banco Nacional de Venezuela), Banesco, etc."
-              />
+              <select
+                className="w-full border rounded-md px-3 py-2 min-h-[40px] bg-white"
+                value={INSTITUCIONES_FINANCIERAS.includes(form.institucion_financiera) ? form.institucion_financiera : 'Otros'}
+                onChange={(e) => {
+                  const v = e.target.value
+                  if (v === 'Otros') {
+                    setForm((f) => ({ ...f, institucion_financiera: otroInstitucion }))
+                  } else {
+                    setForm((f) => ({ ...f, institucion_financiera: v }))
+                    setOtroInstitucion('')
+                  }
+                }}
+              >
+                <option value="">Seleccione...</option>
+                {INSTITUCIONES_FINANCIERAS.map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+                <option value="Otros">Otros</option>
+              </select>
+              {!INSTITUCIONES_FINANCIERAS.includes(form.institucion_financiera) && (
+                <Input
+                  className="mt-2"
+                  value={form.institucion_financiera || otroInstitucion}
+                  onChange={(e) => {
+                    const val = e.target.value
+                    setOtroInstitucion(val)
+                    setForm((f) => ({ ...f, institucion_financiera: val }))
+                  }}
+                  placeholder="Nombre del banco o entidad"
+                />
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Número de operación</label>
@@ -204,12 +256,11 @@ export default function CobrosEditarPage() {
               <div>
                 <label className="block text-sm font-medium mb-1">Monto</label>
                 <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={form.monto}
-                  onChange={(e) => setForm((f) => ({ ...f, monto: e.target.value }))}
-                  placeholder="0.00"
+                  type="text"
+                  inputMode="decimal"
+                  value={form.monto ? formatMontoDisplay(form.monto) : ''}
+                  onChange={(e) => setForm((f) => ({ ...f, monto: parseMontoInput(e.target.value) }))}
+                  placeholder="0,00"
                 />
               </div>
               <div>
