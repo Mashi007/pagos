@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Servicio público de consulta de estado de cuenta por cédula.
  * Sin autenticación. Solo validar cédula y solicitar PDF (envío al email del cliente).
  */
@@ -29,12 +29,21 @@ export interface SolicitarCodigoResponse {
   expira_en?: string
 }
 
+export interface ReciboCuotaItem {
+  prestamo_id: number
+  producto: string
+  cuota_id: number
+  numero_cuota: number
+  url: string
+}
+
 export interface VerificarCodigoResponse {
   ok: boolean
   pdf_base64?: string
   error?: string
-  /** ISO 8601 del código verificado (informativo) */
   expira_en?: string
+  recibo_token?: string
+  recibos_cuotas?: ReciboCuotaItem[]
 }
 
 /** Público: validar cédula (formato + existe en clientes). Sin auth. */

@@ -230,6 +230,12 @@ def generar_pdf_estado_cuenta(
                     ),
                 )
             )
+            style_recibo_link = ParagraphStyle(
+                name="ReciboCuotaLink",
+                fontSize=8,
+                textColor=COLOR_HEADER,
+                spaceAfter=2,
+            )
             rows = [
                 [
                     "Cuota",
@@ -240,9 +246,18 @@ def generar_pdf_estado_cuenta(
                     "Saldo",
                     "Pago conc.",
                     "Estado",
+                    "Recibo",
                 ]
             ]
             for c in cuotas:
+                estado_cuota = (c.get("estado") or "").strip().upper()
+                cuota_id = c.get("id")
+                puede_recibo = estado_cuota == "PAGADO" and cuota_id and base_url and recibo_token
+                if puede_recibo:
+                    url_recibo = f"{base_url}/api/v1/estado-cuenta/public/recibo-cuota?token={recibo_token}&prestamo_id={prestamo_id}&cuota_id={cuota_id}"
+                    recibo_cell = Paragraph(f'<a href="{url_recibo}" color="{COLOR_HEADER}">Ver recibo</a>', style_recibo_link)
+                else:
+                    recibo_cell = Paragraph("&mdash;", style_recibo_link)
                 rows.append(
                     [
                         str(c.get("numero_cuota", "")),
@@ -253,11 +268,12 @@ def generar_pdf_estado_cuenta(
                         f"{float(c.get('saldo_capital_final') or 0):,.2f}",
                         c.get("pago_conciliado_display", "-"),
                         (c.get("estado") or "")[:10],
+                        recibo_cell,
                     ]
                 )
             t = Table(
                 rows,
-                colWidths=[38, 52, 52, 48, 52, 52, 52, 50],
+                colWidths=[34, 48, 48, 44, 48, 48, 48, 46, 52],
             )
             t.setStyle(
                 TableStyle(

@@ -14,7 +14,8 @@ import string
 from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -35,12 +36,13 @@ from app.models.estado_cuenta_codigo import EstadoCuentaCodigo
 from app.models.pago_reportado import PagoReportado
 from app.models.pago import Pago
 from app.api.v1.endpoints.validadores import validate_cedula
-from app.core.security import create_recibo_token
+from app.core.security import create_recibo_token, decode_token
 from app.core.email import send_email
 from app.core.email_config_holder import get_email_activo_servicio
 
 from app.services.estado_cuenta_pdf import generar_pdf_estado_cuenta
 from app.services.cuota_estado import estado_cuota_para_mostrar
+from app.services.cobros.recibo_cuota_amortizacion import generar_recibo_cuota_amortizacion
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +100,8 @@ class VerificarCodigoResponse(BaseModel):
     pdf_base64: Optional[str] = None
     error: Optional[str] = None
     expira_en: Optional[str] = None
-    recibo_token: Optional[str] = None  # token para links de recibo en PDF  # ISO 8601 del código verificado (informativo)
+    recibo_token: Optional[str] = None  # token para links de recibo en PDF
+    recibos_cuotas: Optional[List[dict]] = None  # lista { prestamo_id, producto, cuota_id, numero_cuota, url } para interfaz
 
 
 CODIGO_EXPIRA_MINUTES = 120  # 2 horas
@@ -303,6 +306,7 @@ def _obtener_amortizacion_prestamo(db: Session, prestamo_id: int) -> List[dict]:
         else:
             estado_mostrar = "PAGADO"
         resultado.append({
+            "id": getattr(cu, "id", None),
             "numero_cuota": getattr(cu, "numero_cuota", 0),
             "fecha_vencimiento": fecha_ddmm,
             "monto_capital": monto_capital,
@@ -313,6 +317,66 @@ def _obtener_amortizacion_prestamo(db: Session, prestamo_id: int) -> List[dict]:
             "estado": estado_mostrar,
         })
     return resultado
+
+
+@router.get("/recibo-cuota")
+def get_recibo_cuota_publico(
+    token: str = Query(..., description="Token de estado de cuenta"),
+    prestamo_id: int = Query(..., description="ID del préstamo"),
+    cuota_id: int = Query(..., description="ID de la cuota"),
+    db: Session = Depends(get_db),
+):
+    """
+    Devuelve el PDF del recibo de una cuota. Requiere token válido (emitido al verificar código).
+    Público; la seguridad es el token (cédula + expiración). Para enlaces en el PDF de estado de cuenta.
+    """
+    payload = decode_token(token)
+    if not payload or payload.get("type") != "recibo":
+        raise HTTPException(status_code=401, detail="Token inválido o expirado.")
+    cedula_token = (payload.get("sub") or "").strip().replace("-", "")
+    if not cedula_token:
+        raise HTTPException(status_code=401, detail="Token inválido.")
+    prestamo = db.get(Prestamo, prestamo_id)
+    if not prestamo:
+        raise HTTPException(status_code=404, detail="Préstamo no encontrado.")
+    cedula_prestamo = (getattr(prestamo, "cedula", "") or "").strip().replace("-", "")
+    if cedula_prestamo != cedula_token:
+        raise HTTPException(status_code=403, detail="No tiene permiso para este recibo.")
+    cuota = db.get(Cuota, cuota_id)
+    if not cuota or cuota.prestamo_id != prestamo_id:
+        raise HTTPException(status_code=404, detail="Cuota no encontrada.")
+    monto_cuota = float(cuota.monto or 0)
+    total_pagado = float(cuota.total_pagado or 0)
+    if total_pagado <= 0 and monto_cuota <= 0:
+        raise HTTPException(status_code=400, detail="La cuota no tiene monto pagado.")
+    referencia = f"Cuota-{cuota.numero_cuota}-Prestamo-{prestamo_id}"
+    monto_str = f"{total_pagado:.2f}" if total_pagado > 0 else f"{monto_cuota:.2f}"
+    institucion = "N/A"
+    numero_operacion = referencia
+    fecha_recep = None
+    if cuota.pago_id:
+        pago = db.get(Pago, cuota.pago_id)
+        if pago:
+            institucion = (pago.institucion_bancaria or "N/A")[:100]
+            numero_operacion = (pago.numero_documento or pago.referencia_pago or referencia)[:100]
+            if pago.fecha_pago:
+                fecha_recep = pago.fecha_pago
+    if not fecha_recep and cuota.fecha_pago:
+        fecha_recep = datetime.combine(cuota.fecha_pago, datetime.min.time())
+    pdf_bytes = generar_recibo_cuota_amortizacion(
+        referencia_interna=referencia,
+        nombres_completos=(prestamo.nombres or "").strip(),
+        cedula=(prestamo.cedula or "").strip(),
+        institucion_financiera=institucion,
+        monto=monto_str + " Bs.",
+        numero_operacion=numero_operacion,
+        fecha_recepcion=fecha_recep,
+    )
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="recibo_cuota_{cuota.numero_cuota}_{prestamo.cedula}.pdf"'},
+    )
 
 
 @router.get("/validar-cedula", response_model=ValidarCedulaEstadoCuentaResponse)
@@ -541,8 +605,29 @@ def verificar_codigo_estado_cuenta(
     rec.usado = True
     db.commit()
     expira_en_iso = (rec.expira_en.isoformat() + "Z") if getattr(rec, "expira_en", None) else None
+    recibos_cuotas = []
+    for item in (datos.get("amortizaciones_por_prestamo") or []):
+        prestamo_id = item.get("prestamo_id")
+        producto = (item.get("producto") or "Préstamo")[:40]
+        for c in (item.get("cuotas") or []):
+            if (c.get("estado") or "").strip().upper() != "PAGADO" or not c.get("id"):
+                continue
+            url = f"{base_url}/api/v1/estado-cuenta/public/recibo-cuota?token={recibo_token}&prestamo_id={prestamo_id}&cuota_id={c.get('id')}"
+            recibos_cuotas.append({
+                "prestamo_id": prestamo_id,
+                "producto": producto,
+                "cuota_id": c.get("id"),
+                "numero_cuota": c.get("numero_cuota"),
+                "url": url,
+            })
     logger.info("estado_cuenta verificar ip=%s outcome=ok cedula_suffix=***%s", ip, cedula_lookup[-4:] if len(cedula_lookup) >= 4 else "****")
-    return VerificarCodigoResponse(ok=True, pdf_base64=pdf_b64, expira_en=expira_en_iso, recibo_token=recibo_token)
+    return VerificarCodigoResponse(
+        ok=True,
+        pdf_base64=pdf_b64,
+        expira_en=expira_en_iso,
+        recibo_token=recibo_token,
+        recibos_cuotas=recibos_cuotas if recibos_cuotas else None,
+    )
 
 
 @router.post("/solicitar-estado-cuenta", response_model=SolicitarEstadoCuentaResponse)

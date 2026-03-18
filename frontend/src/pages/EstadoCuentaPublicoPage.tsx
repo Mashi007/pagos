@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Consulta PÚBLICA de estado de cuenta por cédula.
  * Flujo: bienvenida → ingresar cédula → bienvenida con nombre → PDF + envío al email.
  * Sin login. Misma lógica y seguridades que rapicredit-cobros (rate limit, validación).
@@ -6,7 +6,7 @@
  */
 import React, { useState, useEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
-import { validarCedulaEstadoCuenta, solicitarCodigo, verificarCodigo, solicitarEstadoCuenta } from '../services/estadoCuentaService'
+import { validarCedulaEstadoCuenta, solicitarCodigo, verificarCodigo, solicitarEstadoCuenta, type ReciboCuotaItem } from '../services/estadoCuentaService'
 import { PUBLIC_FLOW_SESSION_KEY } from '../config/env'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
@@ -83,6 +83,7 @@ export default function EstadoCuentaPublicoPage() {
   const [notification, setNotification] = useState<NotificationState>(null)
   const [reenviarCooldown, setReenviarCooldown] = useState(0)
   const [reenviarLoading, setReenviarLoading] = useState(false)
+  const [recibosCuotas, setRecibosCuotas] = useState<ReciboCuotaItem[] | null>(null)
   const notificationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -112,6 +113,7 @@ export default function EstadoCuentaPublicoPage() {
     setNotification(null)
     setExpiraEn(null)
     setReenviarCooldown(0)
+    setRecibosCuotas(null)
     if (pdfBlobUrl) { URL.revokeObjectURL(pdfBlobUrl); setPdfBlobUrl(null) }
     setCedula('')
     setCodigo('')
@@ -253,6 +255,7 @@ export default function EstadoCuentaPublicoPage() {
       }
       if (res.pdf_base64) {
         setPdfDataUrl(`data:application/pdf;base64,${res.pdf_base64}`)
+        setRecibosCuotas(res.recibos_cuotas ?? null)
         try {
           const bin = atob(res.pdf_base64)
           const bytes = new Uint8Array(bin.length)
@@ -461,10 +464,29 @@ export default function EstadoCuentaPublicoPage() {
                   download={`estado_cuenta_${cedula.replace(/\s/g, '_')}.pdf`}
                   className="inline-flex items-center justify-center rounded-xl text-sm font-semibold bg-emerald-600 text-white hover:bg-emerald-700 min-h-[48px] px-4 py-2 flex-1 min-w-0 touch-manipulation shadow-lg shadow-emerald-600/25 hover:shadow-xl transition-all duration-200"
                 >
-                  Descargar PDF
+                  Descargar estado de cuenta
                 </a>
               )}
             </div>
+            {recibosCuotas && recibosCuotas.length > 0 && (
+              <div className="pt-4 border-t border-slate-200">
+                <p className="text-sm font-semibold text-[#1e3a5f] mb-2">Recibos de cuotas pagadas</p>
+                <ul className="space-y-2">
+                  {recibosCuotas.map((r, i) => (
+                    <li key={`${r.prestamo_id}-${r.cuota_id}-${i}`}>
+                      <a
+                        href={r.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 text-sm text-emerald-700 hover:text-emerald-800 underline underline-offset-2 font-medium"
+                      >
+                        Recibo cuota {r.numero_cuota} — Préstamo #{r.prestamo_id} {r.producto}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
