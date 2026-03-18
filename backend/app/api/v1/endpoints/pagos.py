@@ -2266,6 +2266,52 @@ def get_cedulas_reportar_bs(db: Session = Depends(get_db)):
     return {"total": total}
 
 
+class AgregarCedulaReportarBsBody(BaseModel):
+    cedula: str
+
+
+@router.post("/cedulas-reportar-bs/agregar", response_model=dict)
+def agregar_cedula_reportar_bs(
+    payload: AgregarCedulaReportarBsBody,
+    db: Session = Depends(get_db),
+):
+    """
+    Agrega una cédula a la lista de quienes pueden reportar en Bs (nuevo cliente que paga en bolívares).
+    Si ya existe, no duplica. La cédula se normaliza (V/E/J/G + dígitos).
+    """
+    cedula_norm = _normalize_cedula_bs(payload.cedula)
+    if not cedula_norm:
+        raise HTTPException(
+            status_code=400,
+            detail="Cédula inválida. Use letra V, E, J o G seguida de 6 a 11 dígitos (ej: V12345678).",
+        )
+    existente = db.execute(
+        select(CedulaReportarBs).where(CedulaReportarBs.cedula == cedula_norm).limit(1)
+    ).scalars().first()
+    if existente:
+        total = db.query(func.count(CedulaReportarBs.cedula)).scalar() or 0
+        return {
+            "agregada": False,
+            "cedula": cedula_norm,
+            "total": total,
+            "mensaje": f"La cédula {cedula_norm} ya estaba en la lista.",
+        }
+    try:
+        db.add(CedulaReportarBs(cedula=cedula_norm))
+        db.commit()
+        total = db.query(func.count(CedulaReportarBs.cedula)).scalar() or 0
+        return {
+            "agregada": True,
+            "cedula": cedula_norm,
+            "total": total,
+            "mensaje": f"Cédula {cedula_norm} agregada. Ya puede reportar pagos en Bs en Cobros e Infopagos.",
+        }
+    except Exception as e:
+        db.rollback()
+        logger.exception("Error agregando cedula_reportar_bs: %s", e)
+        raise HTTPException(status_code=500, detail="Error al agregar la cédula.") from e
+
+
 @router.post("/cedulas-reportar-bs/upload", response_model=dict)
 def upload_cedulas_reportar_bs(
     file: UploadFile = File(...),

@@ -159,6 +159,9 @@ class EnviarReporteInfopagosResponse(BaseModel):
 # Longitud máxima para evitar abuso (cédula venezolana: V/E/J + hasta 11 dígitos)
 MAX_CEDULA_LENGTH = 20
 
+# Mensaje de rechazo cuando intentan reportar en Bs sin estar en la lista (el usuario ve Observación: Bolívares)
+ERROR_BS_NO_AUTORIZADO = "Observación: Bolívares. No puede enviar pago en Bolívares; su cédula no está autorizada. Use USD."
+
 
 @router.get("/validar-cedula", response_model=ValidarCedulaResponse)
 def validar_cedula_publico(
@@ -273,10 +276,7 @@ async def enviar_reporte_publico(
             select(CedulaReportarBs).where(CedulaReportarBs.cedula == cedula_lookup).limit(1)
         ).scalars().first() is not None
         if not permitido_bs:
-            return EnviarReporteResponse(
-                ok=False,
-                error="Reportar pagos en Bolívares (Bs) no está habilitado para esta cédula. Use USD/USDT o contacte a soporte.",
-            )
+            return EnviarReporteResponse(ok=False, error=ERROR_BS_NO_AUTORIZADO)
     if monto <= 0 or monto > 999_999_999.99:
         return EnviarReporteResponse(ok=False, error="Monto no válido.")
     if fecha_pago > date.today():
@@ -518,10 +518,7 @@ async def enviar_reporte_infopagos(
             select(CedulaReportarBs).where(CedulaReportarBs.cedula == cedula_lookup).limit(1)
         ).scalars().first() is not None
         if not permitido_bs:
-            return EnviarReporteInfopagosResponse(
-                ok=False,
-                error="Reportar pagos en Bolívares (Bs) no está habilitado para esta cédula. Use USD/USDT o contacte a soporte.",
-            )
+            return EnviarReporteInfopagosResponse(ok=False, error=ERROR_BS_NO_AUTORIZADO)
     if monto <= 0 or monto > 999_999_999.99:
         return EnviarReporteInfopagosResponse(ok=False, error="Monto no válido.")
     if fecha_pago > date.today():

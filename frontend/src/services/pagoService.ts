@@ -207,6 +207,11 @@ class PagoService {
     return await apiClient.get(`${this.baseUrl}/cedulas-reportar-bs`)
   }
 
+  /** Agrega una cédula a la lista (nuevo cliente que paga en bolívares). */
+  async addCedulaReportarBs(cedula: string): Promise<{ agregada: boolean; cedula: string; total: number; mensaje: string }> {
+    return await apiClient.post(`${this.baseUrl}/cedulas-reportar-bs/agregar`, { cedula })
+  }
+
   /** Carga Excel con columna 'cedula' para definir quiénes pueden reportar en Bs. */
   async uploadCedulasReportarBs(file: File): Promise<{ total: number; mensaje: string }> {
     const formData = new FormData()

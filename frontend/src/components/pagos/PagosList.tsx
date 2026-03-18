@@ -90,6 +90,8 @@ export function PagosList() {
   const [submenuGmailOpen, setSubmenuGmailOpen] = useState(false)
   const [cedulasReportarBsTotal, setCedulasReportarBsTotal] = useState<number | null>(null)
   const [isUploadingCedulasBs, setIsUploadingCedulasBs] = useState(false)
+  const [isAgregandoCedulaBs, setIsAgregandoCedulaBs] = useState(false)
+  const [nuevaCedulaBs, setNuevaCedulaBs] = useState('')
   const fileInputCedulasBsRef = useRef<HTMLInputElement>(null)
   const queryClient = useQueryClient()
 
@@ -345,6 +347,91 @@ export function PagosList() {
   return (
     <div className="space-y-6">
       <PagosKPIsNuevo />
+      {/* Cédulas que pueden reportar en Bs (rapicredit-cobros / infopagos) - visible arriba */}
+      <Card className="border-blue-200 bg-blue-50/80 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2 font-semibold text-gray-800">
+            <FileSpreadsheet className="h-5 w-5 text-blue-600" />
+            Cédulas que pueden reportar en Bs (Bolívares)
+          </CardTitle>
+          <p className="text-sm text-gray-600 mt-1">
+            Solo las cédulas de esta lista pueden elegir «Bs» en RapiCredit Cobros e Infopagos. Cargue un Excel con columna <strong>cedula</strong> o agregue una cédula (ej. nuevo cliente que paga en bolívares).
+          </p>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center gap-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              placeholder="Ej: V12345678"
+              value={nuevaCedulaBs}
+              onChange={(e) => setNuevaCedulaBs(e.target.value)}
+              className="w-40 border-blue-300"
+              maxLength={20}
+              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), document.getElementById('btn-agregar-cedula-bs')?.click())}
+            />
+            <Button
+              id="btn-agregar-cedula-bs"
+              variant="outline"
+              size="sm"
+              className="border-blue-400 text-blue-800 hover:bg-blue-100"
+              disabled={isAgregandoCedulaBs || !nuevaCedulaBs.trim()}
+              onClick={async () => {
+                const ced = nuevaCedulaBs.trim()
+                if (!ced) return
+                setIsAgregandoCedulaBs(true)
+                try {
+                  const res = await pagoService.addCedulaReportarBs(ced)
+                  setCedulasReportarBsTotal(res.total)
+                  setNuevaCedulaBs('')
+                  toast.success(res.mensaje)
+                } catch (err) {
+                  toast.error(getErrorMessage(err))
+                } finally {
+                  setIsAgregandoCedulaBs(false)
+                }
+              }}
+            >
+              {isAgregandoCedulaBs ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />}
+              Agregar cédula
+            </Button>
+          </div>
+          <input
+            ref={fileInputCedulasBsRef}
+            type="file"
+            accept=".xlsx,.xls"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0]
+              if (!file) return
+              setIsUploadingCedulasBs(true)
+              try {
+                const res = await pagoService.uploadCedulasReportarBs(file)
+                setCedulasReportarBsTotal(res.total)
+                toast.success(res.mensaje)
+                if (fileInputCedulasBsRef.current) fileInputCedulasBsRef.current.value = ''
+              } catch (err) {
+                toast.error(getErrorMessage(err))
+              } finally {
+                setIsUploadingCedulasBs(false)
+              }
+            }}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-blue-400 text-blue-800 hover:bg-blue-100"
+            onClick={() => fileInputCedulasBsRef.current?.click()}
+            disabled={isUploadingCedulasBs}
+          >
+            {isUploadingCedulasBs ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
+            Cargar Excel (columna cedula)
+          </Button>
+          {cedulasReportarBsTotal !== null && (
+            <span className="text-sm text-gray-700">
+              <strong>{cedulasReportarBsTotal}</strong> cédula(s) cargada(s)
+            </span>
+          )}
+        </CardContent>
+      </Card>
       <div className="flex flex-wrap justify-end items-center gap-3 rounded-xl border border-gray-200/80 bg-gray-50/50 px-4 py-3 sm:px-5 sm:py-4">
           <Button
             variant="outline"
@@ -555,56 +642,6 @@ export function PagosList() {
           </Popover>
 
       </div>
-      {/* Cédulas que pueden reportar en Bs (rapicredit-cobros / infopagos) */}
-      <Card className="border-blue-100 bg-blue-50/50">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center gap-2 font-semibold text-gray-800">
-            <FileSpreadsheet className="h-5 w-5 text-blue-600" />
-            Cédulas que pueden reportar en Bs (Bolívares)
-          </CardTitle>
-          <p className="text-sm text-gray-600 mt-1">
-            Solo las cédulas de esta lista pueden elegir «Bs» en RapiCredit Cobros e Infopagos. Cargue un Excel con una columna <strong>cedula</strong>.
-          </p>
-        </CardHeader>
-        <CardContent className="flex flex-wrap items-center gap-4">
-          <input
-            ref={fileInputCedulasBsRef}
-            type="file"
-            accept=".xlsx,.xls"
-            className="hidden"
-            onChange={async (e) => {
-              const file = e.target.files?.[0]
-              if (!file) return
-              setIsUploadingCedulasBs(true)
-              try {
-                const res = await pagoService.uploadCedulasReportarBs(file)
-                setCedulasReportarBsTotal(res.total)
-                toast.success(res.mensaje)
-                if (fileInputCedulasBsRef.current) fileInputCedulasBsRef.current.value = ''
-              } catch (err) {
-                toast.error(getErrorMessage(err))
-              } finally {
-                setIsUploadingCedulasBs(false)
-              }
-            }}
-          />
-          <Button
-            variant="outline"
-            size="sm"
-            className="border-blue-300 text-blue-800 hover:bg-blue-100"
-            onClick={() => fileInputCedulasBsRef.current?.click()}
-            disabled={isUploadingCedulasBs}
-          >
-            {isUploadingCedulasBs ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
-            Cargar Excel (columna cedula)
-          </Button>
-          {cedulasReportarBsTotal !== null && (
-            <span className="text-sm text-gray-700">
-              <strong>{cedulasReportarBsTotal}</strong> cédula(s) cargada(s)
-            </span>
-          )}
-        </CardContent>
-      </Card>
       {/* Después de importar desde Cobros: si hay errores, ofrecer descargar Excel de esta importación (datos_importados_conerrores) */}
       {lastImportCobrosResult && lastImportCobrosResult.registros_con_error > 0 && (
         <Card className="border-amber-200 bg-amber-50">

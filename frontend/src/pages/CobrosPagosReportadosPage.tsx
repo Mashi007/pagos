@@ -219,9 +219,12 @@ export default function CobrosPagosReportadosPage() {
                         <span className="block truncate font-mono text-xs" title={row.numero_operacion}>{row.numero_operacion}</span>
                       </td>
                       <td className="py-3 px-3 align-top whitespace-nowrap">{new Date(row.fecha_reporte).toLocaleDateString()}</td>
-                      <td className="py-3 px-3 align-top min-w-0" title={row.observacion ?? ''}>
+                      <td className={`py-3 px-3 align-top min-w-0 ${/bol[ií]vares/i.test(row.observacion || '') ? 'bg-amber-50' : ''}`} title={row.observacion ?? ''}>
                         {row.observacion ? (
-                          <span className={`text-xs line-clamp-2 ${/c[eé]dula/i.test(row.observacion || '') ? 'text-destructive font-medium' : 'text-amber-700'}`}>{row.observacion}</span>
+                          <span className={`text-xs line-clamp-2 ${
+                            /bol[ií]vares.*no autorizada/i.test(row.observacion || '') ? 'text-amber-800 font-medium' :
+                            /c[eé]dula/i.test(row.observacion || '') ? 'text-destructive font-medium' : 'text-amber-700'
+                          }`}>{row.observacion}</span>
                         ) : '—'}
                       </td>
                       <td className="py-3 px-3 align-top whitespace-nowrap">
