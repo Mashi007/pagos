@@ -1,4 +1,4 @@
-"""
+﻿"""
 Servicios para notificaciones de cuotas vencidas y en mora.
 Centraliza la lógica de serialización y filtrado de cuotas.
 Una sola fuente de datos: get_cuotas_pendientes_con_cliente(db) para listado y envío.
@@ -16,6 +16,8 @@ from app.models.prestamo import Prestamo
 def get_cuotas_pendientes_con_cliente(db: Session) -> List[Tuple[Cuota, Cliente]]:
     """
     Fuente única: cuotas no pagadas (fecha_pago nula) con su cliente vía préstamo.
+    Excluye préstamos en estado LIQUIDADO (alineado con tabla prestamos).
+    
     Usado por get_clientes_retrasados y get_notificaciones_tabs_data para evitar duplicar consulta.
     """
     q = (
@@ -23,6 +25,7 @@ def get_cuotas_pendientes_con_cliente(db: Session) -> List[Tuple[Cuota, Cliente]
         .join(Prestamo, Cuota.prestamo_id == Prestamo.id)
         .join(Cliente, Prestamo.cliente_id == Cliente.id)
         .where(Cuota.fecha_pago.is_(None))
+        .where(Prestamo.estado != "LIQUIDADO")
     )
     rows = db.execute(q).all()
     return [(row[0], row[1]) for row in rows]

@@ -28,6 +28,7 @@ import {
   Target,
   DollarSign,
   Clock,
+  Download,
 } from 'lucide-react'
 import { cn } from '../../utils'
 import { useSimpleAuth } from '../../store/simpleAuthStore'
@@ -135,8 +136,12 @@ export function Sidebar({ isOpen, onClose, onToggle }: SidebarProps) {
     },
     {
       title: 'Reportes',
-      href: '/reportes',
       icon: FileText,
+      isSubmenu: true,
+      children: [
+        { title: 'Reportes', href: '/reportes', icon: FileText },
+        { title: 'Informes (estado de cuenta)', href: '/informes', icon: Download },
+      ],
     },
     {
       title: 'Chat AI',

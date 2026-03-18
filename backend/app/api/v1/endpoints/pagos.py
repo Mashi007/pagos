@@ -1799,29 +1799,36 @@ def crear_pagos_batch(
         if cedulas_con_prestamo:
             ced_rows = db.execute(select(Cliente.cedula).where(Cliente.cedula.in_(cedulas_con_prestamo))).scalars().all()
             valid_cedulas = {r[0] for r in ced_rows}
+        # Fase 1: validacion (sin insertar). Si hay errores, devolver sin commit.
+        validation_errors: list[dict] = []
         docs_added_in_batch: set[str] = set()
-        results: list[dict] = []
-        ok_count = 0
-        fail_count = 0
         for idx, payload in enumerate(pagos_list):
-            try:
+            num_doc = docs_en_payload[idx] if idx < len(docs_en_payload) else normalize_documento(payload.numero_documento)
+            if num_doc and (num_doc in existing_docs or num_doc in docs_added_in_batch):
+                validation_errors.append({"index": idx, "error": "Ya existe un pago con ese numero de documento.", "status_code": 409})
+                continue
+            ref = (num_doc or "N/A")[:_MAX_LEN_NUMERO_DOCUMENTO]
+            cedula_normalizada = payload.cedula_cliente.strip().upper() if payload.cedula_cliente else ""
+            if payload.prestamo_id and payload.prestamo_id not in valid_prestamo_ids:
+                validation_errors.append({"index": idx, "error": f"Credito #{payload.prestamo_id} no existe.", "status_code": 400})
+                continue
+            if cedula_normalizada and payload.prestamo_id and cedula_normalizada not in valid_cedulas:
+                validation_errors.append({"index": idx, "error": f"No existe cliente con cedula {cedula_normalizada}", "status_code": 404})
+                continue
+            if num_doc:
+                docs_added_in_batch.add(num_doc)
+        if validation_errors:
+            return {"results": [{"index": e["index"], "success": False, "error": e["error"], "status_code": e["status_code"]} for e in validation_errors], "ok_count": 0, "fail_count": len(validation_errors)}
+
+        # Fase 2: transaccion unica. Crear todos los pagos (flush), aplicar a cuotas, un commit al final.
+        results: list[dict] = []
+        try:
+            for idx, payload in enumerate(pagos_list):
                 num_doc = docs_en_payload[idx] if idx < len(docs_en_payload) else normalize_documento(payload.numero_documento)
-                if num_doc and (num_doc in existing_docs or num_doc in docs_added_in_batch):
-                    results.append({"index": idx, "success": False, "error": "Ya existe un pago con ese Nº de documento.", "status_code": 409})
-                    fail_count += 1
-                    continue
                 ref = (num_doc or "N/A")[:_MAX_LEN_NUMERO_DOCUMENTO]
                 fecha_pago_ts = datetime.combine(payload.fecha_pago, dt_time.min)
                 conciliado = payload.conciliado if payload.conciliado is not None else False
                 cedula_normalizada = payload.cedula_cliente.strip().upper() if payload.cedula_cliente else ""
-                if payload.prestamo_id and payload.prestamo_id not in valid_prestamo_ids:
-                    results.append({"index": idx, "success": False, "error": f"Crédito #{payload.prestamo_id} no existe.", "status_code": 400})
-                    fail_count += 1
-                    continue
-                if cedula_normalizada and payload.prestamo_id and cedula_normalizada not in valid_cedulas:
-                    results.append({"index": idx, "success": False, "error": f"No existe cliente con cédula {cedula_normalizada}", "status_code": 404})
-                    fail_count += 1
-                    continue
                 row = Pago(
                     cedula_cliente=cedula_normalizada,
                     prestamo_id=payload.prestamo_id,
@@ -1838,34 +1845,18 @@ def crear_pagos_batch(
                     usuario_registro=usuario_email,
                 )
                 db.add(row)
-                db.commit()
+                db.flush()
                 db.refresh(row)
                 if row.prestamo_id and float(row.monto_pagado or 0) > 0:
-                    try:
-                        _aplicar_pago_a_cuotas_interno(row, db)
-                        row.estado = "PAGADO"
-                        db.commit()
-                        db.refresh(row)
-                    except Exception as e:
-                        logger.warning("Batch: no se pudo aplicar a cuotas (índice %s): %s", idx, e)
-                        db.rollback()
+                    _aplicar_pago_a_cuotas_interno(row, db)
+                    row.estado = "PAGADO"
                 results.append({"index": idx, "success": True, "pago": _pago_to_response(row)})
-                ok_count += 1
-                if num_doc:
-                    docs_added_in_batch.add(num_doc)
-            except IntegrityError as e:
-                db.rollback()
-                if getattr(getattr(e, "orig", None), "pgcode", None) == "23505":
-                    results.append({"index": idx, "success": False, "error": "Nº de documento duplicado.", "status_code": 409})
-                else:
-                    results.append({"index": idx, "success": False, "error": str(e), "status_code": 500})
-                fail_count += 1
-            except Exception as e:
-                db.rollback()
-                logger.exception("Batch índice %s: %s", idx, e)
-                results.append({"index": idx, "success": False, "error": str(e), "status_code": 500})
-                fail_count += 1
-        return {"results": results, "ok_count": ok_count, "fail_count": fail_count}
+            db.commit()
+            return {"results": results, "ok_count": len(results), "fail_count": 0}
+        except Exception as e:
+            db.rollback()
+            logger.exception("Batch: error en transaccion unica: %s", e)
+            raise HTTPException(status_code=500, detail=f"Error al guardar el lote. Ningun pago fue creado. Detalle: {str(e)}")
     except OperationalError:
         raise HTTPException(
             status_code=503,
@@ -2054,6 +2045,19 @@ def _estado_cuota_por_cobertura(total_pagado: float, monto_cuota: float, fecha_v
     #   - devuelve PENDIENTE si dias_mora == 0, sino VENCIDO/MORA
 
 
+def _marcar_prestamo_liquidado_si_corresponde(prestamo_id: int, db: Session) -> None:
+    """Si todas las cuotas del prestamo estan pagadas, actualiza prestamo.estado a LIQUIDADO. No hace commit."""
+    cuotas = db.execute(select(Cuota).where(Cuota.prestamo_id == prestamo_id)).scalars().all()
+    if not cuotas:
+        return
+    pendientes = sum(1 for c in cuotas if (c.total_pagado or 0) < (float(c.monto) if c.monto else 0) - 0.01)
+    if pendientes == 0:
+        prestamo = db.execute(select(Prestamo).where(Prestamo.id == prestamo_id)).scalars().first()
+        if prestamo and (prestamo.estado or "").upper() == "APROBADO":
+            prestamo.estado = "LIQUIDADO"
+            logger.info("Prestamo id=%s marcado como LIQUIDADO (todas las cuotas pagadas).", prestamo_id)
+
+
 def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
     """
     Aplica el monto del pago a cuotas del préstamo. Reglas de negocio.
@@ -2131,6 +2135,7 @@ def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
             c.dias_mora = _calcular_dias_mora(fecha_venc)  # [M5] Calcular mora
             cuotas_parciales += 1
         monto_restante -= a_aplicar
+    _marcar_prestamo_liquidado_si_corresponde(prestamo_id, db)
     return cuotas_completadas, cuotas_parciales
 
 
@@ -2174,7 +2179,6 @@ def aplicar_pago_a_cuotas(pago_id: int, db: Session = Depends(get_db)):
             status_code=500,
             detail=f"Error al aplicar el pago a cuotas: {str(e)}",
         ) from e
-
 
 
 

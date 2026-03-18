@@ -8,7 +8,7 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
-PRESTAMO_ESTADOS_VALIDOS = frozenset({"APROBADO", "DRAFT", "EN_REVISION", "EVALUADO", "RECHAZADO"})
+PRESTAMO_ESTADOS_VALIDOS = frozenset({"APROBADO", "DRAFT", "EN_REVISION", "EVALUADO", "RECHAZADO", "LIQUIDADO"})
 
 def _normalizar_estado_prestamo(v):
     if not v or not str(v).strip(): return "DRAFT"

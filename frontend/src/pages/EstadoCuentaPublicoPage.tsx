@@ -5,6 +5,7 @@
  * Marca sesión para que, si intentan ir a login/sistema, vean "Acceso prohibido" y puedan volver aquí.
  */
 import React, { useState, useEffect, useRef } from 'react'
+import { useLocation } from 'react-router-dom'
 import { validarCedulaEstadoCuenta, solicitarCodigo, verificarCodigo } from '../services/estadoCuentaService'
 import { PUBLIC_FLOW_SESSION_KEY } from '../config/env'
 import { Button } from '../components/ui/button'
@@ -174,10 +175,11 @@ export default function EstadoCuentaPublicoPage() {
   }
   const stepAnnouncement = stepAnnouncements[step] ?? `Paso ${step}`
 
+  const location = useLocation()
   // Marcar flujo público para que, si intentan ir a login, vean "Acceso prohibido" y puedan volver aquí
   useEffect(() => {
     sessionStorage.setItem(PUBLIC_FLOW_SESSION_KEY, '1')
-    sessionStorage.setItem(PUBLIC_FLOW_SESSION_KEY + '_path', 'rapicredit-estadocuenta')
+    sessionStorage.setItem(PUBLIC_FLOW_SESSION_KEY + '_path', (location.pathname || '').replace(/^\//, '') || 'rapicredit-estadocuenta')
   }, [])
 
   const handleSolicitarCodigo = async () => {
