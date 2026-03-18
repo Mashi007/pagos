@@ -358,7 +358,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
                             title="Descargar recibo PDF"
                             onClick={() => descargarRecibo(cuota)}
                             disabled={descargandoRecibo === cuota.id}
-                            className="inline-flex items-center gap-1 ml-1 text-xs font-medium text-emerald-700 underline underline-offset-2 hover:text-emerald-900 disabled:opacity-50"
+                            className="inline-flex items-center gap-1 ml-1 text-xs font-medium text-red-600 underline underline-offset-2 hover:text-red-800 disabled:opacity-50"
                           >
                             {descargandoRecibo === cuota.id ? (
                               <span>⏳</span>
@@ -388,7 +388,7 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
                           title={`Descargar recibo cuota ${cuota.numero_cuota}`}
                           onClick={() => descargarRecibo(cuota)}
                           disabled={descargandoRecibo === cuota.id}
-                          className="h-8 px-2 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 inline-flex items-center gap-1"
+                          className="h-8 px-2 text-red-600 hover:text-red-800 hover:bg-red-50 inline-flex items-center gap-1"
                         >
                           {descargandoRecibo === cuota.id ? (
                             <span className="text-xs">⏳</span>

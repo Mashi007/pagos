@@ -1786,19 +1786,19 @@ def crear_pagos_batch(
         existing_docs: set[str] = set()
         if docs_no_vacios:
             rows = db.execute(select(Pago.numero_documento).where(Pago.numero_documento.in_(docs_no_vacios))).scalars().all()
-            existing_docs = {r[0] for r in rows}
+            existing_docs = {r for r in rows if r}
         # Preload: ids de préstamos válidos (una sola consulta)
         prestamo_ids = [p.prestamo_id for p in pagos_list if p.prestamo_id]
         valid_prestamo_ids: set[int] = set()
         if prestamo_ids:
             ids_rows = db.execute(select(Prestamo.id).where(Prestamo.id.in_(prestamo_ids))).scalars().all()
-            valid_prestamo_ids = {r[0] for r in ids_rows}
+            valid_prestamo_ids = {r for r in ids_rows if r is not None}
         # Preload: cédulas de clientes que existen (una sola consulta)
         cedulas_con_prestamo = list({(p.cedula_cliente or "").strip().upper() for p in pagos_list if (p.cedula_cliente or "").strip() and p.prestamo_id})
         valid_cedulas: set[str] = set()
         if cedulas_con_prestamo:
             ced_rows = db.execute(select(Cliente.cedula).where(func.upper(Cliente.cedula).in_(cedulas_con_prestamo))).scalars().all()
-            valid_cedulas = {(r[0] or "").strip().upper() for r in ced_rows}
+            valid_cedulas = {(r or "").strip().upper() for r in ced_rows if r}
         # Fase 1: validacion (sin insertar). Si hay errores, devolver sin commit.
         validation_errors: list[dict] = []
         docs_added_in_batch: set[str] = set()

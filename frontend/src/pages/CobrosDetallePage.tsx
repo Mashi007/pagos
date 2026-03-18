@@ -131,7 +131,7 @@ export default function CobrosDetallePage() {
               </Button>
             )}
             {detalle.tiene_recibo_pdf && (
-              <Button variant="outline" size="sm" onClick={() => id && openReciboPdfInNewTab(Number(id))}>
+              <Button variant="outline" size="sm" onClick={() => id && openReciboPdfInNewTab(Number(id))} className="text-red-600 hover:text-red-800 hover:bg-red-50 border-red-200">
                 <FileText className="h-4 w-4 mr-1" /> Ver recibo PDF
               </Button>
             )}
