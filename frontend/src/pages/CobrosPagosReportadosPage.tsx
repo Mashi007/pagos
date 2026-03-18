@@ -27,6 +27,14 @@ import {
   DialogFooter,
 } from '../components/ui/dialog'
 
+const MENSAJE_RECHAZO_POR_DEFECTO = `Buenas tardes
+
+La imagen no se aprecia detalles, agradezco enviar una imagen sin recortar a cobranza@rapicreditca.com
+
+Gracias
+
+Angélica Fuentes`
+
 const ESTADO_CONFIG: Record<string, { label: string; short: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; Icon: typeof Clock }> = {
   pendiente: { label: 'Pendiente', short: 'Pend.', variant: 'secondary', Icon: Clock },
   en_revision: { label: 'En revisión (manual)', short: 'Revisión', variant: 'outline', Icon: Search },
@@ -92,7 +100,7 @@ export default function CobrosPagosReportadosPage() {
   }
 
   const handleAbrirModalRechazo = (row: PagoReportadoItem) => {
-    setMotivoRechazo('')
+    setMotivoRechazo(MENSAJE_RECHAZO_POR_DEFECTO)
     const rowToOpen = { ...row }
     setTimeout(() => setRechazarModal({ open: true, row: rowToOpen }), 0)
   }

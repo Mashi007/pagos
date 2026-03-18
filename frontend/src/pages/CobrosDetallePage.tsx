@@ -27,6 +27,14 @@ const ESTADO_BADGE: Record<string, string> = {
   rechazado: 'Rechazado 🔴',
 }
 
+const MENSAJE_RECHAZO_POR_DEFECTO = `Buenas tardes
+
+La imagen no se aprecia detalles, agradezco enviar una imagen sin recortar a cobranza@rapicreditca.com
+
+Gracias
+
+Angélica Fuentes`
+
 export default function CobrosDetallePage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -179,7 +187,10 @@ export default function CobrosDetallePage() {
               </Button>
               <Button
                 variant="destructive"
-                onClick={() => setAccion('rechazar')}
+                onClick={() => {
+                  setMotivoRechazo(MENSAJE_RECHAZO_POR_DEFECTO)
+                  setAccion('rechazar')
+                }}
                 disabled={accion !== 'idle'}
               >
                 Rechazar
