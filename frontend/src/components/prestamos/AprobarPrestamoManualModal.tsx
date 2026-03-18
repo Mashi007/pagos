@@ -29,8 +29,10 @@ interface AprobarPrestamoManualModalProps {
 
 export function AprobarPrestamoManualModal({ prestamo, onClose, onSuccess }: AprobarPrestamoManualModalProps) {
   const queryClient = useQueryClient()
-  const [fechaAprobacion, setFechaAprobacion] = useState<string>(
-    new Date().toISOString().split('T')[0]
+  const [fechaAprobacion, setFechaAprobacion] = useState<string>(() =>
+    prestamo.fecha_requerimiento
+      ? new Date(prestamo.fecha_requerimiento).toISOString().split('T')[0]
+      : new Date().toISOString().split('T')[0]
   )
   const [documentosAnalizados, setDocumentosAnalizados] = useState(false)
   const [aceptaDeclaracion, setAceptaDeclaracion] = useState(false)

@@ -882,8 +882,9 @@ def importar_reportados_aprobados_a_pagos(
 ):
     """
     Pasa los pagos reportados (módulo Cobros) con estado aprobado a la tabla pagos.
-    Mismas reglas que carga masiva: documento único, cédula con 1 crédito activo (o indicar ID).
-    Los que no cumplen se guardan en pagos_con_errores (Revisar Pagos) con observaciones "Cobros (reportados aprobados)".
+    Mismas reglas que carga masiva: documento único, cédula con 1 crédito activo (APROBADO).
+    Los que no cumplen se guardan en datos_importados_conerrores; descargar Excel desde el frontend.
+    Los pagos válidos se aplican a cuotas del préstamo (FIFO) en el mismo request.
     """
     rows = db.execute(
         select(PagoReportado).where(PagoReportado.estado == "aprobado").order_by(PagoReportado.id)
@@ -960,6 +961,22 @@ def importar_reportados_aprobados_a_pagos(
         numero_doc_raw = (pr.referencia_interna or "").strip()[:100]
         numero_doc_norm = normalize_documento(numero_doc_raw)
         if numero_doc_norm and numero_doc_norm in documentos_ya_en_bd:
+            pce = DatosImportadosConErrores(
+                cedula_cliente=cedula_raw,
+                prestamo_id=None,
+                fecha_pago=datetime.combine(pr.fecha_pago, dt_time.min) if pr.fecha_pago else datetime.now(),
+                monto_pagado=float(pr.monto or 0),
+                numero_documento=numero_doc_raw,
+                estado="PENDIENTE",
+                referencia_pago=numero_doc_raw or "N/A",
+                errores_descripcion=["Ya existe un pago con ese Nº documento (duplicado en BD)"],
+                observaciones=ORIGEN_COBROS_REPORTADOS,
+                referencia_interna=(pr.referencia_interna or "")[:100] or None,
+                fila_origen=pr.id,
+            )
+            db.add(pce)
+            db.flush()
+            ids_pagos_con_errores.append(pce.id)
             errores_detalle.append({"referencia": pr.referencia_interna, "error": "Ya existe un pago con ese Nº documento (duplicado)"})
             continue
         if numero_doc_norm and numero_doc_norm in docs_en_lote:

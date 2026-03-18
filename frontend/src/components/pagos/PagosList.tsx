@@ -77,6 +77,7 @@ export function PagosList() {
   const [lastImportCobrosResult, setLastImportCobrosResult] = useState<{
     registros_procesados: number
     registros_con_error: number
+    cuotas_aplicadas?: number
     mensaje: string
   } | null>(null)
   const [isImportingCobros, setIsImportingCobros] = useState(false)
@@ -132,12 +133,17 @@ export function PagosList() {
       setLastImportCobrosResult({
         registros_procesados: res.registros_procesados,
         registros_con_error: res.registros_con_error,
+        cuotas_aplicadas: res.cuotas_aplicadas,
         mensaje: res.mensaje,
       })
       await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['pagos-con-errores'], exact: false })
-      toast.success(res.mensaje)
+      const mensajeConCuotas =
+        typeof res.cuotas_aplicadas === 'number' && res.cuotas_aplicadas > 0
+          ? `${res.mensaje} ${res.cuotas_aplicadas} cuotas aplicadas a créditos.`
+          : res.mensaje
+      toast.success(mensajeConCuotas)
       if (res.registros_con_error > 0) {
         toast('Hay registros con error. Use el botón "Descargar Excel (errores de esta importación)" para revisarlos.', { duration: 5000 })
       }
@@ -547,7 +553,11 @@ export function PagosList() {
         <Card className="border-amber-200 bg-amber-50">
           <CardContent className="py-3 flex flex-wrap items-center gap-3">
             <span className="text-sm text-amber-800">
-              {lastImportCobrosResult.registros_procesados} importados; {lastImportCobrosResult.registros_con_error} con error (no cumplen reglas de carga masiva). Descargue el Excel para revisar y corregir.
+              {lastImportCobrosResult.registros_procesados} importados
+              {typeof lastImportCobrosResult.cuotas_aplicadas === 'number' && lastImportCobrosResult.cuotas_aplicadas > 0 && (
+                <> ({lastImportCobrosResult.cuotas_aplicadas} cuotas aplicadas)</>
+              )}
+              ; {lastImportCobrosResult.registros_con_error} con error (no cumplen reglas de carga masiva). Descargue el Excel para revisar y corregir.
             </span>
             <Button
               variant="outline"

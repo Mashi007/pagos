@@ -1617,6 +1617,16 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
         row.modalidad_pago = payload.modalidad_pago
     if payload.numero_cuotas is not None:
         row.numero_cuotas = payload.numero_cuotas
+    if payload.fecha_requerimiento is not None:
+        row.fecha_requerimiento = payload.fecha_requerimiento
+    # Coherencia: si hay fecha de aprobación, la fecha de requerimiento no puede ser posterior
+    if row.fecha_aprobacion and row.fecha_requerimiento:
+        ap_date = row.fecha_aprobacion.date() if hasattr(row.fecha_aprobacion, "date") else row.fecha_aprobacion
+        if row.fecha_requerimiento > ap_date:
+            raise HTTPException(
+                status_code=400,
+                detail=f"La fecha de requerimiento ({row.fecha_requerimiento}) no puede ser posterior a la fecha de aprobación ({ap_date}).",
+            )
     db.commit()
     db.refresh(row)
     # Si quedó en APROBADO y no tiene cuotas, generar tabla de amortización (solo si tiene fecha de aprobación)

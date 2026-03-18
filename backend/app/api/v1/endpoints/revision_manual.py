@@ -486,7 +486,19 @@ def editar_prestamo_revision(
     
     if not cambios_dict:
         return {"mensaje": "No hay cambios que guardar", "prestamo_id": prestamo_id}
-    
+
+    # Coherencia: fecha de aprobación debe ser >= fecha de requerimiento
+    _req = getattr(prestamo, "fecha_requerimiento", None)
+    _ap = getattr(prestamo, "fecha_aprobacion", None)
+    if _req and _ap:
+        req_date = _req.date() if hasattr(_req, "date") and callable(getattr(_req, "date", None)) else _req
+        ap_date = _ap.date() if hasattr(_ap, "date") and callable(getattr(_ap, "date", None)) else _ap
+        if req_date and ap_date and ap_date < req_date:
+            raise HTTPException(
+                status_code=400,
+                detail=f"La fecha de aprobación ({ap_date}) debe ser igual o posterior a la fecha de requerimiento ({req_date}).",
+            )
+
     prestamo.fecha_actualizacion = datetime.now()
     
     # Marcar en tabla de revisión que se editó préstamo

@@ -48,14 +48,15 @@ def _generar_cuotas_amortizacion(db: Session, p: Prestamo, fecha_base: date, num
 
 def prestamos_mensual_desactualizados(db: Session):
     """Ids de prestamos MENSUAL con al menos una cuota con vencimiento incorrecto."""
+    # Regla obligatoria: solo fecha_aprobacion para amortización; no considerar fecha_base_calculo
     r = db.execute(text("""
         WITH base AS (
           SELECT
             p.id AS prestamo_id,
-            COALESCE((p.fecha_aprobacion)::date, p.fecha_base_calculo) AS fecha_base
+            (p.fecha_aprobacion)::date AS fecha_base
           FROM prestamos p
           WHERE UPPER(TRIM(COALESCE(p.modalidad_pago, ''))) = 'MENSUAL'
-            AND (p.fecha_aprobacion IS NOT NULL OR p.fecha_base_calculo IS NOT NULL)
+            AND p.fecha_aprobacion IS NOT NULL
         ),
         expected AS (
           SELECT

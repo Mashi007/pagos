@@ -16,11 +16,11 @@ interface AsignarFechaAprobacionModalProps {
 
 export function AsignarFechaAprobacionModal({ prestamo, onClose, onSuccess }: AsignarFechaAprobacionModalProps) {
   const queryClient = useQueryClient()
-  const [fechaAprobacion, setFechaAprobacion] = useState<string>(
-    prestamo.fecha_aprobacion 
-      ? new Date(prestamo.fecha_aprobacion).toISOString().split('T')[0]
-      : new Date().toISOString().split('T')[0]
-  )
+  const [fechaAprobacion, setFechaAprobacion] = useState<string>(() => {
+    if (prestamo.fecha_aprobacion) return new Date(prestamo.fecha_aprobacion).toISOString().split('T')[0]
+    if (prestamo.fecha_requerimiento) return new Date(prestamo.fecha_requerimiento).toISOString().split('T')[0]
+    return new Date().toISOString().split('T')[0]
+  })
   const [isLoading, setIsLoading] = useState(false)
 
   const fechaRequerimientoStr = prestamo.fecha_requerimiento
