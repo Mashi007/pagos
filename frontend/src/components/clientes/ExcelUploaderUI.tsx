@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Pure UI for Excel client bulk upload.
  * Uses useExcelUpload hook for all logic.
  */
@@ -270,7 +270,7 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                             Notas
                           </th>
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-24">
-                            Acciones
+                            Verificar
                           </th>
                           <th className="border p-2 text-left text-xs font-medium text-gray-500 w-28">
                             Advertencia
@@ -281,6 +281,7 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                         {getDisplayData().map((row) => {
                           const motivosDuplicado = getDuplicadoMotivo(row)
                           const esDuplicado = motivosDuplicado.length > 0
+                          const esCedulaNoAcepta = esDuplicado && motivosDuplicado.some((m) => /c[eé]dula/i.test(m))
                           return (
                             <tr
                               key={row._rowIndex}
@@ -475,10 +476,16 @@ export function ExcelUploaderUI(props: ExcelUploaderProps) {
                                       </div>
                                     ) : esDuplicado ? (
                                       <div className="flex flex-col items-center text-red-700 text-xs">
-                                        <span>No se puede guardar</span>
-                                        <span className="text-[10px] font-medium" title={motivosDuplicado.join('; ')}>
-                                          {columnasDuplicadas(motivosDuplicado)}
-                                        </span>
+                                        {esCedulaNoAcepta ? (
+                                          <span className="font-semibold">No se acepta</span>
+                                        ) : (
+                                          <>
+                                            <span>No se puede guardar</span>
+                                            <span className="text-[10px] font-medium" title={motivosDuplicado.join('; ')}>
+                                              {columnasDuplicadas(motivosDuplicado)}
+                                            </span>
+                                          </>
+                                        )}
                                       </div>
                                     ) : isClientValid(row) ? (
                                       <Button

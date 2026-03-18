@@ -1,4 +1,4 @@
-﻿"""
+"""
 Endpoints de pagos. Datos reales desde BD.
 - Tabla pagos: GET/POST/PUT/DELETE /pagos/ (listado y CRUD para /pagos/pagos).
 - GET /pagos/kpis, /stats, /ultimos; POST /upload, /conciliacion/upload, /{id}/aplicar-cuotas.
@@ -592,7 +592,7 @@ async def upload_excel_pagos(
                     numero_doc = _celda_a_string_documento(row[3])
                     col_doc = 3
                 else:
-                    # Fila con datos pero no matchea D, A ni B. Si primera columna no es cédula → formato no reconocido.
+                    # Fila con datos pero no matchea D, A ni B. Si primera columna no es cédula ? formato no reconocido.
                     row_has_content = any(cell is not None and str(cell).strip() for cell in row)
                     first_cell = str(row[0]).strip() if row[0] is not None else ""
                     if row_has_content and first_cell and not _looks_like_cedula(row[0]):
@@ -704,7 +704,7 @@ async def upload_excel_pagos(
             numero_doc_norm = normalize_documento(numero_doc)
             key_doc = (numero_doc_norm or "").strip()
 
-            # Validación post-documentos: duplicado en archivo → enviar a pagos_con_errores
+            # Validación post-documentos: duplicado en archivo ? enviar a pagos_con_errores
             if key_doc and key_doc in numeros_doc_en_lote:
                 err_msg = "Nº documento duplicado en este archivo. Regla general: no se aceptan duplicados en documentos."
                 errores.append(f"Fila {i}: Nº documento duplicado en este archivo")
@@ -720,7 +720,7 @@ async def upload_excel_pagos(
                 })
                 continue
 
-            # Validación post-documentos: duplicado en BD → enviar a pagos_con_errores
+            # Validación post-documentos: duplicado en BD ? enviar a pagos_con_errores
             if key_doc:
                 if key_doc in documentos_ya_en_bd:
                     err_msg = "Ya existe un pago con ese Nº de documento. Regla general: no se aceptan duplicados en documentos."
@@ -1866,13 +1866,13 @@ def crear_pagos_batch(
                 results.append({"index": idx, "success": False, "error": str(e), "status_code": 500})
                 fail_count += 1
         return {"results": results, "ok_count": ok_count, "fail_count": fail_count}
-
-
-except OperationalError:
+    except OperationalError:
         raise HTTPException(
             status_code=503,
             detail="Servicio no disponible. Reintente en unos segundos.",
         )
+
+
 
 @router.post("", response_model=dict, status_code=201)
 def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user: UserResponse = Depends(get_current_user)):
@@ -1950,7 +1950,7 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
         raise
     except IntegrityError as e:
         db.rollback()
-        # Unique violation (p. ej. numero_documento duplicado) → 409
+        # Unique violation (p. ej. numero_documento duplicado) ? 409
         if getattr(getattr(e, "orig", None), "pgcode", None) == "23505":
             raise HTTPException(
                 status_code=409,

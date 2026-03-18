@@ -1,4 +1,4 @@
-"""
+﻿"""
 Endpoints de clientes: CONECTADOS A LA TABLA REAL `clientes` (public.clientes).
 - Conexión: engine/sesión desde app.core.database (DATABASE_URL en .env).
 - Modelo: app.models.cliente.Cliente con __tablename__ = "clientes".
@@ -390,15 +390,11 @@ def check_cedulas(payload: CheckCedulasRequest, db: Session = Depends(get_db)):
     cedulas_norm = [(c or "").strip().upper() for c in payload.cedulas if (c or "").strip()]
     if not cedulas_norm:
         return CheckCedulasResponse(existing_cedulas=[])
-    seen: set[str] = set()
-    existing: list[str] = []
-    for ced in cedulas_norm:
-        if ced in seen or ced == "Z999999999":
-            continue
-        seen.add(ced)
-        row = db.execute(select(Cliente.cedula).where(Cliente.cedula == ced)).first()
-        if row:
-            existing.append(ced)
+
+    rows = db.execute(
+        select(Cliente.cedula).where(Cliente.cedula.in_(cedulas_norm))
+    ).scalars().all()
+    existing = list(rows) if rows else []
     return CheckCedulasResponse(existing_cedulas=existing)
 
 
@@ -413,13 +409,13 @@ def check_emails(payload: CheckEmailsRequest, db: Session = Depends(get_db)):
     emails_norm = list({(e or "").strip().lower() for e in payload.emails if (e or "").strip()})
     if not emails_norm:
         return CheckEmailsResponse(existing_emails=[])
-    existing: list[str] = []
-    for em in emails_norm:
-        row = db.execute(
-            select(Cliente.id).where(func.lower(Cliente.email) == em)
-        ).first()
-        if row:
-            existing.append(em)
+    # Una sola consulta: emails (en minuscula) que existan en la BD
+    rows = db.execute(
+        select(func.lower(Cliente.email)).where(
+            func.lower(Cliente.email).in_(emails_norm)
+        ).distinct()
+    ).scalars().all()
+    existing = list(rows) if rows else []
     return CheckEmailsResponse(existing_emails=existing)
 
 
@@ -473,16 +469,15 @@ def create_cliente(payload: ClienteCreate, db: Session = Depends(get_db)):
     email_norm = _normalize_for_duplicate(payload.email)
     telefono_dig = _digits_telefono(payload.telefono)
 
-    # Prohibir duplicado por cédula (Z999999999 puede repetirse: clientes sin cédula)
-    if cedula_norm != "Z999999999":
-        existing_cedula = db.execute(
-            select(Cliente.id).where(Cliente.cedula == cedula_norm)
-        ).first()
-        if existing_cedula:
-            raise HTTPException(
-                status_code=409,
-                detail=f"Ya existe un cliente con la misma cédula. Cliente existente ID: {existing_cedula[0]}",
-            )
+    # Prohibir duplicado por cédula (única para todos los valores)
+    existing_cedula = db.execute(
+        select(Cliente.id).where(Cliente.cedula == cedula_norm)
+    ).first()
+    if existing_cedula:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Ya existe un cliente con la misma cédula. Cliente existente ID: {existing_cedula[0]}",
+        )
 
     # Prohibir duplicado por nombre completo
     if nombres_norm:
@@ -552,11 +547,10 @@ def _perform_update_cliente(cliente_id: int, payload: ClienteUpdate, db: Session
     data["fecha_actualizacion"] = datetime.now(ZoneInfo("UTC")).replace(tzinfo=None)
 
     # Validar duplicados: no permitir cédula, nombre, email ni teléfono igual a otro cliente
-    # Z999999999 puede repetirse (clientes sin cédula)
     if "cedula" in data:
-        cedula_norm = (_normalize_for_duplicate(data.get("cedula") or getattr(row, "cedula") or "") or "Z999999999").upper()  # Uppercase para consistency
+        cedula_norm = (_normalize_for_duplicate(data.get("cedula") or getattr(row, "cedula") or "") or "Z999999999").upper()
         data["cedula"] = cedula_norm
-        if cedula_norm and cedula_norm != "Z999999999":
+        if cedula_norm:
             existing = db.execute(
                 select(Cliente.id).where(Cliente.cedula == cedula_norm, Cliente.id != cliente_id)
             ).first()
