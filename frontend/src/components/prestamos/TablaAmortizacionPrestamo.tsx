@@ -358,29 +358,9 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
                       )}
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge className={getEstadoBadge(estadoReal)}>
-                          {getEstadoLabel(estadoReal)}
-                        </Badge>
-                        {puedeDescargarRecibo && (
-                          <button
-                            type="button"
-                            title="Descargar recibo PDF"
-                            onClick={() => descargarRecibo(cuota)}
-                            disabled={descargandoRecibo === cuota.id}
-                            className="inline-flex items-center gap-1 ml-1 text-xs font-medium text-red-600 underline underline-offset-2 hover:text-red-800 disabled:opacity-50"
-                          >
-                            {descargandoRecibo === cuota.id ? (
-                              <span>⏳</span>
-                            ) : (
-                              <>
-                                <FileText className="h-4 w-4 shrink-0" />
-                                Ver recibo
-                              </>
-                            )}
-                          </button>
-                        )}
-                      </div>
+                      <Badge className={getEstadoBadge(estadoReal)}>
+                        {getEstadoLabel(estadoReal)}
+                      </Badge>
                       {/* ðŸ” DEBUG: Mostrar información de depuración */}
                       {process.env.NODE_ENV === 'development' && (
                         <div className="text-xs text-gray-400 mt-1">

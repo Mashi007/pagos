@@ -960,15 +960,23 @@ def _obtener_cuotas_para_export(db: Session, prestamo_id: int, prestamo: Prestam
     cuotas = db.execute(
         select(Cuota).where(Cuota.prestamo_id == prestamo_id).order_by(Cuota.numero_cuota)
     ).scalars().all()
-    
+
     resultado = []
+    hoy = date.today()
     for c in cuotas:
         saldo_inicial = float(c.saldo_capital_inicial) if c.saldo_capital_inicial is not None else 0
         saldo_final = float(c.saldo_capital_final) if c.saldo_capital_final is not None else 0
         monto_cuota = float(c.monto) if c.monto is not None else 0
+        total_pagado = float(c.total_pagado or 0)
         monto_capital = max(0, saldo_inicial - saldo_final)
         monto_interes = max(0, monto_cuota - monto_capital)
-        
+        fv = c.fecha_vencimiento
+        fv_date = fv.date() if fv and hasattr(fv, "date") else fv
+        if total_pagado >= monto_cuota - 0.01 and monto_cuota > 0:
+            estado_mostrar = "PAGADO"
+        else:
+            estado_mostrar = estado_cuota_para_mostrar(total_pagado, monto_cuota, fv_date, hoy)
+
         resultado.append({
             "numero_cuota": c.numero_cuota,
             "fecha_vencimiento": c.fecha_vencimiento.isoformat() if c.fecha_vencimiento else "",
