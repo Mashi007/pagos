@@ -5,11 +5,13 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   listPagosReportados,
+  getPagosReportadosKpis,
   cambiarEstadoPago,
   openComprobanteInNewTab,
   eliminarPagoReportado,
   type PagoReportadoItem,
   type ListPagosReportadosResponse,
+  type PagosReportadosKpis,
 } from '../services/cobrosService'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
@@ -57,20 +59,34 @@ export default function CobrosPagosReportadosPage() {
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [rechazarModal, setRechazarModal] = useState<{ open: boolean; row: PagoReportadoItem | null }>({ open: false, row: null })
   const [motivoRechazo, setMotivoRechazo] = useState('')
+  const [kpis, setKpis] = useState<PagosReportadosKpis | null>(null)
 
-  const load = async () => {
+  const load = async (overrides?: { estado?: string; page?: number }) => {
+    const effectiveEstado = overrides?.estado !== undefined ? overrides.estado : estado
+    const effectivePage = overrides?.page !== undefined ? overrides.page : page
+    if (overrides) {
+      if (overrides.estado !== undefined) setEstado(overrides.estado)
+      if (overrides.page !== undefined) setPage(overrides.page)
+    }
     setLoading(true)
     try {
-      const res = await listPagosReportados({
-        page,
-        per_page: 20,
-        estado: estado || undefined,
+      const filterParams = {
         fecha_desde: fechaDesde || undefined,
         fecha_hasta: fechaHasta || undefined,
         cedula: cedula.trim() || undefined,
         institucion: institucion.trim() || undefined,
-      })
+      }
+      const [res, kpisRes] = await Promise.all([
+        listPagosReportados({
+          page: effectivePage,
+          per_page: 20,
+          estado: effectiveEstado || undefined,
+          ...filterParams,
+        }),
+        getPagosReportadosKpis(filterParams),
+      ])
       setData(res)
+      setKpis(kpisRes)
     } catch (e: any) {
       toast.error(e?.message || 'Error al cargar.')
     } finally {
@@ -81,6 +97,10 @@ export default function CobrosPagosReportadosPage() {
   useEffect(() => {
     load()
   }, [page])
+
+  const handleKpiClick = (estadoKey: string) => {
+    load({ estado: estadoKey, page: 1 })
+  }
 
   const handleCambiarEstado = async (id: number, estado: string, motivo?: string) => {
     setChangingEstadoId(id)
@@ -196,10 +216,39 @@ export default function CobrosPagosReportadosPage() {
           />
           <Button onClick={load}>Buscar</Button>
         </CardContent>
-        <p className="text-sm text-muted-foreground px-6 pb-4">
-          Los pagos en <strong>En revisión (manual)</strong> no coincidieron 100% con Gemini; use Aprobar (envía recibo) o Rechazar (se notifica al cliente por correo electrónico).
-        </p>
       </Card>
+
+      {kpis != null && (
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => handleKpiClick('')}
+            className={`rounded-lg border-2 px-4 py-3 text-left transition-colors min-w-[7rem] ${estado === '' ? 'border-primary bg-primary/10 font-semibold' : 'border-muted hover:bg-muted/50'}`}
+          >
+            <span className="block text-xs text-muted-foreground uppercase tracking-wide">Todos</span>
+            <span className="text-2xl font-bold">{kpis.total}</span>
+          </button>
+          {(['pendiente', 'en_revision', 'aprobado', 'rechazado'] as const).map((key) => {
+            const cfg = ESTADO_CONFIG[key]
+            const Icon = cfg.Icon
+            const selected = estado === key
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => handleKpiClick(key)}
+                className={`rounded-lg border-2 px-4 py-3 text-left transition-colors min-w-[7rem] flex flex-col gap-0.5 ${selected ? 'border-primary bg-primary/10 font-semibold' : 'border-muted hover:bg-muted/50'}`}
+              >
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground uppercase tracking-wide">
+                  <Icon className="h-3.5 w-3.5" />
+                  {cfg.label}
+                </span>
+                <span className="text-2xl font-bold">{kpis[key]}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       <Card>
         <CardContent className="pt-6">

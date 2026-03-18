@@ -11,11 +11,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func, or_, and_
+from sqlalchemy import select, func, or_, and_, case
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.pago_reportado import PagoReportado, PagoReportadoHistorial
+from app.models.cedula_reportar_bs import CedulaReportarBs
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.pago import Pago
@@ -169,7 +170,11 @@ def list_pagos_reportados(
         count_q = count_q.where(PagoReportado.institucion_financiera.ilike(f"%{institucion}%"))
 
     total = db.execute(count_q).scalar()
-    q = q.order_by(PagoReportado.created_at.asc()).offset((page - 1) * per_page).limit(per_page)
+    # Rechazados al final de la lista; luego por fecha (más viejo primero)
+    q = q.order_by(
+        case((PagoReportado.estado == "rechazado", 1), else_=0),
+        PagoReportado.created_at.asc(),
+    ).offset((page - 1) * per_page).limit(per_page)
     rows = db.execute(q).scalars().all()
 
     items = []
@@ -193,6 +198,46 @@ def list_pagos_reportados(
             tiene_recibo_pdf=bool(r.recibo_pdf),
         ))
     return {"items": items, "total": total, "page": page, "per_page": per_page}
+
+
+@router.get("/pagos-reportados/kpis", response_model=dict)
+def kpis_pagos_reportados(
+    db: Session = Depends(get_db),
+    fecha_desde: Optional[date] = Query(None),
+    fecha_hasta: Optional[date] = Query(None),
+    cedula: Optional[str] = Query(None),
+    institucion: Optional[str] = Query(None),
+):
+    """Conteos por estado (pendiente, en_revision, aprobado, rechazado) con los mismos filtros opcionales que el listado."""
+    base = select(PagoReportado.estado, func.count(PagoReportado.id).label("cnt")).where(True)
+    if fecha_desde:
+        base = base.where(PagoReportado.created_at >= datetime.combine(fecha_desde, datetime.min.time()))
+    if fecha_hasta:
+        base = base.where(PagoReportado.created_at <= datetime.combine(fecha_hasta, datetime.max.time()))
+    if cedula:
+        ced_clean = cedula.strip().replace("-", "").replace(" ", "").upper()
+        cond_cedula = or_(
+            func.concat(PagoReportado.tipo_cedula, PagoReportado.numero_cedula).like(f"%{ced_clean}%"),
+            PagoReportado.numero_cedula.like(f"%{ced_clean}%"),
+            func.concat(PagoReportado.tipo_cedula, PagoReportado.numero_cedula) == ced_clean,
+            PagoReportado.numero_cedula == ced_clean,
+        )
+        if len(ced_clean) >= 1 and ced_clean[0:1] in ("V", "E", "J") and ced_clean[1:].isdigit():
+            cond_cedula = or_(
+                cond_cedula,
+                and_(PagoReportado.tipo_cedula == ced_clean[0:1], PagoReportado.numero_cedula == ced_clean[1:]),
+            )
+        base = base.where(cond_cedula)
+    if institucion:
+        base = base.where(PagoReportado.institucion_financiera.ilike(f"%{institucion}%"))
+    base = base.group_by(PagoReportado.estado)
+    rows = db.execute(base).all()
+    counts = {"pendiente": 0, "en_revision": 0, "aprobado": 0, "rechazado": 0}
+    for row in rows:
+        if row.estado in counts:
+            counts[row.estado] = row.cnt
+    counts["total"] = sum(counts[k] for k in ("pendiente", "en_revision", "aprobado", "rechazado"))
+    return counts
 
 
 @router.get("/pagos-reportados/{pago_id}", response_model=PagoReportadoDetalle)
@@ -348,17 +393,21 @@ def aprobar_pago_reportado(
     pr.motivo_rechazo = None
     pr.usuario_gestion_id = current_user.get("id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
-    pdf_bytes = generar_recibo_pago_reportado(
-        referencia_interna=pr.referencia_interna,
-        nombres=pr.nombres,
-        apellidos=pr.apellidos,
-        tipo_cedula=pr.tipo_cedula,
-        numero_cedula=pr.numero_cedula,
-        institucion_financiera=pr.institucion_financiera,
-        monto=f"{pr.monto} {pr.moneda}",
-        numero_operacion=pr.numero_operacion,
-        fecha_pago=pr.fecha_pago,
-    )
+    try:
+        pdf_bytes = generar_recibo_pago_reportado(
+            referencia_interna=pr.referencia_interna,
+            nombres=pr.nombres,
+            apellidos=pr.apellidos,
+            tipo_cedula=pr.tipo_cedula,
+            numero_cedula=pr.numero_cedula,
+            institucion_financiera=pr.institucion_financiera,
+            monto=f"{pr.monto} {pr.moneda}",
+            numero_operacion=pr.numero_operacion,
+            fecha_pago=pr.fecha_pago,
+        )
+    except Exception as e:
+        logger.exception("[COBROS] Aprobar ref=%s: error generando recibo PDF: %s", pr.referencia_interna, e)
+        raise HTTPException(status_code=500, detail=f"Error al generar el recibo PDF: {e!s}")
     pr.recibo_pdf = pdf_bytes
     to_email = _email_cliente_pago_reportado(db, pr)
     if not pr.correo_enviado_a and to_email:
@@ -374,9 +423,16 @@ def aprobar_pago_reportado(
             )
             mensaje_final = "Pago aprobado. El recibo no pudo enviarse por correo; use 'Enviar recibo por correo' desde el detalle."
     _registrar_historial(db, pago_id, estado_anterior, "aprobado", usuario_email, None)
-    # Crear pago en tabla pagos y aplicar a cuotas ANTES de commit para que prestamos y estado de cuenta se actualicen en la misma transacción
-    _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)
-    db.commit()
+    try:
+        _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)
+        db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception("[COBROS] Aprobar ref=%s: error al crear pago o aplicar a cuotas: %s", pr.referencia_interna, e)
+        raise HTTPException(status_code=500, detail=f"Error al aprobar: {e!s}")
     return {"ok": True, "mensaje": mensaje_final}
 
 
@@ -643,6 +699,20 @@ def editar_pago_reportado(
         pr.correo_enviado_a = (body.correo_enviado_a or "").strip()[:255] or None
     if body.observacion is not None:
         pr.observacion = (body.observacion or "").strip()[:500] or None
+
+    # Si la moneda queda en BS, la cédula debe estar en la lista de autorizadas para Bolívares
+    moneda_final = (pr.moneda or "").strip().upper()
+    if moneda_final == "BS":
+        cedula_lookup = ((pr.tipo_cedula or "").strip().upper() + (pr.numero_cedula or "").strip().replace(" ", "").replace("-", "")).strip()
+        if cedula_lookup:
+            permitido_bs = db.execute(
+                select(CedulaReportarBs).where(CedulaReportarBs.cedula == cedula_lookup).limit(1)
+            ).scalars().first() is not None
+            if not permitido_bs:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Observación: Bolívares. No puede guardar con moneda Bs; la cédula no está en la lista autorizada. Cambie a USD.",
+                )
 
     db.commit()
     logger.info("[COBROS] Pago reportado editado: id=%s ref=%s", pago_id, pr.referencia_interna)

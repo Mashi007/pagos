@@ -147,6 +147,29 @@ export interface ListPagosReportadosResponse {
   per_page: number
 }
 
+export interface PagosReportadosKpis {
+  pendiente: number
+  en_revision: number
+  aprobado: number
+  rechazado: number
+  total: number
+}
+
+export async function getPagosReportadosKpis(params: {
+  fecha_desde?: string
+  fecha_hasta?: string
+  cedula?: string
+  institucion?: string
+} = {}): Promise<PagosReportadosKpis> {
+  const q = new URLSearchParams()
+  if (params.fecha_desde) q.set('fecha_desde', params.fecha_desde)
+  if (params.fecha_hasta) q.set('fecha_hasta', params.fecha_hasta)
+  if (params.cedula) q.set('cedula', params.cedula)
+  if (params.institucion) q.set('institucion', params.institucion)
+  const data = await apiClient.get<PagosReportadosKpis>(`${BASE_COBROS}/pagos-reportados/kpis?${q}`)
+  return data
+}
+
 export async function listPagosReportados(params: {
   estado?: string
   fecha_desde?: string
