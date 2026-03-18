@@ -3,7 +3,8 @@ Endpoints de administraci贸n del m贸dulo Cobros (requieren autenticaci贸n).
 Listado de pagos reportados, detalle, aprobar, rechazar, hist贸rico por c茅dula.
 """
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, time as dt_time
+from decimal import Decimal
 from typing import Optional, List, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -16,10 +17,13 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.pago_reportado import PagoReportado, PagoReportadoHistorial
 from app.models.cliente import Cliente
+from app.models.prestamo import Prestamo
+from app.models.pago import Pago
 from app.services.cobros.recibo_pdf import generar_recibo_pago_reportado, WHATSAPP_LINK, WHATSAPP_DISPLAY
 from app.core.email import send_email
 from app.core.email_config_holder import get_email_activo_servicio
 from app.api.v1.endpoints.validadores import validate_cedula
+from app.api.v1.endpoints.pagos import _aplicar_pago_a_cuotas_interno
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -134,7 +138,7 @@ def list_pagos_reportados(
         q = q.where(PagoReportado.estado == estado)
         count_q = count_q.where(PagoReportado.estado == estado)
     else:
-        # Por defecto ocultar aprobados: solo casos pendientes (revisi髇, pendiente, rechazado)
+        # Por defecto ocultar aprobados: solo casos pendientes (revisi锟絥, pendiente, rechazado)
         q = q.where(PagoReportado.estado != "aprobado")
         count_q = count_q.where(PagoReportado.estado != "aprobado")
     if fecha_desde:
@@ -266,6 +270,62 @@ def _registrar_historial(db: Session, pago_id: int, estado_anterior: str, estado
     db.add(h)
 
 
+
+def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado, usuario_email: Optional[str]) -> None:
+    """Tras aprobar un pago reportado: crea registro en tabla pagos y aplica a cuotas (FIFO) para que prestamos y estado de cuenta se actualicen igual que por /pagos/pagos."""
+    try:
+        cedula_norm = ((pr.tipo_cedula or "") + (pr.numero_cedula or "")).replace("-", "").replace(" ", "").strip().upper()
+        if not cedula_norm:
+            return
+        cliente = db.execute(
+            select(Cliente).where(func.replace(Cliente.cedula, "-", "") == cedula_norm)
+        ).scalars().first()
+        if not cliente:
+            logger.info("[COBROS] Aprobar ref=%s: no se encontro cliente con cedula; no se crea pago en tabla pagos.", pr.referencia_interna)
+            return
+        prestamo = db.execute(
+            select(Prestamo)
+            .where(Prestamo.cliente_id == cliente.id, Prestamo.estado == "APROBADO")
+            .order_by(Prestamo.id.desc())
+            .limit(1)
+        ).scalars().first()
+        if not prestamo:
+            logger.info("[COBROS] Aprobar ref=%s: cliente sin prestamo APROBADO; no se crea pago.", pr.referencia_interna)
+            return
+        num_doc = ("COB-" + pr.referencia_interna)[:100]
+        if db.execute(select(Pago.id).where(Pago.numero_documento == num_doc)).scalar() is not None:
+            logger.info("[COBROS] Aprobar ref=%s: ya existe pago con documento %s; omitir creacion.", pr.referencia_interna, num_doc)
+            return
+        fecha_ts = datetime.combine(pr.fecha_pago, dt_time.min) if pr.fecha_pago else datetime.now()
+        monto = Decimal(str(round(float(pr.monto), 2)))
+        if monto <= 0:
+            return
+        row = Pago(
+            cedula_cliente=cedula_norm,
+            prestamo_id=prestamo.id,
+            fecha_pago=fecha_ts,
+            monto_pagado=monto,
+            numero_documento=num_doc,
+            institucion_bancaria=(pr.institucion_financiera or "").strip()[:255] or None,
+            estado="PENDIENTE",
+            referencia_pago=num_doc,
+            usuario_registro=usuario_email or "cobros@rapicredit.com",
+        )
+        db.add(row)
+        db.flush()
+        db.refresh(row)
+        _aplicar_pago_a_cuotas_interno(row, db)
+        row.estado = "PAGADO"
+        db.commit()
+        logger.info("[COBROS] Aprobar ref=%s: creado pago id=%s y aplicado a cuotas del prestamo %s.", pr.referencia_interna, row.id, prestamo.id)
+    except Exception as e:
+        logger.warning("[COBROS] Aprobar ref=%s: no se pudo crear pago/aplicar cuotas: %s", pr.referencia_interna, e, exc_info=True)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+
 @router.post("/pagos-reportados/{pago_id}/aprobar")
 def aprobar_pago_reportado(
     pago_id: int,
@@ -312,6 +372,7 @@ def aprobar_pago_reportado(
             mensaje_final = "Pago aprobado. El recibo no pudo enviarse por correo; use 'Enviar recibo por correo' desde el detalle."
     _registrar_historial(db, pago_id, estado_anterior, "aprobado", usuario_email, None)
     db.commit()
+    _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)
     return {"ok": True, "mensaje": mensaje_final}
 
 
@@ -623,3 +684,4 @@ def cambiar_estado_pago(
     _registrar_historial(db, pago_id, estado_anterior, body.estado, usuario_email, body.motivo)
     db.commit()
     return {"ok": True, "mensaje": mensaje}
+

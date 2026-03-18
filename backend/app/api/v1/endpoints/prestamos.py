@@ -664,6 +664,21 @@ def _calcular_monto_cuota_frances(total: float, tasa_periodo: float, n: int) -> 
     return total * (tasa_periodo * factor) / (factor - 1)
 
 
+def _fecha_base_mas_meses(fecha_base: date, meses: int) -> date:
+    """
+    Suma `meses` meses a `fecha_base` manteniendo el mismo dia del mes.
+    Si el dia no existe en el mes resultante (ej. 31 en febrero), usa el ultimo dia del mes.
+    Ejemplo: 17 julio 2025 + 1 mes = 17 agosto 2025; + 2 meses = 17 septiembre 2025.
+    """
+    if meses <= 0:
+        return fecha_base
+    year = fecha_base.year + (fecha_base.month + meses - 1) // 12
+    month = (fecha_base.month + meses - 1) % 12 + 1
+    _, ultimo_dia = calendar.monthrange(year, month)
+    day = min(fecha_base.day, ultimo_dia)
+    return date(year, month, day)
+
+
 def _resolver_monto_cuota(prestamo: "Prestamo", total: float, numero_cuotas: int) -> float:
     """
     [C1] Determina el monto de cuota considerando la tasa de interés del préstamo.
@@ -707,7 +722,10 @@ def _generar_cuotas_amortizacion(db: Session, p: Prestamo, fecha_base: date, num
     monto_cuota_dec = Decimal(str(round(monto_cuota, 2)))
     creadas = 0
     for n in range(1, numero_cuotas + 1):
-        next_date = fecha_base + timedelta(days=delta_dias * n - 1)
+        if modalidad == "MENSUAL":
+            next_date = _fecha_base_mas_meses(fecha_base, n)
+        else:
+            next_date = fecha_base + timedelta(days=delta_dias * n - 1)
         saldo_inicial = Decimal(str(round(total - (n - 1) * monto_cuota, 2)))
         saldo_final = Decimal(str(round(total - n * monto_cuota, 2)))
         if saldo_final < 0:
