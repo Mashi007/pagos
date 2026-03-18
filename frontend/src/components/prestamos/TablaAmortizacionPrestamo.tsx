@@ -301,8 +301,13 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
                 const estaPagado = totalPagado > 0 || montoConciliadoBackend > 0 || ['PAGADO', 'PAGADA', 'CONCILIADO'].includes(estadoReal)
                 // Priorizar pago_monto_conciliado del backend (valores conciliados por préstamo), luego total_pagado, luego monto_cuota si está pagado
                 const montoPagoConciliado = montoConciliadoBackend > 0 ? montoConciliadoBackend : (totalPagado > 0 ? totalPagado : (estaPagado ? montoCuota : 0))
-                // Enlace recibo solo si la cuota está totalmente pagada (PAGADO/CONCILIADO), no en parciales
-                const puedeDescargarRecibo = ['PAGADO', 'PAGADA', 'CONCILIADO'].includes(estadoReal)
+                // Enlace recibo: cuota totalmente pagada (por estado o por monto)
+                const estadoBackend = (cuota.estado || '').toUpperCase()
+                const cuotaCubiertaPorMonto = montoCuota > 0 && (totalPagado >= montoCuota - 0.01 || montoConciliadoBackend >= montoCuota - 0.01)
+                const puedeDescargarRecibo =
+                  ['PAGADO', 'PAGADA', 'CONCILIADO'].includes(estadoReal) ||
+                  ['PAGADO', 'PAGADA', 'CONCILIADO'].includes(estadoBackend) ||
+                  cuotaCubiertaPorMonto
 
                 // Calcular monto_capital y monto_interes si no existen
                 // Capital = diferencia entre saldo inicial y final
@@ -348,16 +353,22 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
                           {getEstadoLabel(estadoReal)}
                         </Badge>
                         {puedeDescargarRecibo && (
-                          <Button
-                            variant="link"
-                            size="sm"
-                            className="h-auto p-0 text-emerald-600 hover:text-emerald-800 font-normal text-xs"
-                            title="Descargar recibo"
+                          <button
+                            type="button"
+                            title="Descargar recibo PDF"
                             onClick={() => descargarRecibo(cuota)}
                             disabled={descargandoRecibo === cuota.id}
+                            className="inline-flex items-center gap-1 ml-1 text-xs font-medium text-emerald-700 underline underline-offset-2 hover:text-emerald-900 disabled:opacity-50"
                           >
-                            {descargandoRecibo === cuota.id ? '⏳' : 'Ver recibo'}
-                          </Button>
+                            {descargandoRecibo === cuota.id ? (
+                              <span>⏳</span>
+                            ) : (
+                              <>
+                                <FileText className="h-4 w-4 shrink-0" />
+                                Ver recibo
+                              </>
+                            )}
+                          </button>
                         )}
                       </div>
                       {/* ðŸ” DEBUG: Mostrar información de depuración */}
