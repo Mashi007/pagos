@@ -181,7 +181,7 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
       if (t.length > 10) t = '9999999999'
       if (t.length >= 10) counts[t] = (counts[t] || 0) + 1
     })
-    return new Set(Object.keys(counts).filter((t) => (counts[t] || 0) > 1))
+    return new Set(Object.keys(counts).filter((t) => t !== '4111111111' && (counts[t] || 0) > 1))
   }, [excelData])
 
   const isClientValid = useCallback(

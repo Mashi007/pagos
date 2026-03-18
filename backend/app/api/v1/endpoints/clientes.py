@@ -1,4 +1,4 @@
-﻿"""
+"""
 Endpoints de clientes: CONECTADOS A LA TABLA REAL `clientes` (public.clientes).
 - Conexión: engine/sesión desde app.core.database (DATABASE_URL en .env).
 - Modelo: app.models.cliente.Cliente con __tablename__ = "clientes".
@@ -503,7 +503,8 @@ def create_cliente(payload: ClienteCreate, db: Session = Depends(get_db)):
 
     # Si teléfono duplicado (2 números exactamente iguales) â†’ reemplazar por +589999999999
     telefono_final = payload.telefono
-    if len(telefono_dig) >= 8:
+    tel_10 = telefono_dig[-10:] if len(telefono_dig) >= 10 else telefono_dig
+    if len(telefono_dig) >= 8 and tel_10 != "4111111111":
         rows_telefono = db.execute(
             select(Cliente.id, Cliente.telefono).where(Cliente.telefono.isnot(None))
         ).all()
@@ -583,7 +584,8 @@ def _perform_update_cliente(cliente_id: int, payload: ClienteUpdate, db: Session
                 )
     if "telefono" in data:
         telefono_dig = _digits_telefono(data.get("telefono") or getattr(row, "telefono") or "")
-        if len(telefono_dig) >= 8:
+        tel_10 = telefono_dig[-10:] if len(telefono_dig) >= 10 else telefono_dig
+        if len(telefono_dig) >= 8 and tel_10 != "4111111111":
             rows_telefono = db.execute(
                 select(Cliente.id, Cliente.telefono).where(
                     Cliente.telefono.isnot(None),
