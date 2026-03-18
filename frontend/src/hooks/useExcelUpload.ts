@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Hook for Excel client bulk upload.
  * Extracted from ExcelUploader component.
  */
@@ -366,7 +366,7 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
           return false
         }
         setSavingProgress((prev) => ({ ...prev, [row._rowIndex]: true }))
-        const rawTel = blankIfNN(row.telefono)
+        const rawTel = blankIfNN(row.telefono) || '4111111111'
         const digits = rawTel.replace(/\D/g, '')
         const tel10 = digits.length > 10 ? '9999999999' : digits.slice(0, 10)
         const telefonoNormalizado = '+58' + (tel10 || rawTel)
@@ -792,7 +792,7 @@ export function useExcelUpload({ onClose, onDataProcessed, onSuccess }: ExcelUpl
             _hasErrors: false,
             cedula: normalizeCedulaInput(row[0]?.toString()) || 'Z999999999',
             nombres: row[1]?.toString() || '',
-            telefono: normalizeTelefonoFromExcel(row[2]?.toString()) || '',
+            telefono: normalizeTelefonoFromExcel(row[2]?.toString()) || '4111111111',
             email: row[3]?.toString() || '',
             direccion: row[4]?.toString() || '',
             fecha_nacimiento: convertirFechaExcel(row[5]),
