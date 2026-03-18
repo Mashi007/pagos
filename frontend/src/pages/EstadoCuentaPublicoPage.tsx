@@ -289,23 +289,39 @@ export default function EstadoCuentaPublicoPage() {
             </div>
           </div>
           <CardHeader className="text-center pb-2 px-4 sm:px-6">
-            <CardTitle className="text-2xl sm:text-3xl text-[#1e3a5f] font-bold tracking-tight">Bienvenido</CardTitle>
+            <CardTitle className="text-2xl sm:text-3xl text-[#1e3a5f] font-bold tracking-tight">
+              {isInformesRoute ? 'Informes — Uso interno' : 'Bienvenido'}
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 sm:space-y-5 px-4 sm:px-6 pb-6">
-            <p className="text-slate-700 text-center text-sm sm:text-base">
-              Desde aquí puede consultar su estado de cuenta. Solo debe ingresar su cédula; el documento se generará y se enviará al correo registrado.
-            </p>
-            <ul className="text-sm text-slate-600 space-y-2 list-disc list-inside">
-              <li>Ingrese su número de cédula (V, E, G o J + dígitos).</li>
-              <li>Se generará un PDF con sus préstamos y cuotas pendientes.</li>
-              <li>Una copia se enviará al correo electrónico registrado.</li>
-            </ul>
-            <p className="text-xs text-slate-500 text-center">
-              Este servicio solo permite consultar su propio estado de cuenta. No da acceso a otros servicios.
-            </p>
-            <p className="text-xs text-slate-500 text-center">
-              Si desea consultar otra cédula, al finalizar use el botón «Consultar otra cédula» o reinicie el proceso.
-            </p>
+            {isInformesRoute ? (
+              <>
+                <p className="text-slate-700 text-center text-sm sm:text-base">
+                  Generación de estado de cuenta para empleados. Ingrese la cédula del cliente y obtenga el PDF al instante. No se solicita código ni se envía correo.
+                </p>
+                <ul className="text-sm text-slate-600 space-y-2 list-disc list-inside">
+                  <li>Ingrese la cédula (V, E, G o J + dígitos).</li>
+                  <li>Se generará el PDF y podrá descargarlo directamente.</li>
+                </ul>
+              </>
+            ) : (
+              <>
+                <p className="text-slate-700 text-center text-sm sm:text-base">
+                  Desde aquí puede consultar su estado de cuenta. Solo debe ingresar su cédula; el documento se generará y se enviará al correo registrado.
+                </p>
+                <ul className="text-sm text-slate-600 space-y-2 list-disc list-inside">
+                  <li>Ingrese su número de cédula (V, E, G o J + dígitos).</li>
+                  <li>Se generará un PDF con sus préstamos y cuotas pendientes.</li>
+                  <li>Una copia se enviará al correo electrónico registrado.</li>
+                </ul>
+                <p className="text-xs text-slate-500 text-center">
+                  Este servicio solo permite consultar su propio estado de cuenta. No da acceso a otros servicios.
+                </p>
+                <p className="text-xs text-slate-500 text-center">
+                  Si desea consultar otra cédula, al finalizar use el botón «Consultar otra cédula» o reinicie el proceso.
+                </p>
+              </>
+            )}
             <Button className="w-full text-base py-6 min-h-[52px] font-semibold bg-[#1e3a5f] hover:bg-[#152a47] text-white touch-manipulation rounded-xl shadow-lg shadow-[#1e3a5f]/25 hover:shadow-xl transition-all duration-200 active:scale-[0.98]" size="lg" onClick={() => goToStep(1)}>
               Iniciar
             </Button>
@@ -327,7 +343,11 @@ export default function EstadoCuentaPublicoPage() {
           <Card className="w-full max-w-md min-w-0 shadow-xl border border-slate-200/80 rounded-2xl overflow-hidden">
             <CardHeader className="px-5 sm:px-6 pb-2">
               <CardTitle className="text-xl sm:text-2xl text-[#1e3a5f] font-bold">Estado de cuenta</CardTitle>
-              <p className="text-sm text-gray-600">Solo letra (V, E, G o J) y 6 a 11 dígitos. No use puntos ni signos. Si solo ingresa números se procesará con V.</p>
+              <p className="text-sm text-gray-600">
+                {isInformesRoute
+                  ? 'Uso interno. Ingrese la cédula del cliente para generar el PDF. No se envía correo.'
+                  : 'Solo letra (V, E, G o J) y 6 a 11 dígitos. No use puntos ni signos. Si solo ingresa números se procesará con V.'}
+              </p>
             </CardHeader>
             <CardContent className="px-4 sm:px-6 space-y-4">
               <Input
@@ -343,7 +363,11 @@ export default function EstadoCuentaPublicoPage() {
                   Atrás
                 </Button>
                 <Button className="flex-1 min-h-[48px] min-w-0 touch-manipulation rounded-xl bg-[#1e3a5f] hover:bg-[#152a47] text-white shadow-md" onClick={handleSolicitarCodigo} disabled={loading}>
-                  {loading ? 'Enviando código...' : 'Enviar código al correo'}
+                  {loading
+                    ? (isInformesRoute ? 'Generando PDF...' : 'Enviando código...')
+                    : isInformesRoute
+                      ? 'Generar PDF'
+                      : 'Enviar código al correo'}
                 </Button>
               </div>
             </CardContent>
