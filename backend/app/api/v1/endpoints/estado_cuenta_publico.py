@@ -194,7 +194,7 @@ def _get_plantilla_email_codigo(
 
 
 def _obtener_datos_pdf(db: Session, cedula_lookup: str):
-    """Obtiene cliente y datos para PDF. Retorna dict o None si no existe cliente."""
+    """Obtiene cliente y datos para PDF desde la BD actual (sin caché). Retorna dict o None si no existe cliente."""
     cliente_row = db.execute(
         select(Cliente).where(func.replace(Cliente.cedula, "-", "") == cedula_lookup)
     ).scalars().first()
@@ -547,6 +547,7 @@ def verificar_codigo_estado_cuenta(
     """
     Verifica el codigo enviado al email y devuelve el PDF de estado de cuenta.
     El codigo es de un solo uso. Rate limit: 15 intentos/15 min por IP.
+    El PDF se genera con datos actuales de la BD (pagos aplicados a cuotas incluidos).
     """
     cedula = (body.cedula or "").strip()
     codigo = (body.codigo or "").strip()
@@ -644,6 +645,8 @@ def solicitar_estado_cuenta(
     Genera el PDF de estado de cuenta para la cédula consultada, lo envía al email
     registrado del cliente y devuelve el PDF en base64 para visualización.
     Público, sin auth. Rate limit: 5 solicitudes/hora por IP.
+    Los datos se leen siempre de la BD en el momento de la petición (sin caché);
+    cualquier pago aplicado a cuotas se refleja automáticamente en la siguiente consulta.
     """
     cedula = (body.cedula or "").strip()
     ip = get_client_ip(request)

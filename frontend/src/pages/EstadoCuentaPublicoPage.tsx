@@ -471,9 +471,14 @@ export default function EstadoCuentaPublicoPage() {
               <p className="text-gray-600">Generando estado de cuenta...</p>
             )}
             {pdfDataUrl && !loadingPdf && (
-              <p className="text-center text-xl sm:text-2xl text-slate-800 font-bold py-6">
-                Descarga tu estado de cuenta
-              </p>
+              <>
+                <p className="text-center text-xl sm:text-2xl text-slate-800 font-bold py-6">
+                  Descarga tu estado de cuenta
+                </p>
+                <p className="text-center text-sm text-slate-500 -mt-4 pb-2">
+                  Los datos reflejan el estado al momento de esta consulta. Cada nueva consulta muestra los pagos más recientes.
+                </p>
+              </>
             )}
             <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
               <Button variant="outline" className="flex-1 min-h-[48px] touch-manipulation min-w-0 rounded-xl border-2" onClick={() => resetForm(0)}>
