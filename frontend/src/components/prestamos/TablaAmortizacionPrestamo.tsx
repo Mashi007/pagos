@@ -343,9 +343,23 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
                       )}
                     </TableCell>
                     <TableCell>
-                      <Badge className={getEstadoBadge(estadoReal)}>
-                        {getEstadoLabel(estadoReal)}
-                      </Badge>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge className={getEstadoBadge(estadoReal)}>
+                          {getEstadoLabel(estadoReal)}
+                        </Badge>
+                        {puedeDescargarRecibo && (
+                          <Button
+                            variant="link"
+                            size="sm"
+                            className="h-auto p-0 text-emerald-600 hover:text-emerald-800 font-normal text-xs"
+                            title="Descargar recibo"
+                            onClick={() => descargarRecibo(cuota)}
+                            disabled={descargandoRecibo === cuota.id}
+                          >
+                            {descargandoRecibo === cuota.id ? '⏳' : 'Ver recibo'}
+                          </Button>
+                        )}
+                      </div>
                       {/* ðŸ” DEBUG: Mostrar información de depuración */}
                       {process.env.NODE_ENV === 'development' && (
                         <div className="text-xs text-gray-400 mt-1">
