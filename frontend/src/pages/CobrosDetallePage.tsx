@@ -1,8 +1,10 @@
 /**
  * Detalle de un pago reportado: datos, comprobante (enlace), Aprobar / Rechazar, historial.
+ * Al aprobar se invalidan cuotas y préstamos para que la tabla de amortización se actualice al ir a Préstamos.
  */
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   getPagoReportadoDetalle,
   aprobarPagoReportado,
@@ -28,6 +30,7 @@ const ESTADO_BADGE: Record<string, string> = {
 export default function CobrosDetallePage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [detalle, setDetalle] = useState<PagoReportadoDetalleResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [accion, setAccion] = useState<'idle' | 'aprobar' | 'rechazar'>('idle')
@@ -60,6 +63,9 @@ export default function CobrosDetallePage() {
       toast.success('Pago aprobado y recibo enviado por correo.')
       setAccion('idle')
       load()
+      // Actualizar tabla de amortización y listado de préstamos para que reflejen el pago aplicado
+      queryClient.invalidateQueries({ queryKey: ['cuotas-prestamo'] })
+      queryClient.invalidateQueries({ queryKey: ['prestamos'] })
     } catch (e: any) {
       toast.error(e?.message || 'Error al aprobar.')
       setAccion('idle')

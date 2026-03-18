@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Download, Eye, FileText, CheckCircle, Clock, AlertCircle } from 'lucide-react'
+import { Download, Eye, FileText, CheckCircle, Clock, AlertCircle, RefreshCw } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import { Button } from '../../components/ui/button'
 import { Badge } from '../../components/ui/badge'
@@ -55,14 +55,14 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
     }
   }
 
-  // Cargar cuotas del préstamo
-  const { data: cuotas, isLoading, error } = useQuery({
+  // Cargar cuotas del préstamo (tabla de amortización desde BD: pagos aplicados a cuotas)
+  const { data: cuotas, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['cuotas-prestamo', prestamo.id],
     queryFn: () => prestamoService.getCuotasPrestamo(prestamo.id),
     enabled: prestamo.estado === 'APROBADO',
-    staleTime: 0, // Siempre refetch para obtener datos actualizados
-    refetchOnMount: true, // Refetch al montar el componente
-    refetchOnWindowFocus: true, // Refetch al enfocar la ventana
+    staleTime: 0,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   })
 
   // Función para determinar el estado correcto basado en los datos
@@ -260,6 +260,16 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
           <Badge variant="secondary">{cuotas.length} cuotas</Badge>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refetch()}
+            disabled={isFetching}
+            title="Actualizar tabla con los últimos pagos aplicados"
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? 'animate-spin' : ''}`} />
+            Refrescar
+          </Button>
           <Button variant="outline" size="sm" onClick={exportarExcel}>
             <Download className="h-4 w-4 mr-2" />
             Exportar Excel
