@@ -92,8 +92,9 @@ export default function CobrosPagosReportadosPage() {
   }
 
   const handleAbrirModalRechazo = (row: PagoReportadoItem) => {
-    setRechazarModal({ open: true, row })
     setMotivoRechazo('')
+    const rowToOpen = { ...row }
+    setTimeout(() => setRechazarModal({ open: true, row: rowToOpen }), 0)
   }
 
   const handleConfirmarRechazo = () => {
@@ -291,9 +292,14 @@ export default function CobrosPagosReportadosPage() {
                             <FileText className="h-4 w-4" />
                           </Button>
                           {(row.estado === 'pendiente' || row.estado === 'en_revision') && (
-                            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" title="Editar (modificar valores para cumplir validadores)" onClick={() => navigate(`/cobros/pagos-reportados/${row.id}/editar`)}>
-                              <Edit className="h-4 w-4" />
-                            </Button>
+                            <>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" title="Editar (modificar valores para cumplir validadores)" onClick={() => navigate(`/cobros/pagos-reportados/${row.id}/editar`)}>
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-destructive hover:text-destructive hover:bg-destructive/10" title="Rechazar (escribir mensaje y enviar correo)" onClick={() => handleAbrirModalRechazo(row)} disabled={changingEstadoId === row.id}>
+                                {changingEstadoId === row.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
+                              </Button>
+                            </>
                           )}
                           <div className="relative inline-block h-8 w-8">
                             <select
