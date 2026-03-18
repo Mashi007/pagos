@@ -301,6 +301,8 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
                 const estaPagado = totalPagado > 0 || montoConciliadoBackend > 0 || ['PAGADO', 'PAGADA', 'CONCILIADO'].includes(estadoReal)
                 // Priorizar pago_monto_conciliado del backend (valores conciliados por préstamo), luego total_pagado, luego monto_cuota si está pagado
                 const montoPagoConciliado = montoConciliadoBackend > 0 ? montoConciliadoBackend : (totalPagado > 0 ? totalPagado : (estaPagado ? montoCuota : 0))
+                // Enlace recibo solo si la cuota está totalmente pagada (PAGADO/CONCILIADO), no en parciales
+                const puedeDescargarRecibo = ['PAGADO', 'PAGADA', 'CONCILIADO'].includes(estadoReal)
 
                 // Calcular monto_capital y monto_interes si no existen
                 // Capital = diferencia entre saldo inicial y final
@@ -354,21 +356,26 @@ export function TablaAmortizacionPrestamo({ prestamo }: TablaAmortizacionPrestam
                       )}
                     </TableCell>
                     <TableCell className="text-center">
-                      {estaPagado && (
+                      {puedeDescargarRecibo ? (
                         <Button
                           variant="ghost"
                           size="sm"
                           title={`Descargar recibo cuota ${cuota.numero_cuota}`}
                           onClick={() => descargarRecibo(cuota)}
                           disabled={descargandoRecibo === cuota.id}
-                          className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50"
+                          className="h-8 px-2 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 inline-flex items-center gap-1"
                         >
                           {descargandoRecibo === cuota.id ? (
                             <span className="text-xs">⏳</span>
                           ) : (
-                            <FileText className="h-4 w-4" />
+                            <>
+                              <FileText className="h-4 w-4 shrink-0" />
+                              <span className="text-xs">Ver recibo</span>
+                            </>
                           )}
                         </Button>
+                      ) : (
+                        <span className="text-gray-400 text-xs">—</span>
                       )}
                     </TableCell>
                   </TableRow>
