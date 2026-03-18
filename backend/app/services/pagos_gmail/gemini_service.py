@@ -50,7 +50,7 @@ GEMINI_PROMPT = (
     "- En imagen busca etiquetas: 'DP:V-', 'Cédula Dep.', 'C.I.', 'RIF'.\n"
     "- Devuelve SOLO los dígitos sin prefijo (ej: 'V-024691606' → '024691606'). Si hay varias cédulas, la del PAGADOR/DEPOSITANTE.\n\n"
     "MONTO:\n"
-    "- Bolívares (Bs, Bs., BsS) o dólares/divisas (Us$, USD, $, USDT). Incluir la moneda: '142.00 USD', '80000.00 Bs'.\n"
+    "- Bolívares (Bs, Bs., BsS) o dólares/divisas. Equivalencia: USDT = Dólares = USD = $. Cuando el comprobante indique USDT, Dólares, $ o USD, usa moneda 'USD' y monto en dólares. Ejemplos: '142.00 USD', '80000.00 Bs'.\n"
     "- En texto busca: 'monto', 'depósito', 'cantidad', 'total', 'importe', 'pagado', 'abono'.\n"
     "- Formato Bs: punto miles, coma decimal; normalizar a '80000.00 Bs'.\n\n"
     "NUMERO_REFERENCIA:\n"
@@ -446,14 +446,14 @@ Paso 1 — Extraer de la imagen: Lee el comprobante y extrae con precisión esto
 - institucion_financiera: nombre del banco o entidad (ej. Banesco, Mercantil, BNC, BDV, Pago Móvil). Si en el comprobante solo aparece la palabra Recibo (o recibo, REcibo) sin nombre de banco, usa "Recibo" como institucion_financiera; es un valor válido en el criterio Bancos/banco.
 - numero_operacion: es el número/código de la transacción. En el comprobante puede aparecer como "Serial", "Serial:", "Nº operación", "Referencia", "Número de referencia", "Código de operación", etc. Extrae los dígitos (y letras si los hay) de ese campo; ese valor es el numero_operacion para comparar con el formulario.
 - monto: cantidad pagada (número; puede estar en Bs, USD, USDT, etc.).
-- moneda: BS, USD, USDT, etc., según lo que indique el comprobante.
+- moneda: BS o USD. Regla: USDT = Dólares = USD = $; si el comprobante muestra USDT, Dólares, $ o USD, devuelve moneda 'USD'.
 - cedula_pagador: cédula del quien paga/deposita. En el comprobante puede aparecer como "Cédula Dep.:", "Nro. de Cédula", "DP:", "C.I.", etc. Toma solo el número del depositante/pagador (no confundir con referencias largas que incluyan fecha). IMPORTANTE: si el número en la imagen empieza por cero (0025677920, 0001234567), quita los ceros a la izquierda antes de comparar (25677920, 1234567). Normaliza a tipo (V, E, G o J) + dígitos sin guiones ni espacios; si solo ves dígitos (ej. 0025677920), antepón V. Resultado a usar para comparar: tipo + número sin ceros a la izquierda.
 
 Paso 2 — Comparar campo por campo: Para cada dato extraído de la imagen, compáralo con el valor que la persona ingresó en el formulario (listado abajo). Reglas:
 - Fecha pago (OBLIGATORIO comparar): La fecha ingresada manualmente en el formulario debe coincidir con la fecha de la operación que aparece en la imagen. Comparar día, mes y año; si alguno difiere, es divergencia (incluir "Fecha pago" en comentario). Ignorar solo el formato (ej. 10/03/2026 vs 2026-03-10 = misma fecha).
 - Institución: mismo banco o entidad (sinónimos o nombre abreviado = válido). Recibo, recibo y REcibo se consideran el mismo valor (coinciden entre sí).
 - Número de operación: el formulario tiene "numero_operacion"; en el comprobante puede estar como "Serial", "Referencia", "Nº operación", etc. Es el mismo dato. Compara los dígitos/código; si coinciden (ignorar espacios o guiones intermedios), COINCIDE. No marques divergencia solo porque la etiqueta en el recibo diga "Serial" en vez de "Número de operación".
-- Monto: mismo valor numérico; misma moneda o equivalente (BS vs Bs, USD vs US$).
+- Monto: mismo valor numérico; misma moneda o equivalente (BS vs Bs, USD vs US$ vs USDT vs Dólares vs $).
 - Cédula: aplicar las REGLAS DEL VALIDADOR DE CÉDULA anteriores. Comparar tipo (V/E/G/J) y número ya normalizado (sin ceros a la izquierda). Si en imagen ves 0025677920 o V-0025677920 y en formulario V25677920 → COINCIDE. Si en imagen ves 0025677920 y en formulario V25677920 → COINCIDE. Solo es divergencia si el tipo es distinto o el número sin ceros a la izquierda es distinto. Antes de poner "Cédula" en comentario, verifica que hayas normalizado ambos lados (imagen y formulario) quitando ceros a la izquierda del número.
 
 Paso 3 — Decidir:

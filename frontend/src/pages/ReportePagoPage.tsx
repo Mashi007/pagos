@@ -135,7 +135,8 @@ export default function ReportePagoPage({ variant = 'cobros' }: { variant?: Repo
   const [institucionOtros, setInstitucionOtros] = useState('')
   const [fechaPago, setFechaPago] = useState('')
   const [monto, setMonto] = useState('')
-  const [moneda, setMoneda] = useState<'BS' | 'USD'>('BS')
+  const [moneda, setMoneda] = useState<'BS' | 'USD' | 'USDT'>('BS')
+  const [puedeReportarBs, setPuedeReportarBs] = useState(true)
   const [numeroDocumento, setNumeroDocumento] = useState('')
   const [archivo, setArchivo] = useState<File | null>(null)
   const [referencia, setReferencia] = useState('')
@@ -178,6 +179,7 @@ export default function ReportePagoPage({ variant = 'cobros' }: { variant?: Repo
     setInstitucionOtros('')
     setFechaPago('')
     setMonto('')
+    setPuedeReportarBs(true)
     setMoneda('BS')
     setNumeroDocumento('')
     setArchivo(null)
@@ -215,6 +217,9 @@ export default function ReportePagoPage({ variant = 'cobros' }: { variant?: Repo
         showNotification('error', res.error || 'Cédula no válida.')
         return
       }
+      const puedeBs = res.puede_reportar_bs ?? true
+      setPuedeReportarBs(puedeBs)
+      if (!puedeBs) setMoneda('USD')
       setCedula(cedulaEnviar)
       setNombre(res.nombre || '')
       setEmailParaVerificacion(res.email ?? res.email_enmascarado ?? '')
@@ -575,11 +580,12 @@ export default function ReportePagoPage({ variant = 'cobros' }: { variant?: Repo
                 <select
                   className="border rounded-md px-3 py-2.5 min-h-[44px] w-full sm:w-24 flex-shrink-0 touch-manipulation bg-white text-base"
                   value={moneda}
-                  onChange={(e) => setMoneda(e.target.value as 'BS' | 'USD')}
+                  onChange={(e) => setMoneda(e.target.value as 'BS' | 'USD' | 'USDT')}
                   aria-label="Moneda"
                 >
-                  <option value="BS">Bs.</option>
-                  <option value="USD">USD</option>
+                  {puedeReportarBs && <option value="BS">Bs.</option>}
+                  <option value="USD">USD / $</option>
+                  <option value="USDT">USDT</option>
                 </select>
               </div>
               <p className="text-xs text-gray-500 mt-1">Monto mayor a 0. Máximo permitido: 999.999.999,99</p>

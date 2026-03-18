@@ -169,7 +169,7 @@ def list_pagos_reportados(
         count_q = count_q.where(PagoReportado.institucion_financiera.ilike(f"%{institucion}%"))
 
     total = db.execute(count_q).scalar()
-    q = q.order_by(PagoReportado.created_at.desc()).offset((page - 1) * per_page).limit(per_page)
+    q = q.order_by(PagoReportado.created_at.asc()).offset((page - 1) * per_page).limit(per_page)
     rows = db.execute(q).scalars().all()
 
     items = []
@@ -402,17 +402,36 @@ def rechazar_pago_reportado(
     pr.usuario_gestion_id = current_user.get("id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
     to_email = _email_cliente_pago_reportado(db, pr)
-    if to_email:
+    if to_email and get_email_activo_servicio("notificaciones"):
         body_text = (
             f"Referencia: {pr.referencia_interna}\n\n"
-            f"{MENSAJE_RECHAZO_GENERICO}"
+            f"Su reporte de pago no ha sido aprobado.\n\n"
+            f"Motivo del rechazo: {pr.motivo_rechazo}\n\n"
+            f"Para más información o aclaratorias, comuníquese con nosotros por WhatsApp: {WHATSAPP_DISPLAY} ({WHATSAPP_LINK}).\n\n"
+            "RapiCredit C.A."
         )
-        ok_mail, err_mail = send_email([to_email], f"Reporte de pago no aprobado #{pr.referencia_interna}", body_text, servicio="cobros", respetar_destinos_manuales=True)
+        attachments: List[Tuple[str, bytes]] = []
+        if pr.comprobante:
+            nombre_adj = (pr.comprobante_nombre or "comprobante").strip() or "comprobante"
+            if not nombre_adj or "." not in nombre_adj:
+                ext = "pdf" if (pr.comprobante_tipo or "").lower().find("pdf") >= 0 else "jpg"
+                nombre_adj = f"comprobante_{pr.referencia_interna}.{ext}"
+            attachments.append((nombre_adj, bytes(pr.comprobante)))
+        ok_mail, err_mail = send_email(
+            [to_email],
+            f"Reporte de pago no aprobado #{pr.referencia_interna}",
+            body_text,
+            attachments=attachments if attachments else None,
+            servicio="notificaciones",
+            respetar_destinos_manuales=True,
+        )
         if not ok_mail:
             logger.error(
                 "[COBROS] Rechazar ref=%s: correo NO enviado a %s. Error: %s.",
                 pr.referencia_interna, to_email, err_mail or "desconocido",
             )
+    elif to_email and not get_email_activo_servicio("notificaciones"):
+        logger.warning("[COBROS] Rechazar ref=%s: email notificaciones desactivado, no se envió correo a %s.", pr.referencia_interna, to_email)
     _registrar_historial(db, pago_id, estado_anterior, "rechazado", usuario_email, pr.motivo_rechazo)
     db.commit()
     return {"ok": True, "mensaje": "Pago rechazado y cliente notificado."}
@@ -615,7 +634,11 @@ def editar_pago_reportado(
             raise HTTPException(status_code=400, detail="El monto no puede ser negativo.")
         pr.monto = body.monto
     if body.moneda is not None:
-        pr.moneda = (body.moneda or "BS").strip()[:10] or pr.moneda
+        m = (body.moneda or "BS").strip().upper()[:10]
+        # USDT = Dólares = USD = $; normalizar a USD
+        if m in ("USD", "USDT"):
+            m = "USD"
+        pr.moneda = m or pr.moneda
     if body.correo_enviado_a is not None:
         pr.correo_enviado_a = (body.correo_enviado_a or "").strip()[:255] or None
     if body.observacion is not None:

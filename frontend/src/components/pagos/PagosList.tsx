@@ -88,6 +88,9 @@ export function PagosList() {
   const [isVaciarTablaGmail, setIsVaciarTablaGmail] = useState(false)
   const [gmailScanFilter, setGmailScanFilter] = useState<'unread' | 'read' | 'all'>('unread')
   const [submenuGmailOpen, setSubmenuGmailOpen] = useState(false)
+  const [cedulasReportarBsTotal, setCedulasReportarBsTotal] = useState<number | null>(null)
+  const [isUploadingCedulasBs, setIsUploadingCedulasBs] = useState(false)
+  const fileInputCedulasBsRef = useRef<HTMLInputElement>(null)
   const queryClient = useQueryClient()
 
   const { loading: loadingGmail, gmailStatus, setGmailStatus, run: runGmail } = useGmailPipeline({
@@ -102,6 +105,10 @@ export function PagosList() {
     if (!agregarPagoOpen) return
     pagoService.getGmailStatus().then(setGmailStatus).catch(() => setGmailStatus(null))
   }, [agregarPagoOpen])
+
+  useEffect(() => {
+    pagoService.getCedulasReportarBs().then((r) => setCedulasReportarBsTotal(r.total)).catch(() => setCedulasReportarBsTotal(0))
+  }, [])
 
   const handleGenerarExcelDesdeGmail = () => {
     setAgregarPagoOpen(false)
@@ -548,6 +555,56 @@ export function PagosList() {
           </Popover>
 
       </div>
+      {/* Cédulas que pueden reportar en Bs (rapicredit-cobros / infopagos) */}
+      <Card className="border-blue-100 bg-blue-50/50">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2 font-semibold text-gray-800">
+            <FileSpreadsheet className="h-5 w-5 text-blue-600" />
+            Cédulas que pueden reportar en Bs (Bolívares)
+          </CardTitle>
+          <p className="text-sm text-gray-600 mt-1">
+            Solo las cédulas de esta lista pueden elegir «Bs» en RapiCredit Cobros e Infopagos. Cargue un Excel con una columna <strong>cedula</strong>.
+          </p>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center gap-4">
+          <input
+            ref={fileInputCedulasBsRef}
+            type="file"
+            accept=".xlsx,.xls"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0]
+              if (!file) return
+              setIsUploadingCedulasBs(true)
+              try {
+                const res = await pagoService.uploadCedulasReportarBs(file)
+                setCedulasReportarBsTotal(res.total)
+                toast.success(res.mensaje)
+                if (fileInputCedulasBsRef.current) fileInputCedulasBsRef.current.value = ''
+              } catch (err) {
+                toast.error(getErrorMessage(err))
+              } finally {
+                setIsUploadingCedulasBs(false)
+              }
+            }}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-blue-300 text-blue-800 hover:bg-blue-100"
+            onClick={() => fileInputCedulasBsRef.current?.click()}
+            disabled={isUploadingCedulasBs}
+          >
+            {isUploadingCedulasBs ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
+            Cargar Excel (columna cedula)
+          </Button>
+          {cedulasReportarBsTotal !== null && (
+            <span className="text-sm text-gray-700">
+              <strong>{cedulasReportarBsTotal}</strong> cédula(s) cargada(s)
+            </span>
+          )}
+        </CardContent>
+      </Card>
       {/* Después de importar desde Cobros: si hay errores, ofrecer descargar Excel de esta importación (datos_importados_conerrores) */}
       {lastImportCobrosResult && lastImportCobrosResult.registros_con_error > 0 && (
         <Card className="border-amber-200 bg-amber-50">

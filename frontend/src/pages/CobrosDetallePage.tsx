@@ -94,7 +94,7 @@ export default function CobrosDetallePage() {
     setAccion('rechazar')
     try {
       await rechazarPagoReportado(Number(id), motivoRechazo.trim())
-      toast.success('Pago rechazado y cliente notificado.')
+      toast.success('Pago rechazado. Correo enviado al cliente desde notificaciones@rapicreditca.com con el motivo y el comprobante adjunto.')
       setAccion('idle')
       setMotivoRechazo('')
       load()
@@ -165,6 +165,9 @@ export default function CobrosDetallePage() {
                 No coincidió 100% con la revisión automática (Gemini). Use los mismos botones: Aprobar (envía recibo) o Rechazar (se notifica al cliente por correo electrónico).
               </p>
             )}
+            <p className="text-sm text-muted-foreground">
+              Al rechazar se envía un correo al cliente desde <strong>notificaciones@rapicreditca.com</strong> con el motivo de rechazo y el comprobante adjunto (misma pantalla).
+            </p>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex gap-2">

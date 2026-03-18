@@ -38,6 +38,7 @@ from app.models.revisar_pago import RevisarPago
 from app.models.cuota_pago import CuotaPago
 from app.models.pago_reportado import PagoReportado
 from app.models.datos_importados_conerrores import DatosImportadosConErrores
+from app.models.cedula_reportar_bs import CedulaReportarBs
 from app.schemas.pago import PagoCreate, PagoUpdate, PagoResponse
 from app.schemas.auth import UserResponse
 
@@ -2238,6 +2239,90 @@ def aplicar_pago_a_cuotas(pago_id: int, db: Session = Depends(get_db)):
             status_code=500,
             detail=f"Error al aplicar el pago a cuotas: {str(e)}",
         ) from e
+
+
+# --- Cédulas permitidas para reportar en Bs (rapicredit-cobros / infopagos) ---
+
+def _normalize_cedula_bs(cedula: str) -> str | None:
+    """Normaliza cédula para la lista: V/E/J/G + dígitos, sin guiones. Retorna None si inválida."""
+    if not cedula or not isinstance(cedula, str):
+        return None
+    s = cedula.strip().upper().replace("-", "").replace(" ", "").replace(".", "")
+    if not s:
+        return None
+    # Solo dígitos -> anteponer V
+    if s.isdigit() and 6 <= len(s) <= 11:
+        return "V" + s
+    # Letra + dígitos
+    if len(s) >= 2 and s[0] in ("V", "E", "J", "G") and s[1:].isdigit() and 6 <= len(s[1:]) <= 11:
+        return s
+    return None
+
+
+@router.get("/cedulas-reportar-bs", response_model=dict)
+def get_cedulas_reportar_bs(db: Session = Depends(get_db)):
+    """Devuelve el total de cédulas en la lista (quienes pueden reportar en Bs en cobros/infopagos)."""
+    total = db.query(func.count(CedulaReportarBs.cedula)).scalar() or 0
+    return {"total": total}
+
+
+@router.post("/cedulas-reportar-bs/upload", response_model=dict)
+def upload_cedulas_reportar_bs(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Carga un Excel con columna 'cedula'. Reemplaza la lista de cédulas que pueden reportar en Bs.
+    Afecta a rapicredit-cobros e infopagos: solo esas cédulas verán habilitada la opción Bs.
+    """
+    if not file.filename or not file.filename.lower().endswith((".xlsx", ".xls")):
+        raise HTTPException(status_code=400, detail="Debe subir un archivo Excel (.xlsx o .xls)")
+    try:
+        import openpyxl
+    except ImportError:
+        raise HTTPException(status_code=500, detail="Excel library not available")
+    content = file.file.read()
+    if len(content) < 50:
+        raise HTTPException(status_code=400, detail="El archivo está vacío o no es un Excel válido.")
+    try:
+        wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"No se pudo leer el Excel: {str(e)}") from e
+    ws = wb.active
+    if not ws:
+        raise HTTPException(status_code=400, detail="El Excel no tiene hojas.")
+    # Buscar columna "cedula" (primera fila)
+    header = [ (c and str(c).strip().lower() if c is not None else "") for c in next(ws.iter_rows(min_row=1, max_row=1, values_only=True), []) ]
+    col_cedula = None
+    for i, h in enumerate(header):
+        if h == "cedula":
+            col_cedula = i
+            break
+    if col_cedula is None:
+        raise HTTPException(status_code=400, detail="El Excel debe tener una columna llamada 'cedula'.")
+    cedulas_unicas: set[str] = set()
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        if not row or len(row) <= col_cedula:
+            continue
+        val = row[col_cedula]
+        cedula_norm = _normalize_cedula_bs(str(val).strip() if val is not None else "")
+        if cedula_norm:
+            cedulas_unicas.add(cedula_norm)
+    wb.close()
+    # Reemplazar tabla
+    try:
+        db.query(CedulaReportarBs).delete()
+        for c in cedulas_unicas:
+            db.add(CedulaReportarBs(cedula=c))
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.exception("Error guardando cedulas_reportar_bs: %s", e)
+        raise HTTPException(status_code=500, detail="Error al guardar la lista de cédulas.") from e
+    return {
+        "total": len(cedulas_unicas),
+        "mensaje": f"Se cargaron {len(cedulas_unicas)} cédula(s). Solo ellas pueden reportar pagos en Bs en RapiCredit Cobros e Infopagos.",
+    }
 
 
 

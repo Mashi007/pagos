@@ -202,6 +202,20 @@ class PagoService {
     })
   }
 
+  /** Cédulas que pueden reportar en Bs (rapicredit-cobros / infopagos). */
+  async getCedulasReportarBs(): Promise<{ total: number }> {
+    return await apiClient.get(`${this.baseUrl}/cedulas-reportar-bs`)
+  }
+
+  /** Carga Excel con columna 'cedula' para definir quiénes pueden reportar en Bs. */
+  async uploadCedulasReportarBs(file: File): Promise<{ total: number; mensaje: string }> {
+    const formData = new FormData()
+    formData.append('file', file)
+    return await apiClient.post(`${this.baseUrl}/cedulas-reportar-bs/upload`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  }
+
   async validarFilasBatch(data: {
     cedulas: string[]
     documentos: string[]

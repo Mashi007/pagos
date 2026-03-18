@@ -189,7 +189,7 @@ export default function CobrosEditarPage() {
               <Input
                 value={form.institucion_financiera}
                 onChange={(e) => setForm((f) => ({ ...f, institucion_financiera: e.target.value }))}
-                placeholder="Banco o entidad"
+                placeholder="Ej: BNC (Banco Nacional de Venezuela), Banesco, etc."
               />
             </div>
             <div>
@@ -217,7 +217,7 @@ export default function CobrosEditarPage() {
                 <Input
                   value={form.moneda}
                   onChange={(e) => setForm((f) => ({ ...f, moneda: e.target.value }))}
-                  placeholder="BS, USD"
+                  placeholder="BS, USD, USDT ($)"
                 />
               </div>
             </div>

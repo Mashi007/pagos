@@ -1,4 +1,4 @@
-﻿from app.core.database import Base
+from app.core.database import Base
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.ticket import Ticket
@@ -31,6 +31,7 @@ from app.models.estado_cuenta_codigo import EstadoCuentaCodigo
 from app.models.envio_notificacion import EnvioNotificacion
 from app.models.crm_campana import CampanaCrm
 from app.models.crm_campana_envio import CampanaEnvioCrm
+from app.models.cedula_reportar_bs import CedulaReportarBs
 
 __all__ = [
     "Base", "Cliente", "Prestamo", "Ticket", "Cuota", "CuotaPago", "Pago", "PagosWhatsapp",
@@ -51,5 +52,6 @@ __all__ = [
     "EnvioNotificacion",
     "CampanaCrm",
     "CampanaEnvioCrm",
+    "CedulaReportarBs",
 ]
 

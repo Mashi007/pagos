@@ -27,6 +27,7 @@ from app.core.cobros_public_rate_limit import (
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
 from app.models.pago_reportado import PagoReportado
+from app.models.cedula_reportar_bs import CedulaReportarBs
 from app.api.v1.endpoints.validadores import validate_cedula
 # Servicio Gemini del sistema (mismo GEMINI_API_KEY y GEMINI_MODEL que Pagos Gmail / health)
 from app.services.pagos_gmail.gemini_service import compare_form_with_image
@@ -134,6 +135,8 @@ class ValidarCedulaResponse(BaseModel):
     email: Optional[str] = None
     email_enmascarado: Optional[str] = None
     error: Optional[str] = None
+    """True si esta cédula puede reportar pagos en Bolívares (Bs) en cobros/infopagos."""
+    puede_reportar_bs: Optional[bool] = None
 
 
 class EnviarReporteResponse(BaseModel):
@@ -193,6 +196,10 @@ def validar_cedula_publico(
     ).scalars().first()
     if not prestamo:
         return ValidarCedulaResponse(ok=False, error="La cédula no tiene un préstamo asociado en nuestro sistema.")
+    # ¿Puede reportar en Bs? (lista cargada desde Excel en /pagos/pagos)
+    puede_bs = db.execute(
+        select(CedulaReportarBs).where(CedulaReportarBs.cedula == cedula_lookup).limit(1)
+    ).scalars().first() is not None
     nombre = (cliente.nombres or "").strip()
     email = (cliente.email or "").strip()
     return ValidarCedulaResponse(
@@ -200,6 +207,7 @@ def validar_cedula_publico(
         nombre=nombre,
         email=email or None,
         email_enmascarado=_mask_email(email),
+        puede_reportar_bs=puede_bs,
     )
 
 
@@ -255,8 +263,20 @@ async def enviar_reporte_publico(
         return EnviarReporteResponse(ok=False, error="Datos inválidos.")
     if observacion and len(observacion) > 300:
         observacion = observacion[:300]
-    if (moneda or "BS").strip().upper() not in ("BS", "USD"):
+    if (moneda or "BS").strip().upper() not in ("BS", "USD", "USDT"):
         return EnviarReporteResponse(ok=False, error="Moneda no válida.")
+    moneda_upper = (moneda or "BS").strip().upper()
+    # USDT = Dólares = USD = $; normalizar a USD para guardar
+    moneda_guardar = "USD" if moneda_upper in ("USD", "USDT") else moneda_upper
+    if moneda_upper == "BS":
+        permitido_bs = db.execute(
+            select(CedulaReportarBs).where(CedulaReportarBs.cedula == cedula_lookup).limit(1)
+        ).scalars().first() is not None
+        if not permitido_bs:
+            return EnviarReporteResponse(
+                ok=False,
+                error="Reportar pagos en Bolívares (Bs) no está habilitado para esta cédula. Use USD/USDT o contacte a soporte.",
+            )
     if monto <= 0 or monto > 999_999_999.99:
         return EnviarReporteResponse(ok=False, error="Monto no válido.")
     if fecha_pago > date.today():
@@ -310,7 +330,7 @@ async def enviar_reporte_publico(
                     institucion_financiera=institucion_financiera.strip()[:100],
                     numero_operacion=numero_operacion.strip()[:100],
                     monto=monto,
-                    moneda=(moneda or "BS").strip()[:10],
+                    moneda=moneda_guardar[:10],
                     comprobante=content,
                     comprobante_nombre=filename[:255],
                     comprobante_tipo=ctype,
@@ -488,8 +508,20 @@ async def enviar_reporte_infopagos(
         return EnviarReporteInfopagosResponse(ok=False, error="Datos inválidos.")
     if observacion and len(observacion) > 300:
         observacion = observacion[:300]
-    if (moneda or "BS").strip().upper() not in ("BS", "USD"):
+    if (moneda or "BS").strip().upper() not in ("BS", "USD", "USDT"):
         return EnviarReporteInfopagosResponse(ok=False, error="Moneda no válida.")
+    moneda_upper = (moneda or "BS").strip().upper()
+    # USDT = Dólares = USD = $; normalizar a USD para guardar
+    moneda_guardar = "USD" if moneda_upper in ("USD", "USDT") else moneda_upper
+    if moneda_upper == "BS":
+        permitido_bs = db.execute(
+            select(CedulaReportarBs).where(CedulaReportarBs.cedula == cedula_lookup).limit(1)
+        ).scalars().first() is not None
+        if not permitido_bs:
+            return EnviarReporteInfopagosResponse(
+                ok=False,
+                error="Reportar pagos en Bolívares (Bs) no está habilitado para esta cédula. Use USD/USDT o contacte a soporte.",
+            )
     if monto <= 0 or monto > 999_999_999.99:
         return EnviarReporteInfopagosResponse(ok=False, error="Monto no válido.")
     if fecha_pago > date.today():
@@ -534,7 +566,7 @@ async def enviar_reporte_infopagos(
                     institucion_financiera=institucion_financiera.strip()[:100],
                     numero_operacion=numero_operacion.strip()[:100],
                     monto=monto,
-                    moneda=(moneda or "BS").strip()[:10],
+                    moneda=moneda_guardar[:10],
                     comprobante=content,
                     comprobante_nombre=filename[:255],
                     comprobante_tipo=ctype,

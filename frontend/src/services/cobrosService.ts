@@ -17,6 +17,8 @@ export interface ValidarCedulaResponse {
   email?: string
   email_enmascarado?: string
   error?: string
+  /** True si esta cédula puede reportar pagos en Bolívares (Bs) en cobros/infopagos. */
+  puede_reportar_bs?: boolean
 }
 
 export interface EnviarReporteResponse {
