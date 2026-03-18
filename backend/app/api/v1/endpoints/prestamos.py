@@ -183,8 +183,18 @@ def listar_prestamos(
         count_q = count_q.where(Cliente.cedula == ced_clean)
     if search and search.strip():
         search_clean = search.strip()
-        q = q.where(Cliente.cedula.ilike(f"%{search_clean}%") | Cliente.nombres.ilike(f"%{search_clean}%"))
-        count_q = count_q.where(Cliente.cedula.ilike(f"%{search_clean}%") | Cliente.nombres.ilike(f"%{search_clean}%"))
+        # Si el search es numérico, permitir buscar directamente por ID de préstamo
+        prestamo_id_search = None
+        try:
+            if search_clean.isdigit():
+                prestamo_id_search = int(search_clean)
+        except ValueError:
+            prestamo_id_search = None
+        condicion_search = Cliente.cedula.ilike(f"%{search_clean}%") | Cliente.nombres.ilike(f"%{search_clean}%")
+        if prestamo_id_search is not None:
+            condicion_search = condicion_search | (Prestamo.id == prestamo_id_search)
+        q = q.where(condicion_search)
+        count_q = count_q.where(condicion_search)
     if modelo and modelo.strip():
         q = q.where(Prestamo.modelo_vehiculo == modelo.strip())
         count_q = count_q.where(Prestamo.modelo_vehiculo == modelo.strip())
