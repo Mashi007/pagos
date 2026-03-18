@@ -732,8 +732,8 @@ def solicitar_estado_cuenta(
 
     recibos = _obtener_recibos_cliente(db, cedula_lookup)
     base_url = str(request.base_url).rstrip("/")
-    usar_token = getattr(body, "origen", None) != "informes"
-    recibo_token = create_recibo_token(cedula_lookup, expire_hours=2) if usar_token else None
+    # Token siempre para que el PDF tenga enlaces "Ver recibo" en tabla amortización (estadocuenta e informes)
+    recibo_token = create_recibo_token(cedula_lookup, expire_hours=2)
     pdf_bytes = generar_pdf_estado_cuenta(
         cedula=cedula_display,
         nombre=nombre,
