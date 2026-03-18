@@ -200,7 +200,7 @@ GEMINI_COBRANZA_PROMPT = (
     "Esta imagen es una papeleta de depósito, recibo de pago o comprobante bancario. "
     "Extrae exactamente estos campos en formato JSON (usa 'NA' si no encuentras el dato): "
     '"fecha_deposito" (fecha del depósito, formato dd/mm/yyyy o yyyy-mm-dd), '
-    '"nombre_banco" (nombre del banco o institución financiera), '
+    '"nombre_banco" (nombre del banco, institución financiera, o "Recibo"/recibo/REcibo si solo aparece esa palabra), '
     '"numero_deposito" (número de depósito, referencia o transacción, muchos dígitos), '
     '"numero_documento" (número de documento, recibo o comprobante de venta), '
     '"cantidad" (monto total en números, ej. 150.00 o 1.234,56), '
@@ -443,7 +443,7 @@ INSTRUCCIONES:
 
 Paso 1 — Extraer de la imagen: Lee el comprobante y extrae con precisión estos datos (los que aparezcan):
 - fecha_pago: fecha de la operación/transacción que aparece en el comprobante (día, mes y año). Puede estar en cualquier formato (dd/mm/yyyy, yyyy-mm-dd, texto, etc.). Este valor se comparará con la fecha que la persona ingresó en el formulario.
-- institucion_financiera: nombre del banco o entidad (ej. Banesco, Mercantil, BNC, BDV, Pago Móvil).
+- institucion_financiera: nombre del banco o entidad (ej. Banesco, Mercantil, BNC, BDV, Pago Móvil). Si en el comprobante solo aparece la palabra Recibo (o recibo, REcibo) sin nombre de banco, usa "Recibo" como institucion_financiera; es un valor válido en el criterio Bancos/banco.
 - numero_operacion: es el número/código de la transacción. En el comprobante puede aparecer como "Serial", "Serial:", "Nº operación", "Referencia", "Número de referencia", "Código de operación", etc. Extrae los dígitos (y letras si los hay) de ese campo; ese valor es el numero_operacion para comparar con el formulario.
 - monto: cantidad pagada (número; puede estar en Bs, USD, USDT, etc.).
 - moneda: BS, USD, USDT, etc., según lo que indique el comprobante.
@@ -451,7 +451,7 @@ Paso 1 — Extraer de la imagen: Lee el comprobante y extrae con precisión esto
 
 Paso 2 — Comparar campo por campo: Para cada dato extraído de la imagen, compáralo con el valor que la persona ingresó en el formulario (listado abajo). Reglas:
 - Fecha pago (OBLIGATORIO comparar): La fecha ingresada manualmente en el formulario debe coincidir con la fecha de la operación que aparece en la imagen. Comparar día, mes y año; si alguno difiere, es divergencia (incluir "Fecha pago" en comentario). Ignorar solo el formato (ej. 10/03/2026 vs 2026-03-10 = misma fecha).
-- Institución: mismo banco o entidad (sinónimos o nombre abreviado = válido).
+- Institución: mismo banco o entidad (sinónimos o nombre abreviado = válido). Recibo, recibo y REcibo se consideran el mismo valor (coinciden entre sí).
 - Número de operación: el formulario tiene "numero_operacion"; en el comprobante puede estar como "Serial", "Referencia", "Nº operación", etc. Es el mismo dato. Compara los dígitos/código; si coinciden (ignorar espacios o guiones intermedios), COINCIDE. No marques divergencia solo porque la etiqueta en el recibo diga "Serial" en vez de "Número de operación".
 - Monto: mismo valor numérico; misma moneda o equivalente (BS vs Bs, USD vs US$).
 - Cédula: aplicar las REGLAS DEL VALIDADOR DE CÉDULA anteriores. Comparar tipo (V/E/G/J) y número ya normalizado (sin ceros a la izquierda). Si en imagen ves 0025677920 o V-0025677920 y en formulario V25677920 → COINCIDE. Si en imagen ves 0025677920 y en formulario V25677920 → COINCIDE. Solo es divergencia si el tipo es distinto o el número sin ceros a la izquierda es distinto. Antes de poner "Cédula" en comentario, verifica que hayas normalizado ambos lados (imagen y formulario) quitando ceros a la izquierda del número.
