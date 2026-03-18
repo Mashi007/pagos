@@ -1794,11 +1794,11 @@ def crear_pagos_batch(
             ids_rows = db.execute(select(Prestamo.id).where(Prestamo.id.in_(prestamo_ids))).scalars().all()
             valid_prestamo_ids = {r[0] for r in ids_rows}
         # Preload: cédulas de clientes que existen (una sola consulta)
-        cedulas_con_prestamo = list({p.cedula_cliente.strip().upper() for p in pagos_list if p.cedula_cliente and p.prestamo_id})
+        cedulas_con_prestamo = list({(p.cedula_cliente or "").strip().upper() for p in pagos_list if (p.cedula_cliente or "").strip() and p.prestamo_id})
         valid_cedulas: set[str] = set()
         if cedulas_con_prestamo:
-            ced_rows = db.execute(select(Cliente.cedula).where(Cliente.cedula.in_(cedulas_con_prestamo))).scalars().all()
-            valid_cedulas = {r[0] for r in ced_rows}
+            ced_rows = db.execute(select(Cliente.cedula).where(func.upper(Cliente.cedula).in_(cedulas_con_prestamo))).scalars().all()
+            valid_cedulas = {(r[0] or "").strip().upper() for r in ced_rows}
         # Fase 1: validacion (sin insertar). Si hay errores, devolver sin commit.
         validation_errors: list[dict] = []
         docs_added_in_batch: set[str] = set()
@@ -1808,7 +1808,7 @@ def crear_pagos_batch(
                 validation_errors.append({"index": idx, "error": "Ya existe un pago con ese numero de documento.", "status_code": 409})
                 continue
             ref = (num_doc or "N/A")[:_MAX_LEN_NUMERO_DOCUMENTO]
-            cedula_normalizada = payload.cedula_cliente.strip().upper() if payload.cedula_cliente else ""
+            cedula_normalizada = (payload.cedula_cliente or "").strip().upper()
             if payload.prestamo_id and payload.prestamo_id not in valid_prestamo_ids:
                 validation_errors.append({"index": idx, "error": f"Credito #{payload.prestamo_id} no existe.", "status_code": 400})
                 continue
@@ -1828,7 +1828,7 @@ def crear_pagos_batch(
                 ref = (num_doc or "N/A")[:_MAX_LEN_NUMERO_DOCUMENTO]
                 fecha_pago_ts = datetime.combine(payload.fecha_pago, dt_time.min)
                 conciliado = payload.conciliado if payload.conciliado is not None else False
-                cedula_normalizada = payload.cedula_cliente.strip().upper() if payload.cedula_cliente else ""
+                cedula_normalizada = (payload.cedula_cliente or "").strip().upper()
                 row = Pago(
                     cedula_cliente=cedula_normalizada,
                     prestamo_id=payload.prestamo_id,
@@ -1857,11 +1857,16 @@ def crear_pagos_batch(
             db.rollback()
             logger.exception("Batch: error en transaccion unica: %s", e)
             raise HTTPException(status_code=500, detail=f"Error al guardar el lote. Ningun pago fue creado. Detalle: {str(e)}")
+    except HTTPException:
+        raise
     except OperationalError:
         raise HTTPException(
             status_code=503,
             detail="Servicio no disponible. Reintente en unos segundos.",
         )
+    except Exception as e:
+        logger.exception("Batch: error inesperado: %s", e)
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}") from e
 
 
 

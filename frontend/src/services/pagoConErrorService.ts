@@ -86,6 +86,14 @@ class PagoConErrorService {
     return await apiClient.post(this.baseUrl, data)
   }
 
+  async createBatch(pagos: PagoConErrorCreate[]): Promise<{
+    results: Array<{ success: boolean; pago?: PagoConError; error?: string; payload_index?: number }>
+    ok_count: number
+    fail_count: number
+  }> {
+    return await apiClient.post(this.baseUrl + '/batch', { pagos }, { timeout: 120000 })
+  }
+
   async update(id: number, data: Partial<PagoConErrorCreate>): Promise<PagoConError> {
     return await apiClient.put(`${this.baseUrl}/${id}`, data)
   }

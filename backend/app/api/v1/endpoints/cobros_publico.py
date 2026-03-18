@@ -11,7 +11,8 @@ import logging
 from datetime import date, datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request, Query
+from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func, text
@@ -31,6 +32,7 @@ from app.api.v1.endpoints.validadores import validate_cedula
 from app.services.pagos_gmail.gemini_service import compare_form_with_image
 from app.services.cobros.recibo_pdf import generar_recibo_pago_reportado, WHATSAPP_LINK
 from app.core.email import send_email
+from app.core.security import decode_token
 
 logger = logging.getLogger(__name__)
 
@@ -394,4 +396,38 @@ async def enviar_reporte_publico(
             ok=False,
             error="No se pudo procesar el reporte. Intente de nuevo o contacte por WhatsApp 424-4579934.",
         )
+
+@router.get("/recibo")
+def get_recibo_publico(
+    token: str = Query(..., description="Token de sesion estado de cuenta"),
+    pago_id: int = Query(..., description="ID del pago reportado"),
+    db: Session = Depends(get_db),
+):
+    """
+    Devuelve el PDF del recibo del pago reportado. Requiere token valido (emitido al verificar codigo en estado de cuenta).
+    Publico, sin auth; la seguridad es el token (cedula + expiracion).
+    """
+    payload = decode_token(token)
+    if not payload or payload.get("type") != "recibo":
+        raise HTTPException(status_code=401, detail="Token invalido o expirado.")
+    cedula_token = (payload.get("sub") or "").strip()
+    if not cedula_token:
+        raise HTTPException(status_code=401, detail="Token invalido.")
+    pr = db.execute(select(PagoReportado).where(PagoReportado.id == pago_id)).scalars().first()
+    if not pr:
+        raise HTTPException(status_code=404, detail="Recibo no encontrado.")
+    pr = pr[0] if hasattr(pr, "__getitem__") else pr
+    cedula_pr = (getattr(pr, "tipo_cedula", "") or "") + (getattr(pr, "numero_cedula", "") or "")
+    if cedula_pr.replace("-", "") != cedula_token.replace("-", ""):
+        raise HTTPException(status_code=403, detail="No tiene permiso para este recibo.")
+    pdf_bytes = getattr(pr, "recibo_pdf", None)
+    if not pdf_bytes:
+        raise HTTPException(status_code=404, detail="No hay recibo PDF para este pago.")
+    ref = getattr(pr, "referencia_interna", "recibo") or "recibo"
+    return Response(
+        content=bytes(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="recibo_{ref}.pdf"'},
+    )
+
 

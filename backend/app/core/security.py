@@ -1,4 +1,4 @@
-﻿"""
+"""
 Seguridad: JWT y contraseñas (auth)
 """
 from datetime import datetime, timedelta
@@ -52,3 +52,9 @@ def decode_token(token: str) -> Optional[dict]:
         return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
     except jwt.PyJWTError:
         return None
+
+def create_recibo_token(cedula: str, expire_hours: int = 2) -> str:
+    """Token para descarga de recibo desde estado de cuenta (sin login). Cedula sin guion."""
+    expire = datetime.utcnow() + timedelta(hours=expire_hours)
+    to_encode = {"sub": cedula, "exp": expire, "type": "recibo"}
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)

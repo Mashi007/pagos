@@ -5,7 +5,7 @@ import { PUBLIC_FLOW_SESSION_KEY } from '../config/env'
 
 /**
  * Si el usuario llegó a login desde un flujo público (reporte de pago o estado de cuenta),
- * se muestra "Acceso prohibido" y "Continuar" para volver al flujo público (evita que personas
+ * se muestra "Acceso limitado" y "Continuar" para volver al flujo público (evita que personas
  * mayores que tocaron un link pierdan el proceso).
  */
 export function Login() {
@@ -18,7 +18,7 @@ export function Login() {
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-white p-6">
         <div className="max-w-md w-full text-center space-y-8">
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-red-500">
-            Acceso prohibido
+            Acceso limitado
           </h1>
           <p className="text-lg text-slate-300">
             Esta pantalla es para el personal del sistema. Si desea reportar un pago o consultar su estado de cuenta, use el botón Continuar para volver.

@@ -8,7 +8,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { pagoService } from '../services/pagoService'
-import { pagoConErrorService } from '../services/pagoConErrorService'
+import { pagoConErrorService, type PagoConErrorCreate } from '../services/pagoConErrorService'
 import { prestamoService } from '../services/prestamoService'
 import { useIsMounted } from './useIsMounted'
 import {
@@ -621,17 +621,26 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     if (serviceStatus === 'offline') { addToast('error', 'Sin conexion'); return }
     setIsSendingAllRevisar(true)
     setBatchProgress({ sent: 0, total: rows.length })
-    let ok = 0; let fail = 0
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i]
-      const success = await sendToRevisarPagos(row, () => {}, true, true, false)
-      if (success) {
-        ok++
-        setEnviadosRevisar((prev) => new Set([...prev, row._rowIndex]))
-        setDuplicadosPendientesRevisar((prev) => { const next = new Set(prev); next.delete(row._rowIndex); return next })
-      } else fail++
-      setBatchProgress({ sent: i + 1, total: rows.length })
+    const pagosPayload: PagoConErrorCreate[] = []
+    for (const row of rows) {
+      const numeroDoc = normalizarNumeroDocumento(row.numero_documento) || ''
+      const cedulaLookup = cedulaLookupParaFila(row.cedula || '', row.numero_documento || '')
+      if (row._hasErrors) {
+        const camposConProblema = Object.entries(row._validation || {}).filter(([, v]) => !v.isValid).map(([field]) => field)
+        pagosPayload.push({ cedula_cliente: cedulaLookup, prestamo_id: null, fecha_pago: convertirFechaParaBackendPago(row.fecha_pago) || new Date().toISOString().split('T')[0], monto_pagado: Number(row.monto_pagado) || 0, numero_documento: numeroDoc || null, institucion_bancaria: null, notas: null, conciliado: row.conciliado ?? false, observaciones: observacionesDesdeCampos(camposConProblema) || undefined, fila_origen: row._rowIndex })
+      } else {
+        const obs = duplicadosPendientesRevisar.has(row._rowIndex) ? OBSERVACIONES_POR_CAMPO.numero_documento : (() => { const ps = prestamosPorCedula[cedulaLookup] || prestamosPorCedula[cedulaLookup?.replace(/-/g, '')] || []; return ps.length === 0 ? OBSERVACION_SIN_CREDITO : ps.length > 1 ? OBSERVACION_MULTIPLES_CREDITOS : 'Revisar' })()
+        pagosPayload.push({ cedula_cliente: cedulaLookup, prestamo_id: null, fecha_pago: convertirFechaParaBackendPago(row.fecha_pago) || new Date().toISOString().split('T')[0], monto_pagado: Number(row.monto_pagado) || 0, numero_documento: numeroDoc || null, institucion_bancaria: null, notas: null, conciliado: row.conciliado ?? false, observaciones: obs || undefined, fila_origen: row._rowIndex })
+      }
     }
+    let ok = 0; let fail = 0
+    try {
+      const res = await pagoConErrorService.createBatch(pagosPayload)
+      ok = res.ok_count ?? res.results.filter((r) => r.success).length
+      fail = res.fail_count ?? res.results.filter((r) => !r.success).length
+      res.results.forEach((r, idx) => { if (r.success && rows[idx]) { setEnviadosRevisar((p) => new Set([...p, rows[idx]._rowIndex])); setDuplicadosPendientesRevisar((p) => { const n = new Set(p); n.delete(rows[idx]._rowIndex); return n }) } })
+    } catch { fail = rows.length }
+    setBatchProgress({ sent: rows.length, total: rows.length })
     setBatchProgress(null)
     setIsSendingAllRevisar(false)
     if (ok > 0) addToast('success', `${ok} duplicado(s) enviado(s) a Revisar Pagos`)
@@ -645,17 +654,26 @@ export function useExcelUploadPagos({ onClose, onSuccess }: ExcelUploaderPagosPr
     if (serviceStatus === 'offline') { addToast('error', 'Sin conexion'); return }
     setIsSendingAllRevisar(true)
     setBatchProgress({ sent: 0, total: rows.length })
-    let ok = 0; let fail = 0
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i]
-      const success = await sendToRevisarPagos(row, () => {}, true, true, false)
-      if (success) {
-        ok++
-        setEnviadosRevisar((prev) => new Set([...prev, row._rowIndex]))
-        setDuplicadosPendientesRevisar((prev) => { const next = new Set(prev); next.delete(row._rowIndex); return next })
-      } else fail++
-      setBatchProgress({ sent: i + 1, total: rows.length })
+    const pagosPayload: PagoConErrorCreate[] = []
+    for (const row of rows) {
+      const numeroDoc = normalizarNumeroDocumento(row.numero_documento) || ''
+      const cedulaLookup = cedulaLookupParaFila(row.cedula || '', row.numero_documento || '')
+      if (row._hasErrors) {
+        const camposConProblema = Object.entries(row._validation || {}).filter(([, v]) => !v.isValid).map(([field]) => field)
+        pagosPayload.push({ cedula_cliente: cedulaLookup, prestamo_id: null, fecha_pago: convertirFechaParaBackendPago(row.fecha_pago) || new Date().toISOString().split('T')[0], monto_pagado: Number(row.monto_pagado) || 0, numero_documento: numeroDoc || null, institucion_bancaria: null, notas: null, conciliado: row.conciliado ?? false, observaciones: observacionesDesdeCampos(camposConProblema) || undefined, fila_origen: row._rowIndex })
+      } else {
+        const obs = duplicadosPendientesRevisar.has(row._rowIndex) ? OBSERVACIONES_POR_CAMPO.numero_documento : (() => { const ps = prestamosPorCedula[cedulaLookup] || prestamosPorCedula[cedulaLookup?.replace(/-/g, '')] || []; return ps.length === 0 ? OBSERVACION_SIN_CREDITO : ps.length > 1 ? OBSERVACION_MULTIPLES_CREDITOS : 'Revisar' })()
+        pagosPayload.push({ cedula_cliente: cedulaLookup, prestamo_id: null, fecha_pago: convertirFechaParaBackendPago(row.fecha_pago) || new Date().toISOString().split('T')[0], monto_pagado: Number(row.monto_pagado) || 0, numero_documento: numeroDoc || null, institucion_bancaria: null, notas: null, conciliado: row.conciliado ?? false, observaciones: obs || undefined, fila_origen: row._rowIndex })
+      }
     }
+    let ok = 0; let fail = 0
+    try {
+      const res = await pagoConErrorService.createBatch(pagosPayload)
+      ok = res.ok_count ?? res.results.filter((r) => r.success).length
+      fail = res.fail_count ?? res.results.filter((r) => !r.success).length
+      res.results.forEach((r, idx) => { if (r.success && rows[idx]) { setEnviadosRevisar((p) => new Set([...p, rows[idx]._rowIndex])); setDuplicadosPendientesRevisar((p) => { const n = new Set(p); n.delete(rows[idx]._rowIndex); return n }) } })
+    } catch { fail = rows.length }
+    setBatchProgress({ sent: rows.length, total: rows.length })
     setBatchProgress(null)
     setIsSendingAllRevisar(false)
     if (ok > 0 && fail === 0) addToast('success', `${ok} enviado(s) a Revisar Pagos.`)

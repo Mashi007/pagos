@@ -7,7 +7,7 @@ from datetime import date, datetime, time as dt_time
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, Query, HTTPException, Body
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
@@ -44,6 +44,18 @@ class PagoConErrorUpdate(BaseModel):
     conciliado: Optional[bool] = None
     errores_descripcion: Optional[list[dict]] = None
     observaciones: Optional[str] = None
+
+
+class PagoConErrorBatchBody(BaseModel):
+    """Hasta 500 pagos con error en una sola peticion."""
+    pagos: list[PagoConErrorCreate]
+
+    @field_validator("pagos")
+    @classmethod
+    def pagos_limite(cls, v: list) -> list:
+        if len(v) > 500:
+            raise ValueError("Maximo 500 items por lote.")
+        return v
 
 
 def _pago_con_error_to_response(row: PagoConError) -> dict:
@@ -160,6 +172,48 @@ def crear_pago_con_error(payload: PagoConErrorCreate, db: Session = Depends(get_
     db.commit()
     db.refresh(row)
     return _pago_con_error_to_response(row)
+
+
+@router.post("/batch", response_model=dict, status_code=201)
+def crear_pagos_con_error_batch(body: PagoConErrorBatchBody, db: Session = Depends(get_db)):
+    """Crea varios pagos con errores en una sola transaccion (Guardar todos desde Carga Masiva)."""
+    results: list[dict] = []
+    try:
+        for payload in body.pagos:
+            try:
+                fecha_ts = datetime.strptime(payload.fecha_pago, "%Y-%m-%d").replace(
+                    hour=0, minute=0, second=0, microsecond=0
+                )
+            except ValueError:
+                results.append({"success": False, "error": "fecha_pago debe ser YYYY-MM-DD", "payload_index": len(results)})
+                continue
+            ref = (payload.numero_documento or "").strip() or "N/A"
+            row = PagoConError(
+                cedula_cliente=(payload.cedula_cliente or "").strip(),
+                prestamo_id=payload.prestamo_id,
+                fecha_pago=fecha_ts,
+                monto_pagado=payload.monto_pagado,
+                numero_documento=(payload.numero_documento or "").strip() or None,
+                institucion_bancaria=(payload.institucion_bancaria or "").strip() or None if payload.institucion_bancaria else None,
+                estado="PENDIENTE",
+                conciliado=payload.conciliado if payload.conciliado is not None else False,
+                notas=payload.notas,
+                referencia_pago=ref,
+                errores_descripcion=payload.errores_descripcion,
+                observaciones=(payload.observaciones or "").strip() or None if payload.observaciones else None,
+                fila_origen=payload.fila_origen,
+            )
+            db.add(row)
+            db.flush()
+            db.refresh(row)
+            results.append({"success": True, "pago": _pago_con_error_to_response(row)})
+        db.commit()
+        ok = sum(1 for r in results if r.get("success"))
+        return {"results": results, "ok_count": ok, "fail_count": len(results) - ok}
+    except Exception as e:
+        db.rollback()
+        logger.exception("Error en POST /pagos/con-errores/batch: %s", e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 class EliminarPorDescargaBody(BaseModel):

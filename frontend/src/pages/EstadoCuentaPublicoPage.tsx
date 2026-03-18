@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Consulta PÚBLICA de estado de cuenta por cédula.
  * Flujo: bienvenida → ingresar cédula → bienvenida con nombre → PDF + envío al email.
  * Sin login. Misma lógica y seguridades que rapicredit-cobros (rate limit, validación).
@@ -6,7 +6,7 @@
  */
 import React, { useState, useEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
-import { validarCedulaEstadoCuenta, solicitarCodigo, verificarCodigo } from '../services/estadoCuentaService'
+import { validarCedulaEstadoCuenta, solicitarCodigo, verificarCodigo, solicitarEstadoCuenta } from '../services/estadoCuentaService'
 import { PUBLIC_FLOW_SESSION_KEY } from '../config/env'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
@@ -176,6 +176,8 @@ export default function EstadoCuentaPublicoPage() {
   const stepAnnouncement = stepAnnouncements[step] ?? `Paso ${step}`
 
   const location = useLocation()
+  const publicPath = (location.pathname || '').replace(/^\//, '')
+  const isInformesRoute = publicPath === 'informes'
   // Marcar flujo público para que, si intentan ir a login, vean "Acceso prohibido" y puedan volver aquí
   useEffect(() => {
     sessionStorage.setItem(PUBLIC_FLOW_SESSION_KEY, '1')
@@ -194,6 +196,27 @@ export default function EstadoCuentaPublicoPage() {
       const validacion = await validarCedulaEstadoCuenta(cedulaEnviar)
       if (!validacion.ok) {
         showNotification('error', validacion.error || 'Cédula no válida.')
+        return
+      }
+      
+      if (isInformesRoute) {
+        const resPdf = await solicitarEstadoCuenta(cedulaEnviar, { origen: 'informes' })
+        if (!resPdf.ok) {
+          showNotification('error', resPdf.error || 'No se pudo generar el estado de cuenta.')
+          return
+        }
+        setCedula(cedulaEnviar)
+        if (resPdf.pdf_base64) {
+          setPdfDataUrl(`data:application/pdf;base64,${resPdf.pdf_base64}`)
+          try {
+            const bin = atob(resPdf.pdf_base64)
+            const bytes = new Uint8Array(bin.length)
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+            const blob = new Blob([bytes], { type: 'application/pdf' })
+            setPdfBlobUrl(URL.createObjectURL(blob))
+          } catch (_) { setPdfBlobUrl(null) }
+          setStep(3)
+        }
         return
       }
       const res = await solicitarCodigo(cedulaEnviar)

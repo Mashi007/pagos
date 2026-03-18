@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Servicio público de consulta de estado de cuenta por cédula.
  * Sin autenticación. Solo validar cédula y solicitar PDF (envío al email del cliente).
  */
@@ -53,7 +53,7 @@ export async function solicitarCodigo(cedula: string): Promise<SolicitarCodigoRe
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cedula: cedula.slice(0, 20).trim() }),
+    body: JSON.stringify(opts?.origen ? { cedula: cedula.slice(0, 20).trim(), origen: opts.origen } : { cedula: cedula.slice(0, 20).trim() }),
     credentials: 'same-origin',
   })
   if (res.status === 429) {
@@ -82,12 +82,12 @@ export async function verificarCodigo(cedula: string, codigo: string): Promise<V
 }
 
 /** Público: solicitar estado de cuenta (genera PDF, envía al email, devuelve PDF en base64). Sin auth. */
-export async function solicitarEstadoCuenta(cedula: string): Promise<SolicitarEstadoCuentaResponse> {
+export async function solicitarEstadoCuenta(cedula: string, opts?: { origen?: string }): Promise<SolicitarEstadoCuentaResponse> {
   const url = `${BASE}/solicitar-estado-cuenta`
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cedula: cedula.slice(0, 20).trim() }),
+    body: JSON.stringify(opts?.origen ? { cedula: cedula.slice(0, 20).trim(), origen: opts.origen } : { cedula: cedula.slice(0, 20).trim() }),
     credentials: 'same-origin',
   })
   if (res.status === 429) {

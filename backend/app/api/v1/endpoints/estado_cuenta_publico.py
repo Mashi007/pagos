@@ -32,7 +32,9 @@ from app.models.prestamo import Prestamo
 from app.models.cuota import Cuota
 from app.models.configuracion import Configuracion
 from app.models.estado_cuenta_codigo import EstadoCuentaCodigo
+from app.models.pago_reportado import PagoReportado
 from app.api.v1.endpoints.validadores import validate_cedula
+from app.core.security import create_recibo_token
 from app.core.email import send_email
 from app.core.email_config_holder import get_email_activo_servicio
 
@@ -64,6 +66,7 @@ class ValidarCedulaEstadoCuentaResponse(BaseModel):
 
 class SolicitarEstadoCuentaRequest(BaseModel):
     cedula: str
+    origen: Optional[str] = None  # "informes" = links sin token
 
 
 class SolicitarEstadoCuentaResponse(BaseModel):
@@ -93,7 +96,8 @@ class VerificarCodigoResponse(BaseModel):
     ok: bool
     pdf_base64: Optional[str] = None
     error: Optional[str] = None
-    expira_en: Optional[str] = None  # ISO 8601 del código verificado (informativo)
+    expira_en: Optional[str] = None
+    recibo_token: Optional[str] = None  # token para links de recibo en PDF  # ISO 8601 del código verificado (informativo)
 
 
 CODIGO_EXPIRA_MINUTES = 120  # 2 horas
@@ -108,6 +112,33 @@ def _cedula_lookup(cedula_input: str) -> str:
     valor = result.get("valor_formateado", "")
     return valor.replace("-", "") if valor else ""
 
+
+
+def _obtener_recibos_cliente(db: Session, cedula_lookup: str) -> List[dict]:
+    """Pagos reportados del cliente (cedula sin guion) con recibo PDF, para enlaces en estado de cuenta."""
+    from sqlalchemy import and_
+    cedula_concat = func.concat(PagoReportado.tipo_cedula, PagoReportado.numero_cedula)
+    rows = db.execute(
+        select(PagoReportado)
+        .where(and_(
+            cedula_concat == cedula_lookup,
+            PagoReportado.recibo_pdf.isnot(None),
+        ))
+        .order_by(PagoReportado.fecha_pago.desc())
+    ).scalars().all()
+    out = []
+    for row in rows:
+        pr = row[0] if hasattr(row, "__getitem__") else row
+        fp = getattr(pr, "fecha_pago", None)
+        fecha_str = fp.isoformat() if fp else ""
+        out.append({
+            "id": pr.id,
+            "referencia_interna": getattr(pr, "referencia_interna", "") or "",
+            "fecha_pago": fecha_str,
+            "monto": float(getattr(pr, "monto", 0) or 0),
+            "moneda": getattr(pr, "moneda", "BS") or "BS",
+        })
+    return out
 
 def _generar_codigo_6() -> str:
     return "".join(random.choices(string.digits, k=6))
@@ -470,6 +501,9 @@ def verificar_codigo_estado_cuenta(
         datos = _obtener_datos_pdf(db, cedula_lookup)
         if not datos:
             return VerificarCodigoResponse(ok=False, error="Error al generar el documento.")
+        recibos = _obtener_recibos_cliente(db, cedula_lookup)
+        recibo_token = create_recibo_token(cedula_lookup, expire_hours=2)
+        base_url = str(request.base_url).rstrip("/")
         pdf_bytes = generar_pdf_estado_cuenta(
             cedula=datos.get("cedula_display") or "",
             nombre=datos.get("nombre") or "",
@@ -478,6 +512,9 @@ def verificar_codigo_estado_cuenta(
             total_pendiente=float(datos.get("total_pendiente") or 0),
             fecha_corte=datos.get("fecha_corte") or date.today(),
             amortizaciones_por_prestamo=datos.get("amortizaciones_por_prestamo") or [],
+            recibos=recibos,
+            recibo_token=recibo_token,
+            base_url=base_url,
         )
         pdf_b64 = base64.b64encode(pdf_bytes).decode("ascii")
     except Exception as e:
@@ -491,7 +528,7 @@ def verificar_codigo_estado_cuenta(
     db.commit()
     expira_en_iso = (rec.expira_en.isoformat() + "Z") if getattr(rec, "expira_en", None) else None
     logger.info("estado_cuenta verificar ip=%s outcome=ok cedula_suffix=***%s", ip, cedula_lookup[-4:] if len(cedula_lookup) >= 4 else "****")
-    return VerificarCodigoResponse(ok=True, pdf_base64=pdf_b64, expira_en=expira_en_iso)
+    return VerificarCodigoResponse(ok=True, pdf_base64=pdf_b64, expira_en=expira_en_iso, recibo_token=recibo_token)
 
 
 @router.post("/solicitar-estado-cuenta", response_model=SolicitarEstadoCuentaResponse)
@@ -594,6 +631,10 @@ def solicitar_estado_cuenta(
             "cuotas": cuotas,
         })
 
+    recibos = _obtener_recibos_cliente(db, cedula_lookup)
+    base_url = str(request.base_url).rstrip("/")
+    usar_token = getattr(body, "origen", None) != "informes"
+    recibo_token = create_recibo_token(cedula_lookup, expire_hours=2) if usar_token else None
     pdf_bytes = generar_pdf_estado_cuenta(
         cedula=cedula_display,
         nombre=nombre,
@@ -602,6 +643,9 @@ def solicitar_estado_cuenta(
         total_pendiente=total_pendiente,
         fecha_corte=fecha_corte,
         amortizaciones_por_prestamo=amortizaciones_por_prestamo,
+        recibos=recibos,
+        recibo_token=recibo_token,
+        base_url=base_url,
     )
 
     if email:
