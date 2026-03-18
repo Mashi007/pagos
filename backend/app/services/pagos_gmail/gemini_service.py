@@ -45,10 +45,11 @@ GEMINI_PROMPT = (
     "}\n\n"
     "REGLAS POR CAMPO (aplican tanto al leer texto como imágenes):\n\n"
     "CEDULA (puede extraerse del ASUNTO, del CUERPO o de la IMAGEN):\n"
-    "- Formato: V, E o J (y opcionalmente G) seguido de guion y números. Ejemplos: V-024691606, E-12345678, J-309841327.\n"
+    "- Formato: V, E o J (y opcionalmente G) seguido de guion y números. Ejemplo en comprobante: DP:V-015989899 → cédula normalizada: V15989899.\n"
+    "- Reglas: (1) Ignorar siempre el guión. (2) NUNCA tomar en cuenta ceros después de la letra; quitar ceros a la izquierda del número. V-015989899 = V15989899; V-0025677920 = V25677920.\n"
     "- En asunto/cuerpo busca: 'cédula', 'C.I.', 'RIF', 'DP:', 'V-', 'E-', 'J-', 'identificación', 'depositante'.\n"
     "- En imagen busca etiquetas: 'DP:V-', 'Cédula Dep.', 'C.I.', 'RIF'.\n"
-    "- Devuelve SOLO los dígitos sin prefijo (ej: 'V-024691606' → '024691606'). Si hay varias cédulas, la del PAGADOR/DEPOSITANTE.\n\n"
+    "- Devuelve tipo + dígitos sin guión y sin ceros a la izquierda (ej: 'V-015989899' → 'V15989899'). Si hay varias cédulas, la del PAGADOR/DEPOSITANTE.\n\n"
     "MONTO:\n"
     "- Bolívares (Bs, Bs., BsS) o dólares/divisas. Equivalencia: USDT = Dólares = USD = $. Cuando el comprobante indique USDT, Dólares, $ o USD, usa moneda 'USD' y monto en dólares. Ejemplos: '142.00 USD', '80000.00 Bs'.\n"
     "- En texto busca: 'monto', 'depósito', 'cantidad', 'total', 'importe', 'pagado', 'abono'.\n"
@@ -431,13 +432,16 @@ GEMINI_COMPARAR_PROMPT_PREFIX = """Eres un revisor de comprobantes de pago. Reci
 
 REGLAS DEL VALIDADOR DE CÉDULA (aplicar siempre; alineado con el sistema):
 - Tipos válidos: solo V, E, G o J (cédula venezolana). RIF puede verse como J o E + dígitos.
-- Formato: tipo (una letra) + entre 6 y 11 dígitos. Ejemplos válidos: V25677920, E12345678, J1234567.
-- Si en la imagen el número EMPIEZA POR CERO (ej. 0025677920, 0001234567): NO tomar en cuenta esos ceros a la izquierda. Normaliza a: tipo + número sin ceros a la izquierda. 0025677920 = 25677920; 0001234567 = 1234567. En Venezuela los comprobantes suelen mostrar la cédula con ceros a la izquierda; el formulario suele tenerla sin ceros: son el mismo documento.
-- Al comparar: ignora guión (V-25677920 = V25677920), espacios y ceros a la izquierda del número. Solo cuenta que el tipo (V/E/G/J) sea el mismo y que el valor numérico (sin ceros a la izquierda) sea el mismo.
-- NO incluyas "Cédula" en comentario si la única diferencia es: ceros a la izquierda en la imagen, guión, o espacios. Solo marca Cédula cuando tipo o número (normalizado) sean realmente distintos.
+- Ejemplo en comprobante: DP:V-015989899 → cédula a usar: V15989899. (1) Ignorar el guión. (2) NUNCA tomar en cuenta ceros después de la letra (ej. V): quitar siempre los ceros a la izquierda del número.
+- Formato normalizado: tipo (una letra) + entre 6 y 11 dígitos sin ceros a la izquierda. V-015989899 = V15989899; V-0025677920 = V25677920; 0025677920 con tipo V = V25677920.
+- Al comparar: ignora guión, espacios y ceros a la izquierda del número. Solo cuenta que el tipo (V/E/G/J) sea el mismo y que el número (sin ceros después de la letra) sea el mismo.
+- NO incluyas "Cédula" en comentario si la única diferencia es: ceros a la izquierda, guión o espacios. Solo marca Cédula cuando tipo o número (normalizado) sean realmente distintos.
 
 NÚMERO DE OPERACIÓN (igual que Serial / Referencia en el comprobante):
 - En el formulario el campo se llama "Número de operación". En el comprobante puede aparecer con OTRO nombre: "Serial", "Serial:", "Nº operación", "Número de operación", "Referencia", "Nº de referencia", "Código", "Número de transacción", etc. Todos son el mismo concepto: el número o código que identifica la transacción. Si en el recibo ves "Serial: 740087401612580", ese valor 740087401612580 ES el número de operación. Compáralo con lo que la persona ingresó en el formulario; si los dígitos coinciden (ignorando espacios o guiones), COINCIDE. No marques "Nº operación" como divergencia solo porque en el comprobante dice "Serial" en vez de "Número de operación".
+
+EXCEPCIÓN BANCO = BINANCE (aplicar siempre y solo en este caso):
+- Si la columna Banco (institucion_financiera) es BINANCE (o Binance), IGNORAR siempre el error de fecha. En el formato de imagen para Banco = BINANCE no hay fecha que comprobar; no incluyas "Fecha pago" en el comentario por diferencia de fecha cuando el banco sea BINANCE.
 
 INSTRUCCIONES:
 
@@ -447,17 +451,17 @@ Paso 1 — Extraer de la imagen: Lee el comprobante y extrae con precisión esto
 - numero_operacion: es el número/código de la transacción. En el comprobante puede aparecer como "Serial", "Serial:", "Nº operación", "Referencia", "Número de referencia", "Código de operación", etc. Extrae los dígitos (y letras si los hay) de ese campo; ese valor es el numero_operacion para comparar con el formulario.
 - monto: cantidad pagada (número; puede estar en Bs, USD, USDT, etc.).
 - moneda: BS o USD. Regla: USDT = Dólares = USD = $; si el comprobante muestra USDT, Dólares, $ o USD, devuelve moneda 'USD'.
-- cedula_pagador: cédula del quien paga/deposita. En el comprobante puede aparecer como "Cédula Dep.:", "Nro. de Cédula", "DP:", "C.I.", etc. Toma solo el número del depositante/pagador (no confundir con referencias largas que incluyan fecha). IMPORTANTE: si el número en la imagen empieza por cero (0025677920, 0001234567), quita los ceros a la izquierda antes de comparar (25677920, 1234567). Normaliza a tipo (V, E, G o J) + dígitos sin guiones ni espacios; si solo ves dígitos (ej. 0025677920), antepón V. Resultado a usar para comparar: tipo + número sin ceros a la izquierda.
+- cedula_pagador: cédula de quien paga/deposita. En el comprobante puede aparecer como "DP:V-015989899", "Cédula Dep.:", "Nro. de Cédula", "DP:", "C.I.", etc. Reglas: ignorar guión; NUNCA tomar en cuenta ceros después de la letra (ej. V-015989899 → V15989899). Normaliza a tipo (V, E, G o J) + dígitos sin guión y sin ceros a la izquierda; si solo ves dígitos (ej. 015989899), antepón V. Resultado para comparar: tipo + número sin ceros a la izquierda (ej. V15989899).
 
 Paso 2 — Comparar campo por campo: Para cada dato extraído de la imagen, compáralo con el valor que la persona ingresó en el formulario (listado abajo). Reglas:
-- Fecha pago (OBLIGATORIO comparar): La fecha ingresada manualmente en el formulario debe coincidir con la fecha de la operación que aparece en la imagen. Comparar día, mes y año; si alguno difiere, es divergencia (incluir "Fecha pago" en comentario). Ignorar solo el formato (ej. 10/03/2026 vs 2026-03-10 = misma fecha).
+- Fecha pago: La fecha del formulario debe coincidir con la fecha de la operación en la imagen. Si difiere, es divergencia (incluir "Fecha pago" en comentario). EXCEPCIÓN: si Banco = BINANCE (o Binance), NO comparar fecha ni incluir "Fecha pago" en comentario; en comprobantes BINANCE no hay fecha que comprobar. Ignorar solo el formato (ej. 10/03/2026 vs 2026-03-10 = misma fecha).
 - Institución: mismo banco o entidad (sinónimos o nombre abreviado = válido). Recibo, recibo y REcibo se consideran el mismo valor (coinciden entre sí).
 - Número de operación: el formulario tiene "numero_operacion"; en el comprobante puede estar como "Serial", "Referencia", "Nº operación", etc. Es el mismo dato. Compara los dígitos/código; si coinciden (ignorar espacios o guiones intermedios), COINCIDE. No marques divergencia solo porque la etiqueta en el recibo diga "Serial" en vez de "Número de operación".
 - Monto: mismo valor numérico; misma moneda o equivalente (BS vs Bs, USD vs US$ vs USDT vs Dólares vs $).
-- Cédula: aplicar las REGLAS DEL VALIDADOR DE CÉDULA anteriores. Comparar tipo (V/E/G/J) y número ya normalizado (sin ceros a la izquierda). Si en imagen ves 0025677920 o V-0025677920 y en formulario V25677920 → COINCIDE. Si en imagen ves 0025677920 y en formulario V25677920 → COINCIDE. Solo es divergencia si el tipo es distinto o el número sin ceros a la izquierda es distinto. Antes de poner "Cédula" en comentario, verifica que hayas normalizado ambos lados (imagen y formulario) quitando ceros a la izquierda del número.
+- Cédula: aplicar las REGLAS DEL VALIDADOR DE CÉDULA anteriores. Ejemplo: comprobante DP:V-015989899 → normalizado V15989899 (ignorar guión; nunca ceros después de la letra). Comparar tipo (V/E/G/J) y número sin ceros a la izquierda. Si en imagen ves V-015989899 o 015989899 y en formulario V15989899 → COINCIDE. Solo es divergencia si el tipo o el número (normalizado) son distintos. Verifica haber quitado guión y ceros a la izquierda antes de marcar Cédula en comentario.
 
 Paso 3 — Decidir:
-- coincide_exacto = true SOLO si TODOS los campos que se pueden verificar en la imagen coinciden con lo ingresado en el formulario (para cédula: mismo tipo y mismo número normalizado sin ceros a la izquierda). Si la cédula no aparece en el comprobante, no la uses para marcar false.
+- coincide_exacto = true SOLO si TODOS los campos que se pueden verificar en la imagen coinciden con lo ingresado en el formulario (para cédula: mismo tipo y mismo número normalizado sin ceros a la izquierda). Si la cédula no aparece en el comprobante, no la uses para marcar false. Si Banco = BINANCE, no uses Fecha pago para marcar false (en BINANCE no hay fecha que comprobar).
 - coincide_exacto = false si CUALQUIER campo extraído de la imagen NO coincide con el formulario (comparando valores normalizados), o si no puedes leer con claridad algún dato necesario. No marques false por cédula si la única diferencia es guión, espacios o ceros a la izquierda en el número.
 - comentario: si coincide_exacto = false, es OBLIGATORIO indicar SOLO los nombres de las columnas que no coinciden, separados por coma. Usa EXACTAMENTE estos nombres: Cédula, Banco, Fecha pago, Nº operación, Monto, Moneda. Sin explicaciones. Ejemplo: "Monto, Fecha pago". Si coincide_exacto = true, deja comentario vacío o "".
 
@@ -498,7 +502,7 @@ def compare_form_with_image(
         f"- institucion_financiera: {form_data.get('institucion_financiera')}\n"
         f"- numero_operacion: {form_data.get('numero_operacion')}\n"
         f"- monto: {form_data.get('monto')} {form_data.get('moneda', 'BS')}\n"
-        f"- cedula (tipo + número): {cedula_estandar}. Para comparar con la imagen: si en el comprobante la cédula empieza por cero (ej. 0025677920), ignora esos ceros; el número normalizado es {tipo_c or 'V'}{num_sin_ceros}. Si tipo y ese número coinciden, NO incluyas Cédula en comentario.\n"
+        f"- cedula (tipo + número): {cedula_estandar}. Ejemplo en comprobante: DP:V-015989899 → V15989899 (ignorar guión; nunca contar ceros después de la letra). Número normalizado para comparar: {tipo_c or 'V'}{num_sin_ceros}. Si tipo y ese número coinciden, NO incluyas Cédula en comentario.\n"
     )
     prompt = GEMINI_COMPARAR_PROMPT_PREFIX + "\n\n" + text_data
     model_name = getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash")
