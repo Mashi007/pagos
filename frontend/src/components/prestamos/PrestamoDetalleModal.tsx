@@ -246,6 +246,7 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                           : Number(prestamoData.tasa_interes) || 0) * 100).toFixed(2)}%
                       </p>
                     </div>
+                    {/* Orden lógico: Requerimiento (solicitud) → Aprobación. La tabla de amortización usa fecha de aprobación (o fecha_base_calculo) como base. */}
                     {prestamoData.fecha_requerimiento && (
                       <div>
                         <label className="text-sm text-gray-600">Fecha de Requerimiento</label>
@@ -256,8 +257,31 @@ export function PrestamoDetalleModal({ prestamo: prestamoInitial, onClose }: Pre
                       <div>
                         <label className="text-sm text-gray-600">Fecha de Aprobación</label>
                         <p className="font-medium">{formatDate(prestamoData.fecha_aprobacion)}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">Base para vencimientos de la tabla de amortización</p>
                       </div>
                     )}
+                    {prestamoData.fecha_base_calculo && (
+                      <div>
+                        <label className="text-sm text-gray-600">Fecha Base de Cálculo</label>
+                        <p className="font-medium">{formatDate(prestamoData.fecha_base_calculo)}</p>
+                      </div>
+                    )}
+                    {/* Aviso si las fechas son incoherentes (aprobación antes de requerimiento) */}
+                    {prestamoData.fecha_requerimiento && prestamoData.fecha_aprobacion && (() => {
+                      const req = new Date(prestamoData.fecha_requerimiento).getTime()
+                      const apr = new Date(prestamoData.fecha_aprobacion).getTime()
+                      if (apr < req) {
+                        return (
+                          <div className="col-span-2 mt-2 p-3 rounded-md bg-amber-50 border border-amber-200 flex items-start gap-2">
+                            <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                            <div className="text-sm text-amber-800">
+                              Las fechas no coinciden con el flujo habitual: la fecha de aprobación es anterior a la fecha de requerimiento. Revise los datos en Revisión Manual o edición si es un error de carga.
+                            </div>
+                          </div>
+                        )
+                      }
+                      return null
+                    })()}
                   </CardContent>
                 </Card>
 

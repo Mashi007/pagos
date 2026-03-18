@@ -1081,7 +1081,15 @@ def generar_amortizacion(prestamo_id: int, db: Session = Depends(get_db)):
     if numero_cuotas <= 0 or total <= 0:
         raise HTTPException(status_code=400, detail="Préstamo sin número de cuotas o monto válido.")
     monto_cuota = _resolver_monto_cuota(p, total, numero_cuotas)  # [C1] usa amortización francesa si tasa > 0
-    fecha_base = p.fecha_base_calculo if getattr(p, "fecha_base_calculo", None) else date.today()
+    # Fecha base de la tabla de amortización: fecha_base_calculo > fecha_aprobacion > fecha_requerimiento > hoy
+    fecha_base = getattr(p, "fecha_base_calculo", None)
+    if not fecha_base and getattr(p, "fecha_aprobacion", None):
+        fa = p.fecha_aprobacion
+        fecha_base = fa.date() if hasattr(fa, "date") and callable(getattr(fa, "date")) else fa
+    if not fecha_base and getattr(p, "fecha_requerimiento", None):
+        fecha_base = p.fecha_requerimiento
+    if not fecha_base:
+        fecha_base = date.today()
     if hasattr(fecha_base, "date"):
         fecha_base = fecha_base.date() if callable(getattr(fecha_base, "date", None)) else fecha_base
     creadas = _generar_cuotas_amortizacion(db, p, fecha_base, numero_cuotas, monto_cuota)
@@ -1125,7 +1133,8 @@ def aplicar_condiciones_aprobacion(prestamo_id: int, payload: AplicarCondiciones
         numero_cuotas = p.numero_cuotas or 12
         total = float(p.total_financiamiento or 0)
         monto_cuota = _resolver_monto_cuota(p, total, numero_cuotas)  # [C1] usa amortización francesa si tasa > 0
-        fecha_base = p.fecha_base_calculo or date.today()
+        # Fecha base: fecha_base_calculo > fecha_aprobacion > hoy (regla: tabla de amortización usa fecha de aprobación)
+        fecha_base = getattr(p, "fecha_base_calculo", None) or (p.fecha_aprobacion.date() if p.fecha_aprobacion and hasattr(p.fecha_aprobacion, "date") else None) or date.today()
         if hasattr(fecha_base, "date"):
             fecha_base = fecha_base.date() if callable(getattr(fecha_base, "date", None)) else fecha_base
         _generar_cuotas_amortizacion(db, p, fecha_base, numero_cuotas, monto_cuota)
@@ -1515,9 +1524,15 @@ def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db), curr
     prestamo_id = row.id  # guardar antes del try para no acceder a row tras rollback
 
     try:
-        cuotas_generadas = _generar_cuotas_amortizacion(db, row, hoy, numero_cuotas, monto_cuota)
+        # Fecha base para amortización: fecha_aprobacion > fecha_requerimiento > hoy (regla: tabla usa fecha de aprobación)
+        fecha_base_cuotas = hoy
+        if row.fecha_aprobacion:
+            fecha_base_cuotas = row.fecha_aprobacion.date() if hasattr(row.fecha_aprobacion, "date") else row.fecha_aprobacion
+        elif getattr(row, "fecha_requerimiento", None):
+            fecha_base_cuotas = row.fecha_requerimiento
+        cuotas_generadas = _generar_cuotas_amortizacion(db, row, fecha_base_cuotas, numero_cuotas, monto_cuota)
         db.commit()
-        logger.info(f"Préstamo {prestamo_id}: {cuotas_generadas} cuotas generadas automáticamente")
+        logger.info(f"Préstamo {prestamo_id}: {cuotas_generadas} cuotas generadas automáticamente (fecha_base={fecha_base_cuotas})")
     except Exception as e:
         db.rollback()
         logger.error("Error generando cuotas para préstamo %s: %s", prestamo_id, str(e))
