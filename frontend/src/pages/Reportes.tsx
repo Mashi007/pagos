@@ -29,10 +29,10 @@ import { DialogReporteFiltros, type FiltrosReporte } from '../components/reporte
 import { DialogReporteContableFiltros, type FiltrosReporteContable } from '../components/reportes/DialogReporteContableFiltros'
 import { DialogConciliacion } from '../components/reportes/DialogConciliacion'
 import { usePermissions } from '../hooks/usePermissions'
-import { BASE_PATH, PUBLIC_REPORTE_PAGO_PATH } from '../config/env'
+import { BASE_PATH } from '../config/env'
 
 /** Path público de estado de cuenta (consultar por cédula, PDF por correo). */
-const PUBLIC_ESTADO_CUENTA_PATH = 'rapicredit-estadocuenta'
+const INFORMES_PATH = 'informes'
 
 function getLinkParaCompartir(path: string): string {
   const base = typeof window !== 'undefined' ? window.location.origin : ''
@@ -335,7 +335,7 @@ return (
         <Card className="shadow-sm border-gray-200/80">
           <CardContent className="py-4">
             <p className="text-sm text-gray-500 mb-4">
-              Copie el enlace y compártalo con clientes o equipos para consulta de reporte de pagos o estado de cuenta.
+              Copie el enlace y compártalo con clientes o equipos para consulta y descarga de estado de cuenta.
             </p>
             <div className="flex flex-wrap items-center gap-3">
               <Button
@@ -343,19 +343,7 @@ return (
                 variant="outline"
                 size="sm"
                 className="h-11 gap-2"
-                onClick={() => copiarEnlaceServicio(PUBLIC_REPORTE_PAGO_PATH, 'Reporte de pagos')}
-                title="Copiar enlace: Reporte de pagos"
-                aria-label="Copiar enlace reporte de pagos"
-              >
-                <DollarSign className="h-5 w-5" />
-                Reporte de pagos
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-11 gap-2"
-                onClick={() => copiarEnlaceServicio(PUBLIC_ESTADO_CUENTA_PATH, 'Estado de cuenta')}
+                onClick={() => copiarEnlaceServicio(INFORMES_PATH, 'Estado de cuenta')}
                 title="Copiar enlace: Estado de cuenta"
                 aria-label="Copiar enlace estado de cuenta"
               >
