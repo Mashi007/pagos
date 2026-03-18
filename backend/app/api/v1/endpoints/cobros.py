@@ -355,6 +355,7 @@ def aprobar_pago_reportado(
         institucion_financiera=pr.institucion_financiera,
         monto=f"{pr.monto} {pr.moneda}",
         numero_operacion=pr.numero_operacion,
+        fecha_pago=pr.fecha_pago,
     )
     pr.recibo_pdf = pdf_bytes
     to_email = _email_cliente_pago_reportado(db, pr)
@@ -515,6 +516,7 @@ def enviar_recibo_manual(
             institucion_financiera=pr.institucion_financiera,
             monto=f"{pr.monto} {pr.moneda}",
             numero_operacion=pr.numero_operacion,
+            fecha_pago=pr.fecha_pago,
         )
         pr.recibo_pdf = pdf_bytes
         db.commit()
@@ -655,6 +657,7 @@ def cambiar_estado_pago(
             institucion_financiera=pr.institucion_financiera,
             monto=f"{pr.monto} {pr.moneda}",
             numero_operacion=pr.numero_operacion,
+            fecha_pago=pr.fecha_pago,
         )
         pr.recibo_pdf = pdf_bytes
         to_email = _email_cliente_pago_reportado(db, pr)

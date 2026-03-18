@@ -58,3 +58,10 @@ def create_recibo_token(cedula: str, expire_hours: int = 2) -> str:
     expire = datetime.utcnow() + timedelta(hours=expire_hours)
     to_encode = {"sub": cedula, "exp": expire, "type": "recibo"}
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+def create_recibo_infopagos_token(pago_id: int, expire_hours: int = 2) -> str:
+    """Token de un solo uso para que el colaborador descargue el recibo tras registrar pago por Infopagos."""
+    expire = datetime.utcnow() + timedelta(hours=expire_hours)
+    to_encode = {"sub": str(pago_id), "pago_id": pago_id, "exp": expire, "type": "recibo_infopagos"}
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)

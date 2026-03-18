@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   Mail,
   Search,
+  Building2,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { getErrorMessage, getErrorDetail } from '../types/errors'
@@ -34,6 +35,8 @@ import { BASE_PATH, PUBLIC_REPORTE_PAGO_PATH } from '../config/env'
 /** Path público de estado de cuenta (consultar por cédula, PDF por correo). */
 const PUBLIC_ESTADO_CUENTA_PATH = 'rapicredit-estadocuenta'
 const INFORMES_PATH = 'informes'
+/** Path para personal: registro de pago a nombre del deudor (sin token; recibo al email y descarga). */
+const INFOPAGOS_PATH = 'infopagos'
 
 function getLinkParaCompartir(path: string): string {
   const base = typeof window !== 'undefined' ? window.location.origin : ''
@@ -374,6 +377,18 @@ return (
               >
                 <Download className="h-5 w-5" />
                 Informes
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-11 gap-2"
+                onClick={() => copiarEnlaceServicio(INFOPAGOS_PATH, 'Infopagos')}
+                title="Copiar enlace: Infopagos (pago a nombre del deudor)"
+                aria-label="Copiar enlace Infopagos"
+              >
+                <Building2 className="h-5 w-5" />
+                Infopagos
               </Button>
             </div>
           </CardContent>

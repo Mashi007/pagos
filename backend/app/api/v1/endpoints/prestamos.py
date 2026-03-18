@@ -1,4 +1,4 @@
-﻿"""
+"""
 Endpoints de préstamos. Datos reales desde BD (tabla prestamos).
 Todos los endpoints usan Depends(get_db). No hay stubs ni datos demo.
 """
@@ -870,6 +870,7 @@ def get_recibo_cuota_pdf(prestamo_id: int, cuota_id: int, db: Session = Depends(
     institucion = "N/A"
     numero_operacion = referencia
     fecha_recep = None
+    fecha_pago_date = None
     if cuota.pago_id:
         pago = db.get(Pago, cuota.pago_id)
         if pago:
@@ -877,8 +878,10 @@ def get_recibo_cuota_pdf(prestamo_id: int, cuota_id: int, db: Session = Depends(
             numero_operacion = (pago.numero_documento or pago.referencia_pago or referencia)[:100]
             if pago.fecha_pago:
                 fecha_recep = pago.fecha_pago
+                fecha_pago_date = pago.fecha_pago.date() if hasattr(pago.fecha_pago, "date") else pago.fecha_pago
     if not fecha_recep and cuota.fecha_pago:
         fecha_recep = datetime.combine(cuota.fecha_pago, datetime.min.time())
+        fecha_pago_date = cuota.fecha_pago
     pdf_bytes = generar_recibo_cuota_amortizacion(
         referencia_interna=referencia,
         nombres_completos=(prestamo.nombres or "").strip(),
@@ -887,11 +890,12 @@ def get_recibo_cuota_pdf(prestamo_id: int, cuota_id: int, db: Session = Depends(
         monto=monto_str + " Bs.",
         numero_operacion=numero_operacion,
         fecha_recepcion=fecha_recep,
+        fecha_pago=fecha_pago_date,
     )
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="recibo_cuota_{cuota.numero_cuota}_{prestamo.cedula}.pdf"'},
+        headers={"Content-Disposition": f'inline; filename="recibo_{referencia}.pdf"'},
     )
 
 def _obtener_cuotas_para_export(db: Session, prestamo_id: int, prestamo: Prestamo) -> list:

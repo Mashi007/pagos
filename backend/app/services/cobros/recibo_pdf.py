@@ -1,9 +1,10 @@
-﻿"""
+"""
 Generación del recibo PDF para reportes de pago (módulo Cobros).
 Logo RapiCredit, cuerpo del recibo, número de referencia, pie con contacto y WhatsApp.
+Incluye fecha de emisión del recibo y fecha de pago (desde tabla pagos_reportados).
 """
 import io
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Optional
 
@@ -26,11 +27,13 @@ def generar_recibo_pago_reportado(
     monto: str,
     numero_operacion: str,
     fecha_recepcion: Optional[datetime] = None,
+    fecha_pago: Optional[date] = None,
 ) -> bytes:
     """
     Genera el PDF del recibo de reporte de pago.
     Cabecera: logo (imagen si existe) y texto "RapiCredit C.A.".
     Cuerpo: mensaje estándar con datos del reporte.
+    Fechas: fecha de emisión del recibo (recepción) y fecha de pago (desde pagos_reportados).
     Pie: datos de contacto y WhatsApp clickeable (en PDF como URL).
     """
     from reportlab.lib.pagesizes import letter
@@ -44,8 +47,9 @@ def generar_recibo_pago_reportado(
     styles.add(ParagraphStyle(name="Center", alignment=1))
     styles.add(ParagraphStyle(name="Small", fontSize=9, spaceAfter=4))
 
-    fecha_recep = fecha_recepcion or datetime.utcnow()
-    fecha_hora_str = fecha_recep.strftime("%d/%m/%Y %H:%M")
+    fecha_emision = fecha_recepcion or datetime.utcnow()
+    fecha_emision_str = fecha_emision.strftime("%d/%m/%Y %H:%M")
+    fecha_pago_str = fecha_pago.strftime("%d/%m/%Y") if fecha_pago else "—"
 
     story = []
     # Cabecera: logo RapiCredit si existe, luego texto
@@ -54,9 +58,10 @@ def generar_recibo_pago_reportado(
         story.append(logo_img)
         story.append(Spacer(1, 8))
     story.append(Paragraph("<b>RapiCredit C.A.</b>", styles["Title"]))
-    story.append(Paragraph(f"Recibo de reporte de pago — {referencia_interna}", styles["Heading2"]))
+    story.append(Paragraph(f"Recibo de pago — {referencia_interna}", styles["Heading2"]))
     story.append(Spacer(1, 12))
-    story.append(Paragraph(f"<b>Fecha y hora de recepción:</b> {fecha_hora_str}", styles["Normal"]))
+    story.append(Paragraph(f"<b>Fecha de emisión del recibo:</b> {fecha_emision_str}", styles["Normal"]))
+    story.append(Paragraph(f"<b>Fecha de pago:</b> {fecha_pago_str}", styles["Normal"]))
     story.append(Spacer(1, 12))
 
     # Cuerpo

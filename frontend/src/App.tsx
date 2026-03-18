@@ -11,9 +11,9 @@ import { useSimpleAuth } from './store/simpleAuthStore'
 import { BASE_PATH } from './config/env'
 
 /** Rutas que no requieren login: solo formulario de reporte de pago y login. El resto usa Layout con sidebar (protegido). */
-const PUBLIC_PATHS = ['/', '/login', '/reporte-pago', '/rapicredit-cobros', '/rapicredit-estadocuenta', '/informes']
+const PUBLIC_PATHS = ['/', '/login', '/reporte-pago', '/rapicredit-cobros', '/rapicredit-estadocuenta', '/informes', '/infopagos']
 
-/** En rutas p˙blicas solo muestra el Outlet (sin Layout). En el resto, si no hay token activo, redirige a /login
+/** En rutas pùblicas solo muestra el Outlet (sin Layout). En el resto, si no hay token activo, redirige a /login
  * para pedir usuario y clave. Con basename="/pagos", pathname puede ser "/pagos/rapicredit-cobros"; normalizamos. */
 function RootLayoutWrapper() {
   const location = useLocation()
@@ -24,7 +24,7 @@ function RootLayoutWrapper() {
   }
   const isPublic = PUBLIC_PATHS.some(p => pathname === p)
   if (isPublic) return <Outlet />
-  // Sin token activo en ruta no p˙blica ? pedir usuario y clave (login)
+  // Sin token activo en ruta no pùblica ? pedir usuario y clave (login)
   if (!isLoading && !isAuthenticated) {
     return <Navigate to="/login" replace state={{ from: location }} />
   }
@@ -35,7 +35,7 @@ function RootLayoutWrapper() {
   )
 }
 
-// Constantes de configuraciÛn
+// Constantes de configuraciùn
 const ANIMATION_DURATION = 0.3
 
 // Pages - Welcome y Login import directo para evitar React #321 (Invalid hook call) en chunks lazy con framer-motion/context.
@@ -67,29 +67,30 @@ import ConversacionesWhatsAppPage from './pages/ConversacionesWhatsApp'
 import ComunicacionesPage from './pages/Comunicaciones'
 import CampanasPage from './pages/Campanas'
 import ReportePagoPage from './pages/ReportePagoPage'
+import InfopagosPage from './pages/InfopagosPage'
 import EstadoCuentaPublicoPage from './pages/EstadoCuentaPublicoPage'
 import CobrosPagosReportadosPage from './pages/CobrosPagosReportadosPage'
 import CobrosDetallePage from './pages/CobrosDetallePage'
 import CobrosEditarPage from './pages/CobrosEditarPage'
 import CobrosHistoricoPage from './pages/CobrosHistoricoPage'
 
-// Todas las p·ginas ahora est·n importadas desde archivos reales
+// Todas las pùginas ahora estùn importadas desde archivos reales
 
 const NotFound = () => (
   <div className="min-h-screen flex items-center justify-center">
     <div className="text-center">
       <h1 className="text-6xl font-bold text-gray-300 mb-4">404</h1>
       <h2 className="text-2xl font-semibold text-gray-700 mb-4">
-        P·gina no encontrada
+        Pùgina no encontrada
       </h2>
       <p className="text-gray-500 mb-6">
-        La p·gina que buscas no existe o ha sido movida.
+        La pùgina que buscas no existe o ha sido movida.
       </p>
       <button
         onClick={() => window.history.back()}
         className="bg-primary text-primary-foreground px-6 py-2 rounded-lg hover:bg-primary/90 transition-colors"
       >
-        Volver atr·s
+        Volver atrùs
       </button>
     </div>
   </div>
@@ -100,12 +101,12 @@ const PageLoader = () => (
   <div className="min-h-screen flex items-center justify-center">
     <div className="text-center">
       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-      <p className="text-gray-600">Cargando p·gina...</p>
+      <p className="text-gray-600">Cargando pùgina...</p>
     </div>
   </div>
 )
 
-// Una sola ejecuciÛn de init auth por sesiÛn (evita doble llamada en StrictMode
+// Una sola ejecuciùn de init auth por sesiùn (evita doble llamada en StrictMode
 // y reduce "demasiadas llamadas a location/history" ? "The operation is insecure")
 let _authInitDone = false
 
@@ -119,7 +120,7 @@ function App() {
     initializeAuth()
   }, [initializeAuth])
 
-  // Mostrar loader solo si est· cargando Y hay datos de auth (para evitar flash)
+  // Mostrar loader solo si estù cargando Y hay datos de auth (para evitar flash)
   let pathname = (location.pathname || '').replace(/\/$/, '') || '/'
   if (BASE_PATH && pathname.startsWith(BASE_PATH)) { const r = pathname.slice(BASE_PATH.length); pathname = r === '' ? '/' : r }
   const isPublicPath = PUBLIC_PATHS.some((p: string) => pathname === p)
@@ -129,9 +130,9 @@ function App() {
     <AnimatePresence mode="wait">
       <Suspense fallback={<PageLoader />}>
         <Routes>
-        {/* Una sola raÌz path="/" para que Layout reciba correctamente las rutas hijas (dashboard, clientes, etc.) */}
+        {/* Una sola raùz path="/" para que Layout reciba correctamente las rutas hijas (dashboard, clientes, etc.) */}
         <Route path="/" element={<RootLayoutWrapper />}>
-          {/* RaÌz /pagos/ sin token ? pedir usuario y clave (login) */}
+          {/* Raùz /pagos/ sin token ? pedir usuario y clave (login) */}
           <Route
             index
             element={
@@ -143,13 +144,14 @@ function App() {
             }
           />
 
-          {/* Formulario p˙blico de reporte de pago (sin login). Link canÛnico: /rapicredit-cobros */}
+          {/* Formulario pùblico de reporte de pago (sin login). Link canùnico: /rapicredit-cobros */}
           <Route path="reporte-pago" element={<ReportePagoPage />} />
           <Route path="rapicredit-cobros" element={<ReportePagoPage />} />
           <Route path="rapicredit" element={<Navigate to="/rapicredit-cobros" replace />} />
-          {/* Consulta p˙blica de estado de cuenta (sin login). Solo esta consulta, sin acceso a otros servicios. */}
+          {/* Consulta pùblica de estado de cuenta (sin login). Solo esta consulta, sin acceso a otros servicios. */}
           <Route path="rapicredit-estadocuenta" element={<EstadoCuentaPublicoPage />} />
           <Route path="informes" element={<EstadoCuentaPublicoPage />} />
+          <Route path="infopagos" element={<InfopagosPage />} />
 
           {/* Login: misma pantalla que index cuando no autenticado */}
           <Route
@@ -171,7 +173,7 @@ function App() {
             }
           />
 
-          {/* Dashboard - ruta m·s especÌfica primero */}
+          {/* Dashboard - ruta mùs especùfica primero */}
           <Route path="dashboard/menu" element={<DashboardMenu />} />
           <Route path="dashboard" element={<Navigate to="/dashboard/menu" replace />} />
 
@@ -180,7 +182,7 @@ function App() {
           <Route path="clientes/nuevo" element={<Clientes />} />
           <Route path="clientes/:id" element={<Clientes />} />
 
-          {/* PrÈstamos */}
+          {/* Prùstamos */}
           <Route
             path="prestamos"
             element={<Prestamos />}
@@ -192,12 +194,12 @@ function App() {
             <Route path=":id" element={<PagosPage />} />
           </Route>
 
-          {/* AmortizaciÛn */}
+          {/* Amortizaciùn */}
           <Route path="amortizacion" element={<AmortizacionPage />} />
 
-          {/* ConciliaciÛn */}
+          {/* Conciliaciùn */}
 
-          {/* Cobros (Pagos Reportados, Detalle, HistÛrico) */}
+          {/* Cobros (Pagos Reportados, Detalle, Histùrico) */}
           <Route path="cobros/pagos-reportados" element={<CobrosPagosReportadosPage />} />
           <Route path="cobros/pagos-reportados/:id/editar" element={<CobrosEditarPage />} />
           <Route path="cobros/pagos-reportados/:id" element={<CobrosDetallePage />} />
@@ -209,14 +211,14 @@ function App() {
             element={<Reportes />}
           />
 
-          {/* RevisiÛn Manual de PrÈstamos */}
+          {/* Revisiùn Manual de Prùstamos */}
           <Route path="revision-manual" element={<RevisionManual />} />
           <Route path="revision-manual/editar/:prestamoId" element={<EditarRevisionManual />} />
 
 {/* Notificaciones (dentro de CRM en sidebar) */}
           <Route path="notificaciones" element={<Notificaciones />} />
 
-          {/* Redirecciones: plantillas viven en ConfiguraciÛn */}
+          {/* Redirecciones: plantillas viven en Configuraciùn */}
           <Route path="notificaciones/plantillas" element={<Navigate to="/configuracion?tab=plantillas" replace />} />
           <Route path="herramientas/notificaciones" element={<Navigate to="/notificaciones" replace />} />
           <Route path="herramientas/plantillas" element={<Navigate to="/configuracion?tab=plantillas" replace />} />
@@ -236,7 +238,7 @@ function App() {
             }
           />
 
-          {/* ConfiguraciÛn */}
+          {/* Configuraciùn */}
           <Route
             path="configuracion"
             element={
@@ -282,7 +284,7 @@ function App() {
             }
           />
 
-          {/* Modelos de VehÌculos */}
+          {/* Modelos de Vehùculos */}
           <Route
             path="modelos-vehiculos"
             element={
@@ -292,7 +294,7 @@ function App() {
             }
           />
 
-          {/* Chat AI ó accesible por cualquier usuario autenticado (no solo admin) */}
+          {/* Chat AI ù accesible por cualquier usuario autenticado (no solo admin) */}
           <Route
             path="chat-ai"
             element={

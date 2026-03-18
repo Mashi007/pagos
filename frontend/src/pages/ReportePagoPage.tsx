@@ -6,7 +6,7 @@
  * Marca flujo público para que, si intentan ir a login, vean "Acceso prohibido" y puedan volver.
  */
 import React, { useState, useRef, useEffect } from 'react'
-import { validarCedulaPublico, enviarReportePublico } from '../services/cobrosService'
+import { validarCedulaPublico, enviarReportePublico, enviarReporteInfopagos, getReciboInfopagos } from '../services/cobrosService'
 import { PUBLIC_FLOW_SESSION_KEY } from '../config/env'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
@@ -121,7 +121,10 @@ function NotificationBanner({ notification, onDismiss }: { notification: Notific
   )
 }
 
-export default function ReportePagoPage() {
+export type ReportePagoVariant = 'cobros' | 'infopagos'
+
+export default function ReportePagoPage({ variant = 'cobros' }: { variant?: ReportePagoVariant }) {
+  const isInfopagos = variant === 'infopagos'
   const honeypotRef = useRef<HTMLInputElement>(null)
   const [step, setStep] = useState(0)
   const [loading, setLoading] = useState(false)
@@ -137,6 +140,9 @@ export default function ReportePagoPage() {
   const [archivo, setArchivo] = useState<File | null>(null)
   const [referencia, setReferencia] = useState('')
   const [enviado, setEnviado] = useState(false)
+  const [reciboToken, setReciboToken] = useState<string | null>(null)
+  const [pagoId, setPagoId] = useState<number | null>(null)
+  const [descargandoRecibo, setDescargandoRecibo] = useState(false)
   const [messageForScreenReader, setMessageForScreenReader] = useState('')
   const [notification, setNotification] = useState<NotificationState>(null)
   const notificationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -159,8 +165,8 @@ export default function ReportePagoPage() {
   // Marcar flujo público para que, si intentan ir a login, vean "Acceso prohibido" y puedan volver
   useEffect(() => {
     sessionStorage.setItem(PUBLIC_FLOW_SESSION_KEY, '1')
-    sessionStorage.setItem(PUBLIC_FLOW_SESSION_KEY + '_path', 'rapicredit-cobros')
-  }, [])
+    sessionStorage.setItem(PUBLIC_FLOW_SESSION_KEY + '_path', isInfopagos ? 'infopagos' : 'rapicredit-cobros')
+  }, [isInfopagos])
 
   const institucionFinal = institucion === 'Otros' ? institucionOtros : institucion
 
@@ -177,6 +183,8 @@ export default function ReportePagoPage() {
     setArchivo(null)
     setReferencia('')
     setEnviado(false)
+    setReciboToken(null)
+    setPagoId(null)
     setStep(irAStep)
   }
 
@@ -276,15 +284,29 @@ export default function ReportePagoPage() {
     if (archivo) form.append('comprobante', archivo)
     setLoading(true)
     try {
-      const res = await enviarReportePublico(form)
-      if (!res.ok) {
-        showNotification('error', res.error || 'Error al enviar.')
-        return
+      if (isInfopagos) {
+        const res = await enviarReporteInfopagos(form)
+        if (!res.ok) {
+          showNotification('error', res.error || 'Error al enviar.')
+          return
+        }
+        showNotification('success', res.mensaje || 'Pago registrado.')
+        setReferencia(res.referencia_interna || '')
+        if (res.recibo_descarga_token) setReciboToken(res.recibo_descarga_token)
+        if (res.pago_id != null) setPagoId(res.pago_id)
+        setEnviado(true)
+        setStep(8)
+      } else {
+        const res = await enviarReportePublico(form)
+        if (!res.ok) {
+          showNotification('error', res.error || 'Error al enviar.')
+          return
+        }
+        showNotification('success', res.mensaje || 'Reporte de pago enviado correctamente.')
+        setReferencia(res.referencia_interna || '')
+        setEnviado(true)
+        setStep(8)
       }
-      showNotification('success', res.mensaje || 'Reporte de pago enviado correctamente.')
-      setReferencia(res.referencia_interna || '')
-      setEnviado(true)
-      setStep(8)
     } catch (e: any) {
       showNotification('error', e?.message || 'Error al enviar el reporte.')
     } finally {
@@ -292,15 +314,42 @@ export default function ReportePagoPage() {
     }
   }
 
+  const handleDescargarRecibo = async () => {
+    if (!reciboToken || pagoId == null) return
+    setDescargandoRecibo(true)
+    try {
+      const blob = await getReciboInfopagos(reciboToken, pagoId)
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `recibo_${referencia || 'pago'}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+    } catch (e: any) {
+      showNotification('error', e?.message || 'No se pudo descargar el recibo.')
+    } finally {
+      setDescargandoRecibo(false)
+    }
+  }
+
   // Pantalla de bienvenida con instrucciones generales (logo y colores RapiCredit: azul oscuro, naranja/marrón)
   const LOGO_PUBLIC_SRC = `${(import.meta.env.BASE_URL || '/').replace(/\/?$/, '')}/logos/rapicredit-public.png`
   if (step === 0) {
-    const steps = [
-      { icon: 'id', text: 'Ingrese su número de cédula (V, E, G o J + dígitos).' },
-      { icon: 'bank', text: 'Indique institución financiera, fecha, monto y número de operación.' },
-      { icon: 'file', text: 'Adjunte el comprobante de pago (JPG, PNG o PDF, máx. 5 MB).' },
-      { icon: 'check', text: 'Revise los datos y envíe. Recibirá confirmación al correo registrado.' },
-    ]
+    const steps = isInfopagos
+      ? [
+          { icon: 'id' as const, text: 'Ingrese la cédula del deudor (V, E, G o J + dígitos).' },
+          { icon: 'bank' as const, text: 'Indique institución financiera, fecha, monto y número de operación.' },
+          { icon: 'file' as const, text: 'Adjunte el comprobante de pago (JPG, PNG o PDF, máx. 5 MB).' },
+          { icon: 'check' as const, text: 'Al enviar, el recibo se enviará al correo del deudor y podrá descargarlo aquí.' },
+        ]
+      : [
+          { icon: 'id' as const, text: 'Ingrese su número de cédula (V, E, G o J + dígitos).' },
+          { icon: 'bank' as const, text: 'Indique institución financiera, fecha, monto y número de operación.' },
+          { icon: 'file' as const, text: 'Adjunte el comprobante de pago (JPG, PNG o PDF, máx. 5 MB).' },
+          { icon: 'check' as const, text: 'Revise los datos y envíe. Recibirá confirmación al correo registrado.' },
+        ]
     return (
       <div className="min-h-screen min-h-[100dvh] bg-gradient-to-br from-slate-50 via-[#e8eef5] to-slate-100 flex flex-col items-center justify-center p-3 sm:p-4 overflow-x-hidden">
         <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
@@ -311,14 +360,16 @@ export default function ReportePagoPage() {
           <div className="bg-white px-4 sm:px-6 py-5 sm:py-6 text-center rounded-t-lg border-b border-slate-100">
             <div className="inline-flex flex-col items-center justify-center">
               <img src={LOGO_PUBLIC_SRC} alt="RapiCredit" className="h-14 sm:h-16 mx-auto object-contain" />
-              <p className="text-[#c4a35a] text-sm sm:text-base mt-2 sm:mt-3 font-semibold">Reporte de pago</p>
+              <p className="text-[#c4a35a] text-sm sm:text-base mt-2 sm:mt-3 font-semibold">{isInfopagos ? 'Infopagos' : 'Reporte de pago'}</p>
             </div>
           </div>
           <CardContent className="p-4 sm:p-6 md:p-8 space-y-5 sm:space-y-6">
             <div className="text-center">
-              <h2 className="text-lg sm:text-xl font-semibold text-[#1e3a5f]">Bienvenido</h2>
+              <h2 className="text-lg sm:text-xl font-semibold text-[#1e3a5f]">{isInfopagos ? 'Pago a nombre del deudor' : 'Bienvenido'}</h2>
               <p className="text-slate-600 mt-2 text-sm leading-relaxed">
-                Reporte su pago de forma segura para que sea verificado por cobranza.
+                {isInfopagos
+                  ? 'Registre el pago del deudor. El recibo se enviará a su correo y podrá descargarlo aquí para compartirlo.'
+                  : 'Reporte su pago de forma segura para que sea verificado por cobranza.'}
               </p>
             </div>
             <ul className="space-y-3" role="list">
@@ -353,7 +404,7 @@ export default function ReportePagoPage() {
               size="lg"
               onClick={() => setStep(1)}
             >
-              Iniciar reporte
+              {isInfopagos ? 'Registrar pago del deudor' : 'Iniciar reporte'}
             </Button>
           </CardContent>
         </Card>
@@ -382,7 +433,7 @@ export default function ReportePagoPage() {
           <NotificationBanner notification={notification} onDismiss={dismissNotification} />
           <Card className="w-full max-w-md min-w-0">
           <CardHeader className="px-4 sm:px-6 pb-2">
-            <CardTitle className="text-lg sm:text-xl">Reporte de pago</CardTitle>
+            <CardTitle className="text-lg sm:text-xl">{isInfopagos ? 'Cédula del deudor' : 'Reporte de pago'}</CardTitle>
             <p className="text-sm text-gray-600 mt-1">Solo letra (V, E, G o J) y 6 a 11 dígitos. No use puntos ni signos. Si solo ingresa números se procesará con V.</p>
           </CardHeader>
           <CardContent className="px-4 sm:px-6 space-y-4">
@@ -412,9 +463,11 @@ export default function ReportePagoPage() {
           <NotificationBanner notification={notification} onDismiss={dismissNotification} />
           <Card className="w-full max-w-md min-w-0">
           <CardHeader className="px-4 sm:px-6">
-            <CardTitle className="text-lg sm:text-xl">Hola, {nombre || 'Cliente'}</CardTitle>
+            <CardTitle className="text-lg sm:text-xl">{isInfopagos ? 'Deudor: ' : 'Hola, '}{nombre || (isInfopagos ? '—' : 'Cliente')}</CardTitle>
             <p className="text-sm text-gray-600 mt-2">
-              Recuerda ingresar únicamente datos de tu pago que se comprobarán y almacenarán para fines de validación de pago.
+              {isInfopagos
+                ? 'Ingrese los datos del pago del deudor. El recibo se enviará a su correo registrado.'
+                : 'Recuerda ingresar únicamente datos de tu pago que se comprobarán y almacenarán para fines de validación de pago.'}
             </p>
           </CardHeader>
           <CardContent className="px-4 sm:px-6">
@@ -677,15 +730,17 @@ export default function ReportePagoPage() {
           </CardContent>
           <CardContent className="px-4 sm:px-6 pt-0 space-y-3">
             <p className="text-sm text-gray-600 break-words">
-              Tu pago se procesará y se enviará al correo registrado en tu contrato de financiamiento (
-              <span className="font-semibold text-[#1e3a5f] bg-blue-50 px-1.5 py-0.5 rounded break-all">
-                {emailParaVerificacion || 'correo registrado'}
-              </span>
-              ). Si tienes algún problema con el correo, contacta a{' '}
-              <a href="mailto:cobranza@rapicreditca.com" className="font-semibold text-[#1e3a5f] underline hover:no-underline break-all">
-                cobranza@rapicreditca.com
-              </a>{' '}
-              o a tu asesor para actualización.
+              {isInfopagos
+                ? <>El recibo se enviará al correo del deudor (<span className="font-semibold text-[#1e3a5f] bg-blue-50 px-1.5 py-0.5 rounded break-all">{emailParaVerificacion || 'correo registrado'}</span>) y podrá descargarlo aquí al finalizar.</>
+                : <>Tu pago se procesará y se enviará al correo registrado en tu contrato de financiamiento (
+                  <span className="font-semibold text-[#1e3a5f] bg-blue-50 px-1.5 py-0.5 rounded break-all">
+                    {emailParaVerificacion || 'correo registrado'}
+                  </span>
+                  ). Si tienes algún problema con el correo, contacta a{' '}
+                  <a href="mailto:cobranza@rapicreditca.com" className="font-semibold text-[#1e3a5f] underline hover:no-underline break-all">
+                    cobranza@rapicreditca.com
+                  </a>{' '}
+                  o a tu asesor para actualización.</>}
             </p>
             <div className="flex gap-2 flex-wrap sm:flex-nowrap">
               <Button variant="outline" className="min-h-[48px] flex-1 min-w-[100px] touch-manipulation" onClick={() => setStep(6)}>No, editar</Button>
@@ -706,7 +761,9 @@ export default function ReportePagoPage() {
       <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">{messageForScreenReader || stepAnnouncement}</div>
       <Card className="w-full max-w-md min-w-0 text-center mx-1 sm:mx-0">
         <CardHeader className="px-4 sm:px-6">
-          <CardTitle className="text-base sm:text-lg text-green-700">Tu reporte de pago fue recibido exitosamente.</CardTitle>
+          <CardTitle className="text-base sm:text-lg text-green-700">
+            {isInfopagos ? 'Pago registrado correctamente.' : 'Tu reporte de pago fue recibido exitosamente.'}
+          </CardTitle>
         </CardHeader>
         <CardContent className="px-4 sm:px-6 space-y-4">
           <div className="text-base sm:text-lg break-words">
@@ -715,9 +772,26 @@ export default function ReportePagoPage() {
               #{referencia}
             </p>
           </div>
-          <p className="text-sm text-gray-600">
-            El recibo (PDF) se enviará a tu correo registrado en un plazo de hasta 24 horas.
-          </p>
+          {isInfopagos ? (
+            <>
+              <p className="text-sm text-gray-600">
+                Se envió el recibo al correo registrado del deudor (según cédula). Puede descargar el recibo aquí para compartirlo.
+              </p>
+              {reciboToken && pagoId != null && (
+                <Button
+                  className="w-full min-h-[48px] touch-manipulation gap-2"
+                  onClick={handleDescargarRecibo}
+                  disabled={descargandoRecibo}
+                >
+                  {descargandoRecibo ? 'Descargando...' : 'Descargar recibo (PDF)'}
+                </Button>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-gray-600">
+              El recibo (PDF) se enviará a tu correo registrado en un plazo de hasta 24 horas.
+            </p>
+          )}
           <p className="text-sm break-words">
             Si necesitas información adicional, comunícate con nosotros por WhatsApp:{' '}
             <a href={WHATSAPP_LINK} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
@@ -726,10 +800,10 @@ export default function ReportePagoPage() {
           </p>
           <div className="flex flex-col sm:flex-row gap-3 pt-4">
             <Button variant="outline" className="flex-1 min-h-[48px] touch-manipulation" onClick={() => resetForm(0)}>
-              Termina
+              {isInfopagos ? 'Terminar' : 'Termina'}
             </Button>
             <Button className="flex-1 min-h-[48px] bg-[#1e3a5f] hover:bg-[#152a47] touch-manipulation" onClick={() => resetForm(1)}>
-              Ingresar otro pago
+              {isInfopagos ? 'Registrar otro pago' : 'Ingresar otro pago'}
             </Button>
           </div>
         </CardContent>

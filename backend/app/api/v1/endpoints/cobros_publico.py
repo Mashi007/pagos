@@ -32,7 +32,7 @@ from app.api.v1.endpoints.validadores import validate_cedula
 from app.services.pagos_gmail.gemini_service import compare_form_with_image
 from app.services.cobros.recibo_pdf import generar_recibo_pago_reportado, WHATSAPP_LINK
 from app.core.email import send_email
-from app.core.security import decode_token
+from app.core.security import decode_token, create_recibo_infopagos_token
 
 logger = logging.getLogger(__name__)
 
@@ -141,6 +141,16 @@ class EnviarReporteResponse(BaseModel):
     referencia_interna: Optional[str] = None
     mensaje: Optional[str] = None
     error: Optional[str] = None
+
+
+class EnviarReporteInfopagosResponse(BaseModel):
+    """Respuesta de Infopagos: incluye token para que el colaborador descargue el recibo."""
+    ok: bool
+    referencia_interna: Optional[str] = None
+    mensaje: Optional[str] = None
+    error: Optional[str] = None
+    recibo_descarga_token: Optional[str] = None
+    pago_id: Optional[int] = None
 
 
 # Longitud máxima para evitar abuso (cédula venezolana: V/E/J + hasta 11 dígitos)
@@ -356,6 +366,7 @@ async def enviar_reporte_publico(
                 institucion_financiera=pr.institucion_financiera,
                 monto=f"{pr.monto} {pr.moneda}",
                 numero_operacion=pr.numero_operacion,
+                fecha_pago=pr.fecha_pago,
             )
             pr.recibo_pdf = pdf_bytes
             to_email = (cliente.email or "").strip()
@@ -428,6 +439,220 @@ def get_recibo_publico(
         content=bytes(pdf_bytes),
         media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename="recibo_{ref}.pdf"'},
+    )
+
+
+# --- Infopagos: mismo flujo que cobros público, sin token para el deudor; recibo al email y descarga para el colaborador ---
+
+@router.post("/infopagos/enviar-reporte", response_model=EnviarReporteInfopagosResponse)
+async def enviar_reporte_infopagos(
+    request: Request,
+    db: Session = Depends(get_db),
+    tipo_cedula: str = Form(...),
+    numero_cedula: str = Form(...),
+    fecha_pago: date = Form(...),
+    institucion_financiera: str = Form(...),
+    numero_operacion: str = Form(...),
+    monto: float = Form(...),
+    moneda: str = Form("BS"),
+    comprobante: UploadFile = File(...),
+    observacion: Optional[str] = Form(None),
+    contact_website: Optional[str] = Form(None),
+):
+    """
+    Registro de pago a nombre del deudor (uso interno / personal). Mismo proceso que enviar-reporte;
+    no requiere token. Siempre genera recibo, envía al email del deudor (por cédula) y devuelve
+    token para que el colaborador descargue el recibo en la misma pantalla.
+    """
+    ip = get_client_ip(request)
+    check_rate_limit_enviar_reporte(ip)
+    if contact_website and str(contact_website).strip():
+        logger.warning("[INFOPAGOS] Honeypot activado desde IP %s", ip)
+        return EnviarReporteInfopagosResponse(ok=False, error="No se pudo procesar el envío. Intente de nuevo.")
+    cedula_input = f"{tipo_cedula}{numero_cedula}"
+    val = validate_cedula(cedula_input)
+    if not val.get("valido"):
+        return EnviarReporteInfopagosResponse(ok=False, error=val.get("error", "Cédula inválida."))
+    cedula_lookup = val.get("valor_formateado", "").replace("-", "")
+    cliente = db.execute(
+        select(Cliente).where(func.replace(Cliente.cedula, "-", "") == cedula_lookup)
+    ).scalars().first()
+    if not cliente:
+        return EnviarReporteInfopagosResponse(ok=False, error="La cédula no está registrada.")
+    prestamo = db.execute(select(Prestamo).where(Prestamo.cliente_id == cliente.id).limit(1)).scalars().first()
+    if not prestamo:
+        return EnviarReporteInfopagosResponse(ok=False, error="No tiene préstamo asociado.")
+    if len(tipo_cedula.strip()) > 2 or len(numero_cedula.strip()) > 13:
+        return EnviarReporteInfopagosResponse(ok=False, error="Datos inválidos.")
+    if len(institucion_financiera.strip()) > 100 or len(numero_operacion.strip()) > 100:
+        return EnviarReporteInfopagosResponse(ok=False, error="Datos inválidos.")
+    if observacion and len(observacion) > 300:
+        observacion = observacion[:300]
+    if (moneda or "BS").strip().upper() not in ("BS", "USD"):
+        return EnviarReporteInfopagosResponse(ok=False, error="Moneda no válida.")
+    if monto <= 0 or monto > 999_999_999.99:
+        return EnviarReporteInfopagosResponse(ok=False, error="Monto no válido.")
+    if fecha_pago > date.today():
+        return EnviarReporteInfopagosResponse(ok=False, error="La fecha de pago no puede ser futura.")
+    content = await comprobante.read()
+    if len(content) > MAX_FILE_SIZE:
+        return EnviarReporteInfopagosResponse(ok=False, error="El comprobante no puede superar 5 MB.")
+    if len(content) < 4:
+        return EnviarReporteInfopagosResponse(ok=False, error="El archivo está vacío o no es válido.")
+    ctype = (comprobante.content_type or "").lower()
+    if "excel" in ctype or "spreadsheet" in ctype or "xls" in ctype:
+        return EnviarReporteInfopagosResponse(ok=False, error="El comprobante debe ser PDF o imagen (JPG, PNG).")
+    if ctype not in ALLOWED_COMPROBANTE_TYPES:
+        return EnviarReporteInfopagosResponse(ok=False, error="Solo se permiten archivos JPG, PNG o PDF.")
+    if not _validate_file_magic(content, ctype):
+        return EnviarReporteInfopagosResponse(ok=False, error="El archivo no corresponde a una imagen o PDF válido.")
+    filename = _sanitize_filename(comprobante.filename or "comprobante")
+    try:
+        pr = None
+        referencia = None
+        for _attempt in range(2):
+            try:
+                try:
+                    hoy_int = int(date.today().strftime("%Y%m%d"))
+                    db.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": hoy_int})
+                except Exception:
+                    db.rollback()
+                referencia = _generar_referencia_interna(db)
+                nombres = (cliente.nombres or "").strip()
+                apellidos = ""
+                if " " in nombres:
+                    parts = nombres.split(None, 1)
+                    nombres = parts[0]
+                    apellidos = parts[1] if len(parts) > 1 else ""
+                pr = PagoReportado(
+                    referencia_interna=referencia,
+                    nombres=nombres,
+                    apellidos=apellidos,
+                    tipo_cedula=tipo_cedula.strip().upper(),
+                    numero_cedula=numero_cedula.strip(),
+                    fecha_pago=fecha_pago,
+                    institucion_financiera=institucion_financiera.strip()[:100],
+                    numero_operacion=numero_operacion.strip()[:100],
+                    monto=monto,
+                    moneda=(moneda or "BS").strip()[:10],
+                    comprobante=content,
+                    comprobante_nombre=filename[:255],
+                    comprobante_tipo=ctype,
+                    ruta_comprobante=None,
+                    observacion=observacion[:300] if observacion else None,
+                    correo_enviado_a=cliente.email,
+                    estado="aprobado",
+                )
+                db.add(pr)
+                db.commit()
+                db.refresh(pr)
+                break
+            except IntegrityError as ie:
+                db.rollback()
+                err_msg = str(ie.orig) if getattr(ie, "orig", None) else str(ie)
+                if _attempt == 0 and "referencia_interna" in err_msg:
+                    continue
+                return EnviarReporteInfopagosResponse(
+                    ok=False,
+                    error="Ya existe un reporte con esa referencia. Intente de nuevo en un momento.",
+                )
+        form_data = {
+            "fecha_pago": str(fecha_pago),
+            "institucion_financiera": institucion_financiera,
+            "numero_operacion": numero_operacion,
+            "monto": str(monto),
+            "moneda": moneda,
+            "tipo_cedula": tipo_cedula,
+            "numero_cedula": numero_cedula,
+        }
+        from app.core.config import settings as _s
+        _gemini_configured = bool((getattr(_s, "GEMINI_API_KEY", None) or "").strip())
+        if _gemini_configured:
+            gemini_result = compare_form_with_image(form_data, content, filename)
+            pr.gemini_coincide_exacto = "true" if gemini_result.get("coincide_exacto", False) else "false"
+            pr.gemini_comentario = gemini_result.get("comentario")
+        pdf_bytes = generar_recibo_pago_reportado(
+            referencia_interna=referencia,
+            nombres=pr.nombres,
+            apellidos=pr.apellidos,
+            tipo_cedula=pr.tipo_cedula,
+            numero_cedula=pr.numero_cedula,
+            institucion_financiera=pr.institucion_financiera,
+            monto=f"{pr.monto} {pr.moneda}",
+            numero_operacion=pr.numero_operacion,
+            fecha_pago=pr.fecha_pago,
+        )
+        pr.recibo_pdf = pdf_bytes
+        to_email = (cliente.email or "").strip()
+        if to_email:
+            body = (
+                f"Se ha registrado un pago a su nombre.\n\n"
+                f"Número de referencia: {referencia}\n\n"
+                f"El recibo se adjunta. Si necesita información adicional, contáctenos por WhatsApp: {WHATSAPP_LINK}\n\n"
+                "RapiCredit C.A."
+            )
+            ok_mail, err_mail = send_email(
+                [to_email],
+                f"Recibo de pago #{referencia}",
+                body,
+                attachments=[(f"recibo_{referencia}.pdf", pdf_bytes)],
+                servicio="cobros",
+                respetar_destinos_manuales=True,
+            )
+            if not ok_mail:
+                logger.error("[INFOPAGOS] Recibo ref=%s: correo NO enviado a %s. Error: %s.", referencia, to_email, err_mail or "desconocido")
+        recibo_token = create_recibo_infopagos_token(pr.id, expire_hours=2)
+        db.commit()
+        return EnviarReporteInfopagosResponse(
+            ok=True,
+            referencia_interna=referencia,
+            mensaje="Pago registrado. Se envió el recibo al correo del deudor. Puede descargar el recibo aquí.",
+            recibo_descarga_token=recibo_token,
+            pago_id=pr.id,
+        )
+    except Exception as e:
+        logger.exception("[INFOPAGOS] Error en enviar-reporte: %s", e)
+        db.rollback()
+        return EnviarReporteInfopagosResponse(
+            ok=False,
+            error="No se pudo procesar el reporte. Intente de nuevo o contacte por WhatsApp 424-4579934.",
+        )
+
+
+@router.get("/infopagos/recibo")
+def get_recibo_infopagos(
+    token: str = Query(..., description="Token de descarga emitido tras registrar el pago"),
+    pago_id: int = Query(..., description="ID del pago reportado"),
+    db: Session = Depends(get_db),
+):
+    """
+    Devuelve el PDF del recibo del pago registrado por Infopagos. Requiere el token devuelto
+    en la respuesta de enviar-reporte (válido 2 horas) para que el colaborador descargue el recibo.
+    """
+    payload = decode_token(token)
+    if not payload or payload.get("type") != "recibo_infopagos":
+        raise HTTPException(status_code=401, detail="Token inválido o expirado.")
+    token_pago_id = payload.get("pago_id") or payload.get("sub")
+    if token_pago_id is None:
+        raise HTTPException(status_code=401, detail="Token inválido.")
+    try:
+        token_pago_id = int(token_pago_id)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=401, detail="Token inválido.")
+    if token_pago_id != pago_id:
+        raise HTTPException(status_code=403, detail="No tiene permiso para este recibo.")
+    pr = db.execute(select(PagoReportado).where(PagoReportado.id == pago_id)).scalars().first()
+    if not pr:
+        raise HTTPException(status_code=404, detail="Recibo no encontrado.")
+    pr = pr[0] if hasattr(pr, "__getitem__") else pr
+    pdf_bytes = getattr(pr, "recibo_pdf", None)
+    if not pdf_bytes:
+        raise HTTPException(status_code=404, detail="No hay recibo PDF para este pago.")
+    ref = getattr(pr, "referencia_interna", "recibo") or "recibo"
+    return Response(
+        content=bytes(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="recibo_{ref}.pdf"'},
     )
 
 

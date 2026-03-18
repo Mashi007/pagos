@@ -1,8 +1,8 @@
 """
-Generacion del recibo PDF para una cuota de la tabla de amortizacion (prestamos).
-Reutiliza el mismo formato visual que el recibo de cobros (recibo_pdf.generar_recibo_pago_reportado).
+Generación del recibo PDF para una cuota de la tabla de amortización (préstamos).
+Misma plantilla que el recibo de cobros (recibo_pdf): diseño, numeración de referencia y fechas.
 """
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
 from app.services.cobros.recibo_pdf import generar_recibo_pago_reportado
@@ -16,10 +16,11 @@ def generar_recibo_cuota_amortizacion(
     monto: str,
     numero_operacion: str,
     fecha_recepcion: Optional[datetime] = None,
+    fecha_pago: Optional[date] = None,
 ) -> bytes:
     """
-    Genera el PDF del recibo para una cuota de la tabla de amortizacion.
-    Usa el mismo formato visual que el recibo de cobros (reporte de pago).
+    Genera el PDF del recibo para una cuota de la tabla de amortización.
+    Misma plantilla que recibo de pago reportado (cobros): logo, fechas, cuerpo, número de referencia, pie.
     """
     cedula_clean = (cedula or "").strip().replace(" ", "")
     partes = cedula_clean.split("-")
@@ -42,4 +43,5 @@ def generar_recibo_cuota_amortizacion(
         monto=monto,
         numero_operacion=numero_operacion or referencia_interna,
         fecha_recepcion=fecha_recepcion,
+        fecha_pago=fecha_pago,
     )

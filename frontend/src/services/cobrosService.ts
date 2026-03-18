@@ -26,6 +26,16 @@ export interface EnviarReporteResponse {
   error?: string
 }
 
+/** Respuesta de Infopagos: incluye token para descargar recibo en la misma pantalla. */
+export interface EnviarReporteInfopagosResponse {
+  ok: boolean
+  referencia_interna?: string
+  mensaje?: string
+  error?: string
+  recibo_descarga_token?: string
+  pago_id?: number
+}
+
 /** Público: validar cédula (formato + tiene préstamo). Sin auth. Sin envío de token. */
 export async function validarCedulaPublico(cedula: string): Promise<ValidarCedulaResponse> {
   const url = `${BASE_PUBLIC}/validar-cedula?cedula=${encodeURIComponent(cedula.slice(0, 20))}`
@@ -69,6 +79,41 @@ export async function enviarReportePublico(formData: FormData): Promise<EnviarRe
     return { ok: false, error: (data as EnviarReporteResponse).error || `Error ${res.status}. Intente más tarde o contacte por WhatsApp 424-4579934.` }
   }
   return data
+}
+
+/** Infopagos: enviar reporte a nombre del deudor (uso interno). Devuelve token para descargar recibo. */
+export async function enviarReporteInfopagos(formData: FormData): Promise<EnviarReporteInfopagosResponse> {
+  const url = `${BASE_PUBLIC}/infopagos/enviar-reporte`
+  const res = await fetch(url, {
+    method: 'POST',
+    body: formData,
+    credentials: 'same-origin',
+  })
+  if (res.status === 429) {
+    return { ok: false, error: 'Ha alcanzado el límite de envíos por hora. Intente más tarde.' }
+  }
+  const text = await res.text()
+  let data: EnviarReporteInfopagosResponse
+  try {
+    data = text ? JSON.parse(text) : {}
+  } catch {
+    return {
+      ok: false,
+      error: (text || `Error ${res.status}. Intente más tarde.`).slice(0, 200),
+    }
+  }
+  if (!res.ok && data && typeof data === 'object') {
+    return { ok: false, error: (data as EnviarReporteInfopagosResponse).error || `Error ${res.status}.` }
+  }
+  return data
+}
+
+/** Infopagos: descargar recibo PDF con el token devuelto tras registrar el pago. */
+export async function getReciboInfopagos(token: string, pagoId: number): Promise<Blob> {
+  const url = `${BASE_PUBLIC}/infopagos/recibo?token=${encodeURIComponent(token)}&pago_id=${pagoId}`
+  const res = await fetch(url, { credentials: 'same-origin' })
+  if (!res.ok) throw new Error(res.status === 401 ? 'Enlace de descarga expirado.' : 'No se pudo descargar el recibo.')
+  return res.blob()
 }
 
 export interface PagoReportadoItem {
