@@ -53,7 +53,7 @@ export async function solicitarCodigo(cedula: string): Promise<SolicitarCodigoRe
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(opts?.origen ? { cedula: cedula.slice(0, 20).trim(), origen: opts.origen } : { cedula: cedula.slice(0, 20).trim() }),
+    body: JSON.stringify({ cedula: cedula.slice(0, 20).trim() }),
     credentials: 'same-origin',
   })
   if (res.status === 429) {
