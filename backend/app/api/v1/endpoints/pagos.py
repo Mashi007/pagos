@@ -1929,18 +1929,14 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
             usuario_registro=usuario_email,  # [MEJORADO] Usuario real desde JWT
         )
         db.add(row)
+        db.flush()
+        db.refresh(row)
+        # [C3] Aplicar FIFO a cuotas en la misma transacción para que préstamos y estado de cuenta se actualicen
+        if row.prestamo_id and float(row.monto_pagado or 0) > 0:
+            _aplicar_pago_a_cuotas_interno(row, db)
+            row.estado = "PAGADO"
         db.commit()
         db.refresh(row)
-        # [C3] Aplicar FIFO a cuotas siempre que el pago tenga prestamo_id
-        if row.prestamo_id and float(row.monto_pagado or 0) > 0:
-            try:
-                _aplicar_pago_a_cuotas_interno(row, db)
-                row.estado = "PAGADO"
-                db.commit()
-                db.refresh(row)
-            except Exception as e:
-                logger.warning("Al crear pago, no se pudo aplicar a cuotas (FIFO): %s", e)
-                db.rollback()
         return _pago_to_response(row)
     except HTTPException:
         raise

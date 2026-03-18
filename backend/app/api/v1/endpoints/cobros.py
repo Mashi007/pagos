@@ -272,58 +272,55 @@ def _registrar_historial(db: Session, pago_id: int, estado_anterior: str, estado
 
 
 def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado, usuario_email: Optional[str]) -> None:
-    """Tras aprobar un pago reportado: crea registro en tabla pagos y aplica a cuotas (FIFO) para que prestamos y estado de cuenta se actualicen igual que por /pagos/pagos."""
-    try:
-        cedula_norm = ((pr.tipo_cedula or "") + (pr.numero_cedula or "")).replace("-", "").replace(" ", "").strip().upper()
-        if not cedula_norm:
-            return
-        cliente = db.execute(
-            select(Cliente).where(func.replace(Cliente.cedula, "-", "") == cedula_norm)
-        ).scalars().first()
-        if not cliente:
-            logger.info("[COBROS] Aprobar ref=%s: no se encontro cliente con cedula; no se crea pago en tabla pagos.", pr.referencia_interna)
-            return
-        prestamo = db.execute(
-            select(Prestamo)
-            .where(Prestamo.cliente_id == cliente.id, Prestamo.estado == "APROBADO")
-            .order_by(Prestamo.id.desc())
-            .limit(1)
-        ).scalars().first()
-        if not prestamo:
-            logger.info("[COBROS] Aprobar ref=%s: cliente sin prestamo APROBADO; no se crea pago.", pr.referencia_interna)
-            return
-        num_doc = ("COB-" + pr.referencia_interna)[:100]
-        if db.execute(select(Pago.id).where(Pago.numero_documento == num_doc)).scalar() is not None:
-            logger.info("[COBROS] Aprobar ref=%s: ya existe pago con documento %s; omitir creacion.", pr.referencia_interna, num_doc)
-            return
-        fecha_ts = datetime.combine(pr.fecha_pago, dt_time.min) if pr.fecha_pago else datetime.now()
-        monto = Decimal(str(round(float(pr.monto), 2)))
-        if monto <= 0:
-            return
-        row = Pago(
-            cedula_cliente=cedula_norm,
-            prestamo_id=prestamo.id,
-            fecha_pago=fecha_ts,
-            monto_pagado=monto,
-            numero_documento=num_doc,
-            institucion_bancaria=(pr.institucion_financiera or "").strip()[:255] or None,
-            estado="PENDIENTE",
-            referencia_pago=num_doc,
-            usuario_registro=usuario_email or "cobros@rapicredit.com",
+    """Tras aprobar un pago reportado: crea registro en tabla pagos y aplica a cuotas (FIFO) para que prestamos y estado de cuenta se actualicen. Debe llamarse ANTES de commit; si falla lanza HTTPException."""
+    cedula_norm = ((pr.tipo_cedula or "") + (pr.numero_cedula or "")).replace("-", "").replace(" ", "").strip().upper()
+    if not cedula_norm:
+        raise HTTPException(status_code=400, detail="Cédula del reporte vacía; no se puede crear el pago en préstamos.")
+    cedula_lookup = func.upper(func.replace(func.replace(Cliente.cedula, "-", ""), " ", ""))
+    cliente = db.execute(
+        select(Cliente).where(cedula_lookup == cedula_norm)
+    ).scalars().first()
+    if not cliente:
+        raise HTTPException(
+            status_code=400,
+            detail="No se encontró cliente con la cédula indicada. Verifique la cédula o registre al cliente para que el estado de cuenta se actualice.",
         )
-        db.add(row)
-        db.flush()
-        db.refresh(row)
-        _aplicar_pago_a_cuotas_interno(row, db)
-        row.estado = "PAGADO"
-        db.commit()
-        logger.info("[COBROS] Aprobar ref=%s: creado pago id=%s y aplicado a cuotas del prestamo %s.", pr.referencia_interna, row.id, prestamo.id)
-    except Exception as e:
-        logger.warning("[COBROS] Aprobar ref=%s: no se pudo crear pago/aplicar cuotas: %s", pr.referencia_interna, e, exc_info=True)
-        try:
-            db.rollback()
-        except Exception:
-            pass
+    prestamo = db.execute(
+        select(Prestamo)
+        .where(Prestamo.cliente_id == cliente.id, func.upper(Prestamo.estado) == "APROBADO")
+        .order_by(Prestamo.id.desc())
+        .limit(1)
+    ).scalars().first()
+    if not prestamo:
+        raise HTTPException(
+            status_code=400,
+            detail="El cliente no tiene un préstamo APROBADO activo. No se puede actualizar estado de cuenta.",
+        )
+    num_doc = ("COB-" + pr.referencia_interna)[:100]
+    if db.execute(select(Pago.id).where(Pago.numero_documento == num_doc)).scalar() is not None:
+        logger.info("[COBROS] Aprobar ref=%s: ya existe pago con documento %s; omitir creacion (idempotente).", pr.referencia_interna, num_doc)
+        return
+    fecha_ts = datetime.combine(pr.fecha_pago, dt_time.min) if pr.fecha_pago else datetime.now()
+    monto = Decimal(str(round(float(pr.monto), 2)))
+    if monto <= 0:
+        raise HTTPException(status_code=400, detail="El monto del reporte debe ser mayor que cero.")
+    row = Pago(
+        cedula_cliente=cedula_norm,
+        prestamo_id=prestamo.id,
+        fecha_pago=fecha_ts,
+        monto_pagado=monto,
+        numero_documento=num_doc,
+        institucion_bancaria=(pr.institucion_financiera or "").strip()[:255] or None,
+        estado="PENDIENTE",
+        referencia_pago=num_doc,
+        usuario_registro=usuario_email or "cobros@rapicredit.com",
+    )
+    db.add(row)
+    db.flush()
+    db.refresh(row)
+    _aplicar_pago_a_cuotas_interno(row, db)
+    row.estado = "PAGADO"
+    logger.info("[COBROS] Aprobar ref=%s: creado pago id=%s y aplicado a cuotas del prestamo %s.", pr.referencia_interna, row.id, prestamo.id)
 
 
 @router.post("/pagos-reportados/{pago_id}/aprobar")
@@ -336,14 +333,19 @@ def aprobar_pago_reportado(
     pr = db.execute(select(PagoReportado).where(PagoReportado.id == pago_id)).scalars().first()
     if not pr:
         raise HTTPException(status_code=404, detail="Pago reportado no encontrado.")
+    usuario_email = current_user.get("email") if isinstance(current_user, dict) else getattr(current_user, "email", None)
     if pr.estado == "aprobado":
+        try:
+            _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)
+            db.commit()
+        except HTTPException:
+            pass
         return {"ok": True, "mensaje": "Ya estaba aprobado."}
     if pr.estado == "rechazado":
         raise HTTPException(status_code=400, detail="No se puede aprobar un pago rechazado.")
     estado_anterior = pr.estado
     pr.estado = "aprobado"
     pr.motivo_rechazo = None
-    usuario_email = current_user.get("email") if isinstance(current_user, dict) else getattr(current_user, "email", None)
     pr.usuario_gestion_id = current_user.get("id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
     pdf_bytes = generar_recibo_pago_reportado(
@@ -372,8 +374,9 @@ def aprobar_pago_reportado(
             )
             mensaje_final = "Pago aprobado. El recibo no pudo enviarse por correo; use 'Enviar recibo por correo' desde el detalle."
     _registrar_historial(db, pago_id, estado_anterior, "aprobado", usuario_email, None)
-    db.commit()
+    # Crear pago en tabla pagos y aplicar a cuotas ANTES de commit para que prestamos y estado de cuenta se actualicen en la misma transacción
     _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)
+    db.commit()
     return {"ok": True, "mensaje": mensaje_final}
 
 

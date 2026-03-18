@@ -266,13 +266,15 @@ def mover_a_pagos_normales(
     payload: dict = Body(..., embed=True),
     db: Session = Depends(get_db),
 ):
-    """Mueve pagos corregidos de pagos_con_errores a pagos (y los elimina de con_errores)."""
+    """Mueve pagos corregidos de pagos_con_errores a pagos (y los elimina de con_errores). Aplica cada pago a cuotas (FIFO) para que préstamos y estado de cuenta se actualicen."""
     ids = payload.get("ids", [])
     if not ids:
         return {"movidos": 0, "mensaje": "No hay IDs"}
     from app.models.pago import Pago
+    from app.api.v1.endpoints.pagos import _aplicar_pago_a_cuotas_interno
 
     movidos = 0
+    cuotas_aplicadas = 0
     for pid in ids:
         if not isinstance(pid, int) or pid <= 0:
             continue
@@ -292,10 +294,20 @@ def mover_a_pagos_normales(
             referencia_pago=row.referencia_pago or row.numero_documento or "N/A",
         )
         db.add(pago)
+        db.flush()
+        db.refresh(pago)
+        if pago.prestamo_id and float(pago.monto_pagado or 0) > 0:
+            try:
+                cc, cp = _aplicar_pago_a_cuotas_interno(pago, db)
+                if cc > 0 or cp > 0:
+                    pago.estado = "PAGADO"
+                    cuotas_aplicadas += cc + cp
+            except Exception as e:
+                logger.warning("mover_a_pagos_normales: no se pudo aplicar pago id=%s a cuotas: %s", getattr(pago, "id", "?"), e)
         db.delete(row)
         movidos += 1
     db.commit()
-    return {"movidos": movidos, "mensaje": f"{movidos} pagos movidos a tabla pagos"}
+    return {"movidos": movidos, "cuotas_aplicadas": cuotas_aplicadas, "mensaje": f"{movidos} pagos movidos a tabla pagos; cuotas aplicadas: {cuotas_aplicadas}"}
 
 
 @router.get("/{pago_id}", response_model=dict)
