@@ -2014,15 +2014,15 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
                 detail="Ya existe otro pago con ese Nº de documento. El documento debe ser único; no se permiten repetidos.",
             )
         raise HTTPException(status_code=500, detail="Error de integridad en la base de datos.")
-    if aplicar_conciliado and row.prestamo_id and float(row.monto_pagado or 0) > 0:
+    # Regla: si el pago cumple validadores (prestamo_id + monto), aplicar automáticamente a cuotas en cualquier canal
+    if row.prestamo_id and float(row.monto_pagado or 0) > 0:
         try:
             cuotas_completadas, cuotas_parciales = _aplicar_pago_a_cuotas_interno(row, db)
-            # PAGADO si se abonó a alguna cuota o si no había cuotas pendientes (pago procesado para el préstamo)
             row.estado = "PAGADO"
             db.commit()
             db.refresh(row)
         except Exception as e:
-            logger.warning("Al actualizar pago conciliado, no se pudo aplicar a cuotas: %s", e)
+            logger.warning("Al actualizar pago, no se pudo aplicar a cuotas: %s", e)
     return _pago_to_response(row)
 
 

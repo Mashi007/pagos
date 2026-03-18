@@ -1,4 +1,4 @@
-﻿"""
+"""
 Endpoints PÚBLICOS para consulta de estado de cuenta por cédula.
 SEGURIDAD: Sin autenticación (router sin get_current_user). Solo datos del cliente
 identificado por la cédula consultada. Rate limiting por IP. No expone otros servicios
@@ -33,6 +33,7 @@ from app.models.cuota import Cuota
 from app.models.configuracion import Configuracion
 from app.models.estado_cuenta_codigo import EstadoCuentaCodigo
 from app.models.pago_reportado import PagoReportado
+from app.models.pago import Pago
 from app.api.v1.endpoints.validadores import validate_cedula
 from app.core.security import create_recibo_token
 from app.core.email import send_email
@@ -137,7 +138,20 @@ def _obtener_recibos_cliente(db: Session, cedula_lookup: str) -> List[dict]:
             "fecha_pago": fecha_str,
             "monto": float(getattr(pr, "monto", 0) or 0),
             "moneda": getattr(pr, "moneda", "BS") or "BS",
+            "aplicado_a_cuotas": False,
         })
+    if out:
+        num_docs = ["COB-" + (r["referencia_interna"] or "")[:90] for r in out]
+        pagos_aplicados = set(
+            row[0] for row in db.execute(
+                select(Pago.numero_documento).where(
+                    Pago.numero_documento.in_(num_docs),
+                    Pago.estado == "PAGADO",
+                )
+            ).all()
+        )
+        for r in out:
+            r["aplicado_a_cuotas"] = ("COB-" + (r["referencia_interna"] or "")) in pagos_aplicados
     return out
 
 def _generar_codigo_6() -> str:
@@ -648,7 +662,8 @@ def solicitar_estado_cuenta(
         base_url=base_url,
     )
 
-    if email:
+    enviar_por_email = email and getattr(body, "origen", None) != "informes"
+    if enviar_por_email:
         try:
             filename = f"estado_cuenta_{cedula_display.replace('-', '_')}.pdf"
             email_body = (f"Estimado(a) {nombre},\n\nSe adjunta su estado de cuenta con fecha de corte {fecha_corte.isoformat()}.\n\nSaludos,\nRapiCredit")
@@ -667,7 +682,7 @@ def solicitar_estado_cuenta(
 
     import base64
     pdf_b64 = base64.b64encode(pdf_bytes).decode("ascii")
-    mensaje = "Estado de cuenta generado. Se ha enviado una copia al correo registrado." if email else "Estado de cuenta generado."
+    mensaje = "Estado de cuenta generado. Se ha enviado una copia al correo registrado." if enviar_por_email else "Estado de cuenta generado."
     return SolicitarEstadoCuentaResponse(
         ok=True,
         pdf_base64=pdf_b64,

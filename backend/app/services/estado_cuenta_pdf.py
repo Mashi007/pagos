@@ -299,11 +299,15 @@ def generar_pdf_estado_cuenta(
                 except Exception:
                     pass
             monto = f"{float(r.get('monto') or 0):,.2f} {r.get('moneda') or 'BS'}"
-            if recibo_token:
-                url = f"{base_url}/api/v1/cobros/public/recibo?token={recibo_token}&pago_id={r.get('id', '')}"
+            aplicado = r.get("aplicado_a_cuotas", False)
+            if aplicado and base_url:
+                if recibo_token:
+                    url = f"{base_url}/api/v1/cobros/public/recibo?token={recibo_token}&pago_id={r.get('id', '')}"
+                else:
+                    url = f"{base_url}/api/v1/cobros/pagos-reportados/{r.get('id', '')}/recibo.pdf"
+                link_cell = Paragraph(f'<a href="{url}" color="{COLOR_HEADER}">Ver recibo</a>', style_link)
             else:
-                url = f"{base_url}/api/v1/cobros/pagos-reportados/{r.get('id', '')}/recibo.pdf"
-            link_cell = Paragraph(f'<a href="{url}" color="{COLOR_HEADER}">Ver recibo</a>', style_link)
+                link_cell = Paragraph("&mdash;", style_link)
             rows.append([ref, fecha, monto, link_cell])
         t = Table(rows, colWidths=[100, 70, 85, 75])
         t.setStyle(
