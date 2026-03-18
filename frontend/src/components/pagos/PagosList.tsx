@@ -139,7 +139,7 @@ export function PagosList() {
       await queryClient.invalidateQueries({ queryKey: ['pagos-con-errores'], exact: false })
       toast.success(res.mensaje)
       if (res.registros_con_error > 0) {
-        toast('Hay pagos en Revisar Pagos. Use el botón "Descargar Excel en revisión pagos" si desea exportarlos.', { duration: 5000 })
+        toast('Hay registros con error. Use el botón "Descargar Excel (errores de esta importación)" para revisarlos.', { duration: 5000 })
       }
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || e?.message || 'Error al importar desde Cobros')
@@ -542,22 +542,22 @@ export function PagosList() {
           </Popover>
 
       </div>
-      {/* Después de importar desde Cobros: si hay errores, ofrecer descargar Excel en revisión */}
+      {/* Después de importar desde Cobros: si hay errores, ofrecer descargar Excel de esta importación (datos_importados_conerrores) */}
       {lastImportCobrosResult && lastImportCobrosResult.registros_con_error > 0 && (
         <Card className="border-amber-200 bg-amber-50">
           <CardContent className="py-3 flex flex-wrap items-center gap-3">
             <span className="text-sm text-amber-800">
-              {lastImportCobrosResult.registros_procesados} importados; {lastImportCobrosResult.registros_con_error} en Revisar Pagos (no cumplen reglas de carga masiva).
+              {lastImportCobrosResult.registros_procesados} importados; {lastImportCobrosResult.registros_con_error} con error (no cumplen reglas de carga masiva). Descargue el Excel para revisar y corregir.
             </span>
             <Button
               variant="outline"
               size="sm"
               className="border-amber-400 text-amber-800 hover:bg-amber-100"
-              onClick={handleDescargarExcelRevisionPagos}
-              disabled={isExportingRevisionPagos}
+              onClick={handleDescargarExcelErroresCobros}
+              disabled={isDescargandoExcelCobrosErrores}
             >
-              {isExportingRevisionPagos ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Download className="h-4 w-4 mr-1" />}
-              Descargar Excel en revisión pagos
+              {isDescargandoExcelCobrosErrores ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Download className="h-4 w-4 mr-1" />}
+              Descargar Excel (errores de esta importación)
             </Button>
             <Button variant="ghost" size="sm" onClick={() => setLastImportCobrosResult(null)}>Ocultar</Button>
           </CardContent>
