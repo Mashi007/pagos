@@ -2154,7 +2154,48 @@ def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
             cuotas_parciales += 1
         monto_restante -= a_aplicar
     _marcar_prestamo_liquidado_si_corresponde(prestamo_id, db)
+    # Advertencia si no se aplicó nada pero el préstamo sí tiene cuotas (p. ej. cuotas creadas después del pago)
+    if cuotas_completadas == 0 and cuotas_parciales == 0:
+        num_cuotas = db.scalar(
+            select(func.count()).select_from(Cuota).where(Cuota.prestamo_id == prestamo_id)
+        ) or 0
+        if num_cuotas > 0:
+            logger.warning(
+                "Pago id=%s (prestamo_id=%s): no se aplicó a ninguna cuota; el préstamo tiene %s cuotas. "
+                "Puede deberse a que las cuotas se generaron después del pago; use aplicar-cuotas o generar cuotas (aplica pendientes automático).",
+                pago.id, prestamo_id, num_cuotas,
+            )
     return cuotas_completadas, cuotas_parciales
+
+
+def aplicar_pagos_pendientes_prestamo(prestamo_id: int, db: Session) -> int:
+    """
+    Aplica a cuotas los pagos conciliados del préstamo que aún no tienen enlaces en cuota_pagos
+    (p. ej. el pago se creó/concilió antes de que existieran las cuotas). No hace commit.
+    Retorna el número de pagos a los que se les aplicó algo.
+    """
+    subq = select(CuotaPago.pago_id).where(CuotaPago.pago_id.isnot(None)).distinct()
+    rows = db.execute(
+        select(Pago).where(
+            Pago.prestamo_id == prestamo_id,
+            Pago.conciliado == True,
+            Pago.monto_pagado > 0,
+            ~Pago.id.in_(subq),
+        )
+    ).scalars().all()
+    n = 0
+    for pago in rows:
+        try:
+            cc, cp = _aplicar_pago_a_cuotas_interno(pago, db)
+            if cc > 0 or cp > 0:
+                pago.estado = "PAGADO"
+                n += 1
+        except Exception as e:
+            logger.warning(
+                "aplicar_pagos_pendientes_prestamo prestamo_id=%s pago id=%s: %s",
+                prestamo_id, pago.id, e,
+            )
+    return n
 
 
 @router.post("/{pago_id}/aplicar-cuotas", response_model=dict)

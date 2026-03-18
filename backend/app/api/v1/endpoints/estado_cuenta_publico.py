@@ -275,7 +275,11 @@ def _obtener_datos_pdf(db: Session, cedula_lookup: str):
 
 
 def _obtener_amortizacion_prestamo(db: Session, prestamo_id: int) -> List[dict]:
-    """Obtiene todas las cuotas del préstamo formateadas como tabla de amortización."""
+    """
+    Obtiene todas las cuotas del préstamo formateadas como tabla de amortización.
+    Misma fuente que la tabla de amortización interna (tabla cuotas): total_pagado, estado, etc.
+    Usado por rapicredit-estadocuenta e informes; cualquier pago aplicado a cuotas se refleja aquí.
+    """
     cuotas_rows = db.execute(
         select(Cuota).where(Cuota.prestamo_id == prestamo_id).order_by(Cuota.numero_cuota)
     ).scalars().all()
@@ -647,6 +651,8 @@ def solicitar_estado_cuenta(
     Público, sin auth. Rate limit: 5 solicitudes/hora por IP.
     Los datos se leen siempre de la BD en el momento de la petición (sin caché);
     cualquier pago aplicado a cuotas se refleja automáticamente en la siguiente consulta.
+    Usado por: /pagos/rapicredit-estadocuenta y /pagos/informes; en ambos se muestran
+    las mismas tablas de amortización (cuotas) con Pago conc. y Recibo desde la tabla cuotas.
     """
     cedula = (body.cedula or "").strip()
     ip = get_client_ip(request)

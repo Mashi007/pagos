@@ -29,6 +29,7 @@ from app.models.prestamo import Prestamo
 from app.models.user import User
 from app.models.revision_manual_prestamo import RevisionManualPrestamo
 from app.schemas.prestamo import PrestamoCreate, PrestamoResponse, PrestamoUpdate, PrestamoListResponse
+from app.api.v1.endpoints.pagos import aplicar_pagos_pendientes_prestamo
 from app.services.cobros.recibo_cuota_amortizacion import generar_recibo_cuota_amortizacion
 from app.services.cuota_estado import estado_cuota_para_mostrar
 
@@ -1141,6 +1142,7 @@ def generar_amortizacion(prestamo_id: int, db: Session = Depends(get_db)):
             detail="El préstamo debe tener fecha de aprobación para generar la tabla de amortización. Asigne la fecha de aprobación primero.",
         )
     creadas = _generar_cuotas_amortizacion(db, p, fecha_base, numero_cuotas, monto_cuota)
+    aplicar_pagos_pendientes_prestamo(p.id, db)
     db.commit()
     return {"message": "Tabla de amortización generada.", "cuotas": creadas, "creadas": creadas}
 
@@ -1191,6 +1193,7 @@ def aplicar_condiciones_aprobacion(prestamo_id: int, payload: AplicarCondiciones
             total = float(p.total_financiamiento or 0)
             monto_cuota = _resolver_monto_cuota(p, total, numero_cuotas)  # [C1] usa amortización francesa si tasa > 0
             _generar_cuotas_amortizacion(db, p, fecha_base, numero_cuotas, monto_cuota)
+            aplicar_pagos_pendientes_prestamo(p.id, db)
             db.commit()
     db.refresh(p)
     return PrestamoResponse.model_validate(p)
@@ -1265,6 +1268,7 @@ def asignar_fecha_aprobacion(prestamo_id: int, payload: AsignarFechaAprobacionBo
         monto_cuota = _resolver_monto_cuota(p, total, numero_cuotas)  # [C1] usa amortización francesa si tasa > 0
         fecha_base = payload.fecha_aprobacion
         cuotas_recalculadas = _generar_cuotas_amortizacion(db, p, fecha_base, numero_cuotas, monto_cuota)
+        aplicar_pagos_pendientes_prestamo(p.id, db)
     db.commit()
     db.refresh(p)
     return {"prestamo": PrestamoResponse.model_validate(p), "cuotas_recalculadas": cuotas_recalculadas}
@@ -1339,6 +1343,7 @@ def aprobar_manual(
             raise HTTPException(status_code=400, detail="Número de cuotas o monto de financiamiento inválido.")
         monto_cuota = _resolver_monto_cuota(p, total, numero_cuotas)  # [C1] usa amortización francesa si tasa > 0
         creadas = _generar_cuotas_amortizacion(db, p, fecha_ap, numero_cuotas, monto_cuota)
+        aplicar_pagos_pendientes_prestamo(prestamo_id, db)
 
         audit = Auditoria(
             usuario_id=_audit_user_id(db, current_user),
@@ -1521,6 +1526,7 @@ def generar_cuotas_aprobados_sin_cuotas(
                 continue
             monto_cuota = _resolver_monto_cuota(p, total, numero_cuotas)
             creadas = _generar_cuotas_amortizacion(db, p, fecha_base, numero_cuotas, monto_cuota)
+            aplicar_pagos_pendientes_prestamo(p.id, db)
             db.commit()
             total_cuotas += creadas
             logger.info("Préstamo %s: %s cuotas generadas (fecha_base=%s)", p.id, creadas, fecha_base)
@@ -1590,6 +1596,7 @@ def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db), curr
         fecha_base_cuotas = _fecha_aprobacion_para_amortizacion(row)
         if fecha_base_cuotas:
             cuotas_generadas = _generar_cuotas_amortizacion(db, row, fecha_base_cuotas, numero_cuotas, monto_cuota)
+            aplicar_pagos_pendientes_prestamo(row.id, db)
             db.commit()
             logger.info(f"Préstamo {prestamo_id}: {cuotas_generadas} cuotas generadas automáticamente (fecha_base={fecha_base_cuotas})")
         # Si no hay fecha_aprobacion (ej. DRAFT desde modal): no generar cuotas; se generarán al aprobar con fecha.
@@ -1654,6 +1661,7 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
                 if numero_cuotas > 0 and total_fin > 0:
                     monto_cuota = _resolver_monto_cuota(row, total_fin, numero_cuotas)
                     _generar_cuotas_amortizacion(db, row, fecha_base, numero_cuotas, monto_cuota)
+                    aplicar_pagos_pendientes_prestamo(prestamo_id, db)
                     db.commit()
                     db.refresh(row)
     return PrestamoResponse.model_validate(row)
@@ -1861,7 +1869,7 @@ async def upload_prestamos_excel(
                 # Generar cuotas automáticamente
                 monto_cuota = _resolver_monto_cuota(prestamo, float(monto), cuotas)
                 _generar_cuotas_amortizacion(db, prestamo, hoy, cuotas, monto_cuota)
-                
+                aplicar_pagos_pendientes_prestamo(prestamo.id, db)
                 # Registrar en revisión manual
                 _registrar_en_revision_manual(db, prestamo.id)
                 

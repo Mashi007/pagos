@@ -18,6 +18,7 @@ from app.models.prestamo import Prestamo
 from app.models.cuota import Cuota
 from app.models.pago import Pago
 from app.models.revision_manual_prestamo import RevisionManualPrestamo
+from app.api.v1.endpoints.pagos import aplicar_pagos_pendientes_prestamo
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -121,6 +122,8 @@ def _aplicar_saldo_cero_si_corresponde(db: Session, prestamo: Prestamo) -> None:
     for pago in pagos:
         pago.conciliado = True
         pago.fecha_conciliacion = ahora
+    # Aplicar a cuotas cualquier pago conciliado que aún no tenga enlaces en cuota_pagos
+    aplicar_pagos_pendientes_prestamo(prestamo.id, db)
     for cuota in cuotas:
         cuota.estado = "PAGADO"  # [A1] Usar MAYÚSCULAS para consistencia con el resto del backend
 
