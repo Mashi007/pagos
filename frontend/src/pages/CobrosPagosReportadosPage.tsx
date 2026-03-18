@@ -284,7 +284,6 @@ export default function CobrosPagosReportadosPage() {
                               disabled={changingEstadoId === row.id}
                             >
                               <option value="">Cambiar estado</option>
-                              <option value="pendiente">Pendiente</option>
                               <option value="en_revision">En revisión</option>
                               <option value="aprobado">Aprobar</option>
                               <option value="rechazado">Rechazar</option>
