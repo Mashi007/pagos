@@ -2186,10 +2186,14 @@ def aplicar_pagos_pendientes_prestamo(prestamo_id: int, db: Session) -> int:
     Retorna el número de pagos a los que se les aplicó algo.
     """
     subq = select(CuotaPago.pago_id).where(CuotaPago.pago_id.isnot(None)).distinct()
+    # Mismo criterio que get_cuotas_prestamo: conciliado O verificado_concordancia SI.
     rows = db.execute(
         select(Pago).where(
             Pago.prestamo_id == prestamo_id,
-            Pago.conciliado == True,
+            or_(
+                Pago.conciliado.is_(True),
+                func.coalesce(func.upper(func.trim(Pago.verificado_concordancia)), "") == "SI",
+            ),
             Pago.monto_pagado > 0,
             ~Pago.id.in_(subq),
         )

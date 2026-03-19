@@ -43,6 +43,7 @@ from app.core.email_config_holder import get_email_activo_servicio
 from app.services.estado_cuenta_pdf import generar_pdf_estado_cuenta
 from app.services.cuota_estado import estado_cuota_para_mostrar
 from app.services.cobros.recibo_cuota_amortizacion import generar_recibo_cuota_amortizacion
+from app.api.v1.endpoints.pagos import aplicar_pagos_pendientes_prestamo
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +118,16 @@ def _cedula_lookup(cedula_input: str) -> str:
     return valor.replace("-", "") if valor else ""
 
 
+
+def _sincronizar_pagos_a_cuotas_prestamos(db: Session, prestamo_ids: List[int]) -> None:
+    """Aplica pagos conciliados o verificado SI sin cuota_pagos; commit si hubo cambios (mismo efecto que GET cuotas)."""
+    if not prestamo_ids:
+        return
+    n = 0
+    for pid in prestamo_ids:
+        n += aplicar_pagos_pendientes_prestamo(pid, db)
+    if n > 0:
+        db.commit()
 
 def _obtener_recibos_cliente(db: Session, cedula_lookup: str) -> List[dict]:
     """Pagos reportados del cliente (cedula sin guion) con recibo PDF, para enlaces en estado de cuenta."""
@@ -219,6 +230,7 @@ def _obtener_datos_pdf(db: Session, cedula_lookup: str):
             "total_financiamiento": float(getattr(p, "total_financiamiento", 0) or 0),
             "estado": getattr(p, "estado", None) or "",
         })
+    _sincronizar_pagos_a_cuotas_prestamos(db, prestamo_ids)
     cuotas_pendientes = []
     total_pendiente = 0.0
     fecha_corte = date.today()
@@ -700,6 +712,7 @@ def solicitar_estado_cuenta(
             "total_financiamiento": float(getattr(p, "total_financiamiento", 0) or 0),
             "estado": getattr(p, "estado", None) or "",
         })
+    _sincronizar_pagos_a_cuotas_prestamos(db, prestamo_ids)
 
     cuotas_pendientes = []
     total_pendiente = 0.0
