@@ -247,6 +247,10 @@ async def health_integrity_prestamos(db: Session = Depends(get_db)):
         "pagos_con_prestamo_id_invalido": 0,
         "prestamos_sin_cuotas": 0,
         "prestamos_aprobado_sin_cuotas": 0,
+        # Trazabilidad (informativo; no altera el status base para no romper monitoreo actual)
+        "pagos_con_prestamo_y_monto_sin_cuota_pagos": 0,
+        "pagos_con_prestamo_y_monto_con_cuota_pagos": 0,
+        "cuotas_con_total_pagado_sin_cuota_pagos": 0,
         "error": None,
     }
     try:
@@ -300,6 +304,44 @@ async def health_integrity_prestamos(db: Session = Depends(get_db)):
               AND NOT EXISTS (SELECT 1 FROM cuotas c WHERE c.prestamo_id = p.id)
         """))
         result["prestamos_aprobado_sin_cuotas"] = r.scalar() or 0
+
+        # Trazabilidad: pagos y cuotas con montos aplicados pero sin filas en cuota_pagos
+        # - Pagos: prestamo_id existe + monto_pagado > 0 y NO existe cuota_pagos para ese pago.
+        r = db.execute(text("""
+            SELECT COUNT(*)
+            FROM pagos p
+            WHERE p.prestamo_id IS NOT NULL
+              AND p.monto_pagado > 0
+              AND NOT EXISTS (
+                SELECT 1 FROM cuota_pagos cp WHERE cp.pago_id = p.id
+              )
+        """))
+        result["pagos_con_prestamo_y_monto_sin_cuota_pagos"] = r.scalar() or 0
+
+        # - Pagos con trazabilidad: existen en cuota_pagos.
+        r = db.execute(text("""
+            SELECT COUNT(*)
+            FROM pagos p
+            WHERE p.prestamo_id IS NOT NULL
+              AND p.monto_pagado > 0
+              AND EXISTS (
+                SELECT 1 FROM cuota_pagos cp WHERE cp.pago_id = p.id
+              )
+        """))
+        result["pagos_con_prestamo_y_monto_con_cuota_pagos"] = r.scalar() or 0
+
+        # - Cuotas: total_pagado > 0 y pago_id existe, pero NO hay cuota_pagos para esa cuota.
+        r = db.execute(text("""
+            SELECT COUNT(*)
+            FROM cuotas c
+            WHERE c.total_pagado IS NOT NULL
+              AND c.total_pagado > 0
+              AND c.pago_id IS NOT NULL
+              AND NOT EXISTS (
+                SELECT 1 FROM cuota_pagos cp WHERE cp.cuota_id = c.id
+              )
+        """))
+        result["cuotas_con_total_pagado_sin_cuota_pagos"] = r.scalar() or 0
 
         # Status: error si hay integridad rota
         if (

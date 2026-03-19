@@ -5,6 +5,7 @@ Revisar Pagos y front apuntan a esta tabla. No se mezclan con pagos que cumplen 
 import logging
 from datetime import date, datetime, time as dt_time
 from typing import Any, Optional
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query, HTTPException, Body
 from pydantic import BaseModel, field_validator
@@ -281,6 +282,8 @@ def mover_a_pagos_normales(
         row = db.get(PagoConError, pid)
         if not row:
             continue
+        conciliado = bool(row.conciliado) if row.conciliado is not None else False
+        ahora = datetime.now(ZoneInfo("America/Caracas")) if conciliado else None
         pago = Pago(
             cedula_cliente=row.cedula_cliente,
             prestamo_id=row.prestamo_id,
@@ -289,7 +292,9 @@ def mover_a_pagos_normales(
             numero_documento=row.numero_documento or "",
             institucion_bancaria=row.institucion_bancaria,
             estado=row.estado or "PENDIENTE",
-            conciliado=row.conciliado,
+            conciliado=conciliado,
+            fecha_conciliacion=ahora,
+            verificado_concordancia="SI" if conciliado else "",
             notas=row.notas,
             referencia_pago=row.referencia_pago or row.numero_documento or "N/A",
         )
