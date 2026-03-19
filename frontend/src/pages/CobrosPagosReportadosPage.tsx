@@ -362,7 +362,7 @@ export default function CobrosPagosReportadosPage() {
                             <select
                               className="absolute inset-0 w-full h-full min-w-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
                               value=""
-                              title="Cambiar estado"
+                              title="Estado"
                               onChange={(e) => {
                                 const v = e.target.value
                                 e.target.value = ''
@@ -375,12 +375,12 @@ export default function CobrosPagosReportadosPage() {
                               }}
                               disabled={changingEstadoId === row.id}
                             >
-                              <option value="">Cambiar estado</option>
+                              <option value="">—</option>
                               <option value="en_revision">En revisión</option>
                               <option value="aprobado">Aprobar</option>
                               <option value="rechazado">Rechazar</option>
                             </select>
-                            <span className="pointer-events-none flex h-8 w-8 items-center justify-center rounded-md border border-input bg-background" title="Cambiar estado">
+                            <span className="pointer-events-none flex h-8 w-8 items-center justify-center rounded-md border border-input bg-background" title="Estado">
                               {changingEstadoId === row.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Settings className="h-4 w-4" />}
                             </span>
                           </div>
