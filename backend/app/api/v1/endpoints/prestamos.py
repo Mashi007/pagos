@@ -1630,9 +1630,10 @@ def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db), curr
     usuario_proponente_email = current_user.email if current_user else "itmaster@rapicreditca.com"
     
     es_carga_masiva = getattr(payload, "aprobado_por_carga_masiva", False)
-    estado_inicial = "APROBADO" if es_carga_masiva else (payload.estado or "DRAFT")
-    # Carga masiva: fecha_aprobacion = fecha_registro (se asigna después del commit/refresh)
-    fecha_aprob = None if es_carga_masiva else None
+    # Siempre crear como APROBADO (individual y carga masiva); cuotas se generan con fecha_aprobacion
+    estado_inicial = "APROBADO"
+    # Carga masiva: fecha_aprobacion = fecha_registro (se asigna después del commit/refresh). Individual: fecha_requerimiento o hoy
+    fecha_aprob = None if es_carga_masiva else datetime.combine(payload.fecha_requerimiento or hoy, time.min)
     row = Prestamo(
         cliente_id=payload.cliente_id,
         cedula=cliente.cedula or "",
@@ -1658,8 +1659,7 @@ def create_prestamo(payload: PrestamoCreate, db: Session = Depends(get_db), curr
         db.commit()
         db.refresh(row)
     
-    # [MEJORA] Generar cuotas automáticamente solo si el préstamo tiene fecha de aprobación (regla obligatoria)
-    # Modal "Nuevo Préstamo" crea en DRAFT sin fecha_aprobacion → no se generan cuotas aquí; se generan al "Aprobar manual".
+    # Generar cuotas automáticamente con fecha_aprobacion (regla obligatoria). Creación individual y carga masiva ya dejan APROBADO y fecha_aprobacion.
     numero_cuotas = payload.numero_cuotas or 12
     total_financiamiento = float(payload.total_financiamiento)
     monto_cuota = _resolver_monto_cuota(row, total_financiamiento, numero_cuotas)
@@ -1921,25 +1921,25 @@ async def upload_prestamos_excel(
                 cliente_id = clientes_cedulas[cedula]
                 cliente = db.get(Cliente, cliente_id)
                 
+                # Carga masiva: préstamo APROBADO y fecha_aprobacion = hoy; cuotas en base a esa fecha
                 prestamo = Prestamo(
                     cliente_id=cliente_id,
                     cedula=cliente.cedula or "",
                     nombres=cliente.nombres or "",
                     total_financiamiento=monto,
                     fecha_requerimiento=hoy,
+                    fecha_aprobacion=datetime.combine(hoy, time.min),
                     modalidad_pago=modalidad,
                     numero_cuotas=cuotas,
                     cuota_periodo=Decimal("0.00"),
                     producto=producto,
-                    estado="DRAFT",
+                    estado="APROBADO",
                     concesionario=concesionario,
                     analista=analista,
                     usuario_proponente=usuario_email,
                 )
                 db.add(prestamo)
                 db.flush()  # Obtener ID del préstamo
-                
-                # Generar cuotas automáticamente
                 monto_cuota = _resolver_monto_cuota(prestamo, float(monto), cuotas)
                 _generar_cuotas_amortizacion(db, prestamo, hoy, cuotas, monto_cuota)
                 aplicar_pagos_pendientes_prestamo(prestamo.id, db)

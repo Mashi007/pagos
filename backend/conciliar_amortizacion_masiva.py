@@ -36,7 +36,7 @@ def prestamos_con_pagos_pendientes_aplicar(db: Session):
         )
         .distinct()
     ).scalars().all()
-    return [row[0] for row in r if row[0] is not None]
+    return [x for x in r if x is not None]
 
 
 def main():

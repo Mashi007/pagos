@@ -776,6 +776,8 @@ async def upload_excel_pagos(
                 fecha_pago = _parse_fecha(fecha_val)
                 ref_pago = ((numero_doc_norm or (numero_doc or "").strip()) or "Carga")[:_MAX_LEN_NUMERO_DOCUMENTO]
                 usuario_email = current_user.email if current_user else "sistema@rapicredit.com"
+                # Autoconciliar: pagos creados por carga Excel se marcan conciliados (aplicados a cuotas después)
+                ahora_up = datetime.now(ZoneInfo(TZ_NEGOCIO))
                 p = Pago(
                     cedula_cliente=cedula.strip().upper() if cedula else "",  # Normalize to uppercase
                     prestamo_id=prestamo_id,
@@ -785,6 +787,9 @@ async def upload_excel_pagos(
                     estado="PENDIENTE",
                     referencia_pago=ref_pago,
                     usuario_registro=usuario_email,  # [MEJORADO] Usuario real desde JWT
+                    conciliado=True,
+                    fecha_conciliacion=ahora_up,
+                    verificado_concordancia="SI",
                 )
                 db.add(p)
                 registros += 1
@@ -1092,6 +1097,7 @@ def importar_reportados_aprobados_a_pagos(
             continue
 
         ref_pago = (numero_doc_norm or numero_doc_raw or "Cobros")[:_MAX_LEN_NUMERO_DOCUMENTO]
+        ahora_imp = datetime.now(ZoneInfo(TZ_NEGOCIO))
         p = Pago(
             cedula_cliente=cedula_raw,
             prestamo_id=prestamo_id,
@@ -1101,6 +1107,9 @@ def importar_reportados_aprobados_a_pagos(
             estado="PENDIENTE",
             referencia_pago=ref_pago,
             usuario_registro=usuario_email,
+            conciliado=True,
+            fecha_conciliacion=ahora_imp,
+            verificado_concordancia="SI",
         )
         db.add(p)
         db.flush()
@@ -1845,7 +1854,7 @@ def crear_pagos_batch(
                 num_doc = docs_en_payload[idx] if idx < len(docs_en_payload) else normalize_documento(payload.numero_documento)
                 ref = (num_doc or "N/A")[:_MAX_LEN_NUMERO_DOCUMENTO]
                 fecha_pago_ts = datetime.combine(payload.fecha_pago, dt_time.min)
-                conciliado = payload.conciliado if payload.conciliado is not None else False
+                conciliado = payload.conciliado if payload.conciliado is not None else (True if payload.prestamo_id else False)
                 cedula_normalizada = (payload.cedula_cliente or "").strip().upper()
                 row = Pago(
                     cedula_cliente=cedula_normalizada,
@@ -1899,7 +1908,8 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
         )
     ref = (num_doc or "N/A")[:_MAX_LEN_NUMERO_DOCUMENTO]
     fecha_pago_ts = datetime.combine(payload.fecha_pago, dt_time.min)
-    conciliado = payload.conciliado if payload.conciliado is not None else False  # [B2] Default False
+    # Autoconciliar cuando se asigna a un préstamo y no se indica explícitamente conciliado
+    conciliado = payload.conciliado if payload.conciliado is not None else (True if payload.prestamo_id else False)
     usuario_email = current_user.email if current_user else "sistema@rapicredit.com"
     
     # Normalizar cédula: uppercase para evitar FK mismatch

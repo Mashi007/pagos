@@ -490,6 +490,9 @@ def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado,
         estado="PENDIENTE",
         referencia_pago=num_doc,
         usuario_registro=usuario_email or "cobros@rapicredit.com",
+        conciliado=True,
+        fecha_conciliacion=datetime.now(),
+        verificado_concordancia="SI",
     )
     db.add(row)
     db.flush()
