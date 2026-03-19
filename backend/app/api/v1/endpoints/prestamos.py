@@ -740,10 +740,10 @@ def _generar_cuotas_amortizacion(db: Session, p: Prestamo, fecha_base: date, num
     Genera filas en tabla cuotas para el préstamo dado.
     Regla obligatoria: fecha_base debe ser la fecha de aprobación del préstamo (única fecha para el cálculo).
 
-    Fecha de vencimiento = fecha_base + (delta * n) - 1 días:
-      - MENSUAL (30d):   cuota 1 → día 29, cuota 2 → día 59, etc.
-      - QUINCENAL (15d): cuota 1 → día 14, cuota 2 → día 29, etc.
-      - SEMANAL (7d):    cuota 1 → día 6, cuota 2 → día 13, etc.
+    Fecha de vencimiento:
+      - MENSUAL: mismo día del mes; cuota n = fecha_base + n meses (ej. 2 ene → 2 feb, 2 mar).
+      - QUINCENAL: fin de cada quincena; cuota n = fecha_base + (15*n - 1) días (ej. 1 ene → 15 ene, 30 ene, 14 feb).
+      - SEMANAL: fin de cada semana; cuota n = fecha_base + (7*n - 1) días.
 
     [C1] Cálculo del monto de cuota:
     - Si tasa_interes == 0 (o NULL): cuota plana = total_financiamiento / numero_cuotas.
@@ -756,7 +756,7 @@ def _generar_cuotas_amortizacion(db: Session, p: Prestamo, fecha_base: date, num
     se derivan en el frontend desde saldo_capital_inicial / saldo_capital_final.
     """
     modalidad = (p.modalidad_pago or "MENSUAL").upper()
-    delta_dias = 30 if modalidad == "MENSUAL" else (15 if modalidad == "QUINCENAL" else 7)
+    delta_dias = 15 if modalidad == "QUINCENAL" else (7 if modalidad == "SEMANAL" else None)
     cliente_id = p.cliente_id
     total = monto_cuota * numero_cuotas
     monto_cuota_dec = Decimal(str(round(monto_cuota, 2)))
@@ -765,6 +765,7 @@ def _generar_cuotas_amortizacion(db: Session, p: Prestamo, fecha_base: date, num
         if modalidad == "MENSUAL":
             next_date = _fecha_base_mas_meses(fecha_base, n)
         else:
+            # QUINCENAL: 15*n-1 días (1 ene → 15 ene, 30 ene, 14 feb); SEMANAL: 7*n-1
             next_date = fecha_base + timedelta(days=delta_dias * n - 1)
         saldo_inicial = Decimal(str(round(total - (n - 1) * monto_cuota, 2)))
         saldo_final = Decimal(str(round(total - n * monto_cuota, 2)))
