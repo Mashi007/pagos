@@ -78,6 +78,17 @@ export function PagosList() {
     registros_procesados: number
     registros_con_error: number
     cuotas_aplicadas?: number
+    operaciones_cuota_total?: number
+    pagos_con_aplicacion_a_cuotas?: number
+    pagos_sin_aplicacion_cuotas_total?: number
+    pagos_sin_aplicacion_cuotas_truncados?: boolean
+    pagos_sin_aplicacion_cuotas?: Array<{
+      pago_id: number | null
+      cedula_cliente: string
+      prestamo_id: number | null
+      motivo: string
+      detalle: string
+    }>
     mensaje: string
   } | null>(null)
   const [isImportingCobros, setIsImportingCobros] = useState(false)
@@ -143,16 +154,33 @@ export function PagosList() {
         registros_procesados: res.registros_procesados,
         registros_con_error: res.registros_con_error,
         cuotas_aplicadas: res.cuotas_aplicadas,
+        operaciones_cuota_total: res.operaciones_cuota_total,
+        pagos_con_aplicacion_a_cuotas: res.pagos_con_aplicacion_a_cuotas,
+        pagos_sin_aplicacion_cuotas_total: res.pagos_sin_aplicacion_cuotas_total,
+        pagos_sin_aplicacion_cuotas_truncados: res.pagos_sin_aplicacion_cuotas_truncados,
+        pagos_sin_aplicacion_cuotas: res.pagos_sin_aplicacion_cuotas,
         mensaje: res.mensaje,
       })
       await queryClient.invalidateQueries({ queryKey: ['pagos'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['pagos-kpis'], exact: false })
       await queryClient.invalidateQueries({ queryKey: ['pagos-con-errores'], exact: false })
-      const mensajeConCuotas =
-        typeof res.cuotas_aplicadas === 'number' && res.cuotas_aplicadas > 0
-          ? `${res.mensaje} ${res.cuotas_aplicadas} cuotas aplicadas a créditos.`
-          : res.mensaje
-      toast.success(mensajeConCuotas)
+      const ops =
+        typeof res.operaciones_cuota_total === 'number'
+          ? res.operaciones_cuota_total
+          : res.cuotas_aplicadas
+      const pagosArticulados = res.pagos_con_aplicacion_a_cuotas
+      const extraOps =
+        typeof ops === 'number' && ops > 0 && typeof pagosArticulados === 'number'
+          ? ` ${ops} operaciones en cuotas (${pagosArticulados} pago(s) con monto aplicado a cronograma).`
+          : ''
+      toast.success(`${res.mensaje}${extraOps}`)
+      const sinAplicar = res.pagos_sin_aplicacion_cuotas_total ?? 0
+      if (sinAplicar > 0) {
+        toast(
+          `${sinAplicar} pago(s) quedaron en tabla Pagos sin aplicar a cuotas (revisar préstamo o usar «Aplicar a cuotas»).`,
+          { duration: 8000 },
+        )
+      }
       if (res.registros_con_error > 0) {
         toast('Hay registros con error. Use el botón "Descargar Excel (errores de esta importación)" para revisarlos.', { duration: 5000 })
       }
@@ -649,7 +677,14 @@ export function PagosList() {
             <span className="text-sm text-amber-800">
               {lastImportCobrosResult.registros_procesados} importados
               {typeof lastImportCobrosResult.cuotas_aplicadas === 'number' && lastImportCobrosResult.cuotas_aplicadas > 0 && (
-                <> ({lastImportCobrosResult.cuotas_aplicadas} cuotas aplicadas)</>
+                <>
+                  {' '}
+                  ({lastImportCobrosResult.cuotas_aplicadas} operaciones en cuotas
+                  {typeof lastImportCobrosResult.pagos_con_aplicacion_a_cuotas === 'number'
+                    ? `, ${lastImportCobrosResult.pagos_con_aplicacion_a_cuotas} pago(s) con aplicación`
+                    : ''}
+                  )
+                </>
               )}
               ; {lastImportCobrosResult.registros_con_error} con error (no cumplen reglas de carga masiva). Descargue el Excel para revisar y corregir.
             </span>
@@ -667,6 +702,31 @@ export function PagosList() {
           </CardContent>
         </Card>
       )}
+      {lastImportCobrosResult &&
+        (lastImportCobrosResult.pagos_sin_aplicacion_cuotas_total ?? 0) > 0 && (
+          <Card className="border-orange-200 bg-orange-50">
+            <CardContent className="py-3 flex flex-col gap-2">
+              <span className="text-sm text-orange-900 font-medium">
+                {lastImportCobrosResult.pagos_sin_aplicacion_cuotas_total} pago(s) importado(s) sin aplicar a cuotas
+                {lastImportCobrosResult.pagos_sin_aplicacion_cuotas_truncados ? ' (lista truncada)' : ''}
+              </span>
+              <p className="text-xs text-orange-800">
+                Revise cuotas del préstamo o use «Aplicar a cuotas» en la fila del pago. Detalle:
+              </p>
+              <ul className="text-xs text-orange-900 list-disc pl-5 max-h-32 overflow-y-auto">
+                {(lastImportCobrosResult.pagos_sin_aplicacion_cuotas ?? []).map((row, i) => (
+                  <li key={`${row.pago_id ?? i}-${row.cedula_cliente}`}>
+                    {row.pago_id != null ? `#${row.pago_id}` : '—'} · {row.cedula_cliente || '—'} · préstamo{' '}
+                    {row.prestamo_id ?? '—'} · {row.motivo}: {row.detalle}
+                  </li>
+                ))}
+              </ul>
+              <Button variant="ghost" size="sm" className="self-start" onClick={() => setLastImportCobrosResult(null)}>
+                Ocultar
+              </Button>
+            </CardContent>
+          </Card>
+        )}
       {/* Pestañas: por defecto Resumen por Cliente (detalles por cliente, más reciente a más antiguo) */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="mb-4">

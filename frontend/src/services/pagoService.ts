@@ -146,7 +146,20 @@ class PagoService {
     registros_con_error: number
     errores_detalle: Array<{ referencia: string; error: string }>
     ids_pagos_con_errores: number[]
+    /** Suma de operaciones en cuotas (completadas + parciales), no cantidad de filas del cronograma. */
     cuotas_aplicadas?: number
+    operaciones_cuota_total?: number
+    pagos_con_aplicacion_a_cuotas?: number
+    pagos_sin_aplicacion_cuotas?: Array<{
+      pago_id: number | null
+      cedula_cliente: string
+      prestamo_id: number | null
+      motivo: string
+      detalle: string
+    }>
+    pagos_sin_aplicacion_cuotas_total?: number
+    pagos_sin_aplicacion_cuotas_truncados?: boolean
+    total_datos_revisar?: number
     mensaje: string
   }> {
     return await apiClient.post(`${this.baseUrl}/importar-desde-cobros`)

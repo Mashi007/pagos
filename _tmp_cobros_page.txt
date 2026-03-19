@@ -41,7 +41,6 @@ const ESTADO_CONFIG: Record<string, { label: string; short: string; variant: 'de
   pendiente: { label: 'Pendiente', short: 'Pend.', variant: 'secondary', Icon: Clock },
   en_revision: { label: 'En revisión (manual)', short: 'Revisión', variant: 'outline', Icon: Search },
   aprobado: { label: 'Aprobado', short: 'Aprobado', variant: 'default', Icon: CheckCircle },
-  importado: { label: 'Importado a Pagos', short: 'Import.', variant: 'default', Icon: CheckCircle },
   rechazado: { label: 'Rechazado', short: 'Rechazado', variant: 'destructive', Icon: XCircle },
 }
 
@@ -188,7 +187,6 @@ export default function CobrosPagosReportadosPage() {
             <option value="en_revision">En revisión</option>
             <option value="aprobado">Aprobado</option>
             <option value="rechazado">Rechazado</option>
-            <option value="importado">Importado a Pagos</option>
           </select>
           <Input
             type="date"

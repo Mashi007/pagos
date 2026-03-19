@@ -37,33 +37,6 @@ from app.core.security import decode_token, create_recibo_infopagos_token
 
 logger = logging.getLogger(__name__)
 
-def _prestamos_aprobados_del_cliente(db: Session, cliente_id: int) -> list:
-    """Misma regla que importar reportados a pagos: solo préstamos en estado APROBADO."""
-    rows = db.execute(
-        select(Prestamo)
-        .where(Prestamo.cliente_id == cliente_id, Prestamo.estado == "APROBADO")
-        .order_by(Prestamo.id)
-    ).scalars().all()
-    return [p for p in rows if p is not None]
-
-
-def _error_si_no_puede_reportar_en_web(prestamos_aprobados: list) -> Optional[str]:
-    """
-    El formulario web asigna el pago a un único préstamo APROBADO. Si hay 0 o >1, coherente con importación a pagos.
-    """
-    if len(prestamos_aprobados) == 0:
-        return (
-            "No tiene un crédito en estado APROBADO para reportar pagos en línea. "
-            "Si su crédito está en otro estado o ya fue liquidado, contacte a cobranza."
-        )
-    if len(prestamos_aprobados) > 1:
-        return (
-            "Su cédula tiene más de un crédito aprobado activo; el reporte en línea no está disponible. "
-            "Contacte a RapiCredit / cobranza para indicar a qué crédito corresponde el pago."
-        )
-    return None
-
-
 def _intentar_importar_reportado_automatico(
     db: Session,
     pr: PagoReportado,
@@ -251,8 +224,7 @@ def validar_cedula_publico(
     db: Session = Depends(get_db),
 ):
     """
-    Valida cédula (formato V/E/J + dígitos), existencia en clientes y un único préstamo APROBADO
-    (misma regla que la importación a la tabla pagos).
+    Valida cédula (formato V/E/J + dígitos) y verifica si tiene préstamo.
     Público, sin auth. Rate limit: 30 req/min por IP. Retorna nombre y correo enmascarado si ok.
     Sin límite cuando origen=infopagos (ruta /pagos/infopagos, uso interno).
     """
@@ -277,10 +249,12 @@ def validar_cedula_publico(
     ).scalars().first()
     if not cliente:
         return ValidarCedulaResponse(ok=False, error="La cédula ingresada no se encuentra registrada en nuestro sistema.")
-    prestamos_aprob = _prestamos_aprobados_del_cliente(db, cliente.id)
-    err_pres = _error_si_no_puede_reportar_en_web(prestamos_aprob)
-    if err_pres:
-        return ValidarCedulaResponse(ok=False, error=err_pres)
+    # ¿Tiene préstamo? (cualquier préstamo asociado al cliente)
+    prestamo = db.execute(
+        select(Prestamo).where(Prestamo.cliente_id == cliente.id).limit(1)
+    ).scalars().first()
+    if not prestamo:
+        return ValidarCedulaResponse(ok=False, error="La cédula no tiene un préstamo asociado en nuestro sistema.")
     # ¿Puede reportar en Bs? (lista cargada desde Excel en /pagos/pagos)
     puede_bs = db.execute(
         select(CedulaReportarBs).where(CedulaReportarBs.cedula == cedula_lookup).limit(1)
@@ -337,10 +311,9 @@ async def enviar_reporte_publico(
     ).scalars().first()
     if not cliente:
         return EnviarReporteResponse(ok=False, error="La cédula no está registrada.")
-    prestamos_aprob = _prestamos_aprobados_del_cliente(db, cliente.id)
-    err_pres = _error_si_no_puede_reportar_en_web(prestamos_aprob)
-    if err_pres:
-        return EnviarReporteResponse(ok=False, error=err_pres)
+    prestamo = db.execute(select(Prestamo).where(Prestamo.cliente_id == cliente.id).limit(1)).scalars().first()
+    if not prestamo:
+        return EnviarReporteResponse(ok=False, error="No tiene préstamo asociado.")
 
     # Límites de longitud para evitar inyección o abuso
     if len(tipo_cedula.strip()) > 2 or len(numero_cedula.strip()) > 13:
@@ -582,10 +555,9 @@ async def enviar_reporte_infopagos(
     ).scalars().first()
     if not cliente:
         return EnviarReporteInfopagosResponse(ok=False, error="La cédula no está registrada.")
-    prestamos_aprob = _prestamos_aprobados_del_cliente(db, cliente.id)
-    err_pres = _error_si_no_puede_reportar_en_web(prestamos_aprob)
-    if err_pres:
-        return EnviarReporteInfopagosResponse(ok=False, error=err_pres)
+    prestamo = db.execute(select(Prestamo).where(Prestamo.cliente_id == cliente.id).limit(1)).scalars().first()
+    if not prestamo:
+        return EnviarReporteInfopagosResponse(ok=False, error="No tiene préstamo asociado.")
     if len(tipo_cedula.strip()) > 2 or len(numero_cedula.strip()) > 13:
         return EnviarReporteInfopagosResponse(ok=False, error="Datos inválidos.")
     if len(institucion_financiera.strip()) > 100 or len(numero_operacion.strip()) > 100:

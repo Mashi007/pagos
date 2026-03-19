@@ -1014,6 +1014,12 @@ def importar_reportados_aprobados_a_pagos(
             "ids_pagos_con_errores": [],
             "total_datos_revisar": 0,
             "mensaje": "No hay pagos reportados aprobados para importar.",
+            "cuotas_aplicadas": 0,
+            "operaciones_cuota_total": 0,
+            "pagos_con_aplicacion_a_cuotas": 0,
+            "pagos_sin_aplicacion_cuotas": [],
+            "pagos_sin_aplicacion_cuotas_total": 0,
+            "pagos_sin_aplicacion_cuotas_truncados": False,
         }
 
     usuario_email = current_user.email if current_user else "sistema@rapicredit.com"
@@ -1050,25 +1056,70 @@ def importar_reportados_aprobados_a_pagos(
         )
 
 
-    cuotas_aplicadas = 0
+    operaciones_cuota_total = 0
+    pagos_con_aplicacion_a_cuotas = 0
+    pagos_sin_aplicacion_cuotas: list[dict] = []
     for p in pagos_creados:
+        pid = getattr(p, "id", None)
+        ced = (getattr(p, "cedula_cliente", None) or "") or ""
+        pr_id = getattr(p, "prestamo_id", None)
         try:
             cc, cp = _aplicar_pago_a_cuotas_interno(p, db)
             if cc > 0 or cp > 0:
                 p.estado = "PAGADO"
-            cuotas_aplicadas += cc + cp
+                operaciones_cuota_total += cc + cp
+                pagos_con_aplicacion_a_cuotas += 1
+            elif pr_id and float(p.monto_pagado or 0) > 0:
+                pagos_sin_aplicacion_cuotas.append(
+                    {
+                        "pago_id": pid,
+                        "cedula_cliente": ced,
+                        "prestamo_id": pr_id,
+                        "motivo": "sin_cuotas_afectadas",
+                        "detalle": "Ninguna cuota recibió monto; revise cuotas pendientes o use Aplicar a cuotas.",
+                    }
+                )
         except Exception as e:
-            logger.warning("Importar Cobros: no se pudo aplicar pago id=%s a cuotas: %s", getattr(p, "id", "?"), e)
+            logger.warning(
+                "Importar Cobros: no se pudo aplicar pago id=%s a cuotas: %s",
+                getattr(p, "id", "?"),
+                e,
+            )
+            pagos_sin_aplicacion_cuotas.append(
+                {
+                    "pago_id": pid,
+                    "cedula_cliente": ced,
+                    "prestamo_id": pr_id,
+                    "motivo": "error",
+                    "detalle": str(e),
+                }
+            )
     db.commit()
     total_datos_revisar = db.execute(select(func.count()).select_from(DatosImportadosConErrores)).scalar() or 0
+    n_sin_aplicacion = len(pagos_sin_aplicacion_cuotas)
+    _limite_sin_aplicacion = 50
+    mensaje_base = (
+        f"Importados {registros_procesados} pagos desde Cobros; "
+        f"{len(ids_pagos_con_errores)} con error (revisar: descargar Excel)."
+    )
+    if n_sin_aplicacion > 0:
+        mensaje_base += (
+            f" Atención: {n_sin_aplicacion} pago(s) creado(s) pero sin aplicar a cuotas "
+            "(error o sin cuotas pendientes según reglas); use Aplicar a cuotas o revise el préstamo."
+        )
     return {
         "registros_procesados": registros_procesados,
         "registros_con_error": len(ids_pagos_con_errores),
         "errores_detalle": errores_detalle[:100],
         "ids_pagos_con_errores": ids_pagos_con_errores,
-        "cuotas_aplicadas": cuotas_aplicadas,
+        "cuotas_aplicadas": operaciones_cuota_total,
+        "operaciones_cuota_total": operaciones_cuota_total,
+        "pagos_con_aplicacion_a_cuotas": pagos_con_aplicacion_a_cuotas,
+        "pagos_sin_aplicacion_cuotas": pagos_sin_aplicacion_cuotas[:_limite_sin_aplicacion],
+        "pagos_sin_aplicacion_cuotas_total": n_sin_aplicacion,
+        "pagos_sin_aplicacion_cuotas_truncados": n_sin_aplicacion > _limite_sin_aplicacion,
         "total_datos_revisar": total_datos_revisar,
-        "mensaje": f"Importados {registros_procesados} pagos desde Cobros; {len(ids_pagos_con_errores)} con error (revisar: descargar Excel).",
+        "mensaje": mensaje_base,
     }
 
 

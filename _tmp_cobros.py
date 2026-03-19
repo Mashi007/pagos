@@ -14,7 +14,6 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select, func, or_, and_, case
 
 from app.core.database import get_db
-from app.core.documento import normalize_documento
 from app.core.deps import get_current_user
 from app.models.pago_reportado import PagoReportado, PagoReportadoHistorial
 from app.models.cedula_reportar_bs import CedulaReportarBs
@@ -199,8 +198,7 @@ def _observacion_reglas_carga(
         if moneda == "BS" and cedula_norm and cedula_norm not in cedulas_bolivares:
             partes.append("Monto: solo Bs si está en lista Bolívares")
         num_op = (r.numero_operacion or "").strip()
-        n_doc = normalize_documento(num_op) if num_op else None
-        if n_doc and n_doc in numeros_doc_en_pagos:
+        if num_op and num_op in numeros_doc_en_pagos:
             partes.append("DUPLICADO DOC")
         result.append(partes)
     return result
@@ -286,14 +284,13 @@ def list_pagos_reportados(
         for row in list_bs if row[0]
     }
 
-    num_ops_raw = list({(r.numero_operacion or "").strip() for r in rows if (r.numero_operacion or "").strip()})
-    norms_for_query = {n for o in num_ops_raw for n in [normalize_documento(o)] if n}
+    num_ops = list({(r.numero_operacion or "").strip() for r in rows if (r.numero_operacion or "").strip()})
     numeros_doc_en_pagos = set()
-    if norms_for_query:
+    if num_ops:
         existing_docs = db.execute(
-            select(Pago.numero_documento).where(Pago.numero_documento.in_(list(norms_for_query)))
+            select(Pago.numero_documento).where(Pago.numero_documento.in_(num_ops))
         ).scalars().all()
-        numeros_doc_en_pagos = {str(d) for d in existing_docs if d}
+        numeros_doc_en_pagos = {row[0] for row in existing_docs if row[0]}
 
     partes_por_fila = _observacion_reglas_carga(
         db, rows, cedulas_en_clientes, cedulas_bolivares, numeros_doc_en_pagos
