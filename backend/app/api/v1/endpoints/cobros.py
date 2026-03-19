@@ -121,6 +121,30 @@ def _observacion_solo_columnas(raw: Optional[str]) -> Optional[str]:
     return ", ".join(columnas) if columnas else raw[:100]
 
 
+def _observacion_reglas_carga(
+    db: Session,
+    rows: list,
+    cedulas_en_clientes: set,
+    cedulas_bolivares: set,
+    numeros_doc_en_pagos: set,
+) -> list:
+    """Para cada fila de pagos_reportados, devuelve lista de observaciones por reglas: NO CLIENTES, Monto (Bs no autorizado), DUPLICADO DOC."""
+    result = []
+    for r in rows:
+        partes = []
+        cedula_norm = ((r.tipo_cedula or "") + (r.numero_cedula or "")).replace("-", "").replace(" ", "").strip().upper()
+        if cedula_norm and cedula_norm not in cedulas_en_clientes:
+            partes.append("NO CLIENTES")
+        moneda = (r.moneda or "BS").strip().upper()
+        if moneda == "BS" and cedula_norm and cedula_norm not in cedulas_bolivares:
+            partes.append("Monto: solo Bs si está en lista Bolívares")
+        num_op = (r.numero_operacion or "").strip()
+        if num_op and num_op in numeros_doc_en_pagos:
+            partes.append("DUPLICADO DOC")
+        result.append(partes)
+    return result
+
+
 @router.get("/pagos-reportados", response_model=dict)
 def list_pagos_reportados(
     db: Session = Depends(get_db),
@@ -177,8 +201,44 @@ def list_pagos_reportados(
     ).offset((page - 1) * per_page).limit(per_page)
     rows = db.execute(q).scalars().all()
 
+    # Conjuntos para reglas de observación al cargar (cédula en clientes, lista Bs, duplicado en pagos)
+    cedula_norms = [
+        ((r.tipo_cedula or "") + (r.numero_cedula or "")).replace("-", "").replace(" ", "").strip().upper()
+        for r in rows
+    ]
+    unique_cedulas = set(c for c in cedula_norms if c)
+    cedulas_en_clientes = set()
+    if unique_cedulas:
+        cedula_lookup = func.upper(func.replace(func.replace(Cliente.cedula, "-", ""), " ", ""))
+        existing = db.execute(
+            select(cedula_lookup).select_from(Cliente).where(cedula_lookup.in_(unique_cedulas))
+        ).scalars().all()
+        cedulas_en_clientes = {row[0] for row in existing if row[0]}
+
+    cedulas_bolivares = set()
+    list_bs = db.execute(select(CedulaReportarBs.cedula)).scalars().all()
+    cedulas_bolivares = {
+        (row[0] or "").strip().upper().replace("-", "").replace(" ", "")
+        for row in list_bs if row[0]
+    }
+
+    num_ops = list({(r.numero_operacion or "").strip() for r in rows if (r.numero_operacion or "").strip()})
+    numeros_doc_en_pagos = set()
+    if num_ops:
+        existing_docs = db.execute(
+            select(Pago.numero_documento).where(Pago.numero_documento.in_(num_ops))
+        ).scalars().all()
+        numeros_doc_en_pagos = {row[0] for row in existing_docs if row[0]}
+
+    partes_por_fila = _observacion_reglas_carga(
+        db, rows, cedulas_en_clientes, cedulas_bolivares, numeros_doc_en_pagos
+    )
+
     items = []
-    for r in rows:
+    for i, r in enumerate(rows):
+        obs_gemini = _observacion_solo_columnas(r.gemini_comentario)
+        partes_reglas = partes_por_fila[i] if i < len(partes_por_fila) else []
+        observacion = " / ".join(filter(None, [obs_gemini] + partes_reglas)) if (obs_gemini or partes_reglas) else None
         items.append(PagoReportadoListItem(
             id=r.id,
             referencia_interna=r.referencia_interna,
@@ -193,7 +253,7 @@ def list_pagos_reportados(
             fecha_reporte=r.created_at,
             estado=r.estado,
             gemini_coincide_exacto=r.gemini_coincide_exacto,
-            observacion=_observacion_solo_columnas(r.gemini_comentario),
+            observacion=observacion,
             correo_enviado_a=r.correo_enviado_a,
             tiene_recibo_pdf=bool(r.recibo_pdf),
         ))
@@ -318,6 +378,7 @@ def _registrar_historial(db: Session, pago_id: int, estado_anterior: str, estado
 
 def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado, usuario_email: Optional[str]) -> None:
     """Tras aprobar un pago reportado: crea registro en tabla pagos y aplica a cuotas (FIFO) para que prestamos y estado de cuenta se actualicen. Debe llamarse ANTES de commit; si falla lanza HTTPException."""
+    _rechazar_si_numero_operacion_duplicado(db, pr.numero_operacion)
     cedula_norm = ((pr.tipo_cedula or "") + (pr.numero_cedula or "")).replace("-", "").replace(" ", "").strip().upper()
     if not cedula_norm:
         raise HTTPException(status_code=400, detail="Cédula del reporte vacía; no se puede crear el pago en préstamos.")
@@ -626,6 +687,19 @@ class EditarPagoReportadoBody(BaseModel):
     observacion: Optional[str] = None
 
 
+def _rechazar_si_numero_operacion_duplicado(db: Session, numero_operacion: str) -> None:
+    """Si el número de operación ya existe en tabla pagos (numero_documento), lanza HTTPException 400. Nunca se permite guardar duplicado."""
+    num_op = (numero_operacion or "").strip()
+    if not num_op:
+        return
+    existe = db.execute(select(Pago.id).where(Pago.numero_documento == num_op)).scalar() is not None
+    if existe:
+        raise HTTPException(
+            status_code=400,
+            detail="Número de operación duplicado. No se permite guardar. Ya existe un pago con ese documento.",
+        )
+
+
 def _normalizar_cedula_editar(tipo: Optional[str], numero: Optional[str]) -> Tuple[str, str]:
     """Devuelve (tipo, numero) normalizados; si solo viene numero con 6-11 dígitos, antepone V."""
     if tipo is None and numero is None:
@@ -699,6 +773,9 @@ def editar_pago_reportado(
         pr.correo_enviado_a = (body.correo_enviado_a or "").strip()[:255] or None
     if body.observacion is not None:
         pr.observacion = (body.observacion or "").strip()[:500] or None
+
+    # Número de operación: nunca permitir duplicado en tabla pagos
+    _rechazar_si_numero_operacion_duplicado(db, pr.numero_operacion)
 
     # Si la moneda queda en BS, la cédula debe estar en la lista de autorizadas para Bolívares
     moneda_final = (pr.moneda or "").strip().upper()
