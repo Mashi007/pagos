@@ -304,11 +304,19 @@ export default function CobrosPagosReportadosPage() {
                         <span className="block truncate font-mono text-xs" title={row.numero_operacion}>{row.numero_operacion}</span>
                       </td>
                       <td className="py-3 px-3 align-top whitespace-nowrap">{new Date(row.fecha_reporte).toLocaleDateString()}</td>
-                      <td className={`py-3 px-3 align-top min-w-0 ${/bol[ií]vares/i.test(row.observacion || '') ? 'bg-amber-50' : ''}`} title={row.observacion ?? ''}>
+                      <td
+                        className="py-3 px-3 align-top min-w-0"
+                        title={
+                          /NO CLIENTES/i.test(row.observacion || '')
+                            ? `NO CLIENTES: la cédula del reporte (${row.cedula_display}) no figura en la tabla clientes. Se compara normalizada (sin guión, sin ceros a la izquierda). Verifique en Préstamos > Clientes o registre al cliente.`
+                            : /solo Bs|Bolívares/i.test(row.observacion || '')
+                              ? 'Monto en Bs: solo está permitido si la cédula está en la lista de autorizadas para Bolívares (tabla cedulas_reportar_bs). Si no está, use USD o agregue la cédula a la lista en Configuración.'
+                              : (row.observacion ?? '')
+                        }
+                      >
                         {row.observacion ? (
                           <span className={`text-xs line-clamp-2 ${
-                            /bol[ií]vares.*no autorizada/i.test(row.observacion || '') ? 'text-amber-800 font-medium' :
-                            /c[eé]dula/i.test(row.observacion || '') ? 'text-destructive font-medium' : 'text-amber-700'
+                            /NO CLIENTES/i.test(row.observacion || '') ? 'text-destructive font-medium' : 'text-muted-foreground'
                           }`}>{row.observacion}</span>
                         ) : '—'}
                       </td>
