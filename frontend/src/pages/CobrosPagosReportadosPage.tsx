@@ -214,7 +214,7 @@ export default function CobrosPagosReportadosPage() {
             onChange={(e) => setInstitucion(e.target.value)}
             className="w-48"
           />
-          <Button onClick={load}>Buscar</Button>
+          <Button onClick={() => load()}>Buscar</Button>
         </CardContent>
       </Card>
 
