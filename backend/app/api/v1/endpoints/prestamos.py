@@ -30,6 +30,7 @@ from app.models.user import User
 from app.models.revision_manual_prestamo import RevisionManualPrestamo
 from app.schemas.prestamo import PrestamoCreate, PrestamoResponse, PrestamoUpdate, PrestamoListResponse
 from app.api.v1.endpoints.pagos import aplicar_pagos_pendientes_prestamo
+from app.services.pagos_cuotas_sincronizacion import sincronizar_pagos_pendientes_a_prestamos
 from app.services.cobros.recibo_cuota_amortizacion import generar_recibo_cuota_amortizacion
 from app.services.cuota_estado import estado_cuota_para_mostrar
 
@@ -805,9 +806,8 @@ def get_cuotas_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
 
     # Aplicar a cuotas cualquier pago conciliado del préstamo que aún no tenga enlaces (cuota_pagos).
     # Corrige el caso donde el pago existía pero nunca se ejecutó "aplicar a cuotas".
-    n_aplicados = aplicar_pagos_pendientes_prestamo(prestamo_id, db)
+    n_aplicados = sincronizar_pagos_pendientes_a_prestamos(db, [prestamo_id])
     if n_aplicados > 0:
-        db.commit()
         logger.info("get_cuotas_prestamo: aplicados %s pago(s) pendientes al préstamo %s", n_aplicados, prestamo_id)
 
     # Obtener todas las cuotas del préstamo (tras posible aplicación, para devolver datos actualizados)

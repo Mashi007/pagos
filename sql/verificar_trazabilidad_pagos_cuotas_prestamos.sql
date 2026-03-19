@@ -1,3 +1,4 @@
+-- Ver tambien: regularizar_total_pagado_desde_cuota_pagos.sql (ajustar total_pagado desde cuota_pagos).
 -- =============================================================================
 -- Verificación del mecanismo de trazabilidad: orden e integración
 --   pagos → cuota_pagos → cuotas → préstamos

@@ -878,6 +878,116 @@ async def upload_excel_pagos(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
+def importar_un_pago_reportado_a_pagos(
+    db: Session,
+    pr: PagoReportado,
+    *,
+    usuario_email: str,
+    documentos_ya_en_bd: set[str],
+    docs_en_lote: set[str],
+    registrar_error_en_tabla: bool = True,
+) -> dict:
+    """
+    Crea un Pago desde un PagoReportado con las mismas validaciones que importar-desde-cobros.
+    No hace commit ni aplica a cuotas (el lote o el caller aplican después).
+    Retorna {"ok": True, "pago": Pago} o {"ok": False, "error": str, "referencia": ..., "pce_id": int|None}.
+    """
+    ref_display = (pr.referencia_interna or "").strip()[:100] or None
+
+    def _err(msg: str) -> dict:
+        return {"ok": False, "error": msg, "referencia": pr.referencia_interna, "pce_id": None}
+
+    def _err_con_pce(msg: str, **pce_kw) -> dict:
+        if not registrar_error_en_tabla:
+            return _err(msg)
+        ref = (pr.referencia_interna or "").strip()[:100] or "N/A"
+        pce = DatosImportadosConErrores(
+            cedula_cliente=pce_kw.get("cedula_cliente", ""),
+            prestamo_id=pce_kw.get("prestamo_id"),
+            fecha_pago=datetime.combine(pr.fecha_pago, dt_time.min) if pr.fecha_pago else datetime.now(),
+            monto_pagado=float(pr.monto or 0),
+            numero_documento=(pr.referencia_interna or "")[:100],
+            estado="PENDIENTE",
+            referencia_pago=ref,
+            errores_descripcion=[msg],
+            observaciones=ORIGEN_COBROS_REPORTADOS,
+            referencia_interna=(pr.referencia_interna or "")[:100] or None,
+            fila_origen=pr.id,
+        )
+        db.add(pce)
+        db.flush()
+        return {"ok": False, "error": msg, "referencia": pr.referencia_interna, "pce_id": pce.id}
+
+    cedula_raw = f"{pr.tipo_cedula or ''}{pr.numero_cedula or ''}".replace("-", "").strip().upper()
+    if not cedula_raw:
+        return _err_con_pce("Cédula vacía", cedula_cliente="")
+
+    if not _looks_like_cedula_inline(cedula_raw):
+        return _err_con_pce(
+            "Cédula inválida. Formato: V, E o J + 6-11 dígitos (igual que Pagos desde Excel).",
+            cedula_cliente=cedula_raw,
+        )
+
+    numero_doc_raw = (pr.referencia_interna or "").strip()[:100]
+    numero_doc_norm = normalize_documento(numero_doc_raw)
+    if numero_doc_norm and numero_doc_norm in documentos_ya_en_bd:
+        return _err_con_pce("Ya existe un pago con ese Nº documento (duplicado en BD)", cedula_cliente=cedula_raw)
+    if numero_doc_norm and numero_doc_norm in docs_en_lote:
+        return _err_con_pce("Nº documento duplicado en este lote", cedula_cliente=cedula_raw)
+
+    cliente = db.execute(
+        select(Cliente).where(func.replace(Cliente.cedula, "-", "") == cedula_raw)
+    ).scalars().first()
+    if not cliente:
+        return _err_con_pce("Cédula no encontrada en clientes", cedula_cliente=cedula_raw)
+
+    prestamos = db.execute(
+        select(Prestamo)
+        .where(Prestamo.cliente_id == cliente.id, Prestamo.estado == "APROBADO")
+        .order_by(Prestamo.id)
+    ).scalars().all()
+    prestamos = [p for p in prestamos if p is not None]
+    if len(prestamos) == 0:
+        return _err_con_pce("Sin crédito activo (APROBADO)", cedula_cliente=cedula_raw)
+    if len(prestamos) > 1:
+        return _err_con_pce(
+            f"Cédula con {len(prestamos)} préstamos; indique ID del crédito",
+            cedula_cliente=cedula_raw,
+        )
+
+    prestamo_id = prestamos[0].id
+    monto = float(pr.monto or 0)
+    if monto < _MIN_MONTO_PAGADO:
+        return _err_con_pce(
+            f"Monto debe ser mayor a {_MIN_MONTO_PAGADO}",
+            cedula_cliente=cedula_raw,
+            prestamo_id=prestamo_id,
+        )
+
+    ref_pago = (numero_doc_norm or numero_doc_raw or "Cobros")[:_MAX_LEN_NUMERO_DOCUMENTO]
+    ahora_imp = datetime.now(ZoneInfo(TZ_NEGOCIO))
+    p = Pago(
+        cedula_cliente=cedula_raw,
+        prestamo_id=prestamo_id,
+        fecha_pago=datetime.combine(pr.fecha_pago, dt_time.min) if pr.fecha_pago else datetime.now(),
+        monto_pagado=Decimal(str(round(monto, 2))),
+        numero_documento=numero_doc_norm,
+        estado="PENDIENTE",
+        referencia_pago=ref_pago,
+        usuario_registro=usuario_email,
+        conciliado=True,
+        fecha_conciliacion=ahora_imp,
+        verificado_concordancia="SI",
+    )
+    db.add(p)
+    db.flush()
+    if numero_doc_norm:
+        docs_en_lote.add(numero_doc_norm)
+        documentos_ya_en_bd.add(numero_doc_norm)
+    return {"ok": True, "pago": p, "referencia": ref_display, "pce_id": None}
+
+
+
 ORIGEN_COBROS_REPORTADOS = "Cobros (reportados aprobados)"
 
 
@@ -920,204 +1030,25 @@ def importar_reportados_aprobados_a_pagos(
     pagos_creados: list[Pago] = []
 
     for pr in reportados:
-        cedula_raw = f"{pr.tipo_cedula or ''}{pr.numero_cedula or ''}".replace("-", "").strip().upper()
-        if not cedula_raw:
-            ref = (pr.referencia_interna or "").strip()[:100] or "N/A"
-            pce = DatosImportadosConErrores(
-                cedula_cliente="",
-                prestamo_id=None,
-                fecha_pago=datetime.combine(pr.fecha_pago, dt_time.min) if pr.fecha_pago else datetime.now(),
-                monto_pagado=float(pr.monto or 0),
-                numero_documento=(pr.referencia_interna or "")[:100],
-                estado="PENDIENTE",
-                referencia_pago=ref,
-                errores_descripcion=["Cédula vacía"],
-                observaciones=ORIGEN_COBROS_REPORTADOS,
-                referencia_interna=(pr.referencia_interna or "")[:100] or None,
-                                fila_origen=pr.id,
-            )
-            db.add(pce)
-            db.flush()
-            ids_pagos_con_errores.append(pce.id)
-            errores_detalle.append({"referencia": pr.referencia_interna, "error": "Cédula vacía"})
-            continue
-
-        # Mismo validador que Pagos desde Excel: cédula V/E/J + 6-11 dígitos
-        if not _looks_like_cedula_inline(cedula_raw):
-            ref = (pr.referencia_interna or "").strip()[:100] or "N/A"
-            pce = DatosImportadosConErrores(
-                cedula_cliente=cedula_raw,
-                prestamo_id=None,
-                fecha_pago=datetime.combine(pr.fecha_pago, dt_time.min) if pr.fecha_pago else datetime.now(),
-                monto_pagado=float(pr.monto or 0),
-                numero_documento=(pr.referencia_interna or "")[:100],
-                estado="PENDIENTE",
-                referencia_pago=ref,
-                errores_descripcion=["Cédula inválida. Formato: V, E o J + 6-11 dígitos (igual que Pagos desde Excel)."],
-                observaciones=ORIGEN_COBROS_REPORTADOS,
-                referencia_interna=(pr.referencia_interna or "")[:100] or None,
-                                fila_origen=pr.id,
-            )
-            db.add(pce)
-            db.flush()
-            ids_pagos_con_errores.append(pce.id)
-            errores_detalle.append({"referencia": pr.referencia_interna, "error": "Cédula inválida (V/E/J + 6-11 dígitos)"})
-            continue
-
-        numero_doc_raw = (pr.referencia_interna or "").strip()[:100]
-        numero_doc_norm = normalize_documento(numero_doc_raw)
-        if numero_doc_norm and numero_doc_norm in documentos_ya_en_bd:
-            pce = DatosImportadosConErrores(
-                cedula_cliente=cedula_raw,
-                prestamo_id=None,
-                fecha_pago=datetime.combine(pr.fecha_pago, dt_time.min) if pr.fecha_pago else datetime.now(),
-                monto_pagado=float(pr.monto or 0),
-                numero_documento=numero_doc_raw,
-                estado="PENDIENTE",
-                referencia_pago=numero_doc_raw or "N/A",
-                errores_descripcion=["Ya existe un pago con ese Nº documento (duplicado en BD)"],
-                observaciones=ORIGEN_COBROS_REPORTADOS,
-                referencia_interna=(pr.referencia_interna or "")[:100] or None,
-                fila_origen=pr.id,
-            )
-            db.add(pce)
-            db.flush()
-            ids_pagos_con_errores.append(pce.id)
-            errores_detalle.append({"referencia": pr.referencia_interna, "error": "Ya existe un pago con ese Nº documento (duplicado)"})
-            continue
-        if numero_doc_norm and numero_doc_norm in docs_en_lote:
-            pce = DatosImportadosConErrores(
-                cedula_cliente=cedula_raw,
-                prestamo_id=None,
-                fecha_pago=datetime.combine(pr.fecha_pago, dt_time.min) if pr.fecha_pago else datetime.now(),
-                monto_pagado=float(pr.monto or 0),
-                numero_documento=numero_doc_raw,
-                estado="PENDIENTE",
-                referencia_pago=numero_doc_raw or "N/A",
-                errores_descripcion=["Nº documento duplicado en este lote"],
-                observaciones=ORIGEN_COBROS_REPORTADOS,
-                referencia_interna=(pr.referencia_interna or "")[:100] or None,
-                                fila_origen=pr.id,
-            )
-            db.add(pce)
-            db.flush()
-            ids_pagos_con_errores.append(pce.id)
-            errores_detalle.append({"referencia": pr.referencia_interna, "error": "Nº documento duplicado en este lote"})
-            continue
-
-        # Búsqueda que acepta cédula con o sin guión en BD (normalizar para comparar)
-        cliente = db.execute(
-            select(Cliente).where(func.replace(Cliente.cedula, "-", "") == cedula_raw)
-        ).scalars().first()
-        if not cliente:
-            pce = DatosImportadosConErrores(
-                cedula_cliente=cedula_raw,
-                prestamo_id=None,
-                fecha_pago=datetime.combine(pr.fecha_pago, dt_time.min) if pr.fecha_pago else datetime.now(),
-                monto_pagado=float(pr.monto or 0),
-                numero_documento=numero_doc_raw,
-                estado="PENDIENTE",
-                referencia_pago=numero_doc_raw or "N/A",
-                errores_descripcion=["Cédula no encontrada en clientes"],
-                observaciones=ORIGEN_COBROS_REPORTADOS,
-                referencia_interna=(pr.referencia_interna or "")[:100] or None,
-                                fila_origen=pr.id,
-            )
-            db.add(pce)
-            db.flush()
-            ids_pagos_con_errores.append(pce.id)
-            errores_detalle.append({"referencia": pr.referencia_interna, "error": "Cédula no encontrada en clientes"})
-            continue
-
-        prestamos = db.execute(
-            select(Prestamo)
-            .where(Prestamo.cliente_id == cliente.id, Prestamo.estado == "APROBADO")
-            .order_by(Prestamo.id)
-        ).scalars().all()
-        prestamos = [p for p in prestamos if p is not None]
-        if len(prestamos) == 0:
-            pce = DatosImportadosConErrores(
-                cedula_cliente=cedula_raw,
-                prestamo_id=None,
-                fecha_pago=datetime.combine(pr.fecha_pago, dt_time.min) if pr.fecha_pago else datetime.now(),
-                monto_pagado=float(pr.monto or 0),
-                numero_documento=numero_doc_raw,
-                estado="PENDIENTE",
-                referencia_pago=numero_doc_raw or "N/A",
-                errores_descripcion=["Sin crédito activo (APROBADO)"],
-                observaciones=ORIGEN_COBROS_REPORTADOS,
-                referencia_interna=(pr.referencia_interna or "")[:100] or None,
-                                fila_origen=pr.id,
-            )
-            db.add(pce)
-            db.flush()
-            ids_pagos_con_errores.append(pce.id)
-            errores_detalle.append({"referencia": pr.referencia_interna, "error": "Sin crédito activo"})
-            continue
-        if len(prestamos) > 1:
-            pce = DatosImportadosConErrores(
-                cedula_cliente=cedula_raw,
-                prestamo_id=None,
-                fecha_pago=datetime.combine(pr.fecha_pago, dt_time.min) if pr.fecha_pago else datetime.now(),
-                monto_pagado=float(pr.monto or 0),
-                numero_documento=numero_doc_raw,
-                estado="PENDIENTE",
-                referencia_pago=numero_doc_raw or "N/A",
-                errores_descripcion=[f"Cédula con {len(prestamos)} préstamos; indique ID del crédito"],
-                observaciones=ORIGEN_COBROS_REPORTADOS,
-                referencia_interna=(pr.referencia_interna or "")[:100] or None,
-                                fila_origen=pr.id,
-            )
-            db.add(pce)
-            db.flush()
-            ids_pagos_con_errores.append(pce.id)
-            errores_detalle.append({"referencia": pr.referencia_interna, "error": "Más de un préstamo; indique ID"})
-            continue
-
-        prestamo_id = prestamos[0].id
-        monto = float(pr.monto or 0)
-        if monto < _MIN_MONTO_PAGADO:
-            pce = DatosImportadosConErrores(
-                cedula_cliente=cedula_raw,
-                prestamo_id=prestamo_id,
-                fecha_pago=datetime.combine(pr.fecha_pago, dt_time.min) if pr.fecha_pago else datetime.now(),
-                monto_pagado=monto,
-                numero_documento=numero_doc_raw,
-                estado="PENDIENTE",
-                referencia_pago=numero_doc_raw or "N/A",
-                errores_descripcion=[f"Monto debe ser mayor a {_MIN_MONTO_PAGADO}"],
-                observaciones=ORIGEN_COBROS_REPORTADOS,
-                referencia_interna=(pr.referencia_interna or "")[:100] or None,
-                                fila_origen=pr.id,
-            )
-            db.add(pce)
-            db.flush()
-            ids_pagos_con_errores.append(pce.id)
-            errores_detalle.append({"referencia": pr.referencia_interna, "error": "Monto inválido"})
-            continue
-
-        ref_pago = (numero_doc_norm or numero_doc_raw or "Cobros")[:_MAX_LEN_NUMERO_DOCUMENTO]
-        ahora_imp = datetime.now(ZoneInfo(TZ_NEGOCIO))
-        p = Pago(
-            cedula_cliente=cedula_raw,
-            prestamo_id=prestamo_id,
-            fecha_pago=datetime.combine(pr.fecha_pago, dt_time.min) if pr.fecha_pago else datetime.now(),
-            monto_pagado=Decimal(str(round(monto, 2))),
-            numero_documento=numero_doc_norm,
-            estado="PENDIENTE",
-            referencia_pago=ref_pago,
-            usuario_registro=usuario_email,
-            conciliado=True,
-            fecha_conciliacion=ahora_imp,
-            verificado_concordancia="SI",
+        res = importar_un_pago_reportado_a_pagos(
+            db,
+            pr,
+            usuario_email=usuario_email,
+            documentos_ya_en_bd=documentos_ya_en_bd,
+            docs_en_lote=docs_en_lote,
+            registrar_error_en_tabla=True,
         )
-        db.add(p)
-        db.flush()
-        if numero_doc_norm:
-            docs_en_lote.add(numero_doc_norm)
-            documentos_ya_en_bd.add(numero_doc_norm)
-        registros_procesados += 1
-        pagos_creados.append(p)
+        if res.get("ok"):
+            registros_procesados += 1
+            pagos_creados.append(res["pago"])
+            continue
+        pce_id = res.get("pce_id")
+        if pce_id is not None:
+            ids_pagos_con_errores.append(pce_id)
+        errores_detalle.append(
+            {"referencia": res.get("referencia"), "error": res.get("error", "Error")}
+        )
+
 
     cuotas_aplicadas = 0
     for p in pagos_creados:

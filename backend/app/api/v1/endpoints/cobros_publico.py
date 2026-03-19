@@ -37,6 +37,59 @@ from app.core.security import decode_token, create_recibo_infopagos_token
 
 logger = logging.getLogger(__name__)
 
+def _intentar_importar_reportado_automatico(
+    db: Session,
+    pr: PagoReportado,
+    referencia: str,
+    log_tag: str,
+) -> None:
+    """
+    Si el reporte quedó en estado aprobado: crea Pago (mismas reglas que importar-desde-cobros),
+    aplica a cuotas y marca el reporte como importado. Fallos solo en log (no rompe la respuesta al cliente).
+    """
+    if pr is None or getattr(pr, "estado", None) != "aprobado":
+        return
+    try:
+        from app.models.pago import Pago
+        from app.core.documento import normalize_documento
+        from app.api.v1.endpoints.pagos import importar_un_pago_reportado_a_pagos, _aplicar_pago_a_cuotas_interno
+
+        db.refresh(pr)
+        doc_raw = (pr.referencia_interna or "").strip()[:100]
+        doc_norm = normalize_documento(doc_raw)
+        docs_bd: set[str] = set()
+        if doc_norm:
+            row = db.execute(select(Pago.numero_documento).where(Pago.numero_documento == doc_norm)).scalars().first()
+            if row:
+                docs_bd.add(str(row))
+        usuario = "infopagos@rapicredit" if log_tag == "INFOPAGOS" else "cobros-publico@rapicredit"
+        res = importar_un_pago_reportado_a_pagos(
+            db,
+            pr,
+            usuario_email=usuario,
+            documentos_ya_en_bd=docs_bd,
+            docs_en_lote=set(),
+            registrar_error_en_tabla=False,
+        )
+        if not res.get("ok"):
+            logger.warning("[%s] Auto-import ref=%s omitido: %s", log_tag, referencia, res.get("error"))
+            return
+        pago = res["pago"]
+        cc, cp = _aplicar_pago_a_cuotas_interno(pago, db)
+        if cc > 0 or cp > 0:
+            pago.estado = "PAGADO"
+        pr.estado = "importado"
+        db.commit()
+        logger.info("[%s] Auto-import OK ref=%s pago_id=%s", log_tag, referencia, getattr(pago, "id", None))
+    except Exception as e:
+        logger.warning("[%s] Auto-import fallo ref=%s: %s", log_tag, referencia, e)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+
+
 router = APIRouter(dependencies=[])  # Sin get_current_user
 
 # Tipos de archivo permitidos para comprobante
@@ -417,6 +470,7 @@ async def enviar_reporte_publico(
             pr.estado = "en_revision"
 
         db.commit()
+        _intentar_importar_reportado_automatico(db, pr, referencia, "COBROS_PUBLIC")
 
         return EnviarReporteResponse(
             ok=True,
@@ -634,6 +688,7 @@ async def enviar_reporte_infopagos(
                 logger.error("[INFOPAGOS] Recibo ref=%s: correo NO enviado a %s. Error: %s.", referencia, to_email, err_mail or "desconocido")
         recibo_token = create_recibo_infopagos_token(pr.id, expire_hours=2)
         db.commit()
+        _intentar_importar_reportado_automatico(db, pr, referencia, "INFOPAGOS")
         return EnviarReporteInfopagosResponse(
             ok=True,
             referencia_interna=referencia,

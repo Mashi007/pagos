@@ -43,7 +43,7 @@ from app.core.email_config_holder import get_email_activo_servicio
 from app.services.estado_cuenta_pdf import generar_pdf_estado_cuenta
 from app.services.cuota_estado import estado_cuota_para_mostrar
 from app.services.cobros.recibo_cuota_amortizacion import generar_recibo_cuota_amortizacion
-from app.api.v1.endpoints.pagos import aplicar_pagos_pendientes_prestamo
+from app.services.pagos_cuotas_sincronizacion import sincronizar_pagos_pendientes_a_prestamos
 
 logger = logging.getLogger(__name__)
 
@@ -118,16 +118,6 @@ def _cedula_lookup(cedula_input: str) -> str:
     return valor.replace("-", "") if valor else ""
 
 
-
-def _sincronizar_pagos_a_cuotas_prestamos(db: Session, prestamo_ids: List[int]) -> None:
-    """Aplica pagos conciliados o verificado SI sin cuota_pagos; commit si hubo cambios (mismo efecto que GET cuotas)."""
-    if not prestamo_ids:
-        return
-    n = 0
-    for pid in prestamo_ids:
-        n += aplicar_pagos_pendientes_prestamo(pid, db)
-    if n > 0:
-        db.commit()
 
 def _obtener_recibos_cliente(db: Session, cedula_lookup: str) -> List[dict]:
     """Pagos reportados del cliente (cedula sin guion) con recibo PDF, para enlaces en estado de cuenta."""
@@ -230,7 +220,7 @@ def _obtener_datos_pdf(db: Session, cedula_lookup: str):
             "total_financiamiento": float(getattr(p, "total_financiamiento", 0) or 0),
             "estado": getattr(p, "estado", None) or "",
         })
-    _sincronizar_pagos_a_cuotas_prestamos(db, prestamo_ids)
+    sincronizar_pagos_pendientes_a_prestamos(db, prestamo_ids)
     cuotas_pendientes = []
     total_pendiente = 0.0
     fecha_corte = date.today()
@@ -684,85 +674,22 @@ def solicitar_estado_cuenta(
     if not cedula_lookup:
         return SolicitarEstadoCuentaResponse(ok=False, error="Formato de cédula no reconocido.")
 
-    cliente_row = db.execute(
-        select(Cliente).where(func.replace(Cliente.cedula, "-", "") == cedula_lookup)
-    ).scalars().first()
-    if not cliente_row:
+    datos = _obtener_datos_pdf(db, cedula_lookup)
+    if not datos:
         return SolicitarEstadoCuentaResponse(
             ok=False,
             error="La cédula no se encuentra registrada.",
         )
-    cliente = cliente_row[0] if hasattr(cliente_row, "__getitem__") else cliente_row
-    cliente_id = getattr(cliente, "id", None)
-    nombre = (getattr(cliente, "nombres", None) or "").strip()
-    email = (getattr(cliente, "email", None) or "").strip()
-    cedula_display = (getattr(cliente, "cedula", None) or cedula).strip()
-
-    prestamos_rows = db.execute(
-        select(Prestamo).where(Prestamo.cliente_id == cliente_id)
-    ).scalars().all()
-    prestamos_list = []
-    prestamo_ids = []
-    for row in prestamos_rows:
-        p = row[0] if hasattr(row, "__getitem__") else row
-        prestamo_ids.append(p.id)
-        prestamos_list.append({
-            "id": p.id,
-            "producto": getattr(p, "producto", None) or "",
-            "total_financiamiento": float(getattr(p, "total_financiamiento", 0) or 0),
-            "estado": getattr(p, "estado", None) or "",
-        })
-    _sincronizar_pagos_a_cuotas_prestamos(db, prestamo_ids)
-
-    cuotas_pendientes = []
-    total_pendiente = 0.0
-    fecha_corte = date.today()
-    if prestamo_ids:
-        cuotas_rows = db.execute(
-            select(Cuota)
-            .where(Cuota.prestamo_id.in_(prestamo_ids))
-            .order_by(Cuota.prestamo_id, Cuota.numero_cuota)
-        ).scalars().all()
-        for c in cuotas_rows:
-            cu = c[0] if hasattr(c, "__getitem__") else c
-            monto_cuota = float(getattr(cu, "monto", 0) or 0)
-            total_pagado = float(getattr(cu, "total_pagado", 0) or 0)
-            monto_pendiente = max(0.0, monto_cuota - total_pagado)
-            if monto_pendiente <= 0:
-                continue
-            total_pendiente += monto_pendiente
-            fv = getattr(cu, "fecha_vencimiento", None)
-            fv_date = fv.date() if fv and hasattr(fv, "date") else fv
-            estado_mostrar = estado_cuota_para_mostrar(total_pagado, monto_cuota, fv_date, fecha_corte)
-            cuotas_pendientes.append({
-                "prestamo_id": getattr(cu, "prestamo_id", ""),
-                "numero_cuota": getattr(cu, "numero_cuota", ""),
-                "fecha_vencimiento": fv.isoformat() if fv else "",
-                "monto": monto_pendiente,
-                "estado": estado_mostrar,
-            })
-
-    # Tablas de amortización para préstamos APROBADOS (misma estructura que en Detalles del Préstamo)
-    amortizaciones_por_prestamo = []
-    for p in prestamos_list:
-        estado = (p.get("estado") or "").strip().upper()
-        if estado != "APROBADO":
-            continue
-        prestamo_id = p.get("id")
-        if not prestamo_id:
-            continue
-        cuotas = _obtener_amortizacion_prestamo(db, prestamo_id)
-        if not cuotas:
-            continue
-        amortizaciones_por_prestamo.append({
-            "prestamo_id": prestamo_id,
-            "producto": p.get("producto") or "Préstamo",
-            "cuotas": cuotas,
-        })
-
+    cedula_display = (datos.get("cedula_display") or "").strip()
+    nombre = (datos.get("nombre") or "").strip()
+    email = (datos.get("email") or "").strip()
+    prestamos_list = datos.get("prestamos_list") or []
+    cuotas_pendientes = datos.get("cuotas_pendientes") or []
+    total_pendiente = float(datos.get("total_pendiente") or 0)
+    fecha_corte = datos.get("fecha_corte") or date.today()
+    amortizaciones_por_prestamo = datos.get("amortizaciones_por_prestamo") or []
     recibos = _obtener_recibos_cliente(db, cedula_lookup)
     base_url = str(request.base_url).rstrip("/")
-    # Token siempre para que el PDF tenga enlaces "Ver recibo" en tabla amortización (estadocuenta e informes)
     recibo_token = create_recibo_token(cedula_lookup, expire_hours=2)
     pdf_bytes = generar_pdf_estado_cuenta(
         cedula=cedula_display,
@@ -795,7 +722,6 @@ def solicitar_estado_cuenta(
             logger.warning("No se pudo enviar estado de cuenta por email a %s: %s", email, e)
             # No fallar la petición: el PDF se devuelve igual
 
-    import base64
     pdf_b64 = base64.b64encode(pdf_bytes).decode("ascii")
     mensaje = "Estado de cuenta generado. Se ha enviado una copia al correo registrado." if enviar_por_email else "Estado de cuenta generado."
     return SolicitarEstadoCuentaResponse(

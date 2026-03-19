@@ -223,8 +223,8 @@ def list_pagos_reportados(
         count_q = count_q.where(PagoReportado.estado == estado)
     else:
         # Por defecto ocultar aprobados: solo casos pendientes (revisi�n, pendiente, rechazado)
-        q = q.where(PagoReportado.estado != "aprobado")
-        count_q = count_q.where(PagoReportado.estado != "aprobado")
+        q = q.where(~PagoReportado.estado.in_(("aprobado", "importado")))
+        count_q = count_q.where(~PagoReportado.estado.in_(("aprobado", "importado")))
     if fecha_desde:
         q = q.where(PagoReportado.created_at >= datetime.combine(fecha_desde, datetime.min.time()))
         count_q = count_q.where(PagoReportado.created_at >= datetime.combine(fecha_desde, datetime.min.time()))
@@ -356,11 +356,11 @@ def kpis_pagos_reportados(
         base = base.where(PagoReportado.institucion_financiera.ilike(f"%{institucion}%"))
     base = base.group_by(PagoReportado.estado)
     rows = db.execute(base).all()
-    counts = {"pendiente": 0, "en_revision": 0, "aprobado": 0, "rechazado": 0}
+    counts = {"pendiente": 0, "en_revision": 0, "aprobado": 0, "rechazado": 0, "importado": 0}
     for row in rows:
         if row.estado in counts:
             counts[row.estado] = row.cnt
-    counts["total"] = sum(counts[k] for k in ("pendiente", "en_revision", "aprobado", "rechazado"))
+    counts["total"] = sum(counts[k] for k in ("pendiente", "en_revision", "aprobado", "rechazado", "importado"))
     return counts
 
 
@@ -513,6 +513,8 @@ def aprobar_pago_reportado(
     if not pr:
         raise HTTPException(status_code=404, detail="Pago reportado no encontrado.")
     usuario_email = current_user.get("email") if isinstance(current_user, dict) else getattr(current_user, "email", None)
+    if pr.estado == "importado":
+        return {"ok": True, "mensaje": "Ya importado a la tabla de pagos."}
     if pr.estado == "aprobado":
         try:
             _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)
@@ -818,8 +820,8 @@ def editar_pago_reportado(
     pr = db.execute(select(PagoReportado).where(PagoReportado.id == pago_id)).scalars().first()
     if not pr:
         raise HTTPException(status_code=404, detail="Pago reportado no encontrado.")
-    if pr.estado == "aprobado":
-        raise HTTPException(status_code=400, detail="No se puede editar un pago ya aprobado.")
+    if pr.estado in ("aprobado", "importado"):
+        raise HTTPException(status_code=400, detail="No se puede editar un pago ya aprobado o importado a pagos.")
     if pr.estado == "rechazado":
         raise HTTPException(status_code=400, detail="No se puede editar un pago rechazado.")
 
