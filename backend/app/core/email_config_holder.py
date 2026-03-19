@@ -158,15 +158,16 @@ def init_from_settings() -> None:
 
 
 def get_smtp_config(servicio: Optional[str] = None, tipo_tab: Optional[str] = None) -> dict[str, Any]:
-    """Devuelve la config SMTP para el servicio/tab. Cobros=cuenta 1, Estado cuenta=2, Notificaciones=cuenta por tab (3 o 4)."""
+    """Devuelve la config SMTP para el servicio/tab. Cobros=cuenta 1, Estado cuenta=2, Notificaciones=cuenta por tab (3 o 4). Para servicio=notificaciones se fuerza From a NOTIFICACIONES_FROM_EMAIL si está definido."""
     sync_from_db()
+    cfg: dict[str, Any]
     if servicio and _cuentas_data.get("cuentas"):
         asignacion = _cuentas_data.get("asignacion") or {}
         idx = obtener_indice_cuenta(servicio, tipo_tab, asignacion)
         idx = max(1, min(idx, NUM_CUENTAS))
         cu = _cuentas_data["cuentas"][idx - 1]
         if isinstance(cu, dict) and (cu.get("smtp_user") or "").strip():
-            return {
+            cfg = {
                 "smtp_host": cu.get("smtp_host") or "",
                 "smtp_port": int(cu.get("smtp_port") or 587),
                 "smtp_user": cu.get("smtp_user") or "",
@@ -175,8 +176,10 @@ def get_smtp_config(servicio: Optional[str] = None, tipo_tab: Optional[str] = No
                 "from_name": cu.get("from_name") or "RapiCredit",
                 "smtp_use_tls": cu.get("smtp_use_tls", "true"),
             }
-    if _current.get("smtp_user"):
-        return {
+        else:
+            cfg = _fallback_smtp_config()
+    elif _current.get("smtp_user"):
+        cfg = {
             "smtp_host": _current.get("smtp_host") or "",
             "smtp_port": int(_current.get("smtp_port") or 587),
             "smtp_user": _current.get("smtp_user") or "",
@@ -184,6 +187,18 @@ def get_smtp_config(servicio: Optional[str] = None, tipo_tab: Optional[str] = No
             "from_email": _current.get("from_email") or _current.get("smtp_user") or "",
             "from_name": _current.get("from_name") or "RapiCredit",
         }
+    else:
+        cfg = _fallback_smtp_config()
+    if servicio == "notificaciones":
+        from_notif = getattr(settings, "NOTIFICACIONES_FROM_EMAIL", None) or ""
+        if (from_notif or "").strip():
+            cfg["from_email"] = from_notif.strip()
+            logger.info("[EMAIL] Servicio notificaciones: remitente forzado a %s.", cfg["from_email"])
+    return cfg
+
+
+def _fallback_smtp_config() -> dict[str, Any]:
+    """Config SMTP desde settings (.env)."""
     return {
         "smtp_host": getattr(settings, "SMTP_HOST", None) or "",
         "smtp_port": getattr(settings, "SMTP_PORT", None) or 587,
@@ -191,6 +206,7 @@ def get_smtp_config(servicio: Optional[str] = None, tipo_tab: Optional[str] = No
         "smtp_password": getattr(settings, "SMTP_PASSWORD", None) or "",
         "from_email": getattr(settings, "SMTP_FROM_EMAIL", None) or getattr(settings, "SMTP_USER", None) or "",
         "from_name": "RapiCredit",
+        "smtp_use_tls": "true",
     }
 
 

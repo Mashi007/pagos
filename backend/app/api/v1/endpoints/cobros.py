@@ -477,7 +477,9 @@ def aprobar_pago_reportado(
     if to_email:
         body = f"Su reporte de pago ha sido aprobado. Número de referencia: {pr.referencia_interna}. Adjunto encontrará el recibo.\n\nRapiCredit C.A."
         ok_mail, err_mail = send_email([to_email], f"Recibo de reporte de pago #{pr.referencia_interna}", body, attachments=[(f"recibo_{pr.referencia_interna}.pdf", pdf_bytes)], servicio="cobros", respetar_destinos_manuales=True)
-        if not ok_mail:
+        if ok_mail:
+            logger.info("[COBROS] Aprobar ref=%s: recibo enviado por correo a %s.", pr.referencia_interna, to_email)
+        else:
             logger.error(
                 "[COBROS] Aprobar ref=%s: correo NO enviado a %s. Error: %s.",
                 pr.referencia_interna, to_email, err_mail or "desconocido",
@@ -519,7 +521,12 @@ def rechazar_pago_reportado(
     pr.usuario_gestion_id = current_user.get("id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
 
     to_email = _email_cliente_pago_reportado(db, pr)
-    if to_email and get_email_activo_servicio("notificaciones"):
+    notif_activo = get_email_activo_servicio("notificaciones")
+    logger.info(
+        "[COBROS] Rechazar ref=%s: destino=%s servicio_notificaciones_activo=%s.",
+        pr.referencia_interna, to_email or "sin correo", notif_activo,
+    )
+    if to_email and notif_activo:
         body_text = (
             f"Referencia: {pr.referencia_interna}\n\n"
             f"Su reporte de pago no ha sido aprobado.\n\n"
@@ -542,13 +549,17 @@ def rechazar_pago_reportado(
             servicio="notificaciones",
             respetar_destinos_manuales=True,
         )
-        if not ok_mail:
+        if ok_mail:
+            logger.info("[COBROS] Rechazar ref=%s: correo enviado a %s (servicio notificaciones OK).", pr.referencia_interna, to_email)
+        else:
             logger.error(
                 "[COBROS] Rechazar ref=%s: correo NO enviado a %s. Error: %s.",
                 pr.referencia_interna, to_email, err_mail or "desconocido",
             )
-    elif to_email and not get_email_activo_servicio("notificaciones"):
-        logger.warning("[COBROS] Rechazar ref=%s: email notificaciones desactivado, no se envió correo a %s.", pr.referencia_interna, to_email)
+    elif to_email and not notif_activo:
+        logger.warning("[COBROS] Rechazar ref=%s: servicio notificaciones desactivado, no se envió correo a %s.", pr.referencia_interna, to_email)
+    elif not to_email:
+        logger.info("[COBROS] Rechazar ref=%s: no hay correo del cliente, no se envió notificación.", pr.referencia_interna)
     _registrar_historial(db, pago_id, estado_anterior, "rechazado", usuario_email, pr.motivo_rechazo)
     db.commit()
     return {"ok": True, "mensaje": "Pago rechazado y cliente notificado."}
@@ -847,6 +858,7 @@ def cambiar_estado_pago(
                 respetar_destinos_manuales=True,
             )
             if ok_mail:
+                logger.info("[COBROS] Cambiar a aprobado ref=%s: recibo enviado por correo a %s.", pr.referencia_interna, to_email)
                 mensaje = "Estado actualizado a aprobado. Recibo enviado por correo."
             else:
                 logger.error(
@@ -861,6 +873,51 @@ def cambiar_estado_pago(
             _crear_pago_desde_reportado_y_aplicar_cuotas(db, pr, usuario_email)
         except HTTPException:
             raise
+    elif body.estado == "rechazado":
+        to_email = _email_cliente_pago_reportado(db, pr)
+        notif_activo = get_email_activo_servicio("notificaciones")
+        logger.info(
+            "[COBROS] PATCH estado=rechazado ref=%s: destino=%s servicio_notificaciones_activo=%s.",
+            pr.referencia_interna, to_email or "sin correo", notif_activo,
+        )
+        if to_email and notif_activo:
+            body_text = (
+                f"Referencia: {pr.referencia_interna}\n\n"
+                f"Su reporte de pago no ha sido aprobado.\n\n"
+                f"Motivo del rechazo: {pr.motivo_rechazo}\n\n"
+                f"Para más información o aclaratorias, comuníquese con nosotros por WhatsApp: {WHATSAPP_DISPLAY} ({WHATSAPP_LINK}).\n\n"
+                "RapiCredit C.A."
+            )
+            attachments_rech: List[Tuple[str, bytes]] = []
+            if pr.comprobante:
+                nombre_adj = (pr.comprobante_nombre or "comprobante").strip() or "comprobante"
+                if not nombre_adj or "." not in nombre_adj:
+                    ext = "pdf" if (pr.comprobante_tipo or "").lower().find("pdf") >= 0 else "jpg"
+                    nombre_adj = f"comprobante_{pr.referencia_interna}.{ext}"
+                attachments_rech.append((nombre_adj, bytes(pr.comprobante)))
+            ok_mail, err_mail = send_email(
+                [to_email],
+                f"Reporte de pago no aprobado #{pr.referencia_interna}",
+                body_text,
+                attachments=attachments_rech if attachments_rech else None,
+                servicio="notificaciones",
+                respetar_destinos_manuales=True,
+            )
+            if ok_mail:
+                logger.info("[COBROS] PATCH estado=rechazado ref=%s: correo enviado a %s (servicio notificaciones OK).", pr.referencia_interna, to_email)
+                mensaje = "Estado actualizado a rechazado. Cliente notificado por correo (notificaciones@rapicreditca.com)."
+            else:
+                logger.error(
+                    "[COBROS] PATCH estado=rechazado ref=%s: correo NO enviado a %s. Error: %s.",
+                    pr.referencia_interna, to_email, err_mail or "desconocido",
+                )
+                mensaje = "Estado actualizado a rechazado. El correo al cliente no pudo enviarse."
+        elif to_email and not notif_activo:
+            logger.warning("[COBROS] PATCH estado=rechazado ref=%s: servicio notificaciones desactivado, no se envió correo a %s.", pr.referencia_interna, to_email)
+            mensaje = "Estado actualizado a rechazado. Servicio de correo desactivado."
+        else:
+            logger.info("[COBROS] PATCH estado=rechazado ref=%s: no hay correo del cliente, no se envió notificación.", pr.referencia_interna)
+            mensaje = "Estado actualizado a rechazado."
 
     _registrar_historial(db, pago_id, estado_anterior, body.estado, usuario_email, body.motivo)
     db.commit()

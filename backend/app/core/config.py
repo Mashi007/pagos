@@ -125,6 +125,11 @@ class Settings(BaseSettings):
     SMTP_USER: Optional[str] = None
     SMTP_PASSWORD: Optional[str] = None
     SMTP_FROM_EMAIL: Optional[str] = None
+    # Remitente forzado para el servicio "notificaciones" (rechazos, notificaciones a clientes). Si está definido, se usa como From al enviar con servicio=notificaciones.
+    NOTIFICACIONES_FROM_EMAIL: Optional[str] = Field(
+        default="notificaciones@rapicreditca.com",
+        description="Email remitente para notificaciones (rechazos, etc.). Por defecto notificaciones@rapicreditca.com.",
+    )
     # Correo(s) para notificaciones de tickets CRM (varios separados por coma). Incluye tickets automáticos por recibo no claro (3 intentos).
     TICKETS_NOTIFY_EMAIL: Optional[str] = Field(
         default="itmaster@rapicreditca.com",
