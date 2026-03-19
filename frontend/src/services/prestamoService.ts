@@ -1,4 +1,4 @@
-﻿import { apiClient, ApiResponse, PaginatedResponse, buildUrl } from './api'
+import { apiClient, ApiResponse, PaginatedResponse, buildUrl } from './api'
 import { Prestamo, PrestamoForm } from '../types'
 import { logger } from '../utils/logger'
 
@@ -253,13 +253,30 @@ class PrestamoService {
     window.open(url, '_blank')
   }
 
-  // Generar tabla de amortizaci
   // Generar tabla de amortización
   async generarAmortizacion(prestamoId: number): Promise<any> {
     const response = await apiClient.post<any>(
       `${this.baseUrl}/${prestamoId}/generar-amortizacion`
     )
     return response
+  }
+
+  /**
+   * Reconciliar amortización masiva: aplica pagos conciliados a cuotas
+   * (útil tras regenerar tabla de amortización). Si prestamoIds es vacío, procesa todos los que tengan pagos pendientes de aplicar.
+   */
+  async conciliarAmortizacionMasiva(prestamoIds?: number[]): Promise<{
+    procesados: number
+    pagos_aplicados_total: number
+    errores: Array<{ prestamo_id: number; error: string }>
+    mensaje: string
+  }> {
+    return await apiClient.post<{
+      procesados: number
+      pagos_aplicados_total: number
+      errores: Array<{ prestamo_id: number; error: string }>
+      mensaje: string
+    }>(`${this.baseUrl}/conciliar-amortizacion-masiva`, { prestamo_ids: prestamoIds ?? null }, { timeout: 120000 })
   }
 
   // Aplicar condiciones de aprobación

@@ -7,7 +7,7 @@ import io
 import logging
 from datetime import date, datetime, timedelta, time
 from decimal import Decimal
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import Response
@@ -1552,6 +1552,66 @@ def generar_cuotas_aprobados_sin_cuotas(
         "cuotas_creadas": total_cuotas,
         "errores": errores,
         "mensaje": f"Procesados {len(prestamos_sin_cuotas) - len(errores)} préstamos, {total_cuotas} cuotas creadas."
+        + (f" {len(errores)} error(es)." if errores else ""),
+    }
+
+
+class ConciliarAmortizacionMasivaBody(BaseModel):
+    """Opcional: lista de prestamo_id a conciliar. Si vacío o ausente, se procesan todos los que tengan pagos conciliados sin aplicar."""
+    prestamo_ids: Optional[List[int]] = None
+
+
+@router.post("/conciliar-amortizacion-masiva", response_model=dict)
+def conciliar_amortizacion_masiva(
+    body: ConciliarAmortizacionMasivaBody = Body(default=ConciliarAmortizacionMasivaBody()),
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
+    """
+    Aplica a cuotas los pagos conciliados que aún no tienen enlace en cuota_pagos
+    (p. ej. tras regenerar la tabla de amortización). Por préstamo llama a aplicar_pagos_pendientes_prestamo.
+    Si body.prestamo_ids viene vacío o null, se detectan automáticamente los préstamos con pagos pendientes de aplicar.
+    """
+    if body.prestamo_ids:
+        ids = list(body.prestamo_ids)
+    else:
+        # Préstamos que tienen al menos un pago conciliado con monto y sin fila en cuota_pagos
+        subq = select(CuotaPago.pago_id).where(CuotaPago.pago_id.isnot(None)).distinct()
+        r = db.execute(
+            select(Pago.prestamo_id)
+            .where(
+                Pago.prestamo_id.isnot(None),
+                Pago.conciliado == True,
+                Pago.monto_pagado > 0,
+                ~Pago.id.in_(subq),
+            )
+            .distinct()
+        ).scalars().all()
+        ids = [row[0] for row in r if row[0] is not None]
+    if not ids:
+        return {
+            "procesados": 0,
+            "pagos_aplicados_total": 0,
+            "errores": [],
+            "mensaje": "No hay préstamos con pagos pendientes de aplicar a cuotas.",
+        }
+    pagos_aplicados_total = 0
+    errores = []
+    for prestamo_id in ids:
+        try:
+            n = aplicar_pagos_pendientes_prestamo(prestamo_id, db)
+            if n > 0:
+                db.commit()
+                pagos_aplicados_total += n
+        except Exception as e:
+            db.rollback()
+            logger.exception("conciliar-amortizacion-masiva prestamo_id=%s: %s", prestamo_id, e)
+            errores.append({"prestamo_id": prestamo_id, "error": str(e)})
+    return {
+        "procesados": len(ids),
+        "pagos_aplicados_total": pagos_aplicados_total,
+        "errores": errores,
+        "mensaje": f"Conciliación masiva: {len(ids)} préstamo(s), {pagos_aplicados_total} pago(s) aplicados a cuotas."
         + (f" {len(errores)} error(es)." if errores else ""),
     }
 

@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { Search, Download, User, Loader2 } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Search, Download, User, Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
@@ -14,6 +14,8 @@ import { toast } from 'sonner'
 export function PagosBuscadorAmortizacion() {
   const [cedulaInput, setCedulaInput] = useState('')
   const [cedulaBuscar, setCedulaBuscar] = useState<string | null>(null)
+  const [conciliando, setConciliando] = useState(false)
+  const queryClient = useQueryClient()
 
   const { data: prestamos, isLoading: loadingPrestamos } = usePrestamosByCedula(cedulaBuscar || '')
   const prestamoIds = prestamos?.map((p) => p.id) ?? []
@@ -47,6 +49,25 @@ export function PagosBuscadorAmortizacion() {
     if (e.key === 'Enter') handleBuscar()
   }
 
+  const handleConciliarAmortizacionMasiva = async () => {
+    if (!window.confirm(
+      '¿Reconciliar amortización? Se aplicarán los pagos conciliados a las cuotas de todos los préstamos que tengan pagos pendientes de aplicar (por ejemplo, tras haber actualizado fechas de amortización).'
+    )) return
+    setConciliando(true)
+    try {
+      const res = await prestamoService.conciliarAmortizacionMasiva()
+      toast.success(res.mensaje)
+      if (res.pagos_aplicados_total > 0) {
+        queryClient.invalidateQueries({ queryKey: ['cuotas-amortizacion-cedula'] })
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al reconciliar'
+      toast.error(msg)
+    } finally {
+      setConciliando(false)
+    }
+  }
+
   const handleDescargarPDF = async () => {
     if (!cedulaBuscar) return
     try {
@@ -77,6 +98,21 @@ export function PagosBuscadorAmortizacion() {
         <p className="text-sm text-gray-600 mt-1">
           Ingrese la cédula del cliente y pulse Buscar para desplegar la tabla de amortización. Puede descargarla en PDF.
         </p>
+        <div className="mt-3 pt-3 border-t">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleConciliarAmortizacionMasiva}
+            disabled={conciliando}
+          >
+            {conciliando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+            Reconciliar amortización (aplicar pagos a cuotas)
+          </Button>
+          <p className="text-xs text-muted-foreground mt-1">
+            Útil tras actualizar fechas de amortización: reasigna pagos conciliados a las cuotas correctas.
+          </p>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-col sm:flex-row gap-3">
