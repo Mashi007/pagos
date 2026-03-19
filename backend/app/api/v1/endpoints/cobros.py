@@ -97,12 +97,13 @@ OBSERVACION_COLUMNAS = ["Cédula", "Banco", "Fecha pago", "Nº operación", "Mon
 
 
 def _observacion_solo_columnas(raw: Optional[str]) -> Optional[str]:
-    """Devuelve la observación mostrando solo nombres de columnas. Si raw ya es una lista corta de columnas, la devuelve; si es texto largo, extrae columnas por palabras clave."""
+    """Devuelve la observación mostrando solo nombres de columnas (formato estándar: separador único ' / '). Si raw ya es lista corta, normaliza separadores; si es texto largo, extrae columnas por palabras clave."""
     if not raw or not (raw := raw.strip()):
         return None
-    # Si ya parece lista de columnas (corta, sin frases largas)
+    # Si ya parece lista de columnas (corta, sin frases largas): normalizar a " / "
     if len(raw) <= 80 and not any(x in raw for x in ("en la imagen", "en el formulario", "mientras que", "incluye el", "no coincide")):
-        return raw
+        parts = [p.strip() for p in raw.replace(",", " / ").split(" / ") if p.strip()]
+        return " / ".join(parts) if parts else raw[:80]
     # Extraer columnas por palabras clave (registros antiguos con texto largo)
     lower = raw.lower()
     columnas = []
@@ -118,7 +119,18 @@ def _observacion_solo_columnas(raw: Optional[str]) -> Optional[str]:
         columnas.append("Monto")
     if "moneda" in lower:
         columnas.append("Moneda")
-    return ", ".join(columnas) if columnas else raw[:100]
+    return " / ".join(columnas) if columnas else raw[:100]
+
+
+def _normalize_cedula_for_client_lookup(cedula: str) -> str:
+    """Normaliza cédula para comparar con tabla clientes: sin guión/espacios, mayúsculas, sin ceros a la izquierda en el número (V08752971 -> V8752971)."""
+    s = (cedula or "").replace("-", "").replace(" ", "").strip().upper()
+    if not s:
+        return s
+    if len(s) >= 2 and s[0] in ("V", "E", "J", "G") and s[1:].isdigit():
+        num = s[1:].lstrip("0") or "0"
+        return s[0] + num
+    return s
 
 
 def _observacion_reglas_carga(
@@ -128,11 +140,12 @@ def _observacion_reglas_carga(
     cedulas_bolivares: set,
     numeros_doc_en_pagos: set,
 ) -> list:
-    """Para cada fila de pagos_reportados, devuelve lista de observaciones por reglas: NO CLIENTES, Monto (Bs no autorizado), DUPLICADO DOC."""
+    """Para cada fila de pagos_reportados, devuelve lista de observaciones por reglas: NO CLIENTES, Monto (Bs no autorizado), DUPLICADO DOC. Cédula normalizada igual que en clientes (sin ceros a la izquierda)."""
     result = []
     for r in rows:
         partes = []
-        cedula_norm = ((r.tipo_cedula or "") + (r.numero_cedula or "")).replace("-", "").replace(" ", "").strip().upper()
+        raw_cedula = ((r.tipo_cedula or "") + (r.numero_cedula or "")).replace("-", "").replace(" ", "").strip().upper()
+        cedula_norm = _normalize_cedula_for_client_lookup(raw_cedula)
         if cedula_norm and cedula_norm not in cedulas_en_clientes:
             partes.append("NO CLIENTES")
         moneda = (r.moneda or "BS").strip().upper()
@@ -201,24 +214,27 @@ def list_pagos_reportados(
     ).offset((page - 1) * per_page).limit(per_page)
     rows = db.execute(q).scalars().all()
 
-    # Conjuntos para reglas de observación al cargar (cédula en clientes, lista Bs, duplicado en pagos)
+    # Conjuntos para reglas de observación al cargar (cédula en clientes, lista Bs, duplicado en pagos).
+    # Normalizar cédula igual que en clientes: sin guión/espacios y sin ceros a la izquierda (V08752971 = V8752971).
     cedula_norms = [
-        ((r.tipo_cedula or "") + (r.numero_cedula or "")).replace("-", "").replace(" ", "").strip().upper()
+        _normalize_cedula_for_client_lookup(
+            ((r.tipo_cedula or "") + (r.numero_cedula or "")).replace("-", "").replace(" ", "").strip().upper()
+        )
         for r in rows
     ]
     unique_cedulas = set(c for c in cedula_norms if c)
     cedulas_en_clientes = set()
     if unique_cedulas:
-        cedula_lookup = func.upper(func.replace(func.replace(Cliente.cedula, "-", ""), " ", ""))
-        existing = db.execute(
-            select(cedula_lookup).select_from(Cliente).where(cedula_lookup.in_(unique_cedulas))
-        ).scalars().all()
-        cedulas_en_clientes = {row[0] for row in existing if row[0]}
+        # Cargar cédulas de clientes y normalizar igual (quitar ceros a la izquierda) para comparar.
+        clientes_cedulas = db.execute(select(Cliente.cedula).select_from(Cliente)).scalars().all()
+        cedulas_en_clientes = {
+            _normalize_cedula_for_client_lookup(row[0]) for row in clientes_cedulas if row[0]
+        }
 
     cedulas_bolivares = set()
     list_bs = db.execute(select(CedulaReportarBs.cedula)).scalars().all()
     cedulas_bolivares = {
-        (row[0] or "").strip().upper().replace("-", "").replace(" ", "")
+        _normalize_cedula_for_client_lookup((row[0] or "").strip().upper().replace("-", "").replace(" ", ""))
         for row in list_bs if row[0]
     }
 
@@ -238,7 +254,9 @@ def list_pagos_reportados(
     for i, r in enumerate(rows):
         obs_gemini = _observacion_solo_columnas(r.gemini_comentario)
         partes_reglas = partes_por_fila[i] if i < len(partes_por_fila) else []
-        observacion = " / ".join(filter(None, [obs_gemini] + partes_reglas)) if (obs_gemini or partes_reglas) else None
+        # Orden estándar: reglas (NO CLIENTES, DUPLICADO DOC, Monto...) primero; luego divergencias Gemini (columnas). Un solo separador " / ".
+        partes_final = partes_reglas + ([obs_gemini] if obs_gemini else [])
+        observacion = " / ".join(partes_final) if partes_final else None
         items.append(PagoReportadoListItem(
             id=r.id,
             referencia_interna=r.referencia_interna,
@@ -788,14 +806,18 @@ def editar_pago_reportado(
     # Número de operación: nunca permitir duplicado en tabla pagos
     _rechazar_si_numero_operacion_duplicado(db, pr.numero_operacion)
 
-    # Si la moneda queda en BS, la cédula debe estar en la lista de autorizadas para Bolívares
+    # Si la moneda queda en BS, la cédula debe estar en la lista de autorizadas para Bolívares (misma normalización que en listado)
     moneda_final = (pr.moneda or "").strip().upper()
     if moneda_final == "BS":
-        cedula_lookup = ((pr.tipo_cedula or "").strip().upper() + (pr.numero_cedula or "").strip().replace(" ", "").replace("-", "")).strip()
-        if cedula_lookup:
-            permitido_bs = db.execute(
-                select(CedulaReportarBs).where(CedulaReportarBs.cedula == cedula_lookup).limit(1)
-            ).scalars().first() is not None
+        raw_cedula = ((pr.tipo_cedula or "") + (pr.numero_cedula or "")).replace("-", "").replace(" ", "").strip().upper()
+        cedula_norm = _normalize_cedula_for_client_lookup(raw_cedula)
+        if cedula_norm:
+            list_bs_all = db.execute(select(CedulaReportarBs.cedula)).scalars().all()
+            cedulas_bs_norm = {
+                _normalize_cedula_for_client_lookup((r[0] or "").strip().upper().replace("-", "").replace(" ", ""))
+                for r in list_bs_all if r[0]
+            }
+            permitido_bs = cedula_norm in cedulas_bs_norm
             if not permitido_bs:
                 raise HTTPException(
                     status_code=400,
