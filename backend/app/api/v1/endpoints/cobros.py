@@ -183,6 +183,17 @@ def _observacion_reglas_carga(
         cedula_norm = _normalize_cedula_for_client_lookup(raw_cedula)
         if cedula_norm and cedula_norm not in cedulas_en_clientes:
             partes.append("NO CLIENTES")
+            # Auditoría: log para diagnosticar por qué se marca NO CLIENTES
+            logger.info(
+                "[COBROS] NO CLIENTES: ref=%s tipo_cedula=%r numero_cedula=%r raw=%r cedula_norm=%r | set_size=%s V20149164_in_set=%s",
+                getattr(r, "referencia_interna", None),
+                getattr(r, "tipo_cedula", None),
+                getattr(r, "numero_cedula", None),
+                raw_cedula,
+                cedula_norm,
+                len(cedulas_en_clientes),
+                "V20149164" in cedulas_en_clientes,
+            )
         moneda = (r.moneda or "BS").strip().upper()
         if moneda == "BS" and cedula_norm and cedula_norm not in cedulas_bolivares:
             partes.append("Monto: solo Bs si está en lista Bolívares")
@@ -260,6 +271,11 @@ def list_pagos_reportados(
     unique_cedulas = set(c for c in cedula_norms if c)
     # Conjunto de cédulas que existen en clientes (incluye variante V+numero si en BD está solo el número)
     cedulas_en_clientes = _cedulas_en_clientes_set(db)
+    logger.debug(
+        "[COBROS] pagos-reportados: cedulas_en_clientes set_size=%s V20149164_in_set=%s",
+        len(cedulas_en_clientes),
+        "V20149164" in cedulas_en_clientes,
+    )
 
     cedulas_bolivares = set()
     list_bs = db.execute(select(CedulaReportarBs.cedula)).scalars().all()
