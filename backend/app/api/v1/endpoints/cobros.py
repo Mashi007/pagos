@@ -133,6 +133,41 @@ def _normalize_cedula_for_client_lookup(cedula: str) -> str:
     return s
 
 
+def _cedula_lookup_variants(cedula_norm: str) -> List[str]:
+    """Para buscar cliente por cédula: si cedula_norm es V/E/J/G + dígitos, incluir también solo los dígitos (en clientes a veces está solo el número)."""
+    if not cedula_norm:
+        return []
+    variants = [cedula_norm]
+    if len(cedula_norm) >= 2 and cedula_norm[0] in ("V", "E", "J", "G") and cedula_norm[1:].isdigit():
+        variants.append(cedula_norm[1:])
+    return variants
+
+
+def _cedulas_en_clientes_set(db: Session) -> set:
+    """
+    Devuelve el conjunto de cédulas que se consideran "en clientes" para la regla NO CLIENTES.
+    Incluye la forma normalizada de cada clientes.cedula y, si la cédula en BD es solo dígitos (ej. 20149164),
+    también añade la variante con prefijo V (V20149164), porque en préstamos/reportes suele usarse V+numero
+    y el cliente puede estar guardado solo con el número.
+    """
+    clientes_cedulas = db.execute(select(Cliente.cedula).select_from(Cliente)).scalars().all()
+    out = set()
+    for row in clientes_cedulas:
+        if not row or not row[0]:
+            continue
+        raw = (row[0] or "").strip().upper().replace("-", "").replace(" ", "")
+        norm = _normalize_cedula_for_client_lookup(raw)
+        if not norm:
+            continue
+        out.add(norm)
+        # Si en clientes está solo el número (con o sin ceros a la izq.), añadir variante sin ceros y V+numero
+        if len(norm) >= 6 and norm.isdigit():
+            num = norm.lstrip("0") or "0"
+            out.add(num)
+            out.add("V" + num)
+    return out
+
+
 def _observacion_reglas_carga(
     db: Session,
     rows: list,
@@ -223,13 +258,8 @@ def list_pagos_reportados(
         for r in rows
     ]
     unique_cedulas = set(c for c in cedula_norms if c)
-    cedulas_en_clientes = set()
-    if unique_cedulas:
-        # Cargar cédulas de clientes y normalizar igual (quitar ceros a la izquierda) para comparar.
-        clientes_cedulas = db.execute(select(Cliente.cedula).select_from(Cliente)).scalars().all()
-        cedulas_en_clientes = {
-            _normalize_cedula_for_client_lookup(row[0]) for row in clientes_cedulas if row[0]
-        }
+    # Conjunto de cédulas que existen en clientes (incluye variante V+numero si en BD está solo el número)
+    cedulas_en_clientes = _cedulas_en_clientes_set(db)
 
     cedulas_bolivares = set()
     list_bs = db.execute(select(CedulaReportarBs.cedula)).scalars().all()
@@ -371,12 +401,15 @@ def _email_cliente_pago_reportado(db: Session, pr: PagoReportado) -> str:
     to = (pr.correo_enviado_a or "").strip()
     if to and "@" in to:
         return to
-    cedula_norm = (f"{pr.tipo_cedula or ''}{pr.numero_cedula or ''}").replace("-", "").strip()
-    if not cedula_norm:
+    cedula_raw = (f"{pr.tipo_cedula or ''}{pr.numero_cedula or ''}").replace("-", "").replace(" ", "").strip().upper()
+    if not cedula_raw:
         return ""
-    cliente = db.execute(
-        select(Cliente).where(func.replace(Cliente.cedula, "-", "") == cedula_norm)
-    ).scalars().first()
+    cedula_norm = _normalize_cedula_for_client_lookup(cedula_raw)
+    variants = _cedula_lookup_variants(cedula_norm)
+    if not variants:
+        return ""
+    cedula_lookup = func.upper(func.replace(func.replace(Cliente.cedula, "-", ""), " ", ""))
+    cliente = db.execute(select(Cliente).where(cedula_lookup.in_(variants))).scalars().first()
     if cliente and (cliente.email or "").strip():
         return (cliente.email or "").strip()
     return ""
@@ -397,12 +430,15 @@ def _registrar_historial(db: Session, pago_id: int, estado_anterior: str, estado
 def _crear_pago_desde_reportado_y_aplicar_cuotas(db: Session, pr: PagoReportado, usuario_email: Optional[str]) -> None:
     """Tras aprobar un pago reportado: crea registro en tabla pagos y aplica a cuotas (FIFO) para que prestamos y estado de cuenta se actualicen. Debe llamarse ANTES de commit; si falla lanza HTTPException."""
     _rechazar_si_numero_operacion_duplicado(db, pr.numero_operacion)
-    cedula_norm = ((pr.tipo_cedula or "") + (pr.numero_cedula or "")).replace("-", "").replace(" ", "").strip().upper()
+    cedula_norm = _normalize_cedula_for_client_lookup(
+        ((pr.tipo_cedula or "") + (pr.numero_cedula or "")).replace("-", "").replace(" ", "").strip().upper()
+    )
     if not cedula_norm:
         raise HTTPException(status_code=400, detail="Cédula del reporte vacía; no se puede crear el pago en préstamos.")
+    variants = _cedula_lookup_variants(cedula_norm)
     cedula_lookup = func.upper(func.replace(func.replace(Cliente.cedula, "-", ""), " ", ""))
     cliente = db.execute(
-        select(Cliente).where(cedula_lookup == cedula_norm)
+        select(Cliente).where(cedula_lookup.in_(variants))
     ).scalars().first()
     if not cliente:
         raise HTTPException(
