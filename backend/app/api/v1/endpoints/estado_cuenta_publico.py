@@ -391,14 +391,17 @@ def get_recibo_cuota_publico(
 def validar_cedula_estado_cuenta(
     request: Request,
     cedula: str,
+    origen: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
     """
     Valida cédula y verifica que exista en tabla clientes.
     Público, sin auth. Rate limit: 30 req/min por IP. Retorna nombre y email si ok.
+    Sin límite cuando origen=informes (ruta /pagos/informes, uso interno).
     """
     ip = get_client_ip(request)
-    check_rate_limit_estado_cuenta_validar(ip)
+    if (origen or "").strip().lower() != "informes":
+        check_rate_limit_estado_cuenta_validar(ip)
     if not cedula or not cedula.strip():
         return ValidarCedulaEstadoCuentaResponse(ok=False, error="Ingrese el número de cédula.")
     if len(cedula.strip()) > MAX_CEDULA_LENGTH:
@@ -656,7 +659,8 @@ def solicitar_estado_cuenta(
     """
     cedula = (body.cedula or "").strip()
     ip = get_client_ip(request)
-    check_rate_limit_estado_cuenta_solicitar(ip)
+    if (body.origen or "").strip().lower() != "informes":
+        check_rate_limit_estado_cuenta_solicitar(ip)
     if not cedula:
         return SolicitarEstadoCuentaResponse(ok=False, error="Ingrese el número de cédula.")
     if len(cedula.strip()) > MAX_CEDULA_LENGTH:

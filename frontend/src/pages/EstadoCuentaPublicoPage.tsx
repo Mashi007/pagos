@@ -195,7 +195,10 @@ export default function EstadoCuentaPublicoPage() {
     const cedulaEnviar = v.valorParaEnviar!
     setLoading(true)
     try {
-      const validacion = await validarCedulaEstadoCuenta(cedulaEnviar)
+      const validacion = await validarCedulaEstadoCuenta(
+        cedulaEnviar,
+        isInformesRoute ? { origen: 'informes' } : undefined,
+      )
       if (!validacion.ok) {
         showNotification('error', validacion.error || 'Cédula no válida.')
         return

@@ -212,7 +212,10 @@ export default function ReportePagoPage({ variant = 'cobros' }: { variant?: Repo
     const cedulaEnviar = v.valorParaEnviar!
     setLoading(true)
     try {
-      const res = await validarCedulaPublico(cedulaEnviar)
+      const res = await validarCedulaPublico(
+        cedulaEnviar,
+        isInfopagos ? { origen: 'infopagos' } : undefined,
+      )
       if (!res.ok) {
         showNotification('error', res.error || 'Cédula no válida.')
         return

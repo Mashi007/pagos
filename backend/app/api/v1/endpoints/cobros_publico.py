@@ -167,14 +167,17 @@ ERROR_BS_NO_AUTORIZADO = "Observación: Bolívares. No puede enviar pago en Bol�
 def validar_cedula_publico(
     request: Request,
     cedula: str,
+    origen: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
     """
     Valida cédula (formato V/E/J + dígitos) y verifica si tiene préstamo.
     Público, sin auth. Rate limit: 30 req/min por IP. Retorna nombre y correo enmascarado si ok.
+    Sin límite cuando origen=infopagos (ruta /pagos/infopagos, uso interno).
     """
     ip = get_client_ip(request)
-    check_rate_limit_validar_cedula(ip)
+    if (origen or "").strip().lower() != "infopagos":
+        check_rate_limit_validar_cedula(ip)
     if not cedula or not cedula.strip():
         return ValidarCedulaResponse(ok=False, error="Ingrese el número de cédula.")
     if len(cedula.strip()) > MAX_CEDULA_LENGTH:
@@ -485,7 +488,6 @@ async def enviar_reporte_infopagos(
     token para que el colaborador descargue el recibo en la misma pantalla.
     """
     ip = get_client_ip(request)
-    check_rate_limit_enviar_reporte(ip)
     if contact_website and str(contact_website).strip():
         logger.warning("[INFOPAGOS] Honeypot activado desde IP %s", ip)
         return EnviarReporteInfopagosResponse(ok=False, error="No se pudo procesar el envío. Intente de nuevo.")

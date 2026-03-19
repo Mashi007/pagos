@@ -47,8 +47,14 @@ export interface VerificarCodigoResponse {
 }
 
 /** Público: validar cédula (formato + existe en clientes). Sin auth. */
-export async function validarCedulaEstadoCuenta(cedula: string): Promise<ValidarCedulaEstadoCuentaResponse> {
-  const url = `${BASE}/validar-cedula?cedula=${encodeURIComponent(cedula.slice(0, 20))}`
+export async function validarCedulaEstadoCuenta(
+  cedula: string,
+  opts?: { origen?: string },
+): Promise<ValidarCedulaEstadoCuentaResponse> {
+  const o = (opts?.origen || '').trim()
+  const q = new URLSearchParams({ cedula: cedula.slice(0, 20) })
+  if (o) q.set('origen', o)
+  const url = `${BASE}/validar-cedula?${q.toString()}`
   const res = await fetch(url, { credentials: 'same-origin' })
   if (res.status === 429) {
     return { ok: false, error: 'Demasiadas consultas. Espere un minuto e intente de nuevo.' }
