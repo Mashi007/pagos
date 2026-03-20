@@ -1321,7 +1321,7 @@ def guardar_fila_editable(
             fecha_pago=datetime.combine(fecha_pago, dt_time.min),
             monto_pagado=Decimal(str(round(monto, 2))),
             numero_documento=numero_doc_norm,
-            estado="PAGADO",
+            estado="PENDIENTE",
             referencia_pago=ref_pago,
             conciliado=True,  # [B2] Usar solo conciliado
             fecha_conciliacion=ahora_conciliacion,
@@ -1336,6 +1336,7 @@ def guardar_fila_editable(
         cuotas_parciales = 0
         if pago.prestamo_id and monto > 0:
             cuotas_completadas, cuotas_parciales = _aplicar_pago_a_cuotas_interno(pago, db)
+        pago.estado = _estado_pago_tras_aplicar_fifo(cuotas_completadas, cuotas_parciales)
 
         db.commit()
 
@@ -1857,8 +1858,8 @@ def crear_pagos_batch(
                 db.flush()
                 db.refresh(row)
                 if row.prestamo_id and float(row.monto_pagado or 0) > 0:
-                    _aplicar_pago_a_cuotas_interno(row, db)
-                    row.estado = "PAGADO"
+                    cc_b, cp_b = _aplicar_pago_a_cuotas_interno(row, db)
+                    row.estado = _estado_pago_tras_aplicar_fifo(cc_b, cp_b)
                 results.append({"index": idx, "success": True, "pago": _pago_to_response(row)})
             db.commit()
             return {"results": results, "ok_count": len(results), "fail_count": 0}
@@ -1943,8 +1944,8 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
         db.refresh(row)
         # [C3] Aplicar FIFO a cuotas en la misma transacción para que préstamos y estado de cuenta se actualicen
         if row.prestamo_id and float(row.monto_pagado or 0) > 0:
-            _aplicar_pago_a_cuotas_interno(row, db)
-            row.estado = "PAGADO"
+            cc_n, cp_n = _aplicar_pago_a_cuotas_interno(row, db)
+            row.estado = _estado_pago_tras_aplicar_fifo(cc_n, cp_n)
         db.commit()
         db.refresh(row)
         return _pago_to_response(row)
@@ -2024,7 +2025,7 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
     if row.prestamo_id and float(row.monto_pagado or 0) > 0:
         try:
             cuotas_completadas, cuotas_parciales = _aplicar_pago_a_cuotas_interno(row, db)
-            row.estado = "PAGADO"
+            row.estado = _estado_pago_tras_aplicar_fifo(cuotas_completadas, cuotas_parciales)
             db.commit()
             db.refresh(row)
         except Exception as e:
@@ -2067,6 +2068,17 @@ def _marcar_prestamo_liquidado_si_corresponde(prestamo_id: int, db: Session) -> 
         if prestamo and (prestamo.estado or "").upper() == "APROBADO":
             prestamo.estado = "LIQUIDADO"
             logger.info("Prestamo id=%s marcado como LIQUIDADO (todas las cuotas pagadas).", prestamo_id)
+
+
+def _estado_pago_tras_aplicar_fifo(cuotas_completadas: int, cuotas_parciales: int) -> str:
+    """
+    Estado del pago según articulación real a cuotas.
+    Solo PAGADO si hubo aplicación (al menos un registro en cuota_pagos).
+    Evita marcar PAGADO sin cuota_pagos (inconsistencia y bloqueo del job FIFO).
+    """
+    if cuotas_completadas > 0 or cuotas_parciales > 0:
+        return "PAGADO"
+    return "PENDIENTE"
 
 
 def _aplicar_pago_a_cuotas_interno(pago: Pago, db: Session) -> tuple[int, int]:
@@ -2198,9 +2210,8 @@ def aplicar_pagos_pendientes_prestamo(prestamo_id: int, db: Session) -> int:
 @router.post("/{pago_id:int}/aplicar-cuotas", response_model=dict)
 def aplicar_pago_a_cuotas(pago_id: int, db: Session = Depends(get_db)):
     """
-    Aplica el monto del pago a cuotas del préstamo (por orden de numero_cuota).
-    Reglas de negocio: 100% cubierta â†’ PAGADO; parcial + futuro â†’ PAGO_ADELANTADO; parcial + vencido â†’ PENDIENTE.
-    Actualiza pago.estado a PAGADO cuando se aplica a cuotas.
+    Aplica el monto del pago a cuotas del prestamo (orden numero_cuota).
+    pago.estado = PAGADO solo si hubo articulacion (cc o cp > 0); si no hubo cupo, PENDIENTE.
     """
     pago = db.get(Pago, pago_id)
     if not pago:
@@ -2217,8 +2228,7 @@ def aplicar_pago_a_cuotas(pago_id: int, db: Session = Depends(get_db)):
         return {"success": True, "cuotas_completadas": 0, "cuotas_parciales": 0, "message": "Monto del pago es cero."}
     try:
         cuotas_completadas, cuotas_parciales = _aplicar_pago_a_cuotas_interno(pago, db)
-        # PAGADO siempre que se procese para el préstamo (haya o no cuotas pendientes)
-        pago.estado = "PAGADO"
+        pago.estado = _estado_pago_tras_aplicar_fifo(cuotas_completadas, cuotas_parciales)
         db.commit()
         return {
             "success": True,
