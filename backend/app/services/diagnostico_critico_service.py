@@ -1,12 +1,12 @@
-﻿# -*- coding: utf-8 -*-
-"`"
+# -*- coding: utf-8 -*-
+"""
 Script de diagnóstico y corrección de problemas críticos de conciliación.
 
 Problemas a resolver:
 1. 14,127 pagos sin asignar a cuotas (3,426,096.76 BS = 49.2%)
 2. 1 cuota sobre-aplicada (Cuota 216933: 96 BS exceso)
 3. Estados inconsistentes (MORA no documentado)
-"`"
+"""
 import logging
 from decimal import Decimal
 from datetime import datetime
@@ -18,11 +18,11 @@ logger = logging.getLogger(__name__)
 
 
 class DiagnosticoCritico:
-    "`"Diagnóstico de problemas críticos"`"
+    """Diagnóstico de problemas críticos"""
 
     @staticmethod
     def diagnosticar_pagos_sin_asignar(db: Session) -> dict:
-        "`"Diagnostica los 14,127 pagos sin asignar"`"
+        """Diagnostica los 14,127 pagos sin asignar"""
         
         # Pagos sin cuotas asignadas
         pagos_sin_asignar = db.query(text('''
@@ -80,7 +80,7 @@ class DiagnosticoCritico:
 
     @staticmethod
     def diagnosticar_cuota_sobre_aplicada(db: Session, cuota_id: int = 216933) -> dict:
-        "`"Diagnostica la cuota 216933 sobre-aplicada"`"
+        """Diagnostica la cuota 216933 sobre-aplicada"""
         
         cuota_data = db.query(text('''
             SELECT 
@@ -144,7 +144,7 @@ class DiagnosticoCritico:
 
     @staticmethod
     def diagnosticar_estados_inconsistentes(db: Session) -> dict:
-        "`"Diagnostica inconsistencias en estados de cuota"`"
+        """Diagnostica inconsistencias en estados de cuota"""
         
         # Cuotas en estado MORA pero calculado diferente
         cuotas_mora = db.query(text('''
@@ -198,11 +198,11 @@ class DiagnosticoCritico:
 
 
 class CorrectoresCriticos:
-    "`"Correctores automáticos para problemas críticos"`"
+    """Correctores automáticos para problemas críticos"""
 
     @staticmethod
     def corregir_cuota_sobre_aplicada(db: Session, cuota_id: int = 216933):
-        "`"Corrige la cuota 216933 reduciendo el monto del último pago aplicado"`"
+        """Corrige la cuota 216933 reduciendo el monto del último pago aplicado"""
         
         try:
             # Obtener exceso
@@ -271,7 +271,7 @@ class CorrectoresCriticos:
 
     @staticmethod
     def corregir_estados_mora_inconsistentes(db: Session):
-        "`"Corrige estados MORA que no coinciden con cálculo"`"
+        """Corrige estados MORA que no coinciden con cálculo"""
         
         try:
             # Actualizar cuotas con estado incorrecto

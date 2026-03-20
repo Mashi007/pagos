@@ -1,5 +1,5 @@
-﻿# -*- coding: utf-8 -*-
-"`"
+# -*- coding: utf-8 -*-
+"""
 Servicio de conciliación automática de pagos no conciliados.
 
 Características:
@@ -7,7 +7,7 @@ Características:
 2. Valida en tiempo real para evitar sobre-aplicaciones
 3. Registra auditoría de cada asignación
 4. Genera alertas de pagos problemáticos
-"`"
+"""
 from datetime import datetime
 from decimal import Decimal
 from typing import Dict, List, Tuple
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 class EstadoCuota:
-    "`"Estados válidos de una cuota con documentación."`"
+    """Estados válidos de una cuota con documentación."""
     PAGADO = 'PAGADO'
     PENDIENTE = 'PENDIENTE'
     MORA = 'MORA'
@@ -47,7 +47,7 @@ class EstadoCuota:
 
 
 class ValidadorSobreAplicacion:
-    "`"Valida en tiempo real para evitar sobre-aplicaciones de pagos."`"
+    """Valida en tiempo real para evitar sobre-aplicaciones de pagos."""
 
     @staticmethod
     def obtener_monto_aplicado_actual(db: Session, cuota_id: int) -> Decimal:
@@ -98,7 +98,7 @@ class ValidadorSobreAplicacion:
 
 
 class ConciliacionAutomaticaService:
-    "`"Servicio principal de conciliación automática."`"
+    """Servicio principal de conciliación automática."""
 
     @staticmethod
     def asignar_pagos_no_conciliados(

@@ -1,7 +1,7 @@
-﻿# -*- coding: utf-8 -*-
-"`"
+# -*- coding: utf-8 -*-
+"""
 Endpoints para conciliación automática y manual de pagos.
-"`"
+"""
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.core.database import get_db
@@ -19,10 +19,10 @@ async def asignar_pagos_automatico(
     db: Session = Depends(get_db),
     usuario = Depends(verificar_token_admin)
 ):
-    "`"
+    """
     Asigna automáticamente pagos sin cuotas a cuotas pendientes (FIFO).
     Requiere: Token de administrador
-    "`"
+    """
     try:
         resultado = ConciliacionAutomaticaService.asignar_pagos_no_conciliados(
             db,
@@ -45,10 +45,10 @@ async def obtener_estados_cuotas(
     db: Session = Depends(get_db),
     usuario = Depends(get_current_user)
 ):
-    "`"
+    """
     Retorna documentación de estados de cuota y estadísticas.
     Estados válidos: PAGADO, PENDIENTE, MORA, PARCIAL, CANCELADA
-    "`"
+    """
     try:
         resumen = ConciliacionAutomaticaService.obtener_resumen_estado_cuotas(db)
         
@@ -75,10 +75,10 @@ async def obtener_cuotas_sobre_aplicadas(
     db: Session = Depends(get_db),
     usuario = Depends(verificar_token_admin)
 ):
-    "`"
+    """
     Identifica cuotas que tienen más dinero aplicado que su monto.
     Ayuda a detectar errores de conciliación.
-    "`"
+    """
     try:
         cuotas_problematicas = ConciliacionAutomaticaService.obtener_cuotas_sobre_aplicadas(db)
         

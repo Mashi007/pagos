@@ -1,8 +1,8 @@
-﻿# -*- coding: utf-8 -*-
-"`"
+# -*- coding: utf-8 -*-
+"""
 Modelo SQLAlchemy para auditoría de conciliación manual.
 Registra cada asignación manual o automática de pagos a cuotas.
-"`"
+"""
 from sqlalchemy import Column, Integer, Numeric, DateTime, ForeignKey, String, Text
 from sqlalchemy.sql import func
 

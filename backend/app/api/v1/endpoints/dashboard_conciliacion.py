@@ -1,8 +1,8 @@
-﻿# -*- coding: utf-8 -*-
-"`"
+# -*- coding: utf-8 -*-
+"""
 Dashboard de monitoreo en tiempo real de conciliación.
 Muestra métricas de salud del sistema de pagos y cuotas.
-"`"
+"""
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func
@@ -19,10 +19,10 @@ async def dashboard_conciliacion_health(
     db: Session = Depends(get_db),
     usuario = Depends(get_current_user)
 ):
-    "`"
+    """
     Dashboard de salud de conciliación.
     Métricas críticas en tiempo real.
-    "`"
+    """
     
     try:
         # Pagos sin asignar
@@ -97,9 +97,9 @@ async def dashboard_conciliacion_metrics(
     db: Session = Depends(get_db),
     usuario = Depends(get_current_user)
 ):
-    "`"
+    """
     Métricas detalladas de conciliación con histórico.
-    "`"
+    """
     
     try:
         # Auditoría del día

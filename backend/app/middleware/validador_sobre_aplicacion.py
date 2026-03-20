@@ -1,8 +1,8 @@
-﻿# -*- coding: utf-8 -*-
-"`"
+# -*- coding: utf-8 -*-
+"""
 Middleware de validación en tiempo real para evitar sobre-aplicaciones.
 Intercepta requests que intenten aplicar pagos y valida antes de ejecutar.
-"`"
+"""
 from fastapi import Request, HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
@@ -20,10 +20,10 @@ logger = logging.getLogger(__name__)
 
 
 class ValidadorSobreAplicacionMiddleware(BaseHTTPMiddleware):
-    "`"
+    """
     Middleware que intercepta requests de aplicación de pagos y valida
     en tiempo real para evitar sobre-aplicaciones.
-    "`"
+    """
     
     async def dispatch(self, request: Request, call_next):
         # Solo validar requests POST/PUT a endpoints de aplicación de pagos

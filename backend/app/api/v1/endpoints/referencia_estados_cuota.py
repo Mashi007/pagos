@@ -1,7 +1,7 @@
-﻿# -*- coding: utf-8 -*-
-"`"
+# -*- coding: utf-8 -*-
+"""
 Endpoint para documentación y referencia de estados de cuota.
-"`"
+"""
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.core.database import get_db
@@ -17,10 +17,10 @@ async def obtener_referencia_estados_cuota(
     db: Session = Depends(get_db),
     usuario = Depends(get_current_user)
 ):
-    "`"
+    """
     Retorna documentación completa de todos los estados de cuota válidos.
     Útil para frontend y para entender el ciclo de vida de una cuota.
-    "`"
+    """
     
     estados = {
         'PAGADO': {

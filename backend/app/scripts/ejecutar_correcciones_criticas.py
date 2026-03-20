@@ -1,8 +1,8 @@
-﻿# -*- coding: utf-8 -*-
-"`"
+# -*- coding: utf-8 -*-
+"""
 Script de automatización para ejecutar correcciones críticas.
 Puede ser usado como CLI o importado como módulo.
-"`"
+"""
 import sys
 import logging
 from datetime import datetime
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class AutomatizadorCriticos:
-    "`"Automatiza la ejecución de correcciones críticas"`"
+    """Automatiza la ejecución de correcciones críticas"""
 
     @staticmethod
     def ejecutar_todas_correcciones(db: Session, dry_run: bool = True) -> dict:

@@ -1,8 +1,8 @@
-﻿# -*- coding: utf-8 -*-
-"`"
+# -*- coding: utf-8 -*-
+"""
 Endpoint para auditoría de conciliación manual.
 Permite visualizar el historial de asignaciones de pagos a cuotas.
-"`"
+"""
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, and_
@@ -24,7 +24,7 @@ async def obtener_auditoria_conciliacion(
     db: Session = Depends(get_db),
     admin = Depends(verificar_token_admin)
 ):
-    "`"
+    """
     Retorna historial de auditoría de conciliación manual/automática.
     
     Args:
@@ -35,7 +35,7 @@ async def obtener_auditoria_conciliacion(
     
     Returns:
         Historial detallado con estadísticas
-    "`"
+    """
     
     try:
         fecha_inicio = datetime.utcnow() - timedelta(days=dias)
@@ -112,9 +112,9 @@ async def obtener_resumen_diario_conciliacion(
     db: Session = Depends(get_db),
     admin = Depends(verificar_token_admin)
 ):
-    "`"
+    """
     Retorna resumen diario de conciliaciones (automáticas + manuales).
-    "`"
+    """
     
     try:
         fecha_inicio = datetime.utcnow() - timedelta(days=dias)
