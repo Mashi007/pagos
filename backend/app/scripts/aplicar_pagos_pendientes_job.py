@@ -87,7 +87,8 @@ def aplicar_pagos_pendientes():
                     sin_cuotas += 1
                     continue
 
-                # Aplicar FIFO
+                # Aplicar FIFO (exito real = al menos una fila en cuota_pagos)
+                hubo_aplicacion = False
                 for cuota in cuotas:
                     if saldo_pago <= Decimal("0.01"):
                         break
@@ -114,7 +115,17 @@ def aplicar_pagos_pendientes():
                         orden_aplicacion=1,
                     )
                     db.add(cuota_pago)
+                    hubo_aplicacion = True
                     saldo_pago -= monto_a_aplicar
+
+                if not hubo_aplicacion:
+                    db.rollback()
+                    logger.info(
+                        f"Pago {pago.id}: Prestamo {pago.prestamo_id} sin saldo aplicable en cuotas "
+                        f"(revisadas pero no se creo cuota_pagos)"
+                    )
+                    sin_cuotas += 1
+                    continue
 
                 # Actualizar estado del pago si se aplico completamente
                 if saldo_pago < Decimal("0.01"):
