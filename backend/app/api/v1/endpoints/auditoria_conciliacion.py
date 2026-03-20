@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, and_
 from app.core.database import get_db
-from app.core.auth import verificar_token_admin
+from app.core.deps import get_current_user
 from app.schemas.response_schema import ResponseSchema
 from app.models.auditoria_conciliacion_manual import AuditoriaConciliacionManual
 from datetime import datetime, timedelta
@@ -22,7 +22,7 @@ async def obtener_auditoria_conciliacion(
     resultado: str = Query(None),
     usuario_id: int = Query(None),
     db: Session = Depends(get_db),
-    admin = Depends(verificar_token_admin)
+    admin = Depends(get_current_user)
 ):
     """
     Retorna historial de auditoría de conciliación manual/automática.
@@ -110,7 +110,7 @@ async def obtener_auditoria_conciliacion(
 async def obtener_resumen_diario_conciliacion(
     dias: int = Query(30, ge=1, le=365),
     db: Session = Depends(get_db),
-    admin = Depends(verificar_token_admin)
+    admin = Depends(get_current_user)
 ):
     """
     Retorna resumen diario de conciliaciones (automáticas + manuales).
@@ -162,3 +162,4 @@ async def obtener_resumen_diario_conciliacion(
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+

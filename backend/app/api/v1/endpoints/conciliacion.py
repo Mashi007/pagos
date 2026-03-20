@@ -8,7 +8,6 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.schemas.response_schema import ResponseSchema
 from app.services.conciliacion_automatica_service import ConciliacionAutomaticaService, EstadoCuota
-from app.core.auth import verificar_token_admin
 
 router = APIRouter(prefix='/api/v1/conciliacion', tags=['conciliacion'])
 
@@ -17,7 +16,7 @@ router = APIRouter(prefix='/api/v1/conciliacion', tags=['conciliacion'])
 async def asignar_pagos_automatico(
     prestamo_id: int = None,
     db: Session = Depends(get_db),
-    usuario = Depends(verificar_token_admin)
+    usuario = Depends(get_current_user)
 ):
     """
     Asigna automáticamente pagos sin cuotas a cuotas pendientes (FIFO).
@@ -73,7 +72,7 @@ async def obtener_estados_cuotas(
 @router.get('/cuotas-sobre-aplicadas')
 async def obtener_cuotas_sobre_aplicadas(
     db: Session = Depends(get_db),
-    usuario = Depends(verificar_token_admin)
+    usuario = Depends(get_current_user)
 ):
     """
     Identifica cuotas que tienen más dinero aplicado que su monto.
@@ -90,3 +89,4 @@ async def obtener_cuotas_sobre_aplicadas(
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
