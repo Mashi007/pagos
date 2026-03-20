@@ -417,38 +417,6 @@ async def health_check_head():
 
 
 
-# ============================================================================
-# Background Jobs
-# ============================================================================
-from apscheduler.schedulers.background import BackgroundScheduler
-from app.scripts.aplicar_pagos_pendientes_job import aplicar_pagos_pendientes
-
-def iniciar_jobs():
-    """Inicia jobs en background."""
-    try:
-        scheduler = BackgroundScheduler()
-        # Job cada 3 minutos: aplicar pagos pendientes (sin solapamiento)
-        scheduler.add_job(
-            aplicar_pagos_pendientes,
-            'interval',
-            minutes=3,
-            id='aplicar_pagos_pendientes',
-            max_instances=1,
-            coalesce=True,
-            misfire_grace_time=60
-        )
-        scheduler.start()
-        logger.info("Background jobs iniciados: aplicar_pagos_pendientes cada 3 min")
-    except Exception as e:
-        logger.error(f"Error iniciando background jobs: {e}", exc_info=True)
-
-# Iniciar jobs en startup
-@app.on_event("startup")
-async def startup_event():
-    """Se ejecuta al iniciar la aplicación."""
-    iniciar_jobs()
-
-
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(

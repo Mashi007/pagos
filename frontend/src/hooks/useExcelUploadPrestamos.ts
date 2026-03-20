@@ -213,6 +213,27 @@ export function useExcelUploadPrestamos({ onClose, onSuccess }: ExcelUploaderPre
           return false
         }
 
+        const fechaRequerimientoBackend = convertirFechaParaBackendPrestamo(row.fecha_requerimiento)
+        const fechaValida = /^\d{4}-\d{2}-\d{2}$/.test(fechaRequerimientoBackend)
+        if (!fechaValida) {
+          setExcelData((prev) =>
+            prev.map((r) =>
+              r._rowIndex === row._rowIndex
+                ? {
+                    ...r,
+                    _hasErrors: true,
+                    _validation: {
+                      ...r._validation,
+                      fecha_requerimiento: { isValid: false, message: 'fecha_requerimiento inválida o vacía' },
+                    },
+                  }
+                : r
+            )
+          )
+          addToast('error', `Fila ${row._rowIndex}: fecha_requerimiento inválida o vacía`)
+          return false
+        }
+
         const total = Number(row.total_financiamiento) || 0
         const numCuotas = Math.min(50, Math.max(1, Math.round(Number(row.numero_cuotas) || 12)))
         const cuotaPeriodo = row.cuota_periodo != null && Number(row.cuota_periodo) > 0
@@ -223,7 +244,7 @@ export function useExcelUploadPrestamos({ onClose, onSuccess }: ExcelUploaderPre
           cliente_id: cliente.id,
           total_financiamiento: total,
           modalidad_pago: (row.modalidad_pago || 'MENSUAL').toUpperCase() as 'MENSUAL' | 'QUINCENAL' | 'SEMANAL',
-          fecha_requerimiento: convertirFechaParaBackendPrestamo(row.fecha_requerimiento) || new Date().toISOString().split('T')[0],
+          fecha_requerimiento: fechaRequerimientoBackend,
           producto: (row.producto || '').trim() || 'Financiamiento',
           concesionario: (row.concesionario || '').trim() || undefined,
           analista: (row.analista || '').trim() || '',
@@ -347,6 +368,14 @@ export function useExcelUploadPrestamos({ onClose, onSuccess }: ExcelUploaderPre
             const validation = validatePrestamoField(field, val as string | number)
             rowData._validation[field] = validation
             if (!validation.isValid) hasErrors = true
+          }
+          const fechaBackend = convertirFechaParaBackendPrestamo(rowData.fecha_requerimiento)
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaBackend)) {
+            rowData._validation.fecha_requerimiento = {
+              isValid: false,
+              message: 'fecha_requerimiento inválida o vacía',
+            }
+            hasErrors = true
           }
           rowData._validation.concesionario = { isValid: true }
           rowData._validation.modelo_vehiculo = { isValid: true }
