@@ -79,7 +79,7 @@ export default function CobrosHistoricoPage() {
                   <tbody>
                     {items.map((row) => (
                       <tr key={row.id} className="border-b">
-                        <td className="py-2 font-mono">{row.referencia_interna}</td>
+                        <td className="py-2 font-mono">{row.referencia_interna?.startsWith("#") ? row.referencia_interna : `#${row.referencia_interna}`}</td>
                         <td className="py-2">{row.fecha_pago ?? '—'}</td>
                         <td className="py-2">{new Date(row.fecha_reporte).toLocaleString()}</td>
                         <td className="py-2 text-right">{row.monto} {row.moneda}</td>

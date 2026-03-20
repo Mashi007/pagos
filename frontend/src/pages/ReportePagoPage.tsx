@@ -777,7 +777,7 @@ export default function ReportePagoPage({ variant = 'cobros' }: { variant?: Repo
           <div className="text-base sm:text-lg break-words">
             <p className="font-semibold">Número de referencia:</p>
             <p className="mt-1 select-all font-mono bg-gray-100 px-2 py-1 rounded inline-block break-all" title="Copiar">
-              #{referencia}
+              {referencia?.startsWith("#") ? referencia : `#${referencia}`}
             </p>
           </div>
           {isInfopagos ? (

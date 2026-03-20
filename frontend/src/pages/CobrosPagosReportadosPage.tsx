@@ -444,7 +444,7 @@ export default function CobrosPagosReportadosPage() {
             <DialogDescription>
               {rechazarModal.row && (
                 <>
-                  Referencia: <strong>{rechazarModal.row.referencia_interna}</strong>
+                  Referencia: <strong>{rechazarModal.row.referencia_interna?.startsWith("#") ? rechazarModal.row.referencia_interna : `#${rechazarModal.row.referencia_interna}`}</strong>
                   {rechazarModal.row.correo_enviado_a && (
                     <span className="block mt-1">
                       Se enviará un correo automáticamente a <strong>{rechazarModal.row.correo_enviado_a}</strong> desde <strong>notificaciones@rapicreditca.com</strong> con el mensaje y el comprobante adjunto.

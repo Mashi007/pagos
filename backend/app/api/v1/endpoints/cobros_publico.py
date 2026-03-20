@@ -37,6 +37,13 @@ from app.core.security import decode_token, create_recibo_infopagos_token
 
 logger = logging.getLogger(__name__)
 
+def _referencia_display(referencia_interna: str) -> str:
+    ref = (referencia_interna or "").strip()
+    if not ref:
+        return "-"
+    return ref if ref.startswith("#") else f"#{ref}"
+
+
 def _monto_con_moneda(pr: PagoReportado) -> str:
     monto = getattr(pr, "monto", "")
     moneda = (getattr(pr, "moneda", "") or "").strip()
@@ -488,13 +495,13 @@ async def enviar_reporte_publico(
             if to_email:
                 body = (
                     f"Se ha recibido su reporte de pago.\n\n"
-                    f"Número de referencia: {referencia}\n\n"
+                    f"Número de referencia: {_referencia_display(referencia)}\n\n"
                     f"El recibo se adjunta. Si necesita información adicional, contáctenos por WhatsApp: {WHATSAPP_LINK}\n\n"
                     "RapiCredit C.A."
                 )
                 ok_mail, err_mail = send_email(
                     [to_email],
-                    f"Recibo de reporte de pago #{referencia}",
+                    f"Recibo de reporte de pago {_referencia_display(referencia)}",
                     body,
                     attachments=[(f"recibo_{referencia}.pdf", pdf_bytes)],
                     servicio="cobros",
@@ -702,13 +709,13 @@ async def enviar_reporte_infopagos(
         if to_email:
             body = (
                 f"Se ha registrado un pago a su nombre.\n\n"
-                f"Número de referencia: {referencia}\n\n"
+                f"Número de referencia: {_referencia_display(referencia)}\n\n"
                 f"El recibo se adjunta. Si necesita información adicional, contáctenos por WhatsApp: {WHATSAPP_LINK}\n\n"
                 "RapiCredit C.A."
             )
             ok_mail, err_mail = send_email(
                 [to_email],
-                f"Recibo de pago #{referencia}",
+                f"Recibo de pago {_referencia_display(referencia)}",
                 body,
                 attachments=[(f"recibo_{referencia}.pdf", pdf_bytes)],
                 servicio="cobros",

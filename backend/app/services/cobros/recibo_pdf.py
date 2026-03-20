@@ -14,6 +14,13 @@ CONTACTO_COBRANZA = "cobranza@rapicreditca.com"
 _LOGO_PATH = Path(__file__).resolve().parent.parent.parent.parent / "static" / "logo.png"
 
 
+def _referencia_display(referencia_interna: str) -> str:
+    ref = (referencia_interna or "").strip()
+    if not ref:
+        return "-"
+    return ref if ref.startswith("#") else f"#{ref}"
+
+
 def _cedula_display(tipo_cedula: str, numero_cedula: str) -> str:
     tipo = (tipo_cedula or "").strip().upper()
     numero = (numero_cedula or "").strip().upper().replace("-", "").replace(" ", "")
@@ -111,13 +118,14 @@ def generar_recibo_pago_reportado(
         story.append(Spacer(1, 6))
 
     story.append(Paragraph("<b>RapiCredit C.A.</b>", title_style))
-    story.append(Paragraph(f"Recibo de pago Nro. {referencia_interna}", subtitle_style))
+    ref_display = _referencia_display(referencia_interna)
+    story.append(Paragraph(f"Recibo de pago Nro. {ref_display}", subtitle_style))
 
     info = [
         [Paragraph("Fecha de emision", label_style), Paragraph(fecha_emision_str, value_style), Paragraph("Fecha de pago", label_style), Paragraph(fecha_pago_str, value_style)],
         [Paragraph("Titular", label_style), Paragraph(nombre_completo or "-", value_style), Paragraph("Cedula", label_style), Paragraph(cedula or "-", value_style)],
         [Paragraph("Banco", label_style), Paragraph(banco or "-", value_style), Paragraph("Operacion", label_style), Paragraph(numero_op or "-", value_style)],
-        [Paragraph("Monto reportado", label_style), Paragraph(f"<b>{monto_display or '-'}</b>", value_style), Paragraph("Referencia", label_style), Paragraph(referencia_interna, value_style)],
+        [Paragraph("Monto reportado", label_style), Paragraph(f"<b>{monto_display or '-'}</b>", value_style), Paragraph("Referencia", label_style), Paragraph(ref_display, value_style)],
     ]
 
     table = Table(info, colWidths=[1.45 * inch, 2.0 * inch, 1.2 * inch, 1.45 * inch])

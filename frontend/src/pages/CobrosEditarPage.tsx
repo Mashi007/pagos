@@ -155,7 +155,7 @@ export default function CobrosEditarPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Editar reporte #{detalle.referencia_interna}</CardTitle>
+          <CardTitle>Editar reporte {detalle.referencia_interna?.startsWith("#") ? detalle.referencia_interna : `#${detalle.referencia_interna}`}</CardTitle>
           <p className="text-sm text-muted-foreground">
             Modifica los valores para que cumplan con los validadores (cédula, fecha, monto, etc.).
           </p>

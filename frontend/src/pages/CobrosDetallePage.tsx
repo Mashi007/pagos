@@ -127,7 +127,7 @@ export default function CobrosDetallePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Detalle del reporte #{detalle.referencia_interna}</CardTitle>
+          <CardTitle>Detalle del reporte {detalle.referencia_interna?.startsWith("#") ? detalle.referencia_interna : `#${detalle.referencia_interna}`}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           <p><strong>Nombre:</strong> {detalle.nombres} {detalle.apellidos}</p>
