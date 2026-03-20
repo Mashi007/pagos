@@ -37,6 +37,28 @@ from app.core.security import decode_token, create_recibo_infopagos_token
 
 logger = logging.getLogger(__name__)
 
+def _monto_con_moneda(pr: PagoReportado) -> str:
+    monto = getattr(pr, "monto", "")
+    moneda = (getattr(pr, "moneda", "") or "").strip()
+    monto_str = str(monto).strip()
+    return f"{monto_str} {moneda}".strip()
+
+
+def _generar_recibo_desde_pago(pr: PagoReportado) -> bytes:
+    """Genera recibo siempre con datos del pago reportado actual."""
+    return generar_recibo_pago_reportado(
+        referencia_interna=pr.referencia_interna,
+        nombres=pr.nombres,
+        apellidos=pr.apellidos,
+        tipo_cedula=pr.tipo_cedula,
+        numero_cedula=pr.numero_cedula,
+        institucion_financiera=pr.institucion_financiera,
+        monto=_monto_con_moneda(pr),
+        numero_operacion=pr.numero_operacion,
+        fecha_pago=pr.fecha_pago,
+    )
+
+
 def _prestamos_aprobados_del_cliente(db: Session, cliente_id: int) -> list:
     """Misma regla que importar reportados a pagos: solo préstamos en estado APROBADO."""
     rows = db.execute(
@@ -460,17 +482,7 @@ async def enviar_reporte_publico(
 
         if coincide:
             pr.estado = "aprobado"
-            pdf_bytes = generar_recibo_pago_reportado(
-                referencia_interna=referencia,
-                nombres=pr.nombres,
-                apellidos=pr.apellidos,
-                tipo_cedula=pr.tipo_cedula,
-                numero_cedula=pr.numero_cedula,
-                institucion_financiera=pr.institucion_financiera,
-                monto=f"{pr.monto} {pr.moneda}",
-                numero_operacion=pr.numero_operacion,
-                fecha_pago=pr.fecha_pago,
-            )
+            pdf_bytes = _generar_recibo_desde_pago(pr)
             pr.recibo_pdf = pdf_bytes
             to_email = (cliente.email or "").strip()
             if to_email:
@@ -535,9 +547,9 @@ def get_recibo_publico(
     cedula_pr = (getattr(pr, "tipo_cedula", "") or "") + (getattr(pr, "numero_cedula", "") or "")
     if cedula_pr.replace("-", "") != cedula_token.replace("-", ""):
         raise HTTPException(status_code=403, detail="No tiene permiso para este recibo.")
-    pdf_bytes = getattr(pr, "recibo_pdf", None)
-    if not pdf_bytes:
-        raise HTTPException(status_code=404, detail="No hay recibo PDF para este pago.")
+    pdf_bytes = _generar_recibo_desde_pago(pr)
+    pr.recibo_pdf = pdf_bytes
+    db.commit()
     ref = getattr(pr, "referencia_interna", "recibo") or "recibo"
     return Response(
         content=bytes(pdf_bytes),
@@ -684,17 +696,7 @@ async def enviar_reporte_infopagos(
             gemini_result = compare_form_with_image(form_data, content, filename)
             pr.gemini_coincide_exacto = "true" if gemini_result.get("coincide_exacto", False) else "false"
             pr.gemini_comentario = gemini_result.get("comentario")
-        pdf_bytes = generar_recibo_pago_reportado(
-            referencia_interna=referencia,
-            nombres=pr.nombres,
-            apellidos=pr.apellidos,
-            tipo_cedula=pr.tipo_cedula,
-            numero_cedula=pr.numero_cedula,
-            institucion_financiera=pr.institucion_financiera,
-            monto=f"{pr.monto} {pr.moneda}",
-            numero_operacion=pr.numero_operacion,
-            fecha_pago=pr.fecha_pago,
-        )
+        pdf_bytes = _generar_recibo_desde_pago(pr)
         pr.recibo_pdf = pdf_bytes
         to_email = (cliente.email or "").strip()
         if to_email:
@@ -759,9 +761,9 @@ def get_recibo_infopagos(
     if not pr:
         raise HTTPException(status_code=404, detail="Recibo no encontrado.")
     pr = pr[0] if hasattr(pr, "__getitem__") else pr
-    pdf_bytes = getattr(pr, "recibo_pdf", None)
-    if not pdf_bytes:
-        raise HTTPException(status_code=404, detail="No hay recibo PDF para este pago.")
+    pdf_bytes = _generar_recibo_desde_pago(pr)
+    pr.recibo_pdf = pdf_bytes
+    db.commit()
     ref = getattr(pr, "referencia_interna", "recibo") or "recibo"
     return Response(
         content=bytes(pdf_bytes),

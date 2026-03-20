@@ -1,20 +1,25 @@
-"""
-Generación del recibo PDF para reportes de pago (módulo Cobros).
-Logo RapiCredit, cuerpo del recibo, número de referencia, pie con contacto y WhatsApp.
-Incluye fecha de emisión del recibo y fecha de pago (desde tabla pagos_reportados).
+﻿"""
+Generacion del recibo PDF para reportes de pago (modulo Cobros).
+Diseno profesional con encabezado, resumen estructurado y bloque narrativo.
 """
 import io
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 from typing import Optional
 
-# WhatsApp RapiCredit: 424-4579934 — https://wa.me/584244579934 (usado en recibo, rechazos y confirmaciones)
 WHATSAPP_LINK = "https://wa.me/584244579934"
 WHATSAPP_DISPLAY = "424-4579934"
 CONTACTO_COBRANZA = "cobranza@rapicreditca.com"
 
-# Ruta al logo: backend/static/logo.png (desde app/services/cobros/ subimos a backend)
 _LOGO_PATH = Path(__file__).resolve().parent.parent.parent.parent / "static" / "logo.png"
+
+
+def _cedula_display(tipo_cedula: str, numero_cedula: str) -> str:
+    tipo = (tipo_cedula or "").strip().upper()
+    numero = (numero_cedula or "").strip().upper().replace("-", "").replace(" ", "")
+    if tipo and numero.startswith(tipo):
+        numero = numero[len(tipo):]
+    return f"{tipo}-{numero}".strip("-")
 
 
 def generar_recibo_pago_reportado(
@@ -26,64 +31,123 @@ def generar_recibo_pago_reportado(
     institucion_financiera: str,
     monto: str,
     numero_operacion: str,
-    fecha_recepcion: Optional[datetime] = None,
+    fecha_recepcion: Optional[object] = None,
     fecha_pago: Optional[date] = None,
 ) -> bytes:
-    """
-    Genera el PDF del recibo de reporte de pago.
-    Cabecera: logo (imagen si existe) y texto "RapiCredit C.A.".
-    Cuerpo: mensaje estándar con datos del reporte.
-    Fechas: fecha de emisión del recibo (recepción) y fecha de pago (desde pagos_reportados).
-    Pie: datos de contacto y WhatsApp clickeable (en PDF como URL).
-    """
+    """Genera el PDF del recibo con datos reales del pago reportado."""
+    from reportlab.lib import colors
     from reportlab.lib.pagesizes import letter
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import inch
+    from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+    del fecha_recepcion  # No se usa: la emision del recibo es la fecha actual.
+
+    fecha_emision_str = date.today().strftime("%d/%m/%Y")
+    fecha_pago_str = fecha_pago.strftime("%d/%m/%Y") if fecha_pago else "-"
+
+    nombre_completo = f"{(nombres or '').strip()} {(apellidos or '').strip()}".strip()
+    cedula = _cedula_display(tipo_cedula, numero_cedula)
+    banco = (institucion_financiera or "").strip()
+    monto_display = (monto or "").strip()
+    numero_op = (numero_operacion or "").strip()
 
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=letter, topMargin=0.75 * inch, bottomMargin=0.75 * inch)
-    styles = getSampleStyleSheet()
-    styles.add(ParagraphStyle(name="Center", alignment=1))
-    styles.add(ParagraphStyle(name="Small", fontSize=9, spaceAfter=4))
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=letter,
+        topMargin=0.55 * inch,
+        bottomMargin=0.55 * inch,
+        leftMargin=0.65 * inch,
+        rightMargin=0.65 * inch,
+    )
 
-    fecha_emision = fecha_recepcion or datetime.utcnow()
-    fecha_emision_str = fecha_emision.strftime("%d/%m/%Y %H:%M")
-    fecha_pago_str = fecha_pago.strftime("%d/%m/%Y") if fecha_pago else "—"
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "ReceiptTitle",
+        parent=styles["Title"],
+        fontSize=17,
+        leading=21,
+        textColor=colors.HexColor("#0f172a"),
+        spaceAfter=4,
+    )
+    subtitle_style = ParagraphStyle(
+        "ReceiptSubtitle",
+        parent=styles["Normal"],
+        fontSize=10,
+        textColor=colors.HexColor("#475569"),
+        spaceAfter=8,
+    )
+    label_style = ParagraphStyle(
+        "Label",
+        parent=styles["Normal"],
+        fontSize=9,
+        textColor=colors.HexColor("#64748b"),
+    )
+    value_style = ParagraphStyle(
+        "Value",
+        parent=styles["Normal"],
+        fontSize=10,
+        textColor=colors.HexColor("#0f172a"),
+    )
+    body_style = ParagraphStyle(
+        "Body",
+        parent=styles["Normal"],
+        fontSize=10.2,
+        leading=15,
+        textColor=colors.HexColor("#111827"),
+    )
+    footer_style = ParagraphStyle(
+        "Footer",
+        parent=styles["Normal"],
+        fontSize=9,
+        textColor=colors.HexColor("#475569"),
+    )
 
     story = []
-    # Cabecera: logo RapiCredit si existe, luego texto
+
     if _LOGO_PATH.exists():
-        logo_img = Image(str(_LOGO_PATH), width=2.0 * inch, height=2.0 * inch)
-        story.append(logo_img)
-        story.append(Spacer(1, 8))
-    story.append(Paragraph("<b>RapiCredit C.A.</b>", styles["Title"]))
-    story.append(Paragraph(f"Recibo de pago — {referencia_interna}", styles["Heading2"]))
-    story.append(Spacer(1, 12))
-    story.append(Paragraph(f"<b>Fecha de emisión del recibo:</b> {fecha_emision_str}", styles["Normal"]))
-    story.append(Paragraph(f"<b>Fecha de pago:</b> {fecha_pago_str}", styles["Normal"]))
+        story.append(Image(str(_LOGO_PATH), width=1.45 * inch, height=1.45 * inch))
+        story.append(Spacer(1, 6))
+
+    story.append(Paragraph("<b>RapiCredit C.A.</b>", title_style))
+    story.append(Paragraph(f"Recibo de pago Nro. {referencia_interna}", subtitle_style))
+
+    info = [
+        [Paragraph("Fecha de emision", label_style), Paragraph(fecha_emision_str, value_style), Paragraph("Fecha de pago", label_style), Paragraph(fecha_pago_str, value_style)],
+        [Paragraph("Titular", label_style), Paragraph(nombre_completo or "-", value_style), Paragraph("Cedula", label_style), Paragraph(cedula or "-", value_style)],
+        [Paragraph("Banco", label_style), Paragraph(banco or "-", value_style), Paragraph("Operacion", label_style), Paragraph(numero_op or "-", value_style)],
+        [Paragraph("Monto reportado", label_style), Paragraph(f"<b>{monto_display or '-'}</b>", value_style), Paragraph("Referencia", label_style), Paragraph(referencia_interna, value_style)],
+    ]
+
+    table = Table(info, colWidths=[1.45 * inch, 2.0 * inch, 1.2 * inch, 1.45 * inch])
+    table.setStyle(TableStyle([
+        ("BOX", (0, 0), (-1, -1), 0.8, colors.HexColor("#cbd5e1")),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#e2e8f0")),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f8fafc")),
+        ("BACKGROUND", (0, 2), (-1, 2), colors.HexColor("#f8fafc")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]))
+
+    story.append(table)
     story.append(Spacer(1, 12))
 
-    # Cuerpo
-    nombre_completo = f"{nombres} {apellidos}".strip()
-    cedula_display = f"{tipo_cedula}-{numero_cedula}"
     cuerpo = (
-        f'Se ha recibido reporte de pago de la Sra./Sr. <b>{nombre_completo}</b>, '
-        f'titular de la cédula <b>{cedula_display}</b>, proveniente del banco <b>{institucion_financiera}</b>, '
-        f'por la cantidad de <b>{monto}</b> Bs., con número de operación <b>{numero_operacion}</b>.'
+        "Se confirma la recepcion de su reporte de pago, asociado al titular "
+        f"<b>{nombre_completo or '-'}</b> (cedula <b>{cedula or '-'}</b>). "
+        f"El pago fue reportado por <b>{monto_display or '-'}</b> en la institucion "
+        f"<b>{banco or '-'}</b>, con numero de operacion <b>{numero_op or '-'}</b>."
     )
-    story.append(Paragraph(cuerpo, styles["Normal"]))
-    story.append(Spacer(1, 16))
-    story.append(Paragraph(f"<b>Número de referencia:</b> {referencia_interna}", styles["Normal"]))
-    story.append(Spacer(1, 24))
+    story.append(Paragraph(cuerpo, body_style))
+    story.append(Spacer(1, 18))
 
-    # Pie: contacto y WhatsApp (en PDF el enlace se puede hacer clickeable)
-    story.append(Paragraph("<b>Datos de contacto — RapiCredit C.A.</b>", styles["Normal"]))
-    story.append(Paragraph(f"Email: {CONTACTO_COBRANZA}", styles["Small"]))
-    story.append(Paragraph(
-        f'WhatsApp: <a href="{WHATSAPP_LINK}">{WHATSAPP_DISPLAY}</a>',
-        styles["Small"],
-    ))
+    story.append(Paragraph("<b>Contacto de cobranza</b>", value_style))
+    story.append(Paragraph(f"Email: {CONTACTO_COBRANZA}", footer_style))
+    story.append(Paragraph(f'WhatsApp: <a href="{WHATSAPP_LINK}">{WHATSAPP_DISPLAY}</a>', footer_style))
 
     doc.build(story)
     return buf.getvalue()
