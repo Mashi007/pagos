@@ -162,7 +162,7 @@ class ConciliacionAutomaticaService:
                     
                     if not es_valido:
                         resultado['errores'].append(
-                            f"Pago {pago.id} -> Cuota {cuota.id}: {"; ".join(errores_validacion)}"
+                            f'Pago {pago.id} -> Cuota {cuota.id}: {", ".join(errores_validacion)}'
                         )
                         resultado['fallidas'] += 1
                         continue
@@ -252,3 +252,4 @@ class ConciliacionAutomaticaService:
             })
         
         return resultado
+
