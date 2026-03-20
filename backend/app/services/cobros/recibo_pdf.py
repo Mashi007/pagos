@@ -21,6 +21,19 @@ def _referencia_display(referencia_interna: str) -> str:
     return ref if ref.startswith("#") else f"#{ref}"
 
 
+def _is_placeholder_text(value: str) -> bool:
+    txt = (value or "").strip().upper()
+    return txt in {"", "-", "N/A", "NA", "NONE", "NULL", "NULO"}
+
+
+def _normalize_monto_display(monto: str) -> str:
+    txt = (monto or "").strip()
+    up = txt.upper()
+    if "USDT" in up:
+        txt = txt.replace("USDT", "USD")
+    return txt
+
+
 def _cedula_display(tipo_cedula: str, numero_cedula: str) -> str:
     tipo = (tipo_cedula or "").strip().upper()
     numero = (numero_cedula or "").strip().upper().replace("-", "").replace(" ", "")
@@ -56,7 +69,8 @@ def generar_recibo_pago_reportado(
     nombre_completo = f"{(nombres or '').strip()} {(apellidos or '').strip()}".strip()
     cedula = _cedula_display(tipo_cedula, numero_cedula)
     banco = (institucion_financiera or "").strip()
-    monto_display = (monto or "").strip()
+    banco_valido = "" if _is_placeholder_text(banco) else banco
+    monto_display = _normalize_monto_display(monto)
     numero_op = (numero_operacion or "").strip()
 
     buf = io.BytesIO()
@@ -124,7 +138,7 @@ def generar_recibo_pago_reportado(
     info = [
         [Paragraph("Fecha de emision", label_style), Paragraph(fecha_emision_str, value_style), Paragraph("Fecha de pago", label_style), Paragraph(fecha_pago_str, value_style)],
         [Paragraph("Titular", label_style), Paragraph(nombre_completo or "-", value_style), Paragraph("Cedula", label_style), Paragraph(cedula or "-", value_style)],
-        [Paragraph("Banco", label_style), Paragraph(banco or "-", value_style), Paragraph("Operacion", label_style), Paragraph(numero_op or "-", value_style)],
+        [Paragraph("Banco", label_style), Paragraph(banco_valido or "-", value_style), Paragraph("Operacion", label_style), Paragraph(numero_op or "-", value_style)],
         [Paragraph("Monto reportado", label_style), Paragraph(f"<b>{monto_display or '-'}</b>", value_style), Paragraph("Referencia", label_style), Paragraph(ref_display, value_style)],
     ]
 
@@ -144,12 +158,20 @@ def generar_recibo_pago_reportado(
     story.append(table)
     story.append(Spacer(1, 12))
 
-    cuerpo = (
-        "Se confirma la recepcion de su reporte de pago, asociado al titular "
-        f"<b>{nombre_completo or '-'}</b> (cedula <b>{cedula or '-'}</b>). "
-        f"El pago fue reportado por <b>{monto_display or '-'}</b> en la institucion "
-        f"<b>{banco or '-'}</b>, con numero de operacion <b>{numero_op or '-'}</b>."
-    )
+    if banco_valido:
+        cuerpo = (
+            "Se confirma la recepcion de su reporte de pago, asociado al titular "
+            f"<b>{nombre_completo or '-'}</b> (cedula <b>{cedula or '-'}</b>). "
+            f"El pago fue reportado por <b>{monto_display or '-'}</b> en la institucion "
+            f"<b>{banco_valido}</b>, con numero de operacion <b>{numero_op or '-'}</b>."
+        )
+    else:
+        cuerpo = (
+            "Se confirma la recepcion de su reporte de pago, asociado al titular "
+            f"<b>{nombre_completo or '-'}</b> (cedula <b>{cedula or '-'}</b>). "
+            f"El pago fue reportado por <b>{monto_display or '-'}</b>, "
+            f"con numero de operacion <b>{numero_op or '-'}</b>."
+        )
     story.append(Paragraph(cuerpo, body_style))
     story.append(Spacer(1, 18))
 
