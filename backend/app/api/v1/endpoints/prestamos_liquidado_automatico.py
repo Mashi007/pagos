@@ -5,7 +5,7 @@ Endpoint para ejecutar actualizacion manual de prestamos a LIQUIDADO
 from fastapi import APIRouter, Depends, HTTPException
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.schemas.response_schema import ResponseSchema
+
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from datetime import datetime
@@ -48,10 +48,10 @@ async def actualizar_liquidado_manual(
             LIMIT 10
         ''')).fetchall()
         
-        return ResponseSchema(
-            status='success',
-            message='Actualizacion de prestamos a LIQUIDADO completada',
-            data={
+        return {
+            'status': 'success',
+            'message': 'Actualizacion de prestamos a LIQUIDADO completada',
+            'data': {
                 'total_cambios_hoy': cambios_hoy[0],
                 'ultima_ejecucion': datetime.now().isoformat(),
                 'cambios_recientes': [
@@ -66,7 +66,7 @@ async def actualizar_liquidado_manual(
                     for d in detalles
                 ]
             }
-        ).dict()
+        }
     
     except Exception as e:
         raise HTTPException(
@@ -109,10 +109,10 @@ async def obtener_auditoria_cambios_estado(
             WHERE fecha_cambio >= CURRENT_DATE - INTERVAL ':dias days'
         '''), {'dias': dias}).fetchone()
         
-        return ResponseSchema(
-            status='success',
-            message=f'Historial de cambios de estado (ultimos {dias} dias)',
-            data={
+        return {
+            'status': 'success',
+            'message': f'Historial de cambios de estado (ultimos {dias} dias)',
+            'data': {
                 'resumen': {
                     'total_cambios': resumen[0],
                     'prestamos_afectados': resumen[1],
@@ -132,7 +132,7 @@ async def obtener_auditoria_cambios_estado(
                     for c in cambios
                 ]
             }
-        ).dict()
+        }
     
     except Exception as e:
         raise HTTPException(
@@ -140,4 +140,6 @@ async def obtener_auditoria_cambios_estado(
             detail=f'Error al obtener auditoria: {str(e)}'
         )
 
+
+
 
