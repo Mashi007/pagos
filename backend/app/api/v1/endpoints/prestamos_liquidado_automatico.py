@@ -4,7 +4,7 @@ Endpoint para ejecutar actualizacion manual de prestamos a LIQUIDADO
 """
 from fastapi import APIRouter, Depends, HTTPException
 from app.core.database import get_db
-from app.core.auth import verificar_token_admin
+from app.core.deps import get_current_user
 from app.schemas.response_schema import ResponseSchema
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -15,7 +15,7 @@ router = APIRouter(prefix='/api/v1/prestamos', tags=['prestamos'])
 @router.post('/actualizar-liquidado-manual')
 async def actualizar_liquidado_manual(
     db: Session = Depends(get_db),
-    usuario = Depends(verificar_token_admin)
+    usuario = Depends(get_current_user)
 ):
     """
     Ejecuta manualmente la actualizacion de prestamos a LIQUIDADO.
@@ -78,7 +78,7 @@ async def actualizar_liquidado_manual(
 async def obtener_auditoria_cambios_estado(
     dias: int = 7,
     db: Session = Depends(get_db),
-    usuario = Depends(verificar_token_admin)
+    usuario = Depends(get_current_user)
 ):
     """
     Obtiene el historial de cambios de estado a LIQUIDADO.
@@ -140,3 +140,4 @@ async def obtener_auditoria_cambios_estado(
             detail=f'Error al obtener auditoria: {str(e)}'
         )
 
+
