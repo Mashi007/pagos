@@ -48,6 +48,7 @@ import { toast } from 'sonner'
 import { getErrorMessage } from '../../types/errors'
 import { useSearchParams, Link } from 'react-router-dom'
 import { useGmailPipeline } from '../../hooks/useGmailPipeline'
+import apiClient from '../../services/api'
 
 /** Si false, la opción "Descargar Excel" (Gmail) no se muestra en el submenú Agregar pago. */
 const SHOW_DESCARGA_EXCEL_EN_SUBMENU = false
@@ -95,6 +96,7 @@ export function PagosList() {
   const [isDescargandoExcelCobrosErrores, setIsDescargandoExcelCobrosErrores] = useState(false)
   const [isExportingRevisionPagos, setIsExportingRevisionPagos] = useState(false)
   const [isDescargandoGmailExcel, setIsDescargandoGmailExcel] = useState(false)
+  const [isExportingSinAplicarCuotas, setIsExportingSinAplicarCuotas] = useState(false)
   const [showVaciarTablaGmail, setShowVaciarTablaGmail] = useState(false)
   const [isVaciarTablaGmail, setIsVaciarTablaGmail] = useState(false)
   const [gmailScanFilter, setGmailScanFilter] = useState<'unread' | 'read' | 'all'>('unread')
@@ -375,6 +377,39 @@ export function PagosList() {
   return (
     <div className="space-y-6">
       <PagosKPIsNuevo />
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="gap-2 border-amber-300 text-amber-950 bg-amber-50 hover:bg-amber-100"
+          disabled={isExportingSinAplicarCuotas}
+          title="Pagos sin filas en cuota_pagos (cohorte=todos). Requiere sesion."
+          onClick={async () => {
+            setIsExportingSinAplicarCuotas(true)
+            try {
+              const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
+              await apiClient.downloadFile(
+                '/api/v1/pagos/export/excel/pagos-sin-aplicar-cuotas?cohorte=todos',
+                `pagos_sin_aplicar_cuotas_${stamp}.xlsx`
+              )
+              toast.success('Excel descargado (pagos sin aplicar a cuotas)')
+            } catch (e) {
+              console.error(e)
+              toast.error('No se pudo descargar el Excel. Revise la sesion o intente de nuevo.')
+            } finally {
+              setIsExportingSinAplicarCuotas(false)
+            }
+          }}
+        >
+          {isExportingSinAplicarCuotas ? (
+            <Loader2 className="h-4 w-4 animate-spin shrink-0" aria-hidden />
+          ) : (
+            <Download className="h-4 w-4 shrink-0" aria-hidden />
+          )}
+          Excel: sin aplicar a cuotas
+        </Button>
+      </div>
       {/* Cédulas que pueden reportar en Bs (rapicredit-cobros / infopagos) - visible arriba */}
       <Card className="border-blue-200 bg-blue-50/80 shadow-sm">
         <CardHeader className="pb-2">
