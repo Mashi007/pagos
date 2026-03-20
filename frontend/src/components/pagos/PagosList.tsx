@@ -48,7 +48,6 @@ import { toast } from 'sonner'
 import { getErrorMessage } from '../../types/errors'
 import { useSearchParams, Link } from 'react-router-dom'
 import { useGmailPipeline } from '../../hooks/useGmailPipeline'
-import apiClient from '../../services/api'
 
 /** Si false, la opción "Descargar Excel" (Gmail) no se muestra en el submenú Agregar pago. */
 const SHOW_DESCARGA_EXCEL_EN_SUBMENU = false
@@ -96,7 +95,6 @@ export function PagosList() {
   const [isDescargandoExcelCobrosErrores, setIsDescargandoExcelCobrosErrores] = useState(false)
   const [isExportingRevisionPagos, setIsExportingRevisionPagos] = useState(false)
   const [isDescargandoGmailExcel, setIsDescargandoGmailExcel] = useState(false)
-  const [isExportingSinAplicarCuotas, setIsExportingSinAplicarCuotas] = useState(false)
   const [showVaciarTablaGmail, setShowVaciarTablaGmail] = useState(false)
   const [isVaciarTablaGmail, setIsVaciarTablaGmail] = useState(false)
   const [gmailScanFilter, setGmailScanFilter] = useState<'unread' | 'read' | 'all'>('unread')
@@ -376,52 +374,6 @@ export function PagosList() {
   }
   return (
     <div className="space-y-6">
-      <Card
-        data-export-sin-cuotas="1"
-        className="border-2 border-amber-400 bg-gradient-to-r from-amber-50 to-orange-50 shadow-md"
-      >
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg flex flex-wrap items-center gap-2 font-semibold text-amber-950">
-            <FileSpreadsheet className="h-6 w-6 text-amber-700 shrink-0" />
-            Excel: pagos sin aplicar a cuotas
-          </CardTitle>
-          <p className="text-sm text-amber-900/85 mt-1">
-            Descarga el listado de pagos que <strong>no tienen filas en cuota_pagos</strong> (cohorte todos). Usa tu sesion actual; no sirve pegar la URL del API en el navegador.
-          </p>
-        </CardHeader>
-        <CardContent className="pt-0 flex flex-wrap gap-3">
-          <Button
-            type="button"
-            variant="default"
-            size="lg"
-            className="gap-2 bg-amber-600 hover:bg-amber-700 text-white shadow"
-            disabled={isExportingSinAplicarCuotas}
-            onClick={async () => {
-              setIsExportingSinAplicarCuotas(true)
-              try {
-                const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
-                await apiClient.downloadFile(
-                  '/api/v1/pagos/export/excel/pagos-sin-aplicar-cuotas?cohorte=todos',
-                `pagos_sin_aplicar_cuotas_${stamp}.xlsx`
-                )
-                toast.success('Excel descargado (pagos sin aplicar a cuotas)')
-              } catch (e) {
-                console.error(e)
-                toast.error('No se pudo descargar el Excel. Revise la sesion o intente de nuevo.')
-              } finally {
-                setIsExportingSinAplicarCuotas(false)
-              }
-            }}
-          >
-            {isExportingSinAplicarCuotas ? (
-              <Loader2 className="h-5 w-5 animate-spin shrink-0" aria-hidden />
-            ) : (
-              <Download className="h-5 w-5 shrink-0" aria-hidden />
-            )}
-            Descargar Excel ahora
-          </Button>
-        </CardContent>
-      </Card>
       <PagosKPIsNuevo />
       {/* Cédulas que pueden reportar en Bs (rapicredit-cobros / infopagos) - visible arriba */}
       <Card className="border-blue-200 bg-blue-50/80 shadow-sm">
