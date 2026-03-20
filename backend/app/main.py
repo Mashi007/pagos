@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.api.v1 import api_router
 from app.middleware.audit_middleware import AuditMiddleware
+from app.middleware.validador_sobre_aplicacion import ValidadorSobreAplicacionMiddleware
 from app.services.liquidado_scheduler import liquidado_scheduler
 
 # Configurar logging con UTF-8 para tildes/caracteres en Render
@@ -99,6 +100,9 @@ async def global_exception_handler(request: Request, exc: Exception):
 # Log de cada request (mÃ©todo, ruta, status, tiempo) para depuraciÃ³n en Render
 app.add_middleware(RequestLogMiddleware)
 
+# Middleware: Validación en tiempo real de sobre-aplicaciones
+app.add_middleware(ValidadorSobreAplicacionMiddleware)
+
 # AuditorÃ­a automÃ¡tica: registra todos los POST/PUT/DELETE/PATCH en tabla auditoria
 app.add_middleware(AuditMiddleware)
 
@@ -119,6 +123,15 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 # Incluir endpoint del scheduler de LIQUIDADO
 from app.api.v1.endpoints import prestamos_liquidado_automatico
 app.include_router(prestamos_liquidado_automatico.router)
+# Incluir endpoint de conciliación automática
+from app.api.v1.endpoints import conciliacion
+app.include_router(conciliacion.router)
+# Incluir endpoint de referencia de estados de cuota
+from app.api.v1.endpoints import referencia_estados_cuota
+app.include_router(referencia_estados_cuota.router)
+# Incluir endpoint de auditoría de conciliación
+from app.api.v1.endpoints import auditoria_conciliacion
+app.include_router(auditoria_conciliacion.router)
 
 
 def _startup_db_with_retry(engine, max_attempts: int = 10, delay_sec: float = 3.0):
@@ -405,3 +418,7 @@ if __name__ == "__main__":
         port=8000,
         reload=settings.DEBUG
     )
+
+
+
+
