@@ -85,6 +85,8 @@ Ver `sql/correccion_pagos_pagado_sin_aplicacion_template.sql`.
 ## Seguimiento
 
 1. Desplegar backend con `_estado_pago_tras_aplicar_fifo`.
+2. **usuario_registro:** en pagos.py, _usuario_registro_desde_current_user guarda email JWT o import-masivo@sistema.rapicredit.com / user_id:{id}@... si falta email (nuevas cargas MER/BNC trazables).
+
 2. Corregir histórico con criterio A/B y respaldo.
 3. Verificar KPIs y `GET /health` (integridad pagos/cuotas) si está habilitado.
 4. Dejar el job `aplicar_pagos_pendientes` procesar primero pagos con cupo real (`PENDIENTE` con aplicación posible).

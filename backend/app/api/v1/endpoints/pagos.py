@@ -87,6 +87,31 @@ _MIN_MONTO_PAGADO = 0.01  # Monto mínimo válido (> 0)
 _PRESTAMO_ID_MAX = 2_147_483_647  # INT max en BD (32-bit signed)
 
 
+
+# Marca de sistema para auditoría cuando JWT no trae email (evita usuario_registro vacío en BD).
+_USUARIO_REGISTRO_FALLBACK = "import-masivo@sistema.rapicredit.com"
+
+
+def _usuario_registro_desde_current_user(current_user: Optional[Any]) -> str:
+    """
+    Email del usuario o identificador estable para auditoría.
+    No devuelve cadena vacía (los lotes MER/BNC quedan trazables).
+    """
+    if current_user is None:
+        return _USUARIO_REGISTRO_FALLBACK
+    email = getattr(current_user, "email", None)
+    if email is None and isinstance(current_user, dict):
+        email = current_user.get("email")
+    if isinstance(email, str) and email.strip():
+        return email.strip()[:255]
+    uid = getattr(current_user, "id", None)
+    if uid is None and isinstance(current_user, dict):
+        uid = current_user.get("id")
+    if uid is not None:
+        return f"user_id:{uid}@{_USUARIO_REGISTRO_FALLBACK}"[:255]
+    return _USUARIO_REGISTRO_FALLBACK
+
+
 # Todas las funciones de normalización de documento están centralizadas en app.core.documento
 # Se usan ahora: normalize_documento() que consolidaba las 3 funciones anteriores.
 # Esto evita duplicación y facilita mantenimiento.
@@ -775,7 +800,7 @@ async def upload_excel_pagos(
             try:
                 fecha_pago = _parse_fecha(fecha_val)
                 ref_pago = ((numero_doc_norm or (numero_doc or "").strip()) or "Carga")[:_MAX_LEN_NUMERO_DOCUMENTO]
-                usuario_email = current_user.email if current_user else "sistema@rapicredit.com"
+                usuario_registro = _usuario_registro_desde_current_user(current_user)
                 # Autoconciliar: pagos creados por carga Excel se marcan conciliados (aplicados a cuotas después)
                 ahora_up = datetime.now(ZoneInfo(TZ_NEGOCIO))
                 p = Pago(
@@ -786,7 +811,7 @@ async def upload_excel_pagos(
                     numero_documento=numero_doc_norm,
                     estado="PENDIENTE",
                     referencia_pago=ref_pago,
-                    usuario_registro=usuario_email,  # [MEJORADO] Usuario real desde JWT
+                    usuario_registro=usuario_registro,  # [MEJORADO] Usuario real desde JWT
                     conciliado=True,
                     fecha_conciliacion=ahora_up,
                     verificado_concordancia="SI",
@@ -1022,7 +1047,7 @@ def importar_reportados_aprobados_a_pagos(
             "pagos_sin_aplicacion_cuotas_truncados": False,
         }
 
-    usuario_email = current_user.email if current_user else "sistema@rapicredit.com"
+    usuario_registro = _usuario_registro_desde_current_user(current_user)
     documentos_ya_en_bd: set[str] = set()
     docs_reportados = [normalize_documento(pr.referencia_interna) for pr in reportados if (pr.referencia_interna or "").strip()]
     if docs_reportados:
@@ -1039,7 +1064,7 @@ def importar_reportados_aprobados_a_pagos(
         res = importar_un_pago_reportado_a_pagos(
             db,
             pr,
-            usuario_email=usuario_email,
+            usuario_email=usuario_registro,
             documentos_ya_en_bd=documentos_ya_en_bd,
             docs_en_lote=docs_en_lote,
             registrar_error_en_tabla=True,
@@ -1065,8 +1090,8 @@ def importar_reportados_aprobados_a_pagos(
         pr_id = getattr(p, "prestamo_id", None)
         try:
             cc, cp = _aplicar_pago_a_cuotas_interno(p, db)
+            p.estado = _estado_pago_tras_aplicar_fifo(cc, cp)
             if cc > 0 or cp > 0:
-                p.estado = "PAGADO"
                 operaciones_cuota_total += cc + cp
                 pagos_con_aplicacion_a_cuotas += 1
             elif pr_id and float(p.monto_pagado or 0) > 0:
@@ -1267,7 +1292,7 @@ def guardar_fila_editable(
         monto = body.monto_pagado
         numero_doc = (body.numero_documento or "").strip() if body.numero_documento else None
         prestamo_id = body.prestamo_id
-        usuario_email = current_user.email if current_user else "sistema@rapicredit.com"
+        usuario_registro = _usuario_registro_desde_current_user(current_user)
 
         # Validaciones post-guardado
         if not cedula:
@@ -1326,7 +1351,7 @@ def guardar_fila_editable(
             conciliado=True,  # [B2] Usar solo conciliado
             fecha_conciliacion=ahora_conciliacion,
             verificado_concordancia="SI",  # Legacy: sync con conciliado
-            usuario_registro=usuario_email,  # [MEJORADO] Usuario real desde JWT
+            usuario_registro=usuario_registro,
         )
         db.add(pago)
         db.flush()
@@ -1788,7 +1813,7 @@ def crear_pagos_batch(
     Optimizado: una sola consulta para docs existentes, préstamos y clientes en lugar de N por fila.
     """
     try:
-        usuario_email = current_user.email if current_user else "sistema@rapicredit.com"
+        usuario_registro = _usuario_registro_desde_current_user(current_user)
         pagos_list = body.pagos
         # Preload: documentos ya existentes en BD (una sola consulta)
         docs_en_payload = [normalize_documento(p.numero_documento) for p in pagos_list]
@@ -1852,7 +1877,7 @@ def crear_pagos_batch(
                     conciliado=conciliado,
                     fecha_conciliacion=datetime.now(ZoneInfo(TZ_NEGOCIO)) if conciliado else None,
                     verificado_concordancia="SI" if conciliado else "",
-                    usuario_registro=usuario_email,
+                    usuario_registro=usuario_registro,
                 )
                 db.add(row)
                 db.flush()
@@ -1893,7 +1918,7 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
     fecha_pago_ts = datetime.combine(payload.fecha_pago, dt_time.min)
     # Autoconciliar cuando se asigna a un préstamo y no se indica explícitamente conciliado
     conciliado = payload.conciliado if payload.conciliado is not None else (True if payload.prestamo_id else False)
-    usuario_email = current_user.email if current_user else "sistema@rapicredit.com"
+    usuario_registro = _usuario_registro_desde_current_user(current_user)
     
     # Normalizar cédula: uppercase para evitar FK mismatch
     cedula_normalizada = payload.cedula_cliente.strip().upper() if payload.cedula_cliente else ""
@@ -1937,7 +1962,7 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
             conciliado=conciliado,  # [B2] Usar solo conciliado, no verificado_concordancia
             fecha_conciliacion=datetime.now(ZoneInfo(TZ_NEGOCIO)) if conciliado else None,
             verificado_concordancia="SI" if conciliado else "",  # Legacy: sync con conciliado
-            usuario_registro=usuario_email,  # [MEJORADO] Usuario real desde JWT
+            usuario_registro=usuario_registro,  # [MEJORADO] Usuario real desde JWT
         )
         db.add(row)
         db.flush()
