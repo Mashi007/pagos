@@ -165,3 +165,7 @@ output_*.txt
 *.backup
 *.bak
 *~.txt
+
+# Respaldos locales (opción A)
+backups/
+*.dump

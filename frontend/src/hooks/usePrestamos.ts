@@ -51,12 +51,15 @@ export function usePrestamos(
 }
 
 // Hook para obtener un préstamo específico
+// Detalle del prestamo: sin cache largo; fecha_aprobacion y demas deben reflejar la BD (edicion, SQL, asignar fecha).
 export function usePrestamo(id: number) {
   return useQuery({
     queryKey: prestamoKeys.detail(id),
     queryFn: () => prestamoService.getPrestamo(id),
     enabled: !!id,
-    staleTime: STALE_TIME_LONG,
+    staleTime: 0,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   })
 }
 

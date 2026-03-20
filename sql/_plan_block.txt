@@ -1,0 +1,57 @@
+-- =============================================================================
+-- PROCEDIMIENTO DE REGENERACIÓN ALINEADO CON FIFO (plan operativo — actualizado)
+-- =============================================================================
+--
+-- Objetivo: reconstruir el plan de cuotas según la fecha de aprobación y la
+-- modalidad vigentes, y volver a imputar los cobros ya existentes en orden
+-- (primero cuota 1, luego 2, …), sin borrar los registros de pago.
+--
+-- | Paso | Acción |
+-- |------|--------|
+-- | **0** | **Análisis integral:** alinear políticas de producto (fechas, tasas por defecto 0 %, FIFO por número de cuota, estados) con lo que muestra y permite el sistema; checklist back/front antes de tocar datos. |
+-- | **1** | **Backup:** copia de seguridad de la BD completa o, como mínimo, tablas `cuotas` y `cuota_pagos`, más snapshot de conteos por préstamo/cuota. |
+-- | **2** | **Pre-chequeos:** detectar desalineación de la cuota 1 respecto a `fecha_aprobacion` (consultas de este script); verificar integridad `pagos` ↔ `cuota_pagos` (p. ej. `sql/verificar_trazabilidad_pagos_cuotas_prestamos.sql`). |
+-- | **3** | **Regenerar cuotas:** `DELETE` del conjunto objetivo en `cuotas` (CASCADE borra `cuota_pagos`); luego `INSERT` del plan nuevo con la misma lógica que el backend (secciones E preview y F). Los `pagos` permanecen en tabla `pagos`. |
+-- | **4** | **Re-aplicar pagos:** `POST /api/v1/prestamos/conciliar-amortizacion-masiva` (body opcional `prestamo_ids`) para re-imputar cobros conciliados al nuevo calendario. |
+-- | **5** | **Post-chequeo:** repetir trazabilidad y consultas “cuota 1 vs esperado”; revisar casos donde capital, número de cuotas o tasa difieren del histórico con el que se registraron cobros. |
+--
+-- Lectura financiera (equivalencia): (1) respaldo del estado de cartera y vínculos
+-- pago–cuota. (2) auditoría de coherencia fecha de aprobación vs primer vencimiento
+-- e integridad de aplicaciones. (3) sustitución del calendario de vencimientos y
+-- montos de cuota. (4) redistribución de cobros al nuevo plan en orden de cuotas.
+-- (5) cierre de auditoría y cuadre.
+--
+-- -----------------------------------------------------------------------------
+-- Paso 0 — Análisis integral: políticas backend y coherencia con frontend
+-- -----------------------------------------------------------------------------
+-- Antes de borrar o regenerar datos, validar que el equipo entiende y documenta
+-- la misma "fuente de verdad" y los mismos flujos que verá el usuario en pantalla.
+--
+-- Backend (revisar código y comportamiento real de API)
+-- - Amortización: base de fechas = `fecha_aprobacion` (no confundir con otros
+--   campos legacy si aún existen en BD); modalidad MENSUAL / QUINCENAL / SEMANAL.
+-- - Generación de cuotas: `prestamos.py` → `_generar_cuotas_amortizacion`,
+--   `_resolver_monto_cuota` (cuota plana si tasa 0 % por defecto; sistema francés
+--   solo si la tasa anual es mayor que cero).
+-- - Aplicación de pagos: FIFO por `numero_cuota` ASC; historial en `cuota_pagos`;
+--   re-aplicación tras regenerar vía `aplicar_pagos_pendientes_prestamo` /
+--   `conciliar-amortizacion-masiva`.
+-- - Estados de cuota (PENDIENTE, PAGADO, mora/vencido según reglas actuales) y
+--   transición a LIQUIDADO del préstamo cuando todas las cuotas cubiertas.
+-- - Endpoints que disparan generación o recálculo (crear/actualizar préstamo,
+--   aprobar manual, asignar fecha, carga masiva) para no dejar huecos si el front
+--   solo actualiza `fecha_aprobacion` sin pasar por el flujo que regenera cuotas.
+--
+-- Frontend (coherencia con lo anterior)
+-- - Qué campos se muestran y editan (p. ej. solo "fecha de aprobación" vs fechas
+--   que ya no deben usarse para amortización); textos y tooltips alineados al back.
+-- - Listados y detalle de préstamo/cuotas: mismos criterios de orden y etiquetas
+--   que la API (número de cuota, vencimiento, estado, total pagado).
+-- - Caché / refetch tras edición (evitar UI con datos viejos tras corregir fechas).
+-- - Exportaciones (PDF/Excel amortización) si existen: deben reflejar las mismas
+--   fechas y montos que `GET .../cuotas`.
+--
+-- Entregable sugerido del paso 0: breve checklist firmado (qué políticas aplican,
+-- qué pantallas las reflejan, qué endpoints intervienen) antes del paso 1.
+-- =============================================================================
+
