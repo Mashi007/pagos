@@ -1,0 +1,136 @@
+﻿========================================================== ================================================================================
+IMPLEMENTACION COMPLETADA: Automatizacion de actualización a estado LIQUIDADO (9 PM diario)
+========================================================== ================================================================================
+
+COMPONENTES CREADOS:
+=====================
+
+1. TABLA DE AUDITORIA
+   - Tabla: auditoria_cambios_estado_prestamo
+   - Registra todos los cambios de estado de APROBADO -> LIQUIDADO
+   - Campos: id, prestamo_id, estado_anterior, estado_nuevo, motivo, fecha_cambio, ejecutado_por, total_financiamiento, suma_pagado
+
+2. FUNCION PostgreSQL
+   - Nombre: actualizar_prestamos_a_liquidado_automatico()
+   - Ubicacion: BD PostgreSQL (schema public)
+   - Funcion: Detecta prestamos APROBADO con 100% pagado y los actualiza a LIQUIDADO
+   - Registra automaticamente los cambios en auditoria
+   - Se ejecuta SIN necesidad de transacciones externas
+
+3. SCHEDULER (APScheduler)
+   - Archivo: app/services/liquidado_scheduler.py
+   - Clase: LiquidadoScheduler
+   - Frecuencia: Diariamente a las 21:00 (9 PM)
+   - Configuración: Timezone-aware, maneja excepciones
+
+4. ENDPOINTS REST
+   - Archivo: app/api/v1/endpoints/prestamos_liquidado_automatico.py
+   - POST /api/v1/prestamos/actualizar-liquidado-manual
+     * Ejecuta manualmente la actualización
+     * Solo acceso para admin
+     * Retorna detalles de cambios realizados
+   - GET /api/v1/prestamos/auditoria-cambios-estado?dias=7
+     * Obtiene historial de cambios (últimos N días)
+     * Solo acceso para admin
+     * Incluye resumen y detalles
+
+INSTALACION / CONFIGURACION:
+============================
+
+PASO 1: Instalar dependencias
+------------------------------
+pip install apscheduler
+
+PASO 2: Agregar lineas a main.py
+---------------------------------
+En importaciones (al inicio del archivo):
+  from app.services.liquidado_scheduler import liquidado_scheduler
+
+En evento de startup (despues de crear app FastAPI):
+  @app.on_event('startup')
+  async def startup_event():
+      liquidado_scheduler.iniciar_scheduler()
+      logger.info('Scheduler de actualizacion a LIQUIDADO iniciado')
+
+En evento de shutdown:
+  @app.on_event('shutdown')
+  async def shutdown_event():
+      liquidado_scheduler.detener_scheduler()
+      logger.info('Scheduler de actualizacion a LIQUIDADO detenido')
+
+Incluir router (donde estan otros routers):
+  from app.api.v1.endpoints import prestamos_liquidado_automatico
+  app.include_router(prestamos_liquidado_automatico.router)
+
+PASO 3: Reiniciar la aplicación
+--------------------------------
+uvicorn app.main:app --reload
+
+FLUJO DE EJECUCION:
+====================
+
+Diario a las 21:00 (9 PM):
+1. APScheduler dispara el job
+2. Se ejecuta: actualizar_prestamos_a_liquidado_automatico()
+3. La función en BD detecta prestamos 100% pagados
+4. Actualiza estado de APROBADO -> LIQUIDADO
+5. Registra todos los cambios en tabla de auditoría
+6. Log info con cantidad de registros actualizados
+
+MONITOREO:
+==========
+
+Via API (solo admin):
+- GET /api/v1/prestamos/auditoria-cambios-estado?dias=7
+  Retorna: resumen y detalles de cambios (últimos 7 días)
+
+Via SQL directo:
+- SELECT * FROM auditoria_cambios_estado_prestamo WHERE DATE(fecha_cambio) = CURRENT_DATE;
+
+Via Logs de aplicación:
+- Buscar: 'Scheduler de actualizacion a LIQUIDADO iniciado' (startup)
+- Buscar: 'COMPLETADO:' (ejecución del job)
+- Buscar: 'ERROR' (si algo falla)
+
+VALIDACION POST-IMPLEMENTACION:
+===============================
+
+1. Verificar que el scheduler está activo
+   - Al iniciar app, buscar log: 'Scheduler de actualizacion a LIQUIDADO iniciado'
+
+2. Ejecutar manualmente para validar
+   - POST /api/v1/prestamos/actualizar-liquidado-manual
+   - Debe retornar cantidad de cambios realizados
+
+3. Verificar auditoria
+   - GET /api/v1/prestamos/auditoria-cambios-estado?dias=1
+   - Debe mostrar cambios realizados
+
+4. Verificar tabla de prestamos
+   - SELECT COUNT(*) FROM prestamos WHERE estado = 'LIQUIDADO'
+   - La cantidad debe aumentar cuando se ejecute el job
+
+CONSIDERACIONES:
+================
+
+1. Timezone: El scheduler usa 21:00 en el timezone del servidor
+   Si necesitas cambiar timezone, modificar: liquidado_scheduler.py, hora 21
+
+2. Performance: La función SQL es eficiente, usa índices y FILTER agregado
+
+3. Auditoría: TODOS los cambios quedan registrados con fecha/hora exacta
+
+4. Seguridad: Los endpoints requieren token admin (verificar_token_admin)
+
+5. Rollback: Si algo falla durante la ejecución, TODOS los cambios se descartan
+   (transaction ACID)
+
+PRÓXIMOS PASOS:
+===============
+
+1. Agregar las lineas mencionadas a main.py
+2. Instalar apscheduler: pip install apscheduler
+3. Reiniciar aplicación
+4. Validar con los pasos de validación arriba
+5. Monitorear durante 24 horas para confirmar que se ejecuta a las 9 PM
+

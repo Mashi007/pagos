@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.api.v1 import api_router
 from app.middleware.audit_middleware import AuditMiddleware
+from app.services.liquidado_scheduler import liquidado_scheduler
 
 # Configurar logging con UTF-8 para tildes/caracteres en Render
 import sys
@@ -114,6 +115,10 @@ app.add_middleware(
 
 # Incluir routers
 app.include_router(api_router, prefix=settings.API_V1_STR)
+
+# Incluir endpoint del scheduler de LIQUIDADO
+from app.api.v1.endpoints import prestamos_liquidado_automatico
+app.include_router(prestamos_liquidado_automatico.router)
 
 
 def _startup_db_with_retry(engine, max_attempts: int = 10, delay_sec: float = 3.0):
@@ -245,6 +250,13 @@ def on_startup():
     except Exception as e:
         logger.exception("No se pudo iniciar el worker de caché dashboard: %s", e)
 
+# Scheduler automatico de LIQUIDADO: ejecutar a las 21:00 (9 PM) diariamente
+    try:
+        liquidado_scheduler.iniciar_scheduler()
+        logger.info('Scheduler de actualizacion a LIQUIDADO iniciado (9 PM diariamente)')
+    except Exception as e:
+        logger.warning('No se pudo iniciar el scheduler de LIQUIDADO: %s', e)
+
     # Limpiar syncs de Gmail que quedaron en estado "running" tras un reinicio inesperado (SIGTERM/deploy).
     # Si no se limpian, _is_pipeline_running bloquea nuevas ejecuciones.
     try:
@@ -277,6 +289,13 @@ def on_startup():
 @app.on_event("shutdown")
 def on_shutdown():
     """Detener scheduler y heartbeat de leader al cerrar la aplicación."""
+    # Detener scheduler de LIQUIDADO
+    try:
+        liquidado_scheduler.detener_scheduler()
+        logger.info('Scheduler de LIQUIDADO detenido')
+    except Exception as e:
+        logger.warning('Error al detener scheduler de LIQUIDADO: %s', e)
+    
     try:
         if getattr(app.state, "_scheduler_leader", False):
             from app.core.scheduler_leader import stop_scheduler_leader_heartbeat

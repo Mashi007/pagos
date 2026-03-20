@@ -1,0 +1,49 @@
+﻿# -*- coding: utf-8 -*-
+# Fragmente a agregar en main.py DESPUES de crear la app FastAPI
+
+# En las importaciones agregar:
+# from app.services.liquidado_scheduler import liquidado_scheduler
+# 
+# En el evento startup agregar:
+# @app.on_event('startup')
+# async def startup_event():
+#     liquidado_scheduler.iniciar_scheduler()
+#     logger.info('Scheduler de LIQUIDADO iniciado')
+#
+# En el evento shutdown agregar:
+# @app.on_event('shutdown')
+# async def shutdown_event():
+#     liquidado_scheduler.detener_scheduler()
+#     logger.info('Scheduler de LIQUIDADO detenido')
+
+INTEGRACION_MAIN_PY = '''
+# =============================================================================
+# INTEGRACION DEL SCHEDULER DE LIQUIDADO EN main.py
+# =============================================================================
+
+# 1. AGREGAR EN IMPORTACIONES (al inicio del archivo):
+from app.services.liquidado_scheduler import liquidado_scheduler
+
+# 2. AGREGAR EVENTO DE STARTUP (despues de crear app y antes de uvicorn):
+@app.on_event('startup')
+async def startup_event():
+    \"\"\"Evento que se ejecuta al iniciar la aplicacion\"\"\"
+    liquidado_scheduler.iniciar_scheduler()
+    logger.info('Scheduler de actualizacion a LIQUIDADO iniciado')
+
+# 3. AGREGAR EVENTO DE SHUTDOWN:
+@app.on_event('shutdown')
+async def shutdown_event():
+    \"\"\"Evento que se ejecuta al detener la aplicacion\"\"\"
+    liquidado_scheduler.detener_scheduler()
+    logger.info('Scheduler de actualizacion a LIQUIDADO detenido')
+
+# 4. INCLUIR ROUTER (donde estan otros routers):
+from app.api.v1.endpoints import prestamos_liquidado_automatico
+app.include_router(prestamos_liquidado_automatico.router)
+
+# 5. INSTALAR APScheduler si no esta instalado:
+# pip install apscheduler
+'''
+
+print(INTEGRACION_MAIN_PY)
