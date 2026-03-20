@@ -9,6 +9,7 @@ import {
   cambiarEstadoPago,
   openComprobanteInNewTab,
   eliminarPagoReportado,
+  markPagosReportadosExportados,
   type PagoReportadoItem,
   type ListPagosReportadosResponse,
   type PagosReportadosKpis,
@@ -20,6 +21,7 @@ import { Badge } from '../components/ui/badge'
 import toast from 'react-hot-toast'
 import { Loader2, Eye, FileText, Settings, Clock, Search, CheckCircle, XCircle, Trash2, AlertCircle, AlertTriangle, Edit, Mail } from 'lucide-react'
 import { PUBLIC_REPORTE_PAGO_PATH } from '../config/env'
+import { createAndDownloadExcel } from '../types/exceljs'
 import {
   Dialog,
   DialogContent,
@@ -44,6 +46,16 @@ const ESTADO_CONFIG: Record<string, { label: string; short: string; variant: 'de
   importado: { label: 'Importado a Pagos', short: 'Import.', variant: 'default', Icon: CheckCircle },
   rechazado: { label: 'Rechazado', short: 'Rechazado', variant: 'destructive', Icon: XCircle },
 }
+
+const normalizeEstadoValue = (value: string) =>
+  String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .replace(/\s+/g, '_')
+    .toLowerCase()
+
+const isEstadoAprobado = (estadoValue: string) => normalizeEstadoValue(estadoValue) === 'aprobado'
 
 export default function CobrosPagosReportadosPage() {
   const navigate = useNavigate()
@@ -159,6 +171,41 @@ export default function CobrosPagosReportadosPage() {
     }
   }
 
+  const handleDescargarExcelAprobados = async () => {
+    const aprobados = (data?.items ?? []).filter((row) => isEstadoAprobado(row.estado))
+
+    if (!aprobados.length) {
+      toast('No hay pagos aprobados para exportar con los filtros actuales.')
+      return
+    }
+
+    const rows = aprobados.map((row) => ({
+      Nombre: `${row.nombres} ${row.apellidos}`.trim(),
+      Cedula: row.cedula_display,
+      Banco: row.institucion_financiera,
+      Monto: `${row.monto} ${row.moneda}`,
+      'Fecha pago': row.fecha_pago,
+      'Numero operacion': row.numero_operacion,
+      'Fecha reporte': row.fecha_reporte ? new Date(row.fecha_reporte).toLocaleDateString() : '',
+      Observacion: row.observacion ?? '',
+      Estado: ESTADO_CONFIG[normalizeEstadoValue(row.estado)]?.label ?? row.estado,
+    }))
+
+    const fecha = new Date().toISOString().slice(0, 10)
+
+    try {
+      await createAndDownloadExcel(rows, 'Pagos Aprobados', `pagos_reportados_aprobados_${fecha}.xlsx`)
+      const idsAprobados = aprobados.map((row) => row.id)
+      const markResult = await markPagosReportadosExportados(idsAprobados)
+      toast.success(
+        `Excel generado con ${rows.length} pago(s) aprobado(s). Marcados exportados: ${markResult.marcados}.`,
+      )
+      await load({ page: 1 })
+    } catch (e: any) {
+      toast.error(e?.message || 'Se descarg? el Excel, pero fall? el marcado de exportados. Recargue e intente de nuevo.')
+    }
+  }
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -217,6 +264,7 @@ export default function CobrosPagosReportadosPage() {
             className="w-48"
           />
           <Button onClick={() => load()}>Buscar</Button>
+          <Button variant="outline" onClick={handleDescargarExcelAprobados}>Descargar Excel Aprobados</Button>
         </CardContent>
       </Card>
 

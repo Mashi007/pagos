@@ -427,16 +427,18 @@ def iniciar_jobs():
     """Inicia jobs en background."""
     try:
         scheduler = BackgroundScheduler()
-        # Job cada 5 minutos: aplicar pagos pendientes
+        # Job cada 3 minutos: aplicar pagos pendientes (sin solapamiento)
         scheduler.add_job(
             aplicar_pagos_pendientes,
             'interval',
-            minutes=5,
+            minutes=3,
             id='aplicar_pagos_pendientes',
-            max_instances=1
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=60
         )
         scheduler.start()
-        logger.info("Background jobs iniciados: aplicar_pagos_pendientes cada 5 min")
+        logger.info("Background jobs iniciados: aplicar_pagos_pendientes cada 3 min")
     except Exception as e:
         logger.error(f"Error iniciando background jobs: {e}", exc_info=True)
 

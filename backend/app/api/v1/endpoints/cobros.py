@@ -17,6 +17,7 @@ from app.core.database import get_db
 from app.core.documento import normalize_documento
 from app.core.deps import get_current_user
 from app.models.pago_reportado import PagoReportado, PagoReportadoHistorial
+from app.models.pago_reportado_exportado import PagoReportadoExportado
 from app.models.cedula_reportar_bs import CedulaReportarBs
 from app.models.cliente import Cliente
 from app.models.prestamo import Prestamo
@@ -122,6 +123,10 @@ class AprobarRechazarBody(BaseModel):
     motivo: Optional[str] = None  # Obligatorio si rechaza
 
 
+class MarcarExportadosBody(BaseModel):
+    pago_reportado_ids: List[int]
+
+
 # Nombres de columnas para Observación (solo mostrar estos en el listado)
 OBSERVACION_COLUMNAS = ["Cédula", "Banco", "Fecha pago", "Nº operación", "Monto", "Moneda"]
 
@@ -182,10 +187,13 @@ def _cedulas_en_clientes_set(db: Session) -> set:
     """
     clientes_cedulas = db.execute(select(Cliente.cedula).select_from(Cliente)).scalars().all()
     out = set()
-    for row in clientes_cedulas:
-        if not row or not row[0]:
+    for cedula in clientes_cedulas:
+        if cedula is None:
             continue
-        raw = (row[0] or "").strip().upper().replace("-", "").replace(" ", "")
+        # scalars().all() devuelve valores escalares (str/int), no tuplas
+        raw = str(cedula).strip().upper().replace("-", "").replace(" ", "")
+        if not raw:
+            continue
         norm = _normalize_cedula_for_client_lookup(raw)
         if not norm:
             continue
@@ -249,6 +257,7 @@ def list_pagos_reportados(
     """Lista paginada de pagos reportados con filtros. Por defecto excluye aprobados para mostrar solo casos pendientes."""
     q = select(PagoReportado)
     count_q = select(func.count(PagoReportado.id))
+    exportados_subq = select(PagoReportadoExportado.pago_reportado_id)
     if estado:
         q = q.where(PagoReportado.estado == estado)
         count_q = count_q.where(PagoReportado.estado == estado)
@@ -256,6 +265,10 @@ def list_pagos_reportados(
         # Por defecto ocultar aprobados: solo casos pendientes (revisi�n, pendiente, rechazado)
         q = q.where(~PagoReportado.estado.in_(("aprobado", "importado")))
         count_q = count_q.where(~PagoReportado.estado.in_(("aprobado", "importado")))
+
+    # Ocultar aprobados ya exportados (persistido en BD).
+    q = q.where(~and_(PagoReportado.estado == "aprobado", PagoReportado.id.in_(exportados_subq)))
+    count_q = count_q.where(~and_(PagoReportado.estado == "aprobado", PagoReportado.id.in_(exportados_subq)))
     if fecha_desde:
         q = q.where(PagoReportado.created_at >= datetime.combine(fecha_desde, datetime.min.time()))
         count_q = count_q.where(PagoReportado.created_at >= datetime.combine(fecha_desde, datetime.min.time()))
@@ -1005,3 +1018,52 @@ def cambiar_estado_pago(
     db.commit()
     return {"ok": True, "mensaje": mensaje}
 
+
+
+@router.post("/pagos-reportados/marcar-exportados")
+def marcar_pagos_reportados_exportados(
+    body: MarcarExportadosBody,
+    db: Session = Depends(get_db),
+):
+    ids = sorted({int(x) for x in (body.pago_reportado_ids or []) if int(x) > 0})
+    if not ids:
+        raise HTTPException(status_code=400, detail="Debe indicar al menos un pago reportado aprobado para marcar exportado.")
+
+    rows = db.execute(
+        select(PagoReportado.id, PagoReportado.estado).where(PagoReportado.id.in_(ids))
+    ).all()
+    estado_por_id = {int(r.id): str(r.estado or "") for r in rows}
+
+    faltantes = [pid for pid in ids if pid not in estado_por_id]
+    if faltantes:
+        raise HTTPException(status_code=404, detail=f"Pagos reportados no encontrados: {faltantes}")
+
+    no_aprobados = [pid for pid in ids if estado_por_id[pid] != "aprobado"]
+    if no_aprobados:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Solo se pueden marcar exportados pagos en estado aprobado. IDs inválidos: {no_aprobados}",
+        )
+
+    ya_exportados = set(
+        db.execute(
+            select(PagoReportadoExportado.pago_reportado_id).where(PagoReportadoExportado.pago_reportado_id.in_(ids))
+        ).scalars().all()
+    )
+
+    nuevos = [
+        PagoReportadoExportado(pago_reportado_id=pid)
+        for pid in ids
+        if pid not in ya_exportados
+    ]
+
+    if nuevos:
+        db.add_all(nuevos)
+        db.commit()
+
+    return {
+        "ok": True,
+        "marcados": len(nuevos),
+        "ya_exportados": len(ya_exportados),
+        "total_solicitados": len(ids),
+    }

@@ -62,7 +62,7 @@ export function CrearPrestamoForm({ prestamo, onClose, onSuccess, onAprobarManua
     cedula: prestamo?.cedula || '',
     total_financiamiento: prestamo?.total_financiamiento || 0,
     modalidad_pago: prestamo?.modalidad_pago || 'MENSUAL',
-    fecha_requerimiento: prestamo?.fecha_requerimiento || getCurrentDate(), // Fecha actual por defecto para nuevos préstamos
+    fecha_requerimiento: prestamo?.fecha_requerimiento || '', // Fecha actual por defecto para nuevos préstamos
     fecha_aprobacion: prestamo?.fecha_aprobacion
       ? String(prestamo.fecha_aprobacion).slice(0, 10)
       : undefined,

@@ -310,3 +310,12 @@ export async function updatePagoReportado(
   const data = await apiClient.patch<{ ok: boolean; mensaje?: string }>(`${BASE_COBROS}/pagos-reportados/${pagoId}`, payload)
   return data
 }
+
+
+export async function markPagosReportadosExportados(pagoReportadoIds: number[]): Promise<{ ok: boolean; marcados: number; ya_exportados: number; total_solicitados: number }> {
+  const data = await apiClient.post<{ ok: boolean; marcados: number; ya_exportados: number; total_solicitados: number }>(
+    `${BASE_COBROS}/pagos-reportados/marcar-exportados`,
+    { pago_reportado_ids: pagoReportadoIds },
+  )
+  return data
+}

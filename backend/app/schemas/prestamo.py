@@ -40,7 +40,7 @@ class PrestamoBase(BaseModel):
     def estado_normalizado(cls, v: Optional[str]) -> str:
         return _normalizar_estado_prestamo(v or "DRAFT")
 
-    fecha_requerimiento: Optional[date] = None
+    fecha_requerimiento: date
     cuota_periodo: Optional[Decimal] = None
     producto: Optional[str] = None
 
