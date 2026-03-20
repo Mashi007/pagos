@@ -141,6 +141,8 @@ def aplicar_pagos_pendientes():
     finally:
         try:
             if lock_acquired:
+                # Si la transaccion quedo abortada, limpiar antes de unlock.
+                db.rollback()
                 db.execute(text("SELECT pg_advisory_unlock(:k)"), {"k": JOB_LOCK_KEY})
         except Exception:
             logger.warning("No se pudo liberar advisory lock del job", exc_info=True)
