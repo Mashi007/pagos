@@ -1,0 +1,28 @@
+# ============================================================================
+# Background Jobs - Agregar esto al final de backend/app/main.py (antes del if __name__)
+# ============================================================================
+from apscheduler.schedulers.background import BackgroundScheduler
+from app.scripts.aplicar_pagos_pendientes_job import aplicar_pagos_pendientes
+
+def iniciar_jobs():
+    """Inicia jobs en background."""
+    try:
+        scheduler = BackgroundScheduler()
+        # Job cada 5 minutos: aplicar pagos pendientes
+        scheduler.add_job(
+            aplicar_pagos_pendientes,
+            'interval',
+            minutes=5,
+            id='aplicar_pagos_pendientes',
+            max_instances=1
+        )
+        scheduler.start()
+        logger.info("Background jobs iniciados: aplicar_pagos_pendientes cada 5 min")
+    except Exception as e:
+        logger.error(f"Error iniciando background jobs: {e}", exc_info=True)
+
+# Iniciar jobs en startup
+@app.on_event("startup")
+async def startup_event():
+    """Se ejecuta al iniciar la aplicación."""
+    iniciar_jobs()
