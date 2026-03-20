@@ -1,8 +1,31 @@
-import { CreditCard } from 'lucide-react'
+import { useState } from 'react'
+import toast from 'react-hot-toast'
+import { CreditCard, Download, Loader2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
+import { Button } from '../components/ui/button'
 import { PagosList } from '../components/pagos/PagosList'
+import apiClient from '../services/api'
 
 function PagosPage() {
+  const [exporting, setExporting] = useState(false)
+
+  const handleExportPagosSinAplicarCuotas = async () => {
+    setExporting(true)
+    try {
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
+      await apiClient.downloadFile(
+        '/api/v1/pagos/export/excel/pagos-sin-aplicar-cuotas?cohorte=todos',
+        `pagos_sin_aplicar_cuotas_${stamp}.xlsx`
+      )
+      toast.success('Excel descargado (pagos sin filas en cuota_pagos)')
+    } catch (e) {
+      console.error(e)
+      toast.error('No se pudo descargar el Excel. Revise la sesión o intente de nuevo.')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <div className="space-y-6 p-6 max-w-[1600px] mx-auto">
       <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -14,6 +37,23 @@ function PagosPage() {
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Pagos</h1>
             <p className="text-sm text-gray-500 mt-0.5">Gestión de cobros y conciliación</p>
           </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="gap-2 border-blue-200 text-blue-700 hover:bg-blue-50"
+            disabled={exporting}
+            onClick={handleExportPagosSinAplicarCuotas}
+            title="Todos los pagos sin aplicación a cuotas (sin filas en cuota_pagos)"
+          >
+            {exporting ? (
+              <Loader2 className="h-4 w-4 animate-spin shrink-0" aria-hidden />
+            ) : (
+              <Download className="h-4 w-4 shrink-0" aria-hidden />
+            )}
+            Excel: sin aplicar a cuotas
+          </Button>
         </div>
       </header>
 
