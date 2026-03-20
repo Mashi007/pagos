@@ -114,6 +114,8 @@ export interface PrestamoForm {
   total_financiamiento: number
   modalidad_pago: 'MENSUAL' | 'QUINCENAL' | 'SEMANAL'
   fecha_requerimiento: string
+  /** Solo edicion: YYYY-MM-DD; PUT persiste fecha_aprobacion en BD */
+  fecha_aprobacion?: string
   producto: string
   concesionario?: string
   analista: string

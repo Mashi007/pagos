@@ -1713,6 +1713,8 @@ def update_prestamo(prestamo_id: int, payload: PrestamoUpdate, db: Session = Dep
         row.numero_cuotas = payload.numero_cuotas
     if payload.fecha_requerimiento is not None:
         row.fecha_requerimiento = payload.fecha_requerimiento
+    if payload.fecha_aprobacion is not None:
+        row.fecha_aprobacion = payload.fecha_aprobacion
     # Coherencia: si hay fecha de aprobación, la fecha de requerimiento no puede ser posterior
     if row.fecha_aprobacion and row.fecha_requerimiento:
         ap_date = row.fecha_aprobacion.date() if hasattr(row.fecha_aprobacion, "date") else row.fecha_aprobacion

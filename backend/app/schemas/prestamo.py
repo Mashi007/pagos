@@ -75,6 +75,7 @@ class PrestamoUpdate(BaseModel):
         return _normalizar_estado_prestamo(v)
 
     fecha_requerimiento: Optional[date] = None
+    fecha_aprobacion: Optional[datetime] = None
     cuota_periodo: Optional[Decimal] = None
     producto: Optional[str] = None
 
