@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Validación carga masiva de pagos (Excel).
  *
  * NÚMERO DE DOCUMENTO: acepta TODOS los formatos sin distinción (numérico, BNC/, ZELLE, BS., € $, etc.).
@@ -74,8 +74,37 @@ export function convertirFechaExcelPago(val: unknown): string {
 
 export function convertirFechaParaBackendPago(f: string): string {
   if (!f?.trim()) return ''
-  const m = f.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
-  return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : f.trim()
+  const s = f.trim()
+
+  // Try DD/MM/YYYY format first (most common in ES locales)
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  if (m) {
+    const [, day, month, year] = m
+    const d = parseInt(day, 10)
+    const mo = parseInt(month, 10)
+    const y = parseInt(year, 10)
+
+    // Validate day (1-31) and month (1-12)
+    if (d >= 1 && d <= 31 && mo >= 1 && mo <= 12 && y >= 1900 && y <= 2100) {
+      return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+    }
+  }
+
+  // If it already looks like YYYY-MM-DD, return as-is
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
+
+  // Try parsing as a Date object (handles various formats)
+  try {
+    const parsed = new Date(s)
+    if (!Number.isNaN(parsed.getTime())) {
+      return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`
+    }
+  } catch {
+    // Fall through
+  }
+
+  // Return empty if we can't parse it (will trigger fallback to today's date)
+  return ''
 }
 
 /** Parsea numero de credito (ej: VE/96179604, 96, 96179604) y extrae prestamo_id. */
