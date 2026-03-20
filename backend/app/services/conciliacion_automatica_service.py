@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-Servicio de conciliación automática de pagos no conciliados.
+Servicio de conciliaciÃ³n automÃ¡tica de pagos no conciliados.
 
-Características:
-1. Asigna automáticamente pagos sin cuotas a cuotas pendientes (FIFO)
+CaracterÃ­sticas:
+1. Asigna automÃ¡ticamente pagos sin cuotas a cuotas pendientes (FIFO)
 2. Valida en tiempo real para evitar sobre-aplicaciones
-3. Registra auditoría de cada asignación
-4. Genera alertas de pagos problemáticos
+3. Registra auditorÃ­a de cada asignaciÃ³n
+4. Genera alertas de pagos problemÃ¡ticos
 """
 from datetime import datetime
 from decimal import Decimal
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 class EstadoCuota:
-    """Estados válidos de una cuota con documentación."""
+    """Estados vÃ¡lidos de una cuota con documentaciÃ³n."""
     PAGADO = 'PAGADO'
     PENDIENTE = 'PENDIENTE'
     MORA = 'MORA'
@@ -35,7 +35,7 @@ class EstadoCuota:
     
     DOCUMENTACION = {
         PAGADO: 'Cuota completamente pagada. Monto aplicado >= monto de la cuota.',
-        PENDIENTE: 'Cuota sin pagar o con vencimiento futuro. No hay aplicaciones o aplicación parcial.',
+        PENDIENTE: 'Cuota sin pagar o con vencimiento futuro. No hay aplicaciones o aplicaciÃ³n parcial.',
         MORA: 'Cuota vencida (fecha_vencimiento < hoy) y sin pagar completamente. Estado de riesgo de cobranza.',
         PARCIAL: 'Cuota con pagos parciales aplicados. Monto aplicado < monto de la cuota.',
         CANCELADA: 'Cuota anulada o no vigente. No requiere pago.',
@@ -69,7 +69,7 @@ class ValidadorSobreAplicacion:
         
         if monto_aplicado + monto_a_aplicar > monto_total_permitido + Decimal('0.01'):
             errores.append(
-                f'Sobre-aplicación: {monto_aplicado} + {monto_a_aplicar} > {monto_total_permitido}'
+                f'Sobre-aplicaciÃ³n: {monto_aplicado} + {monto_a_aplicar} > {monto_total_permitido}'
             )
         
         if monto_a_aplicar <= 0:
@@ -98,7 +98,7 @@ class ValidadorSobreAplicacion:
 
 
 class ConciliacionAutomaticaService:
-    """Servicio principal de conciliación automática."""
+    """Servicio principal de conciliaciÃ³n automÃ¡tica."""
 
     @staticmethod
     def asignar_pagos_no_conciliados(
@@ -191,13 +191,13 @@ class ConciliacionAutomaticaService:
             
             db.commit()
             logger.info(
-                f'Conciliación: {resultado['exitosas']} exitosas, '
-                f'{resultado['fallidas']} fallidas. Total: {resultado['total_monto_asignado']}'
+                f"Conciliación: {resultado['exitosas']} exitosas, "
+                f"{resultado['fallidas']} fallidas. Total: {resultado['total_monto_asignado']}"
             )
             
         except Exception as e:
             db.rollback()
-            logger.error(f'Error en conciliación: {e}', exc_info=True)
+            logger.error(f'Error en conciliaciÃ³n: {e}', exc_info=True)
             resultado['errores'].append(f'Error fatal: {str(e)}')
 
         return resultado
