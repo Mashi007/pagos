@@ -100,7 +100,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 # Log de cada request (mÃ©todo, ruta, status, tiempo) para depuraciÃ³n en Render
 app.add_middleware(RequestLogMiddleware)
 
-# Middleware: Validación en tiempo real de sobre-aplicaciones
+# Middleware: Validaciï¿½n en tiempo real de sobre-aplicaciones
 app.add_middleware(ValidadorSobreAplicacionMiddleware)
 
 # AuditorÃ­a automÃ¡tica: registra todos los POST/PUT/DELETE/PATCH en tabla auditoria
@@ -123,16 +123,16 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 # Incluir endpoint del scheduler de LIQUIDADO
 from app.api.v1.endpoints import prestamos_liquidado_automatico
 app.include_router(prestamos_liquidado_automatico.router)
-# Incluir endpoint de conciliación automática
+# Incluir endpoint de conciliaciï¿½n automï¿½tica
 from app.api.v1.endpoints import conciliacion
 app.include_router(conciliacion.router)
 # Incluir endpoint de referencia de estados de cuota
 from app.api.v1.endpoints import referencia_estados_cuota
 app.include_router(referencia_estados_cuota.router)
-# Incluir endpoint de auditoría de conciliación
+# Incluir endpoint de auditorï¿½a de conciliaciï¿½n
 from app.api.v1.endpoints import auditoria_conciliacion
 app.include_router(auditoria_conciliacion.router)
-# Incluir endpoint de problemas críticos (diagnóstico y corrección)
+# Incluir endpoint de problemas crï¿½ticos (diagnï¿½stico y correcciï¿½n)
 from app.api.v1.endpoints import criticos
 app.include_router(criticos.router)
 # Incluir dashboard de monitoreo
@@ -414,6 +414,37 @@ async def health_check_db():
 async def health_check_head():
     """Endpoint de salud para HEAD requests"""
     return
+
+
+
+# ============================================================================
+# Background Jobs
+# ============================================================================
+from apscheduler.schedulers.background import BackgroundScheduler
+from app.scripts.aplicar_pagos_pendientes_job import aplicar_pagos_pendientes
+
+def iniciar_jobs():
+    """Inicia jobs en background."""
+    try:
+        scheduler = BackgroundScheduler()
+        # Job cada 5 minutos: aplicar pagos pendientes
+        scheduler.add_job(
+            aplicar_pagos_pendientes,
+            'interval',
+            minutes=5,
+            id='aplicar_pagos_pendientes',
+            max_instances=1
+        )
+        scheduler.start()
+        logger.info("Background jobs iniciados: aplicar_pagos_pendientes cada 5 min")
+    except Exception as e:
+        logger.error(f"Error iniciando background jobs: {e}", exc_info=True)
+
+# Iniciar jobs en startup
+@app.on_event("startup")
+async def startup_event():
+    """Se ejecuta al iniciar la aplicaciÃ³n."""
+    iniciar_jobs()
 
 
 if __name__ == "__main__":
