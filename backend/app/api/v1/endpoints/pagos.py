@@ -21,7 +21,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, Query, HTTPException, UploadFile, File, Body
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, field_validator
-from sqlalchemy import and_, case, func, or_, select
+from sqlalchemy import and_, case, delete, exists, func, or_, select
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError, OperationalError
 
@@ -1207,6 +1207,117 @@ def descargar_excel_errores_importados(
         buf,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@router.get("/export/excel/pagos-sin-aplicar-cuotas")
+def export_excel_pagos_sin_aplicar_cuotas(
+    cohorte: str = Query(
+        "todos",
+        description="todos (default): sin ninguna fila en cuota_pagos (no aplicados a cuotas). "
+        "fifo: ademas monto>0, prestamo_id, no ANULADO_IMPORT (cola del job). "
+        "sin_cupo: como fifo y sin cupo aplicable en cuotas PENDIENTE/MORA/PARCIAL.",
+    ),
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
+    """
+    Descarga Excel con pagos que no tienen aplicacion a cuotas (sin filas en cuota_pagos).
+    Por defecto cohorte=todos incluye todos esos pagos. Requiere autenticacion. Maximo 200000 filas.
+    """
+    c = (cohorte or "todos").strip().lower()
+    if c not in ("todos", "fifo", "sin_cupo"):
+        raise HTTPException(status_code=400, detail="cohorte debe ser todos, fifo o sin_cupo")
+
+    import openpyxl
+
+    tiene_cuota_pago = exists(select(CuotaPago.id).where(CuotaPago.pago_id == Pago.id))
+    if c == "todos":
+        cond_final = ~tiene_cuota_pago
+    else:
+        cond_base = and_(
+            ~tiene_cuota_pago,
+            func.coalesce(Pago.monto_pagado, 0) > 0,
+            func.upper(func.coalesce(Pago.estado, "")) != "ANULADO_IMPORT",
+            Pago.prestamo_id.isnot(None),
+        )
+        if c == "sin_cupo":
+            aplicado_en_cuota = (
+                select(func.coalesce(func.sum(CuotaPago.monto_aplicado), 0))
+                .where(CuotaPago.cuota_id == Cuota.id)
+                .correlate(Cuota)
+                .scalar_subquery()
+            )
+            hay_cupo_aplicable = exists(
+                select(1)
+                .select_from(Cuota)
+                .where(
+                    and_(
+                        Cuota.prestamo_id == Pago.prestamo_id,
+                        Cuota.estado.in_(["PENDIENTE", "MORA", "PARCIAL"]),
+                        (func.coalesce(Cuota.monto, 0) - aplicado_en_cuota) > 0.01,
+                    )
+                )
+            )
+            cond_final = and_(cond_base, ~hay_cupo_aplicable)
+        else:
+            cond_final = cond_base
+
+    rows = (
+        db.execute(
+            select(Pago)
+            .where(cond_final)
+            .order_by(Pago.fecha_registro.asc(), Pago.id.asc())
+            .limit(200000)
+        )
+        .scalars()
+        .all()
+    )
+    rows = [r for r in rows if r is not None]
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Pagos sin aplicar"
+    headers = [
+        "pago_id",
+        "fecha_registro",
+        "fecha_pago",
+        "prestamo_id",
+        "cedula",
+        "monto_pagado",
+        "estado",
+        "referencia_pago",
+        "numero_documento",
+        "conciliado",
+        "usuario_registro",
+        "cohorte_filtro",
+    ]
+    for col, h in enumerate(headers, 1):
+        ws.cell(row=1, column=col, value=h)
+    for row_idx, p in enumerate(rows, 2):
+        fr = p.fecha_registro
+        fp = p.fecha_pago
+        ws.cell(row=row_idx, column=1, value=p.id)
+        ws.cell(row=row_idx, column=2, value=fr.strftime("%Y-%m-%d %H:%M:%S") if fr else "")
+        ws.cell(row=row_idx, column=3, value=fp.strftime("%Y-%m-%d %H:%M:%S") if fp else "")
+        ws.cell(row=row_idx, column=4, value=p.prestamo_id)
+        ws.cell(row=row_idx, column=5, value=(p.cedula_cliente or ""))
+        ws.cell(row=row_idx, column=6, value=float(p.monto_pagado) if p.monto_pagado is not None else 0)
+        ws.cell(row=row_idx, column=7, value=p.estado or "")
+        ws.cell(row=row_idx, column=8, value=p.referencia_pago or "")
+        ws.cell(row=row_idx, column=9, value=p.numero_documento or "")
+        ws.cell(row=row_idx, column=10, value=bool(p.conciliado) if p.conciliado is not None else False)
+        ws.cell(row=row_idx, column=11, value=p.usuario_registro or "")
+        ws.cell(row=row_idx, column=12, value=c)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    fname = f"pagos_sin_aplicar_cuotas_{c}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={fname}"},
     )
 
 
