@@ -222,7 +222,7 @@ ORDER BY fecha DESC;
 
 SELECT 
     p.id,
-    p.cedula_cliente,
+    p.cedula,
     p.fecha_pago,
     p.monto_pagado,
     p.referencia_pago,
@@ -231,7 +231,7 @@ SELECT
     STRING_AGG(CAST(cp.cuota_id AS VARCHAR), ', ') as cuotas_aplicadas
 FROM pagos p
 LEFT JOIN cuota_pagos cp ON p.id = cp.pago_id
-WHERE p.cedula_cliente = 'cedula_aqui' 
+WHERE p.cedula = 'cedula_aqui' 
    OR p.referencia_pago = 'referencia_aqui'
 GROUP BY p.id
 ORDER BY p.fecha_pago DESC;

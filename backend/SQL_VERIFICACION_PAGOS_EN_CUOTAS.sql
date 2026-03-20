@@ -11,7 +11,7 @@
 SELECT 
     p.id,
     p.prestamo_id,
-    p.cedula_cliente,
+    p.cedula,
     p.fecha_pago,
     p.monto_pagado,
     p.referencia_pago,
@@ -31,7 +31,7 @@ ORDER BY p.fecha_pago DESC;
 SELECT 
     p.id,
     p.prestamo_id,
-    p.cedula_cliente,
+    p.cedula,
     p.fecha_pago,
     p.monto_pagado,
     p.referencia_pago,
@@ -50,7 +50,7 @@ ORDER BY p.fecha_pago DESC;
 SELECT 
     p.id,
     p.prestamo_id,
-    p.cedula_cliente,
+    p.cedula,
     p.fecha_pago,
     p.monto_pagado,
     SUM(cp.monto_aplicado) as total_aplicado,
@@ -71,7 +71,7 @@ ORDER BY p.fecha_pago DESC;
 SELECT 
     p.id,
     p.prestamo_id,
-    p.cedula_cliente,
+    p.cedula,
     p.fecha_pago,
     p.monto_pagado,
     p.referencia_pago,
@@ -246,7 +246,7 @@ FROM cuotas;
 SELECT 
     p.id,
     p.prestamo_id,
-    p.cedula_cliente,
+    p.cedula,
     p.fecha_pago,
     p.monto_pagado,
     p.referencia_pago,
@@ -289,7 +289,7 @@ ORDER BY porcentaje_pagos_asignados ASC;
 SELECT 
     p.id,
     p.prestamo_id,
-    p.cedula_cliente,
+    p.cedula,
     p.fecha_pago,
     p.monto_pagado,
     p.referencia_pago,
