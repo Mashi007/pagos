@@ -132,6 +132,12 @@ app.include_router(referencia_estados_cuota.router)
 # Incluir endpoint de auditoría de conciliación
 from app.api.v1.endpoints import auditoria_conciliacion
 app.include_router(auditoria_conciliacion.router)
+# Incluir endpoint de problemas críticos (diagnóstico y corrección)
+from app.api.v1.endpoints import criticos
+app.include_router(criticos.router)
+# Incluir dashboard de monitoreo
+from app.api.v1.endpoints import dashboard_conciliacion
+app.include_router(dashboard_conciliacion.router)
 
 
 def _startup_db_with_retry(engine, max_attempts: int = 10, delay_sec: float = 3.0):
@@ -418,6 +424,8 @@ if __name__ == "__main__":
         port=8000,
         reload=settings.DEBUG
     )
+
+
 
 
 
