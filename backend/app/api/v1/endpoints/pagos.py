@@ -1753,7 +1753,7 @@ def mover_a_revisar_pagos(payload: MoverRevisarPagosBody = Body(...), db: Sessio
     return {"movidos": insertados, "mensaje": f"{insertados} pagos movidos a revisar_pagos"}
 
 
-@router.get("/{pago_id}", response_model=dict)
+@router.get("/{pago_id:int}", response_model=dict)
 def obtener_pago(pago_id: int, db: Session = Depends(get_db)):
     """Obtiene un pago por ID desde la tabla pagos."""
     row = db.get(Pago, pago_id)
@@ -1968,7 +1968,7 @@ def crear_pago(payload: PagoCreate, db: Session = Depends(get_db), current_user:
         )
 
 
-@router.put("/{pago_id}", response_model=dict)
+@router.put("/{pago_id:int}", response_model=dict)
 def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get_db)):
     """Actualiza un pago en la tabla pagos. Nº documento no puede repetirse."""
     row = db.get(Pago, pago_id)
@@ -2032,7 +2032,7 @@ def actualizar_pago(pago_id: int, payload: PagoUpdate, db: Session = Depends(get
     return _pago_to_response(row)
 
 
-@router.delete("/{pago_id}", status_code=204)
+@router.delete("/{pago_id:int}", status_code=204)
 def eliminar_pago(pago_id: int, db: Session = Depends(get_db)):
     """Elimina un pago de la tabla pagos."""
     row = db.get(Pago, pago_id)
@@ -2195,7 +2195,7 @@ def aplicar_pagos_pendientes_prestamo(prestamo_id: int, db: Session) -> int:
     return n
 
 
-@router.post("/{pago_id}/aplicar-cuotas", response_model=dict)
+@router.post("/{pago_id:int}/aplicar-cuotas", response_model=dict)
 def aplicar_pago_a_cuotas(pago_id: int, db: Session = Depends(get_db)):
     """
     Aplica el monto del pago a cuotas del préstamo (por orden de numero_cuota).

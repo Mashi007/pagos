@@ -162,7 +162,7 @@ class PagoService {
     total_datos_revisar?: number
     mensaje: string
   }> {
-    return await apiClient.post(`${this.baseUrl}/importar-desde-cobros`)
+    return await apiClient.post(`${this.baseUrl}/importar-desde-cobros`, undefined, { timeout: 120000 })
   }
 
   /**
