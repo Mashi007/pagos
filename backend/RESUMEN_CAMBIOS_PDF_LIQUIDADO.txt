@@ -1,0 +1,143 @@
+================================================================================
+RESUMEN DE CAMBIOS: Notificaciones LIQUIDADO con PDF de Estado de Cuenta
+================================================================================
+
+ANTES:
+======
+Cuando un préstamo se liquidaba (9 PM):
+1. Se actualizaba estado a LIQUIDADO en BD
+2. Se enviaba correo simple:
+   - Solo texto (sin adjunto)
+   - Sin PDF del estado de cuenta
+   - Cliente no veía detalles de cuotas pendientes
+
+Flujo:
+  Scheduler (9 PM) 
+    → actualizar_prestamos_a_liquidado_automatico() 
+    → Insert en envio_notificacion (solo texto)
+    → Cliente recibe: "Su préstamo XYZ ha sido pagado"
+
+
+AHORA (MEJORADO):
+=================
+Cuando un préstamo se liquida (9 PM):
+1. Se actualiza estado a LIQUIDADO en BD
+2. Se GENERA PDF del estado de cuenta:
+   - Tabla de todos los préstamos del cliente (con estado actual)
+   - Tabla de cuotas PENDIENTES consolidadas
+   - Total adeudado
+   - Logo y diseño profesional de RapiCredit
+   
+3. Se envía correo CON PDF ADJUNTO:
+   - Asunto: "Préstamo ABC123 - 100% Liquidado"
+   - Cuerpo: Confirmación personalizada
+   - Adjunto: estado_cuenta_ABC123.pdf <- NUEVO
+   
+4. Se registra en envio_notificacion (con exito=true/false)
+
+Flujo mejorado:
+  Scheduler (9 PM)
+    → actualizar_prestamos_a_liquidado_automatico()
+    → Para cada préstamo liquidado:
+       ├─ Generar PDF del estado de cuenta
+       │  ├─ Consultar prestamos del cliente
+       │  ├─ Consultar cuotas PENDIENTES
+       │  └─ Llamar generar_pdf_estado_cuenta() → bytes PDF
+       │
+       ├─ Enviar correo con PDF adjunto
+       │  └─ send_email(..., attachments=[(nombre, pdf_bytes)])
+       │
+       └─ Registrar en envio_notificacion
+          └─ tipo='liquidado', exito=true/false
+
+
+ARCHIVOS MODIFICADOS:
+======================
+
+1. app/services/liquidado_notificacion_service.py
+   - Nuevo método: _generar_pdf_estado_cuenta(db, cliente_id)
+     Genera PDF con datos en vivo del cliente
+   
+   - Mejorado: crear_notificacion()
+     + Llama a _generar_pdf_estado_cuenta()
+     + Adjunta PDF al correo con send_email()
+     + Fallback graceful si falla PDF (envía sin adjunto)
+
+2. app/services/liquidado_scheduler.py
+   - Mejorado: actualizar_prestamos_liquidado()
+     + Identifica prestamos a liquidar ANTES de actualizar
+     + Para cada uno, llama notificacion_service.crear_notificacion()
+     + Registra estadísticas (ok, fail)
+
+3. app/main.py
+   - (Sin cambios) Ya tiene imports de scheduler
+
+
+BENEFICIOS:
+===========
+
+OK Cliente recibe PDF actualizado de su estado de cuenta
+OK Puede ver cuotas pendientes en otros préstamos
+OK Adjunto profesional (mismo diseño que endpoint público)
+OK Facilita auditoría y gestión de cobros
+OK Mejor experiencia del cliente
+OK Fallback automático si falla PDF
+
+
+TABLA envio_notificacion:
+========================
+
+Registro anterior (sin PDF):
+  prestamo_id: 123
+  cliente_id: 45
+  tipo: 'liquidado'
+  asunto: 'Préstamo ABC123 - 100% Liquidado'
+  cuerpo: 'Su préstamo por 1000.00 ha sido...'
+  exito: true
+  fecha_envio: 2025-03-20 21:00:00
+
+Mismo registro pero AHORA:
+  - El correo tiene adjunto: estado_cuenta_ABC123.pdf
+  - El PDF tiene:
+    * Tabla de prestamos del cliente
+    * Tabla de cuotas pendientes
+    * Total adeudado
+    * Logo RapiCredit
+
+
+VALIDACION:
+===========
+
+OK Validacion de archivos: OK
+OK Importaciones: OK
+OK Integracion en scheduler: OK
+OK Integracion en main.py: OK
+
+
+PROXIMOS PASOS:
+===============
+
+1. Reiniciar aplicación:
+   uvicorn app.main:app --reload
+
+2. Monitorear logs por: [LIQUIDADO_NOTIF]
+
+3. Esperar 9 PM o cambiar hora de scheduler para testing
+
+4. Verificar correo recibido con PDF adjunto
+
+5. Consultar BD:
+   SELECT * FROM envio_notificacion WHERE tipo='liquidado'
+
+
+DETALLES TECNICOS:
+==================
+
+PDF generado con: reportlab
+Adjuntado con: send_email() de app.core.email
+Datos consultados: EN VIVO (no cacheados)
+Fallback: Si falla PDF, correo se envía sin adjunto
+Auditoria: Registrado en envio_notificacion
+Frontend: Visible en ?tab=liquidados
+
+================================================================================

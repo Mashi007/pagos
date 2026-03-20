@@ -1,4 +1,4 @@
-﻿"""
+"""
 Scheduler para tareas programadas (zona America/Caracas).
 
 Actualización periódica de informes y reportes:

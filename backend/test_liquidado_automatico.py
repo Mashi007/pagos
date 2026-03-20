@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 \"\"\"
 Script de prueba para verificar la automatizacion de LIQUIDADO
 \"\"\"

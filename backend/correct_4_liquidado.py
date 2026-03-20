@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 from app.core.database import SessionLocal
 from sqlalchemy import text
 

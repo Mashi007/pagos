@@ -1,4 +1,4 @@
-﻿with open(r'C:\Users\PORTATIL\Documents\BIBLIOTECA\GitHub\pagos\backend\app\main.py', 'r', encoding='utf-8') as f:
+with open(r'C:\Users\PORTATIL\Documents\BIBLIOTECA\GitHub\pagos\backend\app\main.py', 'r', encoding='utf-8') as f:
     lines = f.readlines()
     
 print('=== VERIFICACION: Cambios agregados ===\n')

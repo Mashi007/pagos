@@ -1,4 +1,4 @@
-﻿# Fix pagos.py: add except OperationalError after batch return
+# Fix pagos.py: add except OperationalError after batch return
 path = "app/api/v1/endpoints/pagos.py"
 with open(path, "r", encoding="utf-8") as f:
     lines = f.readlines()

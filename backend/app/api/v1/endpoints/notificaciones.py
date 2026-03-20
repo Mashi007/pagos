@@ -1,4 +1,4 @@
-﻿"""
+"""
 Endpoints de notificaciones a clientes retrasados.
 Datos reales desde BD: cuotas (fecha_vencimiento, pagado) y clientes.
 Reglas: 5 pestaÃƒÂ±as por dÃƒÂ­as hasta vencimiento y mora 61+.

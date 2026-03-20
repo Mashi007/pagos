@@ -1,4 +1,4 @@
-﻿"""
+"""
 Servicios para notificaciones de cuotas vencidas y en mora.
 Centraliza la lógica de serialización y filtrado de cuotas.
 Una sola fuente de datos: get_cuotas_pendientes_con_cliente(db) para listado y envío.

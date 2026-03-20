@@ -1,4 +1,4 @@
-﻿"""
+"""
 Conexión a la base de datos PostgreSQL.
 Proporciona engine, sesión y dependencia get_db para inyectar en endpoints.
 """

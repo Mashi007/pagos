@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 \"\"\"
 Endpoint para ejecutar actualizacion manual de prestamos a LIQUIDADO
 \"\"\"

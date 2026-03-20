@@ -1,4 +1,4 @@
-﻿print('='*100)
+print('='*100)
 print('IMPLEMENTACION COMPLETADA: Automatizacion de LIQUIDADO 9 PM')
 print('='*100)
 

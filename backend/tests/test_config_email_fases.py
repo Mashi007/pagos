@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 Tests para flujo de configuracion de email y verificacion de fases (logs/indicadores).
 - GET/PUT configuracion email
