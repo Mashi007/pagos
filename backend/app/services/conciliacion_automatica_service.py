@@ -94,7 +94,10 @@ class ValidadorSobreAplicacion:
         elif monto_aplicado > 0:
             return EstadoCuota.PARCIAL
         else:
-            return EstadoCuota.MORA if cuota.dias_mora and cuota.dias_mora > 0 else EstadoCuota.PENDIENTE
+            if cuota.dias_mora and cuota.dias_mora > 0:
+                  return EstadoCuota.MORA if cuota.dias_mora > 90 else EstadoCuota.VENCIDO
+            else:
+                  return EstadoCuota.PENDIENTE
 
 
 class ConciliacionAutomaticaService:
