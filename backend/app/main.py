@@ -19,6 +19,22 @@ from app.middleware.audit_middleware import AuditMiddleware
 from app.middleware.validador_sobre_aplicacion import ValidadorSobreAplicacionMiddleware
 from app.services.liquidado_scheduler import liquidado_scheduler
 
+# Importar middlewares de seguridad FASE 1
+from app.middleware.security_headers import (
+    SecurityHeadersMiddleware,
+    ContentSecurityPolicyMiddleware,
+    RequestIdMiddleware,
+)
+from app.api.v1.endpoints import auth_csrf_cookies
+
+# Importar middlewares de seguridad FASE 1
+from app.middleware.security_headers import (
+    SecurityHeadersMiddleware,
+    ContentSecurityPolicyMiddleware,
+    RequestIdMiddleware,
+)
+from app.api.v1.endpoints import auth_csrf_cookies
+
 # Configurar logging con UTF-8 para tildes/caracteres en Render
 import sys
 import io
@@ -119,6 +135,11 @@ app.add_middleware(
 
 # Incluir routers
 app.include_router(api_router, prefix=settings.API_V1_STR)
+
+# ========== ROUTER DE AUTENTICACION CON CSRF (FASE 1) ==========
+# Endpoints: GET /api/v1/auth/login-form, POST /api/v1/auth/login, POST /api/v1/auth/logout
+app.include_router(auth_csrf_cookies.router, prefix=settings.API_V1_STR)
+# ================================================================
 
 # Incluir endpoint del scheduler de LIQUIDADO
 from app.api.v1.endpoints import prestamos_liquidado_automatico
