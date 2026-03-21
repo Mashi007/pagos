@@ -1,0 +1,1 @@
+        url.includes('/prestamos/cedula/batch') || // Batch carga masiva: muchas c\ufffddulas

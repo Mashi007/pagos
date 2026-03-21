@@ -44,13 +44,13 @@ const safeClearSession = () => {
   }
 }
 
-// Constantes de configuraci�n
+// Constantes de configuración
 
 const DEFAULT_TIMEOUT_MS = 30000
 
-const SLOW_ENDPOINT_TIMEOUT_MS = 60000 // Para endpoints que pueden tardar m�s
+const SLOW_ENDPOINT_TIMEOUT_MS = 60000 // Para endpoints que pueden tardar más
 
-// Base URL de la API. CSP permite same-origin y or�genes Render; usar VITE_API_URL cuando front y back est�n en servicios distintos.
+// Base URL de la API. CSP permite same-origin y orígenes Render; usar VITE_API_URL cuando front y back estén en servicios distintos.
 
 function getEffectiveApiBaseUrl(): string {
   const url = env.API_URL
@@ -81,7 +81,7 @@ class ApiClient {
 
   private isRedirectingToLogin = false
 
-  private refreshTokenExpired = false // ? Flag para evitar requests cuando el refresh token est� expirado
+  private refreshTokenExpired = false // ? Flag para evitar requests cuando el refresh token esté expirado
 
   private failedQueue: Array<{
     resolve: (value?: any) => void
@@ -112,15 +112,15 @@ class ApiClient {
   }
 
   private setupInterceptors() {
-    // Request interceptor - agregar token de autenticaci�n
+    // Request interceptor - agregar token de autenticación
 
     this.client.interceptors.request.use(
       config => {
-        // ? Si el refresh token est� expirado, cancelar el request inmediatamente
+        // ? Si el refresh token esté expirado, cancelar el request inmediatamente
 
         if (this.refreshTokenExpired && !config.url?.includes('/auth/login')) {
           const error = new Error(
-            'Sesi�n expirada. Por favor, inicia sesi�n nuevamente.'
+            'Sesión expirada. Por favor, inicia sesión nuevamente.'
           )
 
           ;(error as any).isCancelled = true
@@ -128,7 +128,7 @@ class ApiClient {
           return Promise.reject(error)
         }
 
-        // NO agregar token a endpoints de autenticaci�n ni olvido de contrase�a
+        // NO agregar token a endpoints de autenticación ni olvido de contraseña
 
         const authEndpoints = [
           '/api/v1/auth/login',
@@ -149,12 +149,12 @@ class ApiClient {
             ? safeGetItem('access_token', '')
             : safeGetSessionItem('access_token', '')
 
-          // ? Limpiar token: remover espacios, saltos de l�nea, y prefijo "Bearer " si existe
+          // ? Limpiar token: remover espacios, saltos de línea, y prefijo "Bearer " si existe
 
           if (token) {
             token = token.trim()
 
-            // Remover prefijo "Bearer " si est� presente
+            // Remover prefijo "Bearer " si esté presente
 
             if (token.startsWith('Bearer ')) {
               token = token.substring(7).trim()
@@ -187,7 +187,7 @@ class ApiClient {
               }
 
               const error = new Error(
-                'Token inv�lido. Por favor, inicia sesi�n nuevamente.'
+                'Token inválido. Por favor, inicia sesión nuevamente.'
               )
 
               ;(error as any).isCancelled = true
@@ -195,7 +195,7 @@ class ApiClient {
               return Promise.reject(error)
             }
 
-            // ? Verificar si el token est� expirado ANTES de enviar el request
+            // ? Verificar si el token esté expirado ANTES de enviar el request
 
             if (isTokenExpired(token)) {
               // Token expirado - marcar flag, cancelar requests pendientes y redirigir
@@ -276,7 +276,7 @@ class ApiClient {
       },
 
       async error => {
-        // Auto-retry para errores 500 transitorios (conexi�n SSL, timeouts, etc.)
+        // Auto-retry para errores 500 transitorios (conexión SSL, timeouts, etc.)
 
         const requestConfigForRetry = error.config
 
@@ -287,7 +287,7 @@ class ApiClient {
         if (
           (error.response?.status === 500 || error.response?.status === 503) &&
           retryCount < maxRetries &&
-          requestConfigForRetry.method !== 'get' // No reintentar GET en teor�a, pero POST s� es seguro para carga
+          requestConfigForRetry.method !== 'get' // No reintentar GET en teoría, pero POST sí es seguro para carga
         ) {
           ;(requestConfigForRetry as any)._retryCount = retryCount + 1
 
@@ -319,10 +319,10 @@ class ApiClient {
           }
         }
 
-        // Auto-refresh de tokens con protecci�n contra loops infinitos y race conditions
+        // Auto-refresh de tokens con protección contra loops infinitos y race conditions
 
         if (error.response?.status === 401 && !originalRequest?._retry) {
-          // No intentar refresh en endpoints de autenticaci�n
+          // No intentar refresh en endpoints de autenticación
 
           const authEndpoints = ['/api/v1/auth/login', '/api/v1/auth/refresh']
 
@@ -338,7 +338,7 @@ class ApiClient {
             return Promise.reject(error)
           }
 
-          // Si ya hay un refresh en progreso, encolar esta petici�n
+          // Si ya hay un refresh en progreso, encolar esta petición
 
           if (this.isRefreshing) {
             return new Promise<string>((resolve, reject) => {
@@ -347,7 +347,7 @@ class ApiClient {
 
               .then(token => {
                 if (!token) {
-                  throw new Error('Token no disponible despu�s del refresh')
+                  throw new Error('Token no disponible después del refresh')
                 }
 
                 originalRequest.headers.Authorization = `Bearer ${token}`
@@ -375,7 +375,7 @@ class ApiClient {
               throw new Error('No refresh token available')
             }
 
-            // Hacer la petici�n de refresh con validaci�n estricta (lanzar error para 4xx)
+            // Hacer la petición de refresh con validación estricta (lanzar error para 4xx)
 
             let response
 
@@ -398,13 +398,13 @@ class ApiClient {
                 refresh_token: refreshToken,
               })
             } catch (error: any) {
-              // Si el refresh token est� expirado o es inv�lido, el servidor devuelve 401
+              // Si el refresh token esté expirado o es inválido, el servidor devuelve 401
 
               if (
                 error.response?.status === 401 ||
                 error.response?.status === 400
               ) {
-                throw new Error('Refresh token inv�lido o expirado')
+                throw new Error('Refresh token inválido o expirado')
               }
 
               // Para otros errores (red, timeout, etc.), propagar el error
@@ -412,10 +412,10 @@ class ApiClient {
               throw error
             }
 
-            // Verificar si la respuesta es v�lida
+            // Verificar si la respuesta es válida
 
             if (!response || !response.data || !response.data.access_token) {
-              throw new Error('Refresh token inv�lido o expirado')
+              throw new Error('Refresh token inválido o expirado')
             }
 
             const { access_token, refresh_token: newRefreshToken } =
@@ -437,13 +437,13 @@ class ApiClient {
 
             this.processQueue(null, access_token)
 
-            // Reintentar la petici�n original
+            // Reintentar la petición original
 
             originalRequest.headers.Authorization = `Bearer ${access_token}`
 
             return this.client(originalRequest)
           } catch (refreshError: any) {
-            // ? Marcar que el refresh token est� expirado para cancelar requests futuros
+            // ? Marcar que el refresh token esté expirado para cancelar requests futuros
 
             this.refreshTokenExpired = true
 
@@ -470,12 +470,12 @@ class ApiClient {
 
               if (process.env.NODE_ENV === 'development') {
                 console.warn(
-                  '? Refresh token fall�. Redirigiendo al login...',
+                  '? Refresh token falló. Redirigiendo al login...',
                   refreshError
                 )
               }
 
-              // ? Redirigir inmediatamente sin delay para evitar m�s requests (respeta BASE_PATH)
+              // ? Redirigir inmediatamente sin delay para evitar más requests (respeta BASE_PATH)
 
               window.location.replace(LOGIN_PATH)
             }
@@ -504,7 +504,7 @@ class ApiClient {
       } else if (token) {
         prom.resolve(token)
       } else {
-        prom.reject(new Error('Token no disponible despu�s del refresh'))
+        prom.reject(new Error('Token no disponible después del refresh'))
       }
     })
 
@@ -566,34 +566,34 @@ class ApiClient {
           }
         | undefined
 
-      // Evitar mostrar toast de 401 cuando est� siendo manejado por el interceptor
+      // Evitar mostrar toast de 401 cuando está siendo manejado por el interceptor
 
       const isBeingHandledByInterceptor =
         (error.config as { _retry?: boolean } | undefined)?._retry !== undefined
 
       switch (status) {
         case 400:
-          // Error de validaci�n o cliente duplicado (misma c�dula y mismo nombre)
+          // Error de validación o cliente duplicado (misma cédula y mismo nombre)
 
           if (typeof responseData?.detail === 'string') {
             toast.error(responseData.detail)
           } else {
-            toast.error(responseData?.message || 'Error de validaci�n')
+            toast.error(responseData?.message || 'Error de validación')
           }
 
           break
 
         case 401:
-          // No mostrar toast si est� siendo manejado por el interceptor de refresh
+          // No mostrar toast si está siendo manejado por el interceptor de refresh
 
           if (!isBeingHandledByInterceptor) {
-            toast.error('Sesi�n expirada. Redirigiendo al inicio de sesi�n...')
+            toast.error('Sesión expirada. Redirigiendo al inicio de sesión...')
           }
 
           break
 
         case 403:
-          toast.error('Sin permisos para esta acci�n')
+          toast.error('Sin permisos para esta acción')
 
           break
 
@@ -605,37 +605,37 @@ class ApiClient {
         case 409:
           toast.error(
             responseData?.message ||
-              'Conflicto de datos. Verifica la informaci�n.'
+              'Conflicto de datos. Verifica la información.'
           )
 
           break
 
         case 422:
-          // Errores de validaci�n
+          // Errores de validación
 
           if (responseData?.detail && Array.isArray(responseData.detail)) {
             responseData.detail.forEach(
               (err: { loc?: string[]; msg?: string }) => {
                 toast.error(
-                  `${err.loc?.join(' ') || 'Campo'}: ${err.msg || 'Error de validaci�n'}`
+                  `${err.loc?.join(' ') || 'Campo'}: ${err.msg || 'Error de validación'}`
                 )
               }
             )
           } else {
-            toast.error(responseData?.message || 'Error de validaci�n')
+            toast.error(responseData?.message || 'Error de validación')
           }
 
           break
 
         case 500:
-          // Mostrar el mensaje de error espec�fico del backend si est� disponible
+          // Mostrar el mensaje de error específico del backend si esté disponible
 
           const errorDetail =
             typeof responseData?.detail === 'string'
               ? responseData.detail
               : responseData?.message || 'Error interno del servidor'
 
-          // Logging detallado para diagn�stico
+          // Logging detallado para diagnóstico
 
           console.error('? [ApiClient] Error 500 del servidor:', {
             detail: errorDetail,
@@ -651,16 +651,16 @@ class ApiClient {
             fullError: error,
           })
 
-          // Mostrar toast con el mensaje del backend (ahora m�s espec�fico)
+          // Mostrar toast con el mensaje del backend (ahora más específico)
 
           toast.error(errorDetail, { duration: 10000 })
 
           break
 
         case 503:
-          // NO mostrar toast gen�rico para errores 503 de duplicados
+          // NO mostrar toast genérico para errores 503 de duplicados
 
-          // Permitir que el componente maneje el error espec�fico
+          // Permitir que el componente maneje el error específico
 
           const detailStr =
             typeof responseData?.detail === 'string' ? responseData.detail : ''
@@ -671,13 +671,13 @@ class ApiClient {
             detailStr.includes('duplicate key') ||
             detailStr.includes('already exists') ||
             detailStr.includes('violates unique constraint') ||
-            detailStr.includes('c�dula') ||
+            detailStr.includes('cédula') ||
             messageStr.includes('duplicate key') ||
             messageStr.includes('already exists')
           ) {
             // No mostrar toast, dejar que el componente maneje el popup
 
-            return Promise.reject(error) // ? CORRECCI�N: Asegurar que se propague el error
+            return Promise.reject(error) // ? CORRECCIÓN: Asegurar que se propague el error
           } else {
             toast.error(
               'Servicio temporalmente no disponible. Intenta nuevamente.'
@@ -691,20 +691,20 @@ class ApiClient {
             error.code === 'ECONNABORTED' ||
             error.message?.includes('timeout')
           ) {
-            toast.error('Tiempo de espera agotado. Verifica tu conexi�n.')
+            toast.error('Tiempo de espera agotado. Verifica tu conexión.')
           } else if (
             error.message?.includes('Network Error') ||
             error.code === 'ERR_NETWORK'
           ) {
             toast.error(
-              'Error de conexi�n. Verifica que el servidor est� funcionando.'
+              'Error de conexión. Verifica que el servidor esté funcionando.'
             )
           } else {
             toast.error(responseData?.message || 'Error desconocido')
           }
       }
     } else if (error.request) {
-      // Error de red - puede ser que el servidor est� reiniciando
+      // Error de red - puede ser que el servidor esté reiniciando
 
       const errorCode = (error as any).code || ''
 
@@ -717,9 +717,9 @@ class ApiClient {
         return
       }
 
-      // Log detallado para diagn�stico
+      // Log detallado para diagnóstico
 
-      console.error('? [ApiClient] Error de conexi�n:', {
+      console.error('? [ApiClient] Error de conexión:', {
         url: error.config?.url,
 
         method: error.config?.method,
@@ -733,9 +733,9 @@ class ApiClient {
         requestId: (error.config as any)?.__requestId,
       })
 
-      // No mostrar toast para errores de conexi�n durante el inicio (servidor reiniciando)
+      // No mostrar toast para errores de conexión durante el inicio (servidor reiniciando)
 
-      // Estos errores son temporales y se resuelven autom�ticamente
+      // Estos errores son temporales y se resuelven automáticamente
 
       if (
         errorCode === 'ERR_NETWORK' ||
@@ -743,44 +743,44 @@ class ApiClient {
         errorMessage.includes('Connection refused') ||
         errorMessage.includes('NS_ERROR_CONNECTION_REFUSED')
       ) {
-        // Solo loggear en consola, no mostrar toast (el usuario ver� el error si persiste)
+        // Solo loggear en consola, no mostrar toast (el usuario verá el error si persiste)
 
         console.warn(
           '? Servidor no disponible temporalmente. Esto es normal durante reinicios.'
         )
 
         console.warn(
-          '   Verifica que el backend est� funcionando en:',
+          '   Verifica que el backend esté funcionando en:',
           API_BASE_URL || 'NO CONFIGURADO'
         )
 
         return
       }
 
-      // Mensaje m�s descriptivo seg�n el tipo de error
+      // Mensaje más descriptivo según el tipo de error
 
-      let errorMsg = 'Error de conexi�n. Verifique su conexi�n a internet.'
+      let errorMsg = 'Error de conexión. Verifique su conexión a internet.'
 
       if (errorCode === 'ECONNABORTED' || errorMessage.includes('timeout')) {
         errorMsg =
-          'Tiempo de espera agotado. El servidor est� tardando demasiado en responder.'
+          'Tiempo de espera agotado. El servidor esté tardando demasiado en responder.'
       } else if (errorCode === 'ERR_NETWORK') {
         errorMsg =
-          'Error de red. Verifique que el servidor est� funcionando y su conexi�n a internet.'
+          'Error de red. Verifique que el servidor esté funcionando y su conexión a internet.'
       }
 
       toast.error(errorMsg)
     } else {
-      // Error de configuraci�n
+      // Error de configuración
 
-      toast.error('Error en la configuraci�n de la petici�n')
+      toast.error('Error en la configuración de la petición')
     }
   }
 
-  // M�todos HTTP
+  // Métodos HTTP
 
   async get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
-    // Detectar endpoints lentos y usar timeout extendido (p. ej. Render tarda 3�5 s en fr�o)
+    // Detectar endpoints lentos y usar timeout extendido (p. ej. Render tarda 3-5 s en frío)
 
     const isSlowEndpoint =
       url.includes('/dashboard/') ||
@@ -837,13 +837,13 @@ class ApiClient {
       defaultTimeout = SLOW_ENDPOINT_TIMEOUT_MS
     }
 
-    // ? Priorizar timeout expl�cito si se proporciona, sino usar el calculado
+    // ? Priorizar timeout explícito si se proporciona, sino usar el calculado
 
     const timeout = config?.timeout ?? defaultTimeout
 
     // ? Asegurar que el timeout se aplique correctamente
 
-    // Axios respeta el timeout en la configuraci�n del request sobre el del cliente
+    // Axios respeta el timeout en la configuración del request sobre el del cliente
 
     const finalConfig = {
       ...config,
@@ -870,12 +870,12 @@ class ApiClient {
         url.includes('/fine-tuning/iniciar') ||
         url.includes('/rag/generar-embeddings') ||
         url.includes('/configuracion/ai/chat') ||
-        url.includes('/prestamos/cedula/batch') || // Batch carga masiva: muchas c�dulas
+        url.includes('/prestamos/cedula/batch') || // Batch carga masiva: muchas cédulas
         url.includes('/pagos/upload') || // Carga masiva pagos: puede tardar con muchas filas
         url.includes('/pagos/batch') || // POST batch pagos: muchas filas + validaciones
         url.includes('/pagos/gmail/run-now') ||
         url.includes('/clientes/check-emails') ||
-        url.includes('/clientes/check-cedulas') // Pipeline Gmail: puede tardar si el backend es s�ncrono (credenciales OAuth)
+        url.includes('/clientes/check-cedulas') // Pipeline Gmail: puede tardar si el backend es síncrono (credenciales OAuth)
 
       const defaultTimeout = isSlowEndpoint
         ? url.includes('/prestamos/cedula/batch')
@@ -885,14 +885,14 @@ class ApiClient {
             : url.includes('/pagos/batch')
               ? 180000 // 3 min: Render frío + muchas filas
               : url.includes('/pagos/gmail/run-now')
-                ? 90000 // 90s: cubre credenciales OAuth + margen para backend s�ncrono viejo
+                ? 90000 // 90s: cubre credenciales OAuth + margen para backend síncrono viejo
                 : url.includes('/clientes/check-emails') ||
                     url.includes('/clientes/check-cedulas')
                   ? 60000
                   : 300000
         : DEFAULT_TIMEOUT_MS
 
-      // Priorizar timeout expl�cito si se proporciona, sino usar el calculado
+      // Priorizar timeout explícito si se proporciona, sino usar el calculado
 
       const timeout = config?.timeout ?? defaultTimeout
 
@@ -919,7 +919,7 @@ class ApiClient {
           const is409Pagos = response.status === 409 && url.includes('/pagos')
 
           if (!is409Pagos) {
-            console.error('? [ApiClient] POST recibi� error 4xx:', {
+            console.error('? [ApiClient] POST recibió error 4xx:', {
               url,
               status: response.status,
               data: response.data,
@@ -976,7 +976,7 @@ class ApiClient {
   ): Promise<T> {
     console.log('? [ApiClient] PUT request:', {
       url,
-      data: data ? '***' : '(vac�o)',
+      data: data ? '***' : '(vacío)',
       config,
     })
 
@@ -996,7 +996,7 @@ class ApiClient {
       // Verificar si la respuesta es un error 4xx (validateStatus permite 4xx pero debemos manejarlos)
 
       if (response.status >= 400 && response.status < 500) {
-        console.error('? [ApiClient] PUT recibi� error 4xx:', {
+        console.error('? [ApiClient] PUT recibió error 4xx:', {
           url,
           status: response.status,
           data: response.data,
@@ -1062,7 +1062,7 @@ class ApiClient {
     return response.data
   }
 
-  // M�todo para subir archivos
+  // Método para subir archivos
 
   async uploadFile<T>(
     url: string,
@@ -1086,7 +1086,7 @@ class ApiClient {
     return response.data
   }
 
-  // M�todo para descargar archivos
+  // Método para descargar archivos
 
   async downloadFile(url: string, filename: string): Promise<void> {
     const response = await this.client.get(url, {
@@ -1118,7 +1118,7 @@ class ApiClient {
     return this.client
   }
 
-  // FUNCI�N DE EMERGENCIA: Limpiar completamente el storage
+  // FUNCIÓN DE EMERGENCIA: Limpiar completamente el storage
 
   emergencyClearStorage(): void {
     try {
@@ -1130,7 +1130,7 @@ class ApiClient {
 
       safeClearSession()
 
-      // Limpiar espec�ficamente tokens de auth
+      // Limpiar específicamente tokens de auth
 
       clearAuthStorage()
     } catch (error) {
@@ -1145,7 +1145,7 @@ export const apiClient = new ApiClient()
 
 export default apiClient
 
-// FUNCI�N GLOBAL DE EMERGENCIA: Limpiar storage desde consola del navegador
+// FUNCIÓN GLOBAL DE EMERGENCIA: Limpiar storage desde consola del navegador
 
 // Uso: window.clearAuthStorage() en la consola del navegador
 
@@ -1180,7 +1180,7 @@ export interface PaginatedResponse<T> {
   total_pages: number
 }
 
-// Funciones de utilidad para construir URLs con par�metros
+// Funciones de utilidad para construir URLs con parámetros
 
 export function buildUrl(
   baseUrl: string,

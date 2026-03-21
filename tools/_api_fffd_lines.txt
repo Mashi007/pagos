@@ -1,0 +1,77 @@
+47: // Constantes de configuraci<FFFD>n
+51: const SLOW_ENDPOINT_TIMEOUT_MS = 60000 // Para endpoints que pueden tardar m<FFFD>s
+53: // Base URL de la API. CSP permite same-origin y or<FFFD>genes Render; usar VITE_API_URL cuando front y back est<FFFD>n en servicios distintos.
+84:   private refreshTokenExpired = false // ? Flag para evitar requests cuando el refresh token est<FFFD> expirado
+115:     // Request interceptor - agregar token de autenticaci<FFFD>n
+119:         // ? Si el refresh token est<FFFD> expirado, cancelar el request inmediatamente
+123:             'Sesi<FFFD>n expirada. Por favor, inicia sesi<FFFD>n nuevamente.'
+131:         // NO agregar token a endpoints de autenticaci<FFFD>n ni olvido de contrase<FFFD>a
+152:           // ? Limpiar token: remover espacios, saltos de l<FFFD>nea, y prefijo "Bearer " si existe
+157:             // Remover prefijo "Bearer " si est<FFFD> presente
+190:                 'Token inv<FFFD>lido. Por favor, inicia sesi<FFFD>n nuevamente.'
+198:             // ? Verificar si el token est<FFFD> expirado ANTES de enviar el request
+279:         // Auto-retry para errores 500 transitorios (conexi<FFFD>n SSL, timeouts, etc.)
+290:           requestConfigForRetry.method !== 'get' // No reintentar GET en teor<FFFD>a, pero POST s<FFFD> es seguro para carga
+322:         // Auto-refresh de tokens con protecci<FFFD>n contra loops infinitos y race conditions
+325:           // No intentar refresh en endpoints de autenticaci<FFFD>n
+341:           // Si ya hay un refresh en progreso, encolar esta petici<FFFD>n
+350:                   throw new Error('Token no disponible despu<FFFD>s del refresh')
+378:             // Hacer la petici<FFFD>n de refresh con validaci<FFFD>n estricta (lanzar error para 4xx)
+401:               // Si el refresh token est<FFFD> expirado o es inv<FFFD>lido, el servidor devuelve 401
+407:                 throw new Error('Refresh token inv<FFFD>lido o expirado')
+415:             // Verificar si la respuesta es v<FFFD>lida
+418:               throw new Error('Refresh token inv<FFFD>lido o expirado')
+440:             // Reintentar la petici<FFFD>n original
+446:             // ? Marcar que el refresh token est<FFFD> expirado para cancelar requests futuros
+473:                   '? Refresh token fall<FFFD>. Redirigiendo al login...',
+478:               // ? Redirigir inmediatamente sin delay para evitar m<FFFD>s requests (respeta BASE_PATH)
+507:         prom.reject(new Error('Token no disponible despu<FFFD>s del refresh'))
+569:       // Evitar mostrar toast de 401 cuando est<FFFD> siendo manejado por el interceptor
+576:           // Error de validaci<FFFD>n o cliente duplicado (misma c<FFFD>dula y mismo nombre)
+581:             toast.error(responseData?.message || 'Error de validaci<FFFD>n')
+587:           // No mostrar toast si est<FFFD> siendo manejado por el interceptor de refresh
+590:             toast.error('Sesi<FFFD>n expirada. Redirigiendo al inicio de sesi<FFFD>n...')
+596:           toast.error('Sin permisos para esta acci<FFFD>n')
+608:               'Conflicto de datos. Verifica la informaci<FFFD>n.'
+614:           // Errores de validaci<FFFD>n
+620:                   `${err.loc?.join(' ') || 'Campo'}: ${err.msg || 'Error de validaci<FFFD>n'}`
+625:             toast.error(responseData?.message || 'Error de validaci<FFFD>n')
+631:           // Mostrar el mensaje de error espec<FFFD>fico del backend si est<FFFD> disponible
+638:           // Logging detallado para diagn<FFFD>stico
+654:           // Mostrar toast con el mensaje del backend (ahora m<FFFD>s espec<FFFD>fico)
+661:           // NO mostrar toast gen<FFFD>rico para errores 503 de duplicados
+663:           // Permitir que el componente maneje el error espec<FFFD>fico
+674:             detailStr.includes('c<FFFD>dula') ||
+680:             return Promise.reject(error) // ? CORRECCI<FFFD>N: Asegurar que se propague el error
+694:             toast.error('Tiempo de espera agotado. Verifica tu conexi<FFFD>n.')
+700:               'Error de conexi<FFFD>n. Verifica que el servidor est<FFFD> funcionando.'
+707:       // Error de red - puede ser que el servidor est<FFFD> reiniciando
+720:       // Log detallado para diagn<FFFD>stico
+722:       console.error('? [ApiClient] Error de conexi<FFFD>n:', {
+736:       // No mostrar toast para errores de conexi<FFFD>n durante el inicio (servidor reiniciando)
+738:       // Estos errores son temporales y se resuelven autom<FFFD>ticamente
+746:         // Solo loggear en consola, no mostrar toast (el usuario ver<FFFD> el error si persiste)
+753:           '   Verifica que el backend est<FFFD> funcionando en:',
+760:       // Mensaje m<FFFD>s descriptivo seg<FFFD>n el tipo de error
+762:       let errorMsg = 'Error de conexi<FFFD>n. Verifique su conexi<FFFD>n a internet.'
+766:           'Tiempo de espera agotado. El servidor est<FFFD> tardando demasiado en responder.'
+769:           'Error de red. Verifique que el servidor est<FFFD> funcionando y su conexi<FFFD>n a internet.'
+774:       // Error de configuraci<FFFD>n
+776:       toast.error('Error en la configuraci<FFFD>n de la petici<FFFD>n')
+780:   // M<FFFD>todos HTTP
+783:     // Detectar endpoints lentos y usar timeout extendido (p. ej. Render tarda 3<FFFD>5 s en fr<FFFD>o)
+840:     // ? Priorizar timeout expl<FFFD>cito si se proporciona, sino usar el calculado
+846:     // Axios respeta el timeout en la configuraci<FFFD>n del request sobre el del cliente
+873:         url.includes('/prestamos/cedula/batch') || // Batch carga masiva: muchas c<FFFD>dulas
+878:         url.includes('/clientes/check-cedulas') // Pipeline Gmail: puede tardar si el backend es s<FFFD>ncrono (credenciales OAuth)
+888:                 ? 90000 // 90s: cubre credenciales OAuth + margen para backend s<FFFD>ncrono viejo
+895:       // Priorizar timeout expl<FFFD>cito si se proporciona, sino usar el calculado
+922:             console.error('? [ApiClient] POST recibi<FFFD> error 4xx:', {
+979:       data: data ? '***' : '(vac<FFFD>o)',
+999:         console.error('? [ApiClient] PUT recibi<FFFD> error 4xx:', {
+1065:   // M<FFFD>todo para subir archivos
+1089:   // M<FFFD>todo para descargar archivos
+1121:   // FUNCI<FFFD>N DE EMERGENCIA: Limpiar completamente el storage
+1133:       // Limpiar espec<FFFD>ficamente tokens de auth
+1148: // FUNCI<FFFD>N GLOBAL DE EMERGENCIA: Limpiar storage desde consola del navegador
+1183: // Funciones de utilidad para construir URLs con par<FFFD>metros
