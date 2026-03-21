@@ -38,6 +38,11 @@ import { useQuery } from '@tanstack/react-query'
 
 import { formatDate } from '../../utils'
 
+import {
+  codigoEstadoCuotaParaUi,
+  etiquetaEstadoCuotaRespaldo,
+} from '../../utils/cuotaEstadoDisplay'
+
 import { toast } from 'sonner'
 
 interface Cuota {
@@ -70,6 +75,8 @@ interface Cuota {
   interes_pendiente?: number
 
   estado: string
+
+  estado_etiqueta?: string
 
   dias_mora: number
 
@@ -135,64 +142,7 @@ export function TablaAmortizacionPrestamo({
     refetchOnWindowFocus: true,
   })
 
-  // Estados de cuota: misma regla que backend (America/Caracas). Conciliacion no cambia el estado mostrado.
-
-  const parseIsoDateOnly = (iso: string): Date => {
-    const part = iso.slice(0, 10)
-    const [y, m, d] = part.split('-').map(x => parseInt(x, 10))
-    return new Date(y, m - 1, d)
-  }
-
-  const hoyCaracas = (): Date => {
-    const s = new Date().toLocaleDateString('en-CA', {
-      timeZone: 'America/Caracas',
-    })
-    const [y, m, d] = s.split('-').map(x => parseInt(x, 10))
-    return new Date(y, m - 1, d)
-  }
-
-  const clasificarEstadoRespaldo = (cuota: Cuota): string => {
-    const montoCuota = Number(cuota.monto_cuota) || 0
-    const paid = Math.max(
-      Number(cuota.total_pagado) || 0,
-      Number(cuota.pago_monto_conciliado) || 0
-    )
-    const fvIso = cuota.fecha_vencimiento || ''
-    const fv = fvIso ? parseIsoDateOnly(fvIso) : null
-    const hoy = hoyCaracas()
-    if (montoCuota > 0 && paid >= montoCuota - 0.01) {
-      if (fv && fv > hoy) return 'PAGO_ADELANTADO'
-      return 'PAGADO'
-    }
-    if (!fv) return 'PENDIENTE'
-    const diasRet = Math.max(
-      0,
-      Math.round((hoy.getTime() - fv.getTime()) / 86400000)
-    )
-    if (diasRet === 0) {
-      return paid > 0.001 ? 'PARCIAL' : 'PENDIENTE'
-    }
-    if (diasRet >= 92) return 'MORA'
-    return 'VENCIDO'
-  }
-
-  const determinarEstadoReal = (cuota: Cuota): string => {
-    const backend = (cuota.estado || '').trim().toUpperCase()
-    const confianza = [
-      'PENDIENTE',
-      'PARCIAL',
-      'VENCIDO',
-      'MORA',
-      'PAGADO',
-      'PAGO_ADELANTADO',
-      'PAGADA',
-    ]
-    if (confianza.includes(backend)) {
-      if (backend === 'PAGADA') return 'PAGADO'
-      return backend
-    }
-    return clasificarEstadoRespaldo(cuota)
-  }
+  // Estado: codigo y etiqueta vienen del backend (get_cuotas_prestamo); sin segunda clasificacion en cliente.
 
   const getEstadoBadge = (estado: string) => {
     const estadoNormalizado = estado?.toUpperCase() || 'PENDIENTE'
@@ -460,7 +410,11 @@ export function TablaAmortizacionPrestamo({
               {cuotasVisibles.map((cuota: Cuota) => {
                 // Determinar el estado real basado en los datos
 
-                const estadoReal = determinarEstadoReal(cuota)
+                const codigoEstado = codigoEstadoCuotaParaUi(cuota.estado)
+
+                const textoEstadoCuota =
+                  (cuota.estado_etiqueta && cuota.estado_etiqueta.trim()) ||
+                  etiquetaEstadoCuotaRespaldo(cuota.estado)
 
                 const totalPagado =
                   typeof cuota.total_pagado === 'number'
@@ -480,7 +434,7 @@ export function TablaAmortizacionPrestamo({
                 const estaPagado =
                   totalPagado > 0 ||
                   montoConciliadoBackend > 0 ||
-                  ['PAGADO', 'PAGADA', 'PAGO_ADELANTADO'].includes(estadoReal)
+                  ['PAGADO', 'PAGADA', 'PAGO_ADELANTADO'].includes(codigoEstado)
 
                 // Priorizar pago_monto_conciliado del backend (valores conciliados por préstamo), luego total_pagado, luego monto_cuota si está pagado
 
@@ -504,7 +458,7 @@ export function TablaAmortizacionPrestamo({
 
                 const puedeDescargarRecibo =
                   ['PAGADO', 'PAGADA', 'PAGO_ADELANTADO'].includes(
-                    estadoReal
+                    codigoEstado
                   ) ||
                   ['PAGADO', 'PAGADA', 'PAGO_ADELANTADO'].includes(
                     estadoBackend
@@ -578,8 +532,8 @@ export function TablaAmortizacionPrestamo({
                     </TableCell>
 
                     <TableCell>
-                      <Badge className={getEstadoBadge(estadoReal)}>
-                        {getEstadoLabel(estadoReal)}
+                      <Badge className={getEstadoBadge(codigoEstado)}>
+                        {textoEstadoCuota}
                       </Badge>
 
                       {/* ðŸ" DEBUG: Mostrar información de depuración */}
@@ -588,7 +542,7 @@ export function TablaAmortizacionPrestamo({
                         <div className="mt-1 text-xs text-gray-400">
                           <div>Estado BD: {cuota.estado || 'NULL'}</div>
 
-                          <div>Estado Real: {estadoReal}</div>
+                          <div>Etiqueta: {textoEstadoCuota}</div>
 
                           <div>
                             Pagado: $

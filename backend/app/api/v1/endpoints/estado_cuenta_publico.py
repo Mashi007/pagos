@@ -84,7 +84,11 @@ from app.core.email_config_holder import get_email_activo_servicio
 
 from app.services.estado_cuenta_pdf import generar_pdf_estado_cuenta
 
-from app.services.cuota_estado import estado_cuota_para_mostrar, hoy_negocio
+from app.services.cuota_estado import (
+    estado_cuota_para_mostrar,
+    etiqueta_estado_cuota,
+    hoy_negocio,
+)
 
 from app.services.cobros.recibo_cuota_amortizacion import generar_recibo_cuota_amortizacion
 
@@ -496,6 +500,8 @@ def _obtener_datos_pdf(db: Session, cedula_lookup: str):
 
                 "estado": estado_mostrar,
 
+                "estado_etiqueta": etiqueta_estado_cuota(estado_mostrar),
+
             })
 
     amortizaciones_por_prestamo = []
@@ -641,6 +647,8 @@ def _obtener_amortizacion_prestamo(db: Session, prestamo_id: int) -> List[dict]:
             "pago_conciliado_display": pago_conciliado_display,
 
             "estado": estado_mostrar,
+
+            "estado_etiqueta": etiqueta_estado_cuota(estado_mostrar),
 
         })
 
@@ -1349,6 +1357,10 @@ def solicitar_estado_cuenta(
     Usado por: /pagos/rapicredit-estadocuenta y /pagos/informes; en ambos se muestran
 
     las mismas tablas de amortización (cuotas) con Pago conc. y Recibo desde la tabla cuotas.
+
+    Estados de cuota en el PDF: mismas reglas Caracas y etiquetas que la app interna
+
+    (generar_pdf_estado_cuenta usa etiqueta_estado_cuota).
 
     """
 

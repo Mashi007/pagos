@@ -66,7 +66,11 @@ from app.services.pagos_cuotas_sincronizacion import sincronizar_pagos_pendiente
 
 from app.services.cobros.recibo_cuota_amortizacion import generar_recibo_cuota_amortizacion
 
-from app.services.cuota_estado import estado_cuota_para_mostrar, hoy_negocio
+from app.services.cuota_estado import (
+    estado_cuota_para_mostrar,
+    etiqueta_estado_cuota,
+    hoy_negocio,
+)
 
 
 
@@ -1796,6 +1800,8 @@ def get_cuotas_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
 
             "estado": estado_mostrar,
 
+            "estado_etiqueta": etiqueta_estado_cuota(estado_mostrar),
+
             "dias_mora": c.dias_mora if c.dias_mora is not None else 0,
 
             "dias_morosidad": c.dias_morosidad if c.dias_morosidad is not None else 0,
@@ -1890,6 +1896,24 @@ def get_recibo_cuota_pdf(prestamo_id: int, cuota_id: int, db: Session = Depends(
 
             fecha_recep = datetime.combine(fp_c, datetime.min.time())
 
+    fv_c = cuota.fecha_vencimiento
+
+    fv_date_c = fv_c.date() if fv_c and hasattr(fv_c, "date") else fv_c
+
+    estado_codigo = estado_cuota_para_mostrar(total_pagado, monto_cuota, fv_date_c, hoy_negocio())
+
+    estado_cuota_lbl = etiqueta_estado_cuota(estado_codigo)
+
+    saldo_ini_s = f"{float(cuota.saldo_capital_inicial or 0):.2f}" if cuota.saldo_capital_inicial is not None else "-"
+
+    saldo_fin_s = f"{float(cuota.saldo_capital_final or 0):.2f}" if cuota.saldo_capital_final is not None else "-"
+
+    fpd = "-"
+
+    if fecha_pago_date:
+
+        fpd = fecha_pago_date.strftime("%d/%m/%Y")
+
     pdf_bytes = generar_recibo_cuota_amortizacion(
 
         referencia_interna=referencia,
@@ -1909,6 +1933,18 @@ def get_recibo_cuota_pdf(prestamo_id: int, cuota_id: int, db: Session = Depends(
         fecha_pago=fecha_pago_date,
 
         moneda="Bs.",
+
+        aplicado_a_cuotas=f"Cuota {cuota.numero_cuota}",
+
+        saldo_inicial=saldo_ini_s,
+
+        saldo_final=saldo_fin_s,
+
+        numero_cuota=cuota.numero_cuota,
+
+        fecha_pago_display=fpd,
+
+        estado_cuota=estado_cuota_lbl,
 
     )
 
@@ -1978,6 +2014,8 @@ def _obtener_cuotas_para_export(db: Session, prestamo_id: int, prestamo: Prestam
 
             "estado": estado_mostrar,
 
+            "estado_etiqueta": etiqueta_estado_cuota(estado_mostrar),
+
         })
 
     return resultado
@@ -2044,7 +2082,7 @@ def _generar_excel_amortizacion(cuotas: list, prestamo: Prestamo) -> bytes:
 
             c["saldo_capital_final"],
 
-            c["estado"],
+            c.get("estado_etiqueta") or c.get("estado") or "-",
 
         ])
 
@@ -2162,7 +2200,7 @@ def _generar_pdf_amortizacion(cuotas: list, prestamo: Prestamo) -> bytes:
 
                 f"${c['saldo_capital_final']:,.2f}",
 
-                c["estado"],
+                c.get("estado_etiqueta") or c.get("estado") or "-",
 
             ])
 

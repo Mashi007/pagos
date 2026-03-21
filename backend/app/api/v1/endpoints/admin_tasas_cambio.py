@@ -8,6 +8,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.user_utils import user_is_administrator
+from app.schemas.auth import UserResponse
 from app.models.tasa_cambio_diaria import TasaCambioDiaria
 from app.services.tasa_cambio_service import (
     obtener_tasa_hoy,
@@ -38,10 +40,10 @@ class GuardarTasaRequest(BaseModel):
 @router.get("/hoy", response_model=Optional[TasaCambioResponse])
 def get_tasa_hoy(
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserResponse = Depends(get_current_user),
 ):
     """Obtiene la tasa de cambio para hoy."""
-    if not current_user.get("is_admin"):
+    if not user_is_administrator(current_user):
         raise HTTPException(status_code=403, detail="Solo administradores")
     
     tasa = obtener_tasa_hoy(db)
@@ -51,10 +53,10 @@ def get_tasa_hoy(
 @router.get("/estado")
 def get_estado_tasa(
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserResponse = Depends(get_current_user),
 ):
     """Verifica si es necesario ingresar la tasa y devuelve el estado."""
-    if not current_user.get("is_admin"):
+    if not user_is_administrator(current_user):
         raise HTTPException(status_code=403, detail="Solo administradores")
     
     debe_ingresar = debe_ingresar_tasa()
@@ -72,10 +74,10 @@ def get_estado_tasa(
 def guardar_tasa(
     req: GuardarTasaRequest,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserResponse = Depends(get_current_user),
 ):
     """Guarda la tasa de cambio oficial para hoy. Obligatorio desde 01:00 AM."""
-    if not current_user.get("is_admin"):
+    if not user_is_administrator(current_user):
         raise HTTPException(status_code=403, detail="Solo administradores")
     
     if not debe_ingresar_tasa():
@@ -84,8 +86,8 @@ def guardar_tasa(
             detail="La tasa solo se puede ingresar desde las 01:00 AM hasta las 23:59 PM"
         )
     
-    usuario_email = current_user.get("email") if isinstance(current_user, dict) else getattr(current_user, "email", None)
-    usuario_id = current_user.get("id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
+    usuario_email = current_user.email
+    usuario_id = current_user.id
     
     tasa = guardar_tasa_diaria(
         db=db,
@@ -101,10 +103,10 @@ def guardar_tasa(
 def get_tasa_por_fecha(
     fecha: date = Query(..., description="Fecha en formato YYYY-MM-DD"),
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserResponse = Depends(get_current_user),
 ):
     """Obtiene la tasa de cambio para una fecha específica."""
-    if not current_user.get("is_admin"):
+    if not user_is_administrator(current_user):
         raise HTTPException(status_code=403, detail="Solo administradores")
     
     tasa = obtener_tasa_por_fecha(db, fecha)
@@ -115,10 +117,10 @@ def get_tasa_por_fecha(
 def get_historial_tasas(
     limite: int = Query(30, ge=1, le=365),
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: UserResponse = Depends(get_current_user),
 ):
     """Obtiene el historial de tasas (últimas N fechas)."""
-    if not current_user.get("is_admin"):
+    if not user_is_administrator(current_user):
         raise HTTPException(status_code=403, detail="Solo administradores")
     
     from sqlalchemy import desc

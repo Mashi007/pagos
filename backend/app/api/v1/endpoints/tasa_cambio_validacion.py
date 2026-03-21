@@ -12,6 +12,8 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.user_utils import user_is_administrator
+from app.schemas.auth import UserResponse
 from app.services.tasa_cambio_service import obtener_tasa_hoy, debe_ingresar_tasa
 from app.models.tasa_cambio_diaria import TasaCambioDiaria
 
@@ -66,7 +68,7 @@ class ValidacionTasaResponse(BaseModel):
 )
 def validar_tasa_para_pago(
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    current_user: UserResponse = Depends(get_current_user)
 ):
     """
     Endpoint para validar si se pueden procesar pagos en Bolívares.
@@ -133,13 +135,13 @@ def validar_tasa_para_pago(
 )
 def get_estado_completo_tasa(
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    current_user: UserResponse = Depends(get_current_user)
 ):
     """
     Retorna información completa sobre el estado de las tasas.
     """
     
-    if not current_user.get("is_admin"):
+    if not user_is_administrator(current_user):
         raise HTTPException(status_code=403, detail="Solo administradores")
     
     tasa_hoy = obtener_tasa_hoy(db)

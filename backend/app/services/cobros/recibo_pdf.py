@@ -60,6 +60,7 @@ def generar_recibo_pago_reportado(
     fecha_pago_display: Optional[str] = None,
     moneda: Optional[str] = None,
     tasa_cambio: Optional[float] = None,
+    estado_cuota: Optional[str] = None,
 ) -> bytes:
     """Genera el PDF del recibo con datos reales del pago reportado."""
     from reportlab.lib import colors
@@ -86,6 +87,7 @@ def generar_recibo_pago_reportado(
     monto_display = _normalize_monto_display(monto)
     numero_op = (numero_operacion or "").strip()
     cuotas_txt = (aplicado_a_cuotas or "").strip() or "Pendiente de aplicar"
+    estado_cuota_lbl = ((estado_cuota or "").strip() or None)
 
     # Simbolo de moneda en tablas (antes faltaba y causaba NameError al generar PDF)
     _m = (moneda or "").strip()
@@ -174,9 +176,17 @@ def generar_recibo_pago_reportado(
             Paragraph("", value_style),
         ],
     ]
+    if estado_cuota_lbl:
+        info.append(
+            [
+                Paragraph("Estado (cuota)", label_style),
+                Paragraph(f"<b>{estado_cuota_lbl}</b>", value_style),
+                Paragraph("", label_style),
+                Paragraph("", value_style),
+            ]
+        )
 
-    table = Table(info, colWidths=[1.45 * inch, 2.0 * inch, 1.2 * inch, 1.45 * inch])
-    table.setStyle(TableStyle([
+    _info_style = [
         ("BOX", (0, 0), (-1, -1), 0.8, colors.HexColor("#cbd5e1")),
         ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#e2e8f0")),
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f8fafc")),
@@ -187,7 +197,14 @@ def generar_recibo_pago_reportado(
         ("RIGHTPADDING", (0, 0), (-1, -1), 8),
         ("TOPPADDING", (0, 0), (-1, -1), 6),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-    ]))
+    ]
+    if estado_cuota_lbl:
+        _info_style.append(
+            ("BACKGROUND", (0, 5), (-1, 5), colors.HexColor("#f8fafc")),
+        )
+
+    table = Table(info, colWidths=[1.45 * inch, 2.0 * inch, 1.2 * inch, 1.45 * inch])
+    table.setStyle(TableStyle(_info_style))
 
     story.append(table)
     story.append(Spacer(1, 12))
@@ -195,6 +212,7 @@ def generar_recibo_pago_reportado(
     # Tabla de saldos si hay cuota
     if numero_cuota:
         fecha_pago_col = (fecha_pago_display or "").strip() or "-"
+        _estado_cell = estado_cuota_lbl or "-"
         saldos_table = Table(
             [
                 [
@@ -203,6 +221,7 @@ def generar_recibo_pago_reportado(
                     Paragraph("Abono", label_style),
                     Paragraph("Fecha de Pago", label_style),
                     Paragraph("Saldo Final", label_style),
+                    Paragraph("Estado", label_style),
                 ],
                 [
                     Paragraph(f"<b>{cuota_num_display}</b>", value_style),
@@ -210,9 +229,10 @@ def generar_recibo_pago_reportado(
                     Paragraph(f"<b>{monto_abono} {moneda_symbol}</b>" if monto_abono != "-" else "-", value_style),
                     Paragraph(fecha_pago_col, value_style),
                     Paragraph(f"{saldo_fin_display} {moneda_symbol}" if saldo_fin_display != "-" else "-", value_style),
+                    Paragraph(_estado_cell, value_style),
                 ],
             ],
-            colWidths=[0.8 * inch, 1.3 * inch, 1.2 * inch, 1.3 * inch, 1.3 * inch],
+            colWidths=[0.65 * inch, 1.05 * inch, 1.0 * inch, 1.05 * inch, 1.05 * inch, 1.15 * inch],
         )
         saldos_table.setStyle(
             TableStyle([

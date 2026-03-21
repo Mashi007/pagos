@@ -31,3 +31,9 @@ def user_to_response(u: User) -> UserResponse:
         updated_at=_dt_iso(u.updated_at),
         last_login=_dt_iso(u.last_login),
     )
+
+
+def user_is_administrator(user: UserResponse) -> bool:
+    """True si el usuario tiene rol administrador (respuesta de get_current_user)."""
+    return (user.rol or "").strip().lower() == "administrador"
+

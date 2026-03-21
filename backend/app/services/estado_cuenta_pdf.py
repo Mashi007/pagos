@@ -14,6 +14,7 @@ from pathlib import Path
 
 from typing import List, Optional
 
+from app.services.cuota_estado import etiqueta_estado_cuota
 
 
 # Ruta al logo: backend/static/logo.png (desde app/services/ subimos a backend)
@@ -374,7 +375,7 @@ def generar_pdf_estado_cuenta(
 
                     f"{float(c.get('monto') or 0):,.2f}",
 
-                    (c.get("estado") or "")[:12],
+                    (c.get("estado_etiqueta") or etiqueta_estado_cuota(str(c.get("estado") or "")))[:32],
 
                 ]
 
@@ -502,11 +503,23 @@ def generar_pdf_estado_cuenta(
 
             for c in cuotas:
 
-                estado_cuota = (c.get("estado") or "").strip().upper()
+                estado_codigo = (c.get("estado") or "").strip().upper()
+
+                estado_etiqueta = (c.get("estado_etiqueta") or "").strip() or etiqueta_estado_cuota(c.get("estado") or "")
 
                 cuota_id = c.get("id")
 
-                puede_recibo = estado_cuota == "PAGADO" and cuota_id and base_url and recibo_token
+                puede_recibo = (
+
+                    estado_codigo in ("PAGADO", "PAGO_ADELANTADO")
+
+                    and cuota_id
+
+                    and base_url
+
+                    and recibo_token
+
+                )
 
                 if puede_recibo:
 
@@ -536,7 +549,7 @@ def generar_pdf_estado_cuenta(
 
                         c.get("pago_conciliado_display", "-"),
 
-                        (c.get("estado") or "")[:10],
+                        estado_etiqueta[:22],
 
                         recibo_cell,
 
@@ -548,7 +561,7 @@ def generar_pdf_estado_cuenta(
 
                 rows,
 
-                colWidths=[34, 48, 48, 44, 48, 48, 48, 46, 52],
+                colWidths=[32, 46, 44, 40, 46, 44, 44, 58, 50],
 
             )
 
@@ -838,6 +851,8 @@ def obtener_datos_estado_cuenta_prestamo(db, prestamo_id: int):
 
             "estado": estado_mostrar,
 
+            "estado_etiqueta": etiqueta_estado_cuota(estado_mostrar),
+
         })
 
     
@@ -876,21 +891,11 @@ def obtener_datos_estado_cuenta_prestamo(db, prestamo_id: int):
 
                 
 
-                estado_backend = (getattr(c, "estado", "") or "").strip().upper()
-
                 fv_c = getattr(c, "fecha_vencimiento", None)
 
                 fv_date_c = fv_c.date() if fv_c and hasattr(fv_c, "date") else fv_c
 
-                
-
-                if estado_backend == "PAGADO" and pago_conciliado:
-
-                    estado_cuota = "CONCILIADO"
-
-                else:
-
-                    estado_cuota = estado_cuota_para_mostrar(total_pagado_c, monto_c, fv_date_c, fecha_corte_dt)
+                estado_cuota = estado_cuota_para_mostrar(total_pagado_c, monto_c, fv_date_c, fecha_corte_dt)
 
                 
 
@@ -917,6 +922,8 @@ def obtener_datos_estado_cuenta_prestamo(db, prestamo_id: int):
                     "pago_conciliado_display": pago_conc_display,
 
                     "estado": estado_cuota,
+
+                    "estado_etiqueta": etiqueta_estado_cuota(estado_cuota),
 
                 })
 

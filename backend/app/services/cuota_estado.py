@@ -90,6 +90,22 @@ def estado_cuota_para_mostrar(
         total_pagado, monto_cuota, fecha_vencimiento, fecha_referencia
     )
 
+
+def etiqueta_estado_cuota(codigo: str) -> str:
+    """Texto para UI/PDF (misma nomenclatura que la tabla de amortización en frontend)."""
+    c = (codigo or "").strip().upper()
+    labels = {
+        "PENDIENTE": "Pendiente",
+        "PARCIAL": "Pendiente parcial",
+        "VENCIDO": "Vencido (1-91 d)",
+        "MORA": "Mora (92+ d)",
+        "PAGADO": "Pagado",
+        "PAGO_ADELANTADO": "Pago adelantado",
+        "PAGADA": "Pagado",
+    }
+    return labels.get(c, codigo.strip() if codigo else "-")
+
+
 # SQL PostgreSQL (misma regla que clasificar_estado_cuota).
 SQL_PG_ESTADO_CUOTA_CASE_CORRELATED = """CASE
   WHEN COALESCE((SELECT SUM(cp.monto_aplicado) FROM cuota_pagos cp WHERE cp.cuota_id = c.id), 0)

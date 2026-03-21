@@ -71,6 +71,11 @@ import { toast } from 'sonner'
 
 import { formatCurrency, formatDate } from '../../utils'
 
+import {
+  codigoEstadoCuotaParaUi,
+  etiquetaEstadoCuotaRespaldo,
+} from '../../utils/cuotaEstadoDisplay'
+
 interface ClienteInfo {
   id: number
 
@@ -359,6 +364,8 @@ export function TablaAmortizacionCompleta() {
 
       queryClient.invalidateQueries({ queryKey: ['cuotas-prestamos'] })
 
+      queryClient.invalidateQueries({ queryKey: ['cuotas-prestamo'] })
+
       queryClient.invalidateQueries({ queryKey: ['cuotas'] })
 
       // También invalidar la query específica de esta cuota si existe
@@ -393,6 +400,8 @@ export function TablaAmortizacionCompleta() {
       toast.success('Cuota eliminada exitosamente')
 
       queryClient.invalidateQueries({ queryKey: ['cuotas-prestamos'] })
+
+      queryClient.invalidateQueries({ queryKey: ['cuotas-prestamo'] })
     },
 
     onError: (error: any) => {
@@ -438,6 +447,10 @@ export function TablaAmortizacionCompleta() {
 
       queryClient.invalidateQueries({ queryKey: ['pagos-cedula'] })
 
+      queryClient.invalidateQueries({ queryKey: ['cuotas-prestamos'] })
+
+      queryClient.invalidateQueries({ queryKey: ['cuotas-prestamo'] })
+
       setMostrarDialogPago(false)
 
       setPagoEditando(null)
@@ -457,6 +470,10 @@ export function TablaAmortizacionCompleta() {
       toast.success('Pago eliminado exitosamente')
 
       queryClient.invalidateQueries({ queryKey: ['pagos-cedula'] })
+
+      queryClient.invalidateQueries({ queryKey: ['cuotas-prestamos'] })
+
+      queryClient.invalidateQueries({ queryKey: ['cuotas-prestamo'] })
     },
 
     onError: (error: any) => {
@@ -480,6 +497,8 @@ export function TablaAmortizacionCompleta() {
       // Invalidar queries para recargar cuotas
 
       queryClient.invalidateQueries({ queryKey: ['cuotas-prestamos'] })
+
+      queryClient.invalidateQueries({ queryKey: ['cuotas-prestamo'] })
 
       queryClient.invalidateQueries({
         queryKey: ['prestamos-cedula', cedulaSeleccionada],
@@ -596,6 +615,8 @@ export function TablaAmortizacionCompleta() {
       setFechaBaseCalculo('')
 
       queryClient.invalidateQueries({ queryKey: ['cuotas-prestamos'] })
+
+      queryClient.invalidateQueries({ queryKey: ['cuotas-prestamo'] })
 
       queryClient.invalidateQueries({
         queryKey: ['prestamos-cedula', cedulaSeleccionada],
@@ -761,42 +782,6 @@ export function TablaAmortizacionCompleta() {
     setMostrarDialogPago(true)
   }
 
-  // Función para determinar el estado correcto basado en los datos (igual que en Préstamos)
-
-  const determinarEstadoReal = (cuota: Cuota): string => {
-    const totalPagado = cuota.total_pagado || 0
-
-    const montoCuota = cuota.monto_cuota || 0
-
-    // Si total_pagado >= monto_cuota, debería ser PAGADO
-
-    if (totalPagado >= montoCuota) {
-      return 'PAGADO'
-    }
-
-    // Si tiene algún pago pero no completo
-
-    if (totalPagado > 0) {
-      // Verificar si está vencida
-
-      const hoy = new Date()
-
-      const fechaVencimiento = cuota.fecha_vencimiento
-        ? new Date(cuota.fecha_vencimiento)
-        : null
-
-      if (fechaVencimiento && fechaVencimiento < hoy) {
-        return 'ATRASADO'
-      }
-
-      return 'PARCIAL'
-    }
-
-    // Si no hay pago, devolver el estado original o PENDIENTE
-
-    return cuota.estado || 'PENDIENTE'
-  }
-
   const getEstadoBadge = (estado: string) => {
     // Normalizar estado a mayúsculas para comparación (igual que en Préstamos)
 
@@ -811,38 +796,18 @@ export function TablaAmortizacionCompleta() {
 
       PAGO_ADELANTADO: 'bg-blue-100 text-blue-800',
 
-      ATRASADO: 'bg-red-100 text-red-800',
+      VENCIDO: 'bg-orange-100 text-orange-800',
 
-      VENCIDA: 'bg-red-100 text-red-800',
+      MORA: 'bg-red-100 text-red-800',
 
-      PARCIAL: 'bg-blue-100 text-blue-800',
+      ATRASADO: 'bg-orange-100 text-orange-800',
+
+      VENCIDA: 'bg-orange-100 text-orange-800',
+
+      PARCIAL: 'bg-amber-100 text-amber-900',
     }
 
     return badges[estadoNormalizado as keyof typeof badges] || badges.PENDIENTE
-  }
-
-  const getEstadoLabel = (estado: string) => {
-    // Normalizar estado a mayúsculas para comparación (igual que en Préstamos)
-
-    const estadoNormalizado = estado?.toUpperCase() || 'PENDIENTE'
-
-    const labels: Record<string, string> = {
-      PENDIENTE: 'Pendiente',
-
-      PAGADO: 'Pagado',
-
-      PAGADA: 'Pagada',
-
-      PAGO_ADELANTADO: 'Pago adelantado',
-
-      ATRASADO: 'Atrasado',
-
-      VENCIDA: 'Vencida',
-
-      PARCIAL: 'Parcial',
-    }
-
-    return labels[estadoNormalizado] || estado
   }
 
   const totalFinanciamiento =
@@ -1033,10 +998,13 @@ export function TablaAmortizacionCompleta() {
 
                                 <TableBody>
                                   {cuotasDelPrestamo.map((cuota: Cuota) => {
-                                    // Determinar el estado real basado en los datos (igual que en Préstamos)
+                                    const codigoEstado =
+                                      codigoEstadoCuotaParaUi(cuota.estado)
 
-                                    const estadoReal =
-                                      determinarEstadoReal(cuota)
+                                    const textoEstadoCuota =
+                                      (cuota.estado_etiqueta &&
+                                        cuota.estado_etiqueta.trim()) ||
+                                      etiquetaEstadoCuotaRespaldo(cuota.estado)
 
                                     // Calcular monto_capital y monto_interes si no existen (igual que en Préstamos)
 
@@ -1098,10 +1066,10 @@ export function TablaAmortizacionCompleta() {
                                         <TableCell>
                                           <Badge
                                             className={getEstadoBadge(
-                                              estadoReal
+                                              codigoEstado
                                             )}
                                           >
-                                            {getEstadoLabel(estadoReal)}
+                                            {textoEstadoCuota}
                                           </Badge>
                                         </TableCell>
 
@@ -1266,12 +1234,13 @@ export function TablaAmortizacionCompleta() {
                                     <p className="text-2xl font-bold text-gray-700">
                                       {
                                         cuotasDelPrestamo.filter((c: Cuota) => {
-                                          const estadoReal =
-                                            determinarEstadoReal(c)
+                                          const codigo =
+                                            codigoEstadoCuotaParaUi(c.estado)
 
                                           return (
-                                            estadoReal === 'PAGADO' ||
-                                            estadoReal === 'PAGADA'
+                                            codigo === 'PAGADO' ||
+                                            codigo === 'PAGADA' ||
+                                            codigo === 'PAGO_ADELANTADO'
                                           )
                                         }).length
                                       }{' '}
