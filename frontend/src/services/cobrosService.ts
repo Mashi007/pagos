@@ -3,7 +3,17 @@
 
 
 
+
+
+
+
+
  * Servicio para el m├â┬│dulo Cobros.
+
+
+
+
+
 
 
 
@@ -13,7 +23,17 @@
 
 
 
+
+
+
+
+
  * - Admin: listado, detalle, aprobar, rechazar, hist├â┬│rico (con auth).
+
+
+
+
+
 
 
 
@@ -23,7 +43,17 @@
 
 
 
+
+
+
+
+
 import { apiClient } from './api'
+
+
+
+
+
 
 
 
@@ -38,12 +68,32 @@ import { env } from '../config/env'
 
 
 
+
+
+
+
+
+
+
+
+
+
 const API = env.API_URL || ''
 
 
 
 
+
+
+
+
+
 const BASE_PUBLIC = `${API}/api/v1/cobros/public`
+
+
+
+
+
 
 
 
@@ -58,7 +108,22 @@ const BASE_COBROS = `${API}/api/v1/cobros`
 
 
 
+
+
+
+
+
+
+
+
+
+
 export interface ValidarCedulaResponse {
+
+
+
+
+
 
 
 
@@ -68,7 +133,17 @@ export interface ValidarCedulaResponse {
 
 
 
+
+
+
+
+
   nombre?: string
+
+
+
+
+
 
 
 
@@ -78,7 +153,17 @@ export interface ValidarCedulaResponse {
 
 
 
+
+
+
+
+
   email?: string
+
+
+
+
+
 
 
 
@@ -88,7 +173,17 @@ export interface ValidarCedulaResponse {
 
 
 
+
+
+
+
+
   error?: string
+
+
+
+
+
 
 
 
@@ -98,12 +193,32 @@ export interface ValidarCedulaResponse {
 
 
 
+
+
+
+
+
   puede_reportar_bs?: boolean
 
 
 
 
+
+
+
+
+
 }
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -118,7 +233,17 @@ export interface EnviarReporteResponse {
 
 
 
+
+
+
+
+
   ok: boolean
+
+
+
+
+
 
 
 
@@ -128,7 +253,17 @@ export interface EnviarReporteResponse {
 
 
 
+
+
+
+
+
   mensaje?: string
+
+
+
+
+
 
 
 
@@ -138,7 +273,22 @@ export interface EnviarReporteResponse {
 
 
 
+
+
+
+
+
 }
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -153,7 +303,17 @@ export interface EnviarReporteResponse {
 
 
 
+
+
+
+
+
 export interface EnviarReporteInfopagosResponse {
+
+
+
+
+
 
 
 
@@ -163,7 +323,17 @@ export interface EnviarReporteInfopagosResponse {
 
 
 
+
+
+
+
+
   referencia_interna?: string
+
+
+
+
+
 
 
 
@@ -173,7 +343,17 @@ export interface EnviarReporteInfopagosResponse {
 
 
 
+
+
+
+
+
   error?: string
+
+
+
+
+
 
 
 
@@ -183,7 +363,17 @@ export interface EnviarReporteInfopagosResponse {
 
 
 
+
+
+
+
+
   pago_id?: number
+
+
+
+
+
 
 
 
@@ -193,12 +383,32 @@ export interface EnviarReporteInfopagosResponse {
 
 
 
+
+
+
+
+
   aplicado_a_cuotas?: string | null
 
 
 
 
+
+
+
+
+
 }
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -213,7 +423,17 @@ export interface EnviarReporteInfopagosResponse {
 
 
 
+
+
+
+
+
 export async function validarCedulaPublico(
+
+
+
+
+
 
 
 
@@ -223,7 +443,17 @@ export async function validarCedulaPublico(
 
 
 
+
+
+
+
+
   opts?: { origen?: string },
+
+
+
+
+
 
 
 
@@ -233,7 +463,17 @@ export async function validarCedulaPublico(
 
 
 
+
+
+
+
+
   const o = (opts?.origen || '').trim()
+
+
+
+
+
 
 
 
@@ -243,7 +483,17 @@ export async function validarCedulaPublico(
 
 
 
+
+
+
+
+
   if (o) q.set('origen', o)
+
+
+
+
+
 
 
 
@@ -253,7 +503,17 @@ export async function validarCedulaPublico(
 
 
 
+
+
+
+
+
   const res = await fetch(url, { credentials: 'same-origin' })
+
+
+
+
+
 
 
 
@@ -263,7 +523,17 @@ export async function validarCedulaPublico(
 
 
 
+
+
+
+
+
     return { ok: false, error: 'Demasiadas consultas. Espere un minuto e intente de nuevo.' }
+
+
+
+
+
 
 
 
@@ -273,12 +543,32 @@ export async function validarCedulaPublico(
 
 
 
+
+
+
+
+
   return res.json()
 
 
 
 
+
+
+
+
+
 }
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -293,7 +583,17 @@ export async function validarCedulaPublico(
 
 
 
+
+
+
+
+
 export async function enviarReportePublico(formData: FormData): Promise<EnviarReporteResponse> {
+
+
+
+
+
 
 
 
@@ -303,7 +603,17 @@ export async function enviarReportePublico(formData: FormData): Promise<EnviarRe
 
 
 
+
+
+
+
+
   const res = await fetch(url, {
+
+
+
+
+
 
 
 
@@ -313,7 +623,17 @@ export async function enviarReportePublico(formData: FormData): Promise<EnviarRe
 
 
 
+
+
+
+
+
     body: formData,
+
+
+
+
+
 
 
 
@@ -323,7 +643,17 @@ export async function enviarReportePublico(formData: FormData): Promise<EnviarRe
 
 
 
+
+
+
+
+
     // No Content-Type: el navegador fija multipart boundary
+
+
+
+
+
 
 
 
@@ -333,7 +663,17 @@ export async function enviarReportePublico(formData: FormData): Promise<EnviarRe
 
 
 
+
+
+
+
+
   if (res.status === 429) {
+
+
+
+
+
 
 
 
@@ -343,7 +683,17 @@ export async function enviarReportePublico(formData: FormData): Promise<EnviarRe
 
 
 
+
+
+
+
+
   }
+
+
+
+
+
 
 
 
@@ -353,12 +703,27 @@ export async function enviarReportePublico(formData: FormData): Promise<EnviarRe
 
 
 
+
+
+
+
+
     return {
 
 
 
 
+
+
+
+
+
       ok: false,
+
+
+
+
+
 
 
 
@@ -368,12 +733,27 @@ export async function enviarReportePublico(formData: FormData): Promise<EnviarRe
 
 
 
+
+
+
+
+
     }
 
 
 
 
+
+
+
+
+
   }
+
+
+
+
+
 
 
 
@@ -383,7 +763,17 @@ export async function enviarReportePublico(formData: FormData): Promise<EnviarRe
 
 
 
+
+
+
+
+
   const text = await res.text()
+
+
+
+
+
 
 
 
@@ -393,7 +783,17 @@ export async function enviarReportePublico(formData: FormData): Promise<EnviarRe
 
 
 
+
+
+
+
+
   try {
+
+
+
+
+
 
 
 
@@ -403,7 +803,17 @@ export async function enviarReportePublico(formData: FormData): Promise<EnviarRe
 
 
 
+
+
+
+
+
   } catch {
+
+
+
+
+
 
 
 
@@ -413,7 +823,17 @@ export async function enviarReportePublico(formData: FormData): Promise<EnviarRe
 
 
 
+
+
+
+
+
       ok: false,
+
+
+
+
+
 
 
 
@@ -423,12 +843,27 @@ export async function enviarReportePublico(formData: FormData): Promise<EnviarRe
 
 
 
+
+
+
+
+
     }
 
 
 
 
+
+
+
+
+
   }
+
+
+
+
+
 
 
 
@@ -438,7 +873,17 @@ export async function enviarReportePublico(formData: FormData): Promise<EnviarRe
 
 
 
+
+
+
+
+
     return { ok: false, error: (data as EnviarReporteResponse).error || `Error ${res.status}. Intente m├â┬ís tarde o contacte por WhatsApp 424-4579934.` }
+
+
+
+
+
 
 
 
@@ -448,12 +893,32 @@ export async function enviarReportePublico(formData: FormData): Promise<EnviarRe
 
 
 
+
+
+
+
+
   return data
 
 
 
 
+
+
+
+
+
 }
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -468,7 +933,17 @@ export async function enviarReportePublico(formData: FormData): Promise<EnviarRe
 
 
 
+
+
+
+
+
 export async function enviarReporteInfopagos(formData: FormData): Promise<EnviarReporteInfopagosResponse> {
+
+
+
+
+
 
 
 
@@ -478,7 +953,17 @@ export async function enviarReporteInfopagos(formData: FormData): Promise<Enviar
 
 
 
+
+
+
+
+
   const res = await fetch(url, {
+
+
+
+
+
 
 
 
@@ -488,7 +973,17 @@ export async function enviarReporteInfopagos(formData: FormData): Promise<Enviar
 
 
 
+
+
+
+
+
     body: formData,
+
+
+
+
+
 
 
 
@@ -498,7 +993,17 @@ export async function enviarReporteInfopagos(formData: FormData): Promise<Enviar
 
 
 
+
+
+
+
+
   })
+
+
+
+
+
 
 
 
@@ -508,12 +1013,27 @@ export async function enviarReporteInfopagos(formData: FormData): Promise<Enviar
 
 
 
+
+
+
+
+
     return { ok: false, error: 'Ha alcanzado el l├â┬¡mite de env├â┬¡os por hora. Intente m├â┬ís tarde.' }
 
 
 
 
+
+
+
+
+
   }
+
+
+
+
+
 
 
 
@@ -523,7 +1043,17 @@ export async function enviarReporteInfopagos(formData: FormData): Promise<Enviar
 
 
 
+
+
+
+
+
   let data: EnviarReporteInfopagosResponse
+
+
+
+
+
 
 
 
@@ -533,7 +1063,17 @@ export async function enviarReporteInfopagos(formData: FormData): Promise<Enviar
 
 
 
+
+
+
+
+
     data = text ? JSON.parse(text) : {}
+
+
+
+
+
 
 
 
@@ -543,7 +1083,17 @@ export async function enviarReporteInfopagos(formData: FormData): Promise<Enviar
 
 
 
+
+
+
+
+
     return {
+
+
+
+
+
 
 
 
@@ -553,7 +1103,17 @@ export async function enviarReporteInfopagos(formData: FormData): Promise<Enviar
 
 
 
+
+
+
+
+
       error: (text || `Error ${res.status}. Intente m├â┬ís tarde.`).slice(0, 200),
+
+
+
+
+
 
 
 
@@ -563,7 +1123,17 @@ export async function enviarReporteInfopagos(formData: FormData): Promise<Enviar
 
 
 
+
+
+
+
+
   }
+
+
+
+
+
 
 
 
@@ -573,7 +1143,17 @@ export async function enviarReporteInfopagos(formData: FormData): Promise<Enviar
 
 
 
+
+
+
+
+
     return { ok: false, error: (data as EnviarReporteInfopagosResponse).error || `Error ${res.status}.` }
+
+
+
+
+
 
 
 
@@ -583,12 +1163,32 @@ export async function enviarReporteInfopagos(formData: FormData): Promise<Enviar
 
 
 
+
+
+
+
+
   return data
 
 
 
 
+
+
+
+
+
 }
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -603,7 +1203,17 @@ export async function enviarReporteInfopagos(formData: FormData): Promise<Enviar
 
 
 
+
+
+
+
+
 export async function getReciboInfopagos(token: string, pagoId: number): Promise<Blob> {
+
+
+
+
+
 
 
 
@@ -613,7 +1223,17 @@ export async function getReciboInfopagos(token: string, pagoId: number): Promise
 
 
 
+
+
+
+
+
   const res = await fetch(url, { credentials: 'same-origin' })
+
+
+
+
+
 
 
 
@@ -623,12 +1243,32 @@ export async function getReciboInfopagos(token: string, pagoId: number): Promise
 
 
 
+
+
+
+
+
   return res.blob()
 
 
 
 
+
+
+
+
+
 }
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -643,7 +1283,17 @@ export interface PagoReportadoItem {
 
 
 
+
+
+
+
+
   id: number
+
+
+
+
+
 
 
 
@@ -653,7 +1303,17 @@ export interface PagoReportadoItem {
 
 
 
+
+
+
+
+
   nombres: string
+
+
+
+
+
 
 
 
@@ -663,7 +1323,17 @@ export interface PagoReportadoItem {
 
 
 
+
+
+
+
+
   cedula_display: string
+
+
+
+
+
 
 
 
@@ -673,7 +1343,17 @@ export interface PagoReportadoItem {
 
 
 
+
+
+
+
+
   monto: number
+
+
+
+
+
 
 
 
@@ -683,7 +1363,17 @@ export interface PagoReportadoItem {
 
 
 
+
+
+
+
+
   fecha_pago: string
+
+
+
+
+
 
 
 
@@ -693,7 +1383,17 @@ export interface PagoReportadoItem {
 
 
 
+
+
+
+
+
   fecha_reporte: string
+
+
+
+
+
 
 
 
@@ -703,7 +1403,17 @@ export interface PagoReportadoItem {
 
 
 
+
+
+
+
+
   gemini_coincide_exacto?: string
+
+
+
+
+
 
 
 
@@ -713,7 +1423,17 @@ export interface PagoReportadoItem {
 
 
 
+
+
+
+
+
   observacion?: string
+
+
+
+
+
 
 
 
@@ -723,7 +1443,17 @@ export interface PagoReportadoItem {
 
 
 
+
+
+
+
+
   correo_enviado_a?: string
+
+
+
+
+
 
 
 
@@ -733,12 +1463,32 @@ export interface PagoReportadoItem {
 
 
 
+
+
+
+
+
   tiene_recibo_pdf?: boolean
 
 
 
 
+
+
+
+
+
 }
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -753,7 +1503,17 @@ export interface ListPagosReportadosResponse {
 
 
 
+
+
+
+
+
   items: PagoReportadoItem[]
+
+
+
+
+
 
 
 
@@ -763,7 +1523,17 @@ export interface ListPagosReportadosResponse {
 
 
 
+
+
+
+
+
   page: number
+
+
+
+
+
 
 
 
@@ -773,7 +1543,22 @@ export interface ListPagosReportadosResponse {
 
 
 
+
+
+
+
+
 }
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -788,7 +1573,17 @@ export interface PagosReportadosKpis {
 
 
 
+
+
+
+
+
   pendiente: number
+
+
+
+
+
 
 
 
@@ -798,7 +1593,17 @@ export interface PagosReportadosKpis {
 
 
 
+
+
+
+
+
   aprobado: number
+
+
+
+
+
 
 
 
@@ -808,12 +1613,32 @@ export interface PagosReportadosKpis {
 
 
 
+
+
+
+
+
   total: number
 
 
 
 
+
+
+
+
+
 }
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -828,7 +1653,17 @@ export async function getPagosReportadosKpis(params: {
 
 
 
+
+
+
+
+
   fecha_desde?: string
+
+
+
+
+
 
 
 
@@ -838,7 +1673,17 @@ export async function getPagosReportadosKpis(params: {
 
 
 
+
+
+
+
+
   cedula?: string
+
+
+
+
+
 
 
 
@@ -848,7 +1693,17 @@ export async function getPagosReportadosKpis(params: {
 
 
 
+
+
+
+
+
 } = {}): Promise<PagosReportadosKpis> {
+
+
+
+
+
 
 
 
@@ -858,7 +1713,17 @@ export async function getPagosReportadosKpis(params: {
 
 
 
+
+
+
+
+
   if (params.fecha_desde) q.set('fecha_desde', params.fecha_desde)
+
+
+
+
+
 
 
 
@@ -868,7 +1733,17 @@ export async function getPagosReportadosKpis(params: {
 
 
 
+
+
+
+
+
   if (params.cedula) q.set('cedula', params.cedula)
+
+
+
+
+
 
 
 
@@ -878,7 +1753,17 @@ export async function getPagosReportadosKpis(params: {
 
 
 
+
+
+
+
+
   const data = await apiClient.get<PagosReportadosKpis>(`${BASE_COBROS}/pagos-reportados/kpis?${q}`)
+
+
+
+
+
 
 
 
@@ -888,7 +1773,22 @@ export async function getPagosReportadosKpis(params: {
 
 
 
+
+
+
+
+
 }
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -903,7 +1803,17 @@ export async function listPagosReportados(params: {
 
 
 
+
+
+
+
+
   estado?: string
+
+
+
+
+
 
 
 
@@ -913,7 +1823,17 @@ export async function listPagosReportados(params: {
 
 
 
+
+
+
+
+
   fecha_hasta?: string
+
+
+
+
+
 
 
 
@@ -923,7 +1843,17 @@ export async function listPagosReportados(params: {
 
 
 
+
+
+
+
+
   institucion?: string
+
+
+
+
+
 
 
 
@@ -933,7 +1863,17 @@ export async function listPagosReportados(params: {
 
 
 
+
+
+
+
+
   per_page?: number
+
+
+
+
+
 
 
 
@@ -943,7 +1883,17 @@ export async function listPagosReportados(params: {
 
 
 
+
+
+
+
+
   const q = new URLSearchParams()
+
+
+
+
+
 
 
 
@@ -953,7 +1903,17 @@ export async function listPagosReportados(params: {
 
 
 
+
+
+
+
+
   if (params.fecha_desde) q.set('fecha_desde', params.fecha_desde)
+
+
+
+
+
 
 
 
@@ -963,7 +1923,17 @@ export async function listPagosReportados(params: {
 
 
 
+
+
+
+
+
   if (params.cedula) q.set('cedula', params.cedula)
+
+
+
+
+
 
 
 
@@ -973,7 +1943,17 @@ export async function listPagosReportados(params: {
 
 
 
+
+
+
+
+
   if (params.page != null) q.set('page', String(params.page))
+
+
+
+
+
 
 
 
@@ -983,7 +1963,17 @@ export async function listPagosReportados(params: {
 
 
 
+
+
+
+
+
   const data = await apiClient.get<ListPagosReportadosResponse>(`${BASE_COBROS}/pagos-reportados?${q}`)
+
+
+
+
+
 
 
 
@@ -993,7 +1983,22 @@ export async function listPagosReportados(params: {
 
 
 
+
+
+
+
+
 }
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1008,7 +2013,17 @@ export interface PagoReportadoDetalleResponse {
 
 
 
+
+
+
+
+
   id: number
+
+
+
+
+
 
 
 
@@ -1018,7 +2033,17 @@ export interface PagoReportadoDetalleResponse {
 
 
 
+
+
+
+
+
   nombres: string
+
+
+
+
+
 
 
 
@@ -1028,7 +2053,17 @@ export interface PagoReportadoDetalleResponse {
 
 
 
+
+
+
+
+
   tipo_cedula: string
+
+
+
+
+
 
 
 
@@ -1038,7 +2073,17 @@ export interface PagoReportadoDetalleResponse {
 
 
 
+
+
+
+
+
   fecha_pago: string
+
+
+
+
+
 
 
 
@@ -1048,7 +2093,17 @@ export interface PagoReportadoDetalleResponse {
 
 
 
+
+
+
+
+
   numero_operacion: string
+
+
+
+
+
 
 
 
@@ -1058,7 +2113,17 @@ export interface PagoReportadoDetalleResponse {
 
 
 
+
+
+
+
+
   moneda: string
+
+
+
+
+
 
 
 
@@ -1068,7 +2133,17 @@ export interface PagoReportadoDetalleResponse {
 
 
 
+
+
+
+
+
   tiene_comprobante: boolean
+
+
+
+
+
 
 
 
@@ -1078,7 +2153,17 @@ export interface PagoReportadoDetalleResponse {
 
 
 
+
+
+
+
+
   observacion?: string
+
+
+
+
+
 
 
 
@@ -1088,7 +2173,17 @@ export interface PagoReportadoDetalleResponse {
 
 
 
+
+
+
+
+
   estado: string
+
+
+
+
+
 
 
 
@@ -1098,7 +2193,17 @@ export interface PagoReportadoDetalleResponse {
 
 
 
+
+
+
+
+
   gemini_coincide_exacto?: string
+
+
+
+
+
 
 
 
@@ -1108,7 +2213,17 @@ export interface PagoReportadoDetalleResponse {
 
 
 
+
+
+
+
+
   created_at: string
+
+
+
+
+
 
 
 
@@ -1118,12 +2233,32 @@ export interface PagoReportadoDetalleResponse {
 
 
 
+
+
+
+
+
   historial: Array<{ estado_anterior: string; estado_nuevo: string; usuario_email?: string; motivo?: string; created_at: string }>
 
 
 
 
+
+
+
+
+
 }
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1138,7 +2273,17 @@ export async function getPagoReportadoDetalle(pagoId: number): Promise<PagoRepor
 
 
 
+
+
+
+
+
   const data = await apiClient.get<PagoReportadoDetalleResponse>(`${BASE_COBROS}/pagos-reportados/${pagoId}`)
+
+
+
+
+
 
 
 
@@ -1148,7 +2293,22 @@ export async function getPagoReportadoDetalle(pagoId: number): Promise<PagoRepor
 
 
 
+
+
+
+
+
 }
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1163,7 +2323,17 @@ export async function aprobarPagoReportado(pagoId: number): Promise<{ ok: boolea
 
 
 
+
+
+
+
+
   const data = await apiClient.post<{ ok: boolean; mensaje?: string }>(`${BASE_COBROS}/pagos-reportados/${pagoId}/aprobar`)
+
+
+
+
+
 
 
 
@@ -1173,7 +2343,22 @@ export async function aprobarPagoReportado(pagoId: number): Promise<{ ok: boolea
 
 
 
+
+
+
+
+
 }
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1188,7 +2373,17 @@ export async function rechazarPagoReportado(pagoId: number, motivo: string): Pro
 
 
 
+
+
+
+
+
   const data = await apiClient.post<{ ok: boolean; mensaje?: string }>(`${BASE_COBROS}/pagos-reportados/${pagoId}/rechazar`, { motivo })
+
+
+
+
+
 
 
 
@@ -1198,7 +2393,22 @@ export async function rechazarPagoReportado(pagoId: number, motivo: string): Pro
 
 
 
+
+
+
+
+
 }
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1213,7 +2423,17 @@ export interface HistoricoClienteItem {
 
 
 
+
+
+
+
+
   id: number
+
+
+
+
+
 
 
 
@@ -1223,7 +2443,17 @@ export interface HistoricoClienteItem {
 
 
 
+
+
+
+
+
   fecha_pago: string | null
+
+
+
+
+
 
 
 
@@ -1233,7 +2463,17 @@ export interface HistoricoClienteItem {
 
 
 
+
+
+
+
+
   monto: number
+
+
+
+
+
 
 
 
@@ -1243,7 +2483,17 @@ export interface HistoricoClienteItem {
 
 
 
+
+
+
+
+
   estado: string
+
+
+
+
+
 
 
 
@@ -1253,7 +2503,22 @@ export interface HistoricoClienteItem {
 
 
 
+
+
+
+
+
 }
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1268,7 +2533,17 @@ export async function historicoPorCliente(cedula: string): Promise<{ cedula: str
 
 
 
+
+
+
+
+
   const data = await apiClient.get<{ cedula: string; items: HistoricoClienteItem[] }>(`${BASE_COBROS}/historico-cliente?cedula=${encodeURIComponent(cedula)}`)
+
+
+
+
+
 
 
 
@@ -1278,7 +2553,22 @@ export async function historicoPorCliente(cedula: string): Promise<{ cedula: str
 
 
 
+
+
+
+
+
 }
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1293,7 +2583,17 @@ export async function historicoPorCliente(cedula: string): Promise<{ cedula: str
 
 
 
+
+
+
+
+
 export async function openComprobanteInNewTab(pagoId: number): Promise<void> {
+
+
+
+
+
 
 
 
@@ -1303,7 +2603,17 @@ export async function openComprobanteInNewTab(pagoId: number): Promise<void> {
 
 
 
+
+
+
+
+
   const url = URL.createObjectURL(data)
+
+
+
+
+
 
 
 
@@ -1313,7 +2623,22 @@ export async function openComprobanteInNewTab(pagoId: number): Promise<void> {
 
 
 
+
+
+
+
+
 }
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1328,7 +2653,17 @@ export async function openComprobanteInNewTab(pagoId: number): Promise<void> {
 
 
 
+
+
+
+
+
 export async function openReciboPdfInNewTab(pagoId: number): Promise<void> {
+
+
+
+
+
 
 
 
@@ -1338,7 +2673,17 @@ export async function openReciboPdfInNewTab(pagoId: number): Promise<void> {
 
 
 
+
+
+
+
+
   const url = URL.createObjectURL(data)
+
+
+
+
+
 
 
 
@@ -1348,7 +2693,22 @@ export async function openReciboPdfInNewTab(pagoId: number): Promise<void> {
 
 
 
+
+
+
+
+
 }
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1363,7 +2723,17 @@ export async function openReciboPdfInNewTab(pagoId: number): Promise<void> {
 
 
 
+
+
+
+
+
 export async function enviarReciboManual(pagoId: number): Promise<{ ok: boolean; mensaje?: string }> {
+
+
+
+
+
 
 
 
@@ -1373,12 +2743,32 @@ export async function enviarReciboManual(pagoId: number): Promise<{ ok: boolean;
 
 
 
+
+
+
+
+
   return data
 
 
 
 
+
+
+
+
+
 }
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1393,7 +2783,17 @@ export async function enviarReciboManual(pagoId: number): Promise<{ ok: boolean;
 
 
 
+
+
+
+
+
 export async function cambiarEstadoPago(
+
+
+
+
+
 
 
 
@@ -1403,7 +2803,17 @@ export async function cambiarEstadoPago(
 
 
 
+
+
+
+
+
   estado: string,
+
+
+
+
+
 
 
 
@@ -1413,7 +2823,17 @@ export async function cambiarEstadoPago(
 
 
 
+
+
+
+
+
 ): Promise<{ ok: boolean; mensaje?: string }> {
+
+
+
+
+
 
 
 
@@ -1423,12 +2843,32 @@ export async function cambiarEstadoPago(
 
 
 
+
+
+
+
+
   return data
 
 
 
 
+
+
+
+
+
 }
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1443,7 +2883,17 @@ export async function eliminarPagoReportado(pagoId: number): Promise<{ ok: boole
 
 
 
+
+
+
+
+
   const data = await apiClient.delete<{ ok: boolean; mensaje?: string }>(`${BASE_COBROS}/pagos-reportados/${pagoId}`)
+
+
+
+
+
 
 
 
@@ -1453,7 +2903,22 @@ export async function eliminarPagoReportado(pagoId: number): Promise<{ ok: boole
 
 
 
+
+
+
+
+
 }
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1468,7 +2933,17 @@ export interface EditarPagoReportadoPayload {
 
 
 
+
+
+
+
+
   nombres?: string
+
+
+
+
+
 
 
 
@@ -1478,7 +2953,17 @@ export interface EditarPagoReportadoPayload {
 
 
 
+
+
+
+
+
   tipo_cedula?: string
+
+
+
+
+
 
 
 
@@ -1488,7 +2973,17 @@ export interface EditarPagoReportadoPayload {
 
 
 
+
+
+
+
+
   fecha_pago?: string
+
+
+
+
+
 
 
 
@@ -1498,7 +2993,17 @@ export interface EditarPagoReportadoPayload {
 
 
 
+
+
+
+
+
   numero_operacion?: string
+
+
+
+
+
 
 
 
@@ -1508,7 +3013,17 @@ export interface EditarPagoReportadoPayload {
 
 
 
+
+
+
+
+
   moneda?: string
+
+
+
+
+
 
 
 
@@ -1518,12 +3033,32 @@ export interface EditarPagoReportadoPayload {
 
 
 
+
+
+
+
+
   observacion?: string
 
 
 
 
+
+
+
+
+
 }
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1538,7 +3073,17 @@ export async function updatePagoReportado(
 
 
 
+
+
+
+
+
   pagoId: number,
+
+
+
+
+
 
 
 
@@ -1548,7 +3093,17 @@ export async function updatePagoReportado(
 
 
 
+
+
+
+
+
 ): Promise<{ ok: boolean; mensaje?: string }> {
+
+
+
+
+
 
 
 
@@ -1558,12 +3113,37 @@ export async function updatePagoReportado(
 
 
 
+
+
+
+
+
   return data
 
 
 
 
+
+
+
+
+
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1583,7 +3163,17 @@ export async function markPagosReportadosExportados(pagoReportadoIds: number[]):
 
 
 
+
+
+
+
+
   const data = await apiClient.post<{ ok: boolean; marcados: number; ya_exportados: number; total_solicitados: number }>(
+
+
+
+
+
 
 
 
@@ -1593,7 +3183,17 @@ export async function markPagosReportadosExportados(pagoReportadoIds: number[]):
 
 
 
+
+
+
+
+
     { pago_reportado_ids: pagoReportadoIds },
+
+
+
+
+
 
 
 
@@ -1603,12 +3203,37 @@ export async function markPagosReportadosExportados(pagoReportadoIds: number[]):
 
 
 
+
+
+
+
+
   return data
 
 
 
 
+
+
+
+
+
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1647,6 +3272,16 @@ export async function descargarPagosAprobadosExcel(): Promise<void> {
   document.body.removeChild(link)
   URL.revokeObjectURL(objectUrl)
 }
+
+
+
+
+
+
+
+
+
+
 
 
 

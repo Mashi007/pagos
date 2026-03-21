@@ -1,3980 +1,3980 @@
-import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, AxiosProgressEvent, AxiosResponse } from 'axios'
-
-
-
-
-import toast from 'react-hot-toast'
-
-
-
-
-import { getErrorMessage, getErrorCode, isAxiosError } from '../types/errors'
-
-
-
-
-import { env, BASE_PATH } from '../config/env'
-
-
-
-
-import {
-
-
-
-
-  safeGetItem,
-
-
-
-
-  safeGetSessionItem,
-
-
-
-
-  safeSetItem,
-
-
-
-
-  safeSetSessionItem,
-
-
-
-
-  safeRemoveItem,
-
-
-
-
-  safeRemoveSessionItem,
-
-
-
-
-  clearAuthStorage
-
-
-
-
-} from '../utils/storage'
-
-
-
-
-import { isTokenExpired } from '../utils/token'
-
-
-
-
-
-
-
-
-
-const safeClear = () => {
-
-
-
-
-  try {
-
-
-
-
-    localStorage.clear()
-
-
-
-
-    return true
-
-
-
-
-  } catch {
-
-
-
-
-    return false
-
-
-
-
-  }
-
-
-
-
-}
-
-
-
-
-
-
-
-
-
-const safeClearSession = () => {
-
-
-
-
-  try {
-
-
-
-
-    sessionStorage.clear()
-
-
-
-
-    return true
-
-
-
-
-  } catch {
-
-
-
-
-    return false
-
-
-
-
-  }
-
-
-
-
-}
-
-
-
-
-
-
-
-
-
-// Constantes de configuraci�n
-
-
-
-
-const DEFAULT_TIMEOUT_MS = 30000
-
-
-
-
-const SLOW_ENDPOINT_TIMEOUT_MS = 60000 // Para endpoints que pueden tardar m�s
-
-
-
-
-
-
-
-
-
-// Base URL de la API. CSP permite same-origin y or�genes Render; usar VITE_API_URL cuando front y back est�n en servicios distintos.
-
-
-
-
-function getEffectiveApiBaseUrl(): string {
-
-
-
-
-  const url = env.API_URL
-
-
-
-
-  if (typeof window === 'undefined') return url
-
-
-
-
-  if (!url) return ''
-
-
-
-
-  try {
-
-
-
-
-    new URL(url)
-
-
-
-
-    return url
-
-
-
-
-  } catch {
-
-
-
-
-    return ''
-
-
-
-
-  }
-
-
-
-
-}
-
-
-
-
-const API_BASE_URL = getEffectiveApiBaseUrl()
-
-
-
-
-
-
-
-
-
-// Ruta de login con base path (ej. /pagos/login cuando BASE_PATH es /pagos)
-
-
-
-
-const LOGIN_PATH = `${BASE_PATH}/login`.replace(/\/+/g, '/')
-
-
-
-
-
-
-
-
-
-class ApiClient {
-
-
-
-
-  private client: AxiosInstance
-
-
-
-
-  private isRefreshing = false
-
-
-
-
-  private isRedirectingToLogin = false
-
-
-
-
-  private refreshTokenExpired = false // ? Flag para evitar requests cuando el refresh token est� expirado
-
-
-
-
-  private failedQueue: Array<{
-
-
-
-
-    resolve: (value?: any) => void
-
-
-
-
-    reject: (reason?: any) => void
-
-
-
-
-  }> = []
-
-
-
-
-  private requestCancellers: Map<string, AbortController> = new Map() // ? Para cancelar requests pendientes
-
-
-
-
-
-
-
-
-
-  constructor() {
-
-
-
-
-    this.client = axios.create({
-
-
-
-
-      baseURL: API_BASE_URL,
-
-
-
-
-      timeout: DEFAULT_TIMEOUT_MS,
-
-
-
-
-      headers: {
-
-
-
-
-        'Content-Type': 'application/json',
-
-
-
-
-      },
-
-
-
-
-      // Optimizaciones de rendimiento
-
-
-
-
-      maxRedirects: 5,
-
-
-
-
-      validateStatus: (status) => status < 500, // No lanzar error para 4xx
-
-
-
-
-    })
-
-
-
-
-
-
-
-
-
-    this.setupInterceptors()
-
-
-
-
-  }
-
-
-
-
-
-
-
-
-
-  private setupInterceptors() {
-
-
-
-
-    // Request interceptor - agregar token de autenticaci�n
-
-
-
-
-    this.client.interceptors.request.use(
-
-
-
-
-      (config) => {
-
-
-
-
-        // ? Si el refresh token est� expirado, cancelar el request inmediatamente
-
-
-
-
-        if (this.refreshTokenExpired && !config.url?.includes('/auth/login')) {
-
-
-
-
-          const error = new Error('Sesi�n expirada. Por favor, inicia sesi�n nuevamente.')
-
-
-
-
-          ;(error as any).isCancelled = true
-
-
-
-
-          return Promise.reject(error)
-
-
-
-
-        }
-
-
-
-
-
-
-
-
-
-        // NO agregar token a endpoints de autenticaci�n ni olvido de contrase�a
-
-
-
-
-        const authEndpoints = ['/api/v1/auth/login', '/api/v1/auth/refresh', '/api/v1/auth/forgot-password']
-
-
-
-
-        const isAuthEndpoint = authEndpoints.some(endpoint => config.url?.includes(endpoint))
-
-
-
-
-
-
-
-
-
-        if (!isAuthEndpoint) {
-
-
-
-
-          // Obtener token de forma segura
-
-
-
-
-          const rememberMe = safeGetItem('remember_me', false)
-
-
-
-
-          let token = rememberMe
-
-
-
-
-            ? safeGetItem('access_token', '')
-
-
-
-
-            : safeGetSessionItem('access_token', '')
-
-
-
-
-
-
-
-
-
-          // ? Limpiar token: remover espacios, saltos de l�nea, y prefijo "Bearer " si existe
-
-
-
-
-          if (token) {
-
-
-
-
-            token = token.trim()
-
-
-
-
-            // Remover prefijo "Bearer " si est� presente
-
-
-
-
-            if (token.startsWith('Bearer ')) {
-
-
-
-
-              token = token.substring(7).trim()
-
-
-
-
-            }
-
-
-
-
-
-
-
-
-
-            // Verificar que el token tenga el formato correcto (3 segmentos separados por puntos)
-
-
-
-
-            const parts = token.split('.')
-
-
-
-
-            if (parts.length !== 3) {
-
-
-
-
-              // Token malformado - limpiar y redirigir
-
-
-
-
-              console.error('? Token malformado (no tiene 3 segmentos). Limpiando almacenamiento...')
-
-
-
-
-              this.refreshTokenExpired = true
-
-
-
-
-              this.cancelAllPendingRequests()
-
-
-
-
-              clearAuthStorage()
-
-
-
-
-
-
-
-
-
-              if (window.location.pathname !== LOGIN_PATH && !this.isRedirectingToLogin) {
-
-
-
-
-                this.isRedirectingToLogin = true
-
-
-
-
-                window.location.replace(LOGIN_PATH)
-
-
-
-
-              }
-
-
-
-
-
-
-
-
-
-              const error = new Error('Token inv�lido. Por favor, inicia sesi�n nuevamente.')
-
-
-
-
-              ;(error as any).isCancelled = true
-
-
-
-
-              return Promise.reject(error)
-
-
-
-
-            }
-
-
-
-
-
-
-
-
-
-            // ? Verificar si el token est� expirado ANTES de enviar el request
-
-
-
-
-            if (isTokenExpired(token)) {
-
-
-
-
-              // Token expirado - marcar flag, cancelar requests pendientes y redirigir
-
-
-
-
-              this.refreshTokenExpired = true
-
-
-
-
-              this.cancelAllPendingRequests()
-
-
-
-
-              clearAuthStorage()
-
-
-
-
-
-
-
-
-
-              // Redirigir inmediatamente si no estamos ya en login
-
-
-
-
-              if (window.location.pathname !== LOGIN_PATH && !this.isRedirectingToLogin) {
-
-
-
-
-                this.isRedirectingToLogin = true
-
-
-
-
-                window.location.replace(LOGIN_PATH)
-
-
-
-
-              }
-
-
-
-
-
-
-
-
-
-              const error = new Error('Token expirado. Redirigiendo al login...')
-
-
-
-
-              ;(error as any).isCancelled = true
-
-
-
-
-              return Promise.reject(error)
-
-
-
-
-            }
-
-
-
-
-            config.headers.Authorization = `Bearer ${token}`
-
-
-
-
-          }
-
-
-
-
-        }
-
-
-
-
-
-
-
-
-
-        // ? Usar signal del caller (p. ej. React Query) si existe; si no, crear uno para rastreo
-
-
-
-
-        if (!config.signal) {
-
-
-
-
-          const controller = new AbortController()
-
-
-
-
-          const requestId = `${config.method}-${config.url}-${Date.now()}`
-
-
-
-
-          config.signal = controller.signal
-
-
-
-
-          ;(config as any).__requestId = requestId
-
-
-
-
-          this.requestCancellers.set(requestId, controller)
-
-
-
-
-        }
-
-
-
-
-
-
-
-
-
-        // ? Exportar reportes (morosidad, cartera, pagos) puede tardar >60s con mucho dato
-
-
-
-
-        if (config.url?.includes('/exportar/') && (config.timeout == null || config.timeout < 180000)) {
-
-
-
-
-          config.timeout = 180000 // 3 minutos
-
-
-
-
-        }
-
-
-
-
-
-
-
-
-
-        return config
-
-
-
-
-      },
-
-
-
-
-      (error) => {
-
-
-
-
-        return Promise.reject(error)
-
-
-
-
-      }
-
-
-
-
-    )
-
-
-
-
-
-
-
-
-
-    // Response interceptor - manejar errores globalmente
-
-
-
-
-    this.client.interceptors.response.use(
-
-
-
-
-      (response) => {
-
-
-
-
-        // ? Limpiar AbortController cuando el request completa exitosamente
-
-
-
-
-        const requestId = (response.config as any).__requestId
-
-
-
-
-        if (requestId) {
-
-
-
-
-          this.requestCancellers.delete(requestId)
-
-
-
-
-        }
-
-
-
-
-        return response
-
-
-
-
-      },
-
-
-
-
-      async (error) => {
-
-
-
-
-        // Auto-retry para errores 500 transitorios (conexi�n SSL, timeouts, etc.)
-
-
-
-
-        const requestConfigForRetry = error.config
-
-
-
-
-        const retryCount = (requestConfigForRetry as any)._retryCount || 0
-
-
-
-
-        const maxRetries = 3
-
-
-
-
-        
-
-
-
-
-        if (
-
-
-
-
-          (error.response?.status === 500 || error.response?.status === 503) &&
-
-
-
-
-          retryCount < maxRetries &&
-
-
-
-
-          requestConfigForRetry.method !== 'get' // No reintentar GET en teor�a, pero POST s� es seguro para carga
-
-
-
-
-        ) {
-
-
-
-
-          (requestConfigForRetry as any)._retryCount = retryCount + 1
-
-
-
-
-          const delayMs = 500 * Math.pow(2, retryCount) // 500ms, 1s, 2s
-
-
-
-
-          
-
-
-
-
-          console.warn(`? [ApiClient] Error ${error.response?.status} (intento ${retryCount + 1}/${maxRetries}), reintentando en ${delayMs}ms:`, {
-
-
-
-
-            url: requestConfigForRetry.url,
-
-
-
-
-            method: requestConfigForRetry.method
-
-
-
-
-          })
-
-
-
-
-          
-
-
-
-
-          await new Promise(resolve => setTimeout(resolve, delayMs))
-
-
-
-
-          return this.client(requestConfigForRetry)
-
-
-
-
-        }
-
-
-
-
-        const originalRequest = error.config
-
-
-
-
-
-
-
-
-
-        // ? Limpiar AbortController cuando el request falla
-
-
-
-
-        if (originalRequest) {
-
-
-
-
-          const requestId = (originalRequest as any).__requestId
-
-
-
-
-          if (requestId) {
-
-
-
-
-            this.requestCancellers.delete(requestId)
-
-
-
-
-          }
-
-
-
-
-        }
-
-
-
-
-
-
-
-
-
-        // Auto-refresh de tokens con protecci�n contra loops infinitos y race conditions
-
-
-
-
-        if (error.response?.status === 401 && !originalRequest?._retry) {
-
-
-
-
-          // No intentar refresh en endpoints de autenticaci�n
-
-
-
-
-          const authEndpoints = ['/api/v1/auth/login', '/api/v1/auth/refresh']
-
-
-
-
-          const isAuthEndpoint = authEndpoints.some(endpoint => originalRequest.url?.includes(endpoint))
-
-
-
-
-
-
-
-
-
-          if (isAuthEndpoint) {
-
-
-
-
-            // En endpoints de auth, simplemente propagar el error sin intentar refresh
-
-
-
-
-            this.handleError(error)
-
-
-
-
-            return Promise.reject(error)
-
-
-
-
-          }
-
-
-
-
-
-
-
-
-
-          // Si ya hay un refresh en progreso, encolar esta petici�n
-
-
-
-
-          if (this.isRefreshing) {
-
-
-
-
-            return new Promise<string>((resolve, reject) => {
-
-
-
-
-              this.failedQueue.push({ resolve, reject })
-
-
-
-
-            })
-
-
-
-
-              .then((token) => {
-
-
-
-
-                if (!token) {
-
-
-
-
-                  throw new Error('Token no disponible despu�s del refresh')
-
-
-
-
-                }
-
-
-
-
-                originalRequest.headers.Authorization = `Bearer ${token}`
-
-
-
-
-                return this.client(originalRequest)
-
-
-
-
-              })
-
-
-
-
-              .catch((err) => {
-
-
-
-
-                return Promise.reject(err)
-
-
-
-
-              })
-
-
-
-
-          }
-
-
-
-
-
-
-
-
-
-          originalRequest._retry = true
-
-
-
-
-          this.isRefreshing = true
-
-
-
-
-
-
-
-
-
-          try {
-
-
-
-
-            const rememberMe = safeGetItem('remember_me', false)
-
-
-
-
-            const refreshToken = rememberMe
-
-
-
-
-              ? safeGetItem('refresh_token', '')
-
-
-
-
-              : safeGetSessionItem('refresh_token', '')
-
-
-
-
-
-
-
-
-
-            if (!refreshToken) {
-
-
-
-
-              throw new Error('No refresh token available')
-
-
-
-
-            }
-
-
-
-
-
-
-
-
-
-            // Hacer la petici�n de refresh con validaci�n estricta (lanzar error para 4xx)
-
-
-
-
-            let response
-
-
-
-
-            try {
-
-
-
-
-              // Crear una instancia temporal de axios sin el interceptor para evitar loops
-
-
-
-
-              const refreshClient = axios.create({
-
-
-
-
-                baseURL: API_BASE_URL,
-
-
-
-
-                timeout: DEFAULT_TIMEOUT_MS,
-
-
-
-
-                headers: {
-
-
-
-
-                  'Content-Type': 'application/json',
-
-
-
-
-                },
-
-
-
-
-                validateStatus: (status) => status < 400, // Lanzar error para 4xx y 5xx
-
-
-
-
-              })
-
-
-
-
-
-
-
-
-
-              response = await refreshClient.post('/api/v1/auth/refresh', {
-
-
-
-
-                refresh_token: refreshToken,
-
-
-
-
-              })
-
-
-
-
-            } catch (error: any) {
-
-
-
-
-              // Si el refresh token est� expirado o es inv�lido, el servidor devuelve 401
-
-
-
-
-              if (error.response?.status === 401 || error.response?.status === 400) {
-
-
-
-
-                throw new Error('Refresh token inv�lido o expirado')
-
-
-
-
-              }
-
-
-
-
-              // Para otros errores (red, timeout, etc.), propagar el error
-
-
-
-
-              throw error
-
-
-
-
-            }
-
-
-
-
-
-
-
-
-
-            // Verificar si la respuesta es v�lida
-
-
-
-
-            if (!response || !response.data || !response.data.access_token) {
-
-
-
-
-              throw new Error('Refresh token inv�lido o expirado')
-
-
-
-
-            }
-
-
-
-
-
-
-
-
-
-            const { access_token, refresh_token: newRefreshToken } = response.data
-
-
-
-
-
-
-
-
-
-            // Guardar en el almacenamiento correspondiente usando funciones seguras
-
-
-
-
-            if (rememberMe) {
-
-
-
-
-              safeSetItem('access_token', access_token)
-
-
-
-
-              safeSetItem('refresh_token', newRefreshToken)
-
-
-
-
-            } else {
-
-
-
-
-              safeSetSessionItem('access_token', access_token)
-
-
-
-
-              safeSetSessionItem('refresh_token', newRefreshToken)
-
-
-
-
-            }
-
-
-
-
-
-
-
-
-
-            // Procesar todas las peticiones en cola
-
-
-
-
-            this.processQueue(null, access_token)
-
-
-
-
-
-
-
-
-
-            // Reintentar la petici�n original
-
-
-
-
-            originalRequest.headers.Authorization = `Bearer ${access_token}`
-
-
-
-
-            return this.client(originalRequest)
-
-
-
-
-          } catch (refreshError: any) {
-
-
-
-
-            // ? Marcar que el refresh token est� expirado para cancelar requests futuros
-
-
-
-
-            this.refreshTokenExpired = true
-
-
-
-
-
-
-
-
-
-            // ? Cancelar todos los requests pendientes
-
-
-
-
-            this.cancelAllPendingRequests()
-
-
-
-
-
-
-
-
-
-            // Si no se puede renovar el token, limpiar datos y redirigir al login
-
-
-
-
-            this.processQueue(refreshError, null)
-
-
-
-
-            clearAuthStorage()
-
-
-
-
-
-
-
-
-
-            // Evitar mostrar toasts durante el redirect
-
-
-
-
-            const isAlreadyRedirecting = window.location.pathname === LOGIN_PATH || this.isRedirectingToLogin
-
-
-
-
-
-
-
-
-
-            if (!isAlreadyRedirecting) {
-
-
-
-
-              this.isRedirectingToLogin = true
-
-
-
-
-
-
-
-
-
-              // Log para debugging (solo en desarrollo)
-
-
-
-
-              if (process.env.NODE_ENV === 'development') {
-
-
-
-
-                console.warn('? Refresh token fall�. Redirigiendo al login...', refreshError)
-
-
-
-
-              }
-
-
-
-
-
-
-
-
-
-              // ? Redirigir inmediatamente sin delay para evitar m�s requests (respeta BASE_PATH)
-
-
-
-
-              window.location.replace(LOGIN_PATH)
-
-
-
-
-            }
-
-
-
-
-
-
-
-
-
-            return Promise.reject(refreshError)
-
-
-
-
-          } finally {
-
-
-
-
-            this.isRefreshing = false
-
-
-
-
-          }
-
-
-
-
-        }
-
-
-
-
-
-
-
-
-
-        // Manejar otros errores - pero no mostrar toast si estamos redirigiendo al login
-
-
-
-
-        if (!this.isRedirectingToLogin) {
-
-
-
-
-          this.handleError(error)
-
-
-
-
-        }
-
-
-
-
-        return Promise.reject(error)
-
-
-
-
-      }
-
-
-
-
-    )
-
-
-
-
-  }
-
-
-
-
-
-
-
-
-
-  private processQueue(error: any, token: string | null) {
-
-
-
-
-    this.failedQueue.forEach((prom) => {
-
-
-
-
-      if (error) {
-
-
-
-
-        prom.reject(error)
-
-
-
-
-      } else if (token) {
-
-
-
-
-        prom.resolve(token)
-
-
-
-
-      } else {
-
-
-
-
-        prom.reject(new Error('Token no disponible despu�s del refresh'))
-
-
-
-
-      }
-
-
-
-
-    })
-
-
-
-
-    this.failedQueue = []
-
-
-
-
-  }
-
-
-
-
-
-
-
-
-
-  // ? Cancelar todos los requests pendientes cuando el refresh token expira
-
-
-
-
-  private cancelAllPendingRequests() {
-
-
-
-
-    this.requestCancellers.forEach((controller, url) => {
-
-
-
-
-      try {
-
-
-
-
-        controller.abort()
-
-
-
-
-      } catch (error) {
-
-
-
-
-        // Ignorar errores al cancelar
-
-
-
-
-      }
-
-
-
-
-    })
-
-
-
-
-    this.requestCancellers.clear()
-
-
-
-
-  }
-
-
-
-
-
-
-
-
-
-  // ? Resetear el flag cuando el usuario hace login exitosamente
-
-
-
-
-  resetRefreshTokenExpired() {
-
-
-
-
-    this.refreshTokenExpired = false
-
-
-
-
-    this.isRedirectingToLogin = false
-
-
-
-
-  }
-
-
-
-
-
-
-
-
-
-  private handleError(error: unknown) {
-
-
-
-
-    if (!isAxiosError(error)) {
-
-
-
-
-      toast.error(getErrorMessage(error))
-
-
-
-
-      return
-
-
-
-
-    }
-
-
-
-
-    // No mostrar toast ni log para peticiones canceladas (p. ej. desmontaje o React Query)
-
-
-
-
-    const code = (error as any).code
-
-
-
-
-    const msg = error.message || ''
-
-
-
-
-    if (code === 'ERR_CANCELED' || msg.includes('Request aborted') || (error as any).isCancelled) {
-
-
-
-
-      return
-
-
-
-
-    }
-
-
-
-
-
-
-
-
-
-    if (error.response) {
-
-
-
-
-      // Error del servidor
-
-
-
-
-      const { status, data } = error.response
-
-
-
-
-      const responseData = data as { detail?: string | Array<{ loc?: string[]; msg?: string }>; message?: string } | undefined
-
-
-
-
-
-
-
-
-
-      // Evitar mostrar toast de 401 cuando est� siendo manejado por el interceptor
-
-
-
-
-      const isBeingHandledByInterceptor = (error.config as { _retry?: boolean } | undefined)?._retry !== undefined
-
-
-
-
-
-
-
-
-
-      switch (status) {
-
-
-
-
-        case 400:
-
-
-
-
-          // Error de validaci�n o cliente duplicado (misma c�dula y mismo nombre)
-
-
-
-
-          if (typeof responseData?.detail === 'string') {
-
-
-
-
-            toast.error(responseData.detail)
-
-
-
-
-          } else {
-
-
-
-
-            toast.error(responseData?.message || 'Error de validaci�n')
-
-
-
-
-          }
-
-
-
-
-          break
-
-
-
-
-        case 401:
-
-
-
-
-          // No mostrar toast si est� siendo manejado por el interceptor de refresh
-
-
-
-
-          if (!isBeingHandledByInterceptor) {
-
-
-
-
-            toast.error('Sesi�n expirada. Redirigiendo al inicio de sesi�n...')
-
-
-
-
-          }
-
-
-
-
-          break
-
-
-
-
-        case 403:
-
-
-
-
-          toast.error('Sin permisos para esta acci�n')
-
-
-
-
-          break
-
-
-
-
-        case 404:
-
-
-
-
-          toast.error('Recurso no encontrado')
-
-
-
-
-          break
-
-
-
-
-        case 409:
-
-
-
-
-          toast.error(responseData?.message || 'Conflicto de datos. Verifica la informaci�n.')
-
-
-
-
-          break
-
-
-
-
-        case 422:
-
-
-
-
-          // Errores de validaci�n
-
-
-
-
-          if (responseData?.detail && Array.isArray(responseData.detail)) {
-
-
-
-
-            responseData.detail.forEach((err: { loc?: string[]; msg?: string }) => {
-
-
-
-
-              toast.error(`${err.loc?.join(' ') || 'Campo'}: ${err.msg || 'Error de validaci�n'}`)
-
-
-
-
-            })
-
-
-
-
-          } else {
-
-
-
-
-            toast.error(responseData?.message || 'Error de validaci�n')
-
-
-
-
-          }
-
-
-
-
-          break
-
-
-
-
-        case 500:
-
-
-
-
-          // Mostrar el mensaje de error espec�fico del backend si est� disponible
-
-
-
-
-          const errorDetail = typeof responseData?.detail === 'string'
-
-
-
-
-            ? responseData.detail
-
-
-
-
-            : responseData?.message || 'Error interno del servidor'
-
-
-
-
-
-
-
-
-
-          // Logging detallado para diagn�stico
-
-
-
-
-          console.error('? [ApiClient] Error 500 del servidor:', {
-
-
-
-
-            detail: errorDetail,
-
-
-
-
-            message: responseData?.message,
-
-
-
-
-            url: error.config?.url,
-
-
-
-
-            method: error.config?.method,
-
-
-
-
-            status: error.response?.status,
-
-
-
-
-            fullError: error
-
-
-
-
-          })
-
-
-
-
-
-
-
-
-
-          // Mostrar toast con el mensaje del backend (ahora m�s espec�fico)
-
-
-
-
-          toast.error(errorDetail, { duration: 10000 })
-
-
-
-
-          break
-
-
-
-
-        case 503:
-
-
-
-
-          // NO mostrar toast gen�rico para errores 503 de duplicados
-
-
-
-
-          // Permitir que el componente maneje el error espec�fico
-
-
-
-
-          const detailStr = typeof responseData?.detail === 'string' ? responseData.detail : ''
-
-
-
-
-          const messageStr = responseData?.message || ''
-
-
-
-
-          if (detailStr.includes('duplicate key') || detailStr.includes('already exists') ||
-
-
-
-
-              detailStr.includes('violates unique constraint') || detailStr.includes('c�dula') ||
-
-
-
-
-              messageStr.includes('duplicate key') || messageStr.includes('already exists')) {
-
-
-
-
-            // No mostrar toast, dejar que el componente maneje el popup
-
-
-
-
-            return Promise.reject(error) // ? CORRECCI�N: Asegurar que se propague el error
-
-
-
-
-          } else {
-
-
-
-
-            toast.error('Servicio temporalmente no disponible. Intenta nuevamente.')
-
-
-
-
-          }
-
-
-
-
-          break
-
-
-
-
-        default:
-
-
-
-
-          if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-
-
-
-
-            toast.error('Tiempo de espera agotado. Verifica tu conexi�n.')
-
-
-
-
-          } else if (error.message?.includes('Network Error') || error.code === 'ERR_NETWORK') {
-
-
-
-
-            toast.error('Error de conexi�n. Verifica que el servidor est� funcionando.')
-
-
-
-
-          } else {
-
-
-
-
-            toast.error(responseData?.message || 'Error desconocido')
-
-
-
-
-          }
-
-
-
-
-      }
-
-
-
-
-    } else if (error.request) {
-
-
-
-
-      // Error de red - puede ser que el servidor est� reiniciando
-
-
-
-
-      const errorCode = (error as any).code || ''
-
-
-
-
-      const errorMessage = error.message || ''
-
-
-
-
-      if (errorCode === 'ERR_CANCELED' || errorMessage.includes('Request aborted')) {
-
-
-
-
-        return
-
-
-
-
-      }
-
-
-
-
-
-
-
-
-
-      // Log detallado para diagn�stico
-
-
-
-
-      console.error('? [ApiClient] Error de conexi�n:', {
-
-
-
-
-        url: error.config?.url,
-
-
-
-
-        method: error.config?.method,
-
-
-
-
-        baseURL: API_BASE_URL,
-
-
-
-
-        code: errorCode,
-
-
-
-
-        message: errorMessage,
-
-
-
-
-        requestId: (error.config as any)?.__requestId
-
-
-
-
-      })
-
-
-
-
-
-
-
-
-
-      // No mostrar toast para errores de conexi�n durante el inicio (servidor reiniciando)
-
-
-
-
-      // Estos errores son temporales y se resuelven autom�ticamente
-
-
-
-
-      if (
-
-
-
-
-        errorCode === 'ERR_NETWORK' ||
-
-
-
-
-        errorCode === 'ECONNREFUSED' ||
-
-
-
-
-        errorMessage.includes('Connection refused') ||
-
-
-
-
-        errorMessage.includes('NS_ERROR_CONNECTION_REFUSED')
-
-
-
-
-      ) {
-
-
-
-
-        // Solo loggear en consola, no mostrar toast (el usuario ver� el error si persiste)
-
-
-
-
-        console.warn('? Servidor no disponible temporalmente. Esto es normal durante reinicios.')
-
-
-
-
-        console.warn('   Verifica que el backend est� funcionando en:', API_BASE_URL || 'NO CONFIGURADO')
-
-
-
-
-        return
-
-
-
-
-      }
-
-
-
-
-
-
-
-
-
-      // Mensaje m�s descriptivo seg�n el tipo de error
-
-
-
-
-      let errorMsg = 'Error de conexi�n. Verifique su conexi�n a internet.'
-
-
-
-
-      if (errorCode === 'ECONNABORTED' || errorMessage.includes('timeout')) {
-
-
-
-
-        errorMsg = 'Tiempo de espera agotado. El servidor est� tardando demasiado en responder.'
-
-
-
-
-      } else if (errorCode === 'ERR_NETWORK') {
-
-
-
-
-        errorMsg = 'Error de red. Verifique que el servidor est� funcionando y su conexi�n a internet.'
-
-
-
-
-      }
-
-
-
-
-      
-
-
-
-
-      toast.error(errorMsg)
-
-
-
-
-    } else {
-
-
-
-
-      // Error de configuraci�n
-
-
-
-
-      toast.error('Error en la configuraci�n de la petici�n')
-
-
-
-
-    }
-
-
-
-
-  }
-
-
-
-
-
-
-
-
-
-  // M�todos HTTP
-
-
-
-
-  async get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
-
-
-
-
-    // Detectar endpoints lentos y usar timeout extendido (p. ej. Render tarda 3�5 s en fr�o)
-
-
-
-
-    const isSlowEndpoint = url.includes('/dashboard/') ||
-
-
-
-
-                          url.includes('/reportes/') ||
-
-
-
-
-                          url.includes('/notificaciones-previas') ||
-
-
-
-
-                          url.includes('/admin') ||
-
-
-
-
-                          url.includes('/evolucion') ||
-
-
-
-
-                          url.includes('/tendencia') ||
-
-
-
-
-                          url.includes('/ml-impago/modelos') ||
-
-
-
-
-                          url.includes('/ml-riesgo/modelos') ||
-
-
-
-
-                          url.includes('/ai/training/') ||
-
-
-
-
-                          url.includes('/cobranzas/') ||
-
-
-
-
-                          url.includes('/pagos/kpis') ||
-
-
-
-
-                          url.includes('/pagos/stats') ||
-
-
-
-
-                          url.includes('/revision-manual/')  // Render cold start + consulta pesada
-
-
-
-
-
-
-
-
-
-    // ? Timeout especial para revision-manual (Render cold start + BD)
-
-
-
-
-    const isRevisionManual = url.includes('/revision-manual/')
-
-
-
-
-    const revisionManualTimeout = 120000 // 120 segundos
-
-
-
-
-
-
-
-
-
-    // ? Timeout especial para reportes (Render cold start + consultas BD pesadas)
-
-
-
-
-    const isReportesDashboard = url.includes('/reportes/') && (url.includes('/dashboard/') || url.includes('/resumen'))
-
-
-
-
-    const reportesDashboardTimeout = 120000 // 120 segundos
-
-
-
-
-
-
-
-
-
-    // ? Timeout especial para clientes-atrasados que puede procesar muchos registros (2868+)
-
-
-
-
-    const isClientesAtrasados = url.includes('/cobranzas/clientes-atrasados')
-
-
-
-
-    const verySlowTimeout = 120000 // 120 segundos para endpoints muy pesados
-
-
-
-
-    
-
-
-
-
-    // ? Timeout extendido para tablas-campos que consulta toda la estructura de BD
-
-
-
-
-    const isTablasCampos = url.includes('/tablas-campos')
-
-
-
-
-    const tablasCamposTimeout = 90000 // 90 segundos para consulta de estructura completa de BD
-
-
-
-
-
-
-
-
-
-    let defaultTimeout = DEFAULT_TIMEOUT_MS
-
-
-
-
-    if (isRevisionManual) {
-
-
-
-
-      defaultTimeout = revisionManualTimeout
-
-
-
-
-    } else if (isReportesDashboard) {
-
-
-
-
-      defaultTimeout = reportesDashboardTimeout
-
-
-
-
-    } else if (isClientesAtrasados) {
-
-
-
-
-      defaultTimeout = verySlowTimeout
-
-
-
-
-    } else if (isTablasCampos) {
-
-
-
-
-      defaultTimeout = tablasCamposTimeout
-
-
-
-
-    } else if (isSlowEndpoint) {
-
-
-
-
-      defaultTimeout = SLOW_ENDPOINT_TIMEOUT_MS
-
-
-
-
-    }
-
-
-
-
-
-
-
-
-
-    // ? Priorizar timeout expl�cito si se proporciona, sino usar el calculado
-
-
-
-
-    const timeout = config?.timeout?? defaultTimeout
-
-
-
-
-    // ? Asegurar que el timeout se aplique correctamente
-
-
-
-
-    // Axios respeta el timeout en la configuraci�n del request sobre el del cliente
-
-
-
-
-    const finalConfig = { 
-
-
-
-
-      ...config, 
-
-
-
-
-      timeout,
-
-
-
-
-    }
-
-
-
-
-
-
-
-
-
-    const response: AxiosResponse<T> = await this.client.get(url, finalConfig)
-
-
-
-
-    return response.data
-
-
-
-
-  }
-
-
-
-
-
-
-
-
-
-  async post<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
-
-
-
-
-    try {
-
-
-
-
-      // Detectar endpoints lentos (entrenamiento ML, etc.) y usar timeout extendido
-
-
-
-
-      const isSlowEndpoint = url.includes('/ml-riesgo/entrenar') ||
-
-
-
-
-                            url.includes('/ml-impago/entrenar') ||
-
-
-
-
-                            url.includes('/fine-tuning/iniciar') ||
-
-
-
-
-                            url.includes('/rag/generar-embeddings') ||
-
-
-
-
-                            url.includes('/configuracion/ai/chat') ||
-
-
-
-
-                            url.includes('/prestamos/cedula/batch') || // Batch carga masiva: muchas c�dulas
-
-
-
-
-                            url.includes('/pagos/upload') || // Carga masiva pagos: puede tardar con muchas filas
-
-
-
-
-                            url.includes('/pagos/batch') || // POST batch pagos: muchas filas + validaciones
-
-
-
-
-                            url.includes('/pagos/gmail/run-now') ||
-
-
-
-
-                            url.includes('/clientes/check-emails') ||
-
-
-
-
-                            url.includes('/clientes/check-cedulas') // Pipeline Gmail: puede tardar si el backend es s�ncrono (credenciales OAuth)
-
-
-
-
-
-
-
-
-
-      const defaultTimeout = isSlowEndpoint
-
-
-
-
-        ? (url.includes('/prestamos/cedula/batch') ? 60000
-
-
-
-
-          : url.includes('/pagos/upload') ? 120000
-
-
-
-
-          : url.includes('/pagos/batch') ? 180000  // 3 min: Render frío + muchas filas
-
-
-
-
-          : url.includes('/pagos/gmail/run-now') ? 90000  // 90s: cubre credenciales OAuth + margen para backend s�ncrono viejo
-
-
-
-
-          : (url.includes('/clientes/check-emails') || url.includes('/clientes/check-cedulas')) ? 60000
-
-
-
-
-          : 300000)
-
-
-
-
-        : DEFAULT_TIMEOUT_MS
-
-
-
-
-      // Priorizar timeout expl�cito si se proporciona, sino usar el calculado
-
-
-
-
-      const timeout = config?.timeout?? defaultTimeout
-
-
-
-
-      const finalConfig = { ...config, timeout }
-
-
-
-
-
-
-
-
-
-      const response: AxiosResponse<T> = await this.client.post(url, data, finalConfig)
-
-
-
-
-
-
-
-
-
-      // Verificar si la respuesta es un error 4xx (validateStatus permite 4xx pero debemos manejarlos)
-
-
-
-
-      if (response.status >= 400 && response.status < 500) {
-
-
-
-
-        // 401 en login/refresh es esperado (credenciales incorrectas); solo log en desarrollo para no saturar consola
-
-
-
-
-        const isAuthFailure = response.status === 401 && (url.includes('/auth/login') || url.includes('/auth/refresh'))
-
-
-
-
-        if (isAuthFailure && process.env.NODE_ENV === 'development') {
-
-
-
-
-          console.warn('? [ApiClient] Login/refresh no autorizado (401):', url)
-
-
-
-
-        } else if (!isAuthFailure) {
-
-
-
-
-          const is409Pagos = response.status === 409 && url.includes('/pagos')
-
-
-
-
-          if (!is409Pagos) {
-
-
-
-
-            console.error('? [ApiClient] POST recibi� error 4xx:', { url, status: response.status, data: response.data })
-
-
-
-
-          }
-
-
-
-
-          // 409 en pagos: no loguear por cada fila (satura consola); la UI ya muestra toast/resumen
-
-
-
-
-        }
-
-
-
-
-        // Crear un error de Axios para que se maneje correctamente, preservando el mensaje del backend
-
-
-
-
-        const backendMessage = (response.data as any)?.detail || (response.data as any)?.message || `Request failed with status ${response.status}`
-
-
-
-
-        const error = new Error(backendMessage) as any
-
-
-
-
-        error.response = response
-
-
-
-
-        error.isAxiosError = true
-
-
-
-
-        error.code = `ERR_HTTP_${response.status}`
-
-
-
-
-        throw error
-
-
-
-
-      }
-
-
-
-
-
-
-
-
-
-      return response.data
-
-
-
-
-    } catch (error: any) {
-
-
-
-
-      const is409Pagos = error?.response?.status === 409 && url.includes('/pagos')
-
-
-
-
-      if (!is409Pagos) {
-
-
-
-
-        const status = error?.response?.status
-
-
-
-
-        const detail = error?.response?.data?.detail?? error?.response?.data?.message
-
-
-
-
-        console.error('? [ApiClient] POST error:', { url, status, detail: detail ? error?.message })
-
-
-
-
-      }
-
-
-
-
-      throw error
-
-
-
-
-    }
-
-
-
-
-  }
-
-
-
-
-
-
-
-
-
-  async put<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
-
-
-
-
-    console.log('? [ApiClient] PUT request:', { url, data: data ? '***' : '(vac�o)', config })
-
-
-
-
-    try {
-
-
-
-
-      const response: AxiosResponse<T> = await this.client.put(url, data, config)
-
-
-
-
-      console.log('? [ApiClient] PUT response:', { url, status: response.status, data: response.data })
-
-
-
-
-
-
-
-
-
-      // Verificar si la respuesta es un error 4xx (validateStatus permite 4xx pero debemos manejarlos)
-
-
-
-
-      if (response.status >= 400 && response.status < 500) {
-
-
-
-
-        console.error('? [ApiClient] PUT recibi� error 4xx:', { url, status: response.status, data: response.data })
-
-
-
-
-        // Crear un error de Axios para que se maneje correctamente
-
-
-
-
-        const error = new Error(`Request failed with status ${response.status}`) as any
-
-
-
-
-        error.response = response
-
-
-
-
-        error.isAxiosError = true
-
-
-
-
-        throw error
-
-
-
-
-      }
-
-
-
-
-
-
-
-
-
-      return response.data
-
-
-
-
-    } catch (error) {
-
-
-
-
-      console.error('? [ApiClient] PUT error:', { url, error })
-
-
-
-
-      throw error
-
-
-
-
-    }
-
-
-
-
-  }
-
-
-
-
-
-
-
-
-
-  async patch<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
-
-
-
-
-    const response: AxiosResponse<T> = await this.client.patch(url, data, config)
-
-
-
-
-    return response.data
-
-
-
-
-  }
-
-
-
-
-
-
-
-
-
-  async delete<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
-
-
-
-
-    const response: AxiosResponse<T> = await this.client.delete(url, config)
-
-
-
-
-
-
-
-
-
-    // Verificar si la respuesta es un error 4xx (validateStatus permite 4xx pero debemos manejarlos)
-
-
-
-
-    if (response.status >= 400 && response.status < 500) {
-
-
-
-
-      const backendMessage = (response.data as any)?.detail || (response.data as any)?.message || `Request failed with status ${response.status}`
-
-
-
-
-      const error = new Error(backendMessage) as any
-
-
-
-
-      error.response = response
-
-
-
-
-      error.isAxiosError = true
-
-
-
-
-      error.code = `ERR_HTTP_${response.status}`
-
-
-
-
-      throw error
-
-
-
-
-    }
-
-
-
-
-
-
-
-
-
-    return response.data
-
-
-
-
-  }
-
-
-
-
-
-
-
-
-
-  // M�todo para subir archivos
-
-
-
-
-  async uploadFile<T>(
-
-
-
-
-    url: string,
-
-
-
-
-    file: File,
-
-
-
-
-    onUploadProgress?: (progressEvent: AxiosProgressEvent) => void
-
-
-
-
-  ): Promise<T> {
-
-
-
-
-    const formData = new FormData()
-
-
-
-
-    formData.append('file', file)
-
-
-
-
-
-
-
-
-
-    const response: AxiosResponse<T> = await this.client.post(url, formData, {
-
-
-
-
-      headers: {
-
-
-
-
-        'Content-Type': 'multipart/form-data',
-
-
-
-
-      },
-
-
-
-
-      onUploadProgress,
-
-
-
-
-    })
-
-
-
-
-
-
-
-
-
-    return response.data
-
-
-
-
-  }
-
-
-
-
-
-
-
-
-
-  // M�todo para descargar archivos
-
-
-
-
-  async downloadFile(url: string, filename: string): Promise<void> {
-
-
-
-
-    const response = await this.client.get(url, {
-
-
-
-
-      responseType: 'blob',
-
-
-
-
-    })
-
-
-
-
-
-
-
-
-
-    const blob = new Blob([response.data])
-
-
-
-
-    const downloadUrl = window.URL.createObjectURL(blob)
-
-
-
-
-    const link = document.createElement('a')
-
-
-
-
-    link.href = downloadUrl
-
-
-
-
-    link.download = filename
-
-
-
-
-    document.body.appendChild(link)
-
-
-
-
-    link.click()
-
-
-
-
-    document.body.removeChild(link)
-
-
-
-
-    window.URL.revokeObjectURL(downloadUrl)
-
-
-
-
-  }
-
-
-
-
-
-
-
-
-
-  // Obtener instancia de Axios para casos especiales
-
-
-
-
-  getAxiosInstance(): AxiosInstance {
-
-
-
-
-    return this.client
-
-
-
-
-  }
-
-
-
-
-
-
-
-
-
-  // FUNCI�N DE EMERGENCIA: Limpiar completamente el storage
-
-
-
-
-  emergencyClearStorage(): void {
-
-
-
-
-    try {
-
-
-
-
-      // Limpiar localStorage
-
-
-
-
-      safeClear()
-
-
-
-
-      // Limpiar sessionStorage
-
-
-
-
-      safeClearSession()
-
-
-
-
-      // Limpiar espec�ficamente tokens de auth
-
-
-
-
-      clearAuthStorage()
-
-
-
-
-    } catch (error) {
-
-
-
-
-      // Error silencioso para evitar loops de logging
-
-
-
-
-    }
-
-
-
-
-  }
-
-
-
-
-}
-
-
-
-
-
-
-
-
-
-// Instancia singleton del cliente API
-
-
-
-
-export const apiClient = new ApiClient()
-
-
-
-
-export default apiClient
-
-
-
-
-
-
-
-
-
-// FUNCI�N GLOBAL DE EMERGENCIA: Limpiar storage desde consola del navegador
-
-
-
-
-// Uso: window.clearAuthStorage() en la consola del navegador
-
-
-
-
-if (typeof window !== 'undefined') {
-
-
-
-
-  (window as Window & { clearAuthStorage?: () => void }).clearAuthStorage = () => {
-
-
-
-
-    apiClient.emergencyClearStorage()
-
-
-
-
-    window.location.reload()
-
-
-
-
-  }
-
-
-
-
-}
-
-
-
-
-
-
-
-
-
-// Tipos para respuestas de API
-
-
-
-
-export interface ApiResponse<T> {
-
-
-
-
-  data: T
-
-
-
-
-  message: string
-
-
-
-
-  success: boolean
-
-
-
-
-}
-
-
-
-
-
-
-
-
-
-export interface PaginatedResponse<T> {
-
-
-
-
-  data: T[]
-
-
-
-
-  total: number
-
-
-
-
-  page: number
-
-
-
-
-  per_page: number
-
-
-
-
-  total_pages: number
-
-
-
-
-}
-
-
-
-
-
-
-
-
-
-// Funciones de utilidad para construir URLs con par�metros
-
-
-
-
-export function buildUrl(baseUrl: string, params?: Record<string, any>): string {
-
-
-
-
-  if (!params) return baseUrl
-
-
-
-
-
-
-
-
-
-  const searchParams = new URLSearchParams()
-
-
-
-
-
-
-
-
-
-  Object.entries(params).forEach(([key, value]) => {
-
-
-
-
-    if (value !== undefined && value !== null && value !== '') {
-
-
-
-
-      if (Array.isArray(value)) {
-
-
-
-
-        value.forEach(v => searchParams.append(key, String(v)))
-
-
-
-
-      } else {
-
-
-
-
-        searchParams.append(key, String(value))
-
-
-
-
-      }
-
-
-
-
-    }
-
-
-
-
-  })
-
-
-
-
-
-
-
-
-
-  const queryString = searchParams.toString()
-
-
-
-
-  return queryString ? `${baseUrl}?${queryString}` : baseUrl
-
-
-
-
-}
-
-
-
-
-
-
-
-
-
-// Hook personalizado para manejar estados de carga
-
-
-
-
-export function useApiState() {
-
-
-
-
-  return {
-
-
-
-
-    loading: false,
-
-
-
-
-    error: null,
-
-
-
-
-    success: false,
-
-
-
-
-  }
-
-
-
-
-}
-
-
-
-
-
-
-
-
-
+import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, AxiosProgressEvent, AxiosResponse } from 'axios'
+
+
+
+
+import toast from 'react-hot-toast'
+
+
+
+
+import { getErrorMessage, getErrorCode, isAxiosError } from '../types/errors'
+
+
+
+
+import { env, BASE_PATH } from '../config/env'
+
+
+
+
+import {
+
+
+
+
+  safeGetItem,
+
+
+
+
+  safeGetSessionItem,
+
+
+
+
+  safeSetItem,
+
+
+
+
+  safeSetSessionItem,
+
+
+
+
+  safeRemoveItem,
+
+
+
+
+  safeRemoveSessionItem,
+
+
+
+
+  clearAuthStorage
+
+
+
+
+} from '../utils/storage'
+
+
+
+
+import { isTokenExpired } from '../utils/token'
+
+
+
+
+
+
+
+
+
+const safeClear = () => {
+
+
+
+
+  try {
+
+
+
+
+    localStorage.clear()
+
+
+
+
+    return true
+
+
+
+
+  } catch {
+
+
+
+
+    return false
+
+
+
+
+  }
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+const safeClearSession = () => {
+
+
+
+
+  try {
+
+
+
+
+    sessionStorage.clear()
+
+
+
+
+    return true
+
+
+
+
+  } catch {
+
+
+
+
+    return false
+
+
+
+
+  }
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+// Constantes de configuraci�n
+
+
+
+
+const DEFAULT_TIMEOUT_MS = 30000
+
+
+
+
+const SLOW_ENDPOINT_TIMEOUT_MS = 60000 // Para endpoints que pueden tardar m�s
+
+
+
+
+
+
+
+
+
+// Base URL de la API. CSP permite same-origin y or�genes Render; usar VITE_API_URL cuando front y back est�n en servicios distintos.
+
+
+
+
+function getEffectiveApiBaseUrl(): string {
+
+
+
+
+  const url = env.API_URL
+
+
+
+
+  if (typeof window === 'undefined') return url
+
+
+
+
+  if (!url) return ''
+
+
+
+
+  try {
+
+
+
+
+    new URL(url)
+
+
+
+
+    return url
+
+
+
+
+  } catch {
+
+
+
+
+    return ''
+
+
+
+
+  }
+
+
+
+
+}
+
+
+
+
+const API_BASE_URL = getEffectiveApiBaseUrl()
+
+
+
+
+
+
+
+
+
+// Ruta de login con base path (ej. /pagos/login cuando BASE_PATH es /pagos)
+
+
+
+
+const LOGIN_PATH = `${BASE_PATH}/login`.replace(/\/+/g, '/')
+
+
+
+
+
+
+
+
+
+class ApiClient {
+
+
+
+
+  private client: AxiosInstance
+
+
+
+
+  private isRefreshing = false
+
+
+
+
+  private isRedirectingToLogin = false
+
+
+
+
+  private refreshTokenExpired = false // ? Flag para evitar requests cuando el refresh token est� expirado
+
+
+
+
+  private failedQueue: Array<{
+
+
+
+
+    resolve: (value?: any) => void
+
+
+
+
+    reject: (reason?: any) => void
+
+
+
+
+  }> = []
+
+
+
+
+  private requestCancellers: Map<string, AbortController> = new Map() // ? Para cancelar requests pendientes
+
+
+
+
+
+
+
+
+
+  constructor() {
+
+
+
+
+    this.client = axios.create({
+
+
+
+
+      baseURL: API_BASE_URL,
+
+
+
+
+      timeout: DEFAULT_TIMEOUT_MS,
+
+
+
+
+      headers: {
+
+
+
+
+        'Content-Type': 'application/json',
+
+
+
+
+      },
+
+
+
+
+      // Optimizaciones de rendimiento
+
+
+
+
+      maxRedirects: 5,
+
+
+
+
+      validateStatus: (status) => status < 500, // No lanzar error para 4xx
+
+
+
+
+    })
+
+
+
+
+
+
+
+
+
+    this.setupInterceptors()
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+  private setupInterceptors() {
+
+
+
+
+    // Request interceptor - agregar token de autenticaci�n
+
+
+
+
+    this.client.interceptors.request.use(
+
+
+
+
+      (config) => {
+
+
+
+
+        // ? Si el refresh token est� expirado, cancelar el request inmediatamente
+
+
+
+
+        if (this.refreshTokenExpired && !config.url?.includes('/auth/login')) {
+
+
+
+
+          const error = new Error('Sesi�n expirada. Por favor, inicia sesi�n nuevamente.')
+
+
+
+
+          ;(error as any).isCancelled = true
+
+
+
+
+          return Promise.reject(error)
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+        // NO agregar token a endpoints de autenticaci�n ni olvido de contrase�a
+
+
+
+
+        const authEndpoints = ['/api/v1/auth/login', '/api/v1/auth/refresh', '/api/v1/auth/forgot-password']
+
+
+
+
+        const isAuthEndpoint = authEndpoints.some(endpoint => config.url?.includes(endpoint))
+
+
+
+
+
+
+
+
+
+        if (!isAuthEndpoint) {
+
+
+
+
+          // Obtener token de forma segura
+
+
+
+
+          const rememberMe = safeGetItem('remember_me', false)
+
+
+
+
+          let token = rememberMe
+
+
+
+
+            ? safeGetItem('access_token', '')
+
+
+
+
+            : safeGetSessionItem('access_token', '')
+
+
+
+
+
+
+
+
+
+          // ? Limpiar token: remover espacios, saltos de l�nea, y prefijo "Bearer " si existe
+
+
+
+
+          if (token) {
+
+
+
+
+            token = token.trim()
+
+
+
+
+            // Remover prefijo "Bearer " si est� presente
+
+
+
+
+            if (token.startsWith('Bearer ')) {
+
+
+
+
+              token = token.substring(7).trim()
+
+
+
+
+            }
+
+
+
+
+
+
+
+
+
+            // Verificar que el token tenga el formato correcto (3 segmentos separados por puntos)
+
+
+
+
+            const parts = token.split('.')
+
+
+
+
+            if (parts.length !== 3) {
+
+
+
+
+              // Token malformado - limpiar y redirigir
+
+
+
+
+              console.error('? Token malformado (no tiene 3 segmentos). Limpiando almacenamiento...')
+
+
+
+
+              this.refreshTokenExpired = true
+
+
+
+
+              this.cancelAllPendingRequests()
+
+
+
+
+              clearAuthStorage()
+
+
+
+
+
+
+
+
+
+              if (window.location.pathname !== LOGIN_PATH && !this.isRedirectingToLogin) {
+
+
+
+
+                this.isRedirectingToLogin = true
+
+
+
+
+                window.location.replace(LOGIN_PATH)
+
+
+
+
+              }
+
+
+
+
+
+
+
+
+
+              const error = new Error('Token inv�lido. Por favor, inicia sesi�n nuevamente.')
+
+
+
+
+              ;(error as any).isCancelled = true
+
+
+
+
+              return Promise.reject(error)
+
+
+
+
+            }
+
+
+
+
+
+
+
+
+
+            // ? Verificar si el token est� expirado ANTES de enviar el request
+
+
+
+
+            if (isTokenExpired(token)) {
+
+
+
+
+              // Token expirado - marcar flag, cancelar requests pendientes y redirigir
+
+
+
+
+              this.refreshTokenExpired = true
+
+
+
+
+              this.cancelAllPendingRequests()
+
+
+
+
+              clearAuthStorage()
+
+
+
+
+
+
+
+
+
+              // Redirigir inmediatamente si no estamos ya en login
+
+
+
+
+              if (window.location.pathname !== LOGIN_PATH && !this.isRedirectingToLogin) {
+
+
+
+
+                this.isRedirectingToLogin = true
+
+
+
+
+                window.location.replace(LOGIN_PATH)
+
+
+
+
+              }
+
+
+
+
+
+
+
+
+
+              const error = new Error('Token expirado. Redirigiendo al login...')
+
+
+
+
+              ;(error as any).isCancelled = true
+
+
+
+
+              return Promise.reject(error)
+
+
+
+
+            }
+
+
+
+
+            config.headers.Authorization = `Bearer ${token}`
+
+
+
+
+          }
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+        // ? Usar signal del caller (p. ej. React Query) si existe; si no, crear uno para rastreo
+
+
+
+
+        if (!config.signal) {
+
+
+
+
+          const controller = new AbortController()
+
+
+
+
+          const requestId = `${config.method}-${config.url}-${Date.now()}`
+
+
+
+
+          config.signal = controller.signal
+
+
+
+
+          ;(config as any).__requestId = requestId
+
+
+
+
+          this.requestCancellers.set(requestId, controller)
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+        // ? Exportar reportes (morosidad, cartera, pagos) puede tardar >60s con mucho dato
+
+
+
+
+        if (config.url?.includes('/exportar/') && (config.timeout == null || config.timeout < 180000)) {
+
+
+
+
+          config.timeout = 180000 // 3 minutos
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+        return config
+
+
+
+
+      },
+
+
+
+
+      (error) => {
+
+
+
+
+        return Promise.reject(error)
+
+
+
+
+      }
+
+
+
+
+    )
+
+
+
+
+
+
+
+
+
+    // Response interceptor - manejar errores globalmente
+
+
+
+
+    this.client.interceptors.response.use(
+
+
+
+
+      (response) => {
+
+
+
+
+        // ? Limpiar AbortController cuando el request completa exitosamente
+
+
+
+
+        const requestId = (response.config as any).__requestId
+
+
+
+
+        if (requestId) {
+
+
+
+
+          this.requestCancellers.delete(requestId)
+
+
+
+
+        }
+
+
+
+
+        return response
+
+
+
+
+      },
+
+
+
+
+      async (error) => {
+
+
+
+
+        // Auto-retry para errores 500 transitorios (conexi�n SSL, timeouts, etc.)
+
+
+
+
+        const requestConfigForRetry = error.config
+
+
+
+
+        const retryCount = (requestConfigForRetry as any)._retryCount || 0
+
+
+
+
+        const maxRetries = 3
+
+
+
+
+        
+
+
+
+
+        if (
+
+
+
+
+          (error.response?.status === 500 || error.response?.status === 503) &&
+
+
+
+
+          retryCount < maxRetries &&
+
+
+
+
+          requestConfigForRetry.method !== 'get' // No reintentar GET en teor�a, pero POST s� es seguro para carga
+
+
+
+
+        ) {
+
+
+
+
+          (requestConfigForRetry as any)._retryCount = retryCount + 1
+
+
+
+
+          const delayMs = 500 * Math.pow(2, retryCount) // 500ms, 1s, 2s
+
+
+
+
+          
+
+
+
+
+          console.warn(`? [ApiClient] Error ${error.response?.status} (intento ${retryCount + 1}/${maxRetries}), reintentando en ${delayMs}ms:`, {
+
+
+
+
+            url: requestConfigForRetry.url,
+
+
+
+
+            method: requestConfigForRetry.method
+
+
+
+
+          })
+
+
+
+
+          
+
+
+
+
+          await new Promise(resolve => setTimeout(resolve, delayMs))
+
+
+
+
+          return this.client(requestConfigForRetry)
+
+
+
+
+        }
+
+
+
+
+        const originalRequest = error.config
+
+
+
+
+
+
+
+
+
+        // ? Limpiar AbortController cuando el request falla
+
+
+
+
+        if (originalRequest) {
+
+
+
+
+          const requestId = (originalRequest as any).__requestId
+
+
+
+
+          if (requestId) {
+
+
+
+
+            this.requestCancellers.delete(requestId)
+
+
+
+
+          }
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+        // Auto-refresh de tokens con protecci�n contra loops infinitos y race conditions
+
+
+
+
+        if (error.response?.status === 401 && !originalRequest?._retry) {
+
+
+
+
+          // No intentar refresh en endpoints de autenticaci�n
+
+
+
+
+          const authEndpoints = ['/api/v1/auth/login', '/api/v1/auth/refresh']
+
+
+
+
+          const isAuthEndpoint = authEndpoints.some(endpoint => originalRequest.url?.includes(endpoint))
+
+
+
+
+
+
+
+
+
+          if (isAuthEndpoint) {
+
+
+
+
+            // En endpoints de auth, simplemente propagar el error sin intentar refresh
+
+
+
+
+            this.handleError(error)
+
+
+
+
+            return Promise.reject(error)
+
+
+
+
+          }
+
+
+
+
+
+
+
+
+
+          // Si ya hay un refresh en progreso, encolar esta petici�n
+
+
+
+
+          if (this.isRefreshing) {
+
+
+
+
+            return new Promise<string>((resolve, reject) => {
+
+
+
+
+              this.failedQueue.push({ resolve, reject })
+
+
+
+
+            })
+
+
+
+
+              .then((token) => {
+
+
+
+
+                if (!token) {
+
+
+
+
+                  throw new Error('Token no disponible despu�s del refresh')
+
+
+
+
+                }
+
+
+
+
+                originalRequest.headers.Authorization = `Bearer ${token}`
+
+
+
+
+                return this.client(originalRequest)
+
+
+
+
+              })
+
+
+
+
+              .catch((err) => {
+
+
+
+
+                return Promise.reject(err)
+
+
+
+
+              })
+
+
+
+
+          }
+
+
+
+
+
+
+
+
+
+          originalRequest._retry = true
+
+
+
+
+          this.isRefreshing = true
+
+
+
+
+
+
+
+
+
+          try {
+
+
+
+
+            const rememberMe = safeGetItem('remember_me', false)
+
+
+
+
+            const refreshToken = rememberMe
+
+
+
+
+              ? safeGetItem('refresh_token', '')
+
+
+
+
+              : safeGetSessionItem('refresh_token', '')
+
+
+
+
+
+
+
+
+
+            if (!refreshToken) {
+
+
+
+
+              throw new Error('No refresh token available')
+
+
+
+
+            }
+
+
+
+
+
+
+
+
+
+            // Hacer la petici�n de refresh con validaci�n estricta (lanzar error para 4xx)
+
+
+
+
+            let response
+
+
+
+
+            try {
+
+
+
+
+              // Crear una instancia temporal de axios sin el interceptor para evitar loops
+
+
+
+
+              const refreshClient = axios.create({
+
+
+
+
+                baseURL: API_BASE_URL,
+
+
+
+
+                timeout: DEFAULT_TIMEOUT_MS,
+
+
+
+
+                headers: {
+
+
+
+
+                  'Content-Type': 'application/json',
+
+
+
+
+                },
+
+
+
+
+                validateStatus: (status) => status < 400, // Lanzar error para 4xx y 5xx
+
+
+
+
+              })
+
+
+
+
+
+
+
+
+
+              response = await refreshClient.post('/api/v1/auth/refresh', {
+
+
+
+
+                refresh_token: refreshToken,
+
+
+
+
+              })
+
+
+
+
+            } catch (error: any) {
+
+
+
+
+              // Si el refresh token est� expirado o es inv�lido, el servidor devuelve 401
+
+
+
+
+              if (error.response?.status === 401 || error.response?.status === 400) {
+
+
+
+
+                throw new Error('Refresh token inv�lido o expirado')
+
+
+
+
+              }
+
+
+
+
+              // Para otros errores (red, timeout, etc.), propagar el error
+
+
+
+
+              throw error
+
+
+
+
+            }
+
+
+
+
+
+
+
+
+
+            // Verificar si la respuesta es v�lida
+
+
+
+
+            if (!response || !response.data || !response.data.access_token) {
+
+
+
+
+              throw new Error('Refresh token inv�lido o expirado')
+
+
+
+
+            }
+
+
+
+
+
+
+
+
+
+            const { access_token, refresh_token: newRefreshToken } = response.data
+
+
+
+
+
+
+
+
+
+            // Guardar en el almacenamiento correspondiente usando funciones seguras
+
+
+
+
+            if (rememberMe) {
+
+
+
+
+              safeSetItem('access_token', access_token)
+
+
+
+
+              safeSetItem('refresh_token', newRefreshToken)
+
+
+
+
+            } else {
+
+
+
+
+              safeSetSessionItem('access_token', access_token)
+
+
+
+
+              safeSetSessionItem('refresh_token', newRefreshToken)
+
+
+
+
+            }
+
+
+
+
+
+
+
+
+
+            // Procesar todas las peticiones en cola
+
+
+
+
+            this.processQueue(null, access_token)
+
+
+
+
+
+
+
+
+
+            // Reintentar la petici�n original
+
+
+
+
+            originalRequest.headers.Authorization = `Bearer ${access_token}`
+
+
+
+
+            return this.client(originalRequest)
+
+
+
+
+          } catch (refreshError: any) {
+
+
+
+
+            // ? Marcar que el refresh token est� expirado para cancelar requests futuros
+
+
+
+
+            this.refreshTokenExpired = true
+
+
+
+
+
+
+
+
+
+            // ? Cancelar todos los requests pendientes
+
+
+
+
+            this.cancelAllPendingRequests()
+
+
+
+
+
+
+
+
+
+            // Si no se puede renovar el token, limpiar datos y redirigir al login
+
+
+
+
+            this.processQueue(refreshError, null)
+
+
+
+
+            clearAuthStorage()
+
+
+
+
+
+
+
+
+
+            // Evitar mostrar toasts durante el redirect
+
+
+
+
+            const isAlreadyRedirecting = window.location.pathname === LOGIN_PATH || this.isRedirectingToLogin
+
+
+
+
+
+
+
+
+
+            if (!isAlreadyRedirecting) {
+
+
+
+
+              this.isRedirectingToLogin = true
+
+
+
+
+
+
+
+
+
+              // Log para debugging (solo en desarrollo)
+
+
+
+
+              if (process.env.NODE_ENV === 'development') {
+
+
+
+
+                console.warn('? Refresh token fall�. Redirigiendo al login...', refreshError)
+
+
+
+
+              }
+
+
+
+
+
+
+
+
+
+              // ? Redirigir inmediatamente sin delay para evitar m�s requests (respeta BASE_PATH)
+
+
+
+
+              window.location.replace(LOGIN_PATH)
+
+
+
+
+            }
+
+
+
+
+
+
+
+
+
+            return Promise.reject(refreshError)
+
+
+
+
+          } finally {
+
+
+
+
+            this.isRefreshing = false
+
+
+
+
+          }
+
+
+
+
+        }
+
+
+
+
+
+
+
+
+
+        // Manejar otros errores - pero no mostrar toast si estamos redirigiendo al login
+
+
+
+
+        if (!this.isRedirectingToLogin) {
+
+
+
+
+          this.handleError(error)
+
+
+
+
+        }
+
+
+
+
+        return Promise.reject(error)
+
+
+
+
+      }
+
+
+
+
+    )
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+  private processQueue(error: any, token: string | null) {
+
+
+
+
+    this.failedQueue.forEach((prom) => {
+
+
+
+
+      if (error) {
+
+
+
+
+        prom.reject(error)
+
+
+
+
+      } else if (token) {
+
+
+
+
+        prom.resolve(token)
+
+
+
+
+      } else {
+
+
+
+
+        prom.reject(new Error('Token no disponible despu�s del refresh'))
+
+
+
+
+      }
+
+
+
+
+    })
+
+
+
+
+    this.failedQueue = []
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+  // ? Cancelar todos los requests pendientes cuando el refresh token expira
+
+
+
+
+  private cancelAllPendingRequests() {
+
+
+
+
+    this.requestCancellers.forEach((controller, url) => {
+
+
+
+
+      try {
+
+
+
+
+        controller.abort()
+
+
+
+
+      } catch (error) {
+
+
+
+
+        // Ignorar errores al cancelar
+
+
+
+
+      }
+
+
+
+
+    })
+
+
+
+
+    this.requestCancellers.clear()
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+  // ? Resetear el flag cuando el usuario hace login exitosamente
+
+
+
+
+  resetRefreshTokenExpired() {
+
+
+
+
+    this.refreshTokenExpired = false
+
+
+
+
+    this.isRedirectingToLogin = false
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+  private handleError(error: unknown) {
+
+
+
+
+    if (!isAxiosError(error)) {
+
+
+
+
+      toast.error(getErrorMessage(error))
+
+
+
+
+      return
+
+
+
+
+    }
+
+
+
+
+    // No mostrar toast ni log para peticiones canceladas (p. ej. desmontaje o React Query)
+
+
+
+
+    const code = (error as any).code
+
+
+
+
+    const msg = error.message || ''
+
+
+
+
+    if (code === 'ERR_CANCELED' || msg.includes('Request aborted') || (error as any).isCancelled) {
+
+
+
+
+      return
+
+
+
+
+    }
+
+
+
+
+
+
+
+
+
+    if (error.response) {
+
+
+
+
+      // Error del servidor
+
+
+
+
+      const { status, data } = error.response
+
+
+
+
+      const responseData = data as { detail?: string | Array<{ loc?: string[]; msg?: string }>; message?: string } | undefined
+
+
+
+
+
+
+
+
+
+      // Evitar mostrar toast de 401 cuando est� siendo manejado por el interceptor
+
+
+
+
+      const isBeingHandledByInterceptor = (error.config as { _retry?: boolean } | undefined)?._retry !== undefined
+
+
+
+
+
+
+
+
+
+      switch (status) {
+
+
+
+
+        case 400:
+
+
+
+
+          // Error de validaci�n o cliente duplicado (misma c�dula y mismo nombre)
+
+
+
+
+          if (typeof responseData?.detail === 'string') {
+
+
+
+
+            toast.error(responseData.detail)
+
+
+
+
+          } else {
+
+
+
+
+            toast.error(responseData?.message || 'Error de validaci�n')
+
+
+
+
+          }
+
+
+
+
+          break
+
+
+
+
+        case 401:
+
+
+
+
+          // No mostrar toast si est� siendo manejado por el interceptor de refresh
+
+
+
+
+          if (!isBeingHandledByInterceptor) {
+
+
+
+
+            toast.error('Sesi�n expirada. Redirigiendo al inicio de sesi�n...')
+
+
+
+
+          }
+
+
+
+
+          break
+
+
+
+
+        case 403:
+
+
+
+
+          toast.error('Sin permisos para esta acci�n')
+
+
+
+
+          break
+
+
+
+
+        case 404:
+
+
+
+
+          toast.error('Recurso no encontrado')
+
+
+
+
+          break
+
+
+
+
+        case 409:
+
+
+
+
+          toast.error(responseData?.message || 'Conflicto de datos. Verifica la informaci�n.')
+
+
+
+
+          break
+
+
+
+
+        case 422:
+
+
+
+
+          // Errores de validaci�n
+
+
+
+
+          if (responseData?.detail && Array.isArray(responseData.detail)) {
+
+
+
+
+            responseData.detail.forEach((err: { loc?: string[]; msg?: string }) => {
+
+
+
+
+              toast.error(`${err.loc?.join(' ') || 'Campo'}: ${err.msg || 'Error de validaci�n'}`)
+
+
+
+
+            })
+
+
+
+
+          } else {
+
+
+
+
+            toast.error(responseData?.message || 'Error de validaci�n')
+
+
+
+
+          }
+
+
+
+
+          break
+
+
+
+
+        case 500:
+
+
+
+
+          // Mostrar el mensaje de error espec�fico del backend si est� disponible
+
+
+
+
+          const errorDetail = typeof responseData?.detail === 'string'
+
+
+
+
+            ? responseData.detail
+
+
+
+
+            : responseData?.message || 'Error interno del servidor'
+
+
+
+
+
+
+
+
+
+          // Logging detallado para diagn�stico
+
+
+
+
+          console.error('? [ApiClient] Error 500 del servidor:', {
+
+
+
+
+            detail: errorDetail,
+
+
+
+
+            message: responseData?.message,
+
+
+
+
+            url: error.config?.url,
+
+
+
+
+            method: error.config?.method,
+
+
+
+
+            status: error.response?.status,
+
+
+
+
+            fullError: error
+
+
+
+
+          })
+
+
+
+
+
+
+
+
+
+          // Mostrar toast con el mensaje del backend (ahora m�s espec�fico)
+
+
+
+
+          toast.error(errorDetail, { duration: 10000 })
+
+
+
+
+          break
+
+
+
+
+        case 503:
+
+
+
+
+          // NO mostrar toast gen�rico para errores 503 de duplicados
+
+
+
+
+          // Permitir que el componente maneje el error espec�fico
+
+
+
+
+          const detailStr = typeof responseData?.detail === 'string' ? responseData.detail : ''
+
+
+
+
+          const messageStr = responseData?.message || ''
+
+
+
+
+          if (detailStr.includes('duplicate key') || detailStr.includes('already exists') ||
+
+
+
+
+              detailStr.includes('violates unique constraint') || detailStr.includes('c�dula') ||
+
+
+
+
+              messageStr.includes('duplicate key') || messageStr.includes('already exists')) {
+
+
+
+
+            // No mostrar toast, dejar que el componente maneje el popup
+
+
+
+
+            return Promise.reject(error) // ? CORRECCI�N: Asegurar que se propague el error
+
+
+
+
+          } else {
+
+
+
+
+            toast.error('Servicio temporalmente no disponible. Intenta nuevamente.')
+
+
+
+
+          }
+
+
+
+
+          break
+
+
+
+
+        default:
+
+
+
+
+          if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+
+
+
+
+            toast.error('Tiempo de espera agotado. Verifica tu conexi�n.')
+
+
+
+
+          } else if (error.message?.includes('Network Error') || error.code === 'ERR_NETWORK') {
+
+
+
+
+            toast.error('Error de conexi�n. Verifica que el servidor est� funcionando.')
+
+
+
+
+          } else {
+
+
+
+
+            toast.error(responseData?.message || 'Error desconocido')
+
+
+
+
+          }
+
+
+
+
+      }
+
+
+
+
+    } else if (error.request) {
+
+
+
+
+      // Error de red - puede ser que el servidor est� reiniciando
+
+
+
+
+      const errorCode = (error as any).code || ''
+
+
+
+
+      const errorMessage = error.message || ''
+
+
+
+
+      if (errorCode === 'ERR_CANCELED' || errorMessage.includes('Request aborted')) {
+
+
+
+
+        return
+
+
+
+
+      }
+
+
+
+
+
+
+
+
+
+      // Log detallado para diagn�stico
+
+
+
+
+      console.error('? [ApiClient] Error de conexi�n:', {
+
+
+
+
+        url: error.config?.url,
+
+
+
+
+        method: error.config?.method,
+
+
+
+
+        baseURL: API_BASE_URL,
+
+
+
+
+        code: errorCode,
+
+
+
+
+        message: errorMessage,
+
+
+
+
+        requestId: (error.config as any)?.__requestId
+
+
+
+
+      })
+
+
+
+
+
+
+
+
+
+      // No mostrar toast para errores de conexi�n durante el inicio (servidor reiniciando)
+
+
+
+
+      // Estos errores son temporales y se resuelven autom�ticamente
+
+
+
+
+      if (
+
+
+
+
+        errorCode === 'ERR_NETWORK' ||
+
+
+
+
+        errorCode === 'ECONNREFUSED' ||
+
+
+
+
+        errorMessage.includes('Connection refused') ||
+
+
+
+
+        errorMessage.includes('NS_ERROR_CONNECTION_REFUSED')
+
+
+
+
+      ) {
+
+
+
+
+        // Solo loggear en consola, no mostrar toast (el usuario ver� el error si persiste)
+
+
+
+
+        console.warn('? Servidor no disponible temporalmente. Esto es normal durante reinicios.')
+
+
+
+
+        console.warn('   Verifica que el backend est� funcionando en:', API_BASE_URL || 'NO CONFIGURADO')
+
+
+
+
+        return
+
+
+
+
+      }
+
+
+
+
+
+
+
+
+
+      // Mensaje m�s descriptivo seg�n el tipo de error
+
+
+
+
+      let errorMsg = 'Error de conexi�n. Verifique su conexi�n a internet.'
+
+
+
+
+      if (errorCode === 'ECONNABORTED' || errorMessage.includes('timeout')) {
+
+
+
+
+        errorMsg = 'Tiempo de espera agotado. El servidor est� tardando demasiado en responder.'
+
+
+
+
+      } else if (errorCode === 'ERR_NETWORK') {
+
+
+
+
+        errorMsg = 'Error de red. Verifique que el servidor est� funcionando y su conexi�n a internet.'
+
+
+
+
+      }
+
+
+
+
+      
+
+
+
+
+      toast.error(errorMsg)
+
+
+
+
+    } else {
+
+
+
+
+      // Error de configuraci�n
+
+
+
+
+      toast.error('Error en la configuraci�n de la petici�n')
+
+
+
+
+    }
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+  // M�todos HTTP
+
+
+
+
+  async get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+
+
+
+
+    // Detectar endpoints lentos y usar timeout extendido (p. ej. Render tarda 3�5 s en fr�o)
+
+
+
+
+    const isSlowEndpoint = url.includes('/dashboard/') ||
+
+
+
+
+                          url.includes('/reportes/') ||
+
+
+
+
+                          url.includes('/notificaciones-previas') ||
+
+
+
+
+                          url.includes('/admin') ||
+
+
+
+
+                          url.includes('/evolucion') ||
+
+
+
+
+                          url.includes('/tendencia') ||
+
+
+
+
+                          url.includes('/ml-impago/modelos') ||
+
+
+
+
+                          url.includes('/ml-riesgo/modelos') ||
+
+
+
+
+                          url.includes('/ai/training/') ||
+
+
+
+
+                          url.includes('/cobranzas/') ||
+
+
+
+
+                          url.includes('/pagos/kpis') ||
+
+
+
+
+                          url.includes('/pagos/stats') ||
+
+
+
+
+                          url.includes('/revision-manual/')  // Render cold start + consulta pesada
+
+
+
+
+
+
+
+
+
+    // ? Timeout especial para revision-manual (Render cold start + BD)
+
+
+
+
+    const isRevisionManual = url.includes('/revision-manual/')
+
+
+
+
+    const revisionManualTimeout = 120000 // 120 segundos
+
+
+
+
+
+
+
+
+
+    // ? Timeout especial para reportes (Render cold start + consultas BD pesadas)
+
+
+
+
+    const isReportesDashboard = url.includes('/reportes/') && (url.includes('/dashboard/') || url.includes('/resumen'))
+
+
+
+
+    const reportesDashboardTimeout = 120000 // 120 segundos
+
+
+
+
+
+
+
+
+
+    // ? Timeout especial para clientes-atrasados que puede procesar muchos registros (2868+)
+
+
+
+
+    const isClientesAtrasados = url.includes('/cobranzas/clientes-atrasados')
+
+
+
+
+    const verySlowTimeout = 120000 // 120 segundos para endpoints muy pesados
+
+
+
+
+    
+
+
+
+
+    // ? Timeout extendido para tablas-campos que consulta toda la estructura de BD
+
+
+
+
+    const isTablasCampos = url.includes('/tablas-campos')
+
+
+
+
+    const tablasCamposTimeout = 90000 // 90 segundos para consulta de estructura completa de BD
+
+
+
+
+
+
+
+
+
+    let defaultTimeout = DEFAULT_TIMEOUT_MS
+
+
+
+
+    if (isRevisionManual) {
+
+
+
+
+      defaultTimeout = revisionManualTimeout
+
+
+
+
+    } else if (isReportesDashboard) {
+
+
+
+
+      defaultTimeout = reportesDashboardTimeout
+
+
+
+
+    } else if (isClientesAtrasados) {
+
+
+
+
+      defaultTimeout = verySlowTimeout
+
+
+
+
+    } else if (isTablasCampos) {
+
+
+
+
+      defaultTimeout = tablasCamposTimeout
+
+
+
+
+    } else if (isSlowEndpoint) {
+
+
+
+
+      defaultTimeout = SLOW_ENDPOINT_TIMEOUT_MS
+
+
+
+
+    }
+
+
+
+
+
+
+
+
+
+    // ? Priorizar timeout expl�cito si se proporciona, sino usar el calculado
+
+
+
+
+    const timeout = config?.timeout?? defaultTimeout
+
+
+
+
+    // ? Asegurar que el timeout se aplique correctamente
+
+
+
+
+    // Axios respeta el timeout en la configuraci�n del request sobre el del cliente
+
+
+
+
+    const finalConfig = { 
+
+
+
+
+      ...config, 
+
+
+
+
+      timeout,
+
+
+
+
+    }
+
+
+
+
+
+
+
+
+
+    const response: AxiosResponse<T> = await this.client.get(url, finalConfig)
+
+
+
+
+    return response.data
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+  async post<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+
+
+
+
+    try {
+
+
+
+
+      // Detectar endpoints lentos (entrenamiento ML, etc.) y usar timeout extendido
+
+
+
+
+      const isSlowEndpoint = url.includes('/ml-riesgo/entrenar') ||
+
+
+
+
+                            url.includes('/ml-impago/entrenar') ||
+
+
+
+
+                            url.includes('/fine-tuning/iniciar') ||
+
+
+
+
+                            url.includes('/rag/generar-embeddings') ||
+
+
+
+
+                            url.includes('/configuracion/ai/chat') ||
+
+
+
+
+                            url.includes('/prestamos/cedula/batch') || // Batch carga masiva: muchas c�dulas
+
+
+
+
+                            url.includes('/pagos/upload') || // Carga masiva pagos: puede tardar con muchas filas
+
+
+
+
+                            url.includes('/pagos/batch') || // POST batch pagos: muchas filas + validaciones
+
+
+
+
+                            url.includes('/pagos/gmail/run-now') ||
+
+
+
+
+                            url.includes('/clientes/check-emails') ||
+
+
+
+
+                            url.includes('/clientes/check-cedulas') // Pipeline Gmail: puede tardar si el backend es s�ncrono (credenciales OAuth)
+
+
+
+
+
+
+
+
+
+      const defaultTimeout = isSlowEndpoint
+
+
+
+
+        ? (url.includes('/prestamos/cedula/batch') ? 60000
+
+
+
+
+          : url.includes('/pagos/upload') ? 120000
+
+
+
+
+          : url.includes('/pagos/batch') ? 180000  // 3 min: Render frío + muchas filas
+
+
+
+
+          : url.includes('/pagos/gmail/run-now') ? 90000  // 90s: cubre credenciales OAuth + margen para backend s�ncrono viejo
+
+
+
+
+          : (url.includes('/clientes/check-emails') || url.includes('/clientes/check-cedulas')) ? 60000
+
+
+
+
+          : 300000)
+
+
+
+
+        : DEFAULT_TIMEOUT_MS
+
+
+
+
+      // Priorizar timeout expl�cito si se proporciona, sino usar el calculado
+
+
+
+
+      const timeout = config?.timeout?? defaultTimeout
+
+
+
+
+      const finalConfig = { ...config, timeout }
+
+
+
+
+
+
+
+
+
+      const response: AxiosResponse<T> = await this.client.post(url, data, finalConfig)
+
+
+
+
+
+
+
+
+
+      // Verificar si la respuesta es un error 4xx (validateStatus permite 4xx pero debemos manejarlos)
+
+
+
+
+      if (response.status >= 400 && response.status < 500) {
+
+
+
+
+        // 401 en login/refresh es esperado (credenciales incorrectas); solo log en desarrollo para no saturar consola
+
+
+
+
+        const isAuthFailure = response.status === 401 && (url.includes('/auth/login') || url.includes('/auth/refresh'))
+
+
+
+
+        if (isAuthFailure && process.env.NODE_ENV === 'development') {
+
+
+
+
+          console.warn('? [ApiClient] Login/refresh no autorizado (401):', url)
+
+
+
+
+        } else if (!isAuthFailure) {
+
+
+
+
+          const is409Pagos = response.status === 409 && url.includes('/pagos')
+
+
+
+
+          if (!is409Pagos) {
+
+
+
+
+            console.error('? [ApiClient] POST recibi� error 4xx:', { url, status: response.status, data: response.data })
+
+
+
+
+          }
+
+
+
+
+          // 409 en pagos: no loguear por cada fila (satura consola); la UI ya muestra toast/resumen
+
+
+
+
+        }
+
+
+
+
+        // Crear un error de Axios para que se maneje correctamente, preservando el mensaje del backend
+
+
+
+
+        const backendMessage = (response.data as any)?.detail || (response.data as any)?.message || `Request failed with status ${response.status}`
+
+
+
+
+        const error = new Error(backendMessage) as any
+
+
+
+
+        error.response = response
+
+
+
+
+        error.isAxiosError = true
+
+
+
+
+        error.code = `ERR_HTTP_${response.status}`
+
+
+
+
+        throw error
+
+
+
+
+      }
+
+
+
+
+
+
+
+
+
+      return response.data
+
+
+
+
+    } catch (error: any) {
+
+
+
+
+      const is409Pagos = error?.response?.status === 409 && url.includes('/pagos')
+
+
+
+
+      if (!is409Pagos) {
+
+
+
+
+        const status = error?.response?.status
+
+
+
+
+        const detail = error?.response?.data?.detail?? error?.response?.data?.message
+
+
+
+
+        console.error('? [ApiClient] POST error:', { url, status, detail: detail ? error?.message })
+
+
+
+
+      }
+
+
+
+
+      throw error
+
+
+
+
+    }
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+  async put<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+
+
+
+
+    console.log('? [ApiClient] PUT request:', { url, data: data ? '***' : '(vac�o)', config })
+
+
+
+
+    try {
+
+
+
+
+      const response: AxiosResponse<T> = await this.client.put(url, data, config)
+
+
+
+
+      console.log('? [ApiClient] PUT response:', { url, status: response.status, data: response.data })
+
+
+
+
+
+
+
+
+
+      // Verificar si la respuesta es un error 4xx (validateStatus permite 4xx pero debemos manejarlos)
+
+
+
+
+      if (response.status >= 400 && response.status < 500) {
+
+
+
+
+        console.error('? [ApiClient] PUT recibi� error 4xx:', { url, status: response.status, data: response.data })
+
+
+
+
+        // Crear un error de Axios para que se maneje correctamente
+
+
+
+
+        const error = new Error(`Request failed with status ${response.status}`) as any
+
+
+
+
+        error.response = response
+
+
+
+
+        error.isAxiosError = true
+
+
+
+
+        throw error
+
+
+
+
+      }
+
+
+
+
+
+
+
+
+
+      return response.data
+
+
+
+
+    } catch (error) {
+
+
+
+
+      console.error('? [ApiClient] PUT error:', { url, error })
+
+
+
+
+      throw error
+
+
+
+
+    }
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+  async patch<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+
+
+
+
+    const response: AxiosResponse<T> = await this.client.patch(url, data, config)
+
+
+
+
+    return response.data
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+  async delete<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+
+
+
+
+    const response: AxiosResponse<T> = await this.client.delete(url, config)
+
+
+
+
+
+
+
+
+
+    // Verificar si la respuesta es un error 4xx (validateStatus permite 4xx pero debemos manejarlos)
+
+
+
+
+    if (response.status >= 400 && response.status < 500) {
+
+
+
+
+      const backendMessage = (response.data as any)?.detail || (response.data as any)?.message || `Request failed with status ${response.status}`
+
+
+
+
+      const error = new Error(backendMessage) as any
+
+
+
+
+      error.response = response
+
+
+
+
+      error.isAxiosError = true
+
+
+
+
+      error.code = `ERR_HTTP_${response.status}`
+
+
+
+
+      throw error
+
+
+
+
+    }
+
+
+
+
+
+
+
+
+
+    return response.data
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+  // M�todo para subir archivos
+
+
+
+
+  async uploadFile<T>(
+
+
+
+
+    url: string,
+
+
+
+
+    file: File,
+
+
+
+
+    onUploadProgress?: (progressEvent: AxiosProgressEvent) => void
+
+
+
+
+  ): Promise<T> {
+
+
+
+
+    const formData = new FormData()
+
+
+
+
+    formData.append('file', file)
+
+
+
+
+
+
+
+
+
+    const response: AxiosResponse<T> = await this.client.post(url, formData, {
+
+
+
+
+      headers: {
+
+
+
+
+        'Content-Type': 'multipart/form-data',
+
+
+
+
+      },
+
+
+
+
+      onUploadProgress,
+
+
+
+
+    })
+
+
+
+
+
+
+
+
+
+    return response.data
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+  // M�todo para descargar archivos
+
+
+
+
+  async downloadFile(url: string, filename: string): Promise<void> {
+
+
+
+
+    const response = await this.client.get(url, {
+
+
+
+
+      responseType: 'blob',
+
+
+
+
+    })
+
+
+
+
+
+
+
+
+
+    const blob = new Blob([response.data])
+
+
+
+
+    const downloadUrl = window.URL.createObjectURL(blob)
+
+
+
+
+    const link = document.createElement('a')
+
+
+
+
+    link.href = downloadUrl
+
+
+
+
+    link.download = filename
+
+
+
+
+    document.body.appendChild(link)
+
+
+
+
+    link.click()
+
+
+
+
+    document.body.removeChild(link)
+
+
+
+
+    window.URL.revokeObjectURL(downloadUrl)
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+  // Obtener instancia de Axios para casos especiales
+
+
+
+
+  getAxiosInstance(): AxiosInstance {
+
+
+
+
+    return this.client
+
+
+
+
+  }
+
+
+
+
+
+
+
+
+
+  // FUNCI�N DE EMERGENCIA: Limpiar completamente el storage
+
+
+
+
+  emergencyClearStorage(): void {
+
+
+
+
+    try {
+
+
+
+
+      // Limpiar localStorage
+
+
+
+
+      safeClear()
+
+
+
+
+      // Limpiar sessionStorage
+
+
+
+
+      safeClearSession()
+
+
+
+
+      // Limpiar espec�ficamente tokens de auth
+
+
+
+
+      clearAuthStorage()
+
+
+
+
+    } catch (error) {
+
+
+
+
+      // Error silencioso para evitar loops de logging
+
+
+
+
+    }
+
+
+
+
+  }
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+// Instancia singleton del cliente API
+
+
+
+
+export const apiClient = new ApiClient()
+
+
+
+
+export default apiClient
+
+
+
+
+
+
+
+
+
+// FUNCI�N GLOBAL DE EMERGENCIA: Limpiar storage desde consola del navegador
+
+
+
+
+// Uso: window.clearAuthStorage() en la consola del navegador
+
+
+
+
+if (typeof window !== 'undefined') {
+
+
+
+
+  (window as Window & { clearAuthStorage?: () => void }).clearAuthStorage = () => {
+
+
+
+
+    apiClient.emergencyClearStorage()
+
+
+
+
+    window.location.reload()
+
+
+
+
+  }
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+// Tipos para respuestas de API
+
+
+
+
+export interface ApiResponse<T> {
+
+
+
+
+  data: T
+
+
+
+
+  message: string
+
+
+
+
+  success: boolean
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+export interface PaginatedResponse<T> {
+
+
+
+
+  data: T[]
+
+
+
+
+  total: number
+
+
+
+
+  page: number
+
+
+
+
+  per_page: number
+
+
+
+
+  total_pages: number
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+// Funciones de utilidad para construir URLs con par�metros
+
+
+
+
+export function buildUrl(baseUrl: string, params?: Record<string, any>): string {
+
+
+
+
+  if (!params) return baseUrl
+
+
+
+
+
+
+
+
+
+  const searchParams = new URLSearchParams()
+
+
+
+
+
+
+
+
+
+  Object.entries(params).forEach(([key, value]) => {
+
+
+
+
+    if (value !== undefined && value !== null && value !== '') {
+
+
+
+
+      if (Array.isArray(value)) {
+
+
+
+
+        value.forEach(v => searchParams.append(key, String(v)))
+
+
+
+
+      } else {
+
+
+
+
+        searchParams.append(key, String(value))
+
+
+
+
+      }
+
+
+
+
+    }
+
+
+
+
+  })
+
+
+
+
+
+
+
+
+
+  const queryString = searchParams.toString()
+
+
+
+
+  return queryString ? `${baseUrl}?${queryString}` : baseUrl
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+// Hook personalizado para manejar estados de carga
+
+
+
+
+export function useApiState() {
+
+
+
+
+  return {
+
+
+
+
+    loading: false,
+
+
+
+
+    error: null,
+
+
+
+
+    success: false,
+
+
+
+
+  }
+
+
+
+
+}
+
+
+
+
+
+
+
+
+

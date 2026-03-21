@@ -1,1485 +1,1485 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { notificacionService, NotificacionPlantilla, NotificacionVariable } from '../../services/notificacionService'
-import { NOTIFICACIONES_QUERY_KEYS } from '../../queries/notificaciones'
-import { Button } from '../../components/ui/button'
-import { Input } from '../../components/ui/input'
-import { Textarea } from '../../components/ui/textarea'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs'
-import { Badge } from '../../components/ui/badge'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
-import { toast } from 'sonner'
-import { Upload, Search, FileText, Database, ChevronDown, ChevronUp, Edit2, Trash2, Calendar, AlertCircle, Eye } from 'lucide-react'
-import { EditorPlantillaHTML } from './EditorPlantillaHTML'
-import { replaceBase64ImagesWithLogoUrl } from '../../utils/plantillaHtmlLogo'
-
-type EditorFocus = 'asunto' | 'encabezado' | 'cuerpo' | 'firma'
-
-interface PlantillasNotificacionesProps {
-  plantillaInicial?: NotificacionPlantilla | null
-  onPlantillaCargada?: () => void
-  /** Cuando el padre est? en la pesta?a "plantillas", se recargan las variables para integrar las creadas en Variables Personalizadas. */
-  tabSeccionActiva?: string
-}
-
-export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada, tabSeccionActiva }: PlantillasNotificacionesProps = {}) {
-  const queryClient = useQueryClient()
-  const { data: plantillas = [], isLoading: loading } = useQuery({
-    queryKey: NOTIFICACIONES_QUERY_KEYS.plantillas,
-    queryFn: () => notificacionService.listarPlantillas(undefined, false),
-    staleTime: 1 * 60 * 1000,
-    placeholderData: [] as NotificacionPlantilla[],
-  })
-  const [plantillasFiltradas, setPlantillasFiltradas] = useState<NotificacionPlantilla[]>([])
-  const [selected, setSelected] = useState<NotificacionPlantilla | null>(null)
-  const [busqueda, setBusqueda] = useState('')
-  const [filtroTipo, setFiltroTipo] = useState('')
-  const [filtroActiva, setFiltroActiva] = useState<boolean | null>(null)
-  const [activeTab, setActiveTab] = useState('armar')
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const [nombre, setNombre] = useState('')
-  const [tipo, setTipo] = useState('') // Mantener para compatibilidad con edici?n individual
-  const [tiposSeleccionados, setTiposSeleccionados] = useState<string[]>([]) // Para creaci?n m?ltiple
-  const [activa, setActiva] = useState(true)
-  const [asunto, setAsunto] = useState('')
-  const [encabezado, setEncabezado] = useState('')
-  const [cuerpo, setCuerpo] = useState('')
-  const [firma, setFirma] = useState('')
-  const [variable, setVariable] = useState('')
-  const [focus, setFocus] = useState<EditorFocus>('cuerpo')
-  const [variablesConfiguradas, setVariablesConfiguradas] = useState<NotificacionVariable[]>([])
-  const [mostrarVariables, setMostrarVariables] = useState(true) // Por defecto visible
-  const [busquedaVariable, setBusquedaVariable] = useState('')
-  const [filtroTablaVariable, setFiltroTablaVariable] = useState<string>('') // Filtro por tabla
-  const asuntoRef = useRef<HTMLTextAreaElement | HTMLInputElement>(null)
-  const encRef = useRef<HTMLTextAreaElement>(null)
-  const cuerpoRef = useRef<HTMLTextAreaElement>(null)
-  const firmaRef = useRef<HTMLTextAreaElement>(null)
-
-  const cuerpoFinal = useMemo(() => {
-    const parts = [encabezado, cuerpo, firma].filter(Boolean)
-    return replaceBase64ImagesWithLogoUrl(parts.join('\n\n'))
-  }, [encabezado, cuerpo, firma])
-
-  /** Variables que el sistema sustituye al enviar (sin burocracia de tablas/BD). Insertar en asunto/cuerpo. */
-  const VARIABLES_NOTIFICACION = [
-    { key: 'nombre', label: 'Nombre' },
-    { key: 'cedula', label: 'C?dula' },
-    { key: 'fecha_vencimiento', label: 'Fecha venc.' },
-    { key: 'numero_cuota', label: 'N? cuota' },
-    { key: 'monto', label: 'Monto' },
-    { key: 'dias_atraso', label: 'D?as atraso' },
-  ]
-
-  // Tipos organizados por categor?as
-  const tiposPorCategoria = {
-    antes: [
-      { valor: 'PAGO_5_DIAS_ANTES', label: '5 d?as antes' },
-      { valor: 'PAGO_3_DIAS_ANTES', label: '3 d?as antes' },
-      { valor: 'PAGO_1_DIA_ANTES', label: '1 d?a antes' },
-    ],
-    diaPago: [
-      { valor: 'PAGO_DIA_0', label: 'D?a de pago' },
-    ],
-    retraso: [
-      { valor: 'PAGO_1_DIA_ATRASADO', label: '1 d?a de retraso' },
-      { valor: 'PAGO_3_DIAS_ATRASADO', label: '3 d?as de retraso' },
-      { valor: 'PAGO_5_DIAS_ATRASADO', label: '5 d?as de retraso' },
-    ],
-    prejudicial: [
-      { valor: 'PREJUDICIAL', label: 'Prejudicial' },
-    ],
-    mora61: [
-      { valor: 'MORA_90', label: '90+ d?as de mora (moroso)' },
-    ],
-    cobranza: [
-      { valor: 'COBRANZA', label: 'Carta de cobranza' },
-    ],
-  }
-
-  const tiposSugeridos = [
-    'PAGO_5_DIAS_ANTES', 'PAGO_3_DIAS_ANTES', 'PAGO_1_DIA_ANTES', 'PAGO_DIA_0',
-    'PAGO_1_DIA_ATRASADO', 'PAGO_3_DIAS_ATRASADO', 'PAGO_5_DIAS_ATRASADO', 'PREJUDICIAL', 'MORA_90', 'COBRANZA'
-  ]
-
-  const todosLosTipos = [
-    ...tiposPorCategoria.antes,
-    ...tiposPorCategoria.diaPago,
-    ...tiposPorCategoria.retraso,
-    ...tiposPorCategoria.prejudicial,
-    ...tiposPorCategoria.mora61,
-    ...(tiposPorCategoria.cobranza || []),
-  ]
-
-  /** Variables para plantilla de cobranza: {{TABLA.CAMPO}} y bloque {{#CUOTAS.VENCIMIENTOS}}. Ver docs/PLANTILLA_COBRANZA_ANALISIS_Y_MECANISMOS.md */
-  const VARIABLES_COBRANZA = [
-    { key: 'CLIENTES.TRATAMIENTO', label: 'Tratamiento' },
-    { key: 'CLIENTES.NOMBRE_COMPLETO', label: 'Nombre completo' },
-    { key: 'PRESTAMOS.ID', label: 'N? cr?dito' },
-    { key: 'FECHA_CARTA', label: 'Fecha carta' },
-    { key: 'LOGO_URL', label: 'URL del logo (se rellena al enviar)' },
-  ]
-  const BLOQUE_CUOTAS_VENCIDAS = `{{#CUOTAS.VENCIMIENTOS}}
-  ? Cuota N? {{CUOTA.NUMERO}} con vencimiento: {{CUOTA.FECHA_VENCIMIENTO}} ? Monto: {{CUOTA.MONTO}}
-{{/CUOTAS.VENCIMIENTOS}}`
-
-  const PLANTILLA_COBRANZA_ASUNTO = 'Recordatorio de cuotas pendientes - Rapi-Credit, C.A.'
-  /** Al cargar la plantilla se usa una URL de ejemplo; al enviar el correo el backend sustituye {{LOGO_URL}} por la URL p?blica del logo. */
-  const PLANTILLA_COBRANZA_CUERPO = `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Recordatorio de cobranza</title>
-</head>
-<body style="margin:0; padding:0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f8;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f4f6f8;">
-    <tr>
-      <td align="center" style="padding: 24px 16px;">
-        <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width: 600px; background: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow: hidden;">
-          <!-- Encabezado con logo -->
-          <tr>
-            <td style="background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); padding: 28px 32px; text-align: center;">
-              <img src="{{LOGO_URL}}" alt="RapiCredit" width="180" height="auto" style="display: inline-block; max-height: 56px; width: auto;" />
-            </td>
-          </tr>
-          <!-- Saludo -->
-          <tr>
-            <td style="padding: 28px 32px 24px 32px;">
-              <p style="margin: 0 0 16px 0; font-size: 16px; line-height: 1.6; color: #1a202c;">
-                Estimado {{CLIENTES.TRATAMIENTO}} <strong>{{CLIENTES.NOMBRE_COMPLETO}}</strong>,
-              </p>
-              <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #2d3748;">
-                Nos dirigimos a usted con el mayor respeto en nombre de <strong>Rapi-Credit, C.A.</strong>, con motivo del vencimiento de cuotas correspondientes a su cr?dito N? <strong>{{PRESTAMOS.ID}}</strong> vigente con nuestra empresa.
-              </p>
-              <p style="margin: 0 0 20px 0; font-size: 15px; line-height: 1.6; color: #2d3748;">
-                Seg?n nuestros registros al <strong>{{FECHA_CARTA}}</strong>, se encuentran pendientes de pago las siguientes cuotas:
-              </p>
-              <!-- Bloque cuotas -->
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin: 0 0 20px 0; border: 1px solid #e2e8f0; border-radius: 6px;">
-                <tr>
-                  <td style="padding: 12px 16px; background-color: #1e3a5f; color: #fff; font-size: 13px; font-weight: 600;">Detalle de cuotas pendientes</td>
-                </tr>
-                <tr>
-                  <td style="padding: 16px;">
-{{#CUOTAS.VENCIMIENTOS}}
-                    <p style="margin: 0 0 8px 0; font-size: 14px; color: #2d3748;">? Cuota N? {{CUOTA.NUMERO}} ? Vencimiento: {{CUOTA.FECHA_VENCIMIENTO}} ? Monto: {{CUOTA.MONTO}}</p>
-{{/CUOTAS.VENCIMIENTOS}}
-                  </td>
-                </tr>
-              </table>
-              <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #2d3748;">
-                Le recordamos que dichas cuotas forman parte del compromiso adquirido al momento de la aprobaci?n de su cr?dito, y su cancelaci?n oportuna contribuye significativamente a mantener su historial financiero en condiciones favorables.
-              </p>
-              <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #c53030; font-weight: 600;">
-                LE REMITIMOS LAS CUENTAS DONDE PUEDE REALIZAR SUS PAGOS. NO CONTAMOS CON ZELLE.
-              </p>
-              <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #2d3748;">
-                En virtud de lo anterior, le invitamos cordialmente a regularizar su situaci?n en un lapso no mayor a <strong>48 horas</strong>, realizando el pago de las cuotas adeudadas a trav?s de nuestros canales habituales.
-              </p>
-              <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #2b6cb0; font-weight: 600;">
-                SI YA HA EFECTUADO EL PAGO, LE AGRADECEMOS HACER CASO OMISO A ESTA COMUNICACI?N.
-              </p>
-              <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #2d3748;">
-                De lo contrario, le exhortamos a comunicarse con nosotros para coordinar una soluci?n adecuada y evitar medidas adicionales.
-              </p>
-              <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #2d3748;">
-                Nuestro objetivo es brindarle siempre un servicio confiable y accesible, por lo cual quedamos atentos para atender cualquier duda o inconveniente que desee plantear.
-              </p>
-              <p style="margin: 0 0 24px 0; font-size: 15px; line-height: 1.6; color: #2d3748;">
-                Agradeciendo de antemano su pronta atenci?n a esta solicitud, nos despedimos cordialmente.
-              </p>
-              <!-- Firma -->
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-top: 2px solid #e2e8f0; padding-top: 20px;">
-                <tr>
-                  <td>
-                    <p style="margin: 0 0 4px 0; font-size: 15px; font-weight: 600; color: #1e3a5f;">Atentamente,</p>
-                    <p style="margin: 0 0 4px 0; font-size: 14px; color: #2d3748;">Departamento de Cobranza</p>
-                    <p style="margin: 0 0 4px 0; font-size: 14px; font-weight: 600; color: #1e3a5f;">Rapi-Credit, C.A.</p>
-                    <p style="margin: 0; font-size: 12px; color: #718096;">Fecha de emisi?n: {{FECHA_CARTA}}</p>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-          <!-- Pie con color corporativo -->
-          <tr>
-            <td style="padding: 12px 32px; background-color: #1e3a5f; color: #a0aec0; font-size: 11px; text-align: center;">
-              Este correo es un recordatorio oficial de Rapi-Credit, C.A. Por favor no responda a este mensaje de forma autom?tica.
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`
-
-  const cargarPlantillaCobranzaPorDefecto = () => {
-    setTipo('COBRANZA')
-    setTiposSeleccionados(['COBRANZA'])
-    setAsunto(PLANTILLA_COBRANZA_ASUNTO)
-    setEncabezado('')
-    setCuerpo(PLANTILLA_COBRANZA_CUERPO)
-    setFirma('')
-    setNombre('Carta de cobranza')
-    toast.success('Plantilla de cobranza cargada. Revise y guarde.')
-  }
-
-  // Generar variables precargadas desde los campos de las tablas
-  const generarVariablesPrecargadas = (): NotificacionVariable[] => {
-    const CAMPOS_DISPONIBLES = {
-      clientes: [
-        { campo: 'id', descripcion: 'ID ?nico del cliente' },
-        { campo: 'cedula', descripcion: 'C?dula de identidad' },
-        { campo: 'nombres', descripcion: 'Nombres completos' },
-        { campo: 'telefono', descripcion: 'Tel?fono de contacto' },
-        { campo: 'email', descripcion: 'Correo electr?nico' },
-        { campo: 'direccion', descripcion: 'Direcci?n de residencia' },
-        { campo: 'fecha_nacimiento', descripcion: 'Fecha de nacimiento' },
-        { campo: 'ocupacion', descripcion: 'Ocupaci?n del cliente' },
-        { campo: 'estado', descripcion: 'Estado (ACTIVO, INACTIVO, FINALIZADO)' },
-        { campo: 'activo', descripcion: 'Estado activo (true/false)' },
-        { campo: 'fecha_registro', descripcion: 'Fecha de registro' },
-        { campo: 'fecha_actualizacion', descripcion: 'Fecha de ?ltima actualizaci?n' },
-        { campo: 'usuario_registro', descripcion: 'Usuario que registr?' },
-        { campo: 'notas', descripcion: 'Notas adicionales' },
-      ],
-      prestamos: [
-        { campo: 'id', descripcion: 'ID del pr?stamo' },
-        { campo: 'cliente_id', descripcion: 'ID del cliente' },
-        { campo: 'cedula', descripcion: 'C?dula del cliente' },
-        { campo: 'nombres', descripcion: 'Nombres del cliente' },
-        { campo: 'valor_activo', descripcion: 'Valor del activo (veh?culo)' },
-        { campo: 'total_financiamiento', descripcion: 'Monto total financiado' },
-        { campo: 'fecha_requerimiento', descripcion: 'Fecha requerida del pr?stamo' },
-        { campo: 'modalidad_pago', descripcion: 'Modalidad (MENSUAL, QUINCENAL, SEMANAL)' },
-        { campo: 'numero_cuotas', descripcion: 'N?mero total de cuotas' },
-        { campo: 'cuota_periodo', descripcion: 'Monto de cuota por per?odo' },
-        { campo: 'tasa_interes', descripcion: 'Tasa de inter?s (%)' },
-        { campo: 'fecha_base_calculo', descripcion: 'Fecha base para c?lculo' },
-        { campo: 'producto', descripcion: 'Producto financiero' },
-        { campo: 'concesionario', descripcion: 'Concesionario' },
-        { campo: 'analista', descripcion: 'Analista asignado' },
-        { campo: 'modelo_vehiculo', descripcion: 'Modelo del veh?culo' },
-        { campo: 'estado', descripcion: 'Estado del pr?stamo' },
-        { campo: 'usuario_proponente', descripcion: 'Usuario proponente' },
-        { campo: 'usuario_aprobador', descripcion: 'Usuario aprobador' },
-        { campo: 'fecha_registro', descripcion: 'Fecha de registro' },
-        { campo: 'fecha_aprobacion', descripcion: 'Fecha de aprobaci?n' },
-      ],
-      cuotas: [
-        { campo: 'id', descripcion: 'ID de la cuota' },
-        { campo: 'prestamo_id', descripcion: 'ID del pr?stamo' },
-        { campo: 'numero_cuota', descripcion: 'N?mero de cuota' },
-        { campo: 'fecha_vencimiento', descripcion: 'Fecha de vencimiento' },
-        { campo: 'fecha_pago', descripcion: 'Fecha de pago' },
-        { campo: 'monto_cuota', descripcion: 'Monto total de la cuota' },
-        { campo: 'monto_capital', descripcion: 'Monto de capital' },
-        { campo: 'monto_interes', descripcion: 'Monto de inter?s' },
-        { campo: 'saldo_capital_inicial', descripcion: 'Saldo capital inicial' },
-        { campo: 'saldo_capital_final', descripcion: 'Saldo capital final' },
-        { campo: 'capital_pagado', descripcion: 'Capital pagado' },
-        { campo: 'interes_pagado', descripcion: 'Inter?s pagado' },
-        { campo: 'mora_pagada', descripcion: 'Mora pagada' },
-        { campo: 'total_pagado', descripcion: 'Total pagado' },
-        { campo: 'capital_pendiente', descripcion: 'Capital pendiente' },
-        { campo: 'interes_pendiente', descripcion: 'Inter?s pendiente' },
-        { campo: 'dias_mora', descripcion: 'D?as de mora' },
-        { campo: 'monto_mora', descripcion: 'Monto de mora' },
-        { campo: 'tasa_mora', descripcion: 'Tasa de mora (%)' },
-        { campo: 'dias_morosidad', descripcion: 'D?as de morosidad' },
-        { campo: 'monto_morosidad', descripcion: 'Monto de morosidad' },
-        { campo: 'estado', descripcion: 'Estado de la cuota' },
-      ],
-      pagos: [
-        { campo: 'id', descripcion: 'ID del pago' },
-        { campo: 'cedula', descripcion: 'C?dula del cliente' },
-        { campo: 'prestamo_id', descripcion: 'ID del pr?stamo' },
-        { campo: 'numero_cuota', descripcion: 'N?mero de cuota' },
-        { campo: 'fecha_pago', descripcion: 'Fecha de pago' },
-        { campo: 'fecha_registro', descripcion: 'Fecha de registro' },
-        { campo: 'monto_pagado', descripcion: 'Monto pagado' },
-        { campo: 'numero_documento', descripcion: 'N?mero de documento' },
-        { campo: 'institucion_bancaria', descripcion: 'Instituci?n bancaria' },
-        { campo: 'estado', descripcion: 'Estado del pago' },
-        { campo: 'conciliado', descripcion: 'Si est? conciliado' },
-        { campo: 'fecha_conciliacion', descripcion: 'Fecha de conciliaci?n' },
-      ],
-    }
-
-    const variablesPrecargadas: NotificacionVariable[] = []
-
-    Object.entries(CAMPOS_DISPONIBLES).forEach(([tabla, campos]) => {
-      campos.forEach(({ campo, descripcion }) => {
-        // Generar nombre de variable: tabla_campo (ej: cliente_nombres, cuota_monto_cuota)
-        const nombreVariable = `${tabla.slice(0, tabla.length - 1)}_${campo}` // Remover 's' final
-
-        variablesPrecargadas.push({
-          id: undefined, // Variables precargadas no tienen ID
-          nombre_variable: nombreVariable,
-          tabla: tabla,
-          campo_bd: campo,
-          descripcion: descripcion,
-          activa: true,
-        } as NotificacionVariable)
-      })
-    })
-
-    return variablesPrecargadas
-  }
-
-  const cargarVariables = async () => {
-    try {
-      const vars = await notificacionService.listarVariables(true) // Solo variables activas
-      const variablesUsuario = vars || []
-
-      // Generar variables precargadas y combinarlas con las del usuario
-      const variablesPrecargadas = generarVariablesPrecargadas()
-
-      // Combinar: las variables del usuario tienen prioridad (por nombre_variable)
-      const nombresVariablesUsuario = new Set(variablesUsuario.map(v => v.nombre_variable))
-      const variablesPrecargadasFiltradas = variablesPrecargadas.filter(
-        v => !nombresVariablesUsuario.has(v.nombre_variable)
-      )
-
-      // Combinar ambas listas
-      const todasLasVariables = [...variablesUsuario, ...variablesPrecargadasFiltradas]
-      setVariablesConfiguradas(todasLasVariables)
-    } catch (error: any) {
-      // Si falla, usar solo variables precargadas
-      const variablesPrecargadas = generarVariablesPrecargadas()
-      setVariablesConfiguradas(variablesPrecargadas)
-    }
-  }
-
-  useEffect(() => {
-    cargarVariables()
-  }, [])
-
-  // Recargar variables cuando el usuario vuelve a la pesta?a Plantillas (tras crear/editar en Variables Personalizadas)
-  useEffect(() => {
-    if (tabSeccionActiva === 'plantillas') {
-      cargarVariables()
-    }
-  }, [tabSeccionActiva])
-
-  // Cargar plantilla inicial si se proporciona (para edici?n desde Resumen)
-  useEffect(() => {
-    if (plantillaInicial && plantillas.length > 0) {
-      // Buscar la plantilla en la lista cargada para asegurar que est? actualizada
-      const plantillaEncontrada = plantillas.find(p => p.id === plantillaInicial.id)
-      const plantillaACargar = plantillaEncontrada || plantillaInicial
-
-      setSelected(plantillaACargar)
-      setNombre(plantillaACargar.nombre)
-      setTipo(plantillaACargar.tipo)
-      setTiposSeleccionados([plantillaACargar.tipo])
-      setActiva(Boolean(plantillaACargar.activa))
-      setAsunto(plantillaACargar.asunto)
-      setEncabezado('')
-      setCuerpo(plantillaACargar.cuerpo)
-      setFirma('')
-
-      // Cambiar a la pesta?a de armar plantilla
-      setActiveTab('armar')
-
-      // Notificar que la plantilla fue cargada
-      if (onPlantillaCargada) {
-        onPlantillaCargada()
-      }
-    }
-  }, [plantillaInicial, plantillas, onPlantillaCargada])
-
-  // Filtrar plantillas
-  useEffect(() => {
-    let filtradas = [...plantillas]
-
-    if (busqueda) {
-      filtradas = filtradas.filter(p =>
-        p.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-        p.tipo.toLowerCase().includes(busqueda.toLowerCase()) ||
-        p.asunto?.toLowerCase().includes(busqueda.toLowerCase())
-      )
-    }
-
-    if (filtroTipo) {
-      filtradas = filtradas.filter(p => p.tipo === filtroTipo)
-    }
-
-    if (filtroActiva !== null) {
-      filtradas = filtradas.filter(p => Boolean(p.activa) === filtroActiva)
-    }
-
-    setPlantillasFiltradas(filtradas)
-  }, [plantillas, busqueda, filtroTipo, filtroActiva])
-
-  const limpiar = () => {
-    setSelected(null)
-    setNombre('')
-    setTipo('')
-    setTiposSeleccionados([])
-    setActiva(true)
-    setAsunto('')
-    setEncabezado('')
-    setCuerpo('')
-    setFirma('')
-  }
-
-  const seleccionar = (p: NotificacionPlantilla) => {
-    setSelected(p)
-    setNombre(p.nombre)
-    setTipo(p.tipo)
-    setTiposSeleccionados([p.tipo]) // Al editar, solo un tipo
-    setActiva(Boolean(p.activa))
-    setAsunto(p.asunto)
-    setEncabezado('')
-    setCuerpo(replaceBase64ImagesWithLogoUrl(p.cuerpo || ''))
-    setFirma('')
-  }
-
-  const toggleTipo = (tipoValor: string) => {
-    setTiposSeleccionados(prev => {
-      if (prev.includes(tipoValor)) {
-        return prev.filter(t => t !== tipoValor)
-      } else {
-        return [...prev, tipoValor]
-      }
-    })
-  }
-
-  const seleccionarTodos = () => {
-    setTiposSeleccionados(todosLosTipos.map(t => t.valor))
-  }
-
-  const deseleccionarTodos = () => {
-    setTiposSeleccionados([])
-  }
-
-  const insertarVariable = (nombreVariable?: string) => {
-    const varName = nombreVariable || variable
-    if (!varName) return
-    const token = `{{${varName}}}`
-    const insertInto = (el: HTMLTextAreaElement | HTMLInputElement | null, setter: (v: string) => void, current: string) => {
-      if (!el) {
-        setter(current + token)
-        return
-      }
-      const start = (el as any).selectionStart ? current.length
-      const end = (el as any).selectionEnd ? current.length
-      const next = current.slice(0, start) + token + current.slice(end)
-      setter(next)
-      setTimeout(() => {
-        try {
-          (el as any).focus()
-          ;(el as any).setSelectionRange(start + token.length, start + token.length)
-        } catch {}
-      }, 0)
-    }
-
-    if (focus === 'asunto') return insertInto(asuntoRef.current, setAsunto, asunto)
-    if (focus === 'encabezado') return insertInto(encRef.current, setEncabezado, encabezado)
-    if (focus === 'cuerpo') return insertInto(cuerpoRef.current, setCuerpo, cuerpo)
-    if (focus === 'firma') return insertInto(firmaRef.current, setFirma, firma)
-  }
-
-  const variablesFiltradas = useMemo(() => {
-    let filtradas = variablesConfiguradas
-
-    // Filtrar por tabla
-    if (filtroTablaVariable) {
-      filtradas = filtradas.filter(v => v.tabla === filtroTablaVariable)
-    }
-
-    // Filtrar por b?squeda
-    if (busquedaVariable) {
-      filtradas = filtradas.filter(v =>
-        v.nombre_variable.toLowerCase().includes(busquedaVariable.toLowerCase()) ||
-        (v.descripcion ? '').toLowerCase().includes(busquedaVariable.toLowerCase()) ||
-        v.tabla.toLowerCase().includes(busquedaVariable.toLowerCase()) ||
-        v.campo_bd.toLowerCase().includes(busquedaVariable.toLowerCase())
-      )
-    }
-
-    return filtradas
-  }, [variablesConfiguradas, busquedaVariable, filtroTablaVariable])
-
-  // Agrupar variables por tabla
-  const variablesPorTabla = useMemo(() => {
-    const agrupadas: Record<string, NotificacionVariable[]> = {}
-    variablesFiltradas.forEach(v => {
-      if (!agrupadas[v.tabla]) {
-        agrupadas[v.tabla] = []
-      }
-      agrupadas[v.tabla].push(v)
-    })
-    return agrupadas
-  }, [variablesFiltradas])
-
-  // Obtener tablas ?nicas
-  const tablasUnicas = useMemo(() => {
-    return Array.from(new Set(variablesConfiguradas.map(v => v.tabla))).sort()
-  }, [variablesConfiguradas])
-
-
-  const aplicarFormato = (tag: 'b' | 'i' | 'u' | 'ul' | 'a') => {
-    const wrap = (el: HTMLTextAreaElement | null, setter: (v: string) => void, current: string) => {
-      if (!el) return
-      const start = el.selectionStart ? 0
-      const end = el.selectionEnd ? 0
-      const selected = current.slice(start, end)
-      let before = '', after = ''
-      if (tag === 'a') {
-        before = '<a href="https://">'
-        after = '</a>'
-      } else if (tag === 'ul') {
-        const lines = selected || 'Elemento 1\nElemento 2'
-        const wrapped = lines.split('\n').map(l => `<li>${l || 'Elemento'}</li>`).join('\n')
-        const next = current.slice(0, start) + `<ul>\n${wrapped}\n</ul>` + current.slice(end)
-        setter(next)
-        return
-      } else {
-        before = `<${tag}>`
-        after = `</${tag}>`
-      }
-      const next = current.slice(0, start) + before + (selected || 'texto') + after + current.slice(end)
-      setter(next)
-      setTimeout(() => {
-        try { el.focus() } catch {}
-      }, 0)
-    }
-    if (focus === 'encabezado') return wrap(encRef.current, setEncabezado, encabezado)
-    if (focus === 'cuerpo') return wrap(cuerpoRef.current, setCuerpo, cuerpo)
-    if (focus === 'firma') return wrap(firmaRef.current, setFirma, firma)
-    if (focus === 'asunto') return // no aplicar html al asunto
-  }
-
-  const guardar = async () => {
-    // Si estamos editando una plantilla existente, guardar solo esa
-    if (selected?.id) {
-      if (!nombre.trim() || !asunto.trim() || !cuerpoFinal.trim()) {
-        toast.error('Complete todos los campos obligatorios')
-        return
-      }
-      if (tiposSeleccionados.length === 0) {
-        toast.error('Seleccione al menos un caso para esta plantilla')
-        return
-      }
-      const tipoActual = selected.tipo
-      try {
-        await notificacionService.actualizarPlantilla(selected.id, { nombre, tipo: tipoActual, asunto, cuerpo: cuerpoFinal, activa })
-        toast.success('Plantilla actualizada exitosamente')
-        const otrosTipos = tiposSeleccionados.filter(t => t !== tipoActual)
-        for (const tipoOtro of otrosTipos) {
-          try {
-            const nombrePlantilla = `${nombre} - ${todosLosTipos.find(t => t.valor === tipoOtro)?.label || tipoOtro}`
-            await notificacionService.crearPlantilla({ nombre: nombrePlantilla, tipo: tipoOtro, asunto, cuerpo: cuerpoFinal, activa })
-          } catch (err) {
-            toast.error('Error al crear copia para otro caso')
-          }
-        }
-        if (otrosTipos.length > 0) toast.success(`Se crearon ${otrosTipos.length} plantilla(s) para los otros casos`) 
-        await queryClient.invalidateQueries({ queryKey: NOTIFICACIONES_QUERY_KEYS.plantillas })
-        limpiar()
-        // Cambiar a la pesta?a de resumen despu?s de guardar
-        setActiveTab('resumen')
-      } catch (error: any) {
-        toast.error(error?.response?.data?.detail || 'Error al guardar plantilla')
-      }
-      return
-    }
-
-    // Si estamos creando nuevas plantillas, validar tipos seleccionados
-    if (tiposSeleccionados.length === 0) {
-      toast.error('Seleccione al menos un tipo de notificaci?n')
-      return
-    }
-
-    if (!nombre.trim() || !asunto.trim() || !cuerpoFinal.trim()) {
-      toast.error('Complete todos los campos obligatorios')
-      return
-    }
-
-    try {
-      // Crear una plantilla para cada tipo seleccionado
-      const plantillasCreadas: string[] = []
-      const erroresCreacion: string[] = []
-
-      for (const tipoSeleccionado of tiposSeleccionados) {
-        try {
-          const nombrePlantilla = `${nombre} - ${todosLosTipos.find(t => t.valor === tipoSeleccionado)?.label || tipoSeleccionado}`
-
-          const payload = {
-            nombre: nombrePlantilla,
-            tipo: tipoSeleccionado,
-            asunto,
-            cuerpo: cuerpoFinal,
-            activa,
-          }
-
-          await notificacionService.crearPlantilla(payload)
-          plantillasCreadas.push(tipoSeleccionado)
-        } catch (error: any) {
-          erroresCreacion.push(`${tipoSeleccionado}: ${error?.response?.data?.detail || 'Error'}`)
-        }
-      }
-
-      if (plantillasCreadas.length > 0) {
-        toast.success(`Se crearon ${plantillasCreadas.length} plantilla(s) exitosamente`)
-        // Cambiar a la pesta?a de resumen despu?s de guardar
-        setActiveTab('resumen')
-      }
-
-      if (erroresCreacion.length > 0) {
-        toast.error(`Errores al crear algunas plantillas: ${erroresCreacion.join(', ')}`)
-      }
-
-      await queryClient.invalidateQueries({ queryKey: NOTIFICACIONES_QUERY_KEYS.plantillas })
-      limpiar()
-    } catch (error: any) {
-      toast.error(error?.response?.data?.detail || 'Error al guardar plantillas')
-    }
-  }
-
-  const eliminar = async () => {
-    if (!selected?.id) {
-      toast.error('Seleccione una plantilla para eliminar')
-      return
-    }
-
-    if (!window.confirm(`?Eliminar plantilla "${selected.nombre}"?`)) return
-
-    try {
-      await notificacionService.eliminarPlantilla(selected.id)
-      toast.success('Plantilla eliminada exitosamente')
-      limpiar()
-      await queryClient.invalidateQueries({ queryKey: NOTIFICACIONES_QUERY_KEYS.plantillas })
-    } catch (error: any) {
-      toast.error(error?.response?.data?.detail || 'Error al eliminar plantilla')
-    }
-  }
-
-  const exportar = async () => {
-    if (!selected?.id) {
-      toast.error('Seleccione una plantilla para exportar')
-      return
-    }
-
-    try {
-      const data = await notificacionService.exportarPlantilla(selected.id)
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `plantilla_${selected.nombre.replace(/[^a-z0-9]/gi, '_')}.json`
-      a.click()
-      URL.revokeObjectURL(url)
-      toast.success('Plantilla exportada exitosamente')
-    } catch (error: any) {
-      toast.error(error?.response?.data?.detail || 'Error al exportar plantilla')
-    }
-  }
-
-  const importar = () => {
-    fileInputRef.current?.click()
-  }
-
-  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    try {
-      const text = await file.text()
-      const data = JSON.parse(text)
-
-      if (!data.nombre || !data.tipo || !data.asunto || !data.cuerpo) {
-        toast.error('Archivo JSON inv?lido: faltan campos obligatorios')
-        return
-      }
-
-      setNombre(data.nombre)
-      setTipo(data.tipo)
-      setAsunto(data.asunto)
-      setCuerpo(data.cuerpo || '')
-      setEncabezado('')
-      setFirma('')
-      setActiva(Boolean(data.activa))
-      setSelected(null)
-      setActiveTab('armar')
-
-      toast.success('Plantilla importada. Revise y guarde cuando est? lista.')
-    } catch (error: any) {
-      toast.error('Error al leer el archivo JSON: ' + (error.message || 'Formato inv?lido'))
-    }
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ''
-    }
-  }
-
-  // Funciones para el resumen
-  const handleEditarDesdeResumen = (plantilla: NotificacionPlantilla) => {
-    seleccionar(plantilla)
-    setActiveTab('armar')
-  }
-
-  const handleEliminarDesdeResumen = async (plantilla: NotificacionPlantilla) => {
-    if (!window.confirm(`?Est? seguro de eliminar la plantilla "${plantilla.nombre}"?`)) {
-      return
-    }
-
-    try {
-      await notificacionService.eliminarPlantilla(plantilla.id)
-      toast.success('Plantilla eliminada exitosamente')
-      await queryClient.invalidateQueries({ queryKey: NOTIFICACIONES_QUERY_KEYS.plantillas })
-    } catch (error: any) {
-      toast.error(error?.response?.data?.detail || 'Error al eliminar plantilla')
-    }
-  }
-
-  const formatearFecha = (fecha: string | null | undefined) => {
-    if (!fecha) return '-'
-    try {
-      const date = new Date(fecha)
-      return date.toLocaleDateString('es-ES', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-    } catch {
-      return fecha
-    }
-  }
-
-  // Mapeo de tipos a categor?as y casos (para el resumen)
-  const mapeoTipos = {
-    'PAGO_5_DIAS_ANTES': { categoria: 'Notificaci?n Previa', caso: '5 d?as antes' },
-    'PAGO_3_DIAS_ANTES': { categoria: 'Notificaci?n Previa', caso: '3 d?as antes' },
-    'PAGO_1_DIA_ANTES': { categoria: 'Notificaci?n Previa', caso: '1 d?a antes' },
-    'PAGO_DIA_0': { categoria: 'D?a de Pago', caso: 'D?a de pago' },
-    'PAGO_1_DIA_ATRASADO': { categoria: 'Notificaci?n Retrasada', caso: '1 d?a de retraso' },
-    'PAGO_3_DIAS_ATRASADO': { categoria: 'Notificaci?n Retrasada', caso: '3 d?as de retraso' },
-    'PAGO_5_DIAS_ATRASADO': { categoria: 'Notificaci?n Retrasada', caso: '5 d?as de retraso' },
-    'PREJUDICIAL': { categoria: 'Prejudicial', caso: 'Prejudicial' },
-    'MORA_90': { categoria: 'Mora 90+', caso: '90+ d?as de mora (moroso)' },
-    'COBRANZA': { categoria: 'Cobranza', caso: 'Carta de cobranza' },
-  }
-
-  /** Orden de casos para el banco por caso (cada uno con su lista de plantillas) */
-  const ordenCasos: { tipo: string; label: string; borderColor: string }[] = [
-    { tipo: 'PAGO_5_DIAS_ANTES', label: 'Faltan 5 d?as', borderColor: 'border-blue-500' },
-    { tipo: 'PAGO_3_DIAS_ANTES', label: 'Faltan 3 d?as', borderColor: 'border-blue-400' },
-    { tipo: 'PAGO_1_DIA_ANTES', label: 'Falta 1 d?a', borderColor: 'border-blue-300' },
-    { tipo: 'PAGO_DIA_0', label: 'Hoy vence', borderColor: 'border-green-500' },
-    { tipo: 'PAGO_1_DIA_ATRASADO', label: '1 d?a de retraso', borderColor: 'border-amber-400' },
-    { tipo: 'PAGO_3_DIAS_ATRASADO', label: '3 d?as de retraso', borderColor: 'border-amber-500' },
-    { tipo: 'PAGO_5_DIAS_ATRASADO', label: '5 d?as de retraso', borderColor: 'border-amber-600' },
-    { tipo: 'PREJUDICIAL', label: 'Prejudicial', borderColor: 'border-red-500' },
-    { tipo: 'MORA_90', label: '90+ d?as de mora (moroso)', borderColor: 'border-slate-500' },
-    { tipo: 'COBRANZA', label: 'Carta de cobranza', borderColor: 'border-violet-500' },
-  ]
-
-  /** Banco por caso: plantillas agrupadas por tipo */
-  const plantillasPorCaso = useMemo(() => {
-    const porTipo: Record<string, NotificacionPlantilla[]> = {}
-    ordenCasos.forEach(({ tipo }) => { porTipo[tipo] = [] })
-    plantillasFiltradas.forEach(plantilla => {
-      if (porTipo[plantilla.tipo]) {
-        porTipo[plantilla.tipo].push(plantilla)
-      } else {
-        porTipo[plantilla.tipo] = [plantilla]
-      }
-    })
-    return porTipo
-  }, [plantillasFiltradas])
-
-  const categoriasOrden = [
-    { key: 'Notificaci?n Previa', color: 'blue', borderColor: 'border-blue-500', icon: '?' },
-    { key: 'D?a de Pago', color: 'green', borderColor: 'border-green-500', icon: '?' },
-    { key: 'Notificaci?n Retrasada', color: 'orange', borderColor: 'border-orange-500', icon: '?' },
-    { key: 'Prejudicial', color: 'red', borderColor: 'border-red-500', icon: '?' },
-    { key: 'Mora 90+', color: 'slate', borderColor: 'border-slate-500', icon: '?' },
-  ]
-
-  // Organizar plantillas por categor?a (para el resumen)
-  const plantillasPorCategoria = useMemo(() => {
-    const organizadas: Record<string, NotificacionPlantilla[]> = {}
-
-    plantillasFiltradas.forEach(plantilla => {
-      const mapeo = mapeoTipos[plantilla.tipo as keyof typeof mapeoTipos]
-      if (mapeo) {
-        const categoria = mapeo.categoria
-        if (!organizadas[categoria]) {
-          organizadas[categoria] = []
-        }
-        organizadas[categoria].push(plantilla)
-      }
-    })
-
-    // Ordenar plantillas dentro de cada categor?a por caso
-    Object.keys(organizadas).forEach(categoria => {
-      organizadas[categoria].sort((a, b) => {
-        const casoA = mapeoTipos[a.tipo as keyof typeof mapeoTipos]?.caso || ''
-        const casoB = mapeoTipos[b.tipo as keyof typeof mapeoTipos]?.caso || ''
-        return casoA.localeCompare(casoB)
-      })
-    })
-
-    return organizadas
-  }, [plantillasFiltradas])
-
-
-  const handleVistaPreviaHtml = () => {
-    const ejemplo: Record<string, string> = {
-      nombre: 'Juan P?rez',
-      cedula: 'V-12345678',
-      fecha_vencimiento: '15/03/2025',
-      numero_cuota: '3',
-      monto: '150.00',
-      dias_atraso: '2',
-      'CLIENTES.TRATAMIENTO': 'Sr.',
-      'CLIENTES.NOMBRE_COMPLETO': 'Juan P?rez',
-      'PRESTAMOS.ID': 'CR-2024-001',
-      FECHA_CARTA: new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }),
-      LOGO_URL: (typeof window !== 'undefined' && window.location.origin) ? `${window.location.origin}/logos/rapicredit-public.png` : '',
-    }
-    let html = cuerpoFinal || ''
-    if (!html.trim()) {
-      html = cuerpo || encabezado || firma || '<p>Sin contenido para previsualizar.</p>'
-    }
-    Object.entries(ejemplo).forEach(([key, val]) => {
-      const token = `{{${key}}}`
-      html = html.split(token).join(val)
-    })
-    html = html.replace(/\{\{#CUOTAS\.VENCIMIENTOS\}\}[\s\S]*?\{\{\/CUOTAS\.VENCIMIENTOS\}\}/g, '<p>Cuota N? 1 - Vencimiento: 10/01/2025 - Monto: 150.00</p><p>Cuota N? 2 - Vencimiento: 10/02/2025 - Monto: 150.00</p>')
-    // Siempre renderizar como HTML (encabezado, cuerpo y firma pueden contener c?digo HTML)
-    const doc = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Vista previa</title></head><body style="margin:0; padding:12px; font-family: sans-serif;">${html}</body></html>`
-    const blob = new Blob([doc], { type: 'text/html;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    window.open(url, '_blank', 'noopener,noreferrer')
-    setTimeout(() => URL.revokeObjectURL(url), 60000)
-    toast.success('Vista previa abierta en nueva pesta?a')
-  }
-
-  return (
-    <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-      <TabsList className="grid w-full grid-cols-3">
-        <TabsTrigger value="armar" className="flex items-center gap-2">
-          <FileText className="h-4 w-4" />
-          Armar plantilla
-        </TabsTrigger>
-        <TabsTrigger value="resumen" className="flex items-center gap-2">
-          <FileText className="h-4 w-4" />
-          Resumen
-        </TabsTrigger>
-        <TabsTrigger value="html-editor" className="flex items-center gap-2">
-          <FileText className="h-4 w-4" />
-          Editor HTML
-        </TabsTrigger>
-      </TabsList>
-
-      <TabsContent value="armar" className="space-y-4">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-lg font-semibold">Armar plantilla</h2>
-            <p className="text-sm text-gray-500">Elige el caso, escribe asunto y cuerpo, inserta variables y guarda. Luego as?gnala en Notificaciones ? Configuraci?n.</p>
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            <Button onClick={importar} variant="outline" size="sm" title="Importar plantilla">
-              <Upload className="h-4 w-4 mr-1" />
-              Importar
-            </Button>
-            <input ref={fileInputRef} type="file" accept=".json" onChange={handleImportFile} className="hidden" />
-            <Button onClick={cargarPlantillaCobranzaPorDefecto} variant="outline" size="sm" title="Cargar plantilla de cobranza con variables {{TABLA.CAMPO}} y bloque de cuotas">
-              <FileText className="h-4 w-4 mr-1" />
-              Cargar plantilla cobranza
-            </Button>
-            <Button onClick={limpiar} variant="secondary" size="sm">
-              Nueva plantilla
-            </Button>
-          </div>
-        </div>
-
-        <Card className="p-4 space-y-3">
-          <div className="grid grid-cols-1 gap-3">
-            <div>
-              <label className="text-sm text-gray-600">Nombre</label>
-              <Input value={nombre} onChange={e=>setNombre(e.target.value)} placeholder="Recordatorio de pago" />
-            </div>
-            <div className="border rounded-lg p-4 bg-gray-50 space-y-4">
-              <label className="text-sm font-medium text-gray-700 block">
-                Usar esta plantilla para (seleccione uno o m?s casos)
-              </label>
-              <p className="text-xs text-gray-500 mb-2">
-                Marque los casos en los que se usar? esta plantilla (ej. 1 d?a, 3 d?as y 5 d?as de retraso).
-              </p>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-gray-600">
-                  {tiposSeleccionados.length} caso(s) seleccionado(s)
-                </span>
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={seleccionarTodos}
-                        className="text-xs"
-                      >
-                        Seleccionar todos
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={deseleccionarTodos}
-                        className="text-xs"
-                      >
-                        Deseleccionar todos
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Antes de vencimiento */}
-                  <div>
-                    <h4 className="text-sm font-semibold mb-2 text-blue-700">Antes de Fecha de Vencimiento</h4>
-                    <div className="grid grid-cols-3 gap-2">
-                      {tiposPorCategoria.antes.map(t => (
-                        <label key={t.valor} className="flex items-center gap-2 p-2 border rounded hover:bg-white cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={tiposSeleccionados.includes(t.valor)}
-                            onChange={() => toggleTipo(t.valor)}
-                            className="rounded"
-                          />
-                          <span className="text-sm">{t.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* D?a de pago */}
-                  <div>
-                    <h4 className="text-sm font-semibold mb-2 text-green-700">D?a de Pago</h4>
-                    <div className="grid grid-cols-3 gap-2">
-                      {tiposPorCategoria.diaPago.map(t => (
-                        <label key={t.valor} className="flex items-center gap-2 p-2 border rounded hover:bg-white cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={tiposSeleccionados.includes(t.valor)}
-                            onChange={() => toggleTipo(t.valor)}
-                            className="rounded"
-                          />
-                          <span className="text-sm">{t.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Retraso */}
-                  <div>
-                    <h4 className="text-sm font-semibold mb-2 text-orange-700">D?as de Retraso</h4>
-                    <div className="grid grid-cols-3 gap-2">
-                      {tiposPorCategoria.retraso.map(t => (
-                        <label key={t.valor} className="flex items-center gap-2 p-2 border rounded hover:bg-white cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={tiposSeleccionados.includes(t.valor)}
-                            onChange={() => toggleTipo(t.valor)}
-                            className="rounded"
-                          />
-                          <span className="text-sm">{t.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Prejudicial */}
-                  <div>
-                    <h4 className="text-sm font-semibold mb-2 text-red-700">Prejudicial</h4>
-                    <div className="grid grid-cols-3 gap-2">
-                      {tiposPorCategoria.prejudicial.map(t => (
-                        <label key={t.valor} className="flex items-center gap-2 p-2 border rounded hover:bg-white cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={tiposSeleccionados.includes(t.valor)}
-                            onChange={() => toggleTipo(t.valor)}
-                            className="rounded"
-                          />
-                          <span className="text-sm">{t.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Mora 90+ */}
-                  {tiposPorCategoria.mora61 && (
-                    <div>
-                      <h4 className="text-sm font-semibold mb-2 text-slate-700">90+ d?as de mora (moroso)</h4>
-                      <div className="grid grid-cols-3 gap-2">
-                        {tiposPorCategoria.mora61.map(t => (
-                          <label key={t.valor} className="flex items-center gap-2 p-2 border rounded hover:bg-white cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={tiposSeleccionados.includes(t.valor)}
-                              onChange={() => toggleTipo(t.valor)}
-                              className="rounded"
-                            />
-                            <span className="text-sm">{t.label}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-            <div className="flex items-center gap-2">
-              <input id="activa" type="checkbox" checked={activa} onChange={e=>setActiva(e.target.checked)} />
-              <label htmlFor="activa" className="text-sm">Habilitar env?o autom?tico a las 3:00 AM</label>
-            </div>
-          </div>
-
-          {/* Variables listas para insertar: por tipo de plantilla */}
-          <div className="rounded-lg bg-blue-50 border border-blue-200 p-3">
-            <p className="text-xs font-semibold text-blue-900 mb-1">Insertar variable en asunto o cuerpo (clic en la variable):</p>
-            {(tipo === 'COBRANZA' || tiposSeleccionados.includes('COBRANZA')) ? (
-              <>
-                <p className="text-xs text-blue-700 mb-2">Plantilla de cobranza: use <code className="bg-white px-1 rounded">{"{{TABLA.CAMPO}}"}</code> y el bloque de cuotas vencidas. Datos desde clientes, pr?stamos y cuotas seg?n filtros de las pesta?as de Notificaciones.</p>
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {VARIABLES_COBRANZA.map(({ key, label }) => (
-                    <Button
-                      key={key}
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="bg-white border-blue-300 text-blue-800 hover:bg-blue-100 font-mono text-xs"
-                      onClick={() => {
-                        insertarVariable(key)
-                        toast.success(`{{${key}}} insertado`, { duration: 1200 })
-                      }}
-                    >
-                      {`{{${key}}}`}
-                    </Button>
-                  ))}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100 font-mono text-xs"
-                    onClick={() => {
-                      const insertInto = (el: HTMLTextAreaElement | HTMLInputElement | null, setter: (v: string) => void, current: string) => {
-                        if (!el && cuerpoRef.current) {
-                          setter(current + '\n' + BLOQUE_CUOTAS_VENCIDAS)
-                          return
-                        }
-                        const elTarget = (focus === 'cuerpo' ? cuerpoRef.current : focus === 'firma' ? firmaRef.current : focus === 'encabezado' ? encRef.current : null) as HTMLTextAreaElement | null
-                        const setterTarget = focus === 'cuerpo' ? setCuerpo : focus === 'firma' ? setFirma : setEncabezado
-                        const currentTarget = focus === 'cuerpo' ? cuerpo : focus === 'firma' ? firma : encabezado
-                        if (!elTarget) { setterTarget(currentTarget + '\n' + BLOQUE_CUOTAS_VENCIDAS); return }
-                        const start = elTarget.selectionStart ? currentTarget.length
-                        const end = elTarget.selectionEnd ? currentTarget.length
-                        const next = currentTarget.slice(0, start) + '\n' + BLOQUE_CUOTAS_VENCIDAS + currentTarget.slice(end)
-                        setterTarget(next)
-                      }
-                      insertInto(cuerpoRef.current, setCuerpo, cuerpo)
-                      setFocus('cuerpo')
-                      toast.success('Bloque de cuotas vencidas insertado', { duration: 2000 })
-                    }}
-                  >
-                    Insertar bloque: lista cuotas vencidas
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <>
-                <p className="text-xs text-blue-700 mb-2">Las variables de la pesta?a <strong>Variables Personalizadas</strong> aparecen abajo en el Banco de Variables y se copian aqu? al hacer clic.</p>
-                <div className="flex flex-wrap gap-2">
-                  {VARIABLES_NOTIFICACION.map(({ key, label }) => (
-                    <Button
-                      key={key}
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="bg-white border-blue-300 text-blue-800 hover:bg-blue-100 font-mono text-xs"
-                      onClick={() => {
-                        insertarVariable(key)
-                        toast.success(`{{${key}}} insertado`, { duration: 1200 })
-                      }}
-                    >
-                      {`{{${key}}}`}
-                    </Button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2">
-              <label className="text-sm text-gray-600">Asunto</label>
-              <Input ref={asuntoRef as any} value={asunto} onFocus={()=>setFocus('asunto')} onChange={e=>setAsunto(e.target.value)} placeholder="Asunto del correo" />
-            </div>
-            <div className="col-span-2">
-              <p className="text-xs text-gray-500 mb-1">Puede usar c?digo HTML en encabezado, cuerpo y firma. Use el bot?n ?Vista previa (datos de ejemplo)? para ver c?mo queda el resultado.</p>
-              <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">Formato r?pido (encabezado/cuerpo/firma):
-                <Button size="sm" variant="ghost" onClick={()=>aplicarFormato('b')}>B</Button>
-                <Button size="sm" variant="ghost" onClick={()=>aplicarFormato('i')}>I</Button>
-                <Button size="sm" variant="ghost" onClick={()=>aplicarFormato('u')}>U</Button>
-                <Button size="sm" variant="ghost" onClick={()=>aplicarFormato('ul')}>Lista</Button>
-                <Button size="sm" variant="ghost" onClick={()=>aplicarFormato('a')}>Enlace</Button>
-              </div>
-            </div>
-            <div>
-              <label className="text-sm text-gray-600">Encabezado (puede incluir HTML)</label>
-              <Textarea ref={encRef} value={encabezado} onFocus={()=>setFocus('encabezado')} onChange={e=>setEncabezado(e.target.value)} rows={4} placeholder="Encabezado (ej. <p>Texto</p>)" />
-            </div>
-            <div>
-              <label className="text-sm text-gray-600">Firma (puede incluir HTML)</label>
-              <Textarea ref={firmaRef} value={firma} onFocus={()=>setFocus('firma')} onChange={e=>setFirma(e.target.value)} rows={4} placeholder="Firma (ej. <p>Atentamente,</p>)" />
-            </div>
-            <div className="col-span-2">
-              <label className="text-sm text-gray-600">Cuerpo (puede incluir HTML)</label>
-              <Textarea ref={cuerpoRef} value={cuerpo} onFocus={()=>setFocus('cuerpo')} onChange={e=>setCuerpo(replaceBase64ImagesWithLogoUrl(e.target.value))} rows={10} placeholder="Contenido principal (ej. <p>Hola <b>{{nombre}}</b></p>)" />
-            </div>
-          </div>
-
-          {/* Panel de Variables Configuradas: incluye Variables Personalizadas (pesta?a hom?nima) */}
-          <div className="border-2 border-blue-200 rounded-lg p-4 bg-gradient-to-br from-blue-50 to-white shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Database className="h-5 w-5 text-blue-600" />
-                <label className="text-base font-bold text-gray-800">Banco de Variables</label>
-                <Badge variant="outline" className="text-xs bg-blue-100 text-blue-800 border-blue-300">
-                  {variablesConfiguradas.length} disponibles
-                </Badge>
-                <span className="text-xs text-gray-600">(incluye Variables Personalizadas)</span>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setMostrarVariables(!mostrarVariables)
-                  if (!mostrarVariables) {
-                    cargarVariables() // Recargar al abrir
-                  }
-                }}
-                className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-              >
-                {mostrarVariables ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              </Button>
-            </div>
-
-            {mostrarVariables && (
-              <div className="space-y-4">
-                {/* Filtros mejorados */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {/* Filtro por tabla */}
-                  <div>
-                    <label className="text-xs font-semibold text-gray-700 mb-1 block">Filtrar por tabla:</label>
-                    <select
-                      value={filtroTablaVariable}
-                      onChange={e => setFiltroTablaVariable(e.target.value)}
-                      className="w-full px-3 py-2 text-sm border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="">Todas las tablas</option>
-                      {tablasUnicas.map(tabla => (
-                        <option key={tabla} value={tabla}>{tabla}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* B?squeda de variables */}
-                  <div className="relative">
-                    <label className="text-xs font-semibold text-gray-700 mb-1 block">Buscar variable:</label>
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" style={{ top: '60%' }} />
-                    <Input
-                      value={busquedaVariable}
-                      onChange={e => setBusquedaVariable(e.target.value)}
-                      placeholder="Nombre, tabla o campo..."
-                      className="pl-10"
-                    />
-                  </div>
-                </div>
-
-                {/* Lista de variables agrupadas por tabla */}
-                {variablesConfiguradas.length === 0 ? (
-                  <div className="text-center py-8 text-sm text-gray-500 bg-white rounded-lg border-2 border-dashed border-gray-300">
-                    <Database className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                    <p className="font-medium">Cargando variables...</p>
-                  </div>
-                ) : variablesFiltradas.length === 0 ? (
-                  <div className="text-center py-8 text-sm text-gray-500 bg-white rounded-lg border-2 border-dashed border-gray-300">
-                    <p className="font-medium">No se encontraron variables con ese criterio.</p>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="mt-2"
-                      onClick={() => {
-                        setBusquedaVariable('')
-                        setFiltroTablaVariable('')
-                      }}
-                    >
-                      Limpiar filtros
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
-                    {Object.entries(variablesPorTabla).map(([tabla, variables]) => (
-                      <div key={tabla} className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm">
-                        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-200">
-                          <Badge variant="outline" className="text-xs font-semibold bg-gray-100 text-gray-700 border-gray-300">
-                            {tabla}
-                          </Badge>
-                          <span className="text-xs text-gray-500">{variables.length} variable{variables.length !== 1 ? 's' : ''}</span>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                          {variables.map(v => (
-                            <div
-                              key={v.id || v.nombre_variable}
-                              className="group border-2 border-gray-200 rounded-lg p-3 bg-white hover:border-blue-400 hover:shadow-md cursor-pointer transition-all duration-200"
-                              onClick={() => insertarVariable(v.nombre_variable)}
-                              title={`Click para insertar {{${v.nombre_variable}}} en el campo activo`}
-                            >
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="flex-1 min-w-0">
-                                  {/* Nombre de variable destacado */}
-                                  <div className="mb-2">
-                                    <code className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm font-mono font-semibold block w-fit">
-                                      {'{{'}{v.nombre_variable}{'}}'}
-                                    </code>
-                                  </div>
-
-                                  {/* Mapeo a BD - Destacado */}
-                                  <div className="mb-1">
-                                    <div className="text-xs text-gray-500 mb-0.5">Mapea a:</div>
-                                    <div className="text-xs font-mono text-gray-700 bg-gray-50 px-2 py-1 rounded border border-gray-200">
-                                      <span className="font-semibold text-gray-900">{v.tabla}</span>.<span className="text-blue-700">{v.campo_bd}</span>
-                                    </div>
-                                  </div>
-
-                                  {/* Descripci?n si existe */}
-                                  {v.descripcion && (
-                                    <div className="text-xs text-gray-600 mt-2 italic border-l-2 border-blue-200 pl-2">
-                                      {v.descripcion}
-                                    </div>
-                                  )}
-                                </div>
-
-                                {/* Bot?n de inserci?n mejorado */}
-                                <Button
-                                  size="sm"
-                                  className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    insertarVariable(v.nombre_variable)
-                                    toast.success(`Variable {{${v.nombre_variable}}} insertada`, { duration: 1500 })
-                                  }}
-                                >
-                                  +
-                                </Button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* M?todo alternativo: campo de texto para variables r?pidas */}
-            <div className="mt-3 pt-3 border-t flex items-center gap-2">
-              <Input
-                value={variable}
-                onChange={e => setVariable(e.target.value)}
-                placeholder="Escriba nombre de variable..."
-                className="max-w-xs"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    insertarVariable()
-                  }
-                }}
-              />
-              <Button onClick={() => insertarVariable()} disabled={!variable}>
-                Insertar
-              </Button>
-              <div className="text-xs text-gray-500">
-                O escriba manualmente: {VARIABLES_NOTIFICACION.slice(0, 3).map(v => `{{${v.key}}}`).join(', ')}...
-              </div>
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            <Button onClick={guardar}>{selected ? 'Actualizar' : 'Guardar'}</Button>
-            {selected && <Button variant="destructive" onClick={eliminar}>Eliminar</Button>}
-            {selected && (
-              <>
-                <Button variant="secondary" onClick={exportar} title="Exportar a JSON">
-                  <FileText className="h-4 w-4 mr-1" />
-                  Exportar
-                </Button>
-              </>
-            )}
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleVistaPreviaHtml}
-              title="Ver c?mo quedar? el cuerpo del email con datos de ejemplo"
-            >
-              <Eye className="h-4 w-4 mr-2" />
-              Vista previa (datos de ejemplo)
-            </Button>
-
-                      
-          </div>
-        </Card>
-      </TabsContent>
-      <TabsContent value="html-editor" className="space-y-4">
-        <EditorPlantillaHTML />
-      </TabsContent>
-
-      <TabsContent value="resumen" className="space-y-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-blue-600" />
-              Banco de plantillas por caso
-            </CardTitle>
-            <CardDescription>
-              Cada caso (1 d?a, 5 d?as, hoy vence, 61+ mora, etc.) tiene su banco. Estos nombres aparecen en Notificaciones ? Configuraci?n al elegir la plantilla a enviar.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {/* B?squeda y filtros para el resumen */}
-            <div className="mb-6 space-y-2">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  value={busqueda}
-                  onChange={e => setBusqueda(e.target.value)}
-                  placeholder="Buscar plantillas..."
-                  className="pl-10"
-                />
-              </div>
-              <div className="flex gap-2">
-                <select
-                  value={filtroTipo}
-                  onChange={e => setFiltroTipo(e.target.value)}
-                  className="flex-1 border rounded px-2 py-1 text-sm"
-                >
-                  <option value="">Todos los casos</option>
-                  {ordenCasos.map(c => <option key={c.tipo} value={c.tipo}>{c.label}</option>)}
-                </select>
-                <select
-                  value={filtroActiva === null ? '' : String(filtroActiva)}
-                  onChange={e => setFiltroActiva(e.target.value === '' ? null : e.target.value === 'true')}
-                  className="border rounded px-2 py-1 text-sm"
-                >
-                  <option value="">Todas</option>
-                  <option value="true">Solo activas</option>
-                  <option value="false">Solo inactivas</option>
-                </select>
-              </div>
-            </div>
-
-            {loading ? (
-              <div className="text-center py-8 text-gray-500">Cargando plantillas...</div>
-            ) : plantillasFiltradas.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <AlertCircle className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-                <p>No hay plantillas configuradas.</p>
-                <p className="text-sm mt-2">Vaya a la pesta?a "Armar plantilla" para crear nuevas plantillas.</p>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {ordenCasos.map(({ tipo, label, borderColor }) => {
-                  const lista = plantillasPorCaso[tipo] || []
-                  if (lista.length === 0) return null
-                  return (
-                    <Card key={tipo} className={`border-l-4 ${borderColor}`}>
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-lg flex items-center gap-2">
-                          <FileText className="h-5 w-5 text-gray-500" />
-                          Banco: {label}
-                          <Badge variant="outline" className="ml-2">
-                            {lista.length} plantilla(s)
-                          </Badge>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="overflow-x-auto">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>Nombre</TableHead>
-                                <TableHead>Asunto</TableHead>
-                                <TableHead>Fecha actualizaci?n</TableHead>
-                                <TableHead>Estado</TableHead>
-                                <TableHead className="text-right">Acciones</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {lista.map(plantilla => (
-                                <TableRow key={plantilla.id}>
-                                  <TableCell className="font-medium" title={plantilla.nombre}>
-                                    {plantilla.nombre}
-                                  </TableCell>
-                                  <TableCell className="max-w-xs text-sm text-gray-600 truncate" title={plantilla.asunto || ''}>
-                                    {plantilla.asunto || 'Sin asunto'}
-                                  </TableCell>
-                                  <TableCell>
-                                    <div className="flex items-center gap-1 text-sm text-gray-600">
-                                      <Calendar className="h-3 w-3" />
-                                      {formatearFecha(plantilla.fecha_actualizacion)}
-                                    </div>
-                                  </TableCell>
-                                  <TableCell>
-                                    {plantilla.activa ? (
-                                      <Badge variant="default" className="bg-green-600">Activa</Badge>
-                                    ) : (
-                                      <Badge variant="secondary">Inactiva</Badge>
-                                    )}
-                                  </TableCell>
-                                  <TableCell className="text-right">
-                                    <div className="flex justify-end gap-2">
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => handleEditarDesdeResumen(plantilla)}
-                                        title="Editar plantilla"
-                                      >
-                                        <Edit2 className="h-4 w-4" />
-                                      </Button>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="hover:bg-red-100 hover:text-red-600"
-                                        onClick={() => handleEliminarDesdeResumen(plantilla)}
-                                        title="Eliminar plantilla"
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                    </div>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </TabsContent>
-    </Tabs>
-  )
-}
-
-export default PlantillasNotificaciones
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { notificacionService, NotificacionPlantilla, NotificacionVariable } from '../../services/notificacionService'
+import { NOTIFICACIONES_QUERY_KEYS } from '../../queries/notificaciones'
+import { Button } from '../../components/ui/button'
+import { Input } from '../../components/ui/input'
+import { Textarea } from '../../components/ui/textarea'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs'
+import { Badge } from '../../components/ui/badge'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
+import { toast } from 'sonner'
+import { Upload, Search, FileText, Database, ChevronDown, ChevronUp, Edit2, Trash2, Calendar, AlertCircle, Eye } from 'lucide-react'
+import { EditorPlantillaHTML } from './EditorPlantillaHTML'
+import { replaceBase64ImagesWithLogoUrl } from '../../utils/plantillaHtmlLogo'
+
+type EditorFocus = 'asunto' | 'encabezado' | 'cuerpo' | 'firma'
+
+interface PlantillasNotificacionesProps {
+  plantillaInicial?: NotificacionPlantilla | null
+  onPlantillaCargada?: () => void
+  /** Cuando el padre est? en la pesta?a "plantillas", se recargan las variables para integrar las creadas en Variables Personalizadas. */
+  tabSeccionActiva?: string
+}
+
+export function PlantillasNotificaciones({ plantillaInicial, onPlantillaCargada, tabSeccionActiva }: PlantillasNotificacionesProps = {}) {
+  const queryClient = useQueryClient()
+  const { data: plantillas = [], isLoading: loading } = useQuery({
+    queryKey: NOTIFICACIONES_QUERY_KEYS.plantillas,
+    queryFn: () => notificacionService.listarPlantillas(undefined, false),
+    staleTime: 1 * 60 * 1000,
+    placeholderData: [] as NotificacionPlantilla[],
+  })
+  const [plantillasFiltradas, setPlantillasFiltradas] = useState<NotificacionPlantilla[]>([])
+  const [selected, setSelected] = useState<NotificacionPlantilla | null>(null)
+  const [busqueda, setBusqueda] = useState('')
+  const [filtroTipo, setFiltroTipo] = useState('')
+  const [filtroActiva, setFiltroActiva] = useState<boolean | null>(null)
+  const [activeTab, setActiveTab] = useState('armar')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [nombre, setNombre] = useState('')
+  const [tipo, setTipo] = useState('') // Mantener para compatibilidad con edici?n individual
+  const [tiposSeleccionados, setTiposSeleccionados] = useState<string[]>([]) // Para creaci?n m?ltiple
+  const [activa, setActiva] = useState(true)
+  const [asunto, setAsunto] = useState('')
+  const [encabezado, setEncabezado] = useState('')
+  const [cuerpo, setCuerpo] = useState('')
+  const [firma, setFirma] = useState('')
+  const [variable, setVariable] = useState('')
+  const [focus, setFocus] = useState<EditorFocus>('cuerpo')
+  const [variablesConfiguradas, setVariablesConfiguradas] = useState<NotificacionVariable[]>([])
+  const [mostrarVariables, setMostrarVariables] = useState(true) // Por defecto visible
+  const [busquedaVariable, setBusquedaVariable] = useState('')
+  const [filtroTablaVariable, setFiltroTablaVariable] = useState<string>('') // Filtro por tabla
+  const asuntoRef = useRef<HTMLTextAreaElement | HTMLInputElement>(null)
+  const encRef = useRef<HTMLTextAreaElement>(null)
+  const cuerpoRef = useRef<HTMLTextAreaElement>(null)
+  const firmaRef = useRef<HTMLTextAreaElement>(null)
+
+  const cuerpoFinal = useMemo(() => {
+    const parts = [encabezado, cuerpo, firma].filter(Boolean)
+    return replaceBase64ImagesWithLogoUrl(parts.join('\n\n'))
+  }, [encabezado, cuerpo, firma])
+
+  /** Variables que el sistema sustituye al enviar (sin burocracia de tablas/BD). Insertar en asunto/cuerpo. */
+  const VARIABLES_NOTIFICACION = [
+    { key: 'nombre', label: 'Nombre' },
+    { key: 'cedula', label: 'C?dula' },
+    { key: 'fecha_vencimiento', label: 'Fecha venc.' },
+    { key: 'numero_cuota', label: 'N? cuota' },
+    { key: 'monto', label: 'Monto' },
+    { key: 'dias_atraso', label: 'D?as atraso' },
+  ]
+
+  // Tipos organizados por categor?as
+  const tiposPorCategoria = {
+    antes: [
+      { valor: 'PAGO_5_DIAS_ANTES', label: '5 d?as antes' },
+      { valor: 'PAGO_3_DIAS_ANTES', label: '3 d?as antes' },
+      { valor: 'PAGO_1_DIA_ANTES', label: '1 d?a antes' },
+    ],
+    diaPago: [
+      { valor: 'PAGO_DIA_0', label: 'D?a de pago' },
+    ],
+    retraso: [
+      { valor: 'PAGO_1_DIA_ATRASADO', label: '1 d?a de retraso' },
+      { valor: 'PAGO_3_DIAS_ATRASADO', label: '3 d?as de retraso' },
+      { valor: 'PAGO_5_DIAS_ATRASADO', label: '5 d?as de retraso' },
+    ],
+    prejudicial: [
+      { valor: 'PREJUDICIAL', label: 'Prejudicial' },
+    ],
+    mora61: [
+      { valor: 'MORA_90', label: '90+ d?as de mora (moroso)' },
+    ],
+    cobranza: [
+      { valor: 'COBRANZA', label: 'Carta de cobranza' },
+    ],
+  }
+
+  const tiposSugeridos = [
+    'PAGO_5_DIAS_ANTES', 'PAGO_3_DIAS_ANTES', 'PAGO_1_DIA_ANTES', 'PAGO_DIA_0',
+    'PAGO_1_DIA_ATRASADO', 'PAGO_3_DIAS_ATRASADO', 'PAGO_5_DIAS_ATRASADO', 'PREJUDICIAL', 'MORA_90', 'COBRANZA'
+  ]
+
+  const todosLosTipos = [
+    ...tiposPorCategoria.antes,
+    ...tiposPorCategoria.diaPago,
+    ...tiposPorCategoria.retraso,
+    ...tiposPorCategoria.prejudicial,
+    ...tiposPorCategoria.mora61,
+    ...(tiposPorCategoria.cobranza || []),
+  ]
+
+  /** Variables para plantilla de cobranza: {{TABLA.CAMPO}} y bloque {{#CUOTAS.VENCIMIENTOS}}. Ver docs/PLANTILLA_COBRANZA_ANALISIS_Y_MECANISMOS.md */
+  const VARIABLES_COBRANZA = [
+    { key: 'CLIENTES.TRATAMIENTO', label: 'Tratamiento' },
+    { key: 'CLIENTES.NOMBRE_COMPLETO', label: 'Nombre completo' },
+    { key: 'PRESTAMOS.ID', label: 'N? cr?dito' },
+    { key: 'FECHA_CARTA', label: 'Fecha carta' },
+    { key: 'LOGO_URL', label: 'URL del logo (se rellena al enviar)' },
+  ]
+  const BLOQUE_CUOTAS_VENCIDAS = `{{#CUOTAS.VENCIMIENTOS}}
+  ? Cuota N? {{CUOTA.NUMERO}} con vencimiento: {{CUOTA.FECHA_VENCIMIENTO}} ? Monto: {{CUOTA.MONTO}}
+{{/CUOTAS.VENCIMIENTOS}}`
+
+  const PLANTILLA_COBRANZA_ASUNTO = 'Recordatorio de cuotas pendientes - Rapi-Credit, C.A.'
+  /** Al cargar la plantilla se usa una URL de ejemplo; al enviar el correo el backend sustituye {{LOGO_URL}} por la URL p?blica del logo. */
+  const PLANTILLA_COBRANZA_CUERPO = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Recordatorio de cobranza</title>
+</head>
+<body style="margin:0; padding:0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f8;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f4f6f8;">
+    <tr>
+      <td align="center" style="padding: 24px 16px;">
+        <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width: 600px; background: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); overflow: hidden;">
+          <!-- Encabezado con logo -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); padding: 28px 32px; text-align: center;">
+              <img src="{{LOGO_URL}}" alt="RapiCredit" width="180" height="auto" style="display: inline-block; max-height: 56px; width: auto;" />
+            </td>
+          </tr>
+          <!-- Saludo -->
+          <tr>
+            <td style="padding: 28px 32px 24px 32px;">
+              <p style="margin: 0 0 16px 0; font-size: 16px; line-height: 1.6; color: #1a202c;">
+                Estimado {{CLIENTES.TRATAMIENTO}} <strong>{{CLIENTES.NOMBRE_COMPLETO}}</strong>,
+              </p>
+              <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #2d3748;">
+                Nos dirigimos a usted con el mayor respeto en nombre de <strong>Rapi-Credit, C.A.</strong>, con motivo del vencimiento de cuotas correspondientes a su cr?dito N? <strong>{{PRESTAMOS.ID}}</strong> vigente con nuestra empresa.
+              </p>
+              <p style="margin: 0 0 20px 0; font-size: 15px; line-height: 1.6; color: #2d3748;">
+                Seg?n nuestros registros al <strong>{{FECHA_CARTA}}</strong>, se encuentran pendientes de pago las siguientes cuotas:
+              </p>
+              <!-- Bloque cuotas -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin: 0 0 20px 0; border: 1px solid #e2e8f0; border-radius: 6px;">
+                <tr>
+                  <td style="padding: 12px 16px; background-color: #1e3a5f; color: #fff; font-size: 13px; font-weight: 600;">Detalle de cuotas pendientes</td>
+                </tr>
+                <tr>
+                  <td style="padding: 16px;">
+{{#CUOTAS.VENCIMIENTOS}}
+                    <p style="margin: 0 0 8px 0; font-size: 14px; color: #2d3748;">? Cuota N? {{CUOTA.NUMERO}} ? Vencimiento: {{CUOTA.FECHA_VENCIMIENTO}} ? Monto: {{CUOTA.MONTO}}</p>
+{{/CUOTAS.VENCIMIENTOS}}
+                  </td>
+                </tr>
+              </table>
+              <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #2d3748;">
+                Le recordamos que dichas cuotas forman parte del compromiso adquirido al momento de la aprobaci?n de su cr?dito, y su cancelaci?n oportuna contribuye significativamente a mantener su historial financiero en condiciones favorables.
+              </p>
+              <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #c53030; font-weight: 600;">
+                LE REMITIMOS LAS CUENTAS DONDE PUEDE REALIZAR SUS PAGOS. NO CONTAMOS CON ZELLE.
+              </p>
+              <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #2d3748;">
+                En virtud de lo anterior, le invitamos cordialmente a regularizar su situaci?n en un lapso no mayor a <strong>48 horas</strong>, realizando el pago de las cuotas adeudadas a trav?s de nuestros canales habituales.
+              </p>
+              <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #2b6cb0; font-weight: 600;">
+                SI YA HA EFECTUADO EL PAGO, LE AGRADECEMOS HACER CASO OMISO A ESTA COMUNICACI?N.
+              </p>
+              <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #2d3748;">
+                De lo contrario, le exhortamos a comunicarse con nosotros para coordinar una soluci?n adecuada y evitar medidas adicionales.
+              </p>
+              <p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #2d3748;">
+                Nuestro objetivo es brindarle siempre un servicio confiable y accesible, por lo cual quedamos atentos para atender cualquier duda o inconveniente que desee plantear.
+              </p>
+              <p style="margin: 0 0 24px 0; font-size: 15px; line-height: 1.6; color: #2d3748;">
+                Agradeciendo de antemano su pronta atenci?n a esta solicitud, nos despedimos cordialmente.
+              </p>
+              <!-- Firma -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-top: 2px solid #e2e8f0; padding-top: 20px;">
+                <tr>
+                  <td>
+                    <p style="margin: 0 0 4px 0; font-size: 15px; font-weight: 600; color: #1e3a5f;">Atentamente,</p>
+                    <p style="margin: 0 0 4px 0; font-size: 14px; color: #2d3748;">Departamento de Cobranza</p>
+                    <p style="margin: 0 0 4px 0; font-size: 14px; font-weight: 600; color: #1e3a5f;">Rapi-Credit, C.A.</p>
+                    <p style="margin: 0; font-size: 12px; color: #718096;">Fecha de emisi?n: {{FECHA_CARTA}}</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <!-- Pie con color corporativo -->
+          <tr>
+            <td style="padding: 12px 32px; background-color: #1e3a5f; color: #a0aec0; font-size: 11px; text-align: center;">
+              Este correo es un recordatorio oficial de Rapi-Credit, C.A. Por favor no responda a este mensaje de forma autom?tica.
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+
+  const cargarPlantillaCobranzaPorDefecto = () => {
+    setTipo('COBRANZA')
+    setTiposSeleccionados(['COBRANZA'])
+    setAsunto(PLANTILLA_COBRANZA_ASUNTO)
+    setEncabezado('')
+    setCuerpo(PLANTILLA_COBRANZA_CUERPO)
+    setFirma('')
+    setNombre('Carta de cobranza')
+    toast.success('Plantilla de cobranza cargada. Revise y guarde.')
+  }
+
+  // Generar variables precargadas desde los campos de las tablas
+  const generarVariablesPrecargadas = (): NotificacionVariable[] => {
+    const CAMPOS_DISPONIBLES = {
+      clientes: [
+        { campo: 'id', descripcion: 'ID ?nico del cliente' },
+        { campo: 'cedula', descripcion: 'C?dula de identidad' },
+        { campo: 'nombres', descripcion: 'Nombres completos' },
+        { campo: 'telefono', descripcion: 'Tel?fono de contacto' },
+        { campo: 'email', descripcion: 'Correo electr?nico' },
+        { campo: 'direccion', descripcion: 'Direcci?n de residencia' },
+        { campo: 'fecha_nacimiento', descripcion: 'Fecha de nacimiento' },
+        { campo: 'ocupacion', descripcion: 'Ocupaci?n del cliente' },
+        { campo: 'estado', descripcion: 'Estado (ACTIVO, INACTIVO, FINALIZADO)' },
+        { campo: 'activo', descripcion: 'Estado activo (true/false)' },
+        { campo: 'fecha_registro', descripcion: 'Fecha de registro' },
+        { campo: 'fecha_actualizacion', descripcion: 'Fecha de ?ltima actualizaci?n' },
+        { campo: 'usuario_registro', descripcion: 'Usuario que registr?' },
+        { campo: 'notas', descripcion: 'Notas adicionales' },
+      ],
+      prestamos: [
+        { campo: 'id', descripcion: 'ID del pr?stamo' },
+        { campo: 'cliente_id', descripcion: 'ID del cliente' },
+        { campo: 'cedula', descripcion: 'C?dula del cliente' },
+        { campo: 'nombres', descripcion: 'Nombres del cliente' },
+        { campo: 'valor_activo', descripcion: 'Valor del activo (veh?culo)' },
+        { campo: 'total_financiamiento', descripcion: 'Monto total financiado' },
+        { campo: 'fecha_requerimiento', descripcion: 'Fecha requerida del pr?stamo' },
+        { campo: 'modalidad_pago', descripcion: 'Modalidad (MENSUAL, QUINCENAL, SEMANAL)' },
+        { campo: 'numero_cuotas', descripcion: 'N?mero total de cuotas' },
+        { campo: 'cuota_periodo', descripcion: 'Monto de cuota por per?odo' },
+        { campo: 'tasa_interes', descripcion: 'Tasa de inter?s (%)' },
+        { campo: 'fecha_base_calculo', descripcion: 'Fecha base para c?lculo' },
+        { campo: 'producto', descripcion: 'Producto financiero' },
+        { campo: 'concesionario', descripcion: 'Concesionario' },
+        { campo: 'analista', descripcion: 'Analista asignado' },
+        { campo: 'modelo_vehiculo', descripcion: 'Modelo del veh?culo' },
+        { campo: 'estado', descripcion: 'Estado del pr?stamo' },
+        { campo: 'usuario_proponente', descripcion: 'Usuario proponente' },
+        { campo: 'usuario_aprobador', descripcion: 'Usuario aprobador' },
+        { campo: 'fecha_registro', descripcion: 'Fecha de registro' },
+        { campo: 'fecha_aprobacion', descripcion: 'Fecha de aprobaci?n' },
+      ],
+      cuotas: [
+        { campo: 'id', descripcion: 'ID de la cuota' },
+        { campo: 'prestamo_id', descripcion: 'ID del pr?stamo' },
+        { campo: 'numero_cuota', descripcion: 'N?mero de cuota' },
+        { campo: 'fecha_vencimiento', descripcion: 'Fecha de vencimiento' },
+        { campo: 'fecha_pago', descripcion: 'Fecha de pago' },
+        { campo: 'monto_cuota', descripcion: 'Monto total de la cuota' },
+        { campo: 'monto_capital', descripcion: 'Monto de capital' },
+        { campo: 'monto_interes', descripcion: 'Monto de inter?s' },
+        { campo: 'saldo_capital_inicial', descripcion: 'Saldo capital inicial' },
+        { campo: 'saldo_capital_final', descripcion: 'Saldo capital final' },
+        { campo: 'capital_pagado', descripcion: 'Capital pagado' },
+        { campo: 'interes_pagado', descripcion: 'Inter?s pagado' },
+        { campo: 'mora_pagada', descripcion: 'Mora pagada' },
+        { campo: 'total_pagado', descripcion: 'Total pagado' },
+        { campo: 'capital_pendiente', descripcion: 'Capital pendiente' },
+        { campo: 'interes_pendiente', descripcion: 'Inter?s pendiente' },
+        { campo: 'dias_mora', descripcion: 'D?as de mora' },
+        { campo: 'monto_mora', descripcion: 'Monto de mora' },
+        { campo: 'tasa_mora', descripcion: 'Tasa de mora (%)' },
+        { campo: 'dias_morosidad', descripcion: 'D?as de morosidad' },
+        { campo: 'monto_morosidad', descripcion: 'Monto de morosidad' },
+        { campo: 'estado', descripcion: 'Estado de la cuota' },
+      ],
+      pagos: [
+        { campo: 'id', descripcion: 'ID del pago' },
+        { campo: 'cedula', descripcion: 'C?dula del cliente' },
+        { campo: 'prestamo_id', descripcion: 'ID del pr?stamo' },
+        { campo: 'numero_cuota', descripcion: 'N?mero de cuota' },
+        { campo: 'fecha_pago', descripcion: 'Fecha de pago' },
+        { campo: 'fecha_registro', descripcion: 'Fecha de registro' },
+        { campo: 'monto_pagado', descripcion: 'Monto pagado' },
+        { campo: 'numero_documento', descripcion: 'N?mero de documento' },
+        { campo: 'institucion_bancaria', descripcion: 'Instituci?n bancaria' },
+        { campo: 'estado', descripcion: 'Estado del pago' },
+        { campo: 'conciliado', descripcion: 'Si est? conciliado' },
+        { campo: 'fecha_conciliacion', descripcion: 'Fecha de conciliaci?n' },
+      ],
+    }
+
+    const variablesPrecargadas: NotificacionVariable[] = []
+
+    Object.entries(CAMPOS_DISPONIBLES).forEach(([tabla, campos]) => {
+      campos.forEach(({ campo, descripcion }) => {
+        // Generar nombre de variable: tabla_campo (ej: cliente_nombres, cuota_monto_cuota)
+        const nombreVariable = `${tabla.slice(0, tabla.length - 1)}_${campo}` // Remover 's' final
+
+        variablesPrecargadas.push({
+          id: undefined, // Variables precargadas no tienen ID
+          nombre_variable: nombreVariable,
+          tabla: tabla,
+          campo_bd: campo,
+          descripcion: descripcion,
+          activa: true,
+        } as NotificacionVariable)
+      })
+    })
+
+    return variablesPrecargadas
+  }
+
+  const cargarVariables = async () => {
+    try {
+      const vars = await notificacionService.listarVariables(true) // Solo variables activas
+      const variablesUsuario = vars || []
+
+      // Generar variables precargadas y combinarlas con las del usuario
+      const variablesPrecargadas = generarVariablesPrecargadas()
+
+      // Combinar: las variables del usuario tienen prioridad (por nombre_variable)
+      const nombresVariablesUsuario = new Set(variablesUsuario.map(v => v.nombre_variable))
+      const variablesPrecargadasFiltradas = variablesPrecargadas.filter(
+        v => !nombresVariablesUsuario.has(v.nombre_variable)
+      )
+
+      // Combinar ambas listas
+      const todasLasVariables = [...variablesUsuario, ...variablesPrecargadasFiltradas]
+      setVariablesConfiguradas(todasLasVariables)
+    } catch (error: any) {
+      // Si falla, usar solo variables precargadas
+      const variablesPrecargadas = generarVariablesPrecargadas()
+      setVariablesConfiguradas(variablesPrecargadas)
+    }
+  }
+
+  useEffect(() => {
+    cargarVariables()
+  }, [])
+
+  // Recargar variables cuando el usuario vuelve a la pesta?a Plantillas (tras crear/editar en Variables Personalizadas)
+  useEffect(() => {
+    if (tabSeccionActiva === 'plantillas') {
+      cargarVariables()
+    }
+  }, [tabSeccionActiva])
+
+  // Cargar plantilla inicial si se proporciona (para edici?n desde Resumen)
+  useEffect(() => {
+    if (plantillaInicial && plantillas.length > 0) {
+      // Buscar la plantilla en la lista cargada para asegurar que est? actualizada
+      const plantillaEncontrada = plantillas.find(p => p.id === plantillaInicial.id)
+      const plantillaACargar = plantillaEncontrada || plantillaInicial
+
+      setSelected(plantillaACargar)
+      setNombre(plantillaACargar.nombre)
+      setTipo(plantillaACargar.tipo)
+      setTiposSeleccionados([plantillaACargar.tipo])
+      setActiva(Boolean(plantillaACargar.activa))
+      setAsunto(plantillaACargar.asunto)
+      setEncabezado('')
+      setCuerpo(plantillaACargar.cuerpo)
+      setFirma('')
+
+      // Cambiar a la pesta?a de armar plantilla
+      setActiveTab('armar')
+
+      // Notificar que la plantilla fue cargada
+      if (onPlantillaCargada) {
+        onPlantillaCargada()
+      }
+    }
+  }, [plantillaInicial, plantillas, onPlantillaCargada])
+
+  // Filtrar plantillas
+  useEffect(() => {
+    let filtradas = [...plantillas]
+
+    if (busqueda) {
+      filtradas = filtradas.filter(p =>
+        p.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
+        p.tipo.toLowerCase().includes(busqueda.toLowerCase()) ||
+        p.asunto?.toLowerCase().includes(busqueda.toLowerCase())
+      )
+    }
+
+    if (filtroTipo) {
+      filtradas = filtradas.filter(p => p.tipo === filtroTipo)
+    }
+
+    if (filtroActiva !== null) {
+      filtradas = filtradas.filter(p => Boolean(p.activa) === filtroActiva)
+    }
+
+    setPlantillasFiltradas(filtradas)
+  }, [plantillas, busqueda, filtroTipo, filtroActiva])
+
+  const limpiar = () => {
+    setSelected(null)
+    setNombre('')
+    setTipo('')
+    setTiposSeleccionados([])
+    setActiva(true)
+    setAsunto('')
+    setEncabezado('')
+    setCuerpo('')
+    setFirma('')
+  }
+
+  const seleccionar = (p: NotificacionPlantilla) => {
+    setSelected(p)
+    setNombre(p.nombre)
+    setTipo(p.tipo)
+    setTiposSeleccionados([p.tipo]) // Al editar, solo un tipo
+    setActiva(Boolean(p.activa))
+    setAsunto(p.asunto)
+    setEncabezado('')
+    setCuerpo(replaceBase64ImagesWithLogoUrl(p.cuerpo || ''))
+    setFirma('')
+  }
+
+  const toggleTipo = (tipoValor: string) => {
+    setTiposSeleccionados(prev => {
+      if (prev.includes(tipoValor)) {
+        return prev.filter(t => t !== tipoValor)
+      } else {
+        return [...prev, tipoValor]
+      }
+    })
+  }
+
+  const seleccionarTodos = () => {
+    setTiposSeleccionados(todosLosTipos.map(t => t.valor))
+  }
+
+  const deseleccionarTodos = () => {
+    setTiposSeleccionados([])
+  }
+
+  const insertarVariable = (nombreVariable?: string) => {
+    const varName = nombreVariable || variable
+    if (!varName) return
+    const token = `{{${varName}}}`
+    const insertInto = (el: HTMLTextAreaElement | HTMLInputElement | null, setter: (v: string) => void, current: string) => {
+      if (!el) {
+        setter(current + token)
+        return
+      }
+      const start = (el as any).selectionStart ? current.length
+      const end = (el as any).selectionEnd ? current.length
+      const next = current.slice(0, start) + token + current.slice(end)
+      setter(next)
+      setTimeout(() => {
+        try {
+          (el as any).focus()
+          ;(el as any).setSelectionRange(start + token.length, start + token.length)
+        } catch {}
+      }, 0)
+    }
+
+    if (focus === 'asunto') return insertInto(asuntoRef.current, setAsunto, asunto)
+    if (focus === 'encabezado') return insertInto(encRef.current, setEncabezado, encabezado)
+    if (focus === 'cuerpo') return insertInto(cuerpoRef.current, setCuerpo, cuerpo)
+    if (focus === 'firma') return insertInto(firmaRef.current, setFirma, firma)
+  }
+
+  const variablesFiltradas = useMemo(() => {
+    let filtradas = variablesConfiguradas
+
+    // Filtrar por tabla
+    if (filtroTablaVariable) {
+      filtradas = filtradas.filter(v => v.tabla === filtroTablaVariable)
+    }
+
+    // Filtrar por b?squeda
+    if (busquedaVariable) {
+      filtradas = filtradas.filter(v =>
+        v.nombre_variable.toLowerCase().includes(busquedaVariable.toLowerCase()) ||
+        (v.descripcion ? '').toLowerCase().includes(busquedaVariable.toLowerCase()) ||
+        v.tabla.toLowerCase().includes(busquedaVariable.toLowerCase()) ||
+        v.campo_bd.toLowerCase().includes(busquedaVariable.toLowerCase())
+      )
+    }
+
+    return filtradas
+  }, [variablesConfiguradas, busquedaVariable, filtroTablaVariable])
+
+  // Agrupar variables por tabla
+  const variablesPorTabla = useMemo(() => {
+    const agrupadas: Record<string, NotificacionVariable[]> = {}
+    variablesFiltradas.forEach(v => {
+      if (!agrupadas[v.tabla]) {
+        agrupadas[v.tabla] = []
+      }
+      agrupadas[v.tabla].push(v)
+    })
+    return agrupadas
+  }, [variablesFiltradas])
+
+  // Obtener tablas ?nicas
+  const tablasUnicas = useMemo(() => {
+    return Array.from(new Set(variablesConfiguradas.map(v => v.tabla))).sort()
+  }, [variablesConfiguradas])
+
+
+  const aplicarFormato = (tag: 'b' | 'i' | 'u' | 'ul' | 'a') => {
+    const wrap = (el: HTMLTextAreaElement | null, setter: (v: string) => void, current: string) => {
+      if (!el) return
+      const start = el.selectionStart ? 0
+      const end = el.selectionEnd ? 0
+      const selected = current.slice(start, end)
+      let before = '', after = ''
+      if (tag === 'a') {
+        before = '<a href="https://">'
+        after = '</a>'
+      } else if (tag === 'ul') {
+        const lines = selected || 'Elemento 1\nElemento 2'
+        const wrapped = lines.split('\n').map(l => `<li>${l || 'Elemento'}</li>`).join('\n')
+        const next = current.slice(0, start) + `<ul>\n${wrapped}\n</ul>` + current.slice(end)
+        setter(next)
+        return
+      } else {
+        before = `<${tag}>`
+        after = `</${tag}>`
+      }
+      const next = current.slice(0, start) + before + (selected || 'texto') + after + current.slice(end)
+      setter(next)
+      setTimeout(() => {
+        try { el.focus() } catch {}
+      }, 0)
+    }
+    if (focus === 'encabezado') return wrap(encRef.current, setEncabezado, encabezado)
+    if (focus === 'cuerpo') return wrap(cuerpoRef.current, setCuerpo, cuerpo)
+    if (focus === 'firma') return wrap(firmaRef.current, setFirma, firma)
+    if (focus === 'asunto') return // no aplicar html al asunto
+  }
+
+  const guardar = async () => {
+    // Si estamos editando una plantilla existente, guardar solo esa
+    if (selected?.id) {
+      if (!nombre.trim() || !asunto.trim() || !cuerpoFinal.trim()) {
+        toast.error('Complete todos los campos obligatorios')
+        return
+      }
+      if (tiposSeleccionados.length === 0) {
+        toast.error('Seleccione al menos un caso para esta plantilla')
+        return
+      }
+      const tipoActual = selected.tipo
+      try {
+        await notificacionService.actualizarPlantilla(selected.id, { nombre, tipo: tipoActual, asunto, cuerpo: cuerpoFinal, activa })
+        toast.success('Plantilla actualizada exitosamente')
+        const otrosTipos = tiposSeleccionados.filter(t => t !== tipoActual)
+        for (const tipoOtro of otrosTipos) {
+          try {
+            const nombrePlantilla = `${nombre} - ${todosLosTipos.find(t => t.valor === tipoOtro)?.label || tipoOtro}`
+            await notificacionService.crearPlantilla({ nombre: nombrePlantilla, tipo: tipoOtro, asunto, cuerpo: cuerpoFinal, activa })
+          } catch (err) {
+            toast.error('Error al crear copia para otro caso')
+          }
+        }
+        if (otrosTipos.length > 0) toast.success(`Se crearon ${otrosTipos.length} plantilla(s) para los otros casos`) 
+        await queryClient.invalidateQueries({ queryKey: NOTIFICACIONES_QUERY_KEYS.plantillas })
+        limpiar()
+        // Cambiar a la pesta?a de resumen despu?s de guardar
+        setActiveTab('resumen')
+      } catch (error: any) {
+        toast.error(error?.response?.data?.detail || 'Error al guardar plantilla')
+      }
+      return
+    }
+
+    // Si estamos creando nuevas plantillas, validar tipos seleccionados
+    if (tiposSeleccionados.length === 0) {
+      toast.error('Seleccione al menos un tipo de notificaci?n')
+      return
+    }
+
+    if (!nombre.trim() || !asunto.trim() || !cuerpoFinal.trim()) {
+      toast.error('Complete todos los campos obligatorios')
+      return
+    }
+
+    try {
+      // Crear una plantilla para cada tipo seleccionado
+      const plantillasCreadas: string[] = []
+      const erroresCreacion: string[] = []
+
+      for (const tipoSeleccionado of tiposSeleccionados) {
+        try {
+          const nombrePlantilla = `${nombre} - ${todosLosTipos.find(t => t.valor === tipoSeleccionado)?.label || tipoSeleccionado}`
+
+          const payload = {
+            nombre: nombrePlantilla,
+            tipo: tipoSeleccionado,
+            asunto,
+            cuerpo: cuerpoFinal,
+            activa,
+          }
+
+          await notificacionService.crearPlantilla(payload)
+          plantillasCreadas.push(tipoSeleccionado)
+        } catch (error: any) {
+          erroresCreacion.push(`${tipoSeleccionado}: ${error?.response?.data?.detail || 'Error'}`)
+        }
+      }
+
+      if (plantillasCreadas.length > 0) {
+        toast.success(`Se crearon ${plantillasCreadas.length} plantilla(s) exitosamente`)
+        // Cambiar a la pesta?a de resumen despu?s de guardar
+        setActiveTab('resumen')
+      }
+
+      if (erroresCreacion.length > 0) {
+        toast.error(`Errores al crear algunas plantillas: ${erroresCreacion.join(', ')}`)
+      }
+
+      await queryClient.invalidateQueries({ queryKey: NOTIFICACIONES_QUERY_KEYS.plantillas })
+      limpiar()
+    } catch (error: any) {
+      toast.error(error?.response?.data?.detail || 'Error al guardar plantillas')
+    }
+  }
+
+  const eliminar = async () => {
+    if (!selected?.id) {
+      toast.error('Seleccione una plantilla para eliminar')
+      return
+    }
+
+    if (!window.confirm(`?Eliminar plantilla "${selected.nombre}"?`)) return
+
+    try {
+      await notificacionService.eliminarPlantilla(selected.id)
+      toast.success('Plantilla eliminada exitosamente')
+      limpiar()
+      await queryClient.invalidateQueries({ queryKey: NOTIFICACIONES_QUERY_KEYS.plantillas })
+    } catch (error: any) {
+      toast.error(error?.response?.data?.detail || 'Error al eliminar plantilla')
+    }
+  }
+
+  const exportar = async () => {
+    if (!selected?.id) {
+      toast.error('Seleccione una plantilla para exportar')
+      return
+    }
+
+    try {
+      const data = await notificacionService.exportarPlantilla(selected.id)
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `plantilla_${selected.nombre.replace(/[^a-z0-9]/gi, '_')}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast.success('Plantilla exportada exitosamente')
+    } catch (error: any) {
+      toast.error(error?.response?.data?.detail || 'Error al exportar plantilla')
+    }
+  }
+
+  const importar = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    try {
+      const text = await file.text()
+      const data = JSON.parse(text)
+
+      if (!data.nombre || !data.tipo || !data.asunto || !data.cuerpo) {
+        toast.error('Archivo JSON inv?lido: faltan campos obligatorios')
+        return
+      }
+
+      setNombre(data.nombre)
+      setTipo(data.tipo)
+      setAsunto(data.asunto)
+      setCuerpo(data.cuerpo || '')
+      setEncabezado('')
+      setFirma('')
+      setActiva(Boolean(data.activa))
+      setSelected(null)
+      setActiveTab('armar')
+
+      toast.success('Plantilla importada. Revise y guarde cuando est? lista.')
+    } catch (error: any) {
+      toast.error('Error al leer el archivo JSON: ' + (error.message || 'Formato inv?lido'))
+    }
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  // Funciones para el resumen
+  const handleEditarDesdeResumen = (plantilla: NotificacionPlantilla) => {
+    seleccionar(plantilla)
+    setActiveTab('armar')
+  }
+
+  const handleEliminarDesdeResumen = async (plantilla: NotificacionPlantilla) => {
+    if (!window.confirm(`?Est? seguro de eliminar la plantilla "${plantilla.nombre}"?`)) {
+      return
+    }
+
+    try {
+      await notificacionService.eliminarPlantilla(plantilla.id)
+      toast.success('Plantilla eliminada exitosamente')
+      await queryClient.invalidateQueries({ queryKey: NOTIFICACIONES_QUERY_KEYS.plantillas })
+    } catch (error: any) {
+      toast.error(error?.response?.data?.detail || 'Error al eliminar plantilla')
+    }
+  }
+
+  const formatearFecha = (fecha: string | null | undefined) => {
+    if (!fecha) return '-'
+    try {
+      const date = new Date(fecha)
+      return date.toLocaleDateString('es-ES', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    } catch {
+      return fecha
+    }
+  }
+
+  // Mapeo de tipos a categor?as y casos (para el resumen)
+  const mapeoTipos = {
+    'PAGO_5_DIAS_ANTES': { categoria: 'Notificaci?n Previa', caso: '5 d?as antes' },
+    'PAGO_3_DIAS_ANTES': { categoria: 'Notificaci?n Previa', caso: '3 d?as antes' },
+    'PAGO_1_DIA_ANTES': { categoria: 'Notificaci?n Previa', caso: '1 d?a antes' },
+    'PAGO_DIA_0': { categoria: 'D?a de Pago', caso: 'D?a de pago' },
+    'PAGO_1_DIA_ATRASADO': { categoria: 'Notificaci?n Retrasada', caso: '1 d?a de retraso' },
+    'PAGO_3_DIAS_ATRASADO': { categoria: 'Notificaci?n Retrasada', caso: '3 d?as de retraso' },
+    'PAGO_5_DIAS_ATRASADO': { categoria: 'Notificaci?n Retrasada', caso: '5 d?as de retraso' },
+    'PREJUDICIAL': { categoria: 'Prejudicial', caso: 'Prejudicial' },
+    'MORA_90': { categoria: 'Mora 90+', caso: '90+ d?as de mora (moroso)' },
+    'COBRANZA': { categoria: 'Cobranza', caso: 'Carta de cobranza' },
+  }
+
+  /** Orden de casos para el banco por caso (cada uno con su lista de plantillas) */
+  const ordenCasos: { tipo: string; label: string; borderColor: string }[] = [
+    { tipo: 'PAGO_5_DIAS_ANTES', label: 'Faltan 5 d?as', borderColor: 'border-blue-500' },
+    { tipo: 'PAGO_3_DIAS_ANTES', label: 'Faltan 3 d?as', borderColor: 'border-blue-400' },
+    { tipo: 'PAGO_1_DIA_ANTES', label: 'Falta 1 d?a', borderColor: 'border-blue-300' },
+    { tipo: 'PAGO_DIA_0', label: 'Hoy vence', borderColor: 'border-green-500' },
+    { tipo: 'PAGO_1_DIA_ATRASADO', label: '1 d?a de retraso', borderColor: 'border-amber-400' },
+    { tipo: 'PAGO_3_DIAS_ATRASADO', label: '3 d?as de retraso', borderColor: 'border-amber-500' },
+    { tipo: 'PAGO_5_DIAS_ATRASADO', label: '5 d?as de retraso', borderColor: 'border-amber-600' },
+    { tipo: 'PREJUDICIAL', label: 'Prejudicial', borderColor: 'border-red-500' },
+    { tipo: 'MORA_90', label: '90+ d?as de mora (moroso)', borderColor: 'border-slate-500' },
+    { tipo: 'COBRANZA', label: 'Carta de cobranza', borderColor: 'border-violet-500' },
+  ]
+
+  /** Banco por caso: plantillas agrupadas por tipo */
+  const plantillasPorCaso = useMemo(() => {
+    const porTipo: Record<string, NotificacionPlantilla[]> = {}
+    ordenCasos.forEach(({ tipo }) => { porTipo[tipo] = [] })
+    plantillasFiltradas.forEach(plantilla => {
+      if (porTipo[plantilla.tipo]) {
+        porTipo[plantilla.tipo].push(plantilla)
+      } else {
+        porTipo[plantilla.tipo] = [plantilla]
+      }
+    })
+    return porTipo
+  }, [plantillasFiltradas])
+
+  const categoriasOrden = [
+    { key: 'Notificaci?n Previa', color: 'blue', borderColor: 'border-blue-500', icon: '?' },
+    { key: 'D?a de Pago', color: 'green', borderColor: 'border-green-500', icon: '?' },
+    { key: 'Notificaci?n Retrasada', color: 'orange', borderColor: 'border-orange-500', icon: '?' },
+    { key: 'Prejudicial', color: 'red', borderColor: 'border-red-500', icon: '?' },
+    { key: 'Mora 90+', color: 'slate', borderColor: 'border-slate-500', icon: '?' },
+  ]
+
+  // Organizar plantillas por categor?a (para el resumen)
+  const plantillasPorCategoria = useMemo(() => {
+    const organizadas: Record<string, NotificacionPlantilla[]> = {}
+
+    plantillasFiltradas.forEach(plantilla => {
+      const mapeo = mapeoTipos[plantilla.tipo as keyof typeof mapeoTipos]
+      if (mapeo) {
+        const categoria = mapeo.categoria
+        if (!organizadas[categoria]) {
+          organizadas[categoria] = []
+        }
+        organizadas[categoria].push(plantilla)
+      }
+    })
+
+    // Ordenar plantillas dentro de cada categor?a por caso
+    Object.keys(organizadas).forEach(categoria => {
+      organizadas[categoria].sort((a, b) => {
+        const casoA = mapeoTipos[a.tipo as keyof typeof mapeoTipos]?.caso || ''
+        const casoB = mapeoTipos[b.tipo as keyof typeof mapeoTipos]?.caso || ''
+        return casoA.localeCompare(casoB)
+      })
+    })
+
+    return organizadas
+  }, [plantillasFiltradas])
+
+
+  const handleVistaPreviaHtml = () => {
+    const ejemplo: Record<string, string> = {
+      nombre: 'Juan P?rez',
+      cedula: 'V-12345678',
+      fecha_vencimiento: '15/03/2025',
+      numero_cuota: '3',
+      monto: '150.00',
+      dias_atraso: '2',
+      'CLIENTES.TRATAMIENTO': 'Sr.',
+      'CLIENTES.NOMBRE_COMPLETO': 'Juan P?rez',
+      'PRESTAMOS.ID': 'CR-2024-001',
+      FECHA_CARTA: new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+      LOGO_URL: (typeof window !== 'undefined' && window.location.origin) ? `${window.location.origin}/logos/rapicredit-public.png` : '',
+    }
+    let html = cuerpoFinal || ''
+    if (!html.trim()) {
+      html = cuerpo || encabezado || firma || '<p>Sin contenido para previsualizar.</p>'
+    }
+    Object.entries(ejemplo).forEach(([key, val]) => {
+      const token = `{{${key}}}`
+      html = html.split(token).join(val)
+    })
+    html = html.replace(/\{\{#CUOTAS\.VENCIMIENTOS\}\}[\s\S]*?\{\{\/CUOTAS\.VENCIMIENTOS\}\}/g, '<p>Cuota N? 1 - Vencimiento: 10/01/2025 - Monto: 150.00</p><p>Cuota N? 2 - Vencimiento: 10/02/2025 - Monto: 150.00</p>')
+    // Siempre renderizar como HTML (encabezado, cuerpo y firma pueden contener c?digo HTML)
+    const doc = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Vista previa</title></head><body style="margin:0; padding:12px; font-family: sans-serif;">${html}</body></html>`
+    const blob = new Blob([doc], { type: 'text/html;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank', 'noopener,noreferrer')
+    setTimeout(() => URL.revokeObjectURL(url), 60000)
+    toast.success('Vista previa abierta en nueva pesta?a')
+  }
+
+  return (
+    <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+      <TabsList className="grid w-full grid-cols-3">
+        <TabsTrigger value="armar" className="flex items-center gap-2">
+          <FileText className="h-4 w-4" />
+          Armar plantilla
+        </TabsTrigger>
+        <TabsTrigger value="resumen" className="flex items-center gap-2">
+          <FileText className="h-4 w-4" />
+          Resumen
+        </TabsTrigger>
+        <TabsTrigger value="html-editor" className="flex items-center gap-2">
+          <FileText className="h-4 w-4" />
+          Editor HTML
+        </TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="armar" className="space-y-4">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-lg font-semibold">Armar plantilla</h2>
+            <p className="text-sm text-gray-500">Elige el caso, escribe asunto y cuerpo, inserta variables y guarda. Luego as?gnala en Notificaciones ? Configuraci?n.</p>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <Button onClick={importar} variant="outline" size="sm" title="Importar plantilla">
+              <Upload className="h-4 w-4 mr-1" />
+              Importar
+            </Button>
+            <input ref={fileInputRef} type="file" accept=".json" onChange={handleImportFile} className="hidden" />
+            <Button onClick={cargarPlantillaCobranzaPorDefecto} variant="outline" size="sm" title="Cargar plantilla de cobranza con variables {{TABLA.CAMPO}} y bloque de cuotas">
+              <FileText className="h-4 w-4 mr-1" />
+              Cargar plantilla cobranza
+            </Button>
+            <Button onClick={limpiar} variant="secondary" size="sm">
+              Nueva plantilla
+            </Button>
+          </div>
+        </div>
+
+        <Card className="p-4 space-y-3">
+          <div className="grid grid-cols-1 gap-3">
+            <div>
+              <label className="text-sm text-gray-600">Nombre</label>
+              <Input value={nombre} onChange={e=>setNombre(e.target.value)} placeholder="Recordatorio de pago" />
+            </div>
+            <div className="border rounded-lg p-4 bg-gray-50 space-y-4">
+              <label className="text-sm font-medium text-gray-700 block">
+                Usar esta plantilla para (seleccione uno o m?s casos)
+              </label>
+              <p className="text-xs text-gray-500 mb-2">
+                Marque los casos en los que se usar? esta plantilla (ej. 1 d?a, 3 d?as y 5 d?as de retraso).
+              </p>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-600">
+                  {tiposSeleccionados.length} caso(s) seleccionado(s)
+                </span>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={seleccionarTodos}
+                        className="text-xs"
+                      >
+                        Seleccionar todos
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={deseleccionarTodos}
+                        className="text-xs"
+                      >
+                        Deseleccionar todos
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Antes de vencimiento */}
+                  <div>
+                    <h4 className="text-sm font-semibold mb-2 text-blue-700">Antes de Fecha de Vencimiento</h4>
+                    <div className="grid grid-cols-3 gap-2">
+                      {tiposPorCategoria.antes.map(t => (
+                        <label key={t.valor} className="flex items-center gap-2 p-2 border rounded hover:bg-white cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={tiposSeleccionados.includes(t.valor)}
+                            onChange={() => toggleTipo(t.valor)}
+                            className="rounded"
+                          />
+                          <span className="text-sm">{t.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* D?a de pago */}
+                  <div>
+                    <h4 className="text-sm font-semibold mb-2 text-green-700">D?a de Pago</h4>
+                    <div className="grid grid-cols-3 gap-2">
+                      {tiposPorCategoria.diaPago.map(t => (
+                        <label key={t.valor} className="flex items-center gap-2 p-2 border rounded hover:bg-white cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={tiposSeleccionados.includes(t.valor)}
+                            onChange={() => toggleTipo(t.valor)}
+                            className="rounded"
+                          />
+                          <span className="text-sm">{t.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Retraso */}
+                  <div>
+                    <h4 className="text-sm font-semibold mb-2 text-orange-700">D?as de Retraso</h4>
+                    <div className="grid grid-cols-3 gap-2">
+                      {tiposPorCategoria.retraso.map(t => (
+                        <label key={t.valor} className="flex items-center gap-2 p-2 border rounded hover:bg-white cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={tiposSeleccionados.includes(t.valor)}
+                            onChange={() => toggleTipo(t.valor)}
+                            className="rounded"
+                          />
+                          <span className="text-sm">{t.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Prejudicial */}
+                  <div>
+                    <h4 className="text-sm font-semibold mb-2 text-red-700">Prejudicial</h4>
+                    <div className="grid grid-cols-3 gap-2">
+                      {tiposPorCategoria.prejudicial.map(t => (
+                        <label key={t.valor} className="flex items-center gap-2 p-2 border rounded hover:bg-white cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={tiposSeleccionados.includes(t.valor)}
+                            onChange={() => toggleTipo(t.valor)}
+                            className="rounded"
+                          />
+                          <span className="text-sm">{t.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Mora 90+ */}
+                  {tiposPorCategoria.mora61 && (
+                    <div>
+                      <h4 className="text-sm font-semibold mb-2 text-slate-700">90+ d?as de mora (moroso)</h4>
+                      <div className="grid grid-cols-3 gap-2">
+                        {tiposPorCategoria.mora61.map(t => (
+                          <label key={t.valor} className="flex items-center gap-2 p-2 border rounded hover:bg-white cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={tiposSeleccionados.includes(t.valor)}
+                              onChange={() => toggleTipo(t.valor)}
+                              className="rounded"
+                            />
+                            <span className="text-sm">{t.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+            <div className="flex items-center gap-2">
+              <input id="activa" type="checkbox" checked={activa} onChange={e=>setActiva(e.target.checked)} />
+              <label htmlFor="activa" className="text-sm">Habilitar env?o autom?tico a las 3:00 AM</label>
+            </div>
+          </div>
+
+          {/* Variables listas para insertar: por tipo de plantilla */}
+          <div className="rounded-lg bg-blue-50 border border-blue-200 p-3">
+            <p className="text-xs font-semibold text-blue-900 mb-1">Insertar variable en asunto o cuerpo (clic en la variable):</p>
+            {(tipo === 'COBRANZA' || tiposSeleccionados.includes('COBRANZA')) ? (
+              <>
+                <p className="text-xs text-blue-700 mb-2">Plantilla de cobranza: use <code className="bg-white px-1 rounded">{"{{TABLA.CAMPO}}"}</code> y el bloque de cuotas vencidas. Datos desde clientes, pr?stamos y cuotas seg?n filtros de las pesta?as de Notificaciones.</p>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {VARIABLES_COBRANZA.map(({ key, label }) => (
+                    <Button
+                      key={key}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="bg-white border-blue-300 text-blue-800 hover:bg-blue-100 font-mono text-xs"
+                      onClick={() => {
+                        insertarVariable(key)
+                        toast.success(`{{${key}}} insertado`, { duration: 1200 })
+                      }}
+                    >
+                      {`{{${key}}}`}
+                    </Button>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100 font-mono text-xs"
+                    onClick={() => {
+                      const insertInto = (el: HTMLTextAreaElement | HTMLInputElement | null, setter: (v: string) => void, current: string) => {
+                        if (!el && cuerpoRef.current) {
+                          setter(current + '\n' + BLOQUE_CUOTAS_VENCIDAS)
+                          return
+                        }
+                        const elTarget = (focus === 'cuerpo' ? cuerpoRef.current : focus === 'firma' ? firmaRef.current : focus === 'encabezado' ? encRef.current : null) as HTMLTextAreaElement | null
+                        const setterTarget = focus === 'cuerpo' ? setCuerpo : focus === 'firma' ? setFirma : setEncabezado
+                        const currentTarget = focus === 'cuerpo' ? cuerpo : focus === 'firma' ? firma : encabezado
+                        if (!elTarget) { setterTarget(currentTarget + '\n' + BLOQUE_CUOTAS_VENCIDAS); return }
+                        const start = elTarget.selectionStart ? currentTarget.length
+                        const end = elTarget.selectionEnd ? currentTarget.length
+                        const next = currentTarget.slice(0, start) + '\n' + BLOQUE_CUOTAS_VENCIDAS + currentTarget.slice(end)
+                        setterTarget(next)
+                      }
+                      insertInto(cuerpoRef.current, setCuerpo, cuerpo)
+                      setFocus('cuerpo')
+                      toast.success('Bloque de cuotas vencidas insertado', { duration: 2000 })
+                    }}
+                  >
+                    Insertar bloque: lista cuotas vencidas
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-blue-700 mb-2">Las variables de la pesta?a <strong>Variables Personalizadas</strong> aparecen abajo en el Banco de Variables y se copian aqu? al hacer clic.</p>
+                <div className="flex flex-wrap gap-2">
+                  {VARIABLES_NOTIFICACION.map(({ key, label }) => (
+                    <Button
+                      key={key}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="bg-white border-blue-300 text-blue-800 hover:bg-blue-100 font-mono text-xs"
+                      onClick={() => {
+                        insertarVariable(key)
+                        toast.success(`{{${key}}} insertado`, { duration: 1200 })
+                      }}
+                    >
+                      {`{{${key}}}`}
+                    </Button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2">
+              <label className="text-sm text-gray-600">Asunto</label>
+              <Input ref={asuntoRef as any} value={asunto} onFocus={()=>setFocus('asunto')} onChange={e=>setAsunto(e.target.value)} placeholder="Asunto del correo" />
+            </div>
+            <div className="col-span-2">
+              <p className="text-xs text-gray-500 mb-1">Puede usar c?digo HTML en encabezado, cuerpo y firma. Use el bot?n ?Vista previa (datos de ejemplo)? para ver c?mo queda el resultado.</p>
+              <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">Formato r?pido (encabezado/cuerpo/firma):
+                <Button size="sm" variant="ghost" onClick={()=>aplicarFormato('b')}>B</Button>
+                <Button size="sm" variant="ghost" onClick={()=>aplicarFormato('i')}>I</Button>
+                <Button size="sm" variant="ghost" onClick={()=>aplicarFormato('u')}>U</Button>
+                <Button size="sm" variant="ghost" onClick={()=>aplicarFormato('ul')}>Lista</Button>
+                <Button size="sm" variant="ghost" onClick={()=>aplicarFormato('a')}>Enlace</Button>
+              </div>
+            </div>
+            <div>
+              <label className="text-sm text-gray-600">Encabezado (puede incluir HTML)</label>
+              <Textarea ref={encRef} value={encabezado} onFocus={()=>setFocus('encabezado')} onChange={e=>setEncabezado(e.target.value)} rows={4} placeholder="Encabezado (ej. <p>Texto</p>)" />
+            </div>
+            <div>
+              <label className="text-sm text-gray-600">Firma (puede incluir HTML)</label>
+              <Textarea ref={firmaRef} value={firma} onFocus={()=>setFocus('firma')} onChange={e=>setFirma(e.target.value)} rows={4} placeholder="Firma (ej. <p>Atentamente,</p>)" />
+            </div>
+            <div className="col-span-2">
+              <label className="text-sm text-gray-600">Cuerpo (puede incluir HTML)</label>
+              <Textarea ref={cuerpoRef} value={cuerpo} onFocus={()=>setFocus('cuerpo')} onChange={e=>setCuerpo(replaceBase64ImagesWithLogoUrl(e.target.value))} rows={10} placeholder="Contenido principal (ej. <p>Hola <b>{{nombre}}</b></p>)" />
+            </div>
+          </div>
+
+          {/* Panel de Variables Configuradas: incluye Variables Personalizadas (pesta?a hom?nima) */}
+          <div className="border-2 border-blue-200 rounded-lg p-4 bg-gradient-to-br from-blue-50 to-white shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Database className="h-5 w-5 text-blue-600" />
+                <label className="text-base font-bold text-gray-800">Banco de Variables</label>
+                <Badge variant="outline" className="text-xs bg-blue-100 text-blue-800 border-blue-300">
+                  {variablesConfiguradas.length} disponibles
+                </Badge>
+                <span className="text-xs text-gray-600">(incluye Variables Personalizadas)</span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setMostrarVariables(!mostrarVariables)
+                  if (!mostrarVariables) {
+                    cargarVariables() // Recargar al abrir
+                  }
+                }}
+                className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+              >
+                {mostrarVariables ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </Button>
+            </div>
+
+            {mostrarVariables && (
+              <div className="space-y-4">
+                {/* Filtros mejorados */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {/* Filtro por tabla */}
+                  <div>
+                    <label className="text-xs font-semibold text-gray-700 mb-1 block">Filtrar por tabla:</label>
+                    <select
+                      value={filtroTablaVariable}
+                      onChange={e => setFiltroTablaVariable(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Todas las tablas</option>
+                      {tablasUnicas.map(tabla => (
+                        <option key={tabla} value={tabla}>{tabla}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* B?squeda de variables */}
+                  <div className="relative">
+                    <label className="text-xs font-semibold text-gray-700 mb-1 block">Buscar variable:</label>
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" style={{ top: '60%' }} />
+                    <Input
+                      value={busquedaVariable}
+                      onChange={e => setBusquedaVariable(e.target.value)}
+                      placeholder="Nombre, tabla o campo..."
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+
+                {/* Lista de variables agrupadas por tabla */}
+                {variablesConfiguradas.length === 0 ? (
+                  <div className="text-center py-8 text-sm text-gray-500 bg-white rounded-lg border-2 border-dashed border-gray-300">
+                    <Database className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                    <p className="font-medium">Cargando variables...</p>
+                  </div>
+                ) : variablesFiltradas.length === 0 ? (
+                  <div className="text-center py-8 text-sm text-gray-500 bg-white rounded-lg border-2 border-dashed border-gray-300">
+                    <p className="font-medium">No se encontraron variables con ese criterio.</p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="mt-2"
+                      onClick={() => {
+                        setBusquedaVariable('')
+                        setFiltroTablaVariable('')
+                      }}
+                    >
+                      Limpiar filtros
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+                    {Object.entries(variablesPorTabla).map(([tabla, variables]) => (
+                      <div key={tabla} className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm">
+                        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-200">
+                          <Badge variant="outline" className="text-xs font-semibold bg-gray-100 text-gray-700 border-gray-300">
+                            {tabla}
+                          </Badge>
+                          <span className="text-xs text-gray-500">{variables.length} variable{variables.length !== 1 ? 's' : ''}</span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          {variables.map(v => (
+                            <div
+                              key={v.id || v.nombre_variable}
+                              className="group border-2 border-gray-200 rounded-lg p-3 bg-white hover:border-blue-400 hover:shadow-md cursor-pointer transition-all duration-200"
+                              onClick={() => insertarVariable(v.nombre_variable)}
+                              title={`Click para insertar {{${v.nombre_variable}}} en el campo activo`}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1 min-w-0">
+                                  {/* Nombre de variable destacado */}
+                                  <div className="mb-2">
+                                    <code className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm font-mono font-semibold block w-fit">
+                                      {'{{'}{v.nombre_variable}{'}}'}
+                                    </code>
+                                  </div>
+
+                                  {/* Mapeo a BD - Destacado */}
+                                  <div className="mb-1">
+                                    <div className="text-xs text-gray-500 mb-0.5">Mapea a:</div>
+                                    <div className="text-xs font-mono text-gray-700 bg-gray-50 px-2 py-1 rounded border border-gray-200">
+                                      <span className="font-semibold text-gray-900">{v.tabla}</span>.<span className="text-blue-700">{v.campo_bd}</span>
+                                    </div>
+                                  </div>
+
+                                  {/* Descripci?n si existe */}
+                                  {v.descripcion && (
+                                    <div className="text-xs text-gray-600 mt-2 italic border-l-2 border-blue-200 pl-2">
+                                      {v.descripcion}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Bot?n de inserci?n mejorado */}
+                                <Button
+                                  size="sm"
+                                  className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    insertarVariable(v.nombre_variable)
+                                    toast.success(`Variable {{${v.nombre_variable}}} insertada`, { duration: 1500 })
+                                  }}
+                                >
+                                  +
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* M?todo alternativo: campo de texto para variables r?pidas */}
+            <div className="mt-3 pt-3 border-t flex items-center gap-2">
+              <Input
+                value={variable}
+                onChange={e => setVariable(e.target.value)}
+                placeholder="Escriba nombre de variable..."
+                className="max-w-xs"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    insertarVariable()
+                  }
+                }}
+              />
+              <Button onClick={() => insertarVariable()} disabled={!variable}>
+                Insertar
+              </Button>
+              <div className="text-xs text-gray-500">
+                O escriba manualmente: {VARIABLES_NOTIFICACION.slice(0, 3).map(v => `{{${v.key}}}`).join(', ')}...
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <Button onClick={guardar}>{selected ? 'Actualizar' : 'Guardar'}</Button>
+            {selected && <Button variant="destructive" onClick={eliminar}>Eliminar</Button>}
+            {selected && (
+              <>
+                <Button variant="secondary" onClick={exportar} title="Exportar a JSON">
+                  <FileText className="h-4 w-4 mr-1" />
+                  Exportar
+                </Button>
+              </>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleVistaPreviaHtml}
+              title="Ver c?mo quedar? el cuerpo del email con datos de ejemplo"
+            >
+              <Eye className="h-4 w-4 mr-2" />
+              Vista previa (datos de ejemplo)
+            </Button>
+
+                      
+          </div>
+        </Card>
+      </TabsContent>
+      <TabsContent value="html-editor" className="space-y-4">
+        <EditorPlantillaHTML />
+      </TabsContent>
+
+      <TabsContent value="resumen" className="space-y-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-blue-600" />
+              Banco de plantillas por caso
+            </CardTitle>
+            <CardDescription>
+              Cada caso (1 d?a, 5 d?as, hoy vence, 61+ mora, etc.) tiene su banco. Estos nombres aparecen en Notificaciones ? Configuraci?n al elegir la plantilla a enviar.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {/* B?squeda y filtros para el resumen */}
+            <div className="mb-6 space-y-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  value={busqueda}
+                  onChange={e => setBusqueda(e.target.value)}
+                  placeholder="Buscar plantillas..."
+                  className="pl-10"
+                />
+              </div>
+              <div className="flex gap-2">
+                <select
+                  value={filtroTipo}
+                  onChange={e => setFiltroTipo(e.target.value)}
+                  className="flex-1 border rounded px-2 py-1 text-sm"
+                >
+                  <option value="">Todos los casos</option>
+                  {ordenCasos.map(c => <option key={c.tipo} value={c.tipo}>{c.label}</option>)}
+                </select>
+                <select
+                  value={filtroActiva === null ? '' : String(filtroActiva)}
+                  onChange={e => setFiltroActiva(e.target.value === '' ? null : e.target.value === 'true')}
+                  className="border rounded px-2 py-1 text-sm"
+                >
+                  <option value="">Todas</option>
+                  <option value="true">Solo activas</option>
+                  <option value="false">Solo inactivas</option>
+                </select>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="text-center py-8 text-gray-500">Cargando plantillas...</div>
+            ) : plantillasFiltradas.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <AlertCircle className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                <p>No hay plantillas configuradas.</p>
+                <p className="text-sm mt-2">Vaya a la pesta?a "Armar plantilla" para crear nuevas plantillas.</p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {ordenCasos.map(({ tipo, label, borderColor }) => {
+                  const lista = plantillasPorCaso[tipo] || []
+                  if (lista.length === 0) return null
+                  return (
+                    <Card key={tipo} className={`border-l-4 ${borderColor}`}>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-lg flex items-center gap-2">
+                          <FileText className="h-5 w-5 text-gray-500" />
+                          Banco: {label}
+                          <Badge variant="outline" className="ml-2">
+                            {lista.length} plantilla(s)
+                          </Badge>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Nombre</TableHead>
+                                <TableHead>Asunto</TableHead>
+                                <TableHead>Fecha actualizaci?n</TableHead>
+                                <TableHead>Estado</TableHead>
+                                <TableHead className="text-right">Acciones</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {lista.map(plantilla => (
+                                <TableRow key={plantilla.id}>
+                                  <TableCell className="font-medium" title={plantilla.nombre}>
+                                    {plantilla.nombre}
+                                  </TableCell>
+                                  <TableCell className="max-w-xs text-sm text-gray-600 truncate" title={plantilla.asunto || ''}>
+                                    {plantilla.asunto || 'Sin asunto'}
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex items-center gap-1 text-sm text-gray-600">
+                                      <Calendar className="h-3 w-3" />
+                                      {formatearFecha(plantilla.fecha_actualizacion)}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    {plantilla.activa ? (
+                                      <Badge variant="default" className="bg-green-600">Activa</Badge>
+                                    ) : (
+                                      <Badge variant="secondary">Inactiva</Badge>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <div className="flex justify-end gap-2">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleEditarDesdeResumen(plantilla)}
+                                        title="Editar plantilla"
+                                      >
+                                        <Edit2 className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="hover:bg-red-100 hover:text-red-600"
+                                        onClick={() => handleEliminarDesdeResumen(plantilla)}
+                                        title="Eliminar plantilla"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </TabsContent>
+    </Tabs>
+  )
+}
+
+export default PlantillasNotificaciones

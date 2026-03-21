@@ -2,7 +2,15 @@ import { apiClient, ApiResponse } from './api'
 
 
 
+
+
+
+
 import { User, AuthTokens } from '../types'
+
+
+
+
 
 
 
@@ -10,7 +18,15 @@ import { BASE_PATH } from '../config/env'
 
 
 
+
+
+
+
 import {
+
+
+
+
 
 
 
@@ -18,7 +34,15 @@ import {
 
 
 
+
+
+
+
   safeGetItem,
+
+
+
+
 
 
 
@@ -26,7 +50,15 @@ import {
 
 
 
+
+
+
+
   safeSetSessionItem,
+
+
+
+
 
 
 
@@ -34,11 +66,23 @@ import {
 
 
 
+
+
+
+
   safeRemoveSessionItem,
 
 
 
+
+
+
+
   clearAuthStorage
+
+
+
+
 
 
 
@@ -50,7 +94,19 @@ import {
 
 
 
+
+
+
+
+
+
+
+
 export interface LoginForm {
+
+
+
+
 
 
 
@@ -58,7 +114,15 @@ export interface LoginForm {
 
 
 
+
+
+
+
   password: string
+
+
+
+
 
 
 
@@ -66,7 +130,19 @@ export interface LoginForm {
 
 
 
+
+
+
+
 }
+
+
+
+
+
+
+
+
 
 
 
@@ -78,7 +154,15 @@ export interface LoginResponse {
 
 
 
+
+
+
+
   access_token: string
+
+
+
+
 
 
 
@@ -86,7 +170,15 @@ export interface LoginResponse {
 
 
 
+
+
+
+
   token_type: string
+
+
+
+
 
 
 
@@ -94,11 +186,27 @@ export interface LoginResponse {
 
 
 
+
+
+
+
   user: User
 
 
 
+
+
+
+
 }
+
+
+
+
+
+
+
+
 
 
 
@@ -110,11 +218,27 @@ export interface RefreshTokenRequest {
 
 
 
+
+
+
+
   refresh_token: string
 
 
 
+
+
+
+
 }
+
+
+
+
+
+
+
+
 
 
 
@@ -126,7 +250,15 @@ export interface ChangePasswordRequest {
 
 
 
+
+
+
+
   current_password: string
+
+
+
+
 
 
 
@@ -134,11 +266,27 @@ export interface ChangePasswordRequest {
 
 
 
+
+
+
+
   confirm_password: string
 
 
 
+
+
+
+
 }
+
+
+
+
+
+
+
+
 
 
 
@@ -150,7 +298,15 @@ export class AuthService {
 
 
 
+
+
+
+
   // Login de usuario - CON PERSISTENCIA SEGURA
+
+
+
+
 
 
 
@@ -158,7 +314,15 @@ export class AuthService {
 
 
 
+
+
+
+
     try {
+
+
+
+
 
 
 
@@ -166,7 +330,15 @@ export class AuthService {
 
 
 
+
+
+
+
       const normalizedCredentials = {
+
+
+
+
 
 
 
@@ -174,11 +346,27 @@ export class AuthService {
 
 
 
+
+
+
+
         email: credentials.email.toLowerCase().trim()
 
 
 
+
+
+
+
       }
+
+
+
+
+
+
+
+
 
 
 
@@ -190,7 +378,15 @@ export class AuthService {
 
 
 
+
+
+
+
       // Aceptar respuesta directa o envuelta en .data (por proxy o middleware)
+
+
+
+
 
 
 
@@ -202,11 +398,27 @@ export class AuthService {
 
 
 
+
+
+
+
+
+
+
+
       const accessToken = response?.access_token
 
 
 
+
+
+
+
       const refreshToken = response?.refresh_token
+
+
+
+
 
 
 
@@ -218,7 +430,19 @@ export class AuthService {
 
 
 
+
+
+
+
+
+
+
+
       if (!accessToken || typeof accessToken !== 'string') {
+
+
+
+
 
 
 
@@ -226,11 +450,27 @@ export class AuthService {
 
 
 
+
+
+
+
         throw new Error('El servidor no devolvió un token de sesión. Intenta de nuevo.')
 
 
 
+
+
+
+
       }
+
+
+
+
+
+
+
+
 
 
 
@@ -242,7 +482,19 @@ export class AuthService {
 
 
 
+
+
+
+
       clearAuthStorage()
+
+
+
+
+
+
+
+
 
 
 
@@ -254,7 +506,15 @@ export class AuthService {
 
 
 
+
+
+
+
       const remember = credentials.remember !== false
+
+
+
+
 
 
 
@@ -262,7 +522,15 @@ export class AuthService {
 
 
 
+
+
+
+
         safeSetItem('access_token', accessToken)
+
+
+
+
 
 
 
@@ -270,7 +538,15 @@ export class AuthService {
 
 
 
+
+
+
+
         safeSetItem('user', user ?? null)
+
+
+
+
 
 
 
@@ -278,7 +554,15 @@ export class AuthService {
 
 
 
+
+
+
+
       } else {
+
+
+
+
 
 
 
@@ -286,7 +570,15 @@ export class AuthService {
 
 
 
+
+
+
+
         safeSetSessionItem('refresh_token', refreshToken ?? '')
+
+
+
+
 
 
 
@@ -294,11 +586,27 @@ export class AuthService {
 
 
 
+
+
+
+
         safeRemoveItem('remember_me')
 
 
 
+
+
+
+
       }
+
+
+
+
+
+
+
+
 
 
 
@@ -310,7 +618,19 @@ export class AuthService {
 
 
 
+
+
+
+
       apiClient.resetRefreshTokenExpired()
+
+
+
+
+
+
+
+
 
 
 
@@ -322,7 +642,15 @@ export class AuthService {
 
 
 
+
+
+
+
     } catch (error: any) {
+
+
+
+
 
 
 
@@ -330,7 +658,15 @@ export class AuthService {
 
 
 
+
+
+
+
         const networkError = new Error('Error de conexión con el servidor') as any
+
+
+
+
 
 
 
@@ -338,7 +674,15 @@ export class AuthService {
 
 
 
+
+
+
+
         throw networkError
+
+
+
+
 
 
 
@@ -350,7 +694,19 @@ export class AuthService {
 
 
 
+
+
+
+
+
+
+
+
       throw error
+
+
+
+
 
 
 
@@ -358,7 +714,19 @@ export class AuthService {
 
 
 
+
+
+
+
   }
+
+
+
+
+
+
+
+
 
 
 
@@ -370,7 +738,15 @@ export class AuthService {
 
 
 
+
+
+
+
   async forgotPassword(email: string): Promise<{ message: string }> {
+
+
+
+
 
 
 
@@ -378,7 +754,15 @@ export class AuthService {
 
 
 
+
+
+
+
     const raw = await apiClient.post<{ message: string }>('/api/v1/auth/forgot-password', { email: normalized })
+
+
+
+
 
 
 
@@ -386,11 +770,27 @@ export class AuthService {
 
 
 
+
+
+
+
     return data
 
 
 
+
+
+
+
   }
+
+
+
+
+
+
+
+
 
 
 
@@ -402,7 +802,15 @@ export class AuthService {
 
 
 
+
+
+
+
   async logout(): Promise<void> {
+
+
+
+
 
 
 
@@ -410,7 +818,15 @@ export class AuthService {
 
 
 
+
+
+
+
       await apiClient.post('/api/v1/auth/logout')
+
+
+
+
 
 
 
@@ -418,7 +834,15 @@ export class AuthService {
 
 
 
+
+
+
+
       // Error silencioso para evitar loops de logging
+
+
+
+
 
 
 
@@ -426,7 +850,15 @@ export class AuthService {
 
 
 
+
+
+
+
       // Limpiar todo el almacenamiento de autenticación
+
+
+
+
 
 
 
@@ -434,11 +866,27 @@ export class AuthService {
 
 
 
+
+
+
+
     }
 
 
 
+
+
+
+
   }
+
+
+
+
+
+
+
+
 
 
 
@@ -450,11 +898,23 @@ export class AuthService {
 
 
 
+
+
+
+
   async refreshToken(): Promise<AuthTokens> {
 
 
 
+
+
+
+
     try {
+
+
+
+
 
 
 
@@ -466,7 +926,19 @@ export class AuthService {
 
 
 
+
+
+
+
+
+
+
+
       if (!refreshToken) {
+
+
+
+
 
 
 
@@ -474,7 +946,19 @@ export class AuthService {
 
 
 
+
+
+
+
       }
+
+
+
+
+
+
+
+
 
 
 
@@ -486,7 +970,15 @@ export class AuthService {
 
 
 
+
+
+
+
         refresh_token: refreshToken
+
+
+
+
 
 
 
@@ -498,7 +990,19 @@ export class AuthService {
 
 
 
+
+
+
+
+
+
+
+
       // Actualizar tokens en almacenamiento
+
+
+
+
 
 
 
@@ -506,7 +1010,15 @@ export class AuthService {
 
 
 
+
+
+
+
       if (rememberMe) {
+
+
+
+
 
 
 
@@ -514,7 +1026,15 @@ export class AuthService {
 
 
 
+
+
+
+
         safeSetItem('refresh_token', response.refresh_token)
+
+
+
+
 
 
 
@@ -522,7 +1042,15 @@ export class AuthService {
 
 
 
+
+
+
+
         safeSetSessionItem('access_token', response.access_token)
+
+
+
+
 
 
 
@@ -530,7 +1058,19 @@ export class AuthService {
 
 
 
+
+
+
+
       }
+
+
+
+
+
+
+
+
 
 
 
@@ -542,7 +1082,15 @@ export class AuthService {
 
 
 
+
+
+
+
     } catch (error: any) {
+
+
+
+
 
 
 
@@ -550,7 +1098,15 @@ export class AuthService {
 
 
 
+
+
+
+
       clearAuthStorage()
+
+
+
+
 
 
 
@@ -558,11 +1114,27 @@ export class AuthService {
 
 
 
+
+
+
+
     }
 
 
 
+
+
+
+
   }
+
+
+
+
+
+
+
+
 
 
 
@@ -574,11 +1146,23 @@ export class AuthService {
 
 
 
+
+
+
+
   async getCurrentUser(): Promise<User> {
 
 
 
+
+
+
+
     try {
+
+
+
+
 
 
 
@@ -590,7 +1174,19 @@ export class AuthService {
 
 
 
+
+
+
+
+
+
+
+
       // El backend retorna directamente el objeto User, no envuelto en ApiResponse
+
+
+
+
 
 
 
@@ -602,7 +1198,19 @@ export class AuthService {
 
 
 
+
+
+
+
+
+
+
+
       if (!user) {
+
+
+
+
 
 
 
@@ -610,7 +1218,19 @@ export class AuthService {
 
 
 
+
+
+
+
       }
+
+
+
+
+
+
+
+
 
 
 
@@ -622,7 +1242,15 @@ export class AuthService {
 
 
 
+
+
+
+
       const rememberMe = safeGetItem('remember_me', false)
+
+
+
+
 
 
 
@@ -630,7 +1258,15 @@ export class AuthService {
 
 
 
+
+
+
+
         safeSetItem('user', user)
+
+
+
+
 
 
 
@@ -638,7 +1274,15 @@ export class AuthService {
 
 
 
+
+
+
+
         safeSetSessionItem('user', user)
+
+
+
+
 
 
 
@@ -650,7 +1294,19 @@ export class AuthService {
 
 
 
+
+
+
+
+
+
+
+
       return user
+
+
+
+
 
 
 
@@ -658,7 +1314,15 @@ export class AuthService {
 
 
 
+
+
+
+
       throw error
+
+
+
+
 
 
 
@@ -666,7 +1330,19 @@ export class AuthService {
 
 
 
+
+
+
+
   }
+
+
+
+
+
+
+
+
 
 
 
@@ -678,7 +1354,15 @@ export class AuthService {
 
 
 
+
+
+
+
   async changePassword(data: ChangePasswordRequest): Promise<{ requires_reauth: boolean; message?: string }> {
+
+
+
+
 
 
 
@@ -690,7 +1374,19 @@ export class AuthService {
 
 
 
+
+
+
+
+
+
+
+
     // ✅ Si el backend indica que se requiere reautenticación, cerrar sesión y redirigir
+
+
+
+
 
 
 
@@ -698,7 +1394,15 @@ export class AuthService {
 
 
 
+
+
+
+
       // Limpiar almacenamiento de autenticación
+
+
+
+
 
 
 
@@ -710,7 +1414,19 @@ export class AuthService {
 
 
 
+
+
+
+
+
+
+
+
       // Redirigir al login (BASE_PATH para coherencia con basename /pagos)
+
+
+
+
 
 
 
@@ -718,7 +1434,15 @@ export class AuthService {
 
 
 
+
+
+
+
         window.location.href = `${BASE_PATH}/login`.replace(/\/+/g, '/')
+
+
+
+
 
 
 
@@ -726,7 +1450,19 @@ export class AuthService {
 
 
 
+
+
+
+
     }
+
+
+
+
+
+
+
+
 
 
 
@@ -738,7 +1474,15 @@ export class AuthService {
 
 
 
+
+
+
+
       requires_reauth: response.requires_reauth || false,
+
+
+
+
 
 
 
@@ -746,11 +1490,27 @@ export class AuthService {
 
 
 
+
+
+
+
     }
 
 
 
+
+
+
+
   }
+
+
+
+
+
+
+
+
 
 
 
@@ -762,7 +1522,15 @@ export class AuthService {
 
 
 
+
+
+
+
   isAuthenticated(): boolean {
+
+
+
+
 
 
 
@@ -770,11 +1538,27 @@ export class AuthService {
 
 
 
+
+
+
+
     return !!token
 
 
 
+
+
+
+
   }
+
+
+
+
+
+
+
+
 
 
 
@@ -786,7 +1570,15 @@ export class AuthService {
 
 
 
+
+
+
+
   getAccessToken(): string | null {
+
+
+
+
 
 
 
@@ -794,7 +1586,19 @@ export class AuthService {
 
 
 
+
+
+
+
   }
+
+
+
+
+
+
+
+
 
 
 
@@ -806,7 +1610,15 @@ export class AuthService {
 
 
 
+
+
+
+
   getStoredUser(): User | null {
+
+
+
+
 
 
 
@@ -814,7 +1626,15 @@ export class AuthService {
 
 
 
+
+
+
+
     return rememberMe
+
+
+
+
 
 
 
@@ -822,11 +1642,23 @@ export class AuthService {
 
 
 
+
+
+
+
       : safeGetSessionItem('user', null)
 
 
 
+
+
+
+
   }
+
+
+
+
 
 
 
@@ -838,11 +1670,27 @@ export class AuthService {
 
 
 
+
+
+
+
+
+
+
+
 // Instancia singleton
 
 
 
+
+
+
+
 export const authService = new AuthService()
+
+
+
+
 
 
 

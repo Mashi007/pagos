@@ -1,5 +1,5 @@
-import { ValidadoresConfig } from '../ValidadoresConfig'
-
-export function ConfigValidadoresTab() {
-  return <ValidadoresConfig />
-}
+import { ValidadoresConfig } from '../ValidadoresConfig'
+
+export function ConfigValidadoresTab() {
+  return <ValidadoresConfig />
+}
