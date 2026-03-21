@@ -12,7 +12,7 @@ function PagosPage() {
           </span>
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Pagos</h1>
-            <p className="text-sm text-gray-500 mt-0.5">Gestión de cobros y conciliación</p>
+            <p className="text-sm text-gray-500 mt-0.5">GestiÃ³n de cobros y conciliaciÃ³n</p>
           </div>
         </div>
       </header>
@@ -23,11 +23,11 @@ function PagosPage() {
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
               <CreditCard className="h-4 w-4" />
             </span>
-            Gestión de pagos
+            GestiÃ³n de pagos
           </CardTitle>
         </CardHeader>
         <CardContent className="text-sm text-gray-600 leading-relaxed">
-          <p>Registre pagos, consulte por cédula, estado o fecha y descargue reportes.</p>
+          <p>Registre pagos, consulte por cÃ©dula, estado o fecha y descargue reportes.</p>
         </CardContent>
       </Card>
 

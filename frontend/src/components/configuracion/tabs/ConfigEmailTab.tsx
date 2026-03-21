@@ -1,6 +1,6 @@
-﻿import { EmailCuentasConfig } from '../EmailCuentasConfig'
-
-export function ConfigEmailTab() {
-  return <EmailCuentasConfig />
-}
-
+ï»¿import { EmailCuentasConfig } from '../EmailCuentasConfig'
+
+export function ConfigEmailTab() {
+  return <EmailCuentasConfig />
+}
+

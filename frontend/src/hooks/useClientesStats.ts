@@ -13,8 +13,8 @@ export function useClientesStats() {
   return useQuery({
     queryKey: ['clientes-stats'],
     queryFn: async (): Promise<ClientesStats> => {
-      // Obtener estadísticas directamente desde el endpoint del backend
-      // Esto es más eficiente que traer todos los clientes
+      // Obtener estadÃ­sticas directamente desde el endpoint del backend
+      // Esto es mÃ¡s eficiente que traer todos los clientes
       return await clienteService.getStats()
     },
     staleTime: 30 * 1000, // 30 s para que el KPI "Nuevos Clientes este mes" se actualice pronto
