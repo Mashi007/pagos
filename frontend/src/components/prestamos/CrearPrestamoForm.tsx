@@ -174,9 +174,26 @@ export function CrearPrestamoForm({
 
   const [clienteData, setClienteData] = useState<any>(null)
 
-  const [numeroCuotas, setNumeroCuotas] = useState<number>(12) // Valor por defecto: 12 cuotas
+  const [numeroCuotas, setNumeroCuotas] = useState<number>(
+    prestamo?.numero_cuotas && prestamo.numero_cuotas > 0
+      ? prestamo.numero_cuotas
+      : 12
+  )
 
-  const [cuotaPeriodo, setCuotaPeriodo] = useState<number>(0)
+  const [cuotaPeriodo, setCuotaPeriodo] = useState<number>(() => {
+    if (!prestamo) return 0
+    const cp =
+      prestamo.cuota_periodo != null && Number(prestamo.cuota_periodo) > 0
+        ? Number(prestamo.cuota_periodo)
+        : 0
+    if (cp > 0) return cp
+    const tf = Number(prestamo.total_financiamiento || 0)
+    const n =
+      prestamo.numero_cuotas && prestamo.numero_cuotas > 0
+        ? prestamo.numero_cuotas
+        : 12
+    return n > 0 && tf > 0 ? tf / n : 0
+  })
 
   const [showConfirmCreate, setShowConfirmCreate] = useState(false)
 
@@ -189,34 +206,31 @@ export function CrearPrestamoForm({
     analista?: boolean
   }>({})
 
-  // Calcular anticipo como 30% del valor activo automáticamente al inicio o cuando cambia el valor activo
-
-  // Solo si no hay un anticipo ya establecido (para nuevos préstamos) o si el anticipo es igual al 30% calculado
+  // Total financiamiento = cuota manual x numero de cuotas; anticipo = valor activo - total
 
   useEffect(() => {
-    if (valorActivo > 0) {
-      const anticipoCalculado = valorActivo * 0.3
-
-      // Solo actualizar automáticamente si el anticipo actual es 0 o igual al 30% calculado
-
-      // Esto permite que el usuario modifique el anticipo sin que se sobrescriba cuando cambia el valor activo
-
-      setAnticipo(prevAnticipo => {
-        if (
-          prevAnticipo === 0 ||
-          Math.abs(prevAnticipo - anticipoCalculado) < 0.01
-        ) {
-          return anticipoCalculado
-        }
-
-        return prevAnticipo
-      })
-    } else {
+    const cuota = Number.isFinite(cuotaPeriodo) ? Math.max(0, cuotaPeriodo) : 0
+    const n =
+      Number.isFinite(numeroCuotas) && numeroCuotas > 0 ? numeroCuotas : 0
+    const va = Number.isFinite(valorActivo) ? Math.max(0, valorActivo) : 0
+    if (cuota <= 0 || n <= 0) {
       setAnticipo(0)
+      setFormData(prev => ({
+        ...prev,
+        total_financiamiento: 0,
+      }))
+      return
     }
-  }, [valorActivo])
+    const totalFin = Math.round(cuota * n * 100) / 100
+    const ant = Math.round(Math.max(0, va - totalFin) * 100) / 100
+    setAnticipo(ant)
+    setFormData(prev => ({
+      ...prev,
+      total_financiamiento: totalFin,
+    }))
+  }, [cuotaPeriodo, numeroCuotas, valorActivo])
 
-  // Si se selecciona modelo o llegan modelos desde configuración, cargar su precio
+  // Si se selecciona modelo o llegan modelos desde configuracion, cargar su precio
 
   useEffect(() => {
     if (
@@ -241,41 +255,13 @@ export function CrearPrestamoForm({
     }
   }, [formData.modelo_vehiculo, modelosVehiculos])
 
-  // Calcular total_financiamiento automáticamente
-
-  useEffect(() => {
-    const total = valorActivo - anticipo
-
-    setFormData(prev => ({
-      ...prev,
-
-      total_financiamiento: Math.max(0, total),
-    }))
-  }, [valorActivo, anticipo])
-
-  // Buscar cliente por cédula con debounce mejorado
+  // Buscar cliente por cedula con debounce mejorado
 
   const debouncedCedula = useDebounce(formData.cedula || '', 500)
 
   const { data: clienteInfo, isLoading: isLoadingCliente } = useSearchClientes(
     debouncedCedula && debouncedCedula.length >= 2 ? debouncedCedula : ''
   )
-
-  // Calcular cuota por período basado en el número de cuotas manual
-
-  useEffect(() => {
-    if (
-      formData.total_financiamiento &&
-      formData.total_financiamiento > 0 &&
-      numeroCuotas > 0
-    ) {
-      const cuota = formData.total_financiamiento / numeroCuotas
-
-      setCuotaPeriodo(cuota)
-    } else {
-      setCuotaPeriodo(0)
-    }
-  }, [formData.total_financiamiento, numeroCuotas])
 
   // Cargar datos del cliente cuando se encuentra
 
@@ -337,21 +323,28 @@ export function CrearPrestamoForm({
       errors.push('El Valor Activo debe ser mayor a 0')
     }
 
-    // Validar Anticipo - debe ser al menos el 30% del valor activo
+    // Cuota por periodo: manual; total = cuota x cuotas no puede superar el valor del activo
 
-    const anticipoMinimo = valorActivo > 0 ? valorActivo * 0.3 : 0
+    if (!cuotaPeriodo || cuotaPeriodo <= 0) {
+      errors.push('Ingrese la Cuota por Periodo (USD) mayor a 0')
+    }
 
-    if (anticipo < anticipoMinimo) {
+    const totalCuotas =
+      Number.isFinite(cuotaPeriodo) && Number.isFinite(numeroCuotas)
+        ? Math.round(cuotaPeriodo * numeroCuotas * 100) / 100
+        : 0
+
+    if (
+      valorActivo > 0 &&
+      totalCuotas > 0 &&
+      totalCuotas > valorActivo + 0.01
+    ) {
       errors.push(
-        `El Anticipo debe ser al menos el 30% del Valor Activo (mínimo: ${anticipoMinimo.toFixed(2)} USD)`
+        'Cuota por periodo x numero de cuotas no puede superar el Valor Activo (el anticipo quedaria negativo)'
       )
     }
 
-    if (anticipo < 0) {
-      errors.push('El Anticipo no puede ser negativo')
-    }
-
-    // Validar Número de Cuotas
+    // Validar Numero de Cuotas
 
     if (
       numeroCuotas < 1 ||
@@ -882,52 +875,25 @@ export function CrearPrestamoForm({
                   <div>
                     <label className="mb-1 block text-sm font-medium">
                       Anticipo (USD){' '}
-                      <span className="text-green-600">(Automático - 30%)</span>
+                      <span className="text-green-600">
+                        (Calculado: Valor Activo - Cuota x Cuotas)
+                      </span>
                     </label>
 
                     <Input
                       type="number"
                       step="0.01"
-                      min={
-                        valorActivo > 0 ? (valorActivo * 0.3).toFixed(2) : '0'
-                      }
+                      min="0"
                       value={anticipo === 0 ? '' : anticipo.toFixed(2)}
-                      onChange={e => {
-                        const value = e.target.value
-
-                        const numericValue =
-                          value === '' ? 0 : parseFloat(value)
-
-                        if (!isNaN(numericValue) && numericValue >= 0) {
-                          setAnticipo(numericValue)
-                        }
-                      }}
-                      onBlur={e => {
-                        const value = parseFloat(e.target.value)
-
-                        const anticipoMinimo =
-                          valorActivo > 0 ? valorActivo * 0.3 : 0
-
-                        // Si el valor es menor al mínimo, establecer el mínimo
-
-                        if (!isNaN(value) && value < anticipoMinimo) {
-                          setAnticipo(anticipoMinimo)
-
-                          toast.warning(
-                            `El anticipo mínimo es ${anticipoMinimo.toFixed(2)} USD (30% del valor activo)`
-                          )
-                        } else if (!isNaN(value) && value >= anticipoMinimo) {
-                          setAnticipo(value)
-                        }
-                      }}
+                      readOnly
+                      className="bg-gray-100"
                       disabled={isReadOnly}
-                      placeholder="Mínimo 30% del Valor Activo"
+                      placeholder="Se calcula al ingresar cuota y cuotas"
                     />
 
                     <p className="mt-1 text-xs text-gray-500">
-                      {valorActivo > 0
-                        ? `Mínimo: ${(valorActivo * 0.3).toFixed(2)} USD (30% del Valor Activo)`
-                        : '30% del Valor Activo'}
+                      Anticipo = Valor Activo menos (Cuota por periodo x Numero
+                      de cuotas). Total financiamiento = cuota x cuotas.
                     </p>
                   </div>
                 </div>
@@ -953,7 +919,8 @@ export function CrearPrestamoForm({
                     />
 
                     <p className="mt-1 text-xs text-gray-500">
-                      Calculado automáticamente (Valor Activo - Anticipo)
+                      Cuota por periodo x Numero de cuotas (sincronizado con
+                      Anticipo)
                     </p>
                   </div>
 
@@ -1019,13 +986,33 @@ export function CrearPrestamoForm({
 
                   <div>
                     <label className="mb-1 block text-sm font-medium">
-                      Cuota por Período (USD)
+                      Cuota por Periodo (USD){' '}
+                      <span className="text-red-500">*</span>{' '}
+                      <span className="text-blue-600">(Manual)</span>
                     </label>
 
                     <Input
-                      value={cuotaPeriodo.toFixed(2)}
-                      disabled
-                      className="bg-gray-50"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={
+                        cuotaPeriodo === 0
+                          ? ''
+                          : Number.isFinite(cuotaPeriodo)
+                            ? cuotaPeriodo
+                            : ''
+                      }
+                      onChange={e => {
+                        const raw = e.target.value
+                        if (raw === '') {
+                          setCuotaPeriodo(0)
+                          return
+                        }
+                        const v = parseFloat(raw)
+                        if (!Number.isNaN(v) && v >= 0) setCuotaPeriodo(v)
+                      }}
+                      disabled={isReadOnly}
+                      placeholder="Ingrese la cuota por periodo"
                     />
                   </div>
                 </div>

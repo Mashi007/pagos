@@ -1,12 +1,12 @@
-"""
+﻿"""
 Endpoints para Revisión Manual de Préstamos (post-migración).
 Lista de préstamos con detalles completos, edición de cliente/préstamo/pagos, y marcado como revisado.
 Incluye validaciones y logging para garantizar integridad de datos.
 """
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, HTTPException, Body
-from sqlalchemy import select, func, and_, case
+from sqlalchemy import select, func, and_, case, literal_column
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 
@@ -61,7 +61,10 @@ class CuotaUpdateData(BaseModel):
     monto: Optional[float] = Field(None, ge=0)
     total_pagado: Optional[float] = Field(None, ge=0)
     # [A1] Acepta mayúsculas y minúsculas; el endpoint normaliza a MAYÚSCULAS antes de guardar.
-    estado: Optional[str] = Field(None, pattern="^(pendiente|pagado|conciliado|PENDIENTE|PAGADO|CONCILIADO)$")
+    estado: Optional[str] = Field(
+        None,
+        pattern="^(?i)(pendiente|parcial|vencido|mora|pagado|pago_adelantado|cancelada|PENDIENTE|PARCIAL|VENCIDO|MORA|PAGADO|PAGO_ADELANTADO|CANCELADA)$",
+    )
     observaciones: Optional[str] = None
 
 # ===== SCHEMAS RESPUESTA =====
@@ -139,8 +142,9 @@ def get_prestamos_revision_manual(
     """
     Lista de préstamos para revisión manual. LIMIT en SQL para carga rápida.
     """
-    hoy = date.today()
-    umbral_moroso = hoy - timedelta(days=89)
+    hoy_lit = literal_column("(CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date")
+    dias_retraso = func.greatest(0, hoy_lit - Cuota.fecha_vencimiento)
+    no_pago_completo = func.coalesce(Cuota.total_pagado, 0) < (Cuota.monto - 0.01)
     cedula_trim = cedula.strip() if cedula and cedula.strip() else None
 
     # 1. Query base: Prestamo LEFT JOIN RevisionManualPrestamo
@@ -181,9 +185,22 @@ def get_prestamos_revision_manual(
     agg_subq = (
         select(
             Cuota.prestamo_id,
-            func.coalesce(func.sum(case((Cuota.fecha_pago.isnot(None), Cuota.total_pagado), else_=0)), 0).label("total_abonos"),
-            func.sum(case((and_(Cuota.fecha_vencimiento < hoy, Cuota.fecha_pago.is_(None)), 1), else_=0)).label("vencidas"),
-            func.sum(case((and_(Cuota.fecha_vencimiento < umbral_moroso, Cuota.fecha_pago.is_(None)), 1), else_=0)).label("morosas"),
+            func.coalesce(func.sum(Cuota.total_pagado), 0).label("total_abonos"),
+            func.sum(
+                case(
+                    (
+                        and_(no_pago_completo, dias_retraso >= 1, dias_retraso < 92),
+                        1,
+                    ),
+                    else_=0,
+                )
+            ).label("vencidas"),
+            func.sum(
+                case(
+                    (and_(no_pago_completo, dias_retraso >= 92), 1),
+                    else_=0,
+                )
+            ).label("morosas"),
         )
         .where(Cuota.prestamo_id.in_(prestamo_ids))
         .group_by(Cuota.prestamo_id)
@@ -658,7 +675,15 @@ def editar_cuota_revision(
     if update_data.estado is not None:
         # [A1] Normalizar siempre a MAYÚSCULAS antes de persistir
         estado_normalizado = update_data.estado.upper()
-        estados_validos = ["PENDIENTE", "PAGADO", "CONCILIADO"]
+        estados_validos = [
+            "PENDIENTE",
+            "PARCIAL",
+            "VENCIDO",
+            "MORA",
+            "PAGADO",
+            "PAGO_ADELANTADO",
+            "CANCELADA",
+        ]
         if estado_normalizado not in estados_validos:
             raise HTTPException(status_code=400, detail=f"Estado inválido. Válidos: {estados_validos}")
         cambios_dict['estado'] = (cuota.estado, estado_normalizado)

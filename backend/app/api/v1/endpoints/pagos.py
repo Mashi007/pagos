@@ -2464,7 +2464,7 @@ def export_excel_pagos_sin_aplicar_cuotas(
 
                         Cuota.prestamo_id == Pago.prestamo_id,
 
-                        Cuota.estado.in_(["PENDIENTE", "MORA", "PARCIAL"]),
+                        Cuota.estado.in_(["PENDIENTE", "VENCIDO", "MORA", "PARCIAL"]),
 
                         (func.coalesce(Cuota.monto, 0) - aplicado_en_cuota) > 0.01,
 

@@ -145,7 +145,7 @@ class ConciliacionAutomaticaService:
                 cuotas_pendientes = db.query(Cuota).filter(
                     and_(
                         Cuota.prestamo_id == pago.prestamo_id,
-                        Cuota.estado.in_([EstadoCuota.PENDIENTE, EstadoCuota.MORA, EstadoCuota.PARCIAL])
+                        Cuota.estado.in_([EstadoCuota.PENDIENTE, EstadoCuota.VENCIDO, EstadoCuota.MORA, EstadoCuota.PARCIAL])
                     )
                 ).order_by(Cuota.numero_cuota).all()
                 

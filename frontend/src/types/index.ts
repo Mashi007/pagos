@@ -219,7 +219,7 @@ export interface PrestamoForm {
 
   numero_cuotas?: number // Número de cuotas manual del formulario
 
-  cuota_periodo?: number // Cuota calculada
+  cuota_periodo?: number // Cuota por periodo (manual en formulario nuevo prestamo)
 
   tasa_interes?: number
 

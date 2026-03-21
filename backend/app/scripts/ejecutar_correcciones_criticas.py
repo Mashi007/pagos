@@ -9,6 +9,7 @@ from datetime import datetime
 from decimal import Decimal
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from app.services.cuota_estado import SQL_PG_ESTADO_CUOTA_CASE_CORRELATED
 
 logging.basicConfig(
     level=logging.INFO,
@@ -84,13 +85,13 @@ class AutomatizadorCriticos:
         
         result = db.execute(text('''
             INSERT INTO cuota_pagos (cuota_id, pago_id, monto_aplicado, orden_aplicacion)
-            SELECT c.id, p.id, LEAST(p.monto_pagado, c.monto - COALESCE((
+            SELECT c.id, p.id, LEAST(p.monto_pagado, c.monto_cuota - COALESCE((
                 SELECT SUM(cp.monto_aplicado) FROM cuota_pagos cp WHERE cp.cuota_id = c.id
               ), 0)), 1
             FROM pagos p
             JOIN clientes cl ON p.cedula = cl.cedula
             JOIN prestamos pr ON cl.id = pr.cliente_id AND pr.estado = 'APROBADO'
-            JOIN cuotas c ON pr.id = c.prestamo_id AND c.estado IN ('PENDIENTE', 'MORA', 'PARCIAL')
+            JOIN cuotas c ON pr.id = c.prestamo_id AND c.estado IN ('PENDIENTE', 'VENCIDO', 'MORA', 'PARCIAL')
             WHERE p.prestamo_id IS NULL
               AND NOT EXISTS (SELECT 1 FROM cuota_pagos cp WHERE cp.pago_id = p.id)
         '''))
@@ -101,9 +102,9 @@ class AutomatizadorCriticos:
     @staticmethod
     def _corregir_cuota_216933(db: Session, dry_run: bool) -> dict:
         exceso_data = db.query(text('''
-            SELECT COALESCE(SUM(cp.monto_aplicado), 0) - c.monto
+            SELECT COALESCE(SUM(cp.monto_aplicado), 0) - c.monto_cuota
             FROM cuotas c LEFT JOIN cuota_pagos cp ON c.id = cp.cuota_id
-            WHERE c.id = 216933 GROUP BY c.monto
+            WHERE c.id = 216933 GROUP BY c.monto_cuota
         ''')).fetchone()
         
         if not exceso_data or exceso_data[0] <= Decimal('0.01'):
@@ -134,8 +135,10 @@ class AutomatizadorCriticos:
     def _corregir_estados(db: Session, dry_run: bool) -> dict:
         inconsistencias = db.query(text('''
             SELECT COUNT(*) FROM cuotas c
-            LEFT JOIN cuota_pagos cp ON c.id = cp.cuota_id
-            WHERE c.estado NOT IN ('PAGADO', 'PARCIAL', 'MORA', 'PENDIENTE', 'CANCELADA')
+            WHERE c.estado NOT IN (
+              'PAGADO', 'PAGO_ADELANTADO', 'PARCIAL', 'VENCIDO',
+              'MORA', 'PENDIENTE', 'CANCELADA'
+            )
         ''')).fetchone()
         
         total_inconsistencias = inconsistencias[0] if inconsistencias else 0
@@ -144,14 +147,16 @@ class AutomatizadorCriticos:
         if dry_run:
             return {'status': 'dry_run', 'inconsistencias': total_inconsistencias}
         
-        result = db.execute(text('''
-            UPDATE cuotas c SET estado = CASE 
-                WHEN COALESCE((SELECT SUM(cp.monto_aplicado) FROM cuota_pagos cp WHERE cp.cuota_id = c.id), 0) >= c.monto - 0.01 THEN 'PAGADO'
-                WHEN COALESCE((SELECT SUM(cp.monto_aplicado) FROM cuota_pagos cp WHERE cp.cuota_id = c.id), 0) > 0 THEN 'PARCIAL'
-                WHEN DATE(c.fecha_vencimiento) < CURRENT_DATE THEN 'MORA'
-                ELSE 'PENDIENTE' END
-            WHERE c.estado IS NULL
-        '''))
+        case_sql = SQL_PG_ESTADO_CUOTA_CASE_CORRELATED
+        result = db.execute(
+            text(
+                "UPDATE cuotas c SET estado = ("
+                + case_sql
+                + ") WHERE c.estado IS DISTINCT FROM ("
+                + case_sql
+                + ")"
+            )
+        )
         
         logger.info(f'✓ {result.rowcount} cuotas actualizadas')
         return {'status': 'success', 'cuotas_actualizadas': result.rowcount}

@@ -78,7 +78,7 @@ def aplicar_pagos_pendientes():
                 cuotas = db.query(Cuota).filter(
                     and_(
                         Cuota.prestamo_id == pago.prestamo_id,
-                        Cuota.estado.in_(["PENDIENTE", "MORA", "PARCIAL"]),
+                        Cuota.estado.in_(["PENDIENTE", "VENCIDO", "MORA", "PARCIAL"]),
                     )
                 ).order_by(Cuota.numero_cuota).all()
 

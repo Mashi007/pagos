@@ -139,7 +139,7 @@ export function TablaAmortizacionPrestamo({
 
   const parseIsoDateOnly = (iso: string): Date => {
     const part = iso.slice(0, 10)
-    const [y, m, d] = part.split('-').map((x) => parseInt(x, 10))
+    const [y, m, d] = part.split('-').map(x => parseInt(x, 10))
     return new Date(y, m - 1, d)
   }
 
@@ -147,7 +147,7 @@ export function TablaAmortizacionPrestamo({
     const s = new Date().toLocaleDateString('en-CA', {
       timeZone: 'America/Caracas',
     })
-    const [y, m, d] = s.split('-').map((x) => parseInt(x, 10))
+    const [y, m, d] = s.split('-').map(x => parseInt(x, 10))
     return new Date(y, m - 1, d)
   }
 
@@ -237,7 +237,6 @@ export function TablaAmortizacionPrestamo({
 
     return labels[estadoNormalizado] || estado
   }
-
 
   // Total pendiente por pagar (cuotas no cubiertas al 100%) - usa total_pagado y pago_monto_conciliado
 
@@ -504,8 +503,12 @@ export function TablaAmortizacionPrestamo({
                     montoConciliadoBackend >= montoCuota - 0.01)
 
                 const puedeDescargarRecibo =
-                  ['PAGADO', 'PAGADA', 'PAGO_ADELANTADO'].includes(estadoReal) ||
-                  ['PAGADO', 'PAGADA', 'PAGO_ADELANTADO'].includes(estadoBackend) ||
+                  ['PAGADO', 'PAGADA', 'PAGO_ADELANTADO'].includes(
+                    estadoReal
+                  ) ||
+                  ['PAGADO', 'PAGADA', 'PAGO_ADELANTADO'].includes(
+                    estadoBackend
+                  ) ||
                   cuotaCubiertaPorMonto
 
                 // Calcular monto_capital y monto_interes si no existen

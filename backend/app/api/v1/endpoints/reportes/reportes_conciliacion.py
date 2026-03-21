@@ -444,7 +444,7 @@ def _generar_excel_conciliacion(
             total_cuotas_num_map[r[0]] = int(r[1])
         rows_pag = db.execute(
             select(Cuota.prestamo_id, func.count(), func.coalesce(func.sum(Cuota.monto), 0))
-            .where(Cuota.prestamo_id.in_(ids), Cuota.estado == "PAGADO")
+            .where(Cuota.prestamo_id.in_(ids), Cuota.estado.in_(["PAGADO", "PAGO_ADELANTADO"]))
             .group_by(Cuota.prestamo_id)
         ).fetchall()
         for r in rows_pag:
@@ -452,7 +452,7 @@ def _generar_excel_conciliacion(
             cuotas_pagadas_monto_map[r[0]] = _safe_float(r[2])
         rows_pend = db.execute(
             select(Cuota.prestamo_id, func.count(), func.coalesce(func.sum(Cuota.monto), 0))
-            .where(Cuota.prestamo_id.in_(ids), Cuota.estado != "PAGADO")
+            .where(Cuota.prestamo_id.in_(ids), ~Cuota.estado.in_(["PAGADO", "PAGO_ADELANTADO"]))
             .group_by(Cuota.prestamo_id)
         ).fetchall()
         for r in rows_pend:
@@ -623,11 +623,11 @@ def _generar_pdf_conciliacion(
         ))
         total_cuotas_pagadas_general = _safe_float(db.scalar(
             select(func.coalesce(func.sum(Cuota.monto), 0))
-            .where(Cuota.prestamo_id.in_(ids), Cuota.estado == "PAGADO")
+            .where(Cuota.prestamo_id.in_(ids), Cuota.estado.in_(["PAGADO", "PAGO_ADELANTADO"]))
         ))
         total_cuotas_pendientes_general = _safe_float(db.scalar(
             select(func.coalesce(func.sum(Cuota.monto), 0))
-            .where(Cuota.prestamo_id.in_(ids), Cuota.estado != "PAGADO")
+            .where(Cuota.prestamo_id.in_(ids), ~Cuota.estado.in_(["PAGADO", "PAGO_ADELANTADO"]))
         ))
     
     resumen_data = [
@@ -776,11 +776,11 @@ def get_conciliacion_resumen(
         ))
         total_cuotas_pagadas = _safe_float(db.scalar(
             select(func.coalesce(func.sum(Cuota.monto), 0))
-            .where(Cuota.prestamo_id.in_(ids), Cuota.estado == "PAGADO")
+            .where(Cuota.prestamo_id.in_(ids), Cuota.estado.in_(["PAGADO", "PAGO_ADELANTADO"]))
         ))
         total_cuotas_pendientes = _safe_float(db.scalar(
             select(func.coalesce(func.sum(Cuota.monto), 0))
-            .where(Cuota.prestamo_id.in_(ids), Cuota.estado != "PAGADO")
+            .where(Cuota.prestamo_id.in_(ids), ~Cuota.estado.in_(["PAGADO", "PAGO_ADELANTADO"]))
         ))
     
     porcentaje_cobrado = (total_pagos / total_financiamiento * 100) if total_financiamiento > 0 else 0

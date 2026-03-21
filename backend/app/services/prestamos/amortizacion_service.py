@@ -8,7 +8,11 @@ from sqlalchemy import and_, or_
 
 from app.models.prestamo import Prestamo
 from app.models.cuota import Cuota
-from app.models.cuota_pago import CuotaPago
+from app.services.cuota_estado import (
+    clasificar_estado_cuota,
+    dias_retraso_desde_vencimiento,
+    hoy_negocio,
+)
 from .prestamos_calculo import PrestamosCalculo
 from .prestamos_excepciones import (
     AmortizacionCalculoError,
@@ -26,6 +30,20 @@ class AmortizacionService:
     def __init__(self, db: Session):
         self.db = db
         self.calculo = PrestamosCalculo(db)
+
+    @staticmethod
+    def _float_cuota_monto(cuota) -> float:
+        v = getattr(cuota, "monto", None)
+        if v is None:
+            v = getattr(cuota, "monto_cuota", None)
+        return float(v or 0)
+
+    @staticmethod
+    def _float_total_pagado(cuota) -> float:
+        return float(getattr(cuota, "total_pagado", None) or 0)
+
+    def _cuota_esta_pagada_completa(self, cuota) -> bool:
+        return self._float_total_pagado(cuota) >= self._float_cuota_monto(cuota) - 0.01
 
     def generar_tabla_amortizacion(
         self,
@@ -50,7 +68,7 @@ class AmortizacionService:
             raise PrestamoNotFoundError(prestamo_id)
 
         if fecha_inicio is None:
-            fecha_inicio = prestamo.fecha_base_calculo or date.today()
+            fecha_inicio = prestamo.fecha_base_calculo or hoy_negocio()
 
         # Si regenerar es True, eliminar cuotas existentes
         if regenerar:
@@ -148,13 +166,14 @@ class AmortizacionService:
                 'id': cuota.id,
                 'numero_cuota': cuota.numero_cuota,
                 'fecha_vencimiento': cuota.fecha_vencimiento.isoformat() if hasattr(cuota.fecha_vencimiento, 'isoformat') else str(cuota.fecha_vencimiento),
-                'monto_cuota': float(cuota.monto_cuota) if hasattr(cuota, 'monto_cuota') else 0.0,
+                'monto_cuota': AmortizacionService._float_cuota_monto(cuota),
                 'interes_cuota': float(cuota.interes_cuota) if hasattr(cuota, 'interes_cuota') else 0.0,
                 'amortizacion_cuota': float(cuota.amortizacion_cuota) if hasattr(cuota, 'amortizacion_cuota') else 0.0,
                 'saldo_vigente': float(cuota.saldo_vigente) if hasattr(cuota, 'saldo_vigente') else 0.0,
                 'estado': getattr(cuota, 'estado', 'PENDIENTE'),
                 'pagado': getattr(cuota, 'pagado', False),
-                'monto_pagado': float(getattr(cuota, 'monto_pagado', 0.0)) or 0.0,
+                'monto_pagado': AmortizacionService._float_total_pagado(cuota),
+                'total_pagado': AmortizacionService._float_total_pagado(cuota),
             }
             tabla.append(item)
 
@@ -203,13 +222,14 @@ class AmortizacionService:
             'prestamo_id': getattr(cuota, 'prestamo_id', None),
             'numero_cuota': getattr(cuota, 'numero_cuota', 0),
             'fecha_vencimiento': getattr(cuota, 'fecha_vencimiento', None),
-            'monto_cuota': float(getattr(cuota, 'monto_cuota', 0.0)),
+            'monto_cuota': self._float_cuota_monto(cuota),
             'interes_cuota': float(getattr(cuota, 'interes_cuota', 0.0)),
             'amortizacion_cuota': float(getattr(cuota, 'amortizacion_cuota', 0.0)),
             'saldo_vigente': float(getattr(cuota, 'saldo_vigente', 0.0)),
             'estado': getattr(cuota, 'estado', 'PENDIENTE'),
             'pagado': getattr(cuota, 'pagado', False),
-            'monto_pagado': float(getattr(cuota, 'monto_pagado', 0.0)),
+            'monto_pagado': self._float_total_pagado(cuota),
+            'total_pagado': self._float_total_pagado(cuota),
         }
 
     def registrar_pago_cuota(
@@ -224,60 +244,37 @@ class AmortizacionService:
         Args:
             cuota_id: ID de la cuota
             monto_pagado: Monto pagado
-            fecha_pago: Fecha del pago (default: hoy)
+            fecha_pago: Fecha del pago (default: hoy negocio Caracas)
 
         Returns:
             Información actualizada de la cuota
         """
         if fecha_pago is None:
-            fecha_pago = date.today()
+            fecha_pago = hoy_negocio()
 
         cuota = self.db.query(Cuota).filter(Cuota.id == cuota_id).first()
         if not cuota:
             raise CuotaNotFoundError(cuota_id)
 
-        monto_cuota = float(getattr(cuota, 'monto_cuota', 0.0))
-        monto_actual = float(getattr(cuota, 'monto_pagado', 0.0)) or 0.0
+        monto_cuota = self._float_cuota_monto(cuota)
+        monto_actual = self._float_total_pagado(cuota)
+        nuevo_total = monto_actual + float(monto_pagado or 0)
 
-        # Actualizar monto pagado
-        nuevo_total = monto_actual + monto_pagado
-        monto_restante = max(monto_cuota - nuevo_total, 0.0)
+        estado = clasificar_estado_cuota(
+            nuevo_total,
+            monto_cuota,
+            getattr(cuota, "fecha_vencimiento", None),
+            fecha_pago,
+        )
 
-        # Determinar estado
-        if monto_restante <= 0:
-            estado = 'PAGADO'
-            pagado = True
-        elif nuevo_total > 0:
-            estado = 'PARCIAL'
-            pagado = False
-        else:
-            estado = 'PENDIENTE'
-            pagado = False
-
-        # Actualizar cuota
-        if hasattr(cuota, 'monto_pagado'):
-            cuota.monto_pagado = Decimal(str(nuevo_total))
-        if hasattr(cuota, 'estado'):
+        if hasattr(cuota, "total_pagado"):
+            cuota.total_pagado = Decimal(str(round(nuevo_total, 2)))
+        if hasattr(cuota, "estado"):
             cuota.estado = estado
-        if hasattr(cuota, 'pagado'):
-            cuota.pagado = pagado
 
         self.db.add(cuota)
         self.db.commit()
         self.db.refresh(cuota)
-
-        # Registrar movimiento de pago si existe tabla CuotaPago
-        try:
-            pago = CuotaPago(
-                cuota_id=cuota_id,
-                monto=Decimal(str(monto_pagado)),
-                fecha_pago=fecha_pago,
-            )
-            self.db.add(pago)
-            self.db.commit()
-        except Exception:
-            # Si la tabla CuotaPago no existe, continuar
-            pass
 
         return self.obtener_cuota(cuota_id)
 
@@ -313,31 +310,33 @@ class AmortizacionService:
         monto_pagado_total = 0.0
         proxima_cuota_vencimiento = None
 
-        hoy = date.today()
+        hoy = hoy_negocio()
 
         for cuota in cuotas:
-            estado = getattr(cuota, 'estado', 'PENDIENTE')
-            fecha_vencimiento = getattr(cuota, 'fecha_vencimiento', None)
-            monto_cuota = float(getattr(cuota, 'monto_cuota', 0.0)) or 0.0
-            monto_pagado = float(getattr(cuota, 'monto_pagado', 0.0)) or 0.0
+            fecha_vencimiento = getattr(cuota, "fecha_vencimiento", None)
+            monto_cuota = self._float_cuota_monto(cuota)
+            paid = self._float_total_pagado(cuota)
+            estado = clasificar_estado_cuota(
+                paid, monto_cuota, fecha_vencimiento, hoy
+            )
 
-            if estado == 'PAGADO':
+            if estado in ("PAGADO", "PAGO_ADELANTADO"):
                 cuotas_pagadas += 1
-            elif estado == 'PARCIAL':
+            elif estado == "PARCIAL":
                 cuotas_parciales += 1
-                saldo_total += monto_cuota - monto_pagado
+                saldo_total += max(monto_cuota - paid, 0.0)
             else:
                 cuotas_pendientes += 1
-                saldo_total += monto_cuota - monto_pagado
-
-                # Verificar atraso
-                if fecha_vencimiento and fecha_vencimiento < hoy:
+                saldo_total += max(monto_cuota - paid, 0.0)
+                if dias_retraso_desde_vencimiento(fecha_vencimiento, hoy) >= 1:
                     cuotas_en_atraso += 1
 
-            monto_pagado_total += monto_pagado
+            monto_pagado_total += paid
 
-            # Próxima cuota sin pagar
-            if proxima_cuota_vencimiento is None and estado != 'PAGADO':
+            if proxima_cuota_vencimiento is None and estado not in (
+                "PAGADO",
+                "PAGO_ADELANTADO",
+            ):
                 proxima_cuota_vencimiento = fecha_vencimiento
 
         return {
@@ -359,18 +358,21 @@ class AmortizacionService:
         }
 
     def obtener_cuotas_vencidas(self, prestamo_id: int) -> List[Dict]:
-        """Obtiene todas las cuotas vencidas de un préstamo."""
-        hoy = date.today()
-
-        cuotas = self.db.query(Cuota).filter(
-            and_(
-                Cuota.prestamo_id == prestamo_id,
-                Cuota.fecha_vencimiento < hoy,
-                Cuota.estado != 'PAGADO'
-            )
-        ).order_by(Cuota.numero_cuota).all()
-
-        return [self._serializar_cuota(c) for c in cuotas]
+        """Cuotas no cubiertas al 100% con al menos 1 dia de retraso (Caracas)."""
+        hoy = hoy_negocio()
+        cuotas = (
+            self.db.query(Cuota)
+            .filter(Cuota.prestamo_id == prestamo_id)
+            .order_by(Cuota.numero_cuota)
+            .all()
+        )
+        out = []
+        for c in cuotas:
+            if self._cuota_esta_pagada_completa(c):
+                continue
+            if dias_retraso_desde_vencimiento(c.fecha_vencimiento, hoy) >= 1:
+                out.append(c)
+        return [self._serializar_cuota(c) for c in out]
 
     def obtener_cuotas_proximas(
         self,
@@ -378,7 +380,7 @@ class AmortizacionService:
         dias_adelante: int = 30
     ) -> List[Dict]:
         """Obtiene cuotas que vencen en los próximos N días."""
-        hoy = date.today()
+        hoy = hoy_negocio()
         fecha_limite = hoy + timedelta(days=dias_adelante)
 
         cuotas = self.db.query(Cuota).filter(
@@ -386,11 +388,14 @@ class AmortizacionService:
                 Cuota.prestamo_id == prestamo_id,
                 Cuota.fecha_vencimiento >= hoy,
                 Cuota.fecha_vencimiento <= fecha_limite,
-                Cuota.estado != 'PAGADO'
             )
         ).order_by(Cuota.numero_cuota).all()
 
-        return [self._serializar_cuota(c) for c in cuotas]
+        return [
+            self._serializar_cuota(c)
+            for c in cuotas
+            if not self._cuota_esta_pagada_completa(c)
+        ]
 
     def calcular_interes_penalizacion_atraso(
         self,
@@ -415,12 +420,15 @@ class AmortizacionService:
         if not fecha_vencimiento:
             return 0.0
 
-        hoy = date.today()
-        if fecha_vencimiento >= hoy:
+        hoy = hoy_negocio()
+        fv = fecha_vencimiento
+        if isinstance(fv, datetime):
+            fv = fv.date()
+        if fv is None or fv >= hoy:
             return 0.0
 
-        dias_atraso = (hoy - fecha_vencimiento).days
-        monto_cuota = float(getattr(cuota, 'monto_cuota', 0.0)) or 0.0
+        dias_atraso = dias_retraso_desde_vencimiento(fv, hoy)
+        monto_cuota = self._float_cuota_monto(cuota)
 
         # Penalización = monto * tasa_diaria * días
         penalizacion = monto_cuota * (tasa_penalizacion_diaria / 100) * dias_atraso
@@ -438,13 +446,14 @@ class AmortizacionService:
                 if hasattr(getattr(cuota, 'fecha_vencimiento', None), 'isoformat') else
                 str(getattr(cuota, 'fecha_vencimiento', None))
             ),
-            'monto_cuota': float(getattr(cuota, 'monto_cuota', 0.0)),
+            'monto_cuota': self._float_cuota_monto(cuota),
             'interes_cuota': float(getattr(cuota, 'interes_cuota', 0.0)),
             'amortizacion_cuota': float(getattr(cuota, 'amortizacion_cuota', 0.0)),
             'saldo_vigente': float(getattr(cuota, 'saldo_vigente', 0.0)),
             'estado': getattr(cuota, 'estado', 'PENDIENTE'),
             'pagado': getattr(cuota, 'pagado', False),
-            'monto_pagado': float(getattr(cuota, 'monto_pagado', 0.0)) or 0.0,
+            'monto_pagado': self._float_total_pagado(cuota),
+            'total_pagado': self._float_total_pagado(cuota),
         }
 
     def regenerar_amortizacion_desde(
@@ -479,10 +488,10 @@ class AmortizacionService:
 
         if cuota_anterior:
             saldo_inicial = float(getattr(cuota_anterior, 'saldo_vigente', 0.0)) or 0.0
-            fecha_inicio = getattr(cuota_anterior, 'fecha_vencimiento', date.today())
+            fecha_inicio = getattr(cuota_anterior, 'fecha_vencimiento', hoy_negocio())
         else:
             saldo_inicial = float(prestamo.total_financiamiento)
-            fecha_inicio = prestamo.fecha_base_calculo or date.today()
+            fecha_inicio = prestamo.fecha_base_calculo or hoy_negocio()
 
         # Usar tasa actualizada si se proporciona
         tasa_a_usar = tasa_actualizada or float(prestamo.tasa_interes)

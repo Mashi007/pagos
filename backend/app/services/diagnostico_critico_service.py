@@ -87,16 +87,16 @@ class DiagnosticoCritico:
               c.id,
               c.prestamo_id,
               c.numero_cuota,
-              c.monto,
+              c.monto_cuota,
               c.estado,
               c.fecha_vencimiento,
               COALESCE(SUM(cp.monto_aplicado), 0) as total_aplicado,
-              COALESCE(SUM(cp.monto_aplicado), 0) - c.monto as exceso,
+              COALESCE(SUM(cp.monto_aplicado), 0) - c.monto_cuota as exceso,
               COUNT(cp.id) as num_pagos
             FROM cuotas c
             LEFT JOIN cuota_pagos cp ON c.id = cp.cuota_id
             WHERE c.id = :cuota_id
-            GROUP BY c.id, c.prestamo_id, c.numero_cuota, c.monto, c.estado, c.fecha_vencimiento
+            GROUP BY c.id, c.prestamo_id, c.numero_cuota, c.monto_cuota, c.estado, c.fecha_vencimiento
         '''), {'cuota_id': cuota_id}).fetchone()
         
         if not cuota_data:
@@ -152,22 +152,39 @@ class DiagnosticoCritico:
               c.id,
               c.prestamo_id,
               c.numero_cuota,
-              c.monto,
+              c.monto_cuota,
               c.estado,
               c.fecha_vencimiento,
               c.dias_mora,
               COALESCE(SUM(cp.monto_aplicado), 0) as total_aplicado,
-              CASE 
-                WHEN COALESCE(SUM(cp.monto_aplicado), 0) >= c.monto - 0.01 THEN 'PAGADO'
-                WHEN COALESCE(SUM(cp.monto_aplicado), 0) > 0 THEN 'PARCIAL'
-                WHEN DATE(c.fecha_vencimiento) < CURRENT_DATE THEN 'MORA'
-                ELSE 'PENDIENTE'
-              END as estado_calculado,
+              CASE
+  WHEN COALESCE(SUM(cp.monto_aplicado), 0) >= COALESCE(c.monto_cuota, 0) - 0.01 THEN
+    CASE
+      WHEN c.fecha_vencimiento IS NOT NULL
+        AND c.fecha_vencimiento::date > (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date
+      THEN 'PAGO_ADELANTADO'
+      ELSE 'PAGADO'
+    END
+  WHEN COALESCE(SUM(cp.monto_aplicado), 0) > 0.001 THEN
+    CASE
+      WHEN c.fecha_vencimiento IS NULL THEN 'PARCIAL'
+      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date <= c.fecha_vencimiento::date THEN 'PARCIAL'
+      WHEN ((CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date - c.fecha_vencimiento::date) >= 92 THEN 'MORA'
+      ELSE 'VENCIDO'
+    END
+  ELSE
+    CASE
+      WHEN c.fecha_vencimiento IS NULL THEN 'PENDIENTE'
+      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date <= c.fecha_vencimiento::date THEN 'PENDIENTE'
+      WHEN ((CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date - c.fecha_vencimiento::date) >= 92 THEN 'MORA'
+      ELSE 'VENCIDO'
+    END
+END as estado_calculado,
               EXTRACT(DAY FROM NOW() - c.fecha_vencimiento::TIMESTAMP) as dias_vencida
             FROM cuotas c
             LEFT JOIN cuota_pagos cp ON c.id = cp.cuota_id
             WHERE c.estado = 'MORA'
-            GROUP BY c.id, c.prestamo_id, c.numero_cuota, c.monto, c.estado, 
+            GROUP BY c.id, c.prestamo_id, c.numero_cuota, c.monto_cuota, c.estado, 
                      c.fecha_vencimiento, c.dias_mora
             LIMIT 100
         ''')).fetchall()
@@ -208,11 +225,11 @@ class CorrectoresCriticos:
             # Obtener exceso
             exceso_data = db.query(text('''
                 SELECT 
-                  COALESCE(SUM(cp.monto_aplicado), 0) - c.monto as exceso
+                  COALESCE(SUM(cp.monto_aplicado), 0) - c.monto_cuota as exceso
                 FROM cuotas c
                 LEFT JOIN cuota_pagos cp ON c.id = cp.cuota_id
                 WHERE c.id = :cuota_id
-                GROUP BY c.monto
+                GROUP BY c.monto_cuota
             '''), {'cuota_id': cuota_id}).fetchone()
             
             if not exceso_data or exceso_data[0] <= 0:
@@ -279,16 +296,34 @@ class CorrectoresCriticos:
                 WITH cuotas_calculo AS (
                   SELECT 
                     c.id,
-                    CASE 
-                      WHEN COALESCE(SUM(cp.monto_aplicado), 0) >= c.monto - 0.01 THEN 'PAGADO'
-                      WHEN COALESCE(SUM(cp.monto_aplicado), 0) > 0 THEN 'PARCIAL'
-                      WHEN DATE(c.fecha_vencimiento) < CURRENT_DATE THEN 'MORA'
-                      ELSE 'PENDIENTE'
-                    END as estado_correcto
+
+                    CASE
+  WHEN COALESCE(SUM(cp.monto_aplicado), 0) >= COALESCE(c.monto_cuota, 0) - 0.01 THEN
+    CASE
+      WHEN c.fecha_vencimiento IS NOT NULL
+        AND c.fecha_vencimiento::date > (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date
+      THEN 'PAGO_ADELANTADO'
+      ELSE 'PAGADO'
+    END
+  WHEN COALESCE(SUM(cp.monto_aplicado), 0) > 0.001 THEN
+    CASE
+      WHEN c.fecha_vencimiento IS NULL THEN 'PARCIAL'
+      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date <= c.fecha_vencimiento::date THEN 'PARCIAL'
+      WHEN ((CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date - c.fecha_vencimiento::date) >= 92 THEN 'MORA'
+      ELSE 'VENCIDO'
+    END
+  ELSE
+    CASE
+      WHEN c.fecha_vencimiento IS NULL THEN 'PENDIENTE'
+      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date <= c.fecha_vencimiento::date THEN 'PENDIENTE'
+      WHEN ((CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date - c.fecha_vencimiento::date) >= 92 THEN 'MORA'
+      ELSE 'VENCIDO'
+    END
+END as estado_correcto
                   FROM cuotas c
                   LEFT JOIN cuota_pagos cp ON c.id = cp.cuota_id
                   WHERE c.estado = 'MORA'
-                  GROUP BY c.id, c.monto, c.fecha_vencimiento
+                  GROUP BY c.id, c.monto_cuota, c.fecha_vencimiento
                 )
                 UPDATE cuotas c
                 SET estado = cc.estado_correcto

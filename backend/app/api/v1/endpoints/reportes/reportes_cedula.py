@@ -52,21 +52,21 @@ def get_reportes_por_cedula(db: Session = Depends(get_db)):
 
         rows_pagadas = db.execute(
             select(Cuota.prestamo_id, func.count())
-            .where(Cuota.prestamo_id.in_(ids), Cuota.estado == "PAGADO")
+            .where(Cuota.prestamo_id.in_(ids), Cuota.estado.in_(["PAGADO", "PAGO_ADELANTADO"]))
             .group_by(Cuota.prestamo_id)
         ).fetchall()
         pagadas_map = {r[0]: int(r[1]) for r in rows_pagadas}
 
         rows_atrasadas = db.execute(
             select(Cuota.prestamo_id, func.count())
-            .where(Cuota.prestamo_id.in_(ids), Cuota.estado != "PAGADO")
+            .where(Cuota.prestamo_id.in_(ids), ~Cuota.estado.in_(["PAGADO", "PAGO_ADELANTADO"]))
             .group_by(Cuota.prestamo_id)
         ).fetchall()
         atrasadas_map = {r[0]: int(r[1]) for r in rows_atrasadas}
 
         rows_monto_atrasadas = db.execute(
             select(Cuota.prestamo_id, func.coalesce(func.sum(Cuota.monto), 0))
-            .where(Cuota.prestamo_id.in_(ids), Cuota.estado != "PAGADO")
+            .where(Cuota.prestamo_id.in_(ids), ~Cuota.estado.in_(["PAGADO", "PAGO_ADELANTADO"]))
             .group_by(Cuota.prestamo_id)
         ).fetchall()
         monto_atrasadas_map = {r[0]: _safe_float(r[1]) for r in rows_monto_atrasadas}

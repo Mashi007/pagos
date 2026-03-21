@@ -89,3 +89,54 @@ def estado_cuota_para_mostrar(
     return clasificar_estado_cuota(
         total_pagado, monto_cuota, fecha_vencimiento, fecha_referencia
     )
+
+# SQL PostgreSQL (misma regla que clasificar_estado_cuota).
+SQL_PG_ESTADO_CUOTA_CASE_CORRELATED = """CASE
+  WHEN COALESCE((SELECT SUM(cp.monto_aplicado) FROM cuota_pagos cp WHERE cp.cuota_id = c.id), 0)
+       >= COALESCE(c.monto_cuota, 0) - 0.01 THEN
+    CASE
+      WHEN c.fecha_vencimiento IS NOT NULL
+        AND c.fecha_vencimiento::date > (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date
+      THEN 'PAGO_ADELANTADO'
+      ELSE 'PAGADO'
+    END
+  WHEN COALESCE((SELECT SUM(cp.monto_aplicado) FROM cuota_pagos cp WHERE cp.cuota_id = c.id), 0) > 0.001 THEN
+    CASE
+      WHEN c.fecha_vencimiento IS NULL THEN 'PARCIAL'
+      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date <= c.fecha_vencimiento::date THEN 'PARCIAL'
+      WHEN ((CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date - c.fecha_vencimiento::date) >= 92 THEN 'MORA'
+      ELSE 'VENCIDO'
+    END
+  ELSE
+    CASE
+      WHEN c.fecha_vencimiento IS NULL THEN 'PENDIENTE'
+      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date <= c.fecha_vencimiento::date THEN 'PENDIENTE'
+      WHEN ((CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date - c.fecha_vencimiento::date) >= 92 THEN 'MORA'
+      ELSE 'VENCIDO'
+    END
+END"""
+
+SQL_PG_ESTADO_CUOTA_CASE_AGGREGATE = """CASE
+  WHEN COALESCE(SUM(cp.monto_aplicado), 0) >= COALESCE(c.monto_cuota, 0) - 0.01 THEN
+    CASE
+      WHEN c.fecha_vencimiento IS NOT NULL
+        AND c.fecha_vencimiento::date > (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date
+      THEN 'PAGO_ADELANTADO'
+      ELSE 'PAGADO'
+    END
+  WHEN COALESCE(SUM(cp.monto_aplicado), 0) > 0.001 THEN
+    CASE
+      WHEN c.fecha_vencimiento IS NULL THEN 'PARCIAL'
+      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date <= c.fecha_vencimiento::date THEN 'PARCIAL'
+      WHEN ((CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date - c.fecha_vencimiento::date) >= 92 THEN 'MORA'
+      ELSE 'VENCIDO'
+    END
+  ELSE
+    CASE
+      WHEN c.fecha_vencimiento IS NULL THEN 'PENDIENTE'
+      WHEN (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date <= c.fecha_vencimiento::date THEN 'PENDIENTE'
+      WHEN ((CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date - c.fecha_vencimiento::date) >= 92 THEN 'MORA'
+      ELSE 'VENCIDO'
+    END
+END"""
+
