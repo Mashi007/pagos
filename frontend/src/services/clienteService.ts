@@ -1,290 +1,290 @@
-import { apiClient, ApiResponse, PaginatedResponse, buildUrl } from './api'
-import { Cliente, ClienteForm, ClienteFilters } from '../types'
-import { logger } from '../utils/logger'
-
-// Constantes de configuraciÃ³n
-const DEFAULT_PER_PAGE = 20
-
-class ClienteService {
-  private baseUrl = '/api/v1/clientes'
-
-  // Obtener lista de clientes con filtros y paginaciÃ³n
-  async getClientes(
-    filters?: ClienteFilters,
-    page: number = 1,
-    perPage: number = DEFAULT_PER_PAGE
-  ): Promise<PaginatedResponse<Cliente>> {
-    const params = { ...filters, page, per_page: perPage }
-    const url = buildUrl(this.baseUrl, params)
-
-    const response = await apiClient.get<any>(url)
-
-    // Adaptar respuesta del backend al formato esperado
-    // â CORRECCIÃN: Asegurar que data siempre sea un array
-    const clientesArray = Array.isArray(response.clientes) 
-      ? response.clientes 
-      : (response.clientes ? [response.clientes] : [])
-    
-    const adaptedResponse = {
-      data: clientesArray,
-      total: response.total || 0,
-      page: response.page || page,
-      per_page: response.per_page || response.limit || perPage,
-      total_pages: response.total_pages || Math.ceil((response.total || 0) / perPage)
-    }
-
-    return adaptedResponse
-  }
-
-  // Obtener cliente por ID
-  async getCliente(id: string): Promise<Cliente> {
-    // El endpoint devuelve ClienteResponse directamente, sin envolver en ApiResponse
-    const response = await apiClient.get<Cliente>(`${this.baseUrl}/${id}`)
-    return response
-  }
-
-  // Obtener estados de cliente desde BD (para dropdowns en formularios)
-  async getEstadosCliente(): Promise<{ estados: Array<{ valor: string; etiqueta: string; orden: number }> }> {
-    return await apiClient.get(`${this.baseUrl}/estados`)
-  }
-
-  // Comprobar quÃ© cÃ©dulas ya existen (para carga masiva: advertir antes de guardar)
-  async checkCedulas(cedulas: string[]): Promise<{ existing_cedulas: string[] }> {
-    if (!cedulas.length) return { existing_cedulas: [] }
-    const response = await apiClient.post<{ existing_cedulas: string[] }>(
-      `${this.baseUrl}/check-cedulas`,
-      { cedulas }
-    )
-    return response
-  }
-
-  // Comprobar quÃ© emails ya existen en la tabla clientes (carga masiva: nunca repetido)
-  async checkEmails(emails: string[]): Promise<{ existing_emails: string[] }> {
-    if (!emails.length) return { existing_emails: [] }
-    const response = await apiClient.post<{ existing_emails: string[] }>(
-      `${this.baseUrl}/check-emails`,
-      { emails }
-    )
-    return response
-  }
-
-  // Crear nuevo cliente
-  async createCliente(data: ClienteForm): Promise<Cliente> {
-    // El endpoint devuelve ClienteResponse directamente
-    const response = await apiClient.post<Cliente>(this.baseUrl, data)
-    return response
-  }
-
-
-  // Actualizar cliente
-  async updateCliente(id: string, data: Partial<ClienteForm>): Promise<Cliente> {
-    // El endpoint devuelve ClienteResponse directamente
-    const response = await apiClient.put<Cliente>(`${this.baseUrl}/${id}`, data)
-    return response
-  }
-
-  // Eliminar cliente
-  async deleteCliente(id: string): Promise<void> {
-    await apiClient.delete(`${this.baseUrl}/${id}`)
-  }
-
-  // --- Revisar Clientes (clientes_con_errores) ---
-
-  /** Lista de clientes enviados a revisiÃ³n (paginado) */
-  async getClientesConErrores(
-    page = 1,
-    perPage = 20
-  ): Promise<{ total: number; page: number; per_page: number; items: Array<{
-    id: number
-    cedula: string | null
-    nombres: string | null
-    email: string | null
-    telefono: string | null
-    errores: string | null
-    fila_origen: number | null
-    estado: string | null
-    fecha_registro: string | null
-  }> }> {
-    const params = new URLSearchParams({ page: String(page), per_page: String(perPage) })
-    return await apiClient.get(`${this.baseUrl}/revisar/lista?${params}`)
-  }
-
-  /** Enviar una fila a Revisar Clientes (desde carga masiva). Elimina de pantalla al enviar. */
-  async agregarClienteARevisar(data: {
-    cedula?: string | null
-    nombres?: string | null
-    direccion?: string | null
-    fecha_nacimiento?: string | null
-    ocupacion?: string | null
-    email?: string | null
-    telefono?: string | null
-    errores_descripcion?: string | null
-    fila_origen?: number | null
-  }): Promise<{ id: number; mensaje: string }> {
-    return await apiClient.post(`${this.baseUrl}/revisar/agregar`, data)
-  }
-
-  /** Eliminar de la lista Revisar Clientes (marcar como resuelto) */
-  async resolverClienteError(errorId: number): Promise<void> {
-    await apiClient.delete(`${this.baseUrl}/revisar/${errorId}`)
-  }
-
-  // Obtener cliente por cÃ©dula exacta (para carga masiva de prÃ©stamos)
-  async getClienteByCedula(cedula: string): Promise<Cliente | null> {
-    if (!cedula?.trim()) return null
-    const list = await this.searchClientes(cedula.trim(), true)
-    const exact = list.find((c) => (c.cedula || '').trim().toUpperCase() === cedula.trim().toUpperCase())
-    return exact ? null
-  }
-
-  // Buscar clientes por tÃ©rmino (usando filtros en endpoint principal)
-  // IMPORTANTE: Por defecto filtra solo clientes ACTIVOS para formularios de prÃ©stamos
-  // Para buscar todos los estados, pasar incluirTodosEstados: true
-  async searchClientes(query: string, incluirTodosEstados: boolean = false): Promise<Cliente[]> {
-    const filters: ClienteFilters = { search: query }
-    // Por defecto filtrar solo ACTIVOS (para formularios de prÃ©stamos)
-    // Solo incluir todos los estados si se especifica explÃ­citamente
-    if (!incluirTodosEstados) {
-      filters.estado = 'ACTIVO'
-    }
-    const response = await this.getClientes(filters, 1, 100)
-    return response.data
-  }
-
-  // Obtener clientes por analista (usando filtros en endpoint principal)
-  async getClientesByAnalista(analistaId: string): Promise<Cliente[]> {
-    const filters: ClienteFilters = {}
-    const response = await this.getClientes(filters, 1, 100)
-    return response.data
-  }
-
-  // Obtener clientes en mora (usando filtro estado en endpoint principal)
-  async getClientesEnMora(): Promise<Cliente[]> {
-    const filters: ClienteFilters = { estado: 'MORA' }
-    const response = await this.getClientes(filters, 1, 100)
-    return response.data
-  }
-
-  // Obtener historial de pagos de un cliente
-  async getHistorialPagos(clienteId: string): Promise<any[]> {
-    const response = await apiClient.get<ApiResponse<any[]>>(`${this.baseUrl}/${clienteId}/pagos`)
-    return response.data
-  }
-
-  // Obtener tabla de amortizaciÃ³n de un cliente
-  async getTablaAmortizacion(clienteId: string): Promise<any[]> {
-    const response = await apiClient.get<ApiResponse<any[]>>(`${this.baseUrl}/${clienteId}/amortizacion`)
-    return response.data
-  }
-
-  // Validar cÃ©dula
-  async validateCedula(cedula: string): Promise<{ valid: boolean; message?: string }> {
-    const response = await apiClient.post<ApiResponse<{ valid: boolean; message?: string }>>(
-      `${this.baseUrl}/validate-cedula`,
-      { cedula }
-    )
-    return response.data
-  }
-
-  // Obtener estadÃ­sticas de cliente
-  async getEstadisticasCliente(clienteId: string): Promise<any> {
-    const response = await apiClient.get<ApiResponse<any>>(`${this.baseUrl}/${clienteId}/estadisticas`)
-    return response.data
-  }
-
-  // Obtener estadÃ­sticas generales de todos los clientes
-  async getStats(): Promise<{ total: number; activos: number; inactivos: number; finalizados: number; nuevos_este_mes: number }> {
-    const response = await apiClient.get<{ total: number; activos: number; inactivos: number; finalizados: number; nuevos_este_mes: number }>(
-      `${this.baseUrl}/stats`
-    )
-    return response
-  }
-
-  // Obtener estadÃ­sticas del embudo de clientes
-  // NOTA: El backend no tiene /embudo/estadisticas; se calculan desde stats de clientes
-  async getEstadisticasEmbudo(): Promise<{ total: number; prospectos: number; evaluacion: number; aprobados: number; rechazados: number }> {
-    try {
-      const stats = await this.getStats()
-      return {
-        total: stats.total,
-        prospectos: stats.activos,
-        evaluacion: stats.inactivos,
-        aprobados: stats.finalizados,
-        rechazados: 0,
-      }
-    } catch {
-      return { total: 0, prospectos: 0, evaluacion: 0, aprobados: 0, rechazados: 0 }
-    }
-  }
-
-  // Cambiar estado de cliente (el backend devuelve Cliente directamente, no envuelto en ApiResponse)
-  async cambiarEstado(clienteId: string, estado: Cliente['estado']): Promise<Cliente> {
-    const response = await apiClient.patch<Cliente>(
-      `${this.baseUrl}/${clienteId}/estado`,
-      { estado }
-    )
-    return response
-  }
-
-  // Importar clientes desde Excel (usando endpoint de carga masiva)
-  async importarClientes(file: File): Promise<{ success: number; errors: any[] }> {
-    const response = await apiClient.uploadFile<ApiResponse<{ success: number; errors: any[] }>>(
-      '/api/v1/carga-masiva/clientes',
-      file
-    )
-    return response.data
-  }
-
-  // Buscar cliente por nÃºmero de telÃ©fono
-  async buscarClientePorTelefono(telefono: string): Promise<Cliente | null> {
-    try {
-      const filters: ClienteFilters = { search: telefono }
-      const response = await this.getClientes(filters, 1, 1)
-      return response.data.length > 0 ? response.data[0] : null
-    } catch (error) {
-      logger.error('Error buscando cliente por telÃ©fono', { error, telefono })
-      return null
-    }
-  }
-
-  // Obtener clientes con problemas de validaciÃ³n (usa /casos-a-revisar del backend)
-  async getClientesConProblemasValidacion(
-    page: number = 1,
-    perPage: number = 20
-  ): Promise<PaginatedResponse<any>> {
-    return this.getCasosARevisar(page, perPage)
-  }
-
-  // Obtener casos a revisar (clientes con placeholders: Z999999999, Revisar Nombres, +589999999999, revisar@email.com)
-  async getCasosARevisar(
-    page: number = 1,
-    perPage: number = 50
-  ): Promise<PaginatedResponse<Cliente>> {
-    const url = buildUrl(`${this.baseUrl}/casos-a-revisar`, { page, per_page: perPage })
-    const response = await apiClient.get<any>(url)
-    return {
-      data: response.clientes || [],
-      total: response.total || 0,
-      page: response.page || page,
-      per_page: response.per_page || perPage,
-      total_pages: response.total_pages || Math.ceil((response.total || 0) / perPage)
-    }
-  }
-
-  // Actualizar mÃºltiples clientes en lote
-  async actualizarClientesLote(actualizaciones: Array<{ id: number; [key: string]: any }>): Promise<{
-    actualizados: number
-    errores: Array<{ id: number | null; error: string }>
-    total_procesados: number
-  }> {
-    const response = await apiClient.post<any>(`${this.baseUrl}/actualizar-lote`, actualizaciones)
-    return response
-  }
-
-  // Eliminar clientes con errores tras su descarga en Excel
-  async eliminarPorDescarga(ids: number[]): Promise<{ deleted: number }> {
-    return apiClient.post(this.baseUrl + "/revisar/eliminar-por-descarga", ids)
-  }}
-
-// Instancia singleton del servicio
-export const clienteService = new ClienteService()
+import { apiClient, ApiResponse, PaginatedResponse, buildUrl } from './api'
+import { Cliente, ClienteForm, ClienteFilters } from '../types'
+import { logger } from '../utils/logger'
+
+// Constantes de configuración
+const DEFAULT_PER_PAGE = 20
+
+class ClienteService {
+  private baseUrl = '/api/v1/clientes'
+
+  // Obtener lista de clientes con filtros y paginación
+  async getClientes(
+    filters?: ClienteFilters,
+    page: number = 1,
+    perPage: number = DEFAULT_PER_PAGE
+  ): Promise<PaginatedResponse<Cliente>> {
+    const params = { ...filters, page, per_page: perPage }
+    const url = buildUrl(this.baseUrl, params)
+
+    const response = await apiClient.get<any>(url)
+
+    // Adaptar respuesta del backend al formato esperado
+    // ✅ CORRECCIÓN: Asegurar que data siempre sea un array
+    const clientesArray = Array.isArray(response.clientes) 
+      ? response.clientes 
+      : (response.clientes ? [response.clientes] : [])
+    
+    const adaptedResponse = {
+      data: clientesArray,
+      total: response.total || 0,
+      page: response.page || page,
+      per_page: response.per_page || response.limit || perPage,
+      total_pages: response.total_pages || Math.ceil((response.total || 0) / perPage)
+    }
+
+    return adaptedResponse
+  }
+
+  // Obtener cliente por ID
+  async getCliente(id: string): Promise<Cliente> {
+    // El endpoint devuelve ClienteResponse directamente, sin envolver en ApiResponse
+    const response = await apiClient.get<Cliente>(`${this.baseUrl}/${id}`)
+    return response
+  }
+
+  // Obtener estados de cliente desde BD (para dropdowns en formularios)
+  async getEstadosCliente(): Promise<{ estados: Array<{ valor: string; etiqueta: string; orden: number }> }> {
+    return await apiClient.get(`${this.baseUrl}/estados`)
+  }
+
+  // Comprobar qué cédulas ya existen (para carga masiva: advertir antes de guardar)
+  async checkCedulas(cedulas: string[]): Promise<{ existing_cedulas: string[] }> {
+    if (!cedulas.length) return { existing_cedulas: [] }
+    const response = await apiClient.post<{ existing_cedulas: string[] }>(
+      `${this.baseUrl}/check-cedulas`,
+      { cedulas }
+    )
+    return response
+  }
+
+  // Comprobar qué emails ya existen en la tabla clientes (carga masiva: nunca repetido)
+  async checkEmails(emails: string[]): Promise<{ existing_emails: string[] }> {
+    if (!emails.length) return { existing_emails: [] }
+    const response = await apiClient.post<{ existing_emails: string[] }>(
+      `${this.baseUrl}/check-emails`,
+      { emails }
+    )
+    return response
+  }
+
+  // Crear nuevo cliente
+  async createCliente(data: ClienteForm): Promise<Cliente> {
+    // El endpoint devuelve ClienteResponse directamente
+    const response = await apiClient.post<Cliente>(this.baseUrl, data)
+    return response
+  }
+
+
+  // Actualizar cliente
+  async updateCliente(id: string, data: Partial<ClienteForm>): Promise<Cliente> {
+    // El endpoint devuelve ClienteResponse directamente
+    const response = await apiClient.put<Cliente>(`${this.baseUrl}/${id}`, data)
+    return response
+  }
+
+  // Eliminar cliente
+  async deleteCliente(id: string): Promise<void> {
+    await apiClient.delete(`${this.baseUrl}/${id}`)
+  }
+
+  // --- Revisar Clientes (clientes_con_errores) ---
+
+  /** Lista de clientes enviados a revisión (paginado) */
+  async getClientesConErrores(
+    page = 1,
+    perPage = 20
+  ): Promise<{ total: number; page: number; per_page: number; items: Array<{
+    id: number
+    cedula: string | null
+    nombres: string | null
+    email: string | null
+    telefono: string | null
+    errores: string | null
+    fila_origen: number | null
+    estado: string | null
+    fecha_registro: string | null
+  }> }> {
+    const params = new URLSearchParams({ page: String(page), per_page: String(perPage) })
+    return await apiClient.get(`${this.baseUrl}/revisar/lista?${params}`)
+  }
+
+  /** Enviar una fila a Revisar Clientes (desde carga masiva). Elimina de pantalla al enviar. */
+  async agregarClienteARevisar(data: {
+    cedula?: string | null
+    nombres?: string | null
+    direccion?: string | null
+    fecha_nacimiento?: string | null
+    ocupacion?: string | null
+    email?: string | null
+    telefono?: string | null
+    errores_descripcion?: string | null
+    fila_origen?: number | null
+  }): Promise<{ id: number; mensaje: string }> {
+    return await apiClient.post(`${this.baseUrl}/revisar/agregar`, data)
+  }
+
+  /** Eliminar de la lista Revisar Clientes (marcar como resuelto) */
+  async resolverClienteError(errorId: number): Promise<void> {
+    await apiClient.delete(`${this.baseUrl}/revisar/${errorId}`)
+  }
+
+  // Obtener cliente por cédula exacta (para carga masiva de préstamos)
+  async getClienteByCedula(cedula: string): Promise<Cliente | null> {
+    if (!cedula?.trim()) return null
+    const list = await this.searchClientes(cedula.trim(), true)
+    const exact = list.find((c) => (c.cedula || '').trim().toUpperCase() === cedula.trim().toUpperCase())
+    return exact ? null
+  }
+
+  // Buscar clientes por término (usando filtros en endpoint principal)
+  // IMPORTANTE: Por defecto filtra solo clientes ACTIVOS para formularios de préstamos
+  // Para buscar todos los estados, pasar incluirTodosEstados: true
+  async searchClientes(query: string, incluirTodosEstados: boolean = false): Promise<Cliente[]> {
+    const filters: ClienteFilters = { search: query }
+    // Por defecto filtrar solo ACTIVOS (para formularios de préstamos)
+    // Solo incluir todos los estados si se especifica explícitamente
+    if (!incluirTodosEstados) {
+      filters.estado = 'ACTIVO'
+    }
+    const response = await this.getClientes(filters, 1, 100)
+    return response.data
+  }
+
+  // Obtener clientes por analista (usando filtros en endpoint principal)
+  async getClientesByAnalista(analistaId: string): Promise<Cliente[]> {
+    const filters: ClienteFilters = {}
+    const response = await this.getClientes(filters, 1, 100)
+    return response.data
+  }
+
+  // Obtener clientes en mora (usando filtro estado en endpoint principal)
+  async getClientesEnMora(): Promise<Cliente[]> {
+    const filters: ClienteFilters = { estado: 'MORA' }
+    const response = await this.getClientes(filters, 1, 100)
+    return response.data
+  }
+
+  // Obtener historial de pagos de un cliente
+  async getHistorialPagos(clienteId: string): Promise<any[]> {
+    const response = await apiClient.get<ApiResponse<any[]>>(`${this.baseUrl}/${clienteId}/pagos`)
+    return response.data
+  }
+
+  // Obtener tabla de amortización de un cliente
+  async getTablaAmortizacion(clienteId: string): Promise<any[]> {
+    const response = await apiClient.get<ApiResponse<any[]>>(`${this.baseUrl}/${clienteId}/amortizacion`)
+    return response.data
+  }
+
+  // Validar cédula
+  async validateCedula(cedula: string): Promise<{ valid: boolean; message?: string }> {
+    const response = await apiClient.post<ApiResponse<{ valid: boolean; message?: string }>>(
+      `${this.baseUrl}/validate-cedula`,
+      { cedula }
+    )
+    return response.data
+  }
+
+  // Obtener estadísticas de cliente
+  async getEstadisticasCliente(clienteId: string): Promise<any> {
+    const response = await apiClient.get<ApiResponse<any>>(`${this.baseUrl}/${clienteId}/estadisticas`)
+    return response.data
+  }
+
+  // Obtener estadísticas generales de todos los clientes
+  async getStats(): Promise<{ total: number; activos: number; inactivos: number; finalizados: number; nuevos_este_mes: number }> {
+    const response = await apiClient.get<{ total: number; activos: number; inactivos: number; finalizados: number; nuevos_este_mes: number }>(
+      `${this.baseUrl}/stats`
+    )
+    return response
+  }
+
+  // Obtener estadísticas del embudo de clientes
+  // NOTA: El backend no tiene /embudo/estadisticas; se calculan desde stats de clientes
+  async getEstadisticasEmbudo(): Promise<{ total: number; prospectos: number; evaluacion: number; aprobados: number; rechazados: number }> {
+    try {
+      const stats = await this.getStats()
+      return {
+        total: stats.total,
+        prospectos: stats.activos,
+        evaluacion: stats.inactivos,
+        aprobados: stats.finalizados,
+        rechazados: 0,
+      }
+    } catch {
+      return { total: 0, prospectos: 0, evaluacion: 0, aprobados: 0, rechazados: 0 }
+    }
+  }
+
+  // Cambiar estado de cliente (el backend devuelve Cliente directamente, no envuelto en ApiResponse)
+  async cambiarEstado(clienteId: string, estado: Cliente['estado']): Promise<Cliente> {
+    const response = await apiClient.patch<Cliente>(
+      `${this.baseUrl}/${clienteId}/estado`,
+      { estado }
+    )
+    return response
+  }
+
+  // Importar clientes desde Excel (usando endpoint de carga masiva)
+  async importarClientes(file: File): Promise<{ success: number; errors: any[] }> {
+    const response = await apiClient.uploadFile<ApiResponse<{ success: number; errors: any[] }>>(
+      '/api/v1/carga-masiva/clientes',
+      file
+    )
+    return response.data
+  }
+
+  // Buscar cliente por número de teléfono
+  async buscarClientePorTelefono(telefono: string): Promise<Cliente | null> {
+    try {
+      const filters: ClienteFilters = { search: telefono }
+      const response = await this.getClientes(filters, 1, 1)
+      return response.data.length > 0 ? response.data[0] : null
+    } catch (error) {
+      logger.error('Error buscando cliente por teléfono', { error, telefono })
+      return null
+    }
+  }
+
+  // Obtener clientes con problemas de validación (usa /casos-a-revisar del backend)
+  async getClientesConProblemasValidacion(
+    page: number = 1,
+    perPage: number = 20
+  ): Promise<PaginatedResponse<any>> {
+    return this.getCasosARevisar(page, perPage)
+  }
+
+  // Obtener casos a revisar (clientes con placeholders: Z999999999, Revisar Nombres, +589999999999, revisar@email.com)
+  async getCasosARevisar(
+    page: number = 1,
+    perPage: number = 50
+  ): Promise<PaginatedResponse<Cliente>> {
+    const url = buildUrl(`${this.baseUrl}/casos-a-revisar`, { page, per_page: perPage })
+    const response = await apiClient.get<any>(url)
+    return {
+      data: response.clientes || [],
+      total: response.total || 0,
+      page: response.page || page,
+      per_page: response.per_page || perPage,
+      total_pages: response.total_pages || Math.ceil((response.total || 0) / perPage)
+    }
+  }
+
+  // Actualizar múltiples clientes en lote
+  async actualizarClientesLote(actualizaciones: Array<{ id: number; [key: string]: any }>): Promise<{
+    actualizados: number
+    errores: Array<{ id: number | null; error: string }>
+    total_procesados: number
+  }> {
+    const response = await apiClient.post<any>(`${this.baseUrl}/actualizar-lote`, actualizaciones)
+    return response
+  }
+
+  // Eliminar clientes con errores tras su descarga en Excel
+  async eliminarPorDescarga(ids: number[]): Promise<{ deleted: number }> {
+    return apiClient.post(this.baseUrl + "/revisar/eliminar-por-descarga", ids)
+  }}
+
+// Instancia singleton del servicio
+export const clienteService = new ClienteService()

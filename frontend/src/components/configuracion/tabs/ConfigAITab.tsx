@@ -1,5 +1,5 @@
-import { AIConfig } from '../AIConfig'
-
-export function ConfigAITab() {
-  return <AIConfig />
-}
+import { AIConfig } from '../AIConfig'
+
+export function ConfigAITab() {
+  return <AIConfig />
+}
