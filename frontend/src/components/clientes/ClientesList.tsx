@@ -1422,7 +1422,7 @@ export function ClientesList() {
 
 
 
-          'Fila origen': it.fila_origen ? '',
+          'Fila origen': it.fila_origen ?? '',
 
 
 
@@ -1430,7 +1430,7 @@ export function ClientesList() {
 
 
 
-          'Cédula': it.cedula ? '',
+          'Cédula': it.cedula ?? '',
 
 
 
@@ -1438,7 +1438,7 @@ export function ClientesList() {
 
 
 
-          Nombres: it.nombres ? '',
+          Nombres: it.nombres ?? '',
 
 
 
@@ -1446,7 +1446,7 @@ export function ClientesList() {
 
 
 
-          Email: it.email ? '',
+          Email: it.email ?? '',
 
 
 
@@ -1454,7 +1454,7 @@ export function ClientesList() {
 
 
 
-          'Teléfono': it.telefono ? '',
+          'Teléfono': it.telefono ?? '',
 
 
 
@@ -1462,7 +1462,7 @@ export function ClientesList() {
 
 
 
-          Errores: it.errores ? '',
+          Errores: it.errores ?? '',
 
 
 
@@ -1470,7 +1470,7 @@ export function ClientesList() {
 
 
 
-          Estado: it.estado ? '',
+          Estado: it.estado ?? '',
 
 
 
@@ -1478,7 +1478,7 @@ export function ClientesList() {
 
 
 
-          'Fecha registro': it.fecha_registro ? '',
+          'Fecha registro': it.fecha_registro ?? '',
 
 
 
@@ -3790,7 +3790,7 @@ export function ClientesList() {
 
 
 
-                          <TableCell className="max-w-xs truncate text-amber-700" title={item.errores ? ''}>{item.errores ? '-'}</TableCell>
+                          <TableCell className="max-w-xs truncate text-amber-700" title={item.errores ?? ''}>{item.errores ? '-'}</TableCell>
 
 
 
@@ -5942,7 +5942,7 @@ export function ClientesList() {
 
 
 
-                          Cédula: {String(cliente.cedula ? '')} | ID: {String(cliente.id ? '')}
+                          Cédula: {String(cliente.cedula ?? '')} | ID: {String(cliente.id ?? '')}
 
 
 
@@ -6006,7 +6006,7 @@ export function ClientesList() {
 
 
 
-                          {String(cliente.email ? '')}
+                          {String(cliente.email ?? '')}
 
 
 
@@ -6110,7 +6110,7 @@ export function ClientesList() {
 
 
 
-                          {String(cliente.telefono ? '')}
+                          {String(cliente.telefono ?? '')}
 
 
 
@@ -6246,7 +6246,7 @@ export function ClientesList() {
 
 
 
-                        {String(cliente.estado ? '')}
+                        {String(cliente.estado ?? '')}
 
 
 

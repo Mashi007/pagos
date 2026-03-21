@@ -2668,7 +2668,7 @@ export function TrainingDashboard() {
 
 
 
-                    (metricas.rag?.documentos_con_embeddings ? 0) > 0 ? 'default' : 'secondary'
+                    (metricas.rag?.documentos_con_embeddings ?? 0) > 0 ? 'default' : 'secondary'
 
 
 
@@ -2698,7 +2698,7 @@ export function TrainingDashboard() {
 
 
 
-                  {(metricas.rag?.documentos_con_embeddings ? 0) > 0 ? 'Configurado' : 'Sin configurar'}
+                  {(metricas.rag?.documentos_con_embeddings ?? 0) > 0 ? 'Configurado' : 'Sin configurar'}
 
 
 

@@ -894,7 +894,7 @@ export function PrestamosList() {
 
 
 
-              'Fila origen': it.fila_origen ? '',
+              'Fila origen': it.fila_origen ?? '',
 
 
 
@@ -902,7 +902,7 @@ export function PrestamosList() {
 
 
 
-              'Cédula cliente': it.cedula_cliente ? '',
+              'Cédula cliente': it.cedula_cliente ?? '',
 
 
 
@@ -910,7 +910,7 @@ export function PrestamosList() {
 
 
 
-              'Total financiamiento': it.total_financiamiento ? '',
+              'Total financiamiento': it.total_financiamiento ?? '',
 
 
 
@@ -918,7 +918,7 @@ export function PrestamosList() {
 
 
 
-              'Modalidad pago': it.modalidad_pago ? '',
+              'Modalidad pago': it.modalidad_pago ?? '',
 
 
 
@@ -926,7 +926,7 @@ export function PrestamosList() {
 
 
 
-              'Nº cuotas': it.numero_cuotas ? '',
+              'Nº cuotas': it.numero_cuotas ?? '',
 
 
 
@@ -934,7 +934,7 @@ export function PrestamosList() {
 
 
 
-              Producto: it.producto ? '',
+              Producto: it.producto ?? '',
 
 
 
@@ -942,7 +942,7 @@ export function PrestamosList() {
 
 
 
-              Analista: it.analista ? '',
+              Analista: it.analista ?? '',
 
 
 
@@ -950,7 +950,7 @@ export function PrestamosList() {
 
 
 
-              Concesionario: it.concesionario ? '',
+              Concesionario: it.concesionario ?? '',
 
 
 
@@ -958,7 +958,7 @@ export function PrestamosList() {
 
 
 
-              Errores: it.errores ? '',
+              Errores: it.errores ?? '',
 
 
 
@@ -966,7 +966,7 @@ export function PrestamosList() {
 
 
 
-              Estado: it.estado ? '',
+              Estado: it.estado ?? '',
 
 
 
@@ -974,7 +974,7 @@ export function PrestamosList() {
 
 
 
-              'Fecha registro': it.fecha_registro ? '',
+              'Fecha registro': it.fecha_registro ?? '',
 
 
 
@@ -4166,7 +4166,7 @@ export function PrestamosList() {
 
 
 
-                          <TableCell className="max-w-[200px] truncate text-amber-700" title={item.errores ? ''}>{item.errores ? '-'}</TableCell>
+                          <TableCell className="max-w-[200px] truncate text-amber-700" title={item.errores ?? ''}>{item.errores ? '-'}</TableCell>
 
 
 
@@ -7102,7 +7102,7 @@ export function PrestamosList() {
 
 
 
-                              {formatCurrency(Number(prestamo.total_financiamiento ? 0))}
+                              {formatCurrency(Number(prestamo.total_financiamiento ?? 0))}
 
 
 
