@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Sistema de Préstamos y Cobranza RapiCredit">
+    <meta name="csrf-token" content="">
+    <title>Iniciar Sesión - RapiCredit</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --primary: #667eea;
+            --primary-dark: #5568d3;
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+            --gray-light: #f3f4f6;
+            --gray: #e0e0e0;
+            --gray-dark: #333;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, var(--primary) 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .login-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            width: 100%;
+            max-width: 420px;
+            animation: slideIn 0.3s ease;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .logo h1 {
+            font-size: 28px;
+            color: var(--primary);
+            margin-bottom: 10px;
+        }
+        
+        .logo p {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .form-group {
+            margin-bottom: 24px;
+        }
+        
+        label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: var(--gray-dark);
+            font-size: 14px;
+        }
+        
+        input[type="email"],
+        input[type="password"],
+        input[type="text"] {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid var(--gray);
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            background-color: #fff;
+        }
+        
+        input[type="email"]:focus,
+        input[type="password"]:focus,
+        input[type="text"]:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            background-color: #f8f9ff;
+        }
+        
+        input.valid {
+            border-color: var(--success);
+            background-color: #f0fdf4;
+        }
+        
+        input.valid:focus {
+            border-color: var(--success);
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+        }
+        
+        input.invalid {
+            border-color: var(--error);
+            background-color: #fef2f2;
+        }
+        
+        input.invalid:focus {
+            border-color: var(--error);
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+        }
+        
+        .input-wrapper {
+            position: relative;
+        }
+        
+        .validation-icon {
+            position: absolute;
+            right: 16px;
+            top: 38px;
+            font-size: 18px;
+            pointer-events: none;
+        }
+        
+        .validation-icon.valid {
+            color: var(--success);
+        }
+        
+        .validation-icon.invalid {
+            color: var(--error);
+        }
+        
+        .form-message {
+            font-size: 13px;
+            margin-top: 6px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-height: 20px;
+        }
+        
+        .form-message.error {
+            color: var(--error);
+        }
+        
+        .form-message.success {
+            color: var(--success);
+        }
+        
+        .form-message.info {
+            color: var(--primary);
+        }
+        
+        .password-strength {
+            margin-top: 8px;
+            height: 4px;
+            background: var(--gray);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        
+        .password-strength-bar {
+            height: 100%;
+            width: 0;
+            transition: width 0.3s ease, background-color 0.3s ease;
+            border-radius: 2px;
+        }
+        
+        .password-strength-bar.weak {
+            width: 33%;
+            background: var(--error);
+        }
+        
+        .password-strength-bar.medium {
+            width: 66%;
+            background: var(--warning);
+        }
+        
+        .password-strength-bar.strong {
+            width: 100%;
+            background: var(--success);
+        }
+        
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .checkbox-group input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            margin: 0;
+            accent-color: var(--primary);
+        }
+        
+        .checkbox-group label {
+            margin: 0;
+            cursor: pointer;
+            font-weight: 400;
+            font-size: 14px;
+        }
+        
+        button {
+            width: 100%;
+            padding: 12px 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: var(--primary);
+            color: white;
+            margin-top: 24px;
+        }
+        
+        button:hover:not(:disabled) {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+        
+        button:active:not(:disabled) {
+            transform: translateY(0);
+        }
+        
+        button:disabled {
+            background: #cbd5e1;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .button-text {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        .footer {
+            margin-top: 20px;
+            text-align: center;
+        }
+        
+        .footer a {
+            color: var(--primary);
+            text-decoration: none;
+            font-size: 14px;
+        }
+        
+        .footer a:hover {
+            text-decoration: underline;
+        }
+        
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .alert.show {
+            display: block;
+        }
+        
+        .alert.error {
+            background: #fef2f2;
+            color: var(--error);
+            border: 1px solid #fecaca;
+        }
+        
+        .alert.success {
+            background: #f0fdf4;
+            color: var(--success);
+            border: 1px solid #bbf7d0;
+        }
+        
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 16px 24px;
+            border-radius: 8px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+            color: white;
+            font-size: 14px;
+            z-index: 9999;
+            animation: slideInRight 0.3s ease;
+        }
+        
+        @keyframes slideInRight {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        .toast.success {
+            background: var(--success);
+        }
+        
+        .toast.error {
+            background: var(--error);
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <!-- Logo -->
+        <div class="logo">
+            <h1>RapiCredit</h1>
+            <p>Sistema de Préstamos y Cobranza</p>
+        </div>
+        
+        <!-- Alert messages -->
+        <div class="alert error" id="error-alert"></div>
+        <div class="alert success" id="success-alert"></div>
+        
+        <!-- Login Form -->
+        <form id="login-form" aria-label="Formulario de inicio de sesión">
+            <!-- CSRF Token Field (Hidden) -->
+            <input type="hidden" id="csrf_token" name="csrf_token" value="">
+            
+            <!-- Email Field -->
+            <div class="form-group">
+                <label for="email">Correo Electrónico</label>
+                <div class="input-wrapper">
+                    <input
+                        type="email"
+                        id="email"
+                        name="email"
+                        placeholder="tu@email.com"
+                        required
+                        aria-label="Correo electrónico"
+                        aria-describedby="email-message"
+                    >
+                    <span class="validation-icon"></span>
+                </div>
+                <div class="form-message" id="email-message"></div>
+            </div>
+            
+            <!-- Password Field -->
+            <div class="form-group">
+                <label for="password">Contraseña</label>
+                <div class="input-wrapper">
+                    <input
+                        type="password"
+                        id="password"
+                        name="password"
+                        placeholder="Ingresa tu contraseña"
+                        required
+                        minlength="8"
+                        aria-label="Contraseña"
+                        aria-describedby="password-message"
+                    >
+                    <span class="validation-icon"></span>
+                </div>
+                <div class="password-strength">
+                    <div class="password-strength-bar"></div>
+                </div>
+                <div class="form-message" id="password-message"></div>
+            </div>
+            
+            <!-- Remember Me -->
+            <div class="form-group">
+                <div class="checkbox-group">
+                    <input
+                        type="checkbox"
+                        id="remember"
+                        name="remember_me"
+                        aria-label="Recordarme en este dispositivo"
+                    >
+                    <label for="remember">Recordarme</label>
+                </div>
+            </div>
+            
+            <!-- Submit Button -->
+            <button type="submit" id="submit-btn" aria-label="Iniciar sesión">
+                <span class="button-text">
+                    <span>Iniciar Sesión</span>
+                </span>
+            </button>
+        </form>
+        
+        <!-- Footer Links -->
+        <div class="footer">
+            <a href="/forgot-password">¿Olvidó su contraseña?</a>
+        </div>
+    </div>
+    
+    <!-- Script -->
+    <script>
+        const form = document.getElementById('login-form');
+        const emailInput = document.getElementById('email');
+        const passwordInput = document.getElementById('password');
+        const csrfInput = document.getElementById('csrf_token');
+        const submitBtn = document.getElementById('submit-btn');
+        const emailMessage = document.getElementById('email-message');
+        const passwordMessage = document.getElementById('password-message');
+        const errorAlert = document.getElementById('error-alert');
+        const successAlert = document.getElementById('success-alert');
+        
+        // Utilidades
+        const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+        
+        const validatePassword = (password) => password.length >= 8;
+        
+        const getPasswordStrength = (password) => {
+            if (password.length < 8) return 'weak';
+            if (password.length < 12) return 'medium';
+            if (/[A-Z]/.test(password) && /[0-9]/.test(password) && /[!@#$%^&*]/.test(password)) {
+                return 'strong';
+            }
+            return 'medium';
+        };
+        
+        const showAlert = (type, message) => {
+            const alert = type === 'error' ? errorAlert : successAlert;
+            alert.textContent = message;
+            alert.classList.add('show');
+            setTimeout(() => alert.classList.remove('show'), 5000);
+        };
+        
+        const showToast = (type, message) => {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        };
+        
+        const updateIcon = (input, isValid) => {
+            const wrapper = input.parentElement;
+            const icon = wrapper.querySelector('.validation-icon');
+            if (input.value) {
+                icon.textContent = isValid ? '✓' : '✕';
+                icon.className = `validation-icon ${isValid ? 'valid' : 'invalid'}`;
+            } else {
+                icon.textContent = '';
+            }
+        };
+        
+        // Email validation
+        emailInput.addEventListener('blur', () => {
+            if (emailInput.value) {
+                const isValid = validateEmail(emailInput.value);
+                emailInput.classList.toggle('valid', isValid);
+                emailInput.classList.toggle('invalid', !isValid);
+                updateIcon(emailInput, isValid);
+            }
+        });
+        
+        emailInput.addEventListener('input', () => {
+            if (emailInput.value) {
+                const isValid = validateEmail(emailInput.value);
+                emailInput.classList.toggle('valid', isValid);
+                emailInput.classList.toggle('invalid', !isValid);
+                updateIcon(emailInput, isValid);
+                
+                if (!isValid && emailInput.value) {
+                    emailMessage.textContent = 'Email no válido';
+                    emailMessage.className = 'form-message error';
+                } else if (isValid) {
+                    emailMessage.textContent = '✓ Email válido';
+                    emailMessage.className = 'form-message success';
+                } else {
+                    emailMessage.textContent = '';
+                }
+            }
+        });
+        
+        // Password validation
+        passwordInput.addEventListener('input', () => {
+            if (passwordInput.value) {
+                const isValid = validatePassword(passwordInput.value);
+                const strength = getPasswordStrength(passwordInput.value);
+                
+                passwordInput.classList.toggle('valid', isValid);
+                passwordInput.classList.toggle('invalid', !isValid);
+                updateIcon(passwordInput, isValid);
+                
+                // Update strength bar
+                const strengthBar = passwordInput.parentElement.nextElementSibling.querySelector('.password-strength-bar');
+                strengthBar.className = `password-strength-bar ${strength}`;
+                
+                if (!isValid) {
+                    passwordMessage.textContent = 'Mínimo 8 caracteres';
+                    passwordMessage.className = 'form-message error';
+                } else if (strength === 'weak') {
+                    passwordMessage.textContent = 'Contraseña débil';
+                    passwordMessage.className = 'form-message info';
+                } else if (strength === 'medium') {
+                    passwordMessage.textContent = 'Contraseña moderada';
+                    passwordMessage.className = 'form-message info';
+                } else {
+                    passwordMessage.textContent = '✓ Contraseña fuerte';
+                    passwordMessage.className = 'form-message success';
+                }
+            }
+        });
+        
+        // Load CSRF token on page load
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const response = await fetch('/api/v1/auth/login-form');
+                const data = await response.json();
+                csrfInput.value = data.csrf_token;
+            } catch (error) {
+                console.error('Error loading CSRF token:', error);
+                showAlert('error', 'Error al cargar formulario');
+            }
+        });
+        
+        // Form submit
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const emailValid = validateEmail(emailInput.value);
+            const passwordValid = validatePassword(passwordInput.value);
+            
+            if (!emailValid || !passwordValid) {
+                showAlert('error', 'Por favor completa todos los campos correctamente');
+                return;
+            }
+            
+            // Show loading state
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="button-text"><span class="spinner"></span><span>Iniciando sesión...</span></span>';
+            
+            try {
+                const response = await fetch('/api/v1/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': csrfInput.value
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        email: emailInput.value,
+                        password: passwordInput.value,
+                        csrf_token: csrfInput.value,
+                        remember_me: document.getElementById('remember').checked
+                    })
+                });
+                
+                if (response.ok) {
+                    showToast('success', 'Sesión iniciada correctamente');
+                    setTimeout(() => {
+                        window.location.href = '/dashboard';
+                    }, 1000);
+                } else {
+                    const error = await response.json();
+                    showAlert('error', error.detail || 'Error al iniciar sesión');
+                    showToast('error', 'Error en autenticación');
+                    
+                    // Reload CSRF token
+                    try {
+                        const tokenResponse = await fetch('/api/v1/auth/login-form');
+                        const tokenData = await tokenResponse.json();
+                        csrfInput.value = tokenData.csrf_token;
+                    } catch (e) {
+                        console.error('Error reloading CSRF token:', e);
+                    }
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showAlert('error', 'Error de conexión');
+                showToast('error', 'Error de red');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<span class="button-text"><span>Iniciar Sesión</span></span>';
+            }
+        });
+    </script>
+</body>
+</html>
