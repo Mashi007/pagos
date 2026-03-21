@@ -70,6 +70,7 @@ from app.services.cuota_estado import (
     estado_cuota_para_mostrar,
     etiqueta_estado_cuota,
     hoy_negocio,
+    sincronizar_columna_estado_cuotas,
 )
 
 
@@ -77,6 +78,118 @@ from app.services.cuota_estado import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
+
+
+class PrestamoIdsCuotasBody(BaseModel):
+    """IDs de prestamos para devolver todas sus cuotas en una sola respuesta (plana)."""
+
+    prestamo_ids: List[int]
+
+    @field_validator("prestamo_ids")
+    @classmethod
+    def cap_ids(cls, v: List[int]) -> List[int]:
+        if len(v) > 200:
+            raise ValueError("Maximo 200 prestamo_ids por solicitud")
+        return v
+
+
+class CuotaUpdateAPI(BaseModel):
+    fecha_vencimiento: Optional[date] = None
+    fecha_pago: Optional[date] = None
+    monto_cuota: Optional[float] = None
+    total_pagado: Optional[float] = None
+    observaciones: Optional[str] = None
+
+
+def _listado_cuotas_prestamo_dicts(db: Session, prestamo_id: int) -> Optional[List[dict]]:
+    row = db.get(Prestamo, prestamo_id)
+    if not row:
+        return None
+    n_aplicados = sincronizar_pagos_pendientes_a_prestamos(db, [prestamo_id])
+    if n_aplicados > 0:
+        logger.info(
+            "cuotas prestamo %s: aplicados %s pago(s) pendientes antes de listar",
+            prestamo_id,
+            n_aplicados,
+        )
+    cuotas = db.execute(
+        select(Cuota).where(Cuota.prestamo_id == prestamo_id).order_by(Cuota.numero_cuota)
+    ).scalars().all()
+    sincronizar_columna_estado_cuotas(db, cuotas, commit=True)
+    resultado: List[dict] = []
+    for c in cuotas:
+        pago_conciliado_flag = False
+        pago_monto_conciliado = 0.0
+        pago_verificado_concordancia = ""
+        pago_monto_conciliado = float(c.total_pagado or 0)
+        cp_links = db.execute(
+            select(Pago).join(CuotaPago, CuotaPago.pago_id == Pago.id).where(
+                CuotaPago.cuota_id == c.id,
+                or_(
+                    Pago.conciliado.is_(True),
+                    func.coalesce(func.upper(func.trim(Pago.verificado_concordancia)), "") == "SI",
+                ),
+            )
+        ).scalars().all()
+        if cp_links:
+            pago_conciliado_flag = True
+        if not pago_conciliado_flag and c.pago_id:
+            pago = db.get(Pago, c.pago_id)
+            if pago:
+                pago_conciliado_flag = bool(pago.conciliado)
+                pago_verificado_concordancia = str(pago.verificado_concordancia or "").strip().upper()
+                if pago_verificado_concordancia == "SI":
+                    pago_conciliado_flag = True
+        if not pago_conciliado_flag:
+            if c.fecha_vencimiento:
+                fecha_inicio = c.fecha_vencimiento - timedelta(days=15)
+                fecha_fin = c.fecha_vencimiento + timedelta(days=15)
+                pagos_en_rango = db.execute(
+                    select(Pago)
+                    .where(
+                        Pago.prestamo_id == prestamo_id,
+                        func.date(Pago.fecha_pago) >= fecha_inicio,
+                        func.date(Pago.fecha_pago) <= fecha_fin,
+                    )
+                    .order_by(Pago.fecha_pago.desc())
+                ).scalars().all()
+                for pago in pagos_en_rango:
+                    if pago.conciliado or (str(pago.verificado_concordancia or "").strip().upper() == "SI"):
+                        pago_conciliado_flag = True
+                        break
+        monto_cuota_f = float(c.monto or 0)
+        total_pagado_f = float(c.total_pagado or 0)
+        fv = c.fecha_vencimiento
+        fv_date = fv.date() if fv and hasattr(fv, "date") else fv
+        estado_mostrar = estado_cuota_para_mostrar(total_pagado_f, monto_cuota_f, fv_date, hoy_negocio())
+        resultado.append(
+            {
+                "id": c.id,
+                "prestamo_id": c.prestamo_id,
+                "pago_id": c.pago_id,
+                "numero_cuota": c.numero_cuota,
+                "fecha_vencimiento": c.fecha_vencimiento.isoformat() if c.fecha_vencimiento else None,
+                "monto": float(c.monto) if c.monto is not None else 0,
+                "monto_cuota": float(c.monto) if c.monto is not None else 0,
+                "monto_capital": float(c.monto_capital) if c.monto_capital is not None else 0,
+                "monto_interes": float(c.monto_interes) if c.monto_interes is not None else 0,
+                "saldo_capital_inicial": float(c.saldo_capital_inicial) if c.saldo_capital_inicial is not None else 0,
+                "saldo_capital_final": float(c.saldo_capital_final) if c.saldo_capital_final is not None else 0,
+                "capital_pagado": None,
+                "interes_pagado": None,
+                "total_pagado": float(c.total_pagado) if c.total_pagado is not None else 0,
+                "fecha_pago": c.fecha_pago.isoformat() if c.fecha_pago else None,
+                "estado": estado_mostrar,
+                "estado_etiqueta": etiqueta_estado_cuota(estado_mostrar),
+                "dias_mora": c.dias_mora if c.dias_mora is not None else 0,
+                "dias_morosidad": c.dias_morosidad if c.dias_morosidad is not None else 0,
+                "pago_conciliado": pago_conciliado_flag,
+                "pago_monto_conciliado": pago_monto_conciliado,
+            }
+        )
+    return resultado
+
+
 
 
 
@@ -1588,237 +1701,89 @@ def _generar_cuotas_amortizacion(db: Session, p: Prestamo, fecha_base: date, num
 
 
 
+@router.post("/cuotas/by-prestamo-ids", response_model=list)
+def post_cuotas_by_prestamo_ids(
+    body: PrestamoIdsCuotasBody,
+    db: Session = Depends(get_db),
+):
+    """
+    Devuelve en una lista plana todas las cuotas de los prestamos indicados (mismo shape que GET .../cuotas).
+    Omite IDs inexistentes. Maximo 200 prestamos por solicitud.
+    """
+    out: List[dict] = []
+    seen: set[int] = set()
+    for pid in body.prestamo_ids:
+        if pid in seen:
+            continue
+        seen.add(pid)
+        part = _listado_cuotas_prestamo_dicts(db, pid)
+        if part:
+            out.extend(part)
+    return out
+
+
+
+
+@router.put("/{prestamo_id}/cuotas/{cuota_id}", response_model=dict)
+def put_cuota_prestamo(
+    prestamo_id: int,
+    cuota_id: int,
+    body: CuotaUpdateAPI,
+    db: Session = Depends(get_db),
+):
+    c = db.get(Cuota, cuota_id)
+    if not c or c.prestamo_id != prestamo_id:
+        raise HTTPException(status_code=404, detail="Cuota no encontrada")
+    if body.fecha_vencimiento is not None:
+        c.fecha_vencimiento = body.fecha_vencimiento
+    if body.fecha_pago is not None:
+        c.fecha_pago = body.fecha_pago
+    if body.monto_cuota is not None:
+        c.monto = Decimal(str(round(float(body.monto_cuota), 2)))
+    if body.total_pagado is not None:
+        c.total_pagado = Decimal(str(round(float(body.total_pagado), 2)))
+    if body.observaciones is not None:
+        c.observaciones = body.observaciones
+    db.flush()
+    todas = db.execute(
+        select(Cuota).where(Cuota.prestamo_id == prestamo_id).order_by(Cuota.numero_cuota)
+    ).scalars().all()
+    sincronizar_columna_estado_cuotas(db, todas, commit=False)
+    db.commit()
+    refreshed = _listado_cuotas_prestamo_dicts(db, prestamo_id) or []
+    for row in refreshed:
+        if row.get("id") == cuota_id:
+            return row
+    raise HTTPException(status_code=500, detail="No se pudo reconstruir la cuota actualizada")
+
+
+@router.delete("/{prestamo_id}/cuotas/{cuota_id}", status_code=204)
+def delete_cuota_prestamo(
+    prestamo_id: int,
+    cuota_id: int,
+    db: Session = Depends(get_db),
+):
+    c = db.get(Cuota, cuota_id)
+    if not c or c.prestamo_id != prestamo_id:
+        raise HTTPException(status_code=404, detail="Cuota no encontrada")
+    db.delete(c)
+    db.commit()
+    return None
+
+
 @router.get("/{prestamo_id}/cuotas", response_model=list)
 
 def get_cuotas_prestamo(prestamo_id: int, db: Session = Depends(get_db)):
-
     """
-
-    Lista las cuotas (tabla de amortización) de un préstamo, con info de pago conciliado.
-
-
-
-    CAUSA RAÍZ del "—" en Pago conciliado/Recibo: pagos en BD con prestamo_id y conciliado
-
-    pero nunca aplicados a cuotas (sin filas en cuota_pagos; cuotas.total_pagado vacío).
-
-    Antes de devolver, se aplican automáticamente los pagos pendientes de este préstamo.
-
+    Lista las cuotas (tabla de amortizacion) de un prestamo, con info de pago conciliado.
+    Aplica pagos pendientes, alinea columna `cuotas.estado` con la regla unificada y devuelve estado + etiqueta.
     """
+    out = _listado_cuotas_prestamo_dicts(db, prestamo_id)
+    if out is None:
+        raise HTTPException(status_code=404, detail="Prestamo no encontrado")
+    return out
 
-    row = db.get(Prestamo, prestamo_id)
 
-    if not row:
-
-        raise HTTPException(status_code=404, detail="Préstamo no encontrado")
-
-
-
-    # Aplicar a cuotas cualquier pago conciliado del préstamo que aún no tenga enlaces (cuota_pagos).
-
-    # Corrige el caso donde el pago existía pero nunca se ejecutó "aplicar a cuotas".
-
-    n_aplicados = sincronizar_pagos_pendientes_a_prestamos(db, [prestamo_id])
-
-    if n_aplicados > 0:
-
-        logger.info("get_cuotas_prestamo: aplicados %s pago(s) pendientes al préstamo %s", n_aplicados, prestamo_id)
-
-
-
-    # Obtener todas las cuotas del préstamo (tras posible aplicación, para devolver datos actualizados)
-
-    cuotas = db.execute(
-
-        select(Cuota).where(Cuota.prestamo_id == prestamo_id).order_by(Cuota.numero_cuota)
-
-    ).scalars().all()
-
-
-
-    resultado = []
-
-    for c in cuotas:
-
-        # Estrategia de búsqueda de pagos:
-
-        # 1. Primero, si existe cuota.pago_id, buscar ese pago específico.
-
-        # 2. Si no, buscar pagos por rango de fechas (+-15 días del vencimiento).
-
-        
-
-        pago_conciliado_flag = False
-
-        pago_monto_conciliado = 0.0
-
-        pago_verificado_concordancia = ""
-
-        
-
-        # [C2] pago_monto_conciliado = monto real abonado a ESTA cuota (cuota.total_pagado),
-
-        # no el monto total del pago (que puede cubrir múltiples cuotas).
-
-        pago_monto_conciliado = float(c.total_pagado or 0)
-
-
-
-        # Caso 0: Tabla cuota_pagos — vínculo explícito pago↔cuota (prioritario; no depende de fecha_vencimiento).
-
-        # Tras actualizar vencimientos, el rango ±15 días ya no coincide; cuota_pagos sí sigue correcto.
-
-        cp_links = db.execute(
-
-            select(Pago).join(CuotaPago, CuotaPago.pago_id == Pago.id).where(
-
-                CuotaPago.cuota_id == c.id,
-
-                or_(
-
-                    Pago.conciliado.is_(True),
-
-                    func.coalesce(func.upper(func.trim(Pago.verificado_concordancia)), "") == "SI",
-
-                ),
-
-            )
-
-        ).scalars().all()
-
-        if cp_links:
-
-            pago_conciliado_flag = True
-
-
-
-        if not pago_conciliado_flag and c.pago_id:
-
-            # Caso 1: La cuota tiene un pago_id vinculado directamente
-
-            pago = db.get(Pago, c.pago_id)
-
-            if pago:
-
-                pago_conciliado_flag = bool(pago.conciliado)
-
-                pago_verificado_concordancia = str(pago.verificado_concordancia or "").strip().upper()
-
-                if pago_verificado_concordancia == "SI":
-
-                    pago_conciliado_flag = True
-
-        if not pago_conciliado_flag:
-
-            # Caso 2: Sin vínculo en cuota_pagos ni pago_id — buscar pagos conciliados por rango de fechas
-
-            if c.fecha_vencimiento:
-
-                fecha_inicio = c.fecha_vencimiento - timedelta(days=15)
-
-                fecha_fin = c.fecha_vencimiento + timedelta(days=15)
-
-
-
-                pagos_en_rango = db.execute(
-
-                    select(Pago)
-
-                    .where(
-
-                        Pago.prestamo_id == prestamo_id,
-
-                        func.date(Pago.fecha_pago) >= fecha_inicio,
-
-                        func.date(Pago.fecha_pago) <= fecha_fin,
-
-                    )
-
-                    .order_by(Pago.fecha_pago.desc())
-
-                ).scalars().all()
-
-
-
-                for pago in pagos_en_rango:
-
-                    if pago.conciliado or (str(pago.verificado_concordancia or "").strip().upper() == "SI"):
-
-                        pago_conciliado_flag = True
-
-                        break
-
-
-
-        monto_cuota_f = float(c.monto or 0)
-
-        total_pagado_f = float(c.total_pagado or 0)
-
-        fv = c.fecha_vencimiento
-
-        fv_date = fv.date() if fv and hasattr(fv, "date") else fv
-
-        estado_mostrar = estado_cuota_para_mostrar(
-
-            total_pagado_f, monto_cuota_f, fv_date, hoy_negocio()
-
-        )
-
-        # Construir respuesta de cuota
-
-        resultado.append({
-
-            "id": c.id,
-
-            "prestamo_id": c.prestamo_id,
-
-            "pago_id": c.pago_id,
-
-            "numero_cuota": c.numero_cuota,
-
-            "fecha_vencimiento": c.fecha_vencimiento.isoformat() if c.fecha_vencimiento else None,
-
-            "monto": float(c.monto) if c.monto is not None else 0,
-
-            "monto_cuota": float(c.monto) if c.monto is not None else 0,
-
-            "monto_capital": float(c.monto_capital) if c.monto_capital is not None else 0,  # [B3]
-
-            "monto_interes": float(c.monto_interes) if c.monto_interes is not None else 0,  # [B3]
-
-            "saldo_capital_inicial": float(c.saldo_capital_inicial) if c.saldo_capital_inicial is not None else 0,
-
-            "saldo_capital_final": float(c.saldo_capital_final) if c.saldo_capital_final is not None else 0,
-
-            "capital_pagado": None,
-
-            "interes_pagado": None,
-
-            "total_pagado": float(c.total_pagado) if c.total_pagado is not None else 0,
-
-            "fecha_pago": c.fecha_pago.isoformat() if c.fecha_pago else None,
-
-            "estado": estado_mostrar,
-
-            "estado_etiqueta": etiqueta_estado_cuota(estado_mostrar),
-
-            "dias_mora": c.dias_mora if c.dias_mora is not None else 0,
-
-            "dias_morosidad": c.dias_morosidad if c.dias_morosidad is not None else 0,
-
-            # pago_conciliado: True si existe pago conciliado O verificado_concordancia='SI'
-
-            "pago_conciliado": pago_conciliado_flag,
-
-            # pago_monto_conciliado: suma de montos de pagos conciliados
-
-            "pago_monto_conciliado": pago_monto_conciliado,
-
-        })
-
-    
-
-    return resultado
 
 
 
@@ -1969,6 +1934,8 @@ def _obtener_cuotas_para_export(db: Session, prestamo_id: int, prestamo: Prestam
         select(Cuota).where(Cuota.prestamo_id == prestamo_id).order_by(Cuota.numero_cuota)
 
     ).scalars().all()
+
+    sincronizar_columna_estado_cuotas(db, cuotas, commit=True)
 
 
 

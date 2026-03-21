@@ -11,7 +11,7 @@ export function etiquetaEstadoCuotaRespaldo(
   const labels: Record<string, string> = {
     PENDIENTE: 'Pendiente',
     PARCIAL: 'Pendiente parcial',
-    VENCIDO: 'Vencido (1-91 d)',
+    VENCIDO: 'Vencido',
     MORA: 'Mora (92+ d)',
     PAGADO: 'Pagado',
     PAGO_ADELANTADO: 'Pago adelantado',

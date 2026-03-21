@@ -354,8 +354,15 @@ export function TablaAmortizacionCompleta() {
   // Mutaciones para editar
 
   const mutationActualizarCuota = useMutation({
-    mutationFn: ({ cuotaId, data }: { cuotaId: number; data: CuotaUpdate }) =>
-      cuotaService.updateCuota(cuotaId, data),
+    mutationFn: ({
+      prestamoId,
+      cuotaId,
+      data,
+    }: {
+      prestamoId: number
+      cuotaId: number
+      data: CuotaUpdate
+    }) => cuotaService.updateCuota(prestamoId, cuotaId, data),
 
     onSuccess: (data, variables) => {
       toast.success('Cuota actualizada exitosamente')
@@ -394,7 +401,13 @@ export function TablaAmortizacionCompleta() {
   })
 
   const mutationEliminarCuota = useMutation({
-    mutationFn: (cuotaId: number) => cuotaService.deleteCuota(cuotaId),
+    mutationFn: ({
+      prestamoId,
+      cuotaId,
+    }: {
+      prestamoId: number
+      cuotaId: number
+    }) => cuotaService.deleteCuota(prestamoId, cuotaId),
 
     onSuccess: () => {
       toast.success('Cuota eliminada exitosamente')
@@ -413,7 +426,7 @@ export function TablaAmortizacionCompleta() {
 
   // Función para confirmar eliminación
 
-  const handleEliminarCuota = (cuotaId: number) => {
+  const handleEliminarCuota = (prestamoId: number, cuotaId: number) => {
     if (
       !confirm(
         '¿Está seguro de eliminar esta cuota? Esta acción no se puede deshacer.'
@@ -422,7 +435,7 @@ export function TablaAmortizacionCompleta() {
       return
     }
 
-    mutationEliminarCuota.mutate(cuotaId)
+    mutationEliminarCuota.mutate({ prestamoId, cuotaId })
   }
 
   const mutationActualizarPago = useMutation({
@@ -1091,7 +1104,10 @@ export function TablaAmortizacionCompleta() {
                                               variant="outline"
                                               className="text-red-600 hover:bg-red-50 hover:text-red-700"
                                               onClick={() =>
-                                                handleEliminarCuota(cuota.id)
+                                                handleEliminarCuota(
+                                                  cuota.prestamo_id,
+                                                  cuota.id
+                                                )
                                               }
                                               title="Eliminar Cuota"
                                             >
@@ -1442,6 +1458,7 @@ export function TablaAmortizacionCompleta() {
                 }
 
                 mutationActualizarCuota.mutate({
+                  prestamoId: cuotaEditando.prestamo_id,
                   cuotaId: cuotaEditando.id,
                   data,
                 })

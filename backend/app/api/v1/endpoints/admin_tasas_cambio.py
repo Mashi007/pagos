@@ -1,16 +1,19 @@
 ﻿"""
 Endpoints para administrar tasas de cambio oficial (admin).
 """
-from datetime import date
-from typing import Optional
+from datetime import date, datetime
+from typing import Any, Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
+
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.user_utils import user_is_administrator
-from app.schemas.auth import UserResponse
 from app.models.tasa_cambio_diaria import TasaCambioDiaria
+from app.models.user import User
+from app.schemas.auth import UserResponse
 from app.services.tasa_cambio_service import (
     obtener_tasa_hoy,
     obtener_tasa_por_fecha,
@@ -22,15 +25,25 @@ router = APIRouter(prefix="/admin/tasas-cambio", tags=["admin-tasas-cambio"])
 
 
 class TasaCambioResponse(BaseModel):
+    """Respuesta API: fechas como string ISO (el ORM entrega datetime)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     fecha: date
     tasa_oficial: float
-    usuario_email: Optional[str]
+    usuario_email: Optional[str] = None
     created_at: str
     updated_at: str
 
-    class Config:
-        from_attributes = True
+    @field_validator("created_at", "updated_at", mode="before")
+    @classmethod
+    def coerce_datetime_to_iso(cls, v: Any) -> str:
+        if isinstance(v, datetime):
+            return v.isoformat()
+        if isinstance(v, str):
+            return v
+        raise ValueError("created_at/updated_at must be datetime or str")
 
 
 class GuardarTasaRequest(BaseModel):
@@ -45,7 +58,7 @@ def get_tasa_hoy(
     """Obtiene la tasa de cambio para hoy."""
     if not user_is_administrator(current_user):
         raise HTTPException(status_code=403, detail="Solo administradores")
-    
+
     tasa = obtener_tasa_hoy(db)
     return tasa
 
@@ -58,10 +71,10 @@ def get_estado_tasa(
     """Verifica si es necesario ingresar la tasa y devuelve el estado."""
     if not user_is_administrator(current_user):
         raise HTTPException(status_code=403, detail="Solo administradores")
-    
+
     debe_ingresar = debe_ingresar_tasa()
     tasa_guardada = obtener_tasa_hoy(db)
-    
+
     return {
         "debe_ingresar": debe_ingresar,
         "tasa_ya_ingresada": tasa_guardada is not None,
@@ -79,23 +92,24 @@ def guardar_tasa(
     """Guarda la tasa de cambio oficial para hoy. Obligatorio desde 01:00 AM."""
     if not user_is_administrator(current_user):
         raise HTTPException(status_code=403, detail="Solo administradores")
-    
+
     if not debe_ingresar_tasa():
         raise HTTPException(
             status_code=400,
-            detail="La tasa solo se puede ingresar desde las 01:00 AM hasta las 23:59 PM"
+            detail="La tasa solo se puede ingresar desde las 01:00 AM hasta las 23:59 PM",
         )
-    
+
+    db_user = db.query(User).filter(User.email == current_user.email).first()
+    usuario_id = db_user.id if db_user else None
     usuario_email = current_user.email
-    usuario_id = current_user.id
-    
+
     tasa = guardar_tasa_diaria(
         db=db,
         tasa_oficial=req.tasa_oficial,
         usuario_id=usuario_id,
         usuario_email=usuario_email,
     )
-    
+
     return tasa
 
 
@@ -105,10 +119,10 @@ def get_tasa_por_fecha(
     db: Session = Depends(get_db),
     current_user: UserResponse = Depends(get_current_user),
 ):
-    """Obtiene la tasa de cambio para una fecha específica."""
+    """Obtiene la tasa de cambio para una fecha especifica."""
     if not user_is_administrator(current_user):
         raise HTTPException(status_code=403, detail="Solo administradores")
-    
+
     tasa = obtener_tasa_por_fecha(db, fecha)
     return tasa
 
@@ -119,13 +133,19 @@ def get_historial_tasas(
     db: Session = Depends(get_db),
     current_user: UserResponse = Depends(get_current_user),
 ):
-    """Obtiene el historial de tasas (últimas N fechas)."""
+    """Obtiene el historial de tasas (ultimas N fechas)."""
     if not user_is_administrator(current_user):
         raise HTTPException(status_code=403, detail="Solo administradores")
-    
+
     from sqlalchemy import desc
-    tasas = db.query(TasaCambioDiaria).order_by(desc(TasaCambioDiaria.fecha)).limit(limite).all()
-    
+
+    tasas = (
+        db.query(TasaCambioDiaria)
+        .order_by(desc(TasaCambioDiaria.fecha))
+        .limit(limite)
+        .all()
+    )
+
     return [
         {
             "id": t.id,
@@ -136,4 +156,3 @@ def get_historial_tasas(
         }
         for t in tasas
     ]
-

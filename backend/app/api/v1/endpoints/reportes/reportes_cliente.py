@@ -14,6 +14,7 @@ from app.core.deps import get_current_user
 from app.models.cliente import Cliente
 from app.models.cuota import Cuota
 from app.models.prestamo import Prestamo
+from app.services.cuota_estado import sincronizar_columna_estado_cuotas
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -70,6 +71,7 @@ def get_pendientes_cliente_pdf(cedula: str, db: Session = Depends(get_db)):
             .where(Cuota.prestamo_id.in_(prestamo_ids), Cuota.fecha_pago.is_(None))
             .order_by(Cuota.prestamo_id, Cuota.numero_cuota)
         ).scalars().all()
+        sincronizar_columna_estado_cuotas(db, cuotas_rows, commit=True)
         for c in cuotas_rows:
             m = float(c.monto) if c.monto is not None else 0
             total_pendiente += m
@@ -139,6 +141,7 @@ def get_amortizacion_cliente_pdf(cedula: str, db: Session = Depends(get_db)):
             .where(Cuota.prestamo_id.in_(prestamo_ids))
             .order_by(Cuota.prestamo_id, Cuota.numero_cuota)
         ).scalars().all()
+        sincronizar_columna_estado_cuotas(db, cuotas_rows, commit=True)
         for c in cuotas_rows:
             m = float(c.monto) if c.monto is not None else 0
             fp = getattr(c, "fecha_pago", None)

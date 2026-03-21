@@ -36,6 +36,51 @@ type ResumenPrestamos = {
   }>
 }
 
+/** Fila de GET /api/v1/prestamos/{id}/cuotas (estado + estado_etiqueta desde backend). */
+export interface CuotaPrestamoApi {
+  id: number
+
+  prestamo_id: number
+
+  pago_id?: number | null
+
+  numero_cuota: number
+
+  fecha_vencimiento: string | null
+
+  monto: number
+
+  monto_cuota: number
+
+  monto_capital: number
+
+  monto_interes: number
+
+  saldo_capital_inicial: number
+
+  saldo_capital_final: number
+
+  capital_pagado?: number | null
+
+  interes_pagado?: number | null
+
+  total_pagado: number
+
+  fecha_pago?: string | null
+
+  estado: string
+
+  estado_etiqueta: string
+
+  dias_mora: number
+
+  dias_morosidad: number
+
+  pago_conciliado?: boolean
+
+  pago_monto_conciliado?: number
+}
+
 class PrestamoService {
   private baseUrl = '/api/v1/prestamos'
 
@@ -366,12 +411,10 @@ class PrestamoService {
 
   // Obtener cuotas (tabla de amortización) de un préstamo
 
-  async getCuotasPrestamo(prestamoId: number): Promise<any[]> {
-    const response = await apiClient.get<any[]>(
+  async getCuotasPrestamo(prestamoId: number): Promise<CuotaPrestamoApi[]> {
+    return await apiClient.get<CuotaPrestamoApi[]>(
       `${this.baseUrl}/${prestamoId}/cuotas`
     )
-
-    return response
   }
 
   /**

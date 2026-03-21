@@ -10,6 +10,13 @@ Reglas de negocio:
 - Mora: sin cubrir al 100%, 92+ dias calendario despues del vencimiento.
 
 Conciliacion bancaria no altera el estado de cuota para el cliente.
+
+Persistencia en BD:
+- La columna `cuotas.estado` debe coincidir con `clasificar_estado_cuota(total_pagado, monto, vencimiento, hoy Caracas)`.
+- GET `/prestamos/{id}/cuotas` y exportaciones llaman a `sincronizar_columna_estado_cuotas` para alinear la columna
+  con el mismo codigo que se devuelve en JSON (`estado` / `estado_etiqueta`). Asi informes que lean solo la tabla
+  ven el mismo estado que la API.
+
 """
 from __future__ import annotations
 
@@ -97,13 +104,42 @@ def etiqueta_estado_cuota(codigo: str) -> str:
     labels = {
         "PENDIENTE": "Pendiente",
         "PARCIAL": "Pendiente parcial",
-        "VENCIDO": "Vencido (1-91 d)",
+        "VENCIDO": "Vencido",
         "MORA": "Mora (92+ d)",
         "PAGADO": "Pagado",
         "PAGO_ADELANTADO": "Pago adelantado",
         "PAGADA": "Pagado",
     }
     return labels.get(c, codigo.strip() if codigo else "-")
+
+
+def calcular_estado_cuota_desde_fila(c: object, fecha_referencia: date | None = None) -> str:
+    """Codigo alineado con GET /prestamos/{id}/cuotas (misma regla que `estado_cuota_para_mostrar`)."""
+    ref = fecha_referencia or hoy_negocio()
+    monto = float(getattr(c, "monto", None) or 0)
+    total = float(getattr(c, "total_pagado", None) or 0)
+    fv = getattr(c, "fecha_vencimiento", None)
+    fv_date = fv.date() if fv is not None and hasattr(fv, "date") else fv
+    return clasificar_estado_cuota(total, monto, fv_date, ref)
+
+
+def sincronizar_columna_estado_cuotas(db: object, cuotas: list, *, commit: bool = False) -> int:
+    """
+    Actualiza `cuotas.estado` en la sesion si difiere del calculado.
+    Si commit=True, hace commit (usar en endpoints que no hagan commit despues).
+    """
+    changed = 0
+    for c in cuotas:
+        nuevo = calcular_estado_cuota_desde_fila(c)
+        cur = (getattr(c, "estado", None) or "").strip().upper()
+        if cur != nuevo:
+            setattr(c, "estado", nuevo)
+            changed += 1
+    if changed and commit:
+        db.commit()
+    return changed
+
+
 
 
 # SQL PostgreSQL (misma regla que clasificar_estado_cuota).

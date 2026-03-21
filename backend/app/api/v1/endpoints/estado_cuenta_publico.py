@@ -88,6 +88,7 @@ from app.services.cuota_estado import (
     estado_cuota_para_mostrar,
     etiqueta_estado_cuota,
     hoy_negocio,
+    sincronizar_columna_estado_cuotas,
 )
 
 from app.services.cobros.recibo_cuota_amortizacion import generar_recibo_cuota_amortizacion
@@ -577,6 +578,8 @@ def _obtener_amortizacion_prestamo(db: Session, prestamo_id: int) -> List[dict]:
         select(Cuota).where(Cuota.prestamo_id == prestamo_id).order_by(Cuota.numero_cuota)
 
     ).scalars().all()
+
+    sincronizar_columna_estado_cuotas(db, cuotas_rows, commit=True)
 
     resultado = []
 

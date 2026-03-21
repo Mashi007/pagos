@@ -11,9 +11,9 @@ export interface Cuota {
 
   monto_cuota: number
 
-  monto_capital?: number // Opcional - puede calcularse desde saldo_capital_inicial y saldo_capital_final
+  monto_capital?: number
 
-  monto_interes?: number // Opcional - puede calcularse desde monto_cuota y monto_capital
+  monto_interes?: number
 
   saldo_capital_inicial: number
 
@@ -65,14 +65,7 @@ export interface CuotaUpdate {
 }
 
 class CuotaService {
-  /** Lectura de cuotas: mismo contrato que GET /api/v1/prestamos/{id}/cuotas (estado + estado_etiqueta). */
   private readonly prestamosBase = '/api/v1/prestamos'
-
-  /**
-   * CRUD bajo /api/v1/amortizacion: no esta registrado en app/api/v1/__init__.py en este repo.
-   * Si falla en runtime, exponer PUT/DELETE en prestamos o quitar esas acciones del UI.
-   */
-  private readonly amortizacionLegacyBase = '/api/v1/amortizacion'
 
   async getCuotasByPrestamo(
     prestamoId: number,
@@ -86,41 +79,39 @@ class CuotaService {
   }
 
   /**
-   * Varias amortizaciones: paraleliza GET /prestamos/{id}/cuotas (sin endpoint batch en backend).
+   * Varias amortizaciones: POST /prestamos/cuotas/by-prestamo-ids (una peticion).
+   * El parametro `estado` no aplica al batch; filtrar en cliente si hiciera falta.
    */
   async getCuotasMultiplesPrestamos(
     prestamoIds: number[],
-    estado?: string
+    _estado?: string
   ): Promise<Cuota[]> {
     if (!prestamoIds || prestamoIds.length === 0) {
       return []
     }
 
-    const lotes = await Promise.all(
-      prestamoIds.map(id => this.getCuotasByPrestamo(id, estado))
-    )
-
-    return lotes.flat()
-  }
-
-  async getCuotaById(cuotaId: number): Promise<Cuota> {
-    return await apiClient.get(
-      `${this.amortizacionLegacyBase}/cuota/${cuotaId}`
+    return await apiClient.post(
+      `${this.prestamosBase}/cuotas/by-prestamo-ids`,
+      {
+        prestamo_ids: prestamoIds,
+      }
     )
   }
 
-  async updateCuota(cuotaId: number, data: CuotaUpdate): Promise<Cuota> {
+  async updateCuota(
+    prestamoId: number,
+    cuotaId: number,
+    data: CuotaUpdate
+  ): Promise<Cuota> {
     return await apiClient.put(
-      `${this.amortizacionLegacyBase}/cuota/${cuotaId}`,
+      `${this.prestamosBase}/${prestamoId}/cuotas/${cuotaId}`,
       data
     )
   }
 
-  async deleteCuota(
-    cuotaId: number
-  ): Promise<{ message: string; cuota_id: number; prestamo_id: number }> {
-    return await apiClient.delete(
-      `${this.amortizacionLegacyBase}/cuota/${cuotaId}`
+  async deleteCuota(prestamoId: number, cuotaId: number): Promise<void> {
+    await apiClient.delete(
+      `${this.prestamosBase}/${prestamoId}/cuotas/${cuotaId}`
     )
   }
 }

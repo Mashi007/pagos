@@ -178,7 +178,7 @@ export function TablaAmortizacionPrestamo({
 
       PAGO_ADELANTADO: 'Pago adelantado',
 
-      VENCIDO: 'Vencido (1-91 d)',
+      VENCIDO: 'Vencido',
 
       MORA: 'Mora (92+ d)',
 
