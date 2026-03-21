@@ -1,0 +1,1 @@
+# Pagos service integration tests
