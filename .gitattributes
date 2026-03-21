@@ -1,0 +1,27 @@
+﻿# Evitar conversiones raras de fin de linea y marcar texto como UTF-8 en Git.
+* text=auto eol=lf
+
+# Codigo fuente
+*.ts   text eol=lf diff=typescript
+*.tsx  text eol=lf diff=typescript
+*.js   text eol=lf
+*.jsx  text eol=lf
+*.mjs  text eol=lf
+*.cjs  text eol=lf
+*.json text eol=lf
+*.css  text eol=lf
+*.md   text eol=lf
+
+# Binarios (no tocar)
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.webp binary
+*.ico  binary
+*.pdf  binary
+*.woff binary
+*.woff2 binary
+
+# Hooks de Git (siempre LF; CRLF rompe shebang en bash)
+.husky/** text eol=lf

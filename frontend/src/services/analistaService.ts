@@ -124,9 +124,7 @@ class AnalistaService {
 
   // Importación masiva desde Excel
 
-  async importarDesdeExcel(
-    file: File
-  ): Promise<{
+  async importarDesdeExcel(file: File): Promise<{
     message: string
     creados: number
     actualizados: number

@@ -34,6 +34,68 @@ from app.services.cobros.pagos_pendiente_descargar_service import obtener_pagos_
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
+
+
+class PagoReportadoHistorialItem(BaseModel):
+    estado_anterior: Optional[str] = None
+    estado_nuevo: str
+    usuario_email: Optional[str] = None
+    motivo: Optional[str] = None
+    created_at: Optional[str] = None
+
+
+class PagoReportadoListItem(BaseModel):
+    id: int
+    referencia_interna: str
+    nombres: str
+    apellidos: str
+    cedula_display: str
+    institucion_financiera: str
+    monto: float
+    moneda: str
+    fecha_pago: date
+    numero_operacion: str
+    fecha_reporte: datetime
+    estado: str
+    gemini_coincide_exacto: Optional[str] = None
+    observacion: Optional[str] = None
+    correo_enviado_a: Optional[str] = None
+    tiene_recibo_pdf: bool
+
+
+class PagoReportadoDetalle(BaseModel):
+    id: int
+    referencia_interna: str
+    nombres: str
+    apellidos: str
+    tipo_cedula: str
+    numero_cedula: str
+    fecha_pago: date
+    institucion_financiera: str
+    numero_operacion: str
+    monto: float
+    moneda: str
+    ruta_comprobante: Optional[str] = None
+    tiene_comprobante: bool
+    tiene_recibo_pdf: bool
+    observacion: Optional[str] = None
+    correo_enviado_a: Optional[str] = None
+    estado: str
+    motivo_rechazo: Optional[str] = None
+    gemini_coincide_exacto: Optional[str] = None
+    gemini_comentario: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    historial: List[PagoReportadoHistorialItem]
+
+
+class AprobarRechazarBody(BaseModel):
+    motivo: Optional[str] = None
+
+
+class MarcarExportadosBody(BaseModel):
+    pago_reportado_ids: Optional[List[int]] = None
+
 # Mensaje genÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â©rico al rechazar: indicar que se comuniquen por WhatsApp (424-4579934)
 MENSAJE_RECHAZO_GENERICO = (
     "Su reporte de pago no ha sido aprobado. "

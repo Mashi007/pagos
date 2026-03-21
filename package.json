@@ -4,12 +4,24 @@
   "description": "Auditoría integral del sitio RapiCredit",
   "main": "audit-rapicredit.js",
   "scripts": {
-    "audit": "node audit-rapicredit.js"
+    "audit": "node audit-rapicredit.js",
+    "prepare": "husky",
+    "hooks:lint-staged": "node node_modules/lint-staged/bin/lint-staged.js"
   },
-  "keywords": ["audit", "rapicredit"],
+  "keywords": [
+    "audit",
+    "rapicredit"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
     "playwright": "^1.40.0"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^15.4.3"
+  },
+  "lint-staged": {
+    "frontend/**/*.{ts,tsx,js,jsx,mjs,cjs}": "node frontend/scripts/check-source-hygiene.mjs"
   }
 }

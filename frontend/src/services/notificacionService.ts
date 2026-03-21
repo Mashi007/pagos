@@ -545,9 +545,7 @@ class NotificacionService {
 
   // Notificaciones previas
 
-  async listarNotificacionesPrevias(
-    estado?: string
-  ): Promise<{
+  async listarNotificacionesPrevias(estado?: string): Promise<{
     items: any[]
     total: number
     dias_5: number
@@ -573,9 +571,7 @@ class NotificacionService {
     )
   }
 
-  async listarNotificacionesRetrasadas(
-    estado?: string
-  ): Promise<{
+  async listarNotificacionesRetrasadas(estado?: string): Promise<{
     items: any[]
     total: number
     dias_1: number

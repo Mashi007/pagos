@@ -122,9 +122,7 @@ export const campanasService = {
     return await apiClient.post<CampanaCrm>(BASE, payload)
   },
 
-  async iniciarEnvio(
-    id: number
-  ): Promise<{
+  async iniciarEnvio(id: number): Promise<{
     success: boolean
     mensaje: string
     total_destinatarios: number

@@ -1155,7 +1155,7 @@ class ReporteService {
 
 
 
-   * Env�a filas de conciliaci�n (cedula, total_financiamiento, total_abonos, columna_e, columna_f) para guardar en BD temporal.
+   * Envía filas de conciliación (cedula, total_financiamiento, total_abonos, columna_e, columna_f) para guardar en BD temporal.
 
 
 
@@ -1181,7 +1181,7 @@ class ReporteService {
 
 
 
-   * Exporta reporte Conciliaci�n en Excel. Al descargar se eliminan los datos temporales.
+   * Exporta reporte Conciliación en Excel. Al descargar se eliminan los datos temporales.
 
 
 
@@ -1189,9 +1189,7 @@ class ReporteService {
 
    */
 
-  async cargarConciliacionExcel(
-    file: File
-  ): Promise<{
+  async cargarConciliacionExcel(file: File): Promise<{
     ok: boolean
     filas_ok: number
     filas_con_error: number

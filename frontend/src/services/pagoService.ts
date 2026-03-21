@@ -23,7 +23,7 @@ export interface Pago {
 
   conciliado: boolean
 
-  verificado_concordancia?: string | null // SI/NO - Verificaci�n de concordancia con m�dulo de pagos
+  verificado_concordancia?: string | null // SI/NO - Verificación de concordancia con módulo de pagos
 
   usuario_registro: string
 
@@ -134,7 +134,7 @@ class PagoService {
     })
   }
 
-  /** Obtiene el 100% de los pagos para exportar (paginaci�n autom�tica sin l�mite) */
+  /** Obtiene el 100% de los pagos para exportar (paginación automática sin límite) */
 
   async getAllPagosForExport(filters: {
     cedula?: string
@@ -182,13 +182,13 @@ class PagoService {
 
 
 
-   * Crea varios pagos en una sola petici�n (Guardar todos). M�x. 500.
+   * Crea varios pagos en una sola petición (Guardar todos). Máx. 500.
 
 
 
 
 
-   * Devuelve resultados por �ndice (�xito/error) para actualizar la tabla sin m�ltiples rondas.
+   * Devuelve resultados por índice (éxito/error) para actualizar la tabla sin múltiples rondas.
 
 
 
@@ -216,7 +216,7 @@ class PagoService {
     return await apiClient.put(`${this.baseUrl}/${id}`, data)
   }
 
-  /** Actualiza solo el estado de conciliaci�n (S�/No) en BD */
+  /** Actualiza solo el estado de conciliación (Sí/No) en BD */
 
   async updateConciliado(id: number, conciliado: boolean): Promise<Pago> {
     return await apiClient.put(`${this.baseUrl}/${id}`, { conciliado })
@@ -226,9 +226,7 @@ class PagoService {
     return await apiClient.delete(`${this.baseUrl}/${id}`)
   }
 
-  async aplicarPagoACuotas(
-    pagoId: number
-  ): Promise<{
+  async aplicarPagoACuotas(pagoId: number): Promise<{
     success: boolean
     cuotas_completadas: number
     cuotas_parciales: number
@@ -253,7 +251,7 @@ class PagoService {
 
 
 
-   * Importa pagos reportados aprobados (m�dulo Cobros) a la tabla pagos.
+   * Importa pagos reportados aprobados (módulo Cobros) a la tabla pagos.
 
 
 
@@ -386,7 +384,7 @@ class PagoService {
     window.URL.revokeObjectURL(blobUrl)
   }
 
-  // Cargar Excel de conciliaci�n (2 columnas: Fecha de Dep�sito, N�mero de Documento)
+  // Cargar Excel de conciliación (2 columnas: Fecha de Depósito, Número de Documento)
 
   async uploadConciliacion(file: File): Promise<{
     pagos_conciliados: number
@@ -420,9 +418,7 @@ class PagoService {
 
   /** Agrega una cédula a la lista (nuevo cliente que paga en bolívares). */
 
-  async addCedulaReportarBs(
-    cedula: string
-  ): Promise<{
+  async addCedulaReportarBs(cedula: string): Promise<{
     agregada: boolean
     cedula: string
     total: number
@@ -568,7 +564,7 @@ class PagoService {
     )
   }
 
-  // Obtener �ltimos pagos por c�dula (resumen)
+  // Obtener últimos pagos por cédula (resumen)
 
   async getUltimosPagos(
     page = 1,
@@ -638,7 +634,7 @@ class PagoService {
     return response.data as Blob
   }
 
-  // Descargar PDF tabla de amortizaci�n completa por c�dula
+  // Descargar PDF tabla de amortización completa por cédula
 
   async descargarPDFAmortizacion(cedula: string): Promise<Blob> {
     const axiosInstance = apiClient.getAxiosInstance()
@@ -652,7 +648,7 @@ class PagoService {
     return response.data as Blob
   }
 
-  /** Pagos Gmail: ejecutar pipeline (Gmail -> Drive -> Gemini -> BD). force=true permite ejecutar aunque la �ltima sync fue hace poco. scan_filter: "unread" | "read" | "all". */
+  /** Pagos Gmail: ejecutar pipeline (Gmail -> Drive -> Gemini -> BD). force=true permite ejecutar aunque la última sync fue hace poco. scan_filter: "unread" | "read" | "all". */
 
   async runGmailNow(
     force = true,
@@ -674,7 +670,7 @@ class PagoService {
     )
   }
 
-  /** Pagos Gmail: estado �ltima ejecuci�n, pr�xima y �ltima fecha con datos disponibles. */
+  /** Pagos Gmail: estado última ejecución, próxima y última fecha con datos disponibles. */
 
   async getGmailStatus(): Promise<{
     last_run: string | null
@@ -694,7 +690,7 @@ class PagoService {
     return await apiClient.get(`${this.baseUrl}/gmail/status`)
   }
 
-  /** Pagos Gmail: confirmar d�a (s�/no). Si confirmado=true, se borran los datos del d�a en el servidor. */
+  /** Pagos Gmail: confirmar día (sí/no). Si confirmado=true, se borran los datos del día en el servidor. */
 
   async confirmarDiaGmail(
     confirmado: boolean,
@@ -713,7 +709,7 @@ class PagoService {
     return res
   }
 
-  /** Pagos Gmail: descargar Excel del d�a (datos del Sheet). Solo descarga si status 200; si no, lanza error (evita guardar HTML/JSON como .xlsx). */
+  /** Pagos Gmail: descargar Excel del día (datos del Sheet). Solo descarga si status 200; si no, lanza error (evita guardar HTML/JSON como .xlsx). */
 
   async downloadGmailExcel(fecha?: string): Promise<void> {
     const axiosInstance = apiClient.getAxiosInstance()
@@ -750,7 +746,7 @@ class PagoService {
 
         throw new Error(
           response.status === 404
-            ? 'Sin datos para descargar. Ejecute �Generar Excel desde Gmail� primero.'
+            ? 'Sin datos para descargar. Ejecute "Generar Excel desde Gmail" primero.'
             : `No se pudo descargar el archivo (${response.status}).`
         )
       }

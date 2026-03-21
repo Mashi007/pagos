@@ -31,7 +31,9 @@
     "serve": "serve -s dist -l $PORT",
     "render-build": "npm install && npm run build",
     "render-start": "node server.js",
-    "sanitize:chars": "node scripts/sanitize-artifact-chars.mjs"
+    "sanitize:chars": "node scripts/sanitize-artifact-chars.mjs",
+    "check:hygiene": "node scripts/check-source-hygiene.mjs",
+    "verify": "npm run check:hygiene && npm run type-check"
   },
   "dependencies": {
     "@heroicons/react": "^2.0.18",

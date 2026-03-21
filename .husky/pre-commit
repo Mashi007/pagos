@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+# lint-staged sin npx: en Git Bash (Windows) npx es .cmd y devuelve 127.
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT" || exit 1
+LSJS="$ROOT/node_modules/lint-staged/bin/lint-staged.js"
+if [ ! -f "$LSJS" ]; then
+  echo "husky: falta lint-staged. En la raiz del repo ejecute: npm install" >&2
+  exit 1
+fi
+exec node "$LSJS"
